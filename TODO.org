@@ -1,0 +1,64 @@
+* Python
+** Builtins
+*** math.sqrt
+*** math.sin
+*** math.cos
+*** random.randrange
+*** random.seed
+*** is
+*** super
+*** object
+*** int
+
+** For loops
+
+** Functions
+*** Default parameters values
+
+** Objects
+*** __add__
+*** __slots__
+
+** Strings
+*** % formatting
+*** string
+*** rstrip
+
+** Generators
+*** Comprehension
+*** __iter__
+
+** Lists
+*** constructor list on an iterator
+*** comprehension
+*** insert
+*** pop
+*** slices
+*** __iter__
+*** reversed
+*** sorted
+    
+** Iterators
+*** __next__
+
+** dicts
+*** values
+*** __iter__
+*** len
+*** sorted
+
+** tuples
+*** constructor tuple on iterators
+*** len
+
+** if expressions
+
+** Ranges
+*** reversed
+** Expression evaluation
+*** Break expressions when a compound operand is found and more expressions are still to be processed.
+
+* Framework
+** Iterators
+*** Allow simultaneous rules, but also add priorities in conflicting situations.
+** Make two versions of SetD and MapD: empty -> top | bottom.

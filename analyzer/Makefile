@@ -1,0 +1,49 @@
+MOPSAROOT = ..
+TARGET = mopsa
+
+all: native
+
+
+#Packs
+mopsa = framework lang main
+
+framework = options ast query pp alarm context lattice lattices visitor flow manager domains analyzer config
+framework.lattices = enum top_set partial_map total_map range_set
+framework.domains = global exec eval local localFlow stateless composers
+
+
+#lang = universal c python
+lang = universal python
+
+lang.universal = ast pp visitor utils flows heap nonrel numeric setup
+lang.universal.heap = pool recency
+lang.universal.nonrel = value domain
+lang.universal.numeric = interval query integers floats relational
+
+lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs programs setup
+lang.python.memory = value nonrel
+lang.python.objects = class function object data_model
+lang.python.objects.data_model = attribute callable
+
+#lang.c = ast frontend cell setup
+#lang.c.cell = varGen typ cellAst toCell pointer numCell
+
+#Packages
+PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
+
+#Flags
+INCLUDES = -I $(MOPSAROOT)/utils/bin -I $(MOPSAROOT)/parsers/c/bin -I $(MOPSAROOT)/parsers/python/bin
+LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa
+
+include $(MOPSAROOT)/make/main.mk
+
+#tests
+TESTS = tests
+PYTESTS = $(shell find $(TESTS) -name "*.py")
+
+python-tests: native
+	@ - $(foreach test, $(PYTESTS), \
+		echo ""; \
+		echo "Running test $(test)"; \
+		./bin/mopsa.native -test -config configs/default.py.json -stubs-dir stubs/python $(MOPSAPARAM) $(test); \
+	)

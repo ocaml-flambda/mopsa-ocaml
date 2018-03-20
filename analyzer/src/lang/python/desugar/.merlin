@@ -1,0 +1,10 @@
+B ../../../../../utils/bin
+B ../../../../../parsers/c/bin
+B ../../../../../parsers/python/bin
+B ../../../../_build
+B ../../../../_build/src
+B ../../../../_build/src/lang/python/desugar
+B ../../../../_build/src/lang/python
+B ../../../../_build/src/lang
+B ../../../../_build/src
+PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
