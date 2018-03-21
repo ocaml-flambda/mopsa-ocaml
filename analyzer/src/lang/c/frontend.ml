@@ -101,15 +101,16 @@ and from_function : C_AST.func -> Ast.c_fundec =
 and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
   let typ, qual = tc in
   let typ' = match typ with
-    | C_AST.T_void -> failwith "C_AST.T_void not supported"
-    | C_AST.T_bool -> failwith "C_AST.T_bool not supported"
-    | C_AST.T_integer _ -> failwith "C_AST.T_integer not supported"
-    | C_AST.T_float _ -> failwith "C_AST.T_float not supported"
-    | C_AST.T_pointer _ -> failwith "C_AST.T_pointer not supported"
-    | C_AST.T_array (_,_) -> failwith "C_AST.T_array not supported"
+    | C_AST.T_void -> Ast.T_c_void
+    | C_AST.T_bool -> Universal.Ast.T_bool
+    | C_AST.T_integer t -> Ast.T_c_integer (from_integer_type t)
+    | C_AST.T_float t -> Ast.T_c_float (from_float_type t)
+    | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ t)
+    | C_AST.T_array (t,l) -> Ast.T_c_array (from_typ t, from_array_length l)
+    | C_AST.T_function None -> Ast.T_c_function None
+    | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type t))
+    | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
-    | C_AST.T_function _ -> failwith "C_AST.T_function not supported"
-    | C_AST.T_builtin_fn
     | C_AST.T_typedef _ -> failwith "C_AST.T_typedef not supported"
     | C_AST.T_record _ -> failwith "C_AST.T_record not supported"
     | C_AST.T_enum _ -> failwith "C_AST.T_enum not supported"
@@ -118,6 +119,40 @@ and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
     T_c_qualified({c_qual_is_const = true; c_qual_is_restrict = false; c_qual_is_volatile = false}, typ')
   else
     typ'
+
+and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
+  | C_AST.Char SIGNED -> Ast.C_char Ast.C_signed
+  | C_AST.Char UNSIGNED -> Ast.C_char Ast.C_unsigned
+  | C_AST.SIGNED_CHAR -> Ast.C_signed_char
+  | C_AST.UNSIGNED_CHAR -> Ast.C_unsigned_char
+  | C_AST.SIGNED_SHORT -> Ast.C_signed_short
+  | C_AST.UNSIGNED_SHORT -> Ast.C_unsigned_short
+  | C_AST.SIGNED_INT -> Ast.C_signed_int
+  | C_AST.UNSIGNED_INT -> Ast.C_unsigned_int
+  | C_AST.SIGNED_LONG -> Ast.C_signed_long
+  | C_AST.UNSIGNED_LONG -> Ast.C_unsigned_long
+  | C_AST.SIGNED_LONG_LONG -> Ast.C_signed_long_long
+  | C_AST.UNSIGNED_LONG_LONG -> Ast.C_unsigned_long_long
+  | C_AST.SIGNED_INT128 -> Ast.C_signed_int128
+  | C_AST.UNSIGNED_INT128 -> Ast.C_unsigned_int128
+
+and from_float_type : C_AST.float_type -> Ast.c_float_type = function
+  | C_AST.FLOAT -> Ast.C_float
+  | C_AST.DOUBLE -> Ast.C_double
+  | C_AST.LONG_DOUBLE -> Ast.C_long_double
+
+and from_array_length : C_AST.array_length -> Ast.c_array_length = function
+  | C_AST.No_length -> Ast.C_array_no_length
+  | C_AST.Length_cst n -> Ast.C_array_length_cst n
+  | C_AST.Length_expr e -> Ast.C_array_length_expr (from_expr e)
+
+and from_function_type : C_AST.function_type -> Ast.c_function_type = fun f ->
+  {
+    c_ftype_return = from_typ f.ftype_return;
+    c_ftype_params = List.map from_typ f.ftype_params;
+    c_ftype_variadic = f.ftype_variadic;
+  }
+
 (** {2 Expressions} *)
 
 and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
