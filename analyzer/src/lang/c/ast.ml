@@ -167,6 +167,24 @@ type constant +=
   | C_c_character of char
   (** Constant character *)
 
+type c_init =
+  | C_init_expr of expr
+  | C_init_list of c_init list (** specified elements *) * c_init option (** filler *)
+  | C_init_implicit of typ
+(** Variable initialization. *)
+
+type c_fundec = {
+  c_func_var: var; (** function name variable with unique identifier *)
+  c_func_is_static: bool;
+  c_func_return: typ; (** type of returned value *)
+  c_func_parameters: var list; (** function parameters *)
+  c_func_body: stmt; (** function body *)
+  c_func_static_vars: (var * c_init option) list; (** static variables declared in the function and their initialization *)
+  c_func_local_vars: (var * c_init option) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
+  c_func_variadic: bool; (** whether the function has a variable number of arguments *)
+}
+(** Function descriptor. *)
+
 type expr_kind +=
   | E_c_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
   (** ?: ternary operator *)
@@ -176,6 +194,8 @@ type expr_kind +=
 
   | E_c_member_access of expr (** record *) * int (** field index *) * string (** field *)
   (** record.field access *)
+
+  | E_c_function of c_fundec
 
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
@@ -210,24 +230,6 @@ type expr_kind +=
 (*==========================================================================*)
                            (** {2 Statements} *)
 (*==========================================================================*)
-
-type c_init =
-  | C_init_expr of expr
-  | C_init_list of c_init list (** specified elements *) * c_init option (** filler *)
-  | C_init_implicit of typ
-(** Variable initialization. *)
-
-type c_fundec = {
-  c_func_var: var; (** function name variable with unique identifier *)
-  c_func_is_static: bool;
-  c_func_return: typ; (** type of returned value *)
-  c_func_parameters: var list; (** function parameters *)
-  c_func_body: stmt; (** function body *)
-  c_func_static_vars: (var * c_init option) list; (** static variables declared in the function and their initialization *)
-  c_func_local_vars: (var * c_init option) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
-  c_func_variadic: bool; (** whether the function has a variable number of arguments *)
-}
-(** Function descriptor. *)
 
 type c_program = {
   c_program_global_variables : (var * c_init option) list;

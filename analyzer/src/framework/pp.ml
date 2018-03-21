@@ -38,11 +38,8 @@ and pp_program_chain : (Format.formatter -> program -> unit) ref =
 and pp_typ_chain : (Format.formatter -> typ -> unit) ref =
   ref (fun fmt typ ->
       match typ with
-      | T_any ->
-        fprintf fmt "?"
-
-      | _ ->
-        failwith "Pp: Unknown type"
+      | T_any -> fprintf fmt "?"
+      | _ -> failwith "Pp: Unknown type"
     )
 
 (* Processing chain for the extensible type [Ast.operator] *)
@@ -71,10 +68,7 @@ and register_pp_operator pp = pp_operator_chain := pp !pp_operator_chain
 and register_pp_constant pp = pp_constant_chain := pp !pp_constant_chain
 
 (* These functions start the chain processing *)
-and pp_expr fmt expr =
-  Format.fprintf fmt "%a:%a"
-    !pp_expr_chain expr
-    pp_typ expr.etyp
+and pp_expr fmt expr = !pp_expr_chain fmt expr
 
 and pp_stmt fmt stmt = !pp_stmt_chain fmt stmt
 

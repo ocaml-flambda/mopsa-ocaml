@@ -24,7 +24,7 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-lang.c = ast frontend setup #cell setup
+lang.c = ast frontend pp setup #cell setup
 #lang.c.cell = varGen typ cellAst toCell pointer numCell
 
 #Packages

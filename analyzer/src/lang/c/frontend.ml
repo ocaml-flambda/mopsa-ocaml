@@ -60,7 +60,7 @@ and from_var (v: C_AST.variable) : Universal.Ast.var =
 
 and from_var_name (org_name: string) (unique_name: string) (uid: int) (typ: Framework.Ast.typ) : Universal.Ast.var =
   {
-    unname = unique_name ^ (string_of_int uid) ;
+    unname = unique_name ^ "@" ^ (string_of_int uid) ;
     orgname = org_name;
     vtyp = typ;
   }
@@ -160,33 +160,61 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
   let etyp = from_typ tc in
   let ekind =
     match ekind with
+    | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
+    | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
+    | C_AST.E_string_literal (s, Clang_AST.Char_Ascii) -> Universal.Ast.(E_constant (C_string s))
+    | C_AST.E_variable v -> Universal.Ast.E_var (from_var v)
+    | C_AST.E_function f -> Ast.E_c_function (from_function f)
+    | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr f, Array.map from_expr args |> Array.to_list)
+    | C_AST.E_unary (op, e) -> Universal.Ast.E_unop (from_unary_operator op, from_expr e)
+    | C_AST.E_binary (op, e1, e2) -> Universal.Ast.E_binop (from_binary_operator op, from_expr e1, from_expr e2)
+    | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
+    | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
+
+    | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
+    | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
     | C_AST.E_conditional (_,_,_) -> failwith "E_conditional not supported"
     | C_AST.E_array_subscript (_,_) -> failwith "E_array_subscript not supported"
     | C_AST.E_member_access (_,_,_) -> failwith "E_member_access not supported"
     | C_AST.E_arrow_access (_,_,_) -> failwith "E_arrow_access not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
-    | C_AST.E_binary (_,_,_) -> failwith "E_binary not supported"
     | C_AST.E_assign (_,_) -> failwith "E_assign not supported"
     | C_AST.E_comma (_,_) -> failwith "E_comma not supported"
-    | C_AST.E_unary (_,_) -> failwith "E_unary not supported"
     | C_AST.E_increment (_,_,_) -> failwith "E_increment not supported"
     | C_AST.E_address_of _ -> failwith "E_address_of not supported"
     | C_AST.E_deref _ -> failwith "E_deref not supported"
-    | C_AST.E_cast (_,_) -> failwith "E_cast not supported"
-    | C_AST.E_call (_,_) -> failwith "E_call not supported"
-    | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
-    | C_AST.E_integer_literal _ -> failwith "E_integer_literal not supported"
-    | C_AST.E_float_literal _ -> failwith "E_float_literal not supported"
-    | C_AST.E_string_literal (_,_) -> failwith "E_string_literal not supported"
     | C_AST.E_compound_literal _ -> failwith "E_compound_literal not supported"
-    | C_AST.E_variable _ -> failwith "E_variable not supported"
-    | C_AST.E_function _ -> failwith "E_function not supported"
     | C_AST.E_predefined _ -> failwith "E_predefined not supported"
     | C_AST.E_statement _ -> failwith "E_statement not supported"
     | C_AST.E_var_args _ -> failwith "E_var_args not supported"
     | C_AST.E_atomic (_,_,_) -> failwith "E_atomic not supported"
   in
   {ekind; erange; etyp}
+
+and from_unary_operator : C_AST.unary_operator -> Framework.Ast.operator = function
+  | C_AST.NEG -> Universal.Ast.O_minus
+  | C_AST.BIT_NOT -> Universal.Ast.O_invert
+  | C_AST.LOGICAL_NOT -> Universal.Ast.O_log_not
+
+and from_binary_operator : C_AST.binary_operator -> Framework.Ast.operator = function
+  | C_AST.O_arithmetic (C_AST.ADD) -> Universal.Ast.O_plus
+  | C_AST.O_arithmetic (C_AST.SUB) -> Universal.Ast.O_minus
+  | C_AST.O_arithmetic (C_AST.MUL) -> Universal.Ast.O_mult
+  | C_AST.O_arithmetic (C_AST.DIV) -> Universal.Ast.O_div
+  | C_AST.O_arithmetic (C_AST.MOD) -> Universal.Ast.O_mod
+  | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> Universal.Ast.O_bit_lshift
+  | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> Universal.Ast.O_bit_rshift
+  | C_AST.O_arithmetic (C_AST.BIT_AND) -> Universal.Ast.O_bit_and
+  | C_AST.O_arithmetic (C_AST.BIT_OR) -> Universal.Ast.O_bit_or
+  | C_AST.O_arithmetic (C_AST.BIT_XOR) -> Universal.Ast.O_bit_xor
+  | C_AST.O_logical (C_AST.LESS) -> Universal.Ast.O_lt
+  | C_AST.O_logical (C_AST.LESS_EQUAL) -> Universal.Ast.O_le
+  | C_AST.O_logical (C_AST.GREATER) -> Universal.Ast.O_gt
+  | C_AST.O_logical (C_AST.GREATER_EQUAL) -> Universal.Ast.O_ge
+  | C_AST.O_logical (C_AST.EQUAL) -> Universal.Ast.O_eq
+  | C_AST.O_logical (C_AST.NOT_EQUAL) -> Universal.Ast.O_ne
+  | C_AST.O_logical (C_AST.LOGICAL_AND) -> Universal.Ast.O_log_and
+  | C_AST.O_logical (C_AST.LOGICAL_OR) -> Universal.Ast.O_log_or
 
 
 (** {2 Ranges and locations} *)
@@ -213,11 +241,12 @@ and from_range : Clang_AST.range -> Framework.Ast.range =
 and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
-    | C_AST.S_local_declaration _ -> failwith "C_AST.S_local_declaration not supprted"
-    | C_AST.S_expression _ -> failwith "C_AST.S_expression not supprted"
-    | C_AST.S_block _ -> failwith "C_AST.S_block not supprted"
-    | C_AST.S_if (_,_,_) -> failwith "C_AST.S_if not supprted"
-    | C_AST.S_while (_,_) -> failwith "C_AST.S_while not supprted"
+    | C_AST.S_local_declaration v -> Universal.Ast.S_block []
+    | C_AST.S_expression(C_AST.E_assign(lval, rval), _, _) -> Universal.Ast.S_assign (from_expr lval, from_expr rval)
+    | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr e)
+    | C_AST.S_block block -> from_block srange block |> Framework.Ast.skind
+    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr cond, from_block srange body, from_block srange orelse)
+    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr cond, from_block srange body)
     | C_AST.S_do_while (_,_) -> failwith "C_AST.S_do_while not supprted"
     | C_AST.S_for (_,_,_,_) -> failwith "C_AST.S_for not supprted"
     | C_AST.S_jump _ -> failwith "C_AST.S_jump not supprted"
@@ -225,7 +254,11 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   in
   {skind; srange}
 
+and from_block range (block: C_AST.block) : Framework.Ast.stmt =
+  mk_block (List.map from_stmt block) range
+
 and from_block_option (range: Framework.Ast.range) (block: C_AST.block option) : Framework.Ast.stmt =
   match block with
   | None -> mk_nop range
-  | Some stmtl -> mk_block (List.map from_stmt stmtl) range
+  | Some stmtl -> from_block range stmtl
+
