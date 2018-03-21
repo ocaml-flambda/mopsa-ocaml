@@ -76,12 +76,18 @@ and c_signedness = C_signed | C_unsigned
 
 and c_integer_type =
   | C_char of c_signedness (** plain 'char', where the signeness is defined by the platform *)
-  | C_signed_char | C_unsigned_char
-  | C_signed_short | C_unsigned_short
-  | C_signed_int | C_unsigned_int
-  | C_signed_long | C_unsigned_long
-  | C_signed_long_long | C_unsigned_long_long
-  | C_signed_int128 | C_unsigned_int128
+  | C_signed_char
+  | C_unsigned_char
+  | C_signed_short
+  | C_unsigned_short
+  | C_signed_int
+  | C_unsigned_int
+  | C_signed_long
+  | C_unsigned_long
+  | C_signed_long_long
+  | C_unsigned_long_long
+  | C_signed_int128
+  | C_unsigned_int128
   (** Integer types. *)
 
 and c_float_type = C_float | C_double | C_long_double
@@ -109,39 +115,38 @@ and c_function_type = {
 (** Function type. *)
 
 type typ +=
-  | TC_void
+  | T_c_void
   (** Void type. *)
 
-  | TC_bool
-  | TC_integer of c_integer_type
-  | TC_float of c_float_type
-  | TC_pointer of typ
+  | T_c_integer of c_integer_type
+  | T_c_float of c_float_type
+  | T_c_pointer of typ
   (** Scalar types. *)
 
-  | TC_array of typ * c_array_length
+  | T_c_array of typ * c_array_length
   (** Arrays. *)
 
-  | TC_bitfield of
+  | T_c_bitfield of
       typ (* integer or enum type *) *
       int (* bit-size *)
   (** Bitfields, with bit-width, only used in struct. *)
 
-  | TC_function of c_function_type option
+  | T_c_function of c_function_type option
   (** Function, with or without a prototype *)
 
-  | TC_builtin_fn
-  (** Bult-in functions *)
+  | T_c_builtin_fn
+  (** Built-in functions *)
 
-  | TC_typedef of c_typedef
+  | T_c_typedef of c_typedef
   (** Typedefs *)
 
-  | TC_record of c_record_type
+  | T_c_record of c_record_type
   (** struct and union *)
 
-  | TC_enum of c_enum_type
+  | T_c_enum of c_enum_type
   (** enums *)
 
-  | TC_qualified of c_qual * typ
+  | T_c_qualified of c_qual * typ
   (** Qualified type. *)
 
 (*==========================================================================*)
@@ -159,47 +164,47 @@ type c_inc_direction =
   (** Whether an incrementation is ++ or -- *)
 
 type constant +=
-  | CC_character of char
+  | C_c_character of char
   (** Constant character *)
 
 type expr_kind +=
-  | EC_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
+  | E_c_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
   (** ?: ternary operator *)
 
-  | EC_array_subscript of expr (** array *) * expr (** index *)
+  | E_c_array_subscript of expr (** array *) * expr (** index *)
   (** Array access. *)
 
-  | EC_member_access of expr (** record *) * int (** field index *) * string (** field *)
+  | E_c_member_access of expr (** record *) * int (** field index *) * string (** field *)
   (** record.field access *)
 
-  | EC_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
+  | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
 
-  | EC_compound_assign of
+  | E_c_compound_assign of
       expr (** lvalue *) * typ (** promoted type of lvalue before operation *) *
       operator (** operator *) *
       expr (** rvalue *) *
       typ (** type of the result, before converting back to lvalue type *)
   (** Assignment with an operation: e1 += e2, etc. *)
 
-  | EC_comma of expr * expr (** , operator *)
+  | E_c_comma of expr * expr (** , operator *)
 
-  | EC_increment of c_inc_direction * c_inc_location * expr
+  | E_c_increment of c_inc_direction * c_inc_location * expr
 
-  | EC_address_of of expr
+  | E_c_address_of of expr
   (** & operator (address of lvalue) *)
 
-  | EC_deref of expr
+  | E_c_deref of expr
   (** * operator (pointer dereference) *)
 
-  | EC_cast of expr * bool (** explicitness *)
+  | E_c_cast of expr * bool (** explicitness *)
   (** casted expression *)
 
-  | EC_predefined of string (** predefined identifier *)
+  | E_c_predefined of string (** predefined identifier *)
 
-  | EC_var_args of expr (** __builtin_va_arg *)
+  | E_c_var_args of expr (** __builtin_va_arg *)
 
-  | EC_atomic of int (** operation *) * expr * expr
+  | E_c_atomic of int (** operation *) * expr * expr
 
 
 (*==========================================================================*)
@@ -231,12 +236,12 @@ type c_program = {
 (** Program descriptor. *)
 
 type stmt_kind +=
-  | SC_do_while of
+  | S_c_do_while of
       stmt (** body *) *
       expr (** condition *)
   (** do-while loop *)
 
-  | SC_for of
+  | S_c_for of
       stmt (** init *) *
       expr option (** condition *) *
       expr option (** increment *) *
@@ -244,23 +249,23 @@ type stmt_kind +=
   (** for loop; the scope of the locals declared in the init block
       is the while for loop *)
 
-  | SC_goto of string
+  | S_c_goto of string
   (** goto statements. *)
 
-  | SC_switch of expr * stmt
+  | S_c_switch of expr * stmt
   (** switch statement. *)
 
-  | SC_labeled_stmt of string * stmt
+  | S_c_labeled_stmt of string * stmt
   (** labeled statements. *)
 
-  | SC_switch_case of expr * stmt
+  | S_c_switch_case of expr * stmt
   (** case of a switch statement. *)
 
-  | SC_switch_default of stmt
+  | S_c_switch_default of stmt
   (** default case of switch statements. *)
 
 
-type program +=
+type program_kind +=
   | C_program of c_program
   (** A complete C program. *)
       
@@ -271,19 +276,19 @@ type program +=
 (*==========================================================================*)
 
 let rec to_clang_type : typ -> C_AST.type_qual = function
-  | TC_void -> C_AST.T_void, C_AST.no_qual
-  | TC_bool -> C_AST.T_bool, C_AST.no_qual
-  | TC_integer(i) -> C_AST.T_integer (to_clang_int_type i), C_AST.no_qual
-  | TC_float(f) -> C_AST.T_float (to_clang_float_type f), C_AST.no_qual
-  | TC_pointer(t) -> C_AST.T_pointer (to_clang_type t), C_AST.no_qual
-  | TC_array(t, array_length) -> C_AST.T_array (to_clang_type t, to_clang_array_length array_length), C_AST.no_qual
-  | TC_bitfield(t, size) -> C_AST.T_bitfield (fst @@ to_clang_type t, size), C_AST.no_qual
-  | TC_function(None) -> C_AST.T_function None, C_AST.no_qual
-  | TC_builtin_fn -> C_AST.T_builtin_fn, C_AST.no_qual
-  | TC_typedef(typedef) -> C_AST.T_typedef (to_clang_typedef typedef), C_AST.no_qual
-  | TC_record(record) -> C_AST.T_record (to_clang_record_type record), C_AST.no_qual
-  | TC_enum(enum) -> C_AST.T_enum (to_clang_enum_type enum), C_AST.no_qual
-  | TC_qualified(qual, t) ->
+  | T_c_void -> C_AST.T_void, C_AST.no_qual
+  | Universal.Ast.T_bool -> C_AST.T_bool, C_AST.no_qual
+  | T_c_integer(i) -> C_AST.T_integer (to_clang_int_type i), C_AST.no_qual
+  | T_c_float(f) -> C_AST.T_float (to_clang_float_type f), C_AST.no_qual
+  | T_c_pointer(t) -> C_AST.T_pointer (to_clang_type t), C_AST.no_qual
+  | T_c_array(t, array_length) -> C_AST.T_array (to_clang_type t, to_clang_array_length array_length), C_AST.no_qual
+  | T_c_bitfield(t, size) -> C_AST.T_bitfield (fst @@ to_clang_type t, size), C_AST.no_qual
+  | T_c_function(None) -> C_AST.T_function None, C_AST.no_qual
+  | T_c_builtin_fn -> C_AST.T_builtin_fn, C_AST.no_qual
+  | T_c_typedef(typedef) -> C_AST.T_typedef (to_clang_typedef typedef), C_AST.no_qual
+  | T_c_record(record) -> C_AST.T_record (to_clang_record_type record), C_AST.no_qual
+  | T_c_enum(enum) -> C_AST.T_enum (to_clang_enum_type enum), C_AST.no_qual
+  | T_c_qualified(qual, t) ->
     let (t, other_qual) = to_clang_type t in
     let qual = to_clang_type_qualifier qual in
     let q = C_AST.merge_qualifiers qual other_qual in
@@ -415,10 +420,10 @@ let sizeof_type (t : typ) : Z.t =
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
     match t with
-    | TC_void -> invalid_arg "sizeof_expr: size of void"
-    | TC_bool | TC_integer _ | TC_float _ | TC_pointer _ | TC_record _ | TC_enum _ ->
+    | T_c_void -> invalid_arg "sizeof_expr: size of void"
+    | Universal.Ast.T_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
        mk_z (sizeof_type t) range
-    | TC_array (t,l) ->
+    | T_c_array (t,l) ->
        let len = match l with
          | C_array_length_cst len -> mk_z len range
          | C_array_length_expr e -> e
@@ -428,9 +433,9 @@ let sizeof_expr (t:typ) range : expr =
             mk_zero range
        in
        mk_binop (doit t) O_mult len range
-    | TC_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
-    | TC_function _ | TC_builtin_fn -> invalid_arg "sizeof_expr: size of function"
-    | TC_typedef t -> doit (t.c_typedef_def)
+    | T_c_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
+    | T_c_function _ | T_c_builtin_fn -> invalid_arg "sizeof_expr: size of function"
+    | T_c_typedef t -> doit (t.c_typedef_def)
     | _ -> assert false
   in
   doit t
@@ -440,14 +445,14 @@ let sizeof_expr (t:typ) range : expr =
 (** [is_signed t] whether [t] is signed *)    
 let rec is_signed (t : typ) : bool=
   match t with
-  | TC_integer it ->
+  | T_c_integer it ->
      begin
        match it with
        | C_char C_signed | C_signed_char | C_signed_short | C_signed_int
        | C_signed_long | C_signed_long_long | C_signed_int128 -> true
        | _ -> false
      end
-  | TC_qualified(_, t) -> is_signed t
+  | T_c_qualified(_, t) -> is_signed t
   | _ -> failwith "[issigned] not an integer type"
 
 (** [range t] computes the interval range of type [t] *)
@@ -487,8 +492,8 @@ let warp (v : Universal.Ast.var) ((l,h) : int * int) range : Framework.Ast.expr 
 (** [is_inttype t] wheter [t] is an integer type *)
 let rec is_inttype ( t : typ) =
   match t with
-  | TC_integer _ -> true
-  | TC_qualified(_, t) -> is_inttype t
+  | T_c_integer _ -> true
+  | T_c_qualified(_, t) -> is_inttype t
   | _ -> false
 
 (** [is_scalartype t] wheter [t] is a scalar type *)
@@ -500,17 +505,17 @@ let is_scalartype ( t : typ) =
 (** [is_pointer t] wheter [t] is a pointer *)
 let rec is_pointer ( t : typ) =
   match t with
-  | TC_pointer _ -> true
-  | TC_qualified(_, t) -> is_pointer t
+  | T_c_pointer _ -> true
+  | T_c_qualified(_, t) -> is_pointer t
   | _ -> false
 
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)
 let pointer_type (t : typ) =
-  (TC_pointer t)
+  (T_c_pointer t)
 
 (** [is_scalartype t] types pointed to by [t] fails if [t] is not a
    pointer type *)
 let under_type (t : typ) : typ =
   match t with
-  | TC_pointer t' -> t'
+  | T_c_pointer t' -> t'
   | _ -> failwith "[under_type] called with a non pointer argument"

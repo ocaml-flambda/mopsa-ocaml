@@ -11,34 +11,10 @@
 open Framework
 open Framework.Flow
 
-let unit_test_mode = ref false
-
 let setup () =
-  Options.register (
-    "-config",
-    Arg.String(fun f -> Config.config_file := f),
-    " path to the domain configuration file"
-  );
-  Options.register (
-    "-test",
-    Arg.Set unit_test_mode,
-    " unit test mode"
-  );
-  Options.register (
-    "-debug",
-    Arg.String(fun f ->
-        Str.split (Str.regexp ",") f |>
-        List.iter Debug.add_channel
-      ),
-    " debug channels"
-  );
-  Options.register (
-    "-color",
-    Arg.Bool(fun f -> Debug.print_color := f),
-    " print debug messages in color"
-  );
+  Options.setup ();
   Lang.Universal.Setup.all ();
-  (* Lang.C.Setup.all (); *)
+  Lang.C.Setup.all ();
   Lang.Python.Setup.all ();
   ()
 
@@ -57,7 +33,7 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
     let abs = Analyzer.init prog in
     let stmt =
       Ast.mk_stmt
-        (if !unit_test_mode then Ast.S_unit_test prog else Ast.S_program prog)
+        (if Options.(common_options.unit_test_mode) then Ast.S_unit_test prog else Ast.S_program prog)
         Framework.Ast.(mk_file_range prog.prog_file)
     in
     let ctx = Framework.Context.empty in
@@ -109,11 +85,12 @@ let () =
   setup ();
 
   Arg.parse !Options.spec (fun filename ->
+      Options.signal_done ();
       Debug.info "Parsing the program ...";
       let prog =
         match Filename.extension filename with
-        (* | ".c" ->
-         *    Lang.C.Frontend.parse_program filename *)
+        | ".c" ->
+           Lang.C.Frontend.parse_program filename
         | ".py" ->
           Lang.Python.Frontend.parse_program filename
         | _ ->
@@ -121,7 +98,7 @@ let () =
       in
 
       Debug.info "Parsing configuration file ...";
-      let domain = Config.parse !Config.config_file in
+      let domain = Config.parse Options.(common_options.config) in
 
       (* Start the analysis *)
       start domain prog

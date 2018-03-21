@@ -193,17 +193,12 @@ let init_modules dir =
         ()
     )
   
-let init dir () =
+let init () =
+  let dir = Framework.Options.(common_options.stubs) in
   init_std dir;
   init_modules dir;
   ()
 
 let setup () =
-  Framework.Options.register (
-    "-stubs-dir",
-    Arg.String (fun dir ->
-        init dir ()
-      ),
-    " path to stubs directory"
-  )
+  Framework.Options.on_done init
 

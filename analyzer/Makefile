@@ -12,8 +12,7 @@ framework.lattices = enum top_set partial_map total_map range_set
 framework.domains = global exec eval local localFlow stateless composers
 
 
-#lang = universal c python
-lang = universal python
+lang = universal c python
 
 lang.universal = ast pp visitor utils flows heap nonrel numeric setup
 lang.universal.heap = pool recency
@@ -25,7 +24,7 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-#lang.c = ast frontend cell setup
+lang.c = ast frontend setup #cell setup
 #lang.c.cell = varGen typ cellAst toCell pointer numCell
 
 #Packages
@@ -39,11 +38,17 @@ include $(MOPSAROOT)/make/main.mk
 
 #tests
 TESTS = tests
-PYTESTS = $(shell find $(TESTS) -name "*.py")
 
 python-tests: native
-	@ - $(foreach test, $(PYTESTS), \
+	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test -config configs/default.py.json -stubs-dir stubs/python $(MOPSAPARAM) $(test); \
+		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
+	)
+
+c-tests: native
+	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
+		echo ""; \
+		echo "Running test $(test)"; \
+		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
 	)

@@ -125,7 +125,7 @@ type stmt_kind = ..
 
 type stmt_kind +=
   | S_program of program
-  (** Program to be analyzed *)
+  (** Standalone program to be analyzed *)
 
   | S_unit_test of program
   (** Unit test program *)

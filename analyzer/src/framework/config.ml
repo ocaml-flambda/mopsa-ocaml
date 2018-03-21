@@ -32,8 +32,6 @@ open Yojson.Basic.Util
 
 let debug fmt = Debug.debug ~channel:"config" fmt
 
-let config_file = ref ""
-
 (** {2 Flat domains} *)
 
 let rec build_domain = function
