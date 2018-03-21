@@ -11,22 +11,33 @@ let debug fmt =
 let rec parse_program (file: string) : Framework.Ast.program =
   let target_options = Clang_parser.get_default_target_options () in
   let target_info = Clang_parser.get_target_info target_options in
-  let x, diag = Clang_parser.parse (target_options) file [||] in
-  debug "%a"
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
-       (Format.pp_print_string)
-    ) (List.map (Clang_dump.string_of_diagnostic) diag)
-  ;
+  let x, diag = Clang_parser.parse (target_options) file [|"-I" ^ Framework.Options.(common_options.stubs)|] in
+  let () =
+    match diag with
+    | [] -> ()
+    | _ ->
+      debug "%a"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
+           (Format.pp_print_string)
+        ) (List.map (Clang_dump.string_of_diagnostic) diag)
+      ;
+      let error_diag = List.exists (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false) diag in
+      if error_diag then
+        failwith "Fatal parsing errors"
+  in
+        
   let ctx = Clang_to_C.create_context file target_info in
   Clang_to_C.add_translation_unit ctx file x;
   let prj = Clang_to_C.link_project ctx in
 
+  debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;
+  
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
                 List.map from_var_with_init
   in
-
+  
   let funcs = StringMap.bindings prj.proj_funcs |>
               List.map snd |>
               List.map from_function

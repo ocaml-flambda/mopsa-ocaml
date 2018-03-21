@@ -1,4 +1,4 @@
-let all () =
+let init () =
   Numeric.Relational.setup ();
   Flows.(
     Intraproc.setup ();
@@ -6,4 +6,7 @@ let all () =
     Loops.setup ();
   );
   Heap.Recency.setup ();
+  ()
+
+let start () =
   ()

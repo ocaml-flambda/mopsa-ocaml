@@ -14,17 +14,10 @@
 *)
 let spec : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
 
-let done_triggers : (unit -> unit) list ref = ref []
-
 (** Register a command-line option. *)
 let register (opt) =
   spec := opt :: !spec
 
-let on_done (f: unit -> unit) =
-  done_triggers := f :: !done_triggers
-
-let signal_done () =
-  List.iter (fun f -> f ()) !done_triggers
 
 type common_options = {
   mutable config : string;

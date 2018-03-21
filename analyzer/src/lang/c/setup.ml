@@ -1,2 +1,5 @@
-let all () =
+let init () =
+  ()
+
+let start () =
   ()

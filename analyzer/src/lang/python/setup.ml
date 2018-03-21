@@ -1,5 +1,4 @@
-let all () =
-  Builtins.setup ();
+let init () =
   
   Objects.(
     Object.setup ();
@@ -36,4 +35,8 @@ let all () =
     Unit_test.setup ();
   );
 
+  ()
+
+let start () =
+  Builtins.setup ();
   ()

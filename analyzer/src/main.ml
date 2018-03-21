@@ -11,11 +11,11 @@
 open Framework
 open Framework.Flow
 
-let setup () =
+let init () =
   Options.setup ();
-  Lang.Universal.Setup.all ();
-  Lang.C.Setup.all ();
-  Lang.Python.Setup.all ();
+  Lang.Universal.Setup.init ();
+  Lang.C.Setup.init ();
+  Lang.Python.Setup.init ();
   ()
 
 
@@ -82,16 +82,17 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
 
 
 let () =
-  setup ();
+  init ();
 
   Arg.parse !Options.spec (fun filename ->
-      Options.signal_done ();
       Debug.info "Parsing the program ...";
       let prog =
         match Filename.extension filename with
         | ".c" ->
-           Lang.C.Frontend.parse_program filename
+          Lang.C.Setup.start ();
+          Lang.C.Frontend.parse_program filename
         | ".py" ->
+          Lang.Python.Setup.start ();
           Lang.Python.Frontend.parse_program filename
         | _ ->
           failwith "Unknown program extension"

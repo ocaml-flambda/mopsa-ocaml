@@ -193,12 +193,9 @@ let init_modules dir =
         ()
     )
   
-let init () =
+let setup () =
   let dir = Framework.Options.(common_options.stubs) in
   init_std dir;
   init_modules dir;
   ()
-
-let setup () =
-  Framework.Options.on_done init
 
