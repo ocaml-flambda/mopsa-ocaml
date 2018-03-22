@@ -1,4 +1,5 @@
 let init () =
+  Unit_tests.setup ();
   Numeric.Relational.setup ();
   Flows.(
     Intraproc.setup ();

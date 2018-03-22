@@ -43,10 +43,7 @@ let rec parse_program (file: string) : Framework.Ast.program =
               List.map from_function
   in
   {
-    prog_kind = Ast.C_program {
-        c_program_global_variables = globals;
-        c_program_functions = funcs;
-      };
+    prog_kind = Ast.C_program (globals, funcs);
     prog_file = file;
   }
 

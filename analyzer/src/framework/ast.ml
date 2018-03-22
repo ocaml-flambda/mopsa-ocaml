@@ -113,9 +113,6 @@ type program = {
   prog_file : string;
 }
 
-let pkind prog = prog.prog_kind
-let pfile prog = prog.prog_file
-
 (*==========================================================================*)
                      (**      {2 Statements}      *)
 (*==========================================================================*)
@@ -125,10 +122,7 @@ type stmt_kind = ..
 
 type stmt_kind +=
   | S_program of program
-  (** Standalone program to be analyzed *)
-
-  | S_unit_test of program
-  (** Unit test program *)
+  (** Program to be analyzed *)
 
 type stmt = {
   skind : stmt_kind; (** Kind of the statement. *)

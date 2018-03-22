@@ -30,9 +30,8 @@ let pp_except fmt e =
 
 let () =
   register_pp_program (fun default fmt prog ->
-      match pkind prog with
-      | Py_program(globals, body) ->
-        pp_stmt fmt body
+      match prog.prog_kind with
+      | Py_program(globals, body) -> pp_stmt fmt body
       | _ -> default fmt prog
     );
   register_pp_typ (fun default fmt typ ->

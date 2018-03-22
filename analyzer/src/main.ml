@@ -32,9 +32,7 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
     Debug.info "Computing initial environments ...";
     let abs = Analyzer.init prog in
     let stmt =
-      Ast.mk_stmt
-        (if Options.(common_options.unit_test_mode) then Ast.S_unit_test prog else Ast.S_program prog)
-        Framework.Ast.(mk_file_range prog.prog_file)
+      Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
     in
     let ctx = Framework.Context.empty in
 

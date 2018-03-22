@@ -23,8 +23,7 @@ let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
 and pp_stmt_chain : (Format.formatter -> stmt -> unit) ref =
   ref (fun fmt stmt ->
       match skind stmt with
-      | S_program prog
-      | S_unit_test prog -> pp_program fmt prog
+      | S_program prog -> pp_program fmt prog
       | _ -> failwith "Pp: Unknown statement"
     )
 

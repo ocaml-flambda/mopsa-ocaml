@@ -30,10 +30,7 @@ let init () =
     Nonrel.setup ();
   );
 
-  Programs.(
-    Standalone.setup ();
-    Unit_test.setup ();
-  );
+  Program.setup ();
 
   ()
 

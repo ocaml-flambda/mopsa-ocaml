@@ -76,7 +76,7 @@ let () =
     );
   register_pp_program (fun default fmt prg ->
       match prg.prog_kind with
-      | Ast.C_program prg ->
+      | Ast.C_program (globals, funcs) ->
         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
           (fun fmt f ->
              fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
@@ -85,7 +85,7 @@ let () =
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") Universal.Pp.pp_var) f.c_func_parameters
                pp_stmt f.c_func_body
           )
-          fmt prg.c_program_functions
+          fmt funcs
           
       | _ -> default fmt prg
     );

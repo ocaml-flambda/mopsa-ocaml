@@ -1,9 +1,10 @@
 {
     "iter": [
-        "python.programs.standalone",
-        "python.programs.unit_test",
+        "python.program",
 
-        "universal.flows.intraproc",
+        "universal.unit_tests",
+
+	"universal.flows.intraproc",
         "universal.flows.interproc",
         "universal.flows.loops",
 

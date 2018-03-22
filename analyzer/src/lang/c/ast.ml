@@ -234,12 +234,6 @@ type expr_kind +=
                            (** {2 Statements} *)
 (*==========================================================================*)
 
-type c_program = {
-  c_program_global_variables : (var * c_init option) list;
-  c_program_functions : c_fundec list;
-}
-(** Program descriptor. *)
-
 type stmt_kind +=
   | S_c_local_declaration of var
   (** declaration of a local variable *)
@@ -274,10 +268,11 @@ type stmt_kind +=
 
 
 type program_kind +=
-  | C_program of c_program
-  (** A complete C program. *)
-      
-
+  | C_program of
+      (var * c_init option) list (** global variables *) *
+      c_fundec list (** functions *)
+(** A complete C program. *)
+                   
 
 (*==========================================================================*)
                   (** {2 Conversion to Clang parser types} *)

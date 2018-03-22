@@ -1,7 +1,12 @@
 {
     "iter": [
+	"c.program",
+	"c.flows.intraproc",
+
+	"universal.unit_tests",
         "universal.flows.intraproc",
         "universal.flows.interproc",
         "universal.flows.loops"
+
     ]
 }

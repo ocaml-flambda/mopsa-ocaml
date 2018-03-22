@@ -14,17 +14,17 @@ framework.domains = global exec eval local localFlow stateless composers
 
 lang = universal c python
 
-lang.universal = ast pp visitor utils flows heap nonrel numeric setup
+lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
 lang.universal.heap = pool recency
 lang.universal.nonrel = value domain
 lang.universal.numeric = interval query integers floats relational
 
-lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs programs setup
+lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs program setup
 lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-lang.c = ast frontend pp setup #cell setup
+lang.c = ast frontend pp flows program setup #cell setup
 #lang.c.cell = varGen typ cellAst toCell pointer numCell
 
 #Packages

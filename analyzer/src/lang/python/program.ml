@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Main handler of standalone Python programs. *)
+(** Main handler of Python programs. *)
 
 
 open Framework.Domains.Stateless
@@ -17,7 +17,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 
-let name = "python.programs.standalone"
+let name = "python.program"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -67,15 +67,57 @@ struct
     flow3
 
 
+  let get_function_name fundec = fundec.py_func_var.orgname
+
+  let is_test fundec =
+    String.sub (get_function_name fundec) 0 4 = "test"
+
+  let get_test_functions body =
+    Framework.Visitor.fold_stmt
+        (fun acc exp -> acc)
+        (fun acc stmt ->
+           match skind stmt with
+           | S_py_function(fundec)
+             when is_test fundec  ->
+             fundec :: acc
+           | _ -> acc
+        ) [] body
+
+
+  let mk_py_unit_tests file tests =
+    let range = mk_file_range file in
+    let tests =
+      tests |> List.map (fun test ->
+          (test.py_func_var.orgname, test.py_func_body)
+        )
+    in
+    mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
+
+  
   let exec stmt manager ctx flow  =
     match skind stmt with
-    | S_program({prog_kind = Py_program(globals, body); prog_file}) ->
+    | S_program({prog_kind = Py_program(globals, body); prog_file})
+      when not Framework.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
       init_globals prog_file globals manager ctx flow |>
       (* Execute the body *)
       manager.exec body ctx |>
       Exec.return
 
+    | S_program({prog_kind = Py_program(globals, body); prog_file})
+      when Framework.Options.(common_options.unit_test_mode) ->
+      (* Initialize global variables *)
+      let flow1 = init_globals prog_file globals manager ctx flow in
+
+      (* Execute the body *)
+      let flow2 = manager.exec body ctx flow1 in
+
+      (* Collect test functions *)
+      let tests = get_test_functions body in
+      let stmt = mk_py_unit_tests prog_file tests in
+      Exec.return (manager.exec stmt ctx flow2)
+
+  
     | _ -> None
 
   let ask _ _ _ _ = None

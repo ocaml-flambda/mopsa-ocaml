@@ -341,9 +341,15 @@ type stmt_kind +=
 
   | S_project_vars of var list
   (** Project the abstract environments on the given list of variables. *)
-
+        
   | S_rebase_addr of addr (** old *) * addr (** new *)
   (** Change the address of a previously allocated object *)
+
+  | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)
+  (** Unit tests suite *)
+
+  | S_assert of expr
+  (** Unit tests assertions *)
 
 let mk_rename v v' =
   mk_stmt (S_rename_var (v, v'))
