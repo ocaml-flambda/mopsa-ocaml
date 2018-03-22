@@ -459,7 +459,7 @@ let rec is_signed (t : typ) : bool=
   | _ -> failwith "[issigned] not an integer type"
 
 (** [range t] computes the interval range of type [t] *)
-let range (t : typ) =
+let rangeof (t : typ) =
   let part = 8*Z.to_int (sizeof_type t) in
   if is_signed t then
     let part' = Z.pow (Z.of_int (2)) (part -1) in
@@ -469,8 +469,8 @@ let range (t : typ) =
     ( Z.of_int 0 , Z.sub part' (Z.of_int 1))
 
 (** [range t] computes the interval range of type [t] *)
-let range_int t =
-  let a,b = range t in
+let rangeof_int t =
+  let a,b = rangeof t in
   (Z.to_int a, Z.to_int b)
 
 (** [warp v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)

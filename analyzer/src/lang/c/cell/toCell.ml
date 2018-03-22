@@ -11,7 +11,7 @@
 open Framework.Flow
 open Framework.Domains
 open Framework.Domains.Stateless
-open Framework.Domains.Manager
+open Framework.Manager
 open Framework.Ast
 open Ast
 

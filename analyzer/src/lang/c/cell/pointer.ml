@@ -11,7 +11,7 @@
 open Framework.Flow
 open Framework.Domains
 open Framework.Domains.Global
-open Framework.Domains.Manager
+open Framework.Manager
 open Framework.Ast
 open Ast
 
@@ -31,7 +31,7 @@ struct
   type t = Typ.CPML.t
   let join = join
 
-  let init prog (man : ('a, t) Manager.manager) (flow : 'a flow) =
+  let init prog (man : ('a, t) manager) (flow : 'a flow) =
     let myenv = man.flow.get TCur flow in
     man.flow.set
       TCur
@@ -69,7 +69,9 @@ struct
   let exec stmt man ctx gabs : 'a flow option =
     match skind stmt with
     | Universal.Ast.S_assign(e,e') ->
-      Eval.compose_exec_list (fun l flow ->
+      Eval.compose_exec_list
+        [e; e']
+        (fun l flow ->
           match l with
           | [e;e'] ->
             begin
@@ -96,7 +98,8 @@ struct
                 Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e')} ctx flow)
             end
           | _ -> assert false
-        ) (fun _ -> None) (*TODO <- qu'est ce?*) [] man ctx gabs
+        ) (fun flow -> Exec.return flow)
+        man ctx gabs
     | _ -> Exec.fail
 
   let rec fold_int f x0 (g,d) =
@@ -107,9 +110,10 @@ struct
     let open Universal.Ast in
     let range = erange expr in
     match ekind expr with
-    | EC_address_of e' ->
+    | E_c_address_of e' ->
       begin
         Eval.compose_eval
+          e'
           (fun e' flow ->
             let open Typ.Cell in
             match ekind e' with
@@ -122,7 +126,7 @@ struct
             | _ -> None
           )
           (fun flow -> Eval.singleton (None, flow, []))
-          e' man ctx flow
+          man ctx flow
       end
     | CellAst.Cell c when c.Typ.Cell.t |> is_pointer ->
       begin
@@ -136,6 +140,7 @@ struct
     | E_binop(op, g, d) when op = O_plus && g |> etyp |> is_pointer ->
       begin
         Eval.compose_eval
+          g
           (fun g' flow ->
             match ekind g' with
             | CellAst.Pointer(b, o) ->
@@ -144,11 +149,12 @@ struct
             | _ -> None
           )
           (fun flow -> Eval.singleton (None, flow, []))
-          g man ctx flow
+          man ctx flow
       end
-    | EC_deref e' ->
+    | E_c_deref e' ->
       begin
         Eval.compose_eval
+          e'
           (fun e' flow ->
             match ekind e' with
             | CellAst.Pointer(b, o) ->
@@ -181,7 +187,7 @@ struct
             | _ -> assert false
           )
           (fun flow -> Eval.singleton (None, flow, []))
-          e' man ctx flow
+          man ctx flow
       end
     | _ -> None
   let ask _ _ _ _ = None
@@ -189,4 +195,4 @@ struct
   end
 
 let setup () =
-  Global.register_domain name (module CPointer)
+  register_domain name (module CPointer)

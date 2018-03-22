@@ -24,8 +24,8 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-lang.c = ast frontend pp flows program setup #cell setup
-#lang.c.cell = varGen typ cellAst toCell pointer numCell
+lang.c = ast frontend pp cell flows program setup
+lang.c.cell = varGen typ cellAst toCell pointer numCell
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
