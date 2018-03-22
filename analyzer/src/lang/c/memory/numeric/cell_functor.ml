@@ -13,24 +13,50 @@ open Framework.Manager
 open Framework.Domains
 open Framework.Flow
 open Ast
-open CellAst
+open Cell
+open Cell_ast
 
 
-let vargen_var () = VarGen.fresh_var_t (Universal.Ast.T_int) "var"
+let name = "c.memory.numeric.cell_functor"
+let debug fmt = Debug.debug ~channel:name fmt
 
-let debug fmt = Debug.debug ~channel:"c.cell.abstract" fmt
+let name_counters = Hashtbl.create 12
+
+let fresh name =
+  let i =
+    try
+      Hashtbl.find name_counters name
+    with
+    | Not_found -> 0
+  in
+  let () = Hashtbl.replace name_counters name (i+1) in
+  Format.sprintf "%s_%d" name i
+
+let fresh_var_t t name =
+  let n = fresh name in
+  {Universal.Ast.orgname = n ; Universal.Ast.unname = n ; vtyp = t}
+
+let fresh_var name =
+  let n = fresh name in
+  {Universal.Ast.orgname = n ;
+   Universal.Ast.unname = n ;
+   vtyp = Framework.Ast.T_any
+  }
+
+
+let vargen_var () = fresh_var_t (Universal.Ast.T_int) "var"
 
 module Make(ValAbs : DOMAIN) = struct
   type t =
     {
-      cs : Typ.CS.t;    (* set of cells *)
-      bd : Typ.CVE.t;   (* cells <-> variables *)
+      cs : CS.t;    (* set of cells *)
+      bd : CVE.t;   (* cells <-> variables *)
       a  : ValAbs.t (* abstract domain over variables *)
     }
   let print fmt x =
-    Format.fprintf fmt "@[<v 1>{@,cs = %a,@,bd = %a,@,a = %a@]@,}"
-      Typ.CS.print x.cs
-      Typ.CVE.print x.bd
+    Format.fprintf fmt "cs = @[%a@]@\nbd = @[%a@]@\n@[%a@]"
+      CS.print x.cs
+      CVE.print x.bd
       ValAbs.print x.a
 
   let subman : ('a, t) manager -> ('a, ValAbs.t) manager =
@@ -52,8 +78,8 @@ module Make(ValAbs : DOMAIN) = struct
       
   let remove_vars (r : Typ.VS.t) (u : t) range =
     let nvars_to_remove =
-      Typ.CVE.fold (fun (c,v) acc ->
-          if Typ.VS.mem c.Typ.Cell.v r then
+      CVE.fold (fun (c,v) acc ->
+          if Typ.VS.mem c.v r then
             Typ.VS.add v acc
           else
             acc
@@ -65,8 +91,8 @@ module Make(ValAbs : DOMAIN) = struct
     in
     let nvars_remove_stmt = Universal.Ast.mk_block nvars_remove_block range in
     {
-        cs = Typ.CS.remove_vars r u.cs;
-        bd = Typ.CVE.remove_vars r u.bd;
+        cs = CS.remove_vars r u.cs;
+        bd = CVE.remove_vars r u.bd;
         a = valabs_trivial_exec nvars_remove_stmt u.a
       }
 
@@ -79,8 +105,8 @@ module Make(ValAbs : DOMAIN) = struct
   let apply_renaming (r : Typ.VVM.t) (u : t) =
     {
       u with
-      cs = Typ.CS.apply_renaming r u.cs;
-      bd = Typ.CVE.apply_renaming r u.bd;
+      cs = CS.apply_renaming r u.cs;
+      bd = CVE.apply_renaming r u.bd;
     }
   type pexp = Invalid
 
@@ -89,31 +115,30 @@ module Make(ValAbs : DOMAIN) = struct
     | Pexp of pexp
 
   (** [phi c u] collects constraints over [c] found in [u] *)
-  let phi (c : Typ.Cell.t) (u : t) range : phi_exp =
-    let open Typ.Cell in
+  let phi (c : cell) (u : t) range : phi_exp =
     let open Universal.Ast in
     let cs = u.cs and bd = u.bd in
-    match Typ.CS.exist_and_find (fun c' -> Typ.Cell.compare c' c = 0) cs with
+    match CS.exist_and_find (fun c' -> compare_cell c' c = 0) cs with
     | Some c' ->
       Nexp (
         Some
-          {ekind = Universal.Ast.E_var (Typ.CVE.find_l c' bd);
+          {ekind = Universal.Ast.E_var (CVE.find_l c' bd);
            etyp = c.t;
            erange = mk_fresh_range ()
           }
       )
     | None ->
        begin
-         match Typ.CS.exist_and_find (fun c' ->
+         match CS.exist_and_find (fun c' ->
              is_inttype c'.t &&
              sizeof_type c'.t = sizeof_type c.t &&
              c.v = c'.v &&
              c.o = c'.o) cs with
          | Some c' ->
-            Nexp (Some (warp (Typ.CVE.find_l c' bd) (rangeof_int c.t) range))
+            Nexp (Some (warp (CVE.find_l c' bd) (rangeof_int c.t) range))
          | None ->
             begin
-              match Typ.CS.exist_and_find (
+              match CS.exist_and_find (
                 fun c' ->
                   let b = Z.of_int (c.o - c'.o) in
                   Z.lt b (sizeof_type c'.t) &&
@@ -123,7 +148,7 @@ module Make(ValAbs : DOMAIN) = struct
               | Some c' ->
                  begin
                    let b = c.o - c'.o in
-                   let x = Typ.CVE.find_l c' bd in
+                   let x = CVE.find_l c' bd in
                    let base = (Z.pow (Z.of_int 2) (8 * b))  in
                    Nexp (Some (
                        mk_binop
@@ -149,8 +174,8 @@ module Make(ValAbs : DOMAIN) = struct
                          let rec aux i l =
                            if i < n then
                              let tobein = {v = c.v ; o = c.o + i ; t = t'} in
-                             if Typ.CS.mem tobein cs then
-                               aux (i+1) ((Typ.CVE.find_l tobein bd) :: l)
+                             if CS.mem tobein cs then
+                               aux (i+1) ((CVE.find_l tobein bd) :: l)
                              else
                                raise NotPossible
                            else
@@ -194,8 +219,8 @@ module Make(ValAbs : DOMAIN) = struct
        end
 
   (** [add_cell c u] adds the cell [c] to the abstraction [u] *)
-  let add_cell (c : Typ.Cell.t) (u : t) range : t =
-    if Typ.CS.mem c u.cs then
+  let add_cell (c : cell) (u : t) range : t =
+    if CS.mem c u.cs then
       u
     else
       begin
@@ -213,24 +238,24 @@ module Make(ValAbs : DOMAIN) = struct
                 )
                 range
             in
-            {cs = Typ.CS.add c u.cs;
-             bd = Typ.CVE.add (c,var_c) u.bd;
+            {cs = CS.add c u.cs;
+             bd = CVE.add (c,var_c) u.bd;
              a = valabs_trivial_exec s u.a
             }
           end
         | Nexp None ->
           begin
             let var_c =  vargen_var () in
-            {cs = Typ.CS.add c u.cs;
-             bd = Typ.CVE.add (c,var_c) u.bd;
+            {cs = CS.add c u.cs;
+             bd = CVE.add (c,var_c) u.bd;
              a = u.a
             }
           end
         | Pexp Invalid ->
           begin
             let var_c = vargen_var () in
-            {cs = Typ.CS.add c u.cs;
-             bd = Typ.CVE.add (c,var_c) u.bd;
+            {cs = CS.add c u.cs;
+             bd = CVE.add (c,var_c) u.bd;
              a = u.a
             } (* TODO : this case needs work*)
           end
@@ -241,20 +266,20 @@ module Make(ValAbs : DOMAIN) = struct
         (u  : t)
         (u' : t)
       : t * t =
-      let diff' = Typ.CS.fold (fun e acc ->
-          if Typ.CS.mem e u'.cs then acc
-          else Typ.CS.add e acc
-        ) u.cs Typ.CS.empty
+      let diff' = CS.fold (fun e acc ->
+          if CS.mem e u'.cs then acc
+          else CS.add e acc
+        ) u.cs CS.empty
       in
-      let diff = Typ.CS.fold (fun e acc ->
-          if Typ.CS.mem e u.cs then acc
-          else Typ.CS.add e acc
-        ) u'.cs Typ.CS.empty
+      let diff = CS.fold (fun e acc ->
+          if CS.mem e u.cs then acc
+          else CS.add e acc
+        ) u'.cs CS.empty
       in
-      Typ.CS.fold (fun c acc ->
+      CS.fold (fun c acc ->
           add_cell c acc range
         ) diff u,
-      Typ.CS.fold (fun c acc ->
+      CS.fold (fun c acc ->
           add_cell c acc range
         ) diff' u'
     in
@@ -264,9 +289,9 @@ module Make(ValAbs : DOMAIN) = struct
         (u' : t)
       : t * t =
       let open Universal.Ast in
-      let a' = Typ.CS.fold (fun c a ->
-          let v' = Typ.CVE.find_l c u'.bd in
-          let v  = Typ.CVE.find_l c u.bd  in
+      let a' = CS.fold (fun c a ->
+          let v' = CVE.find_l c u'.bd in
+          let v  = CVE.find_l c u.bd  in
           valabs_trivial_exec (mk_rename v' v range) a
         ) u.cs u'.a
       in
@@ -274,8 +299,8 @@ module Make(ValAbs : DOMAIN) = struct
     in
     rebind_cells u u'
 
-  let top = {cs = Typ.CS.empty ; bd = Typ.CVE.empty ; a = ValAbs.top}
-  let bottom = {cs = Typ.CS.empty ; bd = Typ.CVE.empty ; a = ValAbs.bottom}
+  let top = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.top}
+  let bottom = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.bottom}
 
   let join (u : t) (u' : t) : t =
     if ValAbs.leq u.a ValAbs.bottom then
@@ -336,7 +361,7 @@ module Make(ValAbs : DOMAIN) = struct
   let init prog (man : ('a, t) manager) (flow : 'a flow) =
     let flow = ValAbs.init prog (subman man) flow in
     let u = get_domain_cur man flow in
-    set_domain_cur {u with cs = Typ.CS.empty ; bd = Typ.CVE.empty} man flow 
+    set_domain_cur {u with cs = CS.empty ; bd = CVE.empty} man flow 
 
   
   let exec (stmt : stmt) (man : ('a, t) manager) (ctx : Framework.Context.context) (flow : 'a flow)
@@ -352,9 +377,9 @@ module Make(ValAbs : DOMAIN) = struct
     let cell_to_var u stmt =
       Framework.Visitor.fold_map_stmt
         (fun u expr -> match ekind expr with
-            | CellAst.Cell c ->
+            | E_c_cell c ->
                let u'' = add_cell c u stmt.srange in
-               (u'', Universal.Ast.mk_var (Typ.CVE.find_l c u.bd) stmt.srange)
+               (u'', Universal.Ast.mk_var (CVE.find_l c u.bd) stmt.srange)
              | _ -> (u, expr)
           )
           (fun u stmt -> (u,stmt))
@@ -367,7 +392,8 @@ module Make(ValAbs : DOMAIN) = struct
     | S_remove_var v      ->
       do_on_all_flows (fun u -> remove_vars (Typ.VS.singleton v) u stmt.srange) flow
       |> Exec.return
-    | S_assign ({ ekind = CellAst.Cell c} , e') ->
+    | S_assign ({ ekind = E_c_cell c} , e') ->
+      debug "assign";
       let u = get_my_current_abstraction flow man in
       let u', stmt = cell_to_var u stmt in
       set_my_current_abstraction {u' with a = valabs_trivial_exec stmt u'.a} flow man
@@ -383,12 +409,26 @@ module Make(ValAbs : DOMAIN) = struct
             set_my_current_abstraction u'' flow man
             |> Exec.return
           )
-          (fun _ -> None ) man ctx flow
+          (fun flow -> Exec.return flow )
+          man ctx flow
       end
     | _ -> Exec.fail
 
-  let eval _ _ _ _ = None
-
+  let eval exp man ctx flow =
+    let u = get_domain_cur man flow in
+    let u', exp' = Framework.Visitor.fold_map_expr 
+          (fun u expr -> match ekind expr with
+             | E_c_cell c ->
+               let u'' = add_cell c u exp.erange in
+               (u'', Universal.Ast.mk_var (CVE.find_l c u.bd) exp.erange)
+             | _ -> (u, expr)
+          )
+          (fun u stmt -> (u,stmt))
+          u exp
+    in
+    let flow = set_domain_cur u' man flow in
+    ValAbs.eval exp' (subman man) ctx flow
+    
   let ask : type b. b Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> b option
     = fun request man ctx flow ->
     match request with
@@ -397,9 +437,9 @@ module Make(ValAbs : DOMAIN) = struct
         let u', exp =
           Framework.Visitor.fold_map_expr
             (fun u expr -> match ekind expr with
-               | CellAst.Cell c ->
+               | E_c_cell c ->
                  let u' = add_cell c u expr.erange in
-                 (u', Universal.Ast.mk_var (Typ.CVE.find_l c u'.bd) expr.erange)
+                 (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) expr.erange)
                | _ -> (u,expr)
             )
             (fun u stmt -> (u,stmt))
@@ -411,4 +451,4 @@ module Make(ValAbs : DOMAIN) = struct
 end
 
 let setup () =
-  register_functor "c.cell.numcell" (module Make)
+  register_functor name (module Make)

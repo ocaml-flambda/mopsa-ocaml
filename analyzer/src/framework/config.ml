@@ -35,16 +35,11 @@ let debug fmt = Debug.debug ~channel:"config" fmt
 (** {2 Flat domains} *)
 
 let rec build_domain = function
-  | `String(name) ->
-    build_leaf name
-  | `Assoc(obj) when List.mem_assoc "fun" obj ->
-    build_functor obj
-  | `Assoc(obj) when List.mem_assoc "fold" obj ->
-    build_fold @@ List.assoc "fold" obj
-  | `Assoc(obj) when List.mem_assoc "iter" obj ->
-    build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "stack" obj ->
-    build_stack @@ List.assoc "stack" obj
+  | `String(name) -> build_leaf name
+  | `Assoc(obj) when List.mem_assoc "fun" obj -> build_functor obj
+  | `Assoc(obj) when List.mem_assoc "fold" obj -> build_fold @@ List.assoc "fold" obj
+  | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
+  | `Assoc(obj) when List.mem_assoc "stack" obj -> build_stack @@ List.assoc "stack" obj
   | _ -> assert false
 
 and build_leaf name =
@@ -119,10 +114,8 @@ and build_stack json =
 and build_stack_domain : json -> (module Domains.Global.STACK_DOMAIN) =
   function
   | `String(name) -> build_stack_leaf name
-  | `Assoc(obj) when List.mem_assoc "fold" obj ->
-    build_stack_fold @@ List.assoc "fold" obj
-  | `Assoc(obj) when List.mem_assoc "iter" obj ->
-    build_stack_iter @@ List.assoc "iter" obj
+  | `Assoc(obj) when List.mem_assoc "fold" obj -> build_stack_fold @@ List.assoc "fold" obj
+  | `Assoc(obj) when List.mem_assoc "iter" obj -> build_stack_iter @@ List.assoc "iter" obj
   | _ -> assert false
 
 and build_stack_leaf (name: string) : (module Domains.Global.STACK_DOMAIN) =

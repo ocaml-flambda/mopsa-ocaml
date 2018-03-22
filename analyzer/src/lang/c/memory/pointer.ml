@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Intra-procedural control flow abstraction *)
+(** Abstraction of pointer arithmetic *)
 
 open Framework.Flow
 open Framework.Domains
@@ -14,8 +14,13 @@ open Framework.Domains.Global
 open Framework.Manager
 open Framework.Ast
 open Ast
+open Typ
+open Cell
+open Cell_ast
+    
+let name = "c.memory.pointer"
+let debug fmt = Debug.debug ~channel:name fmt
 
-let name = "C.cell.CPointer"
 
 module CPointer =
 struct
@@ -25,11 +30,26 @@ struct
                         (** {2 Lattice structure} *)
   (*==========================================================================*)
 
+  (** (cell -> pointsto lattice) lattice *)
+  module CPML = struct
+    include Framework.Lattices.Partial_map.Make(CellValue)(PSL)
+    let apply_renaming (r : VVM.t) =
+      map_p (fun (k,v) -> CellValue.apply_renaming r k, PSL.apply_renaming r v)
+    let remove_vars (s : VS.t) l =
+      let filtering = mem_predicate s in
+      filter (fun k _ -> filtering k.Cell.v) l
+  end
 
-  (* include Typ.CPML *)
-  open Typ.CPML
-  type t = Typ.CPML.t
-  let join = join
+
+  include CPML 
+
+  let print fmt a =
+    Format.fprintf fmt "ptr: @[%a@]@\n"
+      print a
+
+  (*==========================================================================*)
+                        (** {2 Transfer functions} *)
+  (*==========================================================================*)
 
   let init prog (man : ('a, t) manager) (flow : 'a flow) =
     let myenv = man.flow.get TCur flow in
@@ -37,24 +57,7 @@ struct
       TCur
       (man.ax.set top myenv)
       flow
-
-  let top = top
-  let print = print
-  let widening = widening
-  let meet = meet
-  let leq = leq
-  let is_top = is_top
-  let is_bottom = is_bottom
-  let bottom = bottom
-
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
-
-
-  (*==========================================================================*)
-                        (** {2 Transfer functions} *)
-  (*==========================================================================*)
-
+  
   let get_my_current_abstraction (flow : 'a flow) (man : ('a, t) manager)
     : t =
     let module FF = Framework.Flow in
@@ -76,16 +79,16 @@ struct
           | [e;e'] ->
             begin
               match ekind e, etyp e |> is_pointer with
-              | CellAst.Cell _, false ->
+              | E_c_cell _, false ->
                 Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e')} ctx flow)
-              | CellAst.Cell c, true  ->
+              | E_c_cell c, true  ->
                 begin
                   match ekind e' with
-                  | CellAst.Pointer(p, o) ->
+                  | E_c_pointer(p, o) ->
                     let u = get_my_current_abstraction flow man in
                     let u = u
-                            |> Typ.CPML.remove c
-                            |> Typ.CPML.add c p
+                            |> CPML.remove c
+                            |> CPML.add c p
                     in
                     let new_flow = set_my_current_abstraction u flow man in
                     Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,o)} ctx new_flow)
@@ -115,11 +118,10 @@ struct
         Eval.compose_eval
           e'
           (fun e' flow ->
-            let open Typ.Cell in
             match ekind e' with
-            | CellAst.Cell c ->
+            | E_c_cell c ->
               (
-                Some { expr with ekind = CellAst.Pointer(Typ.PSL.singleton (Typ.P.V c.v), mk_int c.o (tag_range range "offset"))},
+                Some { expr with ekind = E_c_pointer(PSL.singleton (Typ.P.V c.v), mk_int c.o (tag_range range "offset"))},
                 flow, []
               ) |>
               Eval.singleton
@@ -128,12 +130,12 @@ struct
           (fun flow -> Eval.singleton (None, flow, []))
           man ctx flow
       end
-    | CellAst.Cell c when c.Typ.Cell.t |> is_pointer ->
+    | E_c_cell c when c.t |> is_pointer ->
       begin
         (
           let pp = get_my_current_abstraction flow man in
           let p = find c pp in
-          (Some {expr with ekind = CellAst.Pointer(p, mk_expr (CellAst.Cell c) (erange expr))},flow,[])
+          (Some {expr with ekind = E_c_pointer(p, mk_expr (E_c_cell c) (erange expr))},flow,[])
           |> Eval.singleton
         )
       end
@@ -143,8 +145,8 @@ struct
           g
           (fun g' flow ->
             match ekind g' with
-            | CellAst.Pointer(b, o) ->
-              (Some {expr with ekind = CellAst.Pointer(b, mk_binop o O_plus d range)}, flow, [])
+            | E_c_pointer(b, o) ->
+              (Some {expr with ekind = E_c_pointer(b, mk_binop o O_plus d range)}, flow, [])
               |> Eval.singleton
             | _ -> None
           )
@@ -157,7 +159,7 @@ struct
           e'
           (fun e' flow ->
             match ekind e' with
-            | CellAst.Pointer(b, o) ->
+            | E_c_pointer(b, o) ->
               begin
                 let s =
                   man.ask
@@ -169,13 +171,12 @@ struct
                 | Some int ->
                   if Universal.Numeric.Interval.is_bounded int then
                     let left, right = Universal.Numeric.Interval.get_bounds int in
-                    Typ.PSL.fold (fun p acc ->
+                    PSL.fold (fun p acc ->
                         match p with
                         | Typ.P.V v ->
-                          let open Typ.Cell in
                           fold_int (fun i acc ->
                               let new_cell = {v = v; o = i; t = expr |> etyp} in
-                              let this_case = (Some {expr with ekind = CellAst.Cell new_cell}, flow, []) |> Eval.singleton in
+                              let this_case = (Some {expr with ekind = E_c_cell new_cell}, flow, []) |> Eval.singleton in
                               Eval.join acc this_case
                             ) acc (left,right)
                         | Typ.P.Invalid -> assert false (*TODO*)

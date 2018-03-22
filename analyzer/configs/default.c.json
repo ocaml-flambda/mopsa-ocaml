@@ -6,7 +6,17 @@
 	"universal.unit_tests",
         "universal.flows.intraproc",
         "universal.flows.interproc",
-        "universal.flows.loops"
+        "universal.flows.loops",
 
+	"c.memory.pointer",
+	{
+	    "fun": "c.memory.numeric.cell_functor",
+	    "arg": {
+		"iter": [
+		    "c.memory.numeric.overflow",
+		    "universal.numeric.non_relational"
+		]
+	    }
+	}
     ]
 }

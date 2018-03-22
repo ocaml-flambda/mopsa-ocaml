@@ -14,8 +14,10 @@ open Framework.Domains.Stateless
 open Framework.Manager
 open Framework.Ast
 open Ast
-
-let name = "C.cell.toCell"
+open Cell
+open Cell_ast
+    
+let name = "c.memory.to_cell"
 
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -35,8 +37,7 @@ struct
         (fun e ->
            match ekind e with
            | E_var v ->
-             let open Typ.Cell in
-             {e with ekind = CellAst.Cell( {v = v; o = 0; t = e |> etyp} )}
+             {e with ekind = E_c_cell( {v = v; o = 0; t = e |> etyp} )}
            | _ -> e
         )
         (fun s -> s)
