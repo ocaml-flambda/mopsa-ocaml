@@ -170,6 +170,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_binary (op, e1, e2) -> Universal.Ast.E_binop (from_binary_operator op, from_expr e1, from_expr e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
     | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
+    | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)
 
     | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
     | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
@@ -178,7 +179,6 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_member_access (_,_,_) -> failwith "E_member_access not supported"
     | C_AST.E_arrow_access (_,_,_) -> failwith "E_arrow_access not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
-    | C_AST.E_assign (_,_) -> failwith "E_assign not supported"
     | C_AST.E_comma (_,_) -> failwith "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> failwith "E_increment not supported"
     | C_AST.E_address_of _ -> failwith "E_address_of not supported"
@@ -241,8 +241,7 @@ and from_range : Clang_AST.range -> Framework.Ast.range =
 and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
-    | C_AST.S_local_declaration v -> Universal.Ast.S_block []
-    | C_AST.S_expression(C_AST.E_assign(lval, rval), _, _) -> Universal.Ast.S_assign (from_expr lval, from_expr rval)
+    | C_AST.S_local_declaration v -> Ast.S_c_local_declaration (from_var v)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr e)
     | C_AST.S_block block -> from_block srange block |> Framework.Ast.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr cond, from_block srange body, from_block srange orelse)

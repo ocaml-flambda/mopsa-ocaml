@@ -4,24 +4,6 @@ open Framework.Ast
 open Ast
 
 let () =
-  register_pp_expr (fun default fmt expr ->
-      match ekind expr with
-      | E_c_conditional(cond, body, orelse) -> assert false
-      | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
-      | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
-      | E_c_function(f) -> Universal.Pp.pp_var fmt f.c_func_var
-      | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
-      | E_c_compound_assign _ -> assert false
-      | E_c_comma _ -> assert false
-      | E_c_increment _ -> assert false
-      | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
-      | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
-      | E_c_cast(e, _) -> fprintf fmt "cast(%a) %a" pp_typ (etyp expr) pp_expr e
-      | E_c_predefined _ -> assert false
-      | E_c_var_args _ -> assert false
-      | E_c_atomic _ -> assert false
-      | _ -> default fmt expr
-    );
   register_pp_typ (fun default fmt typ ->
       match typ with
         | T_c_void -> pp_print_string fmt "void"
@@ -62,8 +44,28 @@ let () =
         | T_c_qualified(qual, t) -> assert false
         | _ -> default fmt typ
     );
+  register_pp_expr (fun default fmt expr ->
+      match ekind expr with
+      | E_c_conditional(cond, body, orelse) -> assert false
+      | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
+      | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
+      | E_c_function(f) -> Universal.Pp.pp_var fmt f.c_func_var
+      | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
+      | E_c_assign(lval, rval) -> fprintf fmt "%a = %a" pp_expr lval pp_expr rval
+      | E_c_compound_assign _ -> assert false
+      | E_c_comma _ -> assert false
+      | E_c_increment _ -> assert false
+      | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
+      | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
+      | E_c_cast(e, _) -> fprintf fmt "cast(%a) %a" pp_typ (etyp expr) pp_expr e
+      | E_c_predefined _ -> assert false
+      | E_c_var_args _ -> assert false
+      | E_c_atomic _ -> assert false
+      | _ -> default fmt expr
+    );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
+      | S_c_local_declaration v -> fprintf fmt "%a %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
           Framework.Pp.pp_stmt init

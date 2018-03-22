@@ -200,6 +200,9 @@ type expr_kind +=
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
 
+  | E_c_assign of expr (** lvalue *) * expr (** rvalue*)
+  (** Assignment as an expression *)
+
   | E_c_compound_assign of
       expr (** lvalue *) * typ (** promoted type of lvalue before operation *) *
       operator (** operator *) *
@@ -238,6 +241,9 @@ type c_program = {
 (** Program descriptor. *)
 
 type stmt_kind +=
+  | S_c_local_declaration of var
+  (** declaration of a local variable *)
+      
   | S_c_do_while of
       stmt (** body *) *
       expr (** condition *)
