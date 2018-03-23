@@ -1,5 +1,5 @@
 open Pp
-    
+
 let init () =
   Program.setup ();
   Flows.Intraproc.setup ();
@@ -8,7 +8,7 @@ let init () =
     Pointer.setup ();
     Numeric.(
       Cell_functor.setup ();
-      Overflow.setup ();
+      Machine_integers.setup ();
     );
   );
   ()

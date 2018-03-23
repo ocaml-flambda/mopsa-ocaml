@@ -98,7 +98,7 @@ and c_array_length =
   | C_array_no_length
   | C_array_length_cst of Z.t
   | C_array_length_expr of expr
-(** Cases of arrays length. *)  
+(** Cases of arrays length. *)
 
 and c_qual = {
   c_qual_is_const: bool;
@@ -236,7 +236,7 @@ type expr_kind +=
 type stmt_kind +=
   | S_c_local_declaration of var
   (** declaration of a local variable *)
-      
+
   | S_c_do_while of
       stmt (** body *) *
       expr (** condition *)
@@ -271,7 +271,7 @@ type program_kind +=
       (var * c_init option) list (** global variables *) *
       c_fundec list (** functions *)
 (** A complete C program. *)
-                   
+
 
 (*==========================================================================*)
                   (** {2 Conversion to Clang parser types} *)
@@ -301,8 +301,8 @@ and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
     C_AST.qual_is_const = qual.c_qual_is_const;
   }
-  
-  
+
+
 
 and to_clang_int_type : c_integer_type -> C_AST.integer_type = function
   | C_char(C_signed) -> C_AST.Char (C_AST.SIGNED)
@@ -356,7 +356,7 @@ and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
 and to_clang_record_kind : c_record_kind -> C_AST.record_kind = function
   | C_struct -> C_AST.STRUCT
   | C_union -> C_AST.UNION
-                 
+
 and to_clang_record_field : c_record_field -> C_AST.record_field = fun field ->
   {
     C_AST.field_uid = -1;
@@ -404,7 +404,7 @@ and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
       loc_column = origin_range.range_end.loc_column;
     };
   }
-  
+
 
 
 
@@ -444,7 +444,7 @@ let sizeof_expr (t:typ) range : expr =
 (** Size (in bytes) of a type, as an expression. Handles variable-length ararys. *)
 
 
-(** [is_signed t] whether [t] is signed *)    
+(** [is_signed t] whether [t] is signed *)
 let rec is_signed (t : typ) : bool=
   match t with
   | T_c_integer it ->

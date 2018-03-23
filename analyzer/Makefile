@@ -17,7 +17,7 @@ lang = universal c python
 lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
 lang.universal.heap = pool recency
 lang.universal.nonrel = value domain
-lang.universal.numeric = interval query integers floats non_relational relational
+lang.universal.numeric = interval query integers floats relational
 
 lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs program setup
 lang.python.memory = value nonrel
@@ -26,7 +26,7 @@ lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp memory flows program setup
 lang.c.memory = typ cell cell_ast pointer numeric to_cell
-lang.c.memory.numeric = cell_functor overflow 
+lang.c.memory.numeric = cell_functor machine_integers
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl

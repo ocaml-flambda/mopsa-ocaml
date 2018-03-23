@@ -13,8 +13,8 @@
 	    "fun": "c.memory.numeric.cell_functor",
 	    "arg": {
 		"iter": [
-		    "c.memory.numeric.overflow",
-		    "universal.numeric.non_relational"
+		    "c.memory.numeric.machine_integers",
+		    "universal.numeric.relational.polyhedra"
 		]
 	    }
 	}

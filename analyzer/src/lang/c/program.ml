@@ -40,7 +40,7 @@ struct
       ) flow
 
   let get_function_name fundec = fundec.c_func_var.orgname
-                                   
+
   let is_test fundec =
     String.sub (get_function_name fundec) 0 4 = "test"
 
@@ -56,7 +56,7 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
-  
+
   let exec stmt manager ctx flow  =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
@@ -73,7 +73,7 @@ struct
       let stmt = mk_c_unit_tests prog_file tests in
       Exec.return (manager.exec stmt ctx flow1)
 
-      
+
     | _ -> None
 
   let ask _ _ _ _ = None
