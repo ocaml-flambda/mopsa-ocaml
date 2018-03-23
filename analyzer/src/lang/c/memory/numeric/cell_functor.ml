@@ -75,7 +75,7 @@ module Make(ValAbs : DOMAIN) = struct
      * A.exec stmt Context.empty (Top.Nt (Flow.Map.singleton Flow.TCur a))
      * |> A.manager.flow.get TCur *)
     assert false
-      
+
   let remove_vars (r : Typ.VS.t) (u : t) range =
     let nvars_to_remove =
       CVE.fold (fun (c,v) acc ->
@@ -361,9 +361,9 @@ module Make(ValAbs : DOMAIN) = struct
   let init prog (man : ('a, t) manager) (flow : 'a flow) =
     let flow = ValAbs.init prog (subman man) flow in
     let u = get_domain_cur man flow in
-    set_domain_cur {u with cs = CS.empty ; bd = CVE.empty} man flow 
+    set_domain_cur {u with cs = CS.empty ; bd = CVE.empty} man flow
 
-  
+
   let exec (stmt : stmt) (man : ('a, t) manager) (ctx : Framework.Context.context) (flow : 'a flow)
     : 'a flow option =
     let open Universal.Ast in
@@ -416,7 +416,7 @@ module Make(ValAbs : DOMAIN) = struct
 
   let eval exp man ctx flow =
     let u = get_domain_cur man flow in
-    let u', exp' = Framework.Visitor.fold_map_expr 
+    let u', exp' = Framework.Visitor.fold_map_expr
           (fun u expr -> match ekind expr with
              | E_c_cell c ->
                let u'' = add_cell c u exp.erange in
@@ -428,7 +428,7 @@ module Make(ValAbs : DOMAIN) = struct
     in
     let flow = set_domain_cur u' man flow in
     ValAbs.eval exp' (subman man) ctx flow
-    
+
   let ask : type b. b Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> b option
     = fun request man ctx flow ->
     match request with

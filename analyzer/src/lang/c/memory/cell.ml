@@ -1,7 +1,7 @@
 open Framework.Ast
 open Framework.Pp
 open Typ
-    
+
 type cell =
   {
     v : Universal.Ast.var ; (* Base variable *)

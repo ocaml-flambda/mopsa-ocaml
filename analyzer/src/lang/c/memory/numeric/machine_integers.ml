@@ -20,52 +20,6 @@ let name = "c.memory.numeric.machine_integers"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
-(*==========================================================================*)
-(**                         {2 Value Abstraction}                           *)
-(*==========================================================================*)
-
-(** Interval abstraction of machine integers *)
-module Value =
-struct
-  include Universal.Numeric.Integers
-
-  let fwd_unop op v =
-    assert false
-
-  let bwd_unop op v r =
-    assert false
-
-  let fwd_binop op v1 v2 =
-    assert false
-
-  let bwd_binop op v1 v2 r =
-    assert false
-
-  let fwd_filter op v1 v2 =
-    assert false
-
-  let bwd_filter op v1 v2 =
-    assert false
-
-  let assume_true v =
-    assert false
-
-  let can_be_true v =
-    assert false
-
-  let assume_false v =
-    assert false
-
-  let can_be_false v =
-    assert false
-end
-
-
-(*==========================================================================*)
-(**                    {2 Environment Abstraction}                          *)
-(*==========================================================================*)
-
-
 (** Abstract domain. *)
 module Domain =
 struct
@@ -75,7 +29,7 @@ struct
   (**                           {2 Lattice}                                   *)
   (*==========================================================================*)
 
-  module VMap = Universal.Nonrel.Domain.Make(Value)
+  module VMap = Universal.Nonrel.Domain.Make(Universal.Numeric.Integers)
 
   include VMap
 
@@ -89,9 +43,19 @@ struct
 
   let init prog man flow = flow
 
-  let exec stmt man ctx flow = None
+  let eval exp man ctx flow =
+    match ekind exp with
+    | E_var v when is_inttype v.vtyp ->
+      assert false
 
-  let eval exp man ctx flow = None
+    | _ -> None
+
+  let exec stmt man ctx flow =
+    match skind stmt with
+    | S_assign({ekind = E_var v}, e) when is_inttype e.etyp ->
+      assert false
+
+    | _ -> None
 
   let ask _ _ _ _ = None
 
