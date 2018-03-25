@@ -11,6 +11,7 @@
 open Framework
 open Framework.Flow
 
+(** Initialize analyzer components and domains. *)
 let init () =
   Options.setup ();
   Lang.Universal.Setup.init ();
@@ -20,7 +21,7 @@ let init () =
 
 
 
-(** Start the analysis using the user-provided domain *)
+(** Start the analysis of [prog] using [domain] as the global abstraction. *)
 let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
   (* Top layer analyzer *)
   let module Domain = (val domain) in
@@ -77,7 +78,6 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
       (Printexc.get_backtrace ())
 
       ()
-
 
 let () =
   init ();
