@@ -128,15 +128,15 @@ struct
   let exec stmt man ctx flow =
     match skind stmt with
     (* Assignment to an attribute. *)
-    | S_assign({ekind = E_addr_attribute(addr, attr); etyp; erange}, rval) ->
+    | S_assign({ekind = E_addr_attribute(addr, attr); etyp; erange}, rval, kind) ->
       let lval = mk_var (attribute_var addr attr etyp) erange in
-      let stmt = mk_assign lval rval stmt.srange in
+      let kind = if Pool.is_weak addr then WEAK else kind in
+      let stmt = mk_assign ~kind lval rval stmt.srange in
       let flow' =
         map_domain_cur (fun (pool, sub) -> (Pool.add_attribute addr attr) pool, sub) man flow |>
         man.exec stmt ctx
       in
-      let flow'' = if Pool.is_weak addr then man.flow.join flow flow' else flow' in
-      Exec.return flow''
+      Exec.return flow'
 
     (* Other statements are given to sub-domain *)
     | _ ->

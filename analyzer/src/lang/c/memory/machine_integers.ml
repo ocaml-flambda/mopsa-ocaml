@@ -46,7 +46,7 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
-    | S_assign({ekind = E_var v}, e) when is_inttype e.etyp ->
+    | S_assign({ekind = E_var v}, e, kind) when is_inttype e.etyp ->
       assert false
 
     | _ -> None

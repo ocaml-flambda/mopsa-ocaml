@@ -56,8 +56,7 @@ struct
     match skind stmt with
     (* For assignments, we handle the case of addresses, otherwise we give it
        to {!Nonrel}. *)
-    | S_assign({ekind = E_var var} as evar, e)
-    | S_expand({ekind = E_var var} as evar, e) ->
+    | S_assign({ekind = E_var var} as evar, e, ((STRONG | EXPAND) as kind)) ->
       Eval.compose_exec
         e
         (fun e flow ->
@@ -67,10 +66,13 @@ struct
              map_domain_cur (Nonrel.add var v) man flow |>
              Exec.return
            | _ ->
-             Nonrel.exec {stmt with skind = S_assign (evar, e)} man ctx flow
+             Nonrel.exec {stmt with skind = S_assign (evar, e,kind)} man ctx flow
         )
         (fun flow -> Exec.return flow)
         man ctx flow
+
+    | S_assign({ekind = E_var var}, e, WEAK) ->
+      assert false
 
     (* Modify variables already pointing to a1 in order to point to a2. *)
     | S_rebase_addr(a1, a2) ->

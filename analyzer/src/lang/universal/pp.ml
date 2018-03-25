@@ -108,8 +108,9 @@ let () =
 
       | S_rename_var(v, v') -> fprintf fmt "rename(%a, %a)" pp_var v pp_var v'
       | S_rebase_addr(a, a') -> fprintf fmt "rebase(%a, %a)" pp_addr a pp_addr a'
-      | S_assign(v, e) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
-      | S_expand(v, v') -> fprintf fmt "expand %a x= %a;" pp_expr v pp_expr v'
+      | S_assign(v, e, STRONG) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
+      | S_assign(v, e, WEAK) -> fprintf fmt "%a ≈ %a;" pp_expr v pp_expr e
+      | S_assign(v, e, EXPAND) -> fprintf fmt "%a ≋ %a;" pp_expr v pp_expr e
       | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
       | S_expression(e) -> fprintf fmt "%a;" pp_expr e
       | S_if(e, s1, s2) ->

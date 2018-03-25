@@ -137,16 +137,7 @@ struct
       Apron.Abstract1.change_environment ApronManager.man abs new_env true |>
       Exec.return
 
-    | S_expand(({ekind = E_var x}), {ekind = E_var ({vtyp = T_int | T_float} as x0)}) ->
-      let abs = add_missing_vars abs [x0] |>
-                exec (mk_stmt (S_remove_var x) stmt.srange) ctx |>
-                Exec.extract top
-      in
-      let x = {x with vtyp = x0.vtyp} in
-      Apron.Abstract1.expand ApronManager.man abs (var_to_apron x0) [| var_to_apron x |] |>
-      Exec.return
-
-    | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e)) -> begin
+    | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
         let v = {v with vtyp = e.etyp} in
         let abs = add_missing_vars abs (v :: (expr_vars e)) in
         try
@@ -158,7 +149,19 @@ struct
           exec {stmt with skind = S_remove_var v} ctx abs
       end
 
-    | S_assign({ekind = E_var v}, _) ->
+    | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
+      assert false
+
+    | S_assign(({ekind = E_var x}), {ekind = E_var ({vtyp = T_int | T_float} as x0)}, EXPAND) ->
+      let abs = add_missing_vars abs [x0] |>
+                exec (mk_stmt (S_remove_var x) stmt.srange) ctx |>
+                Exec.extract top
+      in
+      let x = {x with vtyp = x0.vtyp} in
+      Apron.Abstract1.expand ApronManager.man abs (var_to_apron x0) [| var_to_apron x |] |>
+      Exec.return
+
+    | S_assign({ekind = E_var v}, _, _) ->
       exec {stmt with skind = S_remove_var v} ctx abs
 
     | S_assume(e) -> begin

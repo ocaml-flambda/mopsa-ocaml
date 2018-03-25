@@ -367,7 +367,7 @@ module Make(ValAbs : DOMAIN) = struct
     | S_remove_var v      ->
       do_on_all_flows (fun u -> remove_vars (Typ.VS.singleton v) u stmt.srange) flow
       |> Exec.return
-    | S_assign ({ ekind = E_c_cell c} , e') ->
+    | S_assign ({ ekind = E_c_cell c} , e',kind) ->
       debug "assign";
       let u = get_my_current_abstraction flow man in
       let u', stmt = cell_to_var u stmt in

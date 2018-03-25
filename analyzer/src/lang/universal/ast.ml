@@ -303,8 +303,13 @@ let rec expr_to_int (e: expr) : int option =
 (*==========================================================================*)
 
 
+type assign_kind =
+  | STRONG
+  | WEAK
+  | EXPAND
+
 type stmt_kind +=
-  | S_assign of expr (** lvalue *) * expr (** rvalue *)
+  | S_assign of expr (** lvalue *) * expr (** rvalue *) * assign_kind
   (** Assignments. *)
 
   | S_assume of expr
@@ -312,12 +317,6 @@ type stmt_kind +=
 
   | S_expression of expr
   (** Expression statement, useful for calling functions without a return value *)
-
-  | S_expand of expr * expr
-  (** Perform an assignment, but without creating a relation between the
-      rhs and the lhs.
-  *)
-
 
   | S_if of expr (** condition *) * stmt (** then branch *) * stmt (** else branch *)
 
@@ -354,8 +353,8 @@ type stmt_kind +=
 let mk_rename v v' =
   mk_stmt (S_rename_var (v, v'))
 
-let mk_assign v e =
-  mk_stmt (S_assign (v, e))
+let mk_assign ?(kind = STRONG)v e =
+  mk_stmt (S_assign (v, e, kind))
 
 let mk_assume e =
   mk_stmt (S_assume e)

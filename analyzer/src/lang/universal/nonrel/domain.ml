@@ -290,8 +290,7 @@ struct
       Exec.return
 
 
-    | S_assign({ekind = E_var var}, e)
-    | S_expand({ekind = E_var var}, e) ->
+    | S_assign({ekind = E_var var}, e, STRONG) ->
       Eval.compose_exec
         e
         (fun e flow ->
@@ -304,6 +303,9 @@ struct
         (fun flow -> Exec.return flow)
         man ctx flow
 
+    | S_assign({ekind = E_var var}, e, _) ->
+      assert false
+  
     | S_assume e ->
       Eval.compose_exec
         e

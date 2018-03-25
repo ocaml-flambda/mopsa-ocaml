@@ -133,7 +133,7 @@ struct
 
   let exec stmt man ctx gabs : 'a flow option =
     match skind stmt with
-    | Universal.Ast.S_assign(e,e') ->
+    | Universal.Ast.S_assign(e,e', kind) ->
       Eval.compose_exec_list
         [e; e']
         (fun l flow ->
@@ -142,7 +142,7 @@ struct
             begin
               match ekind e, etyp e |> is_pointer with
               | E_c_cell _, false ->
-                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e')} ctx flow)
+                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e',kind)} ctx flow)
               | E_c_cell c, true  ->
                 begin
                   match ekind e' with
@@ -153,14 +153,14 @@ struct
                             |> CPML.add c p
                     in
                     let new_flow = set_my_current_abstraction u flow man in
-                    Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,o)} ctx new_flow)
+                    Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,o,kind)} ctx new_flow)
                   | _ ->
                     failwith "[C.cell.CPointer.exec] assignation of \
                               pointer type, can not rewrite right hand \
                               side in a pointer"
                 end
               | _ ->
-                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e')} ctx flow)
+                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e',kind)} ctx flow)
             end
           | _ -> assert false
         ) (fun flow -> Exec.return flow)

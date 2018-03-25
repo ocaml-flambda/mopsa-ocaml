@@ -26,8 +26,8 @@ struct
   let rec exec stmt manager ctx flow =
     let range = srange stmt in
     match skind stmt with
-    | S_assign({ekind = E_py_tuple(el)}, exp)
-    | S_assign({ekind = E_py_list(el)}, exp) ->
+    | S_assign({ekind = E_py_tuple(el)}, exp, kind)
+    | S_assign({ekind = E_py_list(el)}, exp, kind) ->
       Eval.compose_exec
         exp
         (fun exp flow ->
@@ -46,7 +46,7 @@ struct
               iter_expr
               (fun iter flow ->
                  match ekind iter with
-                 | E_addr(addr) -> assign_iter el addr range manager ctx flow
+                 | E_addr(addr) -> assign_iter el addr kind range manager ctx flow
                  | _ -> assert false
               )
               (fun flow -> Some flow)
@@ -62,11 +62,11 @@ struct
 
     | _ -> None
 
-  and assign_iter el iter range manager ctx flow =
+  and assign_iter el iter kind range manager ctx flow =
     let stmtl =
       List.fold_left (fun acc e ->
           mk_assign
-            e
+            e ~kind
             (mk_py_call
                (mk_addr (Builtins.from_string "next") (tag_range range "next addr"))
                [mk_addr iter (tag_range range "iter addr")]
