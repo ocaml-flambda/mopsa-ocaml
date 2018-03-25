@@ -100,7 +100,7 @@ struct
     Apron.Abstract1.widening ApronManager.man abs1' abs2'
 
   let print fmt abs =
-    Format.fprintf fmt "rel:@ @[  %a@]"
+    Format.fprintf fmt "rel: @[%a@]"
       Apron.Abstract1.print abs
 
   let refine_var_type var =

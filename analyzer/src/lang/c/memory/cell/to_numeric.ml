@@ -6,18 +6,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Cell abstraction for C language *)
+(** Cell-to-num-var functor *)
+
 open Framework.Ast
 open Framework.Domains.Global
 open Framework.Manager
 open Framework.Domains
 open Framework.Flow
 open Ast
-open Cell
-open Cell_ast
+open Typ
 
 
-let name = "c.memory.numeric.cell_functor"
+let name = "c.memory.cell.to_numeric"
 let debug fmt = Debug.debug ~channel:name fmt
 
 let name_counters = Hashtbl.create 12

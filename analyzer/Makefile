@@ -25,8 +25,7 @@ lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp memory flows program setup
-lang.c.memory = typ cell cell_ast pointer numeric to_cell
-lang.c.memory.numeric = cell_functor machine_integers
+lang.c.memory.cell = typ pointer to_cell to_numeric
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl

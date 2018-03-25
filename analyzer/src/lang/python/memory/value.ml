@@ -47,7 +47,7 @@ module NotImplementedLattice = Framework.Lattices.Enum.Make(struct
   end
 )
 
-module IntLattice = Universal.Numeric.Integers
+module IntLattice = Universal.Numeric.Integers.Value
 
 module FloatLattice = Universal.Numeric.Floats
 

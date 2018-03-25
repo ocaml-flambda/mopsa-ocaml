@@ -2,13 +2,17 @@ open Pp
 
 let init () =
   Program.setup ();
-  Flows.Intraproc.setup ();
+  Flows.(
+    Intraproc.setup ();
+    Interproc.setup ();
+    Loops.setup ();
+  );
   Memory.(
-    To_cell.setup ();
-    Pointer.setup ();
-    Numeric.(
-      Cell_functor.setup ();
-      Machine_integers.setup ();
+    Machine_integers.setup ();
+    Cell.(
+      To_cell.setup ();
+      To_numeric.setup ();
+      Pointer.setup ();
     );
   );
   ()

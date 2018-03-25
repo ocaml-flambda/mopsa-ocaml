@@ -197,6 +197,8 @@ type expr_kind +=
 
   | E_c_function of c_fundec
 
+  | E_c_call of expr (** target *) * expr list (** arguments *)
+
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
 

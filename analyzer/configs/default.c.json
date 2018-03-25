@@ -1,22 +1,27 @@
-{
-    "iter": [
-	"c.program",
-	"c.flows.intraproc",
-
-	"universal.unit_tests",
-        "universal.flows.intraproc",
-        "universal.flows.interproc",
-        "universal.flows.loops",
-
-	"c.memory.pointer",
-	{
-	    "fun": "c.memory.numeric.cell_functor",
-	    "arg": {
-		"iter": [
-		    "c.memory.numeric.machine_integers",
-		    "universal.numeric.relational.polyhedra"
-		]
-	    }
+{"iter": [
+    //Program entry point
+    "c.program",
+    "universal.unit_tests",
+    
+    //Flows
+    "c.flows.intraproc",
+    "c.flows.interproc",
+    "universal.flows.loops",
+    "universal.flows.intraproc",
+    "universal.flows.interproc",
+    "universal.flows.loops",
+    
+    //Cell-based memory representation
+    {"fun": "c.memory.cell.to_cell",
+     "arg": {"iter": [
+	 "c.memory.cell.pointer",
+	 {"fun": "c.memory.cell.to_numeric",
+	  "arg": {"iter": [
+	      "c.memory.machine_integers",
+	      "universal.numeric.integers",
+	      "universal.numeric.relational.polyhedra"
+	  ]}
 	}
-    ]
-}
+     ]}
+    }
+]}

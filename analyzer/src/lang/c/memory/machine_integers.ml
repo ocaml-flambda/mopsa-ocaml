@@ -6,9 +6,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Non-relational numeric abstraction of machine integers. *)
+(** Machine representation of C integers. *)
 
-open Framework.Domains.Global
+open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
@@ -16,7 +16,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 
-let name = "c.memory.numeric.machine_integers"
+let name = "c.memory.machine_integers"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -24,18 +24,6 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-
-  (*==========================================================================*)
-  (**                           {2 Lattice}                                   *)
-  (*==========================================================================*)
-
-  module VMap = Universal.Nonrel.Domain.Make(Universal.Numeric.Integers)
-
-  include VMap
-
-  let print fmt a =
-    Format.fprintf fmt "int: @[%a@]@\n"
-      VMap.print a
 
   (*==========================================================================*)
   (**                        {2 Transfer functions}                           *)

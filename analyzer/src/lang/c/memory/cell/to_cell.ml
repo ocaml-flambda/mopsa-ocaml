@@ -6,18 +6,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Intra-procedural control flow abstraction *)
+(** Var-to-Cell functor *)
 
 open Framework.Flow
 open Framework.Domains
-open Framework.Domains.Stateless
+open Framework.Domains.Global
 open Framework.Manager
 open Framework.Ast
 open Ast
-open Cell
-open Cell_ast
+open Typ
     
-let name = "c.memory.to_cell"
+let name = "c.memory.cell.to_cell"
 
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -25,12 +24,16 @@ module Make(Sub: Global.DOMAIN) =
 struct
 
   (*==========================================================================*)
-                        (** {2 Transfer functions} *)
+                        (** {2 Lattice structure} *)
   (*==========================================================================*)
 
-  let init prg man subman flow = flow      
+  include Sub
   
-  let exec stmt man subman ctx gabs =
+  (*==========================================================================*)
+                        (** {2 Transfer functions} *)
+  (*==========================================================================*)
+  
+  let exec stmt man ctx gabs =
     let open Universal.Ast in
     let s' =
       Framework.Visitor.map_stmt
@@ -43,13 +46,13 @@ struct
         (fun s -> s)
         stmt
     in
-    Sub.exec s' subman ctx gabs
+    Sub.exec s' man ctx gabs
 
-  let eval _ _ _ _ _  = None
+  let eval _ _ _ _  = assert false
 
-  let ask _ _ _ _ _ = None
+  let ask _ _ _ _ = assert false
 
   end
 
 let setup () =
-  register_stack_domain name (module Make)
+  register_functor name (module Make)

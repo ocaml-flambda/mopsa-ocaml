@@ -29,7 +29,8 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
-    | S_c_local_declaration(v) -> Exec.return flow
+    | S_c_local_declaration(v) ->
+      assert false
 
     | _ -> None
 
