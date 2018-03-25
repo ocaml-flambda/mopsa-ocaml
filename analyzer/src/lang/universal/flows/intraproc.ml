@@ -29,6 +29,12 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
+    | S_expression(e) ->
+      Eval.compose_exec
+        e
+        (fun e flow -> Exec.return flow)
+        (fun flow -> Exec.return flow)
+        man ctx flow
     | S_block(block) ->
       List.fold_left (fun acc stmt -> man.exec stmt ctx acc) flow block |>
       Exec.return

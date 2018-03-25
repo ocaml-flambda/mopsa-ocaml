@@ -18,8 +18,7 @@
 	 {"fun": "c.memory.cell.to_numeric",
 	  "arg": {"iter": [
 	      "c.memory.machine_integers",
-	      "universal.numeric.integers",
-	      "universal.numeric.relational.polyhedra"
+	      "universal.numeric.integers"
 	  ]}
 	}
      ]}

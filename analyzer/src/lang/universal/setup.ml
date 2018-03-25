@@ -1,7 +1,8 @@
 let init () =
   Unit_tests.setup ();
   Numeric.(
-    Integers.setup ();
+    Integers.Domain.setup ();
+    Floats.Domain.setup ();
     Relational.setup ();
   );
   Flows.(

@@ -133,17 +133,15 @@ struct
 
   let exec stmt man ctx gabs : 'a flow option =
     match skind stmt with
-    | Universal.Ast.S_assign(e,e', kind) ->
+    | Universal.Ast.S_assign(e,e', kind) when is_pointer e.etyp ->
       Eval.compose_exec_list
         [e; e']
         (fun l flow ->
           match l with
           | [e;e'] ->
             begin
-              match ekind e, etyp e |> is_pointer with
-              | E_c_cell _, false ->
-                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e',kind)} ctx flow)
-              | E_c_cell c, true  ->
+              match ekind e with
+              | E_c_cell c ->
                 begin
                   match ekind e' with
                   | E_c_pointer(p, o) ->
@@ -160,7 +158,7 @@ struct
                               side in a pointer"
                 end
               | _ ->
-                Some (man.exec {stmt with skind = Universal.Ast.S_assign(e,e',kind)} ctx flow)
+                assert false
             end
           | _ -> assert false
         ) (fun flow -> Exec.return flow)

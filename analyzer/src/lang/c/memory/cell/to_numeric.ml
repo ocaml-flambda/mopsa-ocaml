@@ -44,12 +44,31 @@ module Make(ValAbs : DOMAIN) = struct
           set = (fun y x -> man.ax.set {(man.ax.get x) with a = y} x)
         }
     }
+
+  let rec local_subman =
+    let env_manager = Framework.Domains.Global.mk_lattice_manager (module ValAbs : DOMAIN with type t = ValAbs.t) in
+    {
+      env = env_manager;
+      flow = Framework.Flow.lift_lattice_manager env_manager;
+      exec = (fun stmt ctx flow -> match ValAbs.exec stmt local_subman ctx flow with Some flow -> flow | None -> assert false);
+      eval = (fun exp ctx flow -> match ValAbs.eval exp local_subman ctx flow with Some evl -> evl | None -> eval_singleton (Some exp, flow, []) );
+      ask = (fun query ctx flow -> assert false);
+      ax = {
+        get = (fun env -> env);
+        set = (fun env' env -> env');
+      }
+    }
+
+    
   let valabs_trivial_exec (stmt : stmt) (a : ValAbs.t) : ValAbs.t =
-    (* let module A = Analyzer.Make(ValAbs) in
-     * let open Flow in
-     * A.exec stmt Context.empty (Top.Nt (Flow.Map.singleton Flow.TCur a))
-     * |> A.manager.flow.get TCur *)
-    assert false
+    debug "trivial exec %a in@ %a" Framework.Pp.pp_stmt stmt ValAbs.print a;
+    let a' =
+      set_domain_cur a local_subman local_subman.flow.bottom |>
+      local_subman.exec stmt Framework.Context.empty |>
+      local_subman.flow.get TCur
+    in
+    debug "res = %a" ValAbs.print a';
+    a'
 
   let remove_vars (r : Typ.VS.t) (u : t) range =
     let nvars_to_remove =
@@ -353,8 +372,8 @@ module Make(ValAbs : DOMAIN) = struct
       Framework.Visitor.fold_map_stmt
         (fun u expr -> match ekind expr with
             | E_c_cell c ->
-               let u'' = add_cell c u stmt.srange in
-               (u'', Universal.Ast.mk_var (CVE.find_l c u.bd) stmt.srange)
+               let u' = add_cell c u stmt.srange in
+               (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) stmt.srange)
              | _ -> (u, expr)
           )
           (fun u stmt -> (u,stmt))
@@ -367,8 +386,7 @@ module Make(ValAbs : DOMAIN) = struct
     | S_remove_var v      ->
       do_on_all_flows (fun u -> remove_vars (Typ.VS.singleton v) u stmt.srange) flow
       |> Exec.return
-    | S_assign ({ ekind = E_c_cell c} , e',kind) ->
-      debug "assign";
+    | S_assign ({ekind = E_c_cell c} , e', kind) ->
       let u = get_my_current_abstraction flow man in
       let u', stmt = cell_to_var u stmt in
       set_my_current_abstraction {u' with a = valabs_trivial_exec stmt u'.a} flow man
