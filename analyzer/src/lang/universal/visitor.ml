@@ -31,7 +31,7 @@ let () =
         {exprs = [v; e]; stmts = []},
         (fun parts -> {exp with ekind = (E_subscript(List.hd parts.exprs, List.hd @@ List.tl parts.exprs))})
 
-      | E_addr_attribute(addr, attr) -> leaf exp
+      | E_addr_attribute _ -> leaf exp
 
       | E_alloc_addr _ -> leaf exp
 
@@ -92,6 +92,18 @@ let () =
       | S_return(Some e) ->
         {exprs = [e]; stmts = []},
         (function {exprs = [e]} -> {stmt with skind = S_return(Some e)} | _ -> assert false)
+
+      | S_assert(e) ->
+        {exprs = [e]; stmts = []},
+        (function {exprs = [e]} -> {stmt with skind = S_assert(e)} | _ -> assert false)
+
+      | S_unit_tests(file, tests) ->
+        let tests_names, tests_bodies = List.split tests in
+        {exprs = []; stmts = tests_bodies},
+        (function {stmts = tests_bodies} ->
+           let tests = List.combine tests_names tests_bodies in
+           {stmt with skind = S_unit_tests(file, tests)}
+        )
 
       | _ -> default stmt
     );

@@ -26,6 +26,31 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                               {2 AST}                                   *)
 (*==========================================================================*)
 
+(** points-to elements *)
+module P =
+struct
+  type t =
+    | V of Universal.Ast.var (* points to a variable *)
+    | Null                   (* Null pointer         *)
+    | Invalid                (* Invalid pointer      *)
+  let print fmt p = match p with
+    | V v -> Format.fprintf fmt "%a"
+               Format.pp_print_string Universal.Ast.(v.unname)
+    | Null -> Format.fprintf fmt "Null"
+    | Invalid -> Format.fprintf fmt "Invalid"
+  let compare p p' =
+    match p, p' with
+    | V x    , V y     -> Universal.Ast.compare_var x y
+    | Null   , Null    -> 0
+    | Invalid, Invalid -> 0
+    | _                -> 1
+  let apply_renaming (r : VVM.t) (p : t) =
+    match p with
+    | V v -> V (apply_renaming_var r v)
+    | _ -> p
+end
+
+
 (** points-to set abstraction *)
 module PSL = struct
   include Framework.Lattices.Top_set.Make(P)
@@ -158,7 +183,7 @@ struct
             match ekind e' with
             | E_c_cell c ->
               (
-                Some { expr with ekind = E_c_pointer(PSL.singleton (Typ.P.V c.v), mk_int c.o (tag_range range "offset"))},
+                Some { expr with ekind = E_c_pointer(PSL.singleton (P.V c.v), mk_int c.o (tag_range range "offset"))},
                 flow, []
               ) |>
               Eval.singleton
@@ -210,14 +235,14 @@ struct
                     let left, right = Universal.Numeric.Interval.get_bounds int in
                     PSL.fold (fun p acc ->
                         match p with
-                        | Typ.P.V v ->
+                        | P.V v ->
                           fold_int (fun i acc ->
                               let new_cell = {v = v; o = i; t = expr |> etyp} in
                               let this_case = (Some {expr with ekind = E_c_cell new_cell}, flow, []) |> Eval.singleton in
                               Eval.join acc this_case
                             ) acc (left,right)
-                        | Typ.P.Invalid -> assert false (*TODO*)
-                        | Typ.P.Null    -> assert false (*TODO*)
+                        | P.Invalid -> assert false (*TODO*)
+                        | P.Null    -> assert false (*TODO*)
                       ) b None
                   else
                     assert false

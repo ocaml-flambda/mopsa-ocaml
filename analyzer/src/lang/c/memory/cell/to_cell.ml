@@ -6,18 +6,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Var-to-Cell functor *)
+(** Var-to-cell functor *)
 
 open Framework.Flow
 open Framework.Domains
 open Framework.Domains.Global
 open Framework.Manager
 open Framework.Ast
+open Universal.Ast
 open Ast
 open Typ
     
 let name = "c.memory.cell.to_cell"
-
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Make(Sub: Global.DOMAIN) =
@@ -32,25 +32,31 @@ struct
   (*==========================================================================*)
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
-  
-  let exec stmt man ctx gabs =
-    let open Universal.Ast in
-    let s' =
-      Framework.Visitor.map_stmt
-        (fun e ->
-           match ekind e with
-           | E_var v ->
-             {e with ekind = E_c_cell( {v = v; o = 0; t = e |> etyp} )}
-           | _ -> e
-        )
+
+  let cellify_expr e = 
+    match ekind e with
+    | E_var v ->
+      {e with ekind = E_c_cell( {v = v; o = 0; t = e |> etyp} )}
+    | _ -> e
+      
+  let exec stmt man ctx flow =
+    let stmt' = Framework.Visitor.map_stmt
+        (fun e -> cellify_expr e)
         (fun s -> s)
         stmt
     in
-    Sub.exec s' man ctx gabs
+    Sub.exec stmt' man ctx flow
 
-  let eval _ _ _ _  = assert false
-
-  let ask _ _ _ _ = assert false
+  let eval exp man ctx flow  =
+    let exp' = Framework.Visitor.map_expr
+        (fun e -> cellify_expr e)
+        (fun s -> s)
+        exp
+    in
+    Sub.eval exp' man ctx flow
+    
+  let ask query man ctx flow =
+    Sub.ask query man ctx flow
 
   end
 

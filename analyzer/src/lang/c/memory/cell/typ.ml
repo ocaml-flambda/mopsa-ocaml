@@ -1,8 +1,23 @@
-(** types and modules needed for the cell abstract domain *)
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Types and modules needed for the cell abstract domain. *)
 
 open Framework.Ast
 open Framework.Pp
 open Framework.Visitor
+
+
+
+(*==========================================================================*)
+(**                             {2 Variables}                               *)
+(*==========================================================================*)
+
 
 (** variables *)
 module V =
@@ -32,6 +47,39 @@ let mem_predicate (s : VS.t) =
   fun (x : V.t) -> VS.mem x s
 
 
+let name_counters = Hashtbl.create 12
+
+let fresh name =
+  let i =
+    try
+      Hashtbl.find name_counters name
+    with
+    | Not_found -> 0
+  in
+  let () = Hashtbl.replace name_counters name (i+1) in
+  Format.sprintf "%s_%d" name i
+
+let fresh_var_t t name =
+  let n = fresh name in
+  {Universal.Ast.orgname = n ; Universal.Ast.unname = n ; vtyp = t}
+
+let fresh_var name =
+  let n = fresh name in
+  {Universal.Ast.orgname = n ;
+   Universal.Ast.unname = n ;
+   vtyp = Framework.Ast.T_any
+  }
+
+
+let vargen_var () = fresh_var_t (Universal.Ast.T_int) "var"
+
+
+(*==========================================================================*)
+(**                              {2 Cells}                                  *)
+(*==========================================================================*)
+
+
+(** A memory cell. *)
 type cell =
   {
     v : Universal.Ast.var ; (* Base variable *)
@@ -53,7 +101,7 @@ let compare_cell c c' =
     (c.v , c.o , c.t )
     (c'.v, c'.o, c'.t)
 
-(* Cell as a value*)
+(* Cell as a value, useful for sets and maps keys. *)
 module CellValue =
 struct
   type t = cell
@@ -98,6 +146,11 @@ end
 
 
 
+(*==========================================================================*)
+(**                         {2 AST extension}                               *)
+(*==========================================================================*)
+
+
 type expr_kind +=
   | E_c_cell of cell
 
@@ -116,29 +169,4 @@ let () =
       | _ -> default exp
     )
 
-
-
-(** points-to elements *)
-module P =
-struct
-  type t =
-    | V of Universal.Ast.var (* points to a variable *)
-    | Null                   (* Null pointer         *)
-    | Invalid                (* Invalid pointer      *)
-  let print fmt p = match p with
-    | V v -> Format.fprintf fmt "%a"
-               Format.pp_print_string Universal.Ast.(v.unname)
-    | Null -> Format.fprintf fmt "Null"
-    | Invalid -> Format.fprintf fmt "Invalid"
-  let compare p p' =
-    match p, p' with
-    | V x    , V y     -> Universal.Ast.compare_var x y
-    | Null   , Null    -> 0
-    | Invalid, Invalid -> 0
-    | _                -> 1
-  let apply_renaming (r : VVM.t) (p : t) =
-    match p with
-    | V v -> V (apply_renaming_var r v)
-    | _ -> p
-end
 

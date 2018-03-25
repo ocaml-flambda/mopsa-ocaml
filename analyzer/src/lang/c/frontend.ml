@@ -162,7 +162,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_string_literal (s, Clang_AST.Char_Ascii) -> Universal.Ast.(E_constant (C_string s))
     | C_AST.E_variable v -> Universal.Ast.E_var (from_var v)
     | C_AST.E_function f -> Ast.E_c_function (from_function f)
-    | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr f, Array.map from_expr args |> Array.to_list)
+    | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr f, Array.map from_expr args |> Array.to_list)
     | C_AST.E_unary (op, e) -> Universal.Ast.E_unop (from_unary_operator op, from_expr e)
     | C_AST.E_binary (op, e1, e2) -> Universal.Ast.E_binop (from_binary_operator op, from_expr e1, from_expr e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
@@ -238,7 +238,9 @@ and from_range : Clang_AST.range -> Framework.Ast.range =
 and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
-    | C_AST.S_local_declaration v -> Ast.S_c_local_declaration (from_var v)
+    | C_AST.S_local_declaration v ->
+      let v, init = from_var_with_init v in
+      Ast.S_c_local_declaration (v, init)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr e)
     | C_AST.S_block block -> from_block srange block |> Framework.Ast.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr cond, from_block srange body, from_block srange orelse)

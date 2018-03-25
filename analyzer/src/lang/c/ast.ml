@@ -236,8 +236,8 @@ type expr_kind +=
 (*==========================================================================*)
 
 type stmt_kind +=
-  | S_c_local_declaration of var
-  (** declaration of a local variable *)
+  | S_c_local_declaration of var * c_init option
+  (** declaration of a local variable with optional initialization *)
 
   | S_c_do_while of
       stmt (** body *) *

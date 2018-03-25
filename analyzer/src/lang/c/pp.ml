@@ -3,6 +3,12 @@ open Framework.Pp
 open Framework.Ast
 open Ast
 
+let rec pp_c_init fmt = function
+  | C_init_expr(e) -> pp_expr fmt e
+  | C_init_list _ -> assert false
+  | C_init_implicit _ -> assert false
+ 
+
 let () =
   register_pp_typ (fun default fmt typ ->
       match typ with
@@ -66,7 +72,8 @@ let () =
     );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
-      | S_c_local_declaration v -> fprintf fmt "%a %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v
+      | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v
+      | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
           Framework.Pp.pp_stmt init
