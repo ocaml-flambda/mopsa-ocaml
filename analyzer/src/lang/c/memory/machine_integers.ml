@@ -33,14 +33,17 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_var v when is_inttype v.vtyp ->
-      assert false
+    (* | E_var v when is_inttype v.vtyp ->
+     *   assert false
+     * 
+     * | E_unop(op, e) when is_inttype e.etyp ->
+     *   assert false
+     * 
+     * | E_binop(op, e1, e2) when is_inttype e1.etyp && is_inttype e2.etyp ->
+     *   assert false *)
 
-    | E_unop(op, e) when is_inttype e.etyp ->
-      assert false
-  
-    | E_binop(op, e1, e2) when is_inttype e1.etyp && is_inttype e2.etyp ->
-      assert false
+    | E_c_cast(e', _) ->
+      Eval.re_eval_singleton man ctx (Some e', flow, [])
 
     | _ -> None
 

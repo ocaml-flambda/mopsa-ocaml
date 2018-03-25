@@ -297,7 +297,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let qual = to_clang_type_qualifier qual in
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
-  | _ -> assert false
+  | t -> Debug.fail "to_clang_type: %a not a C type" Framework.Pp.pp_typ t
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
@@ -523,3 +523,19 @@ let under_type (t : typ) : typ =
   match t with
   | T_c_pointer t' -> t'
   | _ -> failwith "[under_type] called with a non pointer argument"
+
+let is_c_type = function
+  | T_c_void 
+  | Universal.Ast.T_bool 
+  | T_c_integer _ 
+  | T_c_float _
+  | T_c_pointer _ 
+  | T_c_array _ 
+  | T_c_bitfield _ 
+  | T_c_function  _ 
+  | T_c_builtin_fn 
+  | T_c_typedef _ 
+  | T_c_record  _
+  | T_c_enum _ 
+  | T_c_qualified _ -> true
+  | _ -> false

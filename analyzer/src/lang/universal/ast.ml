@@ -359,6 +359,9 @@ let mk_assign ?(kind = STRONG)v e =
 let mk_assume e =
   mk_stmt (S_assume e)
 
+let mk_assert e =
+  mk_stmt (S_assert e)
+
 let mk_block block = mk_stmt (S_block block)
 
 let mk_nop = mk_block []

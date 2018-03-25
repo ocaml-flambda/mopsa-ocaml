@@ -35,7 +35,7 @@ struct
 
   let cellify_expr e = 
     match ekind e with
-    | E_var v ->
+    | E_var v when is_c_type v.vtyp ->
       {e with ekind = E_c_cell( {v = v; o = 0; t = e |> etyp} )}
     | _ -> e
       

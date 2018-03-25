@@ -392,15 +392,17 @@ module Make(ValAbs : DOMAIN) = struct
       set_my_current_abstraction {u' with a = valabs_trivial_exec stmt u'.a} flow man
       |> Exec.return
     | S_assume e ->
+      debug "assume %a" Framework.Pp.pp_expr e;
       begin
         Eval.compose_exec
           e
           (fun e flow ->
-            let u = get_my_current_abstraction flow man in
-            let u', stmt = cell_to_var u stmt in
-            let u'' = {u' with a = valabs_trivial_exec stmt u'.a} in
-            set_my_current_abstraction u'' flow man
-            |> Exec.return
+             debug "eval done";
+             let u = get_my_current_abstraction flow man in
+             let u', stmt = cell_to_var u stmt in
+             let u'' = {u' with a = valabs_trivial_exec stmt u'.a} in
+             set_my_current_abstraction u'' flow man
+             |> Exec.return
           )
           (fun flow -> Exec.return flow )
           man ctx flow
@@ -408,18 +410,21 @@ module Make(ValAbs : DOMAIN) = struct
     | _ -> Exec.fail
 
   let eval exp man ctx flow =
+    debug "eval %a" Framework.Pp.pp_expr exp;
     let u = get_domain_cur man flow in
     let u', exp' = Framework.Visitor.fold_map_expr
           (fun u expr -> match ekind expr with
-             | E_c_cell c ->
-               let u'' = add_cell c u exp.erange in
-               (u'', Universal.Ast.mk_var (CVE.find_l c u.bd) exp.erange)
-             | _ -> (u, expr)
+            | E_c_cell c ->
+              debug "cell %a" pp_cell c;
+              let u' = add_cell c u exp.erange in
+              (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) exp.erange)
+            | _ -> (u, expr)
           )
           (fun u stmt -> (u,stmt))
           u exp
     in
     let flow = set_domain_cur u' man flow in
+    debug "eval exp' %a" Framework.Pp.pp_expr exp';
     ValAbs.eval exp' (subman man) ctx flow
 
   let ask : type b. b Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> b option

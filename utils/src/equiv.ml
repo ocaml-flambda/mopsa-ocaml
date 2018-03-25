@@ -14,7 +14,7 @@ struct
     Format.fprintf fmt "@[{%a}@]"
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-         (fun fmt (z,t) -> Format.fprintf fmt "%a <~> %a" L.print z R.print t)
+         (fun fmt (z,t) -> Format.fprintf fmt "%a ↔ %a" L.print z R.print t)
       ) (LR.bindings e.lr)
   let compare (e : t) (e' : t) : int =
     try
