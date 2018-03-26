@@ -2,7 +2,7 @@
     //Program entry point
     "c.program",
     "universal.unit_tests",
-    
+
     //Flows
     "c.flows.intraproc",
     "c.flows.interproc",
@@ -10,17 +10,12 @@
     "universal.flows.intraproc",
     "universal.flows.interproc",
     "universal.flows.loops",
-    
+
     //Cell-based memory representation
-    {"fun": "c.memory.cell.to_cell",
+    {"fun": "c.memory.cell",
      "arg": {"iter": [
-	 "c.memory.cell.pointer",
-	 {"fun": "c.memory.cell.to_numeric",
-	  "arg": {"iter": [
-	      "c.memory.machine_integers",
-	      "universal.numeric.integers"
-	  ]}
-	}
+	 "c.memory.machine_integers",
+	 "universal.numeric.integers"
      ]}
     }
 ]}

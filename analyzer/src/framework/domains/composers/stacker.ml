@@ -19,7 +19,7 @@
 open Manager
 open Global
 
-module Make(Head: STACK_DOMAIN)(Tail: DOMAIN) : DOMAIN =
+module Make(Head: STACK_DOMAIN)(Tail: DOMAIN)  =
 struct
 
   module Head = Head(Tail)

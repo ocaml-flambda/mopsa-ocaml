@@ -27,7 +27,7 @@ lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor memory flows program setup
-lang.c.memory.cell = typ pointer to_cell to_numeric
+lang.c.memory.cell = typ pointer numeric domain
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl

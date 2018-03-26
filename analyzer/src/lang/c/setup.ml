@@ -7,11 +7,7 @@ let init () =
   );
   Memory.(
     Machine_integers.setup ();
-    Cell.(
-      To_cell.setup ();
-      To_numeric.setup ();
-      Pointer.setup ();
-    );
+    Cell.Domain.setup ();
   );
   ()
 

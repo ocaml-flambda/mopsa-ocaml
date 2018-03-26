@@ -506,11 +506,11 @@ let is_c_scalar_type ( t : typ) =
   fst |>
   C_AST.type_is_scalar
 
-(** [is_pointer t] wheter [t] is a pointer *)
-let rec is_pointer ( t : typ) =
+(** [is_c_pointer t] wheter [t] is a pointer *)
+let rec is_c_pointer ( t : typ) =
   match t with
   | T_c_pointer _ -> true
-  | T_c_qualified(_, t) -> is_pointer t
+  | T_c_qualified(_, t) -> is_c_pointer t
   | _ -> false
 
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)

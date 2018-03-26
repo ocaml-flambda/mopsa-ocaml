@@ -80,12 +80,6 @@ let () =
     )
 
 
-(*==========================================================================*)
-(**                            {2 Domain}                                   *)
-(*==========================================================================*)
-
-module CPointer =
-struct
 
   (*==========================================================================*)
                         (** {2 Lattice structure} *)
@@ -133,7 +127,7 @@ struct
 
   let exec stmt man ctx gabs : 'a flow option =
     match skind stmt with
-    | Universal.Ast.S_assign(e,e', kind) when is_pointer e.etyp ->
+    | Universal.Ast.S_assign(e,e', kind) when is_c_pointer e.etyp ->
       Eval.compose_exec_list
         [e; e']
         (fun l flow ->
@@ -190,7 +184,7 @@ struct
           (fun flow -> Eval.singleton (None, flow, []))
           man ctx flow
       end
-    | E_c_cell c when c.t |> is_pointer ->
+    | E_c_cell c when c.t |> is_c_pointer ->
       begin
         (
           let pp = get_my_current_abstraction flow man in
@@ -199,7 +193,7 @@ struct
           |> Eval.singleton
         )
       end
-    | E_binop(op, g, d) when op = O_plus && g |> etyp |> is_pointer ->
+    | E_binop(op, g, d) when op = O_plus && g |> etyp |> is_c_pointer ->
       begin
         Eval.compose_eval
           g
@@ -253,7 +247,3 @@ struct
     | _ -> None
   let ask _ _ _ _ = None
     let unify _ u u' = (u,u')
-  end
-
-let setup () =
-  register_domain name (module CPointer)

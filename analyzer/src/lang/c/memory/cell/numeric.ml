@@ -17,7 +17,7 @@ open Ast
 open Typ
 
 
-let name = "c.memory.cell.to_numeric"
+let name = "c.memory.cell.numeric"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -203,7 +203,7 @@ module Make(ValAbs : DOMAIN) = struct
                         if is_c_scalar_type c.t then
                           let a,b = rangeof c.t in
                           Nexp (Some ( mk_constant ~etyp:T_int (C_int_range(a,b)) range))
-                        else if is_pointer c.t then
+                        else if is_c_pointer c.t then
                           Pexp Invalid
                         else
                           Nexp None
@@ -293,10 +293,17 @@ module Make(ValAbs : DOMAIN) = struct
     in
     rebind_cells u u'
 
+  let var_to_cell (v: Universal.Ast.var) (u: t) : cell =
+    try
+      CVE.find_r v u.bd
+    with Not_found ->
+      {v = v; o = 0; t = v.Universal.Ast.vtyp}
+
   let top = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.top}
   let bottom = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.bottom}
 
   let join (u : t) (u' : t) : t =
+    debug "join:@\n u = @[%a@]@\n u' = @[%a@]" print u print u';
     if ValAbs.leq u.a ValAbs.bottom then
       u'
     else if ValAbs.leq u'.a ValAbs.bottom then
