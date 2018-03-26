@@ -80,10 +80,8 @@ let mro name = assert false
 
 let from_expr exp =
   match ekind exp with
-  | E_var v -> from_string v.orgname
-
-  | _ ->
-    assert false
+  | E_var v -> from_string v.vname
+  | _ -> assert false
 
 let eval_attribute name attr range =
   let addr = from_attribute name attr in
@@ -99,7 +97,7 @@ let mk_builtin_module_addr modl =
 
 
 let mk_builtin_class_addr base cls =
-  let name = mk_unname base cls.py_cls_var.orgname in
+  let name = mk_unname base cls.py_cls_var.vname in
   let bases = List.map from_expr cls.py_cls_bases in
   let range = builtin_range name in
   {
@@ -109,7 +107,7 @@ let mk_builtin_class_addr base cls =
   }
 
 let mk_builtin_function_addr base fundec =
-  let name = mk_unname base fundec.py_func_var.orgname in
+  let name = mk_unname base fundec.py_func_var.vname in
   let range = builtin_range name in
   {
     addr_kind = A_py_function (F_builtin name);
@@ -133,7 +131,7 @@ let rec parse_classes modl stmt =
   | S_py_class(cls) ->
     let addr = mk_builtin_class_addr modl cls in
     classes :=  addr :: !classes;
-    let base = mk_unname modl cls.py_cls_var.orgname in
+    let base = mk_unname modl cls.py_cls_var.vname in
     parse_functions (Some base) cls.py_cls_body
 
   | S_block(block) ->

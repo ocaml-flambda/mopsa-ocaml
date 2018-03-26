@@ -477,7 +477,7 @@ let rangeof_int t =
   (Z.to_int a, Z.to_int b)
 
 (** [warp v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let warp (v : Universal.Ast.var) ((l,h) : int * int) range : Framework.Ast.expr =
+let warp (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
   let open Universal.Ast in
   mk_binop
     (mk_int 1 (tag_range range "1"))

@@ -55,7 +55,7 @@ let () =
       | E_c_conditional(cond, body, orelse) -> assert false
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
-      | E_c_function(f) -> Universal.Pp.pp_var fmt f.c_func_var
+      | E_c_function(f) -> pp_var fmt f.c_func_var
       | E_c_builtin_function(f) -> pp_print_string fmt f
       | E_c_call(f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
@@ -73,8 +73,8 @@ let () =
     );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
-      | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v
-      | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.Universal.Ast.vtyp Universal.Pp.pp_var v pp_c_init init
+      | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+      | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
           Framework.Pp.pp_stmt init
@@ -90,8 +90,8 @@ let () =
           (fun fmt f ->
              fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
                pp_typ f.c_func_return
-               Universal.Pp.pp_var f.c_func_var
-               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") Universal.Pp.pp_var) f.c_func_parameters
+               pp_var f.c_func_var
+               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
                pp_stmt f.c_func_body
           )
           fmt funcs

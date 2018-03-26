@@ -16,6 +16,8 @@
 *)
 
 
+open Ast
+
 let debug fmt = Debug.debug ~channel:"framework.visitor" fmt
 
 
@@ -35,8 +37,6 @@ type parts = {
 type 'a structure =
   parts * (parts -> 'a)
 
-
-
 (*==========================================================================*)
                         (** {2 Visitors chains} *)
 (*==========================================================================*)
@@ -47,9 +47,25 @@ type 'a structure =
 *)
 type 'a chain = ('a -> 'a structure) ref
 
+
+(** Leaf nodes maybe defined with a generic identity composer *)
+let leaf (x: 'a) : 'a structure =
+  {exprs = []; stmts = []}, (fun _ -> x)
+
+
 (** Empty chains, that should not be reached when visiting an AST node *)
 let expr_chain : Ast.expr chain = ref (fun exp ->
-    Debug.fail "Unknown expression %a" Pp.pp_expr exp
+    match ekind exp with
+    | E_var _ -> leaf exp
+    | E_constant _ -> leaf exp
+    | E_unop(unop, e) ->
+      {exprs = [e]; stmts = []},
+      (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})  
+    | E_binop(binop, e1, e2) ->
+        {exprs = [e1; e2]; stmts = []},
+        (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
+    | _ ->
+      Debug.fail "Unknown expression %a" Pp.pp_expr exp
   )
 
 let stmt_chain : Ast.stmt chain = ref (fun stmt ->
@@ -68,10 +84,6 @@ let register_expr_visitor
 let register_stmt_visitor
     (v: (Ast.stmt -> Ast.stmt structure) -> Ast.stmt -> Ast.stmt structure) =
   stmt_chain := v !stmt_chain
-
-(** Leaf nodes maybe defined with a generic identity composer *)
-let leaf (x: 'a) : 'a structure =
-  {exprs = []; stmts = []}, (fun _ -> x)
 
 
 let split_expr (expr : Ast.expr) : Ast.expr structure = !expr_chain expr
@@ -182,3 +194,26 @@ and fold_map_stmt
       ) x2 parts.stmts
   in
   (x3,builder {exprs;stmts})
+
+
+(** Extract variables from an expression *)
+let expr_vars (e: Ast.expr) : Ast.var list =
+  fold_expr
+    (fun acc e ->
+       match Ast.ekind e with
+       | Ast.E_var(v) -> v :: acc
+       | _ -> acc
+    )
+    (fun acc s -> acc)
+    [] e
+
+(** Extract variables from a statement *)
+let stmt_vars (s: stmt) : var list =
+  fold_stmt
+    (fun acc e ->
+       match Ast.ekind e with
+       | Ast.E_var(v) -> v :: acc
+       | _ -> acc
+    )    
+    (fun acc s -> acc)
+    [] s

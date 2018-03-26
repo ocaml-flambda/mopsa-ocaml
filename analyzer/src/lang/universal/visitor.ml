@@ -15,17 +15,7 @@ open Ast
 let () =
   register_expr_visitor (fun default exp ->
       match ekind exp with
-      | E_var _
-      | E_constant _
       | E_function _ -> leaf exp
-
-      | E_unop(unop, e) ->
-        {exprs = [e]; stmts = []},
-        (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})
-
-      | E_binop(binop, e1, e2) ->
-        {exprs = [e1; e2]; stmts = []},
-        (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
 
       | E_subscript(v, e) ->
         {exprs = [v; e]; stmts = []},

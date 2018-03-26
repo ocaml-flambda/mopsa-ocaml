@@ -88,9 +88,9 @@ struct
           Eval.singleton (None, flow, [])
         else
           (* Give the call to {!Universal} *)
-          let tmp = Universal.Ast.mktmp () in
+          let tmp = mktmp () in
           let fundec = {
-            fun_name = pyfundec.py_func_var.unname;
+            fun_name = var_uniq_name (pyfundec.py_func_var);
             fun_parameters = pyfundec.py_func_parameters;
             fun_locvars = pyfundec.py_func_locals;
             fun_body = pyfundec.py_func_body;

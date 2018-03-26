@@ -14,9 +14,6 @@ open Ast
 open Format
 
 
-let pp_var fmt v =
-  fprintf fmt "var %s" v.unname
-
 let rec pp_addr_chain : (formatter -> addr -> unit) ref = ref (fun fmt addr ->
     failwith "Pp: Unknown address"
   )
@@ -75,10 +72,6 @@ let () =
   );
   register_pp_expr (fun default fmt exp ->
       match ekind exp with
-      | E_constant c -> pp_constant fmt c
-      | E_var(v) -> pp_var fmt v
-      | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
-      | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
       | E_array(el) ->
         fprintf fmt "[@[<h>%a@]]"
           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el

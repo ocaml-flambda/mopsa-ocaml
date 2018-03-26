@@ -43,7 +43,7 @@ struct
            | E_c_function(fundec) ->
              let open Universal.Ast in
              let fundec' = {
-               fun_name = fundec.c_func_var.unname;
+               fun_name = var_uniq_name (fundec.c_func_var);
                fun_parameters = fundec.c_func_parameters;
                fun_locvars = List.map fst fundec.c_func_local_vars;
                fun_body = fundec.c_func_body;

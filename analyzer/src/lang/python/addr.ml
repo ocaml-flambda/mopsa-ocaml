@@ -9,6 +9,7 @@
 (** Heap addresses of Python objects. *)
 
 open Framework.Ast
+open Framework.Pp
 open Framework.Manager
 open Universal.Ast
 open Ast

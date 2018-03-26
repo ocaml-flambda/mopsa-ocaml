@@ -23,7 +23,7 @@ let pp_except fmt e =
     ) e.py_excpt_type
     (fun fmt v -> match v with
        | None -> ()
-       | Some v -> fprintf fmt " as %a" Universal.Pp.pp_var v
+       | Some v -> fprintf fmt " as %a" pp_var v
     ) e.py_excpt_name
     pp_stmt e.py_excpt_body
 
@@ -154,7 +154,7 @@ let () =
 
       | E_py_lambda l ->
         fprintf fmt "lambda %a: %a"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") Universal.Pp.pp_var) l.py_lambda_parameters
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) l.py_lambda_parameters
           pp_expr l.py_lambda_body
       | E_py_multi_compare(left, ops, rights) ->
         let l = List.combine ops rights in
@@ -173,12 +173,12 @@ let () =
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
       | S_py_class(cls) ->
-        fprintf fmt "class %a:@\n@[<h 2>  %a@]" Universal.Pp.pp_var cls.py_cls_var pp_stmt cls.py_cls_body
+        fprintf fmt "class %a:@\n@[<h 2>  %a@]" pp_var cls.py_cls_var pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
         fprintf fmt "def %a(%a):@\n@[<h 2>  %a@]"
-          Universal.Pp.pp_var func.py_func_var
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") Universal.Pp.pp_var) func.py_func_parameters
+          pp_var func.py_func_var
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_parameters
           pp_stmt func.py_func_body
 
       | S_py_try(body, excepts, orelse, final) ->
@@ -218,14 +218,14 @@ let () =
       | S_py_import(mdl, asname, vroot) ->
         fprintf fmt "import %s%a"
           mdl
-          (fun fmt -> function None -> () | Some name -> fprintf fmt " as %a" Universal.Pp.pp_var name) asname
+          (fun fmt -> function None -> () | Some name -> fprintf fmt " as %a" pp_var name) asname
 
 
       | S_py_import_from(mdl, name, asname) ->
         fprintf fmt "from %s import %s as %a"
           mdl
           name
-          Universal.Pp.pp_var asname
+          pp_var asname
 
       | S_py_delete e -> fprintf fmt "del %a" pp_expr e
 

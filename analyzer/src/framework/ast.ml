@@ -138,7 +138,7 @@ let mk_stmt skind srange =
 
 
 (*==========================================================================*)
-                      (**      {2 Expressions}      *)
+                      (**      {2 Types}      *)
 (*==========================================================================*)
 
 type typ = ..
@@ -147,20 +147,87 @@ type typ = ..
 type typ +=
   | T_any (** Generic unknown type. *)
 
+
+(*==========================================================================*)
+                      (**      {2 Variables}      *)
+(*==========================================================================*)
+
+type var = {
+  vname : string; (** original name of the variable. *)
+  vuid : int; (** unique identifier. *)
+  vtyp : typ; (** type of the variable. *)
+  vkind : var_kind; (** extra kind of the variable. *)
+}
+(** variables *)
+
+and var_kind = ..
+
+type var_kind +=
+  | V_orig (** original program variables. *)
+
+let vkind v = v.vkind
+
+let var_uniq_name v =
+  if v.vuid <= 0 then
+    v.vname
+  else
+    v.vname ^ "@" ^ (string_of_int v.vuid)
+
+let var_kind_compare_chain : (var_kind -> var_kind -> int) ref = ref (fun vk1 vk2 ->
+    match vk1, vk2 with
+    | V_orig, V_orig -> 0
+    | _ -> compare vk1 vk2
+  )
+
+let register_var_kind_compare cmp =
+  var_kind_compare_chain := cmp !var_kind_compare_chain
+
+let compare_var v1 v2 =
+  compare_composer [
+    (fun () -> compare v1.vname v2.vname);
+    (fun () -> compare v1.vuid v2.vuid);
+    (fun () -> compare v1.vtyp v2.vtyp);
+    (fun () -> !var_kind_compare_chain v1.vkind v2.vkind);
+  ]
+
+let mkv ?(vtyp = T_any) ?(vkind = V_orig) ?(vuid=0) vname =
+  {vname; vuid = 0; vtyp; vkind}
+
+let tmp_counter = ref 0
+
+(** Create a temporary variable with a unique name. *)
+let mktmp ?(vtyp = T_any) ?(vkind = V_orig) () =
+  incr tmp_counter;
+  let vname = "$tmp" ^ (string_of_int !tmp_counter) in
+  {vname; vuid = 0; vtyp; vkind}
+
+
+(*==========================================================================*)
+                      (**      {2 Expressions}      *)
+(*==========================================================================*)
+
+
 type operator = ..
 (** Extensible type of operators (unary, binary, etc.). *)
 
 type constant = ..
 (** Extensible type of constants. *)
 
-(** Extensible type of expressions. *)
-type expr_kind = ..
-
 type expr = {
   ekind: expr_kind;
   etyp: typ;
   erange: range;
 }
+
+(** Extensible type of expressions. *)
+and expr_kind = ..
+
+type expr_kind +=
+  | E_var of var (** variables *)
+  | E_constant of constant (** constants *)
+  | E_unop of operator * expr (** unary operator expressions *)
+  | E_binop of operator * expr * expr (** binary operator expressions *)
+
 (** Type-decorated expressions. *)
 
 let ekind (e: expr) = e.ekind
@@ -173,6 +240,16 @@ let mk_expr
   =
   {ekind; etyp; erange}
 
+let mk_var v erange =
+  mk_expr ~etyp:v.vtyp (E_var v) erange
+
+let mk_binop left op right erange =
+  mk_expr (E_binop (op, left, right)) erange
+
+let mk_unop op operand erange =
+  mk_expr (E_unop (op, operand)) erange
+
+let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
 
 (*==========================================================================*)
                         (** {2 Panic statement} *)

@@ -22,9 +22,9 @@ open Framework.Visitor
 (** variables *)
 module V =
 struct
-  type t = Universal.Ast.var
-  let compare = Universal.Ast.compare_var
-  let print fmt v = Format.fprintf fmt "%s" (Universal.Ast.orgname v)
+  type t = var
+  let compare = compare_var
+  let print fmt v = pp_var fmt v
 end
 
 (** (var -> var) map *)
@@ -59,19 +59,11 @@ let fresh name =
   let () = Hashtbl.replace name_counters name (i+1) in
   Format.sprintf "%s_%d" name i
 
-let fresh_var_t t name =
+let fresh_var_t t name vkind =
   let n = fresh name in
-  {Universal.Ast.orgname = n ; Universal.Ast.unname = n ; vtyp = t}
+  {vname = n ; vuid = 0; vtyp = t; vkind}
 
-let fresh_var name =
-  let n = fresh name in
-  {Universal.Ast.orgname = n ;
-   Universal.Ast.unname = n ;
-   vtyp = Framework.Ast.T_any
-  }
-
-
-let vargen_var t () = fresh_var_t t "var"
+let vargen_var t vkind () = fresh_var_t t "var" vkind
 
 
 (*==========================================================================*)
@@ -82,24 +74,23 @@ let vargen_var t () = fresh_var_t t "var"
 (** A memory cell. *)
 type cell =
   {
-    v : Universal.Ast.var ; (* Base variable *)
+    v : var ; (* Base variable *)
     o : int ;               (* Offset        *)
     t : typ                 (* Type          *)
   }
 
 let pp_cell fmt c =
-  Format.fprintf fmt "⟨%a,%a,%a⟩"
-    Format.pp_print_string (Universal.Ast.(c.v.unname))
-    Format.pp_print_int c.o
+  Format.fprintf fmt "⟨%a,%d,%a⟩"
+    pp_var c.v
+    c.o
     pp_typ c.t
 
 let compare_cell c c' =
-  Comp.triple_compare
-    Universal.Ast.compare_var
-    (-)
-    compare (* TODO replace this compare by a real comparison function over C_AST.type_qual*)
-    (c.v , c.o , c.t )
-    (c'.v, c'.o, c'.t)
+  compare_composer [
+    (fun () -> compare_var c.v c'.v);
+    (fun () -> compare c.o c'.o);
+    (fun () -> compare c.t c'.t); (* TODO replace this compare by a real comparison function over C_AST.type_qual*)
+  ]
 
 (* Cell as a value, useful for sets and maps keys. *)
 module CellValue =

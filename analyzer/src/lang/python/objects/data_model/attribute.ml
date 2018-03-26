@@ -79,7 +79,7 @@ struct
   let is_static_attribute addr attr =
     match addr.addr_kind with
     | A_py_class(C_user cls, _) ->
-      List.exists (fun v -> v.orgname = attr) cls.py_cls_static_attributes
+      List.exists (fun v -> v.vname = attr) cls.py_cls_static_attributes
 
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       Builtins.is_builtin_attribute name attr
@@ -117,7 +117,7 @@ struct
   let mk_static_attribute addr attr range =
     match addr.addr_kind with
     | A_py_class(C_user cls, _) ->
-      let v = cls.py_cls_static_attributes |> List.find (fun v -> v.orgname = attr) in
+      let v = cls.py_cls_static_attributes |> List.find (fun v -> v.vname = attr) in
       mk_var v range
 
     | A_py_class(C_builtin name, _)

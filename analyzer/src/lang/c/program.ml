@@ -39,7 +39,7 @@ struct
         | Some (Ast.C_init_implicit _) -> assert false
       ) flow
 
-  let get_function_name fundec = fundec.c_func_var.orgname
+  let get_function_name fundec = fundec.c_func_var.vname
 
   let is_test fundec =
     String.sub (get_function_name fundec) 0 4 = "test"
@@ -51,7 +51,7 @@ struct
     let range = mk_file_range file in
     let tests =
       tests |> List.map (fun test ->
-          let name = test.c_func_var.orgname in
+          let name = test.c_func_var.vname in
           let range = tag_range range "test %s" name in
           let cleaners = List.mapi (fun i (v, _) ->
               let range = tag_range range "cleaner %d" i in
@@ -69,7 +69,7 @@ struct
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
-      let main = List.find (function {c_func_var} -> c_func_var.orgname = "main") functions in
+      let main = List.find (function {c_func_var} -> c_func_var.vname = "main") functions in
       init_globals prog_file globals manager ctx flow |>
       manager.exec main.c_func_body ctx |>
       Exec.return

@@ -62,11 +62,7 @@ and parse_file (filename: string) =
 (** Create a Universal.var variable from Py_AST.var *)
 and from_var v =
   let open Framework.Ast in
-  let unname =
-    if v.uid = -1 then v.name
-    else v.name ^ "%" ^ (string_of_int v.uid)
-  in
-  {Universal.Ast.unname = unname ; orgname = v.name; vtyp = T_any}
+  mkv v.name ~vuid:v.uid ~vtyp:T_any ~vkind:V_orig
 
 (** Translate a Python program into a Framework.Ast.stmt *)
 and from_program filename (p: Py_AST.program) : Framework.Ast.program =
@@ -203,38 +199,38 @@ and from_exp_option : Py_AST.expr option -> Framework.Ast.expr option
 and from_exp exp =
   let ekind, etyp = match exp.ekind with
     | E_true ->
-      Universal.Ast.E_constant (Universal.Ast.C_true),
+      E_constant (Universal.Ast.C_true),
       Universal.Ast.T_bool
 
     | E_false ->
-      Universal.Ast.E_constant (Universal.Ast.C_false),
+      E_constant (Universal.Ast.C_false),
       Universal.Ast.T_bool
 
     | E_none ->
-      Universal.Ast.E_constant (C_py_none),
+      E_constant (C_py_none),
       T_py_none
 
     | E_notimplemented ->
-      Universal.Ast.E_constant (C_py_not_implemented),
+      E_constant (C_py_not_implemented),
       T_py_not_implemented
 
     | E_num (Py_CST.Int i) ->
-      Universal.Ast.E_constant (Universal.Ast.C_int i),
+      E_constant (Universal.Ast.C_int i),
       Universal.Ast.T_int
 
     | E_num (Py_CST.Float f) ->
-      Universal.Ast.E_constant (Universal.Ast.C_float f),
+      E_constant (Universal.Ast.C_float f),
       Universal.Ast.T_float
 
     | E_num (Py_CST.Imag j) ->
       ignore (Str.string_match (Str.regexp "\\(.*\\)j") j 0);
       let j = Str.matched_group 1 j in
       let j = float_of_string j in
-      Universal.Ast.E_constant (Ast.C_py_imag j),
+      E_constant (Ast.C_py_imag j),
       T_py_complex
 
     | E_str s ->
-      Universal.Ast.E_constant (Universal.Ast.C_string s),
+      E_constant (Universal.Ast.C_string s),
       Universal.Ast.T_string
 
     | E_attr (obj, attr) ->
@@ -242,11 +238,11 @@ and from_exp exp =
       T_any
 
     | E_id v ->
-      Universal.Ast.E_var (from_var v),
+      E_var (from_var v),
       T_any
 
     | E_binop (left, op, right) ->
-      Universal.Ast.E_binop (
+      E_binop (
         from_binop op,
         from_exp left,
         from_exp right
@@ -254,7 +250,7 @@ and from_exp exp =
       T_any
 
     | E_unop (op, operand) ->
-      Universal.Ast.E_unop (
+      E_unop (
         from_unop op,
         from_exp operand
       ),

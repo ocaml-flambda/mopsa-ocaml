@@ -10,34 +10,6 @@
 
 open Framework.Ast
 
-
-(*==========================================================================*)
-                           (** {2 Variables} *)
-(*==========================================================================*)
-
-
-type var = {
-  unname : string; (** Unique name. *)
-  orgname : string; (** Original name. *)
-  vtyp: typ; (** Type. *)
-}
-(** Program variable. *)
-
-let compare_var v1 v2 = compare v1.unname v2.unname
-
-
-let unname v = v.unname
-let orgname v = v.orgname
-
-let tmp_counter = ref 0
-
-(** Create a temporary variable with a unique name. *)
-let mktmp ?(vtyp = T_any) () =
-  incr tmp_counter;
-  let name = "$tmp" ^ (string_of_int !tmp_counter) in
-  {orgname = name; unname = name; vtyp}
-
-
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
@@ -152,19 +124,6 @@ type fundec = {
 
 
 type expr_kind +=
-  (** Variable *)
-  | E_var of var
-
-  (** Constant *)
-
-  | E_constant of constant
-
-  (** Unary expressions *)
-  | E_unop of operator * expr
-
-  (** Binary expressions *)
-  | E_binop of operator * expr * expr
-
   (** Function expression *)
   | E_function of fundec
 
@@ -188,20 +147,9 @@ type expr_kind +=
   | E_addr_attribute of addr * string
 
 
-let mk_var v erange =
-  mk_expr ~etyp:v.vtyp (E_var v) erange
-
-let mk_binop left op right erange =
-  mk_expr (E_binop (op, left, right)) erange
-
-let mk_unop op operand erange =
-  mk_expr (E_unop (op, operand)) erange
-
 let mk_neg e = mk_unop O_minus e
 
 let mk_not e = mk_unop O_log_not e
-
-let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
 
 let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
@@ -257,19 +205,6 @@ let mk_false = mk_bool false
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
 let mk_addr_attribute addr attr range = mk_expr (E_addr_attribute (addr, attr)) range
-
-(** Extract variables from an expression *)
-let acc_vars acc e =
-  match ekind e with
-  | E_var(v) -> v :: acc
-  | _ -> acc
-
-let expr_vars (e: expr) : var list =
-  Framework.Visitor.fold_expr
-    acc_vars
-    (fun acc s -> acc)
-    [] e
-
 
 let rec expr_to_int (e: expr) : int option =
   match ekind e with
@@ -368,12 +303,6 @@ let mk_block block = mk_stmt (S_block block)
 let mk_nop = mk_block []
 
 let mk_remove_var v = mk_stmt (S_remove_var v)
-
-let stmt_vars (s: stmt) : var list =
-  Framework.Visitor.fold_stmt
-    acc_vars
-    (fun acc s -> acc)
-    [] s
 
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range

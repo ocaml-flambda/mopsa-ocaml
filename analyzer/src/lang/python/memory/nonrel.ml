@@ -91,7 +91,7 @@ struct
   let eval exp man ctx flow =
     let range = erange exp in
     match ekind exp with
-    | E_var v when Builtins.is_builtin v.orgname ->
+    | E_var v when Builtins.is_builtin v.vname ->
       debug "builtin";
       Eval.singleton (Some (mk_addr (Builtins.from_expr exp) range), flow, [])
         

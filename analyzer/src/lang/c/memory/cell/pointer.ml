@@ -30,17 +30,16 @@ let debug fmt = Debug.debug ~channel:name fmt
 module P =
 struct
   type t =
-    | V of Universal.Ast.var (* points to a variable *)
+    | V of var (* points to a variable *)
     | Null                   (* Null pointer         *)
     | Invalid                (* Invalid pointer      *)
   let print fmt p = match p with
-    | V v -> Format.fprintf fmt "%a"
-               Format.pp_print_string Universal.Ast.(v.unname)
+    | V v -> pp_var fmt v
     | Null -> Format.fprintf fmt "Null"
     | Invalid -> Format.fprintf fmt "Invalid"
   let compare p p' =
     match p, p' with
-    | V x    , V y     -> Universal.Ast.compare_var x y
+    | V x    , V y     -> compare_var x y
     | Null   , Null    -> 0
     | Invalid, Invalid -> 0
     | _                -> 1

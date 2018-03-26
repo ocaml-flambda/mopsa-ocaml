@@ -13,6 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
+open Framework.Pp
 open Universal.Ast
 open Ast
 open Addr
@@ -43,7 +44,7 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_py_class cls ->
-      debug "definition of class %a" Universal.Pp.pp_var cls.py_cls_var;
+      debug "definition of class %a" pp_var cls.py_cls_var;
       Eval.compose_exec_list
         cls.py_cls_bases 
         (fun bases flow ->

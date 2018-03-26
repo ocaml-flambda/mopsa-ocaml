@@ -36,9 +36,9 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_c_function(f) when is_builtin_function f.c_func_var.orgname ->
+    | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";
-      let exp' = mk_expr (E_c_builtin_function f.c_func_var.orgname) ~etyp:T_c_builtin_fn exp.erange in
+      let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       Eval.singleton (Some exp', flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->

@@ -125,7 +125,7 @@ module Make(ValAbs : DOMAIN) = struct
     | Some c' ->
       Nexp (
         Some
-          {ekind = Universal.Ast.E_var (CVE.find_l c' bd);
+          {ekind = E_var (CVE.find_l c' bd);
            etyp = c.t;
            erange = mk_fresh_range ()
           }
@@ -230,7 +230,7 @@ module Make(ValAbs : DOMAIN) = struct
         match phi c u range with
         | Nexp (Some e) ->
           begin
-            let var_c = vargen_var c.t () in
+            let var_c = vargen_var c.t V_orig () in
             let open Universal.Ast in
             let s = mk_assume
                 (mk_binop
@@ -248,7 +248,7 @@ module Make(ValAbs : DOMAIN) = struct
           end
         | Nexp None ->
           begin
-            let var_c =  vargen_var c.t () in
+            let var_c =  vargen_var c.t V_orig () in
             {cs = CS.add c u.cs;
              bd = CVE.add (c,var_c) u.bd;
              a = u.a
@@ -256,7 +256,7 @@ module Make(ValAbs : DOMAIN) = struct
           end
         | Pexp Invalid ->
           begin
-            let var_c = vargen_var c.t () in
+            let var_c = vargen_var c.t V_orig () in
             {cs = CS.add c u.cs;
              bd = CVE.add (c,var_c) u.bd;
              a = u.a
@@ -302,11 +302,11 @@ module Make(ValAbs : DOMAIN) = struct
     in
     rebind_cells u u'
 
-  let var_to_cell (v: Universal.Ast.var) (u: t) : cell =
+  let var_to_cell (v: var) (u: t) : cell =
     try
       CVE.find_r v u.bd
     with Not_found ->
-      {v = v; o = 0; t = v.Universal.Ast.vtyp}
+      {v = v; o = 0; t = v.vtyp}
 
   let top = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.top}
   let bottom = {cs = CS.empty ; bd = CVE.empty ; a = ValAbs.bottom}
@@ -382,7 +382,7 @@ module Make(ValAbs : DOMAIN) = struct
         (fun u expr -> match ekind expr with
             | E_c_cell c ->
                let u' = add_cell c u stmt.srange in
-               (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) stmt.srange)
+               (u', mk_var (CVE.find_l c u'.bd) stmt.srange)
              | _ -> (u, expr)
           )
           (fun u stmt -> (u,stmt))
@@ -412,7 +412,7 @@ module Make(ValAbs : DOMAIN) = struct
           (fun u expr -> match ekind expr with
             | E_c_cell c ->
               let u' = add_cell c u exp.erange in
-              (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) exp.erange)
+              (u', mk_var (CVE.find_l c u'.bd) exp.erange)
             | _ -> (u, expr)
           )
           (fun u stmt -> (u,stmt))

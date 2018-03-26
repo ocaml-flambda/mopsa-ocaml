@@ -48,7 +48,7 @@ struct
     let range = mk_fresh_range () in
     let stmt =
       mk_assign
-        (mk_var {orgname = "__name__"; unname = "__name__"; vtyp = T_any} (tag_range range "__name__ lval"))
+        (mk_var (mkv "__name__" ~vtyp:T_any) (tag_range range "__name__ lval"))
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string (tag_range range "__name__"))
         range
     in
@@ -58,7 +58,7 @@ struct
     let range = mk_fresh_range () in
     let stmt =
         mk_assign
-          (mk_var {orgname = "__file__"; unname = "__file__"; vtyp = T_any} (tag_range range "__file__ lval"))
+          (mk_var (mkv "__file__" ~vtyp:T_any) (tag_range range "__file__ lval"))
           (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string (tag_range range "__file__"))
           range
     in
@@ -67,7 +67,7 @@ struct
     flow3
 
 
-  let get_function_name fundec = fundec.py_func_var.orgname
+  let get_function_name fundec = fundec.py_func_var.vname
 
   let is_test fundec =
     String.sub (get_function_name fundec) 0 4 = "test"
@@ -88,7 +88,7 @@ struct
     let range = mk_file_range file in
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.orgname, test.py_func_body)
+          (test.py_func_var.vname, test.py_func_body)
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range

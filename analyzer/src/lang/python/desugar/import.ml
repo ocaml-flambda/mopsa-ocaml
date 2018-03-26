@@ -27,7 +27,7 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_py_import(modul, vasname, vroot)  when Builtins.is_builtin_module modul ->
-      let addr = Builtins.from_string vroot.orgname in
+      let addr = Builtins.from_string vroot.vname in
       manager.exec
         (mk_assign
            (mk_var vroot (tag_range range "import vroot"))
@@ -39,7 +39,7 @@ struct
          match vasname with
          | None -> flow
          | Some v ->
-           let addr' = Builtins.from_attribute modul v.orgname in
+           let addr' = Builtins.from_attribute modul v.vname in
            manager.exec
              (mk_assign
                 (mk_var v (tag_range range "import v"))

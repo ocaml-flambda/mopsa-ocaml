@@ -49,17 +49,18 @@ let rec parse_program (file: string) : Framework.Ast.program =
 
 (** {2 Variables} *)
 
-and from_var_with_init (v: C_AST.variable) : Universal.Ast.var * Ast.c_init option =
+and from_var_with_init (v: C_AST.variable) : var * Ast.c_init option =
   from_var v, from_init_option v.var_init
 
-and from_var (v: C_AST.variable) : Universal.Ast.var =
-  from_var_name v.var_org_name v.var_unique_name v.var_uid (from_typ v.var_type)
+and from_var (v: C_AST.variable) : var =
+  from_var_name v.var_org_name v.var_uid (from_typ v.var_type)
 
-and from_var_name (org_name: string) (unique_name: string) (uid: int) (typ: Framework.Ast.typ) : Universal.Ast.var =
+and from_var_name (org_name: string) (uid: int) (typ: Framework.Ast.typ) : var =
   {
-    unname = unique_name ^ "@" ^ (string_of_int uid) ;
-    orgname = org_name;
+    vname = org_name;
+    vuid = uid;
     vtyp = typ;
+    vkind = V_orig;
   }
 
 and from_init_option : C_AST.init option -> Ast.c_init option = function
@@ -83,7 +84,7 @@ and from_function : C_AST.func -> Ast.c_fundec =
       })
     in
     {
-      c_func_var = from_var_name func.func_org_name func.func_unique_name func.func_uid typ;
+      c_func_var = from_var_name func.func_org_name func.func_uid typ;
       c_func_is_static = func.func_is_static;
       c_func_return = from_typ func.func_return;
       c_func_parameters = Array.to_list func.func_parameters |> List.map from_var ;
@@ -160,11 +161,11 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
     | C_AST.E_string_literal (s, Clang_AST.Char_Ascii) -> Universal.Ast.(E_constant (C_string s))
-    | C_AST.E_variable v -> Universal.Ast.E_var (from_var v)
+    | C_AST.E_variable v -> E_var (from_var v)
     | C_AST.E_function f -> Ast.E_c_function (from_function f)
     | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr f, Array.map from_expr args |> Array.to_list)
-    | C_AST.E_unary (op, e) -> Universal.Ast.E_unop (from_unary_operator op, from_expr e)
-    | C_AST.E_binary (op, e1, e2) -> Universal.Ast.E_binop (from_binary_operator op, from_expr e1, from_expr e2)
+    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op, from_expr e)
+    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op, from_expr e1, from_expr e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
     | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
     | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)

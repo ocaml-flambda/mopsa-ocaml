@@ -45,7 +45,7 @@ struct
 
   let var_to_apron v =
     (* assert (v.vtyp <> TAny); *)
-    Format.fprintf Format.str_formatter "%s:%a" v.unname Framework.Pp.pp_typ v.vtyp;
+    Format.fprintf Format.str_formatter "%s:%a" (var_uniq_name v) Framework.Pp.pp_typ v.vtyp;
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
 
@@ -139,7 +139,7 @@ struct
 
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
         let v = {v with vtyp = e.etyp} in
-        let abs = add_missing_vars abs (v :: (expr_vars e)) in
+        let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
         try
           let aenv = Apron.Abstract1.env abs in
           let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
@@ -165,7 +165,7 @@ struct
       exec {stmt with skind = S_remove_var v} ctx abs
 
     | S_assume(e) -> begin
-        let abs = add_missing_vars  abs (expr_vars e) in
+        let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env abs in
         try
           let e' = bexp_to_apron e in
@@ -207,7 +207,7 @@ struct
 
   and interval exp abs =
     try
-      let lv =  expr_vars exp in
+      let lv =  Framework.Visitor.expr_vars exp in
       let abs = add_missing_vars abs lv in
       let env = Apron.Abstract1.env abs in
       let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in

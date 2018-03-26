@@ -51,7 +51,7 @@ type operator +=
 (** Lambda functions. *)
 type py_lambda = {
   py_lambda_body: expr; (** Body. *)
-  py_lambda_parameters: Universal.Ast.var list; (** list of parameters variables *)
+  py_lambda_parameters: var list; (** list of parameters variables *)
   py_lambda_defaults: expr option list; (** list of default parameters values *)
 }
 
@@ -115,19 +115,19 @@ type expr_kind +=
 
 (** Python function descriptor *)
 type py_fundec = {
-  py_func_var: Universal.Ast.var; (** function object variable *)
-  py_func_parameters: Universal.Ast.var list; (** list of parameters variables *)
+  py_func_var: var; (** function object variable *)
+  py_func_parameters: var list; (** list of parameters variables *)
   py_func_defaults: expr option list; (** list of default parameters values *)
-  py_func_locals: Universal.Ast.var list; (** list of local variables *)
+  py_func_locals: var list; (** list of local variables *)
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
 }
 
 (** A Python class *)
 type py_clsdec = {
-  py_cls_var : Universal.Ast.var; (** class object variable *)
+  py_cls_var : var; (** class object variable *)
   py_cls_body : stmt;
-  py_cls_static_attributes: Universal.Ast.var list; (** list of declared attributes: static variables and methods *)
+  py_cls_static_attributes: var list; (** list of declared attributes: static variables and methods *)
   py_cls_bases : expr list; (** base classes *)
   py_cls_decors: expr list;
   py_cls_keywords: (string option * expr) list (** keywords (None id for **kwargs) *)
@@ -138,7 +138,7 @@ type py_clsdec = {
 (** Exception handler *)
 type py_excpt = {
   py_excpt_type : expr option; (** exception class. None is used for the default except *)
-  py_excpt_name : Universal.Ast.var option; (** optional name of exception instance *)
+  py_excpt_name : var option; (** optional name of exception instance *)
   py_excpt_body : stmt; (** body of the except handler *)
 }
 
@@ -178,13 +178,13 @@ type stmt_kind +=
 
   (** package import *)
   | S_py_import of string (** module *) *
-                Universal.Ast.var option (** asname *) *
-                Universal.Ast.var (** root module *)
+                var option (** asname *) *
+                var (** root module *)
 
 
   | S_py_import_from of string (** module *) *
                      string (** name *) *
-                     Universal.Ast.var (** module var *)
+                     var (** module var *)
 
   | S_py_delete of expr
 
@@ -201,7 +201,7 @@ type stmt_kind +=
 
 type Framework.Ast.program_kind +=
   | Py_program of
-      Universal.Ast.var list (** global variables *) *
+      var list (** global variables *) *
       stmt (** body *)
 
 
@@ -238,4 +238,4 @@ let mk_py_attr addr attr range =
   mk_expr (E_py_attribute (Universal.Ast.mk_addr addr (tag_range range "addr"), attr)) range
 
 let mk_py_none range =
-  Universal.Ast.mk_constant ~etyp:T_py_none C_py_none range
+  mk_constant ~etyp:T_py_none C_py_none range

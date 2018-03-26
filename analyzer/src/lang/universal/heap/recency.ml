@@ -22,7 +22,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 let attribute_var addr attr vtyp =
   let () = Format.(fprintf str_formatter "%a.%s" Pp.pp_addr addr attr) in
   let name = Format.flush_str_formatter () in
-  {unname = name; orgname = name; vtyp}
+  mkv name ~vtyp
 
 
 module Make(Sub: DOMAIN) =

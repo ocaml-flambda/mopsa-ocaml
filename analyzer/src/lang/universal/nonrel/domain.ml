@@ -30,7 +30,7 @@ struct
       (struct
         type t = var
         let compare = compare_var
-        let print = Pp.pp_var
+        let print = Framework.Pp.pp_var
       end)
     (Value)
 
