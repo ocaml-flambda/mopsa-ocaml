@@ -525,17 +525,17 @@ let under_type (t : typ) : typ =
   | _ -> failwith "[under_type] called with a non pointer argument"
 
 let is_c_type = function
-  | T_c_void 
-  | Universal.Ast.T_bool 
-  | T_c_integer _ 
+  | T_c_void
+  | Universal.Ast.T_bool
+  | T_c_integer _
   | T_c_float _
-  | T_c_pointer _ 
-  | T_c_array _ 
-  | T_c_bitfield _ 
-  | T_c_function  _ 
-  | T_c_builtin_fn 
-  | T_c_typedef _ 
+  | T_c_pointer _
+  | T_c_array _
+  | T_c_bitfield _
+  | T_c_function  _
+  | T_c_builtin_fn
+  | T_c_typedef _
   | T_c_record  _
-  | T_c_enum _ 
+  | T_c_enum _
   | T_c_qualified _ -> true
   | _ -> false

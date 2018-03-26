@@ -26,18 +26,18 @@ let rec parse_program (file: string) : Framework.Ast.program =
       if error_diag then
         failwith "Fatal parsing errors"
   in
-        
+
   let ctx = Clang_to_C.create_context file target_info in
   Clang_to_C.add_translation_unit ctx file x;
   let prj = Clang_to_C.link_project ctx in
 
   debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;
-  
+
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
                 List.map from_var_with_init
   in
-  
+
   let funcs = StringMap.bindings prj.proj_funcs |>
               List.map snd |>
               List.map from_function
@@ -264,4 +264,3 @@ and from_block_option (range: Framework.Ast.range) (block: C_AST.block option) :
   match block with
   | None -> mk_nop range
   | Some stmtl -> from_block range stmtl
-

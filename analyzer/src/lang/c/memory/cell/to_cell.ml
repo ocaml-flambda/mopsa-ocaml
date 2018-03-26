@@ -16,7 +16,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 open Typ
-    
+
 let name = "c.memory.cell.to_cell"
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -28,17 +28,17 @@ struct
   (*==========================================================================*)
 
   include Sub
-  
+
   (*==========================================================================*)
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let cellify_expr e = 
+  let cellify_expr e =
     match ekind e with
     | E_var v when is_c_type v.vtyp ->
       {e with ekind = E_c_cell( {v = v; o = 0; t = e |> etyp} )}
     | _ -> e
-      
+
   let exec stmt man ctx flow =
     let stmt' = Framework.Visitor.map_stmt
         (fun e -> cellify_expr e)
@@ -54,7 +54,7 @@ struct
         exp
     in
     Sub.eval exp' man ctx flow
-    
+
   let ask query man ctx flow =
     Sub.ask query man ctx flow
 

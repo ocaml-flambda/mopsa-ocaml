@@ -14,10 +14,10 @@ open Framework.Domains.Global
 open Framework.Manager
 open Framework.Ast
 open Framework.Visitor
-open Framework.Pp       
+open Framework.Pp
 open Ast
 open Typ
-    
+
 let name = "c.memory.cell.pointer"
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -90,8 +90,8 @@ struct
   (*==========================================================================*)
                         (** {2 Lattice structure} *)
   (*==========================================================================*)
-  
-  
+
+
   (** (cell -> pointsto lattice) lattice *)
   module CPML = struct
     include Framework.Lattices.Partial_map.Make(CellValue)(PSL)
@@ -103,7 +103,7 @@ struct
   end
 
 
-  include CPML 
+  include CPML
 
   let print fmt a =
     Format.fprintf fmt "ptr: @[%a@]@\n"
@@ -119,7 +119,7 @@ struct
       TCur
       (man.ax.set top myenv)
       flow
-  
+
   let get_my_current_abstraction (flow : 'a flow) (man : ('a, t) manager)
     : t =
     let module FF = Framework.Flow in

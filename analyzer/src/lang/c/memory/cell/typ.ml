@@ -117,7 +117,7 @@ module CS = struct
   include SetP.Make(CellValue)
   let apply_renaming (r : VVM.t) =
     map (CellValue.apply_renaming r)
-      
+
   (** [exist_and_find p cs] gives back an element of [cs] that satisfies [p]*)
   let exist_and_find (p : cell -> bool) (cs : t) : cell option =
       let exception Found of cell in
@@ -168,5 +168,3 @@ let () =
       | E_c_cell c -> leaf exp
       | _ -> default exp
     )
-
-

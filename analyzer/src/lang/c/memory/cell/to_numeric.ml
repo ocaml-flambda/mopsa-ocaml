@@ -59,7 +59,7 @@ module Make(ValAbs : DOMAIN) = struct
       }
     }
 
-    
+
   let valabs_trivial_exec (stmt : stmt) (a : ValAbs.t) : ValAbs.t =
     debug "trivial exec %a in@ %a" Framework.Pp.pp_stmt stmt ValAbs.print a;
     let a' =

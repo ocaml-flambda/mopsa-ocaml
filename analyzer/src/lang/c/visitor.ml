@@ -26,30 +26,30 @@ let () =
           | _ -> assert false
         )
 
-                                              
+
       | E_c_function(f) -> leaf exp
-                             
+
       | E_c_call(f, args) ->
         {exprs = f :: args; stmts = []},
         (function
           | {exprs = f :: args} -> {exp with ekind = E_c_call(f, args)}
           | _ -> assert false
         )
-                               
+
       | E_c_arrow_access(p, idx, fld) ->
         {exprs = [p]; stmts = []},
         (function
           | {exprs = [p]} -> {exp with ekind = E_c_arrow_access(p, idx, fld)}
           | _ -> assert false
         )
-                                           
+
       | E_c_assign(lval, rval) ->
         {exprs = [lval; rval]; stmts = []},
         (function
           | {exprs = [lval; rval]} -> {exp with ekind = E_c_assign(lval, rval)}
           | _ -> assert false
         )
-                                    
+
       | E_c_compound_assign(lval, pretyp, op, rval, posttyp) ->
         {exprs = [lval; rval]; stmts = []},
         (function
@@ -70,7 +70,7 @@ let () =
           | {exprs = [e]} -> {exp with ekind = E_c_increment(dir, loc, e)}
           | _ -> assert false
         )
-        
+
       | E_c_address_of (e) ->
         {exprs = [e]; stmts = []},
         (function
@@ -84,7 +84,7 @@ let () =
           | {exprs = [p]} -> {exp with ekind = E_c_deref(p)}
           | _ -> assert false
         )
-                          
+
       | E_c_cast(e, is_implicit) ->
         {exprs = [e]; stmts = []},
         (function
@@ -93,7 +93,7 @@ let () =
         )
 
       | E_c_predefined _ -> leaf exp
-                              
+
       | E_c_var_args arg ->
         {exprs = [arg]; stmts = []},
         (function
@@ -110,7 +110,7 @@ let () =
 
       | _ -> default exp
     );
-  
+
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
       | S_c_local_declaration(_, None) -> leaf stmt

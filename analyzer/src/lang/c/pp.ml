@@ -7,7 +7,7 @@ let rec pp_c_init fmt = function
   | C_init_expr(e) -> pp_expr fmt e
   | C_init_list _ -> assert false
   | C_init_implicit _ -> assert false
- 
+
 
 let () =
   register_pp_typ (fun default fmt typ ->
@@ -15,23 +15,23 @@ let () =
         | T_c_void -> pp_print_string fmt "void"
 
         | T_c_integer(C_char C_signed)
-        | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char" 
+        | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char"
         | T_c_integer(C_char C_unsigned)
         | T_c_integer(C_unsigned_char) -> pp_print_string fmt "unsigned char"
-        | T_c_integer(C_signed_short) -> pp_print_string fmt "signed short" 
+        | T_c_integer(C_signed_short) -> pp_print_string fmt "signed short"
         | T_c_integer(C_unsigned_short) -> pp_print_string fmt "unsigned short"
-        | T_c_integer(C_signed_int) -> pp_print_string fmt "signed int" 
+        | T_c_integer(C_signed_int) -> pp_print_string fmt "signed int"
         | T_c_integer(C_unsigned_int) -> pp_print_string fmt "unsigned int"
-        | T_c_integer(C_signed_long) -> pp_print_string fmt "signed long" 
+        | T_c_integer(C_signed_long) -> pp_print_string fmt "signed long"
         | T_c_integer(C_unsigned_long) -> pp_print_string fmt "unsigned long"
-        | T_c_integer(C_signed_long_long) -> pp_print_string fmt "signed long long" 
+        | T_c_integer(C_signed_long_long) -> pp_print_string fmt "signed long long"
         | T_c_integer(C_unsigned_long_long) -> pp_print_string fmt "unsigned long long"
-        | T_c_integer(C_signed_int128) -> pp_print_string fmt "signed int128" 
+        | T_c_integer(C_signed_int128) -> pp_print_string fmt "signed int128"
         | T_c_integer(C_unsigned_int128) -> pp_print_string fmt "unsigned int128"
 
         | T_c_float(C_float) -> pp_print_string fmt "float"
-        | T_c_float(C_double) -> pp_print_string fmt "double"  
-        | T_c_float(C_long_double) -> pp_print_string fmt "long double"  
+        | T_c_float(C_double) -> pp_print_string fmt "double"
+        | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
         | T_c_pointer(t) -> fprintf fmt "* %a" pp_typ t
 
@@ -94,7 +94,7 @@ let () =
                pp_stmt f.c_func_body
           )
           fmt funcs
-          
+
       | _ -> default fmt prg
     );
   ()
