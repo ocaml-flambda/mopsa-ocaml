@@ -9,6 +9,9 @@ let init () =
     Machine_integers.setup ();
     Cell.Domain.setup ();
   );
+  Libs.(
+    Mopsa.setup ();
+  );
   ()
 
 let start () =

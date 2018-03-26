@@ -6,20 +6,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of C function calls *)
+(** Abstraction of C intra-procedural control flow *)
 
 open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
 open Framework.Ast
+open Universal.Ast
 open Ast
 
-let name = "c.flows.interproc"
+let name = "c.libs.mopsa"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =
 struct
+
+  let is_builtin_function = function
+    | "_mopsa_assert_true" -> true
+    | _ -> false
 
   (*==========================================================================*)
                         (** {2 Transfer functions} *)
@@ -31,34 +36,15 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_c_call(f, args) ->
-      Eval.compose_eval
-        f
-        (fun f flow ->
-           match ekind f with
-           | E_c_builtin_function(name) ->
-             let exp' = {exp with ekind = E_c_call(f, args)} in
-             Eval.re_eval_singleton man ctx (Some exp', flow, [])
+    | E_c_function(f) when is_builtin_function f.c_func_var.orgname ->
+      debug "builtin function";
+      let exp' = mk_expr (E_c_builtin_function f.c_func_var.orgname) ~etyp:T_c_builtin_fn exp.erange in
+      Eval.singleton (Some exp', flow, [])
 
-           | E_c_function(fundec) ->
-             let open Universal.Ast in
-             let fundec' = {
-               fun_name = fundec.c_func_var.unname;
-               fun_parameters = fundec.c_func_parameters;
-               fun_locvars = List.map fst fundec.c_func_local_vars;
-               fun_body = fundec.c_func_body;
-             } in
-             let exp' = mk_call fundec' args exp.erange in
-             Eval.re_eval_singleton man ctx (Some exp', flow, [])
-
-           | _ ->
-             assert false
-        )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
-
-    | E_c_function(f) ->
-      Eval.singleton (Some exp, flow, [])
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
+      let stmt = mk_assert cond exp.erange in
+      let flow = man.exec stmt ctx flow in
+      Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | _ -> None
 
@@ -67,4 +53,4 @@ struct
   end
 
 let setup () =
-  register_domain name (module Domain)
+  Stateless.register_domain name (module Domain)

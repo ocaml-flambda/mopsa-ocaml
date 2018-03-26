@@ -29,6 +29,8 @@ let () =
 
       | E_c_function(f) -> leaf exp
 
+      | E_c_builtin_function f -> leaf exp
+
       | E_c_call(f, args) ->
         {exprs = f :: args; stmts = []},
         (function

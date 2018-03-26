@@ -15,7 +15,7 @@ open Format
 
 
 let pp_var fmt v =
-  fprintf fmt "%s" v.unname
+  fprintf fmt "var %s" v.unname
 
 let rec pp_addr_chain : (formatter -> addr -> unit) ref = ref (fun fmt addr ->
     failwith "Pp: Unknown address"

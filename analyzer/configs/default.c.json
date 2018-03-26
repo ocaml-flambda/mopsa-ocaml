@@ -3,6 +3,9 @@
     "c.program",
     "universal.unit_tests",
 
+    //Libraries
+    "c.libs.mopsa",
+
     //Flows
     "c.flows.intraproc",
     "c.flows.interproc",

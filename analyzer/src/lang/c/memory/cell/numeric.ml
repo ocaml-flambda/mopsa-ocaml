@@ -422,12 +422,10 @@ module Make(ValAbs : DOMAIN) = struct
     | _ -> ValAbs.exec stmt (subman man) ctx flow
 
   let eval exp man ctx flow =
-    debug "eval %a" Framework.Pp.pp_expr exp;
     let u = get_domain_cur man flow in
     let u', exp' = Framework.Visitor.fold_map_expr
           (fun u expr -> match ekind expr with
             | E_c_cell c ->
-              debug "cell %a" pp_cell c;
               let u' = add_cell c u exp.erange in
               (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) exp.erange)
             | _ -> (u, expr)
@@ -436,7 +434,6 @@ module Make(ValAbs : DOMAIN) = struct
           u exp
     in
     let flow = set_domain_cur u' man flow in
-    debug "eval exp' %a" Framework.Pp.pp_expr exp';
     ValAbs.eval exp' (subman man) ctx flow
 
   let ask request man ctx flow =
