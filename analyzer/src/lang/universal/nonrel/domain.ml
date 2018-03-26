@@ -305,7 +305,7 @@ struct
 
     | S_assign({ekind = E_var var}, e, _) ->
       assert false
-  
+
     | S_assume e ->
       Eval.compose_exec
         e

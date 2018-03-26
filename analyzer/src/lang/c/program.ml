@@ -51,7 +51,15 @@ struct
     let range = mk_file_range file in
     let tests =
       tests |> List.map (fun test ->
-          (test.c_func_var.orgname, test.c_func_body)
+          let name = test.c_func_var.orgname in
+          let range = tag_range range "test %s" name in
+          let cleaners = List.mapi (fun i (v, _) ->
+              let range = tag_range range "cleaner %d" i in
+              mk_remove_var v range
+            ) test.c_func_local_vars
+          in
+          let body = mk_block (test.c_func_body :: cleaners) range in
+          (name, body)
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range

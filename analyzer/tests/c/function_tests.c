@@ -7,5 +7,5 @@ int incr(int x) {
 void test_call_1() {
   int i;
   i = 10;
-  _mopsa_assert_true(incr(i) == 30);
+  _mopsa_assert_true(incr(i) == 11);
 }

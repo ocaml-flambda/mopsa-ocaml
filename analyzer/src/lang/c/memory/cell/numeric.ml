@@ -70,25 +70,31 @@ module Make(ValAbs : DOMAIN) = struct
     debug "res = %a" ValAbs.print a';
     a'
 
-  let remove_vars (r : Typ.VS.t) (u : t) range =
+  let remove_vars (r : Typ.VS.t) range man ctx flow =
+    let open Universal.Ast in
+    let u = get_domain_cur man flow in
+    let u' = {
+      u with
+      cs = CS.remove_vars r u.cs;
+      bd = CVE.remove_vars r u.bd;
+    }
+    in
     let nvars_to_remove =
       CVE.fold (fun (c,v) acc ->
           if Typ.VS.mem c.v r then
-            Typ.VS.add v acc
+            Typ.VS.add {v with vtyp = T_int} acc
           else
             acc
-        ) u.bd Typ.VS.empty in
+        ) u.bd Typ.VS.empty
+    in
     let nvars_remove_block =
       nvars_to_remove
       |> Typ.VS.elements
-      |> List.map (fun v -> mk_stmt (Universal.Ast.S_remove_var v) range)
+      |> List.map (fun v -> mk_remove_var v range)
     in
-    let nvars_remove_stmt = Universal.Ast.mk_block nvars_remove_block range in
-    {
-        cs = CS.remove_vars r u.cs;
-        bd = CVE.remove_vars r u.bd;
-        a = valabs_trivial_exec nvars_remove_stmt u.a
-      }
+    let nvars_remove_stmt = mk_block nvars_remove_block range in
+    let flow = set_domain_cur u' man flow in
+    man.exec nvars_remove_stmt ctx flow
 
   let get_myself (env : 'a) (man : ('a,t) manager) =
     man.ax.get env
@@ -96,12 +102,15 @@ module Make(ValAbs : DOMAIN) = struct
   let set_myself (u : t) (env : 'a) (man : ('a,t) manager) =
     man.ax.set u env
 
-  let apply_renaming (r : Typ.VVM.t) (u : t) =
-    {
-      u with
-      cs = CS.apply_renaming r u.cs;
-      bd = CVE.apply_renaming r u.bd;
-    }
+  let apply_renaming (r : Typ.VVM.t) man ctx flow =
+    map_domain_cur (fun u ->
+        {
+          u with
+          cs = CS.apply_renaming r u.cs;
+          bd = CVE.apply_renaming r u.bd;
+        }
+      ) man flow
+
   type pexp = Invalid
 
   type phi_exp =
@@ -368,13 +377,6 @@ module Make(ValAbs : DOMAIN) = struct
   let exec (stmt : stmt) (man : ('a, t) manager) (ctx : Framework.Context.context) (flow : 'a flow)
     : 'a flow option =
     let open Universal.Ast in
-    let do_on_all_flows f flow =
-      man.flow.map (fun (env : 'a) _ ->
-          let flow = get_myself env man in
-          let flow = f flow in
-          set_myself flow env man
-        ) flow
-    in
     let cell_to_var u stmt =
       Framework.Visitor.fold_map_stmt
         (fun u expr -> match ekind expr with
@@ -388,16 +390,19 @@ module Make(ValAbs : DOMAIN) = struct
     in
     match skind stmt with
     | S_rename_var(v, v') ->
-      do_on_all_flows (fun u -> apply_renaming (Typ.VVM.singleton v v') u) flow
-      |> Exec.return
-    | S_remove_var v      ->
-      do_on_all_flows (fun u -> remove_vars (Typ.VS.singleton v) u stmt.srange) flow
-      |> Exec.return
+      apply_renaming (Typ.VVM.singleton v v') man ctx flow |>
+      Exec.return
+
+    | S_remove_var v when is_c_type v.vtyp ->
+      remove_vars (Typ.VS.singleton v) stmt.srange man ctx flow |>
+      Exec.return
+
     | S_assign ({ekind = E_c_cell c} , e', kind) ->
       let u = get_my_current_abstraction flow man in
       let u', stmt = cell_to_var u stmt in
       set_my_current_abstraction {u' with a = valabs_trivial_exec stmt u'.a} flow man
       |> Exec.return
+
     | S_assume e ->
       debug "assume %a" Framework.Pp.pp_expr e;
       begin
@@ -414,7 +419,7 @@ module Make(ValAbs : DOMAIN) = struct
           (fun flow -> Exec.return flow )
           man ctx flow
       end
-    | _ -> Exec.fail
+    | _ -> ValAbs.exec stmt (subman man) ctx flow
 
   let eval exp man ctx flow =
     debug "eval %a" Framework.Pp.pp_expr exp;
@@ -434,25 +439,9 @@ module Make(ValAbs : DOMAIN) = struct
     debug "eval exp' %a" Framework.Pp.pp_expr exp';
     ValAbs.eval exp' (subman man) ctx flow
 
-  let ask : type b. b Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> b option
-    = fun request man ctx flow ->
-    match request with
-      | Universal.Numeric.Query.QInterval exp ->
-        let u = get_my_current_abstraction flow man in
-        let u', exp =
-          Framework.Visitor.fold_map_expr
-            (fun u expr -> match ekind expr with
-               | E_c_cell c ->
-                 let u' = add_cell c u expr.erange in
-                 (u', Universal.Ast.mk_var (CVE.find_l c u'.bd) expr.erange)
-               | _ -> (u,expr)
-            )
-            (fun u stmt -> (u,stmt))
-            u exp
-        in
-        ValAbs.ask (Universal.Numeric.Query.QInterval exp) (subman man) ctx (set_my_current_abstraction u' flow man)
-      | _ -> None
-  let unify _ u u' = (u,u')
+  let ask request man ctx flow =
+    ValAbs.ask request (subman man) ctx flow
+
 end
 
 let setup () =

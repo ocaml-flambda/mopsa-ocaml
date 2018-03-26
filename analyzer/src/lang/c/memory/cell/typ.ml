@@ -128,7 +128,7 @@ module CS = struct
       | Found e -> Some e
 
   let remove_vars (s : VS.t) (cs : t) =
-    let filtering = mem_predicate s in
+    let filtering v = not (mem_predicate s v) in
     filter (fun c -> filtering c.v) cs
 end
 
@@ -138,7 +138,7 @@ module CVE = struct
   let apply_renaming (r : VVM.t) =
     map (fun (c,v) -> CellValue.apply_renaming r c,v)
   let remove_vars (s : VS.t) (e : t) =
-    let filtering = mem_predicate s in
+    let filtering v = not (mem_predicate s v) in
     {lr = LR.filter (fun k _ -> filtering k.v) e.lr ;
      rl = RL.filter (fun _ v -> filtering v.v) e.rl ;
     }
