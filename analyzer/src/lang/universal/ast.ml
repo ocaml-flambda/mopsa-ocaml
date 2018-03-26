@@ -141,6 +141,7 @@ type fundec = {
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
   fun_body: stmt; (** body of the function *)
+  fun_return_type: typ; (** return type *)
 }
 
 

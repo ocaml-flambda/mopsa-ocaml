@@ -92,7 +92,7 @@ struct
       in
 
       (* Temporary variable to store return expressions *)
-      let tmpv = mktmp () in
+      let tmpv = mktmp ~vtyp:f.fun_return_type () in
       let tmp = mk_var tmpv (tag_range range "return tmp") in
 
       (* Iterate over encountered return flows and assign the returned value to tmp *)

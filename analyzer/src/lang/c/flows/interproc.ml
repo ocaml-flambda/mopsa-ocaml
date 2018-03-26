@@ -47,6 +47,7 @@ struct
                fun_parameters = fundec.c_func_parameters;
                fun_locvars = List.map fst fundec.c_func_local_vars;
                fun_body = fundec.c_func_body;
+               fun_return_type = fundec.c_func_return;
              } in
              let exp' = mk_call fundec' args exp.erange in
              Eval.re_eval_singleton man ctx (Some exp', flow, [])

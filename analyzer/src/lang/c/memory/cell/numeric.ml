@@ -397,28 +397,13 @@ module Make(ValAbs : DOMAIN) = struct
       remove_vars (Typ.VS.singleton v) stmt.srange man ctx flow |>
       Exec.return
 
-    | S_assign ({ekind = E_c_cell c} , e', kind) ->
-      let u = get_my_current_abstraction flow man in
+    | S_assign ({ekind = E_c_cell _} , _, _)
+    | S_assume _ ->
+      let u = get_domain_cur man flow in
       let u', stmt = cell_to_var u stmt in
-      set_my_current_abstraction {u' with a = valabs_trivial_exec stmt u'.a} flow man
-      |> Exec.return
+      let flow = set_domain_cur u' man flow in
+      ValAbs.exec stmt (subman man) ctx flow
 
-    | S_assume e ->
-      debug "assume %a" Framework.Pp.pp_expr e;
-      begin
-        Eval.compose_exec
-          e
-          (fun e flow ->
-             debug "eval done";
-             let u = get_my_current_abstraction flow man in
-             let u', stmt = cell_to_var u stmt in
-             let u'' = {u' with a = valabs_trivial_exec stmt u'.a} in
-             set_my_current_abstraction u'' flow man
-             |> Exec.return
-          )
-          (fun flow -> Exec.return flow )
-          man ctx flow
-      end
     | _ -> ValAbs.exec stmt (subman man) ctx flow
 
   let eval exp man ctx flow =

@@ -94,6 +94,7 @@ struct
             fun_parameters = pyfundec.py_func_parameters;
             fun_locvars = pyfundec.py_func_locals;
             fun_body = pyfundec.py_func_body;
+            fun_return_type = T_any;
           } in
 
 
