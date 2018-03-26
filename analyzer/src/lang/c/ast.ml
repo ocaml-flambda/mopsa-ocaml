@@ -493,15 +493,15 @@ let warp (v : Universal.Ast.var) ((l,h) : int * int) range : Framework.Ast.expr 
     )
     range
 
-(** [is_inttype t] wheter [t] is an integer type *)
-let rec is_inttype ( t : typ) =
+(** [is_c_int_type t] wheter [t] is an integer type *)
+let rec is_c_int_type ( t : typ) =
   match t with
   | T_c_integer _ -> true
-  | T_c_qualified(_, t) -> is_inttype t
+  | T_c_qualified(_, t) -> is_c_int_type t
   | _ -> false
 
-(** [is_scalartype t] wheter [t] is a scalar type *)
-let is_scalartype ( t : typ) =
+(** [is_c_scalar_type t] wheter [t] is a scalar type *)
+let is_c_scalar_type ( t : typ) =
   to_clang_type t |>
   fst |>
   C_AST.type_is_scalar

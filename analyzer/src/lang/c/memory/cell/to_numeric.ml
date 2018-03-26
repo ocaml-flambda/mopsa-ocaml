@@ -124,7 +124,7 @@ module Make(ValAbs : DOMAIN) = struct
     | None ->
        begin
          match CS.exist_and_find (fun c' ->
-             is_inttype c'.t &&
+             is_c_int_type c'.t &&
              sizeof_type c'.t = sizeof_type c.t &&
              c.v = c'.v &&
              c.o = c'.o) cs with
@@ -136,7 +136,7 @@ module Make(ValAbs : DOMAIN) = struct
                 fun c' ->
                   let b = Z.of_int (c.o - c'.o) in
                   Z.lt b (sizeof_type c'.t) &&
-                    is_inttype c'.t &&
+                    is_c_int_type c'.t &&
                     c.t = T_c_integer(C_unsigned_char)
               ) cs with
               | Some c' ->
@@ -161,7 +161,7 @@ module Make(ValAbs : DOMAIN) = struct
                  begin
                    let exception NotPossible in
                    try
-                     if is_inttype c.t then
+                     if is_c_int_type c.t then
                        begin
                          let t' = T_c_integer(C_unsigned_char) in
                          let n = Z.to_int (sizeof_type (c.t)) in
@@ -200,7 +200,7 @@ module Make(ValAbs : DOMAIN) = struct
                    with
                    | NotPossible ->
                       begin
-                        if is_scalartype c.t then
+                        if is_c_scalar_type c.t then
                           let a,b = rangeof c.t in
                           Nexp (Some ( mk_constant ~etyp:T_int (C_int_range(a,b)) range))
                         else if is_pointer c.t then
@@ -221,7 +221,7 @@ module Make(ValAbs : DOMAIN) = struct
         match phi c u range with
         | Nexp (Some e) ->
           begin
-            let var_c = vargen_var () in
+            let var_c = vargen_var c.t () in
             let open Universal.Ast in
             let s = mk_assume
                 (mk_binop
@@ -239,7 +239,7 @@ module Make(ValAbs : DOMAIN) = struct
           end
         | Nexp None ->
           begin
-            let var_c =  vargen_var () in
+            let var_c =  vargen_var c.t () in
             {cs = CS.add c u.cs;
              bd = CVE.add (c,var_c) u.bd;
              a = u.a
@@ -247,7 +247,7 @@ module Make(ValAbs : DOMAIN) = struct
           end
         | Pexp Invalid ->
           begin
-            let var_c = vargen_var () in
+            let var_c = vargen_var c.t () in
             {cs = CS.add c u.cs;
              bd = CVE.add (c,var_c) u.bd;
              a = u.a

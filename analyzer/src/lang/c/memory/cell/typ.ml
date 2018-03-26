@@ -71,7 +71,7 @@ let fresh_var name =
   }
 
 
-let vargen_var () = fresh_var_t (Universal.Ast.T_int) "var"
+let vargen_var t () = fresh_var_t t "var"
 
 
 (*==========================================================================*)

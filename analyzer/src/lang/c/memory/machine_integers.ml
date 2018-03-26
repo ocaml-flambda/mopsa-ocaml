@@ -33,10 +33,12 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    (* | E_var v when is_inttype v.vtyp ->
-     *   assert false
-     *
-     * | E_unop(op, e) when is_inttype e.etyp ->
+    | E_var v when is_c_int_type v.vtyp ->
+      let v' = {v with vtyp = T_int} in
+      let exp' = mk_var v' exp.erange in
+      Eval.singleton (Some exp', flow, [])
+
+    (* | E_unop(op, e) when is_inttype e.etyp ->
      *   assert false
      *
      * | E_binop(op, e1, e2) when is_inttype e1.etyp && is_inttype e2.etyp ->
