@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./analyzer/bin/mopsa.native -config analyzer/configs/default.c.json -stubs analyzer/stubs/c $@

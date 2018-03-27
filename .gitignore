@@ -1,5 +1,6 @@
 analyzer/_build/**
 analyzer/doc/**
+analyzer/bin/**
 utils/_build/**
 utils/doc/**
 utils/bin/**

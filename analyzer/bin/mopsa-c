@@ -1,3 +1,0 @@
-#!/bin/bash
-
-./bin/mopsa.native -config configs/default.c.json -stubs stubs/c $@

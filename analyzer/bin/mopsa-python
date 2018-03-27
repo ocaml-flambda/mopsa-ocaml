@@ -1,3 +1,0 @@
-#!/bin/bash
-
-./bin/mopsa.native -config configs/default.py.json -stubs stubs/python $@
