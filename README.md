@@ -53,7 +53,7 @@ make
 ## Usage
 
 ```bash
-./analyzer/bin/mopsa-c foo.c
-./analyzer/bin/mopsa-python -debug=python.flows._ foo.py
-./analyzer/bin/mopsa-c -test=true -debug=_unit_test_summary analyzer/tests/int_tests.c
+./scripts/mopsa-c foo.c
+./scripts/mopsa-python -debug=python.flows._ foo.py
+./scripts/mopsa-c -test=true -debug=_unit_test_summary analyzer/tests/c/int_tests.c
 ```
