@@ -126,4 +126,7 @@ struct
   let map f abs =
     top_lift1 (Set.map f) abs
 
+  let iter f abs =
+    top_to_exn abs |> Set.iter f
+
 end

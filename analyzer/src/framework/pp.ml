@@ -26,8 +26,8 @@ and pp_var fmt v =
   match vkind v with
   | V_orig when v.vuid <= 0 -> fprintf fmt "%s" v.vname
   | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
-  | _ when v.vuid <= 0 -> fprintf fmt "%s<%a>" v.vname !pp_var_chain v
-  | _ -> fprintf fmt "%s@%d<%a>" v.vname v.vuid !pp_var_chain v
+  | _ when v.vuid <= 0 -> fprintf fmt "%s%a" v.vname !pp_var_chain v
+  | _ -> fprintf fmt "%s@%d%a" v.vname v.vuid !pp_var_chain v
 
 (* Processing chain for the extensible type [Ast.expr] *)
 let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
