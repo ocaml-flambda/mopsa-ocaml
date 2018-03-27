@@ -7,4 +7,4 @@ B ../../../../_build/src/framework/domains/composers
 B ../../../../_build/src/framework/domains
 B ../../../../_build/src/framework
 B ../../../../_build/src
-PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
+PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

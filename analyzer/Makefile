@@ -30,7 +30,7 @@ lang.c = ast frontend pp visitor memory flows libs program setup
 lang.c.memory.cell = typ pointer numeric domain
 
 #Packages
-PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
+PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
 INCLUDES = -I $(MOPSAROOT)/utils/bin -I $(MOPSAROOT)/parsers/c/bin -I $(MOPSAROOT)/parsers/python/bin
