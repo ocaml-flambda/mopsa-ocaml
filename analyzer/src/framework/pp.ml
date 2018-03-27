@@ -14,19 +14,20 @@ open Format
 open Ast
 
 
-let rec pp_var_kind_chain : (formatter -> var_kind -> unit) ref = ref (fun fmt -> function
+let rec pp_var_chain : (formatter -> var -> unit) ref = ref (fun fmt v ->
+    match vkind v with
     | V_orig -> ()
     | _ -> failwith "Pp: Unknown variable kind"
   )
 
-and register_pp_var_kind pp = pp_var_kind_chain := pp !pp_var_kind_chain
+and register_pp_var pp = pp_var_chain := pp !pp_var_chain
 
 and pp_var fmt v =
   match vkind v with
   | V_orig when v.vuid <= 0 -> fprintf fmt "%s" v.vname
-  | V_orig -> fprintf fmt "%s%d" v.vname v.vuid
-  | _ when v.vuid <= 0 -> fprintf fmt "%s<%a>" v.vname !pp_var_kind_chain v.vkind
-  | _ -> fprintf fmt "%s@%d<%a>" v.vname v.vuid !pp_var_kind_chain v.vkind
+  | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
+  | _ when v.vuid <= 0 -> fprintf fmt "%s<%a>" v.vname !pp_var_chain v
+  | _ -> fprintf fmt "%s@%d<%a>" v.vname v.vuid !pp_var_chain v
 
 (* Processing chain for the extensible type [Ast.expr] *)
 let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =

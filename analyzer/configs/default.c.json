@@ -14,11 +14,8 @@
     "universal.flows.interproc",
     "universal.flows.loops",
 
-    //Cell-based memory representation
-    {"fun": "c.memory.cell",
-     "arg": {"iter": [
-	 "c.memory.machine_integers",
-	 "universal.numeric.integers"
-     ]}
-    }
+    //Memory abstraction
+    "c.memory.pointer",
+    "c.memory.machine_integers",
+    {"fun": "c.memory.cell", "arg": "universal.numeric.integers"}
 ]}

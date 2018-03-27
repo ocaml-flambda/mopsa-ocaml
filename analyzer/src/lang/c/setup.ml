@@ -6,8 +6,9 @@ let init () =
     Loops.setup ();
   );
   Memory.(
+    Cell.setup ();
     Machine_integers.setup ();
-    Cell.Domain.setup ();
+    Pointer.setup ();
   );
   Libs.(
     Mopsa.setup ();

@@ -7,7 +7,7 @@ all: native
 #Packs
 mopsa = framework lang main
 
-framework = options ast query pp alarm context lattice lattices visitor flow manager domains analyzer config
+framework = options ast query pp alarm context lattice lattices visitor flow manager domains utils analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
 framework.domains = global exec eval local localFlow stateless composers
 
@@ -27,7 +27,7 @@ lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor memory flows libs program setup
-lang.c.memory.cell = typ pointer numeric domain
+lang.c.memory = cell pointer machine_integers
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
