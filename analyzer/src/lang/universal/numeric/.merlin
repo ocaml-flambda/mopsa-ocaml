@@ -7,4 +7,4 @@ B ../../../../_build/src/lang/universal/numeric
 B ../../../../_build/src/lang/universal
 B ../../../../_build/src/lang
 B ../../../../_build/src
-PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith ocamlgraph camlidl
+PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
