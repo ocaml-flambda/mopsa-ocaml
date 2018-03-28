@@ -265,3 +265,84 @@ let if_eval
     true_branch false_branch bottom_branch
     (fun true_flow false_flow -> join (true_branch true_flow) (false_branch false_flow))
     man flow
+
+(*==========================================================================*)
+(**              {2 Composition with custom evaluators}                     *)
+(*==========================================================================*)
+
+type ('x, 'a) xeval_output = ('x option * 'a * Ast.stmt list) Dnf.t
+
+let xjoin = Dnf.mk_or
+
+let xbottom = Dnf.mk_false
+
+let xsingleton = Dnf.singleton
+
+let xcompose_exec
+    (xeval: ('x, 'a flow) xeval_output)
+    (f: 'x -> 'a flow -> 'a flow option)
+    (empty: 'a flow -> 'a flow option)
+    man ctx : 'a flow option =
+  xeval |> Dnf.substitute
+    (fun (x, flow, clean) ->
+       let flow' =
+         match x with
+         | Some x -> f x flow
+         | None -> empty @@ exec_cleaner_stmts clean man ctx flow
+       in
+       match flow' with
+       | None -> None
+       | Some flow' ->
+         Some (exec_cleaner_stmts clean man ctx flow')
+    )
+    (fun a b ->
+       match a, b with
+       | None, x | x, None -> x
+       | Some a, Some b -> Some (man.flow.join a b)
+    )
+    (fun a b ->
+       match a, b with
+       | None, x | x, None -> x
+       | Some a, Some b -> Some (man.flow.meet a b)
+    )
+
+
+let xcompose_eval
+    (xeval: ('x, 'a flow) xeval_output)
+    (eval: 'x -> 'a flow -> 'a flow eval_output option)
+    (empty: 'a flow -> 'a flow eval_output option)
+    man ctx : 'a flow eval_output option =
+  xeval |> Dnf.substitute
+    (fun (x, flow, clean) ->
+       let evl =
+         match x with
+         | Some x -> eval x flow
+         | None -> empty flow
+       in
+       (* we ensure that we always return an evaluation *)
+       match evl with
+       | None -> None
+       | Some evl ->
+         eval_map (fun (exp'', flow, clean') ->
+             (exp'', flow, clean @ clean')
+           ) evl |>
+         return
+    ) join meet
+
+
+let compose_xeval
+    exp (xeval: Ast.expr -> 'a flow -> ('x, 'a flow) xeval_output)
+    (empty: 'a flow -> ('x, 'a flow) xeval_output) man ctx flow
+  : ('x, 'a flow) xeval_output =
+  man.eval exp ctx flow |>
+  Dnf.substitute2
+    (fun (exp', flow, clean) ->
+       let evl =
+         match exp' with
+         | Some exp' -> xeval exp' flow
+         | None -> empty flow
+       in
+       Dnf.map (fun (x, flow, clean') ->
+           (x, flow, clean @ clean')
+         ) evl
+    )
