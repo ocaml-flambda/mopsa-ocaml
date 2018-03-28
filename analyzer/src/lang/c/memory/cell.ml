@@ -179,7 +179,7 @@ module Make(ValAbs : DOMAIN) = struct
             c.v = c'.v &&
             c.o = c'.o) cs with
         | Some (v', c') ->
-          Nexp (Some (warp v' (rangeof_int c.t) range))
+          Nexp (Some (warp v' (int_rangeof c.t) range))
         | None ->
           begin
             match exist_and_find_cell (
@@ -411,7 +411,7 @@ module Make(ValAbs : DOMAIN) = struct
     | Universal.Ast.S_rename_var(v, v') ->
       assert false
 
-    | Universal.Ast.S_remove_var v when is_c_type v.vtyp ->
+    | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
       let v' = annotate_var v in
       let u' = {u with cs = CS.remove v' u.cs} in
@@ -419,7 +419,7 @@ module Make(ValAbs : DOMAIN) = struct
       let flow = set_domain_cur u' man flow in
       ValAbs.exec stmt' (subman man) ctx flow
 
-    | Universal.Ast.S_assign(({ekind = E_var v} as lval), e, assign_kind) ->
+    | Universal.Ast.S_assign(({ekind = E_var v} as lval), e, assign_kind) when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
       let u', v' = add_var_cell v u stmt.srange in
       let stmt' = {stmt with skind = Universal.Ast.S_assign(mk_var v' lval.erange, e, assign_kind)} in
@@ -433,7 +433,7 @@ module Make(ValAbs : DOMAIN) = struct
     match ekind exp with
     | E_var {vkind = V_cell _ } -> Eval.singleton (Some exp, flow, [])
 
-    | E_var v when is_c_type v.vtyp ->
+    | E_var v when is_c_int_type v.vtyp ->
       debug "evaluating non-annotated base variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let u', v' = add_var_cell v u exp.erange in
