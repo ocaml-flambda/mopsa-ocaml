@@ -16,6 +16,10 @@ let extract none = function
   | Some x -> x
   | None -> none
 
+let unsafe_extract = function
+  | Some x -> x
+  | None -> assert false
+
 let map f = function
   | None -> None
   | Some x -> Some (f x)
