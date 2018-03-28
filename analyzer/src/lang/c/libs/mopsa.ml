@@ -24,6 +24,7 @@ struct
 
   let is_builtin_function = function
     | "_mopsa_assert_true" -> true
+    | "_mopsa_assert_false" -> true
     | _ -> false
 
   (*==========================================================================*)
@@ -43,6 +44,11 @@ struct
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in
+      let flow = man.exec stmt ctx flow in
+      Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_false"}, [cond]) ->
+      let stmt = mk_assert (mk_not cond exp.erange) exp.erange in
       let flow = man.exec stmt ctx flow in
       Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
 

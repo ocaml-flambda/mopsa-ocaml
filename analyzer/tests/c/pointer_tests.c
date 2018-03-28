@@ -23,10 +23,17 @@ void test_double_deref() {
 }
 
 void test_equality() {
-  int i, j;
-  int *p, *q, *r;
+  int i;
+  int *p, *q;
   p = &i;
   q = &i;
-  r = &j;
   _mopsa_assert_true(p == q);
+}
+
+void test_non_equality() {
+  int i, j;
+  int *p, *q;
+  p = &i;
+  q = &j;
+  _mopsa_assert_true(p != q);
 }
