@@ -1,8 +1,7 @@
 #include "mopsa.h"
 
-void test_address_of() {
-  int i;
-  int *p;
-  p = &i;
-  _mopsa_assert_true(p == &i);
+void test_deref_int() {
+  int i = 10;
+  int *p = &i;
+  _mopsa_assert_true(*p == i);
 }

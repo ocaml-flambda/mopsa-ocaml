@@ -170,6 +170,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
     | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)
     | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr e)
+    | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr p)
 
     | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
     | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
@@ -180,7 +181,6 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> failwith "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> failwith "E_increment not supported"
-    | C_AST.E_deref _ -> failwith "E_deref not supported"
     | C_AST.E_compound_literal _ -> failwith "E_compound_literal not supported"
     | C_AST.E_predefined _ -> failwith "E_predefined not supported"
     | C_AST.E_statement _ -> failwith "E_statement not supported"

@@ -18,32 +18,9 @@ open Framework.Pp
 open Universal.Ast
 open Ast
 open Cell
-    
+
 let name = "c.memory.pointer"
 let debug fmt = Debug.debug ~channel:name fmt
-
-
-
-type expr_kind +=
-  | E_c_pointer of var (** base *) * expr (** offset *)
-
-let () =
-  (** Pretty-printer *)
-  register_pp_expr (fun default fmt expr ->
-      match ekind expr with
-      | E_c_pointer(v, e) ->
-        Format.fprintf fmt "@(%a + %a)" pp_var v pp_expr e
-      | _ -> default fmt expr
-    );
-  (** Visitors *)
-  register_expr_visitor ( fun default exp ->
-      match ekind exp with
-      | E_c_pointer(v,e) ->
-        {exprs = [e] ; stmts = []},
-        (fun parts -> {exp with ekind = E_c_pointer(v,List.hd parts.exprs)})
-      | _ -> default exp
-    )
-
 
 
 module Domain =
@@ -101,37 +78,57 @@ struct
 
   let mk_offset_var p range =
     let v = {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int} in
-    let v = {v with vkind = V_cell {v; o = 0; t = v.vtyp}} in
+    let v = {v with vkind = V_cell {v; o = Z.zero; t = v.vtyp}} in
     mk_var v range
 
-  let eval_p exp f man ctx flow =
+  let rec eval_p
+      (exp: expr)
+      (man: ('a, t) manager) ctx
+      (flow: 'a flow)
+    : ((var * expr), 'a flow) Eval.xeval_output =
     let range = erange exp in
     match ekind exp with
-    (* | E_var p when is_c_pointer p.vtyp ->
-     *   Eval.singleton (Some exp, flow, [])
-     * 
-     * | E_c_address_of(e) ->
-     *   Eval.compose_eval e
-     *     (fun e flow ->
-     *        match ekind e with
-     *        | E_var {vkind = V_cell c} ->
-     *          let exp' = {exp with ekind = E_c_pointer (c.v, mk_int c.o (tag_range range "offset"))} in
-     *          Eval.singleton (Some exp', flow, [])
-     * 
-     *        | E_var v when is_c_type v.vtyp ->
-     *          let exp' = {exp with ekind = E_c_pointer (v, mk_zero (tag_range range "offset"))} in
-     *          Eval.singleton (Some exp', flow, [])
-     * 
-     *        | _ -> assert false
-     *     )
-     *     (fun flow -> Eval.singleton (None, flow, []))
-     *     man ctx flow
-     * 
-     * | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer p.etyp ->
-     *   assert false
-     * 
-     * | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
-     *   assert false *)
+     | E_var p when is_c_pointer p.vtyp ->
+       let a = get_domain_cur man flow in
+       let psl = find p a in
+       PSL.fold (fun pt acc ->
+           match pt with
+           | P.V base ->
+             let a = add p (PSL.singleton pt) a in
+             let flow = set_domain_cur a man flow in
+             let pt' = base, (mk_offset_var p range) in
+             Eval.xsingleton (Some pt', flow, []) |>
+             Eval.xjoin acc
+
+           | P.Null -> assert false
+           | P.Invalid -> assert false
+         ) psl Eval.xbottom
+
+     | E_c_address_of(e) ->
+      Eval.compose_xeval e
+        (fun e flow ->
+           match ekind e with
+           | E_var {vkind = V_cell c} ->
+             let pt = (c.v, mk_z c.o (tag_range range "offset")) in
+             Eval.xsingleton (Some pt, flow, [])
+
+           | E_var v when is_c_type v.vtyp ->
+             let pt = (v, mk_zero (tag_range range "offset")) in
+             Eval.xsingleton (Some pt, flow, [])
+
+           | _ -> assert false
+        )
+        (fun flow -> Eval.xsingleton (None, flow, []))
+        man ctx flow
+
+    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer p.etyp ->
+      assert false
+
+    | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
+      assert false
+
+    | E_c_cast(e, _) ->
+      eval_p e man ctx flow
 
     | _ -> assert false
 
@@ -139,12 +136,12 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_assign(p, q, k) when is_c_pointer p.etyp ->
-      eval_p q
-        (fun v offset flow ->
+      Eval.xcompose_exec
+        (eval_p q man ctx flow)
+        (fun (v, offset) flow ->
            Eval.compose_exec p
              (fun p flow ->
-                let p =
-                  match p with
+                let p = match p with
                   | {ekind = E_var p} -> p
                   | _ -> assert false
                 in
@@ -153,27 +150,47 @@ struct
                 Exec.return
              )
              (fun flow -> Exec.return flow)
+             man ctx flow
         )
-        man ctx flow
-        
+        (fun flow -> Exec.return flow)
+        man ctx
+
     | _ -> None
-      
+
   let eval exp man ctx flow =
+    let range = erange exp in
     match ekind exp with
     | E_var p when is_c_pointer p.vtyp ->
       Eval.singleton (Some exp, flow, [])
-      
+
     | E_c_deref(p) ->
-      assert false
+      Eval.xcompose_eval
+        (eval_p p man ctx flow)
+        (fun (base, offset) flow ->
+           let open Universal.Numeric.Integers in
+           let itv = man.ask (Domain.Domain.QEval offset) ctx flow in
+           match itv with
+           | None -> assert false
+           | Some itv ->
+             Value.fold (fun acc o ->
+                 let t = under_type p.etyp in
+                 let c = mk_cell base o t in
+                 let tmp = mktmp ~vtyp:t ~vkind:(V_cell(c)) () in
+                 let evl = Eval.re_eval_singleton man ctx (Some (mk_var tmp range), flow, [mk_remove_var tmp range]) in
+                 Eval.join acc evl
+               ) None itv
+        )
+        (fun flow -> Eval.singleton (None, flow, []))
+        man ctx
 
     | E_binop(Universal.Ast.O_eq, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
       assert false
-        
+
     | E_binop(Universal.Ast.O_ne, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
       assert false
 
     | _ -> None
-      
+
   let ask _ _ _ _ = None
 
 end

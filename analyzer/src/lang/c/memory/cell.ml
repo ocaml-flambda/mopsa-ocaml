@@ -28,14 +28,14 @@ let debug fmt = Debug.debug ~channel:name fmt
 (** Memory cells. *)
 type cell = {
   v: var; (** base variable *)
-  o: int; (** offset *)
+  o: Z.t; (** offset *)
   t: typ; (** type *)
 }
 
 let pp_cell fmt c =
-  Format.fprintf fmt "⟨%a,%d,%a⟩"
+  Format.fprintf fmt "⟨%a,%a,%a⟩"
     pp_var c.v
-    c.o
+    Z.pp_print c.o
     pp_typ c.t
 
 let compare_cell c c' =
@@ -48,6 +48,12 @@ let compare_cell c c' =
 (** Annotate variables with cell information. *)
 type var_kind +=
   | V_cell of cell
+
+let mk_cell v o t = {v = v; o = o; t}
+
+let mk_base_cell v =
+  let c = mk_cell v Z.zero v.vtyp in
+  {v with vkind = V_cell c}, c
 
 let () =
   register_var_compare (fun next v1 v2 ->
@@ -99,11 +105,7 @@ module Make(ValAbs : DOMAIN) = struct
       None
     with
     | Found (v, c) -> Some (v, c)
-      
-  let mk_base_cell v =
-    let c = {v = v; o = 0; t = v.vtyp} in
-    {v with vkind = V_cell c}, c
-  
+
   (*==========================================================================*)
   (**                            {2 Managers}                                 *)
   (*==========================================================================*)
@@ -184,15 +186,15 @@ module Make(ValAbs : DOMAIN) = struct
           begin
             match exist_and_find_cell (
                 fun c' ->
-                  let b = Z.of_int (c.o - c'.o) in
+                  let b = Z.sub c.o c'.o in
                   Z.lt b (sizeof_type c'.t) &&
                   is_c_int_type c'.t &&
                   c.t = T_c_integer(C_unsigned_char)
               ) cs with
             | Some (v', c') ->
               begin
-                let b = c.o - c'.o in
-                let base = (Z.pow (Z.of_int 2) (8 * b))  in
+                let b = Z.sub c.o c'.o in
+                let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
                 Nexp (Some (
                     mk_binop
                       (mk_binop
@@ -216,7 +218,7 @@ module Make(ValAbs : DOMAIN) = struct
                       let n = Z.to_int (sizeof_type (c.t)) in
                       let rec aux i l =
                         if i < n then
-                          let tobein = {v = c.v ; o = c.o + i ; t = t'} in
+                          let tobein = {v = c.v ; o = Z.add c.o (Z.of_int i); t = t'} in
                           match exist_and_find_cell (fun c' -> compare_cell c' tobein = 0) cs with
                           | Some (v', c') ->
                             aux (i+1) (v' :: l)
@@ -268,38 +270,41 @@ module Make(ValAbs : DOMAIN) = struct
     | _ -> mk_base_cell v
 
   let annotate_var v = fst @@ mk_cell_var v
-      
-  (** [add_cell c u] adds cell [c] to the abstraction [u] *)
-  let add_var_cell (v : var) (u : t) range : t * var =
-    let v', c = mk_cell_var v in
-    if mem_cell c u.cs then
-      u, v'
-    else
-      let open Universal.Ast in
-      match phi c u range with
-      | Nexp (Some e) ->
-        let s = mk_assume
-            (mk_binop
-               (mk_var v' range)
-               O_eq
-               e
-               range
-            )
-            range
-        in
-        {cs = CS.add v' u.cs;
-         a = valabs_trivial_exec s u.a
-        }, v'
-      | Nexp None ->
-        {cs = CS.add v' u.cs;
-         a = u.a
-        }, v'
-      | Pexp Invalid ->
-        {cs = CS.add v' u.cs;
-         a = u.a
-        }, v' (* TODO : this case needs work*)
 
-  
+  let add_var_cell v c u range =
+    let open Universal.Ast in
+    match phi c u range with
+    | Nexp (Some e) ->
+      let s = mk_assume
+          (mk_binop
+             (mk_var v range)
+             O_eq
+             e
+             range
+          )
+          range
+      in
+      {cs = CS.add v u.cs;
+       a = valabs_trivial_exec s u.a
+      }
+    | Nexp None ->
+      {cs = CS.add v u.cs;
+       a = u.a
+      }
+    | Pexp Invalid ->
+      {cs = CS.add v u.cs;
+       a = u.a
+      } (* TODO : this case needs work*)
+
+  (** [add_cell c u] adds cell [c] to the abstraction [u] *)
+  let add_var (v : var) (u : t) range : t * var =
+    if CS.mem v u.cs then
+      u, v
+    else
+      let v', c = mk_cell_var v in
+      add_var_cell v' c u range, v'
+
+
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
   let unify (u : t) (u' : t) range : t * t =
     let unify_cells (u  : t) (u' : t) : t * t =
@@ -314,10 +319,10 @@ module Make(ValAbs : DOMAIN) = struct
         ) u'.cs CS.empty
       in
       CS.fold (fun v acc ->
-          fst @@ add_var_cell v acc range
+          fst @@ add_var v acc range
         ) diff u,
       CS.fold (fun v acc ->
-          fst @@ add_var_cell v acc range
+          fst @@ add_var v acc range
         ) diff' u'
     in
     let u,u' = unify_cells u u' in
@@ -421,7 +426,7 @@ module Make(ValAbs : DOMAIN) = struct
 
     | Universal.Ast.S_assign(({ekind = E_var v} as lval), e, assign_kind) when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
-      let u', v' = add_var_cell v u stmt.srange in
+      let u', v' = add_var v u stmt.srange in
       let stmt' = {stmt with skind = Universal.Ast.S_assign(mk_var v' lval.erange, e, assign_kind)} in
       let flow = set_domain_cur u' man flow in
       ValAbs.exec stmt' (subman man) ctx flow
@@ -431,19 +436,24 @@ module Make(ValAbs : DOMAIN) = struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_var {vkind = V_cell _ } -> Eval.singleton (Some exp, flow, [])
+    | E_var ({vkind = V_cell c} as v) ->
+      debug "evaluating annotated cell variable %a" pp_var v;
+      let u = get_domain_cur man flow in
+      let u' = add_var_cell v c u exp.erange in
+      let flow = set_domain_cur u' man flow in
+      Eval.singleton (Some exp, flow, [])
 
     | E_var v when is_c_int_type v.vtyp ->
       debug "evaluating non-annotated base variable %a" pp_var v;
       let u = get_domain_cur man flow in
-      let u', v' = add_var_cell v u exp.erange in
+      let u', v' = add_var v u exp.erange in
       debug "new variable %a" pp_var v';
       let flow = set_domain_cur u' man flow in
       Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
 
     | _ -> ValAbs.eval exp (subman man) ctx flow
 
-      
+
 
   let ask request man ctx flow =
     ValAbs.ask request (subman man) ctx flow
