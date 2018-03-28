@@ -163,6 +163,7 @@ struct
     | _ -> None
 
   let eval exp man ctx flow =
+    let range = exp.erange in
     match ekind exp with
     | E_c_deref(p) ->
       Eval.compose_eval p
@@ -178,7 +179,7 @@ struct
                Value.fold (fun acc o ->
                    let t = under_type p.etyp in
                    let c = mk_cell base o t in
-                   let exp' = Cell.mk_gen_cell_var c exp.erange in
+                   let exp' = Cell.mk_gen_cell_var c range in
                    let evl = Eval.re_eval_singleton man ctx (Some exp', flow, []) in
                    Eval.join acc evl
                  ) None itv
@@ -188,6 +189,45 @@ struct
       )
       (fun flow -> Eval.singleton (None, flow, []))
       man ctx flow
+
+    | E_binop(O_eq, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
+      Eval.compose_eval_list [p; q]
+        (fun el flow ->
+           let p, q = match el with
+             | [{ekind = E_var p}; {ekind = E_var q}] -> p, q
+             | _ -> assert false
+           in
+           let a = get_domain_cur man flow in
+           let psl1 = find p a in
+           let psl2 = find q a in
+           let psl = PSL.meet psl1 psl2 in
+           if PSL.is_bottom psl then
+             Eval.singleton (Some (mk_zero range), flow, [])
+           else
+             let true_case =
+               let a = add p psl a in
+               let a = add q psl a in
+               let flow = set_domain_cur a man flow in
+               let flow = man.exec (mk_assume (mk_binop (mk_var (mk_offset_var p) range) O_eq (mk_var (mk_offset_var q) range) range) range) ctx flow in
+               if man.flow.is_cur_bottom flow then
+                 None
+               else
+                 Eval.singleton (Some (mk_one range), flow, [])
+             in
+             let false_case =
+               let a = add p psl1 a in
+               let a = add q psl2 a in
+               let flow = set_domain_cur a man flow in
+               let flow = man.exec (mk_assume (mk_binop (mk_var (mk_offset_var p) range) O_ne (mk_var (mk_offset_var q) range) range) range) ctx flow in
+               if man.flow.is_cur_bottom flow then
+                 None
+               else
+                 Eval.singleton (Some (mk_zero range), flow, [])
+             in
+             Eval.join true_case false_case
+        )
+        (fun flow -> Eval.singleton (None, flow, []))
+        man ctx flow
 
     | _ -> None
 
