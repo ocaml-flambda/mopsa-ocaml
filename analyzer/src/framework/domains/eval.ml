@@ -346,3 +346,20 @@ let compose_xeval
            (x, flow, clean @ clean')
          ) evl
     )
+
+let xcompose_xeval
+    (xeval: ('x, 'a flow) xeval_output)
+    (eval: 'x -> 'a flow -> ('x, 'a flow) xeval_output)
+    (empty: 'a flow -> ('x, 'a flow) xeval_output)
+  : ('x, 'a flow) xeval_output =
+  xeval |> Dnf.substitute2
+    (fun (x, flow, clean) ->
+       let evl =
+         match x with
+         | Some x -> eval x flow
+         | None -> empty flow
+       in
+       Dnf.map (fun (exp'', flow, clean') ->
+           (exp'', flow, clean @ clean')
+         ) evl
+    )

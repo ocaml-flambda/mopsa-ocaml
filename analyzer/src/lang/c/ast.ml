@@ -500,6 +500,7 @@ let rec is_c_int_type ( t : typ) =
   match t with
   | T_c_integer _ -> true
   | T_c_qualified(_, t) -> is_c_int_type t
+  | T_c_typedef(typedef) -> is_c_int_type (typedef.c_typedef_def)
   | _ -> false
 
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
@@ -513,17 +514,26 @@ let rec is_c_pointer ( t : typ) =
   match t with
   | T_c_pointer _ -> true
   | T_c_qualified(_, t) -> is_c_pointer t
+  | T_c_typedef(typedef) -> is_c_pointer (typedef.c_typedef_def)
   | _ -> false
+
+let rec is_c_array (t: typ) =
+  match t with
+  | T_c_array _ -> true
+  | T_c_typedef(typedef) -> is_c_array (typedef.c_typedef_def)
+  | T_c_qualified(_, t) -> is_c_array t
+  | _ -> false
+
 
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)
 let pointer_type (t : typ) =
   (T_c_pointer t)
 
-(** [is_scalartype t] types pointed to by [t] fails if [t] is not a
-   pointer type *)
-let under_type (t : typ) : typ =
+let rec under_type (t : typ) : typ =
   match t with
   | T_c_pointer t' -> t'
+  | T_c_array(t', _) -> t'
+  | T_c_typedef(typedef) -> under_type (typedef.c_typedef_def)
   | _ -> failwith "[under_type] called with a non pointer argument"
 
 let is_c_type = function

@@ -15,6 +15,7 @@ open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
 open Framework.Flow
+open Universal.Ast
 open Ast
 
 
@@ -45,7 +46,10 @@ module Domain = struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_c_array_subscript(arr, idx) -> panic "Arrays not supported"
+    | E_c_array_subscript(arr, idx) ->
+      let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp:(T_c_pointer(exp.etyp)))} in
+      Eval.re_eval_singleton man ctx (Some exp', flow, [])
+
     | _ -> None
 
 

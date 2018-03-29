@@ -105,6 +105,10 @@ struct
           | P.Invalid -> assert false
         ) psl Eval.xbottom
 
+    | E_var a when is_c_array a.vtyp ->
+      let pt = a, mk_int 0 range in
+      Eval.xsingleton (Some pt, flow, [])
+
     | E_c_address_of(e) ->
       Eval.compose_xeval e
         (fun e flow ->
@@ -122,13 +126,25 @@ struct
         (fun flow -> Eval.xsingleton (None, flow, []))
         man ctx flow
 
-    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer p.etyp ->
-      assert false
+    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer p.etyp || is_c_array p.etyp ->
+      Eval.compose_xeval p
+        (fun p flow ->
+           Eval.xcompose_xeval (eval_p p man ctx flow)
+             (fun (base, offset) flow ->
+                let size = sizeof_type (under_type p.etyp) in
+                let pt = base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range) range) in
+                Eval.xsingleton (Some pt, flow, [])
+             )
+             (fun flow -> Eval.xsingleton (None, flow, []))
+        )
+        (fun flow -> Eval.xsingleton (None, flow, []))
+        man ctx flow
+
 
     | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
       assert false
 
-    | _ -> assert false
+    | _ -> panic "Unsupported expression %a in eval_p" pp_expr exp
 
   let exec stmt man ctx flow =
     let range = srange stmt in

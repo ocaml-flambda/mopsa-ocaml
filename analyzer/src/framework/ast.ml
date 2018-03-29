@@ -243,8 +243,8 @@ let mk_expr
 let mk_var v erange =
   mk_expr ~etyp:v.vtyp (E_var v) erange
 
-let mk_binop left op right erange =
-  mk_expr (E_binop (op, left, right)) erange
+let mk_binop left op right ?(etyp = T_any) erange =
+  mk_expr (E_binop (op, left, right)) ~etyp erange
 
 let mk_unop op operand erange =
   mk_expr (E_unop (op, operand)) erange
