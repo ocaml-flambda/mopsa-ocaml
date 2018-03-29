@@ -402,9 +402,13 @@ module Make(ValAbs : DOMAIN) = struct
           let c' = extract_cell v' in
           debug "check c' = %a" pp_cell c';
           let cell_range c = (c.o, Z.add c.o (sizeof_type c.t)) in
-          debug "overlap case";
-          let overlap (a1, b1) (a2, b2) = Z.leq (Z.max a1 a2) (Z.min b1 b2) in
-          if compare_var c.v c'.v = 0 && overlap (cell_range c) (cell_range c') then
+          let check_overlap (a1, b1) (a2, b2) =
+            debug "check overlap between [%a, %a] and [%a, %a]" Z.pp_print a1 Z.pp_print b1 Z.pp_print a2 Z.pp_print b2;
+            let t = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
+            debug "result = %b" t;
+            t
+          in
+          if compare_var c.v c'.v = 0 && check_overlap (cell_range c) (cell_range c') then
             man.exec (Universal.Ast.mk_remove_var v' range) ctx acc
           else
             acc

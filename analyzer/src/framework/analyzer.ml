@@ -94,12 +94,12 @@ struct
       match evl with
       | Some evl -> evl
       | None ->
-        Debug.warn
-          "Non-evaluated expression in %a:@\nexpr: @[%a@]@\n@[%a@]"
-          Pp.pp_range_verbose exp.erange
-          Pp.pp_expr exp
-          manager.flow.print fa
-        ;
+        (* Debug.warn
+         *   "Non-evaluated expression in %a:@\nexpr: @[%a@]@\n@[%a@]"
+         *   Pp.pp_range_verbose exp.erange
+         *   Pp.pp_expr exp
+         *   manager.flow.print fa
+         * ; *)
         (* raise (ExprPanic exp) *)
         eval_singleton (Some exp, fa, [])
     with Panic ->

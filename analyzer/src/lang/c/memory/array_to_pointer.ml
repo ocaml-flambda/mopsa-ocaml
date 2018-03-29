@@ -35,12 +35,38 @@ module Domain = struct
   (*==========================================================================*)
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
+  let under_array_type t =
+    remove_typedef t |>
+    (function
+      | T_c_array(t, _) -> t
+      | _ -> assert false
+    )
+  let mk_c_array_subscript a i range =
+    mk_expr (E_c_array_subscript (mk_var a range, i)) ~etyp:(under_array_type a.vtyp) range
 
-  let init_array a init man ctx flow =
+  let init_array a init range man ctx flow =
     match init with
     | None -> flow
+
     | Some (C_init_list (l, None)) ->
-      panic "Array list initialization not supported"
+      let rec aux flow i = function
+        | [] -> flow
+        | C_init_expr e :: tl ->
+          let flow = man.exec
+              (mk_assign
+                 (mk_c_array_subscript a (mk_int i range) range)
+                 e
+                 range
+              ) ctx flow
+          in
+          aux flow (i + 1) tl
+        | _ -> assert false
+      in
+      aux flow 0 l
+        
+    | Some (C_init_list ([], Some C_init_expr e)) ->
+      panic "Array filler initialization not supported"
+
     | _ ->
       panic "Array initialization not supported"
 
@@ -51,7 +77,7 @@ module Domain = struct
           if not (is_c_array v.vtyp) then
             flow
           else
-            init_array v init man Framework.Context.empty flow
+            init_array v init (mk_fresh_range ()) man Framework.Context.empty flow
         ) flow globals
 
     | _ -> flow
@@ -59,17 +85,10 @@ module Domain = struct
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     match skind stmt with
     | S_c_local_declaration(v, init) when is_c_array v.vtyp ->
-      init_array v init man ctx flow |>
+      init_array v init stmt.srange man ctx flow |>
       Exec.return
 
     | _ -> None
-
-  let under_array_type t =
-    remove_typedef t |>
-    (function
-      | T_c_array(t, _) -> t
-      | _ -> assert false
-    )
 
   let eval exp man ctx flow =
     match ekind exp with
