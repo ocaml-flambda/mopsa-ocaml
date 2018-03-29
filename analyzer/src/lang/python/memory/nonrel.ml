@@ -94,7 +94,7 @@ struct
     | E_var v when Builtins.is_builtin v.vname ->
       debug "builtin";
       Eval.singleton (Some (mk_addr (Builtins.from_expr exp) range), flow, [])
-        
+
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
       let nonrel = get_domain_cur man flow in

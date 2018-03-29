@@ -246,14 +246,14 @@ struct
 
   and exp_to_apron exp =
     match ekind exp with
-    | E_constant(C_int_range (a,b)) ->
+    | E_constant(C_int_interval (a,b)) ->
        Apron.Texpr1.Cst(
          Apron.Coeff.i_of_scalar
            (Apron.Scalar.of_float @@ Z.to_float a)
            (Apron.Scalar.of_float @@ Z.to_float b)
        )
 
-    | E_constant(C_float_range (a,b)) ->
+    | E_constant(C_float_interval (a,b)) ->
       Apron.Texpr1.Cst(
         Apron.Coeff.i_of_scalar
           (Apron.Scalar.of_float a)

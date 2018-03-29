@@ -19,7 +19,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 module I = Intervals.IntItv
 
 type v = I.t
-type t = v with_bot      
+type t = v with_bot
 
 let bottom = BOT
 
@@ -56,7 +56,7 @@ let of_constant = function
   | C_int i ->
     Nb (I.of_z i i)
 
-  | C_int_range (i1,i2) ->
+  | C_int_interval (i1,i2) ->
     Nb (I.of_z i1 i2)
 
   | C_true ->
@@ -126,7 +126,7 @@ let bwd_binop op a1 a2 r =
   try
     let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
     let aa1, aa2 =
-      match op with     
+      match op with
       | O_plus  -> bot_to_exn (I.bwd_add a1 a2 r)
       | O_minus -> bot_to_exn (I.bwd_sub a1 a2 r)
       | O_mult  -> bot_to_exn (I.bwd_mul a1 a2 r)
@@ -148,7 +148,7 @@ let bwd_filter op a1 a2 =
   try
     let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
     let aa1, aa2 =
-      match op with     
+      match op with
       | O_eq -> bot_to_exn (I.filter_eq a1 a2)
       | O_ne -> bot_to_exn (I.filter_neq a1 a2)
       | O_lt -> bot_to_exn (I.filter_lt a1 a2)

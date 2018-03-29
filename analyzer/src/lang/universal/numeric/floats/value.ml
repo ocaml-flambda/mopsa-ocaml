@@ -14,14 +14,14 @@ open Ast
 open Bot
 
 let debug fmt = Debug.debug ~channel:"universal.numeric.floats.value" fmt
-  
+
 module I = Intervals.FloatItv
-           
+
 type v = I.t
-type t = v with_bot      
+type t = v with_bot
 
 let bottom = BOT
-             
+
 let top = Nb (I.minf_inf)
 
 let is_bottom abs =
@@ -31,15 +31,15 @@ let is_top abs =
   bot_dfl1 false (fun itv -> not (I.is_bounded itv)) abs
 
 let leq (a1:t) (a2:t) : bool = I.included_bot a1 a2
-    
+
 let join (a1:t) (a2:t) : t = I.join_bot a1 a2
-    
+
 let widening ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
-    
+
 let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
 let print fmt (a:t) = I.fprint_bot I.F.dfl_fmt fmt a
-    
+
 let debug_bin name op printres a1 a2 =
   let r = op a1 a2 in
   debug "@[%a@] %s @[%a@] -> @[%a@]" print a1 name print a2 printres r;
@@ -49,12 +49,12 @@ let leq = debug_bin "⊆" leq Format.pp_print_bool
 let join = debug_bin "∪" join print
 let meet = debug_bin "∩" meet print
 let widening ctx = debug_bin "∇" (widening ctx) print
-            
-           
+
+
 let of_constant = function
   | C_float i ->
     Nb (I.cst i)
-  | C_float_range (i1,i2) ->
+  | C_float_interval (i1,i2) ->
     Nb (I.of_float i1 i2)
   | C_true ->
     Nb (I.of_float 1. 1.)
@@ -67,7 +67,7 @@ let to_int a =
       let {I.lo; up} = I.round f in
       Integers.Value.of_float lo up
     ) a
-  
+
 
 let fwd_unop op a =
   match op with
@@ -76,7 +76,7 @@ let fwd_unop op a =
   | O_sqrt -> bot_absorb1 I.sqrt a
   | O_plus -> a
   | _ -> top
-    
+
 let fwd_binop op a1 a2 =
   match op with
   | O_plus  -> bot_lift2 I.add a1 a2
@@ -122,7 +122,7 @@ let bwd_binop op a1 a2 r =
   try
     let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
     let aa1, aa2 =
-      match op with     
+      match op with
       | O_plus  -> bot_to_exn (I.bwd_add a1 a2 r)
       | O_minus -> bot_to_exn (I.bwd_sub a1 a2 r)
       | O_mult  -> bot_to_exn (I.bwd_mul a1 a2 r)
@@ -138,7 +138,7 @@ let bwd_filter op a1 a2 =
   try
     let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
     let aa1, aa2 =
-      match op with     
+      match op with
         | O_eq -> bot_to_exn (I.filter_eq a1 a2)
         | O_ne -> bot_to_exn (I.filter_neq a1 a2)
         | O_lt -> bot_to_exn (I.filter_lt a1 a2)
@@ -150,8 +150,8 @@ let bwd_filter op a1 a2 =
     Nb aa1, Nb aa2
   with Found_BOT ->
     bottom, bottom
-    
-        
+
+
 let from_apron (apitv: Apron.Interval.t) : t =
   if Apron.Interval.is_bottom apitv then
     bottom
@@ -172,11 +172,11 @@ let from_apron (apitv: Apron.Interval.t) : t =
     Nb (I.of_float (scalar_to_float inf) (scalar_to_float sup))
 
 let is_bounded a = bot_dfl1 true I.is_bounded a
-    
+
 let contains c abs =
   match c with
   | C_float i -> bot_dfl1 false (I.contains i) abs
-  | C_float_range (i1,i2) -> assert false
+  | C_float_interval (i1,i2) -> assert false
   | _ -> false
 
 let can_be_true abs =

@@ -53,8 +53,8 @@ let () =
       | C_string(s) -> fprintf fmt "\"%s\"" s
       | C_int(n) -> Z.pp_print fmt n
       | C_float(f) -> pp_print_float fmt f
-      | C_int_range(a,b) -> fprintf fmt "[%a,%a]" Z.pp_print a Z.pp_print b
-      | C_float_range(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
+      | C_int_interval(a,b) -> fprintf fmt "[%a,%a]" Z.pp_print a Z.pp_print b
+      | C_float_interval(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
       | C_true -> pp_print_string fmt "True"
       | C_false -> pp_print_string fmt "False"
       | C_empty -> pp_print_string fmt "empty"

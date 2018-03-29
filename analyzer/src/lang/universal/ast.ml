@@ -34,8 +34,8 @@ type constant +=
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)
-  | C_int_range of Z.t * Z.t (** Integer ranges. *)
-  | C_float_range of float * float (** Float ranges. *)
+  | C_int_interval of Z.t * Z.t (** Integer ranges. *)
+  | C_float_interval of float * float (** Float ranges. *)
   | C_true (** Boolean true value. *)
   | C_false (** Boolean false value. *)
   | C_empty (** Empty value, useful for empty arrays abstraction. *)
@@ -155,10 +155,19 @@ let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
 
 let mk_z i erange =
-  mk_expr ~etyp:T_int (E_constant (C_int i)) erange
+  mk_constant ~etyp:T_int (C_int i) erange
 
 let mk_float f erange =
-  mk_expr ~etyp:T_float (E_constant (C_float f)) erange
+  mk_constant ~etyp:T_float (C_float f) erange
+
+let mk_int_interval a b range =
+  mk_constant ~etyp:T_int (C_int_interval (Z.of_int a, Z.of_int b)) range
+
+let mk_z_interval a b range =
+  mk_constant ~etyp:T_int (C_int_interval (a, b)) range
+
+let mk_float_interval a b range =
+  mk_constant ~etyp:T_float (C_float_interval (a, b)) range
 
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)

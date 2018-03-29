@@ -278,9 +278,9 @@ let of_constant c =
   | C_false -> boolean (BoolLattice.singleton false)
   | C_py_none -> none  (NoneLattice.singleton c)
   | C_int n -> integer (IntLattice.of_constant c)
-  | C_int_range _ -> integer (IntLattice.of_constant c)
+  | C_int_interval _ -> integer (IntLattice.of_constant c)
   | C_float n -> float (FloatLattice.of_constant c)
-  | C_float_range _ -> float (FloatLattice.of_constant c)
+  | C_float_interval _ -> float (FloatLattice.of_constant c)
   | C_py_not_implemented -> notimplem  (NotImplementedLattice.singleton c)
   | C_empty -> emptyvalue  (EmptyValueLattice.singleton c)
   | C_string s -> string (StringLattice.singleton s)
@@ -306,7 +306,7 @@ let type_of abs =
   (fun acc -> if can_be_string abs then Universal.Ast.T_string :: acc else acc) |>
   (fun acc -> if can_be_addr abs then T_addr :: acc else acc) |>
   (fun acc -> if can_be_notimplem abs then T_py_not_implemented :: acc else acc)  |>
-  (fun acc -> if can_be_emptyvalue abs then T_empty :: acc else acc) 
+  (fun acc -> if can_be_emptyvalue abs then T_empty :: acc else acc)
 
 let fold_type f x abs =
   (if can_be_none abs then [T_py_none, {bottom with none = abs.none}] else []) |>

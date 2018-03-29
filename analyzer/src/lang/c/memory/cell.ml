@@ -293,7 +293,7 @@ module Make(ValAbs : DOMAIN) = struct
                   begin
                     if is_c_scalar_type c.t then
                       let a,b = rangeof c.t in
-                      Nexp (Some ( mk_constant ~etyp:T_int (C_int_range(a,b)) range))
+                      Nexp (Some ( mk_z_interval a b range))
                     else if is_c_pointer c.t then
                       Pexp Invalid
                     else

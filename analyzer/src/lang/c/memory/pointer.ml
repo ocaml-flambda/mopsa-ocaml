@@ -203,15 +203,18 @@ struct
            let psl = PSL.meet psl1 psl2 in
            if PSL.is_bottom psl then
              Eval.singleton (Some (mk_zero range), flow, [])
-           else if PSL.cardinal psl = 1 then
+           else
+           if PSL.cardinal psl = 1 then
              let a = add p psl a in
              let a = add q psl a in
              let flow = set_domain_cur a man flow in
              let true_flow = man.exec (mk_assume (mk_binop (mk_var (mk_offset_var p) range) O_eq (mk_var (mk_offset_var q) range) range) range) ctx flow in
              let false_flow = man.exec (mk_assume (mk_binop (mk_var (mk_offset_var p) range) O_ne (mk_var (mk_offset_var q) range) range) range) ctx flow in
-             Eval.join (Eval.singleton (Some (mk_one range), true_flow, [])) (Eval.singleton (Some (mk_zero range), false_flow, []))
+             Eval.join
+               (Eval.singleton (Some (mk_one range), true_flow, []))
+               (Eval.singleton (Some (mk_zero range), false_flow, []))
            else
-             Eval.join (Eval.singleton (Some (mk_one range), flow, [])) (Eval.singleton (Some (mk_zero range), flow, []))
+             Eval.singleton (Some (mk_int_interval 0 1 range), flow, [])
         )
         (fun flow -> Eval.singleton (None, flow, []))
         man ctx flow
@@ -230,7 +233,7 @@ struct
            if PSL.is_bottom psl then
              Eval.singleton (Some (mk_one range), flow, [])
            else
-             assert false (* TODO *)
+             Eval.singleton (Some (mk_int_interval 0 1 range), flow, []) (* TODO: improve precision *)
         )
         (fun flow -> Eval.singleton (None, flow, []))
         man ctx flow
