@@ -27,7 +27,7 @@ lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor memory flows libs program setup
-lang.c.memory = cell pointer machine_integers
+lang.c.memory = cell pointer machine_integers array_to_pointer
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
@@ -41,18 +41,20 @@ include $(MOPSAROOT)/make/main.mk
 #tests
 TESTS = tests
 
+.PHONY: python-tests c-tests
+
 python-tests: native
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
+		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python -debug=$(MOPSADEBUG) $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: native
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
+		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c -debug=$(MOPSADEBUG) $(MOPSAPARAM) $(test); \
 	)
 
 tests: python-tests c-tests

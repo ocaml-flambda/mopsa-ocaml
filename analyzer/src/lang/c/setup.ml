@@ -9,6 +9,7 @@ let init () =
     Cell.setup ();
     Machine_integers.setup ();
     Pointer.setup ();
+    Array_to_pointer.setup ();
   );
   Libs.(
     Mopsa.setup ();

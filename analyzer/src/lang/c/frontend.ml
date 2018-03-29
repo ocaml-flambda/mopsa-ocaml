@@ -171,11 +171,11 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)
     | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr e)
     | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr p)
+    | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr a, from_expr i)
 
     | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
     | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
     | C_AST.E_conditional (_,_,_) -> failwith "E_conditional not supported"
-    | C_AST.E_array_subscript (_,_) -> failwith "E_array_subscript not supported"
     | C_AST.E_member_access (_,_,_) -> failwith "E_member_access not supported"
     | C_AST.E_arrow_access (_,_,_) -> failwith "E_arrow_access not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"

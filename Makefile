@@ -22,7 +22,7 @@ tests:
 	$(MAKE) -C utils tests
 	$(MAKE) -C analyzer tests
 
-analyzer-tests:
+analyzer-tests: analyzer
 	$(MAKE) -C analyzer tests
 
 install:

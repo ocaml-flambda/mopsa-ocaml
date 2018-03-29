@@ -88,10 +88,10 @@ type alarm_kind +=
 let () =
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
-      | AFailTest(t) -> Format.fprintf fmt "%a Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
-      | AMayTest(t) -> Format.fprintf fmt "%a Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⊬" t
-      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a Test %s skipped, unsupported @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "✱" t Framework.Pp.pp_stmt s
-      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a Test %s skipped, unsupported @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "✱" t Framework.Pp.pp_expr e
+      | AFailTest(t) -> Format.fprintf fmt "%a  Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
+      | AMayTest(t) -> Format.fprintf fmt "%a  Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⚠" t
+      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a  Test %s skipped, unsupported statement:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_stmt s
+      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a  Test %s skipped, unsupported expression:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_expr e
       | _ -> next fmt alarm
     )
 
@@ -116,11 +116,11 @@ struct
               | TMayAssert _ -> (ok, fail, may_fail + 1)
               | _ -> (ok, fail, may_fail)
             ) (0, 0, 0) flow1 in
-          debug "Execution of %s done@\n %a %a assertion%a passed@\n %a %a assertion%a failed@\n %a %a assertion%a unproven"
+          debug "Execution of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven"
             name
             ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok plurial ok
             ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail plurial fail
-            ((Debug.color "orange") Format.pp_print_string) "⊬" ((Debug.color "orange") Format.pp_print_int) may_fail plurial may_fail
+            ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail plurial may_fail
           ;
           man.flow.join acc flow1, nb_ok + ok, nb_fail + fail, nb_may_fail + may_fail, nb_panic
         with
@@ -153,12 +153,12 @@ struct
       debug "Starting tests";
       let flow1, ok, fail, may_fail, panic = execute_test_functions tests man ctx flow in
       Debug.debug ~channel:(name ^ ".summary")
-        "Analysis of %s done@\n %a %a assertion%a passed@\n %a %a assertion%a failed@\n %a %a assertion%a unproven\n %a %a test%a not analyzed"
+        "Analysis of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven\n %a  %a test%a skipped"
         file
         ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok plurial ok
         ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail plurial fail
-        ((Debug.color "orange") Format.pp_print_string) "⊬" ((Debug.color "orange") Format.pp_print_int) may_fail plurial may_fail
-        ((Debug.color "fushia") Format.pp_print_string) "✱" ((Debug.color "fushia") Format.pp_print_int) panic plurial panic
+        ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail plurial may_fail
+        ((Debug.color "fushia") Format.pp_print_string) "⎇" ((Debug.color "fushia") Format.pp_print_int) panic plurial panic
       ;
 
       Exec.return flow1

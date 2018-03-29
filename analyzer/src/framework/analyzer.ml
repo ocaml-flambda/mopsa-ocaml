@@ -57,47 +57,53 @@ struct
       Pp.pp_stmt stmt manager.flow.print fa
     ;
     let timer = Timing.start () in
-    let res =
-      let fa1 = Domain.exec stmt manager ctx fa in
-      match fa1 with
-      | None ->
-        Debug.warn
-          "Non-analyzed statement in %a:@\nstmt: @[%a@]@\n@[%a@]"
-          Pp.pp_range_verbose stmt.srange
-          Pp.pp_stmt stmt
-          manager.flow.print fa
-        ;
-        raise (StmtPanic stmt)
+    try
+      let res =
+        let fa1 = Domain.exec stmt manager ctx fa in
+        match fa1 with
+        | None ->
+          Debug.warn
+            "Non-analyzed statement in %a:@\nstmt: @[%a@]@\n@[%a@]"
+            Pp.pp_range_verbose stmt.srange
+            Pp.pp_stmt stmt
+            manager.flow.print fa
+          ;
+          raise (StmtPanic stmt)
 
-      | Some fa1 ->
-        fa1
-    in
-    let t = Timing.stop timer in
-    Debug.debug
-      ~channel:"framework.analyzer.profiler"
-      "exec done in %.6fs of:@\n@[<v>  %a@]"
-      t Pp.pp_stmt stmt
-    ;
-    debug
-      "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-      Pp.pp_stmt stmt manager.flow.print fa manager.flow.print res
-    ;
-    res
+        | Some fa1 ->
+          fa1
+      in
+      let t = Timing.stop timer in
+      Debug.debug
+        ~channel:"framework.analyzer.profiler"
+        "exec done in %.6fs of:@\n@[<v>  %a@]"
+        t Pp.pp_stmt stmt
+      ;
+      debug
+        "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+        Pp.pp_stmt stmt manager.flow.print fa manager.flow.print res
+      ;
+      res
+    with Panic ->
+      raise (StmtPanic stmt)
 
   (** Evaluation of expressions. *)
   and eval exp ctx fa =
-    let evl = Domain.eval exp manager ctx fa in
-    match evl with
-    | Some evl -> evl
-    | None ->
-      Debug.warn
+    try
+      let evl = Domain.eval exp manager ctx fa in
+      match evl with
+      | Some evl -> evl
+      | None ->
+        Debug.warn
           "Non-evaluated expression in %a:@\nexpr: @[%a@]@\n@[%a@]"
           Pp.pp_range_verbose exp.erange
           Pp.pp_expr exp
           manager.flow.print fa
-      ;
-      (* raise (ExprPanic exp) *)
-      eval_singleton (Some exp, fa, [])
+        ;
+        (* raise (ExprPanic exp) *)
+        eval_singleton (Some exp, fa, [])
+    with Panic ->
+      raise (ExprPanic exp)
 
   (** Query handler. *)
   and ask : type b. b Query.query -> Context.context -> 'a -> b option =
