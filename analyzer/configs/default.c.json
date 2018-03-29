@@ -15,8 +15,8 @@
     "universal.flows.loops",
 
     //Memory abstraction
-    "c.memory.array_to_pointer",
     "c.memory.pointer",
-    "c.memory.machine_integers",
-    {"fun": "c.memory.cell", "arg": "universal.numeric.integers"}
+    {"fun": "c.memory.cell", "arg": "universal.numeric.integers"},
+    "c.memory.array_to_pointer",
+    "c.memory.machine_integers"
 ]}

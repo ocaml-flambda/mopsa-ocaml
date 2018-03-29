@@ -28,7 +28,23 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man flow = flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let range = mk_fresh_range () in
+      List.fold_left (fun flow (v, init) ->
+          if not (is_c_int_type v.vtyp) then flow
+          else
+            let e =
+              match init with
+              | None -> mk_zero range
+              | Some (C_init_expr e) -> e
+              | _ -> assert false
+            in
+            man.exec (mk_assign (mk_var v range) e range) Framework.Context.empty flow
+        ) flow globals
+
+    | _ -> flow
 
   let eval exp man ctx flow =
     match ekind exp with
