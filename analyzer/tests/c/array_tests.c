@@ -17,7 +17,7 @@ void test_array_in_rval() {
 
 void test_multidim_array() {
   int a[10][10];
-  a[1][1] = 500;
-  a[2][4] = 10 + a[1][1];
-  _mopsa_assert_true(a[2][4] == 510);
+  a[1][1] = 5;
+  a[2][4] = a[1][1] * 100;
+  _mopsa_assert_true(a[2][4] == 500);
 }

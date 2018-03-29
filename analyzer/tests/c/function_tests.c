@@ -4,8 +4,18 @@ int incr(int x) {
   return x + 1;
 }
 
-void test_call_1() {
+int mult(int x, int y) {
+  return x * y;
+}
+
+void test_call() {
   int i;
   i = 10;
   _mopsa_assert_true(incr(i) == 11);
+}
+
+void test_call_in_chain() {
+  int i;
+  i = 10;
+  _mopsa_assert_true(mult(incr(i), 10) == 110);
 }

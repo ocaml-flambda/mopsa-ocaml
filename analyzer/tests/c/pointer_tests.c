@@ -67,3 +67,13 @@ void test_multidim_array_address() {
   **p = 10;
   _mopsa_assert_true(a[0][0] == 10);
 }
+
+
+void test_array_cell_jump() {
+  int a[10];
+  int *p;
+  p = &a;
+  p = p + 2;
+  *p = 20;
+  _mopsa_assert_true(a[2] == 20);
+}
