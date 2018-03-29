@@ -60,6 +60,15 @@ void test_multi_array_as_address() {
   _mopsa_assert_true(a[0][0] == 10);
 }
 
+void test_multi_array_as_array_of_addresses() {
+  int a[10][10];
+  int *p;
+  p = a[0];
+  *p = 10;
+  _mopsa_assert_true(a[0][0] == 10);
+}
+
+
 void test_address_of_array() {
   int a[10];
   int *p;

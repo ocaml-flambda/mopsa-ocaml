@@ -91,9 +91,9 @@ struct
       (flow: 'a flow)
     : ((var * expr), 'a flow) Eval.xeval_output =
     let range = erange exp in
+    debug "eval_p %a in@\n@[%a@]" pp_expr exp man.flow.print flow;
     match ekind exp with
     | E_var p when is_c_pointer p.vtyp ->
-      debug "eval_p %a in@\n@[%a@]" pp_var p man.flow.print flow;
       let a = get_domain_cur man flow in
       let psl = find p a in
 
@@ -114,7 +114,17 @@ struct
       let pt = a, mk_int 0 range in
       Eval.xsingleton (Some pt, flow, [])
 
+    | E_c_address_of(e) when is_c_array e.etyp ->
+      debug "address of an array";
+      Eval.compose_xeval e
+        (fun e flow ->
+           eval_p e man ctx flow
+        )
+        (fun flow -> Eval.xsingleton (None, flow, []))
+        man ctx flow
+
     | E_c_address_of(e) ->
+      debug "address of an array";
       Eval.compose_xeval e
         (fun e flow ->
            match ekind e with
@@ -122,9 +132,7 @@ struct
              let pt = (c.v, mk_z c.o (tag_range range "offset")) in
              Eval.xsingleton (Some pt, flow, [])
 
-           | E_var v when is_c_array v.vtyp ->
-             let pt = v, mk_int 0 range in
-             Eval.xsingleton (Some pt, flow, [])
+           | E_var v when is_c_array v.vtyp -> assert false
 
            | E_var v when is_c_type v.vtyp ->
              let pt = (v, mk_zero (tag_range range "offset")) in
@@ -169,24 +177,29 @@ struct
       Exec.return flow
 
     | S_assign(p, q, k) when is_c_pointer p.etyp ->
-      Eval.xcompose_exec
-        (eval_p q man ctx flow)
-        (fun (v, offset) flow ->
-           Eval.compose_exec p
-             (fun p flow ->
-                let p = match p with
-                  | {ekind = E_var p} -> p
-                  | _ -> assert false
-                in
-                map_domain_cur (add_var p v) man flow |>
-                man.exec (mk_assign (mk_var (mk_offset_var p) range) offset range) ctx |>
-                Exec.return
+      Eval.compose_exec q
+        (fun q flow ->
+           Eval.xcompose_exec
+             (eval_p q man ctx flow)
+             (fun (v, offset) flow ->
+                Eval.compose_exec p
+                  (fun p flow ->
+                     let p = match p with
+                       | {ekind = E_var p} -> p
+                       | _ -> assert false
+                     in
+                     map_domain_cur (add_var p v) man flow |>
+                     man.exec (mk_assign (mk_var (mk_offset_var p) range) offset range) ctx |>
+                     Exec.return
+                  )
+                  (fun flow -> Exec.return flow)
+                  man ctx flow
              )
              (fun flow -> Exec.return flow)
-             man ctx flow
+             man ctx
         )
         (fun flow -> Exec.return flow)
-        man ctx
+        man ctx flow
 
     | S_remove_var(p) when is_c_pointer p.vtyp ->
       let p, c = Cell.mk_base_cell p in

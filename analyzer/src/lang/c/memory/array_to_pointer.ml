@@ -64,11 +64,18 @@ module Domain = struct
 
     | _ -> None
 
+  let under_array_type t =
+    remove_typedef t |>
+    (function
+      | T_c_array(t, _) -> t
+      | _ -> assert false
+    )
 
   let eval exp man ctx flow =
     match ekind exp with
     | E_c_array_subscript(arr, idx) ->
-      let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp:(T_c_pointer(exp.etyp)))} in
+      debug "array subscript to deref";
+      let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp: arr.etyp)} in
       Eval.re_eval_singleton man ctx (Some exp', flow, [])
 
     | _ -> None

@@ -307,6 +307,7 @@ struct
       assert false
 
     | S_assume e ->
+      debug "assume";
       Eval.compose_exec
         e
         (fun e flow ->

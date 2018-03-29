@@ -56,6 +56,7 @@ struct
 
 
     | E_c_cast(e', _) ->
+      debug "cast";
       Eval.re_eval_singleton man ctx (Some e', flow, [])
 
     | _ -> None
