@@ -5,8 +5,12 @@ open Ast
 
 let rec pp_c_init fmt = function
   | C_init_expr(e) -> pp_expr fmt e
-  | C_init_list _ -> assert false
-  | C_init_implicit _ -> assert false
+  | C_init_list(l, None) ->
+    fprintf fmt "{%a}"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+  | C_init_list([], Some filler) ->
+    fprintf fmt "{%a ...}" pp_c_init filler
+  | _ -> assert false
 
 
 let () =

@@ -36,11 +36,32 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
+  let init_array a init man ctx flow =
+    match init with
+    | None -> flow
+    | Some (C_init_list (l, None)) ->
+      panic "Array list initialization not supported"
+    | _ ->
+      panic "Array initialization not supported"
 
-  let init prog man flow = flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      List.fold_left (fun flow (v, init) ->
+          if not (is_c_array v.vtyp) then
+            flow
+          else
+            init_array v init man Framework.Context.empty flow
+        ) flow globals
+
+    | _ -> flow
 
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     match skind stmt with
+    | S_c_local_declaration(v, init) when is_c_array v.vtyp ->
+      init_array v init man ctx flow |>
+      Exec.return
+
     | _ -> None
 
 

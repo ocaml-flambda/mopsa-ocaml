@@ -24,20 +24,25 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init prog manager flow = flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let range = mk_fresh_range () in
+      globals |> List.fold_left (fun flow (v, init) ->
+          if not (is_c_scalar_type v.vtyp) then
+            flow
+          else
+            let v = mk_var v range in
+            match init with
+            | None -> flow
+            | Some (C_init_expr e) -> man.exec (mk_assign v e range) Framework.Context.empty flow
+            | Some (Ast.C_init_list (_,_)) -> assert false
+            | Some (Ast.C_init_implicit _) -> assert false
+        ) flow
+
+    | _ -> flow
 
   let eval exp manager ctx flow = None
-
-  let init_globals file globals man ctx flow =
-    let range = mk_fresh_range () in
-    globals |> List.fold_left (fun flow (v, init) ->
-        let v = mk_var v range in
-        match init with
-        | None -> flow
-        | Some (C_init_expr e) -> man.exec (mk_assign v e range) ctx flow
-        | Some (Ast.C_init_list (_,_)) -> assert false
-        | Some (Ast.C_init_implicit _) -> assert false
-      ) flow
 
   let get_function_name fundec = fundec.c_func_var.vname
 
@@ -69,17 +74,18 @@ struct
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
-      let main = List.find (function {c_func_var} -> c_func_var.vname = "main") functions in
-      init_globals prog_file globals manager ctx flow |>
-      manager.exec main.c_func_body ctx |>
+      let main = List.find (function
+            {c_func_var} -> c_func_var.vname = "main"
+        ) functions
+      in
+      manager.exec main.c_func_body ctx flow |>
       Exec.return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->
-      let flow1 = init_globals prog_file globals manager ctx flow in
       let tests = get_test_functions functions in
       let stmt = mk_c_unit_tests prog_file tests in
-      Exec.return (manager.exec stmt ctx flow1)
+      Exec.return (manager.exec stmt ctx flow)
 
 
     | _ -> None

@@ -52,6 +52,14 @@ void test_array_as_address() {
   _mopsa_assert_true(a[0] == 10);
 }
 
+void test_multi_array_as_address() {
+  int a[10][10];
+  int **p;
+  p = a;
+  **p = 10;
+  _mopsa_assert_true(a[0][0] == 10);
+}
+
 void test_address_of_array() {
   int a[10];
   int *p;
@@ -60,11 +68,11 @@ void test_address_of_array() {
   _mopsa_assert_true(a[0] == 10);
 }
 
-void test_multidim_array_address() {
+void test_address_of_multi_array() {
   int a[10][10];
-  int **p;
-  p = a;
-  **p = 10;
+  int *p;
+  p = &(a[0]);
+  *p = 10;
   _mopsa_assert_true(a[0][0] == 10);
 }
 

@@ -60,7 +60,19 @@ struct
 
     | _ -> None
 
-  let exec stmt man ctx flow = None
+  let exec stmt man ctx flow =
+    match skind stmt with
+    | S_c_local_declaration(v, init) when is_c_int_type v.vtyp ->
+      let flow =
+        match init with
+        | None -> flow
+        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
+        | Some (Ast.C_init_list (_,_)) -> assert false
+        | Some (Ast.C_init_implicit _) -> assert false
+      in
+      Exec.return flow
+
+    | _ -> None
 
   let ask _ _ _ _ = None
 

@@ -30,15 +30,6 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
-    | S_c_local_declaration(v, init) ->
-      let flow =
-        match init with
-        | None -> flow
-        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
-        | Some (Ast.C_init_list (_,_)) -> assert false
-        | Some (Ast.C_init_implicit _) -> assert false
-      in
-      Exec.return flow
 
     | S_c_switch _ -> assert false
 
@@ -47,7 +38,7 @@ struct
     | S_c_switch_default _ -> assert false
 
     | S_c_goto _ -> assert false
-  
+
     | _ -> None
 
 

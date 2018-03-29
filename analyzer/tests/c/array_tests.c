@@ -1,5 +1,7 @@
 #include "mopsa.h"
 
+int glob[20];
+
 void test_array_in_lval() {
   int a[10];
   int i = 500;
@@ -20,4 +22,13 @@ void test_multidim_array() {
   a[1][1] = 5;
   a[2][4] = a[1][1] * 100;
   _mopsa_assert_true(a[2][4] == 500);
+}
+
+void test_global_init_to_zero() {
+  _mopsa_assert_true(glob[1] == 0);
+}
+
+void test_initialization() {
+  int a[4] = {1, 2, 3, 4};
+  _mopsa_assert_true(a[1] == 2);
 }

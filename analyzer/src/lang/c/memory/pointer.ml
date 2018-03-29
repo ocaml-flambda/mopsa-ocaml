@@ -158,6 +158,16 @@ struct
   let exec stmt man ctx flow =
     let range = srange stmt in
     match skind stmt with
+    | S_c_local_declaration(v, init) when is_c_pointer v.vtyp ->
+      let flow =
+        match init with
+        | None -> flow
+        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
+        | Some (Ast.C_init_list (_,_)) -> assert false
+        | Some (Ast.C_init_implicit _) -> assert false
+      in
+      Exec.return flow
+
     | S_assign(p, q, k) when is_c_pointer p.etyp ->
       Eval.xcompose_exec
         (eval_p q man ctx flow)
