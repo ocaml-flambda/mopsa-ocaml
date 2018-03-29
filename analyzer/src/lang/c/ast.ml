@@ -529,11 +529,14 @@ let rec is_c_array (t: typ) =
 let pointer_type (t : typ) =
   (T_c_pointer t)
 
-let rec under_type (t : typ) : typ =
+let rec remove_typedef = function
+  | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
+  | t -> t
+
+let rec under_pointer_type (t : typ) : typ =
   match t with
   | T_c_pointer t' -> t'
-  | T_c_array(t', _) -> t'
-  | T_c_typedef(typedef) -> under_type (typedef.c_typedef_def)
+  | T_c_typedef(typedef) -> under_pointer_type (typedef.c_typedef_def)
   | _ -> failwith "[under_type] called with a non pointer argument"
 
 let is_c_type = function

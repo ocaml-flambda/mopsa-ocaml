@@ -80,6 +80,11 @@ struct
     let v = {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int} in
     {v with vkind = V_cell {v; o = Z.zero; t = v.vtyp}}
 
+  let under_type base ptr =
+    match remove_typedef base, ptr with
+    | T_c_array(t, _), _ -> t
+    | _, ptr -> Ast.under_pointer_type ptr
+
   let rec eval_p
       (exp: expr)
       (man: ('a, t) manager) ctx
@@ -117,6 +122,10 @@ struct
              let pt = (c.v, mk_z c.o (tag_range range "offset")) in
              Eval.xsingleton (Some pt, flow, [])
 
+           | E_var v when is_c_array v.vtyp ->
+             let pt = v, mk_int 0 range in
+             Eval.xsingleton (Some pt, flow, [])
+
            | E_var v when is_c_type v.vtyp ->
              let pt = (v, mk_zero (tag_range range "offset")) in
              Eval.xsingleton (Some pt, flow, [])
@@ -131,7 +140,7 @@ struct
         (fun p flow ->
            Eval.xcompose_xeval (eval_p p man ctx flow)
              (fun (base, offset) flow ->
-                let size = sizeof_type (under_type p.etyp) in
+                let size = sizeof_type (under_type base.vtyp p.etyp) in
                 let pt = base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range) range) in
                 Eval.xsingleton (Some pt, flow, [])
              )
@@ -187,13 +196,13 @@ struct
            Eval.xcompose_eval
              (eval_p p man ctx flow)
              (fun (base, offset) flow ->
+                let t = under_type base.vtyp p.etyp in
                 let open Universal.Numeric.Integers in
                 let itv = man.ask (Domain.Domain.QEval offset) ctx flow in
                 match itv with
                 | None -> assert false
                 | Some itv ->
                   Value.fold (fun acc o ->
-                      let t = under_type p.etyp in
                       let c = mk_cell base o t in
                       let exp' = Cell.mk_gen_cell_var c range in
                       let evl = Eval.re_eval_singleton man ctx (Some exp', flow, []) in
