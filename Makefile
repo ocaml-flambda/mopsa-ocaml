@@ -1,6 +1,6 @@
 TARGET = mopsa
 
-.PHONY: all analyzer utils c python tests install clean uninstall
+.PHONY: all analyzer utils c python tests analyzer-tests install clean uninstall
 
 all: utils c python analyzer
 
@@ -20,6 +20,9 @@ analyzer: utils c python
 
 tests:
 	$(MAKE) -C utils tests
+	$(MAKE) -C analyzer tests
+
+analyzer-tests:
 	$(MAKE) -C analyzer tests
 
 install:
