@@ -42,14 +42,14 @@ module Domain = struct
       | _ -> assert false
     )
   let mk_c_array_subscript a i range =
-    mk_expr (E_c_array_subscript (mk_var a range, i)) ~etyp:(under_array_type a.vtyp) range
+    mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
 
   let init_array a init range man ctx flow =
     match init with
     | None -> flow
 
     | Some (C_init_list (l, None)) ->
-      let rec aux flow i = function
+      let rec aux flow a i = function
         | [] -> flow
         | C_init_expr e :: tl ->
           let flow = man.exec
@@ -59,10 +59,14 @@ module Domain = struct
                  range
               ) ctx flow
           in
-          aux flow (i + 1) tl
+          aux flow a (i + 1) tl
+        | C_init_list (l, None) :: tl ->
+          let flow = aux flow (mk_c_array_subscript a (mk_int i range) range) 0 l in
+          aux flow a (i + 1) tl
+
         | _ -> assert false
       in
-      aux flow 0 l
+      aux flow (mk_var a range) 0 l
         
     | Some (C_init_list ([], Some C_init_expr e)) ->
       panic "Array filler initialization not supported"
@@ -74,8 +78,7 @@ module Domain = struct
     match prog.prog_kind with
     | C_program(globals, _) ->
       List.fold_left (fun flow (v, init) ->
-          if not (is_c_array v.vtyp) then
-            flow
+          if not (is_c_array v.vtyp) then flow
           else
             init_array v init (mk_fresh_range ()) man Framework.Context.empty flow
         ) flow globals

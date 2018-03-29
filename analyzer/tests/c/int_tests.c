@@ -27,3 +27,9 @@ void test_mod() {
   j = 3;
   _mopsa_assert_true(i % j == 1);
 }
+
+int glob;
+
+void test_global_init_with_zero() {
+  _mopsa_assert_true(glob == 0);
+}
