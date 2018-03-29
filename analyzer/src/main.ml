@@ -50,7 +50,7 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
       match alarms with
       | None
       | Some [] ->
-        Format.printf "No alarm@\n"
+        Format.printf "%a No alarm@\n" ((Debug.color "green") Format.pp_print_string) "✔"
       | Some alarms ->
         Format.printf "Alarms:@\n@[<hov4>    %a@]@\n"
           (Format.pp_print_list

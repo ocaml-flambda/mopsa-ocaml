@@ -10,6 +10,8 @@
 
 open Framework.Domains.Stateless
 open Framework.Domains
+open Framework.Alarm
+open Framework.Context
 open Framework.Lattice
 open Framework.Manager
 open Framework.Flow
@@ -22,30 +24,80 @@ let plurial fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"
 
 
 (*==========================================================================*)
+(**                          {2 Test context }                              *)
+(*==========================================================================*)
+
+type _ Framework.Context.key +=
+  | KCurTestName: string Framework.Context.key
+
+let () =
+  register_key_equality {
+    case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
+              fun chain k1 k2 ->
+                match k1, k2 with
+                | KCurTestName, KCurTestName -> Some Eq
+                | _ -> chain.check k1 k2
+            in
+            f);
+  }
+
+(*==========================================================================*)
 (**                        {2 Assertions tokens }                           *)
 (*==========================================================================*)
 
 type token +=
-  | TSafeAssert of range
-  | TFailAssert of range
-  | TMayAssert of range
+  | TSafeAssert of string * range
+  | TFailAssert of string * range
+  | TMayAssert of string * range
+  | TUnsupportedStmt of string * stmt
+  | TUnsupportedExpr of string * expr
 
 let () =
   register_token_compare (fun next tk1 tk2 ->
       match tk1, tk2 with
-      | TSafeAssert r1, TSafeAssert r2
-      | TFailAssert r1, TFailAssert r2
-      | TMayAssert r1, TMayAssert r2 ->
+      | TSafeAssert (_, r1), TSafeAssert (_, r2)
+      | TFailAssert (_, r1), TFailAssert (_, r2)
+      | TMayAssert (_, r1), TMayAssert (_, r2) ->
         compare_range r1 r2
+      | TUnsupportedStmt(_, s1), TUnsupportedStmt(_, s2) ->
+        compare_range s1.srange s2.srange
+      | TUnsupportedExpr(_, e1), TUnsupportedExpr(_, e2) ->
+        compare_range e1.erange e2.erange
       | _ -> next tk1 tk2
     );
   register_pp_token (fun next fmt -> function
-      | TSafeAssert r -> Format.fprintf fmt "safe@%a" Framework.Pp.pp_range r
-      | TFailAssert r -> Format.fprintf fmt "fail@%a" Framework.Pp.pp_range r
-      | TMayAssert r -> Format.fprintf fmt "may@%a" Framework.Pp.pp_range r
+      | TSafeAssert (test, r) -> Format.fprintf fmt "safe@%s:%a" test Framework.Pp.pp_range r
+      | TFailAssert (test, r) -> Format.fprintf fmt "fail@%s:%a" test Framework.Pp.pp_range r
+      | TMayAssert (test, r) -> Format.fprintf fmt "may@%s:%a" test Framework.Pp.pp_range r
+      | TUnsupportedStmt (test, s) -> Format.fprintf fmt "unsupported@%s:%a:@[%a@]" test Framework.Pp.pp_stmt s Framework.Pp.pp_range s.srange
+      | TUnsupportedExpr (test, e) -> Format.fprintf fmt "unsupported@%s:%a:@[%a@]" test Framework.Pp.pp_expr e Framework.Pp.pp_range e.erange
       | tk -> next fmt tk
     )
 
+
+(*==========================================================================*)
+(**                        {2 Analysis alarms }                             *)
+(*==========================================================================*)
+
+type alarm_kind +=
+  | AFailTest of string
+  | AMayTest of string
+  | AUnsupportedStmt of string * stmt
+  | AUnsupportedExpr of string * expr
+
+let () =
+  register_pp_alarm (fun next fmt alarm ->
+      match alarm.alarm_kind with
+      | AFailTest(t) -> Format.fprintf fmt "%a Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
+      | AMayTest(t) -> Format.fprintf fmt "%a Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⊬" t
+      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a Test %s skipped, unsupported @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "✱" t Framework.Pp.pp_stmt s
+      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a Test %s skipped, unsupported @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "✱" t Framework.Pp.pp_expr e
+      | _ -> next fmt alarm
+    )
+
+(*==========================================================================*)
+(**                        {2 Abstract domain }                             *)
+(*==========================================================================*)
 
 module Domain =
 struct
@@ -54,6 +106,7 @@ struct
   let execute_test_functions tests man ctx flow =
     tests |> List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
+        let ctx = Framework.Context.add KCurTestName name ctx in
         try
           (* Call the function *)
           let flow1 = man.exec test ctx flow in
@@ -71,17 +124,22 @@ struct
           ;
           man.flow.join acc flow1, nb_ok + ok, nb_fail + fail, nb_may_fail + may_fail, nb_panic
         with
-        | StmtPanic stmt ->
+        | StmtPanic (stmt) ->
           Debug.warn "Execution of test %s not completed.@\nUnable to analyze stmt %a"
             name
-            Framework.Pp.pp_stmt stmt;
-          acc, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+            Framework.Pp.pp_stmt stmt
+          ;
+          let flow1 = man.flow.add (TUnsupportedStmt (name, stmt)) (man.flow.get TCur flow) flow in
+          man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
-        | ExprPanic exp ->
+        | ExprPanic (exp) ->
           Debug.warn "Execution of test %s not completed.@\nUnable to evaluate expression %a"
             name
-            Framework.Pp.pp_expr exp;
-          acc, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+            Framework.Pp.pp_expr exp
+          ;
+          let flow1 = man.flow.add (TUnsupportedExpr (name, exp)) (man.flow.get TCur flow) flow in
+          man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+
       ) (man.flow.bottom, 0, 0, 0, 0)
 
 
@@ -107,27 +165,78 @@ struct
 
     | S_assert(cond) ->
       let range = srange stmt in
+      let name = Framework.Context.find KCurTestName ctx in
       Utils.cond_flow
         cond
         (fun safe_flow ->
-           man.flow.add (TSafeAssert range) (man.flow.get TCur safe_flow) safe_flow
+           man.flow.add (TSafeAssert (name, range)) (man.flow.get TCur safe_flow) safe_flow
         )
         (fun fail_flow ->
-           man.flow.add (TFailAssert range) (man.flow.get TCur fail_flow) fail_flow |>
+           man.flow.add (TFailAssert (name, range)) (man.flow.get TCur fail_flow) fail_flow |>
            man.flow.set TCur man.env.bottom
         )
         (fun () -> flow)
         (fun safe_flow fail_flow ->
            man.flow.join safe_flow fail_flow |>
-           man.flow.add (TMayAssert range) (man.flow.get TCur flow) |>
+           man.flow.add (TMayAssert (name, range)) (man.flow.get TCur flow) |>
            man.flow.set TCur (man.flow.get TCur safe_flow)
         )
         man ctx flow |>
       Exec.return
-        
+
     | _ -> None
 
-  let ask _ _ _ _ = None
+  let ask : type r. r Framework.Query.query -> ('a, unit) manager -> Framework.Context.context -> 'a flow -> r option =
+    fun query man ctx flow ->
+      match query with
+      | Framework.Alarm.QGetAlarms ->
+        let alarms = man.flow.fold (fun acc env -> function
+            | TFailAssert(test, range) ->
+              let alarm = {
+                alarm_kind = AFailTest test;
+                alarm_range = range;
+                alarm_level = High;
+              } in
+              alarm :: acc
+
+            | TMayAssert(test, range) ->
+              let alarm = {
+                alarm_kind = AMayTest test;
+                alarm_range = range;
+                alarm_level = Unknown;
+              } in
+              alarm :: acc
+
+            | TUnsupportedStmt(test, s) ->
+              let alarm = {
+                alarm_kind = AUnsupportedStmt (test, s);
+                alarm_range = s.srange;
+                alarm_level = High;
+              } in
+              alarm :: acc
+
+           | TUnsupportedExpr(test, e) ->
+              let alarm = {
+                alarm_kind = AUnsupportedExpr (test, e);
+                alarm_range = e.erange;
+                alarm_level = High;
+              } in
+              alarm :: acc
+
+            | _ -> acc
+          ) [] flow
+        in
+        let alarms = List.sort (fun a1 a2 ->
+            match a1.alarm_kind, a2.alarm_kind with
+            | AFailTest _, _ -> 3
+            | AUnsupportedStmt _, _ -> 2
+            | AUnsupportedExpr _, _ -> 1
+            | AMayTest _, _ -> 0
+            | _ -> compare_range a1.alarm_range a2.alarm_range
+          ) alarms
+        in
+        Some alarms
+      | _ -> None
 
 end
 

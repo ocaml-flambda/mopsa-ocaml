@@ -14,7 +14,7 @@ type alarm_kind +=
   | UncaughtException of string
 
 let () =
-  register_pp (fun default fmt alarm ->
+  register_pp_alarm (fun default fmt alarm ->
       match alarm.alarm_kind with
       | UncaughtException name ->
         Format.fprintf fmt "Uncaught exception %s" name
