@@ -47,7 +47,6 @@ and c_record_field = {
   c_field_bit_offset: int;
   c_field_type: typ;
   c_field_range: range; (** declaration location *)
-  c_field_record: c_record_type;
   c_field_index: int;
 }
 (** Struct or union field. *)
@@ -276,6 +275,9 @@ type program_kind +=
       c_fundec list (** functions *)
 (** A complete C program. *)
 
+let mk_c_address_of e range =
+  mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range
+
 (*==========================================================================*)
                   (** {2 Conversion to Clang parser types} *)
 (*==========================================================================*)
@@ -343,7 +345,7 @@ and to_clang_typedef : c_typedef -> C_AST.typedef = fun typedef ->
   }
 
 and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
-  {
+  let c_record = {
     C_AST.record_kind = to_clang_record_kind record.c_record_kind;
     record_org_name = record.c_record_org_name;
     record_uid = -1;
@@ -351,16 +353,19 @@ and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
     record_defined = record.c_record_defined;
     record_sizeof = record.c_record_sizeof;
     record_alignof = record.c_record_alignof;
-    record_fields = List.map to_clang_record_field record.c_record_fields |>
-                    Array.of_list;
+    record_fields = [||];
     record_range = to_clang_range record.c_record_range;
-  }
+  } in
+  c_record.C_AST.record_fields <- Array.map (fun field ->
+      to_clang_record_field c_record field
+    ) (Array.of_list record.c_record_fields);
+  c_record
 
 and to_clang_record_kind : c_record_kind -> C_AST.record_kind = function
   | C_struct -> C_AST.STRUCT
   | C_union -> C_AST.UNION
 
-and to_clang_record_field : c_record_field -> C_AST.record_field = fun field ->
+and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_field = fun record field ->
   {
     C_AST.field_uid = -1;
     field_org_name = field.c_field_org_name;
@@ -369,7 +374,7 @@ and to_clang_record_field : c_record_field -> C_AST.record_field = fun field ->
     field_bit_offset = field.c_field_bit_offset;
     field_type = to_clang_type field.c_field_type;
     field_range = to_clang_range field.c_field_range;
-    field_record = to_clang_record_type field.c_field_record;
+    field_record = record;
     field_index = field.c_field_index;
   }
 
@@ -502,6 +507,14 @@ let rec is_c_int_type ( t : typ) =
   | T_c_typedef(typedef) -> is_c_int_type (typedef.c_typedef_def)
   | _ -> false
 
+let rec is_c_record_type ( t : typ) =
+  match t with
+  | T_c_record _ -> true
+  | T_c_qualified(_, t) -> is_c_record_type t
+  | T_c_typedef(typedef) -> is_c_record_type (typedef.c_typedef_def)
+  | _ -> false
+
+
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
   to_clang_type t |>
@@ -536,7 +549,14 @@ let rec under_pointer_type (t : typ) : typ =
   match t with
   | T_c_pointer t' -> t'
   | T_c_typedef(typedef) -> under_pointer_type (typedef.c_typedef_def)
-  | _ -> failwith "[under_type] called with a non pointer argument"
+  | _ -> failwith "[under_pointer_type] called with a non pointer argument"
+
+let rec under_array_type (t : typ) : typ =
+  match t with
+  | T_c_array (t', _) -> t'
+  | T_c_typedef(typedef) -> under_array_type (typedef.c_typedef_def)
+  | _ -> failwith "[under_array_type] called with a non array argument"
+
 
 let is_c_type = function
   | T_c_void

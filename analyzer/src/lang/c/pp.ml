@@ -46,10 +46,18 @@ let () =
         | T_c_function None -> ()
         | T_c_function (Some f) -> pp_typ fmt f.c_ftype_return
 
+        | T_c_typedef(typedef) -> pp_typ fmt typedef.c_typedef_def
+
+        | T_c_record({c_record_kind = C_struct} as record) ->
+          fprintf fmt "struct %s" record.c_record_org_name
+          (* fprintf fmt "struct %s {@\n  @[<v>%a@]@\n}"
+           *   record.c_record_org_name
+           *   (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           *      (fun fmt field -> fprintf fmt "%s: %a;" field.c_field_org_name pp_typ field.c_field_type)
+           *   ) record.c_record_fields *)
+     
         | T_c_bitfield(t, size) -> assert false
         | T_c_builtin_fn -> assert false
-        | T_c_typedef(typedef) -> assert false
-        | T_c_record(record) -> assert false
         | T_c_enum(enum) -> assert false
         | T_c_qualified(qual, t) -> assert false
         | _ -> default fmt typ

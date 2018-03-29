@@ -108,9 +108,34 @@ and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
     | C_AST.T_function None -> Ast.T_c_function None
     | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type t))
     | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
+    | C_AST.T_typedef t -> Ast.T_c_typedef {
+        c_typedef_org_name = t.typedef_org_name;
+        c_typedef_unique_name = t.typedef_unique_name;
+        c_typedef_def =  from_typ t.typedef_def;
+        c_typedef_range = from_range t.typedef_range;
+      }
+    | C_AST.T_record r -> Ast.T_c_record {
+        c_record_kind = (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
+        c_record_org_name = r.record_org_name;
+        c_record_unique_name = r.record_unique_name;
+        c_record_defined = r.record_defined;
+        c_record_sizeof = r.record_sizeof;
+        c_record_alignof = r.record_alignof;
+        c_record_fields =
+          List.map (fun f -> {
+                c_field_org_name = f.field_org_name;
+                c_field_name = f.field_name;
+                c_field_offset = f.field_offset;
+                c_field_bit_offset = f.field_bit_offset;
+                c_field_type = from_typ f.field_type;
+                c_field_range = from_range f.field_range;
+                c_field_index = f.field_index;
+              })
+            (Array.to_list r.record_fields);
+        c_record_range = from_range r.record_range;
+      }
+
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
-    | C_AST.T_typedef _ -> failwith "C_AST.T_typedef not supported"
-    | C_AST.T_record _ -> failwith "C_AST.T_record not supported"
     | C_AST.T_enum _ -> failwith "C_AST.T_enum not supported"
   in
   if qual.C_AST.qual_is_const then
@@ -172,11 +197,11 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr e)
     | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr p)
     | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr a, from_expr i)
+    | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr r, i, f)
 
     | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
     | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
     | C_AST.E_conditional (_,_,_) -> failwith "E_conditional not supported"
-    | C_AST.E_member_access (_,_,_) -> failwith "E_member_access not supported"
     | C_AST.E_arrow_access (_,_,_) -> failwith "E_arrow_access not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> failwith "E_comma not supported"

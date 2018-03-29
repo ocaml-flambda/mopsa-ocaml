@@ -18,5 +18,6 @@
     "c.memory.pointer",
     {"fun": "c.memory.cell", "arg": "universal.numeric.integers"},
     "c.memory.array_to_pointer",
+    "c.memory.record_to_pointer",
     "c.memory.machine_integers"
 ]}

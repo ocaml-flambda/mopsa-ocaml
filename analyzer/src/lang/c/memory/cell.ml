@@ -312,6 +312,9 @@ module Make(ValAbs : DOMAIN) = struct
 
   let add_var_cell v c u range =
     let open Universal.Ast in
+    if not (is_c_scalar_type c.t) then
+      u
+    else
     if is_c_pointer c.t then
       {cs = CS.add v u.cs;
        a = u.a;
