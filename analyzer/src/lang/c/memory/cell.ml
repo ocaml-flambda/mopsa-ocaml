@@ -520,15 +520,10 @@ module Make(ValAbs : DOMAIN) = struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_var ({vkind = V_cell c} as v) when is_c_type v.vtyp ->
-      debug "evaluating annotated cell variable %a" pp_var v;
-      let u = get_domain_cur man flow in
-      let u' = add_var_cell v c u exp.erange in
-      let flow = set_domain_cur u' man flow in
-      Eval.singleton (Some exp, flow, [])
+    | E_var {vkind = V_cell _ }  -> None
 
-    | E_var v when is_c_type v.vtyp ->
-      debug "evaluating non-annotated base variable %a" pp_var v;
+    | E_var v when is_c_scalar_type v.vtyp ->
+      debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let u', v' = add_var v u exp.erange in
       debug "new variable %a" pp_var v';

@@ -54,3 +54,5 @@ c-tests: native
 		echo "Running test $(test)"; \
 		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
 	)
+
+tests: python-tests c-tests
