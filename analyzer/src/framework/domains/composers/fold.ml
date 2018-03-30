@@ -68,10 +68,7 @@ struct
   let ask query man ctx gabs =
     let head_reply = Head.ask query (head_man man) ctx gabs in
     let tail_reply = Tail.ask query (tail_man man) ctx gabs in
-    match head_reply, tail_reply with
-    | x, None
-    | None, x -> x
-    | Some x, Some y -> assert false
+    Query.meet query head_reply tail_reply
 
 end
 
@@ -140,9 +137,6 @@ module MakeStack =
   let ask query man subax ctx gabs =
     let head_reply = Head.ask query (head_man man) subax ctx gabs in
     let tail_reply = Tail.ask query (tail_man man) subax ctx gabs in
-    match head_reply, tail_reply with
-    | x, None
-    | None, x -> x
-    | Some x, Some y -> assert false
+    Query.meet query head_reply tail_reply
 
 end

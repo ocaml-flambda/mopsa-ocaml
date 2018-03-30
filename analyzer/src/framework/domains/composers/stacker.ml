@@ -79,8 +79,8 @@ struct
 
   let ask query man ctx gabs =
     let head_reply = Head.ask query (head_man man) (tail_man man) ctx gabs in
-    match head_reply with
-    | None -> Tail.ask query (tail_man man) ctx gabs
-    | _ -> head_reply
+    let tail_reply = Tail.ask query (tail_man man) ctx gabs in
+    Query.join query head_reply tail_reply
+
 
 end

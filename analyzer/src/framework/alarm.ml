@@ -12,7 +12,7 @@
 open Ast
 
 (*==========================================================================*)
-                           (** {2 Types} *)
+                           (** {2 Type} *)
 (*==========================================================================*)
 
 (** Extensible type of alarm kinds, defined by domains. *)
@@ -32,14 +32,37 @@ type alarm = {
   alarm_level : alarm_level; (** the level of the alarm *)
 }
 
+
+(*==========================================================================*)
+                           (** {2 Query} *)
+(*==========================================================================*)
+
+
 (**
-   Domain query used by {!Main} to extract all alarms from the domains
-    of an analysis
+   Query used by {!Main} to extract all alarms from used domains.
 *)
 type _ Query.query +=
   | QGetAlarms: (alarm list) Query.query
 
+let () =
+  Query.(
+    register_reply_manager {
+      domatch = (let compare : type a. a query -> (a, alarm list) eq option =
+                   function
+                   | QGetAlarms -> Some Eq
+                   | _ -> None
+                 in
+                 compare
+                );
+      join = (fun al1 al2 ->
+          al1 @ al2
+        );
 
+      meet = (fun al1 al2 ->
+          List.filter (fun a -> List.mem a al2) al1
+        );
+    }
+  )
 
 (*==========================================================================*)
                            (** {2 Printing} *)
