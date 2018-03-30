@@ -8,3 +8,23 @@
 
 type _ Framework.Query.query +=
   | QInterval : Framework.Ast.expr -> Interval.t Framework.Query.query
+
+let () =
+  Framework.Query.(
+    register_reply_manager {
+      domatch = (let compare : type a. a query -> (a, Interval.t) eq option =
+                   function
+                   | QInterval _ -> Some Eq
+                   | _ -> None
+                 in
+                 compare
+                );
+      join = (fun itv1 itv2 ->
+          Interval.join itv1 itv2
+        );
+
+      meet = (fun itv1 itv2 ->
+          Interval.meet itv1 itv2
+        );
+    }
+  )
