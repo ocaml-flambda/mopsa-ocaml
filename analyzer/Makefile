@@ -26,7 +26,7 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-lang.c = ast frontend pp visitor memory flows libs program setup
+lang.c = ast frontend pp visitor alarms memory flows libs program setup
 lang.c.memory = cell pointer machine_integers array_to_pointer record_to_pointer
 
 #Packages

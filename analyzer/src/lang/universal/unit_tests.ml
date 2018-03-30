@@ -85,16 +85,6 @@ type alarm_kind +=
   | AUnsupportedStmt of string * stmt
   | AUnsupportedExpr of string * expr
 
-let () =
-  register_pp_alarm (fun next fmt alarm ->
-      match alarm.alarm_kind with
-      | AFailTest(t) -> Format.fprintf fmt "%a  Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
-      | AMayTest(t) -> Format.fprintf fmt "%a  Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⚠" t
-      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a  Test %s skipped, unsupported statement:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_stmt s
-      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a  Test %s skipped, unsupported expression:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_expr e
-      | _ -> next fmt alarm
-    )
-
 (*==========================================================================*)
 (**                        {2 Abstract domain }                             *)
 (*==========================================================================*)
@@ -241,4 +231,30 @@ struct
 end
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  Stateless.register_domain name (module Domain);
+
+  register_alarm_compare (fun next a1 a2 ->
+      match a1.alarm_kind, a2.alarm_kind with
+      | AFailTest t1, AFailTest t2 -> compare t1 t2
+      | AMayTest t1, AMayTest t2 -> compare t1 t2
+      | AUnsupportedStmt(t1, s1), AUnsupportedStmt(t2, s2) ->
+        compare_composer [
+          (fun () -> compare t1 t2);
+          (fun () -> compare_range s1.srange s2.srange);
+        ]
+      | AUnsupportedExpr(t1, e1), AUnsupportedExpr(t2, e2) ->
+        compare_composer [
+          (fun () -> compare t1 t2);
+          (fun () -> compare_range e1.erange e2.erange);
+        ]
+      | _ -> next a1 a2
+    );
+
+  register_pp_alarm (fun next fmt alarm ->
+      match alarm.alarm_kind with
+      | AFailTest(t) -> Format.fprintf fmt "%a  Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
+      | AMayTest(t) -> Format.fprintf fmt "%a  Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⚠" t
+      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a  Test %s skipped, unsupported statement:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_stmt s
+      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a  Test %s skipped, unsupported expression:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_expr e
+      | _ -> next fmt alarm
+    )

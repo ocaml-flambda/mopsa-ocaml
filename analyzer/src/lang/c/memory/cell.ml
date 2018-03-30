@@ -70,48 +70,6 @@ let mk_base_cell v =
   let c = mk_cell v Z.zero v.vtyp in
   {v with vkind = V_cell c}, c
 
-let () =
-  register_var_compare (fun next v1 v2 ->
-      match vkind v1, vkind v2 with
-      | V_cell c1, V_cell c2 -> compare_cell c1 c2
-      | _ -> next v1 v2
-    );
-  register_pp_var (fun next fmt v ->
-      match vkind v with
-      | V_cell c -> pp_cell fmt c
-      | _ -> next fmt v
-    );
-  register_pp_expr (fun next fmt exp ->
-      match ekind exp with
-      | E_c_gen_cell_var c -> Format.fprintf fmt "gen cell %a" pp_cell c
-      | _ -> next fmt exp
-    );
-  register_expr_visitor (fun next exp ->
-      match ekind exp with
-      | E_c_gen_cell_var _ -> leaf exp
-      | _ -> next exp
-    );
-  register_pp_stmt (fun next fmt stmt ->
-      match skind stmt with
-      | S_c_remove_cell c -> Format.fprintf fmt "remove cell %a" pp_cell c
-      | _ -> next fmt stmt
-    );
-  register_stmt_visitor (fun next stmt ->
-      match skind stmt with
-      | S_c_remove_cell _ -> leaf stmt
-      | _ -> next stmt
-    )
-
-(*==========================================================================*)
-(**                     {2 Out of bound errors}                             *)
-(*==========================================================================*)
-
-type token +=
-  | TOutOfBound of var (** base variable *) * int (** offset *) * range
-
-type alarm_kind +=
-  | AOutOfBound of var (** base variable *) * int (** offset *)
-
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -537,7 +495,7 @@ module Make(ValAbs : DOMAIN) = struct
 
   let is_safe_cell_access c =
     Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
-    
+
   let eval exp man ctx flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
@@ -563,59 +521,49 @@ module Make(ValAbs : DOMAIN) = struct
         let flow = set_domain_cur u' man flow in
         Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
       else
-        let flow = man.flow.add (TOutOfBound (c.v, Z.to_int c.o, exp.erange)) (man.flow.get TCur flow) flow |>
+        let flow = man.flow.add (Alarms.TOutOfBound (c.v, Z.to_int c.o, exp.erange)) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
         in
         Eval.singleton (None, flow, [])
-        
+
 
 
     | _ -> ValAbs.eval exp (subman man) ctx flow
 
-  let ask : type r. r Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a flow -> r option =
-    fun query man ctx flow ->
-      match query with
-      | Framework.Alarm.QGetAlarms ->
-        begin
-          let alarms = man.flow.fold (fun acc env -> function
-              | TOutOfBound(v, o, range) ->
-                let alarm = {
-                  alarm_kind = AOutOfBound(v, o);
-                  alarm_range = range;
-                  alarm_level = High;
-                } in
-                alarm :: acc
-              | _ -> acc
-            ) [] flow
-          in
-          match ValAbs.ask query (subman man) ctx flow with
-          | None -> (Some alarms)
-          | Some alarms' -> Some (alarms @ alarms')
-        end
-
-      | _ ->
-        ValAbs.ask query (subman man) ctx flow
+  let ask query man ctx flow =
+    ValAbs.ask query (subman man) ctx flow
 
 end
 
 let setup () =
   register_functor name (module Make);
-  register_token_compare (fun next tk1 tk2 ->
-      match tk1, tk2 with
-      | TOutOfBound (v1, o1, r1), TOutOfBound (v2, o2, r2) ->
-        compare_composer [
-          (fun () -> compare_var v1 v2);
-          (fun () -> compare o1 o2);
-          (fun () -> compare_range r1 r2)
-        ]
-      | _ -> next tk1 tk2
+  register_var_compare (fun next v1 v2 ->
+      match vkind v1, vkind v2 with
+      | V_cell c1, V_cell c2 -> compare_cell c1 c2
+      | _ -> next v1 v2
     );
-  register_pp_token (fun next fmt -> function
-      | TOutOfBound (v, o, r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
-      | tk -> next fmt tk
+  register_pp_var (fun next fmt v ->
+      match vkind v with
+      | V_cell c -> pp_cell fmt c
+      | _ -> next fmt v
     );
-  register_pp_alarm (fun next fmt alarm ->
-      match alarm.alarm_kind with
-      | AOutOfBound(v, o) -> Format.fprintf fmt "%a  Out of bound access %a[%d]" ((Debug.color "red") Format.pp_print_string) "✘" pp_var v o
-      | _ -> next fmt alarm
+  register_pp_expr (fun next fmt exp ->
+      match ekind exp with
+      | E_c_gen_cell_var c -> Format.fprintf fmt "gen cell %a" pp_cell c
+      | _ -> next fmt exp
+    );
+  register_expr_visitor (fun next exp ->
+      match ekind exp with
+      | E_c_gen_cell_var _ -> leaf exp
+      | _ -> next exp
+    );
+  register_pp_stmt (fun next fmt stmt ->
+      match skind stmt with
+      | S_c_remove_cell c -> Format.fprintf fmt "remove cell %a" pp_cell c
+      | _ -> next fmt stmt
+    );
+  register_stmt_visitor (fun next stmt ->
+      match skind stmt with
+      | S_c_remove_cell _ -> leaf stmt
+      | _ -> next stmt
     )

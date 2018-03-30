@@ -1,6 +1,7 @@
 {"iter": [
     //Program entry point
     "c.program",
+    "c.alarms",
     "universal.unit_tests",
 
     //Libraries

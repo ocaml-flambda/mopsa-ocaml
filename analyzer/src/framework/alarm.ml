@@ -32,6 +32,18 @@ type alarm = {
   alarm_level : alarm_level; (** the level of the alarm *)
 }
 
+let alarm_compare_chain : (alarm -> alarm -> int) ref = ref (fun a1 a2 -> compare a1.alarm_kind a2.alarm_kind)
+
+let register_alarm_compare cmp =
+  alarm_compare_chain := cmp !alarm_compare_chain
+
+let compare_alarm a1 a2 =
+  compare_composer [
+    (fun () -> compare_range a1.alarm_range a2.alarm_range);
+    (fun () -> !alarm_compare_chain a1 a2);
+  ]
+
+
 
 (*==========================================================================*)
                            (** {2 Query} *)

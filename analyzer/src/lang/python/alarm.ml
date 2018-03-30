@@ -14,6 +14,12 @@ type alarm_kind +=
   | UncaughtException of string
 
 let () =
+  register_alarm_compare (fun next a1 a2 ->
+      match a1.alarm_kind, a2.alarm_kind with
+      | UncaughtException exn1, UncaughtException exn2 -> compare exn1 exn2
+      | _ -> next a1 a2
+    );
+
   register_pp_alarm (fun default fmt alarm ->
       match alarm.alarm_kind with
       | UncaughtException name ->

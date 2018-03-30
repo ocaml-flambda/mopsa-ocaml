@@ -1,5 +1,6 @@
 let init () =
   Program.setup ();
+  Alarms.setup ();
   Flows.(
     Intraproc.setup ();
     Interproc.setup ();
