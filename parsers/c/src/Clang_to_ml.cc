@@ -5,9 +5,11 @@
   This functions from this file are indented to be called from OCaml.
   See Clang_AST.ml
 
-  Based on Clang 4.0.0 (with some extensions to from 5.0.0svn).
+  Based initially on Clang 4.0.0, with some extensions to from 5.0.0svn.
+  Updated to compile with Clang 6.0.0.
+  Features added in Clang 5 and later may be missing.
 
-  Copyright (C) 2017 The MOPSA Project
+  Copyright (C) 2017-2018 The MOPSA Project
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the CeCILL license V2.1.
@@ -26,6 +28,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/Version.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
@@ -432,6 +435,9 @@ public:
 #define GENERATE_CASE_PREFIX(RES, CPREFIX, MLPREFIX, CASE)      \
   case CPREFIX CASE: RES = MLTAG_##MLPREFIX##CASE; break
 
+#define GENERATE_CASE_PREFIX_REV(RES, CPREFIX, MLPREFIX, CASE)          \
+  case Val_int(MLTAG_##MLPREFIX##CASE): RES = CPREFIX CASE; break
+
 
 
 
@@ -618,7 +624,7 @@ public:
   CAMLprim value TranslateTemplateTypeParmType(const TemplateTypeParmType* x);
   CAMLprim value TranslateTemplateTypeParmDecl(const TemplateTypeParmDecl* x);
   CAMLprim value TranslateNamedDecl(const NamedDecl *x);
-
+  
   explicit MLTreeBuilderVisitor(MLLocationTranslator& loc, ASTContext *Context):
     Context(Context), loc(loc),
     cacheType("type"), cacheTypeQual("type_qual"), cacheDecl("decl"), cacheStmt("stmt"),
@@ -4197,6 +4203,15 @@ CAMLprim value MLDiagnostics::TranslateDiagnostics(MLDiagnostics::diag d) {
     }                                                           \
   }
 
+
+enum {
+  MLTAG_Target_EABI_Unknown,
+  MLTAG_Target_EABI_Default,
+  MLTAG_Target_EABI_EABI4,
+  MLTAG_Target_EABI_EABI5,
+  MLTAG_Target_EABI_GNU,
+};
+ 
 /* target_options -> TargetOptions */
 CAMLprim void TargetOptionsFromML(value v, TargetOptions& t) {
   CAMLparam1(v);
@@ -4206,11 +4221,25 @@ CAMLprim void TargetOptionsFromML(value v, TargetOptions& t) {
   t.CPU = String_val(Field(v,2));
   t.FPMath = String_val(Field(v,3));
   t.ABI = String_val(Field(v,4));
-  t.EABIVersion = String_val(Field(v,5));
+
+#if CLANG_VERSION_MAJOR >= 5
+  switch (Field(v,5)) {
+    GENERATE_CASE_PREFIX_REV(t.EABIVersion, llvm::EABI::, Target_EABI_, Unknown);
+    GENERATE_CASE_PREFIX_REV(t.EABIVersion, llvm::EABI::, Target_EABI_, Default);
+    GENERATE_CASE_PREFIX_REV(t.EABIVersion, llvm::EABI::, Target_EABI_, EABI4);
+    GENERATE_CASE_PREFIX_REV(t.EABIVersion, llvm::EABI::, Target_EABI_, EABI5);
+    GENERATE_CASE_PREFIX_REV(t.EABIVersion, llvm::EABI::, Target_EABI_, GNU);
+  default:
+    t.EABIVersion = llvm::EABI::Default;
+  }
+#else
+  t.EABIVersion = "";
+#endif  
+
   t.LinkerVersion = String_val(Field(v,6));
   STORE_STRING_VECTOR(t.FeaturesAsWritten, Field(v,7));
   STORE_STRING_VECTOR(t.Features, Field(v,8));
-  STORE_STRING_VECTOR(t.Reciprocals, Field(v,9));
+  /*STORE_STRING_VECTOR(t.Reciprocals, Field(v,9));*/ // Moved in later versions of Clang
   
   CAMLreturn0;
 }
@@ -4226,11 +4255,30 @@ CAMLprim value TargetOptionsToML(const TargetOptions& t) {
   Store_field(ret, 2, caml_copy_string(t.CPU.c_str()));
   Store_field(ret, 3, caml_copy_string(t.FPMath.c_str()));
   Store_field(ret, 4, caml_copy_string(t.ABI.c_str()));
-  Store_field(ret, 5, caml_copy_string(t.EABIVersion.c_str()));
+
+#if CLANG_VERSION_MAJOR >= 5
+  {
+    int i = MLTAG_Target_EABI_Default;
+    switch (t.EABIVersion) {
+      GENERATE_CASE_PREFIX(i, llvm::EABI::, Target_EABI_, Unknown);
+      GENERATE_CASE_PREFIX(i, llvm::EABI::, Target_EABI_, Default);
+      GENERATE_CASE_PREFIX(i, llvm::EABI::, Target_EABI_, EABI4);
+      GENERATE_CASE_PREFIX(i, llvm::EABI::, Target_EABI_, EABI5);
+      GENERATE_CASE_PREFIX(i, llvm::EABI::, Target_EABI_, GNU);
+      //default:
+      //if (verbose_exn) std::cout << "unknown EABI " << (int)t.EABIVersion << std::endl;
+      //caml_failwith("mlClangAST: unknown EABI");
+    }
+    Store_field(ret, 5, Val_int(i));
+  }
+#else
+  Store_field(ret, 5, Val_int(llvm::EABI::Default));
+#endif
+
   Store_field(ret, 6, caml_copy_string(t.LinkerVersion.c_str()));
   Store_field_list(ret, 7, t.FeaturesAsWritten, caml_copy_string(child.c_str()));
   Store_field_list(ret, 8, t.Features, caml_copy_string(child.c_str()));
-  Store_field_list(ret, 9, t.Reciprocals, caml_copy_string(child.c_str()));
+  /*Store_field_list(ret, 9, t.Reciprocals, caml_copy_string(child.c_str()));*/  // Moved in later versions of Clang
 
   CAMLreturn(ret);
 }
@@ -4302,8 +4350,12 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
   Store_field(ret, 41, Val_bool(t.hasInt128Type()));
   Store_field(ret, 42, Val_bool(t.hasFloat128Type()));
 
+#if CLANG_VERSION_MAJOR >= 6
+  Store_field(ret, 43, caml_copy_int64(t.getNullPointerValue(clang::LangAS::Default)));
+#else
   Store_field(ret, 43, caml_copy_int64(t.getNullPointerValue(0)));
-
+#endif
+  
   CAMLreturn(ret);
 }
 

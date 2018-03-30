@@ -3,10 +3,10 @@
 
   The definition of the AST types returned by Clang_parser.
 
-  Based on Clang 4.0.0 (with some extensions to from 5.0.0svn).
+  Initially based on Clang 4.0.0, with some extensions to from 5.0.0svn.
+  Updated to compile with Clang 6.0.0.
 
-
-  Copyright (C) 2017 The MOPSA Project
+  Copyright (C) 2017-2018 The MOPSA Project
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the CeCILL license V2.1.
@@ -27,6 +27,7 @@
    - Objective-C
    - openMP
    - openCL
+   - features added in Clang 5 and later
  *)
 
 (**
@@ -1845,6 +1846,13 @@ type diagnostic = {
 
 (** {2 Target information} *)
 
+type target_EABI =
+  | Target_EABI_Unknown
+  | Target_EABI_Default
+  | Target_EABI_EABI4
+  | Target_EABI_EABI5
+  | Target_EABI_GNU
+(** EABI version *)
 
 type target_options = {
     target_triple: string; (** if given, the name of the target triple to compile for. *)
@@ -1852,11 +1860,11 @@ type target_options = {
     target_CPU: string; (** if given, the name of the target CPU to generate code for *)
     target_FP_math: string; (** if gven, the unit to use for floating point math *)
     target_ABI: string; (** if given, the name of the target ABI to use *)
-    target_EABI_version: string; (** the EABI version to use *)
+    target_EABI_version: target_EABI; (** the EABI version to use *)
     target_linker_version: string; (** if given, the version string of the linker in use *)
     target_features_as_written: string list; (** the list of target specific features to enable or disable, as written on the command line *)
     target_features: string list; (** the list of target specific features to enable or disable; this should be a list of strings starting with by '+' or '-' *)
-    target_reciprocals: string list;
+    (*target_reciprocals: string list; *) (* moved out in later versions of Clang *)
   }
 (** Options for controlling the target. *)
 

@@ -573,23 +573,31 @@ let string_of_range r =
       r.range_begin.loc_file r.range_begin.loc_line r.range_begin.loc_column
       r.range_end.loc_file r.range_end.loc_line r.range_end.loc_column
 
-
         
 let string_of_diagnostic d =
   Printf.sprintf
     "%s: %s: %s" (string_of_loc d.diag_loc) (diag_level_name d.diag_level) d.diag_message
 
+let string_of_target_EABI e =
+  match e with
+  | Target_EABI_Unknown -> "Unknown"
+  | Target_EABI_Default -> "Default"
+  | Target_EABI_EABI4 -> "EABI4"
+  | Target_EABI_EABI5 -> "EABI5"
+  | Target_EABI_GNU -> "GNU"
+                     
+  
 let string_of_target_options o =
   let list = bp_list (fun b -> Printf.bprintf b "%s") "," in
   let b = Buffer.create 10 in
   Printf.bprintf
-    b "triple='%s' host_triple='%s' CPU='%s' FP_math='%s' ABI='%s' EABI='%s' linker='%s' features_as_written=%a features=%a reciprocals=%a"
+    b "triple='%s' host_triple='%s' CPU='%s' FP_math='%s' ABI='%s' EABI='%s' linker='%s' features_as_written=%a features=%a"
     o.target_triple o.target_host_triple o.target_CPU
-    o.target_FP_math o.target_ABI o.target_EABI_version
+    o.target_FP_math o.target_ABI
+    (string_of_target_EABI o.target_EABI_version)
     o.target_linker_version
     list o.target_features_as_written
-    list o.target_features
-    list o.target_reciprocals;
+    list o.target_features;
   Buffer.contents b
              
 
