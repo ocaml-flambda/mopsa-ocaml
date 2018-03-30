@@ -21,7 +21,7 @@ INCLUDES   := -I $(MOPSAROOT)/utils/bin
 LIBCMXA := utils.cmxa
 
 LLVMCONFIG = llvm-config
-CLANGRESOURCE = $(shell $(LLVMCONFIG) --libdir)/clang/4.0.0
+CLANGRESOURCE = $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --version)
 
 CXXFLAGS := -fPIC  -I $(shell ocamlc -where) $(shell $(LLVMCONFIG) --cxxflags) -Wno-strict-aliasing "-DCLANGRESOURCE=\"$(CLANGRESOURCE)\"" $(CXXFLAGS)
 
