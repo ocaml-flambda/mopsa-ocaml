@@ -34,7 +34,7 @@ sig
   (** Abstract (symbolic) evaluation of expressions. *)
   val eval:
     Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow ->
-    'a flow eval_output option
+    (Ast.expr, 'a) evals option
 
   (** Handler of generic queries. *)
   val ask:
@@ -93,7 +93,7 @@ module type STACK_DOMAIN =
     val eval:
       Ast.expr -> ('a, unit) manager -> ('a, Sub.t) manager ->
       Context.context -> 'a flow ->
-      'a flow eval_output option
+      (Ast.expr, 'a) evals option
 
     (** Handler of generic queries. *)
     val ask:
