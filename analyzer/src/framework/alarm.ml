@@ -47,12 +47,12 @@ type _ Query.query +=
 let () =
   Query.(
     register_reply_manager {
-      domatch = (let compare : type a. a query -> (a, alarm list) eq option =
+      domatch = (let check : type a. a query -> (a, alarm list) eq option =
                    function
                    | QGetAlarms -> Some Eq
                    | _ -> None
                  in
-                 compare
+                 check
                 );
       join = (fun al1 al2 ->
           al1 @ al2

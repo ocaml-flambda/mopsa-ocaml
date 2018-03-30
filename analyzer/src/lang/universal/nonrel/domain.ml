@@ -328,6 +328,27 @@ struct
   type _ Framework.Query.query +=
     | QEval : expr -> Value.t Framework.Query.query
 
+  let () =
+    Framework.Query.(
+      register_reply_manager {
+        domatch = (let check : type a. a query -> (a, Value.t) eq option =
+                     function
+                     | QEval _ -> Some Eq
+                     | _ -> None
+                   in
+                   check
+                  );
+        join = (fun v1 v2 ->
+            Value.join v1 v2
+          );
+
+        meet = (fun v1 v2 ->
+            Value.meet v1 v2
+          );
+      }
+    )
+
+
   let ask : type r. r Framework.Query.query -> ('a, t) manager -> context -> 'a flow -> r option =
     fun query man ctx flow ->
       match query with

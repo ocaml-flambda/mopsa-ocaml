@@ -19,13 +19,13 @@
 
     Next, an interval manager is registered as follows:
     {[register_reply_manager {
-        domatch = (let compare : type a. a query -> (a, (int * int)) eq option =
+        domatch = (let check : type a. a query -> (a, (int * int)) eq option =
                      fun q ->
                        match q with
                        | QInterval _ -> Some Eq
                        | _ -> None
                    in
-                   compare
+                   check
                   );
         join = (fun (a1, a2) (b1, b2) ->
             (min a1 b1, max a2 b2)

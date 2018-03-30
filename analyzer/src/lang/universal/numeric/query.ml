@@ -12,12 +12,12 @@ type _ Framework.Query.query +=
 let () =
   Framework.Query.(
     register_reply_manager {
-      domatch = (let compare : type a. a query -> (a, Interval.t) eq option =
+      domatch = (let check : type a. a query -> (a, Interval.t) eq option =
                    function
                    | QInterval _ -> Some Eq
                    | _ -> None
                  in
-                 compare
+                 check
                 );
       join = (fun itv1 itv2 ->
           Interval.join itv1 itv2
