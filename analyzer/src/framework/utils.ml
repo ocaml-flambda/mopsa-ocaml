@@ -80,7 +80,7 @@ let eval_list
   : ('a list, 'b) evals option =
   let rec aux expl flow clean = function
     | [] ->
-      oeval_singleton (Some expl, flow, clean)
+      oeval_singleton (Some (List.rev expl), flow, clean)
     | exp :: tl ->
       Some (eval exp flow) |>
       oeval_substitute
