@@ -12,6 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -45,16 +46,15 @@ struct
   let eval exp man ctx flow =
     match ekind exp with
     | E_c_assign(lval, rval) ->
-      Eval.compose_eval
-        rval
+      man.eval rval ctx flow |>
+      eval_compose
         (fun rval flow ->
            debug "assign";
            let flow = man.exec (Universal.Ast.mk_assign lval rval exp.erange) ctx flow in
            debug "assign done";
-           Eval.singleton (Some rval, flow, [])
+           oeval_singleton (Some rval, flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
+
     | _ -> None
 
   let ask _ _ _ _  = None

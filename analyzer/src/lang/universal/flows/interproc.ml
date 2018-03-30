@@ -15,6 +15,7 @@ open Framework.Manager
 open Framework.Domains.Global
 open Framework.Domains.Stateless
 open Framework.Ast
+open Framework.Utils
 open Ast
 
 let name = "universal.flows.interproc"
@@ -28,13 +29,6 @@ type token +=
   | TReturn of range * expr option
   (** Control flows reaching a return statement at a given location range
       and returning an optional expression. *)
-
-
-let () =
-  register_pp_token (fun next fmt -> function
-      | TReturn(r, _) -> Format.fprintf fmt "ret@%a" Framework.Pp.pp_range r
-      | tk -> next fmt tk
-    )
 
 
 (*==========================================================================*)
@@ -57,7 +51,7 @@ struct
       let cur = manager.flow.get TCur flow in
       manager.flow.add (TReturn(stmt.srange, eo)) cur flow |>
       manager.flow.remove TCur |>
-      Exec.return
+      return
 
     | _ -> None
 
@@ -131,8 +125,7 @@ struct
       let flow3 = manager.exec ignore_block ctx flow2 in
 
       (* Re-evaluate the expression [tmp] from the top-level *)
-      (Some tmp, flow3, [mk_remove_var tmpv (tag_range range "remove tmp")]) |>
-      Eval.re_eval_singleton manager ctx
+      re_eval_singleton (Some tmp, flow3, [mk_remove_var tmpv (tag_range range "remove tmp")]) manager ctx
 
     | _ -> None
 
@@ -145,7 +138,11 @@ let setup () =
   register_domain name (module Domain);
   register_token_compare (fun next tk1 tk2 ->
       match tk1, tk2 with
-      | TReturn(r1, _), TReturn(r2, _) ->
-        compare_range r1 r2
+      | TReturn(r1, _), TReturn(r2, _) -> compare_range r1 r2
       | _ -> next tk1 tk2
+    );
+  register_pp_token (fun next fmt -> function
+      | TReturn(r, _) -> Format.fprintf fmt "ret@%a" Framework.Pp.pp_range r
+      | tk -> next fmt tk
     )
+

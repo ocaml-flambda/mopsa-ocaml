@@ -14,6 +14,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
+open Framework.Utils
 open Universal.Ast
 open Ast
 
@@ -79,13 +80,13 @@ struct
         ) functions
       in
       manager.exec main.c_func_body ctx flow |>
-      Exec.return
+      return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->
       let tests = get_test_functions functions in
       let stmt = mk_c_unit_tests prog_file tests in
-      Exec.return (manager.exec stmt ctx flow)
+      return (manager.exec stmt ctx flow)
 
 
     | _ -> None

@@ -102,7 +102,7 @@ struct
       init_globals prog_file globals manager ctx flow |>
       (* Execute the body *)
       manager.exec body ctx |>
-      Exec.return
+      return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->
@@ -115,7 +115,7 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests prog_file tests in
-      Exec.return (manager.exec stmt ctx flow2)
+      return (manager.exec stmt ctx flow2)
 
   
     | _ -> None

@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -39,9 +40,8 @@ struct
                 (mk_addr addr (tag_range range "func addr"))
                 (tag_range range "func addr assign")
              ) ctx flow |>
-           Exec.return
+           return
         )
-        (fun flow -> Exec.return flow)
         (Addr.mk_function_addr func) range manager ctx flow
     | _ ->
       None
@@ -64,7 +64,7 @@ struct
         let flow =
           man.exec (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error1")) ctx flow
         in
-        Eval.singleton (None, flow, [])
+        oeval_singleton (None, flow, [])
 
       else
         (* Fill missing args with default parameters *)
@@ -85,7 +85,7 @@ struct
           let flow =
             man.exec (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error2")) ctx flow
           in
-          Eval.singleton (None, flow, [])
+          oeval_singleton (None, flow, [])
         else
           (* Give the call to {!Universal} *)
           let tmp = mktmp () in
@@ -107,8 +107,8 @@ struct
               )
               ctx flow
           in
-
-          Eval.re_eval_singleton man ctx (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp (tag_range exp.erange "cleaner")])
+          let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp (tag_range exp.erange "cleaner")]) in
+          re_eval_singleton evl man ctx 
 
     | _ -> None
 

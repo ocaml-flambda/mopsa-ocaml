@@ -116,19 +116,19 @@ struct
 
       debug "while post abs:@\n abs = @[%a@]" manager.flow.print res1;
 
-      Exec.return res1
+      return res1
 
     | S_break ->
       let cur = manager.flow.get TCur flow in
       manager.flow.add TBreak cur flow |>
       manager.flow.remove TCur |>
-      Exec.return
+      return
 
     | S_continue ->
       let cur = manager.flow.get TCur flow in
       manager.flow.add TContinue cur flow |>
       manager.flow.remove TCur |>
-      Exec.return
+      return
 
     | _ ->
       None

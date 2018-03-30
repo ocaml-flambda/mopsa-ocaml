@@ -15,6 +15,7 @@ open Framework.Domains.Global
 open Framework.Flow
 open Framework.Manager
 open Framework.Context
+open Framework.Utils
 open Ast
 
 module Make(Value: VALUE) =
@@ -264,15 +265,14 @@ struct
   let rec exec stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      Eval.compose_exec
-        e
-        (fun e flow -> Exec.return flow)
-        (fun flow -> Exec.return flow)
-        man ctx flow
+      man.eval e ctx flow |>
+      eval_to_exec
+        (fun e flow -> return flow)
+        man ctx
 
     | S_remove_var v ->
       map_domain_cur (VarMap.remove v) man flow |>
-      Exec.return
+      return
 
     | S_project_vars vars ->
       map_domain_cur (fun a ->
@@ -280,49 +280,46 @@ struct
               if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
             ) a a
         ) man flow |>
-      Exec.return
+      return
 
     | S_rename_var (var1, var2) ->
       map_domain_cur (fun a ->
           let v = VarMap.find var1 a in
           VarMap.remove var1 a |> VarMap.add var2 v
         ) man flow |>
-      Exec.return
+      return
 
 
     | S_assign({ekind = E_var var}, e, STRONG) ->
-      Eval.compose_exec
-        e
+      man.eval e ctx flow |>
+      eval_to_exec
         (fun e flow ->
            map_domain_cur (fun a ->
                let v = eval_value a e in
                VarMap.add var v a
              ) man flow |>
-           Exec.return
+           return
         )
-        (fun flow -> Exec.return flow)
-        man ctx flow
+        man ctx
 
     | S_assign({ekind = E_var var}, e, _) ->
       assert false
 
     | S_assume e ->
       debug "assume";
-      Eval.compose_exec
-        e
+      man.eval e ctx flow |>
+      eval_to_exec
         (fun e flow ->
            map_domain_cur (fun a ->
                let (_,r) as t = annotate_expr a e in
                let rr = Value.assume_true r in
                if Value.is_bottom rr then bottom else refine_expr a t rr
              ) man flow |>
-           Exec.return
+           return
         )
-        (fun flow -> Exec.return flow)
-        man ctx flow
+        man ctx
 
-    | _ ->
-      None
+    | _ -> fail
 
 
   type _ Framework.Query.query +=
@@ -364,28 +361,24 @@ struct
     match ekind exp with
     | E_constant _
     | E_var _ ->
-      Eval.singleton (Some exp, flow, [])
+      oeval_singleton (Some exp, flow, [])
 
     | E_unop(op, e) ->
-      Eval.compose_eval
-        e
+      man.eval e ctx flow |>
+      eval_compose
         (fun e flow ->
            let exp' = {exp with ekind = E_unop(op, e)} in
-           Eval.singleton (Some exp', flow, [])
+           oeval_singleton (Some exp', flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
 
     | E_binop(op, e1, e2) ->
-      Eval.compose_eval_list
-        [e1; e2]
+      man_eval_list [e1; e2] man ctx flow |>
+      oeval_compose
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           Eval.singleton (Some exp', flow, [])
+           oeval_singleton (Some exp', flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
 
     | _ -> None
 

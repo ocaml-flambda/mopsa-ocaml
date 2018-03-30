@@ -15,6 +15,7 @@ open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
 open Framework.Flow
+open Framework.Utils
 open Universal.Ast
 open Ast
 
@@ -41,7 +42,7 @@ module Domain = struct
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     match skind stmt with
     | S_c_local_declaration(v, None) when is_c_record_type v.vtyp ->
-      Exec.return flow
+      return flow
 
     | S_c_local_declaration(v, Some init) when is_c_record_type v.vtyp ->
       panic "Initialization of structs/unions not supported"
@@ -52,7 +53,7 @@ module Domain = struct
     match ekind exp with
     | E_c_member_access(r, idx, f) ->
       let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
-      Eval.re_eval_singleton man ctx (Some exp', flow, [])
+      re_eval_singleton (Some exp', flow, []) man ctx
 
         
     | _ -> None

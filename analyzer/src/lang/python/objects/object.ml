@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -33,27 +34,23 @@ struct
     (* Calls to object.__new__ *)
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__new__")})}, args, []) ->
       debug "call to object.__new__";
-      Eval.compose_eval_list
-        args
+      man_eval_list args man ctx flow |>
+      oeval_compose
         (fun args flow ->
            match args with
            | {ekind = E_addr ({addr_kind = A_py_class _} as cls)} :: tl ->
              debug "Create a new instance";
-             Eval.re_eval_singleton
-               man ctx
-               (Some (mk_expr (Universal.Ast.E_alloc_addr (Addr.mk_instance_addr cls None, range)) range), flow, [])
+             re_eval_singleton (Some (mk_expr (Universal.Ast.E_alloc_addr (Addr.mk_instance_addr cls None, range)) range), flow, []) man ctx
 
            | _ ->
              debug "Error in creating a new instance";
              let flow = man.exec (Builtins.mk_builtin_raise "TypeError" range) ctx flow in
-             Eval.singleton (None, flow, [])
+             oeval_singleton (None, flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
 
     (* Calls to object.__init__ *)
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__init__")})}, args, []) ->
-      Eval.singleton (Some (mk_py_none range), flow, [])
+      oeval_singleton (Some (mk_py_none range), flow, [])
 
   
     | _ -> None

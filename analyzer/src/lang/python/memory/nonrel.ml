@@ -19,6 +19,7 @@ open Framework.Flow
 open Framework.Manager
 open Framework.Query
 open Framework.Ast
+open Framework.Utils
 open Universal.Ast
 open Ast
 open Value
@@ -57,19 +58,18 @@ struct
     (* For assignments, we handle the case of addresses, otherwise we give it
        to {!Nonrel}. *)
     | S_assign({ekind = E_var var} as evar, e, ((STRONG | EXPAND) as kind)) ->
-      Eval.compose_exec
-        e
+      man.eval e ctx flow |>
+      eval_to_exec
         (fun e flow ->
            match ekind e with
            | E_addr(addr) ->
              let v = Value.addr (Value.AddrLattice.singleton addr) in
              map_domain_cur (Nonrel.add var v) man flow |>
-             Exec.return
+             return
            | _ ->
              Nonrel.exec {stmt with skind = S_assign (evar, e,kind)} man ctx flow
         )
-        (fun flow -> Exec.return flow)
-        man ctx flow
+        man ctx
 
     | S_assign({ekind = E_var var}, e, WEAK) ->
       assert false
@@ -79,7 +79,7 @@ struct
       map_domain_cur (
         Nonrel.map (fun v -> Value.rebase_addr a1 a2 v)
       ) man flow |>
-      Exec.return
+      return
 
     (* Other cases are handled by {!Nonrel}. *)
     | _ ->
@@ -93,7 +93,7 @@ struct
     match ekind exp with
     | E_var v when Builtins.is_builtin v.vname ->
       debug "builtin";
-      Eval.singleton (Some (mk_addr (Builtins.from_expr exp) range), flow, [])
+      oeval_singleton (Some (mk_addr (Builtins.from_expr exp) range), flow, [])
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
@@ -107,8 +107,8 @@ struct
           | T_py_undefined ->
             let stmt = Builtins.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
             let flow = man.exec stmt ctx flow' in
-            Eval.singleton (None, flow, []) |>
-            Eval.join acc
+            oeval_singleton (None, flow, []) |>
+            oeval_join acc
 
           (* Partition w.r.t. to all current addresses *)
           | T_addr ->
@@ -118,14 +118,14 @@ struct
               Value.AddrLattice.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)
                   let exp' = {exp with ekind = E_addr addr; etyp = typ} in
-                  Eval.singleton (Some exp', flow', []) |>
-                  Eval.join acc
+                  oeval_singleton (Some exp', flow', []) |>
+                  oeval_join acc
                 ) value'.addr acc
           (* Otherwise, we just give type [typ] to the expression *)
           | _ ->
             let exp' = {exp with etyp = typ} in
-            Eval.singleton (Some exp', flow', []) |>
-            Eval.join acc
+            oeval_singleton (Some exp', flow', []) |>
+            oeval_join acc
 
       ) None value
 

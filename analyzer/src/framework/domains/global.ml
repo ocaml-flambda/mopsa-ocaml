@@ -29,6 +29,10 @@ let oflow_extract_dfl dfl = function
   | None -> dfl
   | Some flow -> flow
 
+let oflow_join man =
+  Option.option_neutral2 man.flow.join
+
+
 let oflow_map f flow = Option.option_lift1 f flow
 
 let oflow_merge f1 f2 f12 none flow1 flow2 = Option.option_apply2 f1 f2 f12 none flow1 flow2
@@ -95,116 +99,6 @@ let oeval_substitute
     )
     (fun () -> None)
     oevl
-
-let oeval_compose
-    (eval: 'a -> 'b flow -> ('c, 'd) evals option)
-    ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
-    (oevl: ('a, 'b) evals option)
-  : ('c, 'd) evals option  =
-  oevl |> oeval_substitute
-    (fun (x, flow, clean) ->
-       let oevl' =
-         match x with
-         | Some x -> eval x flow
-         | None -> empty flow
-       in
-       oeval_map
-         (fun (x', flow, clean') ->
-            (x', flow, clean @ clean')
-         ) oevl'
-    )
-
-let oeval_list
-    (l: 'a list)
-    (eval1: 'a -> 'b flow -> ('a, 'b) evals option)
-    (eval2: 'a list -> 'b flow -> ('a, 'b) evals option)
-    ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
-    (flow: 'b flow)
-  : ('a, 'b) evals option =
-  let rec aux expl flow clean = function
-    | [] ->
-      eval2 (List.rev expl) flow |>
-      oeval_map (fun (exp, flow, clean') ->
-          (exp, flow, clean @ clean')
-        )
-    | exp :: tl ->
-      eval1 exp flow |>
-      oeval_substitute
-        (fun (exp', flow, clean') ->
-           match exp' with
-           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
-           | None -> empty flow
-        )
-  in
-  aux [] flow [] l
-
-(**
-   [re_eval_singleton ev eval] re-evaluates a singleton evaluation case
-   [ev], starting from the top-level domain.
-   The cleaner statements of the new evaluations are automatically added to
-   the result.
-*)
-let re_eval_singleton (exp, flow, clean) man ctx =
-  match exp with
-  | None -> oeval_singleton (exp, flow, clean)
-  | Some exp ->
-    man.eval exp ctx flow |>
-    eval_map
-      (fun (exp', flow', clean') ->
-         (exp', flow', clean @ clean')
-      ) |>
-    return
-
-(**
-   Same as [re_eval_singleton], but applied to a set of previous evaluation
-   results.
-*)
-let re_eval evals man ctx =
-  oeval_substitute (fun case -> re_eval_singleton case man ctx) evals
-
-
-
-(* Execute post-eval clean statements pushed by evaluators.*)
-let exec_cleaner_stmts stmtl man ctx flow =
-  stmtl |> List.fold_left (fun acc stmt ->
-      man.exec stmt ctx acc
-    ) flow
-
-(**
-   [eval_to_exec f man ctx evl] executes the transfer function [f] 
-   on a set of evaluations [evl], and applies the cleaner
-   statements pushed by the evaluations.
-   [empty] is called when [evl] contains an empty expression.
-*)
-let eval_to_exec
-    (f: 'a -> 'b flow -> 'b flow option)
-    ?(empty = (fun flow -> Some flow))
-    man ctx
-    (oeval: ('a, 'b) evals option)
-  : 'a flow option =
-  oeval |> oeval_merge
-    (fun (exp', flow, clean) ->
-       let flow' =
-         match exp' with
-         | Some exp' -> f exp' flow
-         | None -> empty @@ exec_cleaner_stmts clean man ctx flow
-       in
-       match flow' with
-       | None -> None
-       | Some flow' ->
-         Some (exec_cleaner_stmts clean man ctx flow')
-    )
-    (fun a b ->
-       match a, b with
-       | None, x | x, None -> x
-       | Some a, Some b -> Some (man.flow.join a b)
-    )
-    (fun a b ->
-       match a, b with
-       | None, x | x, None -> x
-       | Some a, Some b -> Some (man.flow.meet a b)
-    )
-    (fun () -> None)
 
 
 (*==========================================================================*)

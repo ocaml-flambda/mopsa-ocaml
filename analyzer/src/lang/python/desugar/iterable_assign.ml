@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -28,8 +29,8 @@ struct
     match skind stmt with
     | S_assign({ekind = E_py_tuple(el)}, exp, kind)
     | S_assign({ekind = E_py_list(el)}, exp, kind) ->
-      Eval.compose_exec
-        exp
+      manager.eval exp ctx flow |>
+      eval_to_exec
         (fun exp flow ->
           match ekind exp with
           | E_addr addr ->
@@ -42,23 +43,20 @@ struct
                   ))
                 (tag_range range "iter call")
             in
-            Eval.compose_exec
-              iter_expr
+            manager.eval iter_expr ctx flow |>
+            eval_to_exec
               (fun iter flow ->
                  match ekind iter with
                  | E_addr(addr) -> assign_iter el addr kind range manager ctx flow
                  | _ -> assert false
               )
-              (fun flow -> Some flow)
-              manager ctx flow
+              manager ctx
 
           | _ ->
-            manager.exec
-              (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) ctx flow |>
-            Exec.return
+            manager.exec (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) ctx flow |>
+            return
         )
-        (fun flow -> Some flow)
-        manager ctx flow
+        manager ctx
 
     | _ -> None
 
@@ -92,7 +90,7 @@ struct
     in
 
     manager.exec stmt ctx flow  |>
-    Exec.return
+    return
 
 
   let init _ _ flow = flow

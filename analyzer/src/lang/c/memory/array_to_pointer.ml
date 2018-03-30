@@ -13,8 +13,8 @@ open Framework.Pp
 open Framework.Domains.Stateless
 open Framework.Manager
 open Framework.Visitor
-open Framework.Domains
 open Framework.Flow
+open Framework.Utils
 open Universal.Ast
 open Ast
 
@@ -89,7 +89,7 @@ module Domain = struct
     match skind stmt with
     | S_c_local_declaration(v, init) when is_c_array v.vtyp ->
       init_array v init stmt.srange man ctx flow |>
-      Exec.return
+      return
 
     | _ -> None
 
@@ -98,7 +98,7 @@ module Domain = struct
     | E_c_array_subscript(arr, idx) ->
       debug "array subscript to deref";
       let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp: arr.etyp)} in
-      Eval.re_eval_singleton man ctx (Some exp', flow, [])
+      re_eval_singleton (Some exp', flow, []) man ctx
 
     | _ -> None
 

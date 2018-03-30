@@ -112,29 +112,6 @@ let get_domain_cur man flow =
     man.ax.get
 
 
-(*==========================================================================*)
-(**                         {2 Utility functions}                           *)
-(*==========================================================================*)
-
-let if_flow
-    (true_cond: 'a flow)
-    (false_cond: 'a flow)
-    (true_branch: 'a flow -> 'b)
-    (false_branch: 'a flow -> 'b)
-    (bottom_branch: unit -> 'b)
-    (merge: 'a flow -> 'a flow -> 'b)
-    man flow
-  : 'b =
-  debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
-    man.flow.print true_cond
-    man.flow.print false_cond
-  ;
-  match man.flow.is_cur_bottom true_cond, man.flow.is_cur_bottom false_cond with
-  | false, true -> debug "true branch"; true_branch true_cond
-  | true, false -> debug "true branch"; false_branch false_cond
-  | false, false -> debug "merge branch"; merge true_cond false_cond
-  | true, true -> debug "bottom branch"; bottom_branch ()
-
 
 (*==========================================================================*)
                         (** {2 Panic management} *)

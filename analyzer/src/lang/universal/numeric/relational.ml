@@ -10,7 +10,8 @@
 
 open Framework.Lattice
 open Framework.Domains
-open Framework.Domains.Local
+open Framework.Domains.Global
+open Framework.Manager
 open Framework.Ast
 open Ast
 
@@ -112,9 +113,15 @@ struct
     | _ -> assert false
 
   (* {2 Transfer functions} *)
-  let init prg = top
-
-  let rec exec stmt (ctx: Framework.Context.context) (abs: t) : t option =
+  let init prog man flow =
+    set_domain_cur top man flow
+  
+  let rec exec stmt man ctx flow =
+    let abs = get_domain_cur man flow in
+    let return_cur abs =
+      set_domain_cur abs man flow |>
+      return
+    in
     match skind stmt with
     | S_remove_var var ->
       let vars = refine_var_type var in
@@ -125,7 +132,8 @@ struct
       in
       let env = Apron.Environment.remove env (Array.of_list vars) in
       Apron.Abstract1.change_environment ApronManager.man abs env true |>
-      Exec.return
+      return_cur
+
     | S_project_vars vars ->
       let vars = List.fold_left (fun acc v -> acc @ refine_var_type v) [] vars in
       let env = Apron.Abstract1.env abs in
@@ -135,7 +143,7 @@ struct
       let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
       let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
       Apron.Abstract1.change_environment ApronManager.man abs new_env true |>
-      Exec.return
+      return_cur
 
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
         let v = {v with vtyp = e.etyp} in
@@ -144,25 +152,27 @@ struct
           let aenv = Apron.Abstract1.env abs in
           let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
           Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
-          Exec.return
+          return_cur
         with Unsupported ->
-          exec {stmt with skind = S_remove_var v} ctx abs
+          exec {stmt with skind = S_remove_var v} man ctx flow
       end
 
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
       assert false
 
     | S_assign(({ekind = E_var x}), {ekind = E_var ({vtyp = T_int | T_float} as x0)}, EXPAND) ->
-      let abs = add_missing_vars abs [x0] |>
-                exec (mk_stmt (S_remove_var x) stmt.srange) ctx |>
-                Exec.extract top
+      let abs = add_missing_vars abs [x0] in
+      let abs = set_domain_cur abs man flow |>
+                exec (mk_stmt (S_remove_var x) stmt.srange) man ctx |>
+                oflow_extract |>
+                get_domain_cur man
       in
       let x = {x with vtyp = x0.vtyp} in
       Apron.Abstract1.expand ApronManager.man abs (var_to_apron x0) [| var_to_apron x |] |>
-      Exec.return
+      return_cur
 
     | S_assign({ekind = E_var v}, _, _) ->
-      exec {stmt with skind = S_remove_var v} ctx abs
+      exec {stmt with skind = S_remove_var v} man ctx flow
 
     | S_assume(e) -> begin
         let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
@@ -192,16 +202,16 @@ struct
             ) |> List.fold_left (fun acc abs ->
               Apron.Abstract1.join ApronManager.man acc abs
             ) (Apron.Abstract1.bottom ApronManager.man env) |>
-          Exec.return
+          return_cur
         with Unsupported ->
-          Exec.return abs
+          return_cur abs
       end
 
     | S_rename_var( v, v') ->
         Apron.Abstract1.rename_array ApronManager.man abs
           [| var_to_apron v |]
           [| var_to_apron v' |] |>
-        Exec.return
+        return_cur
 
     | _ -> None
 
@@ -216,10 +226,11 @@ struct
     | Unsupported -> Interval.top
 
   (** {2 Queries} *)
-  and ask : type a. a Framework.Query.query -> Framework.Context.context -> t -> a option =
-    fun query ctx abs ->
+  and ask : type r. r Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> r option =
+    fun query man ctx flow ->
       match query with
       | Query.QInterval exp ->
+        let abs = get_domain_cur man flow in
         Some (interval exp abs)
       | _ ->
         None
@@ -359,7 +370,7 @@ struct
     ) l in
     cond_array
 
-  let eval _ _ _  = None
+  let eval _ _ _ _ = None
 
 end
 
@@ -369,5 +380,5 @@ let setup () =
   let module Oct = Make(struct type t = Oct.t let name = "oct" let man = Oct.manager_alloc () end) in
   let module Poly = Make(struct type t = Polka.strict Polka.t let name = "poly" let man = Polka.manager_alloc_strict () end) in
 
-  Local.register_domain "universal.numeric.relational.octagon" (module Oct);
-  Local.register_domain "universal.numeric.relational.polyhedra" (module Poly);
+  register_domain "universal.numeric.relational.octagon" (module Oct);
+  register_domain "universal.numeric.relational.polyhedra" (module Poly);

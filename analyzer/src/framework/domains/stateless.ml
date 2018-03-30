@@ -12,6 +12,16 @@ open Flow
 open Lattice
 open Manager
 
+let fail = Global.fail
+let return = Global.return
+let oflow_extract = Global.oflow_extract
+let oflow_extract_dfl = Global.oflow_extract_dfl
+let oflow_map = Global.oflow_map
+let oflow_merge = Global.oflow_merge
+let oeval_singleton = Global.oeval_singleton
+let oeval_map = Global.oeval_map
+let oeval_join = Global.oeval_join
+let oeval_meet = Global.oeval_meet
 
 
 (*==========================================================================*)

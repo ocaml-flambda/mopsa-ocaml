@@ -13,6 +13,7 @@ open Framework.Domains
 open Framework.Domains.Global
 open Framework.Flow
 open Framework.Manager
+open Framework.Utils
 open Ast
 
 let name = "universal.heap.recency"
@@ -132,15 +133,12 @@ struct
       let lval = mk_var (attribute_var addr attr etyp) erange in
       let kind = if Pool.is_weak addr then WEAK else kind in
       let stmt = mk_assign ~kind lval rval stmt.srange in
-      let flow' =
-        map_domain_cur (fun (pool, sub) -> (Pool.add_attribute addr attr) pool, sub) man flow |>
-        man.exec stmt ctx
-      in
-      Exec.return flow'
+      map_domain_cur (fun (pool, sub) -> (Pool.add_attribute addr attr) pool, sub) man flow |>
+      man.exec stmt ctx |>
+      return
 
     (* Other statements are given to sub-domain *)
-    | _ ->
-      Sub.exec stmt (sub_manager man) ctx flow
+    | _ -> Sub.exec stmt (sub_manager man) ctx flow
 
   let eval exp (man: ('a, t) manager) ctx (flow: 'a flow) =
     let range = erange exp in
@@ -199,7 +197,7 @@ struct
         ) man flow1
       in
 
-      Eval.singleton (Some (mk_addr recent_addr range), flow2, [])
+      oeval_singleton (Some (mk_addr recent_addr range), flow2, [])
 
 
     (* Read-access to an attribute of a weak address *)
@@ -210,10 +208,10 @@ struct
     (* Read-access to an attribute of a strong address *)
     | E_addr_attribute(addr, attr) ->
       let v = attribute_var addr attr exp.etyp in
-      Eval.re_eval_singleton man ctx (Some (mk_var v exp.erange), flow, [])
+      re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
 
     | E_addr _ ->
-      Eval.singleton (Some exp, flow, [])
+      oeval_singleton (Some exp, flow, [])
 
     | _ ->
       Sub.eval exp (sub_manager man) ctx flow

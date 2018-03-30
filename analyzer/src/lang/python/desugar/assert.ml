@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -28,8 +29,8 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_py_assert (e, msg)->
-      Eval.compose_exec
-        e
+      manager.eval e ctx flow |>
+      eval_to_exec
         (fun e flow ->
           let ok_case = manager.exec (mk_assume e (tag_range range "safe case assume")) ctx flow in
 
@@ -46,11 +47,10 @@ struct
           in
 
           manager.flow.join ok_case fail_case |>
-          Exec.return
+          return
 
         )
-        (fun flow -> Some flow)
-        manager ctx flow
+        manager ctx
 
     | _ -> None
 

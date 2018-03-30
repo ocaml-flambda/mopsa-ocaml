@@ -17,6 +17,7 @@ open Framework.Domains
 open Framework.Alarm
 open Framework.Flow
 open Framework.Lattice
+open Framework.Utils
 open Ast
 
 
@@ -469,7 +470,8 @@ module Make(ValAbs : DOMAIN) = struct
       ValAbs.exec stmt' (subman man) ctx flow
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      Eval.compose_exec_list [rval; lval]
+      man_eval_list [rval; lval] man ctx flow |>
+      oeval_to_exec
         (fun el flow ->
            let rval, lval, v, c = match el with
              | [rval; ({ekind = E_var ({vkind = V_cell c} as v)} as lval)] -> rval, lval, v, c
@@ -482,14 +484,13 @@ module Make(ValAbs : DOMAIN) = struct
            | Some flow ->
              debug "constrain_similar_cells";
              remove_overlapping_cells v c stmt.srange man ctx flow |>
-             Exec.return
+             return
         )
-        (fun flow -> Exec.return flow)
-        man ctx flow
+        man ctx
 
     | S_c_remove_cell(c) ->
       map_domain_cur (fun u -> {u with cs = CS.filter (fun v -> not (mem_pred c v)) u.cs}) man flow |>
-      Exec.return
+      return
 
     | _ -> ValAbs.exec stmt (subman man) ctx flow
 
@@ -506,7 +507,7 @@ module Make(ValAbs : DOMAIN) = struct
       let u', v' = add_var v u exp.erange in
       debug "new variable %a" pp_var v';
       let flow = set_domain_cur u' man flow in
-      Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
+      re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
 
     | E_c_gen_cell_var c ->
       if is_safe_cell_access c then
@@ -519,12 +520,12 @@ module Make(ValAbs : DOMAIN) = struct
             add_var tmp u exp.erange
         in
         let flow = set_domain_cur u' man flow in
-        Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
+        re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
       else
         let flow = man.flow.add (Alarms.TOutOfBound (c.v, Z.to_int c.o, exp.erange)) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
         in
-        Eval.singleton (None, flow, [])
+        oeval_singleton (None, flow, [])
 
 
 
