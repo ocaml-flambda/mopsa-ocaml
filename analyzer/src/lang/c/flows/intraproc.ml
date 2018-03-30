@@ -48,7 +48,9 @@ struct
       Eval.compose_eval
         rval
         (fun rval flow ->
+           debug "assign";
            let flow = man.exec (Universal.Ast.mk_assign lval rval exp.erange) ctx flow in
+           debug "assign done";
            Eval.singleton (Some rval, flow, [])
         )
         (fun flow -> Eval.singleton (None, flow, []))

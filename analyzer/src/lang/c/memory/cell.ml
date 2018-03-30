@@ -14,7 +14,9 @@ open Framework.Domains.Global
 open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
+open Framework.Alarm
 open Framework.Flow
+open Framework.Lattice
 open Ast
 
 
@@ -100,6 +102,15 @@ let () =
       | _ -> next stmt
     )
 
+(*==========================================================================*)
+(**                     {2 Out of bound errors}                             *)
+(*==========================================================================*)
+
+type token +=
+  | TOutOfBound of var (** base variable *) * int (** offset *) * range
+
+type alarm_kind +=
+  | AOutOfBound of var (** base variable *) * int (** offset *)
 
 
 (*==========================================================================*)
@@ -524,7 +535,9 @@ module Make(ValAbs : DOMAIN) = struct
 
     | _ -> ValAbs.exec stmt (subman man) ctx flow
 
-
+  let is_safe_cell_access c =
+    Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
+    
   let eval exp man ctx flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
@@ -538,25 +551,71 @@ module Make(ValAbs : DOMAIN) = struct
       Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
 
     | E_c_gen_cell_var c ->
-      let u = get_domain_cur man flow in
-      let u', v' =
-        try u, find_cell c u.cs
-        with Not_found ->
-          let tmp = mktmp ~vtyp:c.t ~vkind:(V_cell(c)) () in
-          debug "generating tmp for cell %a" pp_cell c;
-          add_var tmp u exp.erange
-      in
-      let flow = set_domain_cur u' man flow in
-      Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
+      if is_safe_cell_access c then
+        let u = get_domain_cur man flow in
+        let u', v' =
+          try u, find_cell c u.cs
+          with Not_found ->
+            let tmp = mktmp ~vtyp:c.t ~vkind:(V_cell(c)) () in
+            debug "generating tmp for cell %a" pp_cell c;
+            add_var tmp u exp.erange
+        in
+        let flow = set_domain_cur u' man flow in
+        Eval.re_eval_singleton man ctx (Some (mk_var v' exp.erange), flow, [])
+      else
+        let flow = man.flow.add (TOutOfBound (c.v, Z.to_int c.o, exp.erange)) (man.flow.get TCur flow) flow |>
+                   man.flow.set TCur man.env.bottom
+        in
+        Eval.singleton (None, flow, [])
+        
+
 
     | _ -> ValAbs.eval exp (subman man) ctx flow
 
+  let ask : type r. r Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a flow -> r option =
+    fun query man ctx flow ->
+      match query with
+      | Framework.Alarm.QGetAlarms ->
+        begin
+          let alarms = man.flow.fold (fun acc env -> function
+              | TOutOfBound(v, o, range) ->
+                let alarm = {
+                  alarm_kind = AOutOfBound(v, o);
+                  alarm_range = range;
+                  alarm_level = High;
+                } in
+                alarm :: acc
+              | _ -> acc
+            ) [] flow
+          in
+          match ValAbs.ask query (subman man) ctx flow with
+          | None -> (Some alarms)
+          | Some alarms' -> Some (alarms @ alarms')
+        end
 
-
-  let ask request man ctx flow =
-    ValAbs.ask request (subman man) ctx flow
+      | _ ->
+        ValAbs.ask query (subman man) ctx flow
 
 end
 
 let setup () =
-  register_functor name (module Make)
+  register_functor name (module Make);
+  register_token_compare (fun next tk1 tk2 ->
+      match tk1, tk2 with
+      | TOutOfBound (v1, o1, r1), TOutOfBound (v2, o2, r2) ->
+        compare_composer [
+          (fun () -> compare_var v1 v2);
+          (fun () -> compare o1 o2);
+          (fun () -> compare_range r1 r2)
+        ]
+      | _ -> next tk1 tk2
+    );
+  register_pp_token (fun next fmt -> function
+      | TOutOfBound (v, o, r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
+      | tk -> next fmt tk
+    );
+  register_pp_alarm (fun next fmt alarm ->
+      match alarm.alarm_kind with
+      | AOutOfBound(v, o) -> Format.fprintf fmt "%a  Out of bound access %a[%d]" ((Debug.color "red") Format.pp_print_string) "✘" pp_var v o
+      | _ -> next fmt alarm
+    )

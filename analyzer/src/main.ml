@@ -43,7 +43,7 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
     let t = Timing.stop t in
     Debug.info "Result:@\n@[<h 2>  %a@]" Analyzer.flow_manager.print res;
 
-    (* Get alarms from all the domains *)
+    Debug.info "Collecting alarms ...";
     let alarms = Analyzer.ask Alarm.QGetAlarms ctx res in
 
     (

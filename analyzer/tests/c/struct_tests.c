@@ -9,5 +9,12 @@ void test_struct_field_in_lval() {
   point p;
   p.x = 1;
   p.y = 2;
-  _mopsa_assert_true(p.x == 1);
+  _mopsa_assert_true(p.x + p.y == 3);
+}
+
+void test_array_of_structs() {
+  point a[10];
+  a[0].x = 1;
+  a[1].x = 2;
+  _mopsa_assert_true(a[0].x + a[1].x == 3);
 }

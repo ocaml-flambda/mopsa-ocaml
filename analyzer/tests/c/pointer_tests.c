@@ -85,11 +85,40 @@ void test_address_of_multi_array() {
   _mopsa_assert_true(a[0][0] == 20);
 }
 
-void test_array_cell_jump() {
+void test_pointer_increment() {
   int a[10];
   int *p;
   p = &a;
-  p = p + 2;
+  p++;
   *p = 20;
-  _mopsa_assert_true(a[2] == 20);
+  _mopsa_assert_true(a[1] == 20);
+}
+
+typedef struct {
+  int x;
+  int y;
+} point;
+
+void test_address_of_struct() {
+  point a;
+  point *p;
+  p = &a;
+  p->x = 10;
+  _mopsa_assert_true(a.x == 10);
+}
+
+void test_pointer_increment_on_struct() {
+  point a[10];
+  point *p;
+  p = &a;
+  p->x = 10;
+  p++;
+  p->x = 20;
+  _mopsa_assert_true(a[0].x + a[1].x == 30);
+}
+
+void test_arrow_on_array_of_struct() {
+  point a[10];
+  a->x = 1;
+  _mopsa_assert_true(a[0].x == 1);
 }
