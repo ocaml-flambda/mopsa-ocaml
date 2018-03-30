@@ -91,6 +91,7 @@ type 'a flow_manager = {
   filter : ('a -> token -> bool) -> 'a flow -> 'a flow;
   map : 'b. ('a -> token -> 'b) -> 'a flow -> 'b flow;
   fold : 'b. ('b -> 'a -> token -> 'b) -> 'b -> 'a flow -> 'b;
+  merge : (token -> 'a option -> 'a option -> 'a option) -> 'a flow -> 'a flow -> 'a flow;
 }
 
 let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
@@ -226,4 +227,7 @@ let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
     g
   );
 
+  merge = (fun f flow1 flow2 ->
+      top_lift2 (Map.merge f) flow1 flow2
+    );
 }

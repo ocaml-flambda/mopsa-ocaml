@@ -505,7 +505,7 @@ module Make(ValAbs : DOMAIN) = struct
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let u', v' = add_var v u exp.erange in
-      debug "new variable %a" pp_var v';
+      debug "new variable %a in %a" pp_var v' print u';
       let flow = set_domain_cur u' man flow in
       re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
 

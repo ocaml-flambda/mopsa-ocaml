@@ -35,6 +35,9 @@ type token +=
 type alarm_kind +=
   | AOutOfBound of var (** base variable *) * int (** offset *)
 
+let is_error_token = function
+  | TOutOfBound _ -> true
+  | _ -> false
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)

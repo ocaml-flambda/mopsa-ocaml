@@ -56,6 +56,7 @@ struct
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_safe"}, [e]) ->
+      let flow0 = flow in
       man.eval e ctx flow |>
       eval_compose
         (fun e flow ->
@@ -64,24 +65,11 @@ struct
            oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
         )
         ~empty:(fun flow ->
-           let stmt = mk_assert (mk_zero exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
-        
-    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_unsafe"}, [e]) ->
-      man.eval e ctx flow |>
-      eval_compose
-        (fun e flow ->
-           let stmt = mk_assert (mk_zero exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
-        ~empty:(fun flow ->
-           let stmt = mk_assert (mk_one exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
+            let flow = man.flow.join flow flow0 in 
+            let stmt = mk_assert (mk_zero exp.erange) exp.erange in
+            let flow = man.exec stmt ctx flow in
+            oeval_singleton (None, flow, [])
+        )        
 
     | _ -> None
 
