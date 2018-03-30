@@ -25,40 +25,24 @@ let debug fmt = Debug.debug ~channel:"framework.manager" fmt
 (*==========================================================================*)
 
 
-type 'a eval_case = Ast.expr option * 'a * Ast.stmt list
-type 'a eval_output = 'a eval_case Dnf.t
+type ('a, 'b) eval_case = 'a option * 'b flow * Ast.stmt list
+type ('a, 'b) evals = ('a, 'b) eval_case Dnf.t
 
-let eval_singleton (case: 'a eval_case) : 'a eval_output =
+let eval_singleton (case: ('a, 'b) eval_case) : ('a, 'b) evals =
   Dnf.singleton case
 
-let eval_join (e1: 'a eval_output) (e2: 'a eval_output) : 'a eval_output =
+let eval_map
+    (f: ('a, 'b) eval_case -> ('c, 'd) eval_case)
+    (evl: ('a, 'b) evals) : ('c, 'd) evals
+  =
+  Dnf.map f evl
+
+let eval_join (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
   Dnf.mk_or e1 e2
 
-let eval_meet (e1: 'a eval_output) (e2: 'a eval_output) : 'a eval_output =
+let eval_meet (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
   Dnf.mk_and e1 e2
 
-let eval_flatten (e: 'a eval_output) : 'a eval_case list =
-  Dnf.to_list e |>
-  List.fold_left (fun acc conj ->
-      List.fold_left (fun acc x ->
-          x :: acc
-        ) acc conj
-    ) []
-
-let eval_collapse
-    (f: 'a eval_case -> 'b)
-    (join: 'b -> 'b -> 'b)
-    (meet: 'b -> 'b -> 'b)
-    (evl: 'a eval_output)
-    : 'b
-  =
-  Dnf.substitute f join meet evl
-
-let eval_map
-    (f: 'a eval_case -> 'b eval_case)
-    (evl: 'a eval_output)
-  : 'b eval_output =
-  Dnf.map f evl
 
 (*==========================================================================*)
 (**                            {2 Accessors}                                *)
@@ -102,7 +86,7 @@ type ('a, 'b) manager = {
   (** Expression transfer function. *)
   eval :
     Ast.expr -> Context.context -> 'a flow ->
-    'a flow  eval_output;
+    (Ast.expr, 'a) evals;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
@@ -127,29 +111,6 @@ let get_domain_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
 
-
-(*==========================================================================*)
-(**                         {2 Utility functions}                           *)
-(*==========================================================================*)
-
-let if_flow
-    (true_cond: 'a flow)
-    (false_cond: 'a flow)
-    (true_branch: 'a flow -> 'b)
-    (false_branch: 'a flow -> 'b)
-    (bottom_branch: unit -> 'b)
-    (merge: 'a flow -> 'a flow -> 'b)
-    man flow
-  : 'b =
-  debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
-    man.flow.print true_cond
-    man.flow.print false_cond
-  ;
-  match man.flow.is_cur_bottom true_cond, man.flow.is_cur_bottom false_cond with
-  | false, true -> debug "true branch"; true_branch true_cond
-  | true, false -> debug "true branch"; false_branch false_cond
-  | false, false -> debug "merge branch"; merge true_cond false_cond
-  | true, true -> debug "bottom branch"; bottom_branch ()
 
 
 (*==========================================================================*)

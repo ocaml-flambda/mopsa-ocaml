@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -28,34 +29,26 @@ struct
   let eval exp manager ctx flow =
     match ekind exp with
     | E_binop(O_py_and, e1, e2) ->
-      Eval.compose_eval
-        e1
+      manager.eval e1 ctx flow |>
+      eval_compose
         (fun e1 flow1 ->
-           Universal.Utils.cond_eval
-             e1
+           Universal.Utils.assume_to_eval e1
              (fun true_flow -> Some (manager.eval e2 ctx true_flow))
-             (fun false_flow -> Eval.singleton (Some e1, false_flow, []))
-             (fun () -> Eval.singleton (None, flow, []))
-             manager ctx flow
+             (fun false_flow -> oeval_singleton (Some e1, false_flow, []))
+             manager ctx flow ()
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        manager ctx flow
+
 
 
     | E_binop(O_py_or, e1, e2) ->
-      Eval.compose_eval
-        e1
+      manager.eval e1 ctx flow |>
+      eval_compose
         (fun e1 flow1 ->
-           Universal.Utils.cond_eval
-             e1
-             (fun true_flow -> Eval.singleton (Some e1, true_flow, []))
+           Universal.Utils.assume_to_eval e1
+             (fun true_flow -> oeval_singleton (Some e1, true_flow, []))
              (fun false_flow -> Some (manager.eval e2 ctx false_flow))
-             (fun () -> Eval.singleton (None, flow, []))
-             manager ctx flow
+             manager ctx flow ()
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        manager ctx flow
-
 
     | _ -> None
 

@@ -12,6 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -42,45 +43,33 @@ struct
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
-      Eval.singleton (Some exp', flow, [])
+      oeval_singleton (Some exp', flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt ctx flow in
-      Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
+      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_false"}, [cond]) ->
       let stmt = mk_assert (mk_not cond exp.erange) exp.erange in
       let flow = man.exec stmt ctx flow in
-      Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
+      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_safe"}, [e]) ->
-      Eval.compose_eval e
+      let flow0 = flow in
+      man.eval e ctx flow |>
+      eval_compose
         (fun e flow ->
            let stmt = mk_assert (mk_one exp.erange) exp.erange in
            let flow = man.exec stmt ctx flow in
-           Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
+           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
         )
-        (fun flow ->
-           let stmt = mk_assert (mk_zero exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
-        man ctx flow
-        
-    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_unsafe"}, [e]) ->
-      Eval.compose_eval e
-        (fun e flow ->
-           let stmt = mk_assert (mk_zero exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
-        (fun flow ->
-           let stmt = mk_assert (mk_one exp.erange) exp.erange in
-           let flow = man.exec stmt ctx flow in
-           Eval.singleton (Some (mk_int 0 exp.erange), flow, [])
-        )
-        man ctx flow
+        ~empty:(fun flow ->
+            let flow = man.flow.join flow flow0 in 
+            let stmt = mk_assert (mk_zero exp.erange) exp.erange in
+            let flow = man.exec stmt ctx flow in
+            oeval_singleton (None, flow, [])
+        )        
 
     | _ -> None
 

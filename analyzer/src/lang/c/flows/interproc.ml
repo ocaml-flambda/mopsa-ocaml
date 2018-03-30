@@ -12,6 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
+open Framework.Utils
 open Framework.Ast
 open Ast
 
@@ -32,13 +33,13 @@ struct
   let eval exp man ctx flow =
     match ekind exp with
     | E_c_call(f, args) ->
-      Eval.compose_eval
-        f
+      man.eval f ctx flow |>
+      eval_compose
         (fun f flow ->
            match ekind f with
            | E_c_builtin_function(name) ->
              let exp' = {exp with ekind = E_c_call(f, args)} in
-             Eval.re_eval_singleton man ctx (Some exp', flow, [])
+             re_eval_singleton (Some exp', flow, []) man ctx
 
            | E_c_function(fundec) ->
              let open Universal.Ast in
@@ -50,16 +51,14 @@ struct
                fun_return_type = fundec.c_func_return;
              } in
              let exp' = mk_call fundec' args exp.erange in
-             Eval.re_eval_singleton man ctx (Some exp', flow, [])
+             re_eval_singleton (Some exp', flow, []) man ctx
 
            | _ ->
              assert false
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
 
     | E_c_function(f) ->
-      Eval.singleton (Some exp, flow, [])
+      oeval_singleton (Some exp, flow, [])
 
     | _ -> None
 

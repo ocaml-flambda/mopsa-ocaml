@@ -12,6 +12,7 @@ open Framework.Domains.Global
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -141,13 +142,13 @@ struct
     match ekind exp with
     | E_py_attribute(obj, attr) ->
       (* Evaluate [obj] and check the resulting cases. *)
-      Eval.compose_eval
-        obj
+      man.eval obj ctx flow |>
+      eval_compose
         (fun obj flow ->
            match ekind obj with
            (* Access to an abstract attribute of an object *)
            | E_addr addr when is_abstract_attribute attr ->
-             Eval.singleton (Some (Universal.Ast.mk_addr_attribute addr attr range), flow, [])
+             oeval_singleton (Some (Universal.Ast.mk_addr_attribute addr attr range), flow, [])
 
            (* Access to an ordinary attribute of an object *)
            | E_addr addr  ->
@@ -156,7 +157,7 @@ struct
                (* Case when [addr.attr] evaluates to [exp] *)
                (fun exp flow ->
                   debug "attribute %s found, exp = %a" attr Framework.Pp.pp_expr exp;
-                  Eval.re_eval_singleton man ctx (Some exp, flow, [])
+                  re_eval_singleton (Some exp, flow, []) man ctx
                )
                (* Case when the attribute [attr] was not found *)
                (fun flow ->
@@ -164,7 +165,7 @@ struct
                       (Builtins.mk_builtin_raise "AttributeError" (tag_range range "error"))
                       ctx flow
                   in
-                  Eval.singleton (None, flow, [])
+                  oeval_singleton (None, flow, [])
                )
                man ctx flow
 
@@ -174,9 +175,7 @@ struct
 
            | _ -> assert false
         )
-        (* Case when [obj] can not be evaluated *)
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
+
     | _ -> None
 
     (** Evaluation of an attribute [attr] on a heap object. *)
@@ -186,9 +185,9 @@ struct
     (* Instances need particular processing in case of a class methods (for binding) *)
     | A_py_instance(cls, _) ->
       debug "accessing instance attribute";
-      Eval.if_eval
-        (assume_is_attribute addr attr man ctx flow)
-        (assume_is_not_attribute addr attr man ctx flow)
+      if_flow_eval
+        (assume_is_attribute addr attr man ctx)
+        (assume_is_not_attribute addr attr man ctx)
         (* Case when the attribute is local to the instance*)
         (fun true_flow ->
            debug "instance attribute found locally";
@@ -201,14 +200,13 @@ struct
              (fun exp flow -> assert false)
              not_found man ctx false_flow
         )
-        (fun () -> Eval.singleton (None, flow, []))
-        man flow
+        man flow ()
 
     (* General case *)
     | _ ->
-      Eval.if_eval
-        (assume_is_attribute addr attr man ctx flow)
-        (assume_is_not_attribute addr attr man ctx flow)
+      if_flow_eval
+        (assume_is_attribute addr attr man ctx)
+        (assume_is_not_attribute addr attr man ctx)
         (* Case when the attribute exists statically or was created dynamically *)
         (fun true_flow ->
            debug "attr %s exists" attr;
@@ -233,15 +231,14 @@ struct
 
            | _ -> assert false
         )
-        (fun () -> Eval.singleton (None, flow, []))
-        man flow
-
+        man flow ()
+        
   let exec stmt man ctx flow =
     match skind stmt with
     (* Assignments to an attribute of an object *)
     | Universal.Ast.S_assign({ekind = E_py_attribute(obj, attr)}, rval, kind) ->
-      Eval.compose_exec_list
-        [rval; obj]
+      man_eval_list [rval; obj] man ctx flow |>
+      oeval_to_exec
         (fun el flow ->
            match el with
            | [rval; {ekind = E_addr obj; erange}] ->
@@ -252,15 +249,12 @@ struct
                  mk_dynamic_attribute obj attr erange, map_domain_cur (add (obj, attr)) man flow
              in
              man.exec (mk_assign ~kind lval rval stmt.srange) ctx flow |>
-             Exec.return
+             return
            | _ ->
              man.exec (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) ctx flow |>
-             Exec.return
-               
-
+             return
         )
-        (fun flow -> Exec.return flow)
-        man ctx flow
+        man ctx
 
     | _ ->
       None

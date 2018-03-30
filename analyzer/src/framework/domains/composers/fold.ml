@@ -57,13 +57,13 @@ struct
 
   let exec stmt man ctx gabs =
     Head.exec stmt (head_man man) ctx gabs |>
-    Exec.extract gabs |>
+    oflow_extract_dfl gabs |>
     Tail.exec stmt (tail_man man) ctx
 
   let eval exp man ctx gabs =
     let head_evr = Head.eval exp (head_man man) ctx gabs in
     let tail_evr = Tail.eval exp (tail_man man) ctx gabs in
-    Eval.meet head_evr tail_evr
+    oeval_meet head_evr tail_evr
 
   let ask query man ctx gabs =
     let head_reply = Head.ask query (head_man man) ctx gabs in
@@ -126,13 +126,13 @@ module MakeStack =
 
   let exec stmt man subax ctx gabs =
     Head.exec stmt (head_man man) subax ctx gabs |>
-    Exec.extract gabs |>
+    oflow_extract_dfl gabs |>
     Tail.exec stmt (tail_man man) subax ctx
 
   let eval exp man subax ctx gabs =
     let head_evr = Head.eval exp (head_man man) subax ctx gabs in
     let tail_evr = Tail.eval exp (tail_man man) subax ctx gabs in
-    Eval.meet head_evr tail_evr
+    oeval_meet head_evr tail_evr
 
   let ask query man subax ctx gabs =
     let head_reply = Head.ask query (head_man man) subax ctx gabs in

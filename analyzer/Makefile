@@ -9,7 +9,7 @@ mopsa = framework lang main
 
 framework = options ast query pp alarm context lattice lattices visitor flow manager domains utils analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
-framework.domains = global exec eval local localFlow stateless composers
+framework.domains = global stateless composers
 
 
 lang = universal c python

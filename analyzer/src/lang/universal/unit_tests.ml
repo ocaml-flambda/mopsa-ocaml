@@ -16,6 +16,7 @@ open Framework.Lattice
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
+open Framework.Utils
 open Ast
 
 let name = "universal.unit_tests"
@@ -151,12 +152,12 @@ struct
         ((Debug.color "fushia") Format.pp_print_string) "⎇" ((Debug.color "fushia") Format.pp_print_int) panic plurial panic
       ;
 
-      Exec.return flow1
+      return flow1
 
     | S_assert(cond) ->
       let range = srange stmt in
       let name = Framework.Context.find KCurTestName ctx in
-      Utils.cond_flow
+      Utils.assume_to_exec
         cond
         (fun safe_flow ->
            man.flow.add (TSafeAssert (name, range)) (man.flow.get TCur safe_flow) safe_flow
@@ -165,14 +166,13 @@ struct
            man.flow.add (TFailAssert (name, range)) (man.flow.get TCur fail_flow) fail_flow |>
            man.flow.set TCur man.env.bottom
         )
-        (fun () -> flow)
-        (fun safe_flow fail_flow ->
+        ~merge_case:(fun safe_flow fail_flow ->
            man.flow.join safe_flow fail_flow |>
            man.flow.add (TMayAssert (name, range)) (man.flow.get TCur flow) |>
            man.flow.set TCur (man.flow.get TCur safe_flow)
         )
-        man ctx flow |>
-      Exec.return
+        man ctx flow () |>
+      return
 
     | _ -> None
 

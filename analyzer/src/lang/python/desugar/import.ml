@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -47,7 +48,7 @@ struct
                 (tag_range range "import v assign")
              ) ctx flow
       ) |>
-      Exec.return
+      return
 
     | S_py_import(modul, vasname, vroot)  ->
       assert false

@@ -17,6 +17,89 @@ open Lattice
 open Flow
 open Manager
 
+(** {Optional flows} *)
+
+let fail = None
+
+let return x = Some x
+
+let oflow_extract = Option.none_to_exn
+
+let oflow_extract_dfl dfl = function
+  | None -> dfl
+  | Some flow -> flow
+
+let oflow_join man =
+  Option.option_neutral2 man.flow.join
+
+
+let oflow_map f flow = Option.option_lift1 f flow
+
+let oflow_merge f1 f2 f12 none flow1 flow2 = Option.option_apply2 f1 f2 f12 none flow1 flow2
+
+(*==========================================================================*)
+(**                       {2 Optional evaluations}                          *)
+(*==========================================================================*)
+
+let oeval_singleton (ev: ('a, 'b) eval_case) : ('a, 'b) evals option =
+  Some (eval_singleton ev)
+
+let oeval_map
+    (f: ('a, 'b) eval_case -> ('c, 'd) eval_case)
+    (oevl: ('a, 'b) evals option) : ('c, 'd) evals option
+  =
+  Option.option_lift1 (eval_map f) oevl
+
+let oeval_join
+    (oevl1: ('a, 'b) evals option)
+    (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
+  =
+  Option.option_neutral2 eval_join oevl1 oevl2
+
+let oeval_meet
+    (oevl1: ('a, 'b) evals option)
+    (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
+  =
+  Option.option_neutral2 eval_meet oevl1 oevl2
+
+
+let oeval_merge
+    (f: ('a, 'b) eval_case -> 'c)
+    (join: 'c -> 'c -> 'c)
+    (meet: 'c -> 'c -> 'c)
+    (none: unit -> 'c)
+    (oevl: ('a, 'b) evals option) : 'c
+  =
+  Option.option_dfl1 none (Dnf.substitute f join meet) oevl
+
+let oeval_merge2
+    (f1: ('a, 'b) evals -> 'e)
+    (f2: ('c, 'd) evals -> 'e)
+    (f12: ('a, 'b) evals -> ('c, 'd) evals -> 'e)
+    (none: unit -> 'e)
+    (oevl1: ('a, 'b) evals option) (oevl2: ('c, 'd) evals option) : 'e =
+  Option.option_apply2 f1 f2 f12 none oevl1 oevl2
+
+
+let oeval_substitute
+    (f: ('a, 'b) eval_case -> ('c, 'd) evals option)
+    (oevl: ('a, 'b) evals option) : ('c, 'd) evals option =
+  oeval_merge f
+    (oeval_merge2
+       (fun evl1 -> Some evl1)
+       (fun evl2 -> Some evl2)
+       (fun evl1 evl2 -> Some (eval_join evl1 evl2))
+       (fun () -> None)
+    )
+    (oeval_merge2
+       (fun evl1 -> Some evl1)
+       (fun evl2 -> Some evl2)
+       (fun evl1 evl2 -> Some (eval_meet evl1 evl2))
+       (fun () -> None)
+    )
+    (fun () -> None)
+    oevl
+
 
 (*==========================================================================*)
                         (** {2 Standlone domains} *)
@@ -40,7 +123,7 @@ sig
   (** Abstract (symbolic) evaluation of expressions. *)
   val eval:
     Ast.expr -> ('a, t) manager -> Context.context -> 'a flow ->
-    'a flow eval_output option
+    (Ast.expr, 'a) evals option
 
   (** Handler of generic queries. *)
   val ask:
@@ -126,7 +209,7 @@ module type STACK_DOMAIN =
     val eval:
       Ast.expr -> ('a, t) manager -> ('a, Sub.t) manager ->
       Context.context -> 'a flow ->
-      'a flow eval_output option
+      (Ast.expr, 'a) evals option
 
     (** Handler of generic queries. *)
     val ask:

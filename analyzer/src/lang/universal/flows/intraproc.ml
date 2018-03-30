@@ -13,6 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
 open Framework.Ast
+open Framework.Utils
 open Ast
 
 let name = "universal.flows.intraproc"
@@ -30,14 +31,14 @@ struct
   let exec stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      Eval.compose_exec
-        e
-        (fun e flow -> Exec.return flow)
-        (fun flow -> Exec.return flow)
-        man ctx flow
+      man.eval e ctx flow |>
+      eval_to_exec (fun e flow ->
+          Some flow
+        ) man ctx
+
     | S_block(block) ->
       List.fold_left (fun acc stmt -> man.exec stmt ctx acc) flow block |>
-      Exec.return
+      return
 
     | S_if(cond, s1, s2) ->
       let range = srange stmt in
@@ -54,7 +55,7 @@ struct
         man.exec s2 ctx
       in
       man.flow.join flow1 flow2 |>
-      Exec.return
+      return
 
     | _ -> None
 

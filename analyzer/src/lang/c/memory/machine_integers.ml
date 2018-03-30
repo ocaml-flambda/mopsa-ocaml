@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
+open Framework.Utils
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -49,31 +50,28 @@ struct
   let eval exp man ctx flow =
     match ekind exp with
     | E_unop(op, e) when is_c_int_type e.etyp ->
-      Eval.compose_eval e
+      man.eval e ctx flow |>
+      eval_compose
         (fun e flow ->
            let e' = {e with etyp = T_int} in
            let exp' = {exp with ekind = E_unop(op, e')} in
-           Eval.singleton (Some exp', flow, [])
+           oeval_singleton (Some exp', flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
 
     | E_binop(op, e1, e2) when is_c_int_type e1.etyp && is_c_int_type e2.etyp ->
-      Eval.compose_eval_list [e1; e2]
+      man_eval_list [e1; e2] man ctx flow |>
+      oeval_compose
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let e1 = {e1 with etyp = T_int} in
            let e2 = {e2 with etyp = T_int} in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           Eval.singleton (Some exp', flow, [])
+           oeval_singleton (Some exp', flow, [])
         )
-        (fun flow -> Eval.singleton (None, flow, []))
-        man ctx flow
-
 
     | E_c_cast(e', _) ->
       debug "cast";
-      Eval.re_eval_singleton man ctx (Some e', flow, [])
+      re_eval_singleton (Some e', flow, []) man ctx
 
     | _ -> None
 
@@ -87,7 +85,7 @@ struct
         | Some (Ast.C_init_list (_,_)) -> assert false
         | Some (Ast.C_init_implicit _) -> assert false
       in
-      Exec.return flow
+      return flow
 
     | _ -> None
 

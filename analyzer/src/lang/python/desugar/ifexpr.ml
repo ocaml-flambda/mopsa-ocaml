@@ -13,6 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
+open Framework.Utils
 open Universal.Ast
 open Ast
 
@@ -36,7 +37,7 @@ struct
           ) ctx flow
       in
       let exp' = {exp with ekind = E_var tmp} in
-      Eval.re_eval_singleton manager ctx (Some exp', flow, [mk_remove_var tmp (tag_range range "cleaner")])
+      re_eval_singleton (Some exp', flow, [mk_remove_var tmp (tag_range range "cleaner")]) manager ctx
 
     | _ -> None
 

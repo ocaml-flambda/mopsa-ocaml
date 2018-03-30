@@ -43,7 +43,7 @@ struct
 
   let check cond range man ctx flow =
     let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) ctx flow in
-    Eval.singleton (Some (mk_py_none range), flow, [])
+    oeval_singleton (Some (mk_py_none range), flow, [])
   
   let eval exp man ctx flow =
     match ekind exp with

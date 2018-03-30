@@ -14,6 +14,7 @@ open Framework.Manager
 open Framework.Flow
 open Framework.Ast
 open Framework.Pp
+open Framework.Utils
 open Universal.Ast
 open Ast
 open Addr
@@ -45,8 +46,8 @@ struct
     match skind stmt with
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      Eval.compose_exec_list
-        cls.py_cls_bases 
+      man_eval_list cls.py_cls_bases manager ctx flow |>
+      oeval_to_exec
         (fun bases flow ->
            if List.for_all can_inherit_from bases then
              let bases =
@@ -65,18 +66,16 @@ struct
                       ) ctx flow
                   in
                   manager.exec cls.py_cls_body ctx flow |>
-                  Exec.return
+                  return
                )
-               (fun flow -> Exec.return flow)
                (Addr.mk_class_addr cls bases) stmt.srange manager ctx flow
            else
              manager.exec
                (Builtins.mk_builtin_raise "TypeError" (tag_range range "class def error"))
                ctx flow |>
-             Exec.return
+             return
         )
-        (fun flow -> Some flow)
-        manager ctx flow
+        manager ctx
 
     | _ ->
       None
@@ -122,8 +121,8 @@ struct
     in
     (* FIXME: check that __init__ always returns None *)
     
-    (Some (mk_var tmp range), flow, [mk_remove_var tmp (tag_range range "cleaner")]) |>
-    Eval.re_eval_singleton manager ctx
+    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp (tag_range range "cleaner")]) in
+    re_eval_singleton evl manager ctx
 
     
   let eval exp manager ctx flow =
