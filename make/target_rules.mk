@@ -10,7 +10,7 @@ lib-native: $(BTARGET).cmxa merlin
 
 $(BTARGET).cmxa: $(TOP_CMX) | deps
 	@echo "Linking native library"
-	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -a -o $(BTARGET).cmxa -package "$(PKGS)" $+
+	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -a -o $(BTARGET).cmxa -package "$(PKGS)" $+
 	@mkdir -p $(BIN)
 	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmt $(BSRC)/*.cmi $(BIN)
 

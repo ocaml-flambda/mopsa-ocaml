@@ -36,6 +36,10 @@ PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 INCLUDES = -I $(MOPSAROOT)/utils/bin -I $(MOPSAROOT)/parsers/c/bin -I $(MOPSAROOT)/parsers/python/bin
 LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa
 
+LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
+LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
+
+
 include $(MOPSAROOT)/make/main.mk
 
 #tests
