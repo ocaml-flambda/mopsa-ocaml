@@ -20,8 +20,8 @@ OCAMLOPT = ocamlopt -cc "$(CXX)"
 INCLUDES   := -I $(MOPSAROOT)/utils/bin
 LIBCMXA := utils.cmxa
 
-LLVMCONFIG = llvm-config
-CLANGRESOURCE = $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --version)
+LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
+CLANGRESOURCE := $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --version)
 
 CXXFLAGS := -fPIC  -I $(shell ocamlc -where) $(shell $(LLVMCONFIG) --cxxflags) -Wno-strict-aliasing "-DCLANGRESOURCE=\"$(CLANGRESOURCE)\"" $(CXXFLAGS)
 
@@ -34,4 +34,3 @@ LDFLAGS  := $(LDFLAGS) $(shell $(LLVMCONFIG) --ldflags) \
 
 
 include $(MOPSAROOT)/make/main.mk
-
