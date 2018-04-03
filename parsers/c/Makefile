@@ -1,6 +1,4 @@
-all: lib-native-c
-
-TARGET = mlClangParser
+TARGET_CLIBS = mlClangParser
 MOPSAROOT = ../..
 
 # Packs

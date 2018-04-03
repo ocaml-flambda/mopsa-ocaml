@@ -31,9 +31,12 @@ BSMLL = $(BMLL:%.mll=%.ml)
 BSMLY = $(BMLY:%.mly=%.ml)
 BYCMX = $(BMLY:%.mly=%.cmx)
 
-## Top-level modules
+
+## Top-level ml files
 TOP_SML = $(wildcard $(SRC)/*.ml)
-TOP_CMX = $(if $($(TARGET)),$($(TARGET):%=$(BSRC)/%.cmx),$(TOP_SML:%.ml=$(BUILD)/%.cmx) $(TOP_PACKS:%=$(BSRC)/%.cmx))
+
+# This function gives the list of cmx files needed to build some argument target
+top_cmx = $(if $($(1)), $($(1):%=$(BSRC)/%.cmx), $(TOP_SML:%.ml=$(BUILD)/%.cmx) $(TOP_PACKS:%=$(BSRC)/%.cmx))
 
 BTARGET = $(BUILD)/$(TARGET)
 

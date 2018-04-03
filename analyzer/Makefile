@@ -1,8 +1,6 @@
+TARGET_NATIVES = mopsa
+
 MOPSAROOT = ..
-TARGET = mopsa
-
-all: native
-
 
 #Packs
 mopsa = framework lang main

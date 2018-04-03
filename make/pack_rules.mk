@@ -50,7 +50,7 @@ define PACK_template =
  #Compile the sub-sources with the right packing flags
  $$(CMX_$(1)): %.cmx: %.ml | %.dep
 	@echo "Compiling $$<"
-	@$$(OCAMLFIND)  $$(OCAMLOPT) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$(LIBCMXA) $$< -o $$@
+	$$(OCAMLFIND)  $$(OCAMLOPT) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$(LIBCMXA) $$< -o $$@
 
  #Compile the pack
  $$(BPATH_$(1)).cmo: %.cmo: $$(LS_$(1):%=$$(BPATH_$(1))/%.cmo) | %.ml

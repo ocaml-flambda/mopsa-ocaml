@@ -1,6 +1,5 @@
-all: lib-native
+TARGET_LIBS = mlPythonParser
 
-TARGET = mlPythonParser
 MOPSAROOT = ../..
 
 # Packs
@@ -15,4 +14,3 @@ LIBCMXA := utils.cmxa
 
 
 include $(MOPSAROOT)/make/main.mk
-

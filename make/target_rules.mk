@@ -1,27 +1,33 @@
-native: $(BTARGET).native merlin
+.PHONY: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
-$(BTARGET).native: $(TOP_CMX) | deps
-	@echo "Linking native binary"
-	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -package "$(PKGS)" -linkpkg  $(LIBCMXA) $+ -o $(BTARGET).native
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BIN)
+all: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
-lib-native: $(BTARGET).cmxa merlin
+$(TARGET_NATIVES): %: $(BUILD)/%.native
+$(TARGET_LIBS): %: $(BUILD)/%.cmxa
+$(TARGET_CLIBS): %: $(BUILD)/lib%.a
 
-$(BTARGET).cmxa: $(TOP_CMX) | deps
-	@echo "Linking native library"
-	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -a -o $(BTARGET).cmxa -package "$(PKGS)" $+
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmt $(BSRC)/*.cmi $(BIN)
-
-lib-native-c: $(BUILD)/lib$(TARGET).a merlin
-
-$(BUILD)/lib$(TARGET).a: $(TOP_CMX) $(C_OBJ) $(CC_OBJ) | deps
-	@echo "Linking native/C library"
-	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(TOP_CMX)
-	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(C_OBJ) $(CC_OBJ)
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmi $(BSRC)/*.cmt $(BIN)
 
 clean:
 	-rm -rf $(BUILD)/* $(BIN)/* $(DOC)/*
+
+
+.SECONDEXPANSION:
+
+$(BUILD)/%.native: $$(call top_cmx, %) | deps
+	@echo "Linking native binary"
+	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -package "$(PKGS)" -linkpkg  $(LIBCMXA) $+ -o $@
+	@mkdir -p $(BIN)
+	@cp $(BUILD)/*.* $(BIN)
+
+$(BUILD)/%.cmxa: $$(call top_cmx, %) | deps
+	@echo "Linking native library $@ $+"
+	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -a -o $@ -package "$(PKGS)" $+
+	@mkdir -p $(BIN)
+	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmt $(BSRC)/*.cmi $(BIN)
+
+$(BUILD)/lib%.a: $$(call top_cmx, %) $(C_OBJ) $(CC_OBJ) | deps
+	@echo "Linking native/C library"
+	@$(OCAMLMKLIB) -o $@ -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(TOP_CMX)
+	@$(OCAMLMKLIB) -o $@ -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(C_OBJ) $(CC_OBJ)
+	@mkdir -p $(BIN)
+	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmi $(BSRC)/*.cmt $(BIN)

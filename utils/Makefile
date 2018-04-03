@@ -1,6 +1,4 @@
-all: lib-native-c
-
-TARGET = utils
+TARGET_LIBS = utils
 MOPSAROOT = ..
 
 intervals = float intBound floatItv intItv
