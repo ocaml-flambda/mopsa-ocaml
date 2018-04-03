@@ -25,8 +25,8 @@ CLANGRESOURCE := $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --v
 
 CXXFLAGS := -fPIC  -I $(shell ocamlc -where) $(shell $(LLVMCONFIG) --cxxflags) -Wno-strict-aliasing "-DCLANGRESOURCE=\"$(CLANGRESOURCE)\"" $(CXXFLAGS)
 
-LDFLAGS  := $(LDFLAGS) $(shell $(LLVMCONFIG) --ldflags) \
-  -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema \
+LDFLAGS  := $(LDFLAGS) $(shell $(LLVMCONFIG) --ldflags)
+LIBS :=   -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema \
   -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic -lclang \
   $(shell $(LLVMCONFIG) --libs --system-libs) \
   -lstdc++

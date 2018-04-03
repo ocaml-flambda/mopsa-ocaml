@@ -2,7 +2,7 @@ native: $(BTARGET).native merlin
 
 $(BTARGET).native: $(TOP_CMX) | deps
 	@echo "Linking native binary"
-	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -package "$(PKGS)" -linkpkg  $(LIBCMXA) $+ -o $(BTARGET).native
+	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -package "$(PKGS)" -linkpkg  $(LIBCMXA) $+ -o $(BTARGET).native
 	@mkdir -p $(BIN)
 	@cp $(BUILD)/*.* $(BIN)
 
@@ -18,8 +18,8 @@ lib-native-c: $(BUILD)/lib$(TARGET).a merlin
 
 $(BUILD)/lib$(TARGET).a: $(TOP_CMX) $(C_OBJ) $(CC_OBJ) | deps
 	@echo "Linking native/C library"
-	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)"  $(LDFLAGS) $(TOP_CMX)
-	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)"  $(LDFLAGS) $(C_OBJ) $(CC_OBJ)
+	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(TOP_CMX)
+	@$(OCAMLMKLIB) -o $(BTARGET) -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(C_OBJ) $(CC_OBJ)
 	@mkdir -p $(BIN)
 	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmi $(BSRC)/*.cmt $(BIN)
 
