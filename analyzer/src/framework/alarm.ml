@@ -93,7 +93,7 @@ let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alar
 let register_pp_alarm pp = pp_alarm_chain := pp !pp_alarm_chain
 
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "@[%a@]@\n%a@\nLevel: %a"
+  Format.fprintf fmt "@[%a@]@\nIn %a@\nLevel: %a"
     !pp_alarm_chain alarm
     Pp.pp_range_verbose alarm.alarm_range
     pp_alarm_level alarm.alarm_level
