@@ -16,5 +16,5 @@ $(BSMLY): %.ml: %.mly | %.ydep
 	@$(MENHIR) --ocamlc '$(OCAMLFIND) $(OCAMLC) $(INCLUDES) -package "$(PKGS)" -bin-annot -I $(BSRC)' --explain --infer $<
 
 %.ydep: %.mly | $(ALL_ML)
-	@echo "Generating dependencies for $<" 
+	@echo "Generating dependencies for $<"
 	@$(MENHIR) --raw-depend --ocamldep '$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES)' $< > $@

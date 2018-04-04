@@ -32,13 +32,9 @@ BSMLY = $(BMLY:%.mly=%.ml)
 BYCMX = $(BMLY:%.mly=%.cmx)
 
 
-## Top-level ml files
+## Top-level ml/cmx files
 TOP_SML = $(wildcard $(SRC)/*.ml)
-
-# This function gives the list of cmx files needed to build some argument target
-top_cmx = $(if $($(1)), $($(1):%=$(BSRC)/%.cmx), $(TOP_SML:%.ml=$(BUILD)/%.cmx) $(TOP_PACKS:%=$(BSRC)/%.cmx))
-
-BTARGET = $(BUILD)/$(TARGET)
+TOP_CMX =  $(TOP_SML:%.ml=$(BUILD)/%.cmx) $(TOP_PACKS:%=$(BSRC)/%.cmx)
 
 ## Unit tests
 TESTS_ML = $(wildcard $(TESTS)/*.ml)

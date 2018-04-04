@@ -1,4 +1,4 @@
-TARGET_LIBS = utils
+TARGET_CLIBS = utils
 MOPSAROOT = ..
 
 intervals = float intBound floatItv intItv

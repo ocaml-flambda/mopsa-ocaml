@@ -14,7 +14,7 @@ $(TESTS_DEP): %.dep: %.ml
 	@echo "Generating dependencies for $<"
 	@$(OCAMLDEP) -I $(BTESTS) -I $(BSRC)  $< > $@
 
-$(TESTS_EXE): %: $(TOP_CMX) $(C_OBJ) $(CC_OBJ) %.cmx 
+$(TESTS_EXE): %: $(TOP_CMX) $(C_OBJ) $(CC_OBJ) %.cmx
 	@echo "Linking $@"
 	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -package "$(PKGS)" $(LIBCMXA) -linkpkg $+ -o $@
 

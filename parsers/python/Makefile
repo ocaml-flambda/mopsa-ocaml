@@ -9,8 +9,8 @@ mlPythonParser = Py_tokens Py_CST Py_parser Py_lexer Py_builtins Py_AST Py_pp Py
 PKGS = zarith
 
 # Flags
-INCLUDES   := -I $(MOPSAROOT)/utils/bin
-LIBCMXA := utils.cmxa
+INCLUDES	:= -I $(MOPSAROOT)/utils/lib
+LIBCMXA		:= utils.cmxa
 
 
 include $(MOPSAROOT)/make/main.mk

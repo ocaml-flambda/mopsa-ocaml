@@ -25,6 +25,7 @@ TESTS = tests
 BUILD = _build
 BIN = bin
 DOC = doc
+LIB = lib
 
 BSRC = $(BUILD)/$(SRC)
 BTESTS = $(BUILD)/$(TESTS)

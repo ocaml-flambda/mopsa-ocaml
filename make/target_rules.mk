@@ -2,32 +2,57 @@
 
 all: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
+clean:
+	-rm -rf $(BUILD)/* $(LIB)/* $(DOC)/*
+
+
 $(TARGET_NATIVES): %: $(BUILD)/%.native
+
 $(TARGET_LIBS): %: $(BUILD)/%.cmxa
+
 $(TARGET_CLIBS): %: $(BUILD)/lib%.a
 
 
-clean:
-	-rm -rf $(BUILD)/* $(BIN)/* $(DOC)/*
+define NATIVE_template =
+ TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BSRC)/%.cmx), $$(TOP_SML:%.ml=$$(BUILD)/%.cmx) $$(TOP_PACKS:%=$$(BSRC)/%.cmx))
+ TARGET_$(1) = $$(BUILD)/$(1).native
+
+ $$(TARGET_$(1)): $$(TOP_CMX_$(1))
+	@echo "Linking native binary $(1)"
+	@$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
+endef
 
 
-.SECONDEXPANSION:
+define LIB_template =
+ TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BSRC)/%.cmx), $$(TOP_SML:%.ml=$$(BUILD)/%.cmx) $$(TOP_PACKS:%=$$(BSRC)/%.cmx))
+ TARGET_$(1) = $$(BUILD)/$(1).cmxa
 
-$(BUILD)/%.native: $$(call top_cmx, %) | deps
-	@echo "Linking native binary"
-	@$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -package "$(PKGS)" -linkpkg  $(LIBCMXA) $+ -o $@
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BIN)
+ $$(TARGET_$(1)): $$(TOP_CMX_$(1))
+	@echo "Linking native library $(1)"
+	@$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	@mkdir -p $$(LIB)
+	@cp $$(BUILD)/*.* $$(BSRC)/*.cmx $$(BSRC)/*.cmt $$(BSRC)/*.cmi $$(LIB)
+endef
 
-$(BUILD)/%.cmxa: $$(call top_cmx, %) | deps
-	@echo "Linking native library $@ $+"
-	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLFLAGS) -cclib "$(LDFLAGS)" -a -o $@ -package "$(PKGS)" $+
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmt $(BSRC)/*.cmi $(BIN)
 
-$(BUILD)/lib%.a: $$(call top_cmx, %) $(C_OBJ) $(CC_OBJ) | deps
-	@echo "Linking native/C library"
-	@$(OCAMLMKLIB) -o $@ -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(TOP_CMX)
-	@$(OCAMLMKLIB) -o $@ -ocamlc "$(OCAMLC)" -ocamlopt "$(OCAMLOPT)" $(LDFLAGS) $(LIBS) $(C_OBJ) $(CC_OBJ)
-	@mkdir -p $(BIN)
-	@cp $(BUILD)/*.* $(BSRC)/*.cmx $(BSRC)/*.cmi $(BSRC)/*.cmt $(BIN)
+define CLIB_template =
+ TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BSRC)/%.cmx), $$(TOP_SML:%.ml=$$(BUILD)/%.cmx) $$(TOP_PACKS:%=$$(BSRC)/%.cmx))
+ TARGET_$(1) = $$(BUILD)/lib$(1).a
+ TARGET_BASE_$(1) = $$(BUILD)/$(1)
+
+ $$(TARGET_$(1)): $$(TOP_CMX_$(1)) $$(C_OBJ) $$(CC_OBJ)
+	@echo "Linking native/C library $(1)"
+	@$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMX_$(1))
+	@$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(C_OBJ) $$(CC_OBJ)
+	@mkdir -p $$(LIB)
+	@cp $$(BUILD)/*.* $$(BSRC)/*.cmx $$(BSRC)/*.cmi $$(BSRC)/*.cmt $$(LIB)
+
+endef
+
+ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),tests)
+$(foreach target,$(TARGET_NATIVES),$(eval $(call NATIVE_template,$(target))))
+$(foreach target,$(TARGET_LIBS),$(eval $(call LIB_template,$(target))))
+$(foreach target,$(TARGET_CLIBS),$(eval $(call CLIB_template,$(target))))
+endif
+endif

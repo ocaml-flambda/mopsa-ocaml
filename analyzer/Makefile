@@ -31,7 +31,7 @@ lang.c.memory = cell pointer machine_integers array_to_pointer record_to_pointer
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
-INCLUDES = -I $(MOPSAROOT)/utils/bin -I $(MOPSAROOT)/parsers/c/bin -I $(MOPSAROOT)/parsers/python/bin
+INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib
 LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
