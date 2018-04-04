@@ -89,6 +89,9 @@ let () =
         | ".c" ->
           Lang.C.Setup.start ();
           Lang.C.Frontend.parse_program filename
+        | ".db" ->
+          Lang.C.Setup.start ();
+          Lang.C.Frontend.parse_db filename
         | ".py" ->
           Lang.Python.Setup.start ();
           Lang.Python.Frontend.parse_program filename
