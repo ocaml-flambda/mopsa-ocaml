@@ -3,3 +3,4 @@
 dbfile=$(mktemp /tmp/mopsaXXXXX.db)
 PATH=/home/ouadjaout/src/mopsa/parsers/c/bin:${PATH} MOPSADB=${dbfile} make -C $1
 /home/ouadjaout/src/mopsa/bin/mopsa -config /home/ouadjaout/src/mopsa/analyzer/configs/default.c.json -stubs /home/ouadjaout/src/mopsa/analyzer/stubs/c ${@:2} ${dbfile}
+rm ${dbfile}
