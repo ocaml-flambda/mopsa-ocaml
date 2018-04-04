@@ -6,12 +6,56 @@ open Ast
 let debug fmt =
   Debug.debug ~channel:"c.frontend" fmt
 
+
 (** {2 Entry points} *)
 
-let rec parse_program (file: string) : Framework.Ast.program =
+let rec parse_db (dbfile: string) : Framework.Ast.program =
+  let open Clang_parser in
+  let open Clang_to_C in
+  let open Build_DB in
+  let target = get_target_info (get_default_target_options ()) in
+  let db = load_db dbfile in
+  let execs = get_executables db in
+  match execs with
+  | [exec] ->
+    let ctx = create_context exec target in
+    let srcs = get_executable_sources db exec in
+    let nb = List.length  srcs
+    and i = ref 0 in
+    List.iter
+      (fun src ->
+         incr i;
+         debug "%i/%i\n" !i nb;
+         match src.source_kind with
+         | SOURCE_C | SOURCE_CXX ->
+           let cwd = Sys.getcwd() in
+           Sys.chdir src.source_cwd;
+           (try
+              (* parse file in the original compilation directory *)
+              let p = parse_file src.source_opts src.source_path in
+              Sys.chdir cwd;
+              (* translate to SAST *)
+              add_translation_unit ctx (Filename.basename src.source_path) p
+            with x ->
+              (* make sure we get back to cwd in all cases *)
+              Sys.chdir cwd;
+              raise x
+           )
+         | _ -> Debug.warn "ignoring file %s\n%!" src.source_path
+      ) srcs;
+    from_project (link_project ctx)
+
+  | l ->
+    assert false
+
+and parse_file (opts: string list) (file: string) =
   let target_options = Clang_parser.get_default_target_options () in
-  let target_info = Clang_parser.get_target_info target_options in
-  let x, diag = Clang_parser.parse (target_options) file [|"-I" ^ Framework.Options.(common_options.stubs)|] in
+  (* remove some options that are in the way *)
+  let filter_out_opts opts =
+    List.filter (fun o -> not (List.mem o ["-MF"])) opts
+  in
+  let opts = filter_out_opts (("-I" ^ Framework.Options.(common_options.stubs)) :: opts) in
+  let x, diag = Clang_parser.parse (target_options) file (Array.of_list opts) in
   let () =
     match diag with
     | [] -> ()
@@ -26,11 +70,21 @@ let rec parse_program (file: string) : Framework.Ast.program =
       if error_diag then
         failwith "Fatal parsing errors"
   in
+  x
 
-  let ctx = Clang_to_C.create_context file target_info in
+and parse_program (file: string) =
+  let open Clang_parser in
+  let open Clang_to_C in
+  let x = parse_file [] file in
+  let target = get_target_info (get_default_target_options ()) in
+  let ctx = Clang_to_C.create_context file target in
   Clang_to_C.add_translation_unit ctx file x;
   let prj = Clang_to_C.link_project ctx in
 
+  from_project prj
+
+
+and from_project prj =
   debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;
 
   let globals = StringMap.bindings prj.proj_vars |>
@@ -44,7 +98,7 @@ let rec parse_program (file: string) : Framework.Ast.program =
   in
   {
     prog_kind = Ast.C_program (globals, funcs);
-    prog_file = file;
+    prog_file = prj.C_AST.proj_name;
   }
 
 (** {2 Variables} *)

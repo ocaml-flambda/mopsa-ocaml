@@ -1,6 +1,6 @@
-B ../../../../utils/bin
-B ../../../../parsers/c/bin
-B ../../../../parsers/python/bin
+B ../../../../utils/lib
+B ../../../../parsers/c/lib
+B ../../../../parsers/python/lib
 B ../../../_build
 B ../../../_build/src
 B ../../../_build/src/lang/universal
