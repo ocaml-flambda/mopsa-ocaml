@@ -1,3 +1,3 @@
 #!/bin/bash
-
-./bin/mopsa -config analyzer/configs/default.py.json -stubs analyzer/stubs/python $@
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.py.json -stubs ${MOPSADIR}/analyzer/stubs/python $@

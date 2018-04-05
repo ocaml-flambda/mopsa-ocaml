@@ -1,6 +1,6 @@
 #!/bin/bash
-
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 dbfile=$(mktemp /tmp/mopsaXXXXX.db)
-PATH=/home/ouadjaout/src/mopsa/parsers/c/bin:${PATH} MOPSADB=${dbfile} make -C $1
-/home/ouadjaout/src/mopsa/bin/mopsa -config /home/ouadjaout/src/mopsa/analyzer/configs/default.c.json -stubs /home/ouadjaout/src/mopsa/analyzer/stubs/c ${@:2} ${dbfile}
+PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${dbfile} make -C $1
+${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.c.json -stubs ${MOPSADIR}/analyzer/stubs/c ${dbfile}
 rm ${dbfile}
