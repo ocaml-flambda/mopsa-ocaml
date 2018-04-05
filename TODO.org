@@ -1,64 +1,72 @@
-* Python
-** Builtins
-*** math.sqrt
-*** math.sin
-*** math.cos
-*** random.randrange
-*** random.seed
-*** is
-*** super
-*** object
-*** int
-
-** For loops
-
-** Functions
-*** Default parameters values
-
-** Objects
-*** __add__
-*** __slots__
-
-** Strings
-*** % formatting
-*** string
-*** rstrip
-
-** Generators
-*** Comprehension
-*** __iter__
-
-** Lists
-*** constructor list on an iterator
-*** comprehension
-*** insert
-*** pop
-*** slices
-*** __iter__
-*** reversed
-*** sorted
-    
-** Iterators
-*** __next__
-
-** dicts
-*** values
-*** __iter__
-*** len
-*** sorted
-
-** tuples
-*** constructor tuple on iterators
-*** len
-
-** if expressions
-
-** Ranges
-*** reversed
-** Expression evaluation
-*** Break expressions when a compound operand is found and more expressions are still to be processed.
-
 * Framework
-** Iterators
-*** Allow simultaneous rules, but also add priorities in conflicting situations.
-** Make two versions of SetD and MapD: empty -> top | bottom.
+** Lattices
+*** add <Relation> lattice to represent multi-image maps.
+*** add <InvRelation> as a relation with inverse map.
+** Domains
+*** add common signature for domains with unification.
+** Reduced product
+*** investigate "reduction-as-continuation"
+* Universal
+** Unit tests
+*** add error raising assertions
+*** add soundness assertion assert(c)X as S[| assume c |] ⊤ ⊆ X
+** Arrays
+*** summary abstraction
+*** expansion abstraction
+** Predicates
+*** integrate Matthieu's work
+* Python
+** Builtin functions
+*** all
+*** any
+*** callable
+*** delattr
+*** enumerate
+*** filter
+*** format
+*** gettattr
+*** hash
+*** id
+*** map
+*** max
+*** min
+*** open
+*** repr
+*** reversed
+*** setattr
+*** sorted 
+*** staticmethod
+*** sum   
+*** super
+*** zip
+** object
+*** __dict__
+*** __class__
+*** __bases__
+*** __slots__
+*** __name__
+*** __mro__
+** str
+*** capitalize
+*** count
+*** find
+*** format
+*** rstrip
+*** strip
+** tuple
+*** constructor tuple on iterators
+* C
+** Strings
+*** convert strings into numeric arrays
+*** initialization
+*** symbolic domain and its reduction with cells
+** Struct/union
+*** initialization
+*** detect inspection of the non-common part in a union of several structs (cf. C11 §6.5.2.3)
+*** bitfields
+** Pointers
+*** invalidate pointers to local variables at function exit.
+*** trace back dereference of invalidate pointers to invalidation site.
+** Stubs
+*** stdio
+*** string
