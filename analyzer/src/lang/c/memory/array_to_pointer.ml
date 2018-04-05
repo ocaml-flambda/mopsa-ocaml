@@ -48,9 +48,20 @@ module Domain = struct
   let mk_c_array_subscript a i range =
     mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
 
-  let init_array a init range man ctx flow =
+  let rec init_array a init is_global range man ctx flow =
     match init with
-    | None -> flow
+    | None when not is_global -> flow
+
+    | None when is_global ->
+      if under_array_type a.vtyp |> is_c_scalar_type then
+        let n = get_array_length a.vtyp in
+        let l =
+          let rec times i = if i = n then [] else (C_init_expr (mk_int 0 range)) :: times (i + 1) in
+          times 0
+        in
+        init_array a (Some (C_init_list (l, None))) is_global range man ctx flow
+      else
+        panic "Implicit initialization of global non-scalar arrays not supported"
 
     | Some (C_init_list (l, None)) ->
       let rec aux flow a i = function
@@ -71,9 +82,6 @@ module Domain = struct
         | _ -> assert false
       in
       aux flow (mk_var a range) 0 l
-
-    | Some (C_init_list ([], Some C_init_expr e)) ->
-      panic "Array filler initialization not supported"
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
       let v = mk_var a range in
@@ -102,7 +110,7 @@ module Domain = struct
       List.fold_left (fun flow (v, init) ->
           if not (is_c_array v.vtyp) then flow
           else
-            init_array v init (mk_fresh_range ()) man Framework.Context.empty flow
+            init_array v init true (mk_fresh_range ()) man Framework.Context.empty flow
         ) flow globals
 
     | _ -> flow
@@ -110,7 +118,7 @@ module Domain = struct
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     match skind stmt with
     | S_c_local_declaration(v, init) when is_c_array v.vtyp ->
-      init_array v init stmt.srange man ctx flow |>
+      init_array v init false stmt.srange man ctx flow |>
       return
 
     | _ -> None
