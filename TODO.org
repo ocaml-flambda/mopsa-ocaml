@@ -6,6 +6,7 @@
 *** add common signature for domains with unification.
 ** Reduced product
 *** investigate "reduction-as-continuation"
+
 * Universal
 ** Unit tests
 *** add error raising assertions
@@ -15,6 +16,7 @@
 *** expansion abstraction
 ** Predicates
 *** integrate Matthieu's work
+
 * Python
 ** Builtin functions
 *** all
@@ -55,6 +57,9 @@
 *** strip
 ** tuple
 *** constructor tuple on iterators
+** Non-relational abstraction
+*** Investigate seprate non-relelations maps where each map key domain is limited to a particular variable type.
+
 * C
 ** Strings
 *** convert strings into numeric arrays
