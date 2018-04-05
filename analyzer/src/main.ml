@@ -11,9 +11,20 @@
 open Framework
 open Framework.Flow
 
+
+(** Initialize analyzer using environment variables. *)
+let init_from_env () =
+  try
+    let debug = Unix.getenv "MOPSADEBUG" in
+    Debug.parse debug
+  with Not_found ->
+    ()
+
+
 (** Initialize analyzer components and domains. *)
 let init () =
   Options.setup ();
+  init_from_env ();
   Lang.Universal.Setup.init ();
   Lang.C.Setup.init ();
   Lang.Python.Setup.init ();

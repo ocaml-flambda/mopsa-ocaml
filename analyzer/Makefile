@@ -49,14 +49,14 @@ python-tests: native
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python -debug=$(MOPSADEBUG) $(MOPSAPARAM) $(test); \
+		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: native
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c -debug=$(MOPSADEBUG) $(MOPSAPARAM) $(test); \
+		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
 	)
 
 tests: python-tests c-tests

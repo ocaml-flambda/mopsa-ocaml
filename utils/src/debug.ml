@@ -6,17 +6,21 @@ let channels = ref []
 let print_color = ref true
 let print_all = ref false
 let colors = [("red", 160); ("green", 0x28); ("yellow", 0xbe); ("blue", 4); ("magenta", 0x5c); ("fushia", 13); ("orange", 0xd0)]
-  
+
 let add_channel ch =
   if ch = "all" then
     print_all := true
   else
     let ch' = ch ^ "$" |>
               Str.global_replace (Str.regexp_string ".") "\\."  |>
-              Str.global_replace (Str.regexp_string "_") ".*" 
+              Str.global_replace (Str.regexp_string "_") ".*"
     in
     let re = Str.regexp ch' in
     channels := re :: !channels
+
+let parse opt =
+  Str.split (Str.regexp ",") opt |>
+  List.iter add_channel
 
 let can_print channel =
   !print_all ||

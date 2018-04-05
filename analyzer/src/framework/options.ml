@@ -45,8 +45,7 @@ let setup () =
   register (
     "-debug",
     Arg.String(fun f ->
-        Str.split (Str.regexp ",") f |>
-        List.iter Debug.add_channel
+        Debug.parse f
       ),
     " debug channels"
   );
