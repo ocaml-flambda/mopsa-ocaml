@@ -40,6 +40,11 @@ module Domain = struct
     | T_c_array(t, _) -> t
     | _ -> assert false
 
+  let get_array_length t =
+    match remove_typedef t with
+    | T_c_array(_, C_array_length_cst n) -> Z.to_int n
+    | _ -> assert false
+
   let mk_c_array_subscript a i range =
     mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
 
@@ -71,14 +76,15 @@ module Domain = struct
       panic "Array filler initialization not supported"
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
-      let a = mk_var a range in
+      let v = mk_var a range in
+      let l = get_array_length a.vtyp in
       let rec aux i flow =
-        if i = String.length s then flow
+        if i = l then flow
         else
-          let c = String.get s i in
+          let c = if i < String.length s then String.get s i else char_of_int 0 in
           let flow = man.exec
               (mk_assign
-                 (mk_c_array_subscript a (mk_int i range) range)
+                 (mk_c_array_subscript v (mk_int i range) range)
                  (mk_constant (C_c_character c) range ~etyp:(T_c_integer(C_char C_signed)))
                  range
               ) ctx flow
