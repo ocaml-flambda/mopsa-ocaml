@@ -545,6 +545,10 @@ let rec remove_typedef = function
   | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
   | t -> t
 
+let rec remove_qual = function
+  | T_c_qualified(_, t) -> remove_qual t
+  | t -> t
+
 let rec under_pointer_type (t : typ) : typ =
   match t with
   | T_c_pointer t' -> t'

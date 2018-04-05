@@ -45,18 +45,18 @@ TESTS = tests
 
 .PHONY: python-tests c-tests
 
-python-tests: native
+python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
 	)
 
-c-tests: native
+c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		./bin/mopsa.native -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
 	)
 
 tests: python-tests c-tests

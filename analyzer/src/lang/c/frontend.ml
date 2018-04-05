@@ -253,6 +253,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr a, from_expr i)
     | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr r, i, f)
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr r, i, f)
+    | C_AST.E_character_literal (c, Clang_AST.Char_Ascii)  -> E_constant(Ast.C_c_character (char_of_int @@ Z.to_int c))
 
     | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
     | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"

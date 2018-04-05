@@ -36,11 +36,10 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
   let under_array_type t =
-    remove_typedef t |>
-    (function
-      | T_c_array(t, _) -> t
-      | _ -> assert false
-    )
+    match remove_typedef t with
+    | T_c_array(t, _) -> t
+    | _ -> assert false
+
   let mk_c_array_subscript a i range =
     mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
 
@@ -67,9 +66,26 @@ module Domain = struct
         | _ -> assert false
       in
       aux flow (mk_var a range) 0 l
-        
+
     | Some (C_init_list ([], Some C_init_expr e)) ->
       panic "Array filler initialization not supported"
+
+    | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
+      let a = mk_var a range in
+      let rec aux i flow =
+        if i = String.length s then flow
+        else
+          let c = String.get s i in
+          let flow = man.exec
+              (mk_assign
+                 (mk_c_array_subscript a (mk_int i range) range)
+                 (mk_constant (C_c_character c) range ~etyp:(T_c_integer(C_char C_signed)))
+                 range
+              ) ctx flow
+          in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
     | _ ->
       panic "Array initialization not supported"

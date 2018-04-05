@@ -357,30 +357,7 @@ struct
       | _ ->
         None
 
-  let eval exp man ctx flow =
-    match ekind exp with
-    | E_constant _
-    | E_var _ ->
-      oeval_singleton (Some exp, flow, [])
-
-    | E_unop(op, e) ->
-      man.eval e ctx flow |>
-      eval_compose
-        (fun e flow ->
-           let exp' = {exp with ekind = E_unop(op, e)} in
-           oeval_singleton (Some exp', flow, [])
-        )
-
-    | E_binop(op, e1, e2) ->
-      man_eval_list [e1; e2] man ctx flow |>
-      oeval_compose
-        (fun el flow ->
-           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-           let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           oeval_singleton (Some exp', flow, [])
-        )
-
-    | _ -> None
+  let eval exp man ctx flow = None
 
 
 end
