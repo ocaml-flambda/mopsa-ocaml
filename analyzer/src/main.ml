@@ -61,16 +61,17 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
       match alarms with
       | None
       | Some [] ->
-        Format.printf "%a No alarm@\n" ((Debug.color "green") Format.pp_print_string) "✔"
+        Format.printf "Analysis terminated in %.6fs@\n%a No alarm@\n" t ((Debug.color "green") Format.pp_print_string) "✔"
       | Some alarms ->
-        Format.printf "Alarms:@\n@[<hov4>    %a@]@\n"
+        Format.printf "Analysis terminated in %.6fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
+          t
+          (List.length alarms)
+          Debug.plurial_list alarms
           (Format.pp_print_list
              ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
              Framework.Alarm.pp_alarm
           ) alarms
     );
-
-    Debug.info "Analysis terminated in %.6fs" t
 
   with
   | Framework.Manager.StmtPanic stmt ->

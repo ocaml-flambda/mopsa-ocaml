@@ -80,3 +80,6 @@ let fail fmt =
         Format.eprintf "[FAIL %.6f] @.@[%s@]@.@." (Sys.time ()) str;
       exit (-1)
     ) fmt
+
+let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"
+let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"
