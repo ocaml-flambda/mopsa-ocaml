@@ -9,7 +9,6 @@
 
 * Universal
 ** Unit tests
-*** add error raising assertions
 *** add soundness assertion assert(c)X as S[| assume c |] ⊤ ⊆ X
 ** Arrays
 *** summary abstraction
@@ -19,8 +18,6 @@
 
 * C
 ** Strings
-*** convert strings into numeric arrays
-*** initialization
 *** symbolic domain and its reduction with cells
 ** Struct/union
 *** initialization
