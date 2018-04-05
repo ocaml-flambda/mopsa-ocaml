@@ -17,6 +17,79 @@
 ** Predicates
 *** integrate Matthieu's work
 
+* C
+** Strings
+*** convert strings into numeric arrays
+*** initialization
+*** symbolic domain and its reduction with cells
+** Struct/union
+*** initialization
+*** check inspection of the non-common part in a union of several structs (cf. C11 §6.5.2.3)
+*** bitfields
+** Pointers
+*** check null pointer dereference
+*** invalidate pointers to local variables at function exit.
+*** check dereference of invalidate pointers and trace back to invalidation site.
+** Stubs
+*** distinguish between concrete/abstract stubs
+** stdio.h
+*** NULL
+*** EOF
+*** FILE
+*** fclose
+*** feof
+*** fopen
+*** fread
+*** fwrite
+*** scanf
+*** printf
+** stdlib.h
+*** atof
+*** atoi
+*** strtod
+*** strtol
+*** strtoul
+*** calloc
+*** free
+*** malloc
+*** realloc
+*** qsort
+*** abs
+** string.h
+*** memchr
+*** memcmp
+*** memcpy
+*** memmove
+*** memset
+*** strcat
+*** strncat
+*** strchr
+*** strcmp
+*** strncmp
+*** strcpy
+*** strncpy
+*** strlen
+** math.h
+*** acos
+*** asin
+*** atan
+*** atan2
+*** cos
+*** cosh
+*** sin
+*** sinh
+*** tanh
+*** exp
+*** log
+*** log10
+*** modf
+*** pow
+*** sqrt
+*** ceil
+*** floor
+*** fmod
+*** fabs
+
 * Python
 ** Builtin functions
 *** all
@@ -59,19 +132,5 @@
 *** constructor tuple on iterators
 ** Non-relational abstraction
 *** Investigate seprate non-relelations maps where each map key domain is limited to a particular variable type.
-
-* C
-** Strings
-*** convert strings into numeric arrays
-*** initialization
-*** symbolic domain and its reduction with cells
-** Struct/union
-*** initialization
-*** detect inspection of the non-common part in a union of several structs (cf. C11 §6.5.2.3)
-*** bitfields
-** Pointers
-*** invalidate pointers to local variables at function exit.
-*** trace back dereference of invalidate pointers to invalidation site.
 ** Stubs
-*** stdio
-*** string
+*** distinguish between concrete/abstract stubs
