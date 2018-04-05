@@ -39,6 +39,10 @@ let is_error_token = function
   | TOutOfBound _ -> true
   | _ -> false
 
+let error_token_range = function
+  | TOutOfBound(_, _, r) -> r
+  | _ -> assert false
+
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
 (*==========================================================================*)
