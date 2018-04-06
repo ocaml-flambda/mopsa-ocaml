@@ -35,7 +35,7 @@ struct
   let error_token_to_code = function
     | Alarms.TOutOfBound _ -> 1
     | _ -> assert false
-  
+
   (*==========================================================================*)
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
@@ -90,16 +90,15 @@ struct
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_error"}, [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
-        let this_error_env, other_errors_env = man.flow.fold (fun (acc1, acc2) env -> function
-            | tk when Alarms.is_error_token tk && code = error_token_to_code tk -> (man.env.join acc1 env, acc2)
-            | tk when Alarms.is_error_token tk -> acc1, man.env.join acc2 env
-            | _ -> acc1, acc2
-          ) (man.env.bottom, man.env.bottom) flow in
+        let this_error_env = man.flow.fold (fun acc env -> function
+            | tk when Alarms.is_error_token tk && code = error_token_to_code tk -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
         let cond =
-          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env, man.env.is_bottom other_errors_env with
-          | true, false, true -> mk_one
-          | _, true, _ -> mk_zero
-          | _ ->  mk_int_interval 0 1
+          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env with
+          | true, false -> mk_one
+          | _, true -> mk_zero
+          | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
@@ -114,19 +113,18 @@ struct
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_error_at_line"}, [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
             begin
         let code = Z.to_int code and line = Z.to_int line in
-        let this_error_env, other_errors_env = man.flow.fold (fun (acc1, acc2) env -> function
+        let this_error_env = man.flow.fold (fun acc env -> function
             | tk when Alarms.is_error_token tk &&
                       code = error_token_to_code tk &&
                       line = (let r = Alarms.error_token_range tk |> get_origin_range in r.range_begin.loc_line) ->
-              (man.env.join acc1 env, acc2)
-            | tk when Alarms.is_error_token tk -> acc1, man.env.join acc2 env
-            | _ -> acc1, acc2
-          ) (man.env.bottom, man.env.bottom) flow in
+              man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
         let cond =
-          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env, man.env.is_bottom other_errors_env with
-          | true, false, true -> mk_one
-          | _, true, _ -> mk_zero
-          | _ ->  mk_int_interval 0 1
+          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env with
+          | true, false -> mk_one
+          | _, true -> mk_zero
+          | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
