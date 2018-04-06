@@ -18,3 +18,8 @@ void test_array_of_structs() {
   a[1].x = 2;
   _mopsa_assert_true(a[0].x + a[1].x == 3);
 }
+
+void test_initialization_with_compound_litteral() {
+  point p = {1, 2};
+  _mopsa_assert_true(p.x == p.y -1);
+}

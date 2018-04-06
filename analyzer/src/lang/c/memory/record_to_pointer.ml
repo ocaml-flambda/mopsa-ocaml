@@ -32,6 +32,10 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain = struct
 
+  let get_nth_field r n =
+    match remove_typedef r.vtyp |> remove_qual with
+    | T_c_record{c_record_kind = C_struct; c_record_fields} -> List.nth c_record_fields n
+    | _ -> assert false
 
   (*==========================================================================*)
   (**                     {2 Transfer functions}                              *)
@@ -40,13 +44,33 @@ module Domain = struct
   let init prog man flow = flow
 
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
+    let range = stmt.srange in
     match skind stmt with
-    | S_c_local_declaration(v, None) when is_c_record_type v.vtyp ->
+    | S_c_local_declaration(r, None) when is_c_record_type r.vtyp ->
       return flow
 
-    | S_c_local_declaration(v, Some init) when is_c_record_type v.vtyp ->
-      panic "Initialization of structs/unions not supported"
-        
+    | S_c_local_declaration(r, Some init) when is_c_struct_type r.vtyp ->
+      let v = mk_var r range in
+      begin
+        match init with
+        | C_init_list(l, None) ->
+          let rec aux flow i = function
+            | [] -> flow
+            | C_init_expr e :: tl ->
+              let field = get_nth_field r i in
+              let flow = man.exec
+                  (mk_assign (mk_c_member_access v field range) e range) ctx flow
+              in
+              aux flow (i + 1) tl
+
+            | _ -> assert false
+          in
+          aux flow 0 l |>
+          return
+
+        | _ -> assert false
+      end
+
     | _ -> None
 
   let eval exp man ctx flow =
@@ -55,7 +79,7 @@ module Domain = struct
       let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
       re_eval_singleton (Some exp', flow, []) man ctx
 
-        
+
     | _ -> None
 
 

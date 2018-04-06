@@ -278,6 +278,9 @@ type program_kind +=
 let mk_c_address_of e range =
   mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range
 
+let mk_c_member_access r f range =
+  mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
+
 (*==========================================================================*)
                   (** {2 Conversion to Clang parser types} *)
 (*==========================================================================*)
@@ -514,6 +517,18 @@ let rec is_c_record_type ( t : typ) =
   | T_c_typedef(typedef) -> is_c_record_type (typedef.c_typedef_def)
   | _ -> false
 
+let rec remove_typedef = function
+  | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
+  | t -> t
+
+let rec remove_qual = function
+  | T_c_qualified(_, t) -> remove_qual t
+  | t -> t
+
+let rec is_c_struct_type (t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_record({c_record_kind = C_struct}) -> true
+  | _ -> false
 
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
@@ -536,18 +551,9 @@ let rec is_c_array (t: typ) =
   | T_c_qualified(_, t) -> is_c_array t
   | _ -> false
 
-
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)
 let pointer_type (t : typ) =
   (T_c_pointer t)
-
-let rec remove_typedef = function
-  | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
-  | t -> t
-
-let rec remove_qual = function
-  | T_c_qualified(_, t) -> remove_qual t
-  | t -> t
 
 let rec under_pointer_type (t : typ) : typ =
   match t with
