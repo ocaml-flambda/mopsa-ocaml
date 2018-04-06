@@ -45,7 +45,7 @@ void test_array_deref() {
 }
 
 void test_multi_array_deref() {
-  int a[10][10];
+  int a[5][5];
   a[0][0] = 10;
   _mopsa_assert_true(**a == 10);
 }
@@ -59,7 +59,7 @@ void test_array_as_address() {
 }
 
 void test_multi_array_as_array_of_addresses() {
-  int a[10][10];
+  int a[5][5];
   int *p;
   p = a[0];
   *p = 10;
@@ -75,7 +75,7 @@ void test_address_of_array() {
 }
 
 void test_address_of_multi_array() {
-  int a[10][10];
+  int a[5][5];
   int *p, *q;
   p = &a[0];
   *p = 10;

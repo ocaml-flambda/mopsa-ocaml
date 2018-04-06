@@ -1,6 +1,8 @@
 #include "mopsa.h"
 
-int glob[20];
+int glob1[5];
+int glob2[5][5];
+int glob3[5] = {1, 2};
 
 void test_array_in_lval() {
   int a[10];
@@ -18,14 +20,16 @@ void test_array_in_rval() {
 }
 
 void test_multi_array() {
-  int a[10][10];
+  int a[5][5];
   a[1][1] = 5;
   a[2][4] = a[1][1] * 100;
   _mopsa_assert_true(a[2][4] == 500);
 }
 
 void test_global_init_with_zero() {
-  _mopsa_assert_true(glob[1] == 0);
+  _mopsa_assert_true(glob1[1] == 0);
+  _mopsa_assert_true(glob2[1][2] == 0);
+  _mopsa_assert_true(glob3[2] == 0);
 }
 
 void test_initialization() {

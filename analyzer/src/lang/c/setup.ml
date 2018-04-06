@@ -12,6 +12,7 @@ let init () =
     Pointer.setup ();
     Array_to_pointer.setup ();
     Record_to_pointer.setup ();
+    Var_init.setup ();
   );
   Libs.(
     Mopsa.setup ();

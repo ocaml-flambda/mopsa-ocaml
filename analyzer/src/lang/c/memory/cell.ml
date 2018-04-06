@@ -264,7 +264,7 @@ module Make(ValAbs : DOMAIN) = struct
                     if is_c_scalar_type c.t then
                       let a,b = rangeof c.t in
                       Nexp (Some ( mk_z_interval a b range))
-                    else if is_c_pointer c.t then
+                    else if is_c_pointer_type c.t then
                       Pexp Invalid
                     else
                       Nexp None
@@ -285,7 +285,7 @@ module Make(ValAbs : DOMAIN) = struct
     if not (is_c_scalar_type c.t) then
       u
     else
-    if is_c_pointer c.t then
+    if is_c_pointer_type c.t then
       {cs = CS.add v u.cs;
        a = u.a;
       }

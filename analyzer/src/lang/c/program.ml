@@ -25,23 +25,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init prog man flow =
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      let range = mk_fresh_range () in
-      globals |> List.fold_left (fun flow (v, init) ->
-          if not (is_c_scalar_type v.vtyp) then
-            flow
-          else
-            let v = mk_var v range in
-            match init with
-            | None -> flow
-            | Some (C_init_expr e) -> man.exec (mk_assign v e range) Framework.Context.empty flow
-            | Some (Ast.C_init_list (_,_)) -> assert false
-            | Some (Ast.C_init_implicit _) -> assert false
-        ) flow
-
-    | _ -> flow
+  let init prog man flow = flow
 
   let eval exp manager ctx flow = None
 

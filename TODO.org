@@ -21,7 +21,6 @@
 *** pointers to string litterals
 *** symbolic domain and its reduction with cells
 ** Struct/union
-*** initialization
 *** assignments with compound litterals
 *** initilization of uninitialized global structs/unions
 *** check inspection of the non-common part in a union of several structs (cf. C11 §6.5.2.3)

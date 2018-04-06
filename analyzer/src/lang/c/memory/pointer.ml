@@ -93,7 +93,7 @@ struct
     let range = erange exp in
     debug "eval_p %a in@\n@[%a@]" pp_expr exp man.flow.print flow;
     match ekind exp with
-    | E_var p when is_c_pointer p.vtyp ->
+    | E_var p when is_c_pointer_type p.vtyp ->
       debug "pointer var";
       let a = get_domain_cur man flow in
       let psl = find p a in
@@ -111,17 +111,17 @@ struct
           | P.Invalid -> assert false
         ) psl None
 
-    | E_var {vkind = V_cell c} when is_c_array c.t ->
+    | E_var {vkind = V_cell c} when is_c_array_type c.t ->
       debug "points to array cell";
       let pt = c.v, mk_z c.o range, under_array_type c.t in
       oeval_singleton (Some pt, flow, [])
 
-    | E_var a when is_c_array a.vtyp ->
+    | E_var a when is_c_array_type a.vtyp ->
       debug "points to array var";
       let pt = a, mk_int 0 range, under_array_type a.vtyp in
       oeval_singleton (Some pt, flow, [])
   
-    | E_c_address_of(e) when is_c_array e.etyp ->
+    | E_c_address_of(e) when is_c_array_type e.etyp ->
       debug "address of an array";
       man.eval e ctx flow |>
       eval_compose
@@ -146,7 +146,7 @@ struct
            | _ -> assert false
         )
 
-    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer p.etyp || is_c_array p.etyp ->
+    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
       man.eval p ctx flow |>
       eval_compose
         (fun p flow ->
@@ -160,7 +160,7 @@ struct
         )
 
 
-    | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
+    | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       assert false
 
     | _ -> panic "Unsupported expression %a in eval_p" pp_expr exp
@@ -168,7 +168,7 @@ struct
   let exec stmt man ctx flow =
     let range = srange stmt in
     match skind stmt with
-    | S_c_local_declaration(v, init) when is_c_pointer v.vtyp ->
+    | S_c_local_declaration(v, init) when is_c_pointer_type v.vtyp ->
       let flow =
         match init with
         | None -> flow
@@ -178,7 +178,7 @@ struct
       in
       return flow
 
-    | S_assign(p, q, k) when is_c_pointer p.etyp ->
+    | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
       man.eval q ctx flow |>
       eval_compose (fun q flow ->
           eval_p q man ctx flow
@@ -199,7 +199,7 @@ struct
                   man ctx
         ) man ctx
 
-    | S_remove_var(p) when is_c_pointer p.vtyp ->
+    | S_remove_var(p) when is_c_pointer_type p.vtyp ->
       let p, c = Cell.mk_base_cell p in
       map_domain_cur (remove p) man flow |>
       man.exec (mk_remove_var (mk_offset_var p) range) ctx |>
@@ -263,7 +263,7 @@ struct
         )
 
 
-    | E_binop(O_eq, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
+    | E_binop(O_eq, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       man_eval_list [p; q] man ctx flow |>
       oeval_compose
         (fun el flow ->
@@ -291,7 +291,7 @@ struct
              oeval_singleton (Some (mk_int_interval 0 1 range), flow, [])
         )
 
-    | E_binop(O_ne, p, q) when is_c_pointer p.etyp && is_c_pointer q.etyp ->
+    | E_binop(O_ne, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       man_eval_list [p; q] man ctx flow |>
       oeval_compose
         (fun el flow ->

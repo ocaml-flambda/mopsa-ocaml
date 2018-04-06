@@ -275,11 +275,6 @@ type program_kind +=
       c_fundec list (** functions *)
 (** A complete C program. *)
 
-let mk_c_address_of e range =
-  mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range
-
-let mk_c_member_access r f range =
-  mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
 
 (*==========================================================================*)
                   (** {2 Conversion to Clang parser types} *)
@@ -502,21 +497,6 @@ let warp (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
     )
     range
 
-(** [is_c_int_type t] wheter [t] is an integer type *)
-let rec is_c_int_type ( t : typ) =
-  match t with
-  | T_c_integer _ -> true
-  | T_c_qualified(_, t) -> is_c_int_type t
-  | T_c_typedef(typedef) -> is_c_int_type (typedef.c_typedef_def)
-  | _ -> false
-
-let rec is_c_record_type ( t : typ) =
-  match t with
-  | T_c_record _ -> true
-  | T_c_qualified(_, t) -> is_c_record_type t
-  | T_c_typedef(typedef) -> is_c_record_type (typedef.c_typedef_def)
-  | _ -> false
-
 let rec remove_typedef = function
   | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
   | t -> t
@@ -525,10 +505,27 @@ let rec remove_qual = function
   | T_c_qualified(_, t) -> remove_qual t
   | t -> t
 
+(** [is_c_int_type t] wheter [t] is an integer type *)
+let rec is_c_int_type ( t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_integer _ -> true
+  | _ -> false
+
+let rec is_c_record_type ( t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_record _ -> true
+  | _ -> false
+
 let rec is_c_struct_type (t : typ) =
   match remove_typedef t |> remove_qual with
   | T_c_record({c_record_kind = C_struct}) -> true
   | _ -> false
+
+let rec is_c_union_type (t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_record({c_record_kind = C_union}) -> true
+  | _ -> false
+
 
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
@@ -537,18 +534,14 @@ let is_c_scalar_type ( t : typ) =
   C_AST.type_is_scalar
 
 (** [is_c_pointer t] wheter [t] is a pointer *)
-let rec is_c_pointer ( t : typ) =
-  match t with
+let rec is_c_pointer_type ( t : typ) =
+  match remove_typedef t |> remove_qual with
   | T_c_pointer _ -> true
-  | T_c_qualified(_, t) -> is_c_pointer t
-  | T_c_typedef(typedef) -> is_c_pointer (typedef.c_typedef_def)
   | _ -> false
 
-let rec is_c_array (t: typ) =
-  match t with
+let rec is_c_array_type (t: typ) =
+  match remove_typedef t |> remove_qual with
   | T_c_array _ -> true
-  | T_c_typedef(typedef) -> is_c_array (typedef.c_typedef_def)
-  | T_c_qualified(_, t) -> is_c_array t
   | _ -> false
 
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)
@@ -556,16 +549,20 @@ let pointer_type (t : typ) =
   (T_c_pointer t)
 
 let rec under_pointer_type (t : typ) : typ =
-  match t with
+  match remove_typedef t |> remove_qual with
   | T_c_pointer t' -> t'
-  | T_c_typedef(typedef) -> under_pointer_type (typedef.c_typedef_def)
   | _ -> failwith "[under_pointer_type] called with a non pointer argument"
 
 let rec under_array_type (t : typ) : typ =
-  match t with
+  match remove_typedef t |> remove_qual with
   | T_c_array (t', _) -> t'
-  | T_c_typedef(typedef) -> under_array_type (typedef.c_typedef_def)
   | _ -> failwith "[under_array_type] called with a non array argument"
+
+let get_array_constant_length t =
+  match remove_typedef t |> remove_qual with
+  | T_c_array(_, C_array_length_cst n) -> Z.to_int n
+  | _ -> assert false
+
 
 
 let is_c_type = function
@@ -583,3 +580,16 @@ let is_c_type = function
   | T_c_enum _
   | T_c_qualified _ -> true
   | _ -> false
+
+
+let mk_c_address_of e range =
+  mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range
+
+let mk_c_member_access r f range =
+  mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
+
+let mk_c_subscript_access a i range =
+  mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
+
+let mk_c_character c range =
+  mk_constant (C_c_character c) range ~etyp:(T_c_integer(C_unsigned_char))
