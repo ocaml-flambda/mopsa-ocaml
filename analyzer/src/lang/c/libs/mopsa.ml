@@ -28,6 +28,7 @@ struct
     | "_mopsa_assert_true"
     | "_mopsa_assert_false"
     | "_mopsa_assert_safe"
+    | "_mopsa_assert_unsafe"
     | "_mopsa_assert_error"
     | "_mopsa_assert_error_at_line" -> true
     | _ -> false
@@ -87,6 +88,28 @@ struct
           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
         with BottomFound ->
           oeval_singleton (None, flow, [])
+      end
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_unsafe"}, []) ->
+      begin
+        let error_env = man.flow.fold (fun acc env -> function
+            | tk when Alarms.is_error_token tk -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let cond =
+          match man.flow.is_cur_bottom flow, man.env.is_bottom error_env with
+          | false, true -> mk_zero
+          | true, false -> mk_one
+          | false, false -> mk_int_interval 0 1
+          | true, true -> mk_zero
+        in
+        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let cur = man.flow.get TCur flow in
+        let flow = man.flow.set TCur man.env.top flow |>
+                   man.exec stmt ctx |>
+                   man.flow.set TCur cur
+        in
+        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
       end
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_error"}, [{ekind = E_constant(C_int code)}]) ->

@@ -6,5 +6,6 @@ void _mopsa_assert_true(int cond);
 void _mopsa_assert_false(int cond);
 void _mopsa_assert_unreachable();
 void _mopsa_assert_safe();
+void _mopsa_assert_unsafe();
 void _mopsa_assert_error(int error);
 void _mopsa_assert_error_at_line(int error, int line);

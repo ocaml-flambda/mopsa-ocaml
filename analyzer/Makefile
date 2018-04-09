@@ -49,14 +49,14 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.py.json -stubs stubs/python $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.py.json -stub stubs/python $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.c.json -stubs stubs/c $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa -test true -config configs/default.c.json -stub stubs/c $(MOPSAPARAM) $(test); \
 	)
 
 tests: python-tests c-tests

@@ -521,7 +521,7 @@ module Make(ValAbs : DOMAIN) = struct
         let flow = set_domain_cur u' man flow in
         re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
       else
-        let flow = man.flow.add (Alarms.TOutOfBound (c.v, Z.to_int c.o, exp.erange)) (man.flow.get TCur flow) flow |>
+        let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
         in
         oeval_singleton (None, flow, [])

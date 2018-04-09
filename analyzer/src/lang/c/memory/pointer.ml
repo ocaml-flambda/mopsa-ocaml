@@ -186,9 +186,11 @@ struct
                   let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range) range), t) in
                   oeval_singleton (Some pt, flow, [])
 
-                | E_p_null -> assert false
+                | E_p_null ->
+                  oeval_singleton (Some E_p_null, flow, [])
 
-                | E_p_invalid -> assert false
+                | E_p_invalid ->
+                  oeval_singleton (Some E_p_invalid, flow, [])
              )
         )
 
@@ -283,16 +285,14 @@ struct
                   end
 
                 | E_p_null ->
-                  let p = match ekind p with E_var p -> p | _ -> assert false in
-                  let flow = man.flow.add (Alarms.TNullDeref (p, exp.erange)) (man.flow.get TCur flow) flow |>
+                  let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
                              man.flow.set TCur man.env.Framework.Lattice.bottom
                   in
                   oeval_singleton (None, flow, [])
 
 
                 | E_p_invalid ->
-                  let p = match ekind p with E_var p -> p | _ -> assert false in
-                  let flow = man.flow.add (Alarms.TInvalidDeref (p, exp.erange)) (man.flow.get TCur flow) flow |>
+                  let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
                              man.flow.set TCur man.env.Framework.Lattice.bottom
                   in
                   oeval_singleton (None, flow, [])

@@ -30,14 +30,14 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 
 type token +=
-  | TOutOfBound of var (** base variable *) * int (** offset *) * range
-  | TNullDeref of var (* pointer *) * range
-  | TInvalidDeref of var (* pointer *) * range
+  | TOutOfBound of range
+  | TNullDeref of range
+  | TInvalidDeref of range
 
 type alarm_kind +=
-  | AOutOfBound of var (** base variable *) * int (** offset *)
-  | ANullDeref of var (** pointer *)
-  | AInvalidDeref of var (** pointer *)
+  | AOutOfBound
+  | ANullDeref
+  | AInvalidDeref
 
 let is_error_token = function
   | TOutOfBound _ -> true
@@ -46,9 +46,9 @@ let is_error_token = function
   | _ -> false
 
 let error_token_range = function
-  | TOutOfBound(_, _, r) -> r
-  | TNullDeref(_, r) -> r
-  | TInvalidDeref(_, r) -> r
+  | TOutOfBound(r) -> r
+  | TNullDeref(r) -> r
+  | TInvalidDeref(r) -> r
   | _ -> assert false
 
 (*==========================================================================*)
@@ -74,25 +74,25 @@ module Domain = struct
       match query with
       | Framework.Alarm.QGetAlarms ->
         let alarms = man.flow.fold (fun acc env -> function
-            | TOutOfBound(v, o, range) ->
+            | TOutOfBound range ->
               let alarm = {
-                alarm_kind = AOutOfBound(v, o);
+                alarm_kind = AOutOfBound;
                 alarm_range = range;
                 alarm_level = High;
               } in
               alarm :: acc
 
-            | TNullDeref(p, range) ->
+            | TNullDeref(range) ->
               let alarm = {
-                alarm_kind = ANullDeref(p);
+                alarm_kind = ANullDeref;
                 alarm_range = range;
                 alarm_level = High;
               } in
               alarm :: acc
 
-            | TInvalidDeref(p, range) ->
+            | TInvalidDeref(range) ->
               let alarm = {
-                alarm_kind = AInvalidDeref(p);
+                alarm_kind = AInvalidDeref;
                 alarm_range = range;
                 alarm_level = High;
               } in
@@ -110,56 +110,17 @@ end
 let setup () =
   register_domain name (module Domain);
 
-  register_token_compare (fun next tk1 tk2 ->
-      match tk1, tk2 with
-      | TOutOfBound (v1, o1, r1), TOutOfBound (v2, o2, r2) ->
-        compare_composer [
-          (fun () -> compare_var v1 v2);
-          (fun () -> compare o1 o2);
-          (fun () -> compare_range r1 r2)
-        ]
-
-      | TNullDeref(p1, r1), TNullDeref(p2, r2) ->
-        compare_composer [
-          (fun () -> compare_var p1 p2);
-          (fun () -> compare_range r1 r2)
-        ]
-
-      | TInvalidDeref(p1, r1), TInvalidDeref(p2, r2) ->
-        compare_composer [
-          (fun () -> compare_var p1 p2);
-          (fun () -> compare_range r1 r2)
-        ]
-
-      | _ -> next tk1 tk2
-    );
-
   register_pp_token (fun next fmt -> function
-      | TOutOfBound (v, o, r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
-      | TNullDeref(p, r) -> Format.fprintf fmt "null@%a" Framework.Pp.pp_range r
-      | TInvalidDeref(p, r) -> Format.fprintf fmt "invalid@%a" Framework.Pp.pp_range r
+      | TOutOfBound(r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
+      | TNullDeref(r) -> Format.fprintf fmt "null@%a" Framework.Pp.pp_range r
+      | TInvalidDeref(r) -> Format.fprintf fmt "invalid@%a" Framework.Pp.pp_range r
       | tk -> next fmt tk
-    );
-
-  register_alarm_compare (fun next a1 a2 ->
-      match a1.alarm_kind, a2.alarm_kind with
-      | AOutOfBound(v1, o1), AOutOfBound(v2, o2) ->
-        compare_composer [
-          (fun () -> compare_var v1 v2);
-          (fun () -> compare o1 o2);
-        ]
-
-      | ANullDeref(p1), ANullDeref(p2) -> compare_var p1 p2
-
-      | AInvalidDeref(p1), AInvalidDeref(p2) -> compare_var p1 p2
-
-      | _ -> next a1 a2
     );
 
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
-      | AOutOfBound(v, o) -> Format.fprintf fmt "%a  Out of bound access on %s" ((Debug.color "red") Format.pp_print_string) "✘" v.vname
-      | ANullDeref(p) -> Format.fprintf fmt "%a  Null pointer dereference on %s" ((Debug.color "red") Format.pp_print_string) "✘" p.vname
-      | AInvalidDeref(p) -> Format.fprintf fmt "%a  Invalid pointer dereference on %s" ((Debug.color "red") Format.pp_print_string) "✘" p.vname
+      | AOutOfBound -> Format.fprintf fmt "%a  Out of bound access" ((Debug.color "red") Format.pp_print_string) "✘"
+      | ANullDeref -> Format.fprintf fmt "%a  Null pointer dereference" ((Debug.color "red") Format.pp_print_string) "✘"
+      | AInvalidDeref -> Format.fprintf fmt "%a  Invalid pointer dereference" ((Debug.color "red") Format.pp_print_string) "✘"
       | _ -> next fmt alarm
     );

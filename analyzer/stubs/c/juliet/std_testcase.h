@@ -1,0 +1,2 @@
+void printHexCharLine(char charHex) {
+}
