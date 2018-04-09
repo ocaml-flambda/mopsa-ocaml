@@ -32,19 +32,23 @@ let debug fmt = Debug.debug ~channel:name fmt
 type token +=
   | TOutOfBound of var (** base variable *) * int (** offset *) * range
   | TNullDeref of var (* pointer *) * range
+  | TInvalidDeref of var (* pointer *) * range
 
 type alarm_kind +=
   | AOutOfBound of var (** base variable *) * int (** offset *)
   | ANullDeref of var (** pointer *)
+  | AInvalidDeref of var (** pointer *)
 
 let is_error_token = function
   | TOutOfBound _ -> true
   | TNullDeref _ -> true
+  | TInvalidDeref _ -> true
   | _ -> false
 
 let error_token_range = function
   | TOutOfBound(_, _, r) -> r
   | TNullDeref(_, r) -> r
+  | TInvalidDeref(_, r) -> r
   | _ -> assert false
 
 (*==========================================================================*)
@@ -86,6 +90,14 @@ module Domain = struct
               } in
               alarm :: acc
 
+            | TInvalidDeref(p, range) ->
+              let alarm = {
+                alarm_kind = AInvalidDeref(p);
+                alarm_range = range;
+                alarm_level = High;
+              } in
+              alarm :: acc
+
             | _ -> acc
           ) [] flow
         in
@@ -106,12 +118,26 @@ let setup () =
           (fun () -> compare o1 o2);
           (fun () -> compare_range r1 r2)
         ]
+
+      | TNullDeref(p1, r1), TNullDeref(p2, r2) ->
+        compare_composer [
+          (fun () -> compare_var p1 p2);
+          (fun () -> compare_range r1 r2)
+        ]
+
+      | TInvalidDeref(p1, r1), TInvalidDeref(p2, r2) ->
+        compare_composer [
+          (fun () -> compare_var p1 p2);
+          (fun () -> compare_range r1 r2)
+        ]
+
       | _ -> next tk1 tk2
     );
 
   register_pp_token (fun next fmt -> function
       | TOutOfBound (v, o, r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
       | TNullDeref(p, r) -> Format.fprintf fmt "null@%a" Framework.Pp.pp_range r
+      | TInvalidDeref(p, r) -> Format.fprintf fmt "invalid@%a" Framework.Pp.pp_range r
       | tk -> next fmt tk
     );
 
@@ -125,6 +151,8 @@ let setup () =
 
       | ANullDeref(p1), ANullDeref(p2) -> compare_var p1 p2
 
+      | AInvalidDeref(p1), AInvalidDeref(p2) -> compare_var p1 p2
+
       | _ -> next a1 a2
     );
 
@@ -132,5 +160,6 @@ let setup () =
       match alarm.alarm_kind with
       | AOutOfBound(v, o) -> Format.fprintf fmt "%a  Out of bound access on %s" ((Debug.color "red") Format.pp_print_string) "✘" v.vname
       | ANullDeref(p) -> Format.fprintf fmt "%a  Null pointer dereference on %s" ((Debug.color "red") Format.pp_print_string) "✘" p.vname
+      | AInvalidDeref(p) -> Format.fprintf fmt "%a  Invalid pointer dereference on %s" ((Debug.color "red") Format.pp_print_string) "✘" p.vname
       | _ -> next fmt alarm
     );

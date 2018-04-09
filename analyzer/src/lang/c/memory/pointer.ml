@@ -73,11 +73,20 @@ struct
     Format.fprintf fmt "ptr: @[%a@]@\n"
       print a
 
+  let add p pt a =
+    CPML.add (Cell.annotate_var p) pt a
+
+  let find p a =
+    CPML.find (Cell.annotate_var p) a
+
   let points_to_var p v a =
     add p (PSL.singleton (P.V v)) a
 
   let points_to_null p a =
     add p (PSL.singleton P.Null) a
+
+  let points_to_invalid p a =
+    add p (PSL.singleton P.Invalid) a
 
   (*==========================================================================*)
   (**                         {2 Transfer functions}                          *)
@@ -123,7 +132,10 @@ struct
             oeval_singleton (Some E_p_null, flow, []) |>
             oeval_join acc
 
-          | P.Invalid -> assert false
+          | P.Invalid ->
+            oeval_singleton (Some E_p_invalid, flow, []) |>
+            oeval_join acc
+
         ) psl None
 
     | E_var {vkind = V_cell c} when is_c_array_type c.t ->
@@ -189,15 +201,10 @@ struct
   let exec stmt man ctx flow =
     let range = srange stmt in
     match skind stmt with
-    | S_c_local_declaration(v, init) when is_c_pointer_type v.vtyp ->
-      let flow =
-        match init with
-        | None -> flow
-        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
-        | Some (Ast.C_init_list (_,_)) -> assert false
-        | Some (Ast.C_init_implicit _) -> assert false
-      in
-      return flow
+    | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
+      map_domain_cur (points_to_invalid p) man flow |>
+      man.exec (mk_remove_var (mk_offset_var p) range) ctx |>
+      return
 
     | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
       man.eval q ctx flow |>
@@ -283,7 +290,12 @@ struct
                   oeval_singleton (None, flow, [])
 
 
-                | E_p_invalid -> assert false
+                | E_p_invalid ->
+                  let p = match ekind p with E_var p -> p | _ -> assert false in
+                  let flow = man.flow.add (Alarms.TInvalidDeref (p, exp.erange)) (man.flow.get TCur flow) flow |>
+                             man.flow.set TCur man.env.Framework.Lattice.bottom
+                  in
+                  oeval_singleton (None, flow, [])
              )
         )
 

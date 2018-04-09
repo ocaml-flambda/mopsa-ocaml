@@ -50,11 +50,17 @@ void test_initialization_to_null_of_uninitialized_global() {
   _mopsa_assert_true(global == NULL);
 }
 
+void test_deref_of_uninitialized_local_is_invalid() {
+  int *p;
+  int i = *p;
+  _mopsa_assert_error(INVALID_DEREF);
+}
+
 void test_null_deref() {
   int *p = NULL;
   int **q = &p;
   **q = 1;
-  _mopsa_assert_error_at_line(NULL_DEREF, 56);
+  _mopsa_assert_error(NULL_DEREF);
 }
 
 void test_array_deref() {

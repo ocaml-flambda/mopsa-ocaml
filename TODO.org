@@ -30,7 +30,6 @@
 *** switch
 *** goto
 ** Pointers
-*** check null pointer dereference
 *** invalidate pointers to local variables at function exit.
 *** check dereference of invalidate pointers and trace back to invalidation site.
 ** Stubs

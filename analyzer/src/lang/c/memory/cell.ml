@@ -71,6 +71,12 @@ let mk_base_cell v =
   let c = mk_cell v Z.zero v.vtyp in
   {v with vkind = V_cell c}, c
 
+let mk_cell_var v =
+  match vkind v with
+  | V_cell c -> v, c
+  | _ -> mk_base_cell v
+
+let annotate_var v = fst @@ mk_cell_var v
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -272,13 +278,6 @@ module Make(ValAbs : DOMAIN) = struct
               end
           end
       end
-
-  let mk_cell_var v =
-    match vkind v with
-    | V_cell c -> v, c
-    | _ -> mk_base_cell v
-
-  let annotate_var v = fst @@ mk_cell_var v
 
   let add_var_cell v c u range =
     let open Universal.Ast in

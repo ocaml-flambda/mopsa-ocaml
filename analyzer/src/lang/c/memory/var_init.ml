@@ -149,6 +149,8 @@ module Domain = struct
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     let range = stmt.srange in
     match skind stmt with
+    | S_c_local_declaration(v, None) when is_c_pointer_type v.vtyp -> None (* Let pointer domain initialize invalid addresses *)
+
     | S_c_local_declaration(v, init) ->
       let v = mk_var v range in
       init_expr v init false range man ctx flow |>
