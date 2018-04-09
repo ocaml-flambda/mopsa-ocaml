@@ -192,8 +192,10 @@ let init_modules dir =
     )
   
 let setup () =
-  let dir = Framework.Options.(common_options.stubs) in
-  init_std dir;
-  init_modules dir;
+  Framework.Options.(common_options.stubs) |> List.iter
+    (fun dir ->
+       init_std dir;
+       init_modules dir;
+    );
   ()
 

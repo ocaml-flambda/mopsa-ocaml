@@ -1,0 +1,26 @@
+#!/bin/bash
+
+file=$1
+esc_file=${file//\//\\\/}
+base=$(basename ${file} .c)
+
+tmp=$(mktemp /tmp/${base}_XXXXX.c)
+sed "1s/^/#include \"mopsa.h\"\n#line 1 \"${esc_file}\"\n/" ${file} > ${tmp}
+
+cat <<EOF >> ${tmp}
+
+#line 1 "mopsa-juliet"
+void test_bad() {
+  ${base}_bad();
+  _mopsa_assert_unsafe();
+}
+
+void test_good() {
+  ${base}_good();
+  _mopsa_assert_safe();
+}
+EOF
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+${MOPSADIR}/bin/mopsa -test=true -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet ${tmp}
+rm ${tmp}

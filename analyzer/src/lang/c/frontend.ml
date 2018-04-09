@@ -54,7 +54,11 @@ and parse_file (opts: string list) (file: string) =
   let filter_out_opts opts =
     List.filter (fun o -> not (List.mem o ["-MF"])) opts
   in
-  let opts = filter_out_opts (("-I" ^ Framework.Options.(common_options.stubs)) :: opts) in
+  let opts =
+    List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
+    (@) opts |>
+    filter_out_opts
+  in
   let x, diag = Clang_parser.parse (target_options) file (Array.of_list opts) in
   let () =
     match diag with
