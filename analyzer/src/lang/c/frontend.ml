@@ -100,6 +100,7 @@ and from_project prj =
               List.map snd |>
               List.map from_function
   in
+  let globals, funcs = construct_string_table globals funcs in
   {
     prog_kind = Ast.C_program (globals, funcs);
     prog_file = prj.C_AST.proj_name;
@@ -349,3 +350,101 @@ and from_block_option (range: Framework.Ast.range) (block: C_AST.block option) :
   match block with
   | None -> mk_nop range
   | Some stmtl -> from_block range stmtl
+
+
+and construct_string_table globals funcs =
+  (* Collect all string litterals and replace them by unique variables *)
+  let module StringTable = Map.Make(struct type t = string let compare = compare end) in
+  let counter = ref 0 in
+  let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s))) in
+
+  let rec visit_expr table e =
+    match ekind e with
+    | E_constant(C_string s) ->
+      let v, table =
+        try StringTable.find s table, table
+        with Not_found ->
+          let v = {
+            vname = "_string_" ^ (string_of_int !counter);
+            vuid = 0;
+            vtyp = type_of_string s;
+            vkind = V_orig;
+          }
+          in
+          incr counter;
+          v, StringTable.add s v table
+      in
+      table, {ekind = E_var v; etyp = type_of_string s; erange = e.erange}
+    | _ -> table, e
+
+
+  and visit_init table init =
+    match init with
+    | C_init_expr e ->
+      let table, e = visit_expr table e in
+      table, C_init_expr e
+    | C_init_list (l, filler) ->
+      let table, l = List.fold_left (fun (table, l) init ->
+          let table, init = visit_init table init in
+          table, init :: l
+        ) (table, []) l
+      in
+      let table, filler = visit_init_option table filler in
+      table, C_init_list(List.rev l, filler)
+    | C_init_implicit _ -> table, init
+
+
+  and visit_init_option table init =
+    match init with
+    | None -> table, None
+    | Some init ->
+      let table, init = visit_init table init in
+      table, Some init
+
+  in
+  let table, funcs =
+    List.fold_left (fun (table, funcs) f ->
+        (* Visit and change the body *)
+        let table, body' =
+          Framework.Visitor.fold_map_stmt
+            (fun acc e -> visit_expr acc e)
+            (fun acc s -> acc, s)
+            table f.c_func_body
+        in
+        (* Visit and change the locals *)
+        let table, locals' = List.fold_left (fun (table, locals) (v, init) ->
+            let table, init' = visit_init_option table init in
+            table, (v, init') :: locals
+          ) (table, []) f.c_func_local_vars
+        in
+        debug "fun: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt f.c_func_body Framework.Pp.pp_stmt body';
+        table, {f with c_func_body = body'; c_func_local_vars = List.rev locals'} :: funcs
+      ) (StringTable.empty, []) funcs
+  in
+  let funcs = List.fold_left (fun acc f ->
+      let body' =
+        Framework.Visitor.map_stmt
+          (fun e ->
+             match ekind e with
+             | E_c_function f ->
+               debug "call to %a" Framework.Pp.pp_var f.c_func_var;
+               let f' = List.find (function {c_func_var} -> c_func_var.vname = f.c_func_var.vname) funcs in
+               {e with ekind = E_c_function f'}
+
+             | _ -> e
+          )
+          (fun s -> s)
+          f.c_func_body
+      in
+      debug "fun2: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt f.c_func_body Framework.Pp.pp_stmt body';
+      {f with c_func_body = body'} :: funcs
+    ) ([]) funcs
+  in
+  (* Add table entries to the global variables *)
+  let range = mk_fresh_range () in
+  let globals = StringTable.fold (fun s v acc ->
+      (v, Some (C_init_expr (mk_constant (C_string s) ~etyp:(type_of_string s) range))) :: acc
+    ) table globals
+  in
+
+  globals, funcs

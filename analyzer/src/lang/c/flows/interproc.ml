@@ -42,6 +42,7 @@ struct
              re_eval_singleton (Some exp', flow, []) man ctx
 
            | E_c_function(fundec) ->
+             debug "call to %a, body @[%a@]" Framework.Pp.pp_var fundec.c_func_var Framework.Pp.pp_stmt fundec.c_func_body;
              let open Universal.Ast in
              let fundec' = {
                fun_name = var_uniq_name (fundec.c_func_var);
