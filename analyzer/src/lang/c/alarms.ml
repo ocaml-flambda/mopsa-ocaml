@@ -31,16 +31,20 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 type token +=
   | TOutOfBound of var (** base variable *) * int (** offset *) * range
+  | TNullDeref of var (* pointer *) * range
 
 type alarm_kind +=
   | AOutOfBound of var (** base variable *) * int (** offset *)
+  | ANullDeref of var (** pointer *)
 
 let is_error_token = function
   | TOutOfBound _ -> true
+  | TNullDeref _ -> true
   | _ -> false
 
 let error_token_range = function
   | TOutOfBound(_, _, r) -> r
+  | TNullDeref(_, r) -> r
   | _ -> assert false
 
 (*==========================================================================*)
@@ -73,6 +77,15 @@ module Domain = struct
                 alarm_level = High;
               } in
               alarm :: acc
+
+            | TNullDeref(p, range) ->
+              let alarm = {
+                alarm_kind = ANullDeref(p);
+                alarm_range = range;
+                alarm_level = High;
+              } in
+              alarm :: acc
+
             | _ -> acc
           ) [] flow
         in
@@ -98,6 +111,7 @@ let setup () =
 
   register_pp_token (fun next fmt -> function
       | TOutOfBound (v, o, r) -> Format.fprintf fmt "outbound@%a" Framework.Pp.pp_range r
+      | TNullDeref(p, r) -> Format.fprintf fmt "null@%a" Framework.Pp.pp_range r
       | tk -> next fmt tk
     );
 
@@ -108,11 +122,15 @@ let setup () =
           (fun () -> compare_var v1 v2);
           (fun () -> compare o1 o2);
         ]
+
+      | ANullDeref(p1), ANullDeref(p2) -> compare_var p1 p2
+
       | _ -> next a1 a2
     );
 
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
       | AOutOfBound(v, o) -> Format.fprintf fmt "%a  Out of bound access on %s" ((Debug.color "red") Format.pp_print_string) "✘" v.vname
+      | ANullDeref(p) -> Format.fprintf fmt "%a  Null pointer dereference on %s" ((Debug.color "red") Format.pp_print_string) "✘" p.vname
       | _ -> next fmt alarm
     );

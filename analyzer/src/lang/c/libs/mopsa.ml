@@ -34,6 +34,7 @@ struct
 
   let error_token_to_code = function
     | Alarms.TOutOfBound _ -> 1
+    | Alarms.TNullDeref _ -> 2
     | _ -> assert false
 
   (*==========================================================================*)

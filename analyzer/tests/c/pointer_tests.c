@@ -44,6 +44,19 @@ void test_null_is_zero() {
   _mopsa_assert_true(p == NULL);
 }
 
+int *global;
+
+void test_initialization_to_null_of_uninitialized_global() {
+  _mopsa_assert_true(global == NULL);
+}
+
+void test_null_deref() {
+  int *p = NULL;
+  int **q = &p;
+  **q = 1;
+  _mopsa_assert_error_at_line(NULL_DEREF, 56);
+}
+
 void test_array_deref() {
   int a[10];
   a[0] = 10;

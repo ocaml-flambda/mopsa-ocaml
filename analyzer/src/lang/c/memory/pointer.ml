@@ -275,7 +275,13 @@ struct
                         ) None itv
                   end
 
-                | E_p_null -> assert false
+                | E_p_null ->
+                  let p = match ekind p with E_var p -> p | _ -> assert false in
+                  let flow = man.flow.add (Alarms.TNullDeref (p, exp.erange)) (man.flow.get TCur flow) flow |>
+                             man.flow.set TCur man.env.Framework.Lattice.bottom
+                  in
+                  oeval_singleton (None, flow, [])
+
 
                 | E_p_invalid -> assert false
              )

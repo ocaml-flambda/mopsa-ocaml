@@ -1,5 +1,5 @@
 #define OUT_OF_BOUND 1
-#define DIV_BY_ZERO 2
+#define NULL_DEREF 2
 
 void _mopsa_assert_true(int cond);
 void _mopsa_assert_false(int cond);
