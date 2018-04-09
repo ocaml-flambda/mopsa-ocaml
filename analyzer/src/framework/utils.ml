@@ -74,15 +74,15 @@ let oeval_compose eval ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
 
 let eval_list
     (l: 'a list)
-    (eval: 'a -> 'b flow -> ('a, 'b) evals)
+    (eval: 'a -> 'b flow -> ('c, 'b) evals option)
     ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
     (flow: 'b flow)
-  : ('a list, 'b) evals option =
+  : ('c list, 'b) evals option =
   let rec aux expl flow clean = function
     | [] ->
       oeval_singleton (Some (List.rev expl), flow, clean)
     | exp :: tl ->
-      Some (eval exp flow) |>
+      eval exp flow |>
       oeval_substitute
         (fun (exp', flow, clean') ->
            match exp' with
@@ -97,8 +97,8 @@ let man_eval_list
     ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
     man ctx (flow: 'b flow)
   : ('a list, 'b) evals option =
-  eval_list l (fun exp flow -> man.eval exp ctx flow) ~empty flow
-    
+  eval_list l (fun exp flow -> Some (man.eval exp ctx flow)) ~empty flow
+
 (**
    [re_eval_singleton ev eval] re-evaluates a singleton evaluation case
    [ev], starting from the top-level domain.

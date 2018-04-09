@@ -1,4 +1,5 @@
 #include "mopsa.h"
+#include <stddef.h>
 
 void test_deref_in_rval() {
   int i = 10;
@@ -36,6 +37,11 @@ void test_non_equality() {
   p = &i;
   q = &j;
   _mopsa_assert_true(p != q);
+}
+
+void test_null_is_zero() {
+  int* p = NULL;
+  _mopsa_assert_true(p == NULL);
 }
 
 void test_array_deref() {
