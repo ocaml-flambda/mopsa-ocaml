@@ -395,7 +395,7 @@ module Make(ValAbs : DOMAIN) = struct
 
   let top = {cs = CS.top; a = ValAbs.top}
 
-  let bottom = {cs = CS.top; a = ValAbs.bottom}
+  let bottom = {cs = CS.bottom; a = ValAbs.bottom}
 
   let join (u : t) (u' : t) : t =
     debug "join:@\n u = @[%a@]@\n u' = @[%a@]" print u print u';
@@ -416,7 +416,7 @@ module Make(ValAbs : DOMAIN) = struct
     else
       let range = mk_fresh_range () in
       let u,u' = unify u u' range in
-      {u with a = ValAbs.join u.a u'.a}
+      {u with a = ValAbs.meet u.a u'.a}
 
   let widening (ctx : Framework.Context.context) (u : t) (u' : t) : t =
     if ValAbs.leq u.a ValAbs.bottom then

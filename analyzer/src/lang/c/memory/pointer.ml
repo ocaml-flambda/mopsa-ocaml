@@ -273,15 +273,18 @@ struct
                     match itv with
                     | None -> assert false
                     | Some itv ->
-                      Value.fold (fun acc o ->
-                          let c = mk_cell base o t in
-                          let exp' = Cell.mk_gen_cell_var c range in
-                          man.eval exp' ctx flow |>
-                          eval_compose
-                            (fun exp' flow ->
-                               oeval_join acc (oeval_singleton (Some exp', flow, []))
-                            )
-                        ) None itv
+                      try
+                        Value.fold (fun acc o ->
+                            let c = mk_cell base o t in
+                            let exp' = Cell.mk_gen_cell_var c range in
+                            man.eval exp' ctx flow |>
+                            eval_compose
+                              (fun exp' flow ->
+                                 oeval_join acc (oeval_singleton (Some exp', flow, []))
+                              )
+                          ) None itv
+                      with Value.Unbounded ->
+                        assert false
                   end
 
                 | E_p_null ->
