@@ -9,7 +9,7 @@ sed "1s/^/#include \"mopsa.h\"\n#line 1 \"${esc_file}\"\n/" ${file} > ${tmp}
 
 cat <<EOF >> ${tmp}
 
-#line 1 "mopsa-juliet"
+#line 1 "${file}-mopsa"
 void test_bad() {
   ${base}_bad();
   _mopsa_assert_unsafe();
@@ -23,4 +23,4 @@ EOF
 
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 ${MOPSADIR}/bin/mopsa -test=true -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet ${tmp}
-rm ${tmp}
+#rm ${tmp}

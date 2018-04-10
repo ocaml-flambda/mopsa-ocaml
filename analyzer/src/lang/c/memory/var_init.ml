@@ -60,10 +60,16 @@ module Domain = struct
       in
       aux 0 flow
 
-    | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
-      let table = Program.find_string_table ctx in
-      let v = Program.StringTable.find s table in
-      assert false
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
+      let n = get_array_constant_length a.etyp in
+      let rec aux i flow =
+        if i = n then flow
+        else
+          let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
+          let flow = init_expr (mk_c_subscript_access a (mk_int i range) range) init is_global range man ctx flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
     | _ ->
       panic "Array initialization not supported"
@@ -131,9 +137,17 @@ module Domain = struct
     let flow =
       match prog.prog_kind with
       | C_program(globals, _) ->
+        (* Initialize string symbols as global variables *)
+        let range = mk_fresh_range () in
+        let table = Program.find_string_table ctx in
+        let globals = Program.StringTable.fold (fun s v acc ->
+            let init = C_init_expr (mk_c_string s range) in
+            (v, Some init) :: acc
+          ) table globals
+        in
+        (* Initialize global variables *)
         List.fold_left (fun flow (v, init) ->
             let range = mk_fresh_range () in
-            let ctx = Framework.Context.empty in
             let v = mk_var v range in
             init_expr v init true range man ctx flow
           ) flow globals

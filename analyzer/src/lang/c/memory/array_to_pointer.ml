@@ -47,6 +47,13 @@ module Domain = struct
       let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp: arr.etyp)} in
       re_eval_singleton (Some exp', flow, []) man ctx
 
+    | E_constant(C_c_string (s, _)) ->
+      let table = Program.find_string_table ctx in
+      let v = Program.StringTable.find s table in
+      let v = mk_var v exp.erange in
+      re_eval_singleton (Some v, flow, []) man ctx
+
+
     | _ -> None
 
 

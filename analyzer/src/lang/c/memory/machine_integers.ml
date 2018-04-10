@@ -33,8 +33,8 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_constant(C_c_character c) ->
-      re_eval_singleton (Some (mk_int (int_of_char c) exp.erange), flow, []) man ctx
+    | E_constant(C_c_character (c, _)) ->
+      re_eval_singleton (Some (mk_z c exp.erange), flow, []) man ctx
 
     | E_unop(op, e) when is_c_int_type e.etyp ->
       man.eval e ctx flow |>

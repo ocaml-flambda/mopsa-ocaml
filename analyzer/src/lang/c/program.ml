@@ -36,37 +36,39 @@ let find_string_table ctx =
 module Domain =
 struct
 
+  let create_string_table prog ctx =
+    let range = mk_file_range prog.prog_file in
+    let stmt = {skind = S_program prog; srange = range} in
+
+    let counter = ref 0 in
+
+    let table = Framework.Visitor.fold_stmt
+        (fun table e ->
+           match ekind e with
+           | E_constant(C_c_string (s, _)) ->
+             if StringTable.mem s table then table
+             else
+               let v = {
+                 vname = "_string_" ^ (string_of_int !counter);
+                 vuid = 0;
+                 vtyp = type_of_string s;
+                 vkind = V_orig;
+               }
+               in
+               incr counter;
+               StringTable.add s v table
+
+           | _ -> table
+        )
+        (fun table stmt -> table)
+        StringTable.empty stmt
+    in
+    table
+
   let init prog man ctx flow =
     match prog.prog_kind with
     | C_program(globals, funcs) ->
-      let range = mk_file_range prog.prog_file in
-      let stmt = {skind = S_program prog; srange = range} in
-
-      let counter = ref 0 in
-      let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s))) in
-
-      let table = Framework.Visitor.fold_stmt
-          (fun table e ->
-             match ekind e with
-             | E_constant(C_string s) ->
-               if StringTable.mem s table then table
-               else
-                 let v = {
-                   vname = "_string_" ^ (string_of_int !counter);
-                   vuid = 0;
-                   vtyp = type_of_string s;
-                   vkind = V_orig;
-                 }
-                 in
-                 incr counter;
-                 StringTable.add s v table
-
-             | _ -> table
-          )
-          (fun table stmt -> table)
-          StringTable.empty stmt
-      in
-
+      let table = create_string_table prog ctx in
       let ctx = Framework.Context.add KStringTable table ctx in
       ctx, flow
 

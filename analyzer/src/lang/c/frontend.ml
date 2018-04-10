@@ -242,7 +242,8 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     match ekind with
     | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
-    | C_AST.E_string_literal (s, Clang_AST.Char_Ascii) -> Universal.Ast.(E_constant (C_string s))
+    | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
+    | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
     | C_AST.E_variable v -> E_var (from_var v)
     | C_AST.E_function f -> Ast.E_c_function (from_function f)
     | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr f, Array.map from_expr args |> Array.to_list)
@@ -256,10 +257,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr a, from_expr i)
     | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr r, i, f)
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr r, i, f)
-    | C_AST.E_character_literal (c, Clang_AST.Char_Ascii)  -> E_constant(Ast.C_c_character (char_of_int @@ Z.to_int c))
 
-    | C_AST.E_character_literal (_,_) -> failwith "E_character_literal not supported"
-    | C_AST.E_string_literal (_, _) -> failwith "E_string_literal not supported"
     | C_AST.E_conditional (_,_,_) -> failwith "E_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> failwith "E_comma not supported"
@@ -297,6 +295,12 @@ and from_binary_operator : C_AST.binary_operator -> Framework.Ast.operator = fun
   | C_AST.O_logical (C_AST.LOGICAL_AND) -> Universal.Ast.O_log_and
   | C_AST.O_logical (C_AST.LOGICAL_OR) -> Universal.Ast.O_log_or
 
+and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = function
+  | Clang_AST.Char_Ascii -> Ast.C_char_ascii
+  | Clang_AST.Char_Wide -> Ast.C_char_wide
+  | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
+  | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
+  | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
 
 (** {2 Ranges and locations} *)
 

@@ -58,7 +58,8 @@ let () =
     );
   register_pp_constant (fun next fmt c ->
       match c with
-      | C_c_character c -> fprintf fmt "'%c'" c
+      | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
+      | C_c_string(s, _) -> fprintf fmt "\"%s\"" s
       | _ -> next fmt c
     );
   register_pp_expr (fun default fmt expr ->

@@ -162,9 +162,19 @@ type c_inc_direction =
   | DEC
   (** Whether an incrementation is ++ or -- *)
 
+type c_character_kind =
+  | C_char_ascii
+  | C_char_wide
+  | C_char_utf8
+  | C_char_utf16
+  | C_char_utf32
+
 type constant +=
-  | C_c_character of char
+  | C_c_character of Z.t * c_character_kind
   (** Constant character *)
+
+  | C_c_string of string * c_character_kind
+  (** Constant string literal *)
 
 type c_init =
   | C_init_expr of expr
@@ -592,4 +602,9 @@ let mk_c_subscript_access a i range =
   mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_array_type a.etyp) range
 
 let mk_c_character c range =
-  mk_constant (C_c_character c) range ~etyp:(T_c_integer(C_unsigned_char))
+  mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
+
+let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s)))
+
+let mk_c_string s range =
+  mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
