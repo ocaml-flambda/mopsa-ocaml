@@ -19,3 +19,17 @@ void test_null_fill_at_initialization() {
   char s2[10] = "part";
   _mopsa_assert_true(s2[4] == '\0');
 }
+
+void test_same_string_from_string_table() {
+  char *p, *q;
+  p = "string";
+  q = "string";
+  _mopsa_assert_true(p == q);
+}
+
+void test_different_strings_from_string_table() {
+  char *p, *q;
+  p = "string1";
+  q = "string2";
+  _mopsa_assert_true(p != q);
+}

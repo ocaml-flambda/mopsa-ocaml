@@ -1,6 +1,6 @@
 /*
   Clang_to_ml - Parse C files with Clang into AST and extract the AST to OCaml values.
-  
+
 
   This functions from this file are indented to be called from OCaml.
   See Clang_AST.ml
@@ -78,7 +78,7 @@ static const bool log_unknown = true;
 /* ************* */
 
 
-#define CAML_EXPORT CAMLprim extern "C" 
+#define CAML_EXPORT CAMLprim extern "C"
 
 /* Used when debugging to catch allocation errors early */
 CAML_EXPORT value caml_gc_full_major(value);
@@ -153,20 +153,20 @@ private:
 
   std::unordered_map<uintptr_t,size_t> map;
   /* underlying map. from key to index in mlvalues */
-   
+
   value mlvalues;
   /* all OCaml values are store into a single contiguous OCaml block,
      the GC can easily traverse the block and update values
   */
-  
+
   size_t nb;
   /* allocated elements in mlvalues */
 
   size_t nb_queries, nb_hit;
   /* number of queries and acche hit, for statistic */
-  
+
 public:
-  
+
   Cache(std::string name) : name(name), nb(0), nb_queries(0), nb_hit(0) {
     mlvalues = caml_alloc_tuple(100);
     caml_register_global_root(&mlvalues);
@@ -187,7 +187,7 @@ public:
       std::cout << "cache '" << name << "' not used" << std::endl;
     }
   }
-  
+
   CAMLprim bool contains(uintptr_t key) {
     bool hit = map.count(key) > 0;
     if (cache_statistics) {
@@ -230,17 +230,17 @@ public:
   CAMLprim  bool contains(const void * key) {
     return contains(reinterpret_cast<uintptr_t>(key));
   }
-  
+
   CAMLprim value get(const void * key) {
     return get(reinterpret_cast<uintptr_t>(key));
   }
-  
+
   CAMLprim void store(const void * key, value v) {
     store(reinterpret_cast<uintptr_t>(key), v);
   }
-  
+
   CAMLprim void uncache(const void * key) {
-    uncache(reinterpret_cast<uintptr_t>(key));    
+    uncache(reinterpret_cast<uintptr_t>(key));
   }
 };
 
@@ -268,7 +268,7 @@ public:
 
 /* execute BODY to get RES and cache,
    unless already associated with KEY in CACHE
-*/ 
+*/
 #define CACHED(CACHE, RES, KEY, BODY) {                                 \
     if (CACHE.contains(KEY)) {                                          \
       RES = CACHE.get(KEY);                                             \
@@ -335,7 +335,7 @@ public:
   }
 
 
-/* as GENERATE_NODE, but returns a variant of given tag with a single 
+/* as GENERATE_NODE, but returns a variant of given tag with a single
    argument containing a struct with NBML elements
  */
 #define GENERATE_NODE_INDIRECT(TYPE, RES, NODE, NBML, BODY)             \
@@ -450,13 +450,13 @@ public:
  */
 
 class MLLocationTranslator {
-  
+
  private:
   SourceManager& src;
   Cache cacheLoc;
   Cache cacheFile;
   value invalid_file;
-  
+
 public:
   CAMLprim value TranslateSourceLocation(SourceLocation a);
   CAMLprim value TranslateSourceRange(SourceRange a);
@@ -466,11 +466,11 @@ public:
     invalid_file = caml_copy_string("<invalid>");
     caml_register_global_root(&invalid_file);
   }
-  
+
   ~MLLocationTranslator() {
     caml_remove_global_root(&invalid_file);
   }
-  
+
 };
 
 CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
@@ -485,7 +485,7 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
       presumedLoc = src.getPresumedLoc(a);
       FileID fid = loc.first;
       const FileEntry* f = src.getFileEntryForID(fid);
-      
+
       if (f) {
         unsigned fuid = f->getUID();
         if (cacheFile.contains(fuid)) {
@@ -499,13 +499,13 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
       else {
         tmp = invalid_file;
       }
-      
+
       ret = caml_alloc_tuple(3);
       Store_field(ret, 0, Val_int(presumedLoc.getLine()));
       Store_field(ret, 1, Val_int(presumedLoc.getColumn()));
       Store_field(ret, 2, tmp);
     });
-  
+
   CAMLreturn(ret);
 }
 
@@ -535,7 +535,7 @@ CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
 
 class MLTreeBuilderVisitor
   : public RecursiveASTVisitor<MLTreeBuilderVisitor> {
-  
+
 private:
   ASTContext *Context;
   MLLocationTranslator& loc;
@@ -624,14 +624,14 @@ public:
   CAMLprim value TranslateTemplateTypeParmType(const TemplateTypeParmType* x);
   CAMLprim value TranslateTemplateTypeParmDecl(const TemplateTypeParmDecl* x);
   CAMLprim value TranslateNamedDecl(const NamedDecl *x);
-  
+
   explicit MLTreeBuilderVisitor(MLLocationTranslator& loc, ASTContext *Context):
     Context(Context), loc(loc),
     cacheType("type"), cacheTypeQual("type_qual"), cacheDecl("decl"), cacheStmt("stmt"),
     cacheExpr("expr"), cacheMisc("misc"), cacheMisc2("misc2"), cacheMisc3("misc3"),
     uid(0)
   {}
-  
+
   bool TraverseDecl(Decl *node);
   bool TraverseStmt(Stmt *node);
   bool TraverseType(QualType node);
@@ -799,27 +799,27 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
   WITH_CACHE_TUPLE(cacheDecl, ret2, node, 3, {
 
       ret = Val_int(-1);
-      
+
       // C nodes
-      
+
       GENERATE_NODE(TranslationUnitDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateDeclContextChild(dyn_cast<DeclContext>(x)));
         });
-      
+
       GENERATE_NODE(FieldDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateFieldDecl(x));
         });
-      
+
       GENERATE_NODE(EnumConstantDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateEnumConstantDecl(x));
         });
-      
+
       GENERATE_NODE_CONSTANT(EmptyDecl, ret, node);
-      
+
       GENERATE_NODE(FileScopeAsmDecl, ret, node, 1, {
           Store_field(ret, 0, caml_copy_string(x->getAsmString()->getString().str().c_str()));
         });
-      
+
       GENERATE_NODE(LinkageSpecDecl, ret, node, 2, {
           int r;
           switch (x->getLanguage()) {
@@ -832,31 +832,31 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 0, Val_int(r));
           Store_field(ret, 1, TranslateDeclContextChild(dyn_cast<DeclContext>(x)));
         });
-      
+
       GENERATE_NODE(LabelDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateNamedDecl(x));
         });
-      
+
       GENERATE_NODE(EnumDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateEnumDecl(x));
         });
-      
+
       GENERATE_NODE(RecordDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateRecordDecl(x));
         });
-      
+
       GENERATE_NODE(TypedefNameDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateTypedefNameDecl(x));
         });
-      
+
       GENERATE_NODE(FunctionDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateFunctionDecl(x));
         });
-      
+
       GENERATE_NODE(VarDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateVarDecl(x));
         });
-      
+
 
       /* C++ */
 
@@ -875,22 +875,22 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 1, caml_copy_string(x->getMessage()->getString().str().c_str()));
           Store_field(ret, 2, Val_bool(x->isFailed()));
         });
-        
+
       GENERATE_NODE(NamespaceAliasDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateNamespaceAliasDecl(x));
         });
-        
+
       GENERATE_NODE(NamespaceDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateNamespaceDecl(x));
         });
-      
+
       GENERATE_NODE_INDIRECT(BuiltinTemplateDecl, ret, node, 5, {
           Store_field(ret, 0, TranslateNamedDecl(x));
           Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
           Store_field(ret, 2, TranslateDecl(x->getTemplatedDecl()));
           Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
           int r = 0;
-          switch (x->getBuiltinTemplateKind()) {    
+          switch (x->getBuiltinTemplateKind()) {
             GENERATE_CASE(r, BTK__make_integer_seq);
             GENERATE_CASE(r, BTK__type_pack_element);
           default:
@@ -899,7 +899,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           }
           Store_field(ret, 4, Val_int(r));
         });
-      
+
       GENERATE_NODE(ClassTemplateDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateClassTemplateDecl(x));
         });
@@ -907,7 +907,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
       GENERATE_NODE(FunctionTemplateDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateFunctionTemplateDecl(x));
         });
-      
+
       GENERATE_NODE_INDIRECT(TypeAliasTemplateDecl, ret, node, 4, {
           x = x->getCanonicalDecl();
           Store_field(ret, 0, TranslateNamedDecl(x));
@@ -915,7 +915,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 2, TranslateTypedefNameDecl(x->getTemplatedDecl()));
           Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
         });
-      
+
       GENERATE_NODE(VarTemplateDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateVarTemplateDecl(x));
         });
@@ -931,15 +931,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
       GENERATE_NODE(TypeAliasDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateTypedefNameDecl(x));
         });
-      
+
       GENERATE_NODE(UnresolvedUsingTypenameDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateUnresolvedUsingTypenameDecl(x));
         });
-      
+
       GENERATE_NODE(UsingDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateUsingDecl(x));
         });
-      
+
       GENERATE_NODE_INDIRECT(UsingDirectiveDecl, ret, node, 3, {
           Store_field(ret, 0, TranslateNamedDecl(x));
           Store_field(ret, 1, TranslateNestedNameSpecifierList(x->getQualifier()));
@@ -960,7 +960,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 2, TranslateExpr(x->getBinding()));
           Store_field_option(ret, 3, x->getHoldingVar(), TranslateVarDecl(x->getHoldingVar()));
         });
-      
+
       GENERATE_NODE(IndirectFieldDecl, ret, node, 1, {
           Store_field(ret, 0, TranslateIndirectFieldDecl(x));
         });
@@ -973,7 +973,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
           Store_field(ret, 0, TranslateNonTypeTemplateParmDecl(x));
         });
 
- 
+
       // Default
       if (ret == Val_int(-1)) {
         ret = caml_alloc(2, MLTAG_UnknownDecl);
@@ -984,11 +984,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
         Store_field(ret, 1, caml_copy_string(node->getDeclKindName()/*r.str().c_str()*/));
         if (log_unknown) { std::cerr << "mlClangAST: unhandled Decl node encountered: " << node->getDeclKindName() << std::endl; }
       }
-      
+
       Store_field(ret2, 0, ret);
       Store_field(ret2, 1, TranslateAccessSpecifier(node->getAccess()));
       Store_field(ret2, 2, loc.TranslateSourceRange(node->getSourceRange()));
-    }); 
+    });
 
   if (verbose_alloc)
     std::cout << "end TranslateDecl " << std::hex << node << std::dec << " " << node->getDeclKindName() << std::endl;
@@ -1007,8 +1007,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNamedDecl(const NamedDecl *x) {
       Store_field(ret, 1, caml_copy_string(x->getQualifiedNameAsString().c_str()));
       Store_field(ret, 2, TranslateDeclarationName(x->getDeclName()));
     });
-  
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* UnresolvedUsingTypenameDecl -> unresolved_using_typename_decl */
@@ -1022,10 +1022,10 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUnresolvedUsingTypenameDecl(const 
       Store_field(ret, 1, TranslateNestedNameSpecifierLoc(x->getQualifierLoc()));
       Store_field(ret, 2, Val_bool(x->isPackExpansion()));
     });
-  
-  CAMLreturn(ret);  
-}     
-  
+
+  CAMLreturn(ret);
+}
+
 /* FriendDecl -> friend_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *x) {
   CAMLparam0();
@@ -1039,15 +1039,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *x) {
       Store_field_array(ret, 3, x->getFriendTypeNumTemplateParameterLists(), TranslateTemplateParameterList(x->getFriendTypeTemplateParameterList(i)));
       Store_field(ret, 4, loc.TranslateSourceRange(x->getSourceRange()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* TemplateTemplateParmDecl -> template_template_param_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateTemplateTemplateParmDecl(const TemplateTemplateParmDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "TemplateTemplateParmDecl");
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 8, {
       Store_field(ret, 0, TranslateNamedDecl(x));
@@ -1063,15 +1063,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateTemplateParmDecl(const Tem
       else Store_field(ret, 6, Atom(0));
       Store_field_option(ret, 7, x->hasDefaultArgument(), TranslateTemplateArgumentLoc(x->getDefaultArgument()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* NonTypeTemplateParmDecl -> non_type_template_parm_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateNonTypeTemplateParmDecl(const NonTypeTemplateParmDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "NonTypeTemplateParmDecl");
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field(ret, 0, TranslateNamedDecl(x));
@@ -1084,15 +1084,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNonTypeTemplateParmDecl(const NonT
       }
       else Store_field(ret, 5, Atom(0));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* UnresolvedUsingValueDecl -> unresolved_using_value_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateUnresolvedUsingValueDecl(const UnresolvedUsingValueDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "UnresolvedUsingValueDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
@@ -1102,15 +1102,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUnresolvedUsingValueDecl(const Unr
       Store_field(ret, 3, Val_bool(x->isAccessDeclaration()));
       Store_field(ret, 4, Val_bool(x->isPackExpansion()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* IndirectFieldDecl -> indirect_field_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateIndirectFieldDecl(const IndirectFieldDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "IndirectFieldDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
@@ -1121,15 +1121,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateIndirectFieldDecl(const IndirectFi
       Store_field_option(ret, 3, x->getVarDecl(), TranslateVarDecl(x->getVarDecl()));
       Store_field_array(ret, 4, d.size(), TranslateDecl(d[i]));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* UsingDecl -> using_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateUsingDecl(const UsingDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "UsingDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
@@ -1137,15 +1137,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingDecl(const UsingDecl *x) {
       Store_field(ret, 1, TranslateNestedNameSpecifierLoc(x->getQualifierLoc()));
       Store_field(ret, 2, Val_bool(x->hasTypename()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* UsingPackDecl -> using_pack_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateUsingPackDecl(const UsingPackDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "UsingPackDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
@@ -1154,15 +1154,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingPackDecl(const UsingPackDecl 
       Store_field(ret, 1, TranslateDecl(x->getInstantiatedFromUsingDecl()));
       Store_field_array(ret, 2, r.size(), TranslateDecl(r[i]));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* UsingShadowDecl -> using_shadow_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateUsingShadowDecl(const UsingShadowDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "UsingShadowDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
@@ -1170,15 +1170,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingShadowDecl(const UsingShadowD
       Store_field(ret, 1, TranslateDecl(x->getTargetDecl()));
       Store_field(ret, 2, TranslateUsingDecl(x->getUsingDecl()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* ClassTemplateDecl -> class_template_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateClassTemplateDecl(const ClassTemplateDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "ClassTemplateDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
@@ -1189,15 +1189,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateClassTemplateDecl(const ClassTempl
       Store_field_list(ret, 4, x->specializations(), TranslateRecordDecl(child));
       Store_field(ret, 5, TranslateQualType((const_cast<ClassTemplateDecl*>(x))->getInjectedClassNameSpecialization()));
     });
- 
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* FunctionTemplateDecl -> function_template_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateFunctionTemplateDecl(const FunctionTemplateDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "FunctionTemplateDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
@@ -1207,15 +1207,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionTemplateDecl(const Functio
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
       Store_field_list(ret, 4, x->specializations(), TranslateFunctionDecl(child));
     });
-   
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* VarTemplateDecl -> var_template_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateDecl(const VarTemplateDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "VarTemplateDecl");
   x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
@@ -1225,8 +1225,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateDecl(const VarTemplateD
       Store_field_option(ret, 3, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
       Store_field_list(ret, 4, x->specializations(), TranslateVarDecl(child));
     });
-  
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 
@@ -1242,7 +1242,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateClassTemplateSpecializationDecl(co
       Store_field_array(ret, 1, l.size(), TranslateTemplateArgument(l.get(i)));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 /* FunctionDecl -> function_template_specialization */
@@ -1257,14 +1257,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionTemplateSpecializationDecl
       Store_field_array(ret, 1, l->size(), TranslateTemplateArgument(l->get(i)));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 /* VarTemplateSpecializationDecl -> var_template_specialization */
 CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateSpecializationDecl(const VarTemplateSpecializationDecl *x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   check_null(x, "VarTemplateSpecializationDecl");
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 2, {
       const TemplateArgumentList& l = x->getTemplateArgs();
@@ -1272,7 +1272,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateSpecializationDecl(cons
       Store_field_array(ret, 1, l.size(), TranslateTemplateArgument(l.get(i)));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 
@@ -1289,7 +1289,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNamespaceDecl(const NamespaceDecl 
       Store_field(ret, 2, Val_bool(x->isInline()));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 /* NamespaceAliasDecl -> namespace_alias_decl */
@@ -1305,8 +1305,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNamespaceAliasDecl(const Namespace
       Store_field(ret, 2, TranslateDecl(x->getAliasedNamespace()));
       Store_field(ret, 3, TranslateNestedNameSpecifierLoc(x->getQualifierLoc()));
     });
-  
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* TemplateParameterList -> template_parameter_list */
@@ -1319,8 +1319,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateParameterList(const Templa
       Store_field_array(ret, 0, x->size(), TranslateDecl(x->getParam(i)));
       Store_field_option(ret, 1, x->getRequiresClause(), TranslateExpr(x->getRequiresClause()));
     });
-  
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* BlockDecl -> block_decl */
@@ -1400,7 +1400,7 @@ enum {
 /* StorageClass -> storage_class */
 CAMLprim value MLTreeBuilderVisitor::TranslateStorageDuration(StorageDuration c) {
   int i = 0;
-  switch (c) {    
+  switch (c) {
   GENERATE_CASE(i, SD_FullExpression);
   GENERATE_CASE(i, SD_Automatic);
   GENERATE_CASE(i, SD_Thread);
@@ -1417,14 +1417,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStorageDuration(StorageDuration c)
 CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *x) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
-  
+
   check_null(x, "TranslateVarDecl");
   if (x->getDefinition(*Context)) x = x->getDefinition(*Context);
   //else x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc, ret, x, 9, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
-      Store_field(ret, 2, TranslateQualType(x->getType()));  
+      Store_field(ret, 2, TranslateQualType(x->getType()));
       Store_field(ret, 3, TranslateStorageClass(x->getStorageClass()));
       Store_field_option(ret, 4, x->hasInit(), TranslateExpr(x->getInit()));
       Store_field(ret, 5, Val_bool(x->isFileVarDecl()));
@@ -1474,7 +1474,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *x
       Store_field(ret, 7, TranslateQualType(x->getReturnType()));
       Store_field_array(ret, 8, x->getNumParams(), TranslateParmVarDecl(x->getParamDecl(i)));
       Store_field(ret, 9, loc.TranslateSourceRange(x->getSourceRange()));
-      // C++ 
+      // C++
       Store_field_option(ret, 10, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
       Store_field_option(ret, 11, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
       Store_field_option(ret, 12, isa<CXXMethodDecl>(x), TranslateCXXMethodDecl(cast<CXXMethodDecl>(x)));
@@ -1486,7 +1486,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *x
 CAMLprim value MLTreeBuilderVisitor::TranslateCXXMethodDecl(const CXXMethodDecl *x) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
-  
+
   check_null(x, "CXXMethodDecl");
   ret = caml_alloc_tuple(6);
   Store_field(ret, 0, TranslateRecordDecl(x->getParent()));
@@ -1564,7 +1564,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateCXXCtorInitializer(const CXXCtorIn
   }
   else {
    if (verbose_exn) std::cout << "unknown constructor initializer" << std::endl;
-   caml_failwith("mlClangAST: unknown constructor initializer");    
+   caml_failwith("mlClangAST: unknown constructor initializer");
   }
 
   CAMLreturn(ret);
@@ -1576,16 +1576,16 @@ enum {
   MLTAG_CXXConstructorName,
   MLTAG_CXXDestructorName,
   MLTAG_CXXConversionFunctionName,
-  MLTAG_CXXDeductionGuideName, 
+  MLTAG_CXXDeductionGuideName,
   MLTAG_CXXOperatorName,
   MLTAG_CXXLiteralOperatorName,
-  MLTAG_CXXUsingDirective 
+  MLTAG_CXXUsingDirective
 };
 
 CAMLprim value MLTreeBuilderVisitor::TranslateDeclarationName(const DeclarationName& x) {
   CAMLparam0();
   CAMLlocal1(ret);
-  
+
   switch (x.getNameKind()) {
   case DeclarationName::Identifier:
     ret = caml_alloc(1, MLTAG_Identifier);
@@ -1608,7 +1608,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDeclarationName(const DeclarationN
     ret = caml_alloc(1, MLTAG_CXXDeductionGuideName);
     Store_field(ret, 0, TranslateDecl(x.getCXXDeductionGuideTemplate()));
     break;
-#endif    
+#endif
   case DeclarationName::CXXOperatorName:
     ret = caml_alloc(1, MLTAG_CXXOperatorName);
     Store_field(ret, 0, Val_false/*TranslateOverloadedOperatorKind(x.getCXXOverloadedOperator(), NULL)*/);
@@ -1725,7 +1725,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateArgumentLoc(const Template
   ret = caml_alloc_tuple(2);
   Store_field(ret, 0, TranslateTemplateArgument(x.getArgument()));
   Store_field(ret, 1, loc.TranslateSourceRange(x.getSourceRange()));
-  
+
   CAMLreturn(ret);
 }
 
@@ -1789,7 +1789,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateArgument(const TemplateArg
     if (verbose_exn) x.dump();
     caml_failwith("mlClangAST: unknown kind of template argument");
   }
-  
+
   CAMLreturn(ret);
 }
 
@@ -1856,7 +1856,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateName(const TemplateName& x
     if (verbose_exn) x.dump();
     caml_failwith("mlClangAST: unknown kind of template name");
   }
-  
+
   CAMLreturn(ret);
 }
 
@@ -1900,7 +1900,7 @@ enum {
   MLTAG_UnaryExprOrTypeTraitExpr,
   MLTAG_VAArgExpr,
 
-  /* C++ expressions */  
+  /* C++ expressions */
   MLTAG_ArrayTypeTraitExpr,
   MLTAG_CXXBindTemporaryExpr,
   MLTAG_CXXBoolLiteralExpr,
@@ -1937,7 +1937,7 @@ enum {
   MLTAG_ConvertVectorExpr,
   MLTAG_ExtVectorElementExpr,
   MLTAG_ShuffleVectorExpr,
-  
+
   /* Unknown */
   MLTAG_UnknownExpr,
 };
@@ -1976,7 +1976,7 @@ enum {
 enum {
   MLTAG_Ident_Func,
   MLTAG_Ident_Function,
-  MLTAG_Ident_LFunction,	
+  MLTAG_Ident_LFunction,
   MLTAG_Ident_FuncDName,
   MLTAG_Ident_FuncSig,
   MLTAG_Ident_PrettyFunction,
@@ -2025,27 +2025,27 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
     std::cout << "TranslateExpr " << std::hex << node << std::dec << " " << node->getStmtClassName() << std::endl;
 
   WITH_CACHE_TUPLE(cacheExpr, ret2, node, 3, {
-      
+
       ret = Val_int(-1);
-      
+
       GENERATE_NODE_INDIRECT(ConditionalOperator, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getCond()));
           Store_field(ret, 1, TranslateExpr(x->getTrueExpr()));
           Store_field(ret, 2, TranslateExpr(x->getFalseExpr()));
         });
-      
+
       GENERATE_NODE(AddrLabelExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateNamedDecl(x->getLabel()->getStmt()->getDecl()));
         });
-      
+
       GENERATE_NODE_CONSTANT(ArrayInitIndexExpr, ret, node);
-      
+
       GENERATE_NODE_INDIRECT(ArrayInitLoopExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateOpaqueValueExpr(x->getCommonExpr()));
           Store_field(ret, 1, TranslateExpr(x->getSubExpr()));
           Store_field(ret, 2, TranslateAPInt(x->getArraySize()));
         });
-      
+
       GENERATE_NODE_INDIRECT(ArraySubscriptExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getBase()));
           Store_field(ret, 1, TranslateExpr(x->getIdx()));
@@ -2065,13 +2065,13 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 3, TranslateExpr(x->getRHS()));
           Store_field(ret, 4, TranslateQualType(x->getComputationResultType()));
        });
-      
+
       GENERATE_NODE(BinaryOperator, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getLHS()));
           Store_field(ret, 1, TranslateBinaryOperatorKind(x->getOpcode(), x));
           Store_field(ret, 2, TranslateExpr(x->getRHS()));
         });
-      
+
       GENERATE_NODE(UnaryOperator, ret, node, 2, {
           Store_field(ret, 0, TranslateUnaryOperatorKind(x->getOpcode(), x));
           Store_field(ret, 1, TranslateExpr(x->getSubExpr()));
@@ -2083,11 +2083,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_array(ret, 2, x->getNumArgs(), TranslateExpr(x->getArg(i)));
           Store_field_option(ret, 3, isa<CXXOperatorCallExpr>(x), TranslateOverloadedOperatorKind((cast<CXXOperatorCallExpr>(x))->getOperator(),x));
         });
-      
+
       GENERATE_NODE(CastExpr, ret, node, 2, {
           int r = 0;
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
-          
+
           if (isa<CStyleCastExpr>(x))r = MLTAG_CStyleCast;
           else if (isa<CXXFunctionalCastExpr>(x))  r = MLTAG_CXXFunctionalCast;
           else if (isa<CXXConstCastExpr>(x))       r = MLTAG_CXXConstCast;
@@ -2101,7 +2101,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           }
           Store_field(ret, 1, Val_int(r));
         });
-      
+
       GENERATE_NODE(CharacterLiteral, ret, node, 2, {
           int r = 0;
           Store_field(ret, 0, caml_copy_int32(x->getValue()));
@@ -2117,7 +2117,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           }
           Store_field(ret, 1, Val_int(r));
         });
-      
+
       GENERATE_NODE_INDIRECT(ChooseExpr, ret, node, 5, {
           Store_field(ret, 0, TranslateExpr(x->getCond()));
           Store_field(ret, 1, TranslateExpr(x->getLHS()));
@@ -2125,49 +2125,49 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 3, TranslateExpr(x->getLHS()));
           Store_field(ret, 4, Val_bool(x->isConditionTrue()));
         });
-      
+
       GENERATE_NODE(CompoundLiteralExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getInitializer()));
           Store_field(ret, 1, Val_bool(x->isFileScope()));
         });
-      
+
       GENERATE_NODE(DeclRefExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateDecl(x->getDecl()));
         });
-      
+
       GENERATE_NODE(DesignatedInitExpr, ret, node, 2, {
           Store_field_array(ret, 0, x->size(), TranslateDesignator(x, ((const_cast<DesignatedInitExpr*>(x))->getDesignator(i))));
           Store_field(ret, 1, TranslateExpr(x->getInit()));
         });
-      
+
       GENERATE_NODE(FloatingLiteral, ret, node, 1, {
           Store_field(ret, 0, TranslateAPFloat(x->getValue()));
         });
-      
+
       GENERATE_NODE_INDIRECT(GenericSelectionExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getControllingExpr()));
           Store_field_array(ret, 1, x->getNumAssocs(), TranslateExpr(x->getAssocExpr(i)));
           Store_field(ret, 2, Val_int(x->getResultIndex()));
         });
-      
+
       GENERATE_NODE_CONSTANT(GNUNullExpr, ret, node);
-      
+
       GENERATE_NODE(ImaginaryLiteral, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
-      
+
       GENERATE_NODE_CONSTANT(ImplicitValueInitExpr, ret, node);
-      
+
       GENERATE_NODE_INDIRECT(InitListExpr, ret, node, 3, {
           Store_field_array(ret, 0, x->getNumInits(), TranslateExpr(x->getInit(i)));
           Store_field_option(ret, 1, x->getInitializedFieldInUnion(), TranslateFieldDecl(x->getInitializedFieldInUnion()));
           Store_field_option(ret, 2, x->hasArrayFiller(), TranslateExpr(x->getArrayFiller()));
         });
-      
+
       GENERATE_NODE(IntegerLiteral, ret, node, 1, {
           Store_field(ret, 0, TranslateAPInt(x->getValue()));
         });
-      
+
       GENERATE_NODE_INDIRECT(MemberExpr, ret, node, 6, {
           Store_field(ret, 0, TranslateExpr(x->getBase()));
           Store_field(ret, 1, TranslateDecl(x->getMemberDecl()));
@@ -2177,35 +2177,35 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_array(ret, 4, x->getNumTemplateArgs(), TranslateTemplateArgumentLoc(tmp[i]));
           Store_field(ret, 5, TranslateDeclarationName(x->getMemberNameInfo().getName()));
         });
-      
+
       GENERATE_NODE_CONSTANT(NoInitExpr, ret, node);
-      
+
       GENERATE_NODE(OffsetOfExpr, ret, node, 2, {
           Store_field_array(ret, 0, x->getNumComponents(), TranslateOffsetOfNode(x, x->getComponent(i)));
           Store_field(ret, 1, TranslateConstantIntegerExpr(node));
         });
-      
+
       GENERATE_NODE(OpaqueValueExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateOpaqueValueExpr(x));
         });
-      
+
       GENERATE_NODE(ParenExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
-      
+
       GENERATE_NODE(ParenListExpr, ret, node, 1, {
           Store_field_array(ret, 0, x->getNumExprs(), TranslateExpr(x->getExpr(i)));
         });
-    
+
       GENERATE_NODE(PredefinedExpr, ret, node, 2, {
           int r = 0;
           switch (x->getIdentType()) {
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Func);
-            GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Function);	
+            GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Function);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, LFunction);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, FuncDName);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, FuncSig);
-            GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunction);	
+            GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunction);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunctionNoVirtual);
           default:
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentType(); }
@@ -2214,7 +2214,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, Val_int(r));
           Store_field(ret, 1, caml_copy_string(x->getFunctionName() ? x->getFunctionName()->getString().str().c_str() : ""));
         });
-      
+
       GENERATE_NODE_INDIRECT(PseudoObjectExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getSyntacticForm()));
           Store_field_array(ret, 1, x->getNumSemanticExprs(), TranslateExpr(x->getSemanticExpr(i)));
@@ -2227,11 +2227,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           }
           Store_field(ret, 2, tmp);
         });
-      
+
       GENERATE_NODE(StmtExpr, ret, node, 1, {
           Store_field_list(ret, 0, x->getSubStmt()->body(), TranslateStmt(child));
         });
-      
+
       GENERATE_NODE(StringLiteral, ret, node, 2, {
           int r = 0;
           // manual copy, as x->getBytes() is not necessarily 0-terminated
@@ -2250,7 +2250,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           }
           Store_field(ret, 1, Val_int(r));
         });
-      
+
       GENERATE_NODE(UnaryExprOrTypeTraitExpr, ret, node, 2, {
           int r = 0;
           switch (x->getKind()) {
@@ -2263,7 +2263,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, Val_int(r));
           Store_field(ret, 1, TranslateQualType(x->getTypeOfArgument()));
         });
-      
+
       GENERATE_NODE(VAArgExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
@@ -2285,11 +2285,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 2, caml_copy_int64(x->getValue()));
           Store_field(ret, 3, TranslateExpr(x->getDimensionExpression()));
         });
-    
+
       GENERATE_NODE(CXXBindTemporaryExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
-      
+
       GENERATE_NODE(CXXBoolLiteralExpr, ret, node, 1, {
           Store_field(ret, 0, Val_bool(x->getValue()));
         });
@@ -2297,12 +2297,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
       GENERATE_NODE(CXXConstructExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateCXXConstructExpr(x));
         });
-        
+
       GENERATE_NODE(CXXDefaultArgExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateParmVarDecl(x->getParam()));
           Store_field(ret, 1, TranslateExpr(x->getExpr()));
         });
-      
+
       GENERATE_NODE(CXXDefaultInitExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateFieldDecl(x->getField()));
           Store_field(ret, 1, TranslateExpr(x->getExpr()));
@@ -2327,7 +2327,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           const TemplateArgumentLoc* tmp = x->getTemplateArgs();
           Store_field_array(ret, 6, x->getNumTemplateArgs(), TranslateTemplateArgumentLoc(tmp[i]));
         });
-      
+
       GENERATE_NODE_INDIRECT(CXXFoldExpr, ret, node, 4, {
           Store_field(ret, 0, TranslateExpr(x->getPattern()));
           Store_field_option(ret, 1, x->getInit(), TranslateExpr(x->getInit()));
@@ -2363,9 +2363,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_option(ret, 8, x->getConstructExpr(), TranslateCXXConstructExpr(x->getConstructExpr()));
           Store_field(ret, 9, Val_bool(x->passAlignment()));
           Store_field(ret, 10, Val_bool(x->doesUsualArrayDeleteWantSize()));
-          
+
         });
-      
+
       GENERATE_NODE(CXXNoexceptExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getOperand()));
           Store_field(ret, 1, Val_bool(x->getValue()));
@@ -2380,7 +2380,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 2, Val_bool(x->isArrow()));
           Store_field(ret, 3, TranslateQualType(x->getDestroyedType()));
         });
-      
+
 
       GENERATE_NODE_CONSTANT(CXXScalarValueInitExpr, ret, node);
 
@@ -2391,13 +2391,13 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
       GENERATE_NODE(CXXThisExpr, ret, node, 1, {
           Store_field(ret, 0, Val_bool(x->isImplicit()));
         });
-      
+
       GENERATE_NODE_INDIRECT(CXXThrowExpr, ret, node, 2, {
           Store_field_option(ret, 0, x->getSubExpr(), TranslateExpr(x->getSubExpr()));
           Store_field(ret, 1, Val_bool(x->isThrownVariableInScope()));
-          
+
         });
-      
+
       GENERATE_NODE_INDIRECT(CXXTypeidExpr, ret, node, 3, {
           Store_field_option(ret, 0, x->isTypeOperand(), TranslateQualType(x->getTypeOperand(*Context)));
           Store_field_option(ret, 1, !x->isTypeOperand(), TranslateExpr(x->getExprOperand()));
@@ -2408,7 +2408,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateQualType(x->getTypeAsWritten()));
           Store_field_array(ret, 1, x->arg_size(), TranslateExpr(x->getArg(i)));
         });
-      
+
       GENERATE_NODE_INDIRECT(DependentScopeDeclRefExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateDeclarationName(x->getDeclName()));
           Store_field(ret, 1, TranslateNestedNameSpecifierLoc(x->getQualifierLoc()));
@@ -2416,7 +2416,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_array(ret, 2, x->getNumTemplateArgs(), TranslateTemplateArgumentLoc(tmp[i]));
 
         });
-      
+
       GENERATE_NODE_INDIRECT(ExpressionTraitExpr, ret, node, 3, {
           int r = 0;
           switch (x->getTrait()) {
@@ -2440,14 +2440,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateParmVarDecl(x->getParameterPack()));
           Store_field_array(ret, 1, x->getNumExpansions(), TranslateParmVarDecl(x->getExpansion(i)));
         });
-      
+
       GENERATE_NODE_INDIRECT(MaterializeTemporaryExpr, ret, node, 4, {
           Store_field(ret, 0, TranslateExpr(x->GetTemporaryExpr()));
           Store_field(ret, 1, TranslateStorageDuration(x->getStorageDuration()));
           Store_field_option(ret, 2, x->getExtendingDecl(), TranslateDecl(x->getExtendingDecl()));
           Store_field(ret, 3, Val_bool(x->isBoundToLvalueReference()));
         });
-      
+
       GENERATE_NODE_INDIRECT(PackExpansionExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getPattern()));
           const Optional<unsigned> num = x->getNumExpansions();
@@ -2477,14 +2477,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 1, TranslateTemplateArgument(x->getArgumentPack()));
 
         });
-              
+
       GENERATE_NODE_INDIRECT(TypeTraitExpr, ret, node, 3, {
           Store_field(ret, 0, TranslateTypeTrait(x->getTrait(), node));
           Store_field_option(ret, 1, !x->isValueDependent(), Val_bool(x->getValue()));
           const ArrayRef<TypeSourceInfo*> a = x->getArgs();
           Store_field_array(ret, 2, x->getNumArgs(), TranslateQualType(a[i]->getType()));
         });
-      
+
       GENERATE_NODE_INDIRECT(UnresolvedLookupExpr, ret, node, 6, {
           const ArrayRef<TemplateArgumentLoc> a = x->template_arguments();
           Store_field(ret, 0, Val_bool(x->requiresADL()));
@@ -2530,23 +2530,23 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 9, Val_bool(x->hasExplicitParameters()));
           Store_field(ret, 10, Val_bool(x->hasExplicitResultType()));
         });
-      
+
       /* Vectors */
-      
+
       GENERATE_NODE(ConvertVectorExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSrcExpr()));
-        });    
+        });
 
       GENERATE_NODE(ExtVectorElementExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getBase()));
           Store_field(ret, 1, caml_copy_string(x->getAccessor().getNameStart()));
-        });    
+        });
 
       GENERATE_NODE(ShuffleVectorExpr, ret, node, 1, {
           Store_field_array(ret, 0, x->getNumSubExprs(), TranslateExpr(x->getExpr(i)));
         });
 
-      
+
       // Default
       if (ret == Val_int(-1)) {
         ret = caml_alloc(2, MLTAG_UnknownExpr);
@@ -2555,12 +2555,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
         if (log_unknown) { std::cerr << "mlClangAST: unhandled Expr node encountered: " << node->getStmtClassName() << std::endl; }
 
       }
-      
+
       Store_field(ret2, 0, ret);
       Store_field(ret2, 1, TranslateQualTypeOption(node->getType()));
       Store_field(ret2, 2, loc.TranslateSourceRange(node->getSourceRange()));
     });
-  
+
   if (verbose_alloc)
     std::cout << "end TranslateExpr " << std::hex << node << std::dec << " " << node->getStmtClassName() << std::endl;
 
@@ -2571,132 +2571,132 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
 /* type_trait */
 enum {
-  MLTAG_UTT_HasNothrowAssign, 	
-  MLTAG_UTT_HasNothrowMoveAssign, 	
-  MLTAG_UTT_HasNothrowCopy, 	
-  MLTAG_UTT_HasNothrowConstructor, 	
-  MLTAG_UTT_HasTrivialAssign, 	
-  MLTAG_UTT_HasTrivialMoveAssign, 	
-  MLTAG_UTT_HasTrivialCopy, 	
-  MLTAG_UTT_HasTrivialDefaultConstructor, 	
-  MLTAG_UTT_HasTrivialMoveConstructor, 	
-  MLTAG_UTT_HasTrivialDestructor, 	
-  MLTAG_UTT_HasVirtualDestructor, 	
-  MLTAG_UTT_IsAbstract, 	
-  MLTAG_UTT_IsArithmetic, 	
-  MLTAG_UTT_IsArray, 	
-  MLTAG_UTT_IsClass, 	
-  MLTAG_UTT_IsCompleteType, 	
-  MLTAG_UTT_IsCompound, 	
-  MLTAG_UTT_IsConst, 	
-  MLTAG_UTT_IsDestructible, 	
-  MLTAG_UTT_IsEmpty, 	
-  MLTAG_UTT_IsEnum, 	
-  MLTAG_UTT_IsFinal, 	
-  MLTAG_UTT_IsFloatingPoint, 	
-  MLTAG_UTT_IsFunction, 	
-  MLTAG_UTT_IsFundamental, 	
-  MLTAG_UTT_IsIntegral, 	
-  MLTAG_UTT_IsInterfaceClass, 	
-  MLTAG_UTT_IsLiteral, 	
-  MLTAG_UTT_IsLvalueReference, 	
-  MLTAG_UTT_IsMemberFunctionPointer, 	
-  MLTAG_UTT_IsMemberObjectPointer, 	
-  MLTAG_UTT_IsMemberPointer, 	
-  MLTAG_UTT_IsNothrowDestructible, 	
-  MLTAG_UTT_IsObject, 	
-  MLTAG_UTT_IsPOD, 	
-  MLTAG_UTT_IsPointer, 	
-  MLTAG_UTT_IsPolymorphic, 	
-  MLTAG_UTT_IsReference, 	
-  MLTAG_UTT_IsRvalueReference, 	
-  MLTAG_UTT_IsScalar, 	
-  MLTAG_UTT_IsSealed, 	
-  MLTAG_UTT_IsSigned, 	
-  MLTAG_UTT_IsStandardLayout, 	
-  MLTAG_UTT_IsTrivial, 	
-  MLTAG_UTT_IsTriviallyCopyable, 	
-  MLTAG_UTT_IsUnion, 	
-  MLTAG_UTT_IsUnsigned, 	
-  MLTAG_UTT_IsVoid, 	
-  MLTAG_UTT_IsVolatile, 	
-  MLTAG_BTT_IsBaseOf, 	
-  MLTAG_BTT_IsConvertible, 	
-  MLTAG_BTT_IsConvertibleTo, 	
-  MLTAG_BTT_IsSame, 	
-  MLTAG_BTT_TypeCompatible, 	
-  MLTAG_BTT_IsAssignable, 	
-  MLTAG_BTT_IsNothrowAssignable, 	
-  MLTAG_BTT_IsTriviallyAssignable, 	
-  MLTAG_TT_IsConstructible, 	
-  MLTAG_TT_IsNothrowConstructible, 	
-  MLTAG_TT_IsTriviallyConstructible,     
+  MLTAG_UTT_HasNothrowAssign,
+  MLTAG_UTT_HasNothrowMoveAssign,
+  MLTAG_UTT_HasNothrowCopy,
+  MLTAG_UTT_HasNothrowConstructor,
+  MLTAG_UTT_HasTrivialAssign,
+  MLTAG_UTT_HasTrivialMoveAssign,
+  MLTAG_UTT_HasTrivialCopy,
+  MLTAG_UTT_HasTrivialDefaultConstructor,
+  MLTAG_UTT_HasTrivialMoveConstructor,
+  MLTAG_UTT_HasTrivialDestructor,
+  MLTAG_UTT_HasVirtualDestructor,
+  MLTAG_UTT_IsAbstract,
+  MLTAG_UTT_IsArithmetic,
+  MLTAG_UTT_IsArray,
+  MLTAG_UTT_IsClass,
+  MLTAG_UTT_IsCompleteType,
+  MLTAG_UTT_IsCompound,
+  MLTAG_UTT_IsConst,
+  MLTAG_UTT_IsDestructible,
+  MLTAG_UTT_IsEmpty,
+  MLTAG_UTT_IsEnum,
+  MLTAG_UTT_IsFinal,
+  MLTAG_UTT_IsFloatingPoint,
+  MLTAG_UTT_IsFunction,
+  MLTAG_UTT_IsFundamental,
+  MLTAG_UTT_IsIntegral,
+  MLTAG_UTT_IsInterfaceClass,
+  MLTAG_UTT_IsLiteral,
+  MLTAG_UTT_IsLvalueReference,
+  MLTAG_UTT_IsMemberFunctionPointer,
+  MLTAG_UTT_IsMemberObjectPointer,
+  MLTAG_UTT_IsMemberPointer,
+  MLTAG_UTT_IsNothrowDestructible,
+  MLTAG_UTT_IsObject,
+  MLTAG_UTT_IsPOD,
+  MLTAG_UTT_IsPointer,
+  MLTAG_UTT_IsPolymorphic,
+  MLTAG_UTT_IsReference,
+  MLTAG_UTT_IsRvalueReference,
+  MLTAG_UTT_IsScalar,
+  MLTAG_UTT_IsSealed,
+  MLTAG_UTT_IsSigned,
+  MLTAG_UTT_IsStandardLayout,
+  MLTAG_UTT_IsTrivial,
+  MLTAG_UTT_IsTriviallyCopyable,
+  MLTAG_UTT_IsUnion,
+  MLTAG_UTT_IsUnsigned,
+  MLTAG_UTT_IsVoid,
+  MLTAG_UTT_IsVolatile,
+  MLTAG_BTT_IsBaseOf,
+  MLTAG_BTT_IsConvertible,
+  MLTAG_BTT_IsConvertibleTo,
+  MLTAG_BTT_IsSame,
+  MLTAG_BTT_TypeCompatible,
+  MLTAG_BTT_IsAssignable,
+  MLTAG_BTT_IsNothrowAssignable,
+  MLTAG_BTT_IsTriviallyAssignable,
+  MLTAG_TT_IsConstructible,
+  MLTAG_TT_IsNothrowConstructible,
+  MLTAG_TT_IsTriviallyConstructible,
 };
 
 /* TypeTrait -> type_trait */
 CAMLprim value MLTreeBuilderVisitor::TranslateTypeTrait(TypeTrait trait, const Expr * node) {
   int r = 0;
   switch (trait) {
-    GENERATE_CASE(r, UTT_HasNothrowAssign); 	
-    GENERATE_CASE(r, UTT_HasNothrowMoveAssign); 	
-    GENERATE_CASE(r, UTT_HasNothrowCopy); 	
-    GENERATE_CASE(r, UTT_HasNothrowConstructor); 	
-    GENERATE_CASE(r, UTT_HasTrivialAssign); 	
-    GENERATE_CASE(r, UTT_HasTrivialMoveAssign); 	
-    GENERATE_CASE(r, UTT_HasTrivialCopy); 	
-    GENERATE_CASE(r, UTT_HasTrivialDefaultConstructor); 	
-    GENERATE_CASE(r, UTT_HasTrivialMoveConstructor); 	
-    GENERATE_CASE(r, UTT_HasTrivialDestructor); 	
-    GENERATE_CASE(r, UTT_HasVirtualDestructor); 	
-    GENERATE_CASE(r, UTT_IsAbstract); 	
-    GENERATE_CASE(r, UTT_IsArithmetic); 	
-    GENERATE_CASE(r, UTT_IsArray); 	
-    GENERATE_CASE(r, UTT_IsClass); 	
-    GENERATE_CASE(r, UTT_IsCompleteType); 	
-    GENERATE_CASE(r, UTT_IsCompound); 	
-    GENERATE_CASE(r, UTT_IsConst); 	
-    GENERATE_CASE(r, UTT_IsDestructible); 	
-    GENERATE_CASE(r, UTT_IsEmpty); 	
-    GENERATE_CASE(r, UTT_IsEnum); 	
-    GENERATE_CASE(r, UTT_IsFinal); 	
-    GENERATE_CASE(r, UTT_IsFloatingPoint); 	
-    GENERATE_CASE(r, UTT_IsFunction); 	
-    GENERATE_CASE(r, UTT_IsFundamental); 	
-    GENERATE_CASE(r, UTT_IsIntegral); 	
-    GENERATE_CASE(r, UTT_IsInterfaceClass); 	
-    GENERATE_CASE(r, UTT_IsLiteral); 	
-    GENERATE_CASE(r, UTT_IsLvalueReference); 	
-    GENERATE_CASE(r, UTT_IsMemberFunctionPointer); 	
-    GENERATE_CASE(r, UTT_IsMemberObjectPointer); 	
-    GENERATE_CASE(r, UTT_IsMemberPointer); 	
-    GENERATE_CASE(r, UTT_IsNothrowDestructible); 	
-    GENERATE_CASE(r, UTT_IsObject); 	
-    GENERATE_CASE(r, UTT_IsPOD); 	
-    GENERATE_CASE(r, UTT_IsPointer); 	
-    GENERATE_CASE(r, UTT_IsPolymorphic); 	
-    GENERATE_CASE(r, UTT_IsReference); 	
-    GENERATE_CASE(r, UTT_IsRvalueReference); 	
-    GENERATE_CASE(r, UTT_IsScalar); 	
-    GENERATE_CASE(r, UTT_IsSealed); 	
-    GENERATE_CASE(r, UTT_IsSigned); 	
-    GENERATE_CASE(r, UTT_IsStandardLayout); 	
-    GENERATE_CASE(r, UTT_IsTrivial); 	
-    GENERATE_CASE(r, UTT_IsTriviallyCopyable); 	
-    GENERATE_CASE(r, UTT_IsUnion); 	
-    GENERATE_CASE(r, UTT_IsUnsigned); 	
-    GENERATE_CASE(r, UTT_IsVoid); 	
-    GENERATE_CASE(r, UTT_IsVolatile); 	
-    GENERATE_CASE(r, BTT_IsBaseOf); 	
-    GENERATE_CASE(r, BTT_IsConvertible); 	
-    GENERATE_CASE(r, BTT_IsConvertibleTo); 	
-    GENERATE_CASE(r, BTT_IsSame); 	
-    GENERATE_CASE(r, BTT_TypeCompatible); 	
-    GENERATE_CASE(r, BTT_IsAssignable); 	
-    GENERATE_CASE(r, BTT_IsNothrowAssignable); 	
-    GENERATE_CASE(r, BTT_IsTriviallyAssignable); 	
-    GENERATE_CASE(r, TT_IsConstructible); 	
-    GENERATE_CASE(r, TT_IsNothrowConstructible); 	
-    GENERATE_CASE(r, TT_IsTriviallyConstructible);     
+    GENERATE_CASE(r, UTT_HasNothrowAssign);
+    GENERATE_CASE(r, UTT_HasNothrowMoveAssign);
+    GENERATE_CASE(r, UTT_HasNothrowCopy);
+    GENERATE_CASE(r, UTT_HasNothrowConstructor);
+    GENERATE_CASE(r, UTT_HasTrivialAssign);
+    GENERATE_CASE(r, UTT_HasTrivialMoveAssign);
+    GENERATE_CASE(r, UTT_HasTrivialCopy);
+    GENERATE_CASE(r, UTT_HasTrivialDefaultConstructor);
+    GENERATE_CASE(r, UTT_HasTrivialMoveConstructor);
+    GENERATE_CASE(r, UTT_HasTrivialDestructor);
+    GENERATE_CASE(r, UTT_HasVirtualDestructor);
+    GENERATE_CASE(r, UTT_IsAbstract);
+    GENERATE_CASE(r, UTT_IsArithmetic);
+    GENERATE_CASE(r, UTT_IsArray);
+    GENERATE_CASE(r, UTT_IsClass);
+    GENERATE_CASE(r, UTT_IsCompleteType);
+    GENERATE_CASE(r, UTT_IsCompound);
+    GENERATE_CASE(r, UTT_IsConst);
+    GENERATE_CASE(r, UTT_IsDestructible);
+    GENERATE_CASE(r, UTT_IsEmpty);
+    GENERATE_CASE(r, UTT_IsEnum);
+    GENERATE_CASE(r, UTT_IsFinal);
+    GENERATE_CASE(r, UTT_IsFloatingPoint);
+    GENERATE_CASE(r, UTT_IsFunction);
+    GENERATE_CASE(r, UTT_IsFundamental);
+    GENERATE_CASE(r, UTT_IsIntegral);
+    GENERATE_CASE(r, UTT_IsInterfaceClass);
+    GENERATE_CASE(r, UTT_IsLiteral);
+    GENERATE_CASE(r, UTT_IsLvalueReference);
+    GENERATE_CASE(r, UTT_IsMemberFunctionPointer);
+    GENERATE_CASE(r, UTT_IsMemberObjectPointer);
+    GENERATE_CASE(r, UTT_IsMemberPointer);
+    GENERATE_CASE(r, UTT_IsNothrowDestructible);
+    GENERATE_CASE(r, UTT_IsObject);
+    GENERATE_CASE(r, UTT_IsPOD);
+    GENERATE_CASE(r, UTT_IsPointer);
+    GENERATE_CASE(r, UTT_IsPolymorphic);
+    GENERATE_CASE(r, UTT_IsReference);
+    GENERATE_CASE(r, UTT_IsRvalueReference);
+    GENERATE_CASE(r, UTT_IsScalar);
+    GENERATE_CASE(r, UTT_IsSealed);
+    GENERATE_CASE(r, UTT_IsSigned);
+    GENERATE_CASE(r, UTT_IsStandardLayout);
+    GENERATE_CASE(r, UTT_IsTrivial);
+    GENERATE_CASE(r, UTT_IsTriviallyCopyable);
+    GENERATE_CASE(r, UTT_IsUnion);
+    GENERATE_CASE(r, UTT_IsUnsigned);
+    GENERATE_CASE(r, UTT_IsVoid);
+    GENERATE_CASE(r, UTT_IsVolatile);
+    GENERATE_CASE(r, BTT_IsBaseOf);
+    GENERATE_CASE(r, BTT_IsConvertible);
+    GENERATE_CASE(r, BTT_IsConvertibleTo);
+    GENERATE_CASE(r, BTT_IsSame);
+    GENERATE_CASE(r, BTT_TypeCompatible);
+    GENERATE_CASE(r, BTT_IsAssignable);
+    GENERATE_CASE(r, BTT_IsNothrowAssignable);
+    GENERATE_CASE(r, BTT_IsTriviallyAssignable);
+    GENERATE_CASE(r, TT_IsConstructible);
+    GENERATE_CASE(r, TT_IsNothrowConstructible);
+    GENERATE_CASE(r, TT_IsTriviallyConstructible);
   default:
     if (verbose_exn) { node->dump(); std::cout << "unknown type trait: " << trait << std::endl;}
     caml_failwith("mlClangAST: unknown type trait");
@@ -2751,7 +2751,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDesignator(const DesignatedInitExp
   CAMLlocal1(ret);
 
   check_null(x && d, "TranslateDesignator");
-  
+
   if (d->isFieldDesignator()) {
     ret = caml_alloc(1, MLTAG_Designator_Field);
     Store_field(ret, 0, TranslateFieldDecl(d->getField()));
@@ -2769,7 +2769,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDesignator(const DesignatedInitExp
     if (verbose_exn) x->dump();
     caml_failwith("mlClangAST: unknown designator kind in designated init expression");
   }
-  
+
   CAMLreturn(ret);
 }
 
@@ -2808,7 +2808,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateOffsetOfNode(const OffsetOfExpr * 
   CAMLreturn(ret);
 }
 
-  
+
 /* OpaqueValueExpr -> opaque_expr */
 CAMLprim value MLTreeBuilderVisitor::TranslateOpaqueValueExpr(const OpaqueValueExpr * node) {
   CAMLparam0();
@@ -2820,7 +2820,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateOpaqueValueExpr(const OpaqueValueE
       Store_field(ret, 1, TranslateQualType(node->getType()));
       Store_field(ret, 2, loc.TranslateSourceRange(node->getSourceRange()));
     });
-  
+
   CAMLreturn(ret);
 }
 
@@ -2867,7 +2867,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUnaryOperatorKind(UnaryOperatorKin
     caml_failwith("mlClangAST: unknown unary operator kind");
   }
   CAMLreturn(Val_int(r));
-}  
+}
 
 /* binary_operator */
 enum {
@@ -3104,7 +3104,7 @@ enum {
   MLTAG_LCK_ByRef,
   MLTAG_LCK_VLAType,
 };
-  
+
 /* LambdaCapture -> lambda_capture */
 CAMLprim value MLTreeBuilderVisitor::TranslateLambdaCapture(const LambdaCapture& x) {
   CAMLparam0();
@@ -3200,7 +3200,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
       GENERATE_NODE(CompoundStmt, ret, node, 1, {
           Store_field_list(ret, 0, x->body(), TranslateStmt(child));
         });
- 
+
       GENERATE_NODE(ContinueStmt, ret, node, 1, {
           Store_field(ret, 0, loc.TranslateSourceLocation(x->getContinueLoc()));
         });
@@ -3208,7 +3208,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
       GENERATE_NODE(DeclStmt, ret, node, 1, {
           Store_field_list(ret, 0, x->decls(), TranslateDecl(child));
         });
- 
+
       GENERATE_NODE_INDIRECT(DoStmt, ret, node, 2, {
           Store_field(ret, 0, TranslateStmt(x->getBody()));
           Store_field(ret, 1, TranslateExpr(x->getCond()));
@@ -3217,7 +3217,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
       GENERATE_NODE(Expr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x));
         });
-      
+
       GENERATE_NODE_INDIRECT(ForStmt, ret, node, 4, {
           Store_field_option(ret, 0, x->getInit(), TranslateStmt(x->getInit()));
           Store_field_option(ret, 1, x->getCond(), TranslateExpr(x->getCond()));
@@ -3246,7 +3246,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
           Store_field(ret, 0, TranslateNamedDecl(x->getDecl()));
           Store_field(ret, 1, TranslateStmt(x->getSubStmt()));
         });
-  
+
       GENERATE_NODE_CONSTANT(NullStmt, ret, node);
 
       GENERATE_NODE(ReturnStmt, ret, node, 1, {
@@ -3286,7 +3286,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
            Store_field_array(ret, 1, x->getNumHandlers(), TranslateCXXCatchStmt(x->getHandler(i)));
         });
 
-      
+
       // Default
       if (ret == Val_int(-1)) {
         ret = caml_alloc(2, MLTAG_UnknownStmt);
@@ -3298,7 +3298,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
       Store_field(ret2, 0, ret);
       Store_field(ret2, 1, loc.TranslateSourceRange(node->getSourceRange()));
     });
-  
+
   if (verbose_alloc)
     std::cout << "end TranslateStmt " << std::hex << node << std::dec << " " << node->getStmtClassName() << std::endl;
 
@@ -3316,7 +3316,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateCXXCatchStmt(const CXXCatchStmt * 
   Store_field_option(ret, 0, x->getExceptionDecl(), TranslateVarDecl(x->getExceptionDecl()));
   Store_field_option(ret, 1,  x->getExceptionDecl(), TranslateQualType(x->getCaughtType()));
   Store_field(ret, 2, TranslateStmt(x->getHandlerBlock()));
-  
+
   CAMLreturn(ret);
 }
 
@@ -3472,7 +3472,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionProtoType(const FunctionPr
   check_null(node, "TranslateFunctionProtoType");
 
   WITH_CACHE_TUPLE(cacheMisc, ret, node, 10, {
-      
+
       Store_field(ret, 0, TranslateQualType(node->getCallResultType(*Context)));
       Store_field(ret, 1, TranslateQualType(node->getReturnType()));
 
@@ -3519,7 +3519,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionProtoType(const FunctionPr
       Store_field(ret, 9, TranslateRefQualifierKind(node->getRefQualifier()));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 
@@ -3530,14 +3530,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionNoProtoType(const Function
 
   check_null(node, "TranslateFunctionNoProtoType");
 
-  /* valgrind shows that the qualifier information is not (always?) set 
+  /* valgrind shows that the qualifier information is not (always?) set
      for prototypes -> we do not export this information
    */
   WITH_CACHE_TUPLE(cacheMisc, ret, node, 1, {
       Store_field(ret, 0, TranslateQualType(node->getCallResultType(*Context)));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 
@@ -3566,11 +3566,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
   CAMLlocal2(ret,tmp);
 
   check_null(node, "TranslateArrayType");
-  
+
   WITH_CACHE_TUPLE(cacheMisc, ret, node, 3, {
       int r;
       Store_field(ret, 0, TranslateQualType(node->getElementType()));
-            
+
       tmp = Val_int(-1);
       GENERATE_NODE(ConstantArrayType, tmp, node, 1, {
           Store_field(tmp, 0, TranslateAPInt(x->getSize()));
@@ -3585,7 +3585,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
         caml_failwith("mlClangAST: unknown array type");
       }
       Store_field(ret, 1, tmp);
-      
+
       switch (node->getSizeModifier()) {
       case ArrayType::Normal: r = MLTAG_SIZE_NORMAL; break;
       case ArrayType::Static: r = MLTAG_SIZE_STATIC; break;
@@ -3597,7 +3597,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
       Store_field(ret, 2, Val_int(r));
     });
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 
@@ -3641,9 +3641,9 @@ enum {
 
   // Vectors
   MLTAG_VectorType,
-  
+
   // Unknown
-  MLTAG_UnknownType,  
+  MLTAG_UnknownType,
 };
 
 /* Type -> type */
@@ -3698,7 +3698,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
   GENERATE_NODE_CACHED(cacheType, PointerType, ret, node, 1, {
       Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, EnumType, ret, node, 1, {
       Store_field(ret, 0, TranslateEnumDecl(x->getDecl()));
     });
@@ -3724,7 +3724,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
   GENERATE_NODE_CACHED(cacheType,TypeOfExprType, ret, node, 1, {
       Store_field(ret, 0, TranslateExpr(x->getUnderlyingExpr()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, DecltypeType, ret, node, 2, {
       Store_field(ret, 0, TranslateExpr(x->getUnderlyingExpr()));
       Store_field(ret, 1, TranslateQualTypeOption(x->getUnderlyingType()));
@@ -3739,7 +3739,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
       Store_field(ret, 0, TranslateTemplateName(x->getTemplateName()));
     });
 #endif
-  
+
   GENERATE_NODE_CACHED(cacheType, DependentSizedExtVectorType, ret, node, 2, {
       Store_field(ret, 0, TranslateExpr(x->getSizeExpr()));
       Store_field(ret, 1, TranslateQualType(x->getElementType()));
@@ -3761,7 +3761,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
       Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
       Store_field(ret, 1, TranslateType(x->getClass()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, PackExpansionType, ret, node, 2, {
       Store_field(ret, 0, TranslateQualType(x->getPattern()));
       const Optional<unsigned> num = x->getNumExpansions();
@@ -3771,28 +3771,28 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
   GENERATE_NODE_CACHED(cacheType, LValueReferenceType, ret, node, 1, {
       Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, RValueReferenceType, ret, node, 1, {
       Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmPackType, ret, node, 3, {
       Store_field(ret, 0, caml_copy_string(x->getIdentifier()->getNameStart()));
       Store_field(ret, 1, TranslateTemplateTypeParmType(x->getReplacedParameter()));
       Store_field(ret, 2, TranslateTemplateArgument(x->getArgumentPack()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmType, ret, node, 2, {
       Store_field(ret, 0, TranslateTemplateTypeParmType(x->getReplacedParameter()));
       Store_field(ret, 1, TranslateQualType(x->getReplacementType()));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, TemplateSpecializationType, ret, node, 3, {
       Store_field_option(ret, 0, x->isTypeAlias(), TranslateQualType(x->getAliasedType()));
       Store_field(ret, 1, TranslateTemplateName(x->getTemplateName()));
       Store_field_array(ret, 2, x->getNumArgs(), TranslateTemplateArgument(x->getArg(i)));
     });
-  
+
   GENERATE_NODE_CACHED(cacheType, TemplateTypeParmType, ret, node, 1, {
       Store_field(ret, 0, TranslateTemplateTypeParmType(x));
     });
@@ -3818,7 +3818,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
       Store_field(ret, 2, Val_int(x->getVectorKind()));
     });
 
-  
+
   // Default
   if (ret == Val_int(-1)) {
     WITH_CACHE(cacheType, ret, node, 2, MLTAG_UnknownType, {
@@ -3827,11 +3827,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
         if (log_unknown) { std::cerr << "mlClangAST: unhandled Type node encountered: " << node->getTypeClassName() << std::endl; }
     });
   }
-  
+
   if (verbose_alloc)
     std::cout << "end TranslateType " << std::hex << node << std::dec << " " << node->getTypeClassName() << std::endl;
 
-  CAMLreturn(ret);  
+  CAMLreturn(ret);
 }
 
 /* TemplateTypeParmType -> template_type_param_type */
@@ -3879,7 +3879,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateQualType(QualType x) {
 
   void* o = x.getAsOpaquePtr();
   check_null(o, "TranslateQualType");
-  
+
   CACHED(cacheTypeQual, ret, o, {
       qual = caml_alloc_tuple(3);
       Store_field(qual, 0, Val_bool(x.isConstQualified()));
@@ -3889,8 +3889,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateQualType(QualType x) {
       Store_field(ret, 0, TranslateType(x.getTypePtr()));
       Store_field(ret, 1, qual);
     });
-  
-  CAMLreturn(ret);  
+
+  CAMLreturn(ret);
 }
 
 /* ref_qualifier_kind */
@@ -3978,7 +3978,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * x) {
       Store_field(ret, 5, Val_bool(x->isUnnamedBitfield()));
       if (d->isCompleteDefinition() && !d->isInvalidDecl() && !d->isDependentType()) {
         // valid layout
-        const ASTRecordLayout & l = Context->getASTRecordLayout(d);  
+        const ASTRecordLayout & l = Context->getASTRecordLayout(d);
         Store_field(ret, 6, Val_true);
         Store_field(ret, 7, caml_copy_int64(l.getFieldOffset(x->getFieldIndex())));
       }
@@ -4073,7 +4073,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateCXXBaseSpecifier(const CXXBaseSpec
   Store_field(ret, 3, Val_bool(x.getInheritConstructors()));
   Store_field(ret, 4, TranslateAccessSpecifier(x.getAccessSpecifier()));
   Store_field(ret, 5, TranslateQualType(x.getType()));
-  
+
   CAMLreturn(ret);
 }
 
@@ -4091,7 +4091,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTypedefNameDecl(const TypedefNameD
 
   // NOTE: removed as the canonical decl may sometimes miss its name!
   // x = dyn_cast<TypedefDecl>(x->getCanonicalDecl());
-  
+
   WITH_CACHE_TUPLE(cacheMisc, ret, x, 4, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
@@ -4118,11 +4118,11 @@ private:
 
   std::vector<diag> diags;
   MLLocationTranslator& loc;
-  
+
 public:
   MLDiagnostics(MLLocationTranslator& loc) : loc(loc)
   {}
-  
+
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                         const Diagnostic &Info) override;
 
@@ -4179,7 +4179,7 @@ CAMLprim value MLDiagnostics::TranslateDiagnostics(MLDiagnostics::diag d) {
   Store_field(ret, 0, Val_int(r));
   Store_field(ret, 1, loc.TranslateSourceLocation(std::get<1>(d)));
   Store_field(ret, 2, caml_copy_string((std::get<2>(d)).c_str()));
-  
+
   CAMLreturn(ret);
 }
 
@@ -4211,7 +4211,7 @@ enum {
   MLTAG_Target_EABI_EABI5,
   MLTAG_Target_EABI_GNU,
 };
- 
+
 /* target_options -> TargetOptions */
 CAMLprim void TargetOptionsFromML(value v, TargetOptions& t) {
   CAMLparam1(v);
@@ -4234,13 +4234,13 @@ CAMLprim void TargetOptionsFromML(value v, TargetOptions& t) {
   }
 #else
   t.EABIVersion = "";
-#endif  
+#endif
 
   t.LinkerVersion = String_val(Field(v,6));
   STORE_STRING_VECTOR(t.FeaturesAsWritten, Field(v,7));
   STORE_STRING_VECTOR(t.Features, Field(v,8));
   /*STORE_STRING_VECTOR(t.Reciprocals, Field(v,9));*/ // Moved in later versions of Clang
-  
+
   CAMLreturn0;
 }
 
@@ -4340,11 +4340,11 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
   Store_field(ret, 33, Val_int(t.getLongDoubleAlign()));
   Store_field(ret, 34, Val_int(t.getFloat128Width()));
   Store_field(ret, 35, Val_int(t.getFloat128Align()));
-  
+
   Store_field(ret, 36, Val_int(t.getLargeArrayMinWidth()));
   Store_field(ret, 37, Val_int(t.getLargeArrayAlign()));
   Store_field(ret, 38, Val_int(t.getSuitableAlign()));
-  
+
   Store_field(ret, 39, Val_bool(t.isBigEndian()));
   Store_field(ret, 40, Val_bool(t.isTLSSupported()));
   Store_field(ret, 41, Val_bool(t.hasInt128Type()));
@@ -4355,7 +4355,7 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
 #else
   Store_field(ret, 43, caml_copy_int64(t.getNullPointerValue(0)));
 #endif
-  
+
   CAMLreturn(ret);
 }
 
@@ -4388,7 +4388,7 @@ private:
 
   value* ret;
   MLLocationTranslator& loc;
-  
+
 public:
   explicit MLTreeBuilderConsumer(MLLocationTranslator& loc, value* ret)
     : ret(ret), loc(loc)
@@ -4404,8 +4404,8 @@ public:
 
 CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   CAMLparam3(target,name,args);
-  CAMLlocal2(ret,tmp);  
-  
+  CAMLlocal2(ret,tmp);
+
   CompilerInstance ci;
   ci.createDiagnostics();
 
@@ -4447,7 +4447,7 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   MLLocationTranslator loc(ci.getSourceManager());
   MLDiagnostics* diag = new MLDiagnostics(loc);
   ci.getDiagnostics().setClient(diag);
-  
+
   // headers
   // TODO: setting ResourceDir and calling GetResourcesPath does not seem to work
   // we use AddPath directly for now
@@ -4455,14 +4455,14 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   ci.getHeaderSearchOpts().UseBuiltinIncludes = false; //true;
   ci.getHeaderSearchOpts().UseStandardSystemIncludes = true;
   //ci.getHeaderSearchOpts().Verbose = true;
-    
+
   // preprocessor
   ci.createPreprocessor(TU_Complete);
   Preprocessor &pp = ci.getPreprocessor();
   pp.getBuiltinInfo().initializeBuiltins(pp.getIdentifierTable(),
                                          pp.getLangOpts());
-  
-  // parsing  
+
+  // parsing
   ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp));
   ci.createASTContext();
   ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &pp);
@@ -4472,6 +4472,6 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   ret = caml_alloc_tuple(2);
   Store_field(ret, 0, tmp);
   Store_field(ret, 1, diag->getDiagnostics());
-  
+
   CAMLreturn(ret);
 }

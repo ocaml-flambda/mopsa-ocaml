@@ -9,7 +9,7 @@ sed "1s/^/#include \"mopsa.h\"\n#line 1 \"${esc_file}\"\n/" ${file} > ${tmp}
 
 cat <<EOF >> ${tmp}
 
-#line 1 "${file}-mopsa"
+#line 1 "${tmp}"
 void test_bad() {
   ${base}_bad();
   _mopsa_assert_unsafe();
