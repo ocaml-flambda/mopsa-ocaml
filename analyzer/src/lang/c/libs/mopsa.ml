@@ -25,6 +25,7 @@ module Domain =
 struct
 
   let is_builtin_function = function
+    | "_mopsa_rand_int"
     | "_mopsa_assert_true"
     | "_mopsa_assert_false"
     | "_mopsa_assert_safe"
@@ -53,6 +54,20 @@ struct
       debug "builtin function";
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       oeval_singleton (Some exp', flow, [])
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_rand_int"}, [a; b]) ->
+      let erange = exp.erange in
+      let typ = T_c_integer(C_signed_long) in
+      let tmp = mktmp ~vtyp:typ () in
+      let v = mk_var tmp erange in
+      let flow = man.exec (mk_assume (
+          mk_binop
+            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+            O_log_and
+            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+            erange
+        ) erange) ctx flow in
+      re_eval_singleton (Some v, flow, [mk_remove_var tmp erange]) man ctx
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in
