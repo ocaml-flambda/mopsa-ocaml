@@ -86,10 +86,10 @@ struct
       AExpr_unop (op, t1), v
 
     | E_binop (((O_eq | O_ne | O_lt | O_le | O_gt | O_ge) as op), e1, e2) ->
-      (* debug "annotate comparison %a" Framework.Pp.pp_operator op; *)
+      debug "annotate comparison %a" Framework.Pp.pp_operator op;
        let (_,v1) as t1 = annotate_expr a e1 in
        let (_,v2) as t2 = annotate_expr a e2 in
-       (* debug "comparison v1 = %a (%a) v2 = %a" Value.print v1 Framework.Pp.pp_operator op Value.print v2; *)
+       debug "comparison v1 = %a (%a) v2 = %a" Value.print v1 Framework.Pp.pp_operator op Value.print v2;
        let neg_op = match op with
          | O_eq -> O_ne
          | O_ne -> O_eq
@@ -100,7 +100,7 @@ struct
          | _ -> assert false
        in
        let a1, a2 = Value.fwd_filter op v1 v2, Value.fwd_filter neg_op v1 v2 in
-       (* debug "comparison %a a1 = %b@ a2 = %b" Framework.Pp.pp_operator op a1 a2; *)
+       debug "comparison %a a1 = %b@ a2 = %b" Framework.Pp.pp_operator op a1 a2;
        AExpr_binop (op, t1, t2), to_bool a1 a2
 
     | E_binop (O_log_and,e1,e2) ->
@@ -159,15 +159,17 @@ struct
 
 
   let rec refine_expr (a:t) ((e,r):aexpr_i) (rr:Value.t) : t =
-    (* debug "refine_expr:@ a = @[%a@]@ r = @[%a@]@ rr = @[%a@]" print a Value.print r Value.print rr; *)
+    debug "refine_expr:@ a = @[%a@]@ r = @[%a@]@ rr = @[%a@]" print a Value.print r Value.print rr;
     let rrr = Value.meet rr r in
     if Value.leq r rrr && Value.leq rrr r then a (* equality so no refinement *)
     else
       match e with
       | AExpr_var var ->
+        debug "refine var %a" Framework.Pp.pp_var var;
         VarMap.add var rr a
 
       | AExpr_cst ->
+        debug "refine constant";
         refine_bool1 rrr (fun a -> a) (fun a -> bottom) a bottom
 
       | AExpr_unop (O_log_not,((_,a1) as t1)) ->
@@ -179,17 +181,20 @@ struct
         refine_expr a t1 aa1
 
       | AExpr_binop (O_log_and,((_,a1) as t1),((_,a2) as t2)) ->
-        (* debug "and@ a1 = %a@ a2 = %a" Value.print a1 Value.print a2; *)
+        debug "and@ a1 = %a@ a2 = %a" Value.print a1 Value.print a2;
         refine_bool1
           rrr
           (fun a ->
-             (* both arguments must be non-zero *)
+             debug "both arguments must be non-zero";
              let aa1 = Value.assume_true a1
              and aa2 = Value.assume_true a2 in
-             refine_expr (refine_expr a t1 aa1) t2 aa2
+             debug "and@ aa1 = %a@ aa2 = %a" Value.print aa1 Value.print aa2;
+             meet
+               (refine_expr a t1 aa1)
+               (refine_expr a t2 aa2)
           )
           (fun a ->
-             (* at least one argument must be zero *)
+             debug "at least one argument must be zero";
              let aa1 = Value.assume_false a1
              and aa2 = Value.assume_false a2 in
              join
@@ -214,13 +219,15 @@ struct
              (* both arguments must be zero *)
              let aa1 = Value.assume_false a1
              and aa2 = Value.assume_false a2 in
-             refine_expr (refine_expr a t1 aa1) t2 aa2
+             meet
+               (refine_expr a t1 aa1)
+               (refine_expr a t2 aa2)
           )
           a
           bottom
 
       | AExpr_binop ((O_eq | O_ne | O_lt | O_le | O_gt | O_ge) as op,((_,a1) as t1),((_,a2) as t2)) ->
-        (* debug "binop %a" Framework.Pp.pp_operator op; *)
+        debug "binop %a in %a" Framework.Pp.pp_operator op print a;
         let neg_op = function
          | O_eq -> O_ne
          | O_ne -> O_eq
@@ -231,8 +238,10 @@ struct
          | _ -> assert false
         in
         let aa1, aa2 = refine_bool2 rrr (Value.bwd_filter op) (Value.bwd_filter (neg_op op)) a1 a2 Value.bottom in
-        (* debug "op = %a@ aa1 = @[%a@]@ aa2 = @[%a@]" Framework.Pp.pp_operator op Value.print aa1 Value.print aa2; *)
-        refine_expr (refine_expr a t1 aa1) t2 aa2
+        debug "op = %a@ aa1 = @[%a@]@ aa2 = @[%a@]" Framework.Pp.pp_operator op Value.print aa1 Value.print aa2;
+        let a = refine_expr (refine_expr a t1 aa1) t2 aa2 in
+        debug "op %a refined@ a = @[%a@]" Framework.Pp.pp_operator op print a;
+        a
 
       | AExpr_binop (op,((_,a1) as t1),((_,a2) as t2)) ->
          let aa1, aa2 = Value.bwd_binop op a1 a2 rrr in
@@ -306,10 +315,11 @@ struct
       assert false
 
     | S_assume e ->
-      debug "assume";
+      debug "assume %a" Framework.Pp.pp_expr e;
       man.eval e ctx flow |>
       eval_to_exec
         (fun e flow ->
+           debug "assume %a, phase 2" Framework.Pp.pp_expr e;
            map_domain_cur (fun a ->
                let (_,r) as t = annotate_expr a e in
                let rr = Value.assume_true r in
