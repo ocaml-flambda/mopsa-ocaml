@@ -473,18 +473,17 @@ public:
   
 };
 
-
-/* SourceLocation -> loc */
 CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
   std::pair<FileID,unsigned> loc;
+  PresumedLoc presumedLoc;
 
   CACHED(cacheLoc, ret, raw, {
       loc = src.getDecomposedLoc(a);
+      presumedLoc = src.getPresumedLoc(a);
       FileID fid = loc.first;
-      unsigned offset = loc.second;
       const FileEntry* f = src.getFileEntryForID(fid);
       
       if (f) {
@@ -493,7 +492,7 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
           tmp = cacheFile.get(fuid);
         }
         else {
-          tmp = caml_copy_string(f->getName().str().c_str());
+          tmp = caml_copy_string(presumedLoc.getFilename());
           cacheFile.store(fuid, tmp);
         }
       }
@@ -502,13 +501,14 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
       }
       
       ret = caml_alloc_tuple(3);
-      Store_field(ret, 0, Val_int(src.getLineNumber(fid,offset)));
-      Store_field(ret, 1, Val_int(src.getColumnNumber(fid,offset)));
+      Store_field(ret, 0, Val_int(presumedLoc.getLine()));
+      Store_field(ret, 1, Val_int(presumedLoc.getColumn()));
       Store_field(ret, 2, tmp);
     });
   
   CAMLreturn(ret);
 }
+
 
 /* SourceRange -> range */
 CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
