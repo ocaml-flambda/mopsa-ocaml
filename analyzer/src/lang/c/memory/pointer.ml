@@ -104,10 +104,6 @@ struct
       (man: ('a, t) manager) ctx
       (flow: 'a flow)
     : (pexpr, 'a) evals option =
-    (* FIXME: this test should be removed, but now, without it, the analyzer crashes when evaluating en expression after an alarm raise *)
-    if man.flow.is_cur_bottom flow then
-      oeval_singleton (None, flow, [])
-    else
     let range = erange exp in
     debug "eval_p %a in@\n@[%a@]" pp_expr exp man.flow.print flow;
     match ekind exp with
