@@ -105,8 +105,9 @@ struct
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
-        let flow = man.flow.set TCur man.env.top flow |>
-                   man.exec stmt ctx |>
+        let flow = man.flow.set TCur man.env.top flow in
+        let flow = man.exec stmt ctx flow |>
+                   man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
         oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
