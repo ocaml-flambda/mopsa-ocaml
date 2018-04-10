@@ -42,11 +42,10 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
 
   try
     Debug.info "Computing initial environments ...";
-    let abs = Analyzer.init prog in
+    let ctx, abs = Analyzer.init prog in
     let stmt =
       Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
     in
-    let ctx = Framework.Context.empty in
 
     Debug.info "Starting the analysis ...";
 

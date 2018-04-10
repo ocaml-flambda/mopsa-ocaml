@@ -114,17 +114,17 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man flow =
+  let init prog man ctx flow =
     (* Initialize sub domain *)
-    Sub.init prog (sub_manager man) flow |>
+    let ctx, flow = Sub.init prog (sub_manager man) ctx flow in
 
     (* After, put an empty pool in the returned cur flow *)
-    man.flow.map (fun env -> function
+    ctx, man.flow.map (fun env -> function
         | TCur ->
           let (_, sub) = man.ax.get env in
           man.ax.set (Pool.empty, sub) env
         | _ -> env
-      )
+      ) flow
 
   let exec stmt man ctx flow =
     match skind stmt with

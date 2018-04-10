@@ -84,7 +84,6 @@ and parse_program (file: string) =
   let ctx = Clang_to_C.create_context file target in
   Clang_to_C.add_translation_unit ctx file x;
   let prj = Clang_to_C.link_project ctx in
-
   from_project prj
 
 
@@ -100,7 +99,6 @@ and from_project prj =
               List.map snd |>
               List.map from_function
   in
-  let globals, funcs = construct_string_table globals funcs in
   {
     prog_kind = Ast.C_program (globals, funcs);
     prog_file = prj.C_AST.proj_name;

@@ -449,10 +449,10 @@ module Make(ValAbs : DOMAIN) = struct
   (*==========================================================================*)
 
 
-  let init prog (man : ('a, t) manager) (flow : 'a flow) =
-    let flow = ValAbs.init prog (subman man) flow in
+  let init prog (man : ('a, t) manager) ctx (flow : 'a flow) =
+    let ctx, flow = ValAbs.init prog (subman man) ctx flow in
     let u = get_domain_cur man flow in
-    set_domain_cur {u with cs = CS.empty} man flow
+    ctx, set_domain_cur {u with cs = CS.empty} man flow
 
   let exec (stmt : stmt) (man : ('a, t) manager) (ctx : Framework.Context.context) (flow : 'a flow)
     : 'a flow option =

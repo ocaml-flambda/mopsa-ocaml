@@ -112,8 +112,8 @@ sig
   include Lattice.LATTICE
 
   val init :
-    Ast.program -> ('a, t) manager  -> 'a flow ->
-    'a flow
+    Ast.program -> ('a, t) manager -> Context.context -> 'a flow ->
+    Context.context * 'a flow
 
   (** Abstract transfer function of statements. *)
   val exec:
@@ -149,7 +149,7 @@ struct
   let meet _ _ = top
   let widening _ _ _ = top
   let print _ _ = ()
-  let init _ _ x = x
+  let init _ _ ctx x = ctx, x
   let exec _ _ _ _ = None
   let eval _ _ _ _ = None
   let ask _ _ _ _ = None
@@ -196,8 +196,8 @@ module type STACK_DOMAIN =
     include Lattice.LATTICE
 
     val init :
-      Ast.program -> ('a, t) manager -> ('a, Sub.t) manager -> 'a flow ->
-      'a flow
+      Ast.program -> ('a, t) manager -> ('a, Sub.t) manager -> Context.context -> 'a flow ->
+      Context.context * 'a flow
 
     (** Abstract transfer function of statements. *)
     val exec:
@@ -235,7 +235,7 @@ module MakeStack =
     let widening = Domain.widening
     let print = Domain.print
 
-    let init _ _ _ x = x
+    let init _ _ _ ctx x = ctx, x
 
     let exec stmt man subman ctx gabs =
       Domain.exec stmt man ctx gabs

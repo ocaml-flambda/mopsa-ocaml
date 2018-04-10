@@ -26,8 +26,8 @@ struct
   let print fmt a =
     Format.fprintf fmt "int: @[%a@]@\n" print a
 
-  let init prog man flow =
-    set_domain_cur top man flow
+  let init prog man ctx flow =
+    ctx, set_domain_cur top man flow
 
 end
 

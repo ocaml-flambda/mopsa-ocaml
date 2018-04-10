@@ -39,7 +39,7 @@ struct
 
   let exec stmt manager ctx flow = None
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
 
   let check cond range man ctx flow =
     let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) ctx flow in

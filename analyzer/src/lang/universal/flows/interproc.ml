@@ -43,7 +43,7 @@ struct
   (*==========================================================================*)
 
 
-  let init prg man fa = fa
+  let init prg man ctx fa = ctx, fa
 
   let exec stmt manager ctx flow =
     match skind stmt with

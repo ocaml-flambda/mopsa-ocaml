@@ -33,8 +33,8 @@ module type DOMAIN =
 sig
 
   val init :
-    Ast.program -> ('a, unit) manager -> 'a flow ->
-    'a flow
+    Ast.program -> ('a, unit) manager -> Context.context -> 'a flow ->
+    Context.context * 'a flow
 
   (** Abstract transfer function of statements. *)
   val exec:
@@ -90,8 +90,8 @@ module type STACK_DOMAIN =
   sig
 
     val init :
-       Ast.program -> ('a, unit) manager -> ('a, Sub.t) manager ->'a flow ->
-      'a flow
+       Ast.program -> ('a, unit) manager -> ('a, Sub.t) manager -> Context.context -> 'a flow ->
+      Context.context * 'a flow
 
     (** Abstract transfer function of statements. *)
     val exec:

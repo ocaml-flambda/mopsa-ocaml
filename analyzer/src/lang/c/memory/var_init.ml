@@ -61,16 +61,8 @@ module Domain = struct
       aux 0 flow
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
-      let n = get_array_constant_length a.etyp in
-      let rec aux i flow =
-        if i = n then flow
-        else
-          let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
-          let flow = init_expr (mk_c_subscript_access a (mk_int i range) range) init is_global range man ctx flow in
-          aux (i + 1) flow
-      in
-      aux 0 flow
-
+      assert false
+        
     | _ ->
       panic "Array initialization not supported"
 
@@ -133,18 +125,20 @@ module Domain = struct
       panic "Unsupported initialization of %a" pp_expr e
 
 
-  and init prog man flow =
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      List.fold_left (fun flow (v, init) ->
-          let range = mk_fresh_range () in
-          let ctx = Framework.Context.empty in
-          let v = mk_var v range in
-          init_expr v init true range man ctx flow
-        ) flow globals
-
-    | _ -> flow
-
+  and init prog man ctx flow =
+    let flow =
+      match prog.prog_kind with
+      | C_program(globals, _) ->
+        List.fold_left (fun flow (v, init) ->
+            let range = mk_fresh_range () in
+            let ctx = Framework.Context.empty in
+            let v = mk_var v range in
+            init_expr v init true range man ctx flow
+          ) flow globals
+          
+      | _ -> flow
+    in
+    ctx, flow
 
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     let range = stmt.srange in

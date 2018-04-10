@@ -29,7 +29,7 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man flow = flow
+  let init prog man ctx flow = ctx, flow
 
   let eval exp man ctx flow =
     match ekind exp with

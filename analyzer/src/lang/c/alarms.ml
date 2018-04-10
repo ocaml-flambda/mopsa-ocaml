@@ -63,7 +63,7 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let init prog man flow = flow
+  let init prog man ctx flow = ctx, flow
 
   let exec stmt man ctx flow = None
 

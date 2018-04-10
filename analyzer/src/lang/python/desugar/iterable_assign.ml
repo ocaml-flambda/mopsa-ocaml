@@ -93,7 +93,7 @@ struct
     return
 
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
   let eval _ _ _ _ = None
   let ask _ _ _ _ = None
 

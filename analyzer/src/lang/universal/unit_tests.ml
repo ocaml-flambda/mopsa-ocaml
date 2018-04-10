@@ -132,7 +132,7 @@ struct
       ) (man.flow.bottom, 0, 0, 0, 0)
 
 
-  let init prog man flow = flow
+  let init prog man ctx flow = ctx, flow
 
   let eval exp man ctx flow = None
 

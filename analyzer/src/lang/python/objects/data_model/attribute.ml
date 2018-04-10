@@ -57,8 +57,8 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man flow =
-    set_domain_cur AttrSet.empty man flow
+  let init prog man ctx flow =
+    ctx, set_domain_cur AttrSet.empty man flow
 
   (** Check whether an attribute [attr] is an encoding of an abstract attribute
       introduced by the analyzer. *)

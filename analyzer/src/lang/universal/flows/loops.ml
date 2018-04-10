@@ -63,7 +63,7 @@ struct
   (**                      {2 Transfer functions}                             *)
   (*==========================================================================*)
 
-  let init prg man flow = flow
+  let init prg man ctx flow = ctx, flow
 
   let rec exec stmt manager ctx flow =
     match skind stmt with

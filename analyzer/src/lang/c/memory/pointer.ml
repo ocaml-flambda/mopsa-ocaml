@@ -92,8 +92,8 @@ struct
   (**                         {2 Transfer functions}                          *)
   (*==========================================================================*)
 
-  let init prog (man : ('a, t) manager) (flow : 'a flow) =
-    set_domain_cur top man flow
+  let init prog (man : ('a, t) manager) ctx (flow : 'a flow) =
+    ctx, set_domain_cur top man flow
 
   let mk_offset_var p =
     let v = {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int} in

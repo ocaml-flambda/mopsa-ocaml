@@ -41,7 +41,7 @@ struct
 
     | _ -> None
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
   let exec _ _ _ _ = None
   let ask _ _ _ _ = None
 

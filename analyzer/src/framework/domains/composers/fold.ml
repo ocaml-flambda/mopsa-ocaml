@@ -51,9 +51,9 @@ struct
     }
   }
 
-  let init prg man fa =
-    Head.init prg (head_man man) fa |>
-    Tail.init prg (tail_man man)
+  let init prg man ctx fa =
+    let ctx, fa = Head.init prg (head_man man) ctx fa in
+    Tail.init prg (tail_man man) ctx fa
 
   let exec stmt man ctx gabs =
     Head.exec stmt (head_man man) ctx gabs |>
@@ -119,9 +119,9 @@ module MakeStack =
     }
   }
 
-  let init prg man subax fa =
-    Head.init prg (head_man man) subax fa |>
-    Tail.init prg (tail_man man) subax
+  let init prg man subax ctx fa =
+    let ctx, fa = Head.init prg (head_man man) subax ctx fa in
+    Tail.init prg (tail_man man) subax ctx fa
 
 
   let exec stmt man subax ctx gabs =

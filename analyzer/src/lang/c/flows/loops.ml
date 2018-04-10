@@ -25,7 +25,7 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prg man fa = fa
+  let init prog man ctx flow = ctx, flow
 
   let exec stmt man ctx flow =
     match skind stmt with

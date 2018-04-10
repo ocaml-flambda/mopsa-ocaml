@@ -81,7 +81,7 @@ struct
       None
 
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
 
 
   let instantiate_object cls args range manager ctx flow =

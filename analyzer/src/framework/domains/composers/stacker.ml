@@ -60,9 +60,9 @@ struct
     }
   }
 
-  let init prg man fa =
-    Head.init prg (head_man man) (tail_man man) fa |>
-    Tail.init prg (tail_man man)
+  let init prg man ctx fa =
+    let ctx, fa = Head.init prg (head_man man) (tail_man man) ctx fa in
+    Tail.init prg (tail_man man) ctx fa
 
   let exec stmt man ctx gabs =
     let gabs' = Head.exec stmt (head_man man) (tail_man man) ctx gabs in

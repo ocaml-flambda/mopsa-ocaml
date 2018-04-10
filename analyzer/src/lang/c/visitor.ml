@@ -116,8 +116,16 @@ let () =
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
       | S_c_local_declaration(_, None) -> leaf stmt
-      | S_c_local_declaration(v, Some (C_init_expr e)) -> assert false
-      | S_c_local_declaration(v, Some _) -> assert false
+      | S_c_local_declaration(v, Some (C_init_expr e)) ->
+        {exprs = [e]; stmts = []},
+        (function
+          | {exprs = [e]} -> {stmt with skind = S_c_local_declaration(v, Some (C_init_expr e))}
+          | _ -> assert false
+        )
+
+      | S_c_local_declaration(v, Some (C_init_list(l, filler))) ->
+        assert false
+          
       | S_c_do_while(body, cond) ->
         {exprs = [cond]; stmts = [body]},
         (function

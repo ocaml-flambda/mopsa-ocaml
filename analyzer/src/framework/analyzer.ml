@@ -125,7 +125,7 @@ struct
     let fa = flow_manager.bottom |>
              flow_manager.set TCur env_manager.top
     in
-    Domain.init prog manager fa
+    Domain.init prog manager Context.empty fa
 
 
 end

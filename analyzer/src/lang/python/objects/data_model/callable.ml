@@ -25,7 +25,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
 
   let exec stmt man ctx flow = None
 

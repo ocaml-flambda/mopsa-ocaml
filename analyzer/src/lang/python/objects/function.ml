@@ -46,7 +46,7 @@ struct
     | _ ->
       None
 
-  let init _ _ flow = flow
+  let init _ _ ctx flow = ctx, flow
 
   let eval exp man ctx flow =
     match ekind exp with

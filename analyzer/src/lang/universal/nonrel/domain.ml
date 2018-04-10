@@ -259,8 +259,8 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man flow =
-    set_domain_cur top man flow
+  let init prog man ctx flow =
+    ctx, set_domain_cur top man flow
 
   let rec exec stmt man ctx flow =
     match skind stmt with

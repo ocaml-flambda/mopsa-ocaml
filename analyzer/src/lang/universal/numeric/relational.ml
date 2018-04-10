@@ -113,8 +113,8 @@ struct
     | _ -> assert false
 
   (* {2 Transfer functions} *)
-  let init prog man flow =
-    set_domain_cur top man flow
+  let init prog man ctx flow =
+    ctx, set_domain_cur top man flow
   
   let rec exec stmt man ctx flow =
     let abs = get_domain_cur man flow in
