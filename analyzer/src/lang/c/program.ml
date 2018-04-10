@@ -39,70 +39,39 @@ struct
   let init prog man ctx flow =
     match prog.prog_kind with
     | C_program(globals, funcs) ->
+      let range = mk_file_range prog.prog_file in
+      let stmt = {skind = S_program prog; srange = range} in
+
       let counter = ref 0 in
       let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s))) in
 
-      let rec visit_expr table e =
-        match ekind e with
-        | E_constant(C_string s) ->
-          if StringTable.mem s table then table
-          else
-            let v = {
-              vname = "_string_" ^ (string_of_int !counter);
-              vuid = 0;
-              vtyp = type_of_string s;
-              vkind = V_orig;
-            }
-            in
-            incr counter;
-            StringTable.add s v table
-              
-        | _ -> table
+      let table = Framework.Visitor.fold_stmt
+          (fun table e ->
+             match ekind e with
+             | E_constant(C_string s) ->
+               if StringTable.mem s table then table
+               else
+                 let v = {
+                   vname = "_string_" ^ (string_of_int !counter);
+                   vuid = 0;
+                   vtyp = type_of_string s;
+                   vkind = V_orig;
+                 }
+                 in
+                 incr counter;
+                 StringTable.add s v table
 
-
-      and visit_init table init =
-        match init with
-        | C_init_expr e ->
-          let table = visit_expr table e in
-          table
-        | C_init_list (l, filler) ->
-          let table = List.fold_left (fun table init ->
-              visit_init table init
-            ) table l
-          in
-          visit_init_option table filler
-            
-        | C_init_implicit _ -> table
-
-
-      and visit_init_option table init =
-        match init with
-        | None -> table
-        | Some init -> visit_init table init
-                         
-      in
-      let table =
-        List.fold_left (fun table f ->
-            let table =
-              Framework.Visitor.fold_stmt
-                (fun table e -> visit_expr table e)
-                (fun table s -> table)
-                table f.c_func_body
-            in
-            (* Visit and change the locals *)
-            let table = List.fold_left (fun table (v, init) ->
-                visit_init_option table init
-              ) table f.c_func_local_vars
-            in
-            table
-      ) StringTable.empty funcs
+             | _ -> table
+          )
+          (fun table stmt -> table)
+          StringTable.empty stmt
       in
 
-    let ctx = Framework.Context.add KStringTable table ctx in
-    ctx, flow
+      let ctx = Framework.Context.add KStringTable table ctx in
+      ctx, flow
 
     | _ -> ctx, flow
-           
+
   let eval exp manager ctx flow = None
 
   let get_function_name fundec = fundec.c_func_var.vname
@@ -166,4 +135,3 @@ let setup () =
               in
               f);
     })
-

@@ -61,8 +61,10 @@ module Domain = struct
       aux 0 flow
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_string s)}) ->
+      let table = Program.find_string_table ctx in
+      let v = Program.StringTable.find s table in
       assert false
-        
+
     | _ ->
       panic "Array initialization not supported"
 
@@ -135,7 +137,7 @@ module Domain = struct
             let v = mk_var v range in
             init_expr v init true range man ctx flow
           ) flow globals
-          
+
       | _ -> flow
     in
     ctx, flow
