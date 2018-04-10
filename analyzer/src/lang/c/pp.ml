@@ -50,10 +50,18 @@ let () =
 
         | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "struct %s" record.c_record_org_name
 
+        | T_c_qualified(qual, t) ->
+          let l =
+            (if qual.c_qual_is_const then ["const"] else []) @
+            (if qual.c_qual_is_volatile then ["volatile"] else []) @
+            (if qual.c_qual_is_restrict then ["restrict"] else [])
+          in
+          let qual = String.concat " " l in
+          fprintf fmt "%s %a" qual pp_typ t
+
         | T_c_bitfield(t, size) -> assert false
         | T_c_builtin_fn -> assert false
         | T_c_enum(enum) -> assert false
-        | T_c_qualified(qual, t) -> assert false
         | _ -> default fmt typ
     );
   register_pp_constant (fun next fmt c ->
