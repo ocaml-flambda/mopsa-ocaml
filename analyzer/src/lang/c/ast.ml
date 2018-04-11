@@ -460,9 +460,18 @@ let sizeof_expr (t:typ) range : expr =
 (** Size (in bytes) of a type, as an expression. Handles variable-length ararys. *)
 
 
+
+let rec remove_typedef = function
+  | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
+  | t -> t
+
+let rec remove_qual = function
+  | T_c_qualified(_, t) -> remove_qual t
+  | t -> t
+
 (** [is_signed t] whether [t] is signed *)
 let rec is_signed (t : typ) : bool=
-  match t with
+  match remove_typedef t |> remove_qual with
   | T_c_integer it ->
      begin
        match it with
@@ -470,8 +479,7 @@ let rec is_signed (t : typ) : bool=
        | C_signed_long | C_signed_long_long | C_signed_int128 -> true
        | _ -> false
      end
-  | T_c_qualified(_, t) -> is_signed t
-  | _ -> failwith "[is_signed] not an integer type"
+  | _ -> Debug.fail "[is_signed] not an integer type %a" Framework.Pp.pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
 let rangeof (t : typ) =
@@ -506,14 +514,6 @@ let warp (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
        (tag_range range "??")
     )
     range
-
-let rec remove_typedef = function
-  | T_c_typedef(td) -> remove_typedef (td.c_typedef_def)
-  | t -> t
-
-let rec remove_qual = function
-  | T_c_qualified(_, t) -> remove_qual t
-  | t -> t
 
 (** [is_c_int_type t] wheter [t] is an integer type *)
 let rec is_c_int_type ( t : typ) =

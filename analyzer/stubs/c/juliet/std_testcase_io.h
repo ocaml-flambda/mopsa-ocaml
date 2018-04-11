@@ -2,6 +2,7 @@
 #define _STD_TESTCASE_IO_H
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <wchar.h>
 
 #define true 1
@@ -56,13 +57,13 @@ void printFloatLine (float floatNumber) {}
 
 void printLongLine(long longNumber) {}
 
-//void printLongLongLine(int64_t longLongIntNumber) {}
+void printLongLongLine(int64_t longLongIntNumber) {}
 
 void printSizeTLine(size_t sizeTNumber) {}
 
 void printHexCharLine(char charHex) {}
 
-//void printWcharLine(wchar_t wideChar) {}
+void printWcharLine(wchar_t wideChar) {}
 
 void printUnsignedLine(unsigned unsignedNumber) {}
 

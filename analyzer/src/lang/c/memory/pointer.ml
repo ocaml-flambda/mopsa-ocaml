@@ -238,7 +238,18 @@ struct
                )
                man ctx
 
-           | E_p_invalid -> assert false
+           | E_p_invalid ->
+             man.eval p ctx flow |>
+             eval_to_exec
+               (fun p flow ->
+                  let p = match p with
+                    | {ekind = E_var p} -> p
+                    | _ -> assert false
+                  in
+                  map_domain_cur (points_to_invalid p) man flow |>
+                  return
+               )
+               man ctx
 
         ) man ctx
 
@@ -327,9 +338,18 @@ struct
                         ) None itv
                   end
 
-                | E_p_null -> assert false
+                | E_p_null ->
+                  let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                             man.flow.set TCur man.env.Framework.Lattice.bottom
+                  in
+                  oeval_singleton (None, flow, [])
 
-                | E_p_invalid -> assert false
+
+                | E_p_invalid ->
+                  let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                             man.flow.set TCur man.env.Framework.Lattice.bottom
+                  in
+                  oeval_singleton (None, flow, [])
              )
         )
 

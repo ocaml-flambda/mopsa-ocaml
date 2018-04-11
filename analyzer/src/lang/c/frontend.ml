@@ -64,15 +64,14 @@ and parse_file (opts: string list) (file: string) =
     match diag with
     | [] -> ()
     | _ ->
-      debug "%a"
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
-           (Format.pp_print_string)
-        ) (List.map (Clang_dump.string_of_diagnostic) diag)
-      ;
       let error_diag = List.exists (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false) diag in
       if error_diag then
-        failwith "Fatal parsing errors"
+        Debug.fail "Fatal parsing errors:@\n%a"
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
+             (Format.pp_print_string)
+          ) (List.map (Clang_dump.string_of_diagnostic) diag)
+
   in
   x
 
