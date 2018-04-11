@@ -1,10 +1,13 @@
 unsigned char i, j;
-int a[10];
+long int a[100];
 
 void main() {
   i = 0;
-  while(i < 20) {
+  char*p;
+  p = &(a[1]);
+  *p = 100;
+  while(i < 100) {
     a[i] = i;
-    i++:
+    i++;
   }
 }
