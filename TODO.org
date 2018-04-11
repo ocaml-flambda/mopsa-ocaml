@@ -18,7 +18,6 @@
 
 * C
 ** Strings
-*** pointers to string litterals
 *** symbolic domain and its reduction with cells
 ** Struct/union
 *** assignments with compound litterals
@@ -35,7 +34,6 @@
 ** Stubs
 *** distinguish between concrete/abstract stubs
 ** stdio.h
-*** NULL
 *** EOF
 *** FILE
 *** fclose
