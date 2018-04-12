@@ -26,6 +26,7 @@ struct
 
   let is_builtin_function = function
     | "_mopsa_rand_int"
+    | "_mopsa_panic"
     | "_mopsa_assert_true"
     | "_mopsa_assert_false"
     | "_mopsa_assert_safe"
@@ -68,6 +69,18 @@ struct
             erange
         ) erange) ctx flow in
       re_eval_singleton (Some v, flow, [mk_remove_var tmp erange]) man ctx
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_panic"}, [msg]) ->
+      let rec remove_cast e =
+        match ekind e with
+        | E_c_cast(e', _) -> remove_cast e'
+        | _ -> e
+      in
+      let s = match remove_cast msg |> ekind with
+        | E_constant(C_c_string (s, _)) -> s
+        | _ -> assert false
+      in
+      panic "%s" s
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in

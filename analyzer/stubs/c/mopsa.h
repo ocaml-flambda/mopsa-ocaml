@@ -4,6 +4,9 @@
 // Abstract values
 long int _mopsa_rand_int(long int, long int);
 
+// Raise Framework.Manager.Panic exception with a given message
+void _mopsa_panic(const char*);
+
 // Errors
 #define OUT_OF_BOUND 1
 #define NULL_DEREF 2
