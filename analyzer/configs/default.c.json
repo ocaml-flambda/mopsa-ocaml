@@ -10,10 +10,10 @@
     //Flows
     "c.flows.intraproc",
     "c.flows.interproc",
+    "c.flows.loops",
     "universal.flows.loops",
     "universal.flows.intraproc",
     "universal.flows.interproc",
-    "universal.flows.loops",
 
     //Memory abstraction
     "c.memory.pointer",

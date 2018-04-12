@@ -156,14 +156,9 @@ module Make(ValAbs : DOMAIN) = struct
 
   (** Execute a statement on [ValAbs] using the local scope manager. *)
   let valabs_trivial_exec (stmt : stmt) (a : ValAbs.t) : ValAbs.t =
-    debug "trivial exec %a in@ %a" Framework.Pp.pp_stmt stmt ValAbs.print a;
-    let a' =
-      set_domain_cur a local_subman local_subman.flow.bottom |>
-      local_subman.exec stmt Framework.Context.empty |>
-      local_subman.flow.get TCur
-    in
-    debug "res = %a" ValAbs.print a';
-    a'
+    set_domain_cur a local_subman local_subman.flow.bottom |>
+    local_subman.exec stmt Framework.Context.empty |>
+    local_subman.flow.get TCur
 
   (*==========================================================================*)
   (**                          {2 Unification}                                *)
@@ -367,18 +362,13 @@ module Make(ValAbs : DOMAIN) = struct
   let remove_overlapping_cells v c range man ctx flow =
     let u = get_domain_cur man flow in
     CS.fold (fun v' acc ->
-        debug "check v= %a, v' = %a" pp_var v pp_var v';
         if compare_var v v' = 0 then
           acc
         else
           let c' = extract_cell v' in
-          debug "check c' = %a" pp_cell c';
           let cell_range c = (c.o, Z.add c.o (sizeof_type c.t)) in
           let check_overlap (a1, b1) (a2, b2) =
-            debug "check overlap between [%a, %a] and [%a, %a]" Z.pp_print a1 Z.pp_print b1 Z.pp_print a2 Z.pp_print b2;
-            let t = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-            debug "result = %b" t;
-            t
+            Z.lt (Z.max a1 a2) (Z.min b1 b2)
           in
           if compare_var c.v c'.v = 0 && check_overlap (cell_range c) (cell_range c') then
             man.exec (Universal.Ast.mk_remove_var v' range) ctx acc
@@ -398,7 +388,6 @@ module Make(ValAbs : DOMAIN) = struct
   let bottom = {cs = CS.bottom; a = ValAbs.bottom}
 
   let join (u : t) (u' : t) : t =
-    debug "join:@\n u = @[%a@]@\n u' = @[%a@]" print u print u';
     if ValAbs.leq u.a ValAbs.bottom then
       u'
     else if ValAbs.leq u'.a ValAbs.bottom then
@@ -477,11 +466,9 @@ module Make(ValAbs : DOMAIN) = struct
              | _ -> assert false
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
-           debug "exec assign";
            match ValAbs.exec stmt' (subman man) ctx flow with
            | None -> None
            | Some flow ->
-             debug "constrain_similar_cells";
              remove_overlapping_cells v c stmt.srange man ctx flow |>
              return
         )

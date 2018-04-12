@@ -29,7 +29,21 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
-    | S_c_for(init, cond, incr, body) -> assert false
+    | S_c_for(init, cond, incr, body) ->
+      let range = stmt.srange in
+      let stmt = Universal.Ast.(
+          mk_block [
+            init;
+            mk_stmt (S_while (
+                (match cond with None -> mk_one range | Some e -> e),
+                (match incr with None -> body | Some e -> mk_block [body; mk_stmt (S_expression e) e.erange] body.srange)
+              )) range
+          ] range
+        )
+      in
+      man.exec stmt ctx flow |>
+      return
+
     | S_c_do_while(body, cond) -> assert false
     | _ -> None
 

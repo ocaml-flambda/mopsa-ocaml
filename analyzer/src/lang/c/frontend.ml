@@ -269,6 +269,10 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
   in
   {ekind; erange; etyp}
 
+and from_expr_option : C_AST.expr option -> Framework.Ast.expr option = function
+  | None -> None
+  | Some e -> Some (from_expr e)
+
 and from_unary_operator : C_AST.unary_operator -> Framework.Ast.operator = function
   | C_AST.NEG -> Universal.Ast.O_minus
   | C_AST.BIT_NOT -> Universal.Ast.O_invert
@@ -332,6 +336,7 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_block block -> from_block srange block |> Framework.Ast.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr cond, from_block srange body, from_block srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr cond, from_block srange body)
+    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block srange init, from_expr_option test, from_expr_option increm, from_block srange body)
     | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
     | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
     | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
@@ -339,7 +344,6 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr e))
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr cond, from_block srange body)
     | C_AST.S_do_while (_,_) -> failwith "C_AST.S_do_while not supprted"
-    | C_AST.S_for (_,_,_,_) -> failwith "C_AST.S_for not supprted"
     | C_AST.S_target _ -> failwith "C_AST.S_target not supprted"
   in
   {skind; srange}
