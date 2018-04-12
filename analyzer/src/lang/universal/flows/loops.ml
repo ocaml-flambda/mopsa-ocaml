@@ -100,19 +100,10 @@ struct
 
       debug "lfp reached:@\n abs = @[%a@]" manager.flow.print res0;
 
-      let res1 = manager.flow.map (fun eabs -> function
-          | TCur ->
-            let brk = manager.flow.get TBreak res0 in
-            manager.env.join eabs brk
-
-          | TBreak ->
-            manager.flow.get TBreak flow
-
-          | TContinue ->
-            manager.flow.get TContinue flow
-
-          | _ -> eabs
-        ) res0 in
+      let res1 = manager.flow.add TCur (manager.flow.get TBreak res0) res0 |>
+                 manager.flow.set TBreak (manager.flow.get TBreak flow) |>
+                 manager.flow.set TContinue (manager.flow.get TContinue flow)
+      in
 
       debug "while post abs:@\n abs = @[%a@]" manager.flow.print res1;
 
@@ -134,12 +125,9 @@ struct
       None
 
   and lfp delay cond body manager ctx flow_init flow =
-    let flow0 = manager.flow.map (fun eabs -> function
-        | TCur ->
-          let cont = manager.flow.get TContinue flow in
-          manager.env.join eabs cont
-        | _ -> eabs
-      ) flow in
+    let flow0 = manager.flow.remove TContinue flow |>
+                manager.flow.remove TBreak
+    in
 
     debug "lfp:@\n delay = %d@\n abs = @[%a@]"
       delay manager.flow.print flow0
@@ -152,26 +140,27 @@ struct
       manager.exec body ctx
     in
 
+    let flow2 = merge_cur_and_continue manager flow1 in
+    
     debug "lfp post:@\n res = @[%a@]" manager.flow.print flow1;
 
-    let flow2 = manager.flow.join flow_init flow1 in
+    let flow3 = manager.flow.join flow_init flow2 in
 
-    debug "lfp join:@\n res = @[%a@]" manager.flow.print flow2;
+    debug "lfp join:@\n res = @[%a@]" manager.flow.print flow3;
 
-    if manager.flow.leq flow2 flow then
-      flow2
+    if manager.flow.leq flow3 flow then
+      flow3
     else
     if delay = 0 then
-      let wflow = manager.flow.widening ctx flow flow2 in
+      let wflow = manager.flow.widening ctx flow flow3 in
       debug
         "widening:@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
         manager.flow.print flow
-        manager.flow.print flow2
+        manager.flow.print flow3
         manager.flow.print wflow;
       lfp !opt_loop_widening_delay cond body manager ctx flow_init wflow
     else
-      lfp (delay - 1) cond body manager ctx flow_init flow2
-
+      lfp (delay - 1) cond body manager ctx flow_init flow3
 
   and unroll cond body manager ctx flow =
     let rec loop i flow =
@@ -180,7 +169,8 @@ struct
       else
         let flow1 =
           manager.exec {skind = S_assume cond; srange = cond.erange} ctx flow |>
-          manager.exec body ctx
+          manager.exec body ctx |>
+          merge_cur_and_continue manager
         in
         let flow2 =
           manager.exec (mk_assume (mk_not cond cond.erange) cond.erange) ctx flow
@@ -189,6 +179,15 @@ struct
         flow1', manager.flow.join flow2 flow2'
     in
     loop !opt_loop_unrolling flow
+
+  and merge_cur_and_continue manager flow =
+    manager.flow.map (fun eabs -> function
+        | TCur ->
+          let cont = manager.flow.get TContinue flow in
+          manager.env.join eabs cont
+        | TContinue -> manager.env.bottom
+        | _ -> eabs
+      ) flow
 
 
   let eval _ _ _ _ = None
