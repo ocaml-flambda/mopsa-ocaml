@@ -237,6 +237,8 @@ struct
                     | _ -> assert false
                   in
                   map_domain_cur (points_to_null p) man flow |>
+                  (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
+                  man.exec (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range) ctx |>
                   return
                )
                man ctx
@@ -250,6 +252,8 @@ struct
                     | _ -> assert false
                   in
                   map_domain_cur (points_to_invalid p) man flow |>
+                  (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
+                  man.exec (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range) ctx |>
                   return
                )
                man ctx
