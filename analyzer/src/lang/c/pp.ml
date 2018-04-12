@@ -50,6 +50,8 @@ let () =
 
       | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "struct %s" record.c_record_org_name
 
+      | T_c_record({c_record_kind = C_union} as record) -> fprintf fmt "union %s" record.c_record_org_name
+
       | T_c_qualified(qual, t) ->
         let l =
           (if qual.c_qual_is_const then ["const"] else []) @

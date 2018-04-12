@@ -74,7 +74,33 @@ module Domain = struct
     | _ ->
       panic "Array initialization not supported"
 
-  and init_union u init is_global range man ctx flow = assert false
+  and init_union u init is_global range man ctx flow =
+    let largest_field =
+      let fields = match remove_typedef u.etyp |> remove_qual with
+        | T_c_record{c_record_fields} -> c_record_fields
+        | _ -> assert false
+      in
+      match fields with
+      | [] -> assert false
+      | [f] -> f
+      | hd :: tl ->
+        let rec doit acc = function
+          | [] -> acc
+          | f :: tl ->
+            let acc = if Z.gt (sizeof_type f.c_field_type) (sizeof_type acc.c_field_type) then f else acc in
+            doit acc tl
+        in
+        doit hd tl
+    in
+
+    match init with
+    | None when not is_global -> flow
+
+    | None when is_global ->
+      init_expr (mk_c_member_access u largest_field range) None is_global range man ctx flow
+
+    | _ -> panic "Initialization of union not supported"
+
 
   and init_scalar v init is_global range man ctx flow =
     match init with
