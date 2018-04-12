@@ -250,22 +250,3 @@ let mk_unop op operand erange =
   mk_expr (E_unop (op, operand)) erange
 
 let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
-
-(*==========================================================================*)
-                        (** {2 Panic statement} *)
-(*==========================================================================*)
-
-
-(**
-   This exception is raised by abstract domains when they encounter an
-   unsupported language construct.
-*)
-exception Panic
-
-exception StmtPanic of stmt
-
-let panic fmt =
-  Format.kasprintf (fun str ->
-      Debug.warn "%s" str;
-      raise Panic
-    ) fmt
