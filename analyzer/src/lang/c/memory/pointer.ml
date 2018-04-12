@@ -12,6 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Domains.Global
 open Framework.Manager
+open Framework.Exceptions
 open Framework.Ast
 open Framework.Visitor
 open Framework.Pp

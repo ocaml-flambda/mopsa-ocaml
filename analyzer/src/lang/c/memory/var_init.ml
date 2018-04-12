@@ -13,6 +13,7 @@ open Framework.Pp
 open Framework.Domains.Stateless
 open Framework.Manager
 open Framework.Visitor
+open Framework.Exceptions
 open Framework.Domains
 open Framework.Flow
 open Framework.Utils

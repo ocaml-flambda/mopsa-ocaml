@@ -693,7 +693,7 @@ let fwd_filter op abs1 abs2 =
 let bwd_unop op abs rabs =
   match op with
   | O_sqrt ->
-    Framework.Manager.panic "bwd evaluation of sqrt not supported"
+    Framework.Exceptions.panic "bwd evaluation of sqrt not supported"
 
   | O_minus ->
     {bottom with int = IntLattice.bwd_unop op abs.int rabs.int; float = FloatLattice.bwd_unop op abs.float rabs.float}

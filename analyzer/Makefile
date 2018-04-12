@@ -5,7 +5,7 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang main
 
-framework = options ast query pp alarm context lattice lattices visitor flow manager domains utils analyzer config
+framework = options ast query pp alarm context lattice lattices visitor exceptions flow manager domains utils analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
 framework.domains = global stateless composers
 

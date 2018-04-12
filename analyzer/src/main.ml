@@ -73,15 +73,7 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
     );
 
   with
-  | Framework.Manager.StmtPanic stmt ->
-    Debug.fail "Unable to analyze statement in %a:@\n @[%a@]"
-      Framework.Pp.pp_range_verbose stmt.Framework.Ast.srange
-      Framework.Pp.pp_stmt stmt
-
-  | Framework.Manager.ExprPanic exp ->
-    Debug.fail "Unable to evaluate expression in %a:@\n @[%a@]"
-      Framework.Pp.pp_range_verbose exp.Framework.Ast.erange
-      Framework.Pp.pp_expr exp
+  | Framework.Exceptions.Panic msg -> Debug.fail "Panic: %s" msg
 
   | e ->
     Debug.fail "Uncaught analyzer exception in %s@\n%s"
@@ -95,24 +87,27 @@ let () =
 
   Arg.parse !Options.spec (fun filename ->
       Debug.info "Parsing the program ...";
-      let prog =
-        match Filename.extension filename with
-        | ".c" ->
-          Lang.C.Setup.start ();
-          Lang.C.Frontend.parse_program filename
-        | ".db" ->
-          Lang.C.Setup.start ();
-          Lang.C.Frontend.parse_db filename
-        | ".py" ->
-          Lang.Python.Setup.start ();
-          Lang.Python.Frontend.parse_program filename
-        | _ ->
-          failwith "Unknown program extension"
-      in
+      try
+        let prog =
+          match Filename.extension filename with
+          | ".c" ->
+            Lang.C.Setup.start ();
+            Lang.C.Frontend.parse_program filename
+          | ".db" ->
+            Lang.C.Setup.start ();
+            Lang.C.Frontend.parse_db filename
+          | ".py" ->
+            Lang.Python.Setup.start ();
+            Lang.Python.Frontend.parse_program filename
+          | _ ->
+            failwith "Unknown program extension"
+        in
 
-      Debug.info "Parsing configuration file ...";
-      let domain = Config.parse Options.(common_options.config) in
+        Debug.info "Parsing configuration file ...";
+        let domain = Config.parse Options.(common_options.config) in
 
-      (* Start the analysis *)
-      start domain prog
+        (* Start the analysis *)
+        start domain prog
+      with Framework.Exceptions.Panic msg ->
+        Debug.fail "Panic: @[%s@]" msg
     ) "Modular Open Platform for Static Analysis"

@@ -33,7 +33,7 @@ struct
     | E_addr {addr_kind = A_py_class (C_builtin "int", _) }
     | E_addr {addr_kind = A_py_class (C_builtin "float", _) }
     | E_addr {addr_kind = A_py_class (C_builtin "string", _) } ->
-      panic "Inheritance from builtin classes not supported"
+      Framework.Exceptions.panic "Inheritance from builtin classes not supported"
 
     | E_addr {addr_kind = A_py_class _ } ->
       true

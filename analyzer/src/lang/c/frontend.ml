@@ -66,7 +66,7 @@ and parse_file (opts: string list) (file: string) =
     | _ ->
       let error_diag = List.exists (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false) diag in
       if error_diag then
-        Debug.fail "Fatal parsing errors:@\n%a"
+        Framework.Exceptions.panic "Fatal parsing errors:@\n @[%a@]"
           (Format.pp_print_list
              ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
              (Format.pp_print_string)
@@ -257,15 +257,15 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr r, i, f)
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr r, i, f)
 
-    | C_AST.E_conditional (_,_,_) -> failwith "E_conditional not supported"
-    | C_AST.E_compound_assign (_,_,_,_,_) -> failwith "E_compound_assign not supported"
-    | C_AST.E_comma (_,_) -> failwith "E_comma not supported"
-    | C_AST.E_increment (_,_,_) -> failwith "E_increment not supported"
-    | C_AST.E_compound_literal _ -> failwith "E_compound_literal not supported"
-    | C_AST.E_predefined _ -> failwith "E_predefined not supported"
-    | C_AST.E_statement _ -> failwith "E_statement not supported"
-    | C_AST.E_var_args _ -> failwith "E_var_args not supported"
-    | C_AST.E_atomic (_,_,_) -> failwith "E_atomic not supported"
+    | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
+    | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
+    | C_AST.E_comma (_,_) -> Framework.Exceptions.panic "E_comma not supported"
+    | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
+    | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
+    | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
+    | C_AST.E_statement _ -> Framework.Exceptions.panic "E_statement not supported"
+    | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
+    | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
   in
   {ekind; erange; etyp}
 
@@ -343,8 +343,8 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
     | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr e))
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr cond, from_block srange body)
-    | C_AST.S_do_while (_,_) -> failwith "C_AST.S_do_while not supprted"
-    | C_AST.S_target _ -> failwith "C_AST.S_target not supprted"
+    | C_AST.S_do_while (_,_) -> Framework.Exceptions.panic "C_AST.S_do_while not supprted"
+    | C_AST.S_target _ -> Framework.Exceptions.panic "C_AST.S_target not supprted"
   in
   {skind; srange}
 

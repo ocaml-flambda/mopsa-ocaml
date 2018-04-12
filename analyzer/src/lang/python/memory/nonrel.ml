@@ -113,7 +113,7 @@ struct
           (* Partition w.r.t. to all current addresses *)
           | T_addr ->
             if Value.AddrLattice.is_top value'.addr then
-              panic "top address found"
+              Framework.Exceptions.panic "top address found"
             else
               Value.AddrLattice.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)

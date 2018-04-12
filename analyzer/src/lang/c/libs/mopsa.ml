@@ -80,7 +80,7 @@ struct
         | E_constant(C_c_string (s, _)) -> s
         | _ -> assert false
       in
-      panic "%s" s
+      Framework.Exceptions.panic "%s" s
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in

@@ -111,24 +111,3 @@ let get_domain_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
 
-
-
-(*==========================================================================*)
-                        (** {2 Panic management} *)
-(*==========================================================================*)
-
-
-exception Panic
-(**
-   This exception is raised by abstract domains when they encounter an
-   unsupported language construct.
-*)
-
-exception StmtPanic of Ast.stmt
-exception ExprPanic of Ast.expr
-
-let panic fmt =
-  Format.kasprintf (fun str ->
-      Debug.warn "%s" str;
-      raise Panic
-    ) fmt

@@ -48,30 +48,7 @@ type token +=
   | TSafeAssert of string * range
   | TFailAssert of string * range
   | TMayAssert of string * range
-  | TUnsupportedStmt of string * stmt
-  | TUnsupportedExpr of string * expr
-
-let () =
-  register_token_compare (fun next tk1 tk2 ->
-      match tk1, tk2 with
-      | TSafeAssert (_, r1), TSafeAssert (_, r2)
-      | TFailAssert (_, r1), TFailAssert (_, r2)
-      | TMayAssert (_, r1), TMayAssert (_, r2) ->
-        compare_range r1 r2
-      | TUnsupportedStmt(_, s1), TUnsupportedStmt(_, s2) ->
-        compare_range s1.srange s2.srange
-      | TUnsupportedExpr(_, e1), TUnsupportedExpr(_, e2) ->
-        compare_range e1.erange e2.erange
-      | _ -> next tk1 tk2
-    );
-  register_pp_token (fun next fmt -> function
-      | TSafeAssert (test, r) -> Format.fprintf fmt "safe@%s:%a" test Framework.Pp.pp_range r
-      | TFailAssert (test, r) -> Format.fprintf fmt "fail@%s:%a" test Framework.Pp.pp_range r
-      | TMayAssert (test, r) -> Format.fprintf fmt "may@%s:%a" test Framework.Pp.pp_range r
-      | TUnsupportedStmt (test, s) -> Format.fprintf fmt "unsupported@%s:%a:@[%a@]" test Framework.Pp.pp_stmt s Framework.Pp.pp_range s.srange
-      | TUnsupportedExpr (test, e) -> Format.fprintf fmt "unsupported@%s:%a:@[%a@]" test Framework.Pp.pp_expr e Framework.Pp.pp_range e.erange
-      | tk -> next fmt tk
-    )
+  | TPanic of string * range
 
 
 (*==========================================================================*)
@@ -81,8 +58,7 @@ let () =
 type alarm_kind +=
   | AFailTest of string
   | AMayTest of string
-  | AUnsupportedStmt of string * stmt
-  | AUnsupportedExpr of string * expr
+  | APanic of string
 
 (*==========================================================================*)
 (**                        {2 Abstract domain }                             *)
@@ -113,20 +89,9 @@ struct
           ;
           man.flow.join acc flow1, nb_ok + ok, nb_fail + fail, nb_may_fail + may_fail, nb_panic
         with
-        | StmtPanic (stmt) ->
-          Debug.warn "Execution of test %s not completed.@\nUnable to analyze stmt %a"
-            name
-            Framework.Pp.pp_stmt stmt
-          ;
-          let flow1 = man.flow.add (TUnsupportedStmt (name, stmt)) (man.flow.get TCur flow) flow in
-          man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
-
-        | ExprPanic (exp) ->
-          Debug.warn "Execution of test %s not completed.@\nUnable to evaluate expression %a"
-            name
-            Framework.Pp.pp_expr exp
-          ;
-          let flow1 = man.flow.add (TUnsupportedExpr (name, exp)) (man.flow.get TCur flow) flow in
+        | Framework.Exceptions.Panic (msg) ->
+          Debug.warn "Panic: @[%s@]" msg;
+          let flow1 = man.flow.add (TPanic (name, test.srange)) (man.flow.get TCur flow) flow in
           man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
       ) (man.flow.bottom, 0, 0, 0, 0)
@@ -195,18 +160,10 @@ struct
               } in
               alarm :: acc
 
-            | TUnsupportedStmt(test, s) ->
+            | TPanic(test, range) ->
               let alarm = {
-                alarm_kind = AUnsupportedStmt (test, s);
-                alarm_range = s.srange;
-                alarm_level = High;
-              } in
-              alarm :: acc
-
-           | TUnsupportedExpr(test, e) ->
-              let alarm = {
-                alarm_kind = AUnsupportedExpr (test, e);
-                alarm_range = e.erange;
+                alarm_kind = APanic (test);
+                alarm_range = range;
                 alarm_level = High;
               } in
               alarm :: acc
@@ -216,9 +173,8 @@ struct
         in
         let alarms = List.sort (fun a1 a2 ->
             match a1.alarm_kind, a2.alarm_kind with
-            | AFailTest _, _ -> 3
-            | AUnsupportedStmt _, _ -> 2
-            | AUnsupportedExpr _, _ -> 1
+            | AFailTest _, _ -> 2
+            | APanic _, _ -> 1
             | AMayTest _, _ -> 0
             | _ -> compare_range a1.alarm_range a2.alarm_range
           ) alarms
@@ -230,21 +186,28 @@ end
 
 let setup () =
   Stateless.register_domain name (module Domain);
-
+  register_token_compare (fun next tk1 tk2 ->
+      match tk1, tk2 with
+      | TSafeAssert (_, r1), TSafeAssert (_, r2)
+      | TFailAssert (_, r1), TFailAssert (_, r2)
+      | TMayAssert (_, r1), TMayAssert (_, r2) ->
+        compare_range r1 r2
+      | TPanic(s1, r1), TPanic(s2, r2) -> compare s1 s2
+      | _ -> next tk1 tk2
+    );
+  register_pp_token (fun next fmt -> function
+      | TSafeAssert (test, r) -> Format.fprintf fmt "safe@%s:%a" test Framework.Pp.pp_range r
+      | TFailAssert (test, r) -> Format.fprintf fmt "fail@%s:%a" test Framework.Pp.pp_range r
+      | TMayAssert (test, r) -> Format.fprintf fmt "may@%s:%a" test Framework.Pp.pp_range r
+      | TPanic (test, r) -> Format.fprintf fmt "panic@%s" test
+      | tk -> next fmt tk
+    );
   register_alarm_compare (fun next a1 a2 ->
       match a1.alarm_kind, a2.alarm_kind with
-      | AFailTest t1, AFailTest t2 -> compare t1 t2
-      | AMayTest t1, AMayTest t2 -> compare t1 t2
-      | AUnsupportedStmt(t1, s1), AUnsupportedStmt(t2, s2) ->
-        compare_composer [
-          (fun () -> compare t1 t2);
-          (fun () -> compare_range s1.srange s2.srange);
-        ]
-      | AUnsupportedExpr(t1, e1), AUnsupportedExpr(t2, e2) ->
-        compare_composer [
-          (fun () -> compare t1 t2);
-          (fun () -> compare_range e1.erange e2.erange);
-        ]
+      | AFailTest t1, AFailTest t2
+      | AMayTest t1, AMayTest t2
+      | APanic(t1), APanic(t2) ->
+        compare t1 t2
       | _ -> next a1 a2
     );
 
@@ -252,7 +215,6 @@ let setup () =
       match alarm.alarm_kind with
       | AFailTest(t) -> Format.fprintf fmt "%a  Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
       | AMayTest(t) -> Format.fprintf fmt "%a  Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⚠" t
-      | AUnsupportedStmt(t, s) -> Format.fprintf fmt "%a  Test %s skipped, unsupported statement:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_stmt s
-      | AUnsupportedExpr(t, e) -> Format.fprintf fmt "%a  Test %s skipped, unsupported expression:@\n     @[%a@]" ((Debug.color "fushia") Format.pp_print_string) "⎇" t Framework.Pp.pp_expr e
+      | APanic(t) -> Format.fprintf fmt "%a  Test %s skipped" ((Debug.color "fushia") Format.pp_print_string) "⎇" t
       | _ -> next fmt alarm
     )
