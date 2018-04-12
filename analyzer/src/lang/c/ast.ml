@@ -298,7 +298,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
   | T_c_pointer(t) -> C_AST.T_pointer (to_clang_type t), C_AST.no_qual
   | T_c_array(t, array_length) -> C_AST.T_array (to_clang_type t, to_clang_array_length array_length), C_AST.no_qual
   | T_c_bitfield(t, size) -> C_AST.T_bitfield (fst @@ to_clang_type t, size), C_AST.no_qual
-  | T_c_function(None) -> C_AST.T_function None, C_AST.no_qual
+  | T_c_function(f) -> C_AST.T_function(to_clang_function_type_option f), C_AST.no_qual
   | T_c_builtin_fn -> C_AST.T_builtin_fn, C_AST.no_qual
   | T_c_typedef(typedef) -> C_AST.T_typedef (to_clang_typedef typedef), C_AST.no_qual
   | T_c_record(record) -> C_AST.T_record (to_clang_record_type record), C_AST.no_qual
@@ -315,6 +315,17 @@ and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
     C_AST.qual_is_const = qual.c_qual_is_const;
   }
 
+
+and to_clang_function_type : c_function_type -> C_AST.function_type =
+  fun f -> {
+      C_AST.ftype_return = to_clang_type f.c_ftype_return;
+      ftype_params = List.map to_clang_type f.c_ftype_params;
+      ftype_variadic = f.c_ftype_variadic;
+    }
+
+and to_clang_function_type_option = function
+  | None -> None
+  | Some t -> Some (to_clang_function_type t)
 
 
 and to_clang_int_type : c_integer_type -> C_AST.integer_type = function

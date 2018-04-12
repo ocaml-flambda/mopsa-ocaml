@@ -16,53 +16,53 @@ let rec pp_c_init fmt = function
 let () =
   register_pp_typ (fun default fmt typ ->
       match typ with
-        | T_c_void -> pp_print_string fmt "void"
+      | T_c_void -> pp_print_string fmt "void"
 
-        | T_c_integer(C_char C_signed)
-        | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char"
-        | T_c_integer(C_char C_unsigned)
-        | T_c_integer(C_unsigned_char) -> pp_print_string fmt "unsigned char"
-        | T_c_integer(C_signed_short) -> pp_print_string fmt "signed short"
-        | T_c_integer(C_unsigned_short) -> pp_print_string fmt "unsigned short"
-        | T_c_integer(C_signed_int) -> pp_print_string fmt "signed int"
-        | T_c_integer(C_unsigned_int) -> pp_print_string fmt "unsigned int"
-        | T_c_integer(C_signed_long) -> pp_print_string fmt "signed long"
-        | T_c_integer(C_unsigned_long) -> pp_print_string fmt "unsigned long"
-        | T_c_integer(C_signed_long_long) -> pp_print_string fmt "signed long long"
-        | T_c_integer(C_unsigned_long_long) -> pp_print_string fmt "unsigned long long"
-        | T_c_integer(C_signed_int128) -> pp_print_string fmt "signed int128"
-        | T_c_integer(C_unsigned_int128) -> pp_print_string fmt "unsigned int128"
+      | T_c_integer(C_char C_signed)
+      | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char"
+      | T_c_integer(C_char C_unsigned)
+      | T_c_integer(C_unsigned_char) -> pp_print_string fmt "unsigned char"
+      | T_c_integer(C_signed_short) -> pp_print_string fmt "signed short"
+      | T_c_integer(C_unsigned_short) -> pp_print_string fmt "unsigned short"
+      | T_c_integer(C_signed_int) -> pp_print_string fmt "signed int"
+      | T_c_integer(C_unsigned_int) -> pp_print_string fmt "unsigned int"
+      | T_c_integer(C_signed_long) -> pp_print_string fmt "signed long"
+      | T_c_integer(C_unsigned_long) -> pp_print_string fmt "unsigned long"
+      | T_c_integer(C_signed_long_long) -> pp_print_string fmt "signed long long"
+      | T_c_integer(C_unsigned_long_long) -> pp_print_string fmt "unsigned long long"
+      | T_c_integer(C_signed_int128) -> pp_print_string fmt "signed int128"
+      | T_c_integer(C_unsigned_int128) -> pp_print_string fmt "unsigned int128"
 
-        | T_c_float(C_float) -> pp_print_string fmt "float"
-        | T_c_float(C_double) -> pp_print_string fmt "double"
-        | T_c_float(C_long_double) -> pp_print_string fmt "long double"
+      | T_c_float(C_float) -> pp_print_string fmt "float"
+      | T_c_float(C_double) -> pp_print_string fmt "double"
+      | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
-        | T_c_pointer(t) -> fprintf fmt "* %a" pp_typ t
+      | T_c_pointer(t) -> fprintf fmt "%a *" pp_typ t
 
-        | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
-        | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)
-        | T_c_array(t, C_array_length_expr e) -> fprintf fmt "%a[%a]" pp_typ t pp_expr e
+      | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
+      | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)
+      | T_c_array(t, C_array_length_expr e) -> fprintf fmt "%a[%a]" pp_typ t pp_expr e
 
-        | T_c_function None -> ()
-        | T_c_function (Some f) -> pp_typ fmt f.c_ftype_return
+      | T_c_function None -> ()
+      | T_c_function (Some f) -> pp_typ fmt f.c_ftype_return
 
-        | T_c_typedef(typedef) -> pp_typ fmt typedef.c_typedef_def
+      | T_c_typedef(typedef) -> pp_typ fmt typedef.c_typedef_def
 
-        | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "struct %s" record.c_record_org_name
+      | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "struct %s" record.c_record_org_name
 
-        | T_c_qualified(qual, t) ->
-          let l =
-            (if qual.c_qual_is_const then ["const"] else []) @
-            (if qual.c_qual_is_volatile then ["volatile"] else []) @
-            (if qual.c_qual_is_restrict then ["restrict"] else [])
-          in
-          let qual = String.concat " " l in
-          fprintf fmt "%s %a" qual pp_typ t
+      | T_c_qualified(qual, t) ->
+        let l =
+          (if qual.c_qual_is_const then ["const"] else []) @
+          (if qual.c_qual_is_volatile then ["volatile"] else []) @
+          (if qual.c_qual_is_restrict then ["restrict"] else [])
+        in
+        let qual = String.concat " " l in
+        fprintf fmt "%s %a" qual pp_typ t
 
-        | T_c_bitfield(t, size) -> assert false
-        | T_c_builtin_fn -> assert false
-        | T_c_enum(enum) -> assert false
-        | _ -> default fmt typ
+      | T_c_bitfield(t, size) -> assert false
+      | T_c_builtin_fn -> assert false
+      | T_c_enum(enum) -> assert false
+      | _ -> default fmt typ
     );
   register_pp_constant (fun next fmt c ->
       match c with

@@ -24,7 +24,6 @@
 *** check inspection of the non-common part in a union of several structs (cf. C11 §6.5.2.3)
 *** bitfields
 ** Statements
-*** for
 *** do while
 *** switch
 *** goto
