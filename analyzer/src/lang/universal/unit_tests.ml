@@ -130,10 +130,14 @@ struct
            man.flow.set TCur man.env.bottom
         )
         ~merge_case:(fun safe_flow fail_flow ->
-           man.flow.join safe_flow fail_flow |>
-           man.flow.add (TMayAssert (name, range)) (man.flow.get TCur flow) |>
-           man.flow.set TCur (man.flow.get TCur safe_flow)
-        )
+            man.flow.join safe_flow fail_flow |>
+            man.flow.add (TMayAssert (name, range)) (man.flow.get TCur flow) |>
+            man.flow.set TCur (man.flow.get TCur safe_flow)
+          )
+        ~bottom_case:(fun () ->
+            man.flow.add (TFailAssert (name, range)) (man.env.top) flow |>
+            man.flow.set TCur man.env.bottom
+          )
         man ctx flow () |>
       return
 
