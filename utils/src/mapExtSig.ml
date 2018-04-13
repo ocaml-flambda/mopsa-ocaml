@@ -1,7 +1,6 @@
 (*  
-  This file is derived from the mapi.ml file from the OCaml distribution.
+  This file is derived from the map.mli file from the OCaml distribution.
   Changes are marked with the [MOPSA] symbol.
-  Based on rev. 10632 2010-07-24 14:16:58Z.
 
   Original copyright follows.
 *)
@@ -82,13 +81,17 @@ module type S =
 
     val compare: ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** Total ordering between maps.  The first argument is a total ordering
-        used to compare data associated with equal keys in the two maps. *)
+        used to compare data associated with equal keys in the two maps. 
+       We assume implicitly that [cmp x x] always returns 0.
+     *)
 
     val equal: ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
     (** [equal cmp m1 m2] tests whether the maps [m1] and [m2] are
        equal, that is, contain equal keys and associate them with
        equal data.  [cmp] is the equality predicate used to compare
-       the data associated with the keys. *)
+       the data associated with the keys. 
+       We assume implicitly that [cmp x x] always returns [true].
+     *)
 
     val iter: (key -> 'a -> unit) -> 'a t -> unit
     (** [iter f m] applies [f] to all bindings in map [m].
@@ -453,7 +456,7 @@ module type S =
     (** {2 Printing} *)
                                                 
     type map_printer = {
-        print_empty: string; (** Special text for empty mapss *)
+        print_empty: string; (** Special text for empty maps *)
         print_begin: string; (** Text before the first binding *)
         print_arrow: string; (** Text between a key and its value *)
         print_sep: string;   (** Text between two bindings *)
@@ -477,4 +480,4 @@ module type S =
     (** Prints to a string buffer (for Printf.bprintf). *)
                       
   end
-(** Output signature of the functor {!Map.Make}. *)
+(** Output signature of the functor {!MapExt.Make}. *)

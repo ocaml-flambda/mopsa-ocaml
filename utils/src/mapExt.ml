@@ -1,7 +1,6 @@
 (*  
   This file is derived from the map.ml file from the OCaml distribution.
   Changes are marked with the [MOPSA] symbol.
-  Based on rev. 10468 2010-05-25 13:29:43Z
 
   Original copyright follows.
 *)
@@ -76,17 +75,19 @@ module Make(Ord: OrderedType) = (struct
 
     let is_empty = function Empty -> true | _ -> false
 
-    let rec add x data = function
+    let rec add x data m = match m with
         Empty ->
           Node(Empty, x, data, Empty, 1)
       | Node(l, v, d, r, h) ->
           let c = Ord.compare x v in
           if c = 0 then
-            Node(l, x, data, r, h)
+            if d == data then m else Node(l, x, data, r, h)
           else if c < 0 then
-            bal (add x data l) v d r
+            let ll = add x data l in
+            if l == ll then m else bal ll v d r
           else
-            bal l v d (add x data r)
+            let rr = add x data r in
+            if r == rr then m else bal l v d rr
 
     let rec find x = function
         Empty ->
@@ -126,7 +127,7 @@ module Make(Ord: OrderedType) = (struct
           let (x, d) = min_binding t2 in
           bal t1 x d (remove_min_binding t2)
 
-    let rec remove x = function
+    let rec remove x m = match m with
         Empty ->
           Empty
       | Node(l, v, d, r, h) ->
@@ -134,9 +135,9 @@ module Make(Ord: OrderedType) = (struct
           if c = 0 then
             merge l r
           else if c < 0 then
-            bal (remove x l) v d r
+            let ll = remove x l in if l == ll then m else bal ll v d r
           else
-            bal l v d (remove x r)
+            let rr = remove x r in if r == rr then m else bal l v d rr
 
     let rec iter f = function
         Empty -> ()
@@ -247,6 +248,10 @@ module Make(Ord: OrderedType) = (struct
         Empty -> e
       | Node(l, v, d, r, _) -> cons_enum l (More(v, d, r, e))
 
+    (* We replace the original equal by one based on iter2zo.
+       This assumes that cmp x x returns 0.
+     *)
+    (*
     let compare cmp m1 m2 =
       let rec compare_aux e1 e2 =
           match (e1, e2) with
@@ -260,7 +265,12 @@ module Make(Ord: OrderedType) = (struct
             if c <> 0 then c else
             compare_aux (cons_enum r1 e1) (cons_enum r2 e2)
       in compare_aux (cons_enum m1 End) (cons_enum m2 End)
+     *)
 
+    (* We replace the original equal by one based on iter2zo.
+       This assumes that cmp x x returns true.
+     *)
+    (*
     let equal cmp m1 m2 =
       let rec equal_aux e1 e2 =
           match (e1, e2) with
@@ -271,7 +281,8 @@ module Make(Ord: OrderedType) = (struct
             Ord.compare v1 v2 = 0 && cmp d1 d2 &&
             equal_aux (cons_enum r1 e1) (cons_enum r2 e2)
       in equal_aux (cons_enum m1 End) (cons_enum m2 End)
-
+        *)
+       
     let rec cardinal = function
         Empty -> 0
       | Node(l, _, _, r, _) -> cardinal l + 1 + cardinal r
@@ -295,6 +306,7 @@ module Make(Ord: OrderedType) = (struct
       List.fold_left (fun acc (k,x) -> add k x acc) empty l
 
 
+    (* internal function *)
     (* similar to split, but returns unbalanced trees *)
     let rec cut k = function
       Empty -> Empty,None,Empty
@@ -537,7 +549,29 @@ module Make(Ord: OrderedType) = (struct
           (match d2 with None -> f1 k d1 | Some d2 -> d1 != d2 && f k d1 d2) ||
           (exists2zo f1 f2 f r1 r2)
       )
-
+    
+    let equal cmp m1 m2 =
+      try
+        iter2zo
+          (fun _ _ -> raise Exit)
+          (fun _ _ -> raise Exit)
+          (fun _ x y -> if not (cmp x y) then raise Exit)
+          m1 m2;
+        true
+      with Exit -> false
+      
+    let compare cmp m1 m2 =
+      let r = ref 0 in
+      try
+        iter2zo
+          (fun _ _ -> r :=  1; raise Exit)
+          (fun _ _ -> r := -1; raise Exit)
+          (fun _ x y -> r := cmp x y; if !r <> 0 then raise Exit)
+          m1 m2;
+        !r
+      with Exit -> !r
+      
+      
 
     (* iterators limited to keys between two bounds *)
 
@@ -611,7 +645,7 @@ module Make(Ord: OrderedType) = (struct
       )
 
 
-    (* nagivation *)
+    (* navigation *)
 
     let find_greater_equal k m =
       let rec aux m found = match m with
@@ -670,7 +704,8 @@ module Make(Ord: OrderedType) = (struct
         print_empty="{}";
         print_begin="{";
         print_arrow=":";
-        print_sep=";"; print_end="}";
+        print_sep=";";
+        print_end="}";
       }
                         
     let print_gen o printer key elem ch s =
