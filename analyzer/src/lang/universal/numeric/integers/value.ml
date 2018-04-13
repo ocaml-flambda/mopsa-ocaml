@@ -210,7 +210,7 @@ let contains c abs =
   | _ -> true
 
 let can_be_true abs =
-  bot_dfl1 false I.contains_one abs
+  bot_dfl1 false I.contains_nonzero abs
 
 let can_be_false abs =
   bot_dfl1 false I.contains_zero abs
