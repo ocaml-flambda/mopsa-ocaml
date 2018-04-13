@@ -38,6 +38,7 @@ module Domain = struct
   (*==========================================================================*)
 
   let rec init_array a init is_global range man ctx flow =
+    debug "init array %a" Framework.Pp.pp_expr a;
     match init with
     | None when not is_global -> flow
 
@@ -76,6 +77,7 @@ module Domain = struct
       panic "Array initialization not supported"
 
   and init_union u init is_global range man ctx flow =
+    debug "init union %a" Framework.Pp.pp_expr u;
     let largest_field =
       let fields = match remove_typedef u.etyp |> remove_qual with
         | T_c_record{c_record_fields} -> c_record_fields
@@ -98,12 +100,15 @@ module Domain = struct
     | None when not is_global -> flow
 
     | None when is_global ->
+      debug "initialization of uninitialized global";
+      debug "largest_field = %a" Framework.Pp.pp_expr (mk_c_member_access u largest_field range);
       init_expr (mk_c_member_access u largest_field range) None is_global range man ctx flow
 
     | _ -> panic "Initialization of union not supported"
 
 
   and init_scalar v init is_global range man ctx flow =
+    debug "init scalar %a" Framework.Pp.pp_expr v;
     match init with
     | None when not is_global -> flow
 
@@ -115,14 +120,15 @@ module Domain = struct
 
     | _ -> assert false
 
-  and init_struct r init is_global range man ctx flow =
-    let get_nth_field r n =
-        match remove_typedef r.etyp |> remove_qual with
+  and init_struct s init is_global range man ctx flow =
+    debug "init struct %a" Framework.Pp.pp_expr s;
+    let get_nth_field n =
+        match remove_typedef s.etyp |> remove_qual with
         | T_c_record{c_record_kind = C_struct; c_record_fields} -> List.nth c_record_fields n
         | _ -> assert false
     in
-    let nb_fields r =
-      match remove_typedef r.etyp |> remove_qual with
+    let nb_fields =
+      match remove_typedef s.etyp |> remove_qual with
       | T_c_record{c_record_kind = C_struct; c_record_fields} -> List.length c_record_fields
       | _ -> assert false
     in
@@ -130,22 +136,20 @@ module Domain = struct
     | None when not is_global -> flow
 
     | None when is_global ->
-      let n = nb_fields r in
       let rec aux i flow =
-        if i = n then flow
+        if i = nb_fields then flow
         else
-          let flow = init_expr (mk_c_member_access r (get_nth_field r i) range) None is_global range man ctx flow in
+          let flow = init_expr (mk_c_member_access s (get_nth_field i) range) None is_global range man ctx flow in
           aux (i + 1) flow
       in
       aux 0 flow
 
     | Some (C_init_list(l, None)) ->
-      let n = nb_fields r in
       let rec aux i flow =
-        if i = n then flow
+        if i = nb_fields then flow
         else
           let init = if i < List.length l then Some (List.nth l i) else None in
-          let flow = init_expr (mk_c_member_access r (get_nth_field r i) range) init is_global range man ctx flow in
+          let flow = init_expr (mk_c_member_access s (get_nth_field i) range) init is_global range man ctx flow in
           aux (i + 1) flow
       in
       aux 0 flow

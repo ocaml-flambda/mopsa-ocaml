@@ -42,3 +42,10 @@ void test_initialization_with_designated_names() {
   point p = {.y = 2, .x = 1};
   _mopsa_assert_true(p.x == p.y -1);
 }
+
+point p3 = {.y = 2};
+
+void test_partial_initialization_with_designated_names() {
+  _mopsa_assert_true(p3.x == 0);
+  _mopsa_assert_true(p3.y == 2);
+}

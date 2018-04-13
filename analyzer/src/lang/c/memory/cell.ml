@@ -253,7 +253,7 @@ module Make(ValAbs : DOMAIN) = struct
                               res
                               range
                           in
-                          let time' = Z.mul time (Z.pow (Z.of_int 2) 8) in
+                          let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
                       in
@@ -288,6 +288,7 @@ module Make(ValAbs : DOMAIN) = struct
     else
       match phi c u range with
       | Nexp (Some e) ->
+        debug "add_cell case 1: nexp = %a" pp_expr e;
         let s = mk_assume
             (mk_binop
                (mk_var v range)
@@ -301,13 +302,13 @@ module Make(ValAbs : DOMAIN) = struct
          a = valabs_trivial_exec s u.a
         }
       | Nexp None ->
+        debug "add_cell case 2: nexp = none";
         {cs = CS.add v u.cs;
          a = u.a
         }
       | Pexp Invalid ->
-        {cs = CS.add v u.cs;
-         a = u.a
-        } (* TODO : this case needs work*)
+        debug "add_cell case 3: pexp = invalid";
+        assert false
 
   (** [add_cell c u] adds cell [c] to the abstraction [u] *)
   let add_var (v : var) (u : t) range : t * var =
