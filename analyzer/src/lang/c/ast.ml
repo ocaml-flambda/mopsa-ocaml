@@ -70,11 +70,7 @@ and c_enum_value = {
 (** A possible value in an enumerated type. *)
 
 
-and c_signedness = C_signed | C_unsigned
-(** Whether an integer type is signed or not. *)
-
 and c_integer_type =
-  | C_char of c_signedness (** plain 'char', where the signeness is defined by the platform *)
   | C_signed_char
   | C_unsigned_char
   | C_signed_short
@@ -329,8 +325,6 @@ and to_clang_function_type_option = function
 
 
 and to_clang_int_type : c_integer_type -> C_AST.integer_type = function
-  | C_char(C_signed) -> C_AST.Char (C_AST.SIGNED)
-  | C_char(C_unsigned) -> C_AST.Char (C_AST.UNSIGNED)
   | C_signed_char -> C_AST.SIGNED_CHAR
   | C_unsigned_char -> C_AST.UNSIGNED_CHAR
   | C_signed_short -> C_AST.SIGNED_SHORT
@@ -486,7 +480,7 @@ let rec is_signed (t : typ) : bool=
   | T_c_integer it ->
      begin
        match it with
-       | C_char C_signed | C_signed_char | C_signed_short | C_signed_int
+       | C_signed_char | C_signed_short | C_signed_int
        | C_signed_long | C_signed_long_long | C_signed_int128 -> true
        | _ -> false
      end
@@ -615,7 +609,7 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
-let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s)))
+let type_of_string s = T_c_array(T_c_integer(C_signed_char), C_array_length_cst (Z.of_int (1 + String.length s)))
 
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)

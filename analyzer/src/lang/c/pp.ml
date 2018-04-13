@@ -18,9 +18,7 @@ let () =
       match typ with
       | T_c_void -> pp_print_string fmt "void"
 
-      | T_c_integer(C_char C_signed)
       | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char"
-      | T_c_integer(C_char C_unsigned)
       | T_c_integer(C_unsigned_char) -> pp_print_string fmt "unsigned char"
       | T_c_integer(C_signed_short) -> pp_print_string fmt "signed short"
       | T_c_integer(C_unsigned_short) -> pp_print_string fmt "unsigned short"

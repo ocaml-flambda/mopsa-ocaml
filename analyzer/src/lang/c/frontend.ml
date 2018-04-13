@@ -200,8 +200,8 @@ and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
     typ'
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
-  | C_AST.Char SIGNED -> Ast.C_char Ast.C_signed
-  | C_AST.Char UNSIGNED -> Ast.C_char Ast.C_unsigned
+  | C_AST.Char SIGNED -> Ast.C_signed_char
+  | C_AST.Char UNSIGNED -> Ast.C_unsigned_char
   | C_AST.SIGNED_CHAR -> Ast.C_signed_char
   | C_AST.UNSIGNED_CHAR -> Ast.C_unsigned_char
   | C_AST.SIGNED_SHORT -> Ast.C_signed_short
@@ -361,7 +361,7 @@ and construct_string_table globals funcs =
   (* Collect all string litterals and replace them by unique variables *)
   let module StringTable = Map.Make(struct type t = string let compare = compare end) in
   let counter = ref 0 in
-  let type_of_string s = T_c_array(T_c_integer(C_char(C_signed)), C_array_length_cst (Z.of_int (1 + String.length s))) in
+  let type_of_string s = T_c_array(T_c_integer(C_signed_char), C_array_length_cst (Z.of_int (1 + String.length s))) in
 
   let rec visit_expr table e =
     match ekind e with
