@@ -240,8 +240,7 @@ module Make(ValAbs : DOMAIN) = struct
                           List.rev l
                       in
                       let ll = aux 0 [] in
-                      let _,e = List.fold_left (fun (exp,res) x ->
-                          let time = Z.mul (Z.pow (Z.of_int 2) 8) exp in
+                      let _,e = List.fold_left (fun (time,res) x ->
                           let res' =
                             mk_binop
                               (mk_binop
@@ -254,7 +253,8 @@ module Make(ValAbs : DOMAIN) = struct
                               res
                               range
                           in
-                          time,res'
+                          let time' = Z.mul time (Z.pow (Z.of_int 2) 8) in
+                          time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
                       in
                       Nexp (Some e)
