@@ -1,3 +1,14 @@
+(**
+  RelationSig - Signature of relations (or multimaps) between ordered sets.
+
+  Copyright (C) 2018 The MOPSA Project
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the CeCILL license V2.1.
+
+  @author Antoine Mine'
+ *)
+
 
 module type OrderedType = MapExtSig.OrderedType
 
@@ -45,7 +56,8 @@ module type S = sig
   (** The empty relation. *)
     
   val image: dom -> t -> codom_set
-  (** [image x r] is the set of elements associated to [x] in [r]. 
+  (** [image x r] is the set of elements associated to [x] in [r]
+      (possibly the empty set).
    *)
 
   val set_image: dom -> codom_set -> t -> t
@@ -55,7 +67,7 @@ module type S = sig
 
   val is_image_empty: dom -> t -> bool
   (** [is_image_empty x r] returns true if there is no element associated 
-      to [x] in [r]
+      to [x] in [r].
    *)
 
   val is_empty: t -> bool
@@ -131,7 +143,6 @@ module type S = sig
       The bindings are considered in increasing order for the lexicographic
       order sorting through dom first, and then codom.
    *)
-    
     
   val fold: (dom -> codom -> 'a -> 'a) -> t -> 'a -> 'a
   (** [fold f r acc] folds [acc] through every binding ([x],[y]) in [r] through [f]. 
@@ -293,26 +304,26 @@ module type S = sig
    *)
 
   val map_domain: (dom -> codom_set -> codom_set) -> t -> t
-  (** [map_domain f r] returns new relation where the image set [ys] of
+  (** [map_domain f r] returns a new relation where the image set [ys] of
       [x] in [r] is replaced with [f x ys]. 
       The domain elements are considered in increasing order.
    *)
 
   val for_all_domain: (dom -> codom_set -> bool) -> t -> bool
-  (** [for_all_domain f r] returns true if [f x ys] us true for every 
+  (** [for_all_domain f r] returns true if [f x ys] is true for every 
       domain element [x] and its image set [ys] in [r].
       The domain elements are considered in increasing order.
    *)
 
   val exists_domain: (dom -> codom_set -> bool) -> t -> bool
-  (** [exists_domain f r] returns true if [f x ys] us true for at least
+  (** [exists_domain f r] returns true if [f x ys] is true for at least
       one domain element [x] and its image set [ys] in [r].
       The domain elements are considered in increasing order.
    *)
 
   val filter_domain: (dom -> codom_set -> bool) -> t -> t
-  (** [for_all_domain f r] returns a new relation restricted to the
-      a domain element [x] with its image [ys] from [r] such that
+  (** [filter_domain f r] returns a new relation restricted to the
+      domain elements [x] with their image [ys] from [r] such that
       [f x ys] is true.
    *)
 

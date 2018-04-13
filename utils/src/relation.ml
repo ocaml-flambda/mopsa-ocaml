@@ -1,3 +1,14 @@
+(**
+  Relation - Relations (or multimaps) between ordered sets.
+
+  Copyright (C) 2018 The MOPSA Project
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the CeCILL license V2.1.
+
+  @author Antoine Mine'
+ *)
+
 
 open RelationSig
 
@@ -94,7 +105,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = (struct
   let domain_map f r =
     DomMap.fold
       (fun x i r -> add_set (f x) i r)
-      r DomMap.empty
+      r empty
 
   let codomain_map f r =
     DomMap.map (CoDomSet.map f) r
@@ -124,14 +135,14 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = (struct
     DomMap.for_all2zo
       (fun _ _ -> false)
       (fun _ _ -> true)
-      (fun _ s1 s2 -> CoDomSet.subset s1 s2)
+      (fun _ -> CoDomSet.subset)
       r1 r2
 
   let union r1 r2 =
     DomMap.map2zo
       (fun _ ys -> ys)
       (fun _ ys -> ys)
-      (fun _ ys1 ys2 -> CoDomSet.union ys1 ys2)
+      (fun _ -> CoDomSet.union)
       r1 r2
 
   let inter r1 r2 =
