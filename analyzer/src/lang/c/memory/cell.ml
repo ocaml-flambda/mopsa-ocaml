@@ -45,8 +45,8 @@ let pp_cell fmt c =
 let compare_cell c c' =
   compare_composer [
     (fun () -> compare_var c.v c'.v);
-    (fun () -> compare c.o c'.o);
-    (fun () -> compare c.t c'.t); (* TODO replace this compare by a real comparison function over C_AST.type_qual*)
+    (fun () -> Z.compare c.o c'.o);
+    (fun () -> compare (remove_typedef c.t) (remove_typedef c'.t)); (* TODO replace this compare by a real comparison function over C_AST.type_qual*)
   ]
 
 (** Annotate variables with cell information. *)
@@ -199,7 +199,7 @@ module Make(ValAbs : DOMAIN) = struct
                   let b = Z.sub c.o c'.o in
                   Z.lt b (sizeof_type c'.t) &&
                   is_c_int_type c'.t &&
-                  c.t = T_c_integer(C_unsigned_char)
+                  compare (remove_typedef c.t) (T_c_integer(C_unsigned_char)) = 0
               ) cs with
             | Some (v', c') ->
               begin
@@ -229,7 +229,9 @@ module Make(ValAbs : DOMAIN) = struct
                       let rec aux i l =
                         if i < n then
                           let tobein = {v = c.v ; o = Z.add c.o (Z.of_int i); t = t'} in
-                          match exist_and_find_cell (fun c' -> compare_cell c' tobein = 0) cs with
+                          match exist_and_find_cell (fun c' ->
+                              compare_cell c' tobein = 0
+                            ) cs with
                           | Some (v', c') ->
                             aux (i+1) (v' :: l)
                           | None ->
