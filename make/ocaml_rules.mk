@@ -19,6 +19,9 @@ $(BML) $(BMLI): $(BSRC)/%: $(SRC)/%
 	@echo "Compiling $<"
 	@$(OCAMLFIND) $(OCAMLC) $(OCAMLFLAGS) -package "$(PKGS)" -o $@ -c $<
 
-%.mli: %.ml
-	@echo "Generating $@"
-	@$(OCAMLFIND) $(OCAMLC) $(OCAMLFLAGS) -package "$(PKGS)" -i $(@:%.mli=%.ml) > $@
+# [AM] commented-out: this caused a given .mli file to be overwitten with
+# a generated one in case of compilation error!
+#
+#%.mli: %.ml
+#	@echo "Generating $@"
+#	@$(OCAMLFIND) $(OCAMLC) $(OCAMLFLAGS) -package "$(PKGS)" -i $(@:%.mli=%.ml) > $@
