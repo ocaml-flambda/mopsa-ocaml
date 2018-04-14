@@ -1,4 +1,3 @@
-open Containers
 open Py_AST
 
 let debug fmt = Debug.debug ~channel:"frontend.uid" fmt
