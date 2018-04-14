@@ -153,8 +153,8 @@ let at_file file =
   let buf = Bytes.create len in
   really_input c buf 0 len;
   close_in c;
-  (* todo: handle quotes and backslasjes *)
-  Str.split (Str.regexp "[ \t\r\n]+") buf
+  (* todo: handle quotes and backslashes *)
+  Str.split (Str.regexp "[ \t\r\n]+") (Bytes.to_string buf)
 
 
 (** replace every @ argument with its contents *)

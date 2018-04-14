@@ -33,7 +33,7 @@ BTESTS = $(BUILD)/$(TESTS)
 #PKGS += unix str
 INCLUDES += -I $(BUILD) -I $(BSRC)
 
-OCAMLFLAGS :=  -bin-annot $(INCLUDES) $(OCAMLFLAGS) -g
+OCAMLFLAGS :=  -bin-annot -safe-string $(INCLUDES) $(OCAMLFLAGS) -g
 CFLAGS := $(CFLAGS) $(INCLUDES)
 CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -L$(BUILD) -L$(BSRC)
