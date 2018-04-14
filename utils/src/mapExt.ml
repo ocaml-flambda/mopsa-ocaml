@@ -23,10 +23,11 @@
 open MapExtSig
 
   
-module Make(Ord: OrderedType) = (struct
+module Make(Ord: OrderedType) =
+  struct
 
     type key = Ord.t
-
+             
     type 'a t =
         Empty
       | Node of 'a t * key * 'a * 'a t * int
@@ -734,4 +735,13 @@ module Make(Ord: OrderedType) = (struct
       Buffer.contents b
                       
           
-end: S with type key = Ord.t)
+end
+
+(* A few useful instances *)
+module StringMap = Make(String)
+module IntMap = Make(struct type t = int let compare : int -> int -> int  = compare end)
+module Int32Map = Make(Int32)
+module Int64Map = Make(Int64)
+module ZMap = Make(Z)
+                
+                  

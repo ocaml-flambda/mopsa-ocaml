@@ -12,7 +12,7 @@
 
 open RelationSig
 
-module Make(Dom: OrderedType)(CoDom: OrderedType) = (struct
+module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   module CoDomSet = SetExt.Make(CoDom)
   module DomMap = MapExt.Make(Dom)
@@ -321,10 +321,6 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = (struct
               () l;
     Buffer.contents b
 
-    
- end: S with
-      type dom = Dom.t and
-      type codom = CoDom.t and
-      module CoDomSet = SetExt.Make(CoDom))
+end
                                                   
                                                    

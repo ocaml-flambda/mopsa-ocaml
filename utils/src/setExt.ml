@@ -26,7 +26,8 @@
 open SetExtSig
 
 module Make(Ord: OrderedType) =
-  (struct
+  struct
+    
     type elt = Ord.t
     type t = Empty | Node of {l:t; v:elt; r:t; h:int}
 
@@ -711,5 +712,13 @@ module Make(Ord: OrderedType) =
       Buffer.contents b
                       
 
-  end: S with type elt = Ord.t)
+  end
 
+
+
+(* A few useful instances *)
+module StringSet = Make(String)
+module IntSet = Make(struct type t = int let compare : int -> int -> int  = compare end)
+module Int32Set = Make(Int32)
+module Int64Set = Make(Int64)
+module ZSet = Make(Z)

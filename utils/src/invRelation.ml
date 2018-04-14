@@ -1,5 +1,5 @@
 (**
-  InvRelationSig - Signature of relations with access to inverse images.
+  InvRelation - Relations with access to inverse images.
 
   Copyright (C) 2018 The MOPSA Project
 
@@ -12,7 +12,7 @@
 
 open InvRelationSig
 
-module MK(Dom: OrderedType)(CoDom: OrderedType) = struct
+module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   module DomSet = SetExt.Make(Dom)
   module DomMap = MapExt.Make(Dom)
@@ -441,15 +441,3 @@ module MK(Dom: OrderedType)(CoDom: OrderedType) = struct
     Buffer.contents b
     
 end
-
-
-module Make(Dom: OrderedType)(CoDom: OrderedType) =
-  (MK(Dom)(CoDom):
-     S with
-     type dom = Dom.t and
-     type codom = CoDom.t and
-     module DomSet = SetExt.Make(Dom) and
-     module CoDomSet = SetExt.Make(CoDom)
-  )
-  
-                                                

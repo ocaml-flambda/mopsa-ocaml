@@ -1,5 +1,5 @@
 (**
-  InvRelation - Relations with access to inverse images.
+  InvRelationSig - Signature of relations with access to inverse images.
 
   Copyright (C) 2018 The MOPSA Project
 
