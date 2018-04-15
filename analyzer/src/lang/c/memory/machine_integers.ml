@@ -36,29 +36,8 @@ struct
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (Some (mk_z c exp.erange), flow, []) man ctx
 
-
-    | E_unop(op, e) when is_c_int_type e.etyp ->
-      man.eval e ctx flow |>
-      eval_compose
-        (fun e flow ->
-           let e' = {e with etyp = T_int} in
-           let exp' = {exp with ekind = E_unop(op, e')} in
-           oeval_singleton (Some exp', flow, [])
-        )
-
-    | E_binop(op, e1, e2) when is_c_int_type e1.etyp && is_c_int_type e2.etyp ->
-      man_eval_list [e1; e2] man ctx flow |>
-      oeval_compose
-        (fun el flow ->
-           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-           let e1 = {e1 with etyp = T_int} in
-           let e2 = {e2 with etyp = T_int} in
-           let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           oeval_singleton (Some exp', flow, [])
-        )
-
-    | E_c_cast(e', _) ->
-      re_eval_singleton (Some e', flow, []) man ctx
+    | E_c_cast(e, _) ->
+      re_eval_singleton (Some e, flow, []) man ctx
 
     | _ -> None
 

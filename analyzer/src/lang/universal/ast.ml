@@ -51,8 +51,7 @@ type operator +=
   (** Unary operators *)
   | O_log_not (** Logical negation *)
   | O_sqrt (** Square root *)
-  | O_invert (** bitwise ~ *)
-  | O_abs (** absolute value *)
+  | O_bit_invert (** bitwise ~ *)
 
   (** Binary operators *)
   | O_plus (** + *)

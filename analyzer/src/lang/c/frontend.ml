@@ -275,7 +275,7 @@ and from_expr_option : C_AST.expr option -> Framework.Ast.expr option = function
 
 and from_unary_operator : C_AST.unary_operator -> Framework.Ast.operator = function
   | C_AST.NEG -> Universal.Ast.O_minus
-  | C_AST.BIT_NOT -> Universal.Ast.O_invert
+  | C_AST.BIT_NOT -> Universal.Ast.O_bit_invert
   | C_AST.LOGICAL_NOT -> Universal.Ast.O_log_not
 
 and from_binary_operator : C_AST.binary_operator -> Framework.Ast.operator = function

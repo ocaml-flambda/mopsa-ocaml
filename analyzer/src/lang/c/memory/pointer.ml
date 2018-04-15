@@ -180,7 +180,7 @@ struct
                 match pt with
                 | E_p_var (base, offset, t) ->
                   let size = sizeof_type t in
-                  let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range) range), t) in
+                  let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
                   oeval_singleton (Some pt, flow, [])
 
                 | E_p_null ->
@@ -282,6 +282,7 @@ struct
              (fun pt flow ->
                 match pt with
                 | E_p_var (base, offset, t) ->
+                  debug "E_p_var(%a, %a, %a)" pp_var base pp_expr offset pp_typ t;
                   let open Universal.Numeric.Integers in
                   let itv = man.ask (Domain.Domain.QEval offset) ctx flow in
                   begin
@@ -375,7 +376,7 @@ struct
                  oeval_singleton (Some (mk_zero range), flow, [])
                else
                  Universal.Utils.assume_to_eval
-                   (mk_binop offset1 O_eq offset2 range)
+                   (mk_binop offset1 O_eq offset2 range ~etyp:T_int)
                    (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
                    (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
                    ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))
@@ -402,7 +403,7 @@ struct
                     oeval_singleton (Some (mk_one range), flow, [])
                   else
                     Universal.Utils.assume_to_eval
-                      (mk_binop offset1 O_ne offset2 range)
+                      (mk_binop offset1 O_ne offset2 range ~etyp:T_int)
                       (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
                       (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
                       ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))

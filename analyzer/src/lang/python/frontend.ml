@@ -420,7 +420,7 @@ and from_unop = function
   | Not -> Universal.Ast.O_log_not
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
-  | Invert -> Universal.Ast.O_invert
+  | Invert -> Universal.Ast.O_bit_invert
 
 
 (* (\** Add a sequence of initializations before a body to assign undefined values to a list of variables *\)

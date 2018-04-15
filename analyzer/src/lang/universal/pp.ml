@@ -43,10 +43,9 @@ let () =
       | O_log_and -> pp_print_string fmt "&&"
       | O_log_not -> pp_print_string fmt "!"
       | O_sqrt -> pp_print_string fmt "sqrt"
-      | O_invert -> pp_print_string fmt "~"
+      | O_bit_invert -> pp_print_string fmt "~"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
-      | O_abs -> pp_print_string fmt "abs"
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function

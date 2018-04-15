@@ -516,8 +516,6 @@ module Make(ValAbs : DOMAIN) = struct
         in
         oeval_singleton (None, flow, [])
 
-
-
     | _ -> ValAbs.eval exp (subman man) ctx flow
 
   let ask query man ctx flow =

@@ -111,6 +111,7 @@ struct
               ) true_flow false_flow
           )
         man ctx flow0 () |>
+      man.flow.add TCur (man.flow.get TCur flow) |>
       return
 
     | S_c_switch_default ->
