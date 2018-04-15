@@ -53,6 +53,9 @@ let bot_equal (f:'a->'b->bool) (a:'a with_bot) (b:'b with_bot) : bool =
                                                             
 let bot_included (f:'a->'b->bool) (a:'a with_bot) (b:'b with_bot) : bool =
   match a,b with BOT, _ -> true | Nb x, Nb y -> f x y | _ -> false
+
+let bot_compare (cmp:'a -> 'a -> int) (a:'a with_bot) (b:'a with_bot) : int =
+  match a,b with BOT,BOT -> 0 | BOT,_ -> -1 | _,BOT -> 1 | Nb x, Nb y -> cmp x y
                                                             
 let bot_dfl1 (dfl:'b) (f:'a->'c) (a:'a with_bot) : 'c =
   match a with BOT -> dfl | Nb x -> f x

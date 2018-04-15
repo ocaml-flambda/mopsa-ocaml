@@ -107,7 +107,6 @@ let minf_inf : t = of_int 1 0
 (** {2 Predicates} *)
 
 
-
 let equal (a:t) (b:t) : bool =
   a = b
 (** Equality. (=) also works. *)
@@ -133,12 +132,16 @@ let contains (x:Z.t) ((a,b):t) : bool =
   rem_zero x a = b
 (** Whether the set contains some value x. *)
 
-let total_order ((a,b):t) ((a',b'):t) : int =
+let compare ((a,b):t) ((a',b'):t) : int =
   if a = a' then Z.compare b b' else Z.compare a a'
 (**
-  A total ordering (lexical ordering). 
+  A total ordering (lexical ordering) returning -1, 0, or 1.
   Can be used as compare for sets, maps, etc. 
-*)
+ *)
+
+let compare_bot (x:t with_bot) (y:t with_bot) : int =
+  Bot.bot_compare compare x y
+(** Total ordering on possibly empty congruences. *)
 
 let contains_zero ((a,b):t) : bool =
   b = Z.zero
@@ -296,6 +299,89 @@ let wrap ((a,b):t) (lo:Z.t) (up:Z.t) : t =
   let w = Z.succ (Z.sub up lo) in 
   of_z (gcd a w) (Z.add lo (Z.erem (Z.sub b lo) w))
 (** Put back inside [lo,up] by modular arithmetics. *)
+
+let to_bool (can_be_zero:bool) (can_be_one:bool) : t =
+  match can_be_zero, can_be_one with
+  | true, false -> zero
+  | false, true -> one
+  | true, true -> minf_inf
+  | _ -> failwith "unreachable case encountered in IntCong.to_bool"
+(* helper function for operators returning a boolean that can be zero and/or one *)
+            
+let log_cast (ab:t) : t =
+  to_bool (contains_zero ab) (contains_nonzero ab)
+(** Conversion from integer to boolean in [0,1]: maps 0 to 0 (false) and non-zero to 1 (true). 
+    [0;1] is over-approximated as ℤ. 
+*)
+                  
+let log_not (ab:t) : t =
+  to_bool (contains_nonzero ab) (contains_zero ab)
+(** Logical negation.
+    Logical operation use the C semantics: they accept 0 and non-0 respectively as false and true, but they always return 0 and 1 respectively for false and true. 
+    [0;1] is over-approximated as ℤ. 
+*)
+
+let log_and (ab:t) (ab':t) : t =
+  to_bool (contains_zero ab || contains_zero ab') (contains_nonzero ab && contains_nonzero ab')
+(** Logical and. *)
+    
+let log_or (ab:t) (ab':t) : t =
+  to_bool (contains_zero ab && contains_zero ab') (contains_nonzero ab || contains_nonzero ab')
+(** Logical or. *)
+
+let log_xor (ab:t) (ab':t) : t =
+  let f,f' = contains_zero ab, contains_zero ab'
+  and t,t' = contains_nonzero ab, contains_nonzero ab' in
+  to_bool ((f && f') || (t && t')) ((f && t') || (t && f'))
+(** Logical exclusive or. *)
+
+
+let log_eq (ab:t) (ab':t) : t =
+  to_bool (not (equal ab ab' && is_singleton ab)) (intersect ab ab')
+
+let log_neq (ab:t) (ab':t) : t =
+  to_bool (intersect ab ab') (not (equal ab ab' && is_singleton ab)) 
+
+let log_leq ((a,b):t) ((a',b'):t) : t =
+  if a <> Z.zero || a' <> Z.zero then minf_inf
+  else if b <= b' then one else zero
+
+let log_geq ((a,b):t) ((a',b'):t) : t =
+  if a <> Z.zero || a' <> Z.zero then minf_inf
+  else if b >= b' then one else zero
+
+let log_lt ((a,b):t) ((a',b'):t) : t =
+  if a <> Z.zero || a' <> Z.zero then minf_inf
+  else if b < b' then one else zero
+
+let log_gt ((a,b):t) ((a',b'):t) : t =
+  if a <> Z.zero || a' <> Z.zero then minf_inf
+  else if b > b' then one else zero
+
+(** C comparison tests. Returns an interval included in [0,1] (a boolean) *)
+
+  
+let is_log_eq (ab:t) (ab':t) : bool =
+  intersect ab ab'
+
+let is_log_neq (ab:t) (ab':t) : bool =
+  not (equal ab ab' && is_singleton ab)
+
+let is_log_leq ((a,b):t) ((a',b'):t) : bool =
+  not (a = Z.zero && a' = Z.zero && b > b')
+
+let is_log_geq ((a,b):t) ((a',b'):t) : bool =
+  not (a = Z.zero && a' = Z.zero && b < b')
+
+let is_log_lt ((a,b):t) ((a',b'):t) : bool =
+  not (a = Z.zero && a' = Z.zero && b >= b')
+
+let is_log_gt ((a,b):t) ((a',b'):t) : bool =
+  not (a = Z.zero && a' = Z.zero && b <= b')
+
+(** C comparison tests. Returns a boolean if the test may succeed *)
+
+  
   
 let shift_left ((a,b):t) ((a',b'):t) : t_with_bot =
   try
@@ -337,14 +423,17 @@ let shift_right_trunc ((a,b):t) ((a',b'):t) : t_with_bot =
     else Nb minf_inf
   with Z.Overflow -> Nb minf_inf
 (** Unsigned bitshift right: division by a power of 2 with truncation. *)
-  
-  
+
+                   
+let bit_not (ab:t) : t =
+  pred (neg ab)
+(** Bitwise negation: ~x = -x-1 *)
+
+
+                   
 (** {2 Filters} *)
 
 
 
 (** {2 Backward operations} *)
 
-
-let _ = ()
-      

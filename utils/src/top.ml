@@ -51,6 +51,9 @@ let top_equal (f:'a->'b->bool) (a:'a with_top) (b:'b with_top) : bool =
 let top_included (f:'a->'b->bool) (a:'a with_top) (b:'b with_top) : bool =
   match a,b with _, TOP -> true | Nt x, Nt y -> f x y | _ -> false
 
+let top_compare (cmp:'a -> 'a -> int) (a:'a with_top) (b:'a with_top) : int =
+  match a,b with TOP,TOP -> 0 | TOP,_ -> 1 | _,TOP -> -1 | Nt x, Nt y -> cmp x y
+
 let top_dfl1 (dfl:'b) (f:'a->'c) (a:'a with_top) : 'c =
   match a with TOP -> dfl | Nt x -> f x
 

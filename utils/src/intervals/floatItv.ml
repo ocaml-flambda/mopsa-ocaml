@@ -121,17 +121,21 @@ let contains (x:float) (a:t) =
   a.lo <= x && a.up >= x
 (** Whether the interval contains a certain value. *)
                                               
-let total_order (a:t) (b:t) : int =
+let compare (a:t) (b:t) : int =
   if a.lo = b.lo then
     compare a.up b.up
   else
     compare a.lo b.lo
 (**
-  A total ordering of intervals: lexical ordering. 
+  A total ordering of intervals (lexical ordering) returning -1, 0, or 1.
   Can be used as compare for sets, maps, etc. 
-  (This hypothesis that bounds cannot be NaN is important to make the order total.
+  (The hypothesis that bounds cannot be NaN is important to make the order total.
 *)
                                              
+let compare_bot (x:t with_bot) (y:t with_bot) : int =
+  Bot.bot_compare compare x y
+(** Total ordering on possibly empty intervals. *)
+
 let contains_zero (a:t) : bool =
   a.lo <= 0. && a.up >= 0.
 

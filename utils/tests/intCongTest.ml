@@ -138,6 +138,17 @@ let test () =
   test_bin "*" test_bin_val mul Z.mul;
   test_bin "/" test_bin_val_bot div Z.div;
   test_bin "%" test_bin_val_bot rem Z.rem;
+  test_un "bool" test_un_val log_cast (fun a -> if a = Z.zero then Z.zero else Z.one);
+  test_un "!" test_un_val log_not (fun a -> if a <> Z.zero then Z.zero else Z.one);
+  test_bin "||" test_bin_val log_or (fun a b -> if a <> Z.zero || b <> Z.zero then Z.one else Z.zero);
+  test_bin "&&" test_bin_val log_and (fun a b -> if a <> Z.zero && b <> Z.zero then Z.one else Z.zero);
+  test_bin "^^" test_bin_val log_xor (fun a b -> if (a <> Z.zero) <> (b <> Z.zero) then Z.one else Z.zero);
+  test_bin "log ==" test_bin_val log_eq (fun a b -> if a = b then Z.one else Z.zero);
+  test_bin "log !=" test_bin_val log_neq (fun a b -> if a <> b then Z.one else Z.zero);
+  test_bin "log <" test_bin_val log_lt (fun a b -> if a < b then Z.one else Z.zero);
+  test_bin "log >" test_bin_val log_gt (fun a b -> if a > b then Z.one else Z.zero);
+  test_bin "log <=" test_bin_val log_leq (fun a b -> if a <= b then Z.one else Z.zero);
+  test_bin "log >=" test_bin_val log_geq (fun a b -> if a >= b then Z.one else Z.zero);
   test_bin "<<" test_bin_val_bot shift_left (fun a b -> Z.shift_left a (Z.to_int b));
   test_bin ">>" test_bin_val_bot shift_right (fun a b -> Z.shift_right a (Z.to_int b));
   test_bin ">>>" test_bin_val_bot shift_right_trunc (fun a b -> Z.shift_right_trunc a (Z.to_int b));

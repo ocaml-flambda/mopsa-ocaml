@@ -166,18 +166,21 @@ let intersect ((a,b):t) ((a',b'):t) : bool =
 
 let intersect_bot : t_with_bot -> t_with_bot -> bool =
   bot_dfl2 false intersect
-
   
 let contains (x:Z.t) ((a,b):t) : bool =
   B.leq a (B.Finite x) && B.leq (B.Finite x) b
 (** Whether the interval contains a (finite) value. *)
                                               
-let total_order ((a,b):t) ((a',b'):t) : int =
+let compare ((a,b):t) ((a',b'):t) : int =
   if B.eq a a' then B.compare b b' else B.compare a a'
 (**
-  A total ordering of intervals: lexical ordering. 
+  A total ordering (lexical ordering) returning -1, 0, or 1. 
   Can be used as compare for sets, maps, etc. 
 *)
+
+let compare_bot (x:t with_bot) (y:t with_bot) : int =
+  Bot.bot_compare compare x y
+(** Total ordering on possibly empty intervals. *)
 
 let contains_zero ((a,b):t) : bool =
   B.sign a <= 0 && B.sign b >= 0
@@ -224,7 +227,7 @@ let print_bot = bot_print print
 let fprint_bot = bot_fprint fprint
 let bprint_bot = bot_bprint bprint
 
-               
+              
 
 (** {2 Enumeration} *)
 
@@ -303,7 +306,7 @@ let meet_nonzero ((a,b):t) : t_with_bot =
 (** {2 Forward operations} *)
 
 
-(** Given one or two inteval argument(s), return the interval result. *)
+(** Given one or two interval argument(s), return the interval result. *)
 
                       
 let neg ((a,b):t) : t =
