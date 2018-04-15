@@ -180,7 +180,14 @@ let is_in_range ((a,b):t) (lo:Z.t) (up:Z.t) =
 (** {2 Printing} *)
 
 
-let to_string ((a,b):t) : string = (Z.to_string a)^"ℤ+"^(Z.to_string b)
+let to_string ((a,b):t) : string =
+  if a = Z.zero then Z.to_string b else
+    let prefix = (if a = Z.one then "" else Z.to_string b) in
+    match Z.sign b with
+    | 1 -> prefix^"ℤ+"^(Z.to_string b)
+    | -1 -> prefix^"ℤ"^(Z.to_string b)
+    | _ -> prefix^"ℤ"
+  
 let print ch (x:t) = output_string ch (to_string x)
 let fprint ch (x:t) = Format.pp_print_string ch (to_string x)
 let bprint ch (x:t) = Buffer.add_string ch (to_string x)
@@ -382,7 +389,6 @@ let is_log_gt ((a,b):t) ((a',b'):t) : bool =
 (** C comparison tests. Returns a boolean if the test may succeed *)
 
   
-  
 let shift_left ((a,b):t) ((a',b'):t) : t_with_bot =
   try
     if a' = Z.zero then
@@ -429,11 +435,110 @@ let bit_not (ab:t) : t =
   pred (neg ab)
 (** Bitwise negation: ~x = -x-1 *)
 
+(* TODO: other bitwise operations? *)
 
-                   
+
+  
 (** {2 Filters} *)
 
+  
+(** Given two interval aruments, return the arguments assuming that the predicate holds. 
+ *)
+
+let filter_eq (ab:t) (ab':t) : (t*t) with_bot =
+  match meet ab ab' with BOT -> BOT | Nb x -> Nb (x,x)
+                                              
+let filter_neq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && b = b' then BOT else Nb (ab,ab')
+
+let filter_leq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && b > b' then BOT else Nb (ab,ab')
+
+let filter_geq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && b < b' then BOT else Nb (ab,ab')
+
+let filter_lt ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && b >= b' then BOT else Nb (ab,ab')
+
+let filter_gt ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && b <= b' then BOT else Nb (ab,ab')
+
+  
 
 
 (** {2 Backward operations} *)
 
+(** Given one or two interval argument(s) and a result interval, return the
+    argument(s) assuming the result in the operation is in the given result.
+ *)
+
+let bwd_neg (a:t) (r:t) : t_with_bot =
+  meet a (neg r)
+
+let bwd_abs (a:t) (r:t) : t_with_bot =
+  meet a (join r (neg r))
+
+let bwd_succ (a:t) (r:t) : t_with_bot =
+  meet a (pred r)
+
+let bwd_pred (a:t) (r:t) : t_with_bot =
+  meet a (succ r)
+            
+let bwd_add (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a + b ⇒ a = r - b ∧ b = r - a *)
+  bot_merge2 (meet a (sub r b)) (meet b (sub r a))
+
+let bwd_sub (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a - b ⇒ a = b + r ∧ b = a - r *)
+  bot_merge2 (meet a (add b r)) (meet b (sub a r))
+
+let bwd_mul (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a * b ⇒ ((a = r / b) ∨ (b = r = 0)) ∧ ((b = r / a) ∨ (a = r = 0)) *)
+  let aa = if contains_zero b && contains_zero r then Nb a else div r b
+  and bb = if contains_zero a && contains_zero r then Nb b else div r a in
+  bot_merge2 aa bb
+
+let bwd_bit_not (a:t) (r:t) : t_with_bot =
+  meet a (bit_not r)            
+
+let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
+  bot_merge2 (meet a r) (meet b r)
+(** Backward join: both arguments and intersected with the result. *)
+
+let bwd_div (a:t) (b:t) (r:t) = Nb (a,b)
+let bwd_rem (a:t) (b:t) (r:t) = Nb (a,b)
+let bwd_wrap (a:t) range (r:t) : t_with_bot = Nb a
+let bwd_shift_left (a:t) (b:t) (r:t) = Nb (a,b)
+let bwd_shift_right (a:t) (b:t) (r:t) = Nb (a,b)
+let bwd_shift_right_trunc (a:t) (b:t) (r:t) = Nb (a,b)
+(* TODO: more precise backward for those, and also bit-wise operations *)
+                                                              
+
+(** {2 Reduction} *)
+
+
+module I = Intervals.IntItv
+module B = Intervals.IntBound
+
+let meet_inter ((a,b):t) ((l,h):I.t) : (t * I.t) with_bot =
+  (* smallest element in aℤ+b greater or equal to l *)
+  let l' = match l with
+    | B.Finite f -> B.Finite (Z.add f (rem_zero (Z.sub b f) a))
+    | _ -> l
+  (* greatest element in aℤ+b smaller or equal to h *)
+  and h' = match h with
+    | B.Finite f -> B.Finite (Z.sub f (rem_zero (Z.sub b f) a))
+    | _ -> h
+  in
+  match l',h' with
+  | B.Finite ll, B.Finite hh ->
+     if ll > hh then BOT
+     else if ll = hh then Nb (cst ll, (l',h'))
+     else Nb ((a,b),(l',h'))
+  | _ -> Nb ((a,b),(l',h'))
+(** Intersects a congruence with an interval, and returns the set represented
+    both as a congruence and as an interval.
+    Useful to implement reductions.
+ *)
+
+                                            
