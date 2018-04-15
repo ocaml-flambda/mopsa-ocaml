@@ -6,52 +6,53 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of C function calls *)
+(** Interpreter of assignment expressions. *)
 
-open Framework.Flow
+open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
-open Framework.Domains.Stateless
+open Framework.Flow
+open Framework.Utils
 open Framework.Ast
+open Universal.Ast
 open Ast
 
-let name = "c.flows.loops"
+let name = "c.desugar.assign"
 let debug fmt = Debug.debug ~channel:name fmt
 
+
+(** Abstract domain. *)
 module Domain =
 struct
 
   (*==========================================================================*)
-                        (** {2 Transfer functions} *)
+  (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
-
+  
   let init prog man ctx flow = ctx, flow
 
-  let exec stmt man ctx flow =
-    match skind stmt with
-    | S_c_for(init, cond, incr, body) ->
-      let range = stmt.srange in
-      let stmt = Universal.Ast.(
-          mk_block [
-            init;
-            mk_stmt (S_while (
-                (match cond with None -> mk_one range | Some e -> e),
-                (match incr with None -> body | Some e -> mk_block [body; mk_stmt (S_expression e) e.erange] body.srange)
-              )) range
-          ] range
+  let eval exp man ctx flow =
+    match ekind exp with
+    | E_c_assign(lval, rval) ->
+      man.eval rval ctx flow |>
+      eval_compose
+        (fun rval flow ->
+           let flow = man.exec (Universal.Ast.mk_assign lval rval exp.erange) ctx flow in
+           oeval_singleton (Some rval, flow, [])
         )
-      in
-      man.exec stmt ctx flow |>
-      return
 
-    | S_c_do_while(body, cond) -> assert false
     | _ -> None
 
-  let eval exp man ctx flow = None
+  let exec stmt man ctx flow = None
 
-  let ask _ _ _ _  = None
+  let ask _ _ _ _ = None
 
-  end
+end
+
+
+(*==========================================================================*)
+(**                            {2 Setup}                                    *)
+(*==========================================================================*)
 
 let setup () =
   register_domain name (module Domain)

@@ -7,10 +7,14 @@
     //Libraries
     "c.libs.mopsa",
 
+    //Desugarisation
+    "c.desugar.andor",
+    "c.desugar.assign",
+    "c.desugar.loops",
+
     //Flows
-    "c.flows.intraproc",
     "c.flows.interproc",
-    "c.flows.loops",
+    "c.flows.switch",
     "universal.flows.loops",
     "universal.flows.intraproc",
     "universal.flows.interproc",

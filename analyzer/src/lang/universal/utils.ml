@@ -1,10 +1,11 @@
 open Framework.Manager
 open Framework.Flow
+open Framework.Lattice
 open Framework.Ast
 open Ast
 
 let assume_to_exec cond true_case false_case man ctx flow
-    ?(bottom_case=(fun () -> flow))
+    ?(bottom_case=(fun () -> man.flow.set TCur man.env.bottom flow))
     ?(merge_case=(fun flow1 flow2 -> man.flow.join (true_case flow1) (false_case flow2)))
     () =
   Framework.Utils.if_flow

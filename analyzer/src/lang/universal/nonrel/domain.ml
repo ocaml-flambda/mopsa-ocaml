@@ -89,8 +89,10 @@ struct
       AExpr_unop (op, t1), v
 
     | E_binop (((O_eq | O_ne | O_lt | O_le | O_gt | O_ge) as op), e1, e2) ->
+      debug "binop: %a" Framework.Pp.pp_operator op;
        let (_,v1) as t1 = annotate_expr a e1 in
        let (_,v2) as t2 = annotate_expr a e2 in
+       debug "binop: v1 = %a, v2 = %a" Value.print v1 Value.print v2;
        let neg_op = match op with
          | O_eq -> O_ne
          | O_ne -> O_eq
@@ -101,6 +103,7 @@ struct
          | _ -> assert false
        in
        let a1, a2 = Value.fwd_filter op v1 v2, Value.fwd_filter neg_op v1 v2 in
+       debug "binop: fwd_filter1 = %b, fwd_filter2 = %b" a1 a2;
        AExpr_binop (op, t1, t2), to_bool a1 a2
 
     | E_binop (O_log_and,e1,e2) ->

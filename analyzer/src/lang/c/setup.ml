@@ -2,9 +2,8 @@ let init () =
   Program.setup ();
   Alarms.setup ();
   Flows.(
-    Intraproc.setup ();
     Interproc.setup ();
-    Loops.setup ();
+    Switch.setup ();
   );
   Memory.(
     Cell.setup ();
@@ -13,6 +12,11 @@ let init () =
     Array_to_pointer.setup ();
     Record_to_pointer.setup ();
     Var_init.setup ();
+  );
+  Desugar.(
+    Andor.setup ();
+    Assign.setup ();
+    Loops.setup ();
   );
   Libs.(
     Mopsa.setup ();

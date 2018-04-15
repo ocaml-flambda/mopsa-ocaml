@@ -36,35 +36,15 @@ struct
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (Some (mk_z c exp.erange), flow, []) man ctx
 
+
     | E_unop(op, e) when is_c_int_type e.etyp ->
+      debug "unop %a" Framework.Pp.pp_operator op;
       man.eval e ctx flow |>
       eval_compose
         (fun e flow ->
            let e' = {e with etyp = T_int} in
            let exp' = {exp with ekind = E_unop(op, e')} in
            oeval_singleton (Some exp', flow, [])
-        )
-
-    | E_binop(O_log_and, e1, e2) ->
-      man.eval e1 ctx flow |>
-      eval_compose
-        (fun e1 flow1 ->
-           Universal.Utils.assume_to_eval e1
-             (fun true_flow -> Some (man.eval e2 ctx true_flow))
-             (fun false_flow -> oeval_singleton (Some (mk_zero exp.erange), false_flow, []))
-             man ctx flow ()
-        )
-
-
-
-    | E_binop(O_log_or, e1, e2) ->
-      man.eval e1 ctx flow |>
-      eval_compose
-        (fun e1 flow1 ->
-           Universal.Utils.assume_to_eval e1
-             (fun true_flow -> oeval_singleton (Some (mk_one exp.erange), true_flow, []))
-             (fun false_flow -> Some (man.eval e2 ctx false_flow))
-             man ctx flow ()
         )
 
     | E_binop(op, e1, e2) when is_c_int_type e1.etyp && is_c_int_type e2.etyp ->

@@ -6,18 +6,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of C intra-procedural control flow *)
+(** Interpreter of for and do-while loops. *)
 
 open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
-open Framework.Utils
 open Framework.Ast
-open Universal.Ast
 open Ast
 
-let name = "c.flows.intraproc"
+let name = "c.desugar.loops"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =
@@ -31,35 +29,29 @@ struct
 
   let exec stmt man ctx flow =
     match skind stmt with
-
-    | S_c_switch _ -> assert false
-
-    | S_c_switch_case _ -> assert false
-
-    | S_c_switch_default _ -> assert false
-
-    | S_c_goto _ -> assert false
-
-    | _ -> None
-
-
-  let eval exp man ctx flow =
-    match ekind exp with
-    | E_c_assign(lval, rval) ->
-      man.eval rval ctx flow |>
-      eval_compose
-        (fun rval flow ->
-           debug "assign";
-           let flow = man.exec (Universal.Ast.mk_assign lval rval exp.erange) ctx flow in
-           debug "assign done";
-           oeval_singleton (Some rval, flow, [])
+    | S_c_for(init, cond, incr, body) ->
+      let range = stmt.srange in
+      let stmt = Universal.Ast.(
+          mk_block [
+            init;
+            mk_stmt (S_while (
+                (match cond with None -> mk_one range | Some e -> e),
+                (match incr with None -> body | Some e -> mk_block [body; mk_stmt (S_expression e) e.erange] body.srange)
+              )) range
+          ] range
         )
+      in
+      man.exec stmt ctx flow |>
+      return
 
+    | S_c_do_while(body, cond) -> assert false
     | _ -> None
+
+  let eval exp man ctx flow = None
 
   let ask _ _ _ _  = None
 
   end
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  register_domain name (module Domain)

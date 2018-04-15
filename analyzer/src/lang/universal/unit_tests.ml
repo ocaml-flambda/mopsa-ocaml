@@ -29,16 +29,6 @@ let debug fmt = Debug.debug ~channel:name fmt
 type _ Framework.Context.key +=
   | KCurTestName: string Framework.Context.key
 
-let () =
-  register_key_equality {
-    case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
-              fun chain k1 k2 ->
-                match k1, k2 with
-                | KCurTestName, KCurTestName -> Some Eq
-                | _ -> chain.check k1 k2
-            in
-            f);
-  }
 
 (*==========================================================================*)
 (**                        {2 Assertions tokens }                           *)
@@ -214,11 +204,20 @@ let setup () =
         compare t1 t2
       | _ -> next a1 a2
     );
-
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
       | AFailTest(t) -> Format.fprintf fmt "%a  Test %s fails" ((Debug.color "red") Format.pp_print_string) "✘" t
       | AMayTest(t) -> Format.fprintf fmt "%a  Test %s may fail" ((Debug.color "orange") Format.pp_print_string) "⚠" t
       | APanic(t) -> Format.fprintf fmt "%a  Test %s skipped" ((Debug.color "fushia") Format.pp_print_string) "⎇" t
       | _ -> next fmt alarm
-    )
+    );
+  register_key_equality {
+    case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
+              fun chain k1 k2 ->
+                match k1, k2 with
+                | KCurTestName, KCurTestName -> Some Eq
+                | _ -> chain.check k1 k2
+            in
+            f);
+  }
+
