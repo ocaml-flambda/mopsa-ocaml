@@ -31,6 +31,10 @@ type _ Framework.Context.key +=
 let find_string_table ctx =
   Framework.Context.find KStringTable ctx
 
+(** {2 Command line options} *)
+let opt_function = ref "main"
+(** Name of the function to be analyzed. *)
+
 (** {2 Domain} *)
 
 module Domain =
@@ -107,7 +111,7 @@ struct
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
       let main = List.find (function
-            {c_func_var} -> c_func_var.vname = "main"
+            {c_func_var} -> c_func_var.vname = !opt_function
         ) functions
       in
       manager.exec main.c_func_body ctx flow |>
@@ -136,4 +140,7 @@ let setup () =
                   | _ -> chain.check k1 k2
               in
               f);
-    })
+    });
+  Framework.Options.register (
+    "-c-function", Arg.Set_string opt_function, " name of the function to be analyzed (default: main)"
+  )

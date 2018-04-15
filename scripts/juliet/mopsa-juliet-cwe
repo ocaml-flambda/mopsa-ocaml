@@ -6,7 +6,6 @@ directory=$1
 
 cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
 
-
 for c in ${cases}; do
     ${MOPSADIR}/scripts/juliet/mopsa-juliet-case ${c}
 done

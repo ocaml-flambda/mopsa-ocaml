@@ -202,4 +202,10 @@ end
 
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  Stateless.register_domain name (module Domain);
+  Framework.Options.register (
+    "-widening-delay", Arg.Set_int opt_loop_widening_delay, " number of iterations before applying a widening (default: 1)"
+  );
+  Framework.Options.register (
+    "-loop-unrolling", Arg.Set_int opt_loop_unrolling, " number of unrolling iterations before joining the environments (default: 1)"
+  )

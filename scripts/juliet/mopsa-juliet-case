@@ -7,30 +7,15 @@ casename=$(basename $1 .c)
 
 files=$(find ${directory} -name "${casename}*.c")
 
-tmp=$(mktemp /tmp/${casename}_XXXXX.c)
-
-echo "#include \"mopsa.h\"" > ${tmp}
-
-for file in ${files}; do
-    esc_file=${file//\//\\\/};
-    sed "1s/^/#line 1 \"${esc_file}\"\n/" ${file} >> ${tmp};
-done
-
-cat <<EOF >> ${tmp}
-
-#line 1 "${tmp}"
-void test_bad() {
-  ${casename}_bad();
-  _mopsa_assert_unsafe();
-}
-
-void test_good() {
-  ${casename}_good();
-  _mopsa_assert_safe();
-}
-EOF
+good="${casename}_good"
+bad="${casename}_bad"
 
 echo "Analyzing ${casename}"
-${MOPSADIR}/bin/mopsa -test=true -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet ${tmp}
+echo "Good case"
+${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${files}
 echo
-rm ${tmp}
+echo "Bad case"
+${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${files}
+echo
+echo "===================================================="
+echo

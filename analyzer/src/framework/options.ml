@@ -40,7 +40,7 @@ let setup () =
   register (
     "-test",
     Arg.Bool (fun m -> common_options.unit_test_mode <- m),
-    " unit test mode"
+    " unit test mode (default: false)"
   );
   register (
     "-debug",
@@ -52,7 +52,7 @@ let setup () =
   register (
     "-color",
     Arg.Bool(fun f -> Debug.print_color := f),
-    " print debug messages in color"
+    " print debug messages in color (default: true)"
   );
   register (
     "-stub",
