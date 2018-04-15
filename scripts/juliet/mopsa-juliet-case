@@ -5,17 +5,16 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/../.."
 directory=$(dirname $1)
 casename=$(basename $1 .c)
 
-files=$(find ${directory} -name "${casename}*.c")
-
+files=$(find ${directory} -name "${casename}*.c" | sort -nr)
 good="${casename}_good"
 bad="${casename}_bad"
 
 echo "Analyzing ${casename}"
 echo "Good case"
-${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${files}
 echo
 echo "Bad case"
-${MOPSADIR}/bin/mopsa -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${files}
 echo
 echo "===================================================="
 echo

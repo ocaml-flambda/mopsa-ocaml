@@ -50,10 +50,14 @@ let build_ast_from_file filename =
   ast
 
 (** Entry point of the frontend *)
-let rec parse_program (filename: string) : Framework.Ast.program =
-  let ast = build_ast_from_file filename in
-  (* Start the translation of the AST *)
-  from_program filename ast
+let rec parse_program (files: string list) : Framework.Ast.program =
+  match files with
+  | [filename] ->
+    let ast = build_ast_from_file filename in
+    (* Start the translation of the AST *)
+    from_program filename ast
+
+  | _ -> assert false
 
 and parse_file (filename: string) =
   let ast = build_ast_from_file filename in

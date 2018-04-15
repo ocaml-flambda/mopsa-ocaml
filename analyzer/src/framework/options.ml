@@ -20,18 +20,25 @@ let register (opt) =
 
 
 type common_options = {
+  mutable lang : string;
   mutable config : string;
   mutable unit_test_mode : bool;
   mutable stubs : string list;
 }
 
 let common_options = {
+  lang = "";
   config = "";
   unit_test_mode = false;
   stubs = [];
 }
 
 let setup () =
+  register (
+    "-lang",
+    Arg.String(fun f -> common_options.lang <- f),
+    " target language"
+  );
   register (
     "-config",
     Arg.String(fun f -> common_options.config <- f),

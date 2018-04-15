@@ -9,7 +9,12 @@ let debug fmt =
 
 (** {2 Entry points} *)
 
-let rec parse_db (dbfile: string) : Framework.Ast.program =
+let rec parse_program (files: string list) =
+  match files with
+  | [filename] when Filename.extension filename = ".db" -> parse_db filename
+  | _ -> parse_files files
+
+and parse_db (dbfile: string) : Framework.Ast.program =
   let open Clang_parser in
   let open Clang_to_C in
   let open Build_DB in
@@ -20,7 +25,7 @@ let rec parse_db (dbfile: string) : Framework.Ast.program =
   | [exec] ->
     let ctx = create_context exec target in
     let srcs = get_executable_sources db exec in
-    let nb = List.length  srcs
+    let nb = List.length srcs
     and i = ref 0 in
     List.iter
       (fun src ->
@@ -48,6 +53,20 @@ let rec parse_db (dbfile: string) : Framework.Ast.program =
   | l ->
     assert false
 
+and parse_files files =
+  let open Clang_parser in
+  let open Clang_to_C in
+  let one_file = List.hd files in
+  let target = get_target_info (get_default_target_options ()) in
+  let ctx = Clang_to_C.create_context one_file target in
+  List.iter
+    (fun file ->
+       let p = parse_file [] file in
+       add_translation_unit ctx (Filename.basename file) p
+    ) files;
+  let prj = Clang_to_C.link_project ctx in
+  from_project prj
+
 and parse_file (opts: string list) (file: string) =
   let target_options = Clang_parser.get_default_target_options () in
   (* remove some options that are in the way *)
@@ -74,17 +93,6 @@ and parse_file (opts: string list) (file: string) =
 
   in
   x
-
-and parse_program (file: string) =
-  let open Clang_parser in
-  let open Clang_to_C in
-  let x = parse_file [] file in
-  let target = get_target_info (get_default_target_options ()) in
-  let ctx = Clang_to_C.create_context file target in
-  Clang_to_C.add_translation_unit ctx file x;
-  let prj = Clang_to_C.link_project ctx in
-  from_project prj
-
 
 and from_project prj =
   debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;

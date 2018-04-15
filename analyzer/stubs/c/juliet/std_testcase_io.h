@@ -47,7 +47,7 @@ typedef struct _twoIntsStruct
 
 void printLine(const char * line) {}
 
-//void printWLine(const wchar_t * line) {}
+void printWLine(const wchar_t * line) {}
 
 void printIntLine (int intNumber) {}
 
