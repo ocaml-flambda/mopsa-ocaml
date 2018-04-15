@@ -118,6 +118,107 @@ let test_un opname test aop cop =
     ) congs
 
 
+
+let test_bwd_un opname test aop cop =
+  Printf.printf "testing %s\n%!" opname;
+  List.iter
+    (fun a1 ->
+      List.iter
+        (fun r ->
+          let a1' = aop a1 r in
+          List.iter
+            (fun c1 ->
+              test opname cop a1 r a1' c1
+            ) (sample_cong a1)
+        ) congs
+    ) congs
+
+let test_bwd_un_val opname cop a1 r a1' c1 =
+  let c = cop c1 in
+  if contains c r then
+    match a1' with
+    | BOT -> 
+        Printf.printf
+          "error: %s %a = %a -> ⊥; %s %s = %s\n"
+          opname print a1 print r
+          opname (Z.to_string c1) (Z.to_string c)
+    | Nb aa ->
+       if not (contains c1 aa) then
+         Printf.printf
+           "error: %s %a = %a -> %a; %s %s = %s\n"
+           opname print a1 print r print aa
+           opname (Z.to_string c1) (Z.to_string c)
+
+
+let test_filter opname test aop cop =
+  Printf.printf "testing %s\n%!" opname;
+  List.iter
+    (fun a1 ->
+      List.iter
+        (fun a2 ->
+          let a' = aop a1 a2 in
+          List.iter
+            (fun c1 ->
+              List.iter
+                (fun c2 ->
+                  test opname cop a1 a2 a' c1 c2
+                ) (sample_cong a2)
+            ) (sample_cong a1)
+        ) congs
+    ) congs
+
+let test_filter_val opname cop a1 a2 a' c1 c2 =
+  if cop c1 c2 then
+    match a' with
+    | BOT -> 
+        Printf.printf
+          "error: %a %s %a -> ⊥; %s %s %s\n"
+          print a1 opname print a2
+          (Z.to_string c1) opname (Z.to_string c2)
+    | Nb (a1',a2') ->
+       if not (contains c1 a1' && contains c2 a2') then
+        Printf.printf
+          "error: %a %s %a -> %a,%a; %s %s %s\n"
+          print a1 opname print a2 print a1' print a2'
+          (Z.to_string c1) opname (Z.to_string c2)
+
+let test_bwd_bin opname test aop cop =
+  Printf.printf "testing %s\n%!" opname;
+  List.iter
+    (fun a1 ->
+      List.iter
+        (fun a2 ->
+          List.iter
+            (fun r ->
+              let a' = aop a1 a2 r in
+              List.iter
+                (fun c1 ->
+                  List.iter
+                    (fun c2 ->
+                      test opname cop a1 a2 r a' c1 c2
+                    ) (sample_cong a2)
+                ) (sample_cong a1)
+            ) congs
+        ) congs
+    ) congs
+
+let test_bwd_bin_val opname cop a1 a2 r a' c1 c2 =
+  let c = cop c1 c2 in
+  if contains c r then
+    match a' with
+    | BOT -> 
+        Printf.printf
+          "error: %a %s %a = %a -> ⊥; %s %s %s = %s\n"
+          print a1 opname print a2 print r
+          (Z.to_string c1) opname (Z.to_string c2) (Z.to_string c)
+    | Nb (a1',a2') ->
+       if not (contains c1 a1' && contains c2 a2') then
+        Printf.printf
+          "error: %a %s %a = %a -> %a,%a; %s %s %s = %s\n"
+          print a1 opname print a2 print r print a1' print a2'
+          (Z.to_string c1) opname (Z.to_string c2) (Z.to_string c)
+
+       
 let wrap2 lo up a =
   wrap a (Z.of_int lo) (Z.of_int up)
   
@@ -128,6 +229,8 @@ let wrap_scalar lo up a =
 let test () =
   test_un "neg" test_un_val neg Z.neg;
   test_un "abs" test_un_val abs Z.abs;
+  test_un "succ" test_un_val succ Z.succ;
+  test_un "pred" test_un_val pred Z.pred;
   test_un "wrap [0,255]" test_un_val (wrap2 0 255) (wrap_scalar 0 255);
   test_un "wrap [-128,127]" test_un_val (wrap2 (-128) 127) (wrap_scalar (-128) 127);
   test_bin "join left" test_bin_val join (fun a b -> a);
@@ -152,6 +255,21 @@ let test () =
   test_bin "<<" test_bin_val_bot shift_left (fun a b -> Z.shift_left a (Z.to_int b));
   test_bin ">>" test_bin_val_bot shift_right (fun a b -> Z.shift_right a (Z.to_int b));
   test_bin ">>>" test_bin_val_bot shift_right_trunc (fun a b -> Z.shift_right_trunc a (Z.to_int b));
+  test_un "~" test_un_val bit_not Z.lognot;
+  test_filter "filter =" test_filter_val filter_eq (=);
+  test_filter "filter !=" test_filter_val filter_neq (<>);
+  test_filter "filter <=" test_filter_val filter_leq (<=);
+  test_filter "filter >=" test_filter_val filter_geq (>=);
+  test_filter "filter <" test_filter_val filter_lt (<);
+  test_filter "filter >" test_filter_val filter_gt (>);
+  test_bwd_un "bwd neg" test_bwd_un_val bwd_neg Z.neg;
+  test_bwd_un "bwd abs" test_bwd_un_val bwd_abs Z.abs;
+  test_bwd_un "bwd succ" test_bwd_un_val bwd_succ Z.succ;
+  test_bwd_un "bwd pred" test_bwd_un_val bwd_pred Z.pred;
+  test_bwd_bin "bwd +" test_bwd_bin_val bwd_add Z.add;
+  test_bwd_bin "bwd -" test_bwd_bin_val bwd_sub Z.sub;
+  test_bwd_bin "bwd *" test_bwd_bin_val bwd_mul Z.mul;
+  test_bwd_un "bwd ~" test_bwd_un_val bwd_bit_not Z.lognot;
   ()
 
 
