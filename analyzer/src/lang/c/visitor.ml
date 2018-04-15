@@ -244,18 +244,14 @@ let () =
           | {exprs = []; stmts = [body]} -> {stmt with skind = S_c_labeled_stmt(label, body)}
           | _ -> assert false
         )
-      | S_c_switch_case(case, body) ->
-        {exprs = [case]; stmts = [body]},
+      | S_c_switch_case(case) ->
+        {exprs = [case]; stmts = []},
         (function
-          | {exprs = [case]; stmts = [body]} -> {stmt with skind = S_c_switch_case(case, body)}
+          | {exprs = [case]; stmts = []} -> {stmt with skind = S_c_switch_case(case)}
           | _ -> assert false
         )
-      | S_c_switch_default(body) ->
-        {exprs = []; stmts = [body]},
-        (function
-          | {exprs = []; stmts = [body]} -> {stmt with skind = S_c_switch_default(body)}
-          | _ -> assert false
-        )
+      | S_c_switch_default -> leaf stmt
+
       | _ -> default stmt
     );
 ()

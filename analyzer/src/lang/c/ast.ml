@@ -268,10 +268,10 @@ type stmt_kind +=
   | S_c_labeled_stmt of string * stmt
   (** labeled statements. *)
 
-  | S_c_switch_case of expr * stmt
+  | S_c_switch_case of expr
   (** case of a switch statement. *)
 
-  | S_c_switch_default of stmt
+  | S_c_switch_default
   (** default case of switch statements. *)
 
 
@@ -609,7 +609,11 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
-let type_of_string s = T_c_array(T_c_integer(C_signed_char), C_array_length_cst (Z.of_int (1 + String.length s)))
+let u8 = T_c_integer(C_unsigned_char)
+let s8 = T_c_integer(C_signed_char)
+
+let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
+

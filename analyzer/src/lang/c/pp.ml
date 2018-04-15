@@ -101,6 +101,12 @@ let () =
           (Printers.print_option Framework.Pp.pp_expr) cond
           (Printers.print_option Framework.Pp.pp_expr) it
           Framework.Pp.pp_stmt stmts
+      | S_c_switch(cond, body) ->
+        fprintf fmt "switch (%a) {@\n  @[%a@]@\n}"
+          pp_expr cond
+          pp_stmt body
+      | S_c_switch_case(e) -> fprintf fmt "case %a:" pp_expr e
+      | S_c_switch_default -> fprintf fmt "default:"
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->

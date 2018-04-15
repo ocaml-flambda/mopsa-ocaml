@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Machine representation of C integers. *)
+(** Interpreter of && and || boolean operators. *)
 
 open Framework.Domains.Stateless
 open Framework.Domains
@@ -17,7 +17,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 
-let name = "c.memory.machine_integers"
+let name = "c.desugar.andor"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -33,48 +33,30 @@ struct
 
   let eval exp man ctx flow =
     match ekind exp with
-    | E_constant(C_c_character (c, _)) ->
-      re_eval_singleton (Some (mk_z c exp.erange), flow, []) man ctx
-
-
-    | E_unop(op, e) when is_c_int_type e.etyp ->
-      man.eval e ctx flow |>
+    | E_binop(O_log_and, e1, e2) ->
+      man.eval e1 ctx flow |>
       eval_compose
-        (fun e flow ->
-           let e' = {e with etyp = T_int} in
-           let exp' = {exp with ekind = E_unop(op, e')} in
-           oeval_singleton (Some exp', flow, [])
+        (fun e1 flow1 ->
+           Universal.Utils.assume_to_eval e1
+             (fun true_flow -> Some (man.eval e2 ctx true_flow))
+             (fun false_flow -> oeval_singleton (Some (mk_zero exp.erange), false_flow, []))
+             man ctx flow ()
         )
 
-    | E_binop(op, e1, e2) when is_c_int_type e1.etyp && is_c_int_type e2.etyp ->
-      man_eval_list [e1; e2] man ctx flow |>
-      oeval_compose
-        (fun el flow ->
-           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-           let e1 = {e1 with etyp = T_int} in
-           let e2 = {e2 with etyp = T_int} in
-           let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           oeval_singleton (Some exp', flow, [])
-        )
 
-    | E_c_cast(e', _) ->
-      re_eval_singleton (Some e', flow, []) man ctx
+    | E_binop(O_log_or, e1, e2) ->
+      man.eval e1 ctx flow |>
+      eval_compose
+        (fun e1 flow1 ->
+           Universal.Utils.assume_to_eval e1
+             (fun true_flow -> oeval_singleton (Some (mk_one exp.erange), true_flow, []))
+             (fun false_flow -> Some (man.eval e2 ctx false_flow))
+             man ctx flow ()
+        )
 
     | _ -> None
 
-  let exec stmt man ctx flow =
-    match skind stmt with
-    | S_c_local_declaration(v, init) when is_c_int_type v.vtyp ->
-      let flow =
-        match init with
-        | None -> flow
-        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
-        | Some (Ast.C_init_list (_,_)) -> assert false
-        | Some (Ast.C_init_implicit _) -> assert false
-      in
-      return flow
-
-    | _ -> None
+  let exec stmt man ctx flow = None
 
   let ask _ _ _ _ = None
 
