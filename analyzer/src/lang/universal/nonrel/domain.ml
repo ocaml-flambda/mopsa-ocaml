@@ -67,20 +67,15 @@ struct
     match ekind e with
 
     | E_var var ->
-      debug "annotate var %a" Framework.Pp.pp_var var;
       let v = VarMap.find var a in
-      debug "annotate var %a = %a" Framework.Pp.pp_var var Value.print v;
       AExpr_var var, v
 
     | E_constant(c) ->
        AExpr_cst, Value.of_constant c
 
     | E_unop (O_log_not, e1) ->
-      debug "annotate_expr not (%a)" Framework.Pp.pp_expr e1;
       let (_,v1) as t1 = annotate_expr a e1 in
-      debug "annotate_expr not (%a), v1 = %a" Framework.Pp.pp_expr e1 Value.print v1;
       let v = to_bool (Value.can_be_false v1) (Value.can_be_true v1)  in
-      debug "annotate_expr not (%a) = %a" Framework.Pp.pp_expr e1 Value.print v;
       AExpr_unop (O_log_not, t1), v
 
     | E_unop (op,e1) ->
@@ -89,10 +84,8 @@ struct
       AExpr_unop (op, t1), v
 
     | E_binop (((O_eq | O_ne | O_lt | O_le | O_gt | O_ge) as op), e1, e2) ->
-      debug "binop: %a" Framework.Pp.pp_operator op;
        let (_,v1) as t1 = annotate_expr a e1 in
        let (_,v2) as t2 = annotate_expr a e2 in
-       debug "binop: v1 = %a, v2 = %a" Value.print v1 Value.print v2;
        let neg_op = match op with
          | O_eq -> O_ne
          | O_ne -> O_eq
@@ -103,7 +96,6 @@ struct
          | _ -> assert false
        in
        let a1, a2 = Value.fwd_filter op v1 v2, Value.fwd_filter neg_op v1 v2 in
-       debug "binop: fwd_filter1 = %b, fwd_filter2 = %b" a1 a2;
        AExpr_binop (op, t1, t2), to_bool a1 a2
 
     | E_binop (O_log_and,e1,e2) ->
@@ -162,17 +154,13 @@ struct
     else
       match e with
       | AExpr_var var ->
-        debug "refine var";
         VarMap.add var rr a
 
       | AExpr_cst ->
-        debug "refine cst";
         refine_bool1 rrr (fun a -> a) (fun a -> bottom) a bottom
 
       | AExpr_unop (O_log_not,((_,a1) as t1)) ->
-        debug "refine not ";
         let aa1 = refine_bool1 rrr Value.assume_false Value.assume_true a1 Value.bottom in
-        debug "refine not aa1 = %a" Value.print aa1;
         refine_expr a t1 aa1
 
       | AExpr_unop (op,((_,a1) as t1)) ->

@@ -38,7 +38,6 @@ struct
 
 
     | E_unop(op, e) when is_c_int_type e.etyp ->
-      debug "unop %a" Framework.Pp.pp_operator op;
       man.eval e ctx flow |>
       eval_compose
         (fun e flow ->
@@ -48,7 +47,6 @@ struct
         )
 
     | E_binop(op, e1, e2) when is_c_int_type e1.etyp && is_c_int_type e2.etyp ->
-      debug "binop %a" Framework.Pp.pp_operator op;
       man_eval_list [e1; e2] man ctx flow |>
       oeval_compose
         (fun el flow ->
