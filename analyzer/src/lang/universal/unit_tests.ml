@@ -142,7 +142,6 @@ struct
               let alarm = {
                 alarm_kind = AFailTest test;
                 alarm_range = range;
-                alarm_level = High;
               } in
               alarm :: acc
 
@@ -150,7 +149,6 @@ struct
               let alarm = {
                 alarm_kind = AMayTest test;
                 alarm_range = range;
-                alarm_level = Unknown;
               } in
               alarm :: acc
 
@@ -158,7 +156,6 @@ struct
               let alarm = {
                 alarm_kind = APanic (test);
                 alarm_range = range;
-                alarm_level = High;
               } in
               alarm :: acc
 

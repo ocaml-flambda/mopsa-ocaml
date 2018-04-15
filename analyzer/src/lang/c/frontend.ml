@@ -345,8 +345,8 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr cond, from_block srange body)
     | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr e)
     | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
+    | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
     | C_AST.S_do_while (_,_) -> Framework.Exceptions.panic "C_AST.S_do_while not supprted"
-    | C_AST.S_target _ -> Framework.Exceptions.panic "C_AST.S_target not supprted"
   in
   {skind; srange}
 

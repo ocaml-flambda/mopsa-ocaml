@@ -238,12 +238,7 @@ let () =
           | {exprs = [cond]; stmts = [body]} -> {stmt with skind = S_c_switch(cond, body)}
           | _ -> assert false
         )
-      | S_c_labeled_stmt(label, body) ->
-        {exprs = []; stmts = [body]},
-        (function
-          | {exprs = []; stmts = [body]} -> {stmt with skind = S_c_labeled_stmt(label, body)}
-          | _ -> assert false
-        )
+      | S_c_label _ -> leaf stmt
       | S_c_switch_case(case) ->
         {exprs = [case]; stmts = []},
         (function

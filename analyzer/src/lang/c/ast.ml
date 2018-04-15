@@ -265,8 +265,8 @@ type stmt_kind +=
   | S_c_switch of expr * stmt
   (** switch statement. *)
 
-  | S_c_labeled_stmt of string * stmt
-  (** labeled statements. *)
+  | S_c_label of string
+  (** statement label. *)
 
   | S_c_switch_case of expr
   (** case of a switch statement. *)

@@ -18,18 +18,10 @@ open Ast
 (** Extensible type of alarm kinds, defined by domains. *)
 type alarm_kind = ..
 
-(** Severity level of an alarm. *)
-type alarm_level =
-  | High
-  | Medium
-  | Low
-  | Unknown
-
 (** An alarm *)
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_range : range;       (** the range of the program where the alarm was detected *)
-  alarm_level : alarm_level; (** the level of the alarm *)
 }
 
 let alarm_compare_chain : (alarm -> alarm -> int) ref = ref (fun a1 a2 -> compare a1.alarm_kind a2.alarm_kind)
@@ -80,12 +72,6 @@ let () =
                            (** {2 Printing} *)
 (*==========================================================================*)
 
-let pp_alarm_level fmt = function
-  | High -> Format.pp_print_string fmt "high"
-  | Medium -> Format.pp_print_string fmt "medium"
-  | Low -> Format.pp_print_string fmt "low"
-  | Unknown -> Format.pp_print_string fmt "unknown"
-
 let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alarm ->
   failwith "Pp: Unknown alarm"
   )
@@ -93,7 +79,6 @@ let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alar
 let register_pp_alarm pp = pp_alarm_chain := pp !pp_alarm_chain
 
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "@[%a@]@\nIn %a@\nLevel: %a"
+  Format.fprintf fmt "@[%a@]@\nIn %a@"
     !pp_alarm_chain alarm
     Pp.pp_range_verbose alarm.alarm_range
-    pp_alarm_level alarm.alarm_level

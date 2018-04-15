@@ -78,7 +78,6 @@ module Domain = struct
               let alarm = {
                 alarm_kind = AOutOfBound;
                 alarm_range = range;
-                alarm_level = High;
               } in
               alarm :: acc
 
@@ -86,7 +85,6 @@ module Domain = struct
               let alarm = {
                 alarm_kind = ANullDeref;
                 alarm_range = range;
-                alarm_level = High;
               } in
               alarm :: acc
 
@@ -94,7 +92,6 @@ module Domain = struct
               let alarm = {
                 alarm_kind = AInvalidDeref;
                 alarm_range = range;
-                alarm_level = High;
               } in
               alarm :: acc
 
