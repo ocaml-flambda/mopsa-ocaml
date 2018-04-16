@@ -154,6 +154,9 @@ module Domain = struct
       in
       aux 0 flow
 
+    | Some (C_init_expr e) ->
+      man.exec (mk_assign s e range) ctx flow
+
     | _ -> assert false
 
   and init_expr e init is_global range man ctx flow =

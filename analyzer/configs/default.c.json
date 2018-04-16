@@ -6,6 +6,7 @@
 
     //Libraries
     "c.libs.mopsa",
+    "c.libs.stdlib",
 
     //Desugarisation
     "c.desugar.andor",

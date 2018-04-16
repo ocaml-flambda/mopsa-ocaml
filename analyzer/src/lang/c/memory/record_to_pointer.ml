@@ -39,8 +39,21 @@ module Domain = struct
 
   let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
     match skind stmt with
-    | S_assign(lval, rval, _) when is_c_record_type lval.etyp ->
-      Framework.Exceptions.panic "assignments to struct/union not supported"
+    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
+      let range = srange stmt in
+      let t1 = remove_typedef lval.etyp |> remove_qual and t2 = remove_typedef rval.etyp |> remove_qual in
+      assert (compare t1 t2 = 0);
+      let fields = match t1 with
+        | T_c_record{c_record_fields} -> c_record_fields
+        | _ -> assert false
+      in
+      fields |> List.fold_left (fun flow field ->
+        let lval = mk_c_member_access lval field range in
+        let rval = mk_c_member_access rval field range in
+        let stmt = {stmt with skind = S_assign(lval, rval, smode)} in
+        man.exec stmt ctx flow
+        ) flow |>
+      return
 
     | _ -> None
 

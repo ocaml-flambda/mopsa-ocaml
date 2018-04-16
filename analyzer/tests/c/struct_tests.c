@@ -49,3 +49,26 @@ void test_partial_initialization_with_designated_names() {
   _mopsa_assert_true(p3.x == 0);
   _mopsa_assert_true(p3.y == 2);
 }
+
+void test_struct_copy() {
+  point p = {.x = 1, .y = 2};
+  point q = p;
+  _mopsa_assert_true(p.x == q.x);
+}
+
+int f1(point p) {
+  return p.x + 1;
+}
+
+int f2(point p) {
+  p.x = p.x + 10;
+  return p.x;
+}
+
+void test_pass_struct_by_value() {
+  point p = {.x = 10, .y = 20};
+  int x = f1(p);
+  _mopsa_assert_true(x == 11);
+  int y = f2(p);
+  _mopsa_assert_true(p.x == 10 && y == 20);
+}

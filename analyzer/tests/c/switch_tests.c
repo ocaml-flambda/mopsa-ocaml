@@ -54,10 +54,28 @@ void test_case_with_no_break() {
 void test_no_default() {
   int i = 2, j = 0;
   switch (i * 5) {
-  case 0: j = 10; break; 
+  case 0: j = 10; break;
   case 1: j = 20; break;
   case 2: j = 30; break;
   case 3: j = 40; break;
   }
   _mopsa_assert_true(j == 0);
+}
+
+
+void test_duff_device() {
+  int to, from;
+  int count;
+  int n = (count + 7) / 8;
+  switch (count % 8) {
+  case 0: while (--n > 0) { to = from++;
+    case 7:      to = from++;
+    case 6:      to = from++;
+    case 5:      to = from++;
+    case 4:      to = from++;
+    case 3:      to = from++;
+    case 2:      to = from++;
+    case 1:      to = from++;
+    }
+  }
 }
