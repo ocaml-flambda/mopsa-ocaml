@@ -1,3 +1,3 @@
 #!/bin/bash
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-${MOPSADIR}/bin/mopsa -lang=c -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c $@
+${MOPSADIR}/bin/mopsa -lang=c -config ${MOPSADIR}/analyzer/configs/default.c.json -stub ${MOPSADIR}/analyzer/stubs/c $@ ${MOPSADIR}/analyzer/stubs/c/mopsa_libc.c

@@ -25,7 +25,6 @@
 *** bitfields
 ** Statements
 *** do while
-*** switch
 *** goto
 ** Pointers
 *** invalidate pointers to local variables at function exit.

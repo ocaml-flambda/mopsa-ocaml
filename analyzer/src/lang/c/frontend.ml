@@ -20,6 +20,7 @@ and parse_db (dbfile: string) : Framework.Ast.program =
   let open Build_DB in
   let target = get_target_info (get_default_target_options ()) in
   let db = load_db dbfile in
+  print_db db;
   let execs = get_executables db in
   match execs with
   | [exec] ->

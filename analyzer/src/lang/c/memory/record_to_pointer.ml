@@ -37,7 +37,12 @@ module Domain = struct
 
   let init prog man ctx flow = ctx, flow
 
-  let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option = None
+  let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
+    match skind stmt with
+    | S_assign(lval, rval, _) when is_c_record_type lval.etyp ->
+      Framework.Exceptions.panic "assignments to struct/union not supported"
+
+    | _ -> None
 
   let eval exp man ctx flow =
     match ekind exp with

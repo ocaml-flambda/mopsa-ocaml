@@ -110,12 +110,17 @@ struct
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
-      let main = List.find (function
-            {c_func_var} -> c_func_var.vname = !opt_function
-        ) functions
-      in
-      manager.exec main.c_func_body ctx flow |>
-      return
+      begin
+        try
+          let main = List.find (function
+                {c_func_var} -> c_func_var.vname = !opt_function
+            ) functions
+          in
+          manager.exec main.c_func_body ctx flow |>
+          return
+        with Not_found ->
+          Framework.Exceptions.panic "function %s not found" !opt_function
+      end
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->

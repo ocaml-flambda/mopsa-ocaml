@@ -193,7 +193,7 @@ struct
 
 
     | E_c_function _ ->
-      panic "Pointer functions not supported"
+      panic "Function pointers not supported"
 
     | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       panic "Pointer substraction not supported"

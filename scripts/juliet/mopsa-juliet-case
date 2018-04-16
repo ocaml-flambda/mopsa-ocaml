@@ -11,10 +11,10 @@ bad="${casename}_bad"
 
 echo "Analyzing ${casename}"
 echo "Good case"
-${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo
 echo "Bad case"
-${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo
 echo "===================================================="
 echo

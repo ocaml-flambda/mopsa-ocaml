@@ -2,10 +2,10 @@
 #define _MOPSA_H
 
 // Abstract values
-long int _mopsa_rand_int(long int, long int);
+extern long int _mopsa_rand_int(long int, long int);
 
 // Raise Framework.Manager.Panic exception with a given message
-void _mopsa_panic(const char*);
+extern void _mopsa_panic(const char*);
 
 // Errors
 #define OUT_OF_BOUND 1
@@ -13,13 +13,13 @@ void _mopsa_panic(const char*);
 #define INVALID_DEREF 3
 
 // Assertions
-void _mopsa_assert_true(int cond);
-void _mopsa_assert_false(int cond);
-void _mopsa_assert_unreachable();
-void _mopsa_assert_safe();
-void _mopsa_assert_unsafe();
-void _mopsa_assert_error(int error);
-void _mopsa_assert_error_at_line(int error, int line);
+extern void _mopsa_assert_true(int cond);
+extern void _mopsa_assert_false(int cond);
+extern void _mopsa_assert_unreachable();
+extern void _mopsa_assert_safe();
+extern void _mopsa_assert_unsafe();
+extern void _mopsa_assert_error(int error);
+extern void _mopsa_assert_error_at_line(int error, int line);
 
 
 

@@ -9,9 +9,6 @@
 
 #define rand() _mopsa_rand_int(0, RAND_MAX)
 
-void * malloc(size_t size) {
-  _mopsa_panic("malloc not supported");
-  return 0;
-}
+void * malloc(size_t size);
 
 #endif //_STDLIB_H
