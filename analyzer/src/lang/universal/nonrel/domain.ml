@@ -11,11 +11,11 @@
 open Value
 open Framework.Ast
 open Framework.Domains
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Flow
 open Framework.Manager
 open Framework.Context
-open Framework.Utils
+open Framework.Exec
 open Ast
 
 module Make(Value: VALUE) =
@@ -250,16 +250,16 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     ctx, set_domain_cur top man flow
 
   let rec exec stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec
         (fun e flow -> return flow)
-        man ctx
+        (man.exec ctx) man.flow
 
     | S_remove_var v ->
       map_domain_cur (VarMap.remove v) man flow |>
@@ -282,7 +282,7 @@ struct
 
 
     | S_assign({ekind = E_var var}, e, STRONG) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec
         (fun e flow ->
            map_domain_cur (fun a ->
@@ -291,13 +291,13 @@ struct
              ) man flow |>
            return
         )
-        man ctx
+        (man.exec ctx) man.flow
 
     | S_assign({ekind = E_var var}, e, _) ->
       assert false
 
     | S_assume e ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec
         (fun e flow ->
            debug "assume %a" Framework.Pp.pp_expr e;
@@ -314,7 +314,7 @@ struct
              ) man flow |>
            return
         )
-        man ctx
+        (man.exec ctx) man.flow
 
     | _ -> fail
 

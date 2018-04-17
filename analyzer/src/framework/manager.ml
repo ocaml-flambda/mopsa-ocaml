@@ -8,7 +8,8 @@
 
 open Lattice
 open Flow
-
+open Eval
+    
 (**
    A manager provides to a domain:
    - the operators of global flow abstraction and its the underlying environment
@@ -19,46 +20,6 @@ open Flow
 
 
 let debug fmt = Debug.debug ~channel:"framework.manager" fmt
-
-(*==========================================================================*)
-(**                            {2 Evaluations}                              *)
-(*==========================================================================*)
-
-
-type ('a, 'b) eval_case = 'a option * 'b flow * Ast.stmt list
-type ('a, 'b) evals = ('a, 'b) eval_case Dnf.t
-
-let eval_singleton (case: ('a, 'b) eval_case) : ('a, 'b) evals =
-  Dnf.singleton case
-
-let eval_map
-    (f: ('a, 'b) eval_case -> ('c, 'd) eval_case)
-    (evl: ('a, 'b) evals) : ('c, 'd) evals
-  =
-  Dnf.map f evl
-
-let eval_join (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
-  Dnf.mk_or e1 e2
-
-let eval_meet (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
-  Dnf.mk_and e1 e2
-
-let pp_evals print fmt (evals: ('a, 'b) evals) =
-  let l = Dnf.to_list evals in
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
-    (fun fmt conj ->
-       Format.fprintf fmt "(%a)"
-         (Format.pp_print_list
-            ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋀@;")
-            (fun fmt (x, _, _) ->
-               match x with
-               | None -> Format.pp_print_string fmt "none"
-               | Some x -> print fmt x
-            )
-         ) conj
-    )
-    fmt l
 
 
 (*==========================================================================*)
@@ -97,16 +58,16 @@ type ('a, 'b) manager = {
 
   (** Statement transfer function. *)
   exec :
-    Ast.stmt -> Context.context -> 'a flow ->
+    Context.context -> Ast.stmt -> 'a flow ->
     'a flow;
 
   (** Expression transfer function. *)
   eval :
-    Ast.expr -> Context.context -> 'a flow ->
-    (Ast.expr, 'a) evals;
+    Context.context -> Ast.expr -> 'a flow ->
+    (Ast.expr, 'a) Eval.evals;
 
   (** Query transfer function. *)
-  ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
+  ask : 'r. Context.context -> 'r Query.query -> 'a flow -> 'r option;
 
   (** Domain accessor. *)
   ax : ('a, 'b) accessor;
@@ -128,3 +89,35 @@ let get_domain_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
 
+
+(*==========================================================================*)
+(**                         {2 Utility functions}                           *)
+(*==========================================================================*)
+
+let if_flow
+    (true_cond: 'a flow -> 'a flow)
+    (false_cond: 'a flow -> 'a flow)
+    (true_branch: 'a flow -> 'b)
+    (false_branch: 'a flow -> 'b)
+    (bottom_branch: unit -> 'b)
+    (merge: 'a flow -> 'a flow -> 'b)
+    man flow
+  : 'b =
+  let true_flow = true_cond flow and false_flow = false_cond flow in
+  debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
+    man.flow.print true_flow
+    man.flow.print false_flow
+  ;
+  match man.flow.is_cur_bottom true_flow, man.flow.is_cur_bottom false_flow with
+  | false, true -> debug "true branch"; true_branch true_flow
+  | true, false -> debug "true branch"; false_branch false_flow
+  | false, false -> debug "merge branch"; merge true_flow false_flow
+  | true, true -> debug "bottom branch"; bottom_branch ()
+
+let if_flow_eval
+    true_flow false_flow
+    true_case false_case man flow
+    ?(bottom_case=(fun () -> oeval_singleton (None, flow, [])))
+    ?(merge_case=(fun flow1 flow2 -> oeval_join (true_case flow1) (false_case flow2)))
+    () =
+  if_flow true_flow false_flow true_case false_case bottom_case merge_case man flow

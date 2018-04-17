@@ -10,10 +10,10 @@
 
 open Framework.Ast
 open Framework.Domains
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Flow
 open Framework.Manager
-open Framework.Utils
+open Framework.Eval
 open Ast
 
 let name = "universal.heap.recency"
@@ -47,30 +47,30 @@ struct
 
   (** Create a manager for the sub-domain with a local scope only. *)
   let rec local_sub_manager : (Sub.t, Sub.t) manager =
-    let env_manager = Framework.Domains.Global.mk_lattice_manager (module Sub : DOMAIN with type t = Sub.t) in
+    let env_manager = Framework.Domains.Stateful.mk_lattice_manager (module Sub : DOMAIN with type t = Sub.t) in
     {
       env = env_manager;
       flow = Framework.Flow.lift_lattice_manager env_manager;
-      exec = (fun stmt ctx flow -> match Sub.exec stmt local_sub_manager ctx flow with Some flow -> flow | None -> assert false);
-      eval = (fun exp ctx flow -> assert false);
-      ask = (fun query ctx flow -> assert false);
+      exec = (fun ctx stmt flow -> match Sub.exec local_sub_manager ctx stmt flow with Some flow -> flow | None -> assert false);
+      eval = (fun ctx exp flow -> assert false);
+      ask = (fun ctx query flow -> assert false);
       ax = {
         get = (fun env -> env);
         set = (fun env' env -> env');
       }
     }
 
-  let move_recent_addr_to_old recent_addr recent_attributes old_addr range man ctx flow =
+  let move_recent_addr_to_old man ctx recent_addr recent_attributes old_addr range flow =
     Pool.AttrSet.fold (fun attr acc ->
         let recent_var = attribute_var recent_addr attr T_any in
         let old_var = attribute_var old_addr attr  T_any in
-        man.exec (
+        man.exec ctx (
           let range = tag_range range "recent.%s->old.%s" attr attr in
           mk_assign (mk_var old_var (tag_range range "lval")) (mk_var recent_var (tag_range range "")) range
-        ) ctx acc |>
-        man.exec (mk_remove_var recent_var (tag_range range "remove")) ctx
+        ) acc |>
+        man.exec ctx (mk_remove_var recent_var (tag_range range "remove"))
       ) recent_attributes flow |>
-    man.exec (mk_rebase_addr recent_addr old_addr (tag_range range "rename addr")) ctx
+    man.exec ctx (mk_rebase_addr recent_addr old_addr (tag_range range "rename addr"))
 
 
   (*==========================================================================*)
@@ -114,9 +114,9 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     (* Initialize sub domain *)
-    let ctx, flow = Sub.init prog (sub_manager man) ctx flow in
+    let ctx, flow = Sub.init (sub_manager man) ctx prog flow in
 
     (* After, put an empty pool in the returned cur flow *)
     ctx, man.flow.map (fun env -> function
@@ -126,7 +126,7 @@ struct
         | _ -> env
       ) flow
 
-  let exec stmt man ctx flow =
+  let exec man ctx stmt flow =
     match skind stmt with
     (* Assignment to an attribute. *)
     | S_assign({ekind = E_addr_attribute(addr, attr); etyp; erange}, rval, kind) ->
@@ -134,13 +134,13 @@ struct
       let kind = if Pool.is_weak addr then WEAK else kind in
       let stmt = mk_assign ~kind lval rval stmt.srange in
       map_domain_cur (fun (pool, sub) -> (Pool.add_attribute addr attr) pool, sub) man flow |>
-      man.exec stmt ctx |>
+      man.exec ctx stmt |>
       return
 
     (* Other statements are given to sub-domain *)
-    | _ -> Sub.exec stmt (sub_manager man) ctx flow
+    | _ -> Sub.exec (sub_manager man) ctx stmt flow
 
-  let eval exp (man: ('a, t) manager) ctx (flow: 'a flow) =
+  let eval (man: ('a, t) manager) ctx  exp (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
     (* Allocation of a head address *)
@@ -176,7 +176,7 @@ struct
                                Pool.AttrSet.join recent_attributes
           in
           (* Move recent attributes to old ones. *)
-          let flow1 = move_recent_addr_to_old recent_addr recent_attributes old_addr range man ctx flow in
+          let flow1 = move_recent_addr_to_old man ctx recent_addr recent_attributes old_addr range flow in
           (* If the old address already exists, then perform a weak update *)
           let flow2 =
             if weak then man.flow.join flow flow1 else flow1
@@ -208,16 +208,16 @@ struct
     (* Read-access to an attribute of a strong address *)
     | E_addr_attribute(addr, attr) ->
       let v = attribute_var addr attr exp.etyp in
-      re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, [])
 
     | E_addr _ ->
       oeval_singleton (Some exp, flow, [])
 
     | _ ->
-      Sub.eval exp (sub_manager man) ctx flow
+      Sub.eval (sub_manager man) ctx exp flow
 
-  let ask query man ctx flow =
-    Sub.ask query (sub_manager man) ctx flow
+  let ask man ctx query flow =
+    Sub.ask (sub_manager man) ctx query flow
 
 
 end

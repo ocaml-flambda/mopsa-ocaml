@@ -12,8 +12,9 @@ open Framework.Lattice
 open Framework.Flow
 open Framework.Domains
 open Framework.Manager
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Domains.Stateless
+open Framework.Exec
 open Framework.Ast
 open Ast
 
@@ -63,9 +64,9 @@ struct
   (**                      {2 Transfer functions}                             *)
   (*==========================================================================*)
 
-  let init prg man ctx flow = ctx, flow
+  let init man ctx prg flow = ctx, flow
 
-  let rec exec stmt manager ctx flow =
+  let rec exec manager ctx stmt flow =
     match skind stmt with
     | S_while(cond, body) ->
       debug "while:@\n abs = @[%a@]" manager.flow.print flow;
@@ -74,7 +75,7 @@ struct
                   manager.flow.remove TBreak
       in
 
-      let flow_init, flow_out = unroll cond body manager ctx flow0 in
+      let flow_init, flow_out = unroll manager ctx cond body flow0 in
 
       debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
         manager.flow.print flow_init
@@ -84,16 +85,15 @@ struct
 
       let res0 =
         lfp
-          !opt_loop_widening_delay
+          manager ctx !opt_loop_widening_delay
           cond body
-          manager ctx
           flow_init flow_init
         |>
-        manager.exec
+        manager.exec ctx
           (mk_assume
              (mk_not cond (tag_range cond.erange "neg"))
              (tag_range cond.erange "while out cond")
-          ) ctx
+          )
         |>
         manager.flow.join flow_out
       in
@@ -124,7 +124,7 @@ struct
     | _ ->
       None
 
-  and lfp delay cond body manager ctx flow_init flow =
+  and lfp manager ctx delay cond body flow_init flow =
     let flow0 = manager.flow.remove TContinue flow |>
                 manager.flow.remove TBreak
     in
@@ -134,10 +134,10 @@ struct
     ;
 
     let flow1 =
-      manager.exec
+      manager.exec ctx
         (mk_assume cond (tag_range cond.erange "while cond"))
-        ctx flow0 |>
-      manager.exec body ctx
+        flow0 |>
+      manager.exec ctx body
     in
 
     let flow2 = merge_cur_and_continue manager flow1 in
@@ -158,22 +158,22 @@ struct
         manager.flow.print flow
         manager.flow.print flow3
         manager.flow.print wflow;
-      lfp !opt_loop_widening_delay cond body manager ctx flow_init wflow
+      lfp manager ctx !opt_loop_widening_delay cond body flow_init wflow
     else
-      lfp (delay - 1) cond body manager ctx flow_init flow3
+      lfp manager ctx (delay - 1) cond body flow_init flow3
 
-  and unroll cond body manager ctx flow =
+  and unroll manager ctx cond body flow =
     let rec loop i flow =
       debug "unrolling iteration %d" i;
       if i = 0 then (flow, manager.flow.bottom)
       else
         let flow1 =
-          manager.exec {skind = S_assume cond; srange = cond.erange} ctx flow |>
-          manager.exec body ctx |>
+          manager.exec ctx {skind = S_assume cond; srange = cond.erange} flow |>
+          manager.exec ctx body |>
           merge_cur_and_continue manager
         in
         let flow2 =
-          manager.exec (mk_assume (mk_not cond cond.erange) cond.erange) ctx flow
+          manager.exec ctx (mk_assume (mk_not cond cond.erange) cond.erange) flow
         in
         let flow1', flow2' = loop (i - 1) flow1 in
         flow1', manager.flow.join flow2 flow2'

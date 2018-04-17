@@ -17,15 +17,16 @@ open Visitor
 open Lattice
 open Flow
 open Manager
-open Domains.Global
-
+open Domains.Stateful
+open Eval
+    
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 
 (**
    Functor to create an [Analyzer] module from an top-level abstract domain.
 *)
-module Make(Domain : Domains.Global.DOMAIN) =
+module Make(Domain : DOMAIN) =
 struct
 
   let env_manager = {
@@ -50,7 +51,7 @@ struct
 
   (** Abstract transfer function of statements. *)
 
-  let rec exec stmt ctx (fa: Domain.t flow) =
+  let rec exec ctx stmt (fa: Domain.t flow) =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Pp.pp_range_verbose stmt.srange
@@ -58,7 +59,7 @@ struct
     ;
     let timer = Timing.start () in
     let res =
-      let fa1 = Domain.exec stmt manager ctx fa in
+      let fa1 = Domain.exec manager ctx stmt fa in
       match fa1 with
       | None ->
         Exceptions.panic
@@ -82,7 +83,7 @@ struct
     res
 
   (** Evaluation of expressions. *)
-  and eval exp ctx fa =
+  and eval ctx exp fa =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Pp.pp_range_verbose exp.erange
@@ -90,7 +91,7 @@ struct
     ;
     let timer = Timing.start () in
     let res =
-      let evl = Domain.eval exp manager ctx fa in
+      let evl = Domain.eval manager ctx exp fa in
       match evl with
       | Some evl -> evl
       | None -> eval_singleton (Some exp, fa, [])
@@ -109,9 +110,9 @@ struct
 
 
   (** Query handler. *)
-  and ask : type b. b Query.query -> Context.context -> 'a -> b option =
-    fun query ctx gabs ->
-      Domain.ask query manager ctx gabs
+  and ask : type b. Context.context -> b Query.query -> 'a -> b option =
+    fun ctx query gabs ->
+      Domain.ask manager ctx query gabs
 
   (** Top level manager *)
 
@@ -128,7 +129,7 @@ struct
     let fa = flow_manager.bottom |>
              flow_manager.set TCur env_manager.top
     in
-    Domain.init prog manager Context.empty fa
+    Domain.init  manager Context.empty prog fa
 
 
 end

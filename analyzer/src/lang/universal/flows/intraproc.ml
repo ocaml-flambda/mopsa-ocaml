@@ -13,7 +13,8 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
 open Framework.Ast
-open Framework.Utils
+open Framework.Eval
+open Framework.Exec
 open Ast
 
 let name = "universal.flows.intraproc"
@@ -26,33 +27,33 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prg man ctx fa = ctx, fa
+  let init man ctx prg fa = ctx, fa
 
-  let exec stmt man ctx flow =
+  let exec man ctx stmt flow =
     match skind stmt with
     | S_expression(e) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec (fun e flow ->
           Some flow
-        ) man ctx
+        ) (man.exec ctx) man.flow
 
     | S_block(block) ->
-      List.fold_left (fun acc stmt -> man.exec stmt ctx acc) flow block |>
+      List.fold_left (fun acc stmt -> man.exec ctx stmt acc) flow block |>
       return
 
     | S_if(cond, s1, s2) ->
       let range = srange stmt in
       let flow1 =
-        man.exec
+        man.exec ctx
           (mk_assume cond (tag_range range "if cond"))
-          ctx flow |>
-        man.exec s1 ctx
+          flow |>
+        man.exec ctx s1
       in
       let flow2 =
-        man.exec
+        man.exec ctx
           (mk_assume (mk_not cond (tag_range range "neg")) (tag_range range "if not cond"))
-          ctx flow |>
-        man.exec s2 ctx
+          flow |>
+        man.exec ctx s2
       in
       man.flow.join flow1 flow2 |>
       return

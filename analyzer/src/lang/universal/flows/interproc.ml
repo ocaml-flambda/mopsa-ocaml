@@ -12,10 +12,10 @@ open Framework.Lattice
 open Framework.Flow
 open Framework.Domains
 open Framework.Manager
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Domains.Stateless
 open Framework.Ast
-open Framework.Utils
+open Framework.Eval
 open Ast
 
 let name = "universal.flows.interproc"
@@ -43,9 +43,9 @@ struct
   (*==========================================================================*)
 
 
-  let init prg man ctx fa = ctx, fa
+  let init man ctx prg fa = ctx, fa
 
-  let exec stmt manager ctx flow =
+  let exec manager ctx stmt flow =
     match skind stmt with
     | S_return (eo) ->
       let cur = manager.flow.get TCur flow in
@@ -55,7 +55,7 @@ struct
 
     | _ -> None
 
-  let eval exp manager ctx flow  =
+  let eval manager ctx exp flow  =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function f}, args) ->
@@ -81,8 +81,8 @@ struct
       in
 
       (* Execute body *)
-      let flow1 = manager.exec init_block ctx flow0 |>
-                  manager.exec f.fun_body ctx
+      let flow1 = manager.exec ctx init_block flow0 |>
+                  manager.exec ctx f.fun_body
       in
 
       (* Temporary variable to store return expressions *)
@@ -97,7 +97,7 @@ struct
 
             | TReturn(_, Some e) ->
               manager.flow.set TCur aenv manager.flow.bottom |>
-              manager.exec (mk_assign tmp e (tag_range range "return assign")) ctx |>
+              manager.exec ctx (mk_assign tmp e (tag_range range "return assign")) |>
               manager.flow.join acc
 
             | tk ->
@@ -122,10 +122,10 @@ struct
           (tag_range range "ignore block")
       in
 
-      let flow3 = manager.exec ignore_block ctx flow2 in
+      let flow3 = manager.exec ctx ignore_block flow2 in
 
       (* Re-evaluate the expression [tmp] from the top-level *)
-      re_eval_singleton (Some tmp, flow3, [mk_remove_var tmpv (tag_range range "remove tmp")]) manager ctx
+      re_eval_singleton (manager.eval ctx) (Some tmp, flow3, [mk_remove_var tmpv (tag_range range "remove tmp")])
 
     | _ -> None
 

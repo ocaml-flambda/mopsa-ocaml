@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Utils
 open Ast
 open Bot
