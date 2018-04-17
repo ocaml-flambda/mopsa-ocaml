@@ -75,10 +75,10 @@ struct
       print a
 
   let add p pt a =
-    CPML.add (Cell.annotate_var p) pt a
+    CPML.add (Cell.var_to_var p) pt a
 
   let find p a =
-    CPML.find (Cell.annotate_var p) a
+    CPML.find (Cell.var_to_var p) a
 
   let points_to_var p v a =
     add p (PSL.singleton (P.V v)) a
@@ -262,10 +262,8 @@ struct
         ) man ctx
 
     | S_remove_var(p) when is_c_pointer_type p.vtyp ->
-      let p, c = Cell.mk_base_cell p in
       map_domain_cur (remove p) man flow |>
       man.exec (mk_remove_var (mk_offset_var p) range) ctx |>
-      man.exec (Cell.mk_remove_cell c stmt.srange) ctx |>
       return
 
     | _ -> None
@@ -291,7 +289,7 @@ struct
                     | Some itv ->
                       try
                         Value.fold (fun acc o ->
-                            let c = mk_cell base o t in
+                            let c = {Cell.v = base; o; t} in
                             let exp' = Cell.mk_gen_cell_var c range in
                             man.eval exp' ctx flow |>
                             eval_compose
@@ -337,7 +335,7 @@ struct
                     | Some itv ->
                       Value.fold (fun acc o ->
                           let o' = Z.add o (Z.of_int field.c_field_offset) in
-                          let c = mk_cell base o' field.c_field_type in
+                          let c = {Cell.v = base; o = o'; t = field.c_field_type} in
                           let exp' = Cell.mk_gen_cell_var c range in
                           man.eval exp' ctx flow |>
                           eval_compose

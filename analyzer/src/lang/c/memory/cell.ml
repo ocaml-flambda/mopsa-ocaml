@@ -56,27 +56,27 @@ type var_kind +=
 type expr_kind +=
   | E_c_gen_cell_var of cell
 
-type stmt_kind +=
-  | S_c_remove_cell of cell
-
-let mk_cell v o t = {v = v; o = o; t}
-
 let mk_gen_cell_var c range =
   mk_expr (E_c_gen_cell_var c) ~etyp:c.t range
 
-let mk_remove_cell c range =
-  mk_stmt (S_c_remove_cell c) range
 
-let mk_base_cell v =
-  let c = mk_cell v Z.zero v.vtyp in
-  {v with vkind = V_cell c}, c
+let cell_to_var c =
+  let open Framework.Ast in
+  { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
+    vuid = 0;
+    vtyp = c.t;
+    vkind = V_cell c;
+  }
 
-let mk_cell_var v =
-  match vkind v with
-  | V_cell c -> v, c
-  | _ -> mk_base_cell v
+let var_to_var v =
+  match v.vkind with
+  | V_cell _ -> v
+  | _ -> { v with vkind = V_cell {v; o = Z.zero; t= v.vtyp} }
 
-let annotate_var v = fst @@ mk_cell_var v
+let cell_of_var v =
+  match v.vkind with
+  | V_cell c -> c
+  | _ -> assert false
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -90,7 +90,12 @@ module Make(ValAbs : DOMAIN) = struct
   (*==========================================================================*)
 
   (** Set of cells variables. *)
-  module CS = Framework.Lattices.Top_set.Make(Framework.Utils.Var)
+  module CS = Framework.Lattices.Top_set.Make(struct
+      include Framework.Utils.Var
+      let print fmt v =
+        let c = cell_of_var v in
+        pp_cell fmt c
+    end)
 
   (** Type of an abstract environment. *)
   type t = {
@@ -105,13 +110,6 @@ module Make(ValAbs : DOMAIN) = struct
       ValAbs.print x.a
 
   let mem_pred c = function {vkind = V_cell c'} -> compare_cell c c' = 0 | _ -> false
-
-  let mem_cell c cs =
-    CS.exists (mem_pred c) cs
-
-  let find_cell c cs =
-    CS.filter (mem_pred c) cs |>
-    CS.choose
 
   let exist_and_find_cell f cs =
     let exception Found of var * cell in
@@ -170,18 +168,15 @@ module Make(ValAbs : DOMAIN) = struct
       Nexp of expr option
     | Pexp of pexp
 
-  (** [phi c u] collects constraints over cell [c] found in [u] *)
-  let phi (c : cell) (u : t) range : phi_exp =
+  (** [phi v u] collects constraints over cell var [v] found in [u] *)
+  let phi (v : var) (u : t) range : phi_exp =
     let open Universal.Ast in
     let cs = u.cs in
-    match exist_and_find_cell (fun c' -> compare_cell c' c = 0) cs with
-    | Some (v', c') ->
+    let c = cell_of_var v in
+    match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
+    | Some (v', _) ->
       Nexp (
-        Some
-          {ekind = E_var v';
-           etyp = c.t;
-           erange = mk_fresh_range ()
-          }
+        Some (mk_var v' range)
       )
     | None ->
       begin
@@ -276,95 +271,71 @@ module Make(ValAbs : DOMAIN) = struct
           end
       end
 
-  let add_var_cell v c u range =
-    debug "add_var_cell %a %a" Framework.Pp.pp_var v pp_cell c;
-    let open Universal.Ast in
-    if not (is_c_scalar_type c.t) then
-      u
+  (** [add_var v u] adds a variable [v] to the abstraction [u] *)
+  let add_var (v : var) (u : t) range : t  =
+    if CS.mem v u.cs then u
     else
-    if is_c_pointer_type c.t then
-      {cs = CS.add v u.cs;
-       a = u.a;
-      }
-    else
-      match phi c u range with
-      | Nexp (Some e) ->
-        debug "add_cell case 1: nexp = %a" pp_expr e;
-        let s = mk_assume
-            (mk_binop
-               (mk_var v range)
-               O_eq
-               e
-               range
-            )
-            range
-        in
-        {cs = CS.add v u.cs;
-         a = valabs_trivial_exec s u.a
+      if not (is_c_scalar_type v.vtyp) then u
+      else if is_c_pointer_type v.vtyp then
+        {
+          cs = CS.add v u.cs;
+          a = u.a;
         }
-      | Nexp None ->
-        debug "add_cell case 2: nexp = none";
-        {cs = CS.add v u.cs;
-         a = u.a
-        }
-      | Pexp Invalid ->
-        debug "add_cell case 3: pexp = invalid";
-        assert false
-
-  (** [add_cell c u] adds cell [c] to the abstraction [u] *)
-  let add_var (v : var) (u : t) range : t * var =
-    debug "add_var %a" Framework.Pp.pp_var v;
-    if CS.mem v u.cs then
-      let _ = debug "existing cell" in u, v
-    else
-      let v', c = mk_cell_var v in
-      add_var_cell v' c u range, v'
+      else
+        let open Universal.Ast in
+        match phi v u range with
+        | Nexp (Some e) ->
+          let s = mk_assume
+              (mk_binop
+                 (mk_var v range)
+                 O_eq
+                 e
+                 range
+              )
+              range
+          in
+          {
+            cs = CS.add v u.cs;
+            a = valabs_trivial_exec s u.a
+          }
+        | Nexp None ->
+          {
+            cs = CS.add v u.cs;
+            a = u.a
+          }
+        | Pexp Invalid ->
+          assert false
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
   let unify (u : t) (u' : t) range : t * t =
+    debug "unify@ %a@ and@ %a" print u print u';
     let unify_cells (u  : t) (u' : t) : t * t =
-      let diff' = CS.fold (fun v acc ->
-          if CS.mem v u'.cs then acc
-          else CS.add v acc
-        ) u.cs CS.empty
-      in
-      let diff = CS.fold (fun v acc ->
-          if CS.mem v u.cs then acc
-          else CS.add v acc
-        ) u'.cs CS.empty
-      in
+      let t = Timing.start () in
+      let diff' = CS.diff u.cs u'.cs in
+      debug "diff' done in %.4fs" (Timing.stop t);
+      let t = Timing.start () in
+      let diff = CS.diff u'.cs u.cs in
+      debug "diff done in %.4fs" (Timing.stop t);
       CS.fold (fun v acc ->
-          fst @@ add_var v acc range
+          add_var v acc range
         ) diff u,
       CS.fold (fun v acc ->
-          fst @@ add_var v acc range
+          add_var v acc range
         ) diff' u'
     in
+    let t = Timing.start () in
     let u,u' = unify_cells u u' in
-    let rebind_cells (u  : t) (u' : t) : t * t =
-      let is_same_cell v v' =
-        match vkind v, vkind v' with
-        | V_cell c, V_cell c' -> compare_cell c c' = 0
-        | _ -> assert false
-      in
-      let a' = CS.fold (fun v a ->
-          let cs' = CS.filter (is_same_cell v) u'.cs in
-          CS.fold (fun v' a ->
-              valabs_trivial_exec (Universal.Ast.mk_rename v' v range) a
-            ) cs' a
-        ) u.cs u'.a
-      in
-      u, {u with a = a'}
-    in
-    rebind_cells u u'
+    debug "unification done in %.4fs" (Timing.stop t);
+    u, u'
 
   let extract_cell v =
     match vkind v with
     | V_cell c -> c
     | _ -> assert false
 
-  let remove_overlapping_cells v c range man ctx flow =
+  let remove_overlapping_cells v range man ctx flow =
+    let c = cell_of_var v in
     let u = get_domain_cur man flow in
     CS.fold (fun v' acc ->
         if compare_var v v' = 0 then
@@ -393,13 +364,14 @@ module Make(ValAbs : DOMAIN) = struct
   let bottom = {cs = CS.bottom; a = ValAbs.bottom}
 
   let join (u : t) (u' : t) : t =
-    if ValAbs.leq u.a ValAbs.bottom then
-      u'
-    else if ValAbs.leq u'.a ValAbs.bottom then
-      u
+    if ValAbs.is_bottom u.a then u'
+    else if ValAbs.is_bottom u'.a then u
     else
       let range = mk_fresh_range () in
+      debug "join";
+      let t = Timing.start () in
       let u,u' = unify u u' range in
+      debug "unify done in %.4f" (Timing.stop t);
       {u with a = ValAbs.join u.a u'.a}
 
   let meet (u : t) (u' : t) : t =
@@ -456,7 +428,7 @@ module Make(ValAbs : DOMAIN) = struct
 
     | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
-      let v' = annotate_var v in
+      let v' = var_to_var v in
       let u' = {u with cs = CS.remove v' u.cs} in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
@@ -466,22 +438,18 @@ module Make(ValAbs : DOMAIN) = struct
       man_eval_list [rval; lval] man ctx flow |>
       oeval_to_exec
         (fun el flow ->
-           let rval, lval, v, c = match el with
-             | [rval; ({ekind = E_var ({vkind = V_cell c} as v)} as lval)] -> rval, lval, v, c
+           let rval, lval, v = match el with
+             | [rval; ({ekind = E_var v} as lval)] -> rval, lval, v
              | _ -> assert false
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
            match ValAbs.exec stmt' (subman man) ctx flow with
            | None -> None
            | Some flow ->
-             remove_overlapping_cells v c stmt.srange man ctx flow |>
+             remove_overlapping_cells v stmt.srange man ctx flow |>
              return
         )
         man ctx
-
-    | S_c_remove_cell(c) ->
-      map_domain_cur (fun u -> {u with cs = CS.filter (fun v -> not (mem_pred c v)) u.cs}) man flow |>
-      return
 
     | _ -> ValAbs.exec stmt (subman man) ctx flow
 
@@ -495,23 +463,22 @@ module Make(ValAbs : DOMAIN) = struct
     | E_var v when is_c_scalar_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
-      let u', v' = add_var v u exp.erange in
-      debug "new variable %a in %a" pp_var v' print u';
+      let v = var_to_var v in
+      let u' = add_var v u exp.erange in
+      debug "new variable %a in %a" pp_var v print u';
       let flow = set_domain_cur u' man flow in
-      re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
+      re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
 
     | E_c_gen_cell_var c ->
       if is_safe_cell_access c then
         let u = get_domain_cur man flow in
-        let u', v' =
-          try u, find_cell c u.cs
-          with Not_found ->
-            let tmp = mktmp ~vtyp:c.t ~vkind:(V_cell(c)) () in
-            debug "generating tmp for cell %a" pp_cell c;
-            add_var tmp u exp.erange
+        let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u.cs  with
+          | Some (v', _) -> v'
+          | None -> cell_to_var c
         in
+        let u' =  add_var v u exp.erange in
         let flow = set_domain_cur u' man flow in
-        re_eval_singleton (Some (mk_var v' exp.erange), flow, []) man ctx
+        re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
       else
         let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
@@ -527,33 +494,23 @@ end
 
 let setup () =
   register_functor name (module Make);
-  register_var_compare (fun next v1 v2 ->
-      match vkind v1, vkind v2 with
+  register_vkind_compare (fun next vk1 vk2 ->
+      match vk1, vk2 with
       | V_cell c1, V_cell c2 -> compare_cell c1 c2
-      | _ -> next v1 v2
+      | _ -> next vk1 vk2
     );
-  register_pp_var (fun next fmt v ->
-      match vkind v with
+  register_pp_vkind (fun next fmt vk ->
+      match vk with
       | V_cell c -> pp_cell fmt c
-      | _ -> next fmt v
+      | _ -> next fmt vk
     );
   register_pp_expr (fun next fmt exp ->
       match ekind exp with
-      | E_c_gen_cell_var c -> Format.fprintf fmt "gen cell %a" pp_cell c
+      | E_c_gen_cell_var c -> Format.fprintf fmt "gen var %a" pp_cell c
       | _ -> next fmt exp
     );
   register_expr_visitor (fun next exp ->
       match ekind exp with
       | E_c_gen_cell_var _ -> leaf exp
       | _ -> next exp
-    );
-  register_pp_stmt (fun next fmt stmt ->
-      match skind stmt with
-      | S_c_remove_cell c -> Format.fprintf fmt "remove cell %a" pp_cell c
-      | _ -> next fmt stmt
-    );
-  register_stmt_visitor (fun next stmt ->
-      match skind stmt with
-      | S_c_remove_cell _ -> leaf stmt
-      | _ -> next stmt
     )

@@ -656,6 +656,12 @@ let () =
             ) r1.c_record_fields r2.c_record_fields
         ))
       | T_c_enum e1, T_c_enum e2 -> assert false
-      | T_c_qualified (q1, t1), T_c_qualified (q2, t2) -> assert false
+      | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
+        compare_composer [
+          (fun () -> compare q1.c_qual_is_const q2.c_qual_is_const);
+          (fun () -> compare q1.c_qual_is_volatile q2.c_qual_is_volatile);
+          (fun () -> compare q1.c_qual_is_restrict q2.c_qual_is_restrict);
+          (fun () -> compare_typ t1 t2)
+        ]
       | _ -> next t1 t2
     )
