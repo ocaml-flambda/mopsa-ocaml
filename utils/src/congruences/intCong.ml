@@ -35,6 +35,9 @@ let is_valid ((a,b):t) : bool =
   a = Z.zero || (a > Z.zero && Z.zero <= b && b < a)
 
 
+module I = Intervals.IntItv
+module B = Intervals.IntBound
+
 
 (** {2 Arithmetic utilities} *)
   
@@ -82,14 +85,13 @@ let of_int (a:int) (b:int) : t =
 let of_int64 (a:int64) (b:int64) : t =
   of_z (Z.of_int64 a) (Z.of_int64 b)
 
-
 let cst (b:Z.t) : t = Z.zero, b
 (** Returns  0ℤ + b *)
 
 let cst_int (b:int) : t = cst (Z.of_int b)
 
 let cst_int64 (b:int64) : t = cst (Z.of_int64 b)
-                    
+                            
 let zero : t = cst_int 0
 (** 0ℤ+0 *)
 
@@ -102,14 +104,35 @@ let mone : t = cst_int (-1)
 let minf_inf : t = of_int 1 0
 (** 1ℤ + 0 *)
 
+let of_range (lo:Z.t) (hi:Z.t) : t =
+  if lo = hi then cst lo else minf_inf
 
+let of_range_bot (lo:Z.t) (hi:Z.t) : t with_bot =  
+  if lo = hi then Nb (cst lo)
+  else if lo > hi then BOT
+  else Nb minf_inf
+
+let of_bound (lo:B.t) (hi:B.t) : t =
+  match lo,hi with
+  | B.Finite l, B.Finite h -> of_range l h
+  | _ -> minf_inf
+
+let of_bound_bot (lo:B.t) (hi:B.t) : t with_bot =
+  match lo,hi with
+  | B.Finite l, B.Finite h -> of_range_bot l h
+  | _ -> Nb minf_inf
+
+(** Congruence overapproximating an interval. *)
+  
+
+  
                  
 (** {2 Predicates} *)
 
 
 let equal (a:t) (b:t) : bool =
   a = b
-(** Equality. (=) also works. *)
+(** Equality. = also works. *)
 
 let equal_bot : t_with_bot -> t_with_bot -> bool =
   bot_equal equal
@@ -163,6 +186,10 @@ let is_negative_strict ((a,b):t) : bool = a = Z.zero && b < Z.zero
 let is_nonzero ((a,b):t) : bool = b <> Z.zero
 (** Sign. *)
 
+let is_minf_inf ((a,b):t) : bool =
+  a = Z.one
+(** The congruence represents [-∞,+∞]. *)
+                                 
 let is_singleton ((a,b):t) : bool =
   a = Z.zero
 (** Whether the congruence contains a single element. *)
@@ -349,21 +376,16 @@ let log_eq (ab:t) (ab':t) : t =
 let log_neq (ab:t) (ab':t) : t =
   to_bool (intersect ab ab') (not (equal ab ab' && is_singleton ab)) 
 
-let log_leq ((a,b):t) ((a',b'):t) : t =
+let log_sgl op ((a,b):t) ((a',b'):t) : t =
   if a <> Z.zero || a' <> Z.zero then minf_inf
-  else if b <= b' then one else zero
+  else if op b b' then one else zero
+(* utility function, only handles the case of singletons *)
+  
+let log_leq = log_sgl (<=)
+let log_geq = log_sgl (>=)
+let log_lt  = log_sgl (<)
+let log_gt  = log_sgl (>)
 
-let log_geq ((a,b):t) ((a',b'):t) : t =
-  if a <> Z.zero || a' <> Z.zero then minf_inf
-  else if b >= b' then one else zero
-
-let log_lt ((a,b):t) ((a',b'):t) : t =
-  if a <> Z.zero || a' <> Z.zero then minf_inf
-  else if b < b' then one else zero
-
-let log_gt ((a,b):t) ((a',b'):t) : t =
-  if a <> Z.zero || a' <> Z.zero then minf_inf
-  else if b > b' then one else zero
 
 (** C comparison tests. Returns an interval included in [0,1] (a boolean) *)
 
@@ -374,17 +396,15 @@ let is_log_eq (ab:t) (ab':t) : bool =
 let is_log_neq (ab:t) (ab':t) : bool =
   not (equal ab ab' && is_singleton ab)
 
-let is_log_leq ((a,b):t) ((a',b'):t) : bool =
-  not (a = Z.zero && a' = Z.zero && b > b')
+let is_log_sgl op ((a,b):t) ((a',b'):t) : bool =
+  a <> Z.zero || a' <> Z.zero || op b b'
+(* utility function, only handles the case of singletons *)
+  
+let is_log_leq = is_log_sgl (<=)
+let is_log_geq = is_log_sgl (>=)
+let is_log_lt  = is_log_sgl (<)
+let is_log_gt  = is_log_sgl (>)
 
-let is_log_geq ((a,b):t) ((a',b'):t) : bool =
-  not (a = Z.zero && a' = Z.zero && b < b')
-
-let is_log_lt ((a,b):t) ((a',b'):t) : bool =
-  not (a = Z.zero && a' = Z.zero && b >= b')
-
-let is_log_gt ((a,b):t) ((a',b'):t) : bool =
-  not (a = Z.zero && a' = Z.zero && b <= b')
 
 (** C comparison tests. Returns a boolean if the test may succeed *)
 
@@ -447,27 +467,22 @@ let bit_not (ab:t) : t =
 
 let filter_eq (ab:t) (ab':t) : (t*t) with_bot =
   match meet ab ab' with BOT -> BOT | Nb x -> Nb (x,x)
-                                              
-let filter_neq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
-  if a = Z.zero && a' = Z.zero && b = b' then BOT else Nb (ab,ab')
 
-let filter_leq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
-  if a = Z.zero && a' = Z.zero && b > b' then BOT else Nb (ab,ab')
+let filter_sgl op ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
+  if a = Z.zero && a' = Z.zero && not (op b b') then BOT else Nb (ab,ab')
+(* utility function: we only handle the simple case of singletons *)
 
-let filter_geq ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
-  if a = Z.zero && a' = Z.zero && b < b' then BOT else Nb (ab,ab')
+let filter_neq = filter_sgl (<>)
+let filter_leq = filter_sgl (<=)
+let filter_geq = filter_sgl (>=)
+let filter_lt  = filter_sgl (<)
+let filter_gt  = filter_sgl (>)
 
-let filter_lt ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
-  if a = Z.zero && a' = Z.zero && b >= b' then BOT else Nb (ab,ab')
-
-let filter_gt ((a,b) as ab:t) ((a',b') as ab':t) : (t*t) with_bot =
-  if a = Z.zero && a' = Z.zero && b <= b' then BOT else Nb (ab,ab')
-
-  
-
+               
 
 (** {2 Backward operations} *)
 
+               
 (** Given one or two interval argument(s) and a result interval, return the
     argument(s) assuming the result in the operation is in the given result.
  *)
@@ -516,10 +531,7 @@ let bwd_shift_right_trunc (a:t) (b:t) (r:t) = Nb (a,b)
 
 (** {2 Reduction} *)
 
-
-module I = Intervals.IntItv
-module B = Intervals.IntBound
-
+                                            
 let meet_inter ((a,b):t) ((l,h):I.t) : (t * I.t) with_bot =
   (* smallest element in aℤ+b greater or equal to l *)
   let l' = match l with
