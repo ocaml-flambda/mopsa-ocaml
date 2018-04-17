@@ -478,11 +478,12 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
   PresumedLoc loc;  
-  const char *filename;
   CACHED(cacheLoc, ret, raw, {
       loc = src.getPresumedLoc(a);
-      filename = loc.getFilename();
+      ret = caml_alloc_tuple(3);
+
       if (loc.isValid()) {
+        const char* filename = loc.getFilename();
         if (cacheFile.contains(filename)) {
           tmp = cacheFile.get(filename);
         }
@@ -490,15 +491,16 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a) {
           tmp = caml_copy_string(filename);
           cacheFile.store(filename, tmp);
         }
+        Store_field(ret, 0, Val_int(loc.getLine()));
+        Store_field(ret, 1, Val_int(loc.getColumn()));
+        Store_field(ret, 2, tmp);
       }
       else {
-        tmp = invalid_file;
+        Store_field(ret, 0, Val_int(-1));
+        Store_field(ret, 1, Val_int(-1));
+        Store_field(ret, 2, invalid_file);
       }
 
-      ret = caml_alloc_tuple(3);
-      Store_field(ret, 0, Val_int(loc.getLine()));
-      Store_field(ret, 1, Val_int(loc.getColumn()));
-      Store_field(ret, 2, tmp);
     });
 
   CAMLreturn(ret);
