@@ -46,7 +46,7 @@ let compare_cell c c' =
   compare_composer [
     (fun () -> compare_var c.v c'.v);
     (fun () -> Z.compare c.o c'.o);
-    (fun () -> compare (remove_typedef c.t) (remove_typedef c'.t)); (* TODO replace this compare by a real comparison function over C_AST.type_qual*)
+    (fun () -> compare_typ c.t c'.t);
   ]
 
 (** Annotate variables with cell information. *)
@@ -187,7 +187,7 @@ module Make(ValAbs : DOMAIN) = struct
       begin
         match exist_and_find_cell (fun c' ->
             is_c_int_type c'.t &&
-            sizeof_type c'.t = sizeof_type c.t &&
+            Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
             compare_var c.v c'.v = 0 &&
             Z.equal c.o c'.o) cs with
         | Some (v', c') ->
@@ -277,6 +277,7 @@ module Make(ValAbs : DOMAIN) = struct
       end
 
   let add_var_cell v c u range =
+    debug "add_var_cell %a %a" Framework.Pp.pp_var v pp_cell c;
     let open Universal.Ast in
     if not (is_c_scalar_type c.t) then
       u
@@ -312,8 +313,9 @@ module Make(ValAbs : DOMAIN) = struct
 
   (** [add_cell c u] adds cell [c] to the abstraction [u] *)
   let add_var (v : var) (u : t) range : t * var =
+    debug "add_var %a" Framework.Pp.pp_var v;
     if CS.mem v u.cs then
-      u, v
+      let _ = debug "existing cell" in u, v
     else
       let v', c = mk_cell_var v in
       add_var_cell v' c u range, v'

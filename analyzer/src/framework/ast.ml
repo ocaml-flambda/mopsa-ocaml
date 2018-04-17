@@ -147,6 +147,18 @@ type typ = ..
 type typ +=
   | T_any (** Generic unknown type. *)
 
+
+let typ_compare_chain : (typ -> typ -> int) ref = ref (fun t1 t2 ->
+    match t1, t2 with
+    | T_any, T_any -> 0
+    | _ -> compare t1 t2
+  )
+
+let register_typ_compare cmp =
+  typ_compare_chain := cmp !typ_compare_chain
+
+let compare_typ t1 t2 = !typ_compare_chain t1 t2
+
 (*==========================================================================*)
                       (**      {2 Variables}      *)
 (*==========================================================================*)
