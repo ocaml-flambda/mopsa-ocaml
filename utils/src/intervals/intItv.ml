@@ -65,11 +65,13 @@ let of_float (a:float) (b:float) : t =
   B.of_float a, B.of_float b
 (** Constructs a non-empty interval. *)  
 
+let of_range = of_z
+  
 let of_bound_bot (a:B.t) (b:B.t) : t_with_bot =
   if B.gt a b || a = B.PINF || b = B.MINF then BOT
   else Nb (a, b)
   
-let of_z_bot (a:Z.t) (b:Z.t) : t_with_bot =
+let of_range_bot (a:Z.t) (b:Z.t) : t_with_bot =
   if Z.gt a b then BOT 
   else Nb (B.Finite a, B.Finite b)
   
@@ -148,7 +150,7 @@ let signed64 : t = signed 64
                   
 let equal ((a,b):t) ((a',b'):t) : bool =
   B.eq a a' && B.eq b b'
-(** Equality. = also workd. *)
+(** Equality. = also workds *)
 
 let equal_bot : t_with_bot -> t_with_bot -> bool =
   bot_equal equal
@@ -208,6 +210,9 @@ let is_singleton ((a,b):t) : bool = B.eq a b
 let is_bounded ((a,b):t) : bool = a <> B.MINF && b <> B.PINF
 (** [a,b] has finite bounds. *)  
 
+let is_minf_inf ((a,b):t) : bool = a = B.MINF && b = B.PINF
+(** [a,b] represents [-∞,+∞]. *)
+                                 
 let is_in_range (a:t) (lo:Z.t) (up:Z.t) =
   included a (B.Finite lo, B.Finite up)
 (** Whether the interval is included in the range [lo,up]. *)
@@ -236,7 +241,7 @@ let size ((a,b):t) =
   match a,b with
   | B.Finite x, B.Finite y -> Z.succ (Z.sub y x)
   | _ -> invalid_arg (Printf.sprintf "IntItv.size: unbounded interval %s" (to_string (a,b)))
-(** Nubmer of elements. Raises an invalid argument if it is unbounded. *)
+(** Number of elements. Raises an invalid argument if it is unbounded. *)
   
 let to_list ((a,b):t) =
   let rec doit l h acc =
