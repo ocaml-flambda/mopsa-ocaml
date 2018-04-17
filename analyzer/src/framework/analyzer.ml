@@ -83,10 +83,30 @@ struct
 
   (** Evaluation of expressions. *)
   and eval exp ctx fa =
-    let evl = Domain.eval exp manager ctx fa in
-    match evl with
-    | Some evl -> evl
-    | None -> eval_singleton (Some exp, fa, [])
+    debug
+      "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
+      Pp.pp_range_verbose exp.erange
+      Pp.pp_expr exp manager.flow.print fa
+    ;
+    let timer = Timing.start () in
+    let res =
+      let evl = Domain.eval exp manager ctx fa in
+      match evl with
+      | Some evl -> evl
+      | None -> eval_singleton (Some exp, fa, [])
+    in
+    let t = Timing.stop timer in
+    Debug.debug
+      ~channel:"framework.analyzer.profiler"
+      "eval done in %.6fs of @[%a@]"
+      t Pp.pp_expr exp
+    ;
+    debug
+      "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+      Pp.pp_expr exp manager.flow.print fa (pp_evals Pp.pp_expr) res
+    ;
+    res
+
 
   (** Query handler. *)
   and ask : type b. b Query.query -> Context.context -> 'a -> b option =

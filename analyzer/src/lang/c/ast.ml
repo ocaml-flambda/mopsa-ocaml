@@ -144,6 +144,7 @@ type typ +=
   | T_c_qualified of c_qual * typ
   (** Qualified type. *)
 
+
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
@@ -617,3 +618,50 @@ let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.le
 let mk_c_string s range =
   mk_constant (C_c_string (s, C_char_ascii)) range ~etyp:(type_of_string s)
 
+
+let () =
+  register_typ_compare (fun next t1 t2 ->
+      match remove_typedef t1, remove_typedef t2 with
+      | T_c_void, T_c_void -> 0
+      | T_c_integer i1, T_c_integer i2 -> compare i1 i2
+      | T_c_float f1, T_c_float f2 -> compare f1 f2
+      | T_c_pointer t1, T_c_pointer t2 -> compare_typ t1 t2
+      | T_c_array(t1, l1), T_c_array(t2, l2) ->
+        compare_composer [
+          (fun () -> compare_typ t1 t2);
+          (fun () -> match l1, l2 with
+             | C_array_length_cst n1, C_array_length_cst n2 -> Z.compare n1 n2
+             | C_array_length_expr e1, C_array_length_expr e2 -> Framework.Exceptions.panic "type compare on arrays with expr length not supported"
+             | C_array_no_length, C_array_no_length -> 0
+             | _ -> compare l1 l2
+          )
+        ]
+      | T_c_bitfield(t1, n1), T_c_bitfield(t2, n2) ->
+        compare_composer [
+          (fun () -> compare_typ t1 t2);
+          (fun () -> compare n1 n2)
+        ]
+      | T_c_function f1, T_c_function f2 -> Framework.Exceptions.panic "type compare on functions not supported"
+      | T_c_builtin_fn, T_c_builtin_fn -> 0
+      | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
+      | T_c_record r1, T_c_record r2 ->
+        compare_composer ([
+          (fun () -> compare r1.c_record_kind r2.c_record_kind);
+          (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
+          (fun () -> compare (List.length r1.c_record_fields) (List.length r2.c_record_fields);
+          )
+        ] @ (
+          List.map2 (fun f1 f2 ->
+              (fun () -> compare_typ f1.c_field_type f2.c_field_type)
+            ) r1.c_record_fields r2.c_record_fields
+        ))
+      | T_c_enum e1, T_c_enum e2 -> assert false
+      | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
+        compare_composer [
+          (fun () -> compare q1.c_qual_is_const q2.c_qual_is_const);
+          (fun () -> compare q1.c_qual_is_volatile q2.c_qual_is_volatile);
+          (fun () -> compare q1.c_qual_is_restrict q2.c_qual_is_restrict);
+          (fun () -> compare_typ t1 t2)
+        ]
+      | _ -> next t1 t2
+    )

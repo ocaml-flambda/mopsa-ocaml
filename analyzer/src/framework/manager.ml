@@ -43,6 +43,23 @@ let eval_join (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
 let eval_meet (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
   Dnf.mk_and e1 e2
 
+let pp_evals print fmt (evals: ('a, 'b) evals) =
+  let l = Dnf.to_list evals in
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
+    (fun fmt conj ->
+       Format.fprintf fmt "(%a)"
+         (Format.pp_print_list
+            ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋀@;")
+            (fun fmt (x, _, _) ->
+               match x with
+               | None -> Format.pp_print_string fmt "none"
+               | Some x -> print fmt x
+            )
+         ) conj
+    )
+    fmt l
+
 
 (*==========================================================================*)
 (**                            {2 Accessors}                                *)

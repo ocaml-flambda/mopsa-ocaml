@@ -147,6 +147,18 @@ type typ = ..
 type typ +=
   | T_any (** Generic unknown type. *)
 
+
+let typ_compare_chain : (typ -> typ -> int) ref = ref (fun t1 t2 ->
+    match t1, t2 with
+    | T_any, T_any -> 0
+    | _ -> compare t1 t2
+  )
+
+let register_typ_compare cmp =
+  typ_compare_chain := cmp !typ_compare_chain
+
+let compare_typ t1 t2 = !typ_compare_chain t1 t2
+
 (*==========================================================================*)
                       (**      {2 Variables}      *)
 (*==========================================================================*)
@@ -172,21 +184,21 @@ let var_uniq_name v =
   else
     v.vname ^ "@" ^ (string_of_int v.vuid)
 
-let var_compare_chain : (var -> var -> int) ref = ref (fun v1 v2 ->
-    match vkind v1, vkind v2 with
+let vkind_compare_chain : (var_kind -> var_kind -> int) ref = ref (fun vk1 vk2 ->
+    match vk1, vk2 with
     | V_orig, V_orig -> 0
-    | _ -> compare v1 v2
+    | _ -> compare vk1 vk2
   )
 
-let register_var_compare cmp =
-  var_compare_chain := cmp !var_compare_chain
+let register_vkind_compare cmp =
+  vkind_compare_chain := cmp !vkind_compare_chain
 
 let compare_var v1 v2 =
   compare_composer [
     (fun () -> compare v1.vname v2.vname);
     (fun () -> compare v1.vuid v2.vuid);
     (fun () -> compare v1.vtyp v2.vtyp);
-    (fun () -> !var_compare_chain v1 v2);
+    (fun () -> !vkind_compare_chain v1.vkind v2.vkind);
   ]
 
 let mkv ?(vtyp = T_any) ?(vkind = V_orig) ?(vuid=0) vname =

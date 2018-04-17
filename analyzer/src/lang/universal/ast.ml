@@ -24,6 +24,17 @@ type typ +=
   | T_empty (** Value type of empty arrays *)
 
 
+let () =
+  Framework.Ast.register_typ_compare (fun next t1 t2 ->
+      match t1, t2 with
+      | T_int, T_int
+      | T_float, T_float
+      | T_string, T_string
+      | T_bool, T_bool
+      | T_addr, T_addr
+      | T_empty, T_empty -> 0
+      | _ -> next t1 t2
+    )
 
 (*==========================================================================*)
                            (** {2 Constants} *)
