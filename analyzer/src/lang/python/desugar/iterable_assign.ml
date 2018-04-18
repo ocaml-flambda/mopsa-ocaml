@@ -12,7 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -24,12 +24,12 @@ module Domain =
 struct
 
 
-  let rec exec stmt manager ctx flow =
+  let rec exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
     | S_assign({ekind = E_py_tuple(el)}, exp, kind)
     | S_assign({ekind = E_py_list(el)}, exp, kind) ->
-      manager.eval exp ctx flow |>
+      man.eval ctx exp flow |>
       eval_to_exec
         (fun exp flow ->
           match ekind exp with
@@ -43,24 +43,24 @@ struct
                   ))
                 (tag_range range "iter call")
             in
-            manager.eval iter_expr ctx flow |>
+            man.eval ctx iter_expr flow |>
             eval_to_exec
               (fun iter flow ->
                  match ekind iter with
-                 | E_addr(addr) -> assign_iter el addr kind range manager ctx flow
+                 | E_addr(addr) -> assign_iter man ctx el addr kind range flow
                  | _ -> assert false
               )
-              manager ctx
+              (man.exec ctx) man.flow
 
           | _ ->
-            manager.exec (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) ctx flow |>
+            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) flow |>
             return
         )
-        manager ctx
+        (man.exec ctx) man.flow
 
     | _ -> None
 
-  and assign_iter el iter kind range manager ctx flow =
+  and assign_iter man ctx el iter kind range flow =
     let stmtl =
       List.fold_left (fun acc e ->
           mk_assign
@@ -89,11 +89,11 @@ struct
         (tag_range range "try next")
     in
 
-    manager.exec stmt ctx flow  |>
+    man.exec ctx stmt flow |>
     return
 
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
   let eval _ _ _ _ = None
   let ask _ _ _ _ = None
 

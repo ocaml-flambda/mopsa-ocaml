@@ -14,7 +14,7 @@ open Framework.Domains.Stateless
 open Framework.Manager
 open Framework.Visitor
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Universal.Ast
 open Ast
 
@@ -36,29 +36,29 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option = None
+  let exec (man : ('a, unit) manager) ctx (stmt : stmt) (flow : 'a flow) : 'a flow option = None
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_array_subscript(arr, idx) ->
       debug "array subscript to deref";
       let exp' = {exp with ekind = E_c_deref(mk_binop arr O_plus idx exp.erange ~etyp: arr.etyp)} in
-      re_eval_singleton (Some exp', flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
     | E_constant(C_c_string (s, _)) ->
       let table = Program.find_string_table ctx in
       let v = Program.StringTable.find s table in
       let v = mk_var v exp.erange in
-      re_eval_singleton (Some v, flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some v, flow, [])
 
 
     | _ -> None
 
 
 
-  let ask request man ctx flow = None
+  let ask man ctx request flow = None
 
 
 end

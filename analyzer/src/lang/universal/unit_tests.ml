@@ -16,7 +16,7 @@ open Framework.Lattice
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
-open Framework.Utils
+open Framework.Eval
 open Ast
 
 let name = "universal.unit_tests"
@@ -58,13 +58,13 @@ module Domain =
 struct
 
 
-  let execute_test_functions tests man ctx flow =
+  let execute_test_functions man ctx tests flow =
     tests |> List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
         let ctx = Framework.Context.add KCurTestName name ctx in
         try
           (* Call the function *)
-          let flow1 = man.exec test ctx flow in
+          let flow1 = man.exec ctx test flow in
           let ok, fail, may_fail = man.flow.fold (fun (ok, fail, may_fail) env -> function
               | TSafeAssert _ -> (ok + 1, fail, may_fail)
               | TFailAssert _ -> (ok, fail + 1, may_fail)
@@ -87,15 +87,15 @@ struct
       ) (man.flow.bottom, 0, 0, 0, 0)
 
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let eval exp man ctx flow = None
+  let eval man ctx exp flow = None
 
-  let exec stmt man ctx flow  =
+  let exec man ctx stmt flow  =
     match skind stmt with
     | S_unit_tests(file, tests) ->
       debug "Starting tests";
-      let flow1, ok, fail, may_fail, panic = execute_test_functions tests man ctx flow in
+      let flow1, ok, fail, may_fail, panic = execute_test_functions man ctx tests flow in
       Debug.debug ~channel:(name ^ ".summary")
         "Analysis of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven\n %a  %a test%a skipped"
         file
@@ -133,8 +133,8 @@ struct
 
     | _ -> None
 
-  let ask : type r. r Framework.Query.query -> ('a, unit) manager -> Framework.Context.context -> 'a flow -> r option =
-    fun query man ctx flow ->
+  let ask : type r. ('a, unit) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
+    fun man ctx query flow ->
       match query with
       | Framework.Alarm.QGetAlarms ->
         let alarms = man.flow.fold (fun acc env -> function

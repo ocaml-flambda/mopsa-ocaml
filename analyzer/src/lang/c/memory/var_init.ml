@@ -16,7 +16,7 @@ open Framework.Visitor
 open Framework.Exceptions
 open Framework.Domains
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Universal.Ast
 open Ast
 
@@ -37,7 +37,7 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let rec init_array a init is_global range man ctx flow =
+  let rec init_array man ctx a init is_global range flow =
     debug "init array %a" Framework.Pp.pp_expr a;
     match init with
     | None when not is_global -> flow
@@ -46,7 +46,7 @@ module Domain = struct
       let rec aux i flow =
         if i = get_array_constant_length a.etyp then flow
         else
-          let flow = init_expr (mk_c_subscript_access a (mk_int i range) range) None is_global range man ctx flow in
+          let flow = init_expr man ctx (mk_c_subscript_access a (mk_int i range) range) None is_global range flow in
           aux (i + 1) flow
       in
       aux 0 flow
@@ -57,7 +57,7 @@ module Domain = struct
         if i = n then flow
         else
           let init = if i < List.length l then Some (List.nth l i) else filler in
-          let flow = init_expr (mk_c_subscript_access a (mk_int i range) range) init is_global range man ctx flow in
+          let flow = init_expr man ctx (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
           aux (i + 1) flow
       in
       aux 0 flow
@@ -68,7 +68,7 @@ module Domain = struct
         if i = n then flow
         else
           let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
-          let flow = init_expr (mk_c_subscript_access a (mk_int i range) range) init is_global range man ctx flow in
+          let flow = init_expr man ctx (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
           aux (i + 1) flow
       in
       aux 0 flow
@@ -76,7 +76,7 @@ module Domain = struct
     | _ ->
       panic "Array initialization not supported"
 
-  and init_union u init is_global range man ctx flow =
+  and init_union  man ctx u init is_global range flow =
     debug "init union %a" Framework.Pp.pp_expr u;
     let largest_field =
       let fields = match remove_typedef u.etyp |> remove_qual with
@@ -102,25 +102,25 @@ module Domain = struct
     | None when is_global ->
       debug "initialization of uninitialized global";
       debug "largest_field = %a" Framework.Pp.pp_expr (mk_c_member_access u largest_field range);
-      init_expr (mk_c_member_access u largest_field range) None is_global range man ctx flow
+      init_expr man ctx (mk_c_member_access u largest_field range) None is_global range flow
 
     | _ -> panic "Initialization of union not supported"
 
 
-  and init_scalar v init is_global range man ctx flow =
+  and init_scalar man ctx v init is_global range flow =
     debug "init scalar %a" Framework.Pp.pp_expr v;
     match init with
     | None when not is_global -> flow
 
     | None when is_global ->
-      man.exec (mk_assign v (mk_zero range) range) ctx flow
+      man.exec ctx (mk_assign v (mk_zero range) range) flow
 
     | Some (C_init_expr e) ->
-      man.exec (mk_assign v e range) ctx flow
+      man.exec ctx (mk_assign v e range) flow
 
     | _ -> assert false
 
-  and init_struct s init is_global range man ctx flow =
+  and init_struct man ctx s init is_global range flow =
     debug "init struct %a" Framework.Pp.pp_expr s;
     let get_nth_field n =
         match remove_typedef s.etyp |> remove_qual with
@@ -139,7 +139,7 @@ module Domain = struct
       let rec aux i flow =
         if i = nb_fields then flow
         else
-          let flow = init_expr (mk_c_member_access s (get_nth_field i) range) None is_global range man ctx flow in
+          let flow = init_expr man ctx (mk_c_member_access s (get_nth_field i) range) None is_global range flow in
           aux (i + 1) flow
       in
       aux 0 flow
@@ -149,25 +149,25 @@ module Domain = struct
         if i = nb_fields then flow
         else
           let init = if i < List.length l then Some (List.nth l i) else None in
-          let flow = init_expr (mk_c_member_access s (get_nth_field i) range) init is_global range man ctx flow in
+          let flow = init_expr man ctx (mk_c_member_access s (get_nth_field i) range) init is_global range flow in
           aux (i + 1) flow
       in
       aux 0 flow
 
     | Some (C_init_expr e) ->
-      man.exec (mk_assign s e range) ctx flow
+      man.exec ctx (mk_assign s e range) flow
 
     | _ -> assert false
 
-  and init_expr e init is_global range man ctx flow =
-    if is_c_scalar_type e.etyp then init_scalar e init is_global range man ctx flow else
-    if is_c_array_type e.etyp then  init_array e init is_global range man ctx flow else
-    if is_c_struct_type e.etyp then init_struct e init is_global range man ctx flow else
-    if is_c_union_type e.etyp then init_union e init is_global range man ctx flow else
+  and init_expr man ctx e (init: c_init option) is_global range flow =
+    if is_c_scalar_type e.etyp then init_scalar man ctx e init is_global range flow else
+    if is_c_array_type e.etyp then  init_array man ctx e init is_global range flow else
+    if is_c_struct_type e.etyp then init_struct man ctx e init is_global range flow else
+    if is_c_union_type e.etyp then init_union man ctx e init is_global range flow else
       panic "Unsupported initialization of %a" pp_expr e
 
 
-  and init prog man ctx flow =
+  and init man ctx prog flow =
     let flow =
       match prog.prog_kind with
       | C_program(globals, _) ->
@@ -183,28 +183,28 @@ module Domain = struct
         List.fold_left (fun flow (v, init) ->
             let range = mk_fresh_range () in
             let v = mk_var v range in
-            init_expr v init true range man ctx flow
+            init_expr man ctx v init true range flow
           ) flow globals
 
       | _ -> flow
     in
     ctx, flow
 
-  let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
+  let exec (man : ('a, unit) manager) ctx (stmt : stmt) (flow : 'a flow) : 'a flow option =
     let range = stmt.srange in
     match skind stmt with
     | S_c_local_declaration(v, None) when is_c_pointer_type v.vtyp -> None (* Let pointer domain initialize invalid addresses *)
 
     | S_c_local_declaration(v, init) ->
       let v = mk_var v range in
-      init_expr v init false range man ctx flow |>
+      init_expr man ctx v init false range flow |>
       return
 
     | _ -> None
 
-  let eval exp man ctx flow = None
+  let eval man ctx exp flow = None
 
-  let ask request man ctx flow = None
+  let ask man ctx request flow = None
 
 
 end

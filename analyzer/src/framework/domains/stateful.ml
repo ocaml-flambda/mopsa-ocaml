@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 (**
-   Domains with global view on the full abstraction.
+   Stateful abstract domains.
 
    This is the low-level domain signature that gives full access to the
    overall flow abstraction and analysis manager.
@@ -18,10 +18,6 @@ open Flow
 open Manager
 open Eval
 
-
-(*==========================================================================*)
-                        (** {2 Standlone domains} *)
-(*==========================================================================*)
 
 (** Low level abstract domain. *)
 module type DOMAIN =
@@ -50,10 +46,6 @@ sig
 end
 
 
-(** Low level functor abstract domain. *)
-module type FUNCTOR = functor(_ : DOMAIN) -> DOMAIN
-
-
 module EmptyDomain : DOMAIN =
 struct
   type t = unit
@@ -80,13 +72,7 @@ let find_domain name = List.assoc name !domains
 let () = register_domain "empty" (module EmptyDomain)
 
 
-let functors : (string * (module FUNCTOR)) list ref = ref []
-
-let register_functor name modl =
-  functors := (name, modl) :: !functors
-
-let find_functor name = List.assoc name !functors
-
+(** Create a lattice manager from a stateful domain. *)
 let mk_lattice_manager (type a) (domain: (module DOMAIN with type t = a)) : a lattice_manager =
   let module Domain = (val domain) in
   {
@@ -100,3 +86,6 @@ let mk_lattice_manager (type a) (domain: (module DOMAIN with type t = a)) : a la
     widening = Domain.widening;
     print = Domain.print;
   }
+
+let return x = Some x
+let fail = None

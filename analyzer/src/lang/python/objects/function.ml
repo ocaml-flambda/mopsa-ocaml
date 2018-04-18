@@ -12,7 +12,8 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
+open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -24,7 +25,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let exec stmt manager ctx flow =
+  let exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
     (* Function definition *)
@@ -34,21 +35,21 @@ struct
          representing the name of the function *)
       Universal.Utils.compose_alloc_exec
         (fun addr flow ->
-           manager.exec
+           man.exec ctx
              (mk_assign
                 (mk_var func.py_func_var (tag_range range "func var"))
                 (mk_addr addr (tag_range range "func addr"))
                 (tag_range range "func addr assign")
-             ) ctx flow |>
+             ) flow |>
            return
         )
-        (Addr.mk_function_addr func) range manager ctx flow
+        (Addr.mk_function_addr func) range man ctx flow
     | _ ->
       None
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     (* Calls to user-defined functions are translated to {!Universal.Ast.E_call}
        in order to be handled by other domains *)
@@ -62,7 +63,7 @@ struct
 
       if List.length pyfundec.py_func_parameters < List.length nondefault_args then
         let flow =
-          man.exec (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error1")) ctx flow
+          man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error1")) flow
         in
         oeval_singleton (None, flow, [])
 
@@ -83,7 +84,7 @@ struct
         let args = fill_with_default default_args nondefault_args args in
         if List.length args < List.length nondefault_args then
           let flow =
-            man.exec (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error2")) ctx flow
+            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error2")) flow
           in
           oeval_singleton (None, flow, [])
         else
@@ -99,16 +100,16 @@ struct
 
 
           let flow =
-            man.exec
+            man.exec ctx
               (mk_assign
                  (mk_var tmp (tag_range exp.erange "tmp"))
                  (mk_call fundec args (tag_range exp.erange "call"))
                  (tag_range exp.erange "call assign")
               )
-              ctx flow
+              flow
           in
           let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp (tag_range exp.erange "cleaner")]) in
-          re_eval_singleton evl man ctx 
+          re_eval_singleton (man.eval ctx) evl
 
     | _ -> None
 

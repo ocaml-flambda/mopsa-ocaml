@@ -55,7 +55,7 @@ let mk_unname base name =
 let from_attribute obj attr =
   let base = from_string obj in
   match base.addr_kind with
-  | A_py_module(M_builtin name) 
+  | A_py_module(M_builtin name)
   | A_py_class(C_builtin name, _) ->
     from_string (mk_unname (Some name) attr)
 
@@ -68,12 +68,12 @@ let is_builtin_module name = List.exists (fun addr -> name = builtin_addr_to_nam
 let is_builtin_attribute name attr =
   let base = from_string name in
   match base.addr_kind with
-  | A_py_module(M_builtin name) 
+  | A_py_module(M_builtin name)
   | A_py_class(C_builtin name, _) ->
     is_builtin (mk_unname (Some name) attr)
-      
+
   | _ -> false
-    
+
 let mk_builtin_raise exn range = assert false
 
 let mro name = assert false
@@ -180,7 +180,7 @@ let init_module filename =
   modules := (mk_builtin_module_addr modl) :: !modules;
   parse_classes (Some modl) body;
   parse_functions (Some modl) body
-    
+
 let init_modules dir =
   Sys.readdir dir |>
   Array.iter (fun stub ->
@@ -190,7 +190,7 @@ let init_modules dir =
       else
         ()
     )
-  
+
 let setup () =
   Framework.Options.(common_options.stubs) |> List.iter
     (fun dir ->
@@ -198,4 +198,3 @@ let setup () =
        init_modules dir;
     );
   ()
-

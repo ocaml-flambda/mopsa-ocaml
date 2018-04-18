@@ -14,7 +14,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Flow
 open Framework.Ast
-open Framework.Utils
+open Framework.Eval
 open Universal.Ast
 open Ast
 
@@ -69,7 +69,7 @@ struct
     in
     table
 
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     match prog.prog_kind with
     | C_program(globals, funcs) ->
       let table = create_string_table prog ctx in
@@ -108,7 +108,7 @@ struct
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
 
-  let exec stmt manager ctx flow  =
+  let exec manager ctx stmt flow  =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
@@ -118,7 +118,7 @@ struct
                 {c_func_var} -> c_func_var.vname = !opt_function
             ) functions
           in
-          manager.exec main.c_func_body ctx flow |>
+          manager.exec ctx main.c_func_body flow |>
           return
         with Not_found ->
           Framework.Exceptions.panic "function %s not found" !opt_function
@@ -128,7 +128,7 @@ struct
       when Framework.Options.(common_options.unit_test_mode) ->
       let tests = get_test_functions functions in
       let stmt = mk_c_unit_tests prog_file tests in
-      return (manager.exec stmt ctx flow)
+      return (manager.exec ctx stmt flow)
 
 
     | _ -> None

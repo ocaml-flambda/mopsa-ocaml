@@ -13,7 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Lattice
 open Framework.Domains.Stateless
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -45,11 +45,11 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec stmt man ctx flow = None
+  let exec man ctx stmt flow = None
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";
@@ -61,14 +61,14 @@ struct
       let typ = T_c_integer(C_signed_long) in
       let tmp = mktmp ~vtyp:typ () in
       let v = mk_var tmp erange in
-      let flow = man.exec (mk_assume (
+      let flow = man.exec ctx (mk_assume (
           mk_binop
             (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
             O_log_and
             (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
             erange
-        ) erange) ctx flow in
-      re_eval_singleton (Some v, flow, [mk_remove_var tmp erange]) man ctx
+        ) erange) flow in
+      re_eval_singleton (man.eval ctx) (Some v, flow, [mk_remove_var tmp erange])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_panic"}, [msg]) ->
       let rec remove_cast e =
@@ -84,12 +84,12 @@ struct
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt ctx flow in
+      let flow = man.exec ctx stmt flow in
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_false"}, [cond]) ->
       let stmt = mk_assert (mk_not cond exp.erange) exp.erange in
-      let flow = man.exec stmt ctx flow in
+      let flow = man.exec ctx stmt  flow in
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_safe"}, []) ->
@@ -110,7 +110,7 @@ struct
           let stmt = mk_assert (cond exp.erange) exp.erange in
           let cur = man.flow.get TCur flow in
           let flow = man.flow.set TCur man.env.top flow |>
-                     man.exec stmt ctx |>
+                     man.exec ctx stmt |>
                      man.flow.set TCur cur
           in
           oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
@@ -134,7 +134,7 @@ struct
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
         let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec stmt ctx flow |>
+        let flow = man.exec ctx stmt flow |>
                    man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
@@ -157,7 +157,7 @@ struct
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
         let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec stmt ctx flow |>
+        let flow = man.exec ctx stmt flow |>
                    man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk && code = error_token_to_code tk -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
@@ -183,7 +183,7 @@ struct
         let stmt = mk_assert (cond exp.erange) exp.erange in
         let cur = man.flow.get TCur flow in
         let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec stmt ctx flow |>
+        let flow = man.exec ctx stmt flow |>
                    man.flow.filter (fun _ -> function
                        | tk when Alarms.is_error_token tk &&
                                  code = error_token_to_code tk &&

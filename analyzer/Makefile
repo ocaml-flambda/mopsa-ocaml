@@ -5,9 +5,10 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang main
 
-framework = options ast query pp alarm context lattice lattices visitor exceptions flow eval manager exec domains analyzer config
+framework = options ast query pp alarm context lattice lattices visitor exceptions flow eval manager exec utils domains analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
-framework.domains = stateful stateless composers
+framework.domains = stateful stateless reduction fun iter
+framework.domains.reduction = domain root product
 
 
 lang = universal c python

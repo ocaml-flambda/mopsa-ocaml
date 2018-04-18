@@ -12,7 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Ast
 
@@ -26,20 +26,20 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec stmt man ctx flow = None
+  let exec man ctx stmt flow = None
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_call(f, args) ->
-      man.eval f ctx flow |>
+      man.eval ctx f flow |>
       eval_compose
         (fun f flow ->
            match ekind f with
            | E_c_builtin_function(name) ->
              let exp' = {exp with ekind = E_c_call(f, args)} in
-             re_eval_singleton (Some exp', flow, []) man ctx
+             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
            | E_c_function(fundec) ->
              debug "call to %a, body @[%a@]" Framework.Pp.pp_var fundec.c_func_var Framework.Pp.pp_stmt fundec.c_func_body;
@@ -52,7 +52,7 @@ struct
                fun_return_type = fundec.c_func_return;
              } in
              let exp' = mk_call fundec' args exp.erange in
-             re_eval_singleton (Some exp', flow, []) man ctx
+             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
            | _ ->
              assert false

@@ -12,7 +12,7 @@ open Framework.Flow
 open Framework.Domains
 open Framework.Manager
 open Framework.Domains.Stateless
-open Framework.Utils
+open Framework.Eval
 open Framework.Context
 open Framework.Lattice
 open Framework.Ast
@@ -55,9 +55,9 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec stmt man ctx flow =
+  let exec man ctx stmt flow =
     match skind stmt with
 
     | S_c_switch(e, body) ->
@@ -70,7 +70,7 @@ struct
 
       (* Store e in the context and execute body. *)
       let ctx = Framework.Context.add KSwitchExpr e ctx in
-      let flow1 = man.exec body ctx flow0 in
+      let flow1 = man.exec ctx body  flow0 in
 
       (* Merge resulting TCur, TBreak and TSwitch (in case when there is no default case) *)
       let cur =
@@ -79,7 +79,7 @@ struct
           (man.flow.get Universal.Flows.Loops.TBreak flow1) |>
         man.env.join
           (man.flow.get TSwitch flow1)
-                  
+
       in
       (* Put the merge into TCur and restore previous TBreak and TSwitch. *)
       let flow2 = man.flow.set TCur cur flow1 |>
@@ -124,7 +124,7 @@ struct
     | _ -> None
 
 
-  let eval exp man ctx flow = None
+  let eval man ctx exp flow = None
 
   let ask _ _ _ _  = None
 
@@ -145,4 +145,3 @@ let setup () =
             in
             f);
   }
-

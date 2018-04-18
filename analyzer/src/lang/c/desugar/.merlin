@@ -3,8 +3,8 @@ B ../../../../../parsers/c/lib
 B ../../../../../parsers/python/lib
 B ../../../../_build
 B ../../../../_build/src
-B ../../../../_build/src/framework/domains/composers
-B ../../../../_build/src/framework/domains
-B ../../../../_build/src/framework
+B ../../../../_build/src/lang/c/desugar
+B ../../../../_build/src/lang/c
+B ../../../../_build/src/lang
 B ../../../../_build/src
 PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

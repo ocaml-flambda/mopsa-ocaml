@@ -13,7 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Lattice
 open Framework.Domains.Stateless
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -32,11 +32,11 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec stmt man ctx flow = None
+  let exec man ctx stmt flow = None
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";

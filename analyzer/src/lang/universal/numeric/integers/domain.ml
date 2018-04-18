@@ -12,7 +12,7 @@ open Framework.Query
 open Framework.Ast
 open Framework.Manager
 open Framework.Domains.Stateful
-open Framework.Utils
+open Framework.Eval
 open Ast
 open Bot
 
@@ -27,17 +27,17 @@ struct
   let print fmt a =
     Format.fprintf fmt "int: @[%a@]@\n" print a
 
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     ctx, set_domain_cur top man flow
 
-  let eval exp man ctx flow =
-    match ekind exp with    
+  let eval man ctx exp flow =
+    match ekind exp with
     | E_binop((O_plus | O_minus | O_mult | O_div | O_mod |
                O_eq | O_ne | O_lt | O_le | O_gt | O_ge |
                O_log_and | O_log_or | O_bit_and | O_bit_or |
                O_bit_xor | O_bit_lshift | O_bit_rshift as op), e1, e2) ->
-      man_eval_list [e1; e2] man ctx flow |>
-      oeval_compose
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
@@ -45,7 +45,7 @@ struct
         )
 
     | E_unop((O_minus | O_plus | O_log_not | O_bit_invert | O_sqrt as op), e) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_compose
         (fun e flow ->
            let exp' = {exp with ekind = E_unop(op, e)} in
@@ -53,7 +53,7 @@ struct
         )
 
     | _ -> None
-      
+
 
 
 end

@@ -15,7 +15,7 @@ open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Universal.Ast
 open Ast
 
@@ -35,9 +35,9 @@ module Domain = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec (stmt : stmt) (man : ('a, unit) manager) ctx (flow : 'a flow) : 'a flow option =
+  let exec (man : ('a, unit) manager) ctx  (stmt : stmt) (flow : 'a flow) : 'a flow option =
     match skind stmt with
     | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
       let range = srange stmt in
@@ -51,22 +51,22 @@ module Domain = struct
         let lval = mk_c_member_access lval field range in
         let rval = mk_c_member_access rval field range in
         let stmt = {stmt with skind = S_assign(lval, rval, smode)} in
-        man.exec stmt ctx flow
+        man.exec ctx stmt flow
         ) flow |>
       return
 
     | _ -> None
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_member_access(r, idx, f) ->
       let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
-      re_eval_singleton (Some exp', flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
 
     | _ -> None
 
-  let ask request man ctx flow = None
+  let ask man ctx request flow = None
 
 end
 

@@ -12,7 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -23,34 +23,34 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let exec stmt manager ctx flow =
+  let exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
     | S_py_assert (e, msg)->
-      manager.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec
         (fun e flow ->
-          let ok_case = manager.exec (mk_assume e (tag_range range "safe case assume")) ctx flow in
+          let ok_case = man.exec ctx (mk_assume e (tag_range range "safe case assume")) flow in
 
           let fail_case =
             debug "checking fail";
-            let flow = manager.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) ctx flow in
-            if manager.flow.is_bottom flow then
+            let flow = man.exec ctx (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
+            if man.flow.is_bottom flow then
               let _ = debug "no fail" in
-              manager.flow.bottom
+              man.flow.bottom
             else
-              manager.exec (
+              man.exec ctx (
                 Builtins.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
-              ) ctx flow
+              ) flow
           in
 
-          manager.flow.join ok_case fail_case |>
+          man.flow.join ok_case fail_case |>
           return
 
         )
-        manager ctx
+        (man.exec ctx) man.flow
 
     | _ -> None
 

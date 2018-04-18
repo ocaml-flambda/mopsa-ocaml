@@ -14,10 +14,12 @@
 *)
 
 open Framework.Domains
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Flow
 open Framework.Manager
 open Framework.Query
+open Framework.Eval
+open Framework.Exec
 open Framework.Ast
 open Framework.Utils
 open Universal.Ast
@@ -45,7 +47,7 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let exec stmt (man: ('a, t) manager) (ctx: Framework.Context.context) (flow: 'a flow) : 'a flow option =
+  let exec (man: ('a, t) manager) (ctx: Framework.Context.context) stmt (flow: 'a flow) : 'a flow option =
     (* Before executing the statement, we need to remove the type of variables.
          This is necessary to keep the same key for all possible (typed) values of a variable in the non-relational map.
     *)
@@ -58,7 +60,7 @@ struct
     (* For assignments, we handle the case of addresses, otherwise we give it
        to {!Nonrel}. *)
     | S_assign({ekind = E_var var} as evar, e, ((STRONG | EXPAND) as kind)) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_to_exec
         (fun e flow ->
            match ekind e with
@@ -67,9 +69,9 @@ struct
              map_domain_cur (Nonrel.add var v) man flow |>
              return
            | _ ->
-             Nonrel.exec {stmt with skind = S_assign (evar, e,kind)} man ctx flow
+             Nonrel.exec man ctx {stmt with skind = S_assign (evar, e,kind)} flow
         )
-        man ctx
+        (man.exec ctx) man.flow
 
     | S_assign({ekind = E_var var}, e, WEAK) ->
       assert false
@@ -83,12 +85,12 @@ struct
 
     (* Other cases are handled by {!Nonrel}. *)
     | _ ->
-      Nonrel.exec stmt man ctx flow
+      Nonrel.exec man ctx stmt flow
 
-  let ask query man ctx flow  =
-    Nonrel.ask query man ctx flow
+  let ask man ctx query flow  =
+    Nonrel.ask man ctx query flow
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     | E_var v when Builtins.is_builtin v.vname ->
@@ -106,7 +108,7 @@ struct
           (* Raise an exception when the variable maybe undefined *)
           | T_py_undefined ->
             let stmt = Builtins.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
-            let flow = man.exec stmt ctx flow' in
+            let flow = man.exec ctx stmt flow' in
             oeval_singleton (None, flow, []) |>
             oeval_join acc
 
@@ -131,7 +133,7 @@ struct
 
     (* TODO: this should be moved to data model of operators *)
     | E_unop(op, e) ->
-      man.eval e ctx flow |>
+      man.eval ctx e flow |>
       eval_compose
         (fun e flow ->
            let exp' = {exp with ekind = E_unop(op, e)} in
@@ -140,20 +142,20 @@ struct
 
     (* TODO: this should be moved to data model of operators *)
     | E_binop(op, e1, e2) ->
-      man_eval_list [e1; e2] man ctx flow |>
-      oeval_compose
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
            oeval_singleton (Some exp', flow, [])
         )
-        
+
     | _ ->
-      Nonrel.eval exp man ctx flow
+      Nonrel.eval man ctx exp flow
 
 
 end
 
 let setup () =
-  Framework.Domains.Global.register_domain name (module Domain);
+  register_domain name (module Domain);
   ()

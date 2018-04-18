@@ -12,6 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Lattice
+open Framework.Eval
 open Framework.Flow
 open Framework.Ast
 open Universal.Ast
@@ -37,15 +38,15 @@ struct
   (*==========================================================================*)
 
 
-  let exec stmt manager ctx flow = None
+  let exec man ctx stmt flow = None
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let check cond range man ctx flow =
-    let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) ctx flow in
+  let check man ctx cond range flow =
+    let flow = man.exec ctx (mk_stmt (Universal.Ast.S_assert cond) range) flow in
     oeval_singleton (Some (mk_py_none range), flow, [])
-  
-  let eval exp man ctx flow =
+
+  let eval man ctx exp flow =
     match ekind exp with
     (* Calls to _mopsa_assert_equal function *)
     | E_py_call(
@@ -53,7 +54,7 @@ struct
         [x; y], []
       ) when f = "_mopsa_assert_equal_" || f = "mopsa.assert_equal" ->
       let range = erange exp in
-      check (mk_binop x O_eq y (tag_range range "eq")) range man ctx flow
+      check man ctx (mk_binop x O_eq y (tag_range range "eq")) range flow
 
     (* Calls to _mopsa_assert_true function *)
     | E_py_call(
@@ -61,7 +62,7 @@ struct
         [x], []
       ) when f = "_mopsa_assert_true_" || f = "mopsa.assert_true" ->
       let range = erange exp in
-      check x range man ctx flow
+      check man ctx x range  flow
 
     (* Calls to _mopsa_assert_false function *)
     | E_py_call(
@@ -69,8 +70,8 @@ struct
         [x], []
       ) when f = "_mopsa_assert_false_" || f = "mopsa.assert_false" ->
       let range = erange exp in
-      check (mk_not x (tag_range range "not")) range man ctx flow
-  
+      check man ctx (mk_not x (tag_range range "not")) range flow
+
     | _ ->
       None
 

@@ -12,7 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -28,26 +28,26 @@ struct
   (*==========================================================================*)
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
-  
-  let init prog man ctx flow = ctx, flow
 
-  let eval exp man ctx flow =
+  let init man ctx prog flow = ctx, flow
+
+  let eval man ctx exp flow =
     match ekind exp with
     | E_constant(C_c_character (c, _)) ->
-      re_eval_singleton (Some (mk_z c exp.erange), flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
 
     | E_c_cast(e, _) ->
-      re_eval_singleton (Some e, flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some e, flow, [])
 
     | _ -> None
 
-  let exec stmt man ctx flow =
+  let exec man ctx stmt flow =
     match skind stmt with
     | S_c_local_declaration(v, init) when is_c_int_type v.vtyp ->
       let flow =
         match init with
         | None -> flow
-        | Some (C_init_expr e) -> man.exec (mk_assign (mk_var v stmt.srange) e stmt.srange) ctx flow
+        | Some (C_init_expr e) -> man.exec ctx (mk_assign (mk_var v stmt.srange) e stmt.srange) flow
         | Some (Ast.C_init_list (_,_)) -> assert false
         | Some (Ast.C_init_implicit _) -> assert false
       in

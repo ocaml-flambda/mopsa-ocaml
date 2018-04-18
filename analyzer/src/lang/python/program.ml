@@ -24,11 +24,11 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let eval exp manager ctx flow = None
+  let eval man ctx exp flow = None
 
-  let init_globals filename globals manager ctx flow =
+  let init_globals man ctx filename globals flow =
     (* Initialize global variables with C_py_undefined constant *)
     let range = mk_fresh_range () in
     let stmt =
@@ -42,7 +42,7 @@ struct
         )
         range
     in
-    let flow1 = manager.exec stmt ctx flow in
+    let flow1 = man.exec ctx stmt flow in
 
     (** Initialize special variable __name__ *)
     let range = mk_fresh_range () in
@@ -52,7 +52,7 @@ struct
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string (tag_range range "__name__"))
         range
     in
-    let flow2 = manager.exec stmt ctx flow1 in
+    let flow2 = man.exec ctx stmt flow1 in
 
     (** Initialize special variable __file__ *)
     let range = mk_fresh_range () in
@@ -62,7 +62,7 @@ struct
           (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string (tag_range range "__file__"))
           range
     in
-    let flow3 = manager.exec stmt Framework.Context.empty flow2 in
+    let flow3 = man.exec ctx stmt flow2 in
 
     flow3
 
@@ -93,31 +93,31 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
-  
-  let exec stmt manager ctx flow  =
+
+  let exec man ctx stmt flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
-      init_globals prog_file globals manager ctx flow |>
+      init_globals man ctx prog_file globals flow |>
       (* Execute the body *)
-      manager.exec body ctx |>
+      man.exec ctx body |>
       return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
-      let flow1 = init_globals prog_file globals manager ctx flow in
+      let flow1 = init_globals man ctx prog_file globals flow in
 
       (* Execute the body *)
-      let flow2 = manager.exec body ctx flow1 in
+      let flow2 = man.exec ctx body flow1 in
 
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests prog_file tests in
-      return (manager.exec stmt ctx flow2)
+      return (man.exec ctx stmt flow2)
 
-  
+
     | _ -> None
 
   let ask _ _ _ _ = None

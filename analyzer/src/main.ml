@@ -33,7 +33,7 @@ let init () =
 
 
 (** Start the analysis of [prog] using [domain] as the global abstraction. *)
-let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
+let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
   (* Top layer analyzer *)
   let module Domain = (val domain) in
   let module Analyzer = Analyzer.Make(Domain) in
@@ -49,12 +49,12 @@ let start (domain: (module Domains.Global.DOMAIN)) (prog : Ast.program) =
 
     Debug.info "Starting the analysis ...";
 
-    let res = Analyzer.exec stmt ctx abs in
+    let res = Analyzer.exec ctx stmt abs in
     let t = Timing.stop t in
     Debug.info "Result:@\n@[<h 2>  %a@]" Analyzer.flow_manager.print res;
 
     Debug.info "Collecting alarms ...";
-    let alarms = Analyzer.ask Alarm.QGetAlarms ctx res in
+    let alarms = Analyzer.ask ctx Alarm.QGetAlarms res in
 
     (
       match alarms with

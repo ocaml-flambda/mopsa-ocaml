@@ -25,9 +25,9 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man ctx flow = ctx, flow
+  let init man ctx prog flow = ctx, flow
 
-  let exec stmt man ctx flow =
+  let exec man ctx stmt flow =
     match skind stmt with
     | S_c_for(init, cond, incr, body) ->
       let range = stmt.srange in
@@ -41,13 +41,13 @@ struct
           ] range
         )
       in
-      man.exec stmt ctx flow |>
+      man.exec ctx stmt flow |>
       return
 
     | S_c_do_while(body, cond) -> assert false
     | _ -> None
 
-  let eval exp man ctx flow = None
+  let eval man ctx exp flow = None
 
   let ask _ _ _ _  = None
 

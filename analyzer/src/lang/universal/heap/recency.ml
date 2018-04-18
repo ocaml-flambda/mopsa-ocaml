@@ -10,7 +10,7 @@
 
 open Framework.Ast
 open Framework.Domains
-open Framework.Domains.Stateful
+open Framework.Domains.Fun
 open Framework.Flow
 open Framework.Manager
 open Framework.Eval
@@ -26,7 +26,7 @@ let attribute_var addr attr vtyp =
   mkv name ~vtyp
 
 
-module Make(Sub: DOMAIN) =
+module Make(Sub: Framework.Domains.Stateful.DOMAIN) =
 struct
 
   type t = Pool.t * Sub.t
@@ -47,7 +47,7 @@ struct
 
   (** Create a manager for the sub-domain with a local scope only. *)
   let rec local_sub_manager : (Sub.t, Sub.t) manager =
-    let env_manager = Framework.Domains.Stateful.mk_lattice_manager (module Sub : DOMAIN with type t = Sub.t) in
+    let env_manager = Framework.Domains.Stateful.(mk_lattice_manager (module Sub : DOMAIN with type t = Sub.t)) in
     {
       env = env_manager;
       flow = Framework.Flow.lift_lattice_manager env_manager;
@@ -224,4 +224,4 @@ end
 
 
 let setup () =
-  register_functor name (module Make)
+  register_domain name (module Make)

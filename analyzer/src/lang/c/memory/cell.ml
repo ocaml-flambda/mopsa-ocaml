@@ -10,14 +10,15 @@
 
 open Framework.Ast
 open Framework.Pp
-open Framework.Domains.Global
+open Framework.Domains.Fun
 open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
 open Framework.Alarm
 open Framework.Flow
 open Framework.Lattice
-open Framework.Utils
+open Framework.Eval
+open Framework.Exec
 open Ast
 
 
@@ -83,7 +84,7 @@ let cell_of_var v =
 (*==========================================================================*)
 
 
-module Make(ValAbs : DOMAIN) = struct
+module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
 
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -91,7 +92,8 @@ module Make(ValAbs : DOMAIN) = struct
 
   (** Set of cells variables. *)
   module CS = Framework.Lattices.Top_set.Make(struct
-      include Framework.Utils.Var
+      type t = var
+      let compare = compare_var
       let print fmt v =
         let c = cell_of_var v in
         pp_cell fmt c
@@ -139,13 +141,13 @@ module Make(ValAbs : DOMAIN) = struct
   (** Manager of the sub-domain limited to a local scope. Useful for unifying
       numeric invariants when applying point-wise lattice operations such as [join]. *)
   let rec local_subman =
-    let env_manager = Framework.Domains.Global.mk_lattice_manager (module ValAbs : DOMAIN with type t = ValAbs.t) in
+    let env_manager = Framework.Domains.Stateful.(mk_lattice_manager (module ValAbs : DOMAIN with type t = ValAbs.t)) in
     {
       env = env_manager;
       flow = Framework.Flow.lift_lattice_manager env_manager;
-      exec = (fun stmt ctx flow -> match ValAbs.exec stmt local_subman ctx flow with Some flow -> flow | None -> assert false);
-      eval = (fun exp ctx flow -> match ValAbs.eval exp local_subman ctx flow with Some evl -> evl | None -> eval_singleton (Some exp, flow, []) );
-      ask = (fun query ctx flow -> assert false);
+      exec = (fun ctx stmt flow -> match ValAbs.exec local_subman ctx stmt flow with Some flow -> flow | None -> assert false);
+      eval = (fun ctx exp flow -> match ValAbs.eval local_subman ctx exp flow with Some evl -> evl | None -> eval_singleton (Some exp, flow, []) );
+      ask = (fun ctx query flow -> assert false);
       ax = {
         get = (fun env -> env);
         set = (fun env' env -> env');
@@ -155,7 +157,7 @@ module Make(ValAbs : DOMAIN) = struct
   (** Execute a statement on [ValAbs] using the local scope manager. *)
   let valabs_trivial_exec (stmt : stmt) (a : ValAbs.t) : ValAbs.t =
     set_domain_cur a local_subman local_subman.flow.bottom |>
-    local_subman.exec stmt Framework.Context.empty |>
+    local_subman.exec Framework.Context.empty stmt |>
     local_subman.flow.get TCur
 
   (*==========================================================================*)
@@ -347,7 +349,7 @@ module Make(ValAbs : DOMAIN) = struct
             Z.lt (Z.max a1 a2) (Z.min b1 b2)
           in
           if compare_var c.v c'.v = 0 && check_overlap (cell_range c) (cell_range c') then
-            man.exec (Universal.Ast.mk_remove_var v' range) ctx acc
+            man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
       ) u.cs flow
@@ -415,12 +417,12 @@ module Make(ValAbs : DOMAIN) = struct
   (*==========================================================================*)
 
 
-  let init prog (man : ('a, t) manager) ctx (flow : 'a flow) =
-    let ctx, flow = ValAbs.init prog (subman man) ctx flow in
+  let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
+    let ctx, flow = ValAbs.init (subman man) ctx prog flow in
     let u = get_domain_cur man flow in
     ctx, set_domain_cur {u with cs = CS.empty} man flow
 
-  let exec (stmt : stmt) (man : ('a, t) manager) (ctx : Framework.Context.context) (flow : 'a flow)
+  let exec (man : ('a, t) manager) (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a flow option =
     match skind stmt with
     | Universal.Ast.S_rename_var(v, v') ->
@@ -432,31 +434,31 @@ module Make(ValAbs : DOMAIN) = struct
       let u' = {u with cs = CS.remove v' u.cs} in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      ValAbs.exec stmt' (subman man) ctx flow
+      ValAbs.exec (subman man) ctx stmt' flow
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      man_eval_list [rval; lval] man ctx flow |>
-      oeval_to_exec
+      eval_list [rval; lval] (man.eval ctx) flow |>
+      eval_to_exec
         (fun el flow ->
            let rval, lval, v = match el with
              | [rval; ({ekind = E_var v} as lval)] -> rval, lval, v
              | _ -> assert false
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
-           match ValAbs.exec stmt' (subman man) ctx flow with
+           match ValAbs.exec (subman man) ctx stmt' flow with
            | None -> None
            | Some flow ->
              remove_overlapping_cells v stmt.srange man ctx flow |>
              return
         )
-        man ctx
+        (man.exec ctx) man.flow
 
-    | _ -> ValAbs.exec stmt (subman man) ctx flow
+    | _ -> ValAbs.exec (subman man) ctx stmt flow
 
   let is_safe_cell_access c =
     Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
 
-  let eval exp man ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
 
@@ -467,7 +469,7 @@ module Make(ValAbs : DOMAIN) = struct
       let u' = add_var v u exp.erange in
       debug "new variable %a in %a" pp_var v print u';
       let flow = set_domain_cur u' man flow in
-      re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, [])
 
     | E_c_gen_cell_var c ->
       if is_safe_cell_access c then
@@ -478,22 +480,22 @@ module Make(ValAbs : DOMAIN) = struct
         in
         let u' =  add_var v u exp.erange in
         let flow = set_domain_cur u' man flow in
-        re_eval_singleton (Some (mk_var v exp.erange), flow, []) man ctx
+        re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, [])
       else
         let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
         in
         oeval_singleton (None, flow, [])
 
-    | _ -> ValAbs.eval exp (subman man) ctx flow
+    | _ -> ValAbs.eval (subman man) ctx exp flow
 
-  let ask query man ctx flow =
-    ValAbs.ask query (subman man) ctx flow
+  let ask man ctx query flow =
+    ValAbs.ask (subman man) ctx query flow
 
 end
 
 let setup () =
-  register_functor name (module Make);
+  register_domain name (module Make);
   register_vkind_compare (fun next vk1 vk2 ->
       match vk1, vk2 with
       | V_cell c1, V_cell c2 -> compare_cell c1 c2

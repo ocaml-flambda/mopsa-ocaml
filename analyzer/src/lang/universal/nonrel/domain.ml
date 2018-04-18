@@ -253,7 +253,7 @@ struct
   let init man ctx prog flow =
     ctx, set_domain_cur top man flow
 
-  let rec exec stmt man ctx flow =
+  let rec exec man ctx stmt flow =
     match skind stmt with
     | S_expression(e) ->
       man.eval ctx e flow |>
@@ -343,8 +343,8 @@ struct
     )
 
 
-  let ask : type r. r Framework.Query.query -> ('a, t) manager -> context -> 'a flow -> r option =
-    fun query man ctx flow ->
+  let ask : type r. ('a, t) manager -> context -> r Framework.Query.query -> 'a flow -> r option =
+    fun man ctx query flow ->
       match query with
       | QEval e ->
         let a = get_domain_cur man flow in

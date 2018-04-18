@@ -8,11 +8,12 @@
 
 (** Data model for attribute access. *)
 
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
+open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -32,7 +33,7 @@ struct
   (*==========================================================================*)
 
   (** Abstraction of objects attributes that were created dynamically. We maintain
-      under and over approximations of relation pairs [addr * attr] to detected 
+      under and over approximations of relation pairs [addr * attr] to detected
       TypeError exceptions. *)
   module AttrSet = Framework.Lattices.Range_set.Make
       (struct
@@ -57,7 +58,7 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     ctx, set_domain_cur AttrSet.empty man flow
 
   (** Check whether an attribute [attr] is an encoding of an abstract attribute
@@ -86,9 +87,9 @@ struct
       Builtins.is_builtin_attribute name attr
 
     | A_py_function _ | A_py_instance _ -> false
-      
+
     | _ -> assert false
-      
+
   let assume_is_attribute addr attr man ctx flow =
     if is_static_attribute addr attr then
       flow
@@ -130,19 +131,19 @@ struct
 
   let mk_dynamic_attribute addr attr range =
     Universal.Ast.mk_addr_attribute addr attr range
-  
+
   let mk_attribute_expr addr attr range =
     if is_static_attribute addr attr then
       mk_static_attribute addr attr range
     else
       mk_dynamic_attribute addr attr range
-  
-  let rec eval exp man ctx flow =
+
+  let rec eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     | E_py_attribute(obj, attr) ->
       (* Evaluate [obj] and check the resulting cases. *)
-      man.eval obj ctx flow |>
+      man.eval ctx obj flow |>
       eval_compose
         (fun obj flow ->
            match ekind obj with
@@ -157,13 +158,13 @@ struct
                (* Case when [addr.attr] evaluates to [exp] *)
                (fun exp flow ->
                   debug "attribute %s found, exp = %a" attr Framework.Pp.pp_expr exp;
-                  re_eval_singleton (Some exp, flow, []) man ctx
+                  re_eval_singleton (man.eval ctx) (Some exp, flow, [])
                )
                (* Case when the attribute [attr] was not found *)
                (fun flow ->
-                  let flow = man.exec
+                  let flow = man.exec ctx
                       (Builtins.mk_builtin_raise "AttributeError" (tag_range range "error"))
-                      ctx flow
+                      flow
                   in
                   oeval_singleton (None, flow, [])
                )
@@ -232,13 +233,13 @@ struct
            | _ -> assert false
         )
         man flow ()
-        
-  let exec stmt man ctx flow =
+
+  let exec man ctx stmt flow =
     match skind stmt with
     (* Assignments to an attribute of an object *)
     | Universal.Ast.S_assign({ekind = E_py_attribute(obj, attr)}, rval, kind) ->
-      man_eval_list [rval; obj] man ctx flow |>
-      oeval_to_exec
+      eval_list [rval; obj] (man.eval ctx) flow |>
+      eval_to_exec
         (fun el flow ->
            match el with
            | [rval; {ekind = E_addr obj; erange}] ->
@@ -248,19 +249,19 @@ struct
                else
                  mk_dynamic_attribute obj attr erange, map_domain_cur (add (obj, attr)) man flow
              in
-             man.exec (mk_assign ~kind lval rval stmt.srange) ctx flow |>
+             man.exec ctx (mk_assign ~kind lval rval stmt.srange) flow |>
              return
            | _ ->
-             man.exec (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) ctx flow |>
+             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) flow |>
              return
         )
-        man ctx
+        (man.exec ctx) man.flow
 
     | _ ->
       None
 
- 
-  let ask query man ctx flow = None
+
+  let ask man ctx query flow = None
 
 end
 

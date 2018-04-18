@@ -41,6 +41,12 @@ let rec build_domain = function
 and build_leaf name =
   try Domains.Stateful.find_domain name
   with Not_found ->
+  try
+    let r = Domains.Reduction.Domain.find_domain name in
+    let module R = (val r : Domains.Reduction.Domain.DOMAIN) in
+    let module D = Domains.Reduction.Domain.MakeStateful(R) in
+    (module D : Domains.Stateful.DOMAIN)
+  with Not_found ->
     Debug.fail "Domain %s not found" name
 
 and build_iter json =
@@ -55,13 +61,10 @@ and build_iter json =
         let tl = aux tl in
         let module Head = (val hd : Domains.Stateful.DOMAIN) in
         let module Tail = (val tl : Domains.Stateful.DOMAIN) in
-        let module Dom = Domains.Composers.Iter.Make(Head)(Tail) in
+        let module Dom = Domains.Iter.Make(Head)(Tail) in
         (module Dom : Domains.Stateful.DOMAIN)
   in
   aux domains
-
-and build_product json =
-  assert false
 
 and build_functor assoc =
   let arg = List.assoc "arg" assoc in
@@ -69,13 +72,41 @@ and build_functor assoc =
   let module A = (val a : Domains.Stateful.DOMAIN) in
   let f = List.assoc "fun" assoc |> to_string in
   try
-    let f = Domains.Stateful.find_functor f in
+    let f = Domains.Fun.find_domain f in
     let module F = (val f) in
     let module D = F(A) in
     (module D : Domains.Stateful.DOMAIN)
   with Not_found ->
     Debug.fail "Functor %s not found" f
 
+and build_product json =
+  let domains = json |> to_list |> List.map build_reduction_domain in
+  let rec aux :
+    (module Domains.Reduction.Domain.DOMAIN) list ->
+    (module Domains.Reduction.Domain.DOMAIN)
+    = function
+      | [] -> assert false
+      | [d] -> d
+      | hd :: tl ->
+        let tl = aux tl in
+        let module Head = (val hd : Domains.Reduction.Domain.DOMAIN) in
+        let module Tail = (val tl : Domains.Reduction.Domain.DOMAIN) in
+        let module Dom = Domains.Reduction.Product.Make(Head)(Tail) in
+        (module Dom : Domains.Reduction.Domain.DOMAIN)
+  in
+  let r = aux domains in
+  let module R = (val r : Domains.Reduction.Domain.DOMAIN) in
+  let module D = Domains.Reduction.Root.Make(R) in
+  (module D : Domains.Stateful.DOMAIN)
+
+and build_reduction_domain = function
+  | `String(name) ->
+    begin
+      try Domains.Reduction.Domain.find_domain name
+      with Not_found ->
+        Debug.fail "Reduction domain %s not found" name
+    end
+  | _ -> Debug.fail "Only literal reduction names are supported"
 
 let parse (file: string) : (module Domains.Stateful.DOMAIN) =
   let json = Yojson.Basic.from_file file in

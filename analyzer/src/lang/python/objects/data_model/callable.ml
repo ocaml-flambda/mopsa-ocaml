@@ -12,7 +12,7 @@ open Framework.Domains
 open Framework.Ast
 open Framework.Manager
 open Framework.Pp
-open Framework.Utils
+open Framework.Eval
 open Universal.Ast
 open Framework.Domains.Stateless
 open Universal.Ast
@@ -25,23 +25,23 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let exec stmt man ctx flow = None
+  let exec man ctx stmt flow = None
 
-  let eval exp manager ctx flow =
+  let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call(f, args, []) ->
       debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
-      manager.eval f ctx flow |>
+      man.eval ctx f flow |>
       eval_compose
         (fun f flow ->
            match ekind f with
            (* Calls on non-object variables and constants is not allowed *)
            | E_var _ | E_constant _ ->
              let stmt = Builtins.mk_builtin_raise "TypeError" (tag_range range "call") in
-             let flow = manager.exec stmt ctx flow in
+             let flow = man.exec ctx stmt flow in
              oeval_singleton (None, flow, [])
 
            (* Calls on instances is OK if __call__ is defined *)
@@ -51,7 +51,7 @@ struct
            (* Calls on other kinds of addresses is handled by other domains *)
            | E_addr _ ->
              let exp = {exp with ekind = E_py_call(f, args, [])} in
-             re_eval_singleton (Some exp, flow, []) manager ctx
+             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
 
            | _ -> assert false
         )

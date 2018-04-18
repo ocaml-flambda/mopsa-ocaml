@@ -14,7 +14,8 @@ open Framework.Manager
 open Framework.Flow
 open Framework.Ast
 open Framework.Pp
-open Framework.Utils
+open Framework.Eval
+open Framework.Exec
 open Universal.Ast
 open Ast
 open Addr
@@ -40,14 +41,14 @@ struct
 
     | _ ->
       false
-      
-  let exec stmt manager ctx flow =
+
+  let exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      man_eval_list cls.py_cls_bases manager ctx flow |>
-      oeval_to_exec
+      eval_list cls.py_cls_bases (man.eval ctx) flow |>
+      eval_to_exec
         (fun bases flow ->
            if List.for_all can_inherit_from bases then
              let bases =
@@ -58,39 +59,39 @@ struct
              in
              Universal.Utils.compose_alloc_exec
                (fun addr flow ->
-                  let flow = manager.exec
+                  let flow = man.exec ctx
                       (mk_assign
                          (mk_var cls.py_cls_var (tag_range range "class var"))
                          (mk_addr addr (tag_range range "class addr"))
                          (tag_range range "class addr assign")
-                      ) ctx flow
+                      ) flow
                   in
-                  manager.exec cls.py_cls_body ctx flow |>
+                  man.exec ctx cls.py_cls_body flow |>
                   return
                )
-               (Addr.mk_class_addr cls bases) stmt.srange manager ctx flow
+               (Addr.mk_class_addr cls bases) stmt.srange man ctx flow
            else
-             manager.exec
-               (Builtins.mk_builtin_raise "TypeError" (tag_range range "class def error"))
-               ctx flow |>
+             man.exec ctx
+               (Builtins.mk_builtin_raise "TypeError" (tag_range range "class def error")) flow
+             |>
              return
         )
-        manager ctx
+        (man.exec ctx) man.flow
 
     | _ ->
       None
 
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
 
-  let instantiate_object cls args range manager ctx flow =
+  let instantiate_object man ctx cls args range flow =
     debug "Instantiate class %a object" Universal.Pp.pp_addr cls;
     let tmp = mktmp () in
 
     (* Call __new__ *)
     let flow =
-      manager.exec
+      man.exec ctx
         (let range = tag_range range "new" in
          mk_assign
            (mk_var tmp (tag_range range "tmp"))
@@ -101,13 +102,13 @@ struct
            )
            range
         )
-        ctx flow
+        flow
     in
-    
+
     (* Call __init__ *)
     (* FIXME: execute __init__ only if __new__ returned an instance of cls *)
-    let flow = 
-      manager.exec
+    let flow =
+      man.exec ctx
         (let range = tag_range range "init" in
          mk_stmt
            (S_expression(
@@ -117,23 +118,23 @@ struct
                  (tag_range range "call")
              ))
            range
-        ) ctx flow
+        ) flow
     in
     (* FIXME: check that __init__ always returns None *)
-    
-    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp (tag_range range "cleaner")]) in
-    re_eval_singleton evl manager ctx
 
-    
-  let eval exp manager ctx flow =
+    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp (tag_range range "cleaner")]) in
+    re_eval_singleton (man.eval ctx) evl
+
+
+  let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     (* Calls to classes to instantiate objects *)
     | E_py_call({ekind = E_addr ({addr_kind = A_py_class _} as cls)}, args, []) ->
-      instantiate_object cls args range manager ctx flow
-        
+      instantiate_object man ctx cls args range flow
+
     | _ -> None
-      
+
   let ask _ _ _ _ = None
 
 end

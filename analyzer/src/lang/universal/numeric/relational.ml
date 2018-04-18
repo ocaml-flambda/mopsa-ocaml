@@ -10,9 +10,10 @@
 
 open Framework.Lattice
 open Framework.Domains
-open Framework.Domains.Global
+open Framework.Domains.Stateful
 open Framework.Manager
 open Framework.Ast
+open Framework.Exec
 open Ast
 
 let name = "universal.numeric.relational"
@@ -113,10 +114,10 @@ struct
     | _ -> assert false
 
   (* {2 Transfer functions} *)
-  let init prog man ctx flow =
+  let init man ctx prog flow =
     ctx, set_domain_cur top man flow
   
-  let rec exec stmt man ctx flow =
+  let rec exec man ctx stmt flow =
     let abs = get_domain_cur man flow in
     let return_cur abs =
       set_domain_cur abs man flow |>
@@ -154,7 +155,7 @@ struct
           Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
           return_cur
         with Unsupported ->
-          exec {stmt with skind = S_remove_var v} man ctx flow
+          exec man ctx {stmt with skind = S_remove_var v} flow
       end
 
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
@@ -163,7 +164,7 @@ struct
     | S_assign(({ekind = E_var x}), {ekind = E_var ({vtyp = T_int | T_float} as x0)}, EXPAND) ->
       let abs = add_missing_vars abs [x0] in
       let abs = set_domain_cur abs man flow |>
-                exec (mk_stmt (S_remove_var x) stmt.srange) man ctx |>
+                exec man ctx (mk_stmt (S_remove_var x) stmt.srange) |>
                 oflow_extract |>
                 get_domain_cur man
       in
@@ -172,7 +173,7 @@ struct
       return_cur
 
     | S_assign({ekind = E_var v}, _, _) ->
-      exec {stmt with skind = S_remove_var v} man ctx flow
+      exec man ctx {stmt with skind = S_remove_var v} flow
 
     | S_assume(e) -> begin
         let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
@@ -226,8 +227,8 @@ struct
     | Unsupported -> Interval.top
 
   (** {2 Queries} *)
-  and ask : type r. r Framework.Query.query -> ('a, t) manager -> Framework.Context.context -> 'a Framework.Flow.flow -> r option =
-    fun query man ctx flow ->
+  and ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
+    fun man ctx query flow ->
       match query with
       | Query.QInterval exp ->
         let abs = get_domain_cur man flow in

@@ -12,7 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -24,30 +24,30 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let init _ _ ctx flow = ctx, flow
+  let init _ ctx _ flow = ctx, flow
 
-  let eval exp manager ctx flow =
+  let eval man ctx exp flow =
     match ekind exp with
     | E_binop(O_py_and, e1, e2) ->
-      manager.eval e1 ctx flow |>
+      man.eval ctx e1 flow |>
       eval_compose
         (fun e1 flow1 ->
            Universal.Utils.assume_to_eval e1
-             (fun true_flow -> Some (manager.eval e2 ctx true_flow))
+             (fun true_flow -> Some (man.eval ctx e2 true_flow))
              (fun false_flow -> oeval_singleton (Some e1, false_flow, []))
-             manager ctx flow ()
+             man ctx flow ()
         )
 
 
 
     | E_binop(O_py_or, e1, e2) ->
-      manager.eval e1 ctx flow |>
+      man.eval ctx e1 flow |>
       eval_compose
         (fun e1 flow1 ->
            Universal.Utils.assume_to_eval e1
              (fun true_flow -> oeval_singleton (Some e1, true_flow, []))
-             (fun false_flow -> Some (manager.eval e2 ctx false_flow))
-             manager ctx flow ()
+             (fun false_flow -> Some (man.eval ctx e2 false_flow))
+             man ctx flow ()
         )
 
     | _ -> None

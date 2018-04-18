@@ -12,7 +12,7 @@ open Flow
 open Lattice
 open Manager
 open Eval
-    
+
 
 (*==========================================================================*)
                   (** {2 Domain signature} *)
@@ -43,7 +43,7 @@ sig
 
 end
 
-(** Creates a low-level domain from a high-level one. *)
+(** Create a stateful domain from a stateless one. *)
 module MakeStatefulDomain(Domain: DOMAIN) : Stateful.DOMAIN =
 struct
 
@@ -74,3 +74,5 @@ let register_domain name modl =
   let module GD = MakeStatefulDomain(D) in
   Stateful.register_domain name (module GD)
 
+let return x = Some x
+let fail = None

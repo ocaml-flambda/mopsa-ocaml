@@ -12,7 +12,7 @@ open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Utils
+open Framework.Eval
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -28,22 +28,22 @@ struct
   (*==========================================================================*)
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
-  
-  let init prog man ctx flow = ctx, flow
 
-  let eval exp man ctx flow =
+  let init man ctx prog flow = ctx, flow
+
+  let eval man ctx exp flow =
     match ekind exp with
     | E_c_assign(lval, rval) ->
-      man.eval rval ctx flow |>
+      man.eval ctx rval flow |>
       eval_compose
         (fun rval flow ->
-           let flow = man.exec (Universal.Ast.mk_assign lval rval exp.erange) ctx flow in
+           let flow = man.exec ctx (Universal.Ast.mk_assign lval rval exp.erange) flow in
            oeval_singleton (Some rval, flow, [])
         )
 
     | _ -> None
 
-  let exec stmt man ctx flow = None
+  let exec man ctx stmt flow = None
 
   let ask _ _ _ _ = None
 

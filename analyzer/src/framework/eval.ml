@@ -33,6 +33,13 @@ let eval_join (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
 let eval_meet (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
   Dnf.mk_and e1 e2
 
+let eval_substitute
+    (f: ('a, 'b) eval_case -> ('c, 'd) evals)
+    (evl: ('a, 'b) evals) : ('c, 'd) evals
+  =
+  Dnf.substitute2 f evl
+
+
 let pp_evals print fmt (evals: ('a, 'b) evals) =
   let l = Dnf.to_list evals in
   Format.pp_print_list
@@ -140,6 +147,26 @@ let oeval_compose eval ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
 
 let eval_list
     (l: 'a list)
+    (eval: 'a -> 'b flow -> ('c, 'b) evals)
+    ?(empty = (fun flow -> eval_singleton (None, flow, [])))
+    (flow: 'b flow)
+  : ('c list, 'b) evals =
+  let rec aux expl flow clean = function
+    | [] ->
+      eval_singleton (Some (List.rev expl), flow, clean)
+    | exp :: tl ->
+      eval exp flow |>
+      eval_substitute
+        (fun (exp', flow, clean') ->
+           match exp' with
+           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
+           | None -> empty flow
+        )
+  in
+  aux [] flow [] l
+
+let oeval_list
+    (l: 'a list)
     (eval: 'a -> 'b flow -> ('c, 'b) evals option)
     ?(empty = (fun flow -> oeval_singleton (None, flow, [])))
     (flow: 'b flow)
@@ -174,4 +201,3 @@ let re_eval_singleton eval (exp, flow, clean)  =
          (exp', flow', clean @ clean')
       ) |>
     return
-
