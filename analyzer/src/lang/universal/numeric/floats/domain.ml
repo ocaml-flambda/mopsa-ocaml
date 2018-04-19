@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Stateful
+open Framework.Domains.Reduction.Domain
 open Framework.Eval
 open Ast
 open Bot
@@ -39,7 +39,7 @@ struct
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           oeval_singleton (Some exp', flow, [])
+           oeval_singleton (Some (exp', []), flow, [])
         )
 
     | E_unop((O_minus | O_plus | O_log_not | O_sqrt as op), e) ->
@@ -47,7 +47,7 @@ struct
       eval_compose
         (fun e flow ->
            let exp' = {exp with ekind = E_unop(op, e)} in
-           oeval_singleton (Some exp', flow, [])
+           oeval_singleton (Some (exp', []), flow, [])
         )
 
     | _ -> None

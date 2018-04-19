@@ -15,3 +15,6 @@ let functors : (string * (module FUNCTOR)) list ref = ref []
 let register_domain name modl = functors := (name, modl) :: !functors
 
 let find_domain name = List.assoc name !functors
+
+let return x = Some x
+let fail = None

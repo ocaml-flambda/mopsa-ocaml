@@ -16,8 +16,12 @@ open Manager
 open Eval
 open Query
 
-(** Reduction channel *)
-type channel = Query: 'a query -> channel
+(** Reduction channels *)
+type channel = ..
+
+type channel +=
+  | Query: 'a query -> channel
+  (** Query reduction channel. Useful for lazy evaluation of post-condition reductions *)
 
 (** Pre-reduction flow merger *)
 type merger = Ast.stmt
@@ -33,6 +37,29 @@ type 'a rflow = {
   ); (** subscription to reduction channels *)
   mergers: merger list; (** pre-reduction mergers *)
 }
+
+let rec rflow_join (man: 'a flow_manager) rflow1 rflow2 = {
+  out = man.join rflow1.out rflow2.out;
+  publish = (@) rflow1.publish rflow2.publish;
+  subscribe = (fun channel flow ->
+      match rflow1.subscribe channel flow, rflow1.subscribe channel flow with
+      | None, x | x, None -> x
+      | Some rflow1, Some rflow2 -> Some (rflow_join man rflow1 rflow2)
+    );
+  mergers = (@) rflow1.mergers rflow2.mergers;
+}
+
+let rec rflow_meet (man: 'a flow_manager) rflow1 rflow2 = {
+  out = man.meet rflow1.out rflow2.out;
+  publish = List.filter (fun channel -> List.mem channel rflow1.publish) rflow2.publish;
+  subscribe = (fun channel flow ->
+      match rflow1.subscribe channel flow, rflow1.subscribe channel flow with
+      | None, x | x, None -> x
+      | Some rflow1, Some rflow2 -> Some (rflow_meet man rflow1 rflow2)
+    );
+  mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers;
+}
+
 
 type 'a reval_case = (Ast.expr * merger list, 'a) eval_case
 type 'a revals = (Ast.expr * merger list, 'a) evals
@@ -101,5 +128,72 @@ struct
 
 end
 
-let return x = Some x
+let return flow = Some {
+    out = flow;
+    publish = [];
+    subscribe = (fun _ _ -> None);
+    mergers = [];
+  }
+
 let fail = None
+
+let eval_to_rexec
+    (f: 'a -> 'b flow -> 'b rflow)
+    (exec: Ast.stmt -> 'b flow -> 'b flow)
+    (man: 'b flow_manager)
+    ?(empty = (fun flow -> {
+          out = flow;
+          publish = [];
+          subscribe = (fun _ _ -> None);
+          mergers = [];
+        }))
+    (eval: ('a, 'b) evals)
+  : 'b rflow =
+  eval |> eval_substitute
+    (fun (exp', flow, clean) ->
+       let flow =
+         match exp' with
+         | Some exp' -> f exp' flow
+         | None -> empty flow
+       in
+       let out = clean |> List.fold_left (fun acc stmt ->
+           exec stmt acc
+         ) flow.out in
+       {flow with out}
+    )
+    (rflow_join man)
+    (rflow_meet man)
+
+
+let eval_to_orexec
+    (f: 'a -> 'b flow -> 'b rflow option)
+    (exec: Ast.stmt -> 'b flow -> 'b flow)
+    (man: 'b flow_manager)
+    ?(empty = (fun flow -> return flow))
+    (eval: ('a, 'b) evals)
+  : 'b rflow option =
+  eval |> eval_substitute
+    (fun (exp', flow, clean) ->
+       let rflow =
+         match exp' with
+         | Some exp' -> f exp' flow
+         | None -> empty flow
+       in
+       match rflow with
+       | None -> None
+       | Some rflow ->
+         let out = clean |> List.fold_left (fun acc stmt ->
+             exec stmt acc
+           ) rflow.out in
+         Some {rflow with out}
+    )
+    (fun flow1 flow2 ->
+       match flow1, flow2 with
+       | None, x | x, None -> x
+       | Some flow1, Some flow2 -> Some (rflow_join man flow1 flow2)
+    )
+    (fun flow1 flow2 ->
+       match flow1, flow2 with
+       | None, x | x, None -> x
+       | Some flow1, Some flow2 -> Some (rflow_meet man flow1 flow2)
+    )

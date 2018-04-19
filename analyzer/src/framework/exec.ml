@@ -2,10 +2,6 @@ open Flow
 open Manager
 open Eval
 
-let return x = Some x
-
-let fail = None
-
 let oflow_extract = Option.none_to_exn
 
 let oflow_extract_dfl dfl = function
@@ -20,12 +16,6 @@ let oflow_map f flow = Option.option_lift1 f flow
 
 let oflow_merge f1 f2 f12 none flow1 flow2 = Option.option_apply2 f1 f2 f12 none flow1 flow2
 
-(* Execute post-eval clean statements pushed by evaluators.*)
-let exec_cleaner_stmts exec stmtl flow =
-  stmtl |> List.fold_left (fun acc stmt ->
-      exec stmt acc
-    ) flow
-
 (**
    [eval_to_exec f man ctx evl] executes the transfer function [f] 
    on a set of evaluations [evl], and applies the cleaner
@@ -33,42 +23,62 @@ let exec_cleaner_stmts exec stmtl flow =
    [empty] is called when [evl] contains an empty expression.
 *)
 let eval_to_exec
+    (f: 'a -> 'b flow -> 'b flow)
+    (exec: Ast.stmt -> 'b flow -> 'b flow)
+    (man: 'b flow_manager)
+    ?(empty = (fun flow -> flow))
+    (eval: ('a, 'b) evals)
+  : 'b flow =
+  eval |> eval_substitute
+    (fun (exp', flow, clean) ->
+       let flow =
+         match exp' with
+         | Some exp' -> f exp' flow
+         | None -> empty flow
+       in
+       clean |> List.fold_left (fun acc stmt ->
+           exec stmt acc
+         ) flow
+    )
+    (man.join)
+    (man.meet)
+
+let eval_to_oexec
     (f: 'a -> 'b flow -> 'b flow option)
     (exec: Ast.stmt -> 'b flow -> 'b flow)
     (man: 'b flow_manager)
     ?(empty = (fun flow -> Some flow))
     (eval: ('a, 'b) evals)
   : 'b flow option =
-  Some eval |> oeval_merge
+  eval |> eval_substitute
     (fun (exp', flow, clean) ->
-       let flow' =
+       let flow =
          match exp' with
          | Some exp' -> f exp' flow
-         | None -> empty @@ exec_cleaner_stmts exec clean flow
+         | None -> empty flow
        in
-       match flow' with
+       match flow with
        | None -> None
-       | Some flow' ->
-         Some (exec_cleaner_stmts exec clean flow')
+       | Some flow ->
+         let flow' = clean |> List.fold_left (fun acc stmt ->
+             exec stmt acc
+           ) flow
+         in
+         Some flow'
     )
-    (fun a b ->
-       match a, b with
+    (fun flow1 flow2 ->
+       match flow1, flow2 with
        | None, x | x, None -> x
-       | Some a, Some b -> Some (man.join a b)
+       | Some flow1, Some flow2 -> Some (man.join flow1 flow2)
     )
-    (fun a b ->
-       match a, b with
+    (fun flow1 flow2 ->
+       match flow1, flow2 with
        | None, x | x, None -> x
-       | Some a, Some b -> Some (man.meet a b)
+       | Some flow1, Some flow2 -> Some (man.meet flow1 flow2)
     )
-    (fun () -> None)
 
-let oeval_to_exec 
-    (f: 'a -> 'b flow -> 'b flow option)
-    ?(empty = (fun flow -> Some flow))
-    man ctx
-    (oeval: ('a, 'b) evals option)
-  : 'b flow option =
+
+let oeval_to_oexec f exec man ?(empty = (fun flow -> Some flow)) oeval =
   match oeval with
   | None -> None
-  | Some eval -> eval_to_exec f ~empty man ctx eval
+  | Some eval -> eval_to_oexec f exec man ~empty eval

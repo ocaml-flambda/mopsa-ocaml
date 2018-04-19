@@ -25,7 +25,12 @@
     "c.memory.array_to_pointer",
     "c.memory.record_to_pointer",
     "c.memory.machine_integers",
-    {"fun": "c.memory.cell", "arg": "universal.numeric.integers"},
+    {"fun": "c.memory.cell", "arg":
+     {"product": [
+         "universal.numeric.integers",
+         "universal.numeric.congruence"
+     ]}
+    },
 
     //This domains should be put after the numeric domain to allow
     //proper initialization of global variables

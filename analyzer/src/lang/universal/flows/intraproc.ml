@@ -33,9 +33,8 @@ struct
     match skind stmt with
     | S_expression(e) ->
       man.eval ctx e flow |>
-      eval_to_exec (fun e flow ->
-          Some flow
-        ) (man.exec ctx) man.flow
+      eval_to_exec (fun e flow -> flow) (man.exec ctx) man.flow |>
+      return
 
     | S_block(block) ->
       List.fold_left (fun acc stmt -> man.exec ctx stmt acc) flow block |>

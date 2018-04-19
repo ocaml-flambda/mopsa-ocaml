@@ -46,11 +46,11 @@ struct
               ) flow
           in
 
-          man.flow.join ok_case fail_case |>
-          return
+          man.flow.join ok_case fail_case
 
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow  |>
+      return
 
     | _ -> None
 

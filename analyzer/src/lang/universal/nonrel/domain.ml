@@ -10,8 +10,7 @@
 
 open Value
 open Framework.Ast
-open Framework.Domains
-open Framework.Domains.Stateful
+open Framework.Domains.Reduction.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Context
@@ -258,8 +257,9 @@ struct
     | S_expression(e) ->
       man.eval ctx e flow |>
       eval_to_exec
-        (fun e flow -> return flow)
-        (man.exec ctx) man.flow
+        (fun e flow -> flow)
+        (man.exec ctx) man.flow |>
+      return
 
     | S_remove_var v ->
       map_domain_cur (VarMap.remove v) man flow |>
@@ -288,10 +288,10 @@ struct
            map_domain_cur (fun a ->
                let v = eval_value a e in
                VarMap.add var v a
-             ) man flow |>
-           return
+             ) man flow
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow |>
+      return
 
     | S_assign({ekind = E_var var}, e, _) ->
       assert false
@@ -311,10 +311,10 @@ struct
                  let a' = refine_expr a t rr in
                  debug "post refine %a" print a';
                  a'
-             ) man flow |>
-           return
+             ) man flow
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow |>
+      return
 
     | _ -> fail
 

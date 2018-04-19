@@ -136,11 +136,11 @@ let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
   meet = (fun fabs1 fabs2 ->
       top_neutral2
         (fun b1 b2 ->
-           (Map.map2zo
-              (fun _ v1 -> value.bottom)
-              (fun _ v2 -> value.bottom)
-              (fun _ v1 v2 -> value.meet v1 v2)
-              b1) b2
+           Map.map2zo
+             (fun _ v1 -> value.bottom)
+             (fun _ v2 -> value.bottom)
+             (fun _ v1 v2 -> value.meet v1 v2)
+             b1 b2
         )
         fabs1 fabs2
     );
@@ -228,6 +228,18 @@ let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
   );
 
   merge = (fun f flow1 flow2 ->
-      top_lift2 (Map.merge f) flow1 flow2
+      let exec tk a b =
+        match f tk a b with
+        | None -> value.bottom
+        | Some v -> v
+      in
+      top_lift2
+        (Map.map2zo
+           (fun tk v1 -> exec tk (Some v1) None)
+           (fun tk v2 -> exec tk None (Some v2))
+           (fun tk v1 v2 -> exec tk (Some v1) (Some v2))
+        )
+        flow1 flow2
+
     );
 }

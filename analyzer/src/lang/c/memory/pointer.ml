@@ -207,7 +207,7 @@ struct
     | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
       man.eval ctx q flow |>
       eval_compose (eval_p man ctx) |>
-      oeval_to_exec
+      oeval_to_oexec
         (fun pt flow ->
            match pt with
            | E_p_var (base, offset, t) ->
@@ -219,10 +219,10 @@ struct
                     | _ -> assert false
                   in
                   map_domain_cur (points_to_var p base) man flow |>
-                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) offset range) |>
-                  return
+                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) offset range)
                )
-               (man.exec ctx) man.flow
+               (man.exec ctx) man.flow |>
+             return
 
            | E_p_null ->
              man.eval ctx p flow |>
@@ -234,10 +234,10 @@ struct
                   in
                   map_domain_cur (points_to_null p) man flow |>
                   (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
-                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range) |>
-                  return
+                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range)
                )
-               (man.exec ctx) man.flow
+               (man.exec ctx) man.flow |>
+             return
 
            | E_p_invalid ->
              man.eval ctx p flow |>
@@ -249,10 +249,10 @@ struct
                   in
                   map_domain_cur (points_to_invalid p) man flow |>
                   (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
-                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range) |>
-                  return
+                  man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range)
                )
-               (man.exec ctx) man.flow
+               (man.exec ctx) man.flow |>
+             return
 
         ) (man.exec ctx) man.flow
 

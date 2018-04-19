@@ -3,6 +3,7 @@ let init () =
   Numeric.(
     Integers.Domain.setup ();
     Floats.Domain.setup ();
+    Congruence.Domain.setup ();
     Relational.setup ();
   );
   Flows.(

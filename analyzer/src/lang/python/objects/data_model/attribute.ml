@@ -249,13 +249,12 @@ struct
                else
                  mk_dynamic_attribute obj attr erange, map_domain_cur (add (obj, attr)) man flow
              in
-             man.exec ctx (mk_assign ~kind lval rval stmt.srange) flow |>
-             return
+             man.exec ctx (mk_assign ~kind lval rval stmt.srange) flow
            | _ ->
-             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) flow |>
-             return
+             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) flow
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow  |>
+      return
 
     | _ ->
       None

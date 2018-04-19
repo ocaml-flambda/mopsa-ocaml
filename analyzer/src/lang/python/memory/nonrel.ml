@@ -14,7 +14,7 @@
 *)
 
 open Framework.Domains
-open Framework.Domains.Stateful
+open Framework.Domains.Reduction.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Query
@@ -47,7 +47,7 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let exec (man: ('a, t) manager) (ctx: Framework.Context.context) stmt (flow: 'a flow) : 'a flow option =
+  let exec (man: ('a, t) manager) (ctx: Framework.Context.context) stmt (flow: 'a flow) : 'a rflow option =
     (* Before executing the statement, we need to remove the type of variables.
          This is necessary to keep the same key for all possible (typed) values of a variable in the non-relational map.
     *)
@@ -61,7 +61,7 @@ struct
        to {!Nonrel}. *)
     | S_assign({ekind = E_var var} as evar, e, ((STRONG | EXPAND) as kind)) ->
       man.eval ctx e flow |>
-      eval_to_exec
+      eval_to_orexec
         (fun e flow ->
            match ekind e with
            | E_addr(addr) ->
@@ -95,7 +95,7 @@ struct
     match ekind exp with
     | E_var v when Builtins.is_builtin v.vname ->
       debug "builtin";
-      oeval_singleton (Some (mk_addr (Builtins.from_expr exp) range), flow, [])
+      oeval_singleton (Some (mk_addr (Builtins.from_expr exp) range, []), flow, [])
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
@@ -120,13 +120,13 @@ struct
               Value.AddrLattice.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)
                   let exp' = {exp with ekind = E_addr addr; etyp = typ} in
-                  oeval_singleton (Some exp', flow', []) |>
+                  oeval_singleton (Some (exp', []), flow', []) |>
                   oeval_join acc
                 ) value'.addr acc
           (* Otherwise, we just give type [typ] to the expression *)
           | _ ->
             let exp' = {exp with etyp = typ} in
-            oeval_singleton (Some exp', flow', []) |>
+            oeval_singleton (Some (exp', []), flow', []) |>
             oeval_join acc
 
       ) None value
@@ -137,7 +137,7 @@ struct
       eval_compose
         (fun e flow ->
            let exp' = {exp with ekind = E_unop(op, e)} in
-           oeval_singleton (Some exp', flow, [])
+           oeval_singleton (Some (exp', []), flow, [])
         )
 
     (* TODO: this should be moved to data model of operators *)
@@ -147,7 +147,7 @@ struct
         (fun el flow ->
            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
            let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-           oeval_singleton (Some exp', flow, [])
+           oeval_singleton (Some (exp', []), flow, [])
         )
 
     | _ ->

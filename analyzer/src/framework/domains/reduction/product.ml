@@ -12,6 +12,8 @@ open Flow
 open Manager
 open Domain
 
+let debug fmt = Debug.debug ~channel:"framework.domains.reduction.product" fmt
+
 module Make(Head: DOMAIN)(Tail: DOMAIN) =
 struct
 
@@ -102,16 +104,21 @@ struct
   let exec man ctx stmt flow =
     let hman = head_man man in
     let tman = tail_man man in
+    debug "exec head";
     let hout = Head.exec hman ctx stmt flow in
+    debug "exec tail";
     let tout = Tail.exec tman ctx stmt flow in
-    merge_rflow man hman tman ctx hout tout
+    debug "merging rflows";
+    let res = merge_rflow man hman tman ctx hout tout in
+    debug "done";
+    res
 
   let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
     Eval.oeval_meet ~fand:(fun hconj tconj ->
         let tconj = merge_reval_cases man ctx hman.ax hconj tconj
         and hconj = merge_reval_cases man ctx hman.ax hconj tconj
         in
-        hconj @ tconj
+        List.sort_uniq compare (hconj @ tconj)
       )
       hevl tevl
 

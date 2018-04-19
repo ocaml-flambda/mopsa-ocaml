@@ -438,7 +438,7 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
       eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_exec
+      eval_to_oexec
         (fun el flow ->
            let rval, lval, v = match el with
              | [rval; ({ekind = E_var v} as lval)] -> rval, lval, v

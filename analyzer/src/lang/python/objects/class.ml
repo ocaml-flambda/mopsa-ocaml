@@ -66,17 +66,15 @@ struct
                          (tag_range range "class addr assign")
                       ) flow
                   in
-                  man.exec ctx cls.py_cls_body flow |>
-                  return
+                  man.exec ctx cls.py_cls_body flow
                )
                (Addr.mk_class_addr cls bases) stmt.srange man ctx flow
            else
              man.exec ctx
                (Builtins.mk_builtin_raise "TypeError" (tag_range range "class def error")) flow
-             |>
-             return
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow  |>
+      return
 
     | _ ->
       None

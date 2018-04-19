@@ -3,13 +3,6 @@ open Pp
 open Flow
 
 
-(** {Optional flows} *)
-
-
-let return x = Some x
-
-let fail = None
-
 (*==========================================================================*)
 (**                            {2 Evaluations}                              *)
 (*==========================================================================*)
@@ -34,6 +27,15 @@ let eval_meet ?(fand=(@)) (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) e
   Dnf.mk_and ~fand e1 e2
 
 let eval_substitute
+    (f: ('a, 'b) eval_case -> 'c)
+    (join: 'c -> 'c -> 'c)
+    (meet: 'c -> 'c -> 'c)
+    (evl: ('a, 'b) evals) : 'c
+  =
+  Dnf.substitute f join meet evl
+
+
+let eval_substitute2
     (f: ('a, 'b) eval_case -> ('c, 'd) evals)
     (evl: ('a, 'b) evals) : ('c, 'd) evals
   =
@@ -156,7 +158,7 @@ let eval_list
       eval_singleton (Some (List.rev expl), flow, clean)
     | exp :: tl ->
       eval exp flow |>
-      eval_substitute
+      eval_substitute2
         (fun (exp', flow, clean') ->
            match exp' with
            | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
@@ -195,9 +197,11 @@ let re_eval_singleton eval (exp, flow, clean)  =
   match exp with
   | None -> oeval_singleton (exp, flow, clean)
   | Some exp ->
-    eval exp flow |>
-    eval_map
-      (fun (exp', flow', clean') ->
-         (exp', flow', clean @ clean')
-      ) |>
-    return
+    let evl =
+      eval exp flow |>
+      eval_map
+        (fun (exp', flow', clean') ->
+           (exp', flow', clean @ clean')
+        )
+    in
+    Some evl

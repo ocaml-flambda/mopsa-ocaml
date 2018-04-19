@@ -53,10 +53,10 @@ struct
               (man.exec ctx) man.flow
 
           | _ ->
-            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) flow |>
-            return
+            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) flow
         )
-        (man.exec ctx) man.flow
+        (man.exec ctx) man.flow  |>
+      return
 
     | _ -> None
 
@@ -89,8 +89,7 @@ struct
         (tag_range range "try next")
     in
 
-    man.exec ctx stmt flow |>
-    return
+    man.exec ctx stmt flow
 
 
   let init _ ctx _ flow = ctx, flow

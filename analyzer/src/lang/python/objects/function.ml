@@ -40,10 +40,10 @@ struct
                 (mk_var func.py_func_var (tag_range range "func var"))
                 (mk_addr addr (tag_range range "func addr"))
                 (tag_range range "func addr assign")
-             ) flow |>
-           return
+             ) flow
         )
-        (Addr.mk_function_addr func) range man ctx flow
+        (Addr.mk_function_addr func) range man ctx flow  |>
+      return
     | _ ->
       None
 
