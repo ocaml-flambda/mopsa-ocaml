@@ -16,10 +16,10 @@ lang = universal c python
 lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
 lang.universal.heap = pool recency
 lang.universal.nonrel = value domain
-lang.universal.numeric = interval query reductions integers congruence floats relational
-lang.universal.numeric.integers = value domain
-lang.universal.numeric.congruence = value domain
-lang.universal.numeric.floats = value domain
+lang.universal.numeric = values query reduction domains
+lang.universal.numeric.values = int congruence float
+lang.universal.numeric.domains = boxes relational
+lang.universal.numeric.domains.boxes = int congruence float
 
 lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs program setup
 lang.python.memory = value nonrel

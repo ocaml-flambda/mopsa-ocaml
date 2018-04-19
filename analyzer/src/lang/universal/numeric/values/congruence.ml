@@ -54,16 +54,16 @@ let widening ctx = debug_bin "∇" (widening ctx) print
 
 let of_constant = function
   | C_int i ->
-    Nb (C.of_z i i)
+    Nb (C.cst i)
 
   | C_int_interval (i1,i2) ->
-    Nb (C.of_z i1 i2)
+    Nb (C.of_range i1 i2)
 
   | C_true ->
-    Nb (C.of_int 1 1)
+    Nb (C.cst_int 1)
 
   | C_false ->
-    Nb (C.of_int 0 0)
+    Nb (C.cst_int 0)
 
   | _ -> top
 
@@ -151,26 +151,6 @@ let bwd_filter op a1 a2 =
   with Found_BOT ->
     bottom, bottom
 
-
-let from_apron (apitv: Apron.Interval.t) : t =
-  if Apron.Interval.is_bottom apitv then
-    bottom
-  else
-    let inf = apitv.Apron.Interval.inf
-    and sup = apitv.Apron.Interval.sup
-    in
-
-    let scalar_to_bound s =
-      let styp = Apron.Scalar.is_infty s in
-      if styp = -1 then Intervals.IntBound.MINF
-      else if styp = 1 then Intervals.IntBound.PINF
-      else
-        let x = Apron.Scalar.to_string s in
-        let f = float_of_string x in
-        Intervals.IntBound.of_float f
-    in
-
-    Nb (C.of_bound (scalar_to_bound inf) (scalar_to_bound sup))
 
 let is_bounded a = bot_dfl1 true C.is_bounded a
 

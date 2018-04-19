@@ -65,7 +65,7 @@ let of_constant = function
 let to_int a =
   bot_absorb1 (fun f ->
       let {I.lo; up} = I.round f in
-      Integers.Value.of_float lo up
+      Int.of_float lo up
     ) a
 
 
@@ -185,7 +185,7 @@ let can_be_true abs =
 let can_be_false abs =
   bot_dfl1 false I.contains_zero abs
 
-let of_int_interval (iitv: Integers.Value.t) : t =
+let of_int_interval (iitv: Int.t) : t =
   let bound_to_float = function
     | Intervals.IntBound.MINF -> neg_infinity
     | Intervals.IntBound.PINF -> infinity

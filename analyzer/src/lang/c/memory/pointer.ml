@@ -274,24 +274,20 @@ struct
            match pt with
            | E_p_var (base, offset, t) ->
              debug "E_p_var(%a, %a, %a)" pp_var base pp_expr offset pp_typ t;
-             let open Universal.Numeric.Integers in
-             let itv = man.ask ctx (Domain.Domain.QEval offset) flow in
+             let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
              begin
                match itv with
                | None -> assert false
                | Some itv ->
-                 try
-                   Value.fold (fun acc o ->
-                       let c = {Cell.v = base; o; t} in
-                       let exp' = Cell.mk_gen_cell_var c range in
-                       man.eval ctx exp' flow |>
-                       eval_compose
-                         (fun exp' flow ->
-                            oeval_join acc (oeval_singleton (Some exp', flow, []))
-                         )
-                     ) None itv
-                 with Value.Unbounded ->
-                   assert false
+                 List.fold_left (fun acc o ->
+                     let c = {Cell.v = base; o; t} in
+                     let exp' = Cell.mk_gen_cell_var c range in
+                     man.eval ctx exp' flow |>
+                     eval_compose
+                       (fun exp' flow ->
+                          oeval_join acc (oeval_singleton (Some exp', flow, []))
+                       )
+                   ) None itv
              end
 
            | E_p_null ->
@@ -317,13 +313,12 @@ struct
            | E_p_var (base, offset, t) ->
              let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
              let field = List.nth record.c_record_fields i in
-             let open Universal.Numeric.Integers in
-             let itv = man.ask ctx (Domain.Domain.QEval offset) flow in
+             let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
              begin
                match itv with
                | None -> assert false
                | Some itv ->
-                 Value.fold (fun acc o ->
+                 List.fold_left (fun acc o ->
                      let o' = Z.add o (Z.of_int field.c_field_offset) in
                      let c = {Cell.v = base; o = o'; t = field.c_field_type} in
                      let exp' = Cell.mk_gen_cell_var c range in

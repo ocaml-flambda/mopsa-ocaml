@@ -318,41 +318,7 @@ struct
 
     | _ -> fail
 
-
-  type _ Framework.Query.query +=
-    | QEval : expr -> Value.t Framework.Query.query
-
-  let () =
-    Framework.Query.(
-      register_reply_manager {
-        domatch = (let check : type a. a query -> (a, Value.t) eq option =
-                     function
-                     | QEval _ -> Some Eq
-                     | _ -> None
-                   in
-                   check
-                  );
-        join = (fun v1 v2 ->
-            Value.join v1 v2
-          );
-
-        meet = (fun v1 v2 ->
-            Value.meet v1 v2
-          );
-      }
-    )
-
-
-  let ask : type r. ('a, t) manager -> context -> r Framework.Query.query -> 'a flow -> r option =
-    fun man ctx query flow ->
-      match query with
-      | QEval e ->
-        let a = get_domain_cur man flow in
-        let value = eval_value a e in
-        Some value
-
-      | _ ->
-        None
+  let ask man ctx query flow = None
 
   let eval exp man ctx flow = None
 

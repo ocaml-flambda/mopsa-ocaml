@@ -7,24 +7,33 @@
 (****************************************************************************)
 
 type _ Framework.Query.query +=
-  | QInterval : Framework.Ast.expr -> Interval.t Framework.Query.query
+  | QIntInterval : Framework.Ast.expr -> Values.Int.t Framework.Query.query
+  | QIntList : Framework.Ast.expr -> Z.t list Framework.Query.query
 
 let () =
   Framework.Query.(
     register_reply_manager {
-      domatch = (let check : type a. a query -> (a, Interval.t) eq option =
+      domatch = (let check : type a. a query -> (a, Values.Int.t) eq option =
                    function
-                   | QInterval _ -> Some Eq
+                   | QIntInterval _ -> Some Eq
                    | _ -> None
                  in
                  check
                 );
-      join = (fun itv1 itv2 ->
-          Interval.join itv1 itv2
-        );
+      join = Values.Int.join;
+      meet = Values.Int.meet;
+    };
 
-      meet = (fun itv1 itv2 ->
-          Interval.meet itv1 itv2
-        );
+    register_reply_manager {
+      domatch = (let check : type a. a query -> (a, Z.t list) eq option =
+                   function
+                   | QIntList _ -> Some Eq
+                   | _ -> None
+                 in
+                 check
+                );
+      join = (fun l1 l2 -> l1 @ l2 |> List.sort_uniq Z.compare);
+      meet = (fun l1 l2 -> List.filter (fun i1 -> List.exists (Z.equal i1) l1)  l1);
     }
+
   )

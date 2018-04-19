@@ -93,7 +93,10 @@ struct
         let flow = man.flow.meet flow2' flow1' in
         let publish = rflow1.publish @ rflow2.publish in
         let subscribe = (fun channel flow ->
-            doit (rflow1.subscribe channel flow) (rflow2.subscribe channel flow)
+            match rflow1.subscribe channel flow, rflow2.subscribe channel flow with
+            | None, None -> return flow
+            | None, x | x, None -> x
+            | x, y -> doit x y
           )
         in
         let mergers = rflow1.mergers @ rflow2.mergers in

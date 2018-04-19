@@ -1,10 +1,14 @@
 let init () =
   Unit_tests.setup ();
   Numeric.(
-    Integers.Domain.setup ();
-    Floats.Domain.setup ();
-    Congruence.Domain.setup ();
-    Relational.setup ();
+    Domains.(
+      Boxes.(
+        Int.setup ();
+        Float.setup ();
+        Congruence.setup ();
+      );
+      Relational.setup ();
+    );
   );
   Flows.(
     Intraproc.setup ();

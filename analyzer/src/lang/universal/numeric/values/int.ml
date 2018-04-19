@@ -219,3 +219,5 @@ let can_be_true abs =
 
 let can_be_false abs =
   bot_dfl1 false I.contains_zero abs
+
+let of_apron itv = assert false

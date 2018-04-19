@@ -216,23 +216,23 @@ struct
 
     | _ -> None
 
-  and interval exp abs =
-    try
-      let lv =  Framework.Visitor.expr_vars exp in
-      let abs = add_missing_vars abs lv in
-      let env = Apron.Abstract1.env abs in
-      let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in
-      Apron.Abstract1.bound_texpr ApronManager.man abs texp
-    with
-    | Unsupported -> Interval.top
-
   (** {2 Queries} *)
   and ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
     fun man ctx query flow ->
       match query with
-      | Query.QInterval exp ->
-        let abs = get_domain_cur man flow in
-        Some (interval exp abs)
+      | Query.QIntInterval exp ->
+        begin
+          let abs = get_domain_cur man flow in
+          try
+            let lv =  Framework.Visitor.expr_vars exp in
+            let abs = add_missing_vars abs lv in
+            let env = Apron.Abstract1.env abs in
+            let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in
+            let itv = Apron.Abstract1.bound_texpr ApronManager.man abs texp in
+            Some (Values.Int.of_apron itv)
+          with
+          | Unsupported -> Some (Values.Int.top)
+        end
       | _ ->
         None
   (** {2 Transformers to Apron syntax} *)

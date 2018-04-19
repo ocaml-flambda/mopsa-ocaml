@@ -209,7 +209,7 @@ let is_in_range ((a,b):t) (lo:Z.t) (up:Z.t) =
 
 let to_string ((a,b):t) : string =
   if a = Z.zero then Z.to_string b else
-    let prefix = (if a = Z.one then "" else Z.to_string b) in
+    let prefix = (if a = Z.one then "" else Z.to_string a) in
     match Z.sign b with
     | 1 -> prefix^"ℤ+"^(Z.to_string b)
     | -1 -> prefix^"ℤ"^(Z.to_string b)
