@@ -27,7 +27,8 @@ type 'a exec_out = {
   mergers: merger list;
 }
 
-type 'a eval_out =  (Ast.expr * merger list, 'a) evals
+type 'a eval_merge_case = (Ast.expr * merger list, 'a) eval_case
+type 'a eval_out = (Ast.expr * merger list, 'a) evals
 
 (** Abstract domain signature. *)
 module type DOMAIN =

@@ -55,24 +55,39 @@ struct
     let ctx, flow = Head.init (head_man man) ctx prog flow in
     Tail.init (tail_man man) ctx prog flow
 
-  let merge_exec_out man hman tman ctx hout tout =
-    let copy_and_merge ax mergers out1 out2 =
-      let out = man.flow.merge (fun tk env1 env2 ->
-          match env1, env2 with
-          | None, _ | _, None -> None
-          | Some env1, Some env2 -> Some (ax.set (ax.get env1) env2)
-        ) out1 out2
-      in
-      mergers |> List.fold_left (fun out merger ->
-          man.exec ctx merger out
-        ) out
+  let copy_and_merge man ctx ax mergers out1 out2 =
+    let out = man.flow.merge (fun tk env1 env2 ->
+        match env1, env2 with
+        | None, _ | _, None -> None
+        | Some env1, Some env2 -> Some (ax.set (ax.get env1) env2)
+      ) out1 out2
     in
+    mergers |> List.fold_left (fun out merger ->
+        man.exec ctx merger out
+      ) out
+
+  let copy_and_merge_list (man: ('a, t) manager) ctx ax (outl1: 'a eval_merge_case list) (outl2: 'a eval_merge_case list) : 'a eval_merge_case list =
+    List.fold_left (fun acc (exp1, out1, cleaners) ->
+        match exp1 with
+        | None -> acc
+        | Some (exp1, mergers1) ->
+          begin
+            List.map (fun (exp2, out2, cleaners) ->
+                match exp2 with
+                | None -> None, out2, cleaners
+                | Some (exp2, mergers2) ->
+                  Some (exp2, mergers2), (copy_and_merge man ctx ax mergers1 out1 out2), cleaners
+              ) acc
+          end
+      ) outl2 outl1
+
+  let merge_exec_out man hman tman ctx hout tout =
     let rec doit hout tout =
       match hout, tout with
       | None, x | x, None -> x
       | Some hout, Some tout ->
-        let tout' = copy_and_merge hman.ax hout.mergers hout.out tout.out in
-        let hout' = copy_and_merge tman.ax tout.mergers tout.out hout.out in
+        let tout' = copy_and_merge man ctx hman.ax hout.mergers hout.out tout.out in
+        let hout' = copy_and_merge man ctx tman.ax tout.mergers tout.out hout.out in
         let out = man.flow.meet hout' tout' in
         let publish = hout.publish @ tout.publish in
         let subscribe = (fun channel flow ->
@@ -91,8 +106,14 @@ struct
     let tout = Tail.exec tman ctx stmt flow in
     merge_exec_out man hman tman ctx hout tout
 
-  let merge_eval_out man hman tman ctx hevl tevl =
-    assert false
+  let merge_eval_out man hman tman ctx (hevl: 'a eval_out option) (tevl: 'a eval_out option) =
+    Eval.oeval_meet ~fand:(fun hconj tconj ->
+        let tconj = copy_and_merge_list man ctx hman.ax hconj tconj
+        and hconj = copy_and_merge_list man ctx hman.ax hconj tconj
+        in
+        hconj @ tconj
+      )
+      hevl tevl
 
   let eval man ctx exp flow =
     let hman = head_man man in

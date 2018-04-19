@@ -30,8 +30,8 @@ let eval_map
 let eval_join (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
   Dnf.mk_or e1 e2
 
-let eval_meet (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
-  Dnf.mk_and e1 e2
+let eval_meet ?(fand=(@)) (e1: ('a, 'b) evals) (e2: ('a, 'b) evals) : ('a, 'b) evals =
+  Dnf.mk_and ~fand e1 e2
 
 let eval_substitute
     (f: ('a, 'b) eval_case -> ('c, 'd) evals)
@@ -78,10 +78,10 @@ let oeval_join
   Option.option_neutral2 eval_join oevl1 oevl2
 
 let oeval_meet
-    (oevl1: ('a, 'b) evals option)
+    ?(fand=(@)) (oevl1: ('a, 'b) evals option)
     (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
   =
-  Option.option_neutral2 eval_meet oevl1 oevl2
+  Option.option_neutral2 (eval_meet ~fand) oevl1 oevl2
 
 
 let oeval_merge

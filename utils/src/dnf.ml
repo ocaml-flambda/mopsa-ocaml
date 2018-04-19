@@ -16,10 +16,10 @@ let mk_true = [[]]
 
 let mk_false = []
 
-let rec mk_and (a: 'a t) (b: 'a t) : 'a t =
+let rec mk_and ?(fand=(@)) (a: 'a t) (b: 'a t) : 'a t =
    List.fold_left (fun acc conj1 ->
       List.fold_left (fun acc conj2 ->
-          let conj = conj1 @ conj2 in
+          let conj = fand conj1 conj2 in
           mk_or acc [conj]
         ) acc b
     ) mk_false a
