@@ -6,17 +6,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Non-relational abstract domain of integer variables. *)
+(** Non-relational congruence abstract domain of integer variables. *)
 
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
 open Framework.Domains.Reduction.Domain
 open Framework.Eval
+open Framework.Exec
 open Ast
 open Bot
 
-let name = "universal.numeric.integers"
+let name = "universal.numeric.congruence"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -25,18 +26,38 @@ struct
   include Nonrel.Domain.Make(Value)
 
   let print fmt a =
-    Format.fprintf fmt "int: @[%a@]@\n" print a
+    Format.fprintf fmt "congruence: @[%a@]@\n" print a
 
   let init man ctx prog flow =
     ctx, set_domain_cur top man flow
+
+  let exec man ctx stmt flow =
+    match skind stmt with
+    | S_assign({ekind = E_var var}, e, STRONG) ->
+      man.eval ctx e flow |>
+      eval_to_orexec
+        (fun e flow ->
+           let a = get_domain_cur man flow in
+           let v = eval_value a e in
+           let flow' = set_domain_cur (VarMap.add var v a) man flow in
+           if Value.is_minf_inf v then
+             return flow'
+           else
+             let a, b = Value.as_tuple v in
+             Some {
+               out = flow'; mergers = []; subscribe = (fun _ _ -> None);
+               publish = [Reductions.CIntCongruence(var, a, b)];
+             }
+        )
+        (man.exec ctx) man.flow
+
+    | _ -> exec man ctx stmt flow
 
 
   let eval man ctx exp flow =
     match ekind exp with
     | E_binop((O_plus | O_minus | O_mult | O_div | O_mod |
-               O_eq | O_ne | O_lt | O_le | O_gt | O_ge |
-               O_log_and | O_log_or | O_bit_and | O_bit_or |
-               O_bit_xor | O_bit_lshift | O_bit_rshift as op), e1, e2) ->
+               O_eq | O_ne | O_lt | O_le | O_gt | O_ge | O_bit_rshift | O_bit_lshift  as op), e1, e2) ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose
         (fun el flow ->
@@ -45,7 +66,7 @@ struct
            oeval_singleton (Some (exp', []), flow, [])
         )
 
-    | E_unop((O_minus | O_plus | O_log_not | O_bit_invert | O_sqrt as op), e) ->
+    | E_unop((O_minus | O_plus | O_log_not as op), e) ->
       man.eval ctx e flow |>
       eval_compose
         (fun e flow ->

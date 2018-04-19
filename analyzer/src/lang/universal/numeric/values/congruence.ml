@@ -184,3 +184,10 @@ let can_be_true abs =
 
 let can_be_false abs =
   bot_dfl1 false C.contains_zero abs
+
+let is_minf_inf abs =
+  bot_dfl1 false C.is_minf_inf abs
+
+let as_tuple (abs: t) =
+  let a, b = bot_to_exn abs in
+  a, b

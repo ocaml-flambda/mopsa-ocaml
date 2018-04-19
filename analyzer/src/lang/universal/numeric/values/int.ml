@@ -182,6 +182,11 @@ let from_apron (apitv: Apron.Interval.t) : t =
 
     Nb (I.of_bound (scalar_to_bound inf) (scalar_to_bound sup))
 
+let is_constant (a: t) =
+  bot_dfl1 true (fun (a, b) ->
+      I.B.eq a b
+    ) a
+
 let is_bounded a = bot_dfl1 true I.is_bounded a
 
 exception Unbounded
