@@ -55,61 +55,61 @@ struct
     let ctx, flow = Head.init (head_man man) ctx prog flow in
     Tail.init (tail_man man) ctx prog flow
 
-  let copy_and_merge man ctx ax mergers out1 out2 =
-    let out = man.flow.merge (fun tk env1 env2 ->
+  let copy_and_merge_flow man ctx ax mergers flow1 flow2 =
+    let flow = man.flow.merge (fun tk env1 env2 ->
         match env1, env2 with
         | None, _ | _, None -> None
         | Some env1, Some env2 -> Some (ax.set (ax.get env1) env2)
-      ) out1 out2
+      ) flow1 flow2
     in
-    mergers |> List.fold_left (fun out merger ->
-        man.exec ctx merger out
-      ) out
+    mergers |> List.fold_left (fun flow merger ->
+        man.exec ctx merger flow
+      ) flow
 
-  let copy_and_merge_list (man: ('a, t) manager) ctx ax (outl1: 'a eval_merge_case list) (outl2: 'a eval_merge_case list) : 'a eval_merge_case list =
-    List.fold_left (fun acc (exp1, out1, cleaners) ->
+  let merge_reval_cases (man: ('a, t) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
+    List.fold_left (fun acc (exp1, flow1, cleaners) ->
         match exp1 with
         | None -> acc
         | Some (exp1, mergers1) ->
           begin
-            List.map (fun (exp2, out2, cleaners) ->
+            List.map (fun (exp2, flow2, cleaners) ->
                 match exp2 with
-                | None -> None, out2, cleaners
+                | None -> None, flow2, cleaners
                 | Some (exp2, mergers2) ->
-                  Some (exp2, mergers2), (copy_and_merge man ctx ax mergers1 out1 out2), cleaners
+                  Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
               ) acc
           end
-      ) outl2 outl1
+      ) cases2 cases1
 
-  let merge_exec_out man hman tman ctx hout tout =
-    let rec doit hout tout =
-      match hout, tout with
+  let merge_rflow man hman tman ctx rflow1 rflow2 =
+    let rec doit rflow1 rflow2 =
+      match rflow1, rflow2 with
       | None, x | x, None -> x
-      | Some hout, Some tout ->
-        let tout' = copy_and_merge man ctx hman.ax hout.mergers hout.out tout.out in
-        let hout' = copy_and_merge man ctx tman.ax tout.mergers tout.out hout.out in
-        let out = man.flow.meet hout' tout' in
-        let publish = hout.publish @ tout.publish in
+      | Some rflow1, Some rflow2 ->
+        let flow2' = copy_and_merge_flow man ctx hman.ax rflow1.mergers rflow1.out rflow2.out in
+        let flow1' = copy_and_merge_flow man ctx tman.ax rflow2.mergers rflow2.out rflow1.out in
+        let flow = man.flow.meet flow2' flow1' in
+        let publish = rflow1.publish @ rflow2.publish in
         let subscribe = (fun channel flow ->
-            doit (hout.subscribe channel flow) (tout.subscribe channel flow)
+            doit (rflow1.subscribe channel flow) (rflow2.subscribe channel flow)
           )
         in
-        let mergers = hout.mergers @ tout.mergers in
-        Some {out; publish; subscribe; mergers}
+        let mergers = rflow1.mergers @ rflow2.mergers in
+        Some {out = flow; publish; subscribe; mergers}
     in
-    doit hout tout
+    doit rflow1 rflow2
 
   let exec man ctx stmt flow =
     let hman = head_man man in
     let tman = tail_man man in
     let hout = Head.exec hman ctx stmt flow in
     let tout = Tail.exec tman ctx stmt flow in
-    merge_exec_out man hman tman ctx hout tout
+    merge_rflow man hman tman ctx hout tout
 
-  let merge_eval_out man hman tman ctx (hevl: 'a eval_out option) (tevl: 'a eval_out option) =
+  let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
     Eval.oeval_meet ~fand:(fun hconj tconj ->
-        let tconj = copy_and_merge_list man ctx hman.ax hconj tconj
-        and hconj = copy_and_merge_list man ctx hman.ax hconj tconj
+        let tconj = merge_reval_cases man ctx hman.ax hconj tconj
+        and hconj = merge_reval_cases man ctx hman.ax hconj tconj
         in
         hconj @ tconj
       )
@@ -120,7 +120,7 @@ struct
     let tman = tail_man man in
     let hevl = Head.eval hman ctx exp flow
     and tevl = Tail.eval tman ctx exp flow in
-    merge_eval_out man hman tman ctx hevl tevl
+    merge_revals man hman tman ctx hevl tevl
 
   let ask man ctx query flow =
     let head_reply = Head.ask (head_man man) ctx query flow in

@@ -10,6 +10,7 @@
 
 open Flow
 open Manager
+open Domain
 
 module Make(Domain: Domain.DOMAIN) =
 struct
@@ -28,9 +29,28 @@ struct
 
   let init = Domain.init
 
-  let exec man ctx stmt flow = assert false
+  let exec man ctx stmt flow =
+    let rflow = Domain.exec man ctx stmt flow in
+    match rflow with
+    | None -> None
+    | Some rflow ->
+      (* FIXME: we do here just one reduction iteration.
+         Reaching fixpoint is not ensured, but the output is still sound.
+      *)
+      let flow = List.fold_left (fun flow channel ->
+          match rflow.subscribe channel flow with
+          | None -> flow
+          | Some rflow -> rflow.out
+        ) rflow.out rflow.publish
+      in
+      Some flow
 
-  let eval man ctx exp flow = assert false
+  let eval man ctx exp flow =
+    let revl = Domain.eval man ctx exp flow in
+    Eval.oeval_map (function
+        | None, flow, cleaners -> None, flow, cleaners
+        | Some (exp, mergers), flow, cleaners -> Some exp, flow, cleaners
+      ) revl
 
   let ask = Domain.ask
 

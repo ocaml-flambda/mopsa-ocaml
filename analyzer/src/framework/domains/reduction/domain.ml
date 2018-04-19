@@ -16,19 +16,26 @@ open Manager
 open Eval
 open Query
 
+(** Reduction channel *)
 type channel = Query: 'a query -> channel
 
+(** Pre-reduction flow merger *)
 type merger = Ast.stmt
 
-type 'a exec_out = {
-  out: 'a flow;
-  publish: channel list;
-  subscribe: (channel -> 'a flow -> 'a exec_out option);
-  mergers: merger list;
+(** Reduction flow *)
+type 'a rflow = {
+  out: 'a flow;             (** not yet reduced post-condition *)
+  publish: channel list;    (** published reduction channels *)
+  subscribe: (
+    channel (** reduction channel *) ->
+    'a flow (** merged post-condition *) ->
+    'a rflow option
+  ); (** subscription to reduction channels *)
+  mergers: merger list; (** pre-reduction mergers *)
 }
 
-type 'a eval_merge_case = (Ast.expr * merger list, 'a) eval_case
-type 'a eval_out = (Ast.expr * merger list, 'a) evals
+type 'a reval_case = (Ast.expr * merger list, 'a) eval_case
+type 'a revals = (Ast.expr * merger list, 'a) evals
 
 (** Abstract domain signature. *)
 module type DOMAIN =
@@ -42,11 +49,11 @@ sig
 
   (** Abstract transfer function of statements. *)
   val exec:
-    ('a, t) manager -> Context.context -> Ast.stmt -> 'a flow -> 'a exec_out option
+    ('a, t) manager -> Context.context -> Ast.stmt -> 'a flow -> 'a rflow option
 
   (** Abstract (symbolic) evaluation of expressions. *)
   val eval:
-    ('a, t) manager -> Context.context -> Ast.expr -> 'a flow -> 'a eval_out option
+    ('a, t) manager -> Context.context -> Ast.expr -> 'a flow -> 'a revals option
 
   (** Handler of generic queries. *)
   val ask:
