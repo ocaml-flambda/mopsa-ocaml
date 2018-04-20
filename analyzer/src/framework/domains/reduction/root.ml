@@ -12,6 +12,8 @@ open Flow
 open Manager
 open Domain
 
+let debug fmt = Debug.debug ~channel:"framework.domains.reduction.root" fmt
+
 module Make(Domain: Domain.DOMAIN) =
 struct
 
@@ -30,34 +32,34 @@ struct
   let init = Domain.init
 
   let exec man ctx stmt flow =
+    debug "exec %a" Pp.pp_stmt stmt;
     let rflow = Domain.exec man ctx stmt flow in
     match rflow with
     | None -> None
     | Some rflow ->
-      let rec doit i rflow =
-        debug "reduction iteration %d" i;
-        if i = Options.(common_options.reduce_iter) then rflow.out
+      let rec doit i post publish =
+        debug "reduction iteration %d, |publish| = %d" i (List.length publish);
+        if i = Options.(common_options.reduce_iter) then post
         else
-          let rec doit2 unused = function
-            | [] ->
-              debug "no publishers";
-              None
-              
-            | channel :: tl ->
-              debug "trying publisher";
-              match Domain.refine man ctx channel rflow.out with
-              | None ->
-                debug "no reply";
-                doit2 (channel :: unused) tl
-              | Some rflow' ->
-                debug "one reply";
-                Some {rflow' with publish = rflow'.publish @ tl @ unused}
-          in
-          match doit2 [] rflow.publish with
-          | None -> debug "really no reply"; rflow.out
-          | Some rflow' -> doit (i + 1) rflow'
+          match publish with
+          | [] -> post
+          | _ ->
+            let post', publish', nb_replies =
+              List.fold_left (fun (post, publish, nb_replies) channel ->
+                  match Domain.refine man ctx channel rflow.out with
+                  | None ->
+                    debug "no reply";
+                    post, channel :: publish, nb_replies
+                  | Some rflow' ->
+                  debug "one reply";
+                  rflow'.out, publish @ rflow'.publish, nb_replies + 1
+                ) (post, [], 0) publish
+            in
+            if nb_replies = 0 then post
+            else
+              doit (i + 1) post' publish'
       in
-      doit 0 rflow |>
+      doit 0 rflow.out rflow.publish |>
       Stateful.return
 
   let eval man ctx exp flow =

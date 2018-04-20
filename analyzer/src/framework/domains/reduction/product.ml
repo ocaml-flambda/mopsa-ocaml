@@ -84,23 +84,23 @@ struct
       ) cases2 cases1
 
   let merge_rflow man hman tman ctx rflow1 rflow2 =
-    let rec doit rflow1 rflow2 =
-      match rflow1, rflow2 with
+    debug "merging";
+    let rflow = match rflow1, rflow2 with
       | None, x | x, None -> x
       | Some rflow1, Some rflow2 ->
         let flow2' = copy_and_merge_flow man ctx hman.ax rflow1.mergers rflow1.out rflow2.out in
         let flow1' = copy_and_merge_flow man ctx tman.ax rflow2.mergers rflow2.out rflow1.out in
         let flow = man.flow.meet flow2' flow1' in
         let publish = rflow1.publish @ rflow2.publish in
+        debug "|publish| = %d + %d" (List.length rflow1.publish) (List.length rflow2.publish);
         let mergers = rflow1.mergers @ rflow2.mergers in
         Some {out = flow; publish; mergers}
     in
-    let rflow = doit rflow1 rflow2 in
     match rflow with
     | None -> None
     | Some rflow ->
       if is_bottom @@ get_domain_cur man rflow.out then
-        Some {rflow with out = set_domain_cur bottom man rflow.out}
+        return (set_domain_cur bottom man rflow.out)
       else
         Some rflow
 
@@ -108,9 +108,9 @@ struct
   let exec man ctx stmt flow =
     let hman = head_man man in
     let tman = tail_man man in
-    debug "exec head";
+    debug "exec %a on head" Pp.pp_stmt stmt;
     let hout = Head.exec hman ctx stmt flow in
-    debug "exec tail";
+    debug "exec %a on tail" Pp.pp_stmt stmt;
     let tout = Tail.exec tman ctx stmt flow in
     debug "merging rflows";
     let res = merge_rflow man hman tman ctx hout tout in
@@ -120,14 +120,14 @@ struct
   let refine man ctx channel flow =
     let hman = head_man man in
     let tman = tail_man man in
-    debug "exec refine";
+    debug "refine head";
     let hout = Head.refine hman ctx channel flow in
-    debug "exec refine";
+    debug "refine tail";
     let tout = Tail.refine tman ctx channel flow in
     debug "merging rflows";
-    let res = merge_rflow man hman tman ctx hout tout in
+    let rflow = merge_rflow man hman tman ctx hout tout in
     debug "done";
-    res
+    rflow
 
 
   let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
