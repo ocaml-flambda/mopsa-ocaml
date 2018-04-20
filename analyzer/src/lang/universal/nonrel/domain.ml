@@ -318,6 +318,8 @@ struct
 
     | _ -> fail
 
+  let refine man ctx channel flow = None
+
   let ask man ctx query flow = None
 
   let eval exp man ctx flow = None

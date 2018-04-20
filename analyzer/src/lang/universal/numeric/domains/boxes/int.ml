@@ -43,43 +43,36 @@ struct
            let v = eval_value a e in
            let a' = VarMap.add var v a in
            let flow' = set_domain_cur a' man flow in
-           try
-             let itv = Bot.bot_to_exn v in
-             if Intervals.IntItv.is_singleton itv then
-               return flow'
-             else
-               Some {
-                 out = flow'; mergers = []; publish = [];
-                 subscribe = (fun ch flow ->
-                   match ch with
-                     | Reduction.CIntCongruence(var', c) when compare_var var var' = 0 ->
-                       begin
-                         let r = Congruences.IntCong.meet_inter c itv in
-                         try
-                           let c', itv' = Bot.bot_to_exn r in
-                           debug "congruence reduction: %a, %a" Values.Congruence.print (Bot.Nb c') Values.Int.print (Bot.Nb itv');
-                           if Intervals.IntItv.included itv itv' then
-                             return flow
-                           else
-                             let a'' = VarMap.add var (Bot.Nb itv') a' in
-                             let flow' = set_domain_cur a'' man flow in
-                              Some {
-                                out = flow'; mergers = []; subscribe = (fun _ flow -> return flow);
-                                publish = [Reduction.CIntCongruence(var, c')]
-                              }
-                         with Bot.Found_BOT ->
-                           let flow' = set_domain_cur bottom man flow in
-                           return flow'
-                       end
-                     | _ -> None
-                   );
-               }
-           with Bot.Found_BOT ->
-             return flow'
+           return flow'
         )
         (man.exec ctx) man.flow
 
     | _ -> exec man ctx stmt flow
+
+  let refine man ctx channel flow =
+    match channel with
+    | Reduction.CIntCongruence(var, c) ->
+      debug "refine with CIntCongruence %a" Values.Congruence.C.fprint c;
+      let a = get_domain_cur man flow in
+      let v = find var a in
+      bot_dfl1 None (fun itv ->
+          debug "trying congruence -> interval reduction on itv = %a with c = %a" Values.Int.I.fprint itv Values.Congruence.C.fprint c;
+          let r = Congruences.IntCong.meet_inter c itv in
+          bot_dfl1 None
+            (fun (c', itv') ->
+               if Intervals.IntItv.included itv itv' then let _ = debug "none" in None
+               else
+                 let a' = VarMap.add var (Bot.Nb itv') a in
+                 debug "reduction applied, itv' = %a" Values.Int.I.fprint itv';
+                 let flow' = set_domain_cur a' man flow in
+                 Some {
+                   out = flow'; mergers = []; publish = [Reduction.CIntCongruence(var, c')]
+                 }
+            ) r
+        ) v
+        
+    | _ -> None
+
 
 
   let eval man ctx exp flow =

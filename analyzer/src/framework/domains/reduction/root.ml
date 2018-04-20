@@ -34,16 +34,31 @@ struct
     match rflow with
     | None -> None
     | Some rflow ->
-      (* FIXME: we do here just one reduction iteration.
-         Reaching fixpoint is not ensured, but the output is still sound.
-      *)
-      let flow = List.fold_left (fun flow channel ->
-          match rflow.subscribe channel flow with
-          | None -> flow
-          | Some rflow -> rflow.out
-        ) rflow.out rflow.publish
+      let rec doit i rflow =
+        debug "reduction iteration %d" i;
+        if i = Options.(common_options.reduce_iter) then rflow.out
+        else
+          let rec doit2 unused = function
+            | [] ->
+              debug "no publishers";
+              None
+              
+            | channel :: tl ->
+              debug "trying publisher";
+              match Domain.refine man ctx channel rflow.out with
+              | None ->
+                debug "no reply";
+                doit2 (channel :: unused) tl
+              | Some rflow' ->
+                debug "one reply";
+                Some {rflow' with publish = rflow'.publish @ tl @ unused}
+          in
+          match doit2 [] rflow.publish with
+          | None -> debug "really no reply"; rflow.out
+          | Some rflow' -> doit (i + 1) rflow'
       in
-      Some flow
+      doit 0 rflow |>
+      Stateful.return
 
   let eval man ctx exp flow =
     let revl = Domain.eval man ctx exp flow in

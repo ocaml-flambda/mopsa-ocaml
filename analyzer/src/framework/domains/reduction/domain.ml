@@ -30,33 +30,18 @@ type merger = Ast.stmt
 type 'a rflow = {
   out: 'a flow;             (** not yet reduced post-condition *)
   publish: channel list;    (** published reduction channels *)
-  subscribe: (
-    channel (** reduction channel *) ->
-    'a flow (** merged post-condition *) ->
-    'a rflow option
-  ); (** subscription to reduction channels *)
   mergers: merger list; (** pre-reduction mergers *)
 }
 
 let rec rflow_join (man: 'a flow_manager) rflow1 rflow2 = {
   out = man.join rflow1.out rflow2.out;
   publish = (@) rflow1.publish rflow2.publish;
-  subscribe = (fun channel flow ->
-      match rflow1.subscribe channel flow, rflow1.subscribe channel flow with
-      | None, x | x, None -> x
-      | Some rflow1, Some rflow2 -> Some (rflow_join man rflow1 rflow2)
-    );
   mergers = (@) rflow1.mergers rflow2.mergers;
 }
 
 let rec rflow_meet (man: 'a flow_manager) rflow1 rflow2 = {
   out = man.meet rflow1.out rflow2.out;
   publish = List.filter (fun channel -> List.mem channel rflow1.publish) rflow2.publish;
-  subscribe = (fun channel flow ->
-      match rflow1.subscribe channel flow, rflow1.subscribe channel flow with
-      | None, x | x, None -> x
-      | Some rflow1, Some rflow2 -> Some (rflow_meet man rflow1 rflow2)
-    );
   mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers;
 }
 
@@ -77,6 +62,9 @@ sig
   (** Abstract transfer function of statements. *)
   val exec:
     ('a, t) manager -> Context.context -> Ast.stmt -> 'a flow -> 'a rflow option
+
+  val refine:
+    ('a, t) manager -> Context.context -> channel -> 'a flow -> 'a rflow option
 
   (** Abstract (symbolic) evaluation of expressions. *)
   val eval:
@@ -131,7 +119,6 @@ end
 let return flow = Some {
     out = flow;
     publish = [];
-    subscribe = (fun _ _ -> None);
     mergers = [];
   }
 
@@ -144,7 +131,6 @@ let eval_to_rexec
     ?(empty = (fun flow -> {
           out = flow;
           publish = [];
-          subscribe = (fun _ _ -> None);
           mergers = [];
         }))
     (eval: ('a, 'b) evals)

@@ -24,6 +24,7 @@ type common_options = {
   mutable config : string;
   mutable unit_test_mode : bool;
   mutable stubs : string list;
+  mutable reduce_iter : int;
 }
 
 let common_options = {
@@ -31,6 +32,7 @@ let common_options = {
   config = "";
   unit_test_mode = false;
   stubs = [];
+  reduce_iter = 1;
 }
 
 let setup () =
@@ -65,5 +67,10 @@ let setup () =
     "-stub",
     Arg.String(fun f -> common_options.stubs <- f :: common_options.stubs),
     " path to a stub directory"
+  );
+  register (
+    "-reduce-iter",
+    Arg.Int(fun n -> common_options.reduce_iter <- n),
+    " maximal number of iterations of post-condition reductions"
   );
   ()

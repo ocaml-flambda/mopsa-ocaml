@@ -39,26 +39,57 @@ struct
       man.eval ctx e flow |>
       eval_to_orexec
         (fun e flow ->
-           debug "assign %a to %a" Framework.Pp.pp_expr e Framework.Pp.pp_var var;
            let a = get_domain_cur man flow in
            let v = eval_value a e in
-           debug "value = %a" Value.print v;
-           let flow' = set_domain_cur (VarMap.add var v a) man flow in
-           if Value.is_minf_inf v then
-             return flow'
+           let a' = VarMap.add var v a in
+           let flow' = set_domain_cur a' man flow in
+           if Value.is_top v || Value.is_bottom v then return flow'
            else
-             try
-               let c = bot_to_exn v in
-               Some {
-                 out = flow'; mergers = []; subscribe = (fun _ _ -> None);
-                 publish = [Reduction.CIntCongruence(var, c)];
-               }
-             with Found_BOT ->
-               return flow'
+             let c = bot_to_exn v in
+             debug "publish CIntCongruence %a" Value.print v;
+             Some {
+               out = flow'; mergers = [];
+               publish = [Reduction.CIntCongruence(var, c)];
+             }
         )
         (man.exec ctx) man.flow
 
     | _ -> exec man ctx stmt flow
+
+  let refine man ctx channel flow =
+    match channel with
+    | Reduction.CIntCongruence(var, c') ->
+      let a = get_domain_cur man flow in
+      let v = find var a in
+      let v' = Bot.Nb c' in
+      debug "applying congruence reduction %a -> %a" Value.print v Value.print v';
+      if Value.leq v v' then
+        None
+      else
+        let a' = VarMap.add var v' a in
+        let flow' = set_domain_cur a' man flow in
+        return flow'
+        
+    (* | Reduction.CIntInterval(var', itv)
+     *   when compare_var var var' = 0 ->
+     *   begin
+     *     debug "trying interval -> congruence reduction on c = %a with itv = %a"Values.Congruence.C.fprint c  Values.Int.I.fprint itv;
+     *     let r = Congruences.IntCong.meet_inter c itv in
+     *     try
+     *       let c', itv' = Bot.bot_to_exn r in
+     *       debug "congruence reduction: %a, %a" Values.Congruence.print (Bot.Nb c') Values.Int.print (Bot.Nb itv');
+     *       if Value.C.included c c' then None
+     *       else
+     *         let a'' = VarMap.add var (Bot.Nb c') a' in
+     *         let flow' = set_domain_cur a'' man flow in
+     *         return ~subscribe flow'
+     *     with Bot.Found_BOT ->
+     *       let flow' = set_domain_cur bottom man flow in
+     *       return ~subscribe flow'
+     *   end *)
+
+    | _ -> None
+
 
 
   let eval man ctx exp flow =
