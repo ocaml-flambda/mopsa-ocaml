@@ -36,7 +36,6 @@ struct
   let exec man ctx stmt flow =
     match skind stmt with
     | S_assign({ekind = E_var var}, e, STRONG) ->
-      debug "assign";
       man.eval ctx e flow |>
       eval_to_orexec
         (fun e flow ->

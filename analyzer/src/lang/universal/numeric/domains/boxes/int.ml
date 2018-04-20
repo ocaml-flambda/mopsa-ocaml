@@ -39,22 +39,17 @@ struct
       man.eval ctx e flow |>
       eval_to_orexec
         (fun e flow ->
-           debug "assume %a" Framework.Pp.pp_expr e;
            let a = get_domain_cur man flow in
            let (_,r) as t = annotate_expr a e in
-           debug "post annotate %a" Value.print r;
            let rr = Value.assume_true r in
-           debug "assume true %a" Value.print rr;
            if Value.is_bottom rr then return (set_domain_cur bottom man flow)
            else
              let a' = refine_expr a t rr in
-             debug "post refine %a" print a';
              let vars = Framework.Visitor.expr_vars e in
              debug "trying constant reduction in %a" print a;
              let publish = List.fold_left (fun acc var ->
                  let v = find var a in
                  let v' = find var a' in
-                 debug "var %a, itv = %a" Framework.Pp.pp_var var Value.print v;
                  if not (Value.is_constant v) && Value.is_constant v' then
                    let n, _ = Value.get_bounds v' in
                    debug "publish new constant reduction";

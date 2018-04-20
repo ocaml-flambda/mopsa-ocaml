@@ -6,7 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduced product composer. *)
+(** Reduced product composer.
+
+    This functor combines two reduction domains into a single one. It ensures
+    the merge of their post condtions.
+*)
 
 open Flow
 open Manager
@@ -39,15 +43,18 @@ struct
   let print fmt (hd, tl) =
     Format.fprintf fmt "%a%a" Head.print hd Tail.print tl
 
+
   let head_man man = {
-    man with ax = {
+    man with
+    ax = {
       get = (fun env -> fst @@ man.ax.get env);
       set = (fun hd env -> man.ax.set (hd, snd @@ man.ax.get env) env);
     }
   }
 
   let tail_man man = {
-    man with ax = {
+    man with
+    ax = {
       get = (fun env -> snd @@ man.ax.get env);
       set = (fun tl env -> man.ax.set (fst @@ man.ax.get env, tl) env);
     }
@@ -57,6 +64,17 @@ struct
     let ctx, flow = Head.init (head_man man) ctx prog flow in
     Tail.init (tail_man man) ctx prog flow
 
+
+
+  (*==========================================================================*)
+  (**                         {2 Statements}                                  *)
+  (*==========================================================================*)
+
+  (** This function is called before computing the meet of two post conditions to:
+      1. copy the private part of a domain D1 from its post condition to the
+      post condition of the other domain D2,
+      2. and then apply the mergers of D1 on the resulting flow
+  *)
   let copy_and_merge_flow man ctx ax mergers flow1 flow2 =
     let flow = man.flow.merge (fun tk env1 env2 ->
         match env1, env2 with
@@ -68,21 +86,8 @@ struct
         man.exec ctx merger flow
       ) flow
 
-  let merge_reval_cases (man: ('a, t) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
-    List.fold_left (fun acc (exp1, flow1, cleaners) ->
-        match exp1 with
-        | None -> acc
-        | Some (exp1, mergers1) ->
-          begin
-            List.map (fun (exp2, flow2, cleaners) ->
-                match exp2 with
-                | None -> None, flow2, cleaners
-                | Some (exp2, mergers2) ->
-                  Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
-              ) acc
-          end
-      ) cases2 cases1
-
+  (** Merge two post conditions by calling [copy_and_merge_flow] mutually and
+      computing the intersection. *)
   let merge_rflow man hman tman ctx rflow1 rflow2 =
     debug "merging";
     let rflow = match rflow1, rflow2 with
@@ -99,12 +104,15 @@ struct
     match rflow with
     | None -> None
     | Some rflow ->
+      (** Default bottom reduction: if at least one of the post conditions is
+          bottom, the both are set to bottom *)
       if is_bottom @@ get_domain_cur man rflow.out then
         return (set_domain_cur bottom man rflow.out)
       else
         Some rflow
 
 
+  (** Execute statement on both domains and merge their post conditions *)
   let exec man ctx stmt flow =
     let hman = head_man man in
     let tman = tail_man man in
@@ -117,6 +125,7 @@ struct
     debug "done";
     res
 
+  (** Refine a post condition with a reduction channel *)
   let refine man ctx channel flow =
     let hman = head_man man in
     let tman = tail_man man in
@@ -128,6 +137,26 @@ struct
     let rflow = merge_rflow man hman tman ctx hout tout in
     debug "done";
     rflow
+
+
+  (*==========================================================================*)
+  (**                         {2 Expressions}                                 *)
+  (*==========================================================================*)
+
+  let merge_reval_cases (man: ('a, t) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
+    List.fold_left (fun acc (exp1, flow1, cleaners) ->
+        match exp1 with
+        | None -> acc
+        | Some (exp1, mergers1) ->
+          begin
+            List.map (fun (exp2, flow2, cleaners) ->
+                match exp2 with
+                | None -> None, flow2, cleaners
+                | Some (exp2, mergers2) ->
+                  Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
+              ) acc
+          end
+      ) cases2 cases1
 
 
   let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
@@ -145,6 +174,11 @@ struct
     let hevl = Head.eval hman ctx exp flow
     and tevl = Tail.eval tman ctx exp flow in
     merge_revals man hman tman ctx hevl tevl
+
+
+  (*==========================================================================*)
+  (**                            {2 Queries}                                  *)
+  (*==========================================================================*)
 
   let ask man ctx query flow =
     let head_reply = Head.ask (head_man man) ctx query flow in
