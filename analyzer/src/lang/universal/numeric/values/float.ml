@@ -13,7 +13,7 @@ open Framework.Ast
 open Ast
 open Bot
 
-let debug fmt = Debug.debug ~channel:"universal.numeric.floats.value" fmt
+let debug fmt = Debug.debug ~channel:"universal.numeric.values.floats" fmt
 
 module I = Intervals.FloatItv
 

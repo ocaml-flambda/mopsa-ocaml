@@ -16,7 +16,7 @@ open Framework.Eval
 open Ast
 open Bot
 
-let name = "universal.numeric.floats"
+let name = "universal.numeric.domains.boxes.floats"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =

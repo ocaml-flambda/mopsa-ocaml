@@ -13,7 +13,7 @@ open Framework.Ast
 open Ast
 open Bot
 
-let name = "universal.numeric.congruence.value"
+let name = "universal.numeric.values.congruence"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module C = Congruences.IntCong

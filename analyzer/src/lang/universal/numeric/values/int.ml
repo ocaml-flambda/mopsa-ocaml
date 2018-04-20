@@ -13,7 +13,7 @@ open Framework.Ast
 open Ast
 open Bot
 
-let name = "universal.numeric.integers.value"
+let name = "universal.numeric.values.int"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module I = Intervals.IntItv

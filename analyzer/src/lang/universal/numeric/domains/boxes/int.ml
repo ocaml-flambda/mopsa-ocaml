@@ -17,15 +17,15 @@ open Framework.Eval
 open Ast
 open Bot
 
-let name = "universal.numeric.integers"
-let debug fmt = Debug.debug ~channel:name fmt
-
+let name = "universal.numeric.domains.boxes.int"
 
 module Domain =
 struct
   module Value = Values.Int
-                   
+
   include Nonrel.Domain.Make(Value)
+
+  let debug fmt = Debug.debug ~channel:name fmt
 
   let print fmt a =
     Format.fprintf fmt "int: @[%a@]@\n" print a
@@ -36,6 +36,7 @@ struct
   let exec man ctx stmt flow =
     match skind stmt with
     | S_assign({ekind = E_var var}, e, STRONG) ->
+      debug "assign";
       man.eval ctx e flow |>
       eval_to_orexec
         (fun e flow ->
@@ -58,19 +59,26 @@ struct
       bot_dfl1 None (fun itv ->
           debug "trying congruence -> interval reduction on itv = %a with c = %a" Values.Int.I.fprint itv Values.Congruence.C.fprint c;
           let r = Congruences.IntCong.meet_inter c itv in
-          bot_dfl1 None
-            (fun (c', itv') ->
-               if Intervals.IntItv.included itv itv' then let _ = debug "none" in None
-               else
-                 let a' = VarMap.add var (Bot.Nb itv') a in
-                 debug "reduction applied, itv' = %a" Values.Int.I.fprint itv';
-                 let flow' = set_domain_cur a' man flow in
-                 Some {
-                   out = flow'; mergers = []; publish = [Reduction.CIntCongruence(var, c')]
-                 }
-            ) r
+          try
+            let (c', itv') = bot_to_exn r in
+            debug "checking precision";
+            if Intervals.IntItv.included itv itv' then let _ = debug "none" in None
+            else
+              let a' = VarMap.add var (Bot.Nb itv') a in
+              debug "reduction applied, itv' = %a" Values.Int.I.fprint itv';
+              let flow' = set_domain_cur a' man flow in
+              if Value.I.is_singleton itv' then
+                let n = match itv' with Value.I.B.Finite n, _ -> n | _ -> assert false in
+                debug "publish new constant reduction";
+                Some {
+                  out = flow'; mergers = []; publish = [Reduction.CIntConstant(var, n)]
+                }
+              else
+                return flow'
+          with Found_BOT ->
+            return (set_domain_cur bottom man flow)
         ) v
-        
+
     | _ -> None
 
 
@@ -112,7 +120,7 @@ struct
             else
               None
           ) v
-        
+
       | _ ->
         None
 

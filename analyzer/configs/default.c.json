@@ -27,8 +27,8 @@
     "c.memory.machine_integers",
     {"fun": "c.memory.cell", "arg":
      {"product": [
-         "universal.numeric.integers",
-         "universal.numeric.congruence"
+         "universal.numeric.domains.boxes.int",
+         "universal.numeric.domains.boxes.congruence"
      ]}
     },
 

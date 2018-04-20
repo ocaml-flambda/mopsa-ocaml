@@ -16,7 +16,7 @@ open Framework.Ast
 open Framework.Exec
 open Ast
 
-let name = "universal.numeric.relational"
+let name = "universal.numeric.domains.relational"
 
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -116,7 +116,7 @@ struct
   (* {2 Transfer functions} *)
   let init man ctx prog flow =
     ctx, set_domain_cur top man flow
-  
+
   let rec exec man ctx stmt flow =
     let abs = get_domain_cur man flow in
     let return_cur abs =
@@ -381,5 +381,5 @@ let setup () =
   let module Oct = Make(struct type t = Oct.t let name = "oct" let man = Oct.manager_alloc () end) in
   let module Poly = Make(struct type t = Polka.strict Polka.t let name = "poly" let man = Polka.manager_alloc_strict () end) in
 
-  register_domain "universal.numeric.relational.octagon" (module Oct);
-  register_domain "universal.numeric.relational.polyhedra" (module Poly);
+  register_domain (name ^ ".octagon") (module Oct);
+  register_domain (name ^ ".polyhedra") (module Poly);
