@@ -71,7 +71,7 @@ struct
           | _ ->
             let post', publish', nb_replies =
               List.fold_left (fun (post, publish, nb_replies) channel ->
-                  match Domain.refine man ctx channel rflow.out with
+                  match Domain.refine man ctx channel post with
                   | None ->
                     (* Channel not used by any domain, so keep it for the next iteration *)
                     post, channel :: publish, nb_replies
