@@ -46,12 +46,16 @@ struct
            let flow' = set_domain_cur a' man flow in
            if Value.is_minf_inf v || Value.is_bottom v then return flow'
            else
-             let c = bot_to_exn v in
-             debug "publish CIntCongruence %a" Value.print v;
-             Some {
-               out = flow'; mergers = [];
-               publish = [Reduction.CIntCongruence(var, c)];
-             }
+             let vars = Framework.Visitor.expr_vars e in
+             match vars with
+             | [] -> return flow'
+             | _ ->
+               let c = bot_to_exn v in
+               debug "publish CIntCongruence %a" Value.print v;
+               Some {
+                 out = flow'; mergers = [];
+                 publish = [Reduction.CIntCongruence(var, c)];
+               }
         )
         (man.exec ctx) man.flow
 
