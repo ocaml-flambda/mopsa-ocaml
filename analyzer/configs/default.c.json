@@ -14,11 +14,12 @@
     "c.desugar.loops",
 
     //Flows
-    "c.flows.interproc",
     "c.flows.switch",
+    "c.flows.interproc",
     "universal.flows.loops",
     "universal.flows.intraproc",
     "universal.flows.interproc",
+    "c.flows.goto",
 
     //Memory abstraction
     "c.memory.pointer",

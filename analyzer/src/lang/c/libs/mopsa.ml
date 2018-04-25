@@ -27,6 +27,7 @@ struct
   let is_builtin_function = function
     | "_mopsa_rand_int"
     | "_mopsa_panic"
+    | "_mopsa_assert_exists"
     | "_mopsa_assert_true"
     | "_mopsa_assert_false"
     | "_mopsa_assert_safe"
@@ -84,6 +85,11 @@ struct
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_true"}, [cond]) ->
       let stmt = mk_assert cond exp.erange in
+      let flow = man.exec ctx stmt flow in
+      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_exists"}, [cond]) ->
+      let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec ctx stmt flow in
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 

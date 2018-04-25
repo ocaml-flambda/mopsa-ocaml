@@ -109,6 +109,7 @@ let () =
       | S_c_switch_default -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto l -> fprintf fmt "goto %s;" l
+      | S_c_goto_stab s -> fprintf fmt "goto_stab {%a};" pp_stmt s
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->
