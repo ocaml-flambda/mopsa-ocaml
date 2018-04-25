@@ -265,6 +265,7 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr a, from_expr i)
     | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr r, i, f)
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr r, i, f)
+    | C_AST.E_statement s -> Ast.E_c_statement (from_block erange s)
 
     | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
@@ -272,7 +273,6 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
     | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
     | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
-    | C_AST.E_statement _ -> Framework.Exceptions.panic "E_statement not supported"
     | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
     | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
   in
@@ -345,6 +345,7 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_block block -> from_block srange block |> Framework.Ast.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr cond, from_block srange body, from_block srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr cond, from_block srange body)
+    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block srange body, from_expr cond)
     | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block srange init, from_expr_option test, from_expr_option increm, from_block srange body)
     | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
     | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
@@ -355,7 +356,6 @@ and from_stmt ((skind, range): C_AST.statement) : Framework.Ast.stmt =
     | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr e)
     | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
-    | C_AST.S_do_while (_,_) -> Framework.Exceptions.panic "C_AST.S_do_while not supprted"
   in
   {skind; srange}
 

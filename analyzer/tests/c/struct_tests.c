@@ -72,3 +72,28 @@ void test_pass_struct_by_value() {
   int y = f2(p);
   _mopsa_assert_true(p.x == 10 && y == 20);
 }
+
+
+
+typedef struct {
+  int* f;
+} s;
+
+int buf[10];
+
+void init(s* x) {
+  x[1].f = buf;
+}
+
+void test_allamigeon() {
+  s a[2][2];
+  s* ptr = (s*) &a[1];
+  init(ptr);
+  ptr = (s*) &a[0];
+  a[1][1].f[0] = 10;
+  _mopsa_assert_safe();
+  a[1][1].f[10] = 20;
+  _mopsa_assert_error(OUT_OF_BOUND);
+}
+
+

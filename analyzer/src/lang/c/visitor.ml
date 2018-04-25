@@ -145,6 +145,13 @@ let () =
           | _ -> assert false
         )
 
+      | E_c_statement(s) ->
+        {exprs = []; stmts = [s]},
+        (function
+          | {stmts = [s]} -> {exp with ekind = E_c_statement(s)}
+          | _ -> assert false
+        )
+
       | _ -> default exp
     );
 

@@ -86,6 +86,7 @@ let () =
       | E_c_address_of (e) -> fprintf fmt "&(%a)" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
       | E_c_cast(e, _) -> fprintf fmt "cast(%a) %a" pp_typ (etyp expr) pp_expr e
+      | E_c_statement s -> fprintf fmt "{@\n  @[%a@]@\n}" pp_stmt s
       | E_c_predefined _ -> assert false
       | E_c_var_args _ -> assert false
       | E_c_atomic _ -> assert false
@@ -101,6 +102,10 @@ let () =
           (Printers.print_option Framework.Pp.pp_expr) cond
           (Printers.print_option Framework.Pp.pp_expr) it
           Framework.Pp.pp_stmt stmts
+      | S_c_do_while (body,cond) ->
+        fprintf fmt "do {@\n  @[%a]@\n} while (%a);"
+          Framework.Pp.pp_stmt body
+          Framework.Pp.pp_expr cond
       | S_c_switch(cond, body) ->
         fprintf fmt "switch (%a) {@\n  @[%a@]@\n}"
           pp_expr cond

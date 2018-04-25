@@ -41,6 +41,9 @@ struct
            oeval_singleton (Some rval, flow, [])
         )
 
+    | E_c_statement s ->
+      assert false
+
     | _ -> None
 
   let exec man ctx stmt flow = None

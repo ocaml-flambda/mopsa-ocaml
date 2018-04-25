@@ -44,7 +44,18 @@ struct
       man.exec ctx stmt flow |>
       return
 
-    | S_c_do_while(body, cond) -> assert false
+    | S_c_do_while(body, cond) ->
+      let range = stmt.srange in
+      let stmt = Universal.Ast.(
+          mk_block [
+            body;
+            mk_stmt (S_while (cond, body)) range
+          ] range
+        )
+      in
+      man.exec ctx stmt flow |>
+      return
+      
     | _ -> None
 
   let eval man ctx exp flow = None

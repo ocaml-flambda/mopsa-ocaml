@@ -233,6 +233,8 @@ type expr_kind +=
   | E_c_cast of expr * bool (** explicitness *)
   (** casted expression *)
 
+  | E_c_statement of stmt
+
   | E_c_predefined of string (** predefined identifier *)
 
   | E_c_var_args of expr (** __builtin_va_arg *)
