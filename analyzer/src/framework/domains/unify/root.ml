@@ -33,55 +33,49 @@ struct
     }
   }
 
-  let rec local_man =
-    let env_manager = Stateful.(mk_lattice_manager (module SubDomain : DOMAIN with type t = SubDomain.t)) in
-    {
-      env = env_manager;
-      flow = Flow.lift_lattice_manager env_manager;
-      exec = (fun ctx stmt flow -> match SubDomain.exec local_man ctx stmt flow with Some flow -> flow | None -> assert false);
-      eval = (fun ctx exp flow -> match SubDomain.eval local_man ctx exp flow with Some evl -> evl | None -> Eval.eval_singleton (Some exp, flow, []) );
-      ask = (fun ctx query flow -> assert false);
-      ax = {
-        get = (fun env -> env);
-        set = (fun env' env -> env');
-      }
-    }
+
+  let local_man = mk_local_manager (module SubDomain : Stateful.DOMAIN with type t = SubDomain.t)
+
+  let bottom = Domain.bottom, SubDomain.bottom
+
+  let is_bottom (hd, tl) = Domain.is_bottom hd || SubDomain.is_bottom tl
+
+  let top = Domain.top, SubDomain.top
+
+  let is_top (hd, tl) = Domain.is_top hd && SubDomain.is_top tl
 
 
-  let rec unify ctx (d1, s1) (d2, s2) =
-    Domain.unify local_man ctx (d1, s1) (d2, s2)
+  let unify ctx (d1, s1) (d2, s2) =
+    let flow1 = set_domain_cur s1 local_man local_man.flow.bottom in
+    let flow2 = set_domain_cur s2 local_man local_man.flow.bottom in
+    let (d1, flow1), (d2, flow2) = Domain.unify local_man ctx (d1, flow1) (d2, flow2) in
+    let s1 = get_domain_cur local_man flow1 in
+    let s2 = get_domain_cur local_man flow2 in
+    (d1, s1), (d2, s2)
 
-  and leq a1 a2 =
+  let leq a1 a2 =
     let (d1', s1'), (d2', s2') = unify Context.empty a1 a2 in
     Domain.leq d1' d2' && SubDomain.leq s1' s2'
 
-  and join a1 a2 =
+  let join a1 a2 =
     let (d1', s1'), (d2', s2') = unify Context.empty a1 a2 in
     Domain.join d1' d2', SubDomain.join s1' s2'
 
-  and meet a1 a2 =
+  let meet a1 a2 =
     let (d1', s1'), (d2', s2') = unify Context.empty a1 a2 in
     Domain.meet d1' d2', SubDomain.join s1' s2'
 
-  and widening ctx a1 a2 =
+  let widening ctx a1 a2 =
     let (d1', s1'), (d2', s2') = unify ctx a1 a2 in
-    Domain.widening ctx d1' d2', SubDomain.join s1' s2'
+    Domain.widening ctx d1' d2', SubDomain.widening ctx s1' s2'
 
 
-  and print fmt (hd, tl) =
+  let print fmt (hd, tl) =
     Format.fprintf fmt "%a%a" Domain.print hd SubDomain.print tl
-
-  and bottom = Domain.bottom, SubDomain.bottom
-
- and is_bottom (hd, tl) = Domain.is_bottom hd || SubDomain.is_bottom tl
-
-  and top = Domain.top, SubDomain.top
-
-  and is_top (hd, tl) = Domain.is_top hd && SubDomain.is_top tl
 
 
   and exec man ctx stmt gabs =
-    let gabs' = Domain.exec (head_man man) (tail_man man) ctx stmt gabs in
+    let gabs' = Domain.exec (head_man man) (tail_man man) (SubDomain.exec (tail_man man) ctx) ctx stmt gabs in
     match gabs' with
     | None -> SubDomain.exec (tail_man man) ctx stmt gabs
     | _ -> gabs'

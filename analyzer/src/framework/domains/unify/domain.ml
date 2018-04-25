@@ -29,11 +29,11 @@ sig
 
   val unify :
     ('a, 'b) manager -> context ->
-    t * 'b -> t * 'b ->
-    (t * 'b) * (t * 'b)
+    t * 'a flow -> t * 'a flow ->
+    (t * 'a flow) * (t * 'a flow)
 
   val exec:
-    ('a, t) manager -> ('a, 'b) manager -> Context.context -> Ast.stmt -> 'a flow ->
+    ('a, t) manager -> ('a, 'b) manager -> (Ast.stmt -> 'a flow -> 'a flow option) -> Context.context -> Ast.stmt -> 'a flow ->
     'a flow option
 
   val eval:
@@ -55,3 +55,23 @@ let find_domain name = List.assoc name !domains
 
 let return x = Some x
 let fail = None
+
+
+
+let mk_local_manager (type a) (dom: (module Stateful.DOMAIN with type t = a)) : (a, a) manager =
+  let module Domain = (val dom) in
+  let env_manager = Stateful.(mk_lattice_manager (module Domain : DOMAIN with type t = Domain.t)) in
+  let rec man =
+    {
+      env = env_manager;
+      flow = Flow.lift_lattice_manager env_manager;
+      exec = (fun ctx stmt flow -> match Domain.exec man ctx stmt flow with Some flow -> flow | None -> assert false);
+      eval = (fun ctx exp flow -> match Domain.eval man ctx exp flow with Some evl -> evl | None -> Eval.eval_singleton (Some exp, flow, []) );
+      ask = (fun ctx query flow -> assert false);
+      ax = {
+        get = (fun env -> env);
+        set = (fun env' env -> env');
+      }
+    }
+  in
+  man

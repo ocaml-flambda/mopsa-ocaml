@@ -82,7 +82,12 @@ let map_domain_cur f man flow =
   man.flow.set TCur cur' flow
 
 let set_domain_cur a man flow =
-  map_domain_cur (fun _ -> a) man flow
+  let cur = man.flow.get TCur flow in
+  debug "cur = %a" man.env.print cur;
+  let cur' = man.ax.set a cur in
+  debug "cur' = %a" man.env.print cur';
+  man.flow.set TCur cur' flow
+
 
 (** Retrieve the domain abstraction of the TCur flow *)
 let get_domain_cur man flow =

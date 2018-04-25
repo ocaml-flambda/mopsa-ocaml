@@ -103,7 +103,6 @@ module Domain = struct
 
   let is_bottom x = false
 
-
   (** Pretty printer. *)
   let print fmt c =
     Format.fprintf fmt "cells: @[%a@]@\n"
@@ -233,52 +232,37 @@ module Domain = struct
           end
       end
 
-  let trivial_exec man ctx s x =
-    debug "aaa";
-    set_domain_cur x man man.flow.bottom |>
-    man.exec ctx s |>
-    get_domain_cur man
-
   (** [add_var v u] adds a variable [v] to the abstraction [u] *)
-  let add_var man ctx range (v : var) (u, x) =
-    if CS.mem v u then u, x
-    else if not (is_c_scalar_type v.vtyp) then u, x
-    else if is_c_pointer_type v.vtyp then CS.add v u, x
-    else
-      let open Universal.Ast in
-      match phi v u range with
+  let add_var man ctx range (v : var) (u, flow) =
+    if CS.mem v u then u, flow
+    else if not (is_c_scalar_type v.vtyp) then u, flow
+    else if is_c_pointer_type v.vtyp then CS.add v u, flow
+    else match phi v u range with
       | Nexp (Some e) ->
-        let s = mk_assume
-              (mk_binop
-                 (mk_var v range)
-                 O_eq
-                 e
-                 range
-              )
-              range
-          in
-          CS.add v u, trivial_exec man ctx s x
+        let s = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
+        CS.add v u, man.exec ctx s flow
 
-        | Nexp None -> CS.add v u, x
+      | Nexp None -> CS.add v u, flow
 
-        | Pexp Invalid ->
-          assert false
+      | Pexp Invalid -> assert false
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify range (man: ('a, 'b) manager) ctx (u, x) (u', x') =
-    let t = Timing.start () in
-    let diff' = CS.diff u u' in
-    debug "diff' done in %.4fs" (Timing.stop t);
-    let t = Timing.start () in
-    let diff = CS.diff u' u in
-    debug "diff done in %.4fs" (Timing.stop t);
-    CS.fold (fun v acc ->
-        add_var man ctx range v acc
-      ) diff (u,x),
-    CS.fold (fun v acc ->
-        add_var man ctx range v acc
-      ) diff' (u',x')
+  let unify range man ctx (u, flow) (u', flow') =
+    if leq u u' || leq u' u then (u, flow), (u', flow')
+    else
+      let t = Timing.start () in
+      let diff' = CS.diff u u' in
+      debug "diff' done in %.4fs" (Timing.stop t);
+      let t = Timing.start () in
+      let diff = CS.diff u' u in
+      debug "diff done in %.4fs" (Timing.stop t);
+      CS.fold (fun v acc ->
+          add_var man ctx range v acc
+        ) diff (u, flow),
+      CS.fold (fun v acc ->
+          add_var man ctx range v acc
+        ) diff' (u', flow')
 
   let extract_cell v =
     match vkind v with
@@ -313,7 +297,7 @@ module Domain = struct
   let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
     ctx, set_domain_cur empty man flow
 
-  let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
+  let exec (man : ('a, t) manager) sub_man sub_exec (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a flow option =
     match skind stmt with
     | Universal.Ast.S_rename_var(v, v') ->
@@ -325,21 +309,25 @@ module Domain = struct
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      subman.exec ctx stmt' flow |>
-      return
+      sub_exec stmt' flow
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+      debug "assign";
       eval_list [rval; lval] (man.eval ctx) flow |>
       eval_to_oexec
         (fun el flow ->
+           debug "eval done";
            let rval, lval, v = match el with
              | [rval; ({ekind = E_var v} as lval)] -> rval, lval, v
              | _ -> assert false
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
-           subman.exec ctx stmt' flow |>
-           remove_overlapping_cells v stmt.srange man ctx |>
-           return
+           debug "subman";
+           match sub_exec stmt' flow with
+           | None -> None
+           | Some flow ->
+             remove_overlapping_cells v stmt.srange man ctx flow |>
+             return
         )
         (man.exec ctx) man.flow
 
@@ -349,7 +337,7 @@ module Domain = struct
   let is_safe_cell_access c =
     Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
 
-  let eval man subman ctx exp flow =
+  let eval man sub_man ctx exp flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
 
@@ -357,10 +345,9 @@ module Domain = struct
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let v = var_to_var v in
-      let x = get_domain_cur subman flow in
-      let (u', x') = add_var subman ctx exp.erange v (u, x) in
+      let (u', flow') = add_var sub_man ctx exp.erange v (u, flow) in
       debug "new variable %a in %a" pp_var v print u';
-      let flow'' = set_domain_cur u' man flow |> set_domain_cur x' subman in
+      let flow'' = set_domain_cur u' man flow' in
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
 
     | E_c_gen_cell_var c ->
@@ -370,10 +357,9 @@ module Domain = struct
           | Some (v', _) -> v'
           | None -> cell_to_var c
         in
-        let x = get_domain_cur subman flow in
-        let (u', x') = add_var subman ctx exp.erange v (u, x) in
+        let (u', flow') = add_var sub_man ctx exp.erange v (u, flow) in
         debug "new variable %a in %a" pp_var v print u';
-        let flow'' = set_domain_cur u' man flow |> set_domain_cur x' subman in
+        let flow'' = set_domain_cur u' man flow' in
         re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
       else
         let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
@@ -383,7 +369,7 @@ module Domain = struct
 
     | _ -> None
 
-  let ask man subman ctx query flow = None
+  let ask man sub_man ctx query flow = None
 
   let unify man ctx a1 a2 = unify (mk_fresh_range ()) man ctx a1 a2
 

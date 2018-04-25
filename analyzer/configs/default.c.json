@@ -26,11 +26,14 @@
     "c.memory.array_to_pointer",
     "c.memory.record_to_pointer",
     "c.memory.machine_integers",
-    {"fun": "c.memory.cell", "arg":
-     {"product": [
-         "universal.numeric.domains.boxes.int",
-         "universal.numeric.domains.boxes.congruence"
-     ]}
+    {
+        "unify": "c.memory.cell",
+        "over": {
+            "product": [
+                "universal.numeric.domains.boxes.int",
+                "universal.numeric.domains.boxes.congruence"
+            ]
+        }
     },
 
     //This domains should be put after the numeric domain to allow
