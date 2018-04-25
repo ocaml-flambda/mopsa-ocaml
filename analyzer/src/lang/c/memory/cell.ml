@@ -84,7 +84,7 @@ let cell_of_var v =
 (*==========================================================================*)
 
 
-module Domain = struct
+module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -232,24 +232,31 @@ module Domain = struct
           end
       end
 
+  let local_manager = mk_local_manager (module SubDomain : Framework.Domains.Stateful.DOMAIN with type t = SubDomain.t)
+
+  let local_exec ctx stmt s =
+    let flow = set_domain_cur s local_manager local_manager.flow.bottom in
+    let flow' = local_manager.exec ctx stmt flow in
+    get_domain_cur local_manager flow'
+
   (** [add_var v u] adds a variable [v] to the abstraction [u] *)
-  let add_var man ctx range (v : var) (u, flow) =
-    if CS.mem v u then u, flow
-    else if not (is_c_scalar_type v.vtyp) then u, flow
-    else if is_c_pointer_type v.vtyp then CS.add v u, flow
+  let add_var ctx range (v : var) (u, s) =
+    if CS.mem v u then u, s
+    else if not (is_c_scalar_type v.vtyp) then u, s
+    else if is_c_pointer_type v.vtyp then CS.add v u, s
     else match phi v u range with
       | Nexp (Some e) ->
-        let s = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
-        CS.add v u, man.exec ctx s flow
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
+        CS.add v u, local_exec ctx stmt s
 
-      | Nexp None -> CS.add v u, flow
+      | Nexp None -> CS.add v u, s
 
       | Pexp Invalid -> assert false
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify range man ctx (u, flow) (u', flow') =
-    if leq u u' || leq u' u then (u, flow), (u', flow')
+  let unify range ctx (u, s) (u', s') =
+    if is_top u || is_top u' then (u, s), (u', s')
     else
       let t = Timing.start () in
       let diff' = CS.diff u u' in
@@ -258,11 +265,11 @@ module Domain = struct
       let diff = CS.diff u' u in
       debug "diff done in %.4fs" (Timing.stop t);
       CS.fold (fun v acc ->
-          add_var man ctx range v acc
-        ) diff (u, flow),
+          add_var ctx range v acc
+        ) diff (u, s),
       CS.fold (fun v acc ->
-          add_var man ctx range v acc
-        ) diff' (u', flow')
+          add_var ctx range v acc
+        ) diff' (u', s')
 
   let extract_cell v =
     match vkind v with
@@ -297,7 +304,7 @@ module Domain = struct
   let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
     ctx, set_domain_cur empty man flow
 
-  let exec (man : ('a, t) manager) sub_man sub_exec (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
+  let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a flow option =
     match skind stmt with
     | Universal.Ast.S_rename_var(v, v') ->
@@ -309,7 +316,7 @@ module Domain = struct
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      sub_exec stmt' flow
+      SubDomain.exec subman ctx stmt' flow
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
       debug "assign";
@@ -323,7 +330,7 @@ module Domain = struct
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
            debug "subman";
-           match sub_exec stmt' flow with
+           match SubDomain.exec subman ctx stmt' flow with
            | None -> None
            | Some flow ->
              remove_overlapping_cells v stmt.srange man ctx flow |>
@@ -337,29 +344,35 @@ module Domain = struct
   let is_safe_cell_access c =
     Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
 
-  let eval man sub_man ctx exp flow =
+  let eval man subman ctx exp flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
 
     | E_var v when is_c_scalar_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
+      let s = get_domain_cur subman flow in
       let v = var_to_var v in
-      let (u', flow') = add_var sub_man ctx exp.erange v (u, flow) in
+      let (u', s') = add_var ctx exp.erange v (u, s) in
       debug "new variable %a in %a" pp_var v print u';
-      let flow'' = set_domain_cur u' man flow' in
+      let flow'' = set_domain_cur u' man flow |>
+                   set_domain_cur s' subman
+      in
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
 
     | E_c_gen_cell_var c ->
       if is_safe_cell_access c then
         let u = get_domain_cur man flow in
+        let s = get_domain_cur subman flow in
         let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
           | Some (v', _) -> v'
           | None -> cell_to_var c
         in
-        let (u', flow') = add_var sub_man ctx exp.erange v (u, flow) in
+        let (u', s') = add_var ctx exp.erange v (u, s) in
         debug "new variable %a in %a" pp_var v print u';
-        let flow'' = set_domain_cur u' man flow' in
+        let flow'' = set_domain_cur u' man flow |>
+                     set_domain_cur s' subman
+        in
         re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
       else
         let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
@@ -369,9 +382,9 @@ module Domain = struct
 
     | _ -> None
 
-  let ask man sub_man ctx query flow = None
+  let ask man subman ctx query flow = None
 
-  let unify man ctx a1 a2 = unify (mk_fresh_range ()) man ctx a1 a2
+  let unify ctx a1 a2 = unify (mk_fresh_range ()) ctx a1 a2
 
 end
 

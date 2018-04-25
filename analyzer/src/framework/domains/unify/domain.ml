@@ -9,8 +9,8 @@
 (**
    Unification domain.
 
-   Signature for domains requiring a unification step of a sub-domain before
-   every call of binary operators (⊆, ∪ and ∩).
+   Signature for domains ensuring unification of an underlying abstraction 
+   before calls to binary operators (⊆, ∪ and ∩).
 *)
 
 open Lattice
@@ -22,27 +22,25 @@ open Query
 
 
 (** Abstract domain signature. *)
-module type DOMAIN =
+module type DOMAIN = functor(SubDomain: Stateful.DOMAIN) ->
 sig
 
   include Stateful.DOMAIN
 
-  val unify :
-    ('a, 'b) manager -> context ->
-    t * 'a flow -> t * 'a flow ->
-    (t * 'a flow) * (t * 'a flow)
+  val unify : context ->
+    t * SubDomain.t  -> t * SubDomain.t ->
+    (t * SubDomain.t) * (t * SubDomain.t)
 
   val exec:
-    ('a, t) manager -> ('a, 'b) manager -> (Ast.stmt -> 'a flow -> 'a flow option) -> Context.context -> Ast.stmt -> 'a flow ->
+    ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> Ast.stmt -> 'a flow ->
     'a flow option
 
   val eval:
-    ('a, t) manager -> ('a, 'b) manager -> Context.context -> Ast.expr -> 'a flow ->
+    ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> Ast.expr -> 'a flow ->
     (Ast.expr, 'a) evals option
 
-  (** Handler of generic queries. *)
   val ask:
-    ('a, t) manager -> ('a, 'b) manager -> Context.context -> 'r Query.query -> 'a flow ->
+    ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'r Query.query -> 'a flow ->
     'r option
 
 end
@@ -57,7 +55,8 @@ let return x = Some x
 let fail = None
 
 
-
+exception Not_supported
+  
 let mk_local_manager (type a) (dom: (module Stateful.DOMAIN with type t = a)) : (a, a) manager =
   let module Domain = (val dom) in
   let env_manager = Stateful.(mk_lattice_manager (module Domain : DOMAIN with type t = Domain.t)) in
@@ -65,7 +64,7 @@ let mk_local_manager (type a) (dom: (module Stateful.DOMAIN with type t = a)) : 
     {
       env = env_manager;
       flow = Flow.lift_lattice_manager env_manager;
-      exec = (fun ctx stmt flow -> match Domain.exec man ctx stmt flow with Some flow -> flow | None -> assert false);
+      exec = (fun ctx stmt flow -> match Domain.exec man ctx stmt flow with Some flow -> flow | None -> raise Not_supported);
       eval = (fun ctx exp flow -> match Domain.eval man ctx exp flow with Some evl -> evl | None -> Eval.eval_singleton (Some exp, flow, []) );
       ask = (fun ctx query flow -> assert false);
       ax = {
