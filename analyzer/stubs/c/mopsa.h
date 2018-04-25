@@ -14,6 +14,7 @@ extern void _mopsa_panic(const char*);
 
 // Assertions
 extern void _mopsa_assert_true(int cond);
+extern void _mopsa_assert_exists(int cond);
 extern void _mopsa_assert_false(int cond);
 extern void _mopsa_assert_unreachable();
 extern void _mopsa_assert_safe();

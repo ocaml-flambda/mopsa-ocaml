@@ -123,6 +123,14 @@ let () =
       | S_continue -> pp_print_string fmt "continue;"
       | S_unit_tests (_, tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
       | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
+      | S_simple_assert(e,b,b') ->
+        begin
+          match b,b' with
+          | true, true -> fprintf fmt "is_bottom(assume(%a))" pp_expr e
+          | true, false -> fprintf fmt "is_bottom(assume(!%a))" pp_expr e
+          | false, false -> fprintf fmt "!is_bottom(assume(!%a))" pp_expr e
+          | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
+        end
       | _ -> default fmt stmt
     );
   ()

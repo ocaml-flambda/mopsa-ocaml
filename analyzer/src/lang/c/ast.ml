@@ -244,6 +244,9 @@ type expr_kind +=
 (*==========================================================================*)
 
 type stmt_kind +=
+  | S_c_goto_stab of stmt
+  (** stabilization point for goto statement *)
+
   | S_c_local_declaration of var * c_init option
   (** declaration of a local variable with optional initialization *)
 

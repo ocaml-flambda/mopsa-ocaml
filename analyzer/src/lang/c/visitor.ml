@@ -232,6 +232,12 @@ let () =
           | _ -> assert false
         )
       | S_c_goto _ -> leaf stmt
+      | S_c_goto_stab stmt ->
+        {exprs = []; stmts = [stmt]},
+        (function
+          | {exprs = []; stmts = [stmt]} -> {stmt with skind = S_c_goto_stab stmt}
+          | _ -> assert false
+        )
       | S_c_switch(cond, body) ->
         {exprs = [cond]; stmts = [body]},
         (function

@@ -4,6 +4,7 @@ let init () =
   Flows.(
     Interproc.setup ();
     Switch.setup ();
+    Goto.setup ();
   );
   Memory.(
     Cell.setup ();

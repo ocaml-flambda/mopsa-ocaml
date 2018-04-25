@@ -295,12 +295,17 @@ type stmt_kind +=
 
   | S_project_vars of var list
   (** Project the abstract environments on the given list of variables. *)
-        
+
   | S_rebase_addr of addr (** old *) * addr (** new *)
   (** Change the address of a previously allocated object *)
 
   | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)
   (** Unit tests suite *)
+
+  | S_simple_assert of expr * bool * bool
+  (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
+     is_bottom(assume(b' cond)) where b exp is understood as exp if b
+      = true and not exp otherwise *)
 
   | S_assert of expr
   (** Unit tests assertions *)

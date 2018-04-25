@@ -48,7 +48,7 @@ struct
                fun_name = var_uniq_name (fundec.c_func_var);
                fun_parameters = fundec.c_func_parameters;
                fun_locvars = List.map fst fundec.c_func_local_vars;
-               fun_body = fundec.c_func_body;
+               fun_body = {skind = S_c_goto_stab (fundec.c_func_body); srange = srange fundec.c_func_body};
                fun_return_type = fundec.c_func_return;
              } in
              let exp' = mk_call fundec' args exp.erange in
