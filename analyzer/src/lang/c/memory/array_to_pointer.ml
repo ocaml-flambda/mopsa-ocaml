@@ -38,7 +38,15 @@ module Domain = struct
 
   let init man ctx prog flow = ctx, flow
 
-  let exec (man : ('a, unit) manager) ctx (stmt : stmt) (flow : 'a flow) : 'a flow option = None
+  let exec (man : ('a, unit) manager) ctx (stmt : stmt) (flow : 'a flow) : 'a flow option =
+    match skind stmt with
+    | S_assign({ekind = E_c_array_subscript(arr, idx)} as lval, rval, mode) ->
+      let lval' = {lval with ekind = E_c_deref(mk_binop arr O_plus idx lval.erange ~etyp: arr.etyp)} in
+      let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
+      man.exec ctx stmt' flow |>
+      return
+
+    | _ -> None
 
   let eval man ctx exp flow =
     match ekind exp with

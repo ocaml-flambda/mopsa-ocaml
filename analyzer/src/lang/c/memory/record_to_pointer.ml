@@ -55,6 +55,12 @@ module Domain = struct
         ) flow |>
       return
 
+    | S_assign({ekind = E_c_member_access(r, idx, f)} as lval, rval, mode) ->
+      let lval' = {lval with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
+      let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
+      man.exec ctx stmt' flow |>
+      return
+
     | _ -> None
 
   let eval man ctx exp flow =

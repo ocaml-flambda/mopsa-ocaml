@@ -60,19 +60,18 @@ type expr_kind +=
 let mk_gen_cell_var c range =
   mk_expr (E_c_gen_cell_var c) ~etyp:c.t range
 
+let annotate_var v =
+  match v.vkind with
+  | V_cell _ -> v
+  | _ -> { v with vkind = V_cell {v; o = Z.zero; t= v.vtyp} }
 
-let cell_to_var c =
+let var_of_cell c =
   let open Framework.Ast in
   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
     vuid = 0;
     vtyp = c.t;
     vkind = V_cell c;
   }
-
-let var_to_var v =
-  match v.vkind with
-  | V_cell _ -> v
-  | _ -> { v with vkind = V_cell {v; o = Z.zero; t= v.vtyp} }
 
 let cell_of_var v =
   match v.vkind with
@@ -279,6 +278,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let remove_overlapping_cells v range man ctx flow =
     let c = cell_of_var v in
     let u = get_domain_cur man flow in
+    let u' = add v u in
+    let flow' = set_domain_cur u' man flow in
     CS.fold (fun v' acc ->
         if compare_var v v' = 0 then
           acc
@@ -292,7 +293,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
-      ) u flow
+      ) u flow'
 
 
 
@@ -312,47 +313,34 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
-      let v' = var_to_var v in
+      let v' = annotate_var v in
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
       SubDomain.exec subman ctx stmt' flow
 
-    | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      debug "assign";
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_oexec
-        (fun el flow ->
-           debug "eval done";
-           let rval, lval, v = match el with
-             | [rval; ({ekind = E_var v} as lval)] -> rval, lval, v
-             | _ -> assert false
-           in
-           let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
-           debug "subman";
-           match SubDomain.exec subman ctx stmt' flow with
-           | None -> None
-           | Some flow ->
-             remove_overlapping_cells v stmt.srange man ctx flow |>
-             return
-        )
-        (man.exec ctx) man.flow
-
+    | Universal.Ast.S_assign({ekind = E_var v} as lval, rval, mode) when is_c_int_type lval.etyp ->
+      begin
+        debug "assign";
+        let v' = annotate_var v in
+        let stmt' = {stmt with skind = Universal.Ast.S_assign({lval with ekind = E_var v'}, rval, mode)} in
+        debug "subman";
+        match SubDomain.exec subman ctx stmt' flow with
+        | None -> None
+        | Some flow ->
+          remove_overlapping_cells v' stmt.srange man ctx flow |>
+          return
+      end
 
     | _ -> None
 
-  let is_safe_cell_access c =
-    Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
-
   let eval man subman ctx exp flow =
     match ekind exp with
-    | E_var {vkind = V_cell _ }  -> None
-
-    | E_var v when is_c_scalar_type v.vtyp ->
+    | E_var ({vkind = V_orig} as v) when is_c_scalar_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let s = get_domain_cur subman flow in
-      let v = var_to_var v in
+      let v = annotate_var v in
       let (u', s') = add_var ctx exp.erange v (u, s) in
       debug "new variable %a in %a" pp_var v print u';
       let flow'' = set_domain_cur u' man flow |>
@@ -361,12 +349,13 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
 
     | E_c_gen_cell_var c ->
-      if is_safe_cell_access c then
+      if Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
+      then
         let u = get_domain_cur man flow in
         let s = get_domain_cur subman flow in
         let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
           | Some (v', _) -> v'
-          | None -> cell_to_var c
+          | None -> var_of_cell c
         in
         let (u', s') = add_var ctx exp.erange v (u, s) in
         debug "new variable %a in %a" pp_var v print u';

@@ -77,10 +77,10 @@ struct
       print a
 
   let add p pt a =
-    CPML.add (Cell.var_to_var p) pt a
+    CPML.add (Cell.annotate_var p) pt a
 
   let find p a =
-    CPML.find (Cell.var_to_var p) a
+    CPML.find (Cell.annotate_var p) a
 
   let points_to_var p v a =
     add p (PSL.singleton (P.V v)) a
@@ -203,6 +203,16 @@ struct
       map_domain_cur (points_to_invalid p) man flow |>
       man.exec ctx (mk_remove_var (mk_offset_var p) range) |>
       return
+
+    | S_assign({ekind = E_c_deref _ | E_c_arrow_access _} as lval, rval, mode) ->
+      man.eval ctx lval flow |>
+      eval_to_oexec (fun lval' flow ->
+          let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
+          man.exec ctx stmt' flow |>
+          return
+        )
+        (man.exec ctx) man.flow
+
 
     | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
       man.eval ctx q flow |>
