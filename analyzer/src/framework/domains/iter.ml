@@ -30,13 +30,13 @@ struct
 
   let is_top (hd, tl) = Head.is_top hd && Tail.is_top tl
 
-  let leq (hd1, tl1) (hd2, tl2) = Head.leq hd1 hd2 && Tail.leq tl1 tl2
+  let leq ((hd1, tl1): t) ((hd2, tl2): t) : bool = Head.leq hd1 hd2 && Tail.leq tl1 tl2
 
-  let join (hd1, tl1) (hd2, tl2) = (Head.join hd1 hd2), (Tail.join tl1 tl2)
+  let join ((hd1, tl1): t) ((hd2, tl2): t) : t = (Head.join hd1 hd2), (Tail.join tl1 tl2)
 
-  let meet (hd1, tl1) (hd2, tl2) = (Head.meet hd1 hd2), (Tail.meet tl1 tl2)
+  let meet ((hd1, tl1): t) ((hd2, tl2): t) : t = (Head.meet hd1 hd2), (Tail.meet tl1 tl2)
 
-  let widening ctx (hd1, tl1) (hd2, tl2) =
+  let widening (ctx: Context.context) ((hd1, tl1): t) ((hd2, tl2): t) : t =
     (Head.widening ctx hd1 hd2), (Tail.widening ctx tl1 tl2)
 
   let print fmt (hd, tl) =

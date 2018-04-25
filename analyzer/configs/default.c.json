@@ -1,38 +1,44 @@
-{"iter": [
-    //Program entry point
-    "c.program",
-    "c.alarms",
-    "universal.unit_tests",
+{
+    "iter": [
+        //Program entry point
+        "c.program",
+        "c.alarms",
+        "universal.unit_tests",
 
-    //Libraries
-    "c.libs.mopsa",
-    "c.libs.stdlib",
+        //Libraries
+        "c.libs.mopsa",
+        "c.libs.stdlib",
 
-    //Desugarisation
-    "c.desugar.andor",
-    "c.desugar.assign",
-    "c.desugar.loops",
+        //Desugarisation
+        "c.desugar.andor",
+        "c.desugar.assign",
+        "c.desugar.loops",
 
-    //Flows
-    "c.flows.interproc",
-    "c.flows.switch",
-    "universal.flows.loops",
-    "universal.flows.intraproc",
-    "universal.flows.interproc",
+        //Flows
+        "c.flows.interproc",
+        "c.flows.switch",
+        "universal.flows.loops",
+        "universal.flows.intraproc",
+        "universal.flows.interproc",
 
-    //Memory abstraction
-    "c.memory.pointer",
-    "c.memory.array_to_pointer",
-    "c.memory.record_to_pointer",
-    "c.memory.machine_integers",
-    {"fun": "c.memory.cell", "arg":
-     {"product": [
-         "universal.numeric.domains.boxes.int",
-         "universal.numeric.domains.boxes.congruence"
-     ]}
-    },
+        //Memory abstraction
+        "c.memory.pointer",
+        "c.memory.array_to_pointer",
+        "c.memory.record_to_pointer",
+        "c.memory.machine_integers",
+        {
+            "unify": "c.memory.cell",
+            "over":
+            {
+                "iter": [
+                    "universal.numeric.domains.boxes.int",
+                    "universal.numeric.domains.boxes.congruence"
+                ]
+            }
+        },
 
-    //This domains should be put after the numeric domain to allow
-    //proper initialization of global variables
-    "c.memory.var_init"
-]}
+        //This domains should be put after the numeric domain to allow
+        //proper initialization of global variables
+        "c.memory.var_init"
+    ]
+}

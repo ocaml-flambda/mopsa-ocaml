@@ -7,8 +7,9 @@ mopsa = framework lang main
 
 framework = options ast query pp alarm context lattice lattices visitor exceptions flow eval manager exec utils domains analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
-framework.domains = stateful stateless reduction fun iter
+framework.domains = stateful stateless reduction fun iter unify
 framework.domains.reduction = domain root product
+framework.domains.unify = domain root
 
 
 lang = universal c python

@@ -22,6 +22,9 @@
    - an object [\{"iter": \[domain list\]\}] iterates over a list of domains and
 returns the first non-empty result.
 
+   - an object [\{"unify": domain, "over": domain\}] creates a unification domain
+over a given sub-domain.
+
 *)
 
 open Yojson.Basic
@@ -36,6 +39,7 @@ let rec build_domain = function
   | `Assoc(obj) when List.mem_assoc "fun" obj -> build_functor obj
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
   | `Assoc(obj) when List.mem_assoc "product" obj -> build_product @@ List.assoc "product" obj
+  | `Assoc(obj) when List.mem_assoc "unify" obj -> build_unify obj
   | _ -> assert false
 
 and build_leaf name =
@@ -107,6 +111,21 @@ and build_reduction_domain = function
         Debug.fail "Reduction domain %s not found" name
     end
   | _ -> Debug.fail "Only literal reduction names are supported"
+
+
+and build_unify assoc =
+  let sub = List.assoc "over" assoc in
+  let a = build_domain sub in
+  let module S = (val a : Domains.Stateful.DOMAIN) in
+  let u = List.assoc "unify" assoc |> to_string in
+  try
+    let d = Domains.Unify.Domain.find_domain u in
+    let module D = (val d) in
+    let module R = Domains.Unify.Root.Make(D)(S) in
+    (module R : Domains.Stateful.DOMAIN)
+  with Not_found ->
+    Debug.fail "Unification domain  %s not found" u
+
 
 let parse (file: string) : (module Domains.Stateful.DOMAIN) =
   let json = Yojson.Basic.from_file file in

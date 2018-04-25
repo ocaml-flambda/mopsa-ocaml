@@ -10,7 +10,7 @@
 
 open Framework.Ast
 open Framework.Pp
-open Framework.Domains.Fun
+open Framework.Domains.Unify.Domain
 open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
@@ -84,7 +84,7 @@ let cell_of_var v =
 (*==========================================================================*)
 
 
-module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
+module Domain = struct
 
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -99,17 +99,15 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
         pp_cell fmt c
     end)
 
-  (** Type of an abstract environment. *)
-  type t = {
-    cs : CS.t; (* set of cells *)
-    a  : ValAbs.t (* abstract numeric environment *)
-  }
+  include CS
+
+  let is_bottom x = false
+
 
   (** Pretty printer. *)
-  let print fmt x =
-    Format.fprintf fmt "cells: @[%a@]@\n@[%a@]"
-      CS.print x.cs
-      ValAbs.print x.a
+  let print fmt c =
+    Format.fprintf fmt "cells: @[%a@]@\n"
+      CS.print c
 
   let mem_pred c = function {vkind = V_cell c'} -> compare_cell c c' = 0 | _ -> false
 
@@ -121,44 +119,6 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
     with
     | Found (v, c) -> Some (v, c)
 
-  (*==========================================================================*)
-  (**                            {2 Managers}                                 *)
-  (*==========================================================================*)
-
-  (** [subman man] lifts a manager [man] defined on [t] to a sub-layer manager
-      defined on the numeric abstraction [ValAbs.t]. *)
-  let subman : ('a, t) manager -> ('a, ValAbs.t) manager =
-    fun man ->
-    {
-      man with
-      ax =
-        {
-          get = (fun x -> (man.ax.get x).a);
-          set = (fun y x -> man.ax.set {(man.ax.get x) with a = y} x)
-        }
-    }
-
-  (** Manager of the sub-domain limited to a local scope. Useful for unifying
-      numeric invariants when applying point-wise lattice operations such as [join]. *)
-  let rec local_subman =
-    let env_manager = Framework.Domains.Stateful.(mk_lattice_manager (module ValAbs : DOMAIN with type t = ValAbs.t)) in
-    {
-      env = env_manager;
-      flow = Framework.Flow.lift_lattice_manager env_manager;
-      exec = (fun ctx stmt flow -> match ValAbs.exec local_subman ctx stmt flow with Some flow -> flow | None -> assert false);
-      eval = (fun ctx exp flow -> match ValAbs.eval local_subman ctx exp flow with Some evl -> evl | None -> eval_singleton (Some exp, flow, []) );
-      ask = (fun ctx query flow -> assert false);
-      ax = {
-        get = (fun env -> env);
-        set = (fun env' env -> env');
-      }
-    }
-
-  (** Execute a statement on [ValAbs] using the local scope manager. *)
-  let valabs_trivial_exec (stmt : stmt) (a : ValAbs.t) : ValAbs.t =
-    set_domain_cur a local_subman local_subman.flow.bottom |>
-    local_subman.exec Framework.Context.empty stmt |>
-    local_subman.flow.get TCur
 
   (*==========================================================================*)
   (**                          {2 Unification}                                *)
@@ -173,7 +133,7 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
   (** [phi v u] collects constraints over cell var [v] found in [u] *)
   let phi (v : var) (u : t) range : phi_exp =
     let open Universal.Ast in
-    let cs = u.cs in
+    let cs = u in
     let c = cell_of_var v in
     match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
     | Some (v', _) ->
@@ -273,21 +233,22 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
           end
       end
 
+  let trivial_exec man ctx s x =
+    debug "aaa";
+    set_domain_cur x man man.flow.bottom |>
+    man.exec ctx s |>
+    get_domain_cur man
+
   (** [add_var v u] adds a variable [v] to the abstraction [u] *)
-  let add_var (v : var) (u : t) range : t  =
-    if CS.mem v u.cs then u
+  let add_var man ctx range (v : var) (u, x) =
+    if CS.mem v u then u, x
+    else if not (is_c_scalar_type v.vtyp) then u, x
+    else if is_c_pointer_type v.vtyp then CS.add v u, x
     else
-      if not (is_c_scalar_type v.vtyp) then u
-      else if is_c_pointer_type v.vtyp then
-        {
-          cs = CS.add v u.cs;
-          a = u.a;
-        }
-      else
-        let open Universal.Ast in
-        match phi v u range with
-        | Nexp (Some e) ->
-          let s = mk_assume
+      let open Universal.Ast in
+      match phi v u range with
+      | Nexp (Some e) ->
+        let s = mk_assume
               (mk_binop
                  (mk_var v range)
                  O_eq
@@ -296,40 +257,28 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
               )
               range
           in
-          {
-            cs = CS.add v u.cs;
-            a = valabs_trivial_exec s u.a
-          }
-        | Nexp None ->
-          {
-            cs = CS.add v u.cs;
-            a = u.a
-          }
+          CS.add v u, trivial_exec man ctx s x
+
+        | Nexp None -> CS.add v u, x
+
         | Pexp Invalid ->
           assert false
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify (u : t) (u' : t) range : t * t =
-    debug "unify@ %a@ and@ %a" print u print u';
-    let unify_cells (u  : t) (u' : t) : t * t =
-      let t = Timing.start () in
-      let diff' = CS.diff u.cs u'.cs in
-      debug "diff' done in %.4fs" (Timing.stop t);
-      let t = Timing.start () in
-      let diff = CS.diff u'.cs u.cs in
-      debug "diff done in %.4fs" (Timing.stop t);
-      CS.fold (fun v acc ->
-          add_var v acc range
-        ) diff u,
-      CS.fold (fun v acc ->
-          add_var v acc range
-        ) diff' u'
-    in
+  let unify range (man: ('a, 'b) manager) ctx (u, x) (u', x') =
     let t = Timing.start () in
-    let u,u' = unify_cells u u' in
-    debug "unification done in %.4fs" (Timing.stop t);
-    u, u'
+    let diff' = CS.diff u u' in
+    debug "diff' done in %.4fs" (Timing.stop t);
+    let t = Timing.start () in
+    let diff = CS.diff u' u in
+    debug "diff done in %.4fs" (Timing.stop t);
+    CS.fold (fun v acc ->
+        add_var man ctx range v acc
+      ) diff (u,x),
+    CS.fold (fun v acc ->
+        add_var man ctx range v acc
+      ) diff' (u',x')
 
   let extract_cell v =
     match vkind v with
@@ -352,64 +301,8 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
             man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
-      ) u.cs flow
+      ) u flow
 
-
-
-  (*==========================================================================*)
-  (**                      {2 Lattice operators}                              *)
-  (*==========================================================================*)
-
-
-  let top = {cs = CS.top; a = ValAbs.top}
-
-  let bottom = {cs = CS.bottom; a = ValAbs.bottom}
-
-  let join (u : t) (u' : t) : t =
-    if ValAbs.is_bottom u.a then u'
-    else if ValAbs.is_bottom u'.a then u
-    else
-      let range = mk_fresh_range () in
-      debug "join";
-      let t = Timing.start () in
-      let u,u' = unify u u' range in
-      debug "unify done in %.4f" (Timing.stop t);
-      {u with a = ValAbs.join u.a u'.a}
-
-  let meet (u : t) (u' : t) : t =
-    if ValAbs.leq ValAbs.top u.a then
-      u'
-    else if ValAbs.leq ValAbs.top u'.a then
-      u
-    else
-      let range = mk_fresh_range () in
-      let u,u' = unify u u' range in
-      {u with a = ValAbs.meet u.a u'.a}
-
-  let widening (ctx : Framework.Context.context) (u : t) (u' : t) : t =
-    if ValAbs.leq u.a ValAbs.bottom then
-      u'
-    else if ValAbs.leq u'.a ValAbs.bottom then
-      u
-    else
-      let range = mk_fresh_range () in
-      let u,u' = unify u u' range in
-      {u with a = ValAbs.widening ctx u.a u'.a}
-
-  let leq (u : t) (u' : t) : bool =
-    if ValAbs.leq u.a ValAbs.bottom then
-      true
-    else if ValAbs.leq u'.a ValAbs.bottom then
-      false
-    else
-      let range = mk_fresh_range () in
-      let u,u' = unify u u' range in
-      ValAbs.leq u.a u'.a
-
-
-  let is_top x = ValAbs.is_top x.a
-
-  let is_bottom x = ValAbs.is_bottom x.a
 
 
   (*==========================================================================*)
@@ -418,11 +311,9 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
 
 
   let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
-    let ctx, flow = ValAbs.init (subman man) ctx prog flow in
-    let u = get_domain_cur man flow in
-    ctx, set_domain_cur {u with cs = CS.empty} man flow
+    ctx, set_domain_cur empty man flow
 
-  let exec (man : ('a, t) manager) (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
+  let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a flow option =
     match skind stmt with
     | Universal.Ast.S_rename_var(v, v') ->
@@ -431,10 +322,11 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
     | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
       let v' = var_to_var v in
-      let u' = {u with cs = CS.remove v' u.cs} in
+      let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      ValAbs.exec (subman man) ctx stmt' flow
+      subman.exec ctx stmt' flow |>
+      return
 
     | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
       eval_list [rval; lval] (man.eval ctx) flow |>
@@ -445,20 +337,19 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
              | _ -> assert false
            in
            let stmt' = {stmt with skind = Universal.Ast.S_assign(lval, rval, mode)} in
-           match ValAbs.exec (subman man) ctx stmt' flow with
-           | None -> None
-           | Some flow ->
-             remove_overlapping_cells v stmt.srange man ctx flow |>
-             return
+           subman.exec ctx stmt' flow |>
+           remove_overlapping_cells v stmt.srange man ctx |>
+           return
         )
         (man.exec ctx) man.flow
 
-    | _ -> ValAbs.exec (subman man) ctx stmt flow
+
+    | _ -> None
 
   let is_safe_cell_access c =
     Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
 
-  let eval man ctx exp flow =
+  let eval man subman ctx exp flow =
     match ekind exp with
     | E_var {vkind = V_cell _ }  -> None
 
@@ -466,36 +357,40 @@ module Make(ValAbs : Framework.Domains.Stateful.DOMAIN) = struct
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let v = var_to_var v in
-      let u' = add_var v u exp.erange in
+      let x = get_domain_cur subman flow in
+      let (u', x') = add_var subman ctx exp.erange v (u, x) in
       debug "new variable %a in %a" pp_var v print u';
-      let flow = set_domain_cur u' man flow in
-      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, [])
+      let flow'' = set_domain_cur u' man flow |> set_domain_cur x' subman in
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
 
     | E_c_gen_cell_var c ->
       if is_safe_cell_access c then
         let u = get_domain_cur man flow in
-        let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u.cs  with
+        let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
           | Some (v', _) -> v'
           | None -> cell_to_var c
         in
-        let u' =  add_var v u exp.erange in
-        let flow = set_domain_cur u' man flow in
-        re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, [])
+        let x = get_domain_cur subman flow in
+        let (u', x') = add_var subman ctx exp.erange v (u, x) in
+        debug "new variable %a in %a" pp_var v print u';
+        let flow'' = set_domain_cur u' man flow |> set_domain_cur x' subman in
+        re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
       else
         let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
                    man.flow.set TCur man.env.bottom
         in
         oeval_singleton (None, flow, [])
 
-    | _ -> ValAbs.eval (subman man) ctx exp flow
+    | _ -> None
 
-  let ask man ctx query flow =
-    ValAbs.ask (subman man) ctx query flow
+  let ask man subman ctx query flow = None
+
+  let unify man ctx a1 a2 = unify (mk_fresh_range ()) man ctx a1 a2
 
 end
 
 let setup () =
-  register_domain name (module Make);
+  register_domain name (module Domain);
   register_vkind_compare (fun next vk1 vk2 ->
       match vk1, vk2 with
       | V_cell c1, V_cell c2 -> compare_cell c1 c2

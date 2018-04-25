@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 (**
-   Domains residing within a reduction product.
+   Domains residing within a reduced product.
 
    When interpreting statements, reduction domains return a post condition and
    a number of reduction channels that can be used by other domains within the

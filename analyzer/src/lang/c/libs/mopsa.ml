@@ -88,9 +88,7 @@ struct
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_false"}, [cond]) ->
-      let stmt = mk_assert (mk_not cond exp.erange) exp.erange in
-      let flow = man.exec ctx stmt  flow in
-      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+      assert false
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_safe"}, []) ->
       begin
