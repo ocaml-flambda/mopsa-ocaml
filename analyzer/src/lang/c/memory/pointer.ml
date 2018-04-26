@@ -38,15 +38,18 @@ struct
   module P =
   struct
     type t =
+      | F of c_fundec          (* points to a function *)
       | B of base              (* points to a variable *)
       | Null                   (* Null pointer         *)
       | Invalid                (* Invalid pointer      *)
     let print fmt p = match p with
+      | F f -> Format.fprintf fmt "%a" pp_var f.c_func_var
       | B b -> pp_base fmt b
       | Null -> Format.fprintf fmt "Null"
       | Invalid -> Format.fprintf fmt "Invalid"
     let compare p p' =
       match p, p' with
+      | F f    , F f'    -> compare f f'
       | B b    , B b'    -> compare_base b b'
       | Null   , Null    -> 0
       | Invalid, Invalid -> 0
@@ -68,6 +71,7 @@ struct
 
   (** Points-to evaluations *)
   type pexpr =
+    | E_p_fun of c_fundec
     | E_p_var of base (** base *) * expr (** offset *) * typ (** type *)
     | E_p_null
     | E_p_invalid
@@ -81,6 +85,9 @@ struct
 
   let find p a =
     CPML.find (Cell.annotate_var p) a
+
+  let points_to_fun p f a =
+    add p (PSL.singleton (P.F f)) a
 
   let points_to_base p b a =
     add p (PSL.singleton (P.B b)) a
@@ -127,6 +134,10 @@ struct
 
       PSL.fold (fun pt acc ->
           match pt with
+          | P.F fundec ->
+            oeval_singleton (Some (E_p_fun fundec), flow, []) |>
+            oeval_join acc
+
           | P.B base ->
             let a = add p (PSL.singleton pt) a in
             let flow = set_domain_cur a man flow in
@@ -181,6 +192,9 @@ struct
       oeval_compose
         (fun pt flow ->
            match pt with
+           | E_p_fun fundec ->
+             debug "pointer arithmetic on a pointer to a function";
+             assert false
            | E_p_var (base, offset, t) ->
              let size = sizeof_type t in
              let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
@@ -205,8 +219,8 @@ struct
            oeval_singleton (Some pt, flow, [])
         )
 
-    | E_c_function _ ->
-      panic "Function pointers not supported"
+    | E_c_function fundec ->
+      oeval_singleton (Some (E_p_fun fundec), flow, [])
 
     | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       panic "Pointer substraction not supported"
@@ -245,6 +259,19 @@ struct
       oeval_to_oexec
         (fun pt flow ->
            match pt with
+           | E_p_fun fundec ->
+             man.eval ctx p flow |>
+             eval_to_exec
+               (fun p flow ->
+                  let p = match p with
+                    | {ekind = E_var p} -> p
+                    | _ -> assert false
+                  in
+                  map_domain_cur (points_to_fun p fundec) man flow
+               )
+               (man.exec ctx) man.flow |>
+             return
+
            | E_p_var (base, offset, t) ->
              man.eval ctx p flow |>
              eval_to_exec
@@ -268,7 +295,9 @@ struct
                     | _ -> assert false
                   in
                   map_domain_cur (points_to_null p) man flow |>
-                  (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
+                  (* FIXME: this is not precise, but reduces the cases
+                     where the offset becomes unbounded when joining
+                     defined and undefined pointers *)
                   man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range)
                )
                (man.exec ctx) man.flow |>
@@ -283,7 +312,9 @@ struct
                     | _ -> assert false
                   in
                   map_domain_cur (points_to_invalid p) man flow |>
-                  (* FIXME: this is not precise, but reduces the cases where the offset becomes unbounded when joining defined and undefined pointers *)
+                  (* FIXME: this is not precise, but reduces the cases
+                     where the offset becomes unbounded when joining
+                     defined and undefined pointers *)
                   man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) (mk_zero range) range)
                )
                (man.exec ctx) man.flow |>
@@ -306,6 +337,8 @@ struct
       oeval_compose
         (fun pt flow ->
            match pt with
+           | E_p_fun fundec ->
+             oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, [])
            | E_p_var (base, offset, t) ->
              debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
              let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
@@ -362,7 +395,9 @@ struct
                        )
                    ) None itv
              end
-
+           | E_p_fun _ ->
+             debug "arrow access to function pointers";
+             assert false
            | E_p_null ->
              let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
                         man.flow.set TCur man.env.Framework.Lattice.bottom

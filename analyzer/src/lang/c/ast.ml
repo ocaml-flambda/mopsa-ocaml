@@ -658,7 +658,21 @@ let () =
           (fun () -> compare_typ t1 t2);
           (fun () -> compare n1 n2)
         ]
-      | T_c_function f1, T_c_function f2 -> Framework.Exceptions.panic "type compare on functions not supported"
+      | T_c_function f1, T_c_function f2 ->
+        begin
+          match f1, f2 with
+          | Some ff1, Some ff2 ->
+            if List.length ff1.c_ftype_params = List.length ff2.c_ftype_params then
+              let l = [
+                (fun () -> compare_typ ff1.c_ftype_return ff2.c_ftype_return);
+                (fun () -> compare ff1.c_ftype_variadic ff2.c_ftype_variadic)
+              ] @ (List.map2 (fun t t' -> fun () -> compare_typ t t') ff1.c_ftype_params ff2.c_ftype_params)
+              in
+              compare_composer l
+            else 1
+          | None, None -> 0
+          | _ -> 1
+        end
       | T_c_builtin_fn, T_c_builtin_fn -> 0
       | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
       | T_c_record r1, T_c_record r2 ->

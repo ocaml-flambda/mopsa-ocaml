@@ -41,7 +41,7 @@ struct
              let exp' = {exp with ekind = E_c_call(f, args)} in
              re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
-           | E_c_function(fundec) ->
+           | E_c_function fundec ->
              debug "call to %a, body @[%a@]" Framework.Pp.pp_var fundec.c_func_var Framework.Pp.pp_stmt fundec.c_func_body;
              let open Universal.Ast in
              let fundec' = {
@@ -54,8 +54,8 @@ struct
              let exp' = mk_call fundec' args exp.erange in
              re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
-           | _ ->
-             assert false
+           | _ -> assert false
+
         )
 
     | E_c_function(f) ->
