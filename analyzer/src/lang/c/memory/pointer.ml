@@ -116,6 +116,10 @@ struct
     | E_constant (C_int n) when Z.equal n Z.zero ->
       oeval_singleton (Some E_p_null, flow, [])
 
+    | E_addr addr ->
+      let pt' = E_p_var (A addr, mk_int 0 range, T_c_void) in
+      oeval_singleton (Some pt', flow, [])
+
     | E_var p when is_c_pointer_type p.vtyp ->
       debug "pointer var";
       let a = get_domain_cur man flow in
@@ -173,8 +177,7 @@ struct
         )
 
     | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
-      man.eval ctx p flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx p flow |>
       oeval_compose
         (fun pt flow ->
            match pt with
@@ -190,6 +193,17 @@ struct
              oeval_singleton (Some E_p_invalid, flow, [])
         )
 
+    | E_c_cast(p', _) ->
+      eval_p man ctx p' flow |>
+      oeval_compose
+        (fun pt flow ->
+           let pt =
+             match pt with
+             | E_p_var (base, offset, _) -> E_p_var(base, offset, under_pointer_type exp.etyp)
+             | _ -> pt
+           in
+           oeval_singleton (Some pt, flow, [])
+        )
 
     | E_c_function _ ->
       panic "Function pointers not supported"
@@ -197,7 +211,16 @@ struct
     | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       panic "Pointer substraction not supported"
 
-    | _ -> panic "Unsupported expression %a in eval_p" pp_expr exp
+    | _ ->
+      man.eval ctx exp flow |>
+      eval_compose
+        (fun exp flow ->
+           eval_p man ctx exp flow
+        )
+        ~empty:
+          (fun _ ->
+             panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
+          )
 
   let exec man ctx stmt flow =
     let range = srange stmt in
@@ -218,8 +241,7 @@ struct
 
 
     | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
-      man.eval ctx q flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx q flow |>
       oeval_to_oexec
         (fun pt flow ->
            match pt with
@@ -280,8 +302,7 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_c_deref(p) ->
-      man.eval ctx p flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx p flow |>
       oeval_compose
         (fun pt flow ->
            match pt with
@@ -318,8 +339,7 @@ struct
         )
 
     | E_c_arrow_access(p, i, f) ->
-      man.eval ctx p flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx p flow |>
       oeval_compose
         (fun pt flow ->
            match pt with
@@ -358,57 +378,49 @@ struct
 
 
     | E_binop(O_eq, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
-      eval_list [p; q] (man.eval ctx) flow |>
-      eval_compose
-        (fun el flow ->
-           oeval_list el (eval_p man ctx) flow |>
-           oeval_compose
-           (fun ptl flow ->
-             match ptl with
-             | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
-               if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
-                 oeval_singleton (Some (mk_zero range), flow, [])
-               else
-                 Universal.Utils.assume_to_eval
-                   (mk_binop offset1 O_eq offset2 range ~etyp:T_int)
-                   (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
-                   (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
-                   ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))
-                   man ctx flow ()
+      oeval_list [p; q] (eval_p man ctx) flow |>
+      oeval_compose
+        (fun ptl flow ->
+           match ptl with
+           | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
+             if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+               oeval_singleton (Some (mk_zero range), flow, [])
+             else
+               Universal.Utils.assume_to_eval
+                 (mk_binop offset1 O_eq offset2 range ~etyp:T_int)
+                 (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
+                 (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
+                 ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))
+                 man ctx flow ()
 
-             | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_one range), flow, [])
+           | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_one range), flow, [])
 
-             | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_zero range), flow, [])
+           | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_zero range), flow, [])
 
-             | _ -> assert false
-           )
+           | _ -> assert false
         )
 
     | E_binop(O_ne, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
-      eval_list [p; q] (man.eval ctx) flow |>
-      eval_compose
-        (fun el flow ->
-           oeval_list el (eval_p man ctx) flow |>
-           oeval_compose
-             (fun ptl flow ->
-                match ptl with
-                | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
-                  if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
-                    oeval_singleton (Some (mk_one range), flow, [])
-                  else
-                    Universal.Utils.assume_to_eval
-                      (mk_binop offset1 O_ne offset2 range ~etyp:T_int)
-                      (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
-                      (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
-                      ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))
-                      man ctx flow ()
+      oeval_list [p; q] (eval_p man ctx) flow |>
+      oeval_compose
+        (fun ptl flow ->
+           match ptl with
+           | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
+             if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+               oeval_singleton (Some (mk_one range), flow, [])
+             else
+               Universal.Utils.assume_to_eval
+                 (mk_binop offset1 O_ne offset2 range ~etyp:T_int)
+                 (fun true_flow -> oeval_singleton (Some (mk_one range), true_flow, []))
+                 (fun false_flow -> oeval_singleton (Some (mk_zero range), false_flow, []))
+                 ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, []))
+                 man ctx flow ()
 
-                | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_zero range), flow, [])
+           | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_zero range), flow, [])
 
-                | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_one range), flow, [])
+           | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_one range), flow, [])
 
-                | _ -> assert false
-           )
+           | _ -> assert false
         )
 
     | _ -> None
