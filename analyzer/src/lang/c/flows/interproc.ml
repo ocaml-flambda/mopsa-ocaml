@@ -33,6 +33,13 @@ struct
   let eval man ctx exp flow =
     match ekind exp with
     | E_c_call(f, args) ->
+      let () = debug "%a : %a" Framework.Pp.pp_typ f.etyp Framework.Pp.pp_expr f in
+      (* let f =
+       *   if is_c_pointer_type f.etyp then
+       *     {f with ekind = E_c_deref f}
+       *   else
+       *     f
+       * in *)
       man.eval ctx f flow |>
       eval_compose
         (fun f flow ->
@@ -54,8 +61,9 @@ struct
              let exp' = mk_call fundec' args exp.erange in
              re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
-           | _ -> assert false
-
+           | _ ->
+             let f = {f with ekind = E_c_deref f} in
+             re_eval_singleton (man.eval ctx) (Some {exp with ekind = E_c_call(f,args)}, flow, [])
         )
 
     | E_c_function(f) ->

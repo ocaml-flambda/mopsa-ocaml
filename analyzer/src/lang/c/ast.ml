@@ -565,6 +565,11 @@ let rec is_c_array_type (t: typ) =
   | T_c_array _ -> true
   | _ -> false
 
+let rec is_c_function_type (t: typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_function _ -> true
+  | _ -> false
+
 (** [is_scalartype t] lifts [t] to a pointer to [t] *)
 let pointer_type (t : typ) =
   (T_c_pointer t)

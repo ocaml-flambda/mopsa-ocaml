@@ -35,14 +35,14 @@ let () =
       | T_c_float(C_double) -> pp_print_string fmt "double"
       | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
-      | T_c_pointer(t) -> fprintf fmt "%a *" pp_typ t
+      | T_c_pointer(t) -> fprintf fmt "(%a *)" pp_typ t
 
       | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
       | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)
       | T_c_array(t, C_array_length_expr e) -> fprintf fmt "%a[%a]" pp_typ t pp_expr e
 
       | T_c_function None -> ()
-      | T_c_function (Some f) -> pp_typ fmt f.c_ftype_return
+      | T_c_function (Some f) -> fprintf fmt "(fun %a)" pp_typ f.c_ftype_return
 
       | T_c_typedef(typedef) -> pp_typ fmt typedef.c_typedef_def
 

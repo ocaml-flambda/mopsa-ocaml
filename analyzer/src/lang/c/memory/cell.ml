@@ -370,8 +370,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | E_c_gen_cell_var c ->
       begin
         let is_ok = match c.b with
-          | A a -> true (* TODO : test overflow for adresses *)
+          | A {Universal.Ast.addr_kind = A_c_static_malloc z}
+            when Z.leq (Z.add c.o (sizeof_type c.t)) z -> true (* TODO : test overflow for adresses *)
           | V v when Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type v.vtyp) -> true
+          | A _ -> Framework.Exceptions.panic "dynamic allocations of non static size not supported (yet)"
           | _ -> false
         in
         if is_ok then

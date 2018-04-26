@@ -170,6 +170,11 @@ struct
       man.eval ctx e flow |>
       eval_compose (eval_p man ctx)
 
+    | E_c_address_of(e) when is_c_function_type e.etyp ->
+      debug "address of a function";
+      man.eval ctx e flow |>
+      eval_compose (eval_p man ctx)
+
     | E_c_address_of(e) ->
       debug "address of a non-array";
       man.eval ctx e flow |>
