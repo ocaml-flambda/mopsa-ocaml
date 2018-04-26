@@ -132,28 +132,30 @@ struct
       let a = get_domain_cur man flow in
       let psl = find p a in
 
-      PSL.fold (fun pt acc ->
-          match pt with
-          | P.F fundec ->
-            oeval_singleton (Some (E_p_fun fundec), flow, []) |>
-            oeval_join acc
+      if PSL.is_empty psl then oeval_singleton (None, flow, [])
+      else
+        PSL.fold (fun pt acc ->
+            match pt with
+            | P.F fundec ->
+              oeval_singleton (Some (E_p_fun fundec), flow, []) |>
+              oeval_join acc
 
-          | P.B base ->
-            let a = add p (PSL.singleton pt) a in
-            let flow = set_domain_cur a man flow in
-            let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
-            oeval_singleton (Some pt', flow, []) |>
-            oeval_join acc
+            | P.B base ->
+              let a = add p (PSL.singleton pt) a in
+              let flow = set_domain_cur a man flow in
+              let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
+              oeval_singleton (Some pt', flow, []) |>
+              oeval_join acc
 
-          | P.Null ->
-            oeval_singleton (Some E_p_null, flow, []) |>
-            oeval_join acc
+            | P.Null ->
+              oeval_singleton (Some E_p_null, flow, []) |>
+              oeval_join acc
 
-          | P.Invalid ->
-            oeval_singleton (Some E_p_invalid, flow, []) |>
-            oeval_join acc
+            | P.Invalid ->
+              oeval_singleton (Some E_p_invalid, flow, []) |>
+              oeval_join acc
 
-        ) psl None
+          ) psl None
 
     | E_var {vkind = V_cell c} when is_c_array_type c.t ->
       debug "points to array cell";
