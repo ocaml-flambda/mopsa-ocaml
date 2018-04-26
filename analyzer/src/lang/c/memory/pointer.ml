@@ -38,16 +38,16 @@ struct
   module P =
   struct
     type t =
-      | V of var (* points to a variable *)
+      | B of base              (* points to a variable *)
       | Null                   (* Null pointer         *)
       | Invalid                (* Invalid pointer      *)
     let print fmt p = match p with
-      | V v -> pp_var fmt v
+      | B b -> pp_base fmt b
       | Null -> Format.fprintf fmt "Null"
       | Invalid -> Format.fprintf fmt "Invalid"
     let compare p p' =
       match p, p' with
-      | V x    , V y     -> compare_var x y
+      | B b    , B b'    -> compare_base b b'
       | Null   , Null    -> 0
       | Invalid, Invalid -> 0
       | _                -> 1
@@ -68,7 +68,7 @@ struct
 
   (** Points-to evaluations *)
   type pexpr =
-    | E_p_var of var (** base *) * expr (** offset *) * typ (** type *)
+    | E_p_var of base (** base *) * expr (** offset *) * typ (** type *)
     | E_p_null
     | E_p_invalid
 
@@ -82,8 +82,11 @@ struct
   let find p a =
     CPML.find (Cell.annotate_var p) a
 
+  let points_to_base p b a =
+    add p (PSL.singleton (P.B b)) a
+
   let points_to_var p v a =
-    add p (PSL.singleton (P.V v)) a
+    add p (PSL.singleton (P.B (V v))) a
 
   let points_to_null p a =
     add p (PSL.singleton P.Null) a
@@ -100,7 +103,7 @@ struct
 
   let mk_offset_var p =
     let v = {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int} in
-    {v with vkind = V_cell {v; o = Z.zero; t = v.vtyp}}
+    {v with vkind = V_cell {b = V v; o = Z.zero; t = v.vtyp}}
 
   let rec eval_p
       (man: ('a, t) manager) ctx
@@ -120,7 +123,7 @@ struct
 
       PSL.fold (fun pt acc ->
           match pt with
-          | P.V base ->
+          | P.B base ->
             let a = add p (PSL.singleton pt) a in
             let flow = set_domain_cur a man flow in
             let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
@@ -139,12 +142,12 @@ struct
 
     | E_var {vkind = V_cell c} when is_c_array_type c.t ->
       debug "points to array cell";
-      let pt = E_p_var (c.v, mk_z c.o range, under_array_type c.t) in
+      let pt = E_p_var (c.b, mk_z c.o range, under_array_type c.t) in
       oeval_singleton (Some pt, flow, [])
 
     | E_var a when is_c_array_type a.vtyp ->
       debug "points to array var";
-      let pt = E_p_var (a, mk_int 0 range, under_array_type a.vtyp) in
+      let pt = E_p_var (V a, mk_int 0 range, under_array_type a.vtyp) in
       oeval_singleton (Some pt, flow, [])
 
     | E_c_address_of(e) when is_c_array_type e.etyp ->
@@ -159,11 +162,11 @@ struct
         (fun e flow ->
            match ekind e with
            | E_var {vkind = V_cell c} ->
-             let pt = E_p_var (c.v, mk_z c.o (tag_range range "offset"), c.t) in
+             let pt = E_p_var (c.b, mk_z c.o (tag_range range "offset"), c.t) in
              oeval_singleton (Some pt, flow, [])
 
            | E_var v when is_c_type v.vtyp ->
-             let pt = E_p_var (v, mk_zero (tag_range range "offset"), v.vtyp) in
+             let pt = E_p_var (V v, mk_zero (tag_range range "offset"), v.vtyp) in
              oeval_singleton (Some pt, flow, [])
 
            | _ -> assert false
@@ -228,7 +231,7 @@ struct
                     | {ekind = E_var p} -> p
                     | _ -> assert false
                   in
-                  map_domain_cur (points_to_var p base) man flow |>
+                  map_domain_cur (points_to_base p base) man flow |>
                   man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) offset range)
                )
                (man.exec ctx) man.flow |>
@@ -283,14 +286,14 @@ struct
         (fun pt flow ->
            match pt with
            | E_p_var (base, offset, t) ->
-             debug "E_p_var(%a, %a, %a)" pp_var base pp_expr offset pp_typ t;
+             debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
              let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
              begin
                match itv with
                | None -> assert false
                | Some itv ->
                  List.fold_left (fun acc o ->
-                     let c = {Cell.v = base; o; t} in
+                     let c = {Cell.b = base; o; t} in
                      let exp' = Cell.mk_gen_cell_var c range in
                      man.eval ctx exp' flow |>
                      eval_compose
@@ -330,7 +333,7 @@ struct
                | Some itv ->
                  List.fold_left (fun acc o ->
                      let o' = Z.add o (Z.of_int field.c_field_offset) in
-                     let c = {Cell.v = base; o = o'; t = field.c_field_type} in
+                     let c = {Cell.b = base; o = o'; t = field.c_field_type} in
                      let exp' = Cell.mk_gen_cell_var c range in
                      man.eval ctx  exp' flow |>
                      eval_compose
@@ -363,7 +366,7 @@ struct
            (fun ptl flow ->
              match ptl with
              | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
-               if compare_var base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+               if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
                  oeval_singleton (Some (mk_zero range), flow, [])
                else
                  Universal.Utils.assume_to_eval
@@ -390,7 +393,7 @@ struct
              (fun ptl flow ->
                 match ptl with
                 | [E_p_var (base1, offset1, t1); E_p_var (base2, offset2, t2)] ->
-                  if compare_var base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+                  if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
                     oeval_singleton (Some (mk_one range), flow, [])
                   else
                     Universal.Utils.assume_to_eval

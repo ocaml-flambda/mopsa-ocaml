@@ -68,10 +68,10 @@ let add_recent (addr: addr) (attrs: AttrSet.t) (abs: t) : t = {abs with recent =
 
 let add_attribute addr attr abs =
   if is_weak addr then
-    let attrs = find_old addr abs in    
+    let attrs = find_old addr abs in
     add_old addr (AttrSet.add attr attrs) abs
   else
-    let attrs = find_recent addr abs in    
+    let attrs = find_recent addr abs in
     add_recent addr (AttrSet.add attr attrs) abs
 
 let join abs1 abs2 = {

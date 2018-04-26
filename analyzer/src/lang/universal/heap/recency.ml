@@ -35,7 +35,7 @@ struct
   (**                        {2 Sub-domain manager}                           *)
   (*==========================================================================*)
 
-  (** Create a manager for the sub-domain that can access to the top-level 
+  (** Create a manager for the sub-domain that can access to the top-level
       transfer functions *)
   let sub_manager (man : ('a, t) manager) : ('a, Sub.t) manager = {
     man with

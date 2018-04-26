@@ -30,22 +30,36 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                              {2 Cells}                                  *)
 (*==========================================================================*)
 
+(** lv base *)
+type base =
+  | V of var
+  | A of Universal.Ast.addr
+
+let pp_base fmt = function
+  | V v -> pp_var fmt v
+  | A a -> Universal.Pp.pp_addr fmt a
+
+let compare_base b b' = match b, b' with
+  | V v, V v' -> compare_var v v'
+  | A a, A a' -> Universal.Ast.compare_addr a a'
+  | _ -> 1
+
 (** Memory cells. *)
 type cell = {
-  v: var; (** base variable *)
+  b: base; (** base variable or address *)
   o: Z.t; (** offset *)
   t: typ; (** type *)
 }
 
 let pp_cell fmt c =
   Format.fprintf fmt "⟨%a,%a,%a⟩"
-    pp_var c.v
+    pp_base c.b
     Z.pp_print c.o
     pp_typ c.t
 
 let compare_cell c c' =
   compare_composer [
-    (fun () -> compare_var c.v c'.v);
+    (fun () -> compare_base c.b c'.b);
     (fun () -> Z.compare c.o c'.o);
     (fun () -> compare_typ c.t c'.t);
   ]
@@ -63,7 +77,7 @@ let mk_gen_cell_var c range =
 let annotate_var v =
   match v.vkind with
   | V_cell _ -> v
-  | _ -> { v with vkind = V_cell {v; o = Z.zero; t= v.vtyp} }
+  | _ -> { v with vkind = V_cell {b = V v; o = Z.zero; t= v.vtyp} }
 
 let var_of_cell c =
   let open Framework.Ast in
@@ -143,7 +157,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         match exist_and_find_cell (fun c' ->
             is_c_int_type c'.t &&
             Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
-            compare_var c.v c'.v = 0 &&
+            compare_base c.b c'.b = 0 &&
             Z.equal c.o c'.o) cs with
         | Some (v', c') ->
           Nexp (Some (warp v' (int_rangeof c.t) range))
@@ -183,7 +197,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                       let n = Z.to_int (sizeof_type (c.t)) in
                       let rec aux i l =
                         if i < n then
-                          let tobein = {v = c.v ; o = Z.add c.o (Z.of_int i); t = t'} in
+                          let tobein = {b = c.b ; o = Z.add c.o (Z.of_int i); t = t'} in
                           match exist_and_find_cell (fun c' ->
                               compare_cell c' tobein = 0
                             ) cs with
@@ -289,7 +303,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           let check_overlap (a1, b1) (a2, b2) =
             Z.lt (Z.max a1 a2) (Z.min b1 b2)
           in
-          if compare_var c.v c'.v = 0 && check_overlap (cell_range c) (cell_range c') then
+          if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
             man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
@@ -349,26 +363,31 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
 
     | E_c_gen_cell_var c ->
-      if Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type c.v.vtyp)
-      then
-        let u = get_domain_cur man flow in
-        let s = get_domain_cur subman flow in
-        let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
-          | Some (v', _) -> v'
-          | None -> var_of_cell c
+      begin
+        let is_ok = match c.b with
+          | A a -> true (* TODO : test overflow for adresses *)
+          | V v when Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type v.vtyp) -> true
+          | _ -> false
         in
-        let (u', s') = add_var ctx exp.erange v (u, s) in
-        debug "new variable %a in %a" pp_var v print u';
-        let flow'' = set_domain_cur u' man flow |>
-                     set_domain_cur s' subman
-        in
-        re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
-      else
-        let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
-                   man.flow.set TCur man.env.bottom
-        in
-        oeval_singleton (None, flow, [])
-
+        if is_ok then
+          let u = get_domain_cur man flow in
+          let s = get_domain_cur subman flow in
+          let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
+            | Some (v', _) -> v'
+            | None -> var_of_cell c
+          in
+          let (u', s') = add_var ctx exp.erange v (u, s) in
+          debug "new variable %a in %a" pp_var v print u';
+          let flow'' = set_domain_cur u' man flow |>
+                       set_domain_cur s' subman
+          in
+          re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
+        else
+          let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
+                     man.flow.set TCur man.env.bottom
+          in
+          oeval_singleton (None, flow, [])
+      end
     | _ -> None
 
   let ask man subman ctx query flow = None
