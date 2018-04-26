@@ -44,7 +44,24 @@ struct
       oeval_singleton (Some exp', flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "malloc"}, [size]) ->
-      Framework.Exceptions.panic "malloc not supported"
+      man.eval ctx size flow |>
+      Framework.Eval.eval_compose
+        (fun size flow ->
+
+           (* try to convert [size] into a constant *)
+           match Universal.Utils.expr_to_z size with
+
+           (* Allocation with a static size *)
+           | Some z ->
+             let exp' = Universal.Ast.mk_alloc_addr (Memory.Cell.A_c_static_malloc z) exp.erange exp.erange in
+             Framework.Eval.re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
+           (* Allocation with a dynamic size *)
+           | None ->
+             let exp' = Universal.Ast.mk_alloc_addr Memory.Cell.A_c_dynamic_malloc exp.erange exp.erange in
+             Framework.Eval.re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
+        )
 
     | _ -> None
 

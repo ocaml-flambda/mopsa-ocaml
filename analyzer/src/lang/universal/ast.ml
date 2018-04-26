@@ -230,32 +230,6 @@ let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 let mk_alloc_addr addr_kind addr_range range =
   mk_expr (E_alloc_addr (addr_kind, addr_range)) ~etyp:T_addr range
 
-let rec expr_to_int (e: expr) : int option =
-  match ekind e with
-  | E_constant (C_int n) -> Some (Z.to_int n)
-  | E_unop (O_minus, e') ->
-    begin
-      match expr_to_int e' with
-      | None -> None
-      | Some n -> Some (-n)
-    end
-  | E_binop(op, e1, e2) ->
-    begin
-      match expr_to_int e1, expr_to_int e2 with
-      | Some n1, Some n2 ->
-        begin
-          match op with
-          | O_plus -> Some (n1 + n2)
-          | O_minus -> Some (n1 - n2)
-          | O_mult -> Some (n1 * n2)
-          | O_div -> if n2 = 0 then None else Some (n1 / n2)
-          | _ -> None
-        end
-      | _ -> None
-    end
-  | _ -> None
-
-
 
 
 (*==========================================================================*)

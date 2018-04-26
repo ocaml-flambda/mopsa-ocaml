@@ -21,7 +21,7 @@ let rec pp_addr_kind_chain : (formatter -> addr_kind -> unit) ref = ref (fun fmt
 and register_pp_addr_kind pp = pp_addr_kind_chain := pp !pp_addr_kind_chain
 
 and pp_addr fmt addr =
-  fprintf fmt "@{%a,%a,%d}" !pp_addr_kind_chain addr.addr_kind pp_range addr.addr_range addr.addr_uid
+  fprintf fmt "@@{%a,%a,%d}" !pp_addr_kind_chain addr.addr_kind pp_range addr.addr_range addr.addr_uid
 
 let () =
   register_pp_operator (fun default fmt -> function

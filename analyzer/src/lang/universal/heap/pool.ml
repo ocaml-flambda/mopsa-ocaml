@@ -75,6 +75,6 @@ let meet abs1 abs2 = {
 let widening ctx = join
 
 let print fmt abs =
-  Format.fprintf fmt "recent:@,@[<v2>  %a@]@\nold:@,@[<v2>  %a@]"
+  Format.fprintf fmt "recent: @[%a@]@\nold: @[%a@]@\n"
     AddrSet.print abs.recent
     AddrSet.print abs.old

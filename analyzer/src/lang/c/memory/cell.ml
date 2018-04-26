@@ -30,6 +30,11 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                              {2 Cells}                                  *)
 (*==========================================================================*)
 
+(** Kinds of heap allocated addresses. *)
+type Universal.Ast.addr_kind +=
+  | A_c_static_malloc of Z.t (** static size *)
+  | A_c_dynamic_malloc (** dynamic size *)
+
 (** lv base *)
 type base =
   | V of var
@@ -417,4 +422,15 @@ let setup () =
       match ekind exp with
       | E_c_gen_cell_var _ -> leaf exp
       | _ -> next exp
+    );
+  Universal.Ast.register_addr_kind_compare (fun next ak1 ak2 ->
+      match ak1, ak2 with
+      | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
+      | _ -> next ak1 ak2
+    );
+  Universal.Pp.register_pp_addr_kind (fun next fmt ak ->
+      match ak with
+      | A_c_static_malloc s -> Format.fprintf fmt "static malloc(%a)" Z.pp_print s
+      | A_c_dynamic_malloc -> Format.fprintf fmt "dynamic malloc"
+      | _ -> next fmt ak
     )
