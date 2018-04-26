@@ -108,12 +108,15 @@ struct
       return flow1
 
     | S_simple_assert(cond, b1, b2) ->
-      let cur = man.flow.get TCur flow in
       let range = srange stmt in
       let name = Framework.Context.find KCurTestName ctx in
       let cond' = if b2 then cond else mk_not cond (tag_range cond.erange "neg") in
       let f' = man.exec ctx (mk_assume cond' (tag_range stmt.srange "assume")) flow in
-      let b = man.env.leq (man.flow.get TCur f') man.env.bottom in
+      let b = man.flow.is_cur_bottom f' in
+      let cur =
+        let env = man.flow.get TCur flow in
+        if man.env.is_bottom env then man.env.top else env
+      in
       let nflow =
         if b = b1 then
           man.flow.add (TSafeAssert (name,range)) cur flow
