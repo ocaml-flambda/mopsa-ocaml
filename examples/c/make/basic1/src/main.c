@@ -1,6 +1,7 @@
 #include "lib.h"
 
 void main() {
-  int i = 0;
-  incr(&i);
+  int a[10];
+  int *p = a;
+  incr(p + 10);
 }

@@ -1,16 +1,6 @@
 #include "mopsa.h"
 
-int f0() {
-  if (0 < 1) {
-    goto l1;
-  } else {
-    goto l2;
-  };
- l1: return 0;
- l2: return 1;
-}
-
-void goto_tests () {
+void test_backward_goto() {
   int a = 0;
   int b = 0;
   int c = 0;
@@ -27,10 +17,17 @@ void goto_tests () {
   _mopsa_assert_exists(a==10 && b == 100);
 }
 
-void test_0() {
-  _mopsa_assert_true(f0() == 0);
+int f0() {
+  if (0 < 1) {
+    goto l1;
+  } else {
+    goto l2;
+  };
+ l1: return 0;
+ l2: return 1;
 }
 
-void test_1() {
-  goto_tests();
+
+void test_goto_and_return() {
+  _mopsa_assert_true(f0() == 0);
 }

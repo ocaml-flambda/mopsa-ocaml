@@ -10,21 +10,28 @@ let debug fmt =
 (** {2 Entry points} *)
 
 let rec parse_program (files: string list) =
-  match files with
-  | [filename] when Filename.extension filename = ".db" -> parse_db filename
-  | _ -> parse_files files
+  let open Clang_parser in
+  let open Clang_to_C in
+  let target = get_target_info (get_default_target_options ()) in
+  let ctx = Clang_to_C.create_context "_project" target in
+  List.iter
+    (fun file ->
+       match Filename.extension file with
+       | ".c" -> parse_file [] file ctx
+       | ".db" -> parse_db file ctx
+       | x -> Debug.fail "Unknown C extension %s" x
+    ) files;
+  let prj = Clang_to_C.link_project ctx in
+  from_project prj
 
-and parse_db (dbfile: string) : Framework.Ast.program =
+and parse_db (dbfile: string) ctx : unit =
   let open Clang_parser in
   let open Clang_to_C in
   let open Build_DB in
-  let target = get_target_info (get_default_target_options ()) in
   let db = load_db dbfile in
-  print_db db;
   let execs = get_executables db in
   match execs with
   | [exec] ->
-    let ctx = create_context exec target in
     let srcs = get_executable_sources db exec in
     let nb = List.length srcs
     and i = ref 0 in
@@ -38,37 +45,20 @@ and parse_db (dbfile: string) : Framework.Ast.program =
            Sys.chdir src.source_cwd;
            (try
               (* parse file in the original compilation directory *)
-              let p = parse_file src.source_opts src.source_path in
+              parse_file src.source_opts src.source_path ctx;
               Sys.chdir cwd;
-              (* translate to SAST *)
-              add_translation_unit ctx (Filename.basename src.source_path) p
             with x ->
               (* make sure we get back to cwd in all cases *)
               Sys.chdir cwd;
               raise x
            )
          | _ -> Debug.warn "ignoring file %s\n%!" src.source_path
-      ) srcs;
-    from_project (link_project ctx)
+      ) srcs
 
   | l ->
     assert false
 
-and parse_files files =
-  let open Clang_parser in
-  let open Clang_to_C in
-  let one_file = List.hd files in
-  let target = get_target_info (get_default_target_options ()) in
-  let ctx = Clang_to_C.create_context one_file target in
-  List.iter
-    (fun file ->
-       let p = parse_file [] file in
-       add_translation_unit ctx (Filename.basename file) p
-    ) files;
-  let prj = Clang_to_C.link_project ctx in
-  from_project prj
-
-and parse_file (opts: string list) (file: string) =
+and parse_file (opts: string list) (file: string) ctx =
   let target_options = Clang_parser.get_default_target_options () in
   (* remove some options that are in the way *)
   let filter_out_opts opts =
@@ -93,7 +83,8 @@ and parse_file (opts: string list) (file: string) =
           ) (List.map (Clang_dump.string_of_diagnostic) diag)
 
   in
-  x
+  Clang_to_C.add_translation_unit ctx (Filename.basename file) x
+
 
 and from_project prj =
   debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;

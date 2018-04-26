@@ -96,13 +96,8 @@ struct
       tests |> List.map (fun test ->
           let name = test.c_func_var.vname in
           let range = tag_range range "test %s" name in
-          let cleaners = List.mapi (fun i (v, _) ->
-              let range = tag_range range "cleaner %d" i in
-              mk_remove_var v range
-            ) test.c_func_local_vars
-          in
-          let body = mk_block (test.c_func_body :: cleaners) range in
-          (name, body)
+          let stmt = mk_c_call_stmt test [] range in
+          (name, stmt)
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
@@ -118,7 +113,9 @@ struct
                 {c_func_var} -> c_func_var.vname = !opt_function
             ) functions
           in
-          manager.exec ctx main.c_func_body flow |>
+          let range = mk_file_range prog_file in
+          let stmt = mk_c_call_stmt main [] range in
+          manager.exec ctx stmt flow |>
           return
         with Not_found ->
           Framework.Exceptions.panic "function %s not found" !opt_function
