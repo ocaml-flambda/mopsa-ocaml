@@ -32,10 +32,6 @@ type t = {
 let old_uid = 0
 let recent_uid = 1
 
-let is_weak addr =
-  addr.addr_uid = old_uid
-
-
 let empty = {
   recent = AddrSet.empty;
   old = AddrSet.empty;
