@@ -14,13 +14,14 @@ open Ast
 open Format
 
 
-let rec pp_addr_chain : (formatter -> addr -> unit) ref = ref (fun fmt addr ->
-    failwith "Pp: Unknown address"
+let rec pp_addr_kind_chain : (formatter -> addr_kind -> unit) ref = ref (fun fmt ak ->
+    failwith "Pp: Unknown address kind"
   )
 
-and register_pp_addr pp = pp_addr_chain := pp !pp_addr_chain
+and register_pp_addr_kind pp = pp_addr_kind_chain := pp !pp_addr_kind_chain
 
-and pp_addr fmt addr = !pp_addr_chain fmt addr
+and pp_addr fmt addr =
+  fprintf fmt "@{%a,%a,%d}" !pp_addr_kind_chain addr.addr_kind pp_range addr.addr_range addr.addr_uid
 
 let () =
   register_pp_operator (fun default fmt -> function
@@ -80,10 +81,6 @@ let () =
         fprintf fmt "%a(%a);"
           pp_expr f
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
-      | E_addr_attribute(addr, attr) ->
-        fprintf fmt "%a.%s"
-          pp_addr addr
-          attr
       | E_alloc_addr(akind, range) ->
         fprintf fmt "alloc(%a)" pp_range range
       | E_addr addr -> pp_addr fmt addr
@@ -99,7 +96,8 @@ let () =
           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) vl
 
       | S_rename_var(v, v') -> fprintf fmt "rename(%a, %a)" pp_var v pp_var v'
-      | S_rebase_addr(a, a') -> fprintf fmt "rebase(%a, %a)" pp_addr a pp_addr a'
+      | S_rebase_addr(a, a', STRONG) -> fprintf fmt "rebase %a = %a" pp_addr a pp_addr a'
+      | S_rebase_addr(a, a', WEAK) -> fprintf fmt "rebase %a ≈ %a" pp_addr a pp_addr a'
       | S_assign(v, e, STRONG) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
       | S_assign(v, e, WEAK) -> fprintf fmt "%a ≈ %a;" pp_expr v pp_expr e
       | S_assign(v, e, EXPAND) -> fprintf fmt "%a ≋ %a;" pp_expr v pp_expr e

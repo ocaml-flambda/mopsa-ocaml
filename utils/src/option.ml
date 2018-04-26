@@ -65,6 +65,13 @@ let option_dfl2
   =
   match a,b with None,_ | _,None -> dfl () | Some x, Some y -> f x y
 
+let option_compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
+  match a, b with
+  | None, None -> 0
+  | None, Some _ -> -1
+  | Some _, None -> 1
+  | Some x, Some y -> cmp x y
+
 exception Found_None
 
 let raise_none () = raise Found_None

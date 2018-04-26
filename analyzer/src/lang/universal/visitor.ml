@@ -21,8 +21,6 @@ let () =
         {exprs = [v; e]; stmts = []},
         (fun parts -> {exp with ekind = (E_subscript(List.hd parts.exprs, List.hd @@ List.tl parts.exprs))})
 
-      | E_addr_attribute _ -> leaf exp
-
       | E_alloc_addr _ -> leaf exp
 
       | E_addr _ -> leaf exp

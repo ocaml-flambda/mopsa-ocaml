@@ -24,8 +24,8 @@
         "python.objects.data_model.attribute",
 
         {
-            "fun": "universal.heap.recency",
-            "arg": "python.memory.nonrel"
+            "unify": "universal.heap.recency",
+            "over": "python.memory.nonrel"
         }
     ]
 }

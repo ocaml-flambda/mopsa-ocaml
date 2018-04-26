@@ -77,11 +77,12 @@ struct
       assert false
 
     (* Modify variables already pointing to a1 in order to point to a2. *)
-    | S_rebase_addr(a1, a2) ->
-      map_domain_cur (
-        Nonrel.map (fun v -> Value.rebase_addr a1 a2 v)
-      ) man flow |>
-      return
+    | S_rebase_addr(a1, a2, mode) ->
+      Framework.Exceptions.panic "python heap operations not supported"
+      (* map_domain_cur (
+       *   Nonrel.map (fun v -> Value.rebase_addr a1 a2 v)
+       * ) man flow |>
+       * return *)
 
     (* Other cases are handled by {!Nonrel}. *)
     | _ ->

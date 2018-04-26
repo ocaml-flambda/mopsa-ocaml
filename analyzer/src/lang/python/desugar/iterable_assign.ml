@@ -33,24 +33,26 @@ struct
       eval_to_exec
         (fun exp flow ->
           match ekind exp with
-          | E_addr addr ->
-            let iter_expr = mk_expr
-                (E_py_call (
-                    (mk_expr
-                       (E_addr_attribute (addr, "__iter__"))
-                       (tag_range range "iter attr")),
-                    [],[]
-                  ))
-                (tag_range range "iter call")
-            in
-            man.eval ctx iter_expr flow |>
-            eval_to_exec
-              (fun iter flow ->
-                 match ekind iter with
-                 | E_addr(addr) -> assign_iter man ctx el addr kind range flow
-                 | _ -> assert false
-              )
-              (man.exec ctx) man.flow
+            | E_addr addr ->
+              Framework.Exceptions.panic "python heap operations not supported"
+
+            (* let iter_expr = mk_expr
+             *     (E_py_call (
+             *         (mk_expr
+             *            (E_addr_attribute (addr, "__iter__"))
+             *            (tag_range range "iter attr")),
+             *         [],[]
+             *       ))
+             *     (tag_range range "iter call")
+             * in
+             * man.eval ctx iter_expr flow |>
+             * eval_to_exec
+             *   (fun iter flow ->
+             *      match ekind iter with
+             *      | E_addr(addr) -> assign_iter man ctx el addr kind range flow
+             *      | _ -> assert false
+             *   )
+             *   (man.exec ctx) man.flow *)
 
           | _ ->
             man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) flow

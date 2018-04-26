@@ -1,42 +1,55 @@
-{"iter": [
-    //Program entry point
-    "c.program",
-    "c.alarms",
-    "universal.unit_tests",
+{
+    "iter": [
+        //Program entry point
+        "c.program",
+        "c.alarms",
+        "universal.unit_tests",
 
-    //Libraries
-    "c.libs.mopsa",
-    "c.libs.stdlib",
+        //Libraries
+        "c.libs.mopsa",
+        "c.libs.stdlib",
 
-    //Desugarisation
-    "c.desugar.andor",
-    "c.desugar.assign",
-    "c.desugar.loops",
+        //Desugarisation
+        "c.desugar.andor",
+        "c.desugar.assign",
+        "c.desugar.loops",
 
-    //Flows
-    "c.flows.switch",
-    "c.flows.interproc",
-    "universal.flows.loops",
-    "universal.flows.intraproc",
-    "universal.flows.interproc",
-    "c.flows.goto",
+        //Flows
+        "c.flows.switch",
+        "c.flows.interproc",
+        "universal.flows.loops",
+        "universal.flows.intraproc",
+        "universal.flows.interproc",
+        "c.flows.goto",
 
-    //Memory abstraction
-    "c.memory.pointer",
-    "c.memory.array_to_pointer",
-    "c.memory.record_to_pointer",
-    "c.memory.machine_integers",
-    {
-        "unify": "c.memory.cell",
-        "over": {
-            "product": [
-                "universal.numeric.domains.boxes.int",
-                "universal.numeric.domains.boxes.congruence"
-            ]
+        //Heap abstraction
+        {
+            "unify": "universal.heap.recency",
+            "over": {
+                "iter": [
+                    //Memory abstraction
+                    "c.memory.pointer",
+                    "c.memory.array_to_pointer",
+                    "c.memory.record_to_pointer",
+                    "c.memory.machine_integers",
+
+                    //Cell abstraction
+                    {
+                        "unify": "c.memory.cell",
+                        "over": {
+                            //Numeric abstraction
+                            "product": [
+                                "universal.numeric.domains.boxes.int",
+                                "universal.numeric.domains.boxes.congruence"
+                            ]
+                        }
+                    },
+
+                    //This domains should be put after the numeric domain to allow
+                    //proper initialization of global variables
+                    "c.memory.var_init"
+                ]
+            }
         }
-    },
-
-    //This domains should be put after the numeric domain to allow
-    //proper initialization of global variables
-    "c.memory.var_init"
-]}
+    ]
+}

@@ -130,7 +130,9 @@ struct
       assert false
 
   let mk_dynamic_attribute addr attr range =
-    Universal.Ast.mk_addr_attribute addr attr range
+    Framework.Exceptions.panic "python heap operations not supported"
+
+    (* Universal.Ast.mk_addr_attribute addr attr range *)
 
   let mk_attribute_expr addr attr range =
     if is_static_attribute addr attr then
@@ -149,7 +151,8 @@ struct
            match ekind obj with
            (* Access to an abstract attribute of an object *)
            | E_addr addr when is_abstract_attribute attr ->
-             oeval_singleton (Some (Universal.Ast.mk_addr_attribute addr attr range), flow, [])
+             Framework.Exceptions.panic "python heap operations not supported"
+             (* oeval_singleton (Some (Universal.Ast.mk_addr_attribute addr attr range), flow, []) *)
 
            (* Access to an ordinary attribute of an object *)
            | E_addr addr  ->

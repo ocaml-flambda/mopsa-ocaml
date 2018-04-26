@@ -53,17 +53,17 @@ let mk_instance_addr cls params =
 let () =
   Universal.Pp.(
     Format.(
-      register_pp_addr (fun default fmt addr ->
-          match addr.addr_kind with
-          | A_py_class(C_user c, _) -> fprintf fmt "@(class %a)" pp_var c.py_cls_var
-          | A_py_class(C_builtin c, _) -> fprintf fmt "@(class %s)" c
-          | A_py_function(F_user f) -> fprintf fmt "@(fun %a)" pp_var f.py_func_var
-          | A_py_function(F_builtin f) -> fprintf fmt "@(fun %s)" f
-          | A_py_instance(c, _) -> fprintf fmt "#(%a,%d)" pp_addr c addr.addr_uid
-          | A_py_method(f, obj) -> fprintf fmt "@(method %a on %a)" pp_addr f pp_addr obj
+      register_pp_addr_kind (fun default fmt ak ->
+          match ak with
+          | A_py_class(C_user c, _) -> fprintf fmt "class %a" pp_var c.py_cls_var
+          | A_py_class(C_builtin c, _) -> fprintf fmt "class %s" c
+          | A_py_function(F_user f) -> fprintf fmt "fun %a" pp_var f.py_func_var
+          | A_py_function(F_builtin f) -> fprintf fmt "fun %s" f
+          | A_py_instance(c, _) -> fprintf fmt "inst of %a" pp_addr c
+          | A_py_method(f, obj) -> fprintf fmt "method %a on %a" pp_addr f pp_addr obj
           | A_py_module(M_builtin m) -> fprintf fmt "%s" m
           | A_py_unknown -> fprintf fmt "?"
-          | _ -> default fmt addr
+          | _ -> default fmt ak
         )
     )
   )

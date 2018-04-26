@@ -103,11 +103,18 @@ type addr = {
   addr_uid : int; (** Unique identifier. *)
 }
 
+let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref = ref (fun ak1 ak2 ->
+    compare ak1 ak2
+  )
+
+let register_addr_kind_compare cmp =
+  addr_kind_compare_chain := cmp !addr_kind_compare_chain
+
 let compare_addr a1 a2 =
   Framework.Ast.compare_composer [
     (fun () -> compare_range a1.addr_range a2.addr_range);
-    (fun () -> compare a1.addr_kind a2.addr_kind);
-    (fun () -> compare a1.addr_uid a2.addr_uid)
+    (fun () -> compare a1.addr_uid a2.addr_uid);
+    (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
   ]
 
 
@@ -152,9 +159,6 @@ type expr_kind +=
 
   (** Head address. *)
   | E_addr of addr
-
-  (** Access to an attribute of a heap address *)
-  | E_addr_attribute of addr * string
 
 
 let mk_neg e = mk_unop O_minus e
@@ -223,7 +227,8 @@ let mk_false = mk_bool false
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
-let mk_addr_attribute addr attr range = mk_expr (E_addr_attribute (addr, attr)) range
+let mk_alloc_addr addr_kind addr_range range =
+  mk_expr (E_alloc_addr (addr_kind, addr_range)) ~etyp:T_addr range
 
 let rec expr_to_int (e: expr) : int option =
   match ekind e with
@@ -258,13 +263,13 @@ let rec expr_to_int (e: expr) : int option =
 (*==========================================================================*)
 
 
-type assign_kind =
+type assign_mode =
   | STRONG
   | WEAK
   | EXPAND
 
 type stmt_kind +=
-  | S_assign of expr (** lvalue *) * expr (** rvalue *) * assign_kind
+  | S_assign of expr (** lvalue *) * expr (** rvalue *) * assign_mode
   (** Assignments. *)
 
   | S_assume of expr
@@ -296,7 +301,7 @@ type stmt_kind +=
   | S_project_vars of var list
   (** Project the abstract environments on the given list of variables. *)
 
-  | S_rebase_addr of addr (** old *) * addr (** new *)
+  | S_rebase_addr of addr (** old *) * addr (** new *) * assign_mode
   (** Change the address of a previously allocated object *)
 
   | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)
@@ -331,8 +336,8 @@ let mk_remove_var v = mk_stmt (S_remove_var v)
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
 
-let mk_rebase_addr old recent range =
-  mk_stmt (S_rebase_addr (old, recent)) range
+let mk_rebase_addr old recent mode range =
+  mk_stmt (S_rebase_addr (old, recent, mode)) range
 
 let mk_call fundec args range =
   mk_expr (E_call (
