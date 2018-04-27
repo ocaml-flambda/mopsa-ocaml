@@ -74,7 +74,7 @@ struct
         let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
         oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
 
-    | E_c_cast(e, _) ->
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           let t  = etyp exp in

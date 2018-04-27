@@ -36,13 +36,9 @@
                     //Cell abstraction
                     {
                         "unify": "c.memory.cell",
-                        "over": {
-                            //Numeric abstraction
-                            "product": [
-                                "universal.numeric.domains.boxes.int",
-                                "universal.numeric.domains.boxes.congruence"
-                            ]
-                        }
+                        "over":
+                        //Numeric abstraction
+                        "universal.numeric.domains.boxes.int"
                     },
 
                     //This domains should be put after the numeric domain to allow
