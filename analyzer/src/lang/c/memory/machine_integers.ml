@@ -40,7 +40,7 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(O_div, e, e') ->
+    | E_binop(O_div, e, e') when exp |> etyp |> is_c_int_type ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           man.eval ctx e' flow |>
@@ -65,7 +65,7 @@ struct
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
 
-    | E_c_cast({ekind = E_constant (C_int z)}, _) ->
+    | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
       let r = exp |> etyp |> rangeof in
       if range_leq (z,z) r then
         oeval_singleton (Some (mk_z z range), flow, [])
@@ -74,7 +74,7 @@ struct
         let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
         oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
 
-    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type ->
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           let t  = etyp exp in
@@ -115,6 +115,9 @@ struct
                 ) man ctx flow ()
             end
         )
+
+    | E_c_cast(e, _) ->
+      re_eval_singleton (man.eval ctx) (Some e, flow, [])
 
     (* | E_binop(O_plus, e, e') when exp |> etyp |> is_c_int_type ->
      *   let () = debug "etyp %a : %a" Framework.Pp.pp_expr exp Framework.Pp.pp_typ (exp |> etyp) in

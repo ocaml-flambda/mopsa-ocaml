@@ -112,7 +112,7 @@ module Domain = struct
 
             | TDivideByZero(range) ->
               let alarm = {
-                alarm_kind = AIntegerOverflow;
+                alarm_kind = ADivideByZero;
                 alarm_range = range;
               } in
               alarm :: acc

@@ -37,6 +37,7 @@ struct
   let exec man ctx stmt flow = None
 
   let eval man ctx exp flow =
+    debug "at least it came here : %a" Framework.Pp.pp_expr exp;
     match ekind exp with
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";

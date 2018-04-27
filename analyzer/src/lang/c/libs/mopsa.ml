@@ -59,6 +59,11 @@ struct
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       oeval_singleton (Some exp', flow, [])
 
+    | E_c_call({ekind = E_c_function f} as e , args) when is_builtin_function f.c_func_var.vname ->
+      debug "builtin function";
+      let exp' = mk_expr (E_c_call({e with ekind = E_c_builtin_function f.c_func_var.vname},args)) ~etyp:T_c_builtin_fn exp.erange in
+      oeval_singleton (Some exp', flow, [])
+
     | E_c_call({ekind = E_c_builtin_function "_mopsa_rand_int"}, [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_signed_long) in
@@ -171,7 +176,8 @@ struct
       end
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_error_at_line"}, [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
-            begin
+      begin
+        let () = debug "toto" in
         let code = Z.to_int code and line = Z.to_int line in
         let this_error_env = man.flow.fold (fun acc env -> function
             | tk when Alarms.is_error_token tk &&
@@ -199,7 +205,8 @@ struct
         in
         oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
       end
-
+    | E_c_call(_) ->
+      let () = debug "E_c_call did not go in on %a" Framework.Pp.pp_expr exp in None
     | _ -> None
 
   let ask _ _ _ _  = None
