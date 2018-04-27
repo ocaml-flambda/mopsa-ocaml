@@ -41,6 +41,7 @@ struct
     match ekind exp with
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
+
     | E_c_cast({ekind = E_constant (C_int z)}, _) ->
       let r = exp |> etyp |> rangeof in
       if range_leq (z,z) r then
@@ -50,7 +51,7 @@ struct
         let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
         oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
 
-    | E_c_cast(e, _) ->
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           let t  = etyp exp in
