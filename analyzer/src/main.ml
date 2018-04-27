@@ -30,57 +30,88 @@ let init () =
   Lang.Python.Setup.init ();
   ()
 
-
-
 (** Start the analysis of [prog] using [domain] as the global abstraction. *)
-let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
+let perform_analysis (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
   (* Top layer analyzer *)
   let module Domain = (val domain) in
   let module Analyzer = Analyzer.Make(Domain) in
 
   let t = Timing.start () in
 
-  try
-    Debug.info "Computing initial environments ...";
-    let ctx, abs = Analyzer.init prog in
-    let stmt =
-      Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
-    in
+  Debug.info "Computing initial environments ...";
+  let ctx, abs = Analyzer.init prog in
+  let stmt =
+    Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
+  in
 
-    Debug.info "Starting the analysis ...";
+  Debug.info "Starting the analysis ...";
 
-    let res = Analyzer.exec ctx stmt abs in
-    let t = Timing.stop t in
-    Debug.info "Result:@\n@[<h 2>  %a@]" Analyzer.flow_manager.print res;
+  let res = Analyzer.exec ctx stmt abs in
+  let t = Timing.stop t in
+  Debug.info "Result:@\n@[<h 2>  %a@]" Analyzer.flow_manager.print res;
 
-    Debug.info "Collecting alarms ...";
-    let alarms = Analyzer.ask ctx Alarm.QGetAlarms res in
+  Debug.info "Collecting alarms ...";
+  let alarms = Analyzer.ask ctx Alarm.QGetAlarms res in
+  t, alarms
 
-    (
-      match alarms with
-      | None
-      | Some [] ->
-        Format.printf "Analysis terminated in %.6fs@\n%a No alarm@\n" t ((Debug.color "green") Format.pp_print_string) "✔"
-      | Some alarms ->
-        Format.printf "Analysis terminated in %.6fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
-          t
-          (List.length alarms)
-          Debug.plurial_list alarms
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
-             Framework.Alarm.pp_alarm
-          ) alarms
-    );
+type analysis_results =
+  | ExcPanic of string
+  | ExcUncaught of string * string
+  | Success of float * Framework.Alarm.alarm list option
 
-  with
-  | Framework.Exceptions.Panic msg -> Debug.fail "Panic: %s" msg
+let bench_printing analysis_res =
+  match analysis_res with
+  | Success(t, None) | Success(t, Some []) ->
+    Format.printf "{\"time\": %.6f, \"alarms\": {}}" t
+  | Success(t, Some alarms) ->
+    Format.printf "{\"time\": %.6f, \"alarms\": {%a}}"
+      t
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+         Framework.Alarm.pp_alarm_bench
+      ) alarms
+  | ExcPanic s ->
+    Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s\"}}" s
+  | ExcUncaught(s,s') ->
+    Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s in %s\"}}" s s'
 
-  | e ->
+let verbose_printing analysis_res =
+  match analysis_res with
+  | Success(t, None) | Success(t, Some []) ->
+    Format.printf "Analysis terminated in %.6fs@\n%a No alarm@\n" t
+      ((Debug.color "green") Format.pp_print_string) "✔"
+  | Success(t, Some alarms) ->
+    Format.printf "Analysis terminated in %.6fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
+      t
+      (List.length alarms)
+      Debug.plurial_list alarms
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
+         Framework.Alarm.pp_alarm
+      ) alarms
+  | ExcPanic s ->
+    Debug.fail "Panic: %s" s
+  | ExcUncaught(name, backtrace)  ->
     Debug.fail "Uncaught analyzer exception in %s@\n%s"
-      (Printexc.to_string e)
-      (Printexc.get_backtrace ())
+      name
+      backtrace
 
-      ()
+(** Start the analysis of [prog] using [domain] as the global abstraction. *)
+let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
+  (* Top layer analyzer *)
+    let result =
+      try
+        let t, alarms = perform_analysis domain prog in
+        Success(t, alarms)
+      with
+      | Framework.Exceptions.Panic msg -> ExcPanic msg
+      | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
+    in
+    match Options.(common_options.output_mode) with
+    | "bench" ->
+      bench_printing result
+    | _ ->
+      verbose_printing result
 
 let () =
   init ();
@@ -101,10 +132,10 @@ let () =
             | _ ->
               Framework.Exceptions.panic "Unknown language"
           in
-          
+
           Debug.info "Parsing configuration file ...";
           let domain = Config.parse Options.(common_options.config) in
-          
+
           (* Start the analysis *)
           start domain prog
         with Framework.Exceptions.Panic msg ->

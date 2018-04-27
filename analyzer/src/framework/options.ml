@@ -25,6 +25,7 @@ type common_options = {
   mutable unit_test_mode : bool;
   mutable stubs : string list;
   mutable reduce_iter : int;
+  mutable output_mode : string;
 }
 
 let common_options = {
@@ -33,9 +34,15 @@ let common_options = {
   unit_test_mode = false;
   stubs = [];
   reduce_iter = 1;
+  output_mode = "verbose"
 }
 
 let setup () =
+  register (
+    "-output-mode",
+    Arg.String(fun s -> common_options.output_mode <- s),
+    " output mode (default: verbose)"
+  );
   register (
     "-lang",
     Arg.String(fun f -> common_options.lang <- f),

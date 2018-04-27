@@ -79,6 +79,11 @@ let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alar
 let register_pp_alarm pp = pp_alarm_chain := pp !pp_alarm_chain
 
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "@[%a@]@\nIn %a"
+  Format.fprintf fmt "%a  @[%a@]@\nIn %a" ((Debug.color "red") Format.pp_print_string) "✘"
+    !pp_alarm_chain alarm
+    Pp.pp_range_verbose alarm.alarm_range
+
+let pp_alarm_bench fmt alarm =
+  Format.fprintf fmt "{\"type\": \"%a\",\"range\": \"%a\"}"
     !pp_alarm_chain alarm
     Pp.pp_range_verbose alarm.alarm_range

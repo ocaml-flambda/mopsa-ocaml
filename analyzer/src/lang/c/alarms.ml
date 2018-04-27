@@ -116,8 +116,8 @@ let setup () =
 
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
-      | AOutOfBound -> Format.fprintf fmt "%a  Out of bound access" ((Debug.color "red") Format.pp_print_string) "✘"
-      | ANullDeref -> Format.fprintf fmt "%a  Null pointer dereference" ((Debug.color "red") Format.pp_print_string) "✘"
-      | AInvalidDeref -> Format.fprintf fmt "%a  Invalid pointer dereference" ((Debug.color "red") Format.pp_print_string) "✘"
+      | AOutOfBound -> Format.fprintf fmt "Out of bound access"
+      | ANullDeref -> Format.fprintf fmt "Null pointer dereference"
+      | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
       | _ -> next fmt alarm
     );
