@@ -11,6 +11,8 @@ extern void _mopsa_panic(const char*);
 #define OUT_OF_BOUND 1
 #define NULL_DEREF 2
 #define INVALID_DEREF 3
+#define INTEGER_OVERFLOW 4
+#define DIVISION_BY_ZERO 5
 
 // Assertions
 extern void _mopsa_assert_true(int cond);

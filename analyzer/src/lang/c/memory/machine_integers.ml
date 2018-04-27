@@ -13,6 +13,7 @@ open Framework.Domains
 open Framework.Manager
 open Framework.Flow
 open Framework.Eval
+open Framework.Lattice
 open Framework.Ast
 open Universal.Ast
 open Universal.Utils
@@ -39,8 +40,31 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
+    | E_binop(O_div, e, e') ->
+      man.eval ctx e flow |>
+      eval_compose (fun e flow ->
+          man.eval ctx e' flow |>
+          eval_compose (fun e' flow ->
+              let emint' = {e' with etyp = T_int} in
+              let cond = {ekind = E_binop(O_eq, emint', mk_z Z.zero (tag_range range "div0"));
+                          etyp  = T_bool;
+                          erange = tag_range range "div0cond"
+                         }
+              in
+              assume_to_eval cond
+                (fun tflow ->
+                   let cur = man.flow.get TCur tflow in
+                   let tflow2 = man.flow.add (Alarms.TDivideByZero range) cur tflow
+                                |> man.flow.set TCur man.env.bottom
+                   in
+                   oeval_singleton (None, tflow2, []))
+                (fun fflow -> re_eval_singleton (man.eval ctx) (Some {exp with etyp = T_int}, flow, []))
+                man ctx flow ()
+            )
+        )
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
+
     | E_c_cast({ekind = E_constant (C_int z)}, _) ->
       let r = exp |> etyp |> rangeof in
       if range_leq (z,z) r then

@@ -34,18 +34,21 @@ type token +=
   | TNullDeref of range
   | TInvalidDeref of range
   | TIntegerOverflow of range
+  | TDivideByZero of range
 
 type alarm_kind +=
   | AOutOfBound
   | ANullDeref
   | AInvalidDeref
   | AIntegerOverflow
+  | ADivideByZero
 
 let is_error_token = function
   | TOutOfBound _ -> true
   | TNullDeref _ -> true
   | TInvalidDeref _ -> true
   | TIntegerOverflow _ -> true
+  | TDivideByZero _ -> true
   | _ -> false
 
 let error_token_range = function
@@ -53,6 +56,7 @@ let error_token_range = function
   | TNullDeref(r) -> r
   | TInvalidDeref(r) -> r
   | TIntegerOverflow(r) -> r
+  | TDivideByZero(r) -> r
   | _ -> assert false
 
 (*==========================================================================*)
@@ -105,6 +109,14 @@ module Domain = struct
                 alarm_range = range;
               } in
               alarm :: acc
+
+            | TDivideByZero(range) ->
+              let alarm = {
+                alarm_kind = AIntegerOverflow;
+                alarm_range = range;
+              } in
+              alarm :: acc
+
             | _ -> acc
           ) [] flow
         in
@@ -122,6 +134,7 @@ let setup () =
       | TNullDeref(r) -> Format.fprintf fmt "null@%a" Framework.Pp.pp_range r
       | TInvalidDeref(r) -> Format.fprintf fmt "invalid@%a" Framework.Pp.pp_range r
       | TIntegerOverflow(r) -> Format.fprintf fmt "integer overflow@%a" Framework.Pp.pp_range r
+      | TDivideByZero(r) -> Format.fprintf fmt "division by zero @%a" Framework.Pp.pp_range r
       | tk -> next fmt tk
     );
 
@@ -131,5 +144,6 @@ let setup () =
       | ANullDeref -> Format.fprintf fmt "Null pointer dereference"
       | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
       | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
+      | ADivideByZero -> Format.fprintf fmt "Division by zero"
       | _ -> next fmt alarm
     );

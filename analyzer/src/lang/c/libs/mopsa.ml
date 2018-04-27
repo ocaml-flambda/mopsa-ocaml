@@ -40,6 +40,8 @@ struct
     | Alarms.TOutOfBound _ -> 1
     | Alarms.TNullDeref _ -> 2
     | Alarms.TInvalidDeref _ -> 3
+    | Alarms.TIntegerOverflow _ -> 4
+    | Alarms.TDivideByZero _ -> 5
     | _ -> assert false
 
   (*==========================================================================*)
