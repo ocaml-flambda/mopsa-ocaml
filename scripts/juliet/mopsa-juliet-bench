@@ -24,9 +24,9 @@ cwes="CWE476_NULL_Pointer_Dereference"
 for cwe in ${cwes}; do
     directory=${juliet}/${cwe}
     cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
-    echo "{"
+    echo "["
     for c in ${cases}; do
         ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench ${c}
     done
-    echo "}"
+    echo "]"
 done

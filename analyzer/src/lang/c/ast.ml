@@ -507,11 +507,11 @@ let int_rangeof t =
   let a,b = rangeof t in
   (Z.to_int a, Z.to_int b)
 
-(** [warp v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let warp (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
+(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
+let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
   let open Universal.Ast in
   mk_binop
-    (mk_int 1 (tag_range range "1"))
+    (mk_int l (tag_range range "l"))
     O_plus
     (mk_binop
        (mk_binop
@@ -521,8 +521,18 @@ let warp (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
           (tag_range range "?")
        )
        O_mod
-       (mk_int h (tag_range range "h"))
-       (tag_range range "??")
+       (mk_binop
+          (mk_binop
+             (mk_int h (tag_range range "v"))
+             O_minus
+             (mk_int l (tag_range range "l"))
+             (tag_range range "?")
+          )
+          O_plus
+          (mk_one (tag_range range "1"))
+          (tag_range range "+1")
+       )
+       (tag_range range "h-l+1")
     )
     range
 

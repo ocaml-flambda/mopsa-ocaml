@@ -360,6 +360,7 @@ struct
                      eval_compose
                        (fun exp' flow ->
                           oeval_join acc (oeval_singleton (Some exp', flow, []))
+                          (* pourquoi ne pas enrichir le flow avec l'information de l'offset?*)
                        )
                    ) None itv
              end

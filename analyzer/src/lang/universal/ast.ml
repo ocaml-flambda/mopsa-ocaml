@@ -88,6 +88,7 @@ type operator +=
   | O_bit_rshift (** >> *)
   | O_bit_lshift (** << *)
 
+  | O_wrap of Z.t * Z.t (** wrap *)
 
 (*==========================================================================*)
                            (** {2 Heap addresses} *)
@@ -116,6 +117,7 @@ let compare_addr a1 a2 =
     (fun () -> compare a1.addr_uid a2.addr_uid);
     (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
   ]
+
 
 
 
@@ -159,7 +161,6 @@ type expr_kind +=
 
   (** Head address. *)
   | E_addr of addr
-
 
 let mk_neg e = mk_unop O_minus e
 

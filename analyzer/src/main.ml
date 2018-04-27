@@ -64,7 +64,7 @@ let bench_printing analysis_res =
   | Success(t, None) | Success(t, Some []) ->
     Format.printf "{\"time\": %.6f, \"alarms\": {}}" t
   | Success(t, Some alarms) ->
-    Format.printf "{\"time\": %.6f, \"alarms\": {%a}}"
+    Format.printf "{\"time\": %.6f, \"alarms\": [%a]}"
       t
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
@@ -73,7 +73,7 @@ let bench_printing analysis_res =
   | ExcPanic s ->
     Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s\"}}" s
   | ExcUncaught(s,s') ->
-    Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s in %s\"}}" s s'
+    Format.printf "{\"exc\": {\"etype\": \"Uncaught\", \"info\" : \"%s in %s\"}}" s s'
 
 let verbose_printing analysis_res =
   match analysis_res with

@@ -165,7 +165,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             compare_base c.b c'.b = 0 &&
             Z.equal c.o c'.o) cs with
         | Some (v', c') ->
-          Nexp (Some (warp v' (int_rangeof c.t) range))
+          Nexp (Some (wrap v' (int_rangeof c.t) range))
         | None ->
           begin
             match exist_and_find_cell (

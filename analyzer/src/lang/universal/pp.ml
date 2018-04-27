@@ -47,6 +47,7 @@ let () =
       | O_bit_invert -> pp_print_string fmt "~"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
+      | O_wrap(l,u)  -> Format.fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function

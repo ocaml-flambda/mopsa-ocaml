@@ -74,6 +74,7 @@ let fwd_unop op a =
   | O_log_not -> bot_lift1 I.log_not a
   | O_minus -> bot_lift1 I.neg a
   | O_plus -> a
+  | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
   | _ -> top
 
 let fwd_binop op a1 a2 =
@@ -115,6 +116,7 @@ let bwd_unop op abs rabs =
     let aa = match op with
       | O_log_not -> assert false
       | O_minus -> bot_to_exn (I.bwd_neg a r)
+      | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
       | _ -> assert false
     in
     Nb aa
