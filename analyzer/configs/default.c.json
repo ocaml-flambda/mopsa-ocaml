@@ -38,7 +38,7 @@
                         "unify": "c.memory.cell",
                         "over": {
                             //Numeric abstraction
-                            "product": [
+                            "reduce": [
                                 "universal.numeric.domains.boxes.int",
                                 "universal.numeric.domains.boxes.congruence"
                             ]

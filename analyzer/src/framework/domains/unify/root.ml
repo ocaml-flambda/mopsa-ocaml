@@ -18,7 +18,7 @@ module Make(UniDomain: Domain.DOMAIN)(SubDomain: Stateful.DOMAIN) =
 struct
 
   module UniDomain = UniDomain(SubDomain)
-      
+
   type t = UniDomain.t * SubDomain.t
 
   let head_man man = {
