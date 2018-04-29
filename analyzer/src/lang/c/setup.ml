@@ -7,12 +7,12 @@ let init () =
     Goto.setup ();
   );
   Memory.(
-    Cell.setup ();
+    Cell.(
+      Expand.setup ();
+      Smash.setup ();
+    );
     Machine_integers.setup ();
     Pointer.setup ();
-    Array_to_pointer.setup ();
-    Record_to_pointer.setup ();
-    Var_init.setup ();
   );
   Desugar.(
     Andor.setup ();

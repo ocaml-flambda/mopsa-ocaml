@@ -134,13 +134,20 @@ struct
 
 end
 
-let return flow = Some {
+let return_flow flow = Some {
     out = flow;
     publish = [];
     mergers = [];
   }
 
 let fail = None
+
+let return_evals (evals: (Ast.expr, 'a) evals) : 'a revals option =
+  Some (eval_map (fun (exp, flow, cleaners) ->
+      match exp with
+      | None -> None, flow, cleaners
+      | Some exp -> Some (exp, []), flow, cleaners
+    ) evals)
 
 let eval_to_rexec
     (f: 'a -> 'b flow -> 'b rflow)
@@ -173,7 +180,7 @@ let eval_to_orexec
     (f: 'a -> 'b flow -> 'b rflow option)
     (exec: Ast.stmt -> 'b flow -> 'b flow)
     (man: 'b flow_manager)
-    ?(empty = (fun flow -> return flow))
+    ?(empty = (fun flow -> return_flow flow))
     (eval: ('a, 'b) evals)
   : 'b rflow option =
   eval |> eval_substitute

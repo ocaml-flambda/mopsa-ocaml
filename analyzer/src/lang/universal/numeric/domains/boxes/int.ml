@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Eval
 open Ast
@@ -42,7 +42,7 @@ struct
            let a = get_domain_cur man flow in
            let (_,r) as t = annotate_expr a e in
            let rr = Value.assume_true r in
-           if Value.is_bottom rr then return (set_domain_cur bottom man flow)
+           if Value.is_bottom rr then return_flow (set_domain_cur bottom man flow)
            else
              let a' = refine_expr a t rr in
              let vars = Framework.Visitor.expr_vars e in
@@ -89,9 +89,9 @@ struct
                   out = flow'; mergers = []; publish = [Reduction.CIntConstant(var, n)]
                 }
               else
-                return flow'
+                return_flow flow'
           with Found_BOT ->
-            return (set_domain_cur bottom man flow)
+            return_flow (set_domain_cur bottom man flow)
         ) v
 
     | _ -> None

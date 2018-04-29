@@ -17,10 +17,10 @@
         //Flows
         "c.flows.switch",
         "c.flows.interproc",
+        "c.flows.goto",
         "universal.flows.loops",
         "universal.flows.intraproc",
         "universal.flows.interproc",
-        "c.flows.goto",
 
         //Heap abstraction
         {
@@ -29,21 +29,19 @@
                 "iter": [
                     //Memory abstraction
                     "c.memory.pointer",
-                    "c.memory.array_to_pointer",
-                    "c.memory.record_to_pointer",
                     "c.memory.machine_integers",
 
                     //Cell abstraction
                     {
-                        "unify": "c.memory.cell",
-                        "over":
-                        //Numeric abstraction
-                        "universal.numeric.domains.boxes.int"
-                    },
-
-                    //This domains should be put after the numeric domain to allow
-                    //proper initialization of global variables
-                    "c.memory.var_init"
+                        "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smash"],
+                        "over": {
+                            //Numeric abstraction
+                            "reduce": [
+                                "universal.numeric.domains.boxes.int",
+                                "universal.numeric.domains.boxes.congruence"
+                            ]
+                        }
+                    }
                 ]
             }
         }
