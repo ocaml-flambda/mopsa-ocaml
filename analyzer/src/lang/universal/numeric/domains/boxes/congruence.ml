@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Eval
 open Framework.Exec
 open Ast
@@ -43,11 +43,11 @@ struct
            let v = eval_value a e in
            let a' = VarMap.add var v a in
            let flow' = set_domain_cur a' man flow in
-           if Value.is_minf_inf v || Value.is_bottom v then return flow'
+           if Value.is_minf_inf v || Value.is_bottom v then return_flow flow'
            else
              let vars = Framework.Visitor.expr_vars e in
              match vars with
-             | [] -> return flow'
+             | [] -> return_flow flow'
              | _ ->
                let c = bot_to_exn v in
                debug "publish CIntCongruence %a" Value.print v;
@@ -73,7 +73,7 @@ struct
             debug "applying refinement";
             let a' = VarMap.add var c' a in
             let flow' = set_domain_cur a' man flow in
-            return flow'
+            return_flow flow'
         ) v
 
     | _ -> None

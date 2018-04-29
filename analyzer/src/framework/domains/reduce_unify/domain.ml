@@ -66,7 +66,8 @@ let domains : (string * (module DOMAIN)) list ref = ref []
 let register_domain name modl = domains := (name, modl) :: !domains
 let find_domain name = List.assoc name !domains
 
-let return = return
+let return_flow = return_flow
+let return_evals = return_evals
 let fail = fail
 
 let eval_to_rexec = eval_to_rexec

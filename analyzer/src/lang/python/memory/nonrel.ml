@@ -14,7 +14,7 @@
 *)
 
 open Framework.Domains
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Query

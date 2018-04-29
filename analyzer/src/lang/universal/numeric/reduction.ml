@@ -1,5 +1,5 @@
 open Framework.Ast
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 
 type channel +=
   | CIntConstant of var * Z.t

@@ -65,19 +65,33 @@ struct
     Format.fprintf fmt "%a%a" RedUniDomain.print hd SubDomain.print tl
 
 
-  let exec man ctx stmt gabs = RedUniDomain.exec (head_man man) (tail_man man) ctx stmt gabs
+  let exec man ctx stmt flow =
+    match RedUniDomain.exec (head_man man) (tail_man man) ctx stmt flow with
+    | Some rflow -> Some rflow
+    | None ->
+      match SubDomain.exec (tail_man man) ctx stmt flow with
+      | None -> None
+      | Some flow -> return_flow flow
 
   let refine man ctx channel gabs = RedUniDomain.refine (head_man man) (tail_man man) ctx channel gabs
 
-  let eval man ctx exp gabs = RedUniDomain.eval (head_man man) (tail_man man) ctx exp gabs
+  let eval man ctx exp flow =
+    match RedUniDomain.eval (head_man man) (tail_man man) ctx exp flow with
+    | Some revals -> Some revals
+    | None ->
+      match SubDomain.eval (tail_man man) ctx exp flow with
+      | None -> None
+      | Some evals ->
+        return_evals evals
+      
+  let ask man ctx query flow =
+    match RedUniDomain.ask (head_man man) (tail_man man) ctx query flow with
+    | Some rpl -> Some rpl
+    | None -> SubDomain.ask (tail_man man) ctx query flow
 
-
-  let ask man ctx query gabs = RedUniDomain.ask (head_man man) (tail_man man) ctx query gabs
-
-  let init man ctx prog fa =
-    let ctx, fa = RedUniDomain.init (head_man man) ctx prog fa in
-    SubDomain.init (tail_man man) ctx prog fa
-
+  let init man ctx prog flow =
+    let ctx', flow' = RedUniDomain.init (head_man man) ctx prog flow in
+    SubDomain.init (tail_man man) ctx' prog flow'
 
 end
 
@@ -86,9 +100,7 @@ module Make(RedUniDomain: Domain.DOMAIN)(SubDomain: Stateful.DOMAIN) : Stateful.
 struct
 
   module D = MakeReduce(RedUniDomain)(SubDomain)
-
   module R = Reduce.Root.Make(D)
-
   include R
 
 end
