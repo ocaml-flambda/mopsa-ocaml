@@ -32,8 +32,6 @@ struct
 
   let leq = Set.subset
 
-  let unify _ abs1 abs2 = (abs1, abs2)
-
   let join  = Set.union
 
   let meet  = Set.inter

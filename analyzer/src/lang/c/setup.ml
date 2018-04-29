@@ -9,7 +9,7 @@ let init () =
   Memory.(
     Cell.(
       Expand.setup ();
-      Smash.setup ();
+      Smashing.setup ();
     );
     Machine_integers.setup ();
     Pointer.setup ();

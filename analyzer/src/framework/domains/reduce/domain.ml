@@ -149,6 +149,13 @@ let return_evals (evals: (Ast.expr, 'a) evals) : 'a revals option =
       | Some exp -> Some (exp, []), flow, cleaners
     ) evals)
 
+let add_eval_mergers mergers oevals =
+  oeval_map (fun (exp, flow, cleaners) ->
+      match exp with
+      | None -> None, flow, cleaners
+      | Some exp -> Some (exp, mergers), flow, cleaners
+    ) oevals
+
 let eval_to_rexec
     (f: 'a -> 'b flow -> 'b rflow)
     (exec: Ast.stmt -> 'b flow -> 'b flow)

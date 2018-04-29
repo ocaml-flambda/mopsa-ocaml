@@ -6,11 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Cell abstraction of low-level C memory operations. *)
+(** Expansion-based abstraction of C memory cells. *)
 
 open Framework.Ast
 open Framework.Pp
-open Framework.Domains.Unify.Domain
+open Framework.Domains.Reduce_unify.Domain
 open Framework.Manager
 open Framework.Visitor
 open Framework.Domains
@@ -20,9 +20,9 @@ open Framework.Lattice
 open Framework.Eval
 open Framework.Exec
 open Ast
+open Pointer
 
-
-let name = "c.memory.cell"
+let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -30,24 +30,6 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                              {2 Cells}                                  *)
 (*==========================================================================*)
 
-(** Kinds of heap allocated addresses. *)
-type Universal.Ast.addr_kind +=
-  | A_c_static_malloc of Z.t (** static size *)
-  | A_c_dynamic_malloc (** dynamic size *)
-
-(** lv base *)
-type base =
-  | V of var
-  | A of Universal.Ast.addr
-
-let pp_base fmt = function
-  | V v -> pp_var fmt v
-  | A a -> Universal.Pp.pp_addr fmt a
-
-let compare_base b b' = match b, b' with
-  | V v, V v' -> compare_var v v'
-  | A a, A a' -> Universal.Ast.compare_addr a a'
-  | _ -> 1
 
 (** Memory cells. *)
 type cell = {
@@ -71,30 +53,25 @@ let compare_cell c c' =
 
 (** Annotate variables with cell information. *)
 type var_kind +=
-  | V_cell of cell
+  | V_expand_cell of cell
 
-type expr_kind +=
-  | E_c_gen_cell_var of cell
-
-let mk_gen_cell_var c range =
-  mk_expr (E_c_gen_cell_var c) ~etyp:c.t range
-
-let annotate_var v =
+let annotate_var_kind v =
   match v.vkind with
-  | V_cell _ -> v
-  | _ -> { v with vkind = V_cell {b = V v; o = Z.zero; t= v.vtyp} }
+  | V_orig -> { v with vkind = V_expand_cell {b = V v; o = Z.zero; t= v.vtyp} }
+  | V_expand_cell _ -> v
+  | _ -> assert false
 
 let var_of_cell c =
   let open Framework.Ast in
   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
     vuid = 0;
     vtyp = c.t;
-    vkind = V_cell c;
+    vkind = V_expand_cell c;
   }
 
 let cell_of_var v =
   match v.vkind with
-  | V_cell c -> c
+  | V_expand_cell c -> c
   | _ -> assert false
 
 (*==========================================================================*)
@@ -123,15 +100,15 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   (** Pretty printer. *)
   let print fmt c =
-    Format.fprintf fmt "cells: @[%a@]@\n"
+    Format.fprintf fmt "expand cells: @[%a@]@\n"
       CS.print c
 
-  let mem_pred c = function {vkind = V_cell c'} -> compare_cell c c' = 0 | _ -> false
+  let mem_pred c = function {vkind = V_expand_cell c'} -> compare_cell c c' = 0 | _ -> false
 
   let exist_and_find_cell f cs =
     let exception Found of var * cell in
     try
-      let () = CS.iter (function ({vkind = V_cell c} as v) -> if f c then raise (Found (v, c)) else () | _ -> ()) cs in
+      let () = CS.iter (function ({vkind = V_expand_cell c} as v) -> if f c then raise (Found (v, c)) else () | _ -> ()) cs in
       None
     with
     | Found (v, c) -> Some (v, c)
@@ -291,7 +268,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   let extract_cell v =
     match vkind v with
-    | V_cell c -> c
+    | V_expand_cell c -> c
     | _ -> assert false
 
   let remove_overlapping_cells v range man ctx flow =
@@ -325,30 +302,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     ctx, set_domain_cur empty man flow
 
   let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
-    : 'a flow option =
+    : 'a rflow option =
     match skind stmt with
     | Universal.Ast.S_rename_var(v, v') ->
       assert false
 
     | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
-      let v' = annotate_var v in
+      let v' = annotate_var_kind v in
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      SubDomain.exec subman ctx stmt' flow
+      (match SubDomain.exec subman ctx stmt' flow with
+      | None -> None
+      | Some flow -> return_flow flow)
 
     | Universal.Ast.S_assign({ekind = E_var v} as lval, rval, mode) when is_c_int_type lval.etyp ->
       begin
         debug "assign";
-        let v' = annotate_var v in
+        let v' = annotate_var_kind v in
         let stmt' = {stmt with skind = Universal.Ast.S_assign({lval with ekind = E_var v'}, rval, mode)} in
         debug "subman";
         match SubDomain.exec subman ctx stmt' flow with
         | None -> None
         | Some flow ->
           remove_overlapping_cells v' stmt.srange man ctx flow |>
-          return
+          return_flow
       end
 
     | _ -> None
@@ -359,45 +338,20 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
       let s = get_domain_cur subman flow in
-      let v = annotate_var v in
+      let v = annotate_var_kind v in
       let (u', s') = add_var ctx exp.erange v (u, s) in
       debug "new variable %a in %a" pp_var v print u';
       let flow'' = set_domain_cur u' man flow |>
                    set_domain_cur s' subman
       in
-      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', []) |>
+      add_eval_mergers []
 
-    | E_c_gen_cell_var c ->
-      begin
-        let is_ok = match c.b with
-          | A {Universal.Ast.addr_kind = A_c_static_malloc z}
-            when Z.leq (Z.add c.o (sizeof_type c.t)) z -> true (* TODO : test overflow for adresses *)
-          | V v when Z.leq (Z.add c.o (sizeof_type c.t)) (sizeof_type v.vtyp) -> true
-          | A _ -> Framework.Exceptions.panic "dynamic allocations of non static size not supported (yet)"
-          | _ -> false
-        in
-        if is_ok then
-          let u = get_domain_cur man flow in
-          let s = get_domain_cur subman flow in
-          let v = match exist_and_find_cell (fun c' -> compare_cell c c' = 0) u  with
-            | Some (v', _) -> v'
-            | None -> var_of_cell c
-          in
-          let (u', s') = add_var ctx exp.erange v (u, s) in
-          debug "new variable %a in %a" pp_var v print u';
-          let flow'' = set_domain_cur u' man flow |>
-                       set_domain_cur s' subman
-          in
-          re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', [])
-        else
-          let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
-                     man.flow.set TCur man.env.bottom
-          in
-          oeval_singleton (None, flow, [])
-      end
     | _ -> None
 
   let ask man subman ctx query flow = None
+
+  let refine man subman ctx channel flow = None
 
   let unify ctx a1 a2 = unify (mk_fresh_range ()) ctx a1 a2
 
@@ -407,32 +361,11 @@ let setup () =
   register_domain name (module Domain);
   register_vkind_compare (fun next vk1 vk2 ->
       match vk1, vk2 with
-      | V_cell c1, V_cell c2 -> compare_cell c1 c2
+      | V_expand_cell c1, V_expand_cell c2 -> compare_cell c1 c2
       | _ -> next vk1 vk2
     );
   register_pp_vkind (fun next fmt vk ->
       match vk with
-      | V_cell c -> pp_cell fmt c
+      | V_expand_cell c -> pp_cell fmt c
       | _ -> next fmt vk
-    );
-  register_pp_expr (fun next fmt exp ->
-      match ekind exp with
-      | E_c_gen_cell_var c -> Format.fprintf fmt "gen var %a" pp_cell c
-      | _ -> next fmt exp
-    );
-  register_expr_visitor (fun next exp ->
-      match ekind exp with
-      | E_c_gen_cell_var _ -> leaf exp
-      | _ -> next exp
-    );
-  Universal.Ast.register_addr_kind_compare (fun next ak1 ak2 ->
-      match ak1, ak2 with
-      | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
-      | _ -> next ak1 ak2
-    );
-  Universal.Pp.register_pp_addr_kind (fun next fmt ak ->
-      match ak with
-      | A_c_static_malloc s -> Format.fprintf fmt "static malloc(%a)" Z.pp_print s
-      | A_c_dynamic_malloc -> Format.fprintf fmt "dynamic malloc"
-      | _ -> next fmt ak
     )
