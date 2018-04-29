@@ -72,6 +72,7 @@ let find_domain name = List.assoc name !domains
 let return_flow = Reduce.Domain.return_flow
 let return_evals = Reduce.Domain.return_evals
 let fail = Reduce.Domain.fail
+let add_flow_mergers = Reduce.Domain.add_flow_mergers
 
 let eval_to_rexec = Reduce.Domain.eval_to_rexec
 let eval_to_orexec = Reduce.Domain.eval_to_orexec

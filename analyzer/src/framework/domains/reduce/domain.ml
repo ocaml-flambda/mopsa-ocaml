@@ -142,6 +142,12 @@ let return_flow flow = Some {
 
 let fail = None
 
+let add_flow_mergers mergers flow = {
+  out = flow;
+  mergers;
+  publish = [];
+}
+
 let return_evals (evals: (Ast.expr, 'a) evals) : 'a revals option =
   Some (eval_map (fun (exp, flow, cleaners) ->
       match exp with

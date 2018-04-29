@@ -57,6 +57,10 @@ type expr_kind +=
   | E_c_resolve_pointer of expr
   | E_c_points_to of pexpr
 
+let mk_c_resolve_pointer e range =
+  mk_expr (E_c_resolve_pointer e) range
+
+
 module Domain =
 struct
 
@@ -338,8 +342,7 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_c_resolve_pointer p ->
-      man.eval ctx p flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx p flow |>
       oeval_compose (fun pt flow ->
           let exp' = {exp with ekind = E_c_points_to pt} in
           oeval_singleton (Some exp', flow, [])

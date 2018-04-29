@@ -317,18 +317,35 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       | None -> None
       | Some flow -> return_flow flow)
 
-    | Universal.Ast.S_assign({ekind = E_var v} as lval, rval, mode) when is_c_int_type lval.etyp ->
-      begin
-        debug "assign";
-        let v' = annotate_var_kind v in
-        let stmt' = {stmt with skind = Universal.Ast.S_assign({lval with ekind = E_var v'}, rval, mode)} in
-        debug "subman";
-        match SubDomain.exec subman ctx stmt' flow with
-        | None -> None
-        | Some flow ->
-          remove_overlapping_cells v' stmt.srange man ctx flow |>
-          return_flow
-      end
+    | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+      man.eval ctx rval flow |>
+      eval_to_orexec (fun rval flow ->
+          man.eval ctx (mk_c_resolve_pointer (mk_c_address_of lval lval.erange) lval.erange) flow |>
+          eval_to_orexec (fun pe flow ->
+              match ekind pe with
+              | E_c_points_to(E_p_var(b, oe, t)) ->
+                begin
+                  match b with
+                  | V {vkind = V_expand_cell{b; o}} ->
+                    begin
+                      match Universal.Utils.expr_to_z oe with
+                      | Some z ->
+                        let v = var_of_cell {b; o = Z.(o + z); t} in
+                        let lval' = {lval with ekind = E_var v} in
+                        let stmt' = {stmt with skind = Universal.Ast.S_assign(lval', rval, mode)} in
+                        SubDomain.exec subman ctx stmt' flow |>
+                        oflow_compose (remove_overlapping_cells v stmt.srange man ctx) |>
+                        oflow_compose (add_flow_mergers [Universal.Ast.mk_remove_var v stmt.srange])
+                        
+                      | None -> assert false
+                    end
+
+                  | _ -> assert false
+                end
+
+              | _ -> assert false
+            ) (man.exec ctx) man.flow
+        ) (man.exec ctx) man.flow
 
     | _ -> None
 
