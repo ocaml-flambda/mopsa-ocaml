@@ -83,7 +83,7 @@ struct
       | None -> None
       | Some evals ->
         return_evals evals
-      
+
   let ask man ctx query flow =
     match RedUniDomain.ask (head_man man) (tail_man man) ctx query flow with
     | Some rpl -> Some rpl

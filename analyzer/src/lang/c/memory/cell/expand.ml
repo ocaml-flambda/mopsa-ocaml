@@ -19,12 +19,14 @@ open Framework.Flow
 open Framework.Lattice
 open Framework.Eval
 open Framework.Exec
+open Universal.Ast
 open Ast
 open Pointer
 
 let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
 
+let opt_max_expand = ref 1
 
 (*==========================================================================*)
 (**                              {2 Cells}                                  *)
@@ -130,45 +132,24 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let cs = u in
     let c = cell_of_var v in
     match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
-    | Some (v', _) ->
-      Nexp (
-        Some (mk_var v' range)
-      )
+    | Some (v', _) -> Nexp (Some (mk_var v' range))
+
     | None ->
       begin
-        match exist_and_find_cell (fun c' ->
-            is_c_int_type c'.t &&
-            Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
-            compare_base c.b c'.b = 0 &&
-            Z.equal c.o c'.o) cs with
-        | Some (v', c') ->
-          Nexp (Some (wrap v' (int_rangeof c.t) range))
+        match exist_and_find_cell (fun c' -> is_c_int_type c'.t && Z.equal (sizeof_type c'.t) (sizeof_type c.t) && compare_base c.b c'.b = 0 && Z.equal c.o c'.o) cs with
+        | Some (v', c') -> Nexp (Some (wrap v' (int_rangeof c.t) range))
+
         | None ->
           begin
-            match exist_and_find_cell (
-                fun c' ->
-                  let b = Z.sub c.o c'.o in
-                  Z.lt b (sizeof_type c'.t) &&
-                  is_c_int_type c'.t &&
-                  compare (remove_typedef c.t) (T_c_integer(C_unsigned_char)) = 0
+            match exist_and_find_cell ( fun c' ->
+                let b = Z.sub c.o c'.o in
+                Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare (remove_typedef c.t) (T_c_integer(C_unsigned_char)) = 0
               ) cs with
             | Some (v', c') ->
-              begin
-                let b = Z.sub c.o c'.o in
-                let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-                Nexp (Some (
-                    mk_binop
-                      (mk_binop
-                         (mk_var v' range)
-                         O_div
-                         (mk_z base range)
-                         range
-                      )
-                      O_mod
-                      (mk_int 256 range)
-                      range
-                  ))
-              end
+              let b = Z.sub c.o c'.o in
+              let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
+              Nexp (Some (mk_binop (mk_binop (mk_var v' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range))
+
             | None ->
               begin
                 let exception NotPossible in
@@ -192,18 +173,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                       in
                       let ll = aux 0 [] in
                       let _,e = List.fold_left (fun (time,res) x ->
-                          let res' =
-                            mk_binop
-                              (mk_binop
-                                 (mk_z time range)
-                                 O_mult
-                                 (mk_var x range)
-                                 range
-                              )
-                              O_plus
-                              res
-                              range
-                          in
+                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_var x range) range) O_plus res range in
                           let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -297,6 +267,72 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
+  let fold_cells f err empty top init base offset typ range man ctx flow =
+    match base with
+    | V {vkind = V_expand_cell{b; o; t}} ->
+      begin
+        match Universal.Utils.expr_to_z offset with
+        | Some z when Z.geq z Z.zero && Z.leq (Z.add z (sizeof_type typ)) (sizeof_type t)  ->
+          let v = var_of_cell {b; o = Z.(o + z); t = typ} in
+          f init v flow
+
+        | Some z ->
+          man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+          man.flow.set TCur man.env.bottom |>
+          err init
+
+        | None ->
+          let safety_cond =
+            mk_binop
+              (mk_binop offset O_ge (mk_zero range) range)
+              O_log_and
+              (mk_binop (mk_binop offset O_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z (sizeof_type t) range) range)
+              range
+          in
+          let safe_case init flow =
+            let v = man.ask ctx (Universal.Numeric.Query.QIntStepInterval offset) flow in
+            match v with
+            | None -> assert false
+            | Some (itv, step) ->
+              try
+                let l, u = Universal.Numeric.Values.Int.get_bounds itv in
+                debug "interval = [%a, %a] mod %a" Z.pp_print l Z.pp_print u Z.pp_print step;
+                if Z.(leq ((u - l + one) / step) (of_int !opt_max_expand)) then
+                  let rec iter x o =
+                    if Z.gt o u then x
+                    else
+                      let v = var_of_cell {b; o; t = typ} in
+                      let flow = man.exec ctx (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                      iter (f x v flow) (Z.add o step)
+                  in
+                  iter init l
+                else
+                  top init flow
+              with Universal.Numeric.Values.Int.Unbounded ->
+                assert false
+          in
+          let error_case init flow =
+            man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+            man.flow.set TCur man.env.bottom |>
+            err init
+          in
+          if_flow
+            (man.exec ctx (mk_assume safety_cond range))
+            (man.exec ctx (mk_assume (mk_not safety_cond range) range))
+            (safe_case init)
+            (error_case init)
+            (empty)
+            (fun sflow eflow -> error_case (safe_case init sflow) eflow)
+            man flow
+
+      end
+
+    | A addr ->
+      assert false
+
+    | _ -> assert false
+
+
 
   let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
     ctx, set_domain_cur empty man flow
@@ -304,10 +340,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a rflow option =
     match skind stmt with
-    | Universal.Ast.S_rename_var(v, v') ->
+    | S_rename_var(v, v') ->
       assert false
 
-    | Universal.Ast.S_remove_var v when is_c_int_type v.vtyp ->
+    | S_remove_var v when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
       let v' = annotate_var_kind v in
       let u' = remove v' u in
@@ -317,31 +353,40 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       | None -> None
       | Some flow -> return_flow flow)
 
-    | Universal.Ast.S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+    | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
       man.eval ctx rval flow |>
       eval_to_orexec (fun rval flow ->
           man.eval ctx (mk_c_resolve_pointer (mk_c_address_of lval lval.erange) lval.erange) flow |>
           eval_to_orexec (fun pe flow ->
               match ekind pe with
               | E_c_points_to(E_p_var(b, oe, t)) ->
-                begin
-                  match b with
-                  | V {vkind = V_expand_cell{b; o}} ->
-                    begin
-                      match Universal.Utils.expr_to_z oe with
-                      | Some z ->
-                        let v = var_of_cell {b; o = Z.(o + z); t} in
-                        let lval' = {lval with ekind = E_var v} in
-                        let stmt' = {stmt with skind = Universal.Ast.S_assign(lval', rval, mode)} in
-                        SubDomain.exec subman ctx stmt' flow |>
-                        oflow_compose (remove_overlapping_cells v stmt.srange man ctx) |>
-                        oflow_compose (add_flow_mergers [Universal.Ast.mk_remove_var v stmt.srange])
-                        
-                      | None -> assert false
-                    end
+                fold_cells
+                  (fun acc v flow ->
+                     let lval' = {lval with ekind = E_var v} in
+                     let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
+                     SubDomain.exec subman ctx stmt' flow |>
+                     oflow_compose (remove_overlapping_cells v stmt.srange man ctx) |>
+                     oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
+                     orflow_join man.flow acc
+                  )
+                  (fun acc flow -> return_flow flow |> orflow_join man.flow acc)
+                  (fun () -> return_flow flow)
+                  (fun flow -> assert false)
+                  None b oe t lval.erange man ctx flow
 
-                  | _ -> assert false
-                end
+              | E_c_points_to(E_p_null) ->
+                let flow = man.flow.add (Alarms.TNullDeref lval.erange) (man.flow.get TCur flow) flow |>
+                           man.flow.set TCur man.env.Framework.Lattice.bottom
+                in
+                return_flow flow
+
+              | E_c_points_to(E_p_invalid) ->
+                let flow = man.flow.add (Alarms.TInvalidDeref lval.erange) (man.flow.get TCur flow) flow |>
+                           man.flow.set TCur man.env.Framework.Lattice.bottom
+                in
+                return_flow flow
+
+              | E_c_points_to(E_p_fun _) -> None
 
               | _ -> assert false
             ) (man.exec ctx) man.flow
@@ -362,6 +407,94 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                    set_domain_cur s' subman
       in
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', []) |>
+      add_eval_mergers []
+
+    | E_c_deref(p) ->
+      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
+            add_eval_mergers []
+
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+            fold_cells
+              (fun acc v flow ->
+                 let exp' = {exp with ekind = E_var v} in
+                 (** FIXME: filter flow with (p == &v) *)
+                 oeval_singleton (Some (exp', []), flow, []) |>
+                 oeval_join acc
+              )
+              (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+              (fun () -> oeval_singleton (None, flow, []))
+              (fun flow -> assert false)
+              None base offset t exp.erange man ctx flow
+
+           | E_c_points_to(E_p_null) ->
+             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                        man.flow.set TCur man.env.Framework.Lattice.bottom
+             in
+             oeval_singleton (None, flow, [])
+
+
+           | E_c_points_to(E_p_invalid) ->
+             let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                        man.flow.set TCur man.env.Framework.Lattice.bottom
+             in
+             oeval_singleton (None, flow, [])
+
+           | _ -> assert false
+        )
+
+    | E_c_arrow_access(p, i, f) ->
+      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            Debug.fail "arrow access to function pointers"
+
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+            let field = List.nth record.c_record_fields i in
+            let offset' = mk_binop offset O_plus (mk_int field.c_field_offset exp.erange) exp.erange in
+            let t' = field.c_field_type in
+            fold_cells
+              (fun acc v flow ->
+                 let exp' = {exp with ekind = E_var v} in
+                 oeval_singleton (Some (exp', []), flow, []) |>
+                 oeval_join acc
+              )
+              (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+              (fun () -> oeval_singleton (None, flow, []))
+              (fun flow -> assert false)
+              None base offset' t' exp.erange man ctx flow
+
+          | E_c_points_to(E_p_null) ->
+             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                        man.flow.set TCur man.env.Framework.Lattice.bottom
+             in
+             oeval_singleton (None, flow, [])
+
+           | E_c_points_to(E_p_invalid) ->
+             let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                        man.flow.set TCur man.env.Framework.Lattice.bottom
+             in
+             oeval_singleton (None, flow, [])
+
+           | _ -> assert false
+        )
+
+
+    | E_c_array_subscript(arr, idx) ->
+      debug "array subscript to deref";
+      let exp' = {exp with ekind = E_c_deref(mk_binop arr Universal.Ast.O_plus idx exp.erange ~etyp: arr.etyp)} in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
+      add_eval_mergers []
+
+    | E_c_member_access(r, idx, f) ->
+      let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
       add_eval_mergers []
 
     | _ -> None
@@ -385,4 +518,9 @@ let setup () =
       match vk with
       | V_expand_cell c -> pp_cell fmt c
       | _ -> next fmt vk
-    )
+    );
+  Framework.Options.register (
+    "-cell-max-expand",
+    Arg.Set_int opt_max_expand,
+    " maximal number of expanded cells"
+  )

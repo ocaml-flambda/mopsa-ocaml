@@ -255,7 +255,8 @@ struct
              panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
           )
 
-  let exec man ctx stmt flow =
+  let rec exec man ctx stmt flow =
+    debug "exec %a" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
     | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
@@ -263,10 +264,18 @@ struct
       man.exec ctx (mk_remove_var (mk_offset_var p) range) |>
       return
 
-    | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
+    | S_c_local_declaration(p, Some (C_init_expr e)) when is_c_pointer_type p.vtyp ->
+      let stmt' = mk_assign (mk_var p stmt.srange) e stmt.srange in
+      exec man ctx stmt' flow
+
+    | S_assign(p, q, k) ->
+      debug "assign on type %a (is pointer = %b)" pp_typ p.etyp (is_c_pointer_type p.etyp);
+      if not (is_c_pointer_type p.etyp) then None
+      else
       eval_p man ctx q flow |>
       oeval_to_oexec
         (fun pt flow ->
+           debug "assign pointer";
            match pt with
            | E_p_fun fundec ->
              man.eval ctx p flow |>
@@ -342,12 +351,13 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_c_resolve_pointer p ->
-      eval_p man ctx p flow |>
+      man.eval ctx p flow |>
+      eval_compose (eval_p man ctx) |>
       oeval_compose (fun pt flow ->
           let exp' = {exp with ekind = E_c_points_to pt} in
           oeval_singleton (Some exp', flow, [])
         )
-      
+
     | E_binop(O_eq, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       oeval_list [p; q] (eval_p man ctx) flow |>
       oeval_compose

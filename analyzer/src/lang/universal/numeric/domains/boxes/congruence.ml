@@ -11,6 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
+open Framework.Flow
 open Framework.Domains.Reduce.Domain
 open Framework.Eval
 open Framework.Exec
@@ -102,6 +103,33 @@ struct
 
     | _ -> None
 
+
+  let ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
+    fun man ctx query flow ->
+      match query with
+      | Query.QIntInterval e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        bot_dfl1 (Some (Values.Int.bottom)) (fun (stride, offset) ->
+            if Value.C.is_singleton (stride, offset) then
+              Some (Values.Int.of_constant (C_int offset))
+            else
+              Some (Values.Int.top)
+          ) v
+
+      | Query.QIntStepInterval e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        debug "eval %a" Value.print v;
+        bot_dfl1 (Some (Values.Int.bottom, Z.one)) (fun (stride, offset) ->
+            if Value.C.is_singleton (stride, offset) then
+              Some (Values.Int.of_constant (C_int offset), Z.one)
+            else
+              Some (Values.Int.top, stride)
+          ) v
+
+      | _ ->
+        None
 
 
 end

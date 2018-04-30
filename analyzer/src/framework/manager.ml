@@ -106,7 +106,8 @@ let if_flow
     (merge: 'a flow -> 'a flow -> 'b)
     man flow
   : 'b =
-  let true_flow = true_cond flow and false_flow = false_cond flow in
+  let true_flow = true_cond flow
+  and false_flow = false_cond flow in
   debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
     man.flow.print true_flow
     man.flow.print false_flow

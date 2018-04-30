@@ -27,25 +27,15 @@
             "unify": "universal.heap.recency",
             "over": {
                 //Memory abstraction
-                "iter": [
-                    "c.memory.machine_integers",
-                    //Cell abstraction
-                    {
-                        "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
-                        "over": {
-			    "iter": [
-				"c.memory.pointer",
-				//Numeric abstraction
-				{
-				    "reduce": [
-					"universal.numeric.domains.boxes.int",
-					"universal.numeric.domains.boxes.congruence"
-				    ]
-				}
-			    ]
-                        }
-                    }
-                ]
+                "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
+                "over": {
+		    "iter": [
+			"c.memory.pointer",
+                        "c.memory.machine_integers",
+			//Numeric abstraction
+			"universal.numeric.domains.boxes.int"
+		    ]
+                }
             }
         }
     ]
