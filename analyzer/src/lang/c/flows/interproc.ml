@@ -54,9 +54,12 @@ struct
              } in
              let exp' = mk_call fundec' args exp.erange in
              re_eval_singleton (man.eval ctx) (Some exp', flow, [])
-           | _ ->
+
+           | E_var pf when pf.vtyp |> is_c_pointer_type ->
              let f = {f with ekind = E_c_deref f} in
              re_eval_singleton (man.eval ctx) (Some {exp with ekind = E_c_call(f,args)}, flow, [])
+
+           | _ -> assert false
         )
 
     | E_c_function(f) ->
