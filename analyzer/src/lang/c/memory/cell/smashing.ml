@@ -20,6 +20,7 @@ open Framework.Lattice
 open Framework.Eval
 open Framework.Exec
 open Ast
+open Base
 open Pointer
 
 let name = "c.memory.cell.smashing"
@@ -28,7 +29,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 (** Smashed cell *)
 type cell = {
-  b : Pointer.base;
+  b : base;
   t : typ;
 }
 

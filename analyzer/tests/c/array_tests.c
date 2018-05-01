@@ -27,17 +27,17 @@ void test_multi_array() {
 }
 
 void test_global_init_with_zero() {
-  _mopsa_assert_true(glob1[1] == 0);
-  _mopsa_assert_true(glob2[1][2] == 0);
-  _mopsa_assert_true(glob3[2] == 0);
+  _mopsa_assert_true(glob1[0] == 0);
+  _mopsa_assert_true(glob2[0][0] == 0);
+  _mopsa_assert_true(glob3[0] == 1);
 }
 
 void test_initialization() {
   int a[4] = {1, 2, 3, 4};
-  _mopsa_assert_true(a[1] == 2);
+  _mopsa_assert_true(a[0] == 1);
 }
 
 void test_initialization_multi_array() {
   int a[2][2][3] = {{{1, 2, 3}, {4, 5, 6}}, {{7, 8, 9}, {10, 11, 12}}};
-  _mopsa_assert_true(a[1][1][2] == 12);
+  _mopsa_assert_true(a[0][0][0] == 1);
 }

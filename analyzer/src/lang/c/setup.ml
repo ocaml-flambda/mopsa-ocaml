@@ -16,6 +16,7 @@ let init () =
   );
   Desugar.(
     Andor.setup ();
+    Cast.setup ();
     Assign.setup ();
     Loops.setup ();
   );
