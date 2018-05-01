@@ -28,7 +28,7 @@ lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor alarms program memory flows desugar libs setup
-lang.c.memory = cell pointer machine_integers array_to_pointer record_to_pointer var_init
+lang.c.memory = cell pointer machine_integers array_to_pointer record_to_pointer var_init ap_pointer
 lang.c.flows = goto interproc switch
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
