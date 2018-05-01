@@ -400,7 +400,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let fold_cells f err empty top x0 base offset typ range man ctx flow =
+  let fold_cells f err empty top x0 base offset typ range man subman ctx flow =
     let cs = get_domain_cur man flow in
     let cell_size = sizeof_type typ in
 
@@ -409,7 +409,12 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       match Universal.Utils.expr_to_z offset with
       | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->
         let v = var_of_cell {b = base; o = z; t = typ} cs in
-        f x0 v flow
+        let s = get_domain_cur subman flow in
+        let (cs', s') = add_var ctx range v (cs, s) in
+        let flow' = set_domain_cur cs' man flow |>
+                    set_domain_cur s' subman
+        in
+        f x0 v flow'
 
       | Some z ->
         debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
@@ -427,7 +432,12 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               else
                 let v = var_of_cell {b = base; o; t = typ} cs in
                 let flow = man.exec ctx (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                iter (f x v flow) (Z.add o step)
+                let s = get_domain_cur subman flow in
+                let (cs', s') = add_var ctx range v (cs, s) in
+                let flow' = set_domain_cur cs' man flow |>
+                            set_domain_cur s' subman
+                in
+                iter (f x v flow') (Z.add o step)
             in
             iter init l
           else
@@ -618,7 +628,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               (fun acc eflow -> debug "error case : %a" man.flow.print eflow; oeval_singleton (None, eflow, []) |> oeval_join acc)
               (fun () -> debug "empty case"; oeval_singleton (None, flow, []))
               (fun flow -> assert false)
-              None base offset t exp.erange man ctx flow
+              None base offset t exp.erange man subman ctx flow
 
           | E_c_points_to(E_p_null) ->
             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
@@ -657,7 +667,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
               (fun () -> oeval_singleton (None, flow, []))
               (fun flow -> assert false)
-              None base offset' t' exp.erange man ctx flow
+              None base offset' t' exp.erange man subman ctx flow
 
           | E_c_points_to(E_p_null) ->
             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
