@@ -14,6 +14,7 @@ open Framework.Manager
 open Framework.Flow
 open Framework.Eval
 open Framework.Ast
+open Framework.Pp
 open Universal.Ast
 open Ast
 
@@ -33,10 +34,7 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    | E_c_cast(e, _) when
-        not (exp |> etyp |> is_c_int_type) &&
-        (not (exp |> etyp |> is_c_pointer_type) || e |> etyp |> is_c_function_type)
-      ->
+    | E_c_cast(e, _) when not (exp |> etyp |> is_c_int_type) ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           oeval_singleton (Some ({exp with ekind = ekind e}), flow, []) 
