@@ -27,7 +27,7 @@ open Pointer
 let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_max_expand = ref 1
+let opt_max_expand = ref 2
 
 (*==========================================================================*)
 (**                              {2 Cells}                                  *)
@@ -727,5 +727,5 @@ let setup () =
   Framework.Options.register (
     "-cell-max-expand",
     Arg.Set_int opt_max_expand,
-    " maximal number of expanded cells"
+    " maximal number of expanded cells (default: 2)"
   )
