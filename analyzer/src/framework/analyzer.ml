@@ -114,13 +114,40 @@ struct
     fun ctx query gabs ->
       Domain.ask manager ctx query gabs
 
+  and ecache = ref []
+  and scache = ref []
+
+  and exec_cache ctx stmt flow =
+    if Options.(common_options.cache_size) == 0 then exec ctx stmt flow
+    else try
+        let flow' = List.assoc (ctx, stmt, flow) !scache in
+        debug "use cache";
+        flow'
+      with Not_found ->
+        debug "not in cache";
+        let flow' = exec ctx stmt flow in
+        scache := ((ctx, stmt, flow), flow') :: (if List.length !scache < Options.(common_options.cache_size) then !scache else List.rev @@ List.tl @@ List.rev !scache);
+        flow'
+        
+  and eval_cache ctx exp flow =
+    if Options.(common_options.cache_size) == 0 then eval ctx exp flow
+    else try
+        let evals = List.assoc (ctx, exp, flow) !ecache in
+        debug "use cache";
+        evals
+      with Not_found ->
+        debug "not in cache";
+        let evals = eval ctx exp flow in
+        ecache := ((ctx, exp, flow), evals) :: (if List.length !ecache < Options.(common_options.cache_size) then !ecache else List.rev @@ List.tl @@ List.rev !ecache);
+        evals
+
   (** Top level manager *)
 
   and manager = {
     env = env_manager;
     flow = flow_manager;
-    exec = exec;
-    eval = eval;
+    exec = exec_cache;
+    eval = eval_cache;
     ask = ask;
     ax = ax;
   }

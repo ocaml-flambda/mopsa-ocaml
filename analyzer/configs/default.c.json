@@ -13,6 +13,7 @@
         "c.desugar.andor",
         "c.desugar.assign",
         "c.desugar.loops",
+	"c.desugar.cast",
 
         //Flows
         "c.flows.switch",
@@ -26,30 +27,21 @@
         {
             "unify": "universal.heap.recency",
             "over": {
-                "iter": [
-                    //Memory abstraction
-                    "c.memory.pointer",
-                    "c.memory.array_to_pointer",
-                    "c.memory.record_to_pointer",
-                    "c.memory.machine_integers",
-
-                    //Cell abstraction
-                    {
-                        "unify": "c.memory.cell",
-                        "over":
-                        //Numeric abstraction
-                        {
-                            "product": [
-                                "universal.numeric.domains.boxes.int",
-                                "universal.numeric.domains.boxes.congruence"
-                            ]
-                        }
-                    },
-
-                    //This domains should be put after the numeric domain to allow
-                    //proper initialization of global variables
-                    "c.memory.var_init"
-                ]
+                //Memory abstraction
+                "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
+                "over": {
+		    "iter": [
+			"c.memory.pointer",
+                        "c.memory.machine_integers",
+			//Numeric abstraction
+			{
+			    "reduce": [
+				"universal.numeric.domains.boxes.int",
+				"universal.numeric.domains.boxes.congruence"
+			    ]
+			}
+		    ]
+                }
             }
         }
     ]

@@ -16,7 +16,7 @@
    (level 0 or 1) identified by its ["name"] and applied to
    an argument [domain].
 
-   - an object [\{"product": \[domain list\]\}] creates a reduced product over
+   - an object [\{"reduce": \[domain list\]\}] creates a reduced product over
    a list of domains.
 
    - an object [\{"iter": \[domain list\]\}] iterates over a list of domains and
@@ -24,6 +24,9 @@ returns the first non-empty result.
 
    - an object [\{"unify": domain, "over": domain\}] creates a unification domain
 over a given sub-domain.
+
+   - an object [\{"reduce-unify": \[domain list\], "over": domain\}] creates a reduced
+   product over a list of unification domains.
 
 *)
 
@@ -38,17 +41,18 @@ let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "fun" obj -> build_functor obj
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "product" obj -> build_product @@ List.assoc "product" obj
+  | `Assoc(obj) when List.mem_assoc "reduce" obj -> build_reduce @@ List.assoc "reduce" obj
   | `Assoc(obj) when List.mem_assoc "unify" obj -> build_unify obj
+  | `Assoc(obj) when List.mem_assoc "reduce-unify" obj -> build_reduce_unify obj                                                     
   | _ -> assert false
 
 and build_leaf name =
   try Domains.Stateful.find_domain name
   with Not_found ->
   try
-    let r = Domains.Reduction.Domain.find_domain name in
-    let module R = (val r : Domains.Reduction.Domain.DOMAIN) in
-    let module D = Domains.Reduction.Domain.MakeStateful(R) in
+    let r = Domains.Reduce.Domain.find_domain name in
+    let module R = (val r : Domains.Reduce.Domain.DOMAIN) in
+    let module D = Domains.Reduce.Domain.MakeStateful(R) in
     (module D : Domains.Stateful.DOMAIN)
   with Not_found ->
     Debug.fail "Domain %s not found" name
@@ -83,32 +87,32 @@ and build_functor assoc =
   with Not_found ->
     Debug.fail "Functor %s not found" f
 
-and build_product json =
-  let domains = json |> to_list |> List.map build_reduction_domain in
+and build_reduce json =
+  let domains = json |> to_list |> List.map build_reduce_domain in
   let rec aux :
-    (module Domains.Reduction.Domain.DOMAIN) list ->
-    (module Domains.Reduction.Domain.DOMAIN)
+    (module Domains.Reduce.Domain.DOMAIN) list ->
+    (module Domains.Reduce.Domain.DOMAIN)
     = function
       | [] -> assert false
       | [d] -> d
       | hd :: tl ->
         let tl = aux tl in
-        let module Head = (val hd : Domains.Reduction.Domain.DOMAIN) in
-        let module Tail = (val tl : Domains.Reduction.Domain.DOMAIN) in
-        let module Dom = Domains.Reduction.Product.Make(Head)(Tail) in
-        (module Dom : Domains.Reduction.Domain.DOMAIN)
+        let module Head = (val hd : Domains.Reduce.Domain.DOMAIN) in
+        let module Tail = (val tl : Domains.Reduce.Domain.DOMAIN) in
+        let module Dom = Domains.Reduce.Product.Make(Head)(Tail) in
+        (module Dom : Domains.Reduce.Domain.DOMAIN)
   in
   let r = aux domains in
-  let module R = (val r : Domains.Reduction.Domain.DOMAIN) in
-  let module D = Domains.Reduction.Root.Make(R) in
+  let module R = (val r : Domains.Reduce.Domain.DOMAIN) in
+  let module D = Domains.Reduce.Root.Make(R) in
   (module D : Domains.Stateful.DOMAIN)
 
-and build_reduction_domain = function
+and build_reduce_domain = function
   | `String(name) ->
     begin
-      try Domains.Reduction.Domain.find_domain name
+      try Domains.Reduce.Domain.find_domain name
       with Not_found ->
-        Debug.fail "Reduction domain %s not found" name
+        Debug.fail "Reduce domain %s not found" name
     end
   | _ -> Debug.fail "Only literal reduction names are supported"
 
@@ -125,6 +129,39 @@ and build_unify assoc =
     (module R : Domains.Stateful.DOMAIN)
   with Not_found ->
     Debug.fail "Unification domain  %s not found" u
+
+
+and build_reduce_unify assoc =
+  let sub = List.assoc "over" assoc in
+  let a = build_domain sub in
+  let module S = (val a : Domains.Stateful.DOMAIN) in
+  let domains = List.assoc "reduce-unify" assoc |> to_list |> List.map build_reduce_unify_domain in
+  let rec aux :
+    (module Domains.Reduce_unify.Domain.DOMAIN) list ->
+    (module Domains.Reduce_unify.Domain.DOMAIN)
+    = function
+      | [] -> assert false
+      | [d] -> d
+      | hd :: tl ->
+        let tl = aux tl in
+        let module Head = (val hd : Domains.Reduce_unify.Domain.DOMAIN) in
+        let module Tail = (val tl : Domains.Reduce_unify.Domain.DOMAIN) in
+        let module Dom = Domains.Reduce_unify.Product.Make(Head)(Tail) in
+        (module Dom : Domains.Reduce_unify.Domain.DOMAIN)
+  in
+  let r = aux domains in
+  let module R = (val r : Domains.Reduce_unify.Domain.DOMAIN) in
+  let module D = Domains.Reduce_unify.Root.Make(R)(S) in
+  (module D : Domains.Stateful.DOMAIN)
+
+and build_reduce_unify_domain = function
+  | `String(name) ->
+    begin
+      try Domains.Reduce_unify.Domain.find_domain name
+      with Not_found ->
+        Debug.fail "Reduce-Unify domain %s not found" name
+    end
+  | _ -> Debug.fail "Only literal names are supported as Reduce-Unify domains"
 
 
 let parse (file: string) : (module Domains.Stateful.DOMAIN) =

@@ -16,8 +16,8 @@ void test_string_local_initialization() {
 }
 
 void test_null_fill_at_initialization() {
-  char s2[10] = "part";
-  _mopsa_assert_true(s2[4] == '\0');
+  char s2[2] = "a";
+  _mopsa_assert_true(s2[1] == '\0');
 }
 
 void test_same_string_from_string_table() {

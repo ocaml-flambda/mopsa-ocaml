@@ -18,7 +18,7 @@ module Make(UniDomain: Domain.DOMAIN)(SubDomain: Stateful.DOMAIN) =
 struct
 
   module UniDomain = UniDomain(SubDomain)
-      
+
   type t = UniDomain.t * SubDomain.t
 
   let head_man man = {
@@ -85,8 +85,8 @@ struct
     Query.join query head_reply tail_reply
 
   let init man ctx prog fa =
-    let ctx, fa = UniDomain.init (head_man man) ctx prog fa in
-    SubDomain.init (tail_man man) ctx prog fa
+    let ctx, fa = SubDomain.init (tail_man man) ctx prog fa in
+    UniDomain.init (head_man man) ctx prog fa
 
 
 end

@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Eval
 open Ast
 open Bot

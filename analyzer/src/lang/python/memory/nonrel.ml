@@ -14,7 +14,7 @@
 *)
 
 open Framework.Domains
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Query
@@ -67,7 +67,7 @@ struct
            | E_addr(addr) ->
              let v = Value.addr (Value.AddrLattice.singleton addr) in
              map_domain_cur (Nonrel.add var v) man flow |>
-             return
+             return_flow
            | _ ->
              Nonrel.exec man ctx {stmt with skind = S_assign (evar, e,kind)} flow
         )

@@ -90,7 +90,7 @@ void test_allamigeon() {
   s* ptr = (s*) &a[1];
   init(ptr);
   ptr = (s*) &a[0];
-  a[1][1].f[0] = 10;
+  a[1][1].f[2] = 10;
   _mopsa_assert_safe();
   a[1][1].f[10] = 20;
   _mopsa_assert_error(OUT_OF_BOUND);

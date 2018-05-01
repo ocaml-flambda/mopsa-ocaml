@@ -16,6 +16,10 @@ let oflow_map f flow = Option.option_lift1 f flow
 
 let oflow_merge f1 f2 f12 none flow1 flow2 = Option.option_apply2 f1 f2 f12 none flow1 flow2
 
+let oflow_compose f = function
+  | None -> None
+  | Some flow -> Some (f flow)
+
 (**
    [eval_to_exec f man ctx evl] executes the transfer function [f] 
    on a set of evaluations [evl], and applies the cleaner

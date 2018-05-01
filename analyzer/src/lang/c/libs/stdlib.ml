@@ -21,6 +21,12 @@ open Ast
 let name = "c.libs.stdlib"
 let debug fmt = Debug.debug ~channel:name fmt
 
+(** Kinds of heap allocated addresses. *)
+type Universal.Ast.addr_kind +=
+  | A_c_static_malloc of Z.t (** static size *)
+  | A_c_dynamic_malloc (** dynamic size *)
+
+
 module Domain =
 struct
 
@@ -54,12 +60,12 @@ struct
 
            (* Allocation with a static size *)
            | Some z ->
-             let exp' = Universal.Ast.mk_alloc_addr (Memory.Cell.A_c_static_malloc z) exp.erange exp.erange in
+             let exp' = Universal.Ast.mk_alloc_addr (A_c_static_malloc z) exp.erange exp.erange in
              Framework.Eval.re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
            (* Allocation with a dynamic size *)
            | None ->
-             let exp' = Universal.Ast.mk_alloc_addr Memory.Cell.A_c_dynamic_malloc exp.erange exp.erange in
+             let exp' = Universal.Ast.mk_alloc_addr A_c_dynamic_malloc exp.erange exp.erange in
              Framework.Eval.re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
         )
@@ -71,4 +77,15 @@ struct
   end
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  Stateless.register_domain name (module Domain);
+  Universal.Ast.register_addr_kind_compare (fun next ak1 ak2 ->
+      match ak1, ak2 with
+      | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
+      | _ -> next ak1 ak2
+    );
+  Universal.Pp.register_pp_addr_kind (fun next fmt ak ->
+      match ak with
+      | A_c_static_malloc s -> Format.fprintf fmt "static malloc(%a)" Z.pp_print s
+      | A_c_dynamic_malloc -> Format.fprintf fmt "dynamic malloc"
+      | _ -> next fmt ak
+    )
