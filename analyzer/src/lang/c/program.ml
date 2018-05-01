@@ -78,7 +78,16 @@ struct
 
     | _ -> ctx, flow
 
-  let eval exp manager ctx flow = None
+  let eval man ctx exp flow =
+    match ekind exp with
+    | E_constant(C_c_string (s, _)) ->
+      let table = find_string_table ctx in
+      let v = StringTable.find s table in
+      let v = mk_var v exp.erange in
+      re_eval_singleton (man.eval ctx) (Some v, flow, [])
+
+    | _ -> None
+
 
   let get_function_name fundec = fundec.c_func_var.vname
 

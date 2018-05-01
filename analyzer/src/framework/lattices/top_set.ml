@@ -33,8 +33,6 @@ struct
   let leq abs1 abs2 =
     top_included Set.subset abs1 abs2
 
-  let unify _ a1 a2 = (a1, a2)
-
   let join  abs1 abs2 =
     top_lift2 Set.union abs1 abs2
 

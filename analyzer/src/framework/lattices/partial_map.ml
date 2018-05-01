@@ -62,8 +62,6 @@ struct
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊥. *)
 
-  let unify op a1 a2 = assert false
-
   let join  (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo

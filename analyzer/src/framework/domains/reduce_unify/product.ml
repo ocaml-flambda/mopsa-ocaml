@@ -112,6 +112,6 @@ module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
   let ask man subman ctx query flow =
     let head_reply = Head.ask (head_man man) subman ctx query flow in
     let tail_reply = Tail.ask (tail_man man) subman ctx query flow in
-    Query.join query head_reply tail_reply
+    Query.meet query head_reply tail_reply
     
 end

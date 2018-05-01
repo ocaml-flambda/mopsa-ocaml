@@ -27,8 +27,8 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object data_model
 lang.python.objects.data_model = attribute callable
 
-lang.c = ast frontend pp visitor alarms program memory flows desugar libs setup
-lang.c.memory = pointer cell machine_integers
+lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
+lang.c.memory = base query pointer cell machine_integers
 lang.c.flows = goto interproc switch
 
 #Packages

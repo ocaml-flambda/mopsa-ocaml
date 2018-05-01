@@ -83,15 +83,15 @@ struct
       | None -> None
       | Some evals ->
         return_evals evals
-      
+
   let ask man ctx query flow =
     match RedUniDomain.ask (head_man man) (tail_man man) ctx query flow with
     | Some rpl -> Some rpl
     | None -> SubDomain.ask (tail_man man) ctx query flow
 
   let init man ctx prog flow =
-    let ctx', flow' = RedUniDomain.init (head_man man) ctx prog flow in
-    SubDomain.init (tail_man man) ctx' prog flow'
+    let ctx', flow' = SubDomain.init (tail_man man) ctx prog flow in
+    RedUniDomain.init (head_man man) ctx' prog flow'
 
 end
 

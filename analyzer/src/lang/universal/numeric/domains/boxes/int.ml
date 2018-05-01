@@ -126,15 +126,15 @@ struct
   let ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
     fun man ctx query flow ->
       match query with
-      | Query.QIntList e ->
+      | Query.QIntInterval e ->
         let a = get_domain_cur man flow in
         let v = eval_value a e in
-        bot_dfl1 None (fun itv ->
-            if Value.I.is_bounded itv then
-              Some (Value.I.to_list itv)
-            else
-              None
-          ) v
+        Some v
+
+      | Query.QIntStepInterval e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some (v, Z.one)
 
       | _ ->
         None

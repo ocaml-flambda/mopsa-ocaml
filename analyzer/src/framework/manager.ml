@@ -83,9 +83,7 @@ let map_domain_cur f man flow =
 
 let set_domain_cur a man flow =
   let cur = man.flow.get TCur flow in
-  debug "cur = %a" man.env.print cur;
   let cur' = man.ax.set a cur in
-  debug "cur' = %a" man.env.print cur';
   man.flow.set TCur cur' flow
 
 
@@ -108,7 +106,8 @@ let if_flow
     (merge: 'a flow -> 'a flow -> 'b)
     man flow
   : 'b =
-  let true_flow = true_cond flow and false_flow = false_cond flow in
+  let true_flow = true_cond flow
+  and false_flow = false_cond flow in
   debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
     man.flow.print true_flow
     man.flow.print false_flow

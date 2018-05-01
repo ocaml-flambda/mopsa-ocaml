@@ -135,7 +135,7 @@ and build_reduce_unify assoc =
   let sub = List.assoc "over" assoc in
   let a = build_domain sub in
   let module S = (val a : Domains.Stateful.DOMAIN) in
-  let domains = List.assoc "reduce_unify" assoc |> to_list |> List.map build_reduce_unify_domain in
+  let domains = List.assoc "reduce-unify" assoc |> to_list |> List.map build_reduce_unify_domain in
   let rec aux :
     (module Domains.Reduce_unify.Domain.DOMAIN) list ->
     (module Domains.Reduce_unify.Domain.DOMAIN)

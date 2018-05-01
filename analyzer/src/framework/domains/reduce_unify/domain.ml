@@ -14,8 +14,11 @@ open Manager
 open Eval
 open Query
 open Context
-open Reduce.Domain
 
+type channel = Reduce.Domain.channel
+type 'a rflow = 'a Reduce.Domain.rflow
+type 'a revals = 'a Reduce.Domain.revals
+               
 (** Abstract domain signature. *)
 module type DOMAIN = functor(SubDomain: Stateful.DOMAIN) ->
 sig
@@ -66,9 +69,12 @@ let domains : (string * (module DOMAIN)) list ref = ref []
 let register_domain name modl = domains := (name, modl) :: !domains
 let find_domain name = List.assoc name !domains
 
-let return_flow = return_flow
-let return_evals = return_evals
-let fail = fail
-
-let eval_to_rexec = eval_to_rexec
-let eval_to_orexec = eval_to_orexec
+let return_flow = Reduce.Domain.return_flow
+let return_evals = Reduce.Domain.return_evals
+let fail = Reduce.Domain.fail
+let add_flow_mergers = Reduce.Domain.add_flow_mergers
+let orflow_join = Reduce.Domain.orflow_join
+let eval_to_rexec = Reduce.Domain.eval_to_rexec
+let eval_to_orexec = Reduce.Domain.eval_to_orexec
+let add_eval_mergers = Reduce.Domain.add_eval_mergers
+let mk_local_manager = Unify.Domain.mk_local_manager

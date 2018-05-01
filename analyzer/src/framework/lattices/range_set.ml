@@ -53,8 +53,6 @@ struct
         Set.subset abs2.inf abs1.inf && SSet.subset abs1.sup abs2.sup
       ) abs1 abs2
 
-  let unify _ a1 a2 = (a1, a2)
-
   let join  abs1 abs2 =
     bot_neutral2 (fun abs1 abs2 ->
         {

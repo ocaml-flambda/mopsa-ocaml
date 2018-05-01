@@ -1,10 +1,11 @@
 #include "mopsa.h"
 
 void test_add() {
-  int i, j;
+  int i, j, k;
   i = 10;
   j = 20;
-  _mopsa_assert_true(i + j == 30);
+  k = i + j;
+  _mopsa_assert_true(k == 30);
 }
 
 void test_mult() {
