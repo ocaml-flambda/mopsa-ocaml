@@ -206,7 +206,7 @@ struct
                | _ -> assert false
             )
 
-        | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
+        | E_binop(math_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
           eval_p man ctx p flow |>
           oeval_compose
             (fun pt flow ->
@@ -217,7 +217,7 @@ struct
                | E_p_var (base, offset, t) ->
                  debug "pointer arithmetics: %a, %a, %a" pp_base base pp_expr offset pp_typ t;
                  let size = sizeof_type t in
-                 let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
+                 let pt = E_p_var (base, (mk_binop offset math_plus (mk_binop e math_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
                  oeval_singleton (Some pt, flow, [])
 
                | E_p_null ->
@@ -242,7 +242,7 @@ struct
         | E_c_function fundec ->
           oeval_singleton (Some (E_p_fun fundec), flow, [])
 
-        | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
+        | E_binop(Universal.Ast.O_minus _, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
           panic "Pointer substraction not supported"
 
         | _ ->

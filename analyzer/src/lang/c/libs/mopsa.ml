@@ -25,6 +25,7 @@ module Domain =
 struct
 
   let is_builtin_function = function
+    | "_mopsa_set_debug_channels"
     | "_mopsa_range"
     | "_mopsa_rand_int"
     | "_mopsa_panic"
@@ -74,6 +75,13 @@ struct
       debug "builtin function";
       let exp' = mk_expr (E_c_call({e with ekind = E_c_builtin_function f.c_func_var.vname},args)) ~etyp:T_c_builtin_fn exp.erange in
       oeval_singleton (Some exp', flow, [])
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_set_debug_channels"} as e, [e']) ->
+      let channels = match ekind e' with
+        | E_c_cast({ ekind = E_constant (C_c_string (s,_))},_) -> s
+        | _ -> ""
+      in
+      let () = Debug.set_channels channels in
+      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_range_char"} as e, []) ->
       range_to_rand man ctx flow Ast.C_signed_char exp e

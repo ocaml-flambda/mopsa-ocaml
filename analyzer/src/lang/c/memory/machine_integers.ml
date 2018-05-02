@@ -61,6 +61,11 @@ let wrap_evals t ctx man range evals =
         ) man ctx flow ()
     ) evals
 (** Abstract domain. *)
+
+let is_c_div = function
+  | O_div t | O_mod t when t |> is_c_type -> true
+  | _ -> false
+
 module Domain =
 struct
 
@@ -73,33 +78,33 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(O_div, e, e') | E_binop(O_mod, e, e') when exp |> etyp |> is_c_int_type ->
-      man.eval ctx e flow |>
-      eval_compose (fun e flow ->
-          man.eval ctx e' flow |>
-          eval_compose (fun e' flow ->
-              let emint' = {e' with etyp = T_int} in
-              let cond = {ekind = E_binop(O_eq, emint', mk_z Z.zero (tag_range range "div0"));
-                          etyp  = T_bool;
-                          erange = tag_range range "div0cond"
-                         }
-              in
-              assume_to_eval cond
-                (fun tflow ->
-                   let cur = man.flow.get TCur tflow in
-                   let tflow2 = man.flow.add (Alarms.TDivideByZero range) cur tflow
-                                |> man.flow.set TCur man.env.bottom
-                   in
-                   oeval_singleton (None, tflow2, []))
-                (fun fflow -> re_eval_singleton (man.eval ctx) (Some {exp with etyp = T_int}, flow, []))
-                man ctx flow ()
+    | E_binop(op, e, e')
+      when op |> is_c_div ->
+      man.eval ctx e' flow |>
+      eval_compose (fun e' flow ->
+          let emint' = {e' with etyp = T_int} in
+          let cond = {ekind = E_binop(O_eq, emint', mk_z Z.zero (tag_range range "div0"));
+                      etyp  = T_bool;
+                      erange = tag_range range "div0cond"
+                     }
+          in
+          assume_to_eval cond
+            (fun tflow ->
+               let cur = man.flow.get TCur tflow in
+               let tflow2 = man.flow.add (Alarms.TDivideByZero range) cur tflow
+                            |> man.flow.set TCur man.env.bottom
+               in
+               oeval_singleton (None, tflow2, []))
+            (fun fflow -> re_eval_singleton (man.eval ctx)
+                (Some { exp with ekind = E_binop(to_math_op op, e, e')}, flow, [])
             )
+            man ctx flow ()
         )
 
-    | E_binop(O_plus, e, e') when exp |> etyp |> is_c_int_type ->
-      man.eval ctx {exp with etyp = T_int} flow |>
-      let rep = wrap_evals (exp |> etyp) ctx man (exp |> erange) in
-      rep
+    (* | E_binop(O_plus, e, e') when exp |> etyp |> is_c_int_type ->
+     *   man.eval ctx {exp with etyp = T_int} flow |>
+     *   let rep = wrap_evals (exp |> etyp) ctx man (exp |> erange) in
+     *   rep *)
 
     | E_constant(C_c_character (c, _)) ->
       re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
@@ -128,13 +133,13 @@ struct
               let e_mint = {e with etyp = T_int} in
               let cond = range_cond e_mint rmin rmax range in
               assume_to_eval cond
-                (fun tflow -> oeval_singleton (Some {e with etyp = T_int}, tflow, []))
+                (fun tflow -> oeval_singleton (Some {e with etyp = t}, tflow, []))
                 (fun fflow ->
                    let cur = man.flow.get TCur fflow in
                    let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow in
                    re_eval_singleton (man.eval ctx)
                      (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                            etyp   = T_int;
+                            etyp   = t;
                             erange = tag_range range "wrap"
                            }), fflow2, []
                      )

@@ -12,7 +12,6 @@ open Framework.Ast
 open Framework.Visitor
 open Universal.Ast
 
-
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
@@ -310,7 +309,8 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let qual = to_clang_type_qualifier qual in
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
-  | t -> Debug.warn "to_clang_type: %a not a C type" Framework.Pp.pp_typ t; assert false
+  | t ->
+    Debug.warn "to_clang_type: %a not a C type" Framework.Pp.pp_typ t; assert false
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
@@ -461,7 +461,7 @@ let sizeof_expr (t:typ) range : expr =
             (* error range "sizeof" "array with no size"*)
             mk_zero range
        in
-       mk_binop (doit t) O_mult len range
+       mk_binop (doit t) (O_mult T_int) len range
     | T_c_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
     | T_c_function _ | T_c_builtin_fn -> invalid_arg "sizeof_expr: size of function"
     | T_c_typedef t -> doit (t.c_typedef_def)
@@ -512,23 +512,23 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
   let open Universal.Ast in
   mk_binop
     (mk_int l (tag_range range "l"))
-    O_plus
+    math_plus
     (mk_binop
        (mk_binop
           (mk_var v (tag_range range "v"))
-          O_minus
+          math_minus
           (mk_int l (tag_range range "l"))
           (tag_range range "?")
        )
-       O_mod
+       math_mod
        (mk_binop
           (mk_binop
              (mk_int h (tag_range range "v"))
-             O_minus
+             (O_minus T_int)
              (mk_int l (tag_range range "l"))
              (tag_range range "?")
           )
-          O_plus
+          math_plus
           (mk_one (tag_range range "1"))
           (tag_range range "+1")
        )

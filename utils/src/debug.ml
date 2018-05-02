@@ -22,6 +22,10 @@ let parse opt =
   Str.split (Str.regexp ",") opt |>
   List.iter add_channel
 
+let set_channels opt =
+  let () = channels := [] in
+  parse opt
+
 let can_print channel =
   !print_all ||
   !channels |> List.exists (fun re -> Str.string_match re channel 0)

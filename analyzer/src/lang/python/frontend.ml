@@ -390,13 +390,13 @@ and from_binop : Py_AST.binop -> Framework.Ast.operator = function
   | O_bool op -> from_bool_op op
 
 and from_arithmetic_op = function
-  | Add -> Universal.Ast.O_plus
-  | Sub -> Universal.Ast.O_minus
-  | Mult -> Universal.Ast.O_mult
-  | Div -> Universal.Ast.O_div
+  | Add -> Universal.Ast.O_plus T_any
+  | Sub -> Universal.Ast.O_minus T_any
+  | Mult -> Universal.Ast.O_mult T_any
+  | Div -> Universal.Ast.O_div T_any
   | FloorDiv -> O_py_floor_div
-  | Mod -> Universal.Ast.O_mod
-  | Pow -> Universal.Ast.O_pow
+  | Mod -> Universal.Ast.O_mod T_any
+  | Pow -> Universal.Ast.O_pow T_any
   | BitOr -> Universal.Ast.O_bit_or
   | BitXor -> Universal.Ast.O_bit_xor
   | BitAnd -> Universal.Ast.O_bit_and
@@ -422,8 +422,8 @@ and from_comparison_op : Py_CST.cmpop -> Framework.Ast.operator = function
 
 and from_unop = function
   | Not -> Universal.Ast.O_log_not
-  | USub -> Universal.Ast.O_minus
-  | UAdd -> Universal.Ast.O_plus
+  | USub -> Universal.Ast.O_minus T_any
+  | UAdd -> Universal.Ast.O_plus T_any
   | Invert -> Universal.Ast.O_bit_invert
 
 
@@ -443,7 +443,7 @@ and from_unop = function
  *     {body with skind = Universal.Ast.S_block (stmtl @ sl)}
  *   | _ ->
  *     {body with skind = Universal.Ast.S_block (stmtl @ [body])}
- * 
+ *
  * and initialize_special_vars filepath body =
  *   let stmt1 = {
  *     Framework.Ast.skind = Universal.Ast.S_assign(
@@ -466,5 +466,5 @@ and from_unop = function
  *     {body with skind = Universal.Ast.S_block (stmt1 :: stmt2 :: sl)}
  *   | _ ->
  *     {body with skind = Universal.Ast.S_block ([stmt1; stmt2; body])}
- * 
+ *
  * (\** Initialize __name__ and __file__ variables *\) *)
