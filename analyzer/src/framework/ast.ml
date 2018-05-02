@@ -13,7 +13,7 @@
 
 (**
    [compare_composer cl] applies a list of comparison functions [cl] in sequence
-   and stops when encoutring the first non-zero result.
+   and stops when encountering the first non-zero result.
 *)
 let rec compare_composer = function
   | [] -> 0
@@ -197,7 +197,7 @@ let compare_var v1 v2 =
   compare_composer [
     (fun () -> compare v1.vname v2.vname);
     (fun () -> compare v1.vuid v2.vuid);
-    (fun () -> compare v1.vtyp v2.vtyp);
+    (fun () -> compare_typ v1.vtyp v2.vtyp);
     (fun () -> !vkind_compare_chain v1.vkind v2.vkind);
   ]
 
