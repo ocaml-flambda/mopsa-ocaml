@@ -17,7 +17,7 @@ let assume_to_exec cond true_case false_case man ctx flow
 let assume_to_eval cond
     true_case false_case man ctx flow
     ?(bottom_case=(fun () -> Framework.Eval.oeval_singleton (None, flow, [])))
-    ?(merge_case=(fun flow1 flow2 -> Framework.Eval.oeval_join (true_case flow1) (true_case flow2))) () =
+    ?(merge_case=(fun flow1 flow2 -> Framework.Eval.oeval_join (true_case flow1) (false_case flow2))) () =
   if_flow
     (man.exec ctx (mk_assume cond (tag_range cond.erange "true assume")))
     (man.exec ctx (mk_assume (mk_not cond (tag_range cond.erange "neg")) (tag_range cond.erange "false assume")))

@@ -101,7 +101,9 @@ struct
                oeval_singleton (Some e, tflow, []))
             (fun fflow ->
                let cur = man.flow.get TCur fflow in
-               let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow in
+               let () = debug "Adding alarm flow : %a" man.env.print cur in
+               let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
+               in
                re_eval_singleton (man.eval ctx)
                  (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
                         etyp   = typ;
@@ -144,7 +146,6 @@ struct
                    debug "false flow : %a" man.flow.print fflow ;
                    let cur = man.flow.get TCur fflow in
                    let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
-                              |> man.flow.remove TCur
                    in
                    re_eval_singleton (man.eval ctx)
                      (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
