@@ -38,6 +38,18 @@ module type OrderedType =
   end
 (** Input signature of the functor {!Map.Make}. *)
 
+
+type map_printer = {
+    print_empty: string; (** Special text for empty maps *)
+    print_begin: string; (** Text before the first binding *)
+    print_arrow: string; (** Text between a key and its value *)
+    print_sep: string;   (** Text between two bindings *)
+    print_end: string;   (** Text after the last binding *)
+  }
+(** [MOPSA] Tells how to print a map. *)
+
+
+  
 module type S =
   sig
     type key
@@ -455,18 +467,6 @@ module type S =
 
     (** {2 Printing} *)
                                                 
-    type map_printer = {
-        print_empty: string; (** Special text for empty maps *)
-        print_begin: string; (** Text before the first binding *)
-        print_arrow: string; (** Text between a key and its value *)
-        print_sep: string;   (** Text between two bindings *)
-        print_end: string;   (** Text after the last binding *)
-      }
-    (** Tells how to print a map. *)
-
-    val printer_default: map_printer
-    (** Print as set: {key1:val1;...;keyn:valn} *)
-
     val to_string: map_printer -> (key -> string) -> ('a -> string) -> 'a t -> string
     (** String representation. *)
 

@@ -55,6 +55,16 @@
 module type OrderedType = MapExtSig.OrderedType
 
                         
+type set_printer = {
+    print_empty: string; (** Special text for empty sets *)
+    print_begin: string; (** Text before the first element *)
+    print_sep: string;   (** Text between two elements *)
+    print_end: string;   (** Text after the last element *)
+  }
+(** [MOPSA] Tells how to print a set. *)
+
+
+                        
 module type S =
   sig
     type elt
@@ -371,17 +381,6 @@ module type S =
 
       
     (** {2 Printing} *)
-                                                
-    type set_printer = {
-        print_empty: string; (** Special text for empty sets *)
-        print_begin: string; (** Text before the first element *)
-        print_sep: string;   (** Text between two elements *)
-        print_end: string;   (** Text after the last element *)
-      }
-    (** Tells how to print a map. *)
-
-    val printer_default: set_printer
-    (** Print as set: {elem1,...,elemn} *)
 
     val to_string: set_printer -> (elt -> string) -> t -> string
     (** String representation. *)
