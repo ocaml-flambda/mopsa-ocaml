@@ -347,24 +347,26 @@ struct
            | E_p_fun fundec ->
              oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, [])
            | E_p_var (base, offset, t) ->
-             debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
-             let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
-             begin
-               match itv with
-               | None -> assert false
-               | Some itv ->
-                 List.fold_left (fun acc o ->
-                     let c = {Cell.b = base; o; t} in
-                     let exp' = Cell.mk_gen_cell_var c range in
-                     man.eval ctx exp' flow |>
-                     eval_compose
-                       (fun exp' flow ->
-                          oeval_join acc (oeval_singleton (Some exp', flow, []))
-                          (* pourquoi ne pas enrichir le flow avec l'information de l'offset?*)
-                       )
-                   ) None itv
-             end
-
+             man.eval ctx offset flow |>
+             eval_compose (fun offset flow ->
+                 debug "E_p_var(%a, %a, %a) in@\n%a" pp_base base pp_expr offset pp_typ t man.flow.print flow;
+                 let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
+                 begin
+                   match itv with
+                   | None -> assert false
+                   | Some itv ->
+                     List.fold_left (fun acc o ->
+                         let c = {Cell.b = base; o; t} in
+                         let exp' = Cell.mk_gen_cell_var c range in
+                         man.eval ctx exp' flow |>
+                         eval_compose
+                           (fun exp' flow ->
+                              oeval_join acc (oeval_singleton (Some exp', flow, []))
+                              (* pourquoi ne pas enrichir le flow avec l'information de l'offset?*)
+                           )
+                       ) None itv
+                 end
+               )
            | E_p_null ->
              let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
                         man.flow.set TCur man.env.Framework.Lattice.bottom

@@ -11,4 +11,6 @@
 
 void * malloc(size_t size);
 
+int atoi(const char *str);
+
 #endif //_STDLIB_H

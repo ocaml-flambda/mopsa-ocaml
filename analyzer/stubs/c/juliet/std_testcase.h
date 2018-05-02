@@ -1,6 +1,8 @@
 #ifndef _STD_TESTCASE_H
 #define _STD_TESTCASE_H
 
+#include <limits.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 

@@ -25,6 +25,7 @@ module Domain =
 struct
 
   let is_builtin_function = function
+    | "_mopsa_range"
     | "_mopsa_rand_int"
     | "_mopsa_panic"
     | "_mopsa_assert_exists"
@@ -44,8 +45,18 @@ struct
     | Alarms.TDivideByZero _ -> 5
     | _ -> assert false
 
+  let range_to_rand man ctx flow t exp e =
+    let range = erange e in
+    let l, r = rangeof (T_c_integer t) in
+    let ll, rr = mk_z l (tag_range range "ll"), mk_z r (tag_range range "rr") in
+    re_eval_singleton (man.eval ctx)
+      (Some {exp with ekind = E_c_call(
+           {e with ekind = E_c_builtin_function "_mopsa_rand_int"},
+           [ll; rr]
+         )
+         }, flow, [])
   (*==========================================================================*)
-                        (** {2 Transfer functions} *)
+  (** {2 Transfer functions} *)
   (*==========================================================================*)
 
   let init man ctx prog flow = ctx, flow
@@ -63,6 +74,23 @@ struct
       debug "builtin function";
       let exp' = mk_expr (E_c_call({e with ekind = E_c_builtin_function f.c_func_var.vname},args)) ~etyp:T_c_builtin_fn exp.erange in
       oeval_singleton (Some exp', flow, [])
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_char"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_signed_char exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_char"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_unsigned_char exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_int"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_signed_int exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_int"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_unsigned_int exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_short"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_signed_short exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_short"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_unsigned_short exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_long"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_signed_long exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_long"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_unsigned_long exp e
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_rand_int"}, [a; b]) ->
       let erange = exp.erange in
@@ -211,7 +239,7 @@ struct
 
   let ask _ _ _ _  = None
 
-  end
+end
 
 let setup () =
   Stateless.register_domain name (module Domain)

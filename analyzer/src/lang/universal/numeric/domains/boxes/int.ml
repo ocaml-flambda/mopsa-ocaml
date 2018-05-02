@@ -133,6 +133,10 @@ struct
             if Value.I.is_bounded itv then
               Some (Value.I.to_list itv)
             else
+              let () = debug "Could not give bound for %a@\nin %a"
+                  Framework.Pp.pp_expr e
+                  man.flow.print flow
+              in
               None
           ) v
 
