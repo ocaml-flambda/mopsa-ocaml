@@ -71,7 +71,7 @@ type operator +=
   | O_mult of typ (** * *)
   | O_div of typ (** / *)
   | O_mod of typ (** % *)
-  | O_pow of typ (** power *)
+  | O_pow (** power *)
 
   | O_eq (** == *)
   | O_ne (** != *)
@@ -96,7 +96,6 @@ let math_minus = O_minus T_int
 let math_div = O_div T_int
 let math_mult = O_mult T_int
 let math_mod = O_mod T_int
-let math_pow = O_pow T_int
 
 let to_math_op op = match op with
   | O_plus t -> O_plus T_int
@@ -104,7 +103,6 @@ let to_math_op op = match op with
   | O_mult t -> O_mult T_int
   | O_div t -> O_div T_int
   | O_mod t -> O_mod T_int
-  | O_pow t -> O_pow T_int
   | _ -> op
 (*==========================================================================*)
                            (** {2 Heap addresses} *)

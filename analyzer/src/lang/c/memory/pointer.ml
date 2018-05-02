@@ -206,7 +206,7 @@ struct
                | _ -> assert false
             )
 
-        | E_binop(math_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
+        | E_binop(O_plus op_t, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
           eval_p man ctx p flow |>
           oeval_compose
             (fun pt flow ->

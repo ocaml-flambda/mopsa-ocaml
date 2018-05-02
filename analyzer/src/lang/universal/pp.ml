@@ -41,14 +41,11 @@ let () =
         pp_print_string fmt "/"
       | O_div t ->
         Format.fprintf fmt "#%a# /" Framework.Pp.pp_typ t
-      | O_pow T_int ->
-        pp_print_string fmt "**"
-      | O_pow t ->
-        Format.fprintf fmt "#%a# **" Framework.Pp.pp_typ t
       | O_mod T_int ->
         pp_print_string fmt "%"
       | O_mod t ->
         Format.fprintf fmt "#%a# %%" Framework.Pp.pp_typ t
+      | O_pow -> pp_print_string fmt "**"
       | O_lt -> pp_print_string fmt "<"
       | O_le -> pp_print_string fmt "<="
       | O_gt -> pp_print_string fmt ">"

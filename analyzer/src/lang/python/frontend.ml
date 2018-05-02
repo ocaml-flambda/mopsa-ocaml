@@ -396,7 +396,7 @@ and from_arithmetic_op = function
   | Div -> Universal.Ast.O_div T_any
   | FloorDiv -> O_py_floor_div
   | Mod -> Universal.Ast.O_mod T_any
-  | Pow -> Universal.Ast.O_pow T_any
+  | Pow -> Universal.Ast.O_pow
   | BitOr -> Universal.Ast.O_bit_or
   | BitXor -> Universal.Ast.O_bit_xor
   | BitAnd -> Universal.Ast.O_bit_and

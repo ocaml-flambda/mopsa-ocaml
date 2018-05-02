@@ -75,7 +75,10 @@ let fwd_unop op a =
   | O_log_not -> bot_lift1 I.log_not a
   | O_minus T_int -> bot_lift1 I.neg a
   | O_plus T_int -> a
-  | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
+  | O_wrap(l, u) ->
+    let rep =  bot_lift1 (fun itv -> I.wrap itv l u) a in
+    let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
+    rep
   | _ -> top
 
 let fwd_binop op a1 a2 =
@@ -84,7 +87,7 @@ let fwd_binop op a1 a2 =
   | O_minus T_int -> bot_lift2 I.sub a1 a2
   | O_mult T_int  -> bot_lift2 I.mul a1 a2
   | O_div T_int   -> bot_absorb2 I.div a1 a2
-  | O_pow T_int   -> bot_lift2 I.pow a1 a2
+  | O_pow   -> bot_lift2 I.pow a1 a2
   | O_log_or   -> bot_lift2 I.log_or a1 a2
   | O_log_and  -> bot_lift2 I.log_and a1 a2
   | O_mod T_int   -> bot_absorb2 I.rem a1 a2
@@ -135,7 +138,7 @@ let bwd_binop op a1 a2 r =
       | O_mult T_int  -> bot_to_exn (I.bwd_mul a1 a2 r)
       | O_div T_int   -> bot_to_exn (I.bwd_div a1 a2 r)
       | O_mod T_int   -> bot_to_exn (I.bwd_rem a1 a2 r)
-      | O_pow T_int   -> bot_to_exn (I.bwd_pow a1 a2 r)
+      | O_pow   -> bot_to_exn (I.bwd_pow a1 a2 r)
       | O_bit_and -> bot_to_exn (I.bwd_bit_and a1 a2 r)
       | O_bit_or  -> bot_to_exn (I.bwd_bit_or a1 a2 r)
       | O_bit_xor -> bot_to_exn (I.bwd_bit_xor a1 a2 r)

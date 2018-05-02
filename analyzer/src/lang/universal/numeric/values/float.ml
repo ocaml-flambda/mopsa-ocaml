@@ -83,7 +83,7 @@ let fwd_binop op a1 a2 =
   | O_minus T_int -> bot_lift2 I.sub a1 a2
   | O_mult T_int  -> bot_lift2 I.mul a1 a2
   | O_div T_int   -> bot_absorb2 I.div a1 a2
-  | O_pow T_int   -> bot_lift2 I.pow a1 a2
+  | O_pow   -> bot_lift2 I.pow a1 a2
   | O_log_or   -> bot_lift2 I.log_or a1 a2
   | O_log_and  -> bot_lift2 I.log_and a1 a2
   | O_mod T_int   -> bot_absorb2 I.fmod a1 a2
