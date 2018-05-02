@@ -142,9 +142,6 @@ struct
             end
         )
 
-    | E_c_cast(e, _) ->
-      re_eval_singleton (man.eval ctx) (Some e, flow, [])
-
     (* | E_binop(O_plus, e, e') when exp |> etyp |> is_c_int_type ->
      *   let () = debug "etyp %a : %a" Framework.Pp.pp_expr exp Framework.Pp.pp_typ (exp |> etyp) in
      *   let rmin, rmax = exp |> etyp |> rangeof in
@@ -177,19 +174,8 @@ struct
      *     ) man ctx flow () *)
     | _ -> None
 
-  let exec man ctx stmt flow =
-    match skind stmt with
-    | S_c_local_declaration(v, init) when is_c_int_type v.vtyp ->
-      let flow =
-        match init with
-        | None -> flow
-        | Some (C_init_expr e) -> man.exec ctx (mk_assign (mk_var v stmt.srange) e stmt.srange) flow
-        | Some (Ast.C_init_list (_,_)) -> assert false
-        | Some (Ast.C_init_implicit _) -> assert false
-      in
-      return flow
+  let exec man ctx stmt flow = None
 
-    | _ -> None
 
   let ask _ _ _ _ = None
 

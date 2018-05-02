@@ -8,7 +8,7 @@
 
 type _ Framework.Query.query +=
   | QIntInterval : Framework.Ast.expr -> Values.Int.t Framework.Query.query
-  | QIntList : Framework.Ast.expr -> Z.t list Framework.Query.query
+  | QIntStepInterval : Framework.Ast.expr -> (Values.Int.t (** interval *) * Z.t (** step *)) Framework.Query.query
 
 let () =
   Framework.Query.(
@@ -25,15 +25,14 @@ let () =
     };
 
     register_reply_manager {
-      domatch = (let check : type a. a query -> (a, Z.t list) eq option =
+      domatch = (let check : type a. a query -> (a, (Values.Int.t * Z.t)) eq option =
                    function
-                   | QIntList _ -> Some Eq
+                   | QIntStepInterval _ -> Some Eq
                    | _ -> None
                  in
                  check
                 );
-      join = (fun l1 l2 -> l1 @ l2 |> List.sort_uniq Z.compare);
-      meet = (fun l1 l2 -> List.filter (fun i1 -> List.exists (Z.equal i1) l1)  l1);
-    }
-
+      join = (fun (i1, s1) (i2, s2) -> Values.Int.join i1 i2, Z.gcd s1 s2);
+      meet = (fun (i1, s1) (i2, s2) -> Values.Int.meet i1 i2, Z.lcm s1 s2);
+    };
   )

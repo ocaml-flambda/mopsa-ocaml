@@ -26,6 +26,7 @@ type common_options = {
   mutable stubs : string list;
   mutable reduce_iter : int;
   mutable output_mode : string;
+  mutable cache_size : int;
 }
 
 let common_options = {
@@ -34,7 +35,8 @@ let common_options = {
   unit_test_mode = false;
   stubs = [];
   reduce_iter = 1;
-  output_mode = "verbose"
+  output_mode = "verbose";
+  cache_size = 10;
 }
 
 let setup () =
@@ -80,4 +82,10 @@ let setup () =
     Arg.Int(fun n -> common_options.reduce_iter <- n),
     " maximal number of iterations of post-condition reductions"
   );
+  register (
+    "-cache-size",
+    Arg.Int(fun n -> common_options.cache_size <- n),
+    " size of exec/eval cache"
+  );
+
   ()

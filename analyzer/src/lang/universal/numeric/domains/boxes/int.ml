@@ -11,7 +11,7 @@
 open Framework.Query
 open Framework.Ast
 open Framework.Manager
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Eval
 open Ast
@@ -42,7 +42,7 @@ struct
            let a = get_domain_cur man flow in
            let (_,r) as t = annotate_expr a e in
            let rr = Value.assume_true r in
-           if Value.is_bottom rr then return (set_domain_cur bottom man flow)
+           if Value.is_bottom rr then return_flow (set_domain_cur bottom man flow)
            else
              let a' = refine_expr a t rr in
              let vars = Framework.Visitor.expr_vars e in
@@ -89,9 +89,9 @@ struct
                   out = flow'; mergers = []; publish = [Reduction.CIntConstant(var, n)]
                 }
               else
-                return flow'
+                return_flow flow'
           with Found_BOT ->
-            return (set_domain_cur bottom man flow)
+            return_flow (set_domain_cur bottom man flow)
         ) v
 
     | _ -> None
@@ -126,19 +126,15 @@ struct
   let ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
     fun man ctx query flow ->
       match query with
-      | Query.QIntList e ->
+      | Query.QIntInterval e ->
         let a = get_domain_cur man flow in
         let v = eval_value a e in
-        bot_dfl1 None (fun itv ->
-            if Value.I.is_bounded itv then
-              Some (Value.I.to_list itv)
-            else
-              let () = debug "Could not give bound for %a@\nin %a"
-                  Framework.Pp.pp_expr e
-                  man.flow.print flow
-              in
-              None
-          ) v
+        Some v
+
+      | Query.QIntStepInterval e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some (v, Z.one)
 
       | _ ->
         None

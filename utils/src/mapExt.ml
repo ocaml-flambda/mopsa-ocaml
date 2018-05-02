@@ -693,22 +693,6 @@ module Make(Ord: OrderedType) =
 
     (* printing *)
 
-    type map_printer = {
-        print_empty: string;
-        print_begin: string;
-        print_arrow: string;
-        print_sep: string;
-        print_end: string;
-      }
-                          
-    let printer_default = {
-        print_empty="{}";
-        print_begin="{";
-        print_arrow=":";
-        print_sep=";";
-        print_end="}";
-      }
-                        
     let print_gen o printer key elem ch s =
       if s = Empty then o ch printer.print_empty else (
         let first = ref true in
@@ -737,7 +721,18 @@ module Make(Ord: OrderedType) =
           
 end
 
-(* A few useful instances *)
+
+let printer_default = {
+    print_empty="{}";
+    print_begin="{";
+    print_arrow=":";
+    print_sep=";";
+    print_end="}";
+  }
+(** [MOPSA] Printe as {key1:val1;key2:val2;...} *)
+                    
+
+(* [MOPSA] A few useful instances *)
 module StringMap = Make(String)
 module IntMap = Make(struct type t = int let compare : int -> int -> int  = compare end)
 module Int32Map = Make(Int32)

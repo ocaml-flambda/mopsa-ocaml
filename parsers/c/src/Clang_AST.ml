@@ -36,7 +36,7 @@
   and definition in the AST. We don't. Either the element is effectively
   defined, and we always expose the definition, or it is not, and we return
   the declarations.
-  This may change in the future in case this turns out to be a bed idea.
+  This may change in the future in case this turns out to be a bad idea.
   (we could do as Clang and always expose each and every declaration, and
   include an indirect pointer to the definition, if any).
  *)
@@ -302,7 +302,7 @@ type name = {
    | DecltypeType of expr * type_qual option
    (** (C++) Represents the type decltype(expr) (C++11). *)
 
-   | AutoType of bool (** true decltype(auto), false for auto *)
+   | AutoType of bool (** true for decltype(auto), false for auto *)
    (** (C++) Represents a C++11 auto or C++14 decltype(auto) type. *)
 
    | DeducedTemplateSpecializationType of template_name
@@ -339,6 +339,7 @@ type name = {
    (** (C++) *)
 
    | DependentNameType of name_specifier list * string
+
    (** (C++) Represents a qualified type name for which the type name is dependent. *)
 
    | DependentTemplateSpecializationType of name_specifier list * string * template_argument array
@@ -1634,7 +1635,7 @@ and overloaded_operator =
   | OO_Arrow (** -> *)
   | OO_Call (** () *)
   | OO_Subscript (** [] *)
-  | OO_Conditional (** ? (cannot be overloaded, but use in the overload resolutio nmachinery) *)
+  | OO_Conditional (** ? (cannot be overloaded, but used in the overload resolution machinery) *)
   | OO_Coawait (** co_await *)
 (** (C++) Overloadable C++ operators *)
 

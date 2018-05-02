@@ -560,9 +560,11 @@ let rec is_c_union_type (t : typ) =
 
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
-  to_clang_type t |>
-  fst |>
-  C_AST.type_is_scalar
+  match remove_typedef t |> remove_qual with
+  | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
+  | T_c_bitfield _ -> true
+  | T_c_enum _ -> true
+  | _ -> false
 
 (** [is_c_pointer t] wheter [t] is a pointer *)
 let rec is_c_pointer_type ( t : typ) =

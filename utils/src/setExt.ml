@@ -674,20 +674,6 @@ module Make(Ord: OrderedType) =
 
     (* printing *)
 
-    type set_printer = {
-        print_empty: string;
-        print_begin: string;
-        print_sep: string;
-        print_end: string;
-      }
-                          
-    let printer_default = {
-        print_empty="{}";
-        print_begin="{";
-        print_sep=",";
-        print_end="}";
-      }
-                        
     let print_gen o printer key ch s =
       if s = Empty then o ch printer.print_empty else (
         let first = ref true in
@@ -715,8 +701,16 @@ module Make(Ord: OrderedType) =
   end
 
 
+let printer_default = {
+    print_empty="{}";
+    print_begin="{";
+    print_sep=",";
+    print_end="}";
+  }
+(** [MOPSA] Print as set: {elem1,...,elemn} *)
 
-(* A few useful instances *)
+
+(* [MOPSA] A few useful instances *)
 module StringSet = Make(String)
 module IntSet = Make(struct type t = int let compare : int -> int -> int  = compare end)
 module Int32Set = Make(Int32)

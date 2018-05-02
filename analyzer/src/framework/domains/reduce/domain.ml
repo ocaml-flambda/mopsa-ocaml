@@ -61,6 +61,7 @@ let rec rflow_meet (man: 'a flow_manager) rflow1 rflow2 = {
   mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers;
 }
 
+let orflow_join man = Option.option_neutral2 (rflow_join man)
 
 type 'a reval_case = (Ast.expr * merger list, 'a) eval_case
 type 'a revals = (Ast.expr * merger list, 'a) evals
@@ -134,13 +135,34 @@ struct
 
 end
 
-let return flow = Some {
+
+let return_flow flow = Some {
     out = flow;
     publish = [];
     mergers = [];
   }
 
 let fail = None
+
+let add_flow_mergers mergers flow = {
+  out = flow;
+  mergers;
+  publish = [];
+}
+
+let return_evals (evals: (Ast.expr, 'a) evals) : 'a revals option =
+  Some (eval_map (fun (exp, flow, cleaners) ->
+      match exp with
+      | None -> None, flow, cleaners
+      | Some exp -> Some (exp, []), flow, cleaners
+    ) evals)
+
+let add_eval_mergers mergers oevals =
+  oeval_map (fun (exp, flow, cleaners) ->
+      match exp with
+      | None -> None, flow, cleaners
+      | Some exp -> Some (exp, mergers), flow, cleaners
+    ) oevals
 
 let eval_to_rexec
     (f: 'a -> 'b flow -> 'b rflow)
@@ -173,7 +195,7 @@ let eval_to_orexec
     (f: 'a -> 'b flow -> 'b rflow option)
     (exec: Ast.stmt -> 'b flow -> 'b flow)
     (man: 'b flow_manager)
-    ?(empty = (fun flow -> return flow))
+    ?(empty = (fun flow -> return_flow flow))
     (eval: ('a, 'b) evals)
   : 'b rflow option =
   eval |> eval_substitute

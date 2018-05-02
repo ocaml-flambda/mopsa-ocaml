@@ -26,7 +26,7 @@ let pp_var_kind fmt vk = !pp_vkind_chain fmt vk
 
 let pp_var fmt v =
   if v.vuid <= 0 then fprintf fmt "%s" v.vname
-  else  fprintf fmt "%s@%d" v.vname v.vuid
+  else  fprintf fmt "%s@%d:%a" v.vname v.vuid pp_var_kind v.vkind
 
 (* Processing chain for the extensible type [Ast.expr] *)
 let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =

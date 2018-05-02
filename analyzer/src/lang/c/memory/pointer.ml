@@ -21,10 +21,30 @@ open Framework.Exec
 open Framework.Utils
 open Universal.Ast
 open Ast
-open Cell
+open Base
 
 let name = "c.memory.pointer"
 let debug fmt = Debug.debug ~channel:name fmt
+
+(** Points-to evaluations *)
+type pexpr =
+  | E_p_fun of c_fundec
+  | E_p_var of base (** base *) * expr (** offset *) * typ (** type *)
+  | E_p_null
+  | E_p_invalid
+
+let pp_pexpr fmt = function
+  | E_p_fun f -> Format.fprintf fmt "<fp %a>" pp_var f.c_func_var
+  | E_p_var(base, offset, typ) -> Format.fprintf fmt "<%a, %a, %a>" pp_base base pp_expr offset pp_typ typ
+  | E_p_null -> Format.pp_print_string fmt "NULL"
+  | E_p_invalid -> Format.pp_print_string fmt "Invalid"
+
+type expr_kind +=
+  | E_c_resolve_pointer of expr
+  | E_c_points_to of pexpr
+
+let mk_c_resolve_pointer e range =
+  mk_expr (E_c_resolve_pointer e) range
 
 
 module Domain =
@@ -33,6 +53,7 @@ struct
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
   (*==========================================================================*)
+
 
   (** points-to elements *)
   module P =
@@ -49,11 +70,9 @@ struct
       | Invalid -> Format.fprintf fmt "Invalid"
     let compare p p' =
       match p, p' with
-      | F f    , F f'    -> compare f f'
+      | F f    , F f'    -> compare_var f.c_func_var f'.c_func_var
       | B b    , B b'    -> compare_base b b'
-      | Null   , Null    -> 0
-      | Invalid, Invalid -> 0
-      | _                -> 1
+      | _                -> compare p p'
   end
 
 
@@ -69,30 +88,19 @@ struct
   include CPML
 
 
-  (** Points-to evaluations *)
-  type pexpr =
-    | E_p_fun of c_fundec
-    | E_p_var of base (** base *) * expr (** offset *) * typ (** type *)
-    | E_p_null
-    | E_p_invalid
-
   let print fmt a =
     Format.fprintf fmt "ptr: @[%a@]@\n"
       print a
-
-  let add p pt a =
-    CPML.add (Cell.annotate_var p) pt a
-
-  let find p a =
-    CPML.find (Cell.annotate_var p) a
 
   let points_to_fun p f a =
     add p (PSL.singleton (P.F f)) a
 
   let points_to_base p b a =
+    (match b with V {vkind = V_orig} -> () | V _ -> assert false | A _ -> ());
     add p (PSL.singleton (P.B b)) a
 
   let points_to_var p v a =
+    (match v.vkind with V_orig -> () | _ -> assert false);
     add p (PSL.singleton (P.B (V v))) a
 
   let points_to_null p a =
@@ -105,166 +113,168 @@ struct
   (**                         {2 Transfer functions}                          *)
   (*==========================================================================*)
 
+  let mk_offset_var p =
+    {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int}
+
   let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
     ctx, set_domain_cur top man flow
-
-  let mk_offset_var p =
-    let v = {vname = (var_uniq_name p) ^ "_offset"; vuid = 0; vkind = V_orig; vtyp = T_int} in
-    {v with vkind = V_cell {b = V v; o = Z.zero; t = v.vtyp}}
 
   let rec eval_p
       (man: ('a, t) manager) ctx
       (exp: expr)
       (flow: 'a flow)
     : (pexpr, 'a) evals option =
+
     let range = erange exp in
     debug "eval_p %a in@\n@[%a@]" pp_expr exp man.flow.print flow;
-    match ekind exp with
-    | E_constant (C_int n) when Z.equal n Z.zero ->
-      oeval_singleton (Some E_p_null, flow, [])
 
-    | E_addr addr ->
-      let pt' = E_p_var (A addr, mk_int 0 range, T_c_void) in
-      oeval_singleton (Some pt', flow, [])
+    man.eval ctx exp flow |>
+    eval_compose (fun exp flow ->
+        match ekind exp with
+        | E_constant (C_int n) when Z.equal n Z.zero ->
+          oeval_singleton (Some E_p_null, flow, [])
 
-    | E_var p when is_c_pointer_type p.vtyp ->
-      debug "pointer var";
-      let a = get_domain_cur man flow in
-      let psl = find p a in
+        | E_addr addr ->
+          let pt' = E_p_var (A addr, mk_int 0 range, T_c_void) in
+          oeval_singleton (Some pt', flow, [])
 
-      if PSL.is_empty psl then oeval_singleton (None, flow, [])
-      else
-        PSL.fold (fun pt acc ->
-            match pt with
-            | P.F fundec ->
-              oeval_singleton (Some (E_p_fun fundec), flow, []) |>
-              oeval_join acc
+        | E_var p when is_c_pointer_type p.vtyp ->
+          debug "pointer var";
+          let a = get_domain_cur man flow in
+          let psl = find p a in
 
-            | P.B base ->
-              let a = add p (PSL.singleton pt) a in
-              let flow = set_domain_cur a man flow in
-              let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
-              oeval_singleton (Some pt', flow, []) |>
-              oeval_join acc
+          if PSL.is_empty psl then oeval_singleton (None, flow, [])
+          else
+            PSL.fold (fun pt acc ->
+                match pt with
+                | P.F fundec ->
+                  oeval_singleton (Some (E_p_fun fundec), flow, []) |>
+                  oeval_join acc
 
-            | P.Null ->
-              oeval_singleton (Some E_p_null, flow, []) |>
-              oeval_join acc
+                | P.B base ->
+                  let a = add p (PSL.singleton pt) a in
+                  let flow = set_domain_cur a man flow in
+                  let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
+                  oeval_singleton (Some pt', flow, []) |>
+                  oeval_join acc
 
-            | P.Invalid ->
-              oeval_singleton (Some E_p_invalid, flow, []) |>
-              oeval_join acc
+                | P.Null ->
+                  oeval_singleton (Some E_p_null, flow, []) |>
+                  oeval_join acc
 
-          ) psl None
+                | P.Invalid ->
+                  oeval_singleton (Some E_p_invalid, flow, []) |>
+                  oeval_join acc
 
-    | E_var {vkind = V_cell c} when is_c_array_type c.t ->
-      debug "points to array cell";
-      let pt = E_p_var (c.b, mk_z c.o range, under_array_type c.t) in
-      oeval_singleton (Some pt, flow, [])
+              ) psl None
 
-    | E_var a when is_c_array_type a.vtyp ->
-      debug "points to array var";
-      let pt = E_p_var (V a, mk_int 0 range, under_array_type a.vtyp) in
-      oeval_singleton (Some pt, flow, [])
-
-    | E_c_address_of(e) when is_c_array_type e.etyp ->
-      debug "address of an array";
-      man.eval ctx e flow |>
-      eval_compose (eval_p man ctx)
-
-    | E_c_address_of(e) when is_c_function_type e.etyp ->
-      debug "address of a function";
-      man.eval ctx e flow |>
-      eval_compose (eval_p man ctx)
-
-    | E_c_address_of(e) ->
-      debug "address of a non-array";
-      man.eval ctx e flow |>
-      eval_compose
-        (fun e flow ->
-           match ekind e with
-           | E_var {vkind = V_cell c} ->
-             let pt = E_p_var (c.b, mk_z c.o (tag_range range "offset"), c.t) in
-             oeval_singleton (Some pt, flow, [])
-
-           | E_var v when is_c_type v.vtyp ->
-             let pt = E_p_var (V v, mk_zero (tag_range range "offset"), v.vtyp) in
-             oeval_singleton (Some pt, flow, [])
-
-           | _ -> assert false
-        )
-
-    | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
-      eval_p man ctx p flow |>
-      oeval_compose
-        (fun pt flow ->
-           match pt with
-           | E_p_fun fundec ->
-             debug "pointer arithmetic on a pointer to a function";
-             assert false
-           | E_p_var (base, offset, t) ->
-             let size = sizeof_type t in
-             let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
-             oeval_singleton (Some pt, flow, [])
-
-           | E_p_null ->
-             oeval_singleton (Some E_p_null, flow, [])
-
-           | E_p_invalid ->
-             oeval_singleton (Some E_p_invalid, flow, [])
-        )
-
-    | E_c_cast(p', _) ->
-      eval_p man ctx p' flow |>
-      oeval_compose
-        (fun pt flow ->
-           let pt =
-             match pt with
-             | E_p_var (base, offset, _) -> E_p_var(base, offset, under_pointer_type exp.etyp)
-             | _ -> pt
-           in
-           oeval_singleton (Some pt, flow, [])
-        )
-
-    | E_c_function fundec ->
-      oeval_singleton (Some (E_p_fun fundec), flow, [])
-
-    | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
-      panic "Pointer substraction not supported"
-
-    | _ ->
-      man.eval ctx exp flow |>
-      eval_compose
-        (fun exp flow ->
-           eval_p man ctx exp flow
-        )
-        ~empty:
-          (fun _ ->
-             panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
+        | E_var a when is_c_array_type a.vtyp ->
+          debug "points to array var";
+          (
+            match man.ask ctx (Query.QExtractVarBase a) flow with
+            | Some (b, o) ->
+              let pt = E_p_var (b, o, under_array_type a.vtyp) in
+              oeval_singleton (Some pt, flow, [])
+            | None ->
+              assert false
           )
 
-  let exec man ctx stmt flow =
+        | E_c_address_of(e) when is_c_array_type e.etyp ->
+          debug "address of an array";
+          eval_p man ctx e flow
+
+        | E_c_address_of(e) when is_c_function_type e.etyp ->
+          debug "address of a function";
+          eval_p man ctx e flow
+
+        | E_c_address_of(e) ->
+          debug "address of a non-array";
+          man.eval ctx e flow |>
+          eval_compose
+            (fun e flow ->
+               match ekind e with
+               | E_var v ->
+                 (
+                   match man.ask ctx (Query.QExtractVarBase v) flow with
+                   | Some (b, o) ->
+                     let pt = E_p_var (b, o, v.vtyp) in
+                     oeval_singleton (Some pt, flow, [])
+
+                   | None ->
+                     assert false
+                 )
+               | _ -> assert false
+            )
+
+        | E_binop(Universal.Ast.O_plus, p, e) when is_c_pointer_type p.etyp || is_c_array_type p.etyp ->
+          eval_p man ctx p flow |>
+          oeval_compose
+            (fun pt flow ->
+               match pt with
+               | E_p_fun fundec ->
+                 debug "pointer arithmetic on a pointer to a function";
+                 assert false
+               | E_p_var (base, offset, t) ->
+                 debug "pointer arithmetics: %a, %a, %a" pp_base base pp_expr offset pp_typ t;
+                 let size = sizeof_type t in
+                 let pt = E_p_var (base, (mk_binop offset O_plus (mk_binop e O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
+                 oeval_singleton (Some pt, flow, [])
+
+               | E_p_null ->
+                 oeval_singleton (Some E_p_null, flow, [])
+
+               | E_p_invalid ->
+                 oeval_singleton (Some E_p_invalid, flow, [])
+            )
+
+        | E_c_cast(p', _) ->
+          eval_p man ctx p' flow |>
+          oeval_compose
+            (fun pt flow ->
+               let pt =
+                 match pt with
+                 | E_p_var (base, offset, _) -> E_p_var(base, offset, under_pointer_type exp.etyp)
+                 | _ -> pt
+               in
+               oeval_singleton (Some pt, flow, [])
+            )
+
+        | E_c_function fundec ->
+          oeval_singleton (Some (E_p_fun fundec), flow, [])
+
+        | E_binop(Universal.Ast.O_minus, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
+          panic "Pointer substraction not supported"
+
+        | _ ->
+          panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
+      )
+
+  let rec exec man ctx stmt flow =
+    debug "exec %a" pp_stmt stmt;
     let range = srange stmt in
     match skind stmt with
     | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
-      map_domain_cur (points_to_invalid p) man flow |>
-      man.exec ctx (mk_remove_var (mk_offset_var p) range) |>
-      return
+      man.eval ctx (mk_var p range) flow |>
+      eval_to_oexec
+        (fun exp flow ->
+           match ekind exp with
+           | E_var p ->
+             map_domain_cur (points_to_invalid p) man flow |>
+             man.exec ctx (mk_remove_var (mk_offset_var p) range) |>
+             return
 
-    | S_assign({ekind = E_c_deref _ | E_c_arrow_access _} as lval, rval, mode) ->
-      man.eval ctx lval flow |>
-      eval_to_oexec (fun lval' flow ->
-          let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
-          man.exec ctx stmt' flow |>
-          return
+           | _ -> assert false
         )
         (man.exec ctx) man.flow
 
-
-    | S_assign(p, q, k) when is_c_pointer_type p.etyp ->
+    | S_assign(p, q, k) ->
+      debug "assign on type %a (is pointer = %b)" pp_typ p.etyp (is_c_pointer_type p.etyp);
+      if not (is_c_pointer_type p.etyp) then None
+      else
       eval_p man ctx q flow |>
       oeval_to_oexec
         (fun pt flow ->
+           debug "assign pointer";
            match pt with
            | E_p_fun fundec ->
              man.eval ctx p flow |>
@@ -287,6 +297,7 @@ struct
                     | {ekind = E_var p} -> p
                     | _ -> assert false
                   in
+                  debug "pointer var = %a" pp_var p;
                   map_domain_cur (points_to_base p base) man flow |>
                   man.exec ctx (mk_assign (mk_var (mk_offset_var p) range) offset range)
                )
@@ -339,88 +350,12 @@ struct
   let eval man ctx exp flow =
     let range = exp.erange in
     match ekind exp with
-    | E_c_deref(p) ->
+    | E_c_resolve_pointer p ->
       eval_p man ctx p flow |>
-      oeval_compose
-        (fun pt flow ->
-           match pt with
-           | E_p_fun fundec ->
-             oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, [])
-           | E_p_var (base, offset, t) ->
-             man.eval ctx offset flow |>
-             eval_compose (fun offset flow ->
-                 debug "E_p_var(%a, %a, %a) in@\n%a" pp_base base pp_expr offset pp_typ t man.flow.print flow;
-                 let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
-                 begin
-                   match itv with
-                   | None -> assert false
-                   | Some itv ->
-                     List.fold_left (fun acc o ->
-                         let c = {Cell.b = base; o; t} in
-                         let exp' = Cell.mk_gen_cell_var c range in
-                         man.eval ctx exp' flow |>
-                         eval_compose
-                           (fun exp' flow ->
-                              oeval_join acc (oeval_singleton (Some exp', flow, []))
-                              (* pourquoi ne pas enrichir le flow avec l'information de l'offset?*)
-                           )
-                       ) None itv
-                 end
-               )
-           | E_p_null ->
-             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
-                        man.flow.set TCur man.env.Framework.Lattice.bottom
-             in
-             oeval_singleton (None, flow, [])
-
-
-           | E_p_invalid ->
-             let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
-                        man.flow.set TCur man.env.Framework.Lattice.bottom
-             in
-             oeval_singleton (None, flow, [])
+      oeval_compose (fun pt flow ->
+          let exp' = {exp with ekind = E_c_points_to pt} in
+          oeval_singleton (Some exp', flow, [])
         )
-
-    | E_c_arrow_access(p, i, f) ->
-      eval_p man ctx p flow |>
-      oeval_compose
-        (fun pt flow ->
-           match pt with
-           | E_p_var (base, offset, t) ->
-             let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
-             let field = List.nth record.c_record_fields i in
-             let itv = man.ask ctx (Universal.Numeric.Query.QIntList offset) flow in
-             begin
-               match itv with
-               | None -> assert false
-               | Some itv ->
-                 List.fold_left (fun acc o ->
-                     let o' = Z.add o (Z.of_int field.c_field_offset) in
-                     let c = {Cell.b = base; o = o'; t = field.c_field_type} in
-                     let exp' = Cell.mk_gen_cell_var c range in
-                     man.eval ctx  exp' flow |>
-                     eval_compose
-                       (fun exp' flow ->
-                          oeval_join acc (oeval_singleton (Some exp', flow, []))
-                       )
-                   ) None itv
-             end
-           | E_p_fun _ ->
-             debug "arrow access to function pointers";
-             assert false
-           | E_p_null ->
-             let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
-                        man.flow.set TCur man.env.Framework.Lattice.bottom
-             in
-             oeval_singleton (None, flow, [])
-
-           | E_p_invalid ->
-             let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
-                        man.flow.set TCur man.env.Framework.Lattice.bottom
-             in
-             oeval_singleton (None, flow, [])
-        )
-
 
     | E_binop(O_eq, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       oeval_list [p; q] (eval_p man ctx) flow |>
@@ -475,4 +410,21 @@ struct
 end
 
 let setup () =
-  register_domain name (module Domain)
+  register_domain name (module Domain);
+  Framework.Pp.register_pp_expr (fun next fmt exp ->
+      match ekind exp with
+      | E_c_resolve_pointer e -> Format.fprintf fmt "resolve %a" pp_expr e
+      | E_c_points_to pe -> Format.fprintf fmt "points-to %a" pp_pexpr pe
+      | _ -> next fmt exp
+    );
+  Framework.Visitor.register_expr_visitor (fun next exp ->
+      match ekind exp with
+      | E_c_resolve_pointer e ->
+        {exprs = [e]; stmts = []},
+        (function
+          | {exprs = [e]} -> {exp with ekind = E_c_resolve_pointer e}
+          | _ -> assert false
+        )
+      | E_c_points_to _ -> leaf exp
+      | _ -> next exp
+    )

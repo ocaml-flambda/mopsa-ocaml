@@ -10,7 +10,7 @@
 
 open Value
 open Framework.Ast
-open Framework.Domains.Reduction.Domain
+open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Context
@@ -156,7 +156,7 @@ struct
         VarMap.add var rr a
 
       | AExpr_cst ->
-        refine_bool1 rrr (fun a -> a) (fun a -> bottom) a bottom
+        refine_bool1 rrr (fun a -> a) (fun a -> a) a bottom
 
       | AExpr_unop (O_log_not,((_,a1) as t1)) ->
         let aa1 = refine_bool1 rrr Value.assume_false Value.assume_true a1 Value.bottom in
@@ -259,11 +259,11 @@ struct
       eval_to_exec
         (fun e flow -> flow)
         (man.exec ctx) man.flow |>
-      return
+      return_flow
 
     | S_remove_var v ->
       map_domain_cur (VarMap.remove v) man flow |>
-      return
+      return_flow
 
     | S_project_vars vars ->
       map_domain_cur (fun a ->
@@ -271,14 +271,14 @@ struct
               if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
             ) a a
         ) man flow |>
-      return
+      return_flow
 
     | S_rename_var (var1, var2) ->
       map_domain_cur (fun a ->
           let v = VarMap.find var1 a in
           VarMap.remove var1 a |> VarMap.add var2 v
         ) man flow |>
-      return
+      return_flow
 
 
     | S_assign({ekind = E_var var}, e, STRONG) ->
@@ -291,7 +291,7 @@ struct
              ) man flow
         )
         (man.exec ctx) man.flow |>
-      return
+      return_flow
 
     | S_assign({ekind = E_var var}, e, _) ->
       assert false
@@ -314,7 +314,7 @@ struct
              ) man flow
         )
         (man.exec ctx) man.flow |>
-      return
+      return_flow
 
     | _ -> fail
 

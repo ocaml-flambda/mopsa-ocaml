@@ -35,7 +35,7 @@ let () =
       | T_c_float(C_double) -> pp_print_string fmt "double"
       | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
-      | T_c_pointer(t) -> fprintf fmt "(%a *)" pp_typ t
+      | T_c_pointer(t) -> fprintf fmt "(ptr %a *)" pp_typ t
 
       | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
       | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)

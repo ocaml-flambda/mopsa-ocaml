@@ -3,7 +3,7 @@ B ../../../../../parsers/c/lib
 B ../../../../../parsers/python/lib
 B ../../../../_build
 B ../../../../_build/src
-B ../../../../_build/src/framework/domains/reduction
+B ../../../../_build/src/framework/domains/reduce
 B ../../../../_build/src/framework/domains
 B ../../../../_build/src/framework
 B ../../../../_build/src
