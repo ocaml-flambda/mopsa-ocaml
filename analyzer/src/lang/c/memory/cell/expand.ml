@@ -273,10 +273,67 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (*==========================================================================*)
 
   let init_manager man ctx =
-    {
-      Init.scalar = (fun v init flow -> assert false);
-      array = (fun a init flow -> assert false);
-      strct = (fun s init flow -> assert false);
+    Init.{
+      (* Initialization of scalar variables *)
+      scalar = (fun v init is_global range flow ->
+          match init with
+          (* Uninitialized local pointers are invalid *)
+          | None when not is_global && is_c_pointer_type v.etyp ->
+            man.exec ctx (mk_assign v (mk_c_invalid range) range) flow |>
+            return
+
+          (* Local uninitialized variables are kept ⟙ *)
+          | None when not is_global ->
+            return flow
+
+          (* Global uninitialized variables are set to 0 *)
+          | None when is_global ->
+            man.exec ctx (mk_assign v (mk_zero range) range) flow |>
+            return
+
+          (* Initialization with an expression *)
+          | Some (C_init_expr e) ->
+            man.exec ctx (mk_assign v e range) flow |>
+            return
+
+          | _ -> assert false
+
+        );
+
+      (* Initialization of arrays *)
+      array =  (fun a init is_global range flow ->
+          match init with
+          (* Local uninitialized arrays are kept ⟙ *)
+          | None when not is_global -> return flow
+
+          (* Otherwise: *)
+          | None                   (* a. when the array is global and uninitialized *)
+          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
+          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
+            ->
+            (* just initialize a limited number of cells *)
+            deeper !opt_max_expand
+
+          | _ ->
+            Framework.Exceptions.panic "Array initialization not supported"
+
+        );
+
+      (* Initialization of structs *)
+      strct =  (fun s init is_global range flow ->
+          match init with
+          | None when not is_global -> return flow
+
+          | None
+          | Some (C_init_list _) ->
+            deeper !opt_max_expand
+
+          | Some (C_init_expr e) ->
+            man.exec ctx (mk_assign s e range) flow |>
+            return
+
+          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+        );
     }
 
   let init man ctx prog flow =

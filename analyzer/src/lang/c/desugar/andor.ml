@@ -33,7 +33,7 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    | E_binop(O_log_and, e1, e2) ->
+    | E_binop(O_c_and, e1, e2) ->
       man.eval ctx e1 flow |>
       eval_compose
         (fun e1 flow1 ->
@@ -45,7 +45,7 @@ struct
         )
 
 
-    | E_binop(O_log_or, e1, e2) ->
+    | E_binop(O_c_or, e1, e2) ->
       man.eval ctx e1 flow |>
       eval_compose
         (fun e1 flow1 ->

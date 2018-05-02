@@ -95,5 +95,3 @@ void test_allamigeon() {
   a[1][1].f[10] = 20;
   _mopsa_assert_error(OUT_OF_BOUND);
 }
-
-

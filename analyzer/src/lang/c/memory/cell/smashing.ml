@@ -97,10 +97,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (*==========================================================================*)
 
   let init_manager man ctx =
-    {
-      Init.scalar = (fun v init flow -> assert false);
-      array = (fun a init flow -> assert false);
-      strct = (fun s init flow -> assert false);
+    Init.{
+      scalar = (fun v init is_global range flow -> return flow);
+      array =  (fun a init is_global range flow -> return flow);
+      strct =  (fun s init is_global range flow -> return flow);
     }
 
   let init man ctx prog flow =
@@ -123,20 +123,19 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let range = stmt.srange in
     match skind stmt with
     | S_c_local_declaration(v, init) ->
-      Init.init_local (init_manager man ctx) v init range flow |>
-      return_flow
+      None
 
     | S_rename_var(v, v') ->
       assert false
 
     | S_remove_var v when is_c_int_type v.vtyp ->
-      assert false
+      None
 
     | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      assert false
+      None
 
     | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
-      assert false
+      None
 
     | _ -> None
 
@@ -144,19 +143,20 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let eval man subman ctx exp flow =
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
-      assert false
+      None
 
     | E_c_deref(p) ->
-      assert false
+      None
 
     | E_c_arrow_access(p, i, f) ->
-      assert false
+      None
 
     | E_c_array_subscript(arr, idx) ->
-      assert false
+      None
 
     | E_c_member_access(r, idx, f) ->
-      assert false
+      None
+
     | _ -> None
 
 

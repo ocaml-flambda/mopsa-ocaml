@@ -1,3 +1,13 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Utility module for initializing variables. *)
+
 open Framework.Ast
 open Framework.Flow
 open Framework.Pp
@@ -7,6 +17,9 @@ open Ast
 type 'a reply =
   | Return of 'a flow
   | Deeper of int
+
+let return flow = Return flow
+let deeper d = Deeper d
 
 type 'a init_fun = expr -> c_init option -> bool -> range -> 'a flow -> 'a reply
 
@@ -19,71 +32,49 @@ type 'a init_manager = {
 
 (** Initialization of scalar expressions *)
 let rec init_scalar man v init is_global range flow =
-  debug "init scalar %a" Framework.Pp.pp_expr v;
-  match init with
-  | None when not is_global -> flow
-
-  | _ ->
-    match man.scalar v init is_global range flow with
-    | Return flow -> flow
-    | Deeper _ -> Framework.Exceptions.fail "scalars can not be initialized deeper"
+  match man.scalar v init is_global range flow with
+  | Return flow -> flow
+  | Deeper _ -> Framework.Exceptions.fail "scalars can not be initialized deeper"
 
 
 and init_array man a init is_global range flow =
   debug "init array %a" Framework.Pp.pp_expr a;
-  match init with
-  | None when not is_global -> flow
+  match man.array a init is_global range flow with
+  | Return flow -> flow
+  | Deeper d ->
+    let n = get_array_constant_length a.etyp in
+    match init with
+    | None when is_global ->
+      let rec aux i flow =
+        if i = n || i = d then flow
+        else
+          let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) None is_global range flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
-  | None when is_global ->
-    begin
-      match man.array a init is_global range flow with
-      | Return flow -> flow
-      | Deeper d ->
-        let n = get_array_constant_length a.etyp in
-        let rec aux i flow =
-          if i = n || i = d then flow
-          else
-            let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) None is_global range flow in
-            aux (i + 1) flow
-        in
-        aux 0 flow
-    end
+    | Some (C_init_list (l, filler)) ->
+      let rec aux i flow =
+        if i = n || i = d then flow
+        else
+          let init = if i < List.length l then Some (List.nth l i) else filler in
+          let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
-  | Some (C_init_list (l, filler)) ->
-    begin
-      match man.array a init is_global range flow with
-      | Return flow -> flow
-      | Deeper d ->
-        let n = get_array_constant_length a.etyp in
-        let rec aux i flow =
-          if i = n || i = d then flow
-          else
-            let init = if i < List.length l then Some (List.nth l i) else filler in
-            let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
-            aux (i + 1) flow
-        in
-        aux 0 flow
-    end
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
+      let rec aux i flow =
+        if i = n || i = d then flow
+        else
+          let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
+          let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
-
-  | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
-    begin
-      match man.array a init is_global range flow with
-      | Return flow -> flow
-      | Deeper d ->
-        let n = get_array_constant_length a.etyp in
-        let rec aux i flow =
-          if i = n || i = d then flow
-          else
-            let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
-            let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
-            aux (i + 1) flow
-        in
-        aux 0 flow
-    end
-
-  | _ ->
-    Framework.Exceptions.panic "Array initialization not supported"
+    | _ ->
+      Framework.Exceptions.panic "Array initialization not supported"
 
 and init_union  man u init is_global range flow =
   debug "init union %a" Framework.Pp.pp_expr u;
@@ -128,46 +119,29 @@ and init_struct man s init is_global range flow =
     | T_c_record{c_record_kind = C_struct; c_record_fields} -> List.length c_record_fields
     | _ -> assert false
   in
-  match init with
-  | None when not is_global -> flow
+  match man.strct s init is_global range flow with
+  | Return flow -> flow
+  | Deeper d ->
+    match init with
+    | None when is_global ->
+      let rec aux i flow =
+        if i = nb_fields || i = d then flow
+        else
+          let flow = init_expr man (mk_c_member_access s (get_nth_field i) range) None is_global range flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
+    | Some (C_init_list(l, None)) ->
+      let rec aux i flow =
+        if i = nb_fields then flow
+        else
+          let init = if i < List.length l then Some (List.nth l i) else None in
+          let flow = init_expr man (mk_c_member_access s (get_nth_field i) range) init is_global range flow in
+          aux (i + 1) flow
+      in
+      aux 0 flow
 
-  | None when is_global ->
-    begin
-      match man.strct s init is_global range flow with
-      | Return flow -> flow
-      | Deeper d ->
-        let rec aux i flow =
-          if i = nb_fields || i = d then flow
-          else
-            let flow = init_expr man (mk_c_member_access s (get_nth_field i) range) None is_global range flow in
-            aux (i + 1) flow
-        in
-        aux 0 flow
-    end
-
-  | Some (C_init_list(l, None)) ->
-    begin
-      match man.strct s init is_global range flow with
-      | Return flow -> flow
-      | Deeper d ->
-        let rec aux i flow =
-          if i = nb_fields then flow
-          else
-            let init = if i < List.length l then Some (List.nth l i) else None in
-            let flow = init_expr man (mk_c_member_access s (get_nth_field i) range) init is_global range flow in
-            aux (i + 1) flow
-        in
-        aux 0 flow
-    end
-
-  | Some (C_init_expr e) ->
-    begin
-      match man.strct s init is_global range flow with
-      | Return flow -> flow
-      | Deeper _ -> Framework.Exceptions.panic "memory.init: can not go deeper in init of struct with expression"
-    end
-
-  | _ -> assert false
+    | _ -> assert false
 
 and init_expr man e (init: c_init option) is_global range flow =
   if is_c_scalar_type e.etyp then init_scalar man e init is_global range flow else
@@ -194,4 +168,5 @@ let fold_globals man globals ctx flow =
     ) flow globals
 
 let init_local man v init range flow =
-  assert false
+  let v = mk_var v range in
+  init_expr man v init false range flow
