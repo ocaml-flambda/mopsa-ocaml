@@ -156,7 +156,7 @@ struct
         VarMap.add var rr a
 
       | AExpr_cst ->
-        refine_bool1 rrr (fun a -> a) (fun a -> bottom) a bottom
+        refine_bool1 rrr (fun a -> a) (fun a -> a) a bottom
 
       | AExpr_unop (O_log_not,((_,a1) as t1)) ->
         let aa1 = refine_bool1 rrr Value.assume_false Value.assume_true a1 Value.bottom in

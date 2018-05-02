@@ -29,6 +29,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 let opt_max_expand = ref 2
 
+
 (*==========================================================================*)
 (**                              {2 Cells}                                  *)
 (*==========================================================================*)
@@ -68,6 +69,7 @@ let cell_of_var v =
   match v.vkind with
   | V_expand_cell c -> c
   | _ -> assert false
+
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -223,7 +225,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify range ctx (u, s) (u', s') =
+  let unify ctx (u, s) (u', s') =
+    let range = mk_fresh_range () in
     if is_top u || is_top u' then (u, s), (u', s')
     else
       let t = Timing.start () in
@@ -265,6 +268,13 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       ) u flow'
 
 
+
+  
+  (*==========================================================================*)
+  (**                    {2 Cells Initialization}                             *)
+  (*==========================================================================*)
+
+  
   let rec init_array man ctx a init is_global range flow =
     debug "init array %a" Framework.Pp.pp_expr a;
     match init with
@@ -396,8 +406,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       Framework.Exceptions.panic "Unsupported initialization of %a" pp_expr e
 
 
+  let init man ctx prog flow =
+    let flow = set_domain_cur empty man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      (* Initialize string symbols as global variables *)
+      let range = mk_fresh_range () in
+      let table = Program.find_string_table ctx in
+      let globals = Program.StringTable.fold (fun s v acc ->
+          let init = C_init_expr (mk_c_string s range) in
+          (v, Some init) :: acc
+        ) table globals
+      in
+      (* Initialize global variables *)
+      let flow' = List.fold_left (fun flow (v, init) ->
+          let range = mk_fresh_range () in
+          let v = mk_var v range in
+          init_expr man ctx v init true range flow
+        ) flow globals
+      in
+      ctx, flow'
+
+    | _ -> ctx, flow
+
+  
   (*==========================================================================*)
-  (**                     {2 Transfer functions}                              *)
+  (**                       {2 Cells expansion}                               *)
   (*==========================================================================*)
 
   let fold_cells f err empty top x0 base offset typ range man subman ctx flow =
@@ -511,30 +545,12 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
 
 
-  let init man ctx prog flow =
-    let flow = set_domain_cur empty man flow in
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      (* Initialize string symbols as global variables *)
-      let range = mk_fresh_range () in
-      let table = Program.find_string_table ctx in
-      let globals = Program.StringTable.fold (fun s v acc ->
-          let init = C_init_expr (mk_c_string s range) in
-          (v, Some init) :: acc
-        ) table globals
-      in
-      (* Initialize global variables *)
-      let flow' = List.fold_left (fun flow (v, init) ->
-          let range = mk_fresh_range () in
-          let v = mk_var v range in
-          init_expr man ctx v init true range flow
-        ) flow globals
-      in
-      ctx, flow'
 
-    | _ -> ctx, flow
+  (*==========================================================================*)
+  (**                      {2 Transfer functions}                             *)
+  (*==========================================================================*)
 
-
+  
   let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a rflow option =
     let range = stmt.srange in
@@ -707,8 +723,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | _ -> None
 
   let refine man subman ctx channel flow = None
-
-  let unify ctx a1 a2 = unify (mk_fresh_range ()) ctx a1 a2
 
 end
 

@@ -4,7 +4,8 @@ open Base
     
 type _ query +=
   | QExtractVarBase : var -> (base * expr) Framework.Query.query
-
+  (** Extract base and offset of a given variable *)
+      
 let () =
   Framework.Query.(
     register_reply_manager {
