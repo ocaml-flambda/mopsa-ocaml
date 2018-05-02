@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Interpreter of assignment expressions. *)
+(** Desugarisation of casts. *)
 
 open Framework.Domains.Stateless
 open Framework.Domains
