@@ -483,7 +483,8 @@ let fwd_unop op abs =
     let abs, _ = coerce abs (float FloatLattice.top) in
     { bottom with float = FloatLattice.fwd_unop op abs.float }
 
-  | O_plus | O_minus ->
+  (* FIXME : use operator types *)
+  | O_plus _ | O_minus _ ->
     let abs = upgrade_type [(T_bool, T_int)] abs in
     {bottom with int = IntLattice.fwd_unop op abs.int; float = FloatLattice.fwd_unop op abs.float}
 
@@ -535,7 +536,8 @@ let fwd_binop op abs1 abs2 =
       | false, false -> bottom
     end
 
-  | O_plus ->
+  (* FIXME : use operator types *)
+  | O_plus _ ->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
@@ -550,8 +552,8 @@ let fwd_binop op abs1 abs2 =
             ) abs1.string StringLattice.bottom;
         with Top.Found_TOP -> StringLattice.top
     }
-
-  | O_mult ->
+  (* FIXME : use operator types *)
+  | O_mult _->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
@@ -560,7 +562,8 @@ let fwd_binop op abs1 abs2 =
       string = if StringLattice.is_bottom abs1.string || IntLattice.is_bottom abs2.int then StringLattice.bottom else assert false;
     }
 
-  | O_mod | O_minus | O_pow ->
+  (* FIXME : use operator types *)
+  | O_mod _| O_minus _ | O_pow _ ->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
@@ -568,7 +571,8 @@ let fwd_binop op abs1 abs2 =
       float = FloatLattice.fwd_binop op abs1.float abs2.float;
     }
 
-  | O_div ->
+  (* FIXME : use operator types *)
+  | O_div _ ->
     let abs1, abs2 = coerce abs1 abs2 in
     let abs1 = cast T_float abs1 and abs2 = cast T_float abs2 in
     {
@@ -581,7 +585,8 @@ let fwd_binop op abs1 abs2 =
     let abs1 = cast T_int abs1 and abs2 = cast T_int abs2 in
     {
       bottom with
-      int = IntLattice.fwd_binop O_div abs1.int abs2.int;
+      (* FIXME : use operator types *)
+      int = IntLattice.fwd_binop math_div abs1.int abs2.int;
     }
 
   | O_bit_and
@@ -694,11 +699,11 @@ let bwd_unop op abs rabs =
   match op with
   | O_sqrt ->
     Framework.Exceptions.panic "bwd evaluation of sqrt not supported"
-
-  | O_minus ->
+  (* FIXME : use operator types *)
+  | O_minus _ ->
     {bottom with int = IntLattice.bwd_unop op abs.int rabs.int; float = FloatLattice.bwd_unop op abs.float rabs.float}
-
-  | O_plus ->
+  (* FIXME : use operator types *)
+  | O_plus _ ->
     {bottom with int = abs.int; float = abs.float}
 
   | _ ->
@@ -708,14 +713,15 @@ let bwd_unop op abs rabs =
 let bwd_binop_default abs1 abs2 = (abs1, abs2)
 let bwd_binop op abs1 abs2 rabs =
   match op with
-  | O_plus | O_minus | O_mult | O_div | O_mod ->
+  (* FIXME : use operator types *)
+  | O_plus _ | O_minus _ | O_mult _ | O_div _ | O_mod _ ->
     let abs1, abs2 = coerce abs1 abs2 in
     let int1, int2 = IntLattice.bwd_binop op abs1.int abs2.int rabs.int in
     let float1, float2 = FloatLattice.bwd_binop op abs1.float abs2.float rabs.float in
     {abs1 with int = int1; float = float1},
     {abs2 with int = int2; float = float2}
-
-  | O_pow
+  (* FIXME : use operator types *)
+  | O_pow _
   | O_py_and
   | O_py_or
   | O_py_floor_div

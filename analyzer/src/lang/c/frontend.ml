@@ -242,12 +242,13 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
-    | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
+    | C_AST.E_string_literal (s, k) ->
+      Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
     | C_AST.E_variable v -> E_var (from_var v)
     | C_AST.E_function f -> Ast.E_c_function (from_function f)
     | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr f, Array.map from_expr args |> Array.to_list)
-    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op, from_expr e)
-    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op, from_expr e1, from_expr e2)
+    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr e)
+    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr e1, from_expr e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
     | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
     | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)
@@ -273,28 +274,28 @@ and from_expr_option : C_AST.expr option -> Framework.Ast.expr option = function
   | None -> None
   | Some e -> Some (from_expr e)
 
-and from_unary_operator : C_AST.unary_operator -> Framework.Ast.operator = function
-  | C_AST.NEG -> Universal.Ast.O_minus
-  | C_AST.BIT_NOT -> Universal.Ast.O_bit_invert
-  | C_AST.LOGICAL_NOT -> Universal.Ast.O_log_not
+and from_unary_operator op t = match op with
+  | C_AST.NEG -> O_minus t
+  | C_AST.BIT_NOT -> O_bit_invert
+  | C_AST.LOGICAL_NOT -> O_log_not
 
-and from_binary_operator : C_AST.binary_operator -> Framework.Ast.operator = function
-  | C_AST.O_arithmetic (C_AST.ADD) -> Universal.Ast.O_plus
-  | C_AST.O_arithmetic (C_AST.SUB) -> Universal.Ast.O_minus
-  | C_AST.O_arithmetic (C_AST.MUL) -> Universal.Ast.O_mult
-  | C_AST.O_arithmetic (C_AST.DIV) -> Universal.Ast.O_div
-  | C_AST.O_arithmetic (C_AST.MOD) -> Universal.Ast.O_mod
-  | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> Universal.Ast.O_bit_lshift
-  | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> Universal.Ast.O_bit_rshift
-  | C_AST.O_arithmetic (C_AST.BIT_AND) -> Universal.Ast.O_bit_and
-  | C_AST.O_arithmetic (C_AST.BIT_OR) -> Universal.Ast.O_bit_or
-  | C_AST.O_arithmetic (C_AST.BIT_XOR) -> Universal.Ast.O_bit_xor
-  | C_AST.O_logical (C_AST.LESS) -> Universal.Ast.O_lt
-  | C_AST.O_logical (C_AST.LESS_EQUAL) -> Universal.Ast.O_le
-  | C_AST.O_logical (C_AST.GREATER) -> Universal.Ast.O_gt
-  | C_AST.O_logical (C_AST.GREATER_EQUAL) -> Universal.Ast.O_ge
-  | C_AST.O_logical (C_AST.EQUAL) -> Universal.Ast.O_eq
-  | C_AST.O_logical (C_AST.NOT_EQUAL) -> Universal.Ast.O_ne
+and from_binary_operator op t = match op with
+  | C_AST.O_arithmetic (C_AST.ADD) -> O_plus t
+  | C_AST.O_arithmetic (C_AST.SUB) -> O_minus t
+  | C_AST.O_arithmetic (C_AST.MUL) -> O_mult t
+  | C_AST.O_arithmetic (C_AST.DIV) -> O_div t
+  | C_AST.O_arithmetic (C_AST.MOD) -> O_mod t
+  | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> O_bit_lshift
+  | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> O_bit_rshift
+  | C_AST.O_arithmetic (C_AST.BIT_AND) -> O_bit_and
+  | C_AST.O_arithmetic (C_AST.BIT_OR) -> O_bit_or
+  | C_AST.O_arithmetic (C_AST.BIT_XOR) -> O_bit_xor
+  | C_AST.O_logical (C_AST.LESS) -> O_lt
+  | C_AST.O_logical (C_AST.LESS_EQUAL) -> O_le
+  | C_AST.O_logical (C_AST.GREATER) -> O_gt
+  | C_AST.O_logical (C_AST.GREATER_EQUAL) -> O_ge
+  | C_AST.O_logical (C_AST.EQUAL) -> O_eq
+  | C_AST.O_logical (C_AST.NOT_EQUAL) -> O_ne
   | C_AST.O_logical (C_AST.LOGICAL_AND) -> Ast.O_c_and
   | C_AST.O_logical (C_AST.LOGICAL_OR) -> Ast.O_c_or
 

@@ -64,12 +64,13 @@ type operator +=
   | O_sqrt (** Square root *)
   | O_bit_invert (** bitwise ~ *)
 
+
   (** Binary operators *)
-  | O_plus (** + *)
-  | O_minus (** - *)
-  | O_mult (** * *)
-  | O_div (** / *)
-  | O_mod (** % *)
+  | O_plus of typ (** + *)
+  | O_minus of typ (** - *)
+  | O_mult of typ (** * *)
+  | O_div of typ (** / *)
+  | O_mod of typ (** % *)
   | O_pow (** power *)
 
   | O_eq (** == *)
@@ -90,6 +91,19 @@ type operator +=
 
   | O_wrap of Z.t * Z.t (** wrap *)
 
+let math_plus = O_plus T_int
+let math_minus = O_minus T_int
+let math_div = O_div T_int
+let math_mult = O_mult T_int
+let math_mod = O_mod T_int
+
+let to_math_op op = match op with
+  | O_plus t -> O_plus T_int
+  | O_minus t -> O_minus T_int
+  | O_mult t -> O_mult T_int
+  | O_div t -> O_div T_int
+  | O_mod t -> O_mod T_int
+  | _ -> op
 (*==========================================================================*)
                            (** {2 Heap addresses} *)
 (*==========================================================================*)
@@ -162,7 +176,7 @@ type expr_kind +=
   (** Head address. *)
   | E_addr of addr
 
-let mk_neg e = mk_unop O_minus e
+let mk_neg e t = mk_unop (O_minus t) e
 
 let mk_not e = mk_unop O_log_not e
 

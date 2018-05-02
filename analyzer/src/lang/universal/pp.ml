@@ -25,10 +25,26 @@ and pp_addr fmt addr =
 
 let () =
   register_pp_operator (fun default fmt -> function
-      | O_plus -> pp_print_string fmt "+"
-      | O_minus -> pp_print_string fmt "-"
-      | O_mult -> pp_print_string fmt "*"
-      | O_div -> pp_print_string fmt "/"
+      | O_plus T_int ->
+        pp_print_string fmt "+"
+      | O_plus t ->
+        Format.fprintf fmt "#%a# +" Framework.Pp.pp_typ t
+      | O_minus T_int ->
+        pp_print_string fmt "-"
+      | O_minus t ->
+        Format.fprintf fmt "#%a# -" Framework.Pp.pp_typ t
+      | O_mult T_int ->
+        pp_print_string fmt "*"
+      | O_mult t ->
+        Format.fprintf fmt "#%a# *" Framework.Pp.pp_typ t
+      | O_div T_int ->
+        pp_print_string fmt "/"
+      | O_div t ->
+        Format.fprintf fmt "#%a# /" Framework.Pp.pp_typ t
+      | O_mod T_int ->
+        pp_print_string fmt "%"
+      | O_mod t ->
+        Format.fprintf fmt "#%a# %%" Framework.Pp.pp_typ t
       | O_pow -> pp_print_string fmt "**"
       | O_lt -> pp_print_string fmt "<"
       | O_le -> pp_print_string fmt "<="
@@ -39,7 +55,6 @@ let () =
       | O_bit_and -> pp_print_string fmt "&"
       | O_bit_or -> pp_print_string fmt "|"
       | O_bit_xor -> pp_print_string fmt "^"
-      | O_mod -> pp_print_string fmt "%"
       | O_log_or -> pp_print_string fmt "or"
       | O_log_and -> pp_print_string fmt "and"
       | O_log_not -> pp_print_string fmt "not"

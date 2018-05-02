@@ -17,7 +17,7 @@ let assume_to_exec cond true_case false_case man ctx flow
 let assume_to_eval cond
     true_case false_case man ctx flow
     ?(bottom_case=(fun () -> Framework.Eval.oeval_singleton (None, flow, [])))
-    ?(merge_case=(fun flow1 flow2 -> Framework.Eval.oeval_join (true_case flow1) (true_case flow2))) () =
+    ?(merge_case=(fun flow1 flow2 -> Framework.Eval.oeval_join (true_case flow1) (false_case flow2))) () =
   if_flow
     (man.exec ctx (mk_assume cond (tag_range cond.erange "true assume")))
     (man.exec ctx (mk_assume (mk_not cond (tag_range cond.erange "neg")) (tag_range cond.erange "false assume")))
@@ -40,7 +40,7 @@ let compose_alloc_exec f addr_kind range manager ctx flow =
 let rec expr_to_z (e: expr) : Z.t option =
   match ekind e with
   | E_constant (C_int n) -> Some n
-  | E_unop (O_minus, e') ->
+  | E_unop (O_minus T_int, e') ->
     begin
       match expr_to_z e' with
       | None -> None
@@ -52,10 +52,10 @@ let rec expr_to_z (e: expr) : Z.t option =
       | Some n1, Some n2 ->
         begin
           match op with
-          | O_plus -> Some (Z.add n1 n2)
-          | O_minus -> Some (Z.sub n1 n2)
-          | O_mult -> Some (Z.mul n1 n2)
-          | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+          | O_plus T_int -> Some (Z.add n1 n2)
+          | O_minus T_int -> Some (Z.sub n1 n2)
+          | O_mult T_int -> Some (Z.mul n1 n2)
+          | O_div T_int -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
           | _ -> None
         end
       | _ -> None

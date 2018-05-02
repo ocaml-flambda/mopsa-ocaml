@@ -249,11 +249,11 @@ struct
       Apron.Texpr1.Cst(Apron.Coeff.Interval Apron.Interval.top)
 
   and binop_to_apron = function
-    | O_plus -> Apron.Texpr1.Add
-    | O_minus -> Apron.Texpr1.Sub
-    | O_mult -> Apron.Texpr1.Mul
-    | O_div -> Apron.Texpr1.Div
-    | O_mod -> Apron.Texpr1.Mod
+    | O_plus T_int -> Apron.Texpr1.Add
+    | O_minus T_int -> Apron.Texpr1.Sub
+    | O_mult T_int -> Apron.Texpr1.Mul
+    | O_div T_int -> Apron.Texpr1.Div
+    | O_mod T_int -> Apron.Texpr1.Mod
     | _ -> raise Unsupported
 
   and exp_to_apron exp =
@@ -286,7 +286,7 @@ struct
        let typ' = typ_to_apron exp.etyp in
        Apron.Texpr1.Binop(binop', e1', e2', typ', default_rounding)
 
-    | E_unop(O_minus, e) ->
+    | E_unop(O_minus T_int, e) ->
       let e' = exp_to_apron e in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', default_rounding)

@@ -23,7 +23,7 @@ open Universal.Ast
 open Ast
 open Base
 open Pointer
-    
+
 let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -153,7 +153,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             | Some (v', c') ->
               let b = Z.sub c.o c'.o in
               let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-              Nexp (Some (mk_binop (mk_binop (mk_var v' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range))
+              Nexp (Some (mk_binop (mk_binop (mk_var v' range) math_div (mk_z base range) range) math_mod (mk_int 256 range) range))
 
             | None ->
               begin
@@ -178,7 +178,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                       in
                       let ll = aux 0 [] in
                       let _,e = List.fold_left (fun (time,res) x ->
-                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_var x range) range) O_plus res range in
+                          let res' = mk_binop (mk_binop (mk_z time range) math_mult (mk_var x range) range) math_plus res range in
                           let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -422,7 +422,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             mk_binop
               (mk_binop offset O_ge (mk_zero range) range)
               O_log_and
-              (mk_binop (mk_binop offset O_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
+              (mk_binop (mk_binop offset math_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
               range
           in
           let safe_case acc flow =
@@ -582,7 +582,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | E_c_points_to(E_p_var (base, offset, t)) ->
             let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
             let field = List.nth record.c_record_fields i in
-            let offset' = mk_binop offset O_plus (mk_int field.c_field_offset exp.erange) exp.erange in
+            let offset' = mk_binop offset math_plus (mk_int field.c_field_offset exp.erange) exp.erange in
             let t' = field.c_field_type in
             fold_cells
               (fun acc v flow ->
@@ -613,14 +613,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     | E_c_array_subscript(arr, idx) ->
       debug "array subscript to deref";
-      let exp' = {exp with ekind = E_c_deref(mk_binop arr Universal.Ast.O_plus idx exp.erange ~etyp: arr.etyp)} in
+      let exp' = {exp with ekind = E_c_deref(mk_binop arr math_plus idx exp.erange ~etyp: arr.etyp)} in
       re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
       add_eval_mergers []
 
     | E_c_member_access(r, idx, f) ->
       let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
       re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
-      add_eval_mergers []      
+      add_eval_mergers []
 
     | _ -> None
 
@@ -629,7 +629,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match query with
     | Query.QExtractVarBase {vkind = V_expand_cell c} ->
       Some (c.b, mk_z c.o (mk_fresh_range ()))
-        
+
     | _ -> None
 
   let refine man subman ctx channel flow = None

@@ -12,7 +12,6 @@ let rec pp_c_init fmt = function
     fprintf fmt "{%a ...}" pp_c_init filler
   | _ -> assert false
 
-
 let () =
   register_pp_typ (fun default fmt typ ->
       match typ with
@@ -67,7 +66,7 @@ let () =
   register_pp_constant (fun next fmt c ->
       match c with
       | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
-      | C_c_string(s, _) -> fprintf fmt "\"%s\"" s
+      | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
       | _ -> next fmt c
     );
   register_pp_operator (fun next fmt op ->

@@ -18,3 +18,4 @@ int atoi(const char *str) {
 }
 
 int INT_MAX = 2147483647;
+int CHAR_MAX = 127;
