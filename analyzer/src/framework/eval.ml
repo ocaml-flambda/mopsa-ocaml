@@ -59,6 +59,10 @@ let pp_evals print fmt (evals: ('a, 'b) evals) =
     )
     fmt l
 
+let pp_oevals print fmt (evals: ('a, 'b) evals option) =
+  match evals with
+  | None -> Format.fprintf fmt "None"
+  | Some evals -> pp_evals print fmt evals
 
 (*==========================================================================*)
 (**                       {2 Optional evaluations}                          *)

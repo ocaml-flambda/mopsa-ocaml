@@ -32,6 +32,7 @@ extern void _mopsa_assert_unreachable();
 extern void _mopsa_assert_safe();
 extern void _mopsa_assert_unsafe();
 extern void _mopsa_assert_error(int error);
+extern void _mopsa_assert_error_exists(int error);
 extern void _mopsa_assert_error_at_line(int error, int line);
 extern void _mopsa_set_debug_channels(char* channels);
 

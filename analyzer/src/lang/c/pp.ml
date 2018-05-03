@@ -69,6 +69,12 @@ let () =
       | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
       | _ -> next fmt c
     );
+  register_pp_operator (fun next fmt op ->
+      match op with
+      | O_c_and -> pp_print_string fmt "&&"
+      | O_c_or -> pp_print_string fmt "||"
+      | _ -> next fmt op
+    );
   register_pp_expr (fun default fmt expr ->
       match ekind expr with
       | E_c_conditional(cond, body, orelse) -> assert false

@@ -17,8 +17,8 @@ void test_backward_goto() {
   _mopsa_assert_exists(a==10 && b == 100);
 }
 
-int f0() {
-  if (0 < 1) {
+int f0(int x) {
+  if (x > 0) {
     goto l1;
   } else {
     goto l2;
@@ -28,6 +28,6 @@ int f0() {
 }
 
 
-void test_goto_and_return() {
-  _mopsa_assert_true(f0() == 0);
+void test_goto_with_return_flows() {
+  _mopsa_assert_true(f0(5) == 0);
 }

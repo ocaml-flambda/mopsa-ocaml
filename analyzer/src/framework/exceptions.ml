@@ -23,3 +23,6 @@ let panic fmt =
   Format.kasprintf (fun str ->
       raise (Panic str)
     ) fmt
+
+
+let fail fmt = Debug.fail fmt

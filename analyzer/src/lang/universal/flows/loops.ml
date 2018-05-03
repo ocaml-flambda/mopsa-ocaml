@@ -46,7 +46,7 @@ let () =
 (**                       {2 Command line options}                          *)
 (*==========================================================================*)
 
-let opt_loop_widening_delay : int ref = ref 1
+let opt_loop_widening_delay : int ref = ref 0
 (** Number of iterations before applying a widening. *)
 
 let opt_loop_unrolling : int ref = ref 1
@@ -204,7 +204,7 @@ end
 let setup () =
   Stateless.register_domain name (module Domain);
   Framework.Options.register (
-    "-widening-delay", Arg.Set_int opt_loop_widening_delay, " number of iterations before applying a widening (default: 1)"
+    "-widening-delay", Arg.Set_int opt_loop_widening_delay, " number of iterations before applying a widening (default: 0)"
   );
   Framework.Options.register (
     "-loop-unrolling", Arg.Set_int opt_loop_unrolling, " number of unrolling iterations before joining the environments (default: 1)"

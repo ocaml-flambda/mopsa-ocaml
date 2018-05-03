@@ -43,8 +43,14 @@ type expr_kind +=
   | E_c_resolve_pointer of expr
   | E_c_points_to of pexpr
 
+type constant +=
+  | C_c_invalid (** invalid pointer constant *)
+
 let mk_c_resolve_pointer e range =
   mk_expr (E_c_resolve_pointer e) range
+
+let mk_c_invalid range =
+  mk_constant C_c_invalid range ~etyp:(T_c_pointer(T_c_void))
 
 
 module Domain =
@@ -133,6 +139,9 @@ struct
         match ekind exp with
         | E_constant (C_int n) when Z.equal n Z.zero ->
           oeval_singleton (Some E_p_null, flow, [])
+
+        | E_constant C_c_invalid ->
+          oeval_singleton (Some E_p_invalid, flow, [])
 
         | E_addr addr ->
           let pt' = E_p_var (A addr, mk_int 0 range, T_c_void) in
@@ -416,6 +425,11 @@ let setup () =
       | E_c_resolve_pointer e -> Format.fprintf fmt "resolve %a" pp_expr e
       | E_c_points_to pe -> Format.fprintf fmt "points-to %a" pp_pexpr pe
       | _ -> next fmt exp
+    );
+  Framework.Pp.register_pp_constant (fun next fmt c ->
+      match c with
+      | C_c_invalid -> Format.fprintf fmt "invalid"
+      | _ -> next fmt c
     );
   Framework.Visitor.register_expr_visitor (fun next exp ->
       match ekind exp with

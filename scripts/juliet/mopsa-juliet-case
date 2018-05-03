@@ -11,9 +11,9 @@ bad="${casename}_bad"
 
 echo "Analyzing ${casename}"
 echo "Good case"
-${MOPSADIR}/scripts/mopsa-c -cell-max-expand=20 -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo "Bad case"
-${MOPSADIR}/scripts/mopsa-c -cell-max-expand=20 -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
+${MOPSADIR}/scripts/mopsa-c -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo
 echo "===================================================="
 echo

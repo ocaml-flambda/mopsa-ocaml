@@ -19,6 +19,7 @@ open Framework.Flow
 open Framework.Lattice
 open Framework.Eval
 open Framework.Exec
+open Universal.Ast
 open Ast
 open Base
 open Pointer
@@ -34,7 +35,7 @@ type cell = {
 }
 
 let pp_cell fmt c =
-  Format.fprintf fmt "⟨%a,%a⟩"
+  Format.fprintf fmt "⟪%a,%a⟫"
     pp_base c.b
     pp_typ c.t
 
@@ -92,24 +93,88 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
 
   (*==========================================================================*)
+  (**                    {2 Cells Initialization}                             *)
+  (*==========================================================================*)
+
+  let init_manager man ctx =
+    Init.{
+      scalar = (fun v init is_global range flow -> return flow);
+      array =  (fun a init is_global range flow -> return flow);
+      strct =  (fun s init is_global range flow -> return flow);
+    }
+
+  let init man ctx prog flow =
+    let flow = set_domain_cur empty man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let flow' = Init.fold_globals (init_manager man ctx) globals ctx flow in
+      ctx, flow'
+
+    | _ -> ctx, flow
+
+
+
+  (*==========================================================================*)
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-
-  let init (man : ('a, t) manager) ctx prog (flow : 'a flow) =
-    ctx, set_domain_cur empty man flow
-
   let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
     : 'a rflow option =
+    let range = stmt.srange in
     match skind stmt with
+    | S_c_local_declaration(v, init) ->
+      None
+
+    | S_rename_var(v, v') ->
+      assert false
+
+    | S_remove_var v when is_c_int_type v.vtyp ->
+      None
+
+    | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+      None
+
+    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
+      None
+
     | _ -> None
+
 
   let eval man subman ctx exp flow =
     match ekind exp with
+    | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
+      None
+
+    | E_c_deref(p) ->
+      None
+
+    | E_c_arrow_access(p, i, f) ->
+      None
+
+    | E_c_array_subscript(arr, idx) ->
+      None
+
+    | E_c_member_access(r, idx, f) ->
+      None
 
     | _ -> None
 
-  let ask man subman ctx query flow = None
+
+  and ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
+    fun man subman ctx query flow ->
+    match query with
+      | Query.QExtractVarBase {vkind = V_smash_cell c} ->
+        let base_size =
+          match c.b with
+          | V v -> sizeof_type v.vtyp
+          | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> s
+          | _ -> Framework.Exceptions.panic "smashing.ask: base %a not supported" pp_base c.b
+        in
+        let cell_size = sizeof_type c.t in
+        let offset = mk_constant (C_int_interval (Z.zero, Z.(base_size - cell_size))) (mk_fresh_range ()) ~etyp:T_int in
+        Some (c.b, offset)
+
+      | _ -> None
 
   let refine man subman ctx channel flow = None
 

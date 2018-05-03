@@ -148,6 +148,10 @@ type typ +=
                            (** {2 Expressions} *)
 (*==========================================================================*)
 
+type operator +=
+  | O_c_and
+  | O_c_or
+
 type c_inc_location =
   | PRE
   | POST
@@ -171,6 +175,7 @@ type constant +=
 
   | C_c_string of string * c_character_kind
   (** Constant string literal *)
+
 
 type c_init =
   | C_init_expr of expr

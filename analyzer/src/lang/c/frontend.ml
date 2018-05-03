@@ -296,8 +296,8 @@ and from_binary_operator op t = match op with
   | C_AST.O_logical (C_AST.GREATER_EQUAL) -> O_ge
   | C_AST.O_logical (C_AST.EQUAL) -> O_eq
   | C_AST.O_logical (C_AST.NOT_EQUAL) -> O_ne
-  | C_AST.O_logical (C_AST.LOGICAL_AND) -> O_log_and
-  | C_AST.O_logical (C_AST.LOGICAL_OR) -> O_log_or
+  | C_AST.O_logical (C_AST.LOGICAL_AND) -> Ast.O_c_and
+  | C_AST.O_logical (C_AST.LOGICAL_OR) -> Ast.O_c_or
 
 and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = function
   | Clang_AST.Char_Ascii -> Ast.C_char_ascii
