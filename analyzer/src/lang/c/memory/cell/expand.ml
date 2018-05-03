@@ -183,7 +183,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let cs = u in
     let c = cell_of_var v in
     match c with
-    | AnyCell c -> Nexp (Some (wrap v (int_rangeof c.t) range))
+    | AnyCell c ->
+      let a,b = rangeof c.t in
+      Nexp (Some ( mk_z_interval a b range))
     | OffsetCell c ->
       match exist_and_find_cell (fun c' -> compare_ocell c c' = 0) cs  with
       | Some (v', _) -> Nexp (Some (mk_var v' range))
@@ -255,6 +257,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let flow' = local_manager.exec ctx stmt flow in
     get_domain_cur local_manager flow'
 
+  let sub_exec subman ctx stmt flow =
+    match SubDomain.exec subman ctx stmt flow with
+    | Some flow -> flow
+    | None -> assert false
+
   (** [add_var v u] adds a variable [v] to the abstraction [u] *)
   let add_var ctx range (v : var) (u, s) =
     if CS.mem v u then u, s
@@ -308,7 +315,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | OffsetCell c -> c
     | _ -> assert false
 
-  let remove_overlapping_cells v range man ctx flow =
+  let remove_overlapping_cells v range man subman ctx flow =
     let u = get_domain_cur man flow in
     let c = cell_of_var v in
     match c with
@@ -316,7 +323,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       CS.fold (fun v' acc ->
           let c' = extract_ocell v' in
           if compare_base c.b c'.b = 0 then
-            man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+            sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
         ) u flow
@@ -334,88 +341,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               Z.lt (Z.max a1 a2) (Z.min b1 b2)
             in
             if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
-              man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+              sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
             else
               acc
         ) u flow'
 
-
-  (*==========================================================================*)
-  (**                    {2 Cells Initialization}                             *)
-  (*==========================================================================*)
-
-  let init_manager man ctx =
-    Init.{
-      (* Initialization of scalar variables *)
-      scalar = (fun v init is_global range flow ->
-          match init with
-          (* Uninitialized local pointers are invalid *)
-          | None when not is_global && is_c_pointer_type v.etyp ->
-            man.exec ctx (mk_assign v (mk_c_invalid range) range) flow |>
-            return
-
-          (* Local uninitialized variables are kept ⟙ *)
-          | None when not is_global ->
-            return flow
-
-          (* Global uninitialized variables are set to 0 *)
-          | None when is_global ->
-            man.exec ctx (mk_assign v (mk_zero range) range) flow |>
-            return
-
-          (* Initialization with an expression *)
-          | Some (C_init_expr e) ->
-            man.exec ctx (mk_assign v e range) flow |>
-            return
-
-          | _ -> assert false
-
-        );
-
-      (* Initialization of arrays *)
-      array =  (fun a init is_global range flow ->
-          match init with
-          (* Local uninitialized arrays are kept ⟙ *)
-          | None when not is_global -> return flow
-
-          (* Otherwise: *)
-          | None                   (* a. when the array is global and uninitialized *)
-          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
-          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
-            ->
-            (* just initialize a limited number of cells *)
-            deeper (Some !opt_max_expand)
-
-          | _ ->
-            Framework.Exceptions.panic "Array initialization not supported"
-
-        );
-
-      (* Initialization of structs *)
-      strct =  (fun s init is_global range flow ->
-          match init with
-          | None when not is_global -> return flow
-
-          | None
-          | Some (C_init_list _) ->
-            deeper None
-
-          | Some (C_init_expr e) ->
-            man.exec ctx (mk_assign s e range) flow |>
-            return
-
-          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
-        );
-    }
-
-  let init man ctx prog flow =
-    let flow = set_domain_cur empty man flow in
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      let flow' = Init.fold_globals (init_manager man ctx) globals ctx flow in
-      ctx, flow'
-
-    | _ -> ctx, flow
 
 
   (*==========================================================================*)
@@ -547,18 +477,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (**                      {2 Transfer functions}                             *)
   (*==========================================================================*)
 
-  let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
-    : 'a rflow option =
+  let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
     | S_c_local_declaration(v, init) ->
-      Init.init_local (init_manager man ctx) v init range flow |>
+      Init.init_local man ctx (init_manager man subman ctx) v init range flow |>
       return_flow
 
     | S_rename_var(v, v') ->
       assert false
 
-    | S_remove_var v when is_c_int_type v.vtyp ->
+    | S_remove_var ({vkind = V_orig | V_expand_cell _} as v) when is_c_int_type v.vtyp ->
       let u = get_domain_cur man flow in
       let v' = annotate_var_kind v in
       let u' = remove v' u in
@@ -575,36 +504,20 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | [rval; {ekind = E_var ({vkind = V_expand_cell (OffsetCell _)} as v)} as lval] ->
             let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
             SubDomain.exec subman ctx stmt' flow |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man ctx) |>
+            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
             oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 
           | [rval; {ekind = E_var ({vkind = V_expand_cell (AnyCell _)} as v)}] ->
-            remove_overlapping_cells v stmt.srange man ctx flow |>
+            remove_overlapping_cells v stmt.srange man subman ctx flow |>
             return_flow
 
           | _ -> None
         ) (man.exec ctx) man.flow
 
-    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
-      let range = srange stmt in
-      let t1 = remove_typedef lval.etyp |> remove_qual and t2 = remove_typedef rval.etyp |> remove_qual in
-      assert (compare t1 t2 = 0);
-      let fields = match t1 with
-        | T_c_record{c_record_fields} -> c_record_fields
-        | _ -> assert false
-      in
-      fields |> List.fold_left (fun flow field ->
-          let lval = mk_c_member_access lval field range in
-          let rval = mk_c_member_access rval field range in
-          let stmt = {stmt with skind = S_assign(lval, rval, smode)} in
-          man.exec ctx stmt flow
-        ) flow |>
-      return_flow
-
     | _ -> None
 
 
-  let eval man subman ctx exp flow =
+  and eval man subman ctx exp flow =
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
@@ -708,7 +621,60 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     | _ -> None
 
-  and ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
+
+  (*==========================================================================*)
+  (**                    {2 Cells Initialization}                             *)
+  (*==========================================================================*)
+
+  and init_manager man subman ctx =
+    Init.{
+      (* Initialization of arrays *)
+      array =  (fun a init is_global range flow ->
+          match init with
+          (* Local uninitialized arrays are kept ⟙ *)
+          | None when not is_global -> return flow
+
+          (* Otherwise: *)
+          | None                   (* a. when the array is global and uninitialized *)
+          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
+          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
+            ->
+            (* just initialize a limited number of cells *)
+            deeper (Some !opt_max_expand)
+
+          | _ ->
+            Framework.Exceptions.panic "Array initialization not supported"
+
+        );
+
+      (* Initialization of structs *)
+      strct =  (fun s init is_global range flow ->
+          match init with
+          | None when not is_global -> return flow
+
+          | None
+          | Some (C_init_list _) ->
+            deeper None
+
+          | Some (C_init_expr e) ->
+            man.exec ctx (mk_assign s e range) flow |>
+            return
+
+          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+        );
+    }
+
+  and init man subman ctx prog flow =
+    let flow = set_domain_cur empty man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      ctx, flow'
+
+    | _ -> ctx, flow
+
+
+  let ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
     fun man subman ctx query flow ->
     match query with
       | Query.QExtractVarBase {vkind = V_expand_cell (OffsetCell c)} ->
@@ -723,6 +689,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       | _ -> None
 
   let refine man subman ctx channel flow = None
+
+
 
 end
 

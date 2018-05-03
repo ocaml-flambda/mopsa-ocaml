@@ -46,7 +46,25 @@ struct
 
     | _ -> None
 
-  let exec man ctx stmt flow = None
+  let exec man ctx stmt flow =
+    match skind stmt with
+    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
+      let range = srange stmt in
+      let t1 = remove_typedef lval.etyp |> remove_qual and t2 = remove_typedef rval.etyp |> remove_qual in
+      assert (compare t1 t2 = 0);
+      let fields = match t1 with
+        | T_c_record{c_record_fields} -> c_record_fields
+        | _ -> assert false
+      in
+      fields |> List.fold_left (fun flow field ->
+          let lval = mk_c_member_access lval field range in
+          let rval = mk_c_member_access rval field range in
+          let stmt = {stmt with skind = S_assign(lval, rval, smode)} in
+          man.exec ctx stmt flow
+        ) flow |>
+      return
+
+    | _ -> None
 
   let ask _ _ _ _ = None
 
