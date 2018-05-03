@@ -281,7 +281,7 @@ struct
       return_flow
 
 
-    | S_assign({ekind = E_var var}, e, STRONG) ->
+    | S_assign({ekind = E_var var}, e, (STRONG | EXPAND)) ->
       man.eval ctx e flow |>
       eval_to_exec
         (fun e flow ->
@@ -293,8 +293,8 @@ struct
         (man.exec ctx) man.flow |>
       return_flow
 
-    | S_assign({ekind = E_var var}, e, _) ->
-      assert false
+    | S_assign({ekind = E_var var}, e, WEAK) ->
+      Framework.Exceptions.panic "weak assigns not supported"
 
     | S_assume e ->
       man.eval ctx e flow |>
