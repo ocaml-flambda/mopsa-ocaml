@@ -16,10 +16,15 @@ open Ast
 
 type 'a reply =
   | Return of 'a flow
-  | Deeper of int
+  | Deeper of int option
 
 let return flow = Return flow
 let deeper d = Deeper d
+
+let depth_reached i (d: int option) =
+  match d with
+  | None -> false
+  | Some d -> i = d
 
 type 'a init_fun = expr -> c_init option -> bool -> range -> 'a flow -> 'a reply
 
@@ -46,7 +51,7 @@ and init_array man a init is_global range flow =
     match init with
     | None when is_global ->
       let rec aux i flow =
-        if i = n || i = d then flow
+        if i = n || depth_reached i d then flow
         else
           let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) None is_global range flow in
           aux (i + 1) flow
@@ -55,7 +60,7 @@ and init_array man a init is_global range flow =
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i flow =
-        if i = n || i = d then flow
+        if i = n || depth_reached i d then flow
         else
           let init = if i < List.length l then Some (List.nth l i) else filler in
           let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
@@ -65,7 +70,7 @@ and init_array man a init is_global range flow =
 
     | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
       let rec aux i flow =
-        if i = n || i = d then flow
+        if i = n || depth_reached i d then flow
         else
           let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
           let flow = init_expr man (mk_c_subscript_access a (mk_int i range) range) init is_global range flow in
@@ -125,7 +130,7 @@ and init_struct man s init is_global range flow =
     match init with
     | None when is_global ->
       let rec aux i flow =
-        if i = nb_fields || i = d then flow
+        if i = nb_fields || depth_reached i d then flow
         else
           let flow = init_expr man (mk_c_member_access s (get_nth_field i) range) None is_global range flow in
           aux (i + 1) flow

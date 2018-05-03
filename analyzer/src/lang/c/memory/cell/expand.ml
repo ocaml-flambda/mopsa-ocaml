@@ -312,7 +312,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
             ->
             (* just initialize a limited number of cells *)
-            deeper !opt_max_expand
+            deeper (Some !opt_max_expand)
 
           | _ ->
             Framework.Exceptions.panic "Array initialization not supported"
@@ -326,7 +326,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
           | None
           | Some (C_init_list _) ->
-            deeper !opt_max_expand
+            deeper None
 
           | Some (C_init_expr e) ->
             man.exec ctx (mk_assign s e range) flow |>
