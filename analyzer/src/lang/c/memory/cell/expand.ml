@@ -27,7 +27,7 @@ open Pointer
 let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_max_expand = ref 1
+let opt_max_expand = ref 2
 
 
 (*==========================================================================*)
