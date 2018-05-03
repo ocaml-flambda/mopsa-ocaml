@@ -18,17 +18,17 @@ juliet=$1/C/testcases
 #    CWE476_NULL_Pointer_Dereference \
 #    CWE562_Return_of_Stack_Variable_Address"
 
-cwes="CWE190_Integer_Overflow/s01"
-
+# CWE476_NULL_Pointer_Dereference \
+cwes="CWE190_Integer_Overflow"
+subdirs="s01 s02"
 
 for cwe in ${cwes}; do
-    echo "Starting cases of ${cwe}"
-    echo
-    directory=${juliet}/${cwe}
-    cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
-    for c in ${cases}; do
-        ${MOPSADIR}/scripts/juliet/mopsa-juliet-case ${c}
+    for subd in ${subdirs}; do
+        directory=${juliet}/${cwe}/${subd}
+        cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
+        for c in ${cases}; do
+            ${MOPSADIR}/scripts/juliet/mopsa-juliet-case ${c}
+        done
+
     done
-    echo "==================="
-    echo
 done

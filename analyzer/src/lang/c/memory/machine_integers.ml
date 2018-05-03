@@ -28,22 +28,6 @@ let range_leq (a,b) (c,d) =
 let wrap_z (z : Z.t) ((l,h) : Z.t * Z.t) : Z.t =
   Z.( l + ((z - l) mod (h-l+one)) )
 
-let range_cond e_mint rmin rmax range =
-  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_le"
-               } in
-  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_ge"
-               } in
-  {ekind = E_binop(O_log_and, condle, condge);
-   etyp = T_bool;
-   erange = tag_range range "wrap_full"
-  }
-
-
-
 let is_c_int_op = function
   | O_div t | O_mod t | O_mult t | O_plus t | O_minus t when t |> is_c_int_type -> true
   | _ -> false

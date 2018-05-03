@@ -572,10 +572,20 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       eval_list [rval; lval] (man.eval ctx) flow |>
       eval_to_orexec (fun el flow ->
           match el with
-          | [rval; {ekind = E_var ({vkind = V_expand_cell (OffsetCell _)} as v)} as lval] ->
+          | [rval; {ekind = E_var ({vkind = V_expand_cell (OffsetCell c)} as v)} as lval] ->
             let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
             SubDomain.exec subman ctx stmt' flow |>
             oflow_compose (remove_overlapping_cells v stmt.srange man ctx) |>
+            oflow_compose (
+              fun flow ->
+                let rmin, rmax = rangeof c.t in
+                let cond = range_cond lval rmin rmax (erange lval) in
+                let stmt'' = (mk_assume cond (tag_range range "assume range")) in
+                let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
+                let rep = man.exec ctx stmt'' flow in
+                let () = debug "the resulting flow is : %a" man.flow.print rep in
+                rep
+            ) |>
             oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 
           | [rval; {ekind = E_var ({vkind = V_expand_cell (AnyCell _)} as v)}] ->

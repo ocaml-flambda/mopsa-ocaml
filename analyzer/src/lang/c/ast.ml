@@ -718,3 +718,17 @@ let () =
         ]
       | _ -> next t1 t2
     )
+
+let range_cond e_mint rmin rmax range =
+  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
+                etyp  = T_bool;
+                erange = tag_range range "wrap_le"
+               } in
+  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
+                etyp  = T_bool;
+                erange = tag_range range "wrap_ge"
+               } in
+  {ekind = E_binop(O_log_and, condle, condge);
+   etyp = T_bool;
+   erange = tag_range range "wrap_full"
+  }

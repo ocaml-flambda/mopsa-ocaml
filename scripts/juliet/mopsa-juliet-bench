@@ -20,14 +20,17 @@ juliet=$1/C/testcases
 
 # CWE476_NULL_Pointer_Dereference \
 cwes="CWE190_Integer_Overflow"
+subdirs="s01 s02"
 
-
+echo "["
 for cwe in ${cwes}; do
-    directory=${juliet}/${cwe}
-    cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
-    echo "["
-    for c in ${cases}; do
-        ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench ${c}
+    for subd in ${subdirs}; do
+        directory=${juliet}/${cwe}/${subd}
+        cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
+        for c in ${cases}; do
+            ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench ${c}
+        done
+
     done
-    echo "]"
 done
+echo "]"
