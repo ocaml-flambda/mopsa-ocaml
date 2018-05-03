@@ -41,3 +41,62 @@ void test_initialization_multi_array() {
   int a[2][2][3] = {{{1, 2, 3}, {4, 5, 6}}, {{7, 8, 9}, {10, 11, 12}}};
   _mopsa_assert_true(a[0][0][0] == 1);
 }
+
+
+/************************/
+/* Constant index tests */
+/************************/
+
+void test_array_out_of_bound_with_constant_index() {
+  int a[100];
+  int j = 100;
+  int x = a[j];
+  _mopsa_assert_error(OUT_OF_BOUND);
+}
+
+void test_array_safe_acces_with_constant() {
+  int a[100];
+  int j = 99;
+  int x = a[j];
+  _mopsa_assert_safe();
+}
+
+
+/*********************/
+/* Range index tests */
+/*********************/
+
+void test_array_safe_acces_with_range() {
+  int a[100];
+  int j = _mopsa_rand_int(0, 10);
+  int x = a[j];
+  _mopsa_assert_safe();
+}
+
+void test_array_out_of_bound_acces_with_range() {
+  int a[100];
+  int j = _mopsa_rand_int(100, 200);
+  int x = a[j];
+  _mopsa_assert_error(OUT_OF_BOUND);
+}
+
+void test_may_array_out_of_bound_acces_with_range() {
+  int a[100];
+  int j = _mopsa_rand_int(10, 200);
+  int x = a[j];
+  _mopsa_assert_error_exists(OUT_OF_BOUND);
+}
+
+void test_array_safe_acces_with_range_in_lval() {
+  int a[100];
+  int j = _mopsa_rand_int(10, 20);
+  a[j] = 10;
+  _mopsa_assert_safe();
+}
+
+void test_array_range_in_rval() {
+  int a[100];
+  int j = _mopsa_rand_int(10, 20);
+  int x = a[j] + 0;
+  _mopsa_assert_safe();
+}
