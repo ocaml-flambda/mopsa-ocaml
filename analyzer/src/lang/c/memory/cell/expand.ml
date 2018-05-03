@@ -323,7 +323,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       CS.fold (fun v' acc ->
           let c' = extract_ocell v' in
           if compare_base c.b c'.b = 0 then
-            sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
+            man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
           else
             acc
         ) u flow
@@ -341,7 +341,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               Z.lt (Z.max a1 a2) (Z.min b1 b2)
             in
             if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
-              sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
+              man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
             else
               acc
         ) u flow'
@@ -493,9 +493,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      (match SubDomain.exec subman ctx stmt' flow with
-       | None -> None
-       | Some flow -> return_flow flow)
+      SubDomain.exec subman ctx stmt' flow |>
+      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
     | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
       eval_list [rval; lval] (man.eval ctx) flow |>

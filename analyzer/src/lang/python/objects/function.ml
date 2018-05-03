@@ -16,6 +16,7 @@ open Framework.Eval
 open Framework.Exec
 open Framework.Ast
 open Universal.Ast
+open Framework.Utils
 open Ast
 open Addr
 

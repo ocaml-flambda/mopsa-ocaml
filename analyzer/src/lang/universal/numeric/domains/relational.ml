@@ -14,6 +14,7 @@ open Framework.Domains.Stateful
 open Framework.Manager
 open Framework.Ast
 open Framework.Exec
+open Framework.Utils
 open Ast
 
 let name = "universal.numeric.domains.relational"

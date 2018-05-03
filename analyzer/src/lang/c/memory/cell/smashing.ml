@@ -147,29 +147,28 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       let u' = remove v' u in
       let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
       let flow = set_domain_cur u' man flow in
-      (match SubDomain.exec subman ctx stmt' flow with
-       | None -> None
-       | Some flow -> return_flow flow)
+      SubDomain.exec subman ctx stmt' flow |>
+      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
 
-   | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_int_type v.vtyp ->
-     let v' = annotate_var v in
-     let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
-     SubDomain.exec subman ctx stmt' flow |>
-     oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
+    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_int_type v.vtyp ->
+      let v' = annotate_var v in
+      let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
+      SubDomain.exec subman ctx stmt' flow |>
+      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-   | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-     eval_list [rval; lval] (man.eval ctx) flow |>
-     eval_to_orexec (fun el flow ->
-         match el with
-         | [rval; {ekind = E_var ({vkind = V_smash_cell _} as v)} as lval] ->
-           let stmt' = {stmt with skind = S_assign(lval, rval, WEAK)} in
-           SubDomain.exec subman ctx stmt' flow |>
-           oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
-           oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
+    | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+      eval_list [rval; lval] (man.eval ctx) flow |>
+      eval_to_orexec (fun el flow ->
+          match el with
+          | [rval; {ekind = E_var ({vkind = V_smash_cell _} as v)} as lval] ->
+            let stmt' = {stmt with skind = S_assign(lval, rval, WEAK)} in
+            SubDomain.exec subman ctx stmt' flow |>
+            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
+            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 
-         | _ -> None
-       ) (man.exec ctx) man.flow
+          | _ -> None
+        ) (man.exec ctx) man.flow
 
     | _ -> None
 
@@ -182,7 +181,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       add_eval_mergers []
 
     | E_c_deref(p) ->
-      None
+      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
+            add_eval_mergers []
+
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+            assert false
+
+          | E_c_points_to(E_p_null) ->
+            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+
+          | E_c_points_to(E_p_invalid) ->
+            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+          | _ -> assert false
+        )
 
     | E_c_arrow_access(p, i, f) ->
       None

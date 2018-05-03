@@ -6,6 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
+let var_uniq_name v =
+  let () = Format.fprintf Format.str_formatter "%a" Pp.pp_var v in
+  Format.flush_str_formatter ();
+
+
 module Var = struct
   type t = Ast.var
   let compare = Ast.compare_var
