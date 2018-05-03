@@ -22,7 +22,7 @@ let debug fmt = Debug.debug ~channel:"framework.domains.reduction.product" fmt
 (*==========================================================================*)
 (**                         {2 Statements}                                  *)
 (*==========================================================================*)
-    
+
 (** This function is called before computing the meet of two post conditions to:
       1. apply the mergers of D1 on the resulting flow
       2. and then copy the private part of a domain D1 from its post condition to the
@@ -69,34 +69,34 @@ let merge_rflow man hman tman is_bottom bottom ctx rflow1 rflow2 =
       Some rflow
 
 
-  (*==========================================================================*)
-  (**                         {2 Expressions}                                 *)
-  (*==========================================================================*)
+(*==========================================================================*)
+(**                         {2 Expressions}                                 *)
+(*==========================================================================*)
 
-  let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
-    List.fold_left (fun acc (exp1, flow1, cleaners) ->
-        match exp1 with
-        | None -> acc
-        | Some (exp1, mergers1) ->
-          begin
-            List.map (fun (exp2, flow2, cleaners) ->
-                match exp2 with
-                | None -> None, flow2, cleaners
-                | Some (exp2, mergers2) ->
-                  Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
-              ) acc
-          end
-      ) cases2 cases1
+let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
+  List.fold_left (fun acc (exp1, flow1, cleaners) ->
+      match exp1 with
+      | None -> acc
+      | Some (exp1, mergers1) ->
+        begin
+          List.map (fun (exp2, flow2, cleaners) ->
+              match exp2 with
+              | None -> None, flow2, cleaners
+              | Some (exp2, mergers2) ->
+                Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
+            ) acc
+        end
+    ) cases2 cases1
 
 
-  let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
-    Eval.oeval_meet ~fand:(fun hconj tconj ->
-        let tconj = merge_reval_cases man ctx hman.ax hconj tconj
-        and hconj = merge_reval_cases man ctx hman.ax hconj tconj
-        in
-        List.sort_uniq compare (hconj @ tconj)
-      )
-      hevl tevl
+let merge_revals man hman tman ctx (hevl: 'a revals option) (tevl: 'a revals option) =
+  Eval.oeval_meet ~fand:(fun hconj tconj ->
+      let tconj' = merge_reval_cases man ctx hman.ax hconj tconj
+      and hconj' = merge_reval_cases man ctx tman.ax tconj hconj
+      in
+      List.sort_uniq compare (hconj' @ tconj')
+    )
+    hevl tevl
 
 
 module Make(Head: DOMAIN)(Tail: DOMAIN) =
