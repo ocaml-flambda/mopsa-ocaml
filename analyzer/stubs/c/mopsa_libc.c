@@ -16,6 +16,3 @@ char* fgets(char *str, int n, FILE *stream) {
 int atoi(const char *str) {
   return _mopsa_range_int();
 }
-
-int INT_MAX = 2147483647;
-int CHAR_MAX = 127;

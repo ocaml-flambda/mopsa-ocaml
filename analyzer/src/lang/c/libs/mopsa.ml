@@ -35,6 +35,7 @@ struct
     | "_mopsa_assert_safe"
     | "_mopsa_assert_unsafe"
     | "_mopsa_assert_error"
+    | "_mopsa_assert_error_exists"
     | "_mopsa_assert_error_at_line" -> true
     | _ -> false
 
@@ -75,8 +76,9 @@ struct
       debug "builtin function";
       let exp' = mk_expr (E_c_call({e with ekind = E_c_builtin_function f.c_func_var.vname},args)) ~etyp:T_c_builtin_fn exp.erange in
       oeval_singleton (Some exp', flow, [])
-    | E_c_call({ekind = E_c_builtin_function "_mopsa_set_debug_channels"} as e, [e']) ->
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_set_debug_channels"}, [e']) ->
       let channels = match ekind e' with
+        | E_constant (C_c_string (s,_))
         | E_c_cast({ ekind = E_constant (C_c_string (s,_))},_) -> s
         | _ -> ""
       in
@@ -241,6 +243,28 @@ struct
         in
         oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
       end
+
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_assert_error_exists"}, [{ekind = E_constant(C_int code)}]) ->
+      begin
+        let code = Z.to_int code in
+        let error_env = man.flow.fold (fun acc env -> function
+            | tk when Alarms.is_error_token tk && code = error_token_to_code tk -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let cur = man.flow.get TCur flow in
+        let cur' = if man.env.is_bottom cur then man.env.top else cur in
+        let cond = if man.env.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
+        let stmt = mk_assert cond exp.erange in
+        let flow' = man.flow.set TCur cur' flow |>
+                   man.exec ctx stmt |>
+                   man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk && code = error_token_to_code tk -> false | _ -> true) |>
+                   man.flow.set TCur cur
+        in
+        oeval_singleton (Some (mk_int 0 exp.erange), flow', [])
+      end
+
+
     | E_c_call(_) ->
       let () = debug "E_c_call did not go in on %a" Framework.Pp.pp_expr exp in None
     | _ -> None

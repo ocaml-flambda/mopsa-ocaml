@@ -64,4 +64,4 @@ c-tests: mopsa
 		$(MOPSAROOT)/bin/mopsa -lang=c -test true -config configs/default.c.json -stub stubs/c $(MOPSAPARAM) $(test); \
 	)
 
-tests: python-tests c-tests
+tests: c-tests #python-tests
