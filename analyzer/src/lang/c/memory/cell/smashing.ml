@@ -112,6 +112,12 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Some flow -> flow
     | None -> assert false
 
+  let expand_relation subman ctx v range flow =
+    let tmp = mktmp ~vkind:(v.vkind) ~vtyp:(v.vtyp) () in
+    let stmt = mk_assign (mk_var tmp range) (mk_var v range) ~mode:EXPAND range in
+    debug "expand stmt: %a" pp_stmt stmt;
+    tmp, sub_exec subman ctx stmt flow
+
   (*==========================================================================*)
   (**                       {2 Cell managements}                              *)
   (*==========================================================================*)
@@ -280,30 +286,42 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_orexec (fun el flow ->
-          match el with
-          | [rval; {ekind = E_var ({vkind = V_smash_cell c} as v)} as lval] ->
-            let stmt' = {stmt with skind = S_assign(lval, rval, WEAK)} in
-            SubDomain.exec subman ctx stmt' flow |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
-            oflow_compose (
-              fun flow ->
-                if is_c_int_type c.t then
-                  let rmin, rmax = rangeof c.t in
-                  let cond = range_cond lval rmin rmax (erange lval) in
-                  let stmt'' = (mk_assume cond (tag_range range "assume range")) in
-                  let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
-                  match SubDomain.exec subman ctx stmt'' flow with
-                  | Some flow -> flow
-                  | None -> assert false
-                else
-                  flow
-            ) |>
-            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
+      man.eval ctx rval flow |>
+      eval_to_orexec (fun rval flow ->
+          let p = mk_c_address_of lval lval.erange in
+          man.eval ctx (mk_c_resolve_pointer p lval.erange) flow |>
+          eval_to_orexec (fun pe flow ->
+              match ekind pe with
+              | E_c_points_to(E_p_var (base, offset, t)) ->
+                debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+                eval_base_offset
+                  (fun acc v flow ->
+                     debug "var case";
+                     let lval' = {lval with ekind = E_var v} in
+                     let stmt' = {stmt with skind = S_assign(lval', rval, WEAK)} in
+                     (** FIXME: filter flow with (p == &v) *)
+                     SubDomain.exec subman ctx stmt' flow |>
+                     oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
+                     orflow_join man.flow acc
+                  )
+                  (fun acc eflow -> return_flow eflow |> orflow_join man.flow acc)
+                  (fun () -> return_flow flow)
+                  None base offset t lval.erange man subman ctx flow
 
-          | _ -> None
+              | E_c_points_to(E_p_null) ->
+                man.flow.add (Alarms.TNullDeref lval.erange) (man.flow.get TCur flow) flow |>
+                man.flow.set TCur man.env.Framework.Lattice.bottom |>
+                return_flow
+
+              | E_c_points_to(E_p_invalid) ->
+                man.flow.add (Alarms.TInvalidDeref lval.erange) (man.flow.get TCur flow) flow |>
+                man.flow.set TCur man.env.Framework.Lattice.bottom |>
+                return_flow
+
+              | _ -> assert false
+            ) (man.exec ctx) man.flow
         ) (man.exec ctx) man.flow
+
 
     | _ -> None
 
@@ -316,53 +334,61 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       add_eval_mergers []
 
     | E_c_deref(p) ->
-      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
-      eval_compose (fun pe flow ->
-          match ekind pe with
-          | E_c_points_to(E_p_fun fundec) ->
-            oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
-            add_eval_mergers []
-
-          | E_c_points_to(E_p_var (base, offset, t)) ->
-            debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
-            eval_base_offset
-              (fun acc v flow ->
-                 debug "var case";
-                 let exp' = {exp with ekind = E_var v} in
-                 (** FIXME: filter flow with (p == &v) *)
-                 oeval_singleton (Some (exp', []), flow, []) |>
-                 oeval_join acc
-              )
-              (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
-              (fun () -> oeval_singleton (None, flow, []))
-              None base offset t exp.erange man subman ctx flow
-
-          | E_c_points_to(E_p_null) ->
-            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
-                       man.flow.set TCur man.env.Framework.Lattice.bottom
-            in
-            oeval_singleton (None, flow, [])
-
-
-          | E_c_points_to(E_p_invalid) ->
-            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
-                       man.flow.set TCur man.env.Framework.Lattice.bottom
-            in
-            oeval_singleton (None, flow, [])
-
-          | _ -> assert false
-        )
+      eval_and_expand_deref man subman ctx exp p flow
 
     | E_c_arrow_access(p, i, f) ->
       None
 
     | E_c_array_subscript(arr, idx) ->
-      None
+      let p = mk_binop arr math_plus idx ~etyp:(etyp arr) exp.erange in
+      eval_and_expand_deref man subman ctx exp p flow
 
     | E_c_member_access(r, idx, f) ->
       None
 
     | _ -> None
+
+  and eval_and_expand_deref man subman ctx exp p flow =
+    debug "eval_and_expand_deref";
+    let range = exp.erange in
+    man.eval ctx (mk_c_resolve_pointer p range) flow |>
+    eval_compose (fun pe flow ->
+        match ekind pe with
+        | E_c_points_to(E_p_fun fundec) ->
+          oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
+          add_eval_mergers []
+
+        | E_c_points_to(E_p_var (base, offset, t)) ->
+          debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+          eval_base_offset
+            (fun acc v flow ->
+               debug "var case";
+               let v', flow' = expand_relation subman ctx v range flow in
+               let exp' = {exp with ekind = E_var v'} in
+               (** FIXME: filter flow with (p == &v) *)
+               oeval_singleton (Some (exp', [mk_remove_var v' range]), flow, [mk_remove_var v' range]) |>
+               oeval_join acc
+            )
+            (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+            (fun () -> oeval_singleton (None, flow, []))
+            None base offset t exp.erange man subman ctx flow
+
+        | E_c_points_to(E_p_null) ->
+          let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                     man.flow.set TCur man.env.Framework.Lattice.bottom
+          in
+          oeval_singleton (None, flow, [])
+
+
+        | E_c_points_to(E_p_invalid) ->
+          let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                     man.flow.set TCur man.env.Framework.Lattice.bottom
+          in
+          oeval_singleton (None, flow, [])
+
+        | _ -> assert false
+      )
+
 
 
     (*==========================================================================*)
