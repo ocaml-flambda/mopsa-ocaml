@@ -41,9 +41,21 @@ struct
            oeval_singleton (Some rval, flow, [])
         )
 
-    | E_c_statement s ->
-      assert false
-
+    | E_c_statement {skind = S_block l} ->
+      begin
+        match List.rev l with
+        | {skind = S_expression e}::q ->
+          let q' = List.rev q in
+          let stmt' = mk_block q' (tag_range (erange exp) "block'") in
+          let flow' = man.exec ctx stmt' flow in
+          re_eval_singleton (man.eval ctx) (Some e, flow', [])
+        | _ ->
+          begin
+            Debug.fail "E_c_statement %a" Framework.Pp.pp_expr exp
+          end
+      end
+    | E_c_statement {skind = S_expression e} ->
+      re_eval_singleton (man.eval ctx) (Some e, flow, [])
     | _ -> None
 
   let exec man ctx stmt flow = None

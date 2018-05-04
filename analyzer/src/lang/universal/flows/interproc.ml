@@ -59,6 +59,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function f}, args) ->
+      let () = debug "called %a" Framework.Pp.pp_expr exp in
 
       (* Clear all return flows *)
       let flow0 = manager.flow.filter (fun _ -> function
@@ -145,4 +146,3 @@ let setup () =
       | TReturn(r, _) -> Format.fprintf fmt "ret@%a" Framework.Pp.pp_range r
       | tk -> next fmt tk
     )
-
