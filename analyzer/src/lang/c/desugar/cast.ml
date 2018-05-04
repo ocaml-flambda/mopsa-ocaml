@@ -34,11 +34,9 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    | E_c_cast(e, _) when not (exp |> etyp |> is_c_int_type) ->
-      man.eval ctx e flow |>
-      eval_compose (fun e flow ->
-          oeval_singleton (Some ({exp with ekind = ekind e}), flow, []) 
-        )
+    | E_c_cast(e, _) when (exp |> etyp |> is_c_record_type) ->
+      let t' = etyp exp in
+      re_eval_singleton (man.eval ctx) (Some ({e with etyp = t'}), flow, [])
 
     | _ -> None
 
