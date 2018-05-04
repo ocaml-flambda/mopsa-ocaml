@@ -323,7 +323,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       CS.fold (fun v' acc ->
           let c' = extract_ocell v' in
           if compare_base c.b c'.b = 0 then
-            man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+            map_domain_cur (remove v') man acc |>
+            sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
           else
             acc
         ) u flow
@@ -341,7 +342,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               Z.lt (Z.max a1 a2) (Z.min b1 b2)
             in
             if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
-              man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+              map_domain_cur (remove v') man acc |>
+              sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
             else
               acc
         ) u flow'
