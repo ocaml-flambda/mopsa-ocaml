@@ -10,7 +10,7 @@
         "c.libs.stdlib",
 
         //Desugarisation
-        // "c.desugar.andor",
+        "c.desugar.andor",
         "c.desugar.assign",
         "c.desugar.loops",
         "c.desugar.cast",
