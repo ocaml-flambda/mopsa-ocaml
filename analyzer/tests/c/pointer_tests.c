@@ -147,3 +147,11 @@ void test_arrow_on_array_of_struct() {
   a->x = 1;
   _mopsa_assert_true(a[0].x == 1);
 }
+
+void test_castint() {
+  char a[10];
+  a[0] = 0;
+  a[1] = 0;
+  ((int *) a)[1] = 1;
+  _mopsa_assert_true(a[1] == 0);
+}

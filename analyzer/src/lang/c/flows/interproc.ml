@@ -60,11 +60,13 @@ struct
              let f = {f with ekind = E_c_deref f} in
              re_eval_singleton (man.eval ctx) (Some {exp with ekind = E_c_call(f,args)}, flow, [])
 
-           | _ -> assert false
+           | _ -> Debug.fail "Call to %a not supported" Framework.Pp.pp_expr f
         )
 
-    | E_c_function(f) ->
-      oeval_singleton (Some exp, flow, [])
+    | E_c_cast(e, _) when (exp |> etyp |> is_c_pointer_type) && (exp |> etyp |> under_pointer_type |> is_c_function_type) ->
+      let t' = exp |> etyp |> under_pointer_type in
+      debug "t' = %a, e = %a" Framework.Pp.pp_typ t' Framework.Pp.pp_expr e;
+      re_eval_singleton (man.eval ctx) (Some ({e with etyp = t'}), flow, [])
 
     | _ -> None
 

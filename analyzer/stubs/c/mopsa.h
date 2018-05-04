@@ -3,6 +3,7 @@
 
 // Abstract values
 extern long int _mopsa_rand_int(long int, long int);
+extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int, unsigned long int);
 
 extern char _mopsa_range_char();
 extern unsigned char _mopsa_range_unsigned_char();

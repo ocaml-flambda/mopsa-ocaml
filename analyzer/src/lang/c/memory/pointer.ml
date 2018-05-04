@@ -207,6 +207,7 @@ struct
            match ekind e with
            | E_var v ->
              (
+               debug "address of var %a" pp_var v;
                match man.ask ctx (Query.QExtractVarBase v) flow with
                | Some (b, o) ->
                  let pt = E_p_var (b, o, v.vtyp) in
@@ -215,7 +216,8 @@ struct
                | None ->
                  assert false
              )
-           | _ -> assert false
+
+           | _ -> Debug.fail "&(%a) not known" pp_expr e;
         )
 
     | E_binop(O_plus _, e1, e2) when
