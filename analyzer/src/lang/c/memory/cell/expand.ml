@@ -323,7 +323,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       CS.fold (fun v' acc ->
           let c' = extract_ocell v' in
           if compare_base c.b c'.b = 0 then
-            man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+            map_domain_cur (remove v') man acc |>
+            sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
           else
             acc
         ) u flow
@@ -341,7 +342,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               Z.lt (Z.max a1 a2) (Z.min b1 b2)
             in
             if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
-              man.exec ctx (Universal.Ast.mk_remove_var v' range) acc
+              map_domain_cur (remove v') man acc |>
+              sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
             else
               acc
         ) u flow'
@@ -480,8 +482,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
-    | S_c_local_declaration(v, init) ->
-      Init.init_local man ctx (init_manager man subman ctx) v init range flow |>
+    | S_c_local_declaration({vkind = V_orig} as v, init) ->
+      let v' = annotate_var_kind v in
+      Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
       return_flow
 
     | S_rename_var(v, v') ->

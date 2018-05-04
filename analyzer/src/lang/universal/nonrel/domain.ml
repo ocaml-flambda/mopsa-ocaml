@@ -294,7 +294,17 @@ struct
       return_flow
 
     | S_assign({ekind = E_var var}, e, WEAK) ->
-      Framework.Exceptions.panic "weak assigns not supported"
+      man.eval ctx e flow |>
+      eval_to_exec
+        (fun e flow ->
+           map_domain_cur (fun a ->
+               let v = eval_value a e in
+               let a' = VarMap.add var v a in
+               join a a'
+             ) man flow
+        )
+        (man.exec ctx) man.flow |>
+      return_flow
 
     | S_assume e ->
       man.eval ctx e flow |>

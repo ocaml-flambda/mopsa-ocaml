@@ -112,9 +112,46 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Some flow -> flow
     | None -> assert false
 
+  let expand_relation subman ctx v range flow =
+    let tmp = mktmp ~vkind:(v.vkind) ~vtyp:(v.vtyp) () in
+    let stmt = mk_assign (mk_var tmp range) (mk_var v range) ~mode:EXPAND range in
+    debug "expand stmt: %a" pp_stmt stmt;
+    tmp, sub_exec subman ctx stmt flow
+
   (*==========================================================================*)
   (**                       {2 Cell managements}                              *)
   (*==========================================================================*)
+
+  let mem_pred c = function {vkind = V_smash_cell c'} -> compare_cell c c' = 0 | _ -> false
+
+  let exist_and_find_cell c cs =
+    let exception Found of var * cell in
+    try
+      let () = CS.iter (fun v -> if mem_pred c v then raise (Found (v, c)) else ()) cs in
+      None
+    with
+    | Found (v, c) -> Some (v, c)
+
+  let var_of_cell (c: cell) cs =
+    match exist_and_find_cell c cs with
+    | Some (v, _) -> v
+    | None ->
+      { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
+        vuid = 0;
+        vtyp = c.t;
+        vkind = V_smash_cell c;
+      }
+
+  let add_var ctx range (v : var) (u, s) =
+    if CS.mem v u then u, s
+    else if not (is_c_scalar_type v.vtyp) then u, s
+    else if is_c_pointer_type v.vtyp then CS.add v u, s
+    else
+      let c = cell_of_var v in
+      let (a, b) = rangeof c.t in
+      let e = mk_z_interval a b range in
+      let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
+      u, local_exec ctx stmt s
 
   let remove_overlapping_cells v range man subman ctx flow =
     let u = get_domain_cur man flow in
@@ -122,10 +159,99 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     CS.fold (fun v' acc ->
         let c' = extract_cell v' in
         if compare_base c.b c'.b = 0 then
-          sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
+          map_domain_cur (remove v') man acc |>
+          sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
         else
           acc
       ) u flow
+
+  let eval_base_offset f err empty x0 base offset typ range man subman ctx flow =
+    let cell_size = sizeof_type typ in
+
+    let rec static_offset_case base_size =
+      debug "static base case";
+      match Universal.Utils.expr_to_z offset with
+      | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->
+        create_smash x0 flow
+
+      | Some z ->
+        debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
+        man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+        man.flow.set TCur man.env.bottom |>
+        err x0
+
+      | None ->
+        dynamic_offset_case base_size
+
+    and dynamic_offset_case base_size =
+      debug "non-constant cell offset";
+      (* Fast bound check with intervals *)
+      let rec fast () =
+        debug "trying fast check";
+        let v = man.ask ctx (Universal.Numeric.Query.QIntInterval offset) flow in
+        match v with
+        | None -> assert false
+        | Some itv ->
+          try
+            debug "offset interval = %a" Universal.Numeric.Values.Int.print itv;
+            let l, u = Universal.Numeric.Values.Int.get_bounds itv in
+            if Z.geq l Z.zero && Z.leq (Z.add u cell_size) base_size then
+              create_smash x0 flow
+            else if Z.lt u Z.zero || Z.gt (Z.add l cell_size) base_size then
+              man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+              man.flow.set TCur man.env.bottom |>
+              err x0
+            else
+              full ()
+          with Universal.Numeric.Values.Int.Unbounded ->
+            full ()
+
+
+      (* Full bound check *)
+      and full () =
+        let safety_cond =
+          mk_binop
+            (mk_binop offset O_ge (mk_zero range) range)
+            O_log_and
+            (mk_binop (mk_binop offset math_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
+            range
+        in
+        let safe_case acc flow =
+          create_smash acc flow
+        in
+        let error_case acc flow =
+          man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+          man.flow.set TCur man.env.bottom |>
+          err acc
+        in
+        if_flow
+          (man.exec ctx (mk_assume safety_cond range))
+          (man.exec ctx (mk_assume (mk_not safety_cond range) range))
+          (safe_case x0)
+          (error_case x0)
+          (empty)
+          (fun sflow eflow -> error_case (safe_case x0 sflow) eflow)
+          man flow
+      in
+      (* Start with fast check *)
+      fast ()
+
+    and create_smash acc flow =
+      let cs = get_domain_cur man flow in
+      let v = var_of_cell {b = base; t = typ} cs in
+      let s = get_domain_cur subman flow in
+      let (cs', s') = add_var ctx range v (cs, s) in
+      let flow' = set_domain_cur cs' man flow |>
+                  set_domain_cur s' subman
+      in
+      f acc v flow'
+    in
+
+    match base with
+    | V v -> static_offset_case (sizeof_type v.vtyp)
+    | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_offset_case s
+    | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
+
 
 
   (*==========================================================================*)
@@ -135,8 +261,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
-    | S_c_local_declaration(v, init) ->
-      None
+    | S_c_local_declaration({vkind = V_orig} as v, init) ->
+      let v' = annotate_var v in
+      Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
+      return_flow
 
     | S_rename_var(v, v') ->
       assert false
@@ -151,24 +279,49 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
 
-    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_int_type v.vtyp ->
+    | S_assign({ekind = E_var ({vkind = V_orig | V_smash_cell _} as v)} as lval, rval, mode) when is_c_scalar_type v.vtyp ->
       let v' = annotate_var v in
       let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-    | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_orexec (fun el flow ->
-          match el with
-          | [rval; {ekind = E_var ({vkind = V_smash_cell _} as v)} as lval] ->
-            let stmt' = {stmt with skind = S_assign(lval, rval, WEAK)} in
-            SubDomain.exec subman ctx stmt' flow |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
-            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
+    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
+      man.eval ctx rval flow |>
+      eval_to_orexec (fun rval flow ->
+          let p = mk_c_address_of lval lval.erange in
+          man.eval ctx (mk_c_resolve_pointer p lval.erange) flow |>
+          eval_to_orexec (fun pe flow ->
+              match ekind pe with
+              | E_c_points_to(E_p_var (base, offset, t)) ->
+                debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+                eval_base_offset
+                  (fun acc v flow ->
+                     debug "var case";
+                     let lval' = {lval with ekind = E_var v} in
+                     let stmt' = {stmt with skind = S_assign(lval', rval, WEAK)} in
+                     (** FIXME: filter flow with (p == &v) *)
+                     SubDomain.exec subman ctx stmt' flow |>
+                     oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
+                     orflow_join man.flow acc
+                  )
+                  (fun acc eflow -> return_flow eflow |> orflow_join man.flow acc)
+                  (fun () -> return_flow flow)
+                  None base offset t lval.erange man subman ctx flow
 
-          | _ -> None
+              | E_c_points_to(E_p_null) ->
+                man.flow.add (Alarms.TNullDeref lval.erange) (man.flow.get TCur flow) flow |>
+                man.flow.set TCur man.env.Framework.Lattice.bottom |>
+                return_flow
+
+              | E_c_points_to(E_p_invalid) ->
+                man.flow.add (Alarms.TInvalidDeref lval.erange) (man.flow.get TCur flow) flow |>
+                man.flow.set TCur man.env.Framework.Lattice.bottom |>
+                return_flow
+
+              | _ -> assert false
+            ) (man.exec ctx) man.flow
         ) (man.exec ctx) man.flow
+
 
     | _ -> None
 
@@ -181,43 +334,61 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       add_eval_mergers []
 
     | E_c_deref(p) ->
-      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
-      eval_compose (fun pe flow ->
-          match ekind pe with
-          | E_c_points_to(E_p_fun fundec) ->
-            oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
-            add_eval_mergers []
-
-          | E_c_points_to(E_p_var (base, offset, t)) ->
-            debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
-            assert false
-
-          | E_c_points_to(E_p_null) ->
-            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
-                       man.flow.set TCur man.env.Framework.Lattice.bottom
-            in
-            oeval_singleton (None, flow, [])
-
-
-          | E_c_points_to(E_p_invalid) ->
-            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
-                       man.flow.set TCur man.env.Framework.Lattice.bottom
-            in
-            oeval_singleton (None, flow, [])
-
-          | _ -> assert false
-        )
+      eval_and_expand_deref man subman ctx exp p flow
 
     | E_c_arrow_access(p, i, f) ->
       None
 
     | E_c_array_subscript(arr, idx) ->
-      None
+      let p = mk_binop arr math_plus idx ~etyp:(etyp arr) exp.erange in
+      eval_and_expand_deref man subman ctx exp p flow
 
     | E_c_member_access(r, idx, f) ->
       None
 
     | _ -> None
+
+  and eval_and_expand_deref man subman ctx exp p flow =
+    debug "eval_and_expand_deref";
+    let range = exp.erange in
+    man.eval ctx (mk_c_resolve_pointer p range) flow |>
+    eval_compose (fun pe flow ->
+        match ekind pe with
+        | E_c_points_to(E_p_fun fundec) ->
+          oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
+          add_eval_mergers []
+
+        | E_c_points_to(E_p_var (base, offset, t)) ->
+          debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+          eval_base_offset
+            (fun acc v flow ->
+               debug "var case";
+               let v', flow' = expand_relation subman ctx v range flow in
+               let exp' = {exp with ekind = E_var v'} in
+               (** FIXME: filter flow with (p == &v) *)
+               oeval_singleton (Some (exp', [mk_remove_var v' range]), flow, [mk_remove_var v' range]) |>
+               oeval_join acc
+            )
+            (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+            (fun () -> oeval_singleton (None, flow, []))
+            None base offset t exp.erange man subman ctx flow
+
+        | E_c_points_to(E_p_null) ->
+          let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                     man.flow.set TCur man.env.Framework.Lattice.bottom
+          in
+          oeval_singleton (None, flow, [])
+
+
+        | E_c_points_to(E_p_invalid) ->
+          let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                     man.flow.set TCur man.env.Framework.Lattice.bottom
+          in
+          oeval_singleton (None, flow, [])
+
+        | _ -> assert false
+      )
+
 
 
     (*==========================================================================*)

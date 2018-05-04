@@ -198,13 +198,13 @@ let compare_var v1 v2 =
 let mkv ?(vtyp = T_any) ?(vkind = V_orig) ?(vuid=0) vname =
   {vname; vuid = 0; vtyp; vkind}
 
-let tmp_counter = ref 0
+let tmp_counter = ref 100
 
 (** Create a temporary variable with a unique name. *)
 let mktmp ?(vtyp = T_any) ?(vkind = V_orig) () =
   incr tmp_counter;
   let vname = "$tmp" ^ (string_of_int !tmp_counter) in
-  {vname; vuid = 0; vtyp; vkind}
+  {vname; vuid = !tmp_counter; vtyp; vkind}
 
 
 (*==========================================================================*)
