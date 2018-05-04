@@ -255,8 +255,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
-    | S_c_local_declaration(v, init) ->
-      None
+    | S_c_local_declaration({vkind = V_orig} as v, init) ->
+      let v' = annotate_var v in
+      Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
+      return_flow
 
     | S_rename_var(v, v') ->
       assert false
@@ -271,7 +273,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
 
-    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_scalar_type v.vtyp ->
+    | S_assign({ekind = E_var ({vkind = V_orig | V_smash_cell _} as v)} as lval, rval, mode) when is_c_scalar_type v.vtyp ->
       let v' = annotate_var v in
       let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
       SubDomain.exec subman ctx stmt' flow |>
