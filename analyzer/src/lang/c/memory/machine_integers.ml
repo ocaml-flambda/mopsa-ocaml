@@ -28,22 +28,6 @@ let range_leq (a,b) (c,d) =
 let wrap_z (z : Z.t) ((l,h) : Z.t * Z.t) : Z.t =
   Z.( l + ((z - l) mod (h-l+one)) )
 
-let range_cond e_mint rmin rmax range =
-  let condle = {ekind = E_binop(O_le, e_mint, mk_z rmax (tag_range range "wrap_le_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_le"
-               } in
-  let condge = {ekind = E_binop(O_ge, e_mint, mk_z rmin (tag_range range "wrap_ge_z"));
-                etyp  = T_bool;
-                erange = tag_range range "wrap_ge"
-               } in
-  {ekind = E_binop(O_log_and, condle, condge);
-   etyp = T_bool;
-   erange = tag_range range "wrap_full"
-  }
-
-
-
 let is_c_int_op = function
   | O_div t | O_mod t | O_mult t | O_plus t | O_minus t when t |> is_c_int_type -> true
   | _ -> false
@@ -51,6 +35,27 @@ let is_c_int_op = function
 let is_c_div = function
   | O_div t | O_mod t when t |> is_c_type -> true
   | _ -> false
+
+let check_overflow typ man ctx range exp =
+  eval_compose (fun e flow ->
+      let rmin, rmax = typ |> rangeof in
+      let cond = range_cond e rmin rmax (erange e) in
+      assume_to_eval cond
+        (fun tflow ->
+           oeval_singleton (Some e, tflow, []))
+        (fun fflow ->
+           let cur = man.flow.get TCur fflow in
+           let () = debug "Adding alarm flow : %a" man.env.print cur in
+           let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
+           in
+           re_eval_singleton (man.eval ctx)
+             (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
+                    etyp   = typ;
+                    erange = tag_range range "wrap"
+                   }), fflow2, []
+             )
+        ) man ctx flow ()
+    ) exp
 
 (** Abstract domain. *)
 
@@ -89,32 +94,21 @@ struct
             man ctx flow ()
         )
 
+    | E_unop(op, e) when is_c_int_op op ->
+      let typ = etyp exp in
+      let nop = to_math_op op in
+      (* oeval_singleton (Some {exp with ekind = E_unop(nop, e) }, flow, []) *)
+      man.eval ctx {exp with ekind = E_unop(nop, e) } flow  |>
+      check_overflow typ man ctx range
+
     | E_binop(op, e, e') when is_c_int_op op ->
       let typ = etyp exp in
       let nop = to_math_op op in
       man.eval ctx {exp with ekind = E_binop(nop, e, e') } flow |>
-      eval_compose (fun e flow ->
-          let rmin, rmax = typ |> rangeof in
-          let cond = range_cond e rmin rmax (erange e) in
-          assume_to_eval cond
-            (fun tflow ->
-               oeval_singleton (Some e, tflow, []))
-            (fun fflow ->
-               let cur = man.flow.get TCur fflow in
-               let () = debug "Adding alarm flow : %a" man.env.print cur in
-               let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
-               in
-               re_eval_singleton (man.eval ctx)
-                 (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                        etyp   = typ;
-                        erange = tag_range range "wrap"
-                       }), fflow2, []
-                 )
-            ) man ctx flow ()
-        )
+      check_overflow typ man ctx range
 
     | E_constant(C_c_character (c, _)) ->
-      re_eval_singleton (man.eval ctx) (Some (mk_z c exp.erange), flow, [])
+      re_eval_singleton (man.eval ctx) (Some ({exp with ekind = E_constant (C_int c)}), flow, [])
 
     | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
       let r = exp |> etyp |> rangeof in

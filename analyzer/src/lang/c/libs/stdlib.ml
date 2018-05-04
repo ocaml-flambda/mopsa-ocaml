@@ -26,12 +26,16 @@ type Universal.Ast.addr_kind +=
   | A_c_static_malloc of Z.t (** static size *)
   | A_c_dynamic_malloc (** dynamic size *)
 
+let range_exp_of_c_type t range =
+  let rmin, rmax = rangeof t in
+  (mk_expr ~etyp:t (E_constant (C_int_interval(rmin,rmax))) range)
 
 module Domain =
 struct
 
   let is_builtin_function = function
     | "malloc" -> true
+    | "fscanf" -> true
     | _ -> false
 
   (*==========================================================================*)
@@ -69,6 +73,29 @@ struct
 
         )
 
+    | E_c_call({ekind = E_c_builtin_function "fscanf"}, l) ->
+      let () = debug "fscanf called" in
+      let range_exp = erange exp in
+      let input_variables = match l with
+        | p::q::r -> r
+        | _ -> debug "fscanf called on less than two arguments" ; assert false
+      in
+      let stmts = List.map (
+          fun e ->
+            let range = erange e in
+            let t = etyp e in
+            if is_c_pointer_type t then
+              let t' = under_pointer_type t in
+              mk_assign (mk_expr ~etyp:t' (E_c_deref e) (tag_range range "lv"))
+                (range_exp_of_c_type t' (tag_range range "rv"))
+                (tag_range range "assign")
+            else
+              (debug "fscanf called on arguments that is not a pointer" ; assert false)
+        ) input_variables in
+      let s = mk_block stmts (tag_range range_exp "block") in
+      let flow' = man.exec ctx s flow in
+      re_eval_singleton (man.eval ctx)
+        (Some (range_exp_of_c_type (etyp exp) (tag_range range_exp "return")), flow', [])
     | _ -> None
 
   let ask _ _ _ _  = None

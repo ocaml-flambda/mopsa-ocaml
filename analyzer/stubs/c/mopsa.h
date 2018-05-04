@@ -12,6 +12,8 @@ extern short _mopsa_range_short();
 extern unsigned short _mopsa_range_unsigned_short();
 extern long _mopsa_range_long();
 extern unsigned long _mopsa_range_unsigned_long();
+extern long _mopsa_range_long_long();
+extern unsigned long _mopsa_range_unsigned_long_long();
 
 
 // Raise Framework.Manager.Panic exception with a given message

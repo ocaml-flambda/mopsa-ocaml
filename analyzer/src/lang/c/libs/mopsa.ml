@@ -25,6 +25,16 @@ module Domain =
 struct
 
   let is_builtin_function = function
+    | "_mopsa_range_char"
+    | "_mopsa_range_unsigned_char"
+    | "_mopsa_range_short"
+    | "_mopsa_range_unsigned_short"
+    | "_mopsa_range_int"
+    | "_mopsa_range_unsigned_int"
+    | "_mopsa_range_long"
+    | "_mopsa_range_unsigned_long"
+    | "_mopsa_range_long_long"
+    | "_mopsa_range_unsigned_long_long"
     | "_mopsa_set_debug_channels"
     | "_mopsa_range"
     | "_mopsa_rand_int"
@@ -101,6 +111,10 @@ struct
       range_to_rand man ctx flow Ast.C_signed_long exp e
     | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_long"} as e, []) ->
       range_to_rand man ctx flow Ast.C_unsigned_long exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_long_long"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_signed_long_long exp e
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_range_unsigned_long_long"} as e, []) ->
+      range_to_rand man ctx flow Ast.C_unsigned_long_long exp e
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_rand_int"}, [a; b]) ->
       let erange = exp.erange in

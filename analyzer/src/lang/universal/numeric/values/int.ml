@@ -1,4 +1,3 @@
-
 (****************************************************************************)
 (*                   Copyright (C) 2017 The MOPSA Project                   *)
 (*                                                                          *)
@@ -118,10 +117,12 @@ let bwd_unop op abs rabs =
   try
     let a, r = bot_to_exn abs, bot_to_exn rabs in
     let aa = match op with
-      | O_log_not -> assert false
       | O_minus T_int -> bot_to_exn (I.bwd_neg a r)
       | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
-      | _ -> assert false
+      | _ ->
+        let () = Debug.fail "following backward %a unary operator is not yet implemented"
+            Framework.Pp.pp_operator op in
+        assert false
     in
     Nb aa
   with Found_BOT ->
