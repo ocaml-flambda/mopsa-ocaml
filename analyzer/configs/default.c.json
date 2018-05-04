@@ -28,7 +28,7 @@
             "unify": "universal.heap.recency",
             "over": {
                 //Memory abstraction
-                "reduce-unify": ["c.memory.cell.smashing"],
+                "reduce-unify": ["c.memory.cell.expand"],
                 "over": {
                     "iter": [
                         "c.memory.pointer",
