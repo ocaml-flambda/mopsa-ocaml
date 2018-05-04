@@ -178,12 +178,6 @@ type var_kind +=
 
 let vkind v = v.vkind
 
-let var_uniq_name v =
-  if v.vuid <= 0 then
-    v.vname
-  else
-    v.vname ^ "@" ^ (string_of_int v.vuid)
-
 let vkind_compare_chain : (var_kind -> var_kind -> int) ref = ref (fun vk1 vk2 ->
     match vk1, vk2 with
     | V_orig, V_orig -> 0

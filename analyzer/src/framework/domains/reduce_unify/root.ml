@@ -54,7 +54,7 @@ struct
 
   let meet a1 a2 =
     let (d1', s1'), (d2', s2') = RedUniDomain.unify Context.empty a1 a2 in
-    RedUniDomain.meet d1' d2', SubDomain.join s1' s2'
+    RedUniDomain.meet d1' d2', SubDomain.meet s1' s2'
 
   let widening ctx a1 a2 =
     let (d1', s1'), (d2', s2') = RedUniDomain.unify ctx a1 a2 in
@@ -91,7 +91,7 @@ struct
 
   let init man ctx prog flow =
     let ctx', flow' = SubDomain.init (tail_man man) ctx prog flow in
-    RedUniDomain.init (head_man man) ctx' prog flow'
+    RedUniDomain.init (head_man man) (tail_man man) ctx' prog flow'
 
 end
 

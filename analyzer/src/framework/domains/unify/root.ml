@@ -54,7 +54,7 @@ struct
 
   let meet a1 a2 =
     let (d1', s1'), (d2', s2') = UniDomain.unify Context.empty a1 a2 in
-    UniDomain.meet d1' d2', SubDomain.join s1' s2'
+    UniDomain.meet d1' d2', SubDomain.meet s1' s2'
 
   let widening ctx a1 a2 =
     let (d1', s1'), (d2', s2') = UniDomain.unify ctx a1 a2 in

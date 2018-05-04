@@ -105,7 +105,7 @@ let fwd_filter op a1 a2 =
   | O_le    -> bot_apply2 false false I.is_log_leq a1 a2
   | O_gt    -> bot_apply2 false false I.is_log_gt a1 a2
   | O_ge    -> bot_apply2 false false I.is_log_geq a1 a2
-  | _ -> assert false
+  | _ -> Framework.Exceptions.fail "fwd_filter: unknown operator %a" Framework.Pp.pp_operator op
 
 let assume_true a =
   bot_absorb1 I.meet_nonzero a
@@ -145,7 +145,7 @@ let bwd_binop op a1 a2 r =
       | O_bit_xor -> bot_to_exn (I.bwd_bit_xor a1 a2 r)
       | O_bit_rshift -> bot_to_exn (I.bwd_shift_right a1 a2 r)
       | O_bit_lshift -> bot_to_exn (I.bwd_shift_left a1 a2 r)
-      | _ -> assert false
+      | _ -> Framework.Exceptions.fail "bwd_binop: unknown operator %a" Framework.Pp.pp_operator op
     in
     Nb aa1, Nb aa2
   with Found_BOT ->
@@ -162,7 +162,7 @@ let bwd_filter op a1 a2 =
       | O_gt -> bot_to_exn (I.filter_gt a1 a2)
       | O_le -> bot_to_exn (I.filter_leq a1 a2)
       | O_ge -> bot_to_exn (I.filter_geq a1 a2)
-      | _ -> assert false
+      | _ -> Framework.Exceptions.fail "bwd_filter: unknown operator %a" Framework.Pp.pp_operator op
     in
     Nb aa1, Nb aa2
   with Found_BOT ->

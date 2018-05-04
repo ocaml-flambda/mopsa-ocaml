@@ -18,7 +18,7 @@ open Context
 type channel = Reduce.Domain.channel
 type 'a rflow = 'a Reduce.Domain.rflow
 type 'a revals = 'a Reduce.Domain.revals
-               
+
 (** Abstract domain signature. *)
 module type DOMAIN = functor(SubDomain: Stateful.DOMAIN) ->
 sig
@@ -26,7 +26,7 @@ sig
   include Lattice.LATTICE
 
   val init :
-    ('a, t) manager ->
+    ('a, t) manager -> ('a, SubDomain.t) manager ->
     Context.context ->
     Ast.program -> 'a flow ->
     Context.context * 'a flow
@@ -78,3 +78,6 @@ let eval_to_rexec = Reduce.Domain.eval_to_rexec
 let eval_to_orexec = Reduce.Domain.eval_to_orexec
 let add_eval_mergers = Reduce.Domain.add_eval_mergers
 let mk_local_manager = Unify.Domain.mk_local_manager
+let map_flow f none = function
+  | None -> none
+  | Some rflow -> f rflow.Reduce.Domain.out

@@ -64,14 +64,9 @@ module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
     }
   }
 
-  let init man ctx prog flow =
-    let ctx, flow = Head.init (head_man man) ctx prog flow in
-    Tail.init (tail_man man) ctx prog flow
-
-
-  let init man ctx prog flow =
-    let ctx, flow = Head.init (head_man man) ctx prog flow in
-    Tail.init (tail_man man) ctx prog flow
+  let init man subman ctx prog flow =
+    let ctx, flow = Head.init (head_man man) subman ctx prog flow in
+    Tail.init (tail_man man) subman ctx prog flow
 
 
   (** Execute statement on both domains and merge their post conditions *)

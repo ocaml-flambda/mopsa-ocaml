@@ -10,7 +10,7 @@
         "c.libs.stdlib",
 
         //Desugarisation
-        // "c.desugar.andor",
+        "c.desugar.andor",
         "c.desugar.assign",
         "c.desugar.loops",
         "c.desugar.cast",
@@ -28,19 +28,19 @@
             "unify": "universal.heap.recency",
             "over": {
                 //Memory abstraction
-                "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
+                "reduce-unify": ["c.memory.cell.expand"],
                 "over": {
-		                "iter": [
-			                  "c.memory.pointer",
+                    "iter": [
+                        "c.memory.pointer",
                         "c.memory.machine_integers",
-			                  //Numeric abstraction
-			                  {
-			                      "reduce": [
-				                        "universal.numeric.domains.boxes.int",
-				                        "universal.numeric.domains.boxes.congruence"
-			                      ]
-			                  }
-		                ]
+                        //Numeric abstraction
+                        {
+                            "reduce": [
+                                "universal.numeric.domains.boxes.int",
+                                "universal.numeric.domains.boxes.congruence"
+                            ]
+                        }
+                    ]
                 }
             }
         }

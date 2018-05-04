@@ -49,6 +49,21 @@ let compare_cell c c' =
 type var_kind +=
   | V_smash_cell of cell
 
+let annotate_var v =
+  match v.vkind with
+  | V_orig -> { v with vkind = V_smash_cell {b = V v; t = v.vtyp}}
+  | V_smash_cell _ -> v
+  | _ -> assert false
+
+let cell_of_var v =
+  match v.vkind with
+  | V_smash_cell c -> c
+  | _ -> assert false
+
+let extract_cell v =
+  match vkind v with
+  | V_smash_cell c -> c
+  | _ -> assert false
 
 
 (*==========================================================================*)
@@ -92,34 +107,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     get_domain_cur local_manager flow'
 
 
+  let sub_exec subman ctx stmt flow =
+    match SubDomain.exec subman ctx stmt flow with
+    | Some flow -> flow
+    | None -> assert false
+
   (*==========================================================================*)
-  (**                    {2 Cells Initialization}                             *)
+  (**                       {2 Cell managements}                              *)
   (*==========================================================================*)
 
-  let init_manager man ctx =
-    Init.{
-      scalar = (fun v init is_global range flow -> return flow);
-      array =  (fun a init is_global range flow -> return flow);
-      strct =  (fun s init is_global range flow -> return flow);
-    }
-
-  let init man ctx prog flow =
-    let flow = set_domain_cur empty man flow in
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      let flow' = Init.fold_globals (init_manager man ctx) globals ctx flow in
-      ctx, flow'
-
-    | _ -> ctx, flow
-
+  let remove_overlapping_cells v range man subman ctx flow =
+    let u = get_domain_cur man flow in
+    let c = cell_of_var v in
+    CS.fold (fun v' acc ->
+        let c' = extract_cell v' in
+        if compare_base c.b c'.b = 0 then
+          sub_exec subman ctx (Universal.Ast.mk_remove_var v' range) acc
+        else
+          acc
+      ) u flow
 
 
   (*==========================================================================*)
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
-  let exec (man : ('a, t) manager) subman (ctx : Framework.Context.context) (stmt : stmt) (flow : 'a flow)
-    : 'a rflow option =
+  let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
     | S_c_local_declaration(v, init) ->
@@ -128,25 +141,72 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | S_rename_var(v, v') ->
       assert false
 
-    | S_remove_var v when is_c_int_type v.vtyp ->
-      None
+    | S_remove_var ({vkind = V_orig | V_smash_cell _} as v) when is_c_int_type v.vtyp ->
+      let u = get_domain_cur man flow in
+      let v' = annotate_var v in
+      let u' = remove v' u in
+      let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
+      let flow = set_domain_cur u' man flow in
+      SubDomain.exec subman ctx stmt' flow |>
+      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
+
+
+    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_int_type v.vtyp ->
+      let v' = annotate_var v in
+      let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
+      SubDomain.exec subman ctx stmt' flow |>
+      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
     | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
-      None
+      eval_list [rval; lval] (man.eval ctx) flow |>
+      eval_to_orexec (fun el flow ->
+          match el with
+          | [rval; {ekind = E_var ({vkind = V_smash_cell _} as v)} as lval] ->
+            let stmt' = {stmt with skind = S_assign(lval, rval, WEAK)} in
+            SubDomain.exec subman ctx stmt' flow |>
+            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
+            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 
-    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
-      None
+          | _ -> None
+        ) (man.exec ctx) man.flow
 
     | _ -> None
 
 
-  let eval man subman ctx exp flow =
+  and eval man subman ctx exp flow =
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
-      None
+      let v = annotate_var v in
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, []) |>
+      add_eval_mergers []
 
     | E_c_deref(p) ->
-      None
+      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            oeval_singleton (Some ({exp with ekind = E_c_function fundec}), flow, []) |>
+            add_eval_mergers []
+
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
+            assert false
+
+          | E_c_points_to(E_p_null) ->
+            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+
+          | E_c_points_to(E_p_invalid) ->
+            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+          | _ -> assert false
+        )
 
     | E_c_arrow_access(p, i, f) ->
       None
@@ -158,6 +218,36 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       None
 
     | _ -> None
+
+
+    (*==========================================================================*)
+  (**                    {2 Cells Initialization}                             *)
+  (*==========================================================================*)
+
+  and init_manager man subman ctx =
+    Init.{
+      (* Initialization of arrays *)
+      array =  (fun a init is_global range flow ->
+          return flow
+        );
+
+      (* Initialization of structs *)
+      strct =  (fun s init is_global range flow ->
+          return flow
+        );
+    }
+
+  let init man subman ctx prog flow =
+    let flow = set_domain_cur empty man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      ctx, flow'
+
+    | _ -> ctx, flow
+
+
+
 
 
   and ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
