@@ -20,7 +20,7 @@ juliet=$1/C/testcases
 
 # CWE476_NULL_Pointer_Dereference \
 cwes="CWE190_Integer_Overflow"
-subdirs="s01 s02"
+subdirs="s01 s02 s03 s04 s05 s06 s07"
 
 echo "["
 for cwe in ${cwes}; do

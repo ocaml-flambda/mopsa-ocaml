@@ -38,6 +38,7 @@ struct
     | "_mopsa_set_debug_channels"
     | "_mopsa_range"
     | "_mopsa_rand_int"
+    | "_mopsa_rand_unsigned_long"
     | "_mopsa_panic"
     | "_mopsa_assert_exists"
     | "_mopsa_assert_true"
@@ -129,6 +130,21 @@ struct
             erange
         ) erange) flow in
       re_eval_singleton (man.eval ctx) (Some v, flow, [mk_remove_var tmp erange])
+
+    | E_c_call({ekind = E_c_builtin_function "_mopsa_rand_unsigned_long"}, [a; b]) ->
+      let erange = exp.erange in
+      let typ = T_c_integer(C_unsigned_long) in
+      let tmp = mktmp ~vtyp:typ () in
+      let v = mk_var tmp erange in
+      let flow = man.exec ctx (mk_assume (
+          mk_binop
+            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+            O_log_and
+            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+            erange
+        ) erange) flow in
+      re_eval_singleton (man.eval ctx) (Some v, flow, [mk_remove_var tmp erange])
+
 
     | E_c_call({ekind = E_c_builtin_function "_mopsa_panic"}, [msg]) ->
       let rec remove_cast e =

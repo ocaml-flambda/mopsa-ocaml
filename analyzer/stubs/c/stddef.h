@@ -5,7 +5,6 @@
 #define size_t long unsigned int
 #define ssize_t long int
 
-typedef long int __off_t;
 typedef unsigned short wchar_t;
 
 #endif //_STDDEF_H

@@ -19,10 +19,12 @@ int atoi(const char *str) {
 }
 
 void *memset(void *s, int c, size_t n) {
-  unsigned char* p=s;
-  while(n--)
-    *p++ = (unsigned char)c;
+  size_t i;
+  for (i = 0 ; i < n ; i++) {
+    ((char*) s)[i] = _mopsa_range_char();
+  };
   return s;
+
 }
 
 int socket(int domain, int type, int protocol) {
@@ -43,10 +45,8 @@ int close(int fd) {
 
 ssize_t recv(int socket, void *buffer, size_t length, int flags) {
   size_t i;
-  _mopsa_set_debug_channels("all");
   for (i = 0 ; i < length ; i++) {
     ((char*) buffer)[i] = _mopsa_range_char();
   };
-  return _mopsa_range_long();
-
+  return _mopsa_rand_int(-1,length);
 }

@@ -99,19 +99,9 @@ let verbose_printing analysis_res =
 (** Start the analysis of [prog] using [domain] as the global abstraction. *)
 let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
   (* Top layer analyzer *)
-    let result =
-      try
-        let t, alarms = perform_analysis domain prog in
-        Success(t, alarms)
-      with
-      | Framework.Exceptions.Panic msg -> ExcPanic msg
-      | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
-    in
-    match Options.(common_options.output_mode) with
-    | "bench" ->
-      bench_printing result
-    | _ ->
-      verbose_printing result
+
+  let t, alarms = perform_analysis domain prog in
+  Success(t, alarms)
 
 let () =
   init ();
@@ -120,24 +110,31 @@ let () =
   Arg.parse !Options.spec (fun filename ->
       files := filename :: !files;
       if !Arg.current = n - 1 then
-        try
-          let prog =
-            match Options.(common_options.lang) with
-            | "c" ->
-              Lang.C.Setup.start ();
-              Lang.C.Frontend.parse_program !files
-            | "python" ->
-              Lang.Python.Setup.start ();
-              Lang.Python.Frontend.parse_program !files
-            | _ ->
-              Framework.Exceptions.panic "Unknown language"
-          in
-
-          Debug.info "Parsing configuration file ...";
-          let domain = Config.parse Options.(common_options.config) in
-
-          (* Start the analysis *)
-          start domain prog
-        with Framework.Exceptions.Panic msg ->
-          Debug.fail "Panic: @[%s@]" msg
+        let result =
+          try
+            let prog =
+              match Options.(common_options.lang) with
+              | "c" ->
+                Lang.C.Setup.start ();
+                Lang.C.Frontend.parse_program !files
+              | "python" ->
+                Lang.Python.Setup.start ();
+                Lang.Python.Frontend.parse_program !files
+              | _ ->
+                Framework.Exceptions.panic "Unknown language"
+            in
+            Debug.info "Parsing configuration file ...";
+            let domain = Config.parse Options.(common_options.config) in
+            (* Start the analysis *)
+            let t, alarms = perform_analysis domain prog in
+            Success(t, alarms)
+          with
+          | Framework.Exceptions.Panic msg -> ExcPanic msg
+          | e -> ExcUncaught(String.escaped (Printexc.to_string e), Printexc.get_backtrace ())
+        in
+        match Options.(common_options.output_mode) with
+        | "bench" ->
+          bench_printing result
+        | _ ->
+          verbose_printing result
     ) "Modular Open Platform for Static Analysis"
