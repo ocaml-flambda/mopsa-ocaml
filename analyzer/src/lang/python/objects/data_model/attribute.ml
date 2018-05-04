@@ -240,7 +240,7 @@ struct
   let exec man ctx stmt flow =
     match skind stmt with
     (* Assignments to an attribute of an object *)
-    | Universal.Ast.S_assign({ekind = E_py_attribute(obj, attr)}, rval, kind) ->
+    | Universal.Ast.S_assign({ekind = E_py_attribute(obj, attr)}, rval, mode) ->
       eval_list [rval; obj] (man.eval ctx) flow |>
       eval_to_exec
         (fun el flow ->
@@ -252,7 +252,7 @@ struct
                else
                  mk_dynamic_attribute obj attr erange, map_domain_cur (add (obj, attr)) man flow
              in
-             man.exec ctx (mk_assign ~kind lval rval stmt.srange) flow
+             man.exec ctx (mk_assign ~mode lval rval stmt.srange) flow
            | _ ->
              man.exec ctx (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) flow
         )

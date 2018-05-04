@@ -496,7 +496,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-    | S_assign(lval, rval, mode) when is_c_int_type lval.etyp ->
+    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
       eval_list [rval; lval] (man.eval ctx) flow |>
       eval_to_orexec (fun el flow ->
           match el with
@@ -506,13 +506,16 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
             oflow_compose (
               fun flow ->
-                let rmin, rmax = rangeof c.t in
-                let cond = range_cond lval rmin rmax (erange lval) in
-                let stmt'' = (mk_assume cond (tag_range range "assume range")) in
-                let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
-                let rep = man.exec ctx stmt'' flow in
-                let () = debug "the resulting flow is : %a" man.flow.print rep in
-                rep
+                if is_c_int_type c.t then
+                  let rmin, rmax = rangeof c.t in
+                  let cond = range_cond lval rmin rmax (erange lval) in
+                  let stmt'' = (mk_assume cond (tag_range range "assume range")) in
+                  let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
+                  match SubDomain.exec subman ctx stmt'' flow with
+                  | Some flow -> flow
+                  | None -> assert false
+                else
+                  flow
             ) |>
             oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 

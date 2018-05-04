@@ -104,6 +104,10 @@ let to_math_op op = match op with
   | O_div t -> O_div T_int
   | O_mod t -> O_mod T_int
   | _ -> op
+
+let is_int_type = function
+  | T_int -> true
+  | _ -> false
 (*==========================================================================*)
                            (** {2 Heap addresses} *)
 (*==========================================================================*)
@@ -307,8 +311,8 @@ type stmt_kind +=
 let mk_rename v v' =
   mk_stmt (S_rename_var (v, v'))
 
-let mk_assign ?(kind = STRONG)v e =
-  mk_stmt (S_assign (v, e, kind))
+let mk_assign ?(mode = STRONG)v e =
+  mk_stmt (S_assign (v, e, mode))
 
 let mk_assume e =
   mk_stmt (S_assume e)

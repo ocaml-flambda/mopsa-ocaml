@@ -62,11 +62,11 @@ struct
 
     | _ -> None
 
-  and assign_iter man ctx el iter kind range flow =
+  and assign_iter man ctx el iter mode range flow =
     let stmtl =
       List.fold_left (fun acc e ->
           mk_assign
-            e ~kind
+            e ~mode
             (mk_py_call
                (mk_addr (Builtins.from_string "next") (tag_range range "next addr"))
                [mk_addr iter (tag_range range "iter addr")]
