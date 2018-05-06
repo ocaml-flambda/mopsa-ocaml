@@ -601,6 +601,13 @@ let rec under_array_type (t : typ) : typ =
   | T_c_array (t', _) -> t'
   | _ -> failwith "[under_array_type] called with a non array argument"
 
+let under_type (t: typ) : typ =
+  match remove_typedef t |> remove_qual with
+  | T_c_array _ -> under_array_type t
+  | T_c_pointer _ -> under_pointer_type t
+  | _ -> failwith "[under_type] called with a non array/pointer argument"
+
+
 let get_array_constant_length t =
   match remove_typedef t |> remove_qual with
   | T_c_array(_, C_array_length_cst n) -> Z.to_int n

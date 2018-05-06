@@ -217,7 +217,7 @@ struct
                  assert false
              )
 
-           | _ -> Debug.fail "&(%a) not known" pp_expr e;
+           | _ -> Debug.fail "eval_p: &(%a) not known" pp_expr e;
         )
 
     | E_binop(O_plus _, e1, e2) when

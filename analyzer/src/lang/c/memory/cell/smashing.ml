@@ -133,16 +133,19 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Found (v, c) -> Some (v, c)
 
   let var_of_cell (c: cell) cs =
+    debug "var_of_cell %a in @[%a@]" pp_cell c print cs;
     match exist_and_find_cell c cs with
-    | Some (v, _) -> v
+    | Some (v, _) -> debug "already exists"; v
     | None ->
+      debug "new cell"; 
       { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
-        vuid = 0;
+        vuid = base_uid c.b;
         vtyp = c.t;
         vkind = V_smash_cell c;
       }
 
   let add_var ctx range (v : var) (u, s) =
+    debug "add_var %a in %a" pp_var v print u;
     if CS.mem v u then u, s
     else if not (is_c_scalar_type v.vtyp) then u, s
     else if is_c_pointer_type v.vtyp then CS.add v u, s
@@ -151,7 +154,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       let (a, b) = rangeof c.t in
       let e = mk_z_interval a b range in
       let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
-      u, local_exec ctx stmt s
+      CS.add v u, local_exec ctx stmt s
 
   let remove_overlapping_cells v range man subman ctx flow =
     let u = get_domain_cur man flow in
@@ -297,10 +300,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                 eval_base_offset
                   (fun acc v flow ->
                      debug "var case";
+                     let u = get_domain_cur man flow in
+                     let s = get_domain_cur subman flow in
+                     let (u', s') = add_var ctx stmt.srange v (u, s) in
+                     debug "new variable %a in %a" pp_var v print u';
+                     let flow' = set_domain_cur u' man flow |>
+                                 set_domain_cur s' subman
+                     in
                      let lval' = {lval with ekind = E_var v} in
                      let stmt' = {stmt with skind = S_assign(lval', rval, WEAK)} in
                      (** FIXME: filter flow with (p == &v) *)
-                     SubDomain.exec subman ctx stmt' flow |>
+                     SubDomain.exec subman ctx stmt' flow' |>
                      oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
                      orflow_join man.flow acc
                   )
@@ -330,21 +340,39 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
       let v = annotate_var v in
-      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow, []) |>
+      let u = get_domain_cur man flow in
+      let s = get_domain_cur subman flow in
+      let (u', s') = add_var ctx exp.erange v (u, s) in
+      debug "new variable %a in %a" pp_var v print u';
+      let flow' = set_domain_cur u' man flow |>
+                   set_domain_cur s' subman
+      in
+      re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow', []) |>
       add_eval_mergers []
 
     | E_c_deref(p) ->
       eval_and_expand_deref man subman ctx exp p flow
 
-    | E_c_arrow_access(p, i, f) ->
-      None
-
     | E_c_array_subscript(arr, idx) ->
       let p = mk_binop arr math_plus idx ~etyp:(etyp arr) exp.erange in
       eval_and_expand_deref man subman ctx exp p flow
 
-    | E_c_member_access(r, idx, f) ->
-      None
+    | E_c_member_access(r, i, f) ->
+      let t = r.etyp in
+      let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+      let field = List.nth record.c_record_fields i in
+      let t' = field.c_field_type in
+      let p = mk_c_address_of r exp.erange in
+      let p' = mk_binop p math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer t') exp.erange in
+      eval_and_expand_deref man subman ctx exp p' flow
+
+    | E_c_arrow_access(p, i, f) ->
+      let t = under_type p.etyp in
+      let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+      let field = List.nth record.c_record_fields i in
+      let t' = field.c_field_type in
+      let p' = mk_binop p math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer t') exp.erange in
+      eval_and_expand_deref man subman ctx exp p' flow
 
     | _ -> None
 
@@ -363,10 +391,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           eval_base_offset
             (fun acc v flow ->
                debug "var case";
-               let v', flow' = expand_relation subman ctx v range flow in
+               let u = get_domain_cur man flow in
+               let s = get_domain_cur subman flow in
+               let (u', s') = add_var ctx exp.erange v (u, s) in
+               debug "new variable %a in %a" pp_var v print u';
+               let flow' = set_domain_cur u' man flow |>
+                           set_domain_cur s' subman
+               in
+               let v', flow'' = expand_relation subman ctx v range flow' in
                let exp' = {exp with ekind = E_var v'} in
                (** FIXME: filter flow with (p == &v) *)
-               oeval_singleton (Some (exp', [mk_remove_var v' range]), flow, [mk_remove_var v' range]) |>
+               oeval_singleton (Some (exp', [mk_remove_var v' range]), flow'', [mk_remove_var v' range]) |>
                oeval_join acc
             )
             (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
