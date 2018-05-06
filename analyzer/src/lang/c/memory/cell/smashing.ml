@@ -65,6 +65,13 @@ let extract_cell v =
   | V_smash_cell c -> c
   | _ -> assert false
 
+let new_var_of_cell c =
+  { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
+    vuid = base_uid c.b;
+    vtyp = c.t;
+    vkind = V_smash_cell c;
+  }
+
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -136,14 +143,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     debug "var_of_cell %a in @[%a@]" pp_cell c print cs;
     match exist_and_find_cell c cs with
     | Some (v, _) -> debug "already exists"; v
-    | None ->
+    | None -> 
       debug "new cell"; 
-      { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
-        vuid = base_uid c.b;
-        vtyp = c.t;
-        vkind = V_smash_cell c;
-      }
-
+      new_var_of_cell c
+        
   let add_var ctx range (v : var) (u, s) =
     debug "add_var %a in %a" pp_var v print u;
     if CS.mem v u then u, s
@@ -434,7 +437,43 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     Init.{
       (* Initialization of arrays *)
       array =  (fun a init is_global range flow ->
-          return flow
+          let v = match ekind a with E_var v -> v | _ -> assert false in
+          let c = annotate_var v |> cell_of_var in
+          let c' = {b = c.b; t = under_array_type a.etyp} in
+          let v' = new_var_of_cell c' in
+          let a' = mk_var v' range in
+          let n = get_array_constant_length a.etyp in
+          match init with
+          | None when not is_global ->
+            return flow
+
+          | None when is_global ->
+            init_expr man ctx (init_manager man subman ctx) a' init is_global range flow |>
+            return
+
+          | Some (C_init_list (l, filler)) ->
+            let rec aux acc i =
+              if i = n then acc
+              else
+                let init = if i < List.length l then Some (List.nth l i) else filler in
+                let flow = init_expr man ctx (init_manager man subman ctx) a' init is_global range flow in
+                aux (man.flow.join acc flow) (i + 1)
+            in
+            aux man.flow.bottom 0 |>
+            return
+          
+          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
+            let rec aux acc i =
+              if i = n then acc
+              else
+                let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
+                let flow = init_expr man ctx (init_manager man subman ctx) a' init is_global range flow in
+                 aux (man.flow.join acc flow) (i + 1)
+            in
+            aux man.flow.bottom 0 |>
+            return
+
+          | _ -> assert false
         );
 
       (* Initialization of structs *)
