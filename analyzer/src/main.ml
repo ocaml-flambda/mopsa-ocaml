@@ -129,7 +129,7 @@ let () =
             let t, alarms = perform_analysis domain prog in
             Success(t, alarms)
           with
-          | Framework.Exceptions.Panic msg -> ExcPanic msg
+          | Framework.Exceptions.Panic msg -> ExcPanic (String.escaped msg)
           | e -> ExcUncaught(String.escaped (Printexc.to_string e), Printexc.get_backtrace ())
         in
         match Options.(common_options.output_mode) with
