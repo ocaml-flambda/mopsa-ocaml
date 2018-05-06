@@ -361,26 +361,31 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       eval_and_expand_deref man subman ctx exp p flow
 
     | E_c_member_access(r, i, f) ->
+      debug "member access %a.%s" pp_expr r f;
       let t = r.etyp in
       let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
       let field = List.nth record.c_record_fields i in
       let t' = field.c_field_type in
-      let p = mk_c_address_of r exp.erange in
-      let p' = mk_binop p math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer t') exp.erange in
-      eval_and_expand_deref man subman ctx exp p' flow
+      debug "t field = %a" pp_typ t';
+      let p = mk_c_cast (mk_c_address_of r exp.erange) (T_c_pointer u8) exp.erange in
+      let p' = mk_binop p math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer u8) exp.erange in
+      let p'' = mk_c_cast p' (T_c_pointer t') exp.erange in
+      eval_and_expand_deref man subman ctx exp p'' flow
 
     | E_c_arrow_access(p, i, f) ->
       let t = under_type p.etyp in
       let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
       let field = List.nth record.c_record_fields i in
       let t' = field.c_field_type in
-      let p' = mk_binop p math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer t') exp.erange in
-      eval_and_expand_deref man subman ctx exp p' flow
+      let p' = mk_c_cast p (T_c_pointer u8) exp.erange in
+      let p'' = mk_binop p' math_plus (mk_int field.c_field_offset exp.erange) ~etyp:(T_c_pointer u8) exp.erange in
+      let p''' = mk_c_cast p'' (T_c_pointer t') exp.erange in
+      eval_and_expand_deref man subman ctx exp p''' flow
 
     | _ -> None
 
   and eval_and_expand_deref man subman ctx exp p flow =
-    debug "eval_and_expand_deref";
+    debug "eval_and_expand_deref %a (%a)" pp_expr p pp_typ (p.etyp);
     let range = exp.erange in
     man.eval ctx (mk_c_resolve_pointer p range) flow |>
     eval_compose (fun pe flow ->
@@ -478,7 +483,18 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
       (* Initialization of structs *)
       strct =  (fun s init is_global range flow ->
-          return flow
+          match init with
+          | None when not is_global -> return flow
+
+          | None
+          | Some (C_init_list _) ->
+            deeper None
+
+          | Some (C_init_expr e) ->
+            man.exec ctx (mk_assign s e range) flow |>
+            return
+
+          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
         );
     }
 

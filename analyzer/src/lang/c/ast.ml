@@ -665,6 +665,9 @@ let mk_c_call_stmt f args range =
   let exp = mk_c_call f args (tag_range range "call") in
   mk_stmt (S_expression exp) range
 
+let mk_c_cast e t range =
+  mk_expr (E_c_cast(e, true)) ~etyp:t range
+
 let () =
   register_typ_compare (fun next t1 t2 ->
       match remove_typedef t1, remove_typedef t2 with
