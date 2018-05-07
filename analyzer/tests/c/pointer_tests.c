@@ -1,12 +1,12 @@
 #include "mopsa.h"
 #include <stddef.h>
 
-/* void test_deref_in_rval() { */
-/*   int i = 10; */
-/*   int* p = &i; */
-/*   i = i + 1; */
-/*   _mopsa_assert_true(*p == 11); */
-/* } */
+void test_deref_in_rval() {
+  int i = 10;
+  int* p = &i;
+  i = i + 1;
+  _mopsa_assert_true(*p == 11);
+}
 
 void test_deref_in_lval() {
   int i = 10;

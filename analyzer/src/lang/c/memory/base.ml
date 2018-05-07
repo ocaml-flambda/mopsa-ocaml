@@ -26,3 +26,7 @@ let compare_base b b' = match b, b' with
   | V v, V v' -> compare_var v v'
   | A a, A a' -> Universal.Ast.compare_addr a a'
   | _ -> compare b b'
+
+let base_uid = function
+  | V v -> v.vuid
+  | A a -> a.addr_uid
