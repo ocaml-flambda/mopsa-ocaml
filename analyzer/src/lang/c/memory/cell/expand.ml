@@ -110,6 +110,20 @@ let base_of_cell = function
   | OffsetCell c -> c.b
   | AnyCell c -> c.b
 
+let var_of_new_ocell c =
+  { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_ocell c in Format.flush_str_formatter ());
+    vuid = 0;
+    vtyp = c.t;
+    vkind = V_expand_cell (OffsetCell c);
+  }
+
+let var_of_xcell (c: xcell) =
+  { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_xcell c in Format.flush_str_formatter ());
+    vuid = 0;
+    vtyp = c.t;
+    vkind = V_expand_cell (AnyCell c);
+  }
+
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -151,19 +165,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let var_of_ocell (c: ocell) cs =
     match exist_and_find_cell (fun c' -> compare c c' = 0) cs with
     | Some (v, _) -> v
-    | None ->
-      { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_ocell c in Format.flush_str_formatter ());
-        vuid = 0;
-        vtyp = c.t;
-        vkind = V_expand_cell (OffsetCell c);
-      }
-
-  let var_of_xcell (c: xcell) =
-    { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_xcell c in Format.flush_str_formatter ());
-      vuid = 0;
-      vtyp = c.t;
-      vkind = V_expand_cell (AnyCell c);
-    }
+    | None -> var_of_new_ocell c
 
 
 
@@ -484,7 +486,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match skind stmt with
     | S_c_local_declaration({vkind = V_orig} as v, init) ->
       let v' = annotate_var_kind v in
-      Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
+      Init.init_local (init_manager man subman ctx) v' init range flow |>
       return_flow
 
     | S_rename_var(v, v') ->
@@ -643,39 +645,63 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   and init_manager man subman ctx =
     Init.{
+      (* Initialization of scalars *)
+      scalars = (fun v e range flow ->
+          match ekind v with
+          | E_var v ->
+            let v = annotate_var_kind v in
+            let u = get_domain_cur man flow in
+            let s = get_domain_cur subman flow in
+            let (u', s') = add_var ctx range v (u, s) in
+            let flow' = set_domain_cur u' man flow |>
+                         set_domain_cur s' subman
+            in
+            let stmt = mk_assign (mk_var v range) e range in
+            sub_exec subman ctx stmt flow'
+
+          | _ -> assert false
+        );
+
       (* Initialization of arrays *)
-      array =  (fun a init is_global range flow ->
-          match init with
-          (* Local uninitialized arrays are kept ⟙ *)
-          | None when not is_global -> return flow
-
-          (* Otherwise: *)
-          | None                   (* a. when the array is global and uninitialized *)
-          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
-          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
-            ->
-            (* just initialize a limited number of cells *)
-            deeper (Some !opt_max_expand)
-
-          | _ ->
-            Framework.Exceptions.panic "Array initialization not supported"
-
+      arrays =  (fun a is_global init_list range flow ->
+          match ekind a with
+          | E_var a ->
+            let rec aux i l flow =
+              if i = !opt_max_expand then flow
+              else
+                match l with
+                | [] -> flow
+                | init :: tl ->
+                  let c = annotate_var_kind a |> extract_ocell in
+                  let t' = under_array_type c.t in
+                  let ci = {b = c.b; o = Z.(c.o + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                  let ai = var_of_new_ocell ci in
+                  let flow' = init_expr (init_manager man subman ctx) (mk_var ai range) is_global init range flow in
+                  aux (i + 1) tl flow'
+            in
+            aux 0 init_list flow
+          | _ -> assert false
         );
 
       (* Initialization of structs *)
-      strct =  (fun s init is_global range flow ->
-          match init with
-          | None when not is_global -> return flow
-
-          | None
-          | Some (C_init_list _) ->
-            deeper None
-
-          | Some (C_init_expr e) ->
-            man.exec ctx (mk_assign s e range) flow |>
-            return
-
-          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+      structs =  (fun s is_global init_list range flow ->
+          match ekind s with
+          | E_var a ->
+            let rec aux i l flow =
+              match l with
+              | [] -> flow
+              | init :: tl ->
+                let c = annotate_var_kind a |> extract_ocell in
+                let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
+                let ef = var_of_new_ocell cf in
+                let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
+                aux (i + 1) tl flow'
+            in
+            aux 0 init_list flow
+          | _ -> assert false
         );
     }
 
@@ -683,7 +709,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let flow = set_domain_cur empty man flow in
     match prog.prog_kind with
     | C_program(globals, _) ->
-      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      let flow' = Init.fold_globals ctx (init_manager man subman ctx) globals flow in
       ctx, flow'
 
     | _ -> ctx, flow
