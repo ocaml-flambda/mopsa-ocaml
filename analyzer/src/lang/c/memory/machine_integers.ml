@@ -36,6 +36,8 @@ let is_c_div = function
   | O_div t | O_mod t when t |> is_c_type -> true
   | _ -> false
 
+let cast_alarm = ref true
+
 let check_overflow typ man ctx range exp =
   eval_compose (fun e flow ->
       let rmin, rmax = typ |> rangeof in
@@ -119,7 +121,7 @@ struct
         let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
         oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
 
-    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
+    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           let t  = etyp exp in
@@ -137,16 +139,29 @@ struct
               assume_to_eval cond
                 (fun tflow -> debug "true flow : %a" man.flow.print tflow ; oeval_singleton (Some {e with etyp = t}, tflow, []))
                 (fun fflow ->
-                   debug "false flow : %a" man.flow.print fflow ;
-                   let cur = man.flow.get TCur fflow in
-                   let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
-                   in
-                   re_eval_singleton (man.eval ctx)
-                     (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                            etyp   = t;
-                            erange = tag_range range "wrap"
-                           }), fflow2, []
-                     )
+                   if b && not (!cast_alarm) then
+                     begin
+                       debug "false flow : %a" man.flow.print fflow ;
+                       re_eval_singleton (man.eval ctx)
+                         (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
+                                etyp   = t;
+                                erange = tag_range range "wrap"
+                               }), fflow, []
+                         )
+                     end
+                   else
+                     begin
+                       debug "false flow : %a" man.flow.print fflow ;
+                       let cur = man.flow.get TCur fflow in
+                       let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
+                       in
+                       re_eval_singleton (man.eval ctx)
+                         (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
+                                etyp   = t;
+                                erange = tag_range range "wrap"
+                               }), fflow2, []
+                         )
+                     end
                 ) man ctx flow ()
             end
         )
@@ -166,4 +181,9 @@ end
 (*==========================================================================*)
 
 let setup () =
-  register_domain name (module Domain)
+  register_domain name (module Domain);
+  Framework.Options.register (
+    "-cast-alarm",
+    Arg.Bool(fun b -> cast_alarm := b),
+    "cast overflow alarms (default: true)"
+  );

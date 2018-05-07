@@ -9,8 +9,8 @@ files=$(find ${directory} -name "${casename}*.c" | sort -nr)
 good="${casename}_good"
 bad="${casename}_bad"
 echo "{\"name\": \"${casename}_good\", \"result\":"
-${MOPSADIR}/scripts/mopsa-c -output-mode "bench" -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
+${MOPSADIR}/scripts/mopsa-c -cast-alarm=false -output-mode "bench" -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${good}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo "},"
 echo "{\"name\": \"${casename}_bad\", \"result\":"
-${MOPSADIR}/scripts/mopsa-c -output-mode "bench" -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
+${MOPSADIR}/scripts/mopsa-c -cast-alarm=false -output-mode "bench" -stub ${MOPSADIR}/analyzer/stubs/c/juliet -c-function "${bad}" ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c ${files}
 echo "},"
