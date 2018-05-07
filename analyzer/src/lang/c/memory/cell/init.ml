@@ -81,7 +81,10 @@ and init_array man a is_global init range flow =
   man.arrays a is_global el range flow
 
 and init_union  man u is_global init range flow =
-  Framework.Exceptions.panic "Initialization of union not supported"
+  match init with
+  | None when not is_global -> flow
+  | _ ->
+    Framework.Exceptions.panic "Initialization of union not supported"
 
 
 and init_struct man s is_global init range flow =
