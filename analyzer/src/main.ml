@@ -62,7 +62,7 @@ type analysis_results =
 let bench_printing analysis_res =
   match analysis_res with
   | Success(t, None) | Success(t, Some []) ->
-    Format.printf "{\"time\": %.6f, \"alarms\": {}}" t
+    Format.printf "{\"time\": %.6f, \"alarms\": []}" t
   | Success(t, Some alarms) ->
     Format.printf "{\"time\": %.6f, \"alarms\": [%a]}"
       t

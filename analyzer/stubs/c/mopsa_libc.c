@@ -50,3 +50,23 @@ ssize_t recv(int socket, void *buffer, size_t length, int flags) {
   };
   return _mopsa_rand_int(-1,length);
 }
+
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+  return _mopsa_range_int();
+}
+
+int listen(int socket, int backlog) {
+  return _mopsa_range_int();
+}
+
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+  if (addr != NULL) {
+    int i;
+    addr->sa_family = _mopsa_range_unsigned_short();
+    for (i = 0 ; i < 14 ; i ++) {
+      addr->sa_data[i] = _mopsa_range_char();
+    };
+    *addrlen = _mopsa_range_long();
+  };
+  return _mopsa_range_int();
+}
