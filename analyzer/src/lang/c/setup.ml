@@ -13,6 +13,8 @@ let init () =
     );
     Machine_integers.setup ();
     Pointer.setup ();
+    Access_path.setup ();
+    Structured.setup ();
   );
   Desugar.(
     Andor.setup ();

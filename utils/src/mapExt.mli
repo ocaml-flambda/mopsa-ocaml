@@ -14,7 +14,11 @@ open MapExtSig
 module Make(Ord: OrderedType) : S with type key = Ord.t
 (** Generic functor to build a map data-type from ordered keys
     to an arbitrary type.
- *)     
+ *)
+
+val printer_default : map_printer
+(** Print as {key1:val1;key2:val2;...} *)
+          
 
 module StringMap   : S with type key = string
 module IntMap      : S with type key = int

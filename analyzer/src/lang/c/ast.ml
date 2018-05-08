@@ -635,6 +635,9 @@ let is_c_type = function
 let mk_c_address_of e range =
   mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range
 
+let mk_c_deref e range =
+  mk_expr (E_c_deref e) ~etyp:(under_pointer_type e.etyp) range
+
 let mk_c_member_access r f range =
   mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
 
