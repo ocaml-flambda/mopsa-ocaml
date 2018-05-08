@@ -729,7 +729,7 @@ let printer_default = {
     print_sep=";";
     print_end="}";
   }
-(** [MOPSA] Printe as {key1:val1;key2:val2;...} *)
+(** [MOPSA] Print as {key1:val1;key2:val2;...} *)
                     
 
 (* [MOPSA] A few useful instances *)

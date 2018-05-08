@@ -15,6 +15,9 @@ module Make(Ord: OrderedType) : S with type elt = Ord.t
 (** Generic functor to build a set data-type from ordered elements.
  *)     
 
+val printer_default : set_printer
+(** Print as set: {elem1,...,elemn}. *)
+
 module StringSet   : S with type elt = string
 module IntSet      : S with type elt = int
 module Int32Set    : S with type elt = int32
