@@ -156,29 +156,29 @@ struct
       let psl = find p a in
 
       if PSL.is_empty psl then oeval_singleton (None, flow, [])
-      else
-        PSL.fold (fun pt acc ->
-            match pt with
-            | P.F fundec ->
-              oeval_singleton (Some (E_p_fun fundec), flow, []) |>
-              oeval_join acc
+      else if PSL.is_top psl then  oeval_singleton (Some E_p_invalid, flow, []) 
+      else PSL.fold (fun pt acc ->
+          let a = add p (PSL.singleton pt) STRONG a in
+          let flow = set_domain_cur a man flow in
+          match pt with
+          | P.F fundec ->
+            oeval_singleton (Some (E_p_fun fundec), flow, []) |>
+            oeval_join acc
 
-            | P.B base ->
-              let a = add p (PSL.singleton pt) STRONG a in
-              let flow = set_domain_cur a man flow in
-              let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
-              oeval_singleton (Some pt', flow, []) |>
-              oeval_join acc
+          | P.B base ->
+            let pt' = E_p_var (base, (mk_var (mk_offset_var p) range), under_pointer_type p.vtyp) in
+            oeval_singleton (Some pt', flow, []) |>
+            oeval_join acc
 
-            | P.Null ->
-              oeval_singleton (Some E_p_null, flow, []) |>
-              oeval_join acc
+          | P.Null ->
+            oeval_singleton (Some E_p_null, flow, []) |>
+            oeval_join acc
 
-            | P.Invalid ->
-              oeval_singleton (Some E_p_invalid, flow, []) |>
-              oeval_join acc
+          | P.Invalid ->
+            oeval_singleton (Some E_p_invalid, flow, []) |>
+            oeval_join acc
 
-          ) psl None
+        ) psl None
 
     | E_var ({vkind = V_orig} as a) when is_c_array_type a.vtyp ->
       let pt = E_p_var (V a, mk_zero range, under_array_type a.vtyp) in
@@ -354,9 +354,11 @@ struct
 
            | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_one range), flow, [])
 
-           | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_zero range), flow, [])
+           | [E_p_invalid; _] | [_; E_p_invalid] ->
+             (* FIXME: maybe detect an error here? *)
+             oeval_singleton (Some (mk_int_interval 0 1 range), flow, [])
 
-           | _ -> assert false
+           | _ -> oeval_singleton (Some (mk_zero range), flow, [])
         )
 
     | E_binop(O_ne, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
@@ -378,9 +380,11 @@ struct
 
            | [E_p_null; E_p_null] -> oeval_singleton (Some (mk_zero range), flow, [])
 
-           | [E_p_var _; E_p_null] | [E_p_null; E_p_var _] -> oeval_singleton (Some (mk_one range), flow, [])
+           | [E_p_invalid; _] | [_; E_p_invalid] ->
+             (* FIXME: maybe detect an error here? *)
+             oeval_singleton (Some (mk_int_interval 0 1 range), flow, [])
 
-           | _ -> assert false
+           | _ -> oeval_singleton (Some (mk_one range), flow, [])
         )
 
     | E_binop(Universal.Ast.O_minus _, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
