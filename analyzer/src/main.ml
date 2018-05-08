@@ -103,6 +103,21 @@ let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
   let t, alarms = perform_analysis domain prog in
   Success(t, alarms)
 
+(** Return the path of the configuration file. 
+    First, check the existence of environment variable MOPSACONFIG.
+    Otherwise, use the provided command line option -config.
+*)
+let get_config_path () =
+  try
+    let config = Unix.getenv "MOPSACONFIG" in
+    if Sys.file_exists config then config
+    else
+      let config' = "configs/" ^ config in
+      if Sys.file_exists config' then config'
+      else Framework.Exceptions.fail "Unable to find configuration file %s" config
+  with Not_found ->
+    Options.(common_options.config)
+
 let () =
   init ();
   let files = ref [] in
@@ -124,7 +139,8 @@ let () =
                 Framework.Exceptions.panic "Unknown language"
             in
             Debug.info "Parsing configuration file ...";
-            let domain = Config.parse Options.(common_options.config) in
+            let config = get_config_path () in
+            let domain = Config.parse config in
             (* Start the analysis *)
             let t, alarms = perform_analysis domain prog in
             Success(t, alarms)
