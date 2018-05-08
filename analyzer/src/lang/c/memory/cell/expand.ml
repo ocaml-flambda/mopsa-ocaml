@@ -685,14 +685,15 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
       (* Initialization of structs *)
       structs =  (fun s is_global init_list range flow ->
-          match ekind s with
-          | E_var a ->
+          let s = match ekind s with E_var s -> s | _ -> assert false in
+          let c = annotate_var_kind s |> extract_ocell in
+          let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+          match init_list with
+          | Parts l ->
             let rec aux i l flow =
               match l with
               | [] -> flow
               | init :: tl ->
-                let c = annotate_var_kind a |> extract_ocell in
-                let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
@@ -700,8 +701,16 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                 let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
-            aux 0 init_list flow
-          | _ -> assert false
+            aux 0 l flow
+
+          | Expr e ->
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
+                let ef = var_of_new_ocell cf in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                init_expr (init_manager man subman ctx) (mk_var ef range) is_global (Some init) range acc
+              ) flow
         );
     }
 

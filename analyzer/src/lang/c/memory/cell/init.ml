@@ -16,10 +16,14 @@ open Universal.Ast
 open Ast
 
 
+type struct_init =
+  | Expr of expr
+  | Parts of c_init option list
+
 type 'a init_manager = {
   scalars : expr -> expr -> range -> 'a flow -> 'a flow;
   arrays  : expr -> bool -> c_init option list -> range -> 'a flow -> 'a flow;
-  structs  : expr -> bool -> c_init option list -> range -> 'a flow -> 'a flow;
+  structs  : expr -> bool -> struct_init -> range -> 'a flow -> 'a flow;
 }
 
 
@@ -101,7 +105,7 @@ and init_struct man s is_global init range flow =
         if i = n then []
         else None :: aux (i + 1)
       in
-      aux 0
+      Parts (aux 0)
 
     | Some (C_init_list(l, None)) ->
       let rec aux i =
@@ -110,9 +114,10 @@ and init_struct man s is_global init range flow =
           let init = if i < List.length l then Some (List.nth l i) else None in
           init :: aux (i + 1)
       in
-      aux 0
+      Parts (aux 0)
 
-    | Some (C_init_expr e) -> Framework.Exceptions.panic "init: initialization of structs not supported"
+    | Some (C_init_expr e) ->
+      Expr e
 
     | _ -> assert false
   in

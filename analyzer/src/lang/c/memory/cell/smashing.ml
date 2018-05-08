@@ -479,18 +479,39 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           let v = match ekind s with E_var v -> v | _ -> assert false in
           let c = annotate_var v |> cell_of_var in
           let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
-          let rec aux i l flow =
-            match l with
-            | [] -> flow
-            | init :: tl ->
-              let field = List.nth record.c_record_fields i in
-              let t' = field.c_field_type in
-              let cf = {b = c.b; t = t'} in
-              let ef = var_of_new_cell cf in
-              let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
-              aux (i + 1) tl flow'
-          in
-          aux 0 init_list flow
+          match init_list with
+          | Parts parts ->
+            debug "init struct by parts";
+            let rec aux i l acc =
+              match l with
+              | [] -> acc
+              | init :: tl ->
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = {b = c.b; t = t'} in
+                debug "field cell %a" pp_cell cf;
+                let ef = var_of_new_cell cf in
+                let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
+                debug "flow' = @[%a@]" man.flow.print flow';
+                let flow'' = man.flow.join acc flow' in
+                aux (i + 1) tl flow''
+            in
+            aux 0 parts man.flow.bottom
+
+          | Expr e ->
+            debug "init struct with expression";
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = {b = c.b; t = t'} in
+                debug "field cell %a" pp_cell cf;
+                let ef = var_of_new_cell cf in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global (Some init) range flow in
+                debug "flow' = @[%a@]" man.flow.print flow';
+                let flow'' = man.flow.join acc flow' in
+                debug "flow'' = @[%a@]" man.flow.print flow'';
+                flow''
+              ) man.flow.bottom
         );
     }
 

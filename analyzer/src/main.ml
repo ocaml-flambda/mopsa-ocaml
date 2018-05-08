@@ -108,15 +108,19 @@ let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
     Otherwise, use the provided command line option -config.
 *)
 let get_config_path () =
-  try
-    let config = Unix.getenv "MOPSACONFIG" in
-    if Sys.file_exists config then config
+  let config =
+    try Unix.getenv "MOPSACONFIG" 
+    with Not_found -> Options.(common_options.config)
+  in
+  if Sys.file_exists config then config
+  else
+    let config' = "configs/" ^ config in
+    if Sys.file_exists config' then config'
     else
-      let config' = "configs/" ^ config in
-      if Sys.file_exists config' then config'
+      let config'' = "analyzer/" ^ config' in
+      if Sys.file_exists config'' then config''
       else Framework.Exceptions.fail "Unable to find configuration file %s" config
-  with Not_found ->
-    Options.(common_options.config)
+
 
 let () =
   init ();
