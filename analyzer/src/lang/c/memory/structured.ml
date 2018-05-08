@@ -39,7 +39,6 @@ open Universal.Ast
 open Ast
 open Base
 open Access_path
-   
 
 let name = "c.memory.structured"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -263,7 +262,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
      TODO: cache this, as string building can be expensive.
    *)
 
-
+    
+  let add_all_sels ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
+    List.fold_left
+      (fun (u,s) (sel,typ)->
+        let v = var_of_ap (b,sel,typ) in
+        let u,s,_ = var_in_domain ctx range v u s in
+        u,s
+      )
+      (u,s) (Sel.enumerate p) 
+  (** Add variables for every path in p from base. *)
+        
 
     
   (*=========================*)
@@ -276,16 +285,43 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     ctx, flow
 
 
+    
+  let unify ctx (u, s) (u', s') =
+    match u,u' with
+    | BOT,_ | _,BOT -> (u,s),(u',s')
+    | Nb uu, Nb uu' ->
+       let range = mk_fresh_range () in
+       let (uu,ss),(uu',ss') =
+         T.fold2zo
+           (fun b p ((u,s),(u',s')) ->
+             (u,s), add_all_sels ctx range b p u' s'
+           )
+           (fun b p ((u,s),(u',s')) ->
+             add_all_sels ctx range b p u s, (u',s')
+           )
+           (fun b p1 p2 ((u,s),(u',s')) ->
+             add_all_sels ctx range b p2 u s,
+             add_all_sels ctx range b p1 u' s'
+           )
+           uu uu' ((uu,s),(uu',s'))
+       in
+       (Nb uu,ss), (Nb uu',ss')
+  (** Add missing access paths so that both arguments have the same set of
+      access paths and the subdomains have the same set of variables.
+   *)
+       
+
+       
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     debug "%a@\nexec %a" pp_range range pp_stmt stmt;
 
     match skind stmt with
     | S_c_local_declaration({vkind = V_orig} as v, init) ->
-       (* TODO: init *)
-       let v' = annotate_var_kind v in
        debug "exec S_c_local_declaration %a" pp_var v;
-       None
+       let v' = annotate_var_kind v in
+       Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
+       return_flow
 
     | S_rename_var(v, v') ->
        assert false
@@ -298,6 +334,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
        let u' =
          bot_lift1
            (fun x ->
+             if not (T.mem base x)
+             then Debug.fail "S_remove_var: cannot find base %a" pp_base base;
              let b = T.find base x in
              match Sel.remove_sel b sel with
              | Nb bb -> T.add base bb x
@@ -442,48 +480,61 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                 man.flow.set TCur man.env.Framework.Lattice.bottom
             in
             oeval_singleton (None, flow, [])
-            
-         | _ -> assert false
         )
         |> oeval_join acc
       )
       (oeval_singleton (None, flow, [])) aps
 
 
-  let add_all_sels ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
-    List.fold_left
-      (fun (u,s) (sel,typ)->
-        let v = var_of_ap (b,sel,typ) in
-        let u,s,_ = var_in_domain ctx range v u s in
-        u,s
-      )
-      (u,s) (Sel.enumerate p) 
-  (** Add variables for every path in p from base. *)
-        
-  let unify ctx (u, s) (u', s') =
-    match u,u' with
-    | BOT,_ | _,BOT -> (u,s),(u',s')
-    | Nb uu, Nb uu' ->
-       let range = mk_fresh_range () in
-       let (uu,ss),(uu',ss') =
-         T.fold2zo
-           (fun b p ((u,s),(u',s')) ->
-             (u,s), add_all_sels ctx range b p u' s'
-           )
-           (fun b p ((u,s),(u',s')) ->
-             add_all_sels ctx range b p u s, (u',s')
-           )
-           (fun b p1 p2 ((u,s),(u',s')) ->
-             add_all_sels ctx range b p2 u s,
-             add_all_sels ctx range b p1 u' s'
-           )
-           uu uu' ((uu,s),(uu',s'))
-       in
-       (Nb uu,ss), (Nb uu',ss')
-  (** Add missing access paths so that both arguments have the same set of
-      access paths and the subdomains have the same set of variables.
-   *)
-       
+  (* copied from extended.ml *)
+  and init_manager man subman ctx =
+    Init.{
+      (* Initialization of arrays *)
+      array =  (fun a init is_global range flow ->
+          match init with
+          (* Local uninitialized arrays are kept ⟙ *)
+          | None when not is_global -> return flow
+
+          (* Otherwise: *)
+          | None                   (* a. when the array is global and uninitialized *)
+          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
+          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
+            ->
+            (* just initialize a limited number of cells *)
+            deeper (Some 2)
+
+          | _ ->
+            Framework.Exceptions.panic "Array initialization not supported"
+
+        );
+
+      (* Initialization of structs *)
+      strct =  (fun s init is_global range flow ->
+          match init with
+          | None when not is_global -> return flow
+
+          | None
+          | Some (C_init_list _) ->
+            deeper None
+
+          | Some (C_init_expr e) ->
+            man.exec ctx (mk_assign s e range) flow |>
+            return
+
+          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+        );
+    }
+
+  and init man subman ctx prog flow =
+    let flow = set_domain_cur top man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      ctx, flow'
+
+    | _ -> ctx, flow
+
+
     
   let ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
     fun man subman ctx query flow ->
