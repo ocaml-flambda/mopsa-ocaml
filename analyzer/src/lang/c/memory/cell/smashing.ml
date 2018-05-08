@@ -311,7 +311,21 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                                  set_domain_cur s' subman
                      in
                      let lval' = {lval with ekind = E_var v} in
-                     let stmt' = {stmt with skind = S_assign(lval', rval, WEAK)} in
+
+                     (* Infer the mode of assignment *)
+                     let mode =
+                       match base with
+                       (* TODO: process the case of heap addresses *)
+                       | A a -> WEAK
+
+                       (* In case of a base variable, we check that we are writing to the whole memory block *)
+                       | V v ->
+                         if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then
+                           STRONG
+                         else
+                           WEAK
+                     in
+                     let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
                      (** FIXME: filter flow with (p == &v) *)
                      SubDomain.exec subman ctx stmt' flow' |>
                      oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
