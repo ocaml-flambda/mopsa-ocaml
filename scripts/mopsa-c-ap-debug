@@ -1,0 +1,12 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+
+DEBUG="\
+     -debug c.memory.cell.expand \
+     -debug c.memory.pointer \
+     -debug c.memory.structured \
+     -debug c.memory.access_path \
+"
+
+${MOPSADIR}/bin/mopsa -lang=c -config ${MOPSADIR}/analyzer/configs/access_path.c.json ${DEBUG} -stub ${MOPSADIR}/analyzer/stubs/c $@ ${MOPSADIR}/analyzer/stubs/c/mopsa_libc.c

@@ -14,13 +14,13 @@
 
 
 #define URAND31() (((unsigned)rand()<<30) ^ ((unsigned)rand()<<15) ^ rand())
-#define RAND32() (_mopsa_range_long())
+#define RAND32() (_mopsa_range_int())
 
 // Following is the Juliet definition of RAND32()
 /* ((int)(rand() & 1 ? URAND31() : -URAND31() - 1)) */
 
 #define URAND63() (((uint64_t)rand()<<60) ^ ((uint64_t)rand()<<45) ^ ((uint64_t)rand()<<30) ^ ((uint64_t)rand()<<15) ^ rand())
-#define RAND64() (_mopsa_range_long_long())
+#define RAND64() (_mopsa_range_long())
 // Following is the Juliet definition of RAND32()
 /* ((int64_t)(rand() & 1 ? URAND63() : -URAND63() - 1)) */
 
