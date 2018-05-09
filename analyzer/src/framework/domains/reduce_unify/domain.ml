@@ -68,11 +68,12 @@ end
 let domains : (string * (module DOMAIN)) list ref = ref []
 let register_domain name modl = domains := (name, modl) :: !domains
 let find_domain name = List.assoc name !domains
-
+let return = Reduce.Domain.return
 let return_flow = Reduce.Domain.return_flow
 let return_evals = Reduce.Domain.return_evals
 let fail = Reduce.Domain.fail
 let add_flow_mergers = Reduce.Domain.add_flow_mergers
+let append_flow_mergers = Reduce.Domain.append_flow_mergers
 let orflow_join = Reduce.Domain.orflow_join
 let eval_to_rexec = Reduce.Domain.eval_to_rexec
 let eval_to_orexec = Reduce.Domain.eval_to_orexec

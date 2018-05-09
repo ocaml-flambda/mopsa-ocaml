@@ -143,6 +143,8 @@ let return_flow flow = Some {
     mergers = [];
   }
 
+let return rflow = Some rflow
+
 let fail = None
 
 let add_flow_mergers mergers flow = {
@@ -150,6 +152,13 @@ let add_flow_mergers mergers flow = {
   mergers;
   publish = [];
 }
+
+let append_flow_mergers mergers rflow = {
+  rflow with
+  mergers = rflow.mergers @ mergers;
+}
+
+
 
 let return_evals (evals: (Ast.expr, 'a) evals) : 'a revals option =
   Some (eval_map (fun (exp, flow, cleaners) ->

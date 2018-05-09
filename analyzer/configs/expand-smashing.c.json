@@ -1,0 +1,48 @@
+{
+    "iter": [
+        //Program entry point
+        "c.program",
+        "c.alarms",
+        "universal.unit_tests",
+
+        //Libraries
+        "c.libs.mopsa",
+        "c.libs.stdlib",
+
+        //Desugarisation
+        "c.desugar.andor",
+        "c.desugar.stmt_rvals",
+	"c.desugar.records",
+        "c.desugar.loops",
+
+        //Flows
+        "c.flows.switch",
+        "c.flows.interproc",
+        "universal.flows.loops",
+        "universal.flows.intraproc",
+        "universal.flows.interproc",
+        "c.flows.goto",
+
+        //Heap abstraction
+        {
+            "unify": "universal.heap.recency",
+            "over": {
+                //Memory abstraction
+                "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
+                "over": {
+                    "iter": [
+                        "c.memory.pointer",
+                        "c.memory.machine_integers",
+                        //Numeric abstraction
+                        {
+                            "reduce": [
+                                "universal.numeric.domains.boxes.int",
+                                "universal.numeric.domains.boxes.congruence"
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

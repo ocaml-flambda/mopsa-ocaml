@@ -325,21 +325,26 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let c = cell_of_var v in
     match c with
     | AnyCell c ->
-      CS.fold (fun v' acc ->
+      let flow', mergers = CS.fold (fun v' (flow, mergers) ->
           let c' = extract_ocell v' in
           if compare_base c.b c'.b = 0 then
-            map_domain_cur (remove v') man acc |>
-            sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
+            let stmt = mk_remove_var v' range in
+            let flow' = map_domain_cur (remove v') man flow |>
+                        sub_exec subman ctx stmt
+            in
+            flow', stmt :: mergers
           else
-            acc
-        ) u flow
+            (flow, mergers)
+        ) u (flow, [mk_remove_var v range]) in
+      add_flow_mergers mergers flow'
+
 
     | OffsetCell c ->
       let u' = add v u in
       let flow' = set_domain_cur u' man flow in
-      CS.fold (fun v' acc ->
+      let flow'', mergers = CS.fold (fun v' (flow, mergers) ->
           if compare_var v v' = 0 then
-            acc
+            (flow, mergers)
           else
             let c' = extract_ocell v' in
             let cell_range c = (c.o, Z.add c.o (sizeof_type c.t)) in
@@ -347,11 +352,15 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               Z.lt (Z.max a1 a2) (Z.min b1 b2)
             in
             if compare_base c.b c'.b = 0 && check_overlap (cell_range c) (cell_range c') then
-              map_domain_cur (remove v') man acc |>
-              sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
+              let stmt = mk_remove_var v' range in
+              let flow' = map_domain_cur (remove v') man flow |>
+                          sub_exec subman ctx stmt
+              in
+              flow', stmt :: mergers
             else
-              acc
-        ) u flow'
+              (flow, mergers)
+        ) u (flow', [mk_remove_var v range]) in
+      add_flow_mergers mergers flow''
 
 
 
@@ -510,9 +519,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           match el with
           | [rval; {ekind = E_var ({vkind = V_expand_cell (OffsetCell c)} as v)} as lval] ->
             let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
-            SubDomain.exec subman ctx stmt' flow |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
-            oflow_compose (
+            SubDomain.exec subman ctx stmt' flow |> oflow_compose (
               fun flow ->
                 if is_c_int_type c.t then
                   let rmin, rmax = rangeof c.t in
@@ -525,11 +532,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                 else
                   flow
             ) |>
-            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
+            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx)
 
           | [rval; {ekind = E_var ({vkind = V_expand_cell (AnyCell _)} as v)}] ->
             remove_overlapping_cells v stmt.srange man subman ctx flow |>
-            return_flow
+            return
 
           | _ -> None
         ) (man.exec ctx) man.flow
@@ -570,7 +577,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                  oeval_singleton (Some (exp', []), flow, []) |>
                  oeval_join acc
               )
-              (fun acc eflow -> debug "error case:@\n acc = %a@\n eflow = @[%a@]" (pp_oevals (fun fmt (e, _) -> pp_expr fmt e)) acc man.flow.print eflow; oeval_singleton (None, eflow, []) |> oeval_join acc)
+              (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
               (fun () -> oeval_singleton (None, flow, []))
               None base offset t exp.erange man subman ctx flow
 
@@ -580,6 +587,44 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             in
             oeval_singleton (None, flow, [])
 
+
+          | E_c_points_to(E_p_invalid) ->
+            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+          | _ -> assert false
+        )
+
+    | E_c_array_subscript(arr, idx) ->
+      man.eval ctx (mk_c_resolve_pointer arr exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            Debug.fail "arrow access to function pointers"
+
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            man.eval ctx idx flow |>
+            eval_compose (fun idx flow ->
+                let offset' = mk_binop offset math_plus (mk_binop idx math_mult (mk_z (sizeof_type t) exp.erange) exp.erange) exp.erange in
+                debug "offset' = %a" pp_expr offset';
+                fold_cells
+                  (fun acc v flow ->
+                     let exp' = {exp with ekind = E_var v} in
+                     oeval_singleton (Some (exp', []), flow, []) |>
+                     oeval_join acc
+                  )
+                  (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+                  (fun () -> oeval_singleton (None, flow, []))
+                  None base offset' t exp.erange man subman ctx flow
+              )
+
+          | E_c_points_to(E_p_null) ->
+            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
 
           | E_c_points_to(E_p_invalid) ->
             let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
@@ -627,17 +672,44 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | _ -> assert false
         )
 
+    | E_c_member_access(r, i, f) ->
+      let p = mk_c_address_of r exp.erange in
+      man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
+      eval_compose (fun pe flow ->
+          match ekind pe with
+          | E_c_points_to(E_p_fun fundec) ->
+            Debug.fail "arrow access to function pointers"
 
-    | E_c_array_subscript(arr, idx) ->
-      debug "array subscript to deref";
-      let exp' = {exp with ekind = E_c_deref(mk_binop arr math_plus idx exp.erange ~etyp: arr.etyp)} in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
-      add_eval_mergers []
+          | E_c_points_to(E_p_var (base, offset, t)) ->
+            let record = match remove_typedef r.etyp with T_c_record r -> r | _ -> assert false in
+            let field = List.nth record.c_record_fields i in
+            let offset' = mk_binop offset math_plus (mk_int field.c_field_offset exp.erange) exp.erange in
+            let t' = field.c_field_type in
+            fold_cells
+              (fun acc v flow ->
+                 let exp' = {exp with ekind = E_var v} in
+                 oeval_singleton (Some (exp', []), flow, []) |>
+                 oeval_join acc
+              )
+              (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
+              (fun () -> oeval_singleton (None, flow, []))
+              None base offset' t' exp.erange man subman ctx flow
 
-    | E_c_member_access(r, idx, f) ->
-      let exp' = {exp with ekind = E_c_arrow_access(mk_c_address_of r r.erange, idx, f)} in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
-      add_eval_mergers []
+          | E_c_points_to(E_p_null) ->
+            let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+          | E_c_points_to(E_p_invalid) ->
+            let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                       man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
+
+          | _ -> assert false
+        )
+
 
     | _ -> None
 
