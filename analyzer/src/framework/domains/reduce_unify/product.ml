@@ -14,13 +14,13 @@ open Domain
 
 let debug fmt = Debug.debug ~channel:"framework.domains.reduce_unify.product" fmt
 
-module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
+module Make(Head: DOMAIN)(Tail: DOMAIN)(Reduction: Reduce.Reduction.REDUCTION) : DOMAIN =
   functor(SubDomain: Stateful.DOMAIN) ->
   struct
 
     module Head = Head(SubDomain)
     module Tail = Tail(SubDomain)
-        
+
     type t = Head.t * Tail.t
 
     let bottom = Head.bottom, Tail.bottom
@@ -101,12 +101,12 @@ module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
     let tman = tail_man man in
     let hevl = Head.eval hman subman ctx exp flow
     and tevl = Tail.eval tman subman ctx exp flow in
-    Reduce.Product.merge_revals man hman tman ctx hevl tevl
+    Reduce.Product.merge_revals man hman tman ctx (Reduction.refine_eval man exp flow) hevl tevl
 
 
   let ask man subman ctx query flow =
     let head_reply = Head.ask (head_man man) subman ctx query flow in
     let tail_reply = Tail.ask (tail_man man) subman ctx query flow in
     Query.meet query head_reply tail_reply
-    
+
 end

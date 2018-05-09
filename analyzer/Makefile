@@ -8,7 +8,7 @@ mopsa = framework lang main
 framework = options ast query pp alarm context lattice lattices visitor exceptions flow eval manager exec utils domains analyzer config
 framework.lattices = enum top_set partial_map total_map range_set
 framework.domains = stateful stateless reduce fun iter unify reduce_unify
-framework.domains.reduce = domain root product
+framework.domains.reduce = domain reduction root product
 framework.domains.unify = domain root
 framework.domains.reduce_unify = domain root product
 
@@ -29,7 +29,7 @@ lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
 lang.c.memory = base query pointer init cell machine_integers access_path structured
-lang.c.memory.cell = expand smashing
+lang.c.memory.cell = expand smashing expand_smashing_reduction
 lang.c.flows = goto interproc switch
 
 #Packages

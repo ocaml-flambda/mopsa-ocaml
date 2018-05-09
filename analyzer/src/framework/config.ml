@@ -16,7 +16,7 @@
    (level 0 or 1) identified by its ["name"] and applied to
    an argument [domain].
 
-   - an object [\{"reduce": \[domain list\]\}] creates a reduced product over
+   - an object [\{"reduce": \[domain list\], "reductions": \[rule list\]\}] creates a reduced product over
    a list of domains.
 
    - an object [\{"iter": \[domain list\]\}] iterates over a list of domains and
@@ -25,7 +25,7 @@ returns the first non-empty result.
    - an object [\{"unify": domain, "over": domain\}] creates a unification domain
 over a given sub-domain.
 
-   - an object [\{"reduce-unify": \[domain list\], "over": domain\}] creates a reduced
+   - an object [\{"reduce-unify": \[domain list\], "reductions": \[rule list\], "over": domain\}] creates a reduced
    product over a list of unification domains.
 
 *)
@@ -41,9 +41,9 @@ let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "fun" obj -> build_functor obj
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "reduce" obj -> build_reduce @@ List.assoc "reduce" obj
+  | `Assoc(obj) when List.mem_assoc "reduce" obj -> build_reduce obj
   | `Assoc(obj) when List.mem_assoc "unify" obj -> build_unify obj
-  | `Assoc(obj) when List.mem_assoc "reduce-unify" obj -> build_reduce_unify obj                                                     
+  | `Assoc(obj) when List.mem_assoc "reduce-unify" obj -> build_reduce_unify obj
   | _ -> assert false
 
 and build_leaf name =
@@ -87,8 +87,10 @@ and build_functor assoc =
   with Not_found ->
     Debug.fail "Functor %s not found" f
 
-and build_reduce json =
-  let domains = json |> to_list |> List.map build_reduce_domain in
+and build_reduce assoc =
+  let reductions = build_reduction_rules assoc in
+  let module RR = (val reductions : Domains.Reduce.Reduction.REDUCTION) in
+  let domains =  List.assoc "reduce" assoc |> to_list |> List.map build_reduce_domain in
   let rec aux :
     (module Domains.Reduce.Domain.DOMAIN) list ->
     (module Domains.Reduce.Domain.DOMAIN)
@@ -99,7 +101,7 @@ and build_reduce json =
         let tl = aux tl in
         let module Head = (val hd : Domains.Reduce.Domain.DOMAIN) in
         let module Tail = (val tl : Domains.Reduce.Domain.DOMAIN) in
-        let module Dom = Domains.Reduce.Product.Make(Head)(Tail) in
+        let module Dom = Domains.Reduce.Product.Make(Head)(Tail)(RR) in
         (module Dom : Domains.Reduce.Domain.DOMAIN)
   in
   let r = aux domains in
@@ -135,6 +137,8 @@ and build_reduce_unify assoc =
   let sub = List.assoc "over" assoc in
   let a = build_domain sub in
   let module S = (val a : Domains.Stateful.DOMAIN) in
+  let reductions = build_reduction_rules assoc in
+  let module RR = (val reductions : Domains.Reduce.Reduction.REDUCTION) in
   let domains = List.assoc "reduce-unify" assoc |> to_list |> List.map build_reduce_unify_domain in
   let rec aux :
     (module Domains.Reduce_unify.Domain.DOMAIN) list ->
@@ -146,13 +150,34 @@ and build_reduce_unify assoc =
         let tl = aux tl in
         let module Head = (val hd : Domains.Reduce_unify.Domain.DOMAIN) in
         let module Tail = (val tl : Domains.Reduce_unify.Domain.DOMAIN) in
-        let module Dom = Domains.Reduce_unify.Product.Make(Head)(Tail) in
+        let module Dom = Domains.Reduce_unify.Product.Make(Head)(Tail)(RR) in
         (module Dom : Domains.Reduce_unify.Domain.DOMAIN)
   in
   let r = aux domains in
   let module R = (val r : Domains.Reduce_unify.Domain.DOMAIN) in
   let module D = Domains.Reduce_unify.Root.Make(R)(S) in
   (module D : Domains.Stateful.DOMAIN)
+
+and build_reduction_rules assoc =
+  try
+    let reductions = List.assoc "reductions" assoc |> to_list |> List.map to_string |> List.map (Domains.Reduce.Reduction.find_reduction) in
+    let rec aux :
+      (module Domains.Reduce.Reduction.REDUCTION) list ->
+      (module Domains.Reduce.Reduction.REDUCTION)
+      = function
+        | [] -> (module Domains.Reduce.Reduction.EmptyReduction)
+        | [r] -> r
+        | hd :: tl ->
+          let tl = aux tl in
+          let module Head = (val hd : Domains.Reduce.Reduction.REDUCTION) in
+          let module Tail = (val tl : Domains.Reduce.Reduction.REDUCTION) in
+          let module R = Domains.Reduce.Reduction.Make(Head)(Tail) in
+          (module R : Domains.Reduce.Reduction.REDUCTION)
+    in
+    aux reductions
+  with Not_found ->
+    (module Domains.Reduce.Reduction.EmptyReduction)
+
 
 and build_reduce_unify_domain = function
   | `String(name) ->
