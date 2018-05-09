@@ -40,13 +40,13 @@ void test_rand_int() {
   _mopsa_assert_true(a >= 0 && a <= 10);
 }
 
-/* void test_interval_congruence_reduction() { */
-/*   int i = 1; */
-/*   while (i <= 10) { */
-/*     i = i + 2; */
-/*   } */
-/*   if (i >= 12) { */
-/*     i = 0; */
-/*   } */
-/*   _mopsa_assert_true(i > 0); */
-/* } */
+void test_interval_congruence_reduction() {
+  int i = 1;
+  while (i <= 10) {
+    i = i + 2;
+  }
+  if (i >= 12) {
+    i = 0;
+  }
+  _mopsa_assert_true(i > 0);
+}

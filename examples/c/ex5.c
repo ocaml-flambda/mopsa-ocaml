@@ -1,6 +1,7 @@
+int a[10];
+
 int main () {
-  int x = 2;
-  int *q = &x;
-  int **p = &q;
-  **p = 1;
+  int b[10];
+  a[0] = 5;
+  b[0] = a[8];
 }
