@@ -31,6 +31,6 @@ for cwe in ${cwes}; do
 done
 output="bench/out.json"
 echo "[" > ${output}
-parallel --no-notice -j2 ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench {} ::: ${allcases[@]} >> ${output}
+parallel --no-notice --eta ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench {} ::: ${allcases[@]} >> ${output}
 sed -i '$ s/.$//' ${output}
 echo "]" >> ${output}
