@@ -16,14 +16,14 @@ open Universal.Ast
 open Ast
 
 
-type struct_init =
+type record_init =
   | Expr of expr
   | Parts of c_init option list
 
 type 'a init_manager = {
-  scalars : expr -> expr -> range -> 'a flow -> 'a flow;
-  arrays  : expr -> bool -> c_init option list -> range -> 'a flow -> 'a flow;
-  structs  : expr -> bool -> struct_init -> range -> 'a flow -> 'a flow;
+  scalar : expr -> expr -> range -> 'a flow -> 'a flow;
+  array  : expr -> bool -> c_init option list -> range -> 'a flow -> 'a flow;
+  record  : expr -> bool -> record_init -> range -> 'a flow -> 'a flow;
 }
 
 
@@ -32,7 +32,7 @@ let rec init_scalar man v is_global init range flow =
   match init with
   (* Uninitialized local pointers are invalid *)
   | None when not is_global && is_c_pointer_type v.etyp ->
-    man.scalars v (Pointer.mk_c_invalid range) range flow
+    man.scalar v (Pointer.mk_c_invalid range) range flow
 
   (* Local uninitialized variables are kept ⟙ *)
   | None when not is_global ->
@@ -40,11 +40,11 @@ let rec init_scalar man v is_global init range flow =
 
   (* Globals are initialized to 0 *)
   | None when is_global ->
-    man.scalars v (mk_zero range) range flow
+    man.scalar v (mk_zero range) range flow
 
   (* Initialization with an expression *)
   | Some (C_init_expr e) ->
-    man.scalars v e range flow
+    man.scalar v e range flow
 
   | _ -> assert false
 
@@ -82,7 +82,7 @@ and init_array man a is_global init range flow =
     | _ ->
       Framework.Exceptions.panic "Array initialization not supported"
   in
-  man.arrays a is_global el range flow
+  man.array a is_global el range flow
 
 and init_union  man u is_global init range flow =
   match init with
@@ -91,11 +91,11 @@ and init_union  man u is_global init range flow =
     Framework.Exceptions.panic "Initialization of union not supported"
 
 
-and init_struct man s is_global init range flow =
-  debug "init struct %a" Framework.Pp.pp_expr s;
+and init_record man s is_global init range flow =
+  debug "init record %a" Framework.Pp.pp_expr s;
   let n =
     match remove_typedef s.etyp |> remove_qual with
-    | T_c_record{c_record_kind = C_struct; c_record_fields} -> List.length c_record_fields
+    | T_c_record{c_record_fields} -> List.length c_record_fields
     | _ -> assert false
   in
   let el =
@@ -121,14 +121,13 @@ and init_struct man s is_global init range flow =
 
     | _ -> assert false
   in
-  man.structs s is_global el range flow
+  man.record s is_global el range flow
 
 
 and init_expr man e is_global (init: c_init option) (range: range) flow =
   if is_c_scalar_type e.etyp then init_scalar man e is_global init range flow else
   if is_c_array_type e.etyp then  init_array man e is_global init range flow else
-  if is_c_struct_type e.etyp then init_struct man e is_global init range flow else
-  if is_c_union_type e.etyp then init_union man e is_global init range flow else
+  if is_c_record_type e.etyp then init_record man e is_global init range flow else
     Framework.Exceptions.panic "Unsupported initialization of %a" pp_expr e
 
 

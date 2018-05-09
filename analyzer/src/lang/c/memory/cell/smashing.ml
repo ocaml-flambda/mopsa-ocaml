@@ -455,7 +455,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   and init_manager man subman ctx =
     Init.{
       (* Initialization of scalars *)
-      scalars = (fun v e range flow ->
+      scalar = (fun v e range flow ->
           match ekind v with
           | E_var v ->
             let v = annotate_var v in
@@ -472,7 +472,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         );
 
       (* Initialization of arrays *)
-      arrays =  (fun a is_global init_list range flow ->
+      array =  (fun a is_global init_list range flow ->
           let v = match ekind a with E_var v -> v | _ -> assert false in
           let c = annotate_var v |> cell_of_var in
           let c' = {b = c.b; t = under_array_type a.etyp} in
@@ -489,7 +489,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         );
 
       (* Initialization of structs *)
-      structs =  (fun s is_global init_list range flow ->
+      record =  (fun s is_global init_list range flow ->
           let v = match ekind s with E_var v -> v | _ -> assert false in
           let c = annotate_var v |> cell_of_var in
           let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
