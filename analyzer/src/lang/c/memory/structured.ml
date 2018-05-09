@@ -319,9 +319,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match skind stmt with
     | S_c_local_declaration({vkind = V_orig} as v, init) ->
        debug "exec S_c_local_declaration %a" pp_var v;
-       let v' = annotate_var_kind v in
-       Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
-       return_flow
+      let v' = annotate_var_kind v in
+      Init.init_local (init_manager man subman ctx) v' init range flow |>
+      return_flow
 
     | S_rename_var(v, v') ->
        assert false
@@ -489,39 +489,37 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (* copied from extended.ml *)
   and init_manager man subman ctx =
     Init.{
+      (* Initialization of scalars *)
+      scalar = (fun v e range flow ->
+          match ekind v with
+          | E_var v ->
+            let v = annotate_var_kind v in
+            let u = get_domain_cur man flow in
+            let s = get_domain_cur subman flow in
+            let u', s', vs = var_in_domain_bot ctx range v u s in
+            let flow' = set_domain_cur u' man flow |>
+                         set_domain_cur s' subman
+            in
+            List.fold_left
+              (fun acc v ->
+                 let stmt = mk_assign (mk_var v range) e range in
+                 sub_exec subman ctx stmt acc
+              )
+              flow' vs
+
+          | _ -> assert false
+        );
+
       (* Initialization of arrays *)
-      array =  (fun a init is_global range flow ->
-          match init with
-          (* Local uninitialized arrays are kept ⟙ *)
-          | None when not is_global -> return flow
-
-          (* Otherwise: *)
-          | None                   (* a. when the array is global and uninitialized *)
-          | Some (C_init_list _)   (* b. when the array is initialized with a list of expressions *)
-          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string _)}) (* c. or when it consists in a string initialization *)
-            ->
-            (* just initialize a limited number of cells *)
-            deeper (Some 2)
-
-          | _ ->
-            Framework.Exceptions.panic "Array initialization not supported"
-
+      array =  (fun a is_global init_list range flow ->
+          (* TODO: initialize arrays *)
+          flow
         );
 
       (* Initialization of structs *)
-      strct =  (fun s init is_global range flow ->
-          match init with
-          | None when not is_global -> return flow
-
-          | None
-          | Some (C_init_list _) ->
-            deeper None
-
-          | Some (C_init_expr e) ->
-            man.exec ctx (mk_assign s e range) flow |>
-            return
-
-          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+      record =  (fun s is_global init_list range flow ->
+          (* TODO: initialize records *)
+          flow
         );
     }
 
@@ -529,7 +527,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let flow = set_domain_cur top man flow in
     match prog.prog_kind with
     | C_program(globals, _) ->
-      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      let flow' = Init.fold_globals ctx (init_manager man subman ctx) globals flow in
       ctx, flow'
 
     | _ -> ctx, flow
