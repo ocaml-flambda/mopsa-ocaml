@@ -266,11 +266,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   (** [add_var v u] adds a variable [v] to the abstraction [u] *)
   let add_var ctx range (v : var) (u, s) =
+    let c = cell_of_var v in
     if CS.mem v u then u, s
     else if not (is_c_scalar_type v.vtyp) then u, s
-    else if is_c_pointer_type v.vtyp then CS.add v u, s
+    else if is_c_pointer_type v.vtyp then
+      match c with
+      | AnyCell _ -> u, s
+      | OffsetCell _ -> CS.add v u, s
     else
-      let c = cell_of_var v in
       match c with
       | AnyCell c ->
         let (a, b) = rangeof c.t in

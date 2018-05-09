@@ -52,13 +52,14 @@ type 'a rflow = {
 let rec rflow_join (man: 'a flow_manager) rflow1 rflow2 = {
   out = man.join rflow1.out rflow2.out;
   publish = (@) rflow1.publish rflow2.publish;
-  mergers = (@) rflow1.mergers rflow2.mergers;
+  mergers = (@) rflow1.mergers rflow2.mergers |> List.sort_uniq compare;
 }
 
 let rec rflow_meet (man: 'a flow_manager) rflow1 rflow2 = {
   out = man.meet rflow1.out rflow2.out;
   publish = List.filter (fun channel -> List.mem channel rflow1.publish) rflow2.publish;
-  mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers;
+  mergers = (@) rflow1.mergers rflow2.mergers |> List.sort_uniq compare;
+  (* mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers; *)
 }
 
 let orflow_join man = Option.option_neutral2 (rflow_join man)
