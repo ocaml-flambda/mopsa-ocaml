@@ -11,9 +11,9 @@
 
         //Desugarisation
         "c.desugar.andor",
-        "c.desugar.assign",
+        "c.desugar.stmt_rvals",
+	"c.desugar.records",
         "c.desugar.loops",
-        "c.desugar.cast",
 
         //Flows
         "c.flows.switch",

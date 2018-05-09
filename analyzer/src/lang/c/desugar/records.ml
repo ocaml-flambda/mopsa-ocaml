@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Interpreter of assignment expressions. *)
+(** Desugarisation of some records expr/stmt. *)
 
 open Framework.Domains.Stateless
 open Framework.Domains
@@ -14,10 +14,11 @@ open Framework.Manager
 open Framework.Flow
 open Framework.Eval
 open Framework.Ast
+open Framework.Pp
 open Universal.Ast
 open Ast
 
-let name = "c.desugar.assign"
+let name = "c.desugar.records"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -33,29 +34,10 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    | E_c_assign(lval, rval) ->
-      man.eval ctx rval flow |>
-      eval_compose
-        (fun rval flow ->
-           let flow = man.exec ctx (Universal.Ast.mk_assign lval rval exp.erange) flow in
-           oeval_singleton (Some rval, flow, [])
-        )
+    | E_c_cast(e, _) when (exp |> etyp |> is_c_record_type) ->
+      let t' = etyp exp in
+      re_eval_singleton (man.eval ctx) (Some ({e with etyp = t'}), flow, [])
 
-    | E_c_statement {skind = S_block l} ->
-      begin
-        match List.rev l with
-        | {skind = S_expression e}::q ->
-          let q' = List.rev q in
-          let stmt' = mk_block q' (tag_range (erange exp) "block'") in
-          let flow' = man.exec ctx stmt' flow in
-          re_eval_singleton (man.eval ctx) (Some e, flow', [])
-        | _ ->
-          begin
-            Debug.fail "E_c_statement %a" Framework.Pp.pp_expr exp
-          end
-      end
-    | E_c_statement {skind = S_expression e} ->
-      re_eval_singleton (man.eval ctx) (Some e, flow, [])
     | _ -> None
 
   let exec man ctx stmt flow =

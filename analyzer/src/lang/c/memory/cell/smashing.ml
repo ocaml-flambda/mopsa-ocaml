@@ -65,7 +65,7 @@ let extract_cell v =
   | V_smash_cell c -> c
   | _ -> assert false
 
-let new_var_of_cell c =
+let var_of_new_cell c =
   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_cell c in Format.flush_str_formatter ());
     vuid = base_uid c.b;
     vtyp = c.t;
@@ -145,7 +145,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Some (v, _) -> debug "already exists"; v
     | None -> 
       debug "new cell"; 
-      new_var_of_cell c
+      var_of_new_cell c
         
   let add_var ctx range (v : var) (u, s) =
     debug "add_var %a in %a" pp_var v print u;
@@ -269,7 +269,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match skind stmt with
     | S_c_local_declaration({vkind = V_orig} as v, init) ->
       let v' = annotate_var v in
-      Init.init_local man ctx (init_manager man subman ctx) v' init range flow |>
+      Init.init_local (init_manager man subman ctx) v' init range flow |>
       return_flow
 
     | S_rename_var(v, v') ->
@@ -311,7 +311,21 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                                  set_domain_cur s' subman
                      in
                      let lval' = {lval with ekind = E_var v} in
-                     let stmt' = {stmt with skind = S_assign(lval', rval, WEAK)} in
+
+                     (* Infer the mode of assignment *)
+                     let mode =
+                       match base with
+                       (* TODO: process the case of heap addresses *)
+                       | A a -> WEAK
+
+                       (* In case of a base variable, we check that we are writing to the whole memory block *)
+                       | V v ->
+                         if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then
+                           STRONG
+                         else
+                           WEAK
+                     in
+                     let stmt' = {stmt with skind = S_assign(lval', rval, mode)} in
                      (** FIXME: filter flow with (p == &v) *)
                      SubDomain.exec subman ctx stmt' flow' |>
                      oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange]) |>
@@ -440,61 +454,78 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   and init_manager man subman ctx =
     Init.{
-      (* Initialization of arrays *)
-      array =  (fun a init is_global range flow ->
-          let v = match ekind a with E_var v -> v | _ -> assert false in
-          let c = annotate_var v |> cell_of_var in
-          let c' = {b = c.b; t = under_array_type a.etyp} in
-          let v' = new_var_of_cell c' in
-          let a' = mk_var v' range in
-          let n = get_array_constant_length a.etyp in
-          match init with
-          | None when not is_global ->
-            return flow
-
-          | None when is_global ->
-            init_expr man ctx (init_manager man subman ctx) a' init is_global range flow |>
-            return
-
-          | Some (C_init_list (l, filler)) ->
-            let rec aux acc i =
-              if i = n then acc
-              else
-                let init = if i < List.length l then Some (List.nth l i) else filler in
-                let flow = init_expr man ctx (init_manager man subman ctx) a' init is_global range flow in
-                aux (man.flow.join acc flow) (i + 1)
+      (* Initialization of scalars *)
+      scalar = (fun v e range flow ->
+          match ekind v with
+          | E_var v ->
+            let v = annotate_var v in
+            let u = get_domain_cur man flow in
+            let s = get_domain_cur subman flow in
+            let (u', s') = add_var ctx range v (u, s) in
+            let flow' = set_domain_cur u' man flow |>
+                        set_domain_cur s' subman
             in
-            aux man.flow.bottom 0 |>
-            return
-          
-          | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _))}) ->
-            let rec aux acc i =
-              if i = n then acc
-              else
-                let init = if i < String.length s then Some (C_init_expr (mk_c_character (String.get s i) range)) else Some (C_init_expr (mk_c_character (char_of_int 0) range)) in
-                let flow = init_expr man ctx (init_manager man subman ctx) a' init is_global range flow in
-                 aux (man.flow.join acc flow) (i + 1)
-            in
-            aux man.flow.bottom 0 |>
-            return
+            let stmt = mk_assign (mk_var v range) e range in
+            sub_exec subman ctx stmt flow'
 
           | _ -> assert false
         );
 
+      (* Initialization of arrays *)
+      array =  (fun a is_global init_list range flow ->
+          let v = match ekind a with E_var v -> v | _ -> assert false in
+          let c = annotate_var v |> cell_of_var in
+          let c' = {b = c.b; t = under_array_type a.etyp} in
+          let v' = var_of_new_cell c' in
+          let a' = mk_var v' range in
+          let rec aux acc l =
+            match l with
+            | [] -> acc
+            | init :: tl ->
+              let flow = init_expr (init_manager man subman ctx) a' is_global init range flow in
+              aux (man.flow.join acc flow) tl
+          in
+          aux man.flow.bottom init_list
+        );
+
       (* Initialization of structs *)
-      strct =  (fun s init is_global range flow ->
-          match init with
-          | None when not is_global -> return flow
+      record =  (fun s is_global init_list range flow ->
+          let v = match ekind s with E_var v -> v | _ -> assert false in
+          let c = annotate_var v |> cell_of_var in
+          let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+          match init_list with
+          | Parts parts ->
+            debug "init struct by parts";
+            let rec aux i l acc =
+              match l with
+              | [] -> acc
+              | init :: tl ->
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = {b = c.b; t = t'} in
+                debug "field cell %a" pp_cell cf;
+                let ef = var_of_new_cell cf in
+                let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
+                debug "flow' = @[%a@]" man.flow.print flow';
+                let flow'' = man.flow.join acc flow' in
+                aux (i + 1) tl flow''
+            in
+            aux 0 parts man.flow.bottom
 
-          | None
-          | Some (C_init_list _) ->
-            deeper None
-
-          | Some (C_init_expr e) ->
-            man.exec ctx (mk_assign s e range) flow |>
-            return
-
-          | _ -> Framework.Exceptions.panic "Struct initialization not supported"
+          | Expr e ->
+            debug "init struct with expression";
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = {b = c.b; t = t'} in
+                debug "field cell %a" pp_cell cf;
+                let ef = var_of_new_cell cf in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global (Some init) range flow in
+                debug "flow' = @[%a@]" man.flow.print flow';
+                let flow'' = man.flow.join acc flow' in
+                debug "flow'' = @[%a@]" man.flow.print flow'';
+                flow''
+              ) man.flow.bottom
         );
     }
 
@@ -502,7 +533,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let flow = set_domain_cur empty man flow in
     match prog.prog_kind with
     | C_program(globals, _) ->
-      let flow' = Init.fold_globals man ctx (init_manager man subman ctx) globals flow in
+      let flow' = Init.fold_globals ctx (init_manager man subman ctx) globals flow in
       ctx, flow'
 
     | _ -> ctx, flow

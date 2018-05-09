@@ -18,8 +18,8 @@ let init () =
   );
   Desugar.(
     Andor.setup ();
-    Cast.setup ();
-    Assign.setup ();
+    Records.setup ();
+    Stmt_rvals.setup ();
     Loops.setup ();
   );
   Libs.(
