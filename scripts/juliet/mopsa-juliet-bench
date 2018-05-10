@@ -1,7 +1,7 @@
 #!/bin/bash
 
+export SHELL=$(type -p bash)
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/../.."
-
 juliet=$1/C/testcases
 
 # cwes="\
@@ -19,30 +19,18 @@ juliet=$1/C/testcases
 #    CWE562_Return_of_Stack_Variable_Address"
 
 # CWE476_NULL_Pointer_Dereference \
-cwes="CWE190_Integer_Overflow"
-subdirs="s01 s02"
-N=$2
-rm -rf .output
-mkdir .output
-for cwe in ${cwes}; do
-    for subd in ${subdirs}; do
-        directory=${juliet}/${cwe}/${subd}
-        cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
-        for c in ${cases}; do
-            ((i=i%N)); ((i++==0)) && wait
-            ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench ${c} >> .output/OUT.$i &
-        done
+cwes="CWE190_Integer_Overflow/s01 CWE190_Integer_Overflow/s02"
 
+allcases=()
+for cwe in ${cwes}; do
+    directory=${juliet}/${cwe}
+    cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
+    for c in ${cases}; do
+        allcases+=($c)
     done
 done
-rm -rf .output
-outputdir="bench"
 output="bench/out.json"
-mkdir ${outputdir}
-
 echo "[" > ${output}
-for i in `seq 1 ${N}`; do
-    cat .output/OUT.$i >> ${output}
-done
+parallel --no-notice --eta ${MOPSADIR}/scripts/juliet/mopsa-juliet-case-bench {} ::: ${allcases[@]} >> ${output}
 sed -i '$ s/.$//' ${output}
 echo "]" >> ${output}
