@@ -64,7 +64,6 @@ and c_enum_value = {
   c_enum_val_org_name: string; (** name as in source *)
   c_enum_val_unique_name: string; (** unique name *)
   c_enum_val_value: Z.t;
-  c_enum_val_enum: c_enum_type;
 }
 (** A possible value in an enumerated type. *)
 
@@ -403,24 +402,30 @@ and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_
   }
 
 and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
-  {
+  let c_enum = {
     C_AST.enum_org_name = enum.c_enum_org_name;
     enum_uid = -1;
     enum_unique_name = enum.c_enum_unique_name;
     enum_defined = enum.c_enum_defined;
-    enum_values = List.map to_clang_enum_value enum.c_enum_values;
+    enum_values = [];
     enum_integer_type = to_clang_int_type enum.c_enum_integer_type;
     enum_range = to_clang_range enum.c_enum_range;
   }
+  in
+  c_enum.C_AST.enum_values <- List.map (fun v ->
+      to_clang_enum_value v c_enum
+    ) enum.c_enum_values;
+  c_enum
 
-and to_clang_enum_value : c_enum_value -> C_AST.enum_value = fun enum_val ->
+and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = fun enum_val enum ->
   {
     C_AST.enum_val_uid = -1;
     enum_val_org_name = enum_val.c_enum_val_org_name;
     enum_val_unique_name = enum_val.c_enum_val_unique_name;
     enum_val_value = enum_val.c_enum_val_value;
-    enum_val_enum = to_clang_enum_type enum_val.c_enum_val_enum;
+    enum_val_enum = enum;
   }
+  
 
 and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
   let origin_range = Framework.Ast.get_origin_range range in
@@ -721,7 +726,7 @@ let () =
               (fun () -> compare_typ f1.c_field_type f2.c_field_type)
             ) r1.c_record_fields r2.c_record_fields
         ))
-      | T_c_enum e1, T_c_enum e2 -> assert false
+      | T_c_enum e1, T_c_enum e2 -> compare e1.c_enum_unique_name e2.c_enum_unique_name
       | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
         compare_composer [
           (fun () -> compare q1.c_qual_is_const q2.c_qual_is_const);

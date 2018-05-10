@@ -190,9 +190,20 @@ and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
             (Array.to_list r.record_fields);
         c_record_range = from_range r.record_range;
       }
-
+    | C_AST.T_enum e -> Ast.T_c_enum {
+        c_enum_org_name = e.enum_org_name;
+        c_enum_unique_name = e.enum_unique_name;
+        c_enum_defined = e.enum_defined;
+        c_enum_values = List.map (fun v -> {
+              c_enum_val_org_name = v.enum_val_org_name;
+              c_enum_val_unique_name = v.enum_val_unique_name;
+              c_enum_val_value = v.enum_val_value;
+            }) e.enum_values;
+        c_enum_integer_type = from_integer_type e.enum_integer_type;
+        c_enum_range = from_range e.enum_range;
+      }
+        
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
-    | C_AST.T_enum _ -> failwith "C_AST.T_enum not supported"
   in
   if qual.C_AST.qual_is_const then
     T_c_qualified({c_qual_is_const = true; c_qual_is_restrict = false; c_qual_is_volatile = false}, typ')

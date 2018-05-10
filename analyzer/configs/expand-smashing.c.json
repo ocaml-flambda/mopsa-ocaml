@@ -35,12 +35,7 @@
                         "c.memory.pointer",
                         "c.memory.machine_integers",
                         //Numeric abstraction
-                        {
-                            "reduce": [
-                                "universal.numeric.domains.boxes.int",
-                                "universal.numeric.domains.boxes.congruence"
-                            ]
-                        }
+                        "universal.numeric.domains.boxes.int"
                     ]
                 }
             }

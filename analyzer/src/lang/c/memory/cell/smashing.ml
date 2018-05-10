@@ -95,6 +95,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   let is_bottom x = false
 
+  let widening ctx = join
+    
   (** Pretty printer. *)
   let print fmt c =
     Format.fprintf fmt "smash cells: @[%a@]@\n"
