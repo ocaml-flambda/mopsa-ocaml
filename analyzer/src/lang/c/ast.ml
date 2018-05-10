@@ -500,6 +500,7 @@ let rec is_signed (t : typ) : bool=
        | C_signed_long | C_signed_long_long | C_signed_int128 -> true
        | _ -> false
      end
+  | T_c_enum e -> is_signed (T_c_integer e.c_enum_integer_type)
   | _ -> Debug.fail "[is_signed] not an integer type %a" Framework.Pp.pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
