@@ -120,11 +120,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | None -> assert false
 
   let expand_relation subman ctx v range flow =
-    v, flow
-    (* let tmp = mktmp ~vkind:(v.vkind) ~vtyp:(v.vtyp) () in
-     * let stmt = mk_assign (mk_var tmp range) (mk_var v range) ~mode:EXPAND range in
-     * debug "expand stmt: %a" pp_stmt stmt;
-     * tmp, sub_exec subman ctx stmt flow *)
+    let tmp = mktmp ~vkind:(v.vkind) ~vtyp:(v.vtyp) () in
+    let stmt = mk_assign (mk_var tmp range) (mk_var v range) ~mode:EXPAND range in
+    debug "expand stmt: %a" pp_stmt stmt;
+    tmp, sub_exec subman ctx stmt flow
 
   (*==========================================================================*)
   (**                       {2 Cell managements}                              *)
@@ -162,8 +161,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   let remove_overlapping_cells v range man subman ctx flow =
     let u = get_domain_cur man flow in
+    let u' = add v u in
+    let flow' = set_domain_cur u' man flow in
     let c = cell_of_var v in
-    let flow', mergers = CS.fold (fun v' (flow, mergers) ->
+    let flow'', mergers = CS.fold (fun v' (flow, mergers) ->
         let c' = extract_cell v' in
         if compare_base c.b c'.b = 0 && compare_typ c.t c'.t <> 0 then
           let flow' = map_domain_cur (remove v') man flow |>
@@ -172,9 +173,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           flow', (mk_remove_var v' range) :: mergers
         else
           flow, mergers
-      ) u (flow, [])
+      ) u (flow', [])
     in
-    add_flow_mergers mergers flow'
+    add_flow_mergers mergers flow''
 
   let eval_base_offset f err empty x0 base offset typ range man subman ctx flow =
     let cell_size = sizeof_type typ in
@@ -270,8 +271,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (*==========================================================================*)
 
   let assign_var man subman ctx lval v rval mode range flow =
+    let cs = get_domain_cur man flow in
     match v.vkind with
     | V_smash_cell c ->
+      let v = var_of_cell c cs in
       let lval = {lval with ekind = E_var v} in
       (* Infer the mode of assignment *)
       let mode = match c.b with
@@ -324,14 +327,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-
-    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      let v' = annotate_var v in
-      assign_var man subman ctx lval v' rval mode stmt.srange flow
-        
-    | S_assign({ekind = E_var {vkind = _}} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      None
-
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
       (* For the rval, we use the manager eval to simplify the expression *)
       man.eval ctx rval flow |>
@@ -375,9 +370,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
             eval_base_offset
               (fun acc v flow ->
-                 let exp' = {exp with ekind = E_var v} in
+                 let v', flow' = expand_relation subman ctx v range flow in
+                 let exp' = {exp with ekind = E_var v'} in
                  (** FIXME: filter flow with (p == &v) *)
-                 oeval_singleton (Some (exp', []), flow, []) |>
+                 oeval_singleton (Some (exp', []), flow', [mk_remove_var v' range]) |>
                  oeval_join acc
               )
               (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
@@ -415,8 +411,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                 debug "offset' = %a" pp_expr offset';
                 eval_base_offset
                   (fun acc v flow ->
-                     let exp' = {exp with ekind = E_var v} in
-                     oeval_singleton (Some (exp', []), flow, []) |>
+                     let v', flow' = expand_relation subman ctx v range flow in
+                     let exp' = {exp with ekind = E_var v'} in
+                     oeval_singleton (Some (exp', []), flow', [mk_remove_var v' range]) |>
                      oeval_join acc
                   )
                   (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
@@ -453,8 +450,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let t' = field.c_field_type in
             eval_base_offset
               (fun acc v flow ->
-                 let exp' = {exp with ekind = E_var v} in
-                 oeval_singleton (Some (exp', []), flow, []) |>
+                 let v', flow' = expand_relation subman ctx v range flow in
+                 let exp' = {exp with ekind = E_var v'} in
+                 oeval_singleton (Some (exp', []), flow', [mk_remove_var v' range]) |>
                  oeval_join acc
               )
               (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
@@ -491,8 +489,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let t' = field.c_field_type in
             eval_base_offset
               (fun acc v flow ->
-                 let exp' = {exp with ekind = E_var v} in
-                 oeval_singleton (Some (exp', []), flow, []) |>
+                 let v', flow' = expand_relation subman ctx v range flow in
+                 let exp' = {exp with ekind = E_var v'} in
+                 oeval_singleton (Some (exp', []), flow', [mk_remove_var v' range]) |>
                  oeval_join acc
               )
               (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)

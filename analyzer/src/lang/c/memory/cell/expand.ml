@@ -542,13 +542,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      let v' = annotate_var_kind v in
-      assign_var man subman ctx v' rval mode stmt.srange flow
-        
-    | S_assign({ekind = E_var {vkind = _}} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      None
-
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
       (* For the rval, we use the manager eval to simplify the expression *)
       man.eval ctx rval flow |>
