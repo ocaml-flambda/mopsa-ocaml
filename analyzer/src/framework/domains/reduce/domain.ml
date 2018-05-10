@@ -136,12 +136,13 @@ struct
 
 end
 
+let return_flow_no_opt flow = {
+  out = flow;
+  publish = [];
+  mergers = [];
+}
 
-let return_flow flow = Some {
-    out = flow;
-    publish = [];
-    mergers = [];
-  }
+let return_flow flow = Some (return_flow_no_opt flow)
 
 let return rflow = Some rflow
 

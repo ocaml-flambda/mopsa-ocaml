@@ -24,6 +24,48 @@ let assume_to_eval cond
     true_case false_case bottom_case merge_case
     man flow
 
+let switch_exec
+    (cases : (((expr * bool) list) * ('a Framework.Flow.flow -> 'a Framework.Flow.flow)) list)
+    man ctx flow
+  : 'a Framework.Flow.flow =
+  match cases with
+  | (cond, t) :: q ->
+    let one (cond : (expr * bool) list) t =
+      List.fold_left (fun acc (x, b) ->
+          let s =
+            if b then (mk_assume x (tag_range x.erange "true assume"))
+            else (mk_assume (mk_not x (tag_range x.erange "neg"))
+                    (tag_range x.erange "false assume"))
+          in
+          man.exec ctx s acc
+        ) flow cond
+      |> t
+    in
+    List.fold_left (fun acc (cond, t) -> man.flow.join (one cond t) acc) (one cond t) q
+  | [] -> man.flow.bottom
+
+
+let switch_rexec
+    (cases : (((expr * bool) list) * ('a Framework.Flow.flow -> 'a Framework.Domains.Reduce.Domain.rflow)) list)
+    man ctx flow
+  : 'a Framework.Domains.Reduce.Domain.rflow =
+  let module RF = Framework.Domains.Reduce.Domain in
+  match cases with
+  | (cond, t) :: q ->
+    let one (cond : (expr * bool) list) t =
+      List.fold_left (fun acc (x, b) ->
+          let s =
+            if b then (mk_assume x (tag_range x.erange "true assume"))
+            else (mk_assume (mk_not x (tag_range x.erange "neg"))
+                    (tag_range x.erange "false assume"))
+          in
+          man.exec ctx s acc
+        ) flow cond
+      |> t
+    in
+    List.fold_left (fun acc (cond, t) -> RF.rflow_join man.flow (one cond t) acc) (one cond t) q
+  | [] -> man.flow.bottom |> RF.return_flow_no_opt
+
 
 let compose_alloc_exec f addr_kind range manager ctx flow =
   let exp = mk_expr (E_alloc_addr(addr_kind, range)) range in
