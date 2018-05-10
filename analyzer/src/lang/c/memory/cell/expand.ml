@@ -369,123 +369,125 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (*==========================================================================*)
 
   let fold_cells f err empty x0 base offset typ range man subman ctx flow =
-    let cs = get_domain_cur man flow in
-    let cell_size = sizeof_type typ in
+    if man.flow.is_cur_bottom flow then empty ()
+    else
+      let cs = get_domain_cur man flow in
+      let cell_size = sizeof_type typ in
 
-    let static_base_case base_size =
-      debug "static base case";
-      match Universal.Utils.expr_to_z offset with
-      | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->
-        let v = var_of_ocell {b = base; o = z; t = typ} cs in
-        let s = get_domain_cur subman flow in
-        let (cs', s') = add_var ctx range v (cs, s) in
-        let flow' = set_domain_cur cs' man flow |>
-                    set_domain_cur s' subman
-        in
-        f x0 v flow'
-
-      | Some z ->
-        debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
-        man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
-        man.flow.set TCur man.env.bottom |>
-        err x0
-
-      | None ->
-        debug "non-constant cell offset";
-        (* Create variables with offsets {min(l + k * step, u) | k >= 0} *)
-        let fold_interval l u step acc flow =
-          debug "fold interval  [%a, %a]:%a (%a)" Z.pp_print l Z.pp_print u Z.pp_print step Z.pp_print Z.((u - l + one) / step);
-          if Z.(leq ((u - l + one) / step) (of_int !opt_max_expand)) then
-            let rec iter x o =
-              if Z.gt o u then x
-              else
-                let v = var_of_ocell {b = base; o; t = typ} cs in
-                let flow = man.exec ctx (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                let s = get_domain_cur subman flow in
-                let (cs', s') = add_var ctx range v (cs, s) in
-                let flow' = set_domain_cur cs' man flow |>
-                            set_domain_cur s' subman
-                in
-                iter (f x v flow') (Z.add o step)
-            in
-            debug "iterating";
-            iter acc l
-          else
-            let v = var_of_xcell {b = base; t = typ} in
-            debug "using an xcell %a" pp_var v;
-            let s = get_domain_cur subman flow in
-            let (cs', s') = add_var ctx range v (cs, s) in
-            let flow' = set_domain_cur cs' man flow |>
-                        set_domain_cur s' subman
-            in
-            f acc v flow'
-        in
-
-        (* Fast bound check with intervals *)
-        let rec fast () =
-          debug "trying fast check";
-          let v = man.ask ctx (Universal.Numeric.Query.QIntStepInterval offset) flow in
-          match v with
-          | None -> assert false
-          | Some (itv, step) ->
-            try
-              debug "offset interval = %a" Universal.Numeric.Values.Int.print itv;
-              let l, u = Universal.Numeric.Values.Int.get_bounds itv in
-              if Z.geq l Z.zero && Z.leq (Z.add u cell_size) base_size then
-                fold_interval l u step x0 flow
-              else if Z.lt u Z.zero || Z.gt (Z.add l cell_size) base_size then
-                man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
-                man.flow.set TCur man.env.bottom |>
-                err x0
-              else
-                full ()
-            with Universal.Numeric.Values.Int.Unbounded ->
-              full ()
-
-
-        (* Full bound check *)
-        and full () =
-          let safety_cond =
-            mk_binop
-              (mk_binop offset O_ge (mk_zero range) range)
-              O_log_and
-              (mk_binop (mk_binop offset math_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
-              range
+      let static_base_case base_size =
+        debug "static base case";
+        match Universal.Utils.expr_to_z offset with
+        | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->
+          let v = var_of_ocell {b = base; o = z; t = typ} cs in
+          let s = get_domain_cur subman flow in
+          let (cs', s') = add_var ctx range v (cs, s) in
+          let flow' = set_domain_cur cs' man flow |>
+                      set_domain_cur s' subman
           in
-          let safe_case acc flow =
+          f x0 v flow'
+
+        | Some z ->
+          debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
+          man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+          man.flow.set TCur man.env.bottom |>
+          err x0
+
+        | None ->
+          debug "non-constant cell offset";
+          (* Create variables with offsets {min(l + k * step, u) | k >= 0} *)
+          let fold_interval l u step acc flow =
+            debug "fold interval  [%a, %a]:%a (%a)" Z.pp_print l Z.pp_print u Z.pp_print step Z.pp_print Z.((u - l + one) / step);
+            if Z.(leq ((u - l + one) / step) (of_int !opt_max_expand)) then
+              let rec iter x o =
+                if Z.gt o u then x
+                else
+                  let v = var_of_ocell {b = base; o; t = typ} cs in
+                  let flow = man.exec ctx (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
+                  let s = get_domain_cur subman flow in
+                  let (cs', s') = add_var ctx range v (cs, s) in
+                  let flow' = set_domain_cur cs' man flow |>
+                              set_domain_cur s' subman
+                  in
+                  iter (f x v flow') (Z.add o step)
+              in
+              debug "iterating";
+              iter acc l
+            else
+              let v = var_of_xcell {b = base; t = typ} in
+              debug "using an xcell %a" pp_var v;
+              let s = get_domain_cur subman flow in
+              let (cs', s') = add_var ctx range v (cs, s) in
+              let flow' = set_domain_cur cs' man flow |>
+                          set_domain_cur s' subman
+              in
+              f acc v flow'
+          in
+
+          (* Fast bound check with intervals *)
+          let rec fast () =
+            debug "trying fast check";
             let v = man.ask ctx (Universal.Numeric.Query.QIntStepInterval offset) flow in
             match v with
             | None -> assert false
             | Some (itv, step) ->
               try
+                debug "offset interval = %a" Universal.Numeric.Values.Int.print itv;
                 let l, u = Universal.Numeric.Values.Int.get_bounds itv in
-                debug "interval = [%a, %a] mod %a" Z.pp_print l Z.pp_print u Z.pp_print step;
-                fold_interval l u step acc flow
+                if Z.geq l Z.zero && Z.leq (Z.add u cell_size) base_size then
+                  fold_interval l u step x0 flow
+                else if Z.lt u Z.zero || Z.gt (Z.add l cell_size) base_size then
+                  man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+                  man.flow.set TCur man.env.bottom |>
+                  err x0
+                else
+                  full ()
               with Universal.Numeric.Values.Int.Unbounded ->
-                assert false
-          in
-          let error_case acc flow =
-            man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
-            man.flow.set TCur man.env.bottom |>
-            err acc
-          in
-          if_flow
-            (man.exec ctx (mk_assume safety_cond range))
-            (man.exec ctx (mk_assume (mk_not safety_cond range) range))
-            (safe_case x0)
-            (error_case x0)
-            (empty)
-            (fun sflow eflow -> error_case (safe_case x0 sflow) eflow)
-            man flow
-        in
-        (* Start with fast check *)
-        fast ()
-    in
+                full ()
 
-    match base with
-    | V v -> static_base_case (sizeof_type v.vtyp)
-    | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_base_case s
-    | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
+
+          (* Full bound check *)
+          and full () =
+            let safety_cond =
+              mk_binop
+                (mk_binop offset O_ge (mk_zero range) range)
+                O_log_and
+                (mk_binop (mk_binop offset math_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
+                range
+            in
+            let safe_case acc flow =
+              let v = man.ask ctx (Universal.Numeric.Query.QIntStepInterval offset) flow in
+              match v with
+              | None -> assert false
+              | Some (itv, step) ->
+                try
+                  let l, u = Universal.Numeric.Values.Int.get_bounds itv in
+                  debug "interval = [%a, %a] mod %a" Z.pp_print l Z.pp_print u Z.pp_print step;
+                  fold_interval l u step acc flow
+                with Universal.Numeric.Values.Int.Unbounded ->
+                  assert false
+            in
+            let error_case acc flow =
+              man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow |>
+              man.flow.set TCur man.env.bottom |>
+              err acc
+            in
+            if_flow
+              (man.exec ctx (mk_assume safety_cond range))
+              (man.exec ctx (mk_assume (mk_not safety_cond range) range))
+              (safe_case x0)
+              (error_case x0)
+              (empty)
+              (fun sflow eflow -> error_case (safe_case x0 sflow) eflow)
+              man flow
+          in
+          (* Start with fast check *)
+          fast ()
+      in
+
+      match base with
+      | V v -> static_base_case (sizeof_type v.vtyp)
+      | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_base_case s
+      | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
 
 
 
@@ -520,8 +522,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       return
 
     | _ -> assert false
-        
-  
+
+
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
@@ -744,7 +746,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let s = get_domain_cur subman flow in
             let (u', s') = add_var ctx range v (u, s) in
             let flow' = set_domain_cur u' man flow |>
-                         set_domain_cur s' subman
+                        set_domain_cur s' subman
             in
             let stmt = mk_assign (mk_var v range) e range in
             sub_exec subman ctx stmt flow'
@@ -816,7 +818,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
   let ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
     fun man subman ctx query flow ->
-    match query with
+      match query with
       | Query.QExtractVarBase {vkind = V_expand_cell (OffsetCell c)} ->
         Some (c.b, mk_z c.o (mk_fresh_range ()))
 

@@ -178,9 +178,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     add_flow_mergers mergers flow''
 
   let eval_base_offset f err empty x0 base offset typ range man subman ctx flow =
-    let cell_size = sizeof_type typ in
-
-    let rec static_offset_case base_size =
+    if man.flow.is_cur_bottom flow then empty ()
+    else
+      let cell_size = sizeof_type typ in
+      
+      let rec static_offset_case base_size =
       debug "static base case";
       match Universal.Utils.expr_to_z offset with
       | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->

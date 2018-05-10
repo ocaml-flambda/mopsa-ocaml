@@ -9,6 +9,7 @@ parsers/c/lib/**
 parsers/python/_build/**
 parsers/python/doc/**
 parsers/python/lib/**
+bench/**
 *.native
 *.byte
 *~
