@@ -22,7 +22,7 @@ module type REDUCTION =
 sig
 
   val refine_eval:
-    ('a, 't) manager ->
+    ('a, 't) manager -> Context.context ->
     expr -> 'a flow ->
     expr * 'a flow -> expr * 'a flow ->
     selector
@@ -36,14 +36,14 @@ let find_reduction name = List.assoc name !reductions
 module Make(Head: REDUCTION)(Tail: REDUCTION) : REDUCTION =
 struct
 
-  let refine_eval man exp flow evl1 evl2 =
-    match Head.refine_eval man exp flow evl1 evl2 with
-    | BOTH -> Tail.refine_eval man exp flow evl1 evl2
+  let refine_eval man ctx exp flow evl1 evl2 =
+    match Head.refine_eval man ctx exp flow evl1 evl2 with
+    | BOTH -> Tail.refine_eval man ctx exp flow evl1 evl2
     | x -> x
 
 end
 
 module EmptyReduction : REDUCTION =
 struct
-  let refine_eval man exp flow evl1 evl2 = BOTH
+  let refine_eval man ctx exp flow evl1 evl2 = BOTH
 end

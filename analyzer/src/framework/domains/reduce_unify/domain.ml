@@ -77,6 +77,7 @@ let append_flow_mergers = Reduce.Domain.append_flow_mergers
 let orflow_join = Reduce.Domain.orflow_join
 let eval_to_rexec = Reduce.Domain.eval_to_rexec
 let eval_to_orexec = Reduce.Domain.eval_to_orexec
+let oeval_to_orexec = Reduce.Domain.oeval_to_orexec
 let add_eval_mergers = Reduce.Domain.add_eval_mergers
 let mk_local_manager = Unify.Domain.mk_local_manager
 let map_flow f none = function

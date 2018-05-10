@@ -10,7 +10,9 @@ let init () =
     Cell.(
       Expand.setup ();
       Smashing.setup ();
-      Expand_smashing_reduction.setup ();
+      Reductions.(
+        Expand_smashing.setup ();
+      );
     );
     Machine_integers.setup ();
     Pointer.setup ();

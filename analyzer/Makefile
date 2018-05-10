@@ -29,7 +29,7 @@ lang.python.objects.data_model = attribute callable
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
 lang.c.memory = base query pointer init cell machine_integers access_path structured
-lang.c.memory.cell = expand smashing expand_smashing_reduction
+lang.c.memory.cell = expand smashing reductions
 lang.c.flows = goto interproc switch
 
 #Packages

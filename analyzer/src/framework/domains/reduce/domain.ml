@@ -234,3 +234,14 @@ let eval_to_orexec
        | None, x | x, None -> x
        | Some flow1, Some flow2 -> Some (rflow_meet man flow1 flow2)
     )
+
+let oeval_to_orexec
+    (f: 'a -> 'b flow -> 'b rflow option)
+    (exec: Ast.stmt -> 'b flow -> 'b flow)
+    (man: 'b flow_manager)
+    ?(empty = (fun flow -> return_flow flow))
+    (eval: ('a, 'b) evals option)
+  : 'b rflow option =
+  match eval with
+  | None -> None
+  | Some evl -> eval_to_orexec f exec man ~empty evl

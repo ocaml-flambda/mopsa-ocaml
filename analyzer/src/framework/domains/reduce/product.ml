@@ -30,6 +30,7 @@ let debug fmt = Debug.debug ~channel:"framework.domains.reduction.product" fmt
 *)
 let copy_and_merge_flow man ctx ax mergers flow1 flow2 =
   let flow2' = mergers |> List.fold_left (fun flow merger ->
+      debug "applying merger %a" Pp.pp_stmt merger;
       man.exec ctx merger flow
     ) flow2
   in
@@ -73,7 +74,7 @@ let merge_rflow man hman tman is_bottom bottom ctx rflow1 rflow2 =
 (**                         {2 Expressions}                                 *)
 (*==========================================================================*)
 
-let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list) (cases2: 'a reval_case list) : 'a reval_case list =
+let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list) mergers1' (cases2: 'a reval_case list) mergers2' : 'a reval_case list =
   List.fold_left (fun acc (exp1, flow1, cleaners) ->
       match exp1 with
       | None -> acc
@@ -83,7 +84,7 @@ let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list
               match exp2 with
               | None -> None, flow2, cleaners
               | Some (exp2, mergers2) ->
-                Some (exp2, mergers2), (copy_and_merge_flow man ctx ax mergers1 flow1 flow2), cleaners
+                Some (exp2, mergers2 @ mergers2'), (copy_and_merge_flow man ctx ax (mergers1 @ mergers1') flow1 flow2), cleaners
             ) acc
         end
     ) cases2 cases1
@@ -91,54 +92,44 @@ let merge_reval_cases (man: ('a, 't) manager) ctx ax (cases1: 'a reval_case list
 
 let merge_revals man hman tman ctx refine (hevl: 'a revals option) (tevl: 'a revals option) =
   Eval.oeval_meet ~fand:(fun hconj tconj ->
-      let rec doit1 r1 l1 l2 =
+      let rec doit1 mm1 mm2 r1 l1 l2 =
         match l1 with
-        | [] ->
-          debug "l1 end";
-          r1, l2
+        | [] -> mm1, mm2, r1, l2
         | c1 :: tl1 ->
           match c1 with
-          | (None, _, _) ->
-            debug "c1 = none";
-            doit1 (c1 :: r1) tl1 l2
-          | Some (e1, _), flow1, _ ->
-            debug "e1 = %a" Pp.pp_expr e1;
-            let rec doit2 r2 l2 =
+          | (None, _, _) -> doit1 mm1 mm2 (c1 :: r1) tl1 l2
+          | Some (e1, m1), flow1, _ ->
+            let rec doit2 mm1 mm2 r2 l2 =
               match l2 with
-              | [] ->
-                debug "l2 end";
-                true, r2
+              | [] -> true, mm1, mm2, r2
               | c2 :: tl2 ->
                 begin
                   match c2 with
-                  | (None, _, _) ->
-                    debug "c2 = none";
-                    false, r2 @ l2
-                  | (Some (e2, _), flow2, _) ->
-                    debug "e2 = %a" Pp.pp_expr e2;
-                    begin
-                      if e1 == e2 || e1 = e2 then doit2 r2 tl2
-                      else
+                  | (None, _, _) -> false, (m1 @ mm1), mm2, r2 @ l2
+                  | (Some (e2, m2), flow2, _) ->
+                    if e1 == e2 || e1 = e2 then doit2 mm1 (m2 @ mm2) r2 tl2
+                    else
                       match refine (e1, flow1) (e2, flow2) with
-                      | Reduction.BOTH -> debug "keep both"; doit2 (c2 :: r2) tl2
-                      | Reduction.HEAD -> doit2 r2 tl2
-                      | Reduction.TAIL -> debug "keep tail"; false, r2 @ l2
-                    end
+                      | Reduction.BOTH -> doit2 mm1 mm2 (c2 :: r2) tl2
+                      | Reduction.HEAD -> doit2 mm1 (m2 @ mm2) r2 tl2
+                      | Reduction.TAIL -> false, (m1 @ mm2), mm2, r2 @ l2
                 end
             in
-            match doit2 [] l2 with
-            | true, l2' -> debug "keep c1"; doit1 (c1 :: r1) tl1 l2'
-            | false, l2' -> debug "remove c1"; doit1 r1 tl1 l2'
+            match doit2 mm1 mm2 [] l2 with
+            | true, mm1', mm2', l2' -> doit1 mm1' mm2' (c1 :: r1) tl1 l2'
+            | false, mm1', mm2', l2' -> doit1 mm1' mm2' r1 tl1 l2'
       in
+
       debug "|hconj| = %d" (List.length hconj);
       debug "|tconj| = %d" (List.length tconj);
-      let hconj', tconj' = doit1 [] hconj tconj in
+
+      let mergers1, mergers2, hconj', tconj' = doit1 [] [] [] hconj tconj in
 
       debug "|hconj'| = %d" (List.length hconj');
       debug "|tconj'| = %d" (List.length tconj');
 
-      let tconj'' = merge_reval_cases man ctx hman.ax hconj' tconj'
-      and hconj'' = merge_reval_cases man ctx tman.ax tconj' hconj'
+      let tconj'' = merge_reval_cases man ctx hman.ax hconj' mergers1 tconj' mergers2
+      and hconj'' = merge_reval_cases man ctx tman.ax tconj' mergers2 hconj' mergers1
       in
       List.sort_uniq compare (hconj'' @ tconj'')
     )
@@ -224,7 +215,7 @@ struct
     let tman = tail_man man in
     let hevl = Head.eval hman ctx exp flow
     and tevl = Tail.eval tman ctx exp flow in
-    merge_revals man hman tman ctx (Reduction.refine_eval man exp flow) hevl tevl
+    merge_revals man hman tman ctx (Reduction.refine_eval man ctx exp flow) hevl tevl
 
 
   let ask man ctx query flow =

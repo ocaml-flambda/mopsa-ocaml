@@ -29,7 +29,7 @@
             "over": {
                 //Memory abstraction
                 "reduce-unify": ["c.memory.cell.expand", "c.memory.cell.smashing"],
-                "reductions": ["c.memory.cell.expand_smashing_reduction"],
+                "reductions": ["c.memory.cell.reductions.expand_smashing"],
                 "over": {
                     "iter": [
                         "c.memory.pointer",

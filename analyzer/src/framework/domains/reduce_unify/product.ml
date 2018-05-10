@@ -101,7 +101,7 @@ module Make(Head: DOMAIN)(Tail: DOMAIN)(Reduction: Reduce.Reduction.REDUCTION) :
     let tman = tail_man man in
     let hevl = Head.eval hman subman ctx exp flow
     and tevl = Tail.eval tman subman ctx exp flow in
-    Reduce.Product.merge_revals man hman tman ctx (Reduction.refine_eval man exp flow) hevl tevl
+    Reduce.Product.merge_revals man hman tman ctx (Reduction.refine_eval man ctx exp flow) hevl tevl
 
 
   let ask man subman ctx query flow =

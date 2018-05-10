@@ -493,6 +493,35 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (**                      {2 Transfer functions}                             *)
   (*==========================================================================*)
 
+  let assign_var man subman ctx v rval mode range flow =
+    match v.vkind with
+    | V_expand_cell (OffsetCell _) ->
+      let lval = mk_var v range in
+      let stmt = mk_assign lval rval ~mode range in
+      SubDomain.exec subman ctx stmt flow |>
+      oflow_compose (
+        fun flow ->
+          if is_c_int_type v.vtyp then
+            let rmin, rmax = rangeof v.vtyp in
+            let cond = range_cond lval rmin rmax (erange lval) in
+            let stmt' = (mk_assume cond (tag_range range "assume range")) in
+            let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt' in
+            match SubDomain.exec subman ctx stmt' flow with
+            | Some flow -> flow
+            | None -> assert false
+          else
+            flow
+      ) |>
+      oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
+      oflow_compose (append_flow_mergers [mk_remove_var v stmt.srange])
+
+    | V_expand_cell (AnyCell _) ->
+      remove_overlapping_cells v range man subman ctx flow |>
+      return
+
+    | _ -> assert false
+        
+  
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
@@ -513,32 +542,25 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
+    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
+      let v' = annotate_var_kind v in
+      assign_var man subman ctx v' rval mode stmt.srange flow
+        
+    | S_assign({ekind = E_var {vkind = _}} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
+      None
+
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_orexec (fun el flow ->
-          match el with
-          | [rval; {ekind = E_var ({vkind = V_expand_cell (OffsetCell c)} as v)} as lval] ->
-            let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
-            SubDomain.exec subman ctx stmt' flow |> oflow_compose (
-              fun flow ->
-                if is_c_int_type c.t then
-                  let rmin, rmax = rangeof c.t in
-                  let cond = range_cond lval rmin rmax (erange lval) in
-                  let stmt'' = (mk_assume cond (tag_range range "assume range")) in
-                  let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
-                  match SubDomain.exec subman ctx stmt'' flow with
-                  | Some flow -> flow
-                  | None -> assert false
-                else
-                  flow
-            ) |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx)
-
-          | [rval; {ekind = E_var ({vkind = V_expand_cell (AnyCell _)} as v)}] ->
-            remove_overlapping_cells v stmt.srange man subman ctx flow |>
-            return
-
-          | _ -> None
+      (* For the rval, we use the manager eval to simplify the expression *)
+      man.eval ctx rval flow |>
+      eval_to_orexec (fun rval flow ->
+          (* However, the lval, we use our local eval so that the reduced product will not evict our simplifications *)
+          eval man subman ctx lval flow |>
+          oeval_to_orexec (fun (lval, _) flow ->
+              match ekind lval with
+              | E_var ({vkind = V_expand_cell _} as v)->
+                assign_var man subman ctx v rval mode stmt.srange flow
+              | _ -> None
+            ) (man.exec ctx) man.flow
         ) (man.exec ctx) man.flow
 
     | _ -> None

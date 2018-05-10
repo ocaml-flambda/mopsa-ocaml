@@ -163,14 +163,18 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let remove_overlapping_cells v range man subman ctx flow =
     let u = get_domain_cur man flow in
     let c = cell_of_var v in
-    CS.fold (fun v' acc ->
+    let flow', mergers = CS.fold (fun v' (flow, mergers) ->
         let c' = extract_cell v' in
         if compare_base c.b c'.b = 0 && compare_typ c.t c'.t <> 0 then
-          map_domain_cur (remove v') man acc |>
-          sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
+          let flow' = map_domain_cur (remove v') man flow |>
+                      sub_exec subman ctx (Universal.Ast.mk_remove_var v' range)
+          in
+          flow', (mk_remove_var v' range) :: mergers
         else
-          acc
-      ) u flow
+          flow, mergers
+      ) u (flow, [])
+    in
+    add_flow_mergers mergers flow'
 
   let eval_base_offset f err empty x0 base offset typ range man subman ctx flow =
     let cell_size = sizeof_type typ in
@@ -265,6 +269,41 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
 
+  let assign_var man subman ctx lval v rval mode range flow =
+    match v.vkind with
+    | V_smash_cell c ->
+      let lval = {lval with ekind = E_var v} in
+      (* Infer the mode of assignment *)
+      let mode = match c.b with
+        (* TODO: process the case of heap addresses *)
+        | A a -> WEAK
+        | V v ->
+          (* In case of a base variable, we check that we are writing to the whole memory block *)
+          if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then STRONG
+          else WEAK
+      in
+
+      let stmt = mk_assign lval rval ~mode range in
+      SubDomain.exec subman ctx stmt flow |>
+      oflow_compose (
+        fun flow ->
+          if is_c_int_type v.vtyp then
+            let rmin, rmax = rangeof v.vtyp in
+            let cond = range_cond lval rmin rmax (erange lval) in
+            let stmt' = (mk_assume cond (tag_range range "assume range")) in
+            let () = debug "cell_smash assume %a" Framework.Pp.pp_stmt stmt' in
+            match SubDomain.exec subman ctx stmt' flow with
+            | Some flow -> flow
+            | None -> assert false
+          else
+            flow
+      ) |>
+      oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
+      oflow_compose (append_flow_mergers [mk_remove_var v stmt.srange])
+
+    | _ -> assert false
+
+    
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
@@ -286,50 +325,26 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
 
-    | S_assign({ekind = E_var ({vkind = V_orig | V_smash_cell _} as v)} as lval, rval, mode) when is_c_scalar_type v.vtyp ->
+    | S_assign({ekind = E_var ({vkind = V_orig} as v)} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
       let v' = annotate_var v in
-      let stmt' = {stmt with skind = S_assign(mk_var v' lval.erange, rval, mode)} in
-      SubDomain.exec subman ctx stmt' flow |>
-      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
+      assign_var man subman ctx lval v' rval mode stmt.srange flow
+        
+    | S_assign({ekind = E_var {vkind = _}} as lval, rval, mode) when is_c_scalar_type lval.etyp ->
+      None
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_orexec (fun el flow ->
-          match el with
-          | [rval; {ekind = E_var ({vkind = V_smash_cell c} as v)} as lval] ->
-            (* Infer the mode of assignment *)
-            let mode =
-              match c.b with
-              (* TODO: process the case of heap addresses *)
-              | A a -> WEAK
-              | V v ->
-              (* In case of a base variable, we check that we are writing to the whole memory block *)
-                if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then STRONG
-                else WEAK
-            in
-            let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
-            SubDomain.exec subman ctx stmt' flow |>
-            oflow_compose (remove_overlapping_cells v stmt.srange man subman ctx) |>
-            oflow_compose (
-              fun flow ->
-                if is_c_int_type c.t then
-                  let rmin, rmax = rangeof c.t in
-                  let cond = range_cond lval rmin rmax (erange lval) in
-                  let stmt'' = (mk_assume cond (tag_range range "assume range")) in
-                  let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt'' in
-                  match SubDomain.exec subman ctx stmt'' flow with
-                  | Some flow -> flow
-                  | None -> assert false
-                else
-                  flow
-            ) |>
-            oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
-
-          | _ -> None
+      (* For the rval, we use the manager eval to simplify the expression *)
+      man.eval ctx rval flow |>
+      eval_to_orexec (fun rval flow ->
+          (* However, the lval, we use our local eval so that the reduced product will not evict our simplifications *)
+          eval man subman ctx lval flow |>
+          oeval_to_orexec (fun (lval, _) flow ->
+              match ekind lval with
+              | E_var ({vkind = V_smash_cell _} as v)->
+                assign_var man subman ctx lval v rval mode stmt.srange flow
+              | _ -> None
+            ) (man.exec ctx) man.flow
         ) (man.exec ctx) man.flow
-
-
-
     | _ -> None
 
 
