@@ -337,7 +337,7 @@ struct
 
     | E_binop(O_eq, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       eval_list [p; q] (man.eval ctx) flow |>
-      eval_compose (fun el flow -> oeval_list [p; q] (eval_p man ctx) flow) |>
+      eval_compose (fun el flow -> oeval_list el (eval_p man ctx) flow) |>
       oeval_compose
         (fun ptl flow ->
            match ptl with
@@ -363,7 +363,7 @@ struct
 
     | E_binop(O_ne, p, q) when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
       eval_list [p; q] (man.eval ctx) flow |>
-      eval_compose (fun el flow -> oeval_list [p; q] (eval_p man ctx) flow) |>
+      eval_compose (fun el flow -> oeval_list el (eval_p man ctx) flow) |>
       oeval_compose
         (fun ptl flow ->
            match ptl with
