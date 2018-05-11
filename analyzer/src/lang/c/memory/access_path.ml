@@ -36,7 +36,12 @@ open Pointer
 let name = "c.memory.access_path"
 let debug fmt = Debug.debug ~channel:name fmt
 
+let smash_threshold = ref (Z.of_int 5)
+(** Smash arrays with length greater than or equal to this. *)
 
+let print_type_in_ap = ref true
+                    
+              
 (*==========================================================================*)
 (**                       {2 Concrete types}                                *)
 (*==========================================================================*)
@@ -76,7 +81,9 @@ let pp_sel_list fmt : sel list -> unit =
   List.iter (pp_sel fmt)
     
 let pp_ap fmt ((b,s,t):ap) : unit =
-  Format.fprintf fmt "%a%a" pp_base b pp_sel_list s
+  if !print_type_in_ap
+  then Format.fprintf fmt "%a%a(%a)" pp_base b pp_sel_list s pp_typ t
+  else  Format.fprintf fmt "%a%a" pp_base b pp_sel_list s
 
 let string_of_ap (ap:ap) : string =
   pp_ap Format.str_formatter ap;
@@ -279,7 +286,8 @@ module Sel = struct
     | S_array (_,_, A_smashed a) ->
          Format.fprintf fmt "[*]%a" print a
 
-    | S_end _ -> ()
+    | S_end t ->
+       if !print_type_in_ap then Format.fprintf fmt "(%a)" pp_typ t
 
              
     
@@ -751,10 +759,16 @@ module Sel = struct
       | S_end t, ((E_s_array_index (t',_) | E_s_array_any t')::tail) ->
          (* at end of tree, add an array selector *)
          (match remove_typedef t with
-          | T_c_array (t'',l) when equal_typ t' t'' ->
-             (* TODO: use smashed if length is too high, or unknown *)
+          | T_c_array (t'', (C_array_length_cst len as l))
+               when equal_typ t' t'' && len < !smash_threshold ->
+             (* append non-smashed array selectors *)
              let r = A_extended ZMap.empty in
              doit (S_array (t', l, r)) s
+          | T_c_array (t'', l) when equal_typ t' t'' ->
+             (* append a smashed array selector *)
+             let s, tails = doit (S_end t') tail in
+             S_array (t',l,A_smashed s),
+             List.map (fun l -> (E_s_array_any t')::l) tails
           | _ ->
              debug "add_sel %a, %a failed #2 at %a, %a"
                    print aa pp_sel_list ss print a pp_sel_list s;
@@ -774,6 +788,8 @@ module Sel = struct
       The path actually added may differ from the specified path 
       to ensure that array smashing matches the selector sequence set,
       so, the path(s) actually added is also returned.
+      NOTE: this takes care of choosing whether to add smashed or non-smashed
+      array selectors !
    *)
 
     

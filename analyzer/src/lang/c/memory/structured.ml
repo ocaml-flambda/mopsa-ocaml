@@ -79,7 +79,7 @@ let annotate_var_kind (v:var) : var =
 
 let type_of_base : base -> typ = function
   | V v -> v.vtyp
-  | A _ -> assert false
+  | A _ -> T_c_void
          
 
 
@@ -211,20 +211,19 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
    *)
 
 
-  let var_in_domain ctx range (v:var) (u:non_bot) (s:SubDomain.t)
+  let add_var ctx range (ap:ap) (u:non_bot) (s:SubDomain.t)
       : non_bot * SubDomain.t * var list =
-    (* ignore non-scalar *)
-    if not (is_c_scalar_type v.vtyp) then u, s, [] else
-    
     (* get, or create the access path set for base *)
-    let base,sel,t = ap_of_var v in
+    let base,sel,t = ap in
     let has_base, block =
       try true, T.find base u
       with Not_found -> false, Sel.base (type_of_base base)
     in
+    (* ignore non-scalar *)
+    if not (is_c_scalar_type t) then u, s, [] else    
     (* initial range, for numeric types *)
     let init =
-      if is_c_pointer_type v.vtyp then None else
+      if is_c_pointer_type t then None else
         let a, b = rangeof t in
         Some (mk_z_interval a b range)
     in
@@ -236,7 +235,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           (* if the acess path was not already in block before add_sel,
              also add it in the subdomain
            *)
-          (*          let v' = { v with vkind = V_access_path (base, sel', t) } in*)
           let v' = var_of_ap (base, sel', t) in
           v'::vs,
           if has_base && Sel.contains_sel block sel' then s
@@ -252,24 +250,23 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         ) ([],s) sels'
     in
     T.add base block' u, s, vs
-  (** Given an access path variable [v], return the list of variables it
+  (** Given an access path [ap], return the list of variables it
       corresponds to in the environment [u].
       Takes care of adding the missing variables in the environment [u] 
       and the subdomain [s].
    *)
 
-  let var_in_domain_bot ctx range (v:var) (u:t) (s:SubDomain.t) =
+  let add_var_bot ctx range (ap:ap) (u:t) (s:SubDomain.t) =
     match u with
     | BOT -> BOT, s, []
-    | Nb u -> let u,s,v = var_in_domain ctx range v u s in Nb u, s, v
+    | Nb u -> let u,s,v = add_var ctx range ap u s in Nb u, s, v
 
     
     
-  let add_all_sels ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
+  let add_all_vars ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
     List.fold_left
       (fun (u,s) (sel,typ)->
-        let v = var_of_ap (b,sel,typ) in
-        let u,s,_ = var_in_domain ctx range v u s in
+        let u,s,_ = add_var ctx range (b,sel,typ) u s in
         u,s
       )
       (u,s) (Sel.enumerate p) 
@@ -296,14 +293,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
        let (uu,ss),(uu',ss') =
          T.fold2zo
            (fun b p ((u,s),(u',s')) ->
-             (u,s), add_all_sels ctx range b p u' s'
+             (u,s), add_all_vars ctx range b p u' s'
            )
            (fun b p ((u,s),(u',s')) ->
-             add_all_sels ctx range b p u s, (u',s')
+             add_all_vars ctx range b p u s, (u',s')
            )
            (fun b p1 p2 ((u,s),(u',s')) ->
-             add_all_sels ctx range b p2 u s,
-             add_all_sels ctx range b p1 u' s'
+             add_all_vars ctx range b p2 u s,
+             add_all_vars ctx range b p1 u' s'
            )
            uu uu' ((uu,s),(uu',s'))
        in
@@ -321,9 +318,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     match skind stmt with
     | S_c_local_declaration({vkind = V_orig} as v, init) ->
        debug "exec S_c_local_declaration %a" pp_var v;
-      let v' = annotate_var_kind v in
-      Init.init_local (init_manager man subman ctx) v' init range flow |>
-      return_flow
+       let v' = annotate_var_kind v in
+       Init.init_local (init_manager man subman ctx) v' init range flow |>
+       return_flow
 
     | S_rename_var(v, v') ->
        assert false
@@ -351,32 +348,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
        oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
        
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      eval_list [rval; lval] (man.eval ctx) flow |>
-      eval_to_orexec (fun el flow ->
-          match el with
-          | [rval; {ekind = E_var ({vkind = V_access_path ap} as v)} as lval] ->
-             let base,sel,typ = ap in
-             let mode = if sel_is_weak sel then WEAK else mode in
-             let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
-             debug "exec S_assign %a" Framework.Pp.pp_stmt stmt';
-             SubDomain.exec subman ctx stmt' flow |>
-               oflow_compose (
-                   fun flow ->
-                   if is_c_int_type typ then
-                     let rmin, rmax = rangeof typ in
-                     let cond = range_cond lval rmin rmax (erange lval) in
-                     let stmt'' = (mk_assume cond (tag_range range "assume range")) in
-                     debug "exec S_assign assume %a" Framework.Pp.pp_stmt stmt'';
-                     match SubDomain.exec subman ctx stmt'' flow with
-                     | Some flow -> flow
-                     | None -> assert false
-                   else
-                     flow
-                 ) |>
-               oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
+       eval_list [rval; lval] (man.eval ctx) flow |>
+       eval_to_orexec (fun el flow ->
+           match el with
+           | [rval; {ekind = E_var ({vkind = V_access_path ap} as v)} as lval] ->
+              let base,sel,typ = ap in
+              let mode = if sel_is_weak sel then WEAK else mode in
+              let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
+              debug "exec S_assign %a" Framework.Pp.pp_stmt stmt';
+              SubDomain.exec subman ctx stmt' flow |>
+              oflow_compose (
+                  fun flow ->
+                  if is_c_int_type typ then
+                    let rmin, rmax = rangeof typ in
+                    let cond = range_cond lval rmin rmax (erange lval) in
+                    let stmt'' = (mk_assume cond (tag_range range "assume range")) in
+                    debug "exec S_assign assume %a" Framework.Pp.pp_stmt stmt'';
+                    match SubDomain.exec subman ctx stmt'' flow with
+                    | Some flow -> flow
+                    | None -> assert false
+                  else
+                    flow
+                ) |>
+              oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
                          
-          | _ -> None
-        ) (man.exec ctx) man.flow
+           | _ -> None
+         ) (man.exec ctx) man.flow
       
       
     | _ -> None
@@ -388,31 +385,20 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
+       (* v => *(&v) *)
        debug "eval E_var %a" pp_var v;
-       let u = get_domain_cur man flow in
-       let s = get_domain_cur subman flow in
-       let u', s', vs = var_in_domain_bot ctx range v u s in
-       let flow'' = set_domain_cur u' man flow |>
-                    set_domain_cur s' subman
-       in
-       List.fold_left
-         (fun acc v ->
-           re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', []) |>
-           add_eval_mergers [] |>
-           oeval_join acc
-         )
-         None vs
-
+       eval_deref man subman ctx exp flow (Ptr.base (V v))
+       
     | E_c_deref(p) ->
        debug "eval E_c_deref %a" pp_expr p;
        man.eval ctx (Pointer.mk_c_resolve_pointer p exp.erange) flow |>
-         eval_compose
-           (fun e flow ->
-             match ekind e with
-             | E_c_access_path pt ->
-                eval_ptr man subman ctx exp flow pt
-             | _ -> assert false
-           )
+       eval_compose
+         (fun e flow ->
+           match ekind e with
+           | E_c_access_path pt ->
+              eval_deref man subman ctx exp flow pt
+           | _ -> assert false
+         )
       
     | E_c_arrow_access(p, i, f) ->
        debug "eval E_c_arrow_access %a" pp_expr p;
@@ -426,7 +412,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
            match ekind e with
            | E_c_access_path pt ->
               let pt = Ptr.append_field record i pt in
-              eval_ptr man subman ctx exp flow pt
+              eval_deref man subman ctx exp flow pt
            | _ -> assert false
          )
        
@@ -446,7 +432,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | _ -> None
 
 
-  and eval_ptr man subman ctx exp flow (pt:Ptr.t) =
+  and eval_deref man subman ctx exp flow (pt:Ptr.t) =
+    let range = exp.erange in
     let aps = match Ptr.enumerate pt with
       | Nt x -> x
       | TOP -> [E_ap_invalid] (* map top pointer to invalid *)
@@ -456,14 +443,30 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         debug "eval E_c_deref E_c_access_path %a" pp_apexpr ape;
         (match ape with
          | E_ap_ap ap ->
-            let exp' = {exp with ekind = E_var (var_of_ap ap)} in
-            oeval_singleton (Some (exp', []), flow, []) |>
-              oeval_join acc
+            (* fix access path type to match the dereference operator *)
+            let base, sel, _ = ap in
+            let ap = base, sel, exp.etyp in
+            (* add variables *)
+            let u = get_domain_cur man flow in
+            let s = get_domain_cur subman flow in
+            let u', s', vs = add_var_bot ctx range ap u s in
+            let flow'' = set_domain_cur u' man flow |>
+                         set_domain_cur s' subman
+            in
+            (* make expression *)
+            List.fold_left
+              (fun acc v ->
+                debug "eval_deref E_ap_ap -> %a" pp_var v;
+                re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow'', []) |>
+                add_eval_mergers [] |>
+                oeval_join acc
+              )
+              None vs
             
          | E_ap_base base ->
             (* TODO: return top of typ  *)
             let flow =
-              man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+              man.flow.add (Alarms.TInvalidDeref range) (man.flow.get TCur flow) flow |>
                 man.flow.set TCur man.env.Framework.Lattice.bottom
             in
             oeval_singleton (None, flow, [])
@@ -474,14 +477,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
            
          | E_ap_null  ->
             let flow =
-              man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get TCur flow) flow |>
+              man.flow.add (Alarms.TNullDeref range) (man.flow.get TCur flow) flow |>
                 man.flow.set TCur man.env.Framework.Lattice.bottom
             in
             oeval_singleton (None, flow, [])
             
          | E_ap_invalid ->
             let flow =
-              man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+              man.flow.add (Alarms.TInvalidDeref range) (man.flow.get TCur flow) flow |>
                 man.flow.set TCur man.env.Framework.Lattice.bottom
             in
             oeval_singleton (None, flow, [])
@@ -498,10 +501,9 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       scalar = (fun v e range flow ->
           match ekind v with
           | E_var v ->
-            let v = annotate_var_kind v in
             let u = get_domain_cur man flow in
             let s = get_domain_cur subman flow in
-            let u', s', vs = var_in_domain_bot ctx range v u s in
+            let u', s', vs = add_var_bot ctx range (ap_of_var v) u s in
             let flow' = set_domain_cur u' man flow |>
                          set_domain_cur s' subman
             in
