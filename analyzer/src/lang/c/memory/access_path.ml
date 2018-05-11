@@ -599,6 +599,7 @@ module Sel = struct
    *)
 
   let ptr_add (elem:typ) (v:Z.t with_top) (a:t) : t =
+    debug "*** %a / %a ***" print a pp_typ elem;
     let rec doit = function
       | S_struct (t,s) ->
          S_struct (t, FieldMap.map doit s)
@@ -607,7 +608,7 @@ module Sel = struct
          (* we should stop at an array selector before the end of a path *)
          raise Found_TOP
 
-      | S_array (t,l, A_extended a) when equal_typ t elem ->
+      | S_array (t,l, A_extended a) when equal_typ t elem || t=T_c_void ->
          (* we found the array selector, reconstruct the map *)
          (match v with
           | Nt i ->
@@ -625,22 +626,28 @@ module Sel = struct
                  )
                  a ZMap.empty
              in
-             S_array (t,l, A_extended aa)
+             S_array (elem,l, A_extended aa)
           | TOP ->
              (* smash the array *)
-             S_array (t,l, A_smashed (smash_array false (A_extended a)))
+             S_array (elem,l, A_smashed (smash_array false (A_extended a)))
          )
       | S_array (t,l, A_extended a) ->
          (* continue traversing the paths *)
          S_array (t, l, A_extended (ZMap.map doit a))
 
-      | S_array (t,l, A_smashed (S_end _)) as a when equal_typ t elem ->
+      | S_array (t,l, A_smashed (S_end _)) as a when equal_typ t elem || t=T_c_void ->
          (* we found the array selector, it is unchanged *)
          a
 
       | S_array (t,l, A_smashed a) ->
          (* continue traversing the paths *)
          S_array (t, l, A_smashed (doit a))
+    in
+    let a =
+      if a = S_end T_c_void then
+        (* special case for pointer to a malloced block *)
+        S_array (elem, C_array_no_length, A_smashed (S_end elem))
+      else a
     in
     doit a 
   (** Pointer arithmetic on array of type [elem]: adds [v] to the
@@ -760,18 +767,23 @@ module Sel = struct
          (* at end of tree, add an array selector *)
          (match remove_typedef t with
           | T_c_array (t'', (C_array_length_cst len as l))
-               when equal_typ t' t'' && len < !smash_threshold ->
+               when equal_or_void_typ t' t'' && len < !smash_threshold ->
              (* append non-smashed array selectors *)
              let r = A_extended ZMap.empty in
              doit (S_array (t', l, r)) s
-          | T_c_array (t'', l) when equal_typ t' t'' ->
+          | T_c_array (t'', l) when equal_or_void_typ t' t'' ->
              (* append a smashed array selector *)
              let s, tails = doit (S_end t') tail in
              S_array (t',l,A_smashed s),
              List.map (fun l -> (E_s_array_any t')::l) tails
+          | T_c_void ->
+             (* append an array selector to a malloced block viewed as an array *)
+             let s, tails = doit (S_end t') tail in
+             S_array (t',C_array_no_length,A_smashed s),
+             List.map (fun l -> (E_s_array_any t')::l) tails
           | _ ->
-             debug "add_sel %a, %a failed #2 at %a, %a"
-                   print aa pp_sel_list ss print a pp_sel_list s;
+             debug "add_sel %a, %a failed #2 at %a/%a, %a/%a"
+                   print aa pp_sel_list ss print a pp_typ t pp_sel_list s pp_typ t';
              raise Not_found
          )
 
