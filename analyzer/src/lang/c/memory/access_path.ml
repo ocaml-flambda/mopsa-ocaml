@@ -36,7 +36,7 @@ open Pointer
 let name = "c.memory.access_path"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let smash_threshold = ref (Z.of_int 5)
+let smash_threshold = ref (Z.of_int 15)
 (** Smash arrays with length greater than or equal to this. *)
 
 let print_type_in_ap = ref true
@@ -702,13 +702,26 @@ module Sel = struct
   (** Unfold the tree into a set of selector sequences. *)
 
 
+  let out_of_bound (l:c_array_length) (s:sel) : bool =
+    match l,s with
+    | C_array_length_cst len, E_s_array_index (_,i)
+         when i >= Z.zero && i < len ->
+       false
+    | _ ->
+       debug "XXX out of bound %a %a XXX" pp_typ (T_c_array (T_c_void,l)) pp_sel s;
+       true
+  (** Utility function to test whether an array access can be 
+      out of bound. 
+   *)
 
-  let add_sel (aa:t) (ss:sel list) : t * sel list list =
-    let rec doit a s = match a,s with
+
+  let add_sel (aa:t) (ss:sel list) : t * sel list list * bool =
+    let rec doit a s err = match a,s with
       | _, [] ->
-         a, [s]
+         a, [s], err
          
-      | S_struct (rc,s), (E_s_field (rc',i) as sel::tail)
+      | S_struct (rc,s),
+        (E_s_field (rc',i) as sel::tail)
            when equal_record rc rc' ->
          (* add in existing record selector node *)
          let f = List.nth rc'.c_record_fields i in
@@ -716,71 +729,83 @@ module Sel = struct
            try FieldMap.find f s
            with Not_found -> S_end f.c_field_type
          in
-         let ss, tails = doit ss tail in
+         let ss, tails, err = doit ss tail err in
          S_struct (rc, FieldMap.add f ss s),
-         List.map (fun l -> sel::l) tails
+         List.map (fun l -> sel::l) tails,
+         err
 
-      | S_array (t,l,A_smashed s), ((E_s_array_index (t',_) | E_s_array_any t')::tail)
+      | S_array (t,l,A_smashed s),
+        ((E_s_array_index (t',_) | E_s_array_any t' as sel)::tail)
            when equal_typ t t' ->
          (* add in existing smashed array node *)
-         let s, tails = doit s tail in
+         let s, tails, err = doit s tail err in
          S_array (t,l,A_smashed s),
-         List.map (fun l -> (E_s_array_any t')::l) tails
+         List.map (fun l -> (E_s_array_any t')::l) tails,
+         err || out_of_bound l sel
          
-      | S_array (t,l,A_extended s), (E_s_array_index (t',i) as sel::tail)
+      | S_array (t,l,A_extended s),
+        (E_s_array_index (t',i) as sel::tail)
            when equal_typ t t' ->
          (* add in existing extended array node *)
          let ss =
            try ZMap.find i s
            with Not_found -> S_end t
          in
-         let ss, tails = doit ss tail in
+         let ss, tails, err = doit ss tail err in
          S_array (t,l,A_extended (ZMap.add i ss s)),
-         List.map (fun l -> sel::l) tails
+         List.map (fun l -> sel::l) tails,
+         err || out_of_bound l sel
 
-      | S_array (t,l,A_extended s), (E_s_array_any t')::tail ->
+      | S_array (t,l,A_extended s),
+        (E_s_array_any t')::tail ->
          let len = match l with
            | C_array_length_cst l -> l
            | _ -> invalid_arg "non-constant array length in add_sel"
          in
          (* call the extended array case for every index *)
-         let rec doit2 a i acc =
-           if i >= len then a,acc
+         let rec doit2 a i acc err =
+           if i >= len then a,acc,err
            else
-             let a,r = doit a (E_s_array_index (t',i)::tail) in
-             doit2 a (Z.succ i) (List.rev_append r acc)
+             let a,r,err = doit a (E_s_array_index (t',i)::tail) err in
+             doit2 a (Z.succ i) (List.rev_append r acc) err
          in
-         doit2 a Z.zero []
+         doit2 a Z.zero [] err
                   
       | S_end t, (E_s_field (rc',i)::tail) ->
          (* at end of tree, add a field selector *)
          (match remove_typedef t with
           | T_c_record rc when equal_record rc rc' ->
-             doit (S_struct (rc,FieldMap.empty)) s
+             doit (S_struct (rc,FieldMap.empty)) s err
           | _ ->
              debug "add_sel %a, %a failed #1 at %a, %a"
                    print aa pp_sel_list ss print a pp_sel_list s;
              raise Not_found
          )
          
-      | S_end t, ((E_s_array_index (t',_) | E_s_array_any t')::tail) ->
+      | S_end t,
+        ((E_s_array_index (t',_) | E_s_array_any t') as sel::tail) ->
          (* at end of tree, add an array selector *)
          (match remove_typedef t with
           | T_c_array (t'', (C_array_length_cst len as l))
                when equal_or_void_typ t' t'' && len < !smash_threshold ->
              (* append non-smashed array selectors *)
              let r = A_extended ZMap.empty in
-             doit (S_array (t', l, r)) s
+             doit (S_array (t', l, r)) s err
+
           | T_c_array (t'', l) when equal_or_void_typ t' t'' ->
              (* append a smashed array selector *)
-             let s, tails = doit (S_end t') tail in
+             let s, tails, err = doit (S_end t') tail err in
              S_array (t',l,A_smashed s),
-             List.map (fun l -> (E_s_array_any t')::l) tails
+             List.map (fun l -> (E_s_array_any t')::l) tails,
+             err || out_of_bound l sel
+
           | T_c_void ->
              (* append an array selector to a malloced block viewed as an array *)
-             let s, tails = doit (S_end t') tail in
+             let s, tails, err = doit (S_end t') tail err in
              S_array (t',C_array_no_length,A_smashed s),
-             List.map (fun l -> (E_s_array_any t')::l) tails
+             List.map (fun l -> (E_s_array_any t')::l) tails,
+             true
+
           | _ ->
              debug "add_sel %a, %a failed #2 at %a/%a, %a/%a"
                    print aa pp_sel_list ss print a pp_typ t pp_sel_list s pp_typ t';
@@ -793,8 +818,9 @@ module Sel = struct
          raise Not_found
          
     in
-    doit aa ss
+    doit aa ss false
   (** Add an access path to a set of selector sequences. 
+      Returns a boolean to denote out-of-bound array access.
       Raises Not_found if the path cannot be added due to type 
       incompatibilities.
       The path actually added may differ from the specified path 

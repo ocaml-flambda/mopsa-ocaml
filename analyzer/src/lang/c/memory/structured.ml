@@ -17,11 +17,6 @@
     array access, pointer arithmetic and pointer casts.
  *)
 
-(* 
-   Status:
-
- *)
-
 open Bot
 open Top
 open Framework.Ast
@@ -212,7 +207,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
 
   let add_var ctx range (ap:ap) (u:non_bot) (s:SubDomain.t)
-      : non_bot * SubDomain.t * var list =
+      : non_bot * SubDomain.t * var list * bool =
     (* get, or create the access path set for base *)
     let base,sel,t = ap in
     let has_base, block =
@@ -220,7 +215,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       with Not_found -> false, Sel.base (type_of_base base)
     in
     (* ignore non-scalar *)
-    if not (is_c_scalar_type t) then u, s, [] else    
+    if not (is_c_scalar_type t) then u, s, [], false else    
     (* initial range, for numeric types *)
     let init =
       if is_c_pointer_type t then None else
@@ -228,7 +223,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         Some (mk_z_interval a b range)
     in
     (* translate access paths of v into a set of access path in u *)
-    let block', sels' = Sel.add_sel block sel in
+    let block', sels', err = Sel.add_sel block sel in
     let vs, s =
       List.fold_left
         (fun (vs,s) sel' ->
@@ -249,24 +244,28 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                s
         ) ([],s) sels'
     in
-    T.add base block' u, s, vs
+    T.add base block' u, s, vs, err
   (** Given an access path [ap], return the list of variables it
       corresponds to in the environment [u].
       Takes care of adding the missing variables in the environment [u] 
       and the subdomain [s].
+      Returns a bool which is true if there may be an out-of-bound access.
    *)
 
   let add_var_bot ctx range (ap:ap) (u:t) (s:SubDomain.t) =
     match u with
-    | BOT -> BOT, s, []
-    | Nb u -> let u,s,v = add_var ctx range ap u s in Nb u, s, v
+    | BOT ->
+       BOT, s, [], false
+    | Nb u ->
+       let u, s, v, err = add_var ctx range ap u s in
+       Nb u, s, v, err
 
     
     
   let add_all_vars ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
     List.fold_left
       (fun (u,s) (sel,typ)->
-        let u,s,_ = add_var ctx range (b,sel,typ) u s in
+        let u,s,_,_ = add_var ctx range (b,sel,typ) u s in
         u,s
       )
       (u,s) (Sel.enumerate p) 
@@ -449,15 +448,22 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             (* add variables *)
             let u = get_domain_cur man flow in
             let s = get_domain_cur subman flow in
-            let u', s', vs = add_var_bot ctx range ap u s in
-            let flow'' = set_domain_cur u' man flow |>
-                         set_domain_cur s' subman
+            let u', s', vs, err = add_var_bot ctx range ap u s in
+            let flow = set_domain_cur u' man flow |>
+                       set_domain_cur s' subman
+            in
+            (* out-of-bound error *)
+            let flow =
+              if err then
+                man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow
+              else
+                flow
             in
             (* make expression *)
             List.fold_left
               (fun acc v ->
                 debug "eval_deref E_ap_ap -> %a" pp_var v;
-                re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow'', []) |>
+                re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow, []) |>
                 add_eval_mergers [] |>
                 oeval_join acc
               )
@@ -467,7 +473,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             (* TODO: return top of typ  *)
             let flow =
               man.flow.add (Alarms.TInvalidDeref range) (man.flow.get TCur flow) flow |>
-                man.flow.set TCur man.env.Framework.Lattice.bottom
+              man.flow.set TCur man.env.Framework.Lattice.bottom
             in
             oeval_singleton (None, flow, [])
            
@@ -503,16 +509,22 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | E_var v ->
             let u = get_domain_cur man flow in
             let s = get_domain_cur subman flow in
-            let u', s', vs = add_var_bot ctx range (ap_of_var v) u s in
-            let flow' = set_domain_cur u' man flow |>
-                         set_domain_cur s' subman
+            let u', s', vs, err = add_var_bot ctx range (ap_of_var v) u s in
+            let flow = set_domain_cur u' man flow |>
+                       set_domain_cur s' subman
+            in
+            let flow =
+              if err then
+                man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow
+              else
+                flow
             in
             List.fold_left
               (fun acc v ->
                  let stmt = mk_assign (mk_var v range) e range in
                  sub_exec subman ctx stmt acc
               )
-              flow' vs
+              flow vs
 
           | _ -> assert false
         );
