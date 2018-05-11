@@ -10,7 +10,7 @@ import re
 
 parser = argparse.ArgumentParser(description='MOPSA launcher for Juliet testcase suite.')
 parser.add_argument('cwe', nargs='+',
-                   help='list of CWE\'s to analyze')
+                    help='list of CWE\'s to analyze (format: cwe[:subdir1,subdir2,...] ...)')
 parser.add_argument('--juliet', default="/opt/juliet",
                    help='path to Juliet testcase suite')
 parser.add_argument('--mopsa', default="/opt/mopsa",
@@ -67,7 +67,11 @@ def parse_result(result):
         return (False, None, None)
 
 cwe_alarm = {
+    124: "Out of bound access",
+    126: "Out of bound access",
+    127: "Out of bound access",
     190: "Integer overflow",
+    369: "Division by zero",
     476: "Null pointer dereference",
 }
 
@@ -112,8 +116,9 @@ with open(args.out, "rt") as fp:
                 "false_positives": 0,
                 "false_negatives": 0
             }
+
         results[cwe] = {
-            "time": old["time"] + [time],
+            "time": old["time"] + [time] if completed else old["time"],
             "total": old["total"] + 1,
             "completed": old["completed"] + completed,
             "false_positives": old["false_positives"] + false_positives,
