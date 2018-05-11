@@ -1039,7 +1039,7 @@ module Ptr = struct
 
 
   let ptr_print (fmt:Format.formatter) (a:ptr) : unit =
-    Format.printf
+    Format.fprintf fmt
       "%a%s%s,%a"
       AP.print a.data
       (if a.invalid then ",invalid" else "")
@@ -1099,8 +1099,10 @@ module Ptr = struct
       )
   (** Utility factoring join and widening. *)
 
-  let join : t -> t -> t =
-    join_widen false
+  let join (a:t) (b:t) : t =
+    let r = join_widen false a b in
+    debug "%a U %a = %a@." print a print b print r;
+    r
 
   let widening (_:Framework.Context.context) : t -> t -> t =
     join_widen true
@@ -1228,7 +1230,10 @@ module Domain =
   module Abs = Framework.Lattices.Total_map.Make(Var)(Ptr)
   include Abs
   (** Assign a pointer information to each variable. *)
-    
+
+  let print fmt x =
+    Format.fprintf fmt "ptr: @[%a@]@\n" print x
+        
 
   (*================*)
   (** {3 Utilities} *)
@@ -1323,7 +1328,7 @@ module Domain =
        man.eval ctx e flow |>
        eval_compose (eval_ref man ctx)
       
-    | E_binop(O_plus _, e1, e2) when
+    | E_binop((O_plus _ | O_minus _ as op), e1, e2) when
            ((is_c_pointer_type e1.etyp || is_c_array_type e1.etyp) && (is_c_int_type e2.etyp || is_int_type e2.etyp)) ||
            ((is_c_pointer_type e2.etyp || is_c_array_type e2.etyp) && (is_c_int_type e1.etyp || is_int_type e1.etyp))
       ->
@@ -1332,14 +1337,19 @@ module Domain =
        let vp = eval_compose (eval_ptr man ctx) (man.eval ctx p flow)
        and vi = man.ask ctx (Universal.Numeric.Query.QIntInterval i) flow
        in
+       let f = match op with
+         | O_plus _ -> fun x -> x
+         | O_minus _ -> Z.neg
+         | _ -> assert false
+       in
        (match vp, vi with
         | Some pp,
           Some (Nb (Intervals.IntBound.Finite lo,
                     Intervals.IntBound.Finite hi)) when lo = hi->
            eval_compose
              (fun pt flow ->
-               let x = Ptr.ptr_add (under_pointer_type p.etyp) (Nt lo) pt in
-               debug "eval_ptr pointer add: %a + %a -> %a" Ptr.print pt Z.pp_print lo Ptr.print x;
+               let x = Ptr.ptr_add (under_pointer_type p.etyp) (Nt (f lo)) pt in
+               debug "eval_ptr pointer add: %a +/- %a -> %a" Ptr.print pt Z.pp_print lo Ptr.print x;
                oeval_singleton (Some x, flow, [])
              )
              pp
@@ -1347,7 +1357,7 @@ module Domain =
            eval_compose
              (fun pt flow ->
                let x = Ptr.ptr_add (under_pointer_type p.etyp) TOP pt in
-               debug "eval_ptr pointer add: %a + %a -> %a" Ptr.print pt pp_expr i Ptr.print x;
+               debug "eval_ptr pointer add: %a +/- %a -> %a" Ptr.print pt pp_expr i Ptr.print x;
                oeval_singleton (Some x, flow, [])
              )
              pp
@@ -1357,10 +1367,11 @@ module Domain =
        
     | E_c_cast(p', _) when is_c_array_type exp.etyp || is_c_function_type exp.etyp || is_c_pointer_type exp.etyp ->
        (* cast (transparent) *)
-       debug "eval_ptr E_c_cast";
+       debug "eval_ptr E_c_cast %a" pp_expr p';
        man.eval ctx p' flow |>
        eval_compose (eval_ptr man ctx)
-      
+    (*       eval_ptr man ctx p' flow*)
+       
     | E_c_function f ->
        (* function constant *)
        let pt = Ptr.fn f in
@@ -1409,7 +1420,7 @@ module Domain =
     
   let rec exec man ctx stmt flow =
     let range = srange stmt in
-    debug "%a@\nexec %a" pp_range range pp_stmt stmt;
+    debug "%a@\nexec %a@\n@[%a@]" pp_range range pp_stmt stmt man.flow.print flow;
     match skind stmt with
 
     | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
@@ -1431,7 +1442,12 @@ module Domain =
        eval_ptr man ctx q flow |>
        oeval_to_oexec
          (fun ptr flow ->
-           debug "exec S_assign -> %a" Ptr.print ptr;
+           debug "exec S_assign %a -> %a" pp_var p Ptr.print ptr;
+           let ptr = match mode with
+             | STRONG | EXPAND -> ptr
+             | WEAK ->
+                Ptr.join ptr (find p (get_domain_cur man flow))
+           in
            map_domain_cur (add p ptr) man flow |>
            return
         ) (man.exec ctx) man.flow
@@ -1446,7 +1462,7 @@ module Domain =
 
   let eval man ctx exp flow =
     let range = exp.erange in
-    debug "%a@\nexec %a" pp_range range pp_expr exp;
+    debug "%a@\neval %a" pp_range range pp_expr exp;
     match ekind exp with
 
     | E_c_resolve_pointer p ->

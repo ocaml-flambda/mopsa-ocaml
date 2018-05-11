@@ -16,10 +16,10 @@ int main() {
   toto e ;
   e.a.x = 1;
   e.b.x = 3;
-  a.a.y = 2;
+  e.a.y = 2;
   e.b.y = 4;
   void * e2 = (void*) (&e);
-  /* point aa = e.a; */
+  point aa = e.a;
   aa.x = 10;
   /* printf("%d", e.a.x); */
 }

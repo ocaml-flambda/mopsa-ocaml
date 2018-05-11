@@ -168,9 +168,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let widening ctx = join
 
 
-  let print : Format.formatter -> t -> unit =
-    T.fprint MapExt.printer_default B.print Sel.print |>
-    bot_fprint
+  let print fmt (x:t) =
+    Format.fprintf
+      fmt "mem: @[%a@]@\n"
+      (bot_fprint (T.fprint MapExt.printer_default B.print Sel.print))
+      x
                     
 
     
@@ -195,6 +197,18 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Some flow -> flow
     | None -> assert false
 
+
+  let var_of_ap (ap:ap) : var =
+    let _,_,typ = ap in
+    { vname = string_of_ap ap;
+      vuid = 0;
+      vtyp = typ;
+      vkind = V_access_path ap;
+    }
+  (**
+     Variable corresponding to an access path.
+     TODO: cache this, as string building can be expensive.
+   *)
 
 
   let var_in_domain ctx range (v:var) (u:non_bot) (s:SubDomain.t)
@@ -222,7 +236,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           (* if the acess path was not already in block before add_sel,
              also add it in the subdomain
            *)
-          let v' = { v with vkind = V_access_path (base, sel', t) } in
+          (*          let v' = { v with vkind = V_access_path (base, sel', t) } in*)
+          let v' = var_of_ap (base, sel', t) in
           v'::vs,
           if has_base && Sel.contains_sel block sel' then s
           else
@@ -249,19 +264,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | Nb u -> let u,s,v = var_in_domain ctx range v u s in Nb u, s, v
 
     
-
-  let var_of_ap (ap:ap) : var =
-    let _,_,typ = ap in
-    { vname = string_of_ap ap;
-      vuid = 0;
-      vtyp = typ;
-      vkind = V_access_path ap;
-    }
-  (**
-     Variable corresponding to an access path.
-     TODO: cache this, as string building can be expensive.
-   *)
-
     
   let add_all_sels ctx range (b:base) (p:Sel.t) (u:non_bot) (s:SubDomain.t) =
     List.fold_left
@@ -354,6 +356,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           match el with
           | [rval; {ekind = E_var ({vkind = V_access_path ap} as v)} as lval] ->
              let base,sel,typ = ap in
+             let mode = if sel_is_weak sel then WEAK else mode in
              let stmt' = {stmt with skind = S_assign(lval, rval, mode)} in
              debug "exec S_assign %a" Framework.Pp.pp_stmt stmt';
              SubDomain.exec subman ctx stmt' flow |>
@@ -398,7 +401,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
            add_eval_mergers [] |>
            oeval_join acc
          )
-         (oeval_singleton (None, flow'', [])) vs
+         None vs
 
     | E_c_deref(p) ->
        debug "eval E_c_deref %a" pp_expr p;
@@ -458,10 +461,12 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
               oeval_join acc
             
          | E_ap_base base ->
-            (* TODO: unknown location inside a base
-               -> returns top of typ + alamr ?
-             *)
-            assert false
+            (* TODO: return top of typ  *)
+            let flow =
+              man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get TCur flow) flow |>
+                man.flow.set TCur man.env.Framework.Lattice.bottom
+            in
+            oeval_singleton (None, flow, [])
            
          | E_ap_fun fn ->
             oeval_singleton (Some ({exp with ekind = E_c_function fn}), flow, []) |>
@@ -483,7 +488,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         )
         |> oeval_join acc
       )
-      (oeval_singleton (None, flow, [])) aps
+      None aps
 
 
   (* copied from extended.ml *)
@@ -538,14 +543,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     fun man subman ctx query flow ->
     match query with
 
-    | QExtractVarAccessPath ({vkind = V_access_path ap} as v) ->
-       let pt = Ptr.of_ap ap in
+    | QExtractVarAccessPath v ->
+       let pt = Ptr.of_ap (ap_of_var v) in
        debug "ask QExtractVarAccessPath %a -> %a" pp_var v Ptr.print pt;
        Some pt
-
-    | QExtractVarAccessPath v ->
-       debug "ask QExtractVarAccessPath %a" pp_var v;
-       assert false
       
     | _ -> None
     
