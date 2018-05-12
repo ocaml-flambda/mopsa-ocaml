@@ -452,22 +452,25 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let flow = set_domain_cur u' man flow |>
                        set_domain_cur s' subman
             in
-            (* out-of-bound error *)
-            let flow =
-              if err then
-                man.flow.add (Alarms.TOutOfBound range) (man.flow.get TCur flow) flow
-              else
-                flow
-            in
             (* make expression *)
-            List.fold_left
-              (fun acc v ->
-                debug "eval_deref E_ap_ap -> %a" pp_var v;
-                re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow, []) |>
-                add_eval_mergers [] |>
-                oeval_join acc
-              )
-              None vs
+            let res =
+              List.fold_left
+                (fun acc v ->
+                  debug "eval_deref E_ap_ap -> %a" pp_var v;
+                  re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow, []) |>
+                    add_eval_mergers [] |>
+                    oeval_join acc
+                )
+                None vs
+            in
+            (* out-of-bound error *)
+            if err then
+              let flow = man.flow.add (Alarms.TOutOfBound exp.erange) (man.flow.get TCur flow) flow |>
+                         man.flow.set TCur man.env.Framework.Lattice.bottom
+              in
+              oeval_join res (oeval_singleton (None, flow, []))
+            else
+              res
             
          | E_ap_base base ->
             (* TODO: return top of typ  *)
