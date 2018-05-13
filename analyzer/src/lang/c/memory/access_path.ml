@@ -317,11 +317,11 @@ module Sel = struct
            fmt a
       
     | S_array (_,_, A_smashed (TOP,a)) ->
-         Format.fprintf fmt "[*]%a" print a
-
+       Format.fprintf fmt "[*]%a" print a
+      
     | S_array (_,_, A_smashed (Nt(l,h),a)) ->
-         Format.fprintf fmt "[%a-%a]%a" Z.pp_print l Z.pp_print h print a
-
+       Format.fprintf fmt "[%a-%a]%a" Z.pp_print l Z.pp_print h print a
+      
     | S_end t ->
        if !print_type_in_ap then Format.fprintf fmt "(%a)" pp_typ t
 
@@ -331,7 +331,24 @@ module Sel = struct
   (** {3 Operations} *)
   (*=================*)
 
-                         
+
+  let rec is_singleton : t -> bool = function
+    | S_struct (_,s) ->
+       (FieldMap.cardinal s = 1)
+       && (is_singleton (snd (FieldMap.min_binding s)))
+      
+    | S_array (_,_, A_extended a) ->
+       (ZMap.cardinal a = 1)
+       && (is_singleton (snd (ZMap.min_binding a)))
+      
+    | S_array (_,_, A_smashed (Nt(l,h),a)) when l=h ->
+       is_singleton a
+
+    | S_array (_,_, A_smashed _) -> false
+    | S_end t -> true
+  (** Whether the selector sequence set represents a single concrete path. *)
+
+       
   let rec join_widen (widen:bool) (a:t) (b:t) : t =
     if a==b then a else
       match a,b with
@@ -531,7 +548,11 @@ module Sel = struct
   (** Inclusion. *)
 
 
+  let equal (a:t) (b:t) =
+    leq a b && leq b a
+  (** Equality. *)
 
+    
   let append_field (rt:c_record_type) (idx:int) (a:t) : t =
     let rec doit = function
       | S_struct (t,s) ->
@@ -1009,13 +1030,21 @@ module AP = struct
   (** Meet. *)
 
 
-  let leq (a:t) (b:t) : bool =
+  let leq : t -> t -> bool =
     (* point-wise inclusion *)
     T.for_all2zo
       (fun _ _ -> false) (* only in a, prevents inclusion *)
       (fun _ _ -> true)  (* only in b, OK *)
       (fun _ x y -> top_included Sel.leq x y)
-      a b
+
+    
+  let equal : t -> t -> bool =
+    (* point-wise equality *)
+    T.for_all2zo
+      (fun _ _ -> false)
+      (fun _ _ -> false)
+      (fun _ x y -> top_equal Sel.equal x y)
+
 
   let empty = T.empty
 
@@ -1071,7 +1100,17 @@ module AP = struct
       unknown accesses within bases.
    *)
 
-    
+  let is_singleton (a:t) : bool =
+    (T.cardinal a = 1)
+    && (let base,sel = T.min_binding a in
+        (* TODO: return false if base represent several blocks *)
+        match sel with
+        | TOP -> false
+        | Nt x -> Sel.is_singleton x
+       )
+  (** Whether the abstract value represents a single concrete acces path. *)
+
+
 end
 
 
@@ -1158,6 +1197,22 @@ module Ptr = struct
                   
   let is_top (a:t) : bool =
     a = Top.TOP
+
+  let is_singleton : t -> bool = function
+    | TOP -> false
+    | Nt a ->
+       (* abstract cardinal: > 1 means non-singleton *)
+       let card =
+         (* invalid is non-singleton as it represents all invalid concrete pointers *)
+         (if a.invalid then 2 else 0)
+         + (if a.null then 1 else 0)
+         + (if AP.is_empty a.data then 0
+            else if AP.is_singleton a.data then 1
+            else 2)
+         + (FunSet.cardinal a.fn)
+       in
+       card <= 1
+  (** Whether the pointer set represents a single concrete pointer. *)
     
   let leq : t -> t -> bool =
     Top.top_included
@@ -1166,6 +1221,15 @@ module Ptr = struct
         (b.null || not a.null) &&
         (AP.leq a.data b.data) &&
         (FunSet.subset a.fn b.fn)
+      )
+
+  let equal : t -> t -> bool =
+    Top.top_equal
+      (fun a b ->
+        (b.invalid = a.invalid) &&
+        (b.null = a.null) &&
+        (AP.equal a.data b.data) &&
+        (FunSet.equal a.fn b.fn)
       )
 
   let join_widen (widen:bool)  =
@@ -1557,6 +1621,41 @@ module Domain =
           debug "eval E_c_resolve_pointer %a: %a" pp_expr p Ptr.print pt;
           oeval_singleton (Some exp', flow, [])
         )
+
+    | E_binop(O_eq | O_ne as op, p, q)
+         when is_c_pointer_type p.etyp && is_c_pointer_type q.etyp ->
+       eval_list [p;q] (man.eval ctx) flow |>
+       eval_compose (fun el flow -> oeval_list [p; q] (eval_ptr man ctx) flow) |>
+       oeval_compose
+         (fun ptl flow ->
+           match ptl with
+           | [pp; qq] ->
+              debug "eval E_binop %a %s %a"
+                    Ptr.print pp (if op=O_eq then "==" else "!=") Ptr.print qq;
+              (try
+                 let can_be_eq = not (Ptr.is_bottom (Ptr.meet pp qq))
+                 and must_be_eq = Ptr.is_singleton pp && Ptr.is_singleton qq && Ptr.equal pp qq
+                 in
+                 let can_be_zero =
+                   (op = O_eq && not must_be_eq) || (op = O_ne && can_be_eq)
+                 and can_be_one =
+                   (op = O_eq && can_be_eq) || (op = O_ne && not must_be_eq)
+                 in
+                 let res = match can_be_zero, can_be_one with
+                   | true, false ->  mk_zero range
+                   | false, true -> mk_one range
+                   | true, true -> mk_int_interval 0 1 range
+                   | false, false -> raise Found_BOT
+                 in
+                 oeval_singleton (Some res, flow, [])
+                 
+               with Found_BOT ->
+                 let flow =  man.flow.set TCur man.env.Framework.Lattice.bottom flow in
+                 oeval_singleton (None, flow, [])
+            )
+                     
+           | _ -> assert false
+         )
       
     | _ -> None
 
