@@ -22,7 +22,8 @@ juliet=$1/C/testcases
 cwes="CWE190_Integer_Overflow/s01 CWE190_Integer_Overflow/s02"
 
 allcases=()
-for cwe in ${cwes}; do
+# for cwe in ${cwes}; do
+for cwe in `cat ./scripts/juliet/bench_input/input`; do
     directory=${juliet}/${cwe}
     cases=$(find ${directory} -regextype posix-egrep -regex ".*[0-9]a?\.c" | sed "s/a\.c/\.c/" | sed "s/\.c//" | sort)
     for c in ${cases}; do
