@@ -80,6 +80,17 @@ let mk_builtin_call f params range =
   mk_py_call (mk_addr (from_string f) range) params range
 
 
+let find_type_class_name = function
+  | T_int -> "int"
+  | T_float -> "float"
+  | T_bool -> "bool"
+  | T_string -> "str"
+  | _ -> assert false
+
+let find_type_function t f =
+  let cls = find_type_class_name t in
+  from_attribute cls f
+
 let mro name = assert false
 
 let from_expr exp =

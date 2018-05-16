@@ -137,7 +137,8 @@ module Domain = struct
           let rop_fun = binop_to_string op |> rop_fun in
 
           if e1.etyp <> T_addr && e2.etyp <> T_addr then
-            let exp = mk_py_call (mk_py_attr e1 op_fun range) [e2] range in
+            let f = mk_addr (Builtins.find_type_function e1.etyp op_fun) range in
+            let exp = mk_py_call f [e1; e2] range in
             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
           else
             let is_same_type e1 e2 =
