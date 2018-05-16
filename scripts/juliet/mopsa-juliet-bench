@@ -19,7 +19,6 @@ juliet=$1/C/testcases
 #    CWE562_Return_of_Stack_Variable_Address"
 
 # CWE476_NULL_Pointer_Dereference \
-cwes="CWE190_Integer_Overflow/s01 CWE190_Integer_Overflow/s02"
 
 allcases=()
 # for cwe in ${cwes}; do

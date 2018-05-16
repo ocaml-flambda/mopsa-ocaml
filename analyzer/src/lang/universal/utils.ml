@@ -4,6 +4,8 @@ open Framework.Lattice
 open Framework.Ast
 open Ast
 
+let debug fmt = Debug.debug ~channel:"universal.utils" fmt
+
 let assume_to_exec cond true_case false_case man ctx flow
     ?(bottom_case=(fun () -> man.flow.set TCur man.env.bottom flow))
     ?(merge_case=(fun flow1 flow2 -> man.flow.join (true_case flow1) (false_case flow2)))

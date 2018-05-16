@@ -40,6 +40,7 @@ let perform_analysis (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.prog
 
   Debug.info "Computing initial environments ...";
   let ctx, abs = Analyzer.init prog in
+  Debug.info "Result:@\n%a" Analyzer.flow_manager.print abs;
   let stmt =
     Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
   in
@@ -103,13 +104,13 @@ let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
   let t, alarms = perform_analysis domain prog in
   Success(t, alarms)
 
-(** Return the path of the configuration file. 
+(** Return the path of the configuration file.
     First, check the existence of environment variable MOPSACONFIG.
     Otherwise, use the provided command line option -config.
 *)
 let get_config_path () =
   let config =
-    try Unix.getenv "MOPSACONFIG" 
+    try Unix.getenv "MOPSACONFIG"
     with Not_found -> Options.(common_options.config)
   in
   if Sys.file_exists config then config

@@ -86,6 +86,12 @@ let compare_cell (c: cell) (c': cell) =
   | AnyCell c, AnyCell c' -> compare_xcell c c'
   | _ -> compare c c'
 
+let mk_ocell_points_to (c : ocell) range =
+  mk_expr ~etyp:(pointer_type c.t) (E_c_points_to (E_p_var (c.b,mk_z c.o (tag_range range "offset"),c.t))) (tag_range range "pointsto")
+
+(* FIXME : offset should not be 0 *)
+let mk_xcell_points_to (c : xcell) range =
+  mk_expr ~etyp:(pointer_type c.t) (E_c_points_to (E_p_var (c.b,mk_int 0 (tag_range range "offset"),c.t))) (tag_range range "pointsto")
 
 (** Annotate variables with cell information. *)
 type var_kind +=
@@ -562,6 +568,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
 
   and eval man subman ctx exp flow =
+    let range = erange exp in
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
@@ -575,6 +582,19 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       in
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', []) |>
       add_eval_mergers []
+
+    | E_c_address_of e ->
+      man.eval ctx e flow |>
+      eval_compose (fun e flow ->
+          match ekind e with
+          | E_var ({vkind = V_expand_cell (OffsetCell c)}) ->
+            oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | E_var ({vkind = V_expand_cell (AnyCell c)}) ->
+            oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | _ -> None
+        )
 
     | E_c_deref(p) ->
       man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>

@@ -34,7 +34,7 @@ let rec compare_list (cmp:'a -> 'a -> int) (l1:'a list) (l2:'a list) : int =
   | h1::t1, h2::t2 ->
      let r = cmp h1 h2 in
      if r <> 0 then r else compare_list cmp t1 t2
-    
+
 
 (*==========================================================================*)
                  (**     {2 Locations and ranges}      *)
@@ -114,7 +114,6 @@ let rec compare_range (r1: range) (r2: range) =
     ]
   | Range_fresh(uid1), Range_fresh(uid2) -> compare uid1 uid2
   | _ -> compare r1 r2
-
 
 (*==========================================================================*)
                         (** {2 Programs} *)

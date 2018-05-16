@@ -13,6 +13,7 @@ let init () =
       Reductions.(
         Expand_smashing.setup ();
       );
+      Initzero.setup ();
     );
     Machine_integers.setup ();
     Pointer.setup ();

@@ -19,7 +19,7 @@ open Flow
 open Manager
 open Domains.Stateful
 open Eval
-    
+
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 
@@ -128,7 +128,7 @@ struct
         let flow' = exec ctx stmt flow in
         scache := ((ctx, stmt, flow), flow') :: (if List.length !scache < Options.(common_options.cache_size) then !scache else List.rev @@ List.tl @@ List.rev !scache);
         flow'
-        
+
   and eval_cache ctx exp flow =
     if Options.(common_options.cache_size) == 0 then eval ctx exp flow
     else try
