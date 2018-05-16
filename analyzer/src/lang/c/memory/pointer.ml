@@ -201,24 +201,30 @@ struct
 
     | E_c_address_of(e) ->
       debug "other addresses";
-      man.eval ctx e flow |>
-      eval_compose
-        (fun e flow ->
-           match ekind e with
-           | E_var v ->
-             (
-               debug "address of var %a" pp_var v;
-               match man.ask ctx (Query.QExtractVarBase v) flow with
-               | Some (b, o) ->
-                 let pt = E_p_var (b, o, v.vtyp) in
-                 oeval_singleton (Some pt, flow, [])
-
-               | None ->
-                 assert false
-             )
-
-           | _ -> Debug.fail "eval_p: &(%a) not known" pp_expr e;
+      man.eval ctx exp flow |>
+      eval_compose (fun e flow ->
+          match ekind e with
+          | E_c_points_to pexpr -> oeval_singleton (Some pexpr, flow, [])
+          | _ -> Debug.fail "E_c_adress_of(e) in eval_p yielded %a" Framework.Pp.pp_expr e
         )
+    (* |>
+       * eval_compose
+       *   (fun e flow ->
+       *      match ekind e with
+       *      | E_var v ->
+       *        (
+       *          debug "address of var %a" pp_var v;
+       *          match man.ask ctx (Query.QExtractVarBase v) flow with
+       *          | Some (b, o) ->
+       *            let pt = E_p_var (b, o, v.vtyp) in
+       *            oeval_singleton (Some pt, flow, [])
+       *
+       *          | None ->
+       *            assert false
+       *        )
+       *
+       *      | _ -> Debug.fail "eval_p: &(%a) not known" pp_expr e;
+       *   ) *)
 
     | E_binop(O_plus _, e1, e2) when
         ((is_c_pointer_type e1.etyp || is_c_array_type e1.etyp) && (is_c_int_type e2.etyp || is_int_type e2.etyp)) ||
@@ -261,6 +267,9 @@ struct
 
     | E_c_function fundec ->
       oeval_singleton (Some (E_p_fun fundec), flow, [])
+
+    | E_c_points_to pexpr ->
+      oeval_singleton (Some pexpr, flow, [])
 
     | _ ->
       panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange

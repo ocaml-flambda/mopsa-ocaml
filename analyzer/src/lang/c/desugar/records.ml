@@ -37,7 +37,6 @@ struct
     | E_c_cast(e, _) when (exp |> etyp |> is_c_record_type) ->
       let t' = etyp exp in
       re_eval_singleton (man.eval ctx) (Some ({e with etyp = t'}), flow, [])
-
     | _ -> None
 
   let exec man ctx stmt flow =

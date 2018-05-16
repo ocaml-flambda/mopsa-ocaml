@@ -159,8 +159,11 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let sub_exec subman ctx stmt flow =
     match SubDomain.exec subman ctx stmt flow with
     | Some flow -> flow
-    | None -> assert false
+    | None -> Debug.fail "[sub_exec] got None when : %a" Framework.Pp.pp_stmt stmt
 
+  let recover_flow x = match x with
+    | Some x -> x
+    | None -> Debug.fail "[recover_flow] got None"
   (*==========================================================================*)
   (**                     {2 Transfer functions}                              *)
   (*==========================================================================*)
@@ -174,7 +177,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let mk_lt a b r =
     mk_binop a O_lt b r
 
-  let is_top_base range man base ctx flow =
+  let is_top_base range subman base ctx flow =
     let vmin = var_of_base base Min in
     let vmax = var_of_base base Max in
     let cond = mk_binop
@@ -183,10 +186,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
         (mk_var vmin (tag_range range "vmin-istop"))
         (tag_range range "cond-istop")
     in
-    let f' = man.exec ctx (mk_assume cond (tag_range range "assume-cond")) flow in
-    not (man.flow.is_cur_bottom f')
+    let f' = SubDomain.exec subman ctx (mk_assume cond (tag_range range "assume-cond")) flow in
+    match f' with
+    | Some f' ->
+      let subcur = subman.ax.get (subman.flow.get TCur f') in
+      not (SubDomain.is_bottom subcur)
+    | None -> Debug.fail "[is_top_base] got bottom"
 
-  let set man base offset typ e range ctx flow =
+  let set man subman base offset typ e range ctx flow =
     let c0 (* e2=0? *)=
       mk_binop e O_eq (mk_zero (tag_range range "0"))
         (tag_range range "rv=0")
@@ -196,17 +203,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let vmax = var_of_base base Max in
     let oleft = offset in
     let oright = mk_binop offset (O_plus T_int) (mk_z e_size (tag_range range "t")) (tag_range range "o+t") in
-    if is_top_base range man base ctx flow then
-
+    if is_top_base range subman base ctx flow then
       switch_rexec
         [([(c0, true)],
           (fun flow ->
-             man.exec ctx (mk_block [set range vmin oleft; set range vmax oright] (tag_range range "set")) flow
+             sub_exec subman ctx (set range vmin oleft) flow
+             |> sub_exec subman ctx (set range vmax oright)
              |> add_flow_mergers [mk_remove_var vmin range; mk_remove_var vmax range])
           );
          ([(c0, false)], (fun flow ->
               Framework.Domains.Reduce.Domain.return_flow_no_opt flow));
-        ]  man ctx flow
+         ] subman ctx flow
     else
       begin
         let diff_vmax_ol = diff range (mk_var vmax (tag_range range "vmax-oleft")) oleft in
@@ -251,18 +258,21 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           [([(c0, true); (c1, true); (d1, true)],
             (fun flow -> Framework.Domains.Reduce.Domain.return_flow_no_opt flow));
            ([(c0, true); (c1, true); (d2, true); (d3, true)], (fun flow ->
-                man.exec ctx (set range vmin oleft) flow
-                |> add_flow_mergers [mk_remove_var vmin range])
+                sub_exec subman ctx (set range vmin oleft) flow
+                |> add_flow_mergers [mk_remove_var vmin range]
+              )
+
            );
            ([(c0, true); (c1, true); (d4, true)], (fun flow ->
-                man.exec ctx (mk_block [set range vmin oleft; set range vmax oright] (tag_range range "metm")) flow
+                sub_exec subman ctx (set range vmin oleft) flow
+                |> sub_exec subman ctx (set range vmax oright)
                 |> add_flow_mergers [mk_remove_var vmin range; mk_remove_var vmax range])
            );
 
            ([(c0, true); (c2, true) ; (c3, true) ; (d2, true); (d3, true)],
             (fun flow -> Framework.Domains.Reduce.Domain.return_flow_no_opt flow));
            ([(c0, true); (c2, true) ; (c3, true) ; (d4, true)], (fun flow ->
-                man.exec ctx (set range vmax oright) flow
+                sub_exec subman ctx (set range vmax oright) flow
                 |> add_flow_mergers [mk_remove_var vmax range])
            );
 
@@ -273,21 +283,21 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
            ([(c0, false); (c1, true); (d1, true)],
             (fun flow -> Framework.Domains.Reduce.Domain.return_flow_no_opt flow));
            ([(c0, false); (c1, true); (d2, true); (d3, true)], (fun flow ->
-                man.exec ctx (set range vmin oright) flow
+                sub_exec subman ctx (set range vmin oright) flow
                 |> add_flow_mergers [mk_remove_var vmin range])
            );
            ([(c0, false); (c1, true); (d4, true)], (fun flow ->
-                man.exec ctx (mk_block [set range vmin (mk_binop (mk_var vmax (tag_range range "vmax")) (O_plus T_int) (mk_int 1 (tag_range range "1")) (tag_range range "vmax+1"))] (tag_range range "bot")) flow
+                sub_exec subman ctx (set range vmin (mk_var vmax (tag_range range "vmax"))) flow
                 |> add_flow_mergers [mk_remove_var vmin range; mk_remove_var vmax range])
            );
 
            ([(c0, false); (c2, true) ; (c3, true) ; (d2, true); (d3, true)], (fun flow ->
-                man.exec ctx (mk_block [set range vmin (mk_binop (mk_var vmax (tag_range range "vmax")) (O_plus T_int) (mk_int 1 (tag_range range "1")) (tag_range range "vmax+1"))] (tag_range range "bot")) flow
+                sub_exec subman ctx (set range vmin (mk_var vmax (tag_range range "vmax"))) flow
                 |> add_flow_mergers [mk_remove_var vmin range; mk_remove_var vmax range])
            );
 
            ([(c0, false); (c2, true) ; (c3, true) ; (d4, true)], (fun flow ->
-                man.exec ctx (set range vmax oleft) flow
+                sub_exec subman ctx (set range vmax oleft) flow
                 |> add_flow_mergers [mk_remove_var vmax range])
            );
 
@@ -297,7 +307,8 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           ]
           man ctx flow
       end
-  let init_zone_as base offset typ e range man ctx flow =
+
+  let init_zone_as base offset typ e range man subman ctx flow =
     let vmin = var_of_base base Min in
     let vmax = var_of_base base Max in
     let c0 (* e=0? *) =
@@ -306,13 +317,13 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     in
     assume_to_exec c0
       (fun flow ->
-         sub_exec man ctx
+         sub_exec subman ctx
            (mk_assign
               (mk_var vmin (tag_range range "t2"))
               offset
               (tag_range range "t0")
            ) flow |>
-         sub_exec man ctx
+         sub_exec subman ctx
            (mk_assign
               (mk_var vmax (tag_range range "t2"))
               (mk_binop offset (O_plus T_int) (mk_z (sizeof_type typ) (tag_range range "t3"))
@@ -370,7 +381,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           eval_to_rexec (fun plval flow ->
               match ekind plval with
               | E_c_points_to(E_p_var (base, offset, t)) ->
-                set man base offset t rval range ctx flow
+                set man subman base offset t rval range ctx flow
               | E_c_points_to(E_p_null) ->
                 man.flow.add (Alarms.TNullDeref lval.erange) (man.flow.get TCur flow) flow |>
                 man.flow.set TCur man.env.Framework.Lattice.bottom |>
@@ -385,6 +396,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             ) (man.exec ctx) man.flow
         ) (man.exec ctx) man.flow
       |> fun x -> Some x
+
     | S_assign(lval, rval, mode)  ->
       let () = debug "lval type is %a" Framework.Pp.pp_typ (etyp lval) in
       None
@@ -424,23 +436,27 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     let cond = mk_binop c2 O_log_and c3 (tag_range range "cond") in
 
-    let v' = tmp_var_of_base_offset base offset t in
-    let ev' = mk_var v' (tag_range range "t0") in
+    (* let v' = tmp_var_of_base_offset base offset t in
+     * let ev' = mk_var v' (tag_range range "t0") in *)
 
     assume_to_eval cond
       (fun flow ->
-         let f' = man.exec ctx (mk_assign
-                              ev'
-                              (mk_c_int 0 t (tag_range range "t1"))
-                              (tag_range range "t2")
-                               ) flow
-         in
-         oeval_singleton (Some ev', f', [mk_remove_var v' range]))
+         (* let f' = man.exec ctx (mk_assign
+          *                      ev'
+          *                      (mk_c_int 0 t (tag_range range "t1"))
+          *                      (tag_range range "t2")
+          *                       ) flow
+          * in
+          * oeval_singleton (Some ev', f', [mk_remove_var v' range])) *)
+         oeval_singleton (Some (mk_c_int 0 t (tag_range range "t0")), flow, [])
+      )
       (fun flow ->
          let typ = t in
          let a,b= rangeof typ in
          let a = mk_z a (tag_range range "t0") in
          let b = mk_z b (tag_range range "t1") in
+         let v' = mktmp ~vtyp:t () in
+         let ev' = mk_var v' (tag_range range "t2") in
          let flow = man.exec ctx (mk_assume (
              mk_binop
                (mk_binop a O_le ev' (tag_range range "in1") ~etyp:typ)
@@ -448,7 +464,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                (mk_binop ev' O_le b (tag_range range "in2") ~etyp:typ)
                range
            ) range) flow in
-         re_eval_singleton (man.eval ctx) (Some ev', flow, [mk_remove_var v' range])
+         oeval_singleton (Some ev', flow, [mk_remove_var v' range])
 
       ) man ctx flow ()
     |> add_eval_mergers []
@@ -458,8 +474,13 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     let range = erange exp in
     match ekind exp with
     | E_var ({vkind = V_orig} as v) when is_c_int_type v.vtyp ->
+      let () = debug "asked to eval and gonna answer to : %a" Framework.Pp.pp_expr exp in
       eval_zone_as (V v) (mk_int 0 (tag_range range "t0")) (etyp exp) range man ctx flow
+
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
+      None
+
+    | E_c_address_of e ->
       None
 
     | E_c_deref(p) ->
@@ -496,7 +517,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     Init.{
       scalar = (fun v e range flow ->
           let rec aux lv o = match ekind lv with
-            | E_var v -> set man (V v) (mk_z o (tag_range range "t5")) (etyp e) e range ctx flow
+            | E_var v -> set man subman (V v) (mk_z o (tag_range range "t5")) (etyp e) e range ctx flow
             | E_c_array_subscript(lv,{ekind = E_constant (C_int i)}) ->
               aux lv (Z.(o + i * (lv |> etyp |> under_array_type |> sizeof_type)))
             | E_c_member_access(r, i, s) ->
@@ -577,12 +598,12 @@ let setup () =
   register_vkind_compare (fun next vk1 vk2 ->
       match vk1, vk2 with
       | V_zero c1, V_zero c2 -> compare_bound c1 c2
-      | V_tmp(b1,o1), V_tmp(b2,o2) -> compare_composer [(fun () -> compare_base b1 b2); (fun () -> compare o1 o2)]
+      (* | V_tmp(b1,o1), V_tmp(b2,o2) -> compare_composer [(fun () -> compare_base b1 b2); (fun () -> compare o1 o2)] *)
       | _ -> next vk1 vk2
     );
   register_pp_vkind (fun next fmt vk ->
       match vk with
       | V_zero c -> print_bound fmt c
-      | V_tmp(b,o)  -> Format.fprintf fmt "<%a,%a)>"pp_base fmt b
+      (* | V_tmp(b,o)  -> Format.fprintf fmt "<%a,%a)>"pp_base fmt b *)
       | _ -> next fmt vk
     )

@@ -248,12 +248,13 @@ struct
         begin
           let abs = get_domain_cur man flow in
           try
-            let lv =  Framework.Visitor.expr_vars exp in
-            let abs = add_missing_vars abs lv in
-            let env = Apron.Abstract1.env abs in
-            let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in
-            let itv = Apron.Abstract1.bound_texpr ApronManager.man abs texp in
-            Some (Values.Int.of_apron itv)
+            None
+            (* let lv =  Framework.Visitor.expr_vars exp in
+             * let abs = add_missing_vars abs lv in
+             * let env = Apron.Abstract1.env abs in
+             * let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in
+             * let itv = Apron.Abstract1.bound_texpr ApronManager.man abs texp in
+             * Some (Values.Int.of_apron itv) *)
           with
           | Unsupported -> Some (Values.Int.top)
         end
