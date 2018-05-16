@@ -76,6 +76,10 @@ let is_builtin_attribute name attr =
 
 let mk_builtin_raise exn range = assert false
 
+let mk_builtin_call f params range =
+  mk_py_call (mk_addr (from_string f) range) params range
+
+
 let mro name = assert false
 
 let from_expr exp =

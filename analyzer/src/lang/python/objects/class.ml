@@ -94,7 +94,7 @@ struct
          mk_assign
            (mk_var tmp (tag_range range "tmp"))
            (mk_py_call
-              (mk_py_attr cls "__new__" (tag_range range "attr"))
+              (mk_py_addr_attr cls "__new__" (tag_range range "attr"))
               ((mk_addr cls (tag_range range "cls arg")) :: args)
               (tag_range range "call")
            )
@@ -111,7 +111,7 @@ struct
          mk_stmt
            (S_expression(
                mk_py_call
-                 (mk_py_attr cls "__init__" (tag_range range "attr"))
+                 (mk_py_addr_attr cls "__init__" (tag_range range "attr"))
                  ((mk_var tmp (tag_range range "obj")) :: args)
                  (tag_range range "call")
              ))

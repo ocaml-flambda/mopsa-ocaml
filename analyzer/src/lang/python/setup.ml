@@ -7,6 +7,7 @@ let init () =
     Data_model.(
       Attribute.setup ();
       Callable.setup ();
+      Arith_ops.setup ();
     );
   );  
   
