@@ -106,13 +106,21 @@ struct
     Format.fprintf fmt "rel: @[%a@]"
       Apron.Abstract1.print abs
 
+  let pp_env = Apron.Environment.print
+      ~first:("[")
+      ~sep:(",")
+      ~last:("]")
+
   let refine_var_type var =
     match var.vtyp with
     | T_int | T_float ->
       [var]
     | T_any ->
       [{var with vtyp = T_int}; {var with vtyp = T_float}]
-    | _ -> assert false
+    | _ ->
+      (* FIXME : this is probably wrong : *)
+      [{var with vtyp = T_int}]
+      (* Debug.fail "[refine_var_type] in relational called on %a" Framework.Pp.pp_typ var.vtyp *)
 
   (* {2 Transfer functions} *)
   let init man ctx prog flow =
@@ -159,6 +167,19 @@ struct
           exec man ctx {stmt with skind = S_remove_var v} flow
       end
 
+    (* FIXME : Need to chexk type of e *)
+    | S_assign({ekind = E_var v}, e, STRONG) -> begin
+        let v = {v with vtyp = T_int} in
+        let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
+        try
+          let aenv = Apron.Abstract1.env abs in
+          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
+          Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
+          return_cur
+        with Unsupported ->
+          exec man ctx {stmt with skind = S_remove_var v} flow
+      end
+
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
       assert false
 
@@ -189,6 +210,8 @@ struct
                     | T_float, T_int
                     | T_int, T_float
                     | T_float, T_float -> Apron.Texpr1.Real
+                    (*FIXME : This is a partial fix : *)
+                    | _,_ -> Apron.Texpr1.Int
                     | _ -> Debug.fail "Unsupported case (%a, %a) in stmt @[%a@]"
                              Framework.Pp.pp_typ typ1
                              Framework.Pp.pp_typ typ2
@@ -302,7 +325,8 @@ struct
   and typ_to_apron = function
     | T_int -> Apron.Texpr1.Int
     | T_float -> Apron.Texpr1.Real
-    | _ -> assert false
+    (* FIXME : This is a partial fix *)
+    | _ -> Apron.Texpr1.Int
 
   and bexp_to_apron exp =
     match ekind exp with

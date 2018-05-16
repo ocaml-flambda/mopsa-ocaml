@@ -13,7 +13,7 @@ open Framework.Manager
 open Framework.Domains.Reduce.Reduction
 open Universal.Numeric.Query
 open Universal.Numeric.Values
-       
+
 let name = "c.memory.cell.reductions.expand_smashing"
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -32,8 +32,8 @@ struct
 
     | Smashing.(V_smash_cell sc), Expand.(V_expand_cell (OffsetCell oc)) ->
       refine_offset_smash_cell man ctx e2 flow2 e1 flow1 TAIL HEAD
-                                                                              
-    | Expand.(V_expand_cell (OffsetCell oc)), Smashing.(V_smash_cell sc) -> 
+
+    | Expand.(V_expand_cell (OffsetCell oc)), Smashing.(V_smash_cell sc) ->
       refine_offset_smash_cell man ctx e1 flow1 e2 flow2 HEAD TAIL
 
     | _ -> BOTH

@@ -136,6 +136,8 @@ struct
 
 end
 
+let flow_of_rflow rflow =
+  rflow.out
 let return_flow_no_opt flow = {
   out = flow;
   publish = [];

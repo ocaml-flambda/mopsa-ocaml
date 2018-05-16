@@ -156,7 +156,7 @@ struct
       let psl = find p a in
 
       if PSL.is_empty psl then oeval_singleton (None, flow, [])
-      else if PSL.is_top psl then  oeval_singleton (Some E_p_invalid, flow, []) 
+      else if PSL.is_top psl then  oeval_singleton (Some E_p_invalid, flow, [])
       else PSL.fold (fun pt acc ->
           let a = add p (PSL.singleton pt) STRONG a in
           let flow = set_domain_cur a man flow in

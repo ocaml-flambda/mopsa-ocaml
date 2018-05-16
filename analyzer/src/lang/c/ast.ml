@@ -425,7 +425,7 @@ and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = 
     enum_val_value = enum_val.c_enum_val_value;
     enum_val_enum = enum;
   }
-  
+
 
 and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
   let origin_range = Framework.Ast.get_origin_range range in
@@ -619,7 +619,10 @@ let get_array_constant_length t =
   | T_c_array(_, C_array_length_cst n) -> Z.to_int n
   | _ -> assert false
 
-
+let align_byte t i =
+  match remove_typedef t |> remove_qual with
+  | T_c_record crt -> (List.nth crt.c_record_fields i).c_field_offset
+  | _ -> assert false
 
 let is_c_type = function
   | T_c_void
