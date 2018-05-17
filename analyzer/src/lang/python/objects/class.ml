@@ -61,9 +61,9 @@ struct
                (fun addr flow ->
                   let flow = man.exec ctx
                       (mk_assign
-                         (mk_var cls.py_cls_var (tag_range range "class var"))
-                         (mk_addr addr (tag_range range "class addr"))
-                         (tag_range range "class addr assign")
+                         (mk_var cls.py_cls_var range)
+                         (mk_addr addr range)
+                         range
                       ) flow
                   in
                   man.exec ctx cls.py_cls_body flow
@@ -71,7 +71,7 @@ struct
                (Addr.mk_class_addr cls bases) stmt.srange man ctx flow
            else
              man.exec ctx
-               (Builtins.mk_builtin_raise "TypeError" (tag_range range "class def error")) flow
+               (Builtins.mk_builtin_raise "TypeError" range) flow
         )
         (man.exec ctx) man.flow  |>
       return
@@ -90,13 +90,12 @@ struct
     (* Call __new__ *)
     let flow =
       man.exec ctx
-        (let range = tag_range range "new" in
-         mk_assign
-           (mk_var tmp (tag_range range "tmp"))
+        (mk_assign
+           (mk_var tmp range)
            (mk_py_call
-              (mk_py_addr_attr cls "__new__" (tag_range range "attr"))
-              ((mk_addr cls (tag_range range "cls arg")) :: args)
-              (tag_range range "call")
+              (mk_py_addr_attr cls "__new__" range)
+              ((mk_addr cls range) :: args)
+              range
            )
            range
         )
@@ -107,20 +106,19 @@ struct
     (* FIXME: execute __init__ only if __new__ returned an instance of cls *)
     let flow =
       man.exec ctx
-        (let range = tag_range range "init" in
-         mk_stmt
+        (mk_stmt
            (S_expression(
                mk_py_call
-                 (mk_py_addr_attr cls "__init__" (tag_range range "attr"))
-                 ((mk_var tmp (tag_range range "obj")) :: args)
-                 (tag_range range "call")
+                 (mk_py_addr_attr cls "__init__" range)
+                 ((mk_var tmp range) :: args)
+                 range
              ))
            range
         ) flow
     in
     (* FIXME: check that __init__ always returns None *)
 
-    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp (tag_range range "cleaner")]) in
+    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp range]) in
     re_eval_singleton (man.eval ctx) evl
 
 

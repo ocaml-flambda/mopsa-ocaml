@@ -130,9 +130,19 @@ struct
       assert false
 
   let mk_dynamic_attribute addr attr range =
-    Framework.Exceptions.panic "python heap operations not supported"
+    let v = {
+      vname = (
+        let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Pp.pp_addr addr attr in
+        let name = Format.flush_str_formatter () in
+        name
+      );
+      vuid = 0;
+      vtyp = T_any;
+      vkind = V_orig;
+    }
+    in
+    mk_var v range
 
-    (* Universal.Ast.mk_addr_attribute addr attr range *)
 
   let mk_attribute_expr addr attr range =
     if is_static_attribute addr attr then
@@ -166,7 +176,7 @@ struct
                (* Case when the attribute [attr] was not found *)
                (fun flow ->
                   let flow = man.exec ctx
-                      (Builtins.mk_builtin_raise "AttributeError" (tag_range range "error"))
+                      (Builtins.mk_builtin_raise "AttributeError" range "error")
                       flow
                   in
                   oeval_singleton (None, flow, [])
@@ -254,7 +264,7 @@ struct
              in
              man.exec ctx (mk_assign ~mode lval rval stmt.srange) flow
            | _ ->
-             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" (tag_range stmt.srange "error")) flow
+             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" stmt.srange) flow
         )
         (man.exec ctx) man.flow  |>
       return

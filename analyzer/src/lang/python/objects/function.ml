@@ -38,9 +38,9 @@ struct
         (fun addr flow ->
            man.exec ctx
              (mk_assign
-                (mk_var func.py_func_var (tag_range range "func var"))
-                (mk_addr addr (tag_range range "func addr"))
-                (tag_range range "func addr assign")
+                (mk_var func.py_func_var range)
+                (mk_addr addr range)
+                range
              ) flow
         )
         (Addr.mk_function_addr func) range man ctx flow  |>
@@ -64,7 +64,7 @@ struct
 
       if List.length pyfundec.py_func_parameters < List.length nondefault_args then
         let flow =
-          man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error1")) flow
+          man.exec ctx (Builtins.mk_builtin_raise "TypeError" exp.erange) flow
         in
         oeval_singleton (None, flow, [])
 
@@ -85,7 +85,7 @@ struct
         let args = fill_with_default default_args nondefault_args args in
         if List.length args < List.length nondefault_args then
           let flow =
-            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range exp.erange "error2")) flow
+            man.exec ctx (Builtins.mk_builtin_raise "TypeError" exp.erange) flow
           in
           oeval_singleton (None, flow, [])
         else
@@ -103,13 +103,13 @@ struct
           let flow =
             man.exec ctx
               (mk_assign
-                 (mk_var tmp (tag_range exp.erange "tmp"))
-                 (mk_call fundec args (tag_range exp.erange "call"))
-                 (tag_range exp.erange "call assign")
+                 (mk_var tmp exp.erange)
+                 (mk_call fundec args exp.erange)
+                 exp.erange
               )
               flow
           in
-          let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp (tag_range exp.erange "cleaner")]) in
+          let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
           re_eval_singleton (man.eval ctx) evl
 
     | _ -> None
