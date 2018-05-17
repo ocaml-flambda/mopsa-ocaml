@@ -176,11 +176,12 @@ module Domain = struct
       debug "Resolving unary operator %a" Framework.Pp.pp_operator op;
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
-          debug "Subexpression evaluated to %a" Framework.Pp.pp_expr e;
+          debug "Subexpression evaluated to %a(%a)" Framework.Pp.pp_expr e Framework.Pp.pp_typ e.etyp;
           let op_fun = unop_to_fun op in
 
           if e.etyp <> T_addr then
-            let exp' = mk_py_call (mk_py_attr e op_fun range) [] range in
+            let f = mk_addr (Builtins.find_type_function e.etyp op_fun) range in
+            let exp' = mk_py_call f [e] range in
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
             let ok_cond = mk_builtin_call "hasattr" [e; mk_string op_fun range] range in

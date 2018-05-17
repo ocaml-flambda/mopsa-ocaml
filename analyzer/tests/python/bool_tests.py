@@ -7,4 +7,3 @@ def test_false():
 def test_true():
     mopsa.assert_equal(+True, 1)
     mopsa.assert_equal(-True, -1)
-

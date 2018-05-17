@@ -21,7 +21,7 @@ def test_bool_coercion():
     b = True
     mopsa.assert_equal(i + b, -9)
 
-# def test_in_condition():
-#     i = -10
-#     mopsa.assert_true(i)
-#     mopsa.assert_false(not i)
+def test_in_condition():
+    i = -10
+    mopsa.assert_true(i)
+    mopsa.assert_false(not i)

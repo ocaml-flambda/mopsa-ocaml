@@ -477,10 +477,12 @@ let fwd_unop op abs =
     let abs, _ = coerce abs (float F.top) in
     { bottom with float = F.fwd_unop op abs.float }
 
-  (* FIXME : use operator types *)
-  | O_plus _ | O_minus _ ->
+  | O_plus T_int | O_minus T_int ->
     let abs = upgrade_type [(T_bool, T_int)] abs in
-    {bottom with int = I.fwd_unop op abs.int; float = F.fwd_unop op abs.float}
+    {bottom with int = I.fwd_unop op abs.int}
+
+  | O_plus T_float | O_minus T_float ->
+    {bottom with float = F.fwd_unop op abs.float}
 
   | _ ->
     Debug.fail "fwd_unop %a not implemented" Framework.Pp.pp_operator op
@@ -530,34 +532,21 @@ let fwd_binop op abs1 abs2 =
       | false, false -> bottom
     end
 
-  (* FIXME : use operator types *)
-  | O_plus _ ->
+  | O_plus T_int | O_minus T_int | O_mult T_int | O_mod T_int  ->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
       int = I.fwd_binop op abs1.int abs2.int;
-      float = F.fwd_binop op abs1.float abs2.float;
-      string =
-        try
-          S.fold (fun s1 acc ->
-              S.fold (fun s2 acc ->
-                  S.add (s1 ^ s2) acc
-                ) abs2.string acc
-            ) abs1.string S.bottom;
-        with Top.Found_TOP -> S.top
-    }
-  (* FIXME : use operator types *)
-  | O_mult _->
-    let abs1, abs2 = coerce abs1 abs2 in
-    {
-      bottom with
-      int = I.fwd_binop op abs1.int abs2.int;
-      float = F.fwd_binop op abs1.float abs2.float;
-      string = if S.is_bottom abs1.string || I.is_bottom abs2.int then S.bottom else assert false;
     }
 
-  (* FIXME : use operator types *)
-  | O_mod _| O_minus _ | O_pow ->
+  | O_plus T_float | O_minus T_float | O_mult T_float | O_mod T_float ->
+    let abs1, abs2 = coerce abs1 abs2 in
+    {
+      bottom with
+      float = F.fwd_binop op abs1.float abs2.float;
+    }
+
+  | O_pow ->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
@@ -566,7 +555,7 @@ let fwd_binop op abs1 abs2 =
     }
 
   (* FIXME : use operator types *)
-  | O_div _ ->
+  | O_div T_float ->
     let abs1, abs2 = coerce abs1 abs2 in
     let abs1 = cast T_float abs1 and abs2 = cast T_float abs2 in
     {
@@ -745,11 +734,8 @@ let bwd_filter op abs1 abs2 =
     {abs with int = int2; float = float2}
 
   | O_ne ->
-    (* let addr1, addr2 = A.bwd_neq abs1.addr abs2.addr in
-     * let string1, string2 = S.bwd_neq abs1.string abs2.string in
-     * {abs1 with int = int1; float = float1; addr = addr1; string = string1},
-     * {abs2 with int = int2; float = float2; addr = addr2; string = string2} *)
-    assert false
+    {abs1 with int = int1; float = float1},
+    {abs2 with int = int2; float = float2}
 
   | O_lt ->
     {abs1 with int = int1; float = float1},
