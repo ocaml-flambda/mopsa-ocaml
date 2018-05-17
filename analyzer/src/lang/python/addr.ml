@@ -50,6 +50,10 @@ let mk_class_addr cls mro =
 let mk_instance_addr cls params =
   A_py_instance(cls, params)
 
+let mk_method_addr f obj =
+  A_py_method (f, obj)
+
+
 let () =
   Universal.Pp.(
     Format.(

@@ -70,7 +70,9 @@ struct
   let get_function_name fundec = fundec.py_func_var.vname
 
   let is_test fundec =
-    String.sub (get_function_name fundec) 0 4 = "test"
+    let name = get_function_name fundec in
+    if String.length name < 5 then false
+    else String.sub name 0 4 = "test"
 
   let get_test_functions body =
     Framework.Visitor.fold_stmt

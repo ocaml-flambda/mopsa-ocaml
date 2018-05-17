@@ -100,6 +100,7 @@ struct
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
+      debug "var %a" Framework.Pp.pp_var v;
       let nonrel = get_domain_cur man flow in
       let value = Nonrel.find v nonrel in
       Value.fold_type (fun acc (typ, value') ->

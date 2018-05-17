@@ -51,6 +51,7 @@ struct
   let init _ ctx _ flow = ctx, flow
 
   let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
     (* Calls to user-defined functions are translated to {!Universal.Ast.E_call}
        in order to be handled by other domains *)
@@ -111,6 +112,15 @@ struct
           in
           let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
           re_eval_singleton (man.eval ctx) evl
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_method(f, obj)}},
+        args,
+        []
+      ) ->
+      let exp' = mk_py_call (mk_addr f range) ((mk_addr obj range) :: args) range in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
 
     | _ -> None
 
