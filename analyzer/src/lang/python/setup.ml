@@ -1,18 +1,19 @@
 let init () =
-  
+
   Objects.(
     Object.setup ();
     Class.setup ();
     Function.setup ();
+    Number.setup ();
     Data_model.(
       Attribute.setup ();
       Callable.setup ();
       Arith_ops.setup ();
     );
-  );  
-  
+  );
+
   (* Flows.(
-   *   
+   *
    * ); *)
 
   Desugar.(

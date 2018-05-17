@@ -19,6 +19,7 @@
         "python.objects.class",
         "python.objects.function",
 	"python.objects.object",
+        "python.objects.number",
 
         "python.objects.data_model.callable",
         "python.objects.data_model.attribute",

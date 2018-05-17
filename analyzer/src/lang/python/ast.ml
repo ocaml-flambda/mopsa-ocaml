@@ -48,6 +48,35 @@ type operator +=
   | O_py_not_in (** not in *)
   | O_py_mat_mult (** @ *)
 
+
+let is_arith_op = function
+  | Universal.Ast.O_plus T_any
+  | Universal.Ast.O_minus T_any
+  | Universal.Ast.O_mult T_any
+  | O_py_mat_mult
+  | Universal.Ast.O_div T_any
+  | O_py_floor_div
+  | Universal.Ast.O_mod T_any
+  | Universal.Ast.O_pow
+  | Universal.Ast.O_bit_lshift
+  | Universal.Ast.O_bit_rshift
+  | Universal.Ast.O_bit_and
+  | Universal.Ast.O_bit_xor
+  | Universal.Ast.O_bit_or ->
+    true
+
+  | _ -> false
+
+let is_comp_op = function
+  | Universal.Ast.O_eq
+  | Universal.Ast.O_ne
+  | Universal.Ast.O_lt
+  | Universal.Ast.O_le
+  | Universal.Ast.O_gt
+  | Universal.Ast.O_ge -> true
+  | _ -> false
+
+
 (** Lambda functions. *)
 type py_lambda = {
   py_lambda_body: expr; (** Body. *)

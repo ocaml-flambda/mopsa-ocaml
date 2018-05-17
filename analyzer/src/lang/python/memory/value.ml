@@ -14,113 +14,107 @@ open Ast
 
 let debug fmt = Debug.debug ~channel:"python.environment.value" fmt
 
-module NoneLattice = Framework.Lattices.Enum.Make(struct
+module N = Framework.Lattices.Enum.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_none]
     let print fmt c = Framework.Pp.pp_constant fmt c
   end
 )
 
-module BoolLattice = Framework.Lattices.Enum.Make(struct
+module B = Framework.Lattices.Enum.Make(struct
     type t = bool
     let values = [true; false]
     let print = Format.pp_print_bool
   end)
 
-module StringLattice = Framework.Lattices.Top_set.Make(struct
+module S = Framework.Lattices.Top_set.Make(struct
     type t = string
     let compare = compare
     let print fmt s = Format.fprintf fmt "\"%s\"" s
   end)
 
-module AddrLattice = struct
+module A = struct
   module SSet = Framework.Lattices.Top_set.Make
       (struct type t = addr let compare = compare_addr let print = Universal.Pp.pp_addr end)
   include SSet
   let widening ctx a b = join a b
 end
 
-module NotImplementedLattice = Framework.Lattices.Enum.Make(struct
+module NI = Framework.Lattices.Enum.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_not_implemented]
     let print fmt c = Framework.Pp.pp_constant fmt c
   end
 )
 
-module IntLattice = Universal.Numeric.Values.Int
+module I = Universal.Numeric.Values.Int
 
-module FloatLattice = Universal.Numeric.Values.Float
+module F = Universal.Numeric.Values.Float
 
-module EmptyValueLattice = Framework.Lattices.Enum.Make(struct
+module E = Framework.Lattices.Enum.Make(struct
     type t = Framework.Ast.constant
     let values = [C_empty]
     let print fmt c = Framework.Pp.pp_constant fmt c
   end
 )
 
-module UndefinedLattice = Framework.Lattices.Enum.Make(struct
-    type t = Framework.Ast.constant
-    let values = [C_py_undefined]
-    let print fmt c = Framework.Pp.pp_constant fmt c
-  end
-)
 
 (** Lattice structure *)
 
 type t = {
-  none: NoneLattice.t;
-  bool: BoolLattice.t;
-  string: StringLattice.t;
-  int : IntLattice.t;
-  float : FloatLattice.t;
-  addr: AddrLattice.t;
-  notimplem: NotImplementedLattice.t;
-  emptyvalue: EmptyValueLattice.t;
+  none: N.t;
+  bool: B.t;
+  string: S.t;
+  int : I.t;
+  float : F.t;
+  addr: A.t;
+  notimplem: NI.t;
+  emptyvalue: E.t;
 }
 
 let bottom = {
-  none = NoneLattice.bottom;
-  bool = BoolLattice.bottom;
-  string = StringLattice.bottom;
-  int = IntLattice.bottom;
-  float = FloatLattice.bottom;
-  addr = AddrLattice.bottom;
-  notimplem = NotImplementedLattice.bottom;
-  emptyvalue = EmptyValueLattice.bottom;
+  none = N.bottom;
+  bool = B.bottom;
+  string = S.bottom;
+  int = I.bottom;
+  float = F.bottom;
+  addr = A.bottom;
+  notimplem = NI.bottom;
+  emptyvalue = E.bottom;
 }
 
 
 let top = {
-  none = NoneLattice.top;
-  bool = BoolLattice.top;
-  string = StringLattice.top;
-  int = IntLattice.top;
-  float = FloatLattice.top;
-  addr = AddrLattice.top;
-  notimplem = NotImplementedLattice.top;
-  emptyvalue = EmptyValueLattice.top;
+  none = N.top;
+  bool = B.top;
+  string = S.top;
+  int = I.top;
+  float = F.top;
+  addr = A.top;
+  notimplem = NI.top;
+  emptyvalue = E.top;
 }
 
 let is_bottom abs =
-  NoneLattice.is_bottom abs.none &&
-  BoolLattice.is_bottom abs.bool &&
-  StringLattice.is_bottom abs.string &&
-  IntLattice.is_bottom abs.int &&
-  FloatLattice.is_bottom abs.float &&
-  FloatLattice.is_bottom abs.float &&
-  AddrLattice.is_bottom abs.addr &&
-  NotImplementedLattice.is_bottom abs.notimplem &&
-  EmptyValueLattice.is_bottom abs.emptyvalue
+  N.is_bottom abs.none &&
+  B.is_bottom abs.bool &&
+  S.is_bottom abs.string &&
+  I.is_bottom abs.int &&
+  F.is_bottom abs.float &&
+  F.is_bottom abs.float &&
+  A.is_bottom abs.addr &&
+  NI.is_bottom abs.notimplem &&
+  E.is_bottom abs.emptyvalue
 
 let is_top abs =
-  NoneLattice.is_top abs.none &&
-  BoolLattice.is_top abs.bool &&
-  StringLattice.is_top abs.string &&
-  IntLattice.is_top abs.int &&
-  FloatLattice.is_top abs.float &&
-  AddrLattice.is_top abs.addr &&
-  NotImplementedLattice.is_top abs.notimplem &&
-  EmptyValueLattice.is_top abs.emptyvalue
+  N.is_top abs.none &&
+  B.is_top abs.bool &&
+  S.is_top abs.string &&
+  I.is_top abs.int &&
+  F.is_top abs.float &&
+  A.is_top abs.addr &&
+  NI.is_top abs.notimplem &&
+  E.is_top abs.emptyvalue
 
 
 let init = top
@@ -136,41 +130,41 @@ let print fmt abs =
       fprintf fmt "@[<h>(|";
       let pred = ref false in
 
-      if not (IntLattice.is_bottom abs.int) then (
-        fprintf fmt " i: %a " IntLattice.print abs.int;
+      if not (I.is_bottom abs.int) then (
+        fprintf fmt " i: %a " I.print abs.int;
         pred := true;
       );
 
-      if not (FloatLattice.is_bottom abs.float) then (
-        fprintf fmt "%s f: %a " (if !pred then "∨" else "") FloatLattice.print abs.float;
+      if not (F.is_bottom abs.float) then (
+        fprintf fmt "%s f: %a " (if !pred then "∨" else "") F.print abs.float;
         pred := true;
       );
 
-      if not (BoolLattice.is_bottom abs.bool) then (
-        fprintf fmt "%s b: %a " (if !pred then "∨" else "") BoolLattice.print abs.bool;
+      if not (B.is_bottom abs.bool) then (
+        fprintf fmt "%s b: %a " (if !pred then "∨" else "") B.print abs.bool;
         pred := true;
       );
 
-      if not (StringLattice.is_bottom abs.string) then (
-        fprintf fmt "%s s: %a " (if !pred then "∨" else "") StringLattice.print abs.string;
+      if not (S.is_bottom abs.string) then (
+        fprintf fmt "%s s: %a " (if !pred then "∨" else "") S.print abs.string;
         pred := true;
       );
 
-      if not (AddrLattice.is_bottom abs.addr) then (
-        fprintf fmt "%s a: %a " (if !pred then "∨" else "") AddrLattice.print abs.addr;
+      if not (A.is_bottom abs.addr) then (
+        fprintf fmt "%s a: %a " (if !pred then "∨" else "") A.print abs.addr;
         pred := true;
       );
 
-      if not (NoneLattice.is_bottom abs.none) then (
-        fprintf fmt "%s n: %a " (if !pred then "∨" else "") NoneLattice.print abs.none;
+      if not (N.is_bottom abs.none) then (
+        fprintf fmt "%s n: %a " (if !pred then "∨" else "") N.print abs.none;
         pred := true;
       );
 
-      if not (NotImplementedLattice.is_bottom abs.notimplem) then
-        fprintf fmt "%s ni: %a " (if !pred then "∨" else "") NotImplementedLattice.print abs.notimplem;
+      if not (NI.is_bottom abs.notimplem) then
+        fprintf fmt "%s ni: %a " (if !pred then "∨" else "") NI.print abs.notimplem;
 
-      if not (EmptyValueLattice.is_bottom abs.emptyvalue) then
-        fprintf fmt "%s %a " (if !pred then "∨" else "") EmptyValueLattice.print abs.emptyvalue;
+      if not (E.is_bottom abs.emptyvalue) then
+        fprintf fmt "%s %a " (if !pred then "∨" else "") E.print abs.emptyvalue;
 
       fprintf fmt "|)@]"
     )
@@ -179,25 +173,25 @@ let print fmt abs =
 let unify op abs1 abs2 = abs1, abs2
 
 let leq abs1 abs2 =
-  NoneLattice.leq abs1.none abs2.none &&
-  BoolLattice.leq abs1.bool abs2.bool &&
-  StringLattice.leq abs1.string abs2.string &&
-  IntLattice.leq abs1.int abs2.int &&
-  FloatLattice.leq abs1.float abs2.float &&
-  AddrLattice.leq abs1.addr abs2.addr &&
-  NotImplementedLattice.leq abs1.notimplem abs2.notimplem &&
-  EmptyValueLattice.leq abs1.emptyvalue abs2.emptyvalue
+  N.leq abs1.none abs2.none &&
+  B.leq abs1.bool abs2.bool &&
+  S.leq abs1.string abs2.string &&
+  I.leq abs1.int abs2.int &&
+  F.leq abs1.float abs2.float &&
+  A.leq abs1.addr abs2.addr &&
+  NI.leq abs1.notimplem abs2.notimplem &&
+  E.leq abs1.emptyvalue abs2.emptyvalue
 
 let join abs1 abs2 =
   let r = {
-    none = NoneLattice.join abs1.none abs2.none;
-    bool = BoolLattice.join abs1.bool abs2.bool;
-    string = StringLattice.join abs1.string abs2.string;
-    int = IntLattice.join abs1.int abs2.int;
-    float = FloatLattice.join abs1.float abs2.float;
-    addr = AddrLattice.join abs1.addr abs2.addr;
-    notimplem = NotImplementedLattice.join abs1.notimplem abs2.notimplem;
-    emptyvalue = EmptyValueLattice.join abs1.emptyvalue abs2.emptyvalue;
+    none = N.join abs1.none abs2.none;
+    bool = B.join abs1.bool abs2.bool;
+    string = S.join abs1.string abs2.string;
+    int = I.join abs1.int abs2.int;
+    float = F.join abs1.float abs2.float;
+    addr = A.join abs1.addr abs2.addr;
+    notimplem = NI.join abs1.notimplem abs2.notimplem;
+    emptyvalue = E.join abs1.emptyvalue abs2.emptyvalue;
   }
   in
   debug "join@\nabs1 =@ @[ %a@]@\nabs2 =@ @[ %a@]@\nres =@ @[ %a@]"
@@ -208,25 +202,25 @@ let join abs1 abs2 =
   r
 
 let meet abs1 abs2 = {
-  none = NoneLattice.meet abs1.none abs2.none;
-  bool = BoolLattice.meet abs1.bool abs2.bool;
-  string = StringLattice.meet abs1.string abs2.string;
-  int = IntLattice.meet abs1.int abs2.int;
-  float = FloatLattice.meet abs1.float abs2.float;
-  addr = AddrLattice.meet abs1.addr abs2.addr;
-  notimplem = NotImplementedLattice.meet abs1.notimplem abs2.notimplem;
-  emptyvalue = EmptyValueLattice.meet abs1.emptyvalue abs2.emptyvalue;
+  none = N.meet abs1.none abs2.none;
+  bool = B.meet abs1.bool abs2.bool;
+  string = S.meet abs1.string abs2.string;
+  int = I.meet abs1.int abs2.int;
+  float = F.meet abs1.float abs2.float;
+  addr = A.meet abs1.addr abs2.addr;
+  notimplem = NI.meet abs1.notimplem abs2.notimplem;
+  emptyvalue = E.meet abs1.emptyvalue abs2.emptyvalue;
 }
 
 let widening ctx abs1 abs2 = {
-  none = NoneLattice.widening ctx abs1.none abs2.none;
-  bool = BoolLattice.widening ctx abs1.bool abs2.bool;
-  string = StringLattice.widening ctx abs1.string abs2.string;
-  int = IntLattice.widening ctx abs1.int abs2.int;
-  float = FloatLattice.widening ctx abs1.float abs2.float;
-  addr = AddrLattice.widening ctx abs1.addr abs2.addr;
-  notimplem = NotImplementedLattice.widening ctx abs1.notimplem abs2.notimplem;
-  emptyvalue = EmptyValueLattice.widening ctx abs1.emptyvalue abs2.emptyvalue;
+  none = N.widening ctx abs1.none abs2.none;
+  bool = B.widening ctx abs1.bool abs2.bool;
+  string = S.widening ctx abs1.string abs2.string;
+  int = I.widening ctx abs1.int abs2.int;
+  float = F.widening ctx abs1.float abs2.float;
+  addr = A.widening ctx abs1.addr abs2.addr;
+  notimplem = NI.widening ctx abs1.notimplem abs2.notimplem;
+  emptyvalue = E.widening ctx abs1.emptyvalue abs2.emptyvalue;
 }
 
 (** Creation of uniquely typed valus *)
@@ -274,27 +268,27 @@ let emptyvalue ev = {
 (** Creation of a value from a program constant *)
 let of_constant c =
   match c with
-  | C_true -> boolean (BoolLattice.singleton true)
-  | C_false -> boolean (BoolLattice.singleton false)
-  | C_py_none -> none  (NoneLattice.singleton c)
-  | C_int n -> integer (IntLattice.of_constant c)
-  | C_int_interval _ -> integer (IntLattice.of_constant c)
-  | C_float n -> float (FloatLattice.of_constant c)
-  | C_float_interval _ -> float (FloatLattice.of_constant c)
-  | C_py_not_implemented -> notimplem  (NotImplementedLattice.singleton c)
-  | C_empty -> emptyvalue  (EmptyValueLattice.singleton c)
-  | C_string s -> string (StringLattice.singleton s)
+  | C_true -> boolean (B.singleton true)
+  | C_false -> boolean (B.singleton false)
+  | C_py_none -> none  (N.singleton c)
+  | C_int n -> integer (I.of_constant c)
+  | C_int_interval _ -> integer (I.of_constant c)
+  | C_float n -> float (F.of_constant c)
+  | C_float_interval _ -> float (F.of_constant c)
+  | C_py_not_implemented -> notimplem  (NI.singleton c)
+  | C_empty -> emptyvalue  (E.singleton c)
+  | C_string s -> string (S.singleton s)
   | _ -> top
 
 (** Type predicates *)
-let can_be_none abs = not (NoneLattice.is_bottom abs.none)
-let can_be_bool abs = not (BoolLattice.is_bottom abs.bool)
-let can_be_int abs = not (IntLattice.is_bottom abs.int)
-let can_be_float abs = not (FloatLattice.is_bottom abs.float)
-let can_be_string abs = not (StringLattice.is_bottom abs.string)
-let can_be_addr abs = not (AddrLattice.is_bottom abs.addr)
-let can_be_notimplem abs = not (NotImplementedLattice.is_bottom abs.notimplem)
-let can_be_emptyvalue abs = not (EmptyValueLattice.is_bottom abs.emptyvalue)
+let can_be_none abs = not (N.is_bottom abs.none)
+let can_be_bool abs = not (B.is_bottom abs.bool)
+let can_be_int abs = not (I.is_bottom abs.int)
+let can_be_float abs = not (F.is_bottom abs.float)
+let can_be_string abs = not (S.is_bottom abs.string)
+let can_be_addr abs = not (A.is_bottom abs.addr)
+let can_be_notimplem abs = not (NI.is_bottom abs.notimplem)
+let can_be_emptyvalue abs = not (E.is_bottom abs.emptyvalue)
 
 
 (** Compute the type of a given value abstraction. *)
@@ -337,24 +331,24 @@ let upgrade_type types abs =
       | T_bool, T_int ->
         { abs with
           int = abs.int |>
-                IntLattice.join (if BoolLattice.mem true abs.bool then IntLattice.of_constant (C_int Z.one) else IntLattice.bottom) |>
-                IntLattice.join (if BoolLattice.mem false  abs.bool then IntLattice.of_constant (C_int Z.zero) else IntLattice.bottom);
+                I.join (if B.mem true abs.bool then I.of_constant (C_int Z.one) else I.bottom) |>
+                I.join (if B.mem false  abs.bool then I.of_constant (C_int Z.zero) else I.bottom);
         }
 
       | T_bool, T_float ->
         { abs with
           float = abs.float |>
-                FloatLattice.join (if BoolLattice.mem true abs.bool then FloatLattice.of_constant (C_float 1.) else FloatLattice.bottom) |>
-                FloatLattice.join (if BoolLattice.mem false  abs.bool then FloatLattice.of_constant (C_float 0.) else FloatLattice.bottom);
+                F.join (if B.mem true abs.bool then F.of_constant (C_float 1.) else F.bottom) |>
+                F.join (if B.mem false  abs.bool then F.of_constant (C_float 0.) else F.bottom);
         }
 
       | T_int, T_float ->
         { abs with
 
           float = abs.float |>
-                  FloatLattice.join (FloatLattice.of_int_interval abs.int) |>
-                  FloatLattice.join (if BoolLattice.mem true abs.bool then FloatLattice.of_constant (C_float 1.) else FloatLattice.bottom) |>
-                  FloatLattice.join (if BoolLattice.mem false  abs.bool then FloatLattice.of_constant (C_float 0.) else FloatLattice.bottom)
+                  F.join (F.of_int_interval abs.int) |>
+                  F.join (if B.mem true abs.bool then F.of_constant (C_float 1.) else F.bottom) |>
+                  F.join (if B.mem false  abs.bool then F.of_constant (C_float 0.) else F.bottom)
         }
 
       | _ -> assert false
@@ -367,8 +361,8 @@ let rec remove_types types abs =
     debug "removing type t = %a from %a" Framework.Pp.pp_typ t print abs;
     let abs' =
       match t with
-      | T_int -> {abs with int = IntLattice.bottom}
-      | T_bool -> {abs with bool = BoolLattice.bottom}
+      | T_int -> {abs with int = I.bottom}
+      | T_bool -> {abs with bool = B.bottom}
       | _ -> assert false
     in
     remove_types tl abs'
@@ -424,52 +418,52 @@ let cast typ abs =
     { bottom with float = abs.float }
 
   | T_int ->
-    { bottom with int = IntLattice.join abs.int (FloatLattice.to_int abs.float) }
+    { bottom with int = I.join abs.int (F.to_int abs.float) }
 
   | _ ->
     assert false
 
 (** Boolean predicates *)
 let can_be_true abs =
-  (BoolLattice.mem true abs.bool) ||
-  (StringLattice.exists (fun s -> s <> "") abs.string) ||
-  (IntLattice.can_be_true abs.int) ||
-  (FloatLattice.can_be_true abs.float) ||
-  (not @@ AddrLattice.is_bottom abs.addr) ||
-  (not @@ NotImplementedLattice.is_bottom abs.notimplem)
+  (B.mem true abs.bool) ||
+  (S.exists (fun s -> s <> "") abs.string) ||
+  (I.can_be_true abs.int) ||
+  (F.can_be_true abs.float) ||
+  (not @@ A.is_bottom abs.addr) ||
+  (not @@ NI.is_bottom abs.notimplem)
 
 let can_be_false abs =
-  let b = (not @@ NoneLattice.is_bottom abs.none) ||
-  (StringLattice.exists (fun s -> s = "") abs.string) ||
-  (BoolLattice.mem false abs.bool) ||
-  (IntLattice.can_be_false abs.int) ||
-          (FloatLattice.can_be_false abs.float)
+  let b = (not @@ N.is_bottom abs.none) ||
+  (S.exists (fun s -> s = "") abs.string) ||
+  (B.mem false abs.bool) ||
+  (I.can_be_false abs.int) ||
+          (F.can_be_false abs.float)
   in
   debug "can_be_false = %b" b;
   b
 
 let assume_is_type typ abs =
   let abs' = match typ with
-    | T_int -> integer IntLattice.top
-    | T_float -> float FloatLattice.top
-    | T_bool -> boolean BoolLattice.top
-    | T_string -> string StringLattice.top
-    | T_addr -> addr AddrLattice.top
-    | T_py_not_implemented -> notimplem NotImplementedLattice.top
-    | T_py_none -> none NoneLattice.top
+    | T_int -> integer I.top
+    | T_float -> float F.top
+    | T_bool -> boolean B.top
+    | T_string -> string S.top
+    | T_addr -> addr A.top
+    | T_py_not_implemented -> notimplem NI.top
+    | T_py_none -> none N.top
     | _ -> assert false
   in
   meet abs abs'
 
 let assume_is_not_type typ abs =
   let abs' = match typ with
-    | T_int -> {top with int = IntLattice.bottom}
-    | T_float -> {top with float = FloatLattice.bottom}
-    | T_bool -> {top with bool = BoolLattice.bottom}
-    | T_string -> {top with string = StringLattice.bottom}
-    | T_addr -> {top with addr = AddrLattice.bottom}
-    | T_py_not_implemented -> {top with notimplem = NotImplementedLattice.bottom}
-    | T_py_none -> {top with none = NoneLattice.bottom}
+    | T_int -> {top with int = I.bottom}
+    | T_float -> {top with float = F.bottom}
+    | T_bool -> {top with bool = B.bottom}
+    | T_string -> {top with string = S.bottom}
+    | T_addr -> {top with addr = A.bottom}
+    | T_py_not_implemented -> {top with notimplem = NI.bottom}
+    | T_py_none -> {top with none = N.bottom}
     | _ -> assert false
   in
   meet abs abs'
@@ -480,24 +474,24 @@ let assume_is_not_type typ abs =
 let fwd_unop op abs =
   match op with
   | O_sqrt ->
-    let abs, _ = coerce abs (float FloatLattice.top) in
-    { bottom with float = FloatLattice.fwd_unop op abs.float }
+    let abs, _ = coerce abs (float F.top) in
+    { bottom with float = F.fwd_unop op abs.float }
 
   (* FIXME : use operator types *)
   | O_plus _ | O_minus _ ->
     let abs = upgrade_type [(T_bool, T_int)] abs in
-    {bottom with int = IntLattice.fwd_unop op abs.int; float = FloatLattice.fwd_unop op abs.float}
+    {bottom with int = I.fwd_unop op abs.int; float = F.fwd_unop op abs.float}
 
   | _ ->
     Debug.fail "fwd_unop %a not implemented" Framework.Pp.pp_operator op
 
 (** Filtering functions *)
 let assume_true abs = {
-  none = NoneLattice.bottom;
-  bool = BoolLattice.meet abs.bool (BoolLattice.singleton true);
-  string = StringLattice.filter (fun s -> s <> "") abs.string;
-  int = IntLattice.assume_true abs.int;
-  float = FloatLattice.assume_true abs.float;
+  none = N.bottom;
+  bool = B.meet abs.bool (B.singleton true);
+  string = S.filter (fun s -> s <> "") abs.string;
+  int = I.assume_true abs.int;
+  float = F.assume_true abs.float;
   addr = abs.addr;
   notimplem = abs.notimplem;
   emptyvalue = abs.emptyvalue;
@@ -506,13 +500,13 @@ let assume_true abs = {
 
 let assume_false abs = {
   none = abs.none;
-  bool = BoolLattice.meet abs.bool (BoolLattice.singleton false);
-  string = StringLattice.filter (fun s -> s = "") abs.string;
-  int = IntLattice.assume_false abs.int;
-  float = FloatLattice.assume_false abs.float;
-  addr = AddrLattice.bottom;
-  notimplem = NotImplementedLattice.bottom;
-  emptyvalue = EmptyValueLattice.bottom;
+  bool = B.meet abs.bool (B.singleton false);
+  string = S.filter (fun s -> s = "") abs.string;
+  int = I.assume_false abs.int;
+  float = F.assume_false abs.float;
+  addr = A.bottom;
+  notimplem = NI.bottom;
+  emptyvalue = E.bottom;
 }
 
 (** Forwared evaluation of binary operators *)
@@ -541,34 +535,34 @@ let fwd_binop op abs1 abs2 =
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
-      int = IntLattice.fwd_binop op abs1.int abs2.int;
-      float = FloatLattice.fwd_binop op abs1.float abs2.float;
+      int = I.fwd_binop op abs1.int abs2.int;
+      float = F.fwd_binop op abs1.float abs2.float;
       string =
         try
-          StringLattice.fold (fun s1 acc ->
-              StringLattice.fold (fun s2 acc ->
-                  StringLattice.add (s1 ^ s2) acc
+          S.fold (fun s1 acc ->
+              S.fold (fun s2 acc ->
+                  S.add (s1 ^ s2) acc
                 ) abs2.string acc
-            ) abs1.string StringLattice.bottom;
-        with Top.Found_TOP -> StringLattice.top
+            ) abs1.string S.bottom;
+        with Top.Found_TOP -> S.top
     }
   (* FIXME : use operator types *)
   | O_mult _->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
-      int = IntLattice.fwd_binop op abs1.int abs2.int;
-      float = FloatLattice.fwd_binop op abs1.float abs2.float;
-      string = if StringLattice.is_bottom abs1.string || IntLattice.is_bottom abs2.int then StringLattice.bottom else assert false;
+      int = I.fwd_binop op abs1.int abs2.int;
+      float = F.fwd_binop op abs1.float abs2.float;
+      string = if S.is_bottom abs1.string || I.is_bottom abs2.int then S.bottom else assert false;
     }
 
   (* FIXME : use operator types *)
-  | O_mod _| O_minus _ | O_pow _ ->
+  | O_mod _| O_minus _ | O_pow ->
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
-      int = IntLattice.fwd_binop op abs1.int abs2.int;
-      float = FloatLattice.fwd_binop op abs1.float abs2.float;
+      int = I.fwd_binop op abs1.int abs2.int;
+      float = F.fwd_binop op abs1.float abs2.float;
     }
 
   (* FIXME : use operator types *)
@@ -577,7 +571,7 @@ let fwd_binop op abs1 abs2 =
     let abs1 = cast T_float abs1 and abs2 = cast T_float abs2 in
     {
       bottom with
-      float = FloatLattice.fwd_binop op abs1.float abs2.float;
+      float = F.fwd_binop op abs1.float abs2.float;
     }
 
   | O_py_floor_div ->
@@ -586,7 +580,7 @@ let fwd_binop op abs1 abs2 =
     {
       bottom with
       (* FIXME : use operator types *)
-      int = IntLattice.fwd_binop math_div abs1.int abs2.int;
+      int = I.fwd_binop math_div abs1.int abs2.int;
     }
 
   | O_bit_and
@@ -595,13 +589,13 @@ let fwd_binop op abs1 abs2 =
   | O_bit_lshift
   | O_bit_rshift
     ->
-    let abs1 = { abs1 with float = FloatLattice.bottom } and abs2 = { abs2 with float = FloatLattice.bottom } in
+    let abs1 = { abs1 with float = F.bottom } and abs2 = { abs2 with float = F.bottom } in
     let abs1, abs2 = coerce abs1 abs2 in
     {
       bottom with
-      int = IntLattice.fwd_binop op abs1.int abs2.int;
-      bool = BoolLattice.fold (fun b1 acc ->
-          BoolLattice.fold (fun b2 acc ->
+      int = I.fwd_binop op abs1.int abs2.int;
+      bool = B.fold (fun b1 acc ->
+          B.fold (fun b2 acc ->
               let op =
                 match op with
                   O_bit_and -> (&&)
@@ -609,43 +603,43 @@ let fwd_binop op abs1 abs2 =
                 | O_bit_xor -> (<>)
                 | _ -> assert false
               in
-              BoolLattice.singleton (op b1 b2) |> BoolLattice.join acc
+              B.singleton (op b1 b2) |> B.join acc
             ) abs2.bool acc
-        ) abs1.bool BoolLattice.bottom
+        ) abs1.bool B.bottom
     }
 
   | O_py_is ->
     let can_be_true = not @@ is_bottom @@ meet abs1 abs2 in
     (* FIXME: weak addresses make "is" returns false *)
     let can_be_false =
-      (not @@ StringLattice.is_bottom abs1.string && not @@ StringLattice.is_bottom abs2.string) ||
+      (not @@ S.is_bottom abs1.string && not @@ S.is_bottom abs2.string) ||
       (not @@ is_bottom abs1 && not @@ is_bottom abs2 && is_bottom @@ meet abs1 abs2)
     in
     debug "is forward evaluation: can_be_true = %b, can_be_false = %b" can_be_true can_be_false;
     (match can_be_true, can_be_false with
      | true, false -> of_constant C_true
      | false, true -> of_constant C_false
-     | true, true -> boolean BoolLattice.top
+     | true, true -> boolean B.top
      | false, false -> bottom)
 
   | O_py_is_not ->
     let can_be_false = not @@ is_bottom @@ meet abs1 abs2 in
     let can_be_true =
-      (not @@ StringLattice.is_bottom abs1.string && not @@ StringLattice.is_bottom abs2.string) ||
+      (not @@ S.is_bottom abs1.string && not @@ S.is_bottom abs2.string) ||
       (not @@ is_bottom abs1 && not @@ is_bottom abs2 && is_bottom @@ meet abs1 abs2)
     in
     debug "is not forward evaluation: can_be_true = %b, can_be_false = %b" can_be_true can_be_false;
     (match can_be_true, can_be_false with
      | true, false -> of_constant C_true
      | false, true -> of_constant C_false
-     | true, true -> boolean BoolLattice.top
+     | true, true -> boolean B.top
      | false, false -> bottom)
 
   | _ ->
     Debug.fail "fwd_binop %a not implemented" Framework.Pp.pp_operator op
 
-let mk_true = boolean (BoolLattice.singleton true)
-let mk_false = boolean (BoolLattice.singleton false)
+let mk_true = boolean (B.singleton true)
+let mk_false = boolean (B.singleton false)
 
 let is_not_same_type abs1 abs2 =
   let type1 = type_of abs1 and type2 = type_of abs2 in
@@ -660,37 +654,37 @@ let fwd_filter op abs1 abs2 =
   | O_ne ->
     (is_bottom @@ meet abs1 abs2) ||
     (
-      not @@ StringLattice.is_bottom abs1.string ||
-      not @@ StringLattice.is_bottom abs2.string &&
+      not @@ S.is_bottom abs1.string ||
+      not @@ S.is_bottom abs2.string &&
       (
-        StringLattice.is_bottom @@ StringLattice.meet abs1.string abs2.string ||
+        S.is_bottom @@ S.meet abs1.string abs2.string ||
         try
-          (StringLattice.cardinal abs1.string > 1) ||
-          (StringLattice.cardinal abs2.string > 1)
+          (S.cardinal abs1.string > 1) ||
+          (S.cardinal abs2.string > 1)
         with Top.Found_TOP -> true
       )
     ) ||
-    (IntLattice.fwd_filter op abs1.int abs2.int) ||
-    (FloatLattice.fwd_filter op abs1.float abs2.float)
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
 
   | O_lt ->
-    (BoolLattice.mem false abs1.bool && BoolLattice.mem true abs1.bool) ||
-    (IntLattice.fwd_filter op abs1.int abs2.int) ||
-    (FloatLattice.fwd_filter op abs1.float abs2.float)
+    (B.mem false abs1.bool && B.mem true abs1.bool) ||
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
   | O_le ->
-    (not @@ BoolLattice.is_bottom @@ BoolLattice.meet abs1.bool abs2.bool) ||
-    (BoolLattice.mem false abs1.bool && BoolLattice.mem true abs1.bool) ||
-    (IntLattice.fwd_filter op abs1.int abs2.int) ||
-    (FloatLattice.fwd_filter op abs1.float abs2.float)
+    (not @@ B.is_bottom @@ B.meet abs1.bool abs2.bool) ||
+    (B.mem false abs1.bool && B.mem true abs1.bool) ||
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
   | O_gt ->
-    (BoolLattice.mem true abs1.bool && BoolLattice.mem false abs1.bool) ||
-    (IntLattice.fwd_filter op abs1.int abs2.int) ||
-    (FloatLattice.fwd_filter op abs1.float abs2.float)
+    (B.mem true abs1.bool && B.mem false abs1.bool) ||
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
   | O_ge ->
-    (not @@ BoolLattice.is_bottom @@ BoolLattice.meet abs1.bool abs2.bool) ||
-    (BoolLattice.mem true abs1.bool && BoolLattice.mem false abs1.bool) ||
-    (IntLattice.fwd_filter op abs1.int abs2.int) ||
-    (FloatLattice.fwd_filter op abs1.float abs2.float)
+    (not @@ B.is_bottom @@ B.meet abs1.bool abs2.bool) ||
+    (B.mem true abs1.bool && B.mem false abs1.bool) ||
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
 
   | _ -> assert false
 
@@ -701,7 +695,7 @@ let bwd_unop op abs rabs =
     Framework.Exceptions.panic "bwd evaluation of sqrt not supported"
   (* FIXME : use operator types *)
   | O_minus _ ->
-    {bottom with int = IntLattice.bwd_unop op abs.int rabs.int; float = FloatLattice.bwd_unop op abs.float rabs.float}
+    {bottom with int = I.bwd_unop op abs.int rabs.int; float = F.bwd_unop op abs.float rabs.float}
   (* FIXME : use operator types *)
   | O_plus _ ->
     {bottom with int = abs.int; float = abs.float}
@@ -716,12 +710,12 @@ let bwd_binop op abs1 abs2 rabs =
   (* FIXME : use operator types *)
   | O_plus _ | O_minus _ | O_mult _ | O_div _ | O_mod _ ->
     let abs1, abs2 = coerce abs1 abs2 in
-    let int1, int2 = IntLattice.bwd_binop op abs1.int abs2.int rabs.int in
-    let float1, float2 = FloatLattice.bwd_binop op abs1.float abs2.float rabs.float in
+    let int1, int2 = I.bwd_binop op abs1.int abs2.int rabs.int in
+    let float1, float2 = F.bwd_binop op abs1.float abs2.float rabs.float in
     {abs1 with int = int1; float = float1},
     {abs2 with int = int2; float = float2}
   (* FIXME : use operator types *)
-  | O_pow _
+  | O_pow
   | O_py_and
   | O_py_or
   | O_py_floor_div
@@ -741,8 +735,8 @@ let bwd_binop op abs1 abs2 rabs =
 (** Backward filters of comparison operators *)
 let bwd_filter op abs1 abs2 =
   let abs1, abs2 = coerce abs1 abs2 in
-  let int1, int2 = IntLattice.bwd_filter op abs1.int abs2.int in
-  let float1, float2 = FloatLattice.bwd_filter op abs1.float abs2.float in
+  let int1, int2 = I.bwd_filter op abs1.int abs2.int in
+  let float1, float2 = F.bwd_filter op abs1.float abs2.float in
 
   match op with
   | O_eq ->
@@ -751,8 +745,8 @@ let bwd_filter op abs1 abs2 =
     {abs with int = int2; float = float2}
 
   | O_ne ->
-    (* let addr1, addr2 = AddrLattice.bwd_neq abs1.addr abs2.addr in
-     * let string1, string2 = StringLattice.bwd_neq abs1.string abs2.string in
+    (* let addr1, addr2 = A.bwd_neq abs1.addr abs2.addr in
+     * let string1, string2 = S.bwd_neq abs1.string abs2.string in
      * {abs1 with int = int1; float = float1; addr = addr1; string = string1},
      * {abs2 with int = int2; float = float2; addr = addr2; string = string2} *)
     assert false
@@ -777,5 +771,5 @@ let bwd_filter op abs1 abs2 =
 
 
 let rebase_addr a1 a2 abs =
-  if not (AddrLattice.mem a1 abs.addr) then abs else
-  { abs with addr = AddrLattice.remove a1 abs.addr |> AddrLattice.add a2 }
+  if not (A.mem a1 abs.addr) then abs else
+  { abs with addr = A.remove a1 abs.addr |> A.add a2 }

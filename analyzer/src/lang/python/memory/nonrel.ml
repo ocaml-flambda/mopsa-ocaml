@@ -65,7 +65,7 @@ struct
         (fun e flow ->
            match ekind e with
            | E_addr(addr) ->
-             let v = Value.addr (Value.AddrLattice.singleton addr) in
+             let v = Value.addr (Value.A.singleton addr) in
              map_domain_cur (Nonrel.add var v) man flow |>
              return_flow
            | _ ->
@@ -115,10 +115,10 @@ struct
 
           (* Partition w.r.t. to all current addresses *)
           | T_addr ->
-            if Value.AddrLattice.is_top value'.addr then
+            if Value.A.is_top value'.addr then
               Framework.Exceptions.panic "top address found"
             else
-              Value.AddrLattice.fold (fun addr acc ->
+              Value.A.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)
                   let exp' = {exp with ekind = E_addr addr; etyp = typ} in
                   oeval_singleton (Some (exp', []), flow', []) |>

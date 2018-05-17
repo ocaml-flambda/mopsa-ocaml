@@ -25,103 +25,6 @@ open Builtins
 let name = "python.objects.data_model.arith_ops"
 let debug fmt = Debug.debug ~channel:name fmt
 
-(** Utility functions for operators *)
-
-let is_arith_op = function
-  | O_plus T_any
-  | O_minus T_any
-  | O_mult T_any
-  | O_py_mat_mult
-  | O_div T_any
-  | O_py_floor_div
-  | O_mod T_any
-  | O_pow
-  | O_bit_lshift
-  | O_bit_rshift
-  | O_bit_and
-  | O_bit_xor
-  | O_bit_or ->
-    true
-
-  | _ -> false
-
-
-let all_arithmetic_ops = [
-  "add"; "sub"; "mul"; "matmul"; "truediv"; "floordiv"; "mod"; "divmod"; "pow"; "lshift"; "rshift"; "and"; "xor"; "or"
-]
-
-let string_to_binop = function
-  | "add" -> O_plus T_any
-  | "sub" -> O_minus T_any
-  | "mul" -> O_mult T_any
-  | "matmul" -> O_py_mat_mult
-  | "truediv" -> O_div T_any
-  | "floordiv" -> O_py_floor_div
-  | "mod" -> O_mod T_any
-  | "pow" -> O_pow
-  | "lshift" -> O_bit_lshift
-  | "rshift" -> O_bit_rshift
-  | "and" -> O_bit_and
-  | "xor" -> O_bit_xor
-  | "or" -> O_bit_or
-  | _ -> assert false
-
-let binop_to_string = function
-  | O_plus T_any -> "add"
-  | O_minus T_any -> "sub"
-  | O_mult T_any -> "mul"
-  | O_py_mat_mult -> "matmul"
-  | O_div T_any -> "truediv"
-  | O_py_floor_div -> "floordiv"
-  | O_mod T_any -> "mod"
-  | O_pow -> "pow"
-  | O_bit_lshift -> "lshift"
-  | O_bit_rshift -> "rshift"
-  | O_bit_and -> "and"
-  | O_bit_xor -> "xor"
-  | O_bit_or -> "or"
-  | _ -> assert false
-
-let string_to_unop = function
-  | "not" -> O_log_not
-  | "neg" -> O_minus T_any
-  | "pos" -> O_plus T_any
-  | "invert" -> O_bit_invert
-  | _ -> assert false
-
-
-let unop_to_string = function
-  | O_log_not -> "not"
-  | O_plus T_any -> "pos"
-  | O_minus T_any -> "neg"
-  | O_bit_invert -> "invert"
-  | _ -> assert false
-
-
-let all_unops = [
- "neg"; "pos"; "abs"; "invert"
-]
-
-let all_convert = [
-  "complex"; "int"; "float"; "round"
-]
-
-let op_fun op = "__" ^ op ^ "__"
-
-let op_fun_inv f =
-  if Str.string_match (Str.regexp "__\\(.*\\)__") f 0 then
-    Str.matched_group 1 f
-  else
-    raise Not_found
-
-let rop_fun op = op_fun ("r" ^ op)
-
-let op_funs = List.map op_fun
-let rop_funs = List.map rop_fun
-
-let all_arithmetic_functions = op_funs all_arithmetic_ops
-let all_unops_functions = op_funs all_unops
-
 
 module Domain = struct
 
@@ -133,8 +36,8 @@ module Domain = struct
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
-          let op_fun = binop_to_string op |> op_fun in
-          let rop_fun = binop_to_string op |> rop_fun in
+          let op_fun = binop_to_fun op in
+          let rop_fun = binop_to_rev_fun op in
 
           if e1.etyp <> T_addr && e2.etyp <> T_addr then
             let f = mk_addr (Builtins.find_type_function e1.etyp op_fun) range in
@@ -274,13 +177,7 @@ module Domain = struct
       man.eval ctx e flow |>
       eval_compose (fun e flow ->
           debug "Subexpression evaluated to %a" Framework.Pp.pp_expr e;
-          let op_fun =
-            match op with
-            | O_plus T_any -> "__pos__"
-            | O_minus T_any -> "__neg__"
-            | O_bit_invert -> "__inverert__"
-            | _ -> assert false
-          in
+          let op_fun = unop_to_fun op in
 
           if e.etyp <> T_addr then
             let exp' = mk_py_call (mk_py_attr e op_fun range) [] range in
