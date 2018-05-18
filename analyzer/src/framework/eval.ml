@@ -41,6 +41,15 @@ let eval_substitute2
   =
   Dnf.substitute2 f evl
 
+let eval_iter (f: ('a, 'b) eval_case -> unit) (evals: ('a, 'b) evals) : unit =
+  Dnf.to_list evals |>
+  List.flatten |>
+  List.iter f
+
+let eval_fold (f: 'c -> ('a, 'b) eval_case -> unit) (x: 'c) (evals: ('a, 'b) evals) : 'c =
+  Dnf.to_list evals |>
+  List.flatten |>
+  List.fold_left f x
 
 let pp_evals print fmt (evals: ('a, 'b) evals) =
   let l = Dnf.to_list evals in
