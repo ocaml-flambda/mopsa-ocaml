@@ -17,7 +17,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 
-let name = "python.desugar.andor"
+let name = "python.desugar.bool"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -25,6 +25,12 @@ module Domain =
 struct
 
   let init _ ctx _ flow = ctx, flow
+
+  let is_bool_function f =
+    match ekind f with
+    | E_var v -> v.vname = "bool"
+    | E_addr a -> compare_addr a (Addr.from_string "bool") = 0
+    | _ -> false
 
   let eval man ctx exp flow =
     match ekind exp with
@@ -49,6 +55,15 @@ struct
              (fun false_flow -> Some (man.eval ctx e2 false_flow))
              man ctx flow ()
         )
+
+    | E_unop(O_py_not, e) ->
+      let e' =
+        if is_bool_function e then e else Builtins.mk_builtin_call "bool" [e] e.erange
+      in
+      Universal.Utils.assume_to_eval e'
+        (fun true_flow -> oeval_singleton (Some (mk_false exp.erange), true_flow, []))
+        (fun false_flow -> oeval_singleton (Some (mk_true exp.erange), false_flow, []))
+        man ctx flow ()
 
     | _ -> None
 

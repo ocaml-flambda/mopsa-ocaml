@@ -4,15 +4,15 @@
 
         "universal.unit_tests",
 
+        "python.desugar.bool",
+        "python.desugar.assert",
+        "python.desugar.if",
+        "python.desugar.import",
+        "python.desugar.iterable_assign",
+
 	"universal.flows.intraproc",
         "universal.flows.interproc",
         "universal.flows.loops",
-
-        "python.desugar.andor",
-        "python.desugar.assert",
-        "python.desugar.ifexpr",
-        "python.desugar.import",
-        "python.desugar.iterable_assign",
 
         "python.libs.mopsa",
 
@@ -21,9 +21,9 @@
 	"python.objects.object",
         "python.objects.number",
 
-        "python.objects.data_model.callable",
         "python.objects.data_model.attribute",
         "python.objects.data_model.arith_ops",
+        "python.objects.data_model.callable",
 
         {
             "unify": "universal.heap.recency",

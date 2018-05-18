@@ -40,10 +40,11 @@ module Domain = struct
           let rop_fun = binop_to_rev_fun op in
 
           if e1.etyp <> T_addr && e2.etyp <> T_addr then
-            let f = mk_addr (Builtins.find_type_function e1.etyp op_fun) range in
+            let f = mk_addr (Addr.find_type_function e1.etyp op_fun) range in
             let exp = mk_py_call f [e1; e2] range in
             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
           else
+            let cls1 = classof e1 and cls2 = classof e2 in
             let is_same_type e1 e2 =
               match ekind e1, ekind e2 with
               | E_addr {addr_kind = A_py_instance(cls1, _)}, E_addr {addr_kind = A_py_instance(cls2, _)} ->
@@ -69,7 +70,7 @@ module Domain = struct
                 man.exec ctx
                   (mk_assign
                      (mk_var tmp range)
-                     (mk_py_call (mk_py_attr e1 op_fun range) [e2] range)
+                     (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range)
                      range
                   ) has_add_flow
 
@@ -120,7 +121,7 @@ module Domain = struct
                 man.exec ctx
                   (mk_assign
                      (mk_var tmp range)
-                     (mk_py_call (mk_py_attr e2 rop_fun range) [e1] range)
+                     (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range)
                      range
                   ) has_radd_flow
             in
@@ -180,10 +181,11 @@ module Domain = struct
           let op_fun = unop_to_fun op in
 
           if e.etyp <> T_addr then
-            let f = mk_addr (Builtins.find_type_function e.etyp op_fun) range in
+            let f = mk_addr (Addr.find_type_function e.etyp op_fun) range in
             let exp' = mk_py_call f [e] range in
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
+            let cls = classof e in
             let ok_cond = mk_builtin_call "hasattr" [e; mk_string op_fun range] range in
             let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
             let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
@@ -192,7 +194,7 @@ module Domain = struct
               if man.flow.is_cur_bottom ok_flow then
                 None
               else
-                let exp' = mk_py_call (mk_py_attr e op_fun range) [] range in
+                let exp' = mk_py_call (mk_py_addr_attr cls op_fun range) [e] range in
                 re_eval_singleton (man.eval ctx) (Some exp', ok_flow, [])
             in
 

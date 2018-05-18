@@ -25,7 +25,8 @@ open Framework.Utils
 open Universal.Ast
 open Ast
 open Value
-
+open Addr
+    
 let name = "python.memory.nonrel"
 
 module Domain =
@@ -94,9 +95,9 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_var v when Builtins.is_builtin v.vname ->
+    | E_var v when is_builtin v.vname ->
       debug "builtin";
-      oeval_singleton (Some (mk_addr (Builtins.from_expr exp) range, []), flow, [])
+      oeval_singleton (Some (mk_addr (Addr.from_expr exp) range, []), flow, [])
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->

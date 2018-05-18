@@ -68,7 +68,7 @@ struct
           mk_assign
             e ~mode
             (mk_py_call
-               (mk_addr (Builtins.from_string "next") (tag_range range "next addr"))
+               (mk_addr (Addr.from_string "next") (tag_range range "next addr"))
                [mk_addr iter (tag_range range "iter addr")]
                (tag_range range "next call")
             )
@@ -82,7 +82,7 @@ struct
       mk_try
         block
         [mk_except
-           (Some (mk_addr (Builtins.from_string "StopIteration") (tag_range range "stop iter")))
+           (Some (mk_addr (Addr.from_string "StopIteration") (tag_range range "stop iter")))
            None
            (Builtins.mk_builtin_raise "ValueError" (tag_range range "error raise"))
         ]

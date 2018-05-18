@@ -25,19 +25,19 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain= struct
 
   let is_number_function f =
-    match Builtins.split_class_dot_attribute f with
+    match Addr.split_class_dot_attribute f with
     | Some (cls, _) ->
       (cls = "int" || cls = "float" || cls = "bool")
     | None -> false
 
   let is_number_binop_function f =
-    match Builtins.split_class_dot_attribute f with
+    match Addr.split_class_dot_attribute f with
     | Some (cls, f) ->
       (cls = "int" || cls = "float" || cls = "bool") && (is_binop_function f)
     | None -> false
 
   let is_number_unop_function f =
-    match Builtins.split_class_dot_attribute f with
+    match Addr.split_class_dot_attribute f with
     | Some (cls, f) ->
       (cls = "int" || cls = "float" || cls = "bool") && (is_unop_function f)
     | None -> false
@@ -99,89 +99,95 @@ module Domain= struct
     let range = exp.erange in
     match ekind exp with
     (** Boleans *)
-    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, [cls], [])
-    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, [cls; {etyp = T_py_none}], [])
-    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, [cls; {etyp = T_py_not_implemented}], [])
-      ->
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, [cls], []) ->
       oeval_singleton (Some (mk_false range), flow, [])
 
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, [cls; arg], [])
       ->
-      begin
-
-        let bool_case =
-          let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) flow in
-          if man.flow.is_cur_bottom flow then
-            None
-          else
-            let exp = mk_py_call (mk_py_attr arg "__bool__" range) [] range in
-            man.eval ctx exp flow |>
-            eval_compose (fun exp flow ->
-                match etyp exp with
-                | T_bool -> oeval_singleton (Some exp, flow, [])
-                | T_any -> assert false
-                | _ ->
-                  let flow = man.exec ctx
-                      (mk_builtin_raise "TypeError" range)
-                      flow
-                  in
-                  oeval_singleton (None, flow, [])
-              )
-
-        in
-
-        let no_bool_flow = man.exec ctx (mk_assume (mk_not (mk_builtin_call "hashattr" [arg; mk_string "__bool__" range] range) range) range) flow in
-
-        let len_case =
-          let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__len__" range] range) range) no_bool_flow in
-          if man.flow.is_cur_bottom flow then
-            None
-          else
-            let can_be_true =
-              not @@ man.flow.is_cur_bottom @@
-              man.exec ctx
-                (mk_assume
-                   (mk_binop
-                      (mk_py_call (mk_py_attr arg "__len__" range) [] range)
-                      O_ne
-                      (mk_zero range)
-                      range
-                   )
-                   range
-                ) flow
-            in
-            let can_be_false =
-              not @@ man.flow.is_cur_bottom @@
-              man.exec ctx
-                (mk_assume
-                   (mk_binop
-                      (mk_py_call (mk_py_attr arg "__len__" range) [] range)
-                      O_eq
-                      (mk_zero range)
-                      range
-                   )
-                   range
-                ) flow
-            in
-            match can_be_true, can_be_false with
-            | true, false -> oeval_singleton (Some (mk_true range), flow, [])
-            | false, true -> oeval_singleton (Some (mk_false range), flow, [])
-            | true, true -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, [])
-            | false, false -> oeval_singleton (None, flow, [])
-        in
-
-        let default_case =
-          let flow = man.exec ctx (mk_assume (mk_not (mk_hasattr arg "__len__" range) range) range) no_bool_flow in
-          if man.flow.is_cur_bottom flow then
-            None
-          else
+      man.eval ctx arg flow |>
+      eval_compose (fun arg flow ->
+          match ekind arg with
+          | E_constant (C_py_none)
+          | E_constant (C_py_not_implemented)
+          | E_constant (C_false) ->
+            oeval_singleton (Some (mk_false range), flow, [])
+          | E_constant (C_true) ->
             oeval_singleton (Some (mk_true range), flow, [])
-        in
+          | _ ->
+            let cls = Addr.classof arg in
+            let bool_case =
+              let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) flow in
+              if man.flow.is_cur_bottom flow then
+                None
+              else
+                let exp = mk_py_call (mk_py_addr_attr cls "__bool__" range) [arg] range in
+                man.eval ctx exp flow |>
+                eval_compose (fun exp flow ->
+                    match etyp exp with
+                    | T_bool -> oeval_singleton (Some exp, flow, [])
+                    | T_any -> assert false
+                    | _ ->
+                      let flow = man.exec ctx
+                          (mk_builtin_raise "TypeError" range)
+                          flow
+                      in
+                      oeval_singleton (None, flow, [])
+                  )
 
-        oeval_join bool_case len_case |> oeval_join default_case
+            in
 
-      end
+            let no_bool_flow = man.exec ctx (mk_assume (mk_not (mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) range) flow in
+
+            let len_case =
+              let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__len__" range] range) range) no_bool_flow in
+              if man.flow.is_cur_bottom flow then
+                None
+              else
+                let can_be_true =
+                  not @@ man.flow.is_cur_bottom @@
+                  man.exec ctx
+                    (mk_assume
+                       (mk_binop
+                          (mk_py_call (mk_py_addr_attr cls "__len__" range) [arg] range)
+                          O_ne
+                          (mk_zero range)
+                          range
+                       )
+                       range
+                    ) flow
+                in
+                let can_be_false =
+                  not @@ man.flow.is_cur_bottom @@
+                  man.exec ctx
+                    (mk_assume
+                       (mk_binop
+                          (mk_py_call (mk_py_addr_attr cls "__len__" range) [arg] range)
+                          O_eq
+                          (mk_zero range)
+                          range
+                       )
+                       range
+                    ) flow
+                in
+                match can_be_true, can_be_false with
+                | true, false -> oeval_singleton (Some (mk_true range), flow, [])
+                | false, true -> oeval_singleton (Some (mk_false range), flow, [])
+                | true, true -> oeval_singleton (Some (mk_int_interval 0 1 range), flow, [])
+                | false, false -> oeval_singleton (None, flow, [])
+            in
+
+            let default_case =
+              let flow = man.exec ctx (mk_assume (mk_not (mk_hasattr arg "__len__" range) range) range) no_bool_flow in
+              if man.flow.is_cur_bottom flow then
+                None
+              else
+                oeval_singleton (Some (mk_true range), flow, [])
+            in
+
+            oeval_join bool_case len_case |> oeval_join default_case
+
+        )
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, _, []) ->
       let flow = man.exec ctx

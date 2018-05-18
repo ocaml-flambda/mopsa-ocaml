@@ -53,7 +53,7 @@ struct
            if List.for_all can_inherit_from bases then
              let bases =
                match bases with
-               | [] -> [Builtins.object_addr]
+               | [] -> [Addr.from_string "object"]
                | _ ->
                  List.map (function {ekind = E_addr addr} -> addr | _ -> assert false)  bases
              in

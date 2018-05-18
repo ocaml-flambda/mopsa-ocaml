@@ -17,9 +17,9 @@ let init () =
    * ); *)
 
   Desugar.(
-    Andor.setup ();
+    Bool.setup ();
     Assert.setup ();
-    Ifexpr.setup ();
+    If.setup ();
     Import.setup ();
     Iterable_assign.setup ();
   );
