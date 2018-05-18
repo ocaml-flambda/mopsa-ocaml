@@ -30,6 +30,8 @@ let mk_builtin_call f params range =
 let mk_hasattr obj attr range =
   mk_builtin_call "hasattr" [obj; mk_string attr range] range
 
+let mk_addr_hasattr obj attr range =
+  mk_hasattr (mk_addr obj range) attr range
 
 let mk_builtin_module_addr modl =
   let range = builtin_range modl in

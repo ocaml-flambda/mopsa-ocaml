@@ -147,3 +147,14 @@ class bool(int):
     def __pos__(self): pass
     def __abs__(self): pass
     def __invert__(self): pass
+
+class dict(object):
+    def __getitem__(self, k): pass
+    def __setitem__(self, k, v): pass
+    def __values__(self): pass
+
+class dict_values(object):
+    def __iter__(self): pass
+
+class dict_valueiterator(object):
+    def __next__(self): pass

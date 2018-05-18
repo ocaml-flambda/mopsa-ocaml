@@ -5,10 +5,14 @@ let init () =
     Class.setup ();
     Function.setup ();
     Number.setup ();
+    Containers.(
+      Dicts.setup ();
+    );
     Data_model.(
       Attribute.setup ();
       Callable.setup ();
       Arith_ops.setup ();
+      Subscript.setup ();
     );
   );
 

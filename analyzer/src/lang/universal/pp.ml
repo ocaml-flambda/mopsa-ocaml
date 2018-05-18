@@ -84,6 +84,7 @@ let () =
       | T_string -> pp_print_string fmt "string"
       | T_bool -> pp_print_string fmt "bool"
       | T_addr -> pp_print_string fmt "addr"
+      | T_empty -> pp_print_string fmt "empty"
       | _ -> default fmt typ
   );
   register_pp_expr (fun default fmt exp ->

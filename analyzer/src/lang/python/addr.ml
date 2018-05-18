@@ -11,8 +11,13 @@
 open Framework.Ast
 open Framework.Pp
 open Framework.Manager
+open Framework.Eval
 open Universal.Ast
 open Ast
+
+
+let debug fmt = Debug.debug ~channel:"python.addr" fmt
+
 
 type obj_param =
   | List of Universal.Ast.addr
@@ -53,6 +58,16 @@ let mk_instance_addr cls params =
 let mk_method_addr f obj =
   A_py_method (f, obj)
 
+
+let eval_alloc_instance (man: ('a, 't) manager) ctx cls params range flow : (addr, 'a) evals option =
+  let exp = mk_alloc_addr (mk_instance_addr cls params) range range in
+  man.eval ctx exp flow |>
+  eval_compose (fun exp flow ->
+      match ekind exp with
+      | E_addr addr -> oeval_singleton (Some addr, flow, [])
+      | _ -> Framework.Exceptions.panic "eval_alloc_instance: allocation returned a non-address express %a" Framework.Pp.pp_expr exp
+    )
+
 (* Builtins *)
 let modules : addr list ref = ref []
 let classes : addr list ref = ref []
@@ -79,7 +94,8 @@ let mk_unname base name =
 
 
 let from_string name =
-  List.find (fun addr -> name = builtin_addr_to_name addr) (all ())
+  debug "searching for builtin %s" name;
+  List.find (fun addr -> debug "addr = %a" Universal.Pp.pp_addr addr; name = builtin_addr_to_name addr) (all ())
 
 
 let from_attribute obj attr =

@@ -264,11 +264,11 @@ let mk_raise exc range =
 let mk_py_call func args range =
   mk_expr (E_py_call (func, args, [])) range
 
-let mk_py_attr obj attr range =
-  mk_expr (E_py_attribute (obj, attr)) range
+let mk_py_attr obj attr ?(etyp=T_any) range =
+  mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
-let mk_py_addr_attr addr attr range =
-  mk_py_attr (Universal.Ast.mk_addr addr (tag_range range "addr")) attr range
+let mk_py_addr_attr addr attr ?(etyp=T_any) range =
+  mk_py_attr (Universal.Ast.mk_addr addr (tag_range range "addr")) attr ~etyp range
 
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range

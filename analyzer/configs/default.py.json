@@ -21,7 +21,10 @@
 	"python.objects.object",
         "python.objects.number",
 
+        "python.objects.containers.dicts",
+
         "python.objects.data_model.attribute",
+        "python.objects.data_model.subscript",
         "python.objects.data_model.arith_ops",
         "python.objects.data_model.callable",
 
