@@ -250,7 +250,7 @@ struct
         match K.must_mem kv keyset, K.may_mem kv keyset with
         | true, _ ->
           let flow = man.exec ctx ok_stmt flow in
-          oeval_singleton (Some ok_exp, flow, [clean_stmt])
+          re_eval_singleton (man.eval ctx) (Some ok_exp, flow, [clean_stmt])
 
         | false, true ->
           let ok_flow =
@@ -265,7 +265,7 @@ struct
             man.exec ctx (Builtins.mk_builtin_raise "KeyError" range)
           in
           oeval_join
-            (oeval_singleton (Some ok_exp, ok_flow, [clean_stmt]))
+            (re_eval_singleton (man.eval ctx) (Some ok_exp, ok_flow, [clean_stmt]))
             (oeval_singleton (None, error_flow, []))
 
         | false, false -> assert false
