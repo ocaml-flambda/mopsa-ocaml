@@ -8,228 +8,162 @@
 
 (** Abstraction of Python tuples. *)
 
-open Framework.Domain
+
+open Framework.Domains
 open Framework.Ast
-open Framework.Query
 open Framework.Manager
-open Framework.Accessor
+open Framework.Pp
+open Framework.Eval
+open Framework.Exec
+open Framework.Domains.Stateless
+open Framework.Flow
+open Framework.Exceptions
 open Universal.Ast
+open Universal.Ast
+open Utils
 open Ast
 open Addr
-open XAst
-open Utils
-    
+
 let name = "python.objects.containers.tuples"
+let debug fmt = Debug.debug ~channel:name fmt
 
-module Make(SubLayer : Framework.Layer.S) = struct
+module Domain = struct
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
-  
-  module SubAbstract = SubLayer.Abstract
+  (** Tuple length *)
+  let mk_tl addr range = mk_py_addr_attr ~etyp:T_int addr "$tl" range
 
-  module Abstract = Framework.Lattice.EmptyLattice
-  module Flow = Framework.Lattice.EmptyLattice
+  (** Tuple value at index i *)
+  let mk_tv addr i range = mk_py_addr_attr addr ("$tv[" ^ (string_of_int i) ^ "]") range
 
-  let has_abstract = false
-  let has_flow = false
-  
-  type t = Abstract.t * Flow.t
-  type st = SubLayer.t
+  (** Tuple value at index z *)
+  let mk_tv_z addr z range = mk_py_addr_attr addr ("$tv[" ^ (Z.to_string z) ^ "]") range
 
-  let mk_tl addr = mk_exp ~etyp:TInt (PyAttribute(mk_addr addr, "$tl"))
-  let mk_tv addr i = mk_exp (PyAttribute(mk_addr addr, "$tv[" ^ (string_of_int i) ^ "]"))
-  let mk_tv_z addr z = mk_exp (PyAttribute(mk_addr addr, "$tv[" ^ (Z.to_string z) ^ "]"))
-  let mk_iter_counter addr = mk_exp ~etyp:TInt (PyAttribute (mk_addr addr, "$counter"))
+  (** Iterator counter *)
+  let mk_iter_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
           
-  let eval (exp : exp) manager ctx ax_ subax_ gabs =
-    let subax = mk_domain_ax subax_ in
+  let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
-    | PyTuple(el)  ->
-      let addr, gabs =
-        Addr.alloc_instance (Builtins.builtin_address "tuple") exp.erange manager ctx gabs
-      in
+    | E_py_tuple(el)  ->
+      Addr.eval_alloc_instance man ctx (Addr.find_builtin "tuple") None range flow |>
+      oeval_compose (fun addr flow ->
+          let tl = mk_tl addr range in
+          let flow = man.exec ctx (mk_assign tl (mk_int (List.length el) range) range) flow in
 
-      let tl = mk_tl addr in
-      let gabs = manager.exec
-          (mk_assign tl (mk_int @@ List.length el))
-          ctx gabs
-      in
-
-      let rec aux i gabs = function
-        | [] -> gabs
-        | e :: tail ->
-          let tv = mk_tv addr i in
-          let gabs = manager.exec
-              (mk_assign tv e)
-              ctx gabs
+          let rec aux i flow = function
+            | [] -> flow
+            | e :: tail ->
+              let tv = mk_tv addr i range in
+              let flow = man.exec ctx (mk_assign tv e range) flow in
+              aux (i + 1) flow tail
           in
-          aux (i + 1) gabs tail
-      in
 
-      let gabs = eval_exec_list (fun el gabs ->
-          aux 0 gabs el
-        ) el manager ctx gabs in
+          let flow = eval_list el (man.eval ctx) flow |>
+                     eval_to_exec (fun el flow -> aux 0 flow el) (man.exec ctx) man.flow
+          in
 
-      let exp' = mk_addr ~erange:exp.erange addr in
+          oeval_singleton (Some (mk_addr addr range), flow, [])
+        )
 
-      [exp', (gabs, [])]
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "tuple.__getitem__"}))},
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "tuple.__getitem__")})},
         [
-          {ekind = Constant (Addr {akind = U_instance({akind = B_class "tuple"}, _)})};
+          {ekind = E_addr {addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tuple", _)}, _)}};
           idx
         ],
         []
       ) ->
       panic "tuple.__getitem__ not supported"
-
-    | PySliceSubscript(
-        {ekind = Constant (Addr {akind = U_instance({akind = B_class "tuple"}, _)})},
-        estart,
-        eend,
-        estep
-      ) ->
-      panic "tuple slice not supported"
   
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function ("tuple.__init__")})},
-        (
-          ({ekind = Constant (Addr _)}) ::
-          args
-        ),
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "tuple.__init__")}},
+        ({ekind = E_addr _} :: args),
         []
       )
       ->
       panic "tuple() not supported"
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("tuple.__len__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class("tuple")}, _)}))}],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "tuple.__len__")}},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tuple", _)}, _)})}],
         []
       ) ->
       panic "tuple.__len__ not supported"
-
         
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function("tuple.__iter__")}))},
-        [({ekind = Constant (Addr ({akind = U_instance({akind = B_class "tuple"}, _)}  as tuple))})],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "tuple.__iter__")})},
+        [({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tuple", _)}, _)}  as tuple)})],
         []
-      )
-      ->
-
-      let aiter, gabs =
-        Addr.alloc_instance (Builtins.builtin_address "tupleiter") ~param:(Some (Tuple tuple)) exp.erange manager ctx gabs
-      in
+      ) ->
+      Addr.eval_alloc_instance man ctx (Addr.find_builtin "tupleiter") (Some (Tuple tuple)) range flow |>
+      oeval_compose (fun aiter flow ->
+          let flow = man.exec ctx (mk_assign (mk_iter_counter aiter range) (mk_zero range) range) flow in
+          oeval_singleton (Some (mk_addr aiter range), flow, [])
+        )
       
-      let gabs = manager.exec (
-          mk_assign
-            (mk_iter_counter aiter)
-            (mk_int 0)
-        ) ctx gabs
-      in
-
-      [mk_addr aiter ~erange:exp.erange, (gabs, [])]
-      
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function("tupleiter.__next__")}))},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "tupleiter"}, Some (Tuple tuple))}  as iter))}],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "tupleiter.__next__")})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tupleiter", _)}, Some (Tuple tuple))}  as iter)}],
         []
-      )
-      ->
-            let tl = mk_tl tuple in
-            let counter = mk_iter_counter iter in
-            let counter_var = Universal.Heap.Domain.attribute_var iter "$counter" TInt |> mk_var ~erange:counter.erange in
+      ) ->
+      let tl = mk_tl tuple range in
+      let counter = mk_iter_counter iter range in
 
-            let in_cond = mk_in ~right_strict:true counter mk_zero tl in
-            debug "in_cond = %a" Framework.Pp.pp_exp in_cond;
-            let in_gabs = manager.exec (mk_stmt (Assume in_cond)) ctx gabs in
-            debug "in_gabs = %a" manager.print in_gabs;
+      let in_cond = mk_in ~right_strict:true counter (mk_zero range) tl range in
+      let in_flow = man.exec ctx (mk_assume in_cond range) flow in
 
-
-            let itv = Universal.Numeric.Values.Query.integer_interval counter_var SubLayer.ask subax_ in_gabs in
-            debug "itv = %a" Universal.Numeric.Values.Integers.print itv;
-            let in_gabs =
-              if Universal.Numeric.Values.Integers.is_bottom itv then in_gabs
-              else if Universal.Numeric.Values.Integers.is_bounded itv then in_gabs
-              else
-                manager.exec (mk_assign counter (mk_top TInt)) ctx gabs |>
-                manager.exec (mk_stmt (Assume (mk_binop counter Ge mk_zero))) ctx |>
-                manager.exec (mk_stmt (Assume (mk_binop counter Lt tl))) ctx
-            in
-            
-            let in_case =
-              if SubAbstract.is_bottom (subax.get_abs in_gabs) then
-                []
-              else
-                let counter_var = Universal.Heap.Domain.attribute_var iter "$counter" TInt |> mk_var ~erange:counter.erange in
-
-                try
-                  let itv = Universal.Numeric.Values.Query.integer_interval counter_var SubLayer.ask subax_ in_gabs in
-                  debug "itv = %a" Universal.Numeric.Values.Integers.print itv;
-                  let _ = eval_exec (fun tl gabs ->
-                      let itv' = Universal.Numeric.Values.Query.integer_interval tl SubLayer.ask subax_ gabs in
-                      debug "itv'(%a) = %a" Framework.Pp.pp_exp tl Universal.Numeric.Values.Integers.print itv';
-                      gabs
-                    ) tl manager ctx in_gabs
-                  in
-                  Universal.Numeric.Values.Integers.fold (fun acc i ->
+      let in_case =
+        if man.flow.is_cur_bottom in_flow then
+          None
+        else
+          man.eval ctx counter in_flow |>
+          eval_compose (fun counter flow ->
+              match man.ask ctx (Universal.Numeric.Query.QIntInterval counter) flow with
+              | Some itv ->
+                debug "itv = %a" Universal.Numeric.Values.Int.print itv;
+                if Universal.Numeric.Values.Int.is_bounded itv then
+                  Universal.Numeric.Values.Int.fold (fun acc i ->
                       debug "assign counter";
-                      let gabs = manager.exec (mk_assign counter (mk_z (Z.succ i))) ctx in_gabs in
-                      let exp' = mk_tv_z tuple i in
-                      ({exp' with erange = exp.erange}, (gabs, [])) :: acc
-                    ) [] itv |>
-                  re_eval_list manager ctx
+                      let flow = man.exec ctx (mk_assign counter (mk_z (Z.succ i) range) range) flow in
+                      let exp' = mk_tv_z tuple i range in
+                      re_eval_singleton (man.eval ctx) (Some exp', flow, []) |>
+                      oeval_join acc
+                    ) None itv
+                else
+                  panic "Unbounded tuple not supported"
 
-                with Universal.Numeric.Values.Integers.Unbounded ->
-                  (
-                    debug "unbounded interval";
-                    let gabs = manager.exec (mk_assign counter (mk_binop counter Plus mk_one)) ctx in_gabs in
-                    [{(mk_top TAny) with erange = exp.erange}, (gabs, [])]
-                  ) @
-                  (
-                    let gabs = manager.exec (
-                        mk_stmt (PyRaise (Some (mk_exp ~erange:exp.erange (Constant (Addr (Builtins.builtin_address "StopIteration"))))))
-                      ) ctx in_gabs
-                    in
-                    [(exp, (gabs, []))]
-                  )
-            in
+              | None -> assert false
+            )
 
-            let out_cond = mk_binop counter Eq tl in
-            let out_gabs = manager.exec (mk_stmt (Assume out_cond)) ctx gabs in
-            let out_case =
-              if SubAbstract.is_bottom (subax.get_abs out_gabs) then
-                []
-              else
-                let gabs = manager.exec (
-                    mk_stmt (PyRaise (Some (mk_exp ~erange:exp.erange (Constant (Addr (Builtins.builtin_address "StopIteration"))))))
-                  ) ctx out_gabs
-                in
-                [(exp, (gabs, []))]
+      in
 
-            in
+      let out_cond = mk_binop counter O_eq tl range in
+      let out_flow = man.exec ctx (mk_assume out_cond range) flow in
+      let out_case =
+        if man.flow.is_cur_bottom out_flow then
+          None
+        else
+          let flow = man.exec ctx (Utils.mk_builtin_raise "StopIteration" range) out_flow
+          in
+          oeval_singleton (None, flow, [])
 
-            in_case @ out_case
+      in
 
-    | PyCall({ekind = Constant (Addr ({akind = B_function f}))}, _, _)
-      when Builtins.is_class_dot_method "tuple" f ->
+      oeval_join in_case out_case
 
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
+      when Addr.is_builtin_class_function "tuple" f ->
       panic "Tuple function %s not implemented" f
 
+    | _ -> None
 
+  let init man ctx prog flow = ctx, flow
+  
+  let exec man ctx stmt flow = None
 
-    | _ -> []
-
-
-  let exec stmt manager ctx ax_ subax_ gabs =
-    continue gabs
-    
-  let ask _ _ = Framework.Query.top
-
+  let ask man ctx query flow = None
 
 end
 
 let setup () =
-  register name (module Make)
+  register_domain name (module Domain)

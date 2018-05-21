@@ -169,3 +169,27 @@ class dict_values(object):
 
 class dict_valueiterator(object):
     def __next__(self): pass
+
+class range(object):
+    def __init__(self, start, stop): pass
+    def __len__(self): pass
+    def __iter__(self): pass
+    def __contains__(self, v): pass
+
+class rangeiter(object):
+    def __next__(self): pass
+
+class set(object):
+    def __init__(self, start, stop): pass
+    def __len__(self): pass
+    def __iter__(self): pass
+    def __contains__(self, v): pass
+    def add(self, c): pass
+    def clear(self): pass
+
+class tuple(object):
+    def __init__(self): pass
+    def __iter__(self): pass
+
+class tupleiter(object):
+    def __next__(self): pass

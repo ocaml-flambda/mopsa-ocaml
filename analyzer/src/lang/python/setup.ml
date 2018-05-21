@@ -10,6 +10,7 @@ let init () =
       Dicts.setup ();
       Ranges.setup ();
       Sets.setup ();
+      Tuples.setup ();
     );
     Data_model.(
       Attribute.setup ();
