@@ -6,6 +6,7 @@ let init () =
     Function.setup ();
     Number.setup ();
     Containers.(
+      Lists.setup ();
       Dicts.setup ();
     );
     Data_model.(
@@ -30,6 +31,7 @@ let init () =
 
   Libs.(
     Mopsa.setup ();
+    Stdlib.setup ();
   );
 
   Memory.(

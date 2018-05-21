@@ -15,12 +15,14 @@
         "universal.flows.loops",
 
         "python.libs.mopsa",
+        "python.libs.stdlib",
 
         "python.objects.class",
         "python.objects.function",
 	"python.objects.object",
         "python.objects.number",
 
+	"python.objects.containers.lists",
         "python.objects.containers.dicts",
 
         "python.objects.data_model.attribute",

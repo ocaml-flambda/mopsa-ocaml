@@ -84,19 +84,14 @@ let rec partition_list_by_length n l =
       hd :: lhd, ltl
     | _ -> assert false
 
-(* let mk_try_stopiteration body except =
- *   mk_try
- *     body
- *     [mk_except
- *        (Some (mk_addr (Builtins.builtin_address "StopIteration")))
- *        None
- *        except
- *     ]
- *     (mk_stmt nop)
- *     (mk_stmt nop)
- *
- * let mk_hasattr obj attr =
- *   mk_exp (PyCall (mk_addr (Builtins.builtin_address "hasattr"),
- *                   [obj; mk_constant (String attr) ~etyp:TString],
- *                   []
- *                  )) *)
+let mk_try_stopiteration body except range =
+  mk_try
+    body
+    [mk_except
+       (Some (mk_addr (Addr.from_string "StopIteration") range))
+       None
+       except
+    ]
+    (mk_block [] range)
+    (mk_block [] range)
+    range

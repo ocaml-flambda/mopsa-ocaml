@@ -156,11 +156,14 @@ struct
     mk_var v range
 
 
-  let mk_attribute_expr addr attr range =
-    if is_static_attribute addr attr then
-      mk_static_attribute addr attr range
-    else
-      mk_attribute_var addr attr range
+  let mk_attribute_expr addr attr etyp range =
+    let e =
+      if is_static_attribute addr attr then
+        mk_static_attribute addr attr range
+      else
+        mk_attribute_var addr attr range
+    in
+    {e with etyp}
 
   let rec eval man ctx exp flow =
     let range = erange exp in
@@ -173,7 +176,7 @@ struct
            match ekind obj with
            (* Access to an abstract attribute of an object *)
            | E_addr addr when is_abstract_attribute attr ->
-             let exp' = mk_attribute_expr addr attr range in
+             let exp' = mk_attribute_expr addr attr exp.etyp range in
              oeval_singleton (Some exp', flow, [])
 
            (* Access to an ordinary attribute of an object *)
@@ -185,7 +188,7 @@ struct
                (fun true_flow ->
                   debug "instance attribute found locally";
                   debug "attribute %s found, exp = %a" attr Framework.Pp.pp_expr exp;
-                  let exp' = mk_attribute_expr addr attr range in
+                  let exp' = mk_attribute_expr addr attr exp.etyp range in
                   re_eval_singleton (man.eval ctx) (Some exp', true_flow, [])
                )
                (* Case when the attribute does not exist => check in mro *)
@@ -218,13 +221,13 @@ struct
                                    re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
 
                                  | _ ->
-                                   let exp = mk_attribute_expr cls attr range in
+                                   let exp = mk_attribute_expr cls attr exp.etyp range in
                                    re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
                                )
 
                            (* No method binding for non-instances *)
                            | _ ->
-                             let exp = mk_attribute_expr cls attr range in
+                             let exp = mk_attribute_expr cls attr exp.etyp range in
                              re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
                         )
                         (fun false_flow -> aux false_flow tl)

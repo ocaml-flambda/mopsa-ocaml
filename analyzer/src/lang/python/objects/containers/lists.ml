@@ -1,478 +1,281 @@
-open Framework.Domain
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Abstraction of Python lists. *)
+
+open Framework.Domains
 open Framework.Ast
-open Framework.Query
 open Framework.Manager
-open Framework.Accessor
+open Framework.Pp
+open Framework.Eval
+open Framework.Domains.Stateless
+open Framework.Flow
+open Framework.Exceptions
 open Universal.Ast
+open Universal.Ast
+open Utils
 open Ast
 open Addr
-open XAst
-open Utils
+open Bot
+
+let name = "python.objects.containers.lists"
+let debug fmt = Debug.debug ~channel:name fmt
     
-let name = "python.objects.lists"
 
-module Make(SubLayer : Framework.Layer.S) = struct
+module Domain = struct
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
+  let mk_ll addr range = mk_py_addr_attr addr "$ll" ~etyp:T_int range
+  let mk_lv addr range = mk_py_addr_attr addr "$lv" range
+      
+  let set_list_length man ctx addr el range flow =
+    man.exec ctx
+      (mk_assign
+         (mk_ll addr range)
+         (mk_int (List.length el) range)
+         range
+      ) flow
   
-  module SubAbstract = SubLayer.Abstract
-
-
-  module Abstract = Framework.Lattice.EmptyLattice
-  module Flow = Framework.Lattice.EmptyLattice
-
-  let has_abstract = false
-  let has_flow = false
-  
-  type t = Abstract.t * Flow.t
-  type st = SubLayer.t
-
-  let set_list_length manager ctx addr el gabs =
-    manager.exec {
-      skind = Assign (
-          {ekind = PyAttribute(
-               mk_addr addr,
-               "$ll"
-             ); etyp = TAny; erange = unknown_range},
-          (mk_int (List.length el))
-        );
-      srange = unknown_range
-    } ctx gabs
-  
-  let set_list_value manager ctx addr el gabs =
+  let set_list_value man ctx addr el range flow =
     match el with
     | [] ->
-      manager.exec
+      man.exec ctx
         (mk_assign
-           (mk_exp (PyAttribute(mk_addr addr,"$lv")))
-           (mk_exp (Constant (PyEmptyValue)))
-        ) ctx gabs
+           (mk_lv addr range)
+           (mk_empty range)
+           range
+        ) flow
 
     | hd :: tl ->
-      let stmt e = {
-        skind = Assign (
-            {ekind = PyAttribute(
-                 mk_addr addr,
-                 "$lv"
-               ); etyp = TAny; erange = unknown_range},
-            e
-          );
-        srange = unknown_range
-      }
-      in
+      let stmt e = mk_assign (mk_lv addr range) e range in
       tl |> List.fold_left (fun acc e ->
-          manager.exec (stmt e) ctx gabs |>
-          manager.join acc
-        ) (manager.exec (stmt hd) ctx gabs)
+          man.exec ctx (stmt e) flow |>
+          man.flow.join acc
+        ) (man.exec ctx (stmt hd) flow)
 
-  let create_post_ignore_stmtl vars =
-    vars |> List.map (fun v -> {
-          skind = RemoveAll v;
-          srange = unknown_range;
-        })
+  let create_post_ignore_stmtl vars range =
+    vars |> List.map (fun v -> mk_remove_var v range)
 
-  let mk_assign_next_loop iter vval assign_stmt =
-    mk_stmt (
-      PyTry (
-        mk_stmt (While (
-            mk_int 1,
-            mk_stmt (Block [
-                mk_assign (mk_var vval) (mk_exp (PyCall(
-                    mk_addr (Builtins.builtin_address "next"),
-                    [mk_exp (Var iter)],
-                    []
-                  )));
-                assign_stmt (mk_var vval)
-              ])
-          )),
-        [mk_except
-           (Some (mk_addr (Builtins.builtin_address "StopIteration")))
-           None
-           (mk_stmt nop)
-        ],
-        mk_stmt nop,
-        mk_stmt nop
+  let mk_assign_next_loop iter assign_stmt range =
+    Utils.mk_try_stopiteration
+      (mk_while
+         (mk_true range)
+         (assign_stmt (Builtins.mk_builtin_call "next" [mk_addr iter range] range))
+         range
       )
-    )
+      (mk_block [] range)
+      range
+      
+  let mk_iter_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
 
-  let mk_ll addr = mk_exp ~etyp:TInt (PyAttribute(mk_addr addr, "$ll"))
-  let mk_lv addr = mk_exp (PyAttribute(mk_addr addr, "$lv"))
+  let add_element man ctx addr e range flow =
+    let flow = man.exec ctx
+        (mk_assign 
+           (mk_ll addr range)
+           (mk_binop (mk_ll addr range) math_plus (mk_one range) range)
+           range
+        ) flow
+    in
 
-  let mk_iter_counter addr = mk_exp ~etyp:TInt (PyAttribute (mk_addr addr, "$counter"))
-
-  let add_element addr e manager ctx gabs =
-    let gabs = manager.exec
-          (mk_stmt (Assign (
-                (mk_exp (PyAttribute(mk_addr addr, "$ll"))),
-                (mk_binop
-                   (mk_exp (PyAttribute(mk_addr addr, "$ll")))
-                   Plus
-                   (mk_int 1)
-                )
-              ))) ctx gabs
-      in
-
-      let empty_list_gabs =
-        manager.exec
-          (mk_stmt (Assume
-                      (mk_binop
-                         (mk_exp (PyAttribute(mk_addr addr, "$ll")))
-                         Eq
-                         (mk_int 1)
-                      )
-                   )) ctx gabs
+    let empty_list_flow =
+      man.exec ctx
+        (mk_assume
+           (mk_binop (mk_ll addr range) O_eq (mk_one range) range)
+           range
+        ) flow
       in
     
-      let nonempty_list_gabs =
-        manager.exec
-                    (mk_stmt (Assume
-                      (mk_binop
-                         (mk_exp (PyAttribute(mk_addr addr, "$ll")))
-                         Gt
-                         (mk_int 1)
-                      )
-                   )) ctx gabs
+      let nonempty_list_flow =
+        man.exec ctx
+          (mk_assume
+             (mk_binop (mk_ll addr range) O_gt (mk_one range) range)
+             range
+          ) flow
       in
 
-      debug "empty_list_gabs = @\n@[  %a@]@\n nonempty_list_gabs = @\n@[  %a@]"
-        manager.print empty_list_gabs
-        manager.print nonempty_list_gabs
+      debug "empty_list_flow = @\n@[  %a@]@\n nonempty_list_flow = @\n@[  %a@]"
+        man.flow.print empty_list_flow
+        man.flow.print nonempty_list_flow
       ;
         
-      manager.join (
+      man.flow.join (
         debug "add1";
-        let gabs' = manager.exec
-          (mk_assign (mk_exp (PyAttribute(mk_addr addr, "$lv"))) e)
-          ctx nonempty_list_gabs
+        let flow' = man.exec ctx
+          (mk_assign (mk_lv addr range) e range ~mode:WEAK)
+          nonempty_list_flow
         in
-        debug "add1 gabs = @\n@[  %a@]" manager.print gabs';
-        manager.join nonempty_list_gabs gabs' |>
-        (fun gabs -> debug "add1' gabs = @\n@[  %a@]" manager.print gabs; gabs)
+        debug "add1 flow = @\n@[  %a@]" man.flow.print flow';
+        flow'
       ) ( 
-        let gabs' = manager.exec
-          (mk_assign (mk_exp (PyAttribute(mk_addr addr, "$lv"))) e)
-          ctx empty_list_gabs in
-        debug "add2 gabs = @\n@[  %a@]" manager.print gabs';
-        gabs'
-      ) |>
-      (fun gabs -> debug "add gabs = @\n@[  %a@]" manager.print gabs; gabs)
+        let flow' = man.exec ctx
+          (mk_assign (mk_lv addr range) e range)
+          empty_list_flow in
+        debug "add2 flow = @\n@[  %a@]" man.flow.print flow';
+        flow'
+      ) 
 
-  let check_index_access alist index manager ctx gabs =
-    let ll = mk_ll alist in
+  let check_index_access man ctx alist index range flow =
+    let ll = mk_ll alist range in
     let cond_safe = mk_binop
-        (mk_binop index Ge (mk_unop Minus ll))
-        LAnd
-        (mk_binop index Lt ll)
-    in  
-    let gabs_safe = manager.exec
-        (mk_stmt (Assume cond_safe)) ctx gabs
+        (mk_binop index O_ge (mk_neg ll range) range)
+        O_log_and
+        (mk_binop index O_lt ll range)
+        range
     in
-    let gabs_fail = manager.exec
-      (mk_stmt (Assume (negate cond_safe))) ctx gabs
+    let flow_safe = man.exec ctx
+        (mk_assume cond_safe range) flow
     in
-    debug "index access:@ list: %a@ index: %a@, gabs: @[%a@]@, safe case:@ @[%a@]@ fail case:@ @[%a@]"
+    let flow_fail = man.exec ctx
+      (mk_assume (mk_not cond_safe range) range) flow
+    in
+    debug "index access:@ list: %a@ index: %a@, flow: @[%a@]@, safe case:@ @[%a@]@ fail case:@ @[%a@]"
       Universal.Pp.pp_addr alist
-      Framework.Pp.pp_exp index
-      manager.print gabs
-      manager.print gabs_safe
-      manager.print gabs_fail
+      Framework.Pp.pp_expr index
+      man.flow.print flow
+      man.flow.print flow_safe
+      man.flow.print flow_fail
     ;
-    gabs_safe, gabs_fail
+    flow_safe, flow_fail
 
 
-  let mult addr n range manager ctx subax gabs =
-    let addr', gabs =
-      Addr.alloc_instance (Builtins.builtin_address "list") range manager ctx gabs
-    in
-
-    let ll = mk_ll addr in
-    let lv = mk_lv addr in
-
-    let ll' = mk_ll addr' in
-    let lv' = mk_lv addr' in
-
-    let gabs = manager.exec (mk_assign ll' (mk_binop ll Mult n)) ctx gabs in
-    let gabs = manager.exec (mk_stmt (Expand (lv', lv))) ctx gabs in
-    addr', gabs
-
-  
-  let fold_increasing_slice_length_cases f x0 estart eend estep ll manager ctx subax gabs =
-    debug "increasing slice case";
-    let start_cases = 
-      match ekind estart with
-      | Constant PyNone -> [mk_zero, mk_one]
-      | _ ->
-        [
-          (ll, mk_binop estart Ge ll);
-          (mk_zero, mk_binop (mk_binop ll Plus estart) Le mk_zero);
-          (mk_binop ll Plus estart, mk_in ~strict:true estart (mk_neg ll) mk_zero);
-          (estart, mk_in estart mk_zero ll)
-        ]
-    in
-
-    let start_cases = start_cases |>
-                      List.map (fun (e, cond) -> (e, manager.exec (mk_stmt (Assume cond)) ctx gabs)) |>
-                      List.filter (fun (_, gabs) -> not (SubAbstract.is_bottom (subax.get_abs gabs)))
-    in
-    
-    let end_cases =
-      match ekind eend with
-      | Constant PyNone -> [ll, mk_one]
-      | _ ->
-        [
-          (ll, mk_binop eend Ge ll);
-          (mk_zero, mk_binop (mk_binop ll Plus eend) Le mk_zero);
-          (mk_binop ll Plus eend, mk_in ~strict:true eend (mk_neg ll) mk_zero);
-          (eend, mk_in eend mk_zero ll)
-        ]
-    in
-
-    let end_cases = end_cases |>
-                      List.map (fun (e, cond) -> (e, manager.exec (mk_stmt (Assume cond)) ctx gabs)) |>
-                      List.filter (fun (_, gabs) -> not (SubAbstract.is_bottom (subax.get_abs gabs)))
-    in
-
-    
-    let cases =
-      start_cases |> List.fold_left (fun acc (estart, start_gabs) ->
-          end_cases |> List.fold_left (fun acc (eend, end_gabs) ->
-              let gabs = manager.meet start_gabs end_gabs in
-              if SubAbstract.is_bottom (subax.get_abs gabs) then
-                acc
-              else
-                ((mk_binop eend Minus estart), gabs) :: acc
-            ) acc
-        ) []
-    in
-    List.fold_left f x0 cases
-
-  let fold_decreasing_slice_length_cases f x0 estart eend estep ll manager ctx subax gabs =
-    debug "decreasing slice case";
-    let start_cases = 
-      match ekind estart with
-      | Constant PyNone -> [mk_binop ll Minus mk_one, mk_one]
-      | _ ->
-        [
-          (mk_binop ll Minus mk_one, mk_binop estart Ge (mk_binop ll Minus mk_one));
-          (mk_zero, mk_binop (mk_binop ll Plus estart) Le mk_zero);
-          (mk_binop ll Plus estart, mk_in ~strict:true estart (mk_neg ll) mk_zero);
-          (estart, mk_in estart mk_zero (mk_binop ll Minus mk_one))
-        ]
-    in
-    debug "start cases";
-    let start_cases = start_cases |>
-                      List.map (fun (e, cond) -> (e, manager.exec (mk_stmt (Assume cond)) ctx gabs)) |>
-                      List.filter (fun (_, gabs) -> not (SubAbstract.is_bottom (subax.get_abs gabs)))
-    in
-    
-    let end_cases =
-      match ekind eend with
-      | Constant PyNone -> [mk_zero, mk_one]
-      | _ ->
-        [
-          (ll, mk_binop eend Ge (mk_binop ll Minus mk_one));
-          (mk_zero, mk_binop (mk_binop ll Plus eend) Le mk_zero);
-          (mk_binop (mk_binop ll Plus eend) Plus mk_one, mk_in ~strict:true eend (mk_neg ll) mk_zero);
-          (mk_binop eend Plus mk_one, mk_in eend mk_zero ll)
-        ]
-    in
-    debug "end cases";
-    let end_cases = end_cases |>
-                      List.map (fun (e, cond) -> (e, manager.exec (mk_stmt (Assume cond)) ctx gabs)) |>
-                      List.filter (fun (_, gabs) -> not (SubAbstract.is_bottom (subax.get_abs gabs)))
-    in
-
-    debug "combining";
-    let cases =
-      start_cases |> List.fold_left (fun acc (estart, start_gabs) ->
-          end_cases |> List.fold_left (fun acc (eend, end_gabs) ->
-              let gabs = manager.meet start_gabs end_gabs in
-              if SubAbstract.is_bottom (subax.get_abs gabs) then
-                acc
-              else
-                (mk_binop (mk_binop estart Minus eend) Plus mk_one, gabs) :: acc
-            ) acc
-        ) []
-    in
-    List.fold_left f x0 cases
-  
-  let fold_slice_length_cases f x0 estart eend estep ll manager ctx cax gabs =
-    match ekind estep with
-    | Constant PyNone -> fold_increasing_slice_length_cases f x0 estart eend estep ll manager ctx cax gabs
-
-    |  _ ->
-      let n = exp_to_int estep in
-      match n with
-      | Some n when n = 1 ->
-        fold_increasing_slice_length_cases f x0 estart eend estep ll manager ctx cax gabs
-
-      | Some n when n = -1 ->
-        fold_decreasing_slice_length_cases f x0 estart eend estep ll manager ctx cax gabs
-
-      | _ -> Debug.fail "Unsupported slice step"
-
-
-  let create_list el range manager ctx subax gabs =
-    let addr, gabs =
-      Addr.alloc_instance (Builtins.builtin_address "list") range manager ctx gabs
-    in
-
-    let gabs = eval_exec_list (fun el gabs ->
-        set_list_value manager ctx addr el gabs
-      ) el manager ctx gabs
-    in
-
-    let gabs = set_list_length manager ctx addr el gabs in
-    
-    let exp = mk_addr addr ~erange:range in
-    exp, gabs, []
+  let create_list man ctx el range flow =
+    eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+    oeval_compose (fun addr flow ->
+        let flow = set_list_value man ctx addr el range flow |>
+                   set_list_length man ctx addr el range
+        in
+        oeval_singleton (Some addr, flow, [])
+      )
  
-  let eval (exp : exp) manager ctx ax subax_ gabs =
-    let subax = mk_domain_ax subax_ in
+  let rec eval man ctx exp flow =
+    let range = exp.erange in
     match ekind exp with
-    | PyList (el)
-      ->
-      let exp, gabs, stmts = create_list el exp.erange manager ctx subax gabs in
-      [(exp, (gabs, stmts))]
+    | E_py_list (el) ->
+      create_list man ctx el range flow  |>
+      oeval_compose (fun addr flow -> oeval_singleton (Some (mk_addr addr range), flow, []))
       
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function("list.__iter__")}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))}) :: [],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("list.__iter__"))})},
+        ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)}) :: [],
         []
       ) ->
-      let aiter, gabs =
-        Addr.alloc_instance (Builtins.builtin_address "listiter") ~param:(Some (List alist)) exp.erange manager ctx gabs
-      in
-
-
-      let gabs = manager.exec (
-          mk_assign
-            (mk_iter_counter aiter)
-            (mk_int 0)
-        ) ctx gabs
-      in
-
-      [mk_addr aiter ~erange:exp.erange, (gabs, [])]
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function("listiter.__next__")}))},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "listiter"}, Some (List alist))}  as aiter))}],
+      eval_alloc_instance man ctx (Addr.from_string "listiter") (Some (List alist)) range flow |>
+      oeval_compose (fun aiter flow ->
+          let flow = man.exec ctx (mk_assign (mk_iter_counter aiter range) (mk_zero range) range) flow in
+          oeval_singleton (Some (mk_addr aiter range), flow, [])
+        )
+        
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("listiter.__next__"))})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "listiter", _)}, Some (List alist))}  as aiter)}],
         []
-      )
-      ->
-            let ll = mk_ll alist in
-            let lv = mk_lv alist in
-            let counter = mk_iter_counter aiter in
+      ) ->
+      let ll = mk_ll alist range in
+      let lv = mk_lv alist range in
+      let counter = mk_iter_counter aiter range in
 
-            let in_cond = mk_binop counter Lt ll in
-            let in_gabs = manager.exec (mk_stmt (Assume in_cond)) ctx gabs in
-            let in_case =
-              if SubAbstract.is_bottom (subax.get_abs in_gabs) then
-                []
-              else
-                let tmp = mktmp () in
-                let gabs =
-                  manager.exec (mk_stmt (Expand ((mk_var tmp), lv))) ctx gabs |>
-                  manager.exec (mk_assign counter (mk_binop counter Plus (mk_int 1))) ctx
-                in
-                let exp' = {exp with ekind = Var tmp} in
-                (exp', (gabs, [mk_stmt (RemoveAll tmp)])) |>
-                re_eval manager ctx
+      let in_cond = mk_binop counter O_lt ll range in
+      let in_flow = man.exec ctx (mk_assume in_cond range) flow in
+      let in_case =
+        if man.flow.is_cur_bottom in_flow then
+          None
+        else
+          let tmp = mktmp () in
+          let flow =
+            man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow |>
+            man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) range) range)
+          in
+          re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
+            
+      in
 
-            in
+      let out_cond = mk_binop counter O_eq ll range in
+      let out_flow = man.exec ctx (mk_assume out_cond range) flow in
+      let out_case =
+        if man.flow.is_cur_bottom out_flow then
+          None
+        else
+          let flow = man.exec ctx (Builtins.mk_builtin_raise "StopIteration" range) out_flow in
+          oeval_singleton (None, flow, [])
+      in
 
-            let out_cond = mk_binop counter Eq ll in
-            let out_gabs = manager.exec (mk_stmt (Assume out_cond)) ctx gabs in
-            let out_case =
-              if SubAbstract.is_bottom (subax.get_abs out_gabs) then
-                []
-              else
-                let gabs = manager.exec (
-                    mk_stmt (PyRaise (Some (mk_exp ~erange:exp.erange (Constant (Addr (Builtins.builtin_address "StopIteration"))))))
-                  ) ctx out_gabs
-                in
-                [(exp, (gabs, []))]
+      oeval_join in_case out_case
 
-            in
-
-        in_case @ out_case
-
-
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("list.__contains__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as list))}; value],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin("list.__contains__"))}},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as list)}; value],
         []
       ) ->
       begin
-        let ll = mk_ll list and lv = mk_lv list in
+        let ll = mk_ll list range and lv = mk_lv list range in
 
+        (* x in l => ll >= 1 && lv == x *)
         let can_be_true =
-          let gabs = manager.exec (mk_stmt (Assume (mk_binop ll Ge mk_one))) ctx gabs in
-          not @@ SubAbstract.is_bottom @@ subax.get_abs gabs &&
-          not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv Eq value))) ctx gabs
+          let flow' = man.exec ctx (mk_assume (mk_binop ll O_ge (mk_one range) range) range) flow in
+          not @@ man.flow.is_cur_bottom flow' &&
+          not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv O_eq value range) range) flow'
         in
 
         debug "can be true = %b" can_be_true;
 
         debug "check false";
 
+        (* x not in l => ll == 0 || lv != x *)
         let can_be_false =
-          not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop ll Eq mk_zero))) ctx gabs ||
-          not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv Ne value))) ctx gabs
+          not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop ll O_eq (mk_zero range) range) range) flow ||
+          not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv O_ne value range) range) flow
         in
 
         debug "can be false = %b" can_be_false;
 
         match can_be_true, can_be_false with
-        | true, false -> [mk_true, (gabs, [])]
-        | false, true -> [mk_false, (gabs, [])]
-        | true, true -> [(mk_true, (gabs, [])); (mk_false, (gabs, []))] (* FIXME: imporove precision by partitioning gabs *)
-        | false, false -> [exp, (subax.set_abs gabs SubAbstract.bottom, [])]
+        | true, false -> oeval_singleton (Some (mk_true range), flow, [])
+        | false, true -> oeval_singleton (Some (mk_false range), flow, [])
+        | true, true -> oeval_join
+                          (oeval_singleton (Some (mk_true range), flow, []))
+                          (oeval_singleton (Some (mk_false range), flow, []))
+        | false, false -> oeval_singleton (None, flow, [])
 
       end  
       
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__getitem__"}))},
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__getitem__")})},
         [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as alist))};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)};
           index
         ],
         []
       ) ->
-      let gabs_safe, gabs_fail = check_index_access alist index manager ctx gabs in
+      let flow_safe, flow_fail = check_index_access man ctx alist index range flow in
 
       let safe_case =
-        if SubAbstract.is_bottom (subax.get_abs gabs_safe) then
-          []
+        if man.flow.is_cur_bottom flow_safe then
+          None
         else
-          let lv = mk_lv alist in
+          let lv = mk_lv alist range in
           let tmp = mktmp () in
-          let gabs_safe = manager.exec (mk_stmt (Expand ((mk_var tmp), lv))) ctx gabs_safe in
-          let exp' = {exp with ekind = Var tmp} in
-          (exp', (gabs_safe, [mk_stmt (RemoveAll tmp)])) |>
-          re_eval manager ctx
+          let flow_safe = man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow_safe in
+          re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow_safe, [mk_remove_var tmp range])
       in
 
       let fail_case = 
-        if SubAbstract.is_bottom (subax.get_abs gabs_fail) then
-          []
+        if man.flow.is_cur_bottom flow_fail then
+          None
         else
-          let gabs_fail =  manager.exec
-            (mk_stmt (PyRaise (Some (mk_exp ~erange:exp.erange (Constant (Addr (Builtins.builtin_address "IndexError")))))))
-            ctx gabs_fail
-          in
-          [(exp, (gabs_fail, []))]
+          let flow_fail =  man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) flow_fail in
+          oeval_singleton (None, flow_fail, [])
       in
 
-      safe_case @ fail_case
+      oeval_join safe_case fail_case
 
-
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__setitem__"}))},
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__setitem__")})},
         [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as alist))};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)};
           index;
           exp'
         ],
@@ -480,127 +283,101 @@ module Make(SubLayer : Framework.Layer.S) = struct
       ) ->
 
 
-      let safe_gabs, fail_gabs = check_index_access alist index manager ctx gabs in
+      let safe_flow, fail_flow = check_index_access man ctx alist index range flow in
 
       let safe_case =
-        if SubAbstract.is_bottom (subax.get_abs safe_gabs) then
-          manager.bottom
+        if man.flow.is_cur_bottom safe_flow then
+          man.flow.bottom
         else
-          let ll = mk_ll alist in
-          let lv = mk_lv alist in
+          let ll = mk_ll alist range in
+          let lv = mk_lv alist range in
 
-          let singleton_cond = mk_binop ll Eq (mk_int 1) in
-          let singleton_gabs = manager.exec (mk_stmt (Assume singleton_cond)) ctx safe_gabs in
-          let singleton_gabs =
-            if SubAbstract.is_bottom (subax.get_abs singleton_gabs) then
-              manager.bottom
+          let singleton_cond = mk_binop ll O_eq (mk_one range) range in
+          let singleton_flow = man.exec ctx (mk_assume singleton_cond range) safe_flow in
+          let singleton_flow =
+            if man.flow.is_cur_bottom singleton_flow then
+              man.flow.bottom
             else
-              manager.exec (mk_assign lv exp') ctx singleton_gabs
+              man.exec ctx (mk_assign lv exp' range) singleton_flow
           in
 
-          let otherwise_cond = mk_binop ll Ge (mk_int 2) in
-          let otherwise_gabs = manager.exec (mk_stmt (Assume otherwise_cond)) ctx safe_gabs in
-          let otherwise_gabs =
-            if SubAbstract.is_bottom (subax.get_abs otherwise_gabs) then
-              manager.bottom
+          let otherwise_cond = mk_binop ll O_ge (mk_int 2 range) range in
+          let otherwise_flow = man.exec ctx (mk_assume otherwise_cond range) safe_flow in
+          let otherwise_flow =
+            if man.flow.is_cur_bottom otherwise_flow then
+              man.flow.bottom
             else
-              manager.exec (mk_assign lv exp') ctx otherwise_gabs |>
-              manager.join otherwise_gabs
+              man.exec ctx (mk_assign lv exp' range ~mode:WEAK) otherwise_flow
           in
 
-          manager.join singleton_gabs otherwise_gabs
+          man.flow.join singleton_flow otherwise_flow
       in
 
       let fail_case = 
-        if SubAbstract.is_bottom (subax.get_abs fail_gabs) then
-          manager.bottom
+        if man.flow.is_cur_bottom fail_flow then
+          man.flow.bottom
         else
-          manager.exec
-            (mk_stmt (PyRaise (Some (mk_addr ~erange:exp.erange (Builtins.builtin_address "IndexError")))))
-            ctx fail_gabs
+          man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) fail_flow
       in
 
-      let gabs = manager.join safe_case fail_case in
-      [mk_constant PyNone ~etyp:TNone, (gabs, [])]
-
+      let flow = man.flow.join safe_case fail_case in
+      oeval_singleton (Some (mk_py_none range), flow, [])
                
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("list.__len__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}))} as elist],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin("list.__len__"))}},
+        [{ekind = E_addr ({addr_kind = A_py_instance(({addr_kind = A_py_class (C_builtin "list", _)}), _)} as alist)}],
         []
       ) ->
-      ({exp with ekind = PyAttribute(elist, "$ll")}, (gabs, [])) |>
-      re_eval manager ctx
+      let exp' = mk_ll alist range in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function "list.__init__"})},
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "list.__init__")}},
         [
-          {ekind = Constant (Addr alist)} as elist;
-          {ekind = Constant (Addr aarg)} as earg
+          {ekind = E_addr alist} as elist;
+          arg
         ],
         []
       )
       ->
+      let ll = mk_ll alist range in
+      let lv = mk_lv alist range in
 
-      let gabs = manager.exec
-          (mk_assign
-             (mk_exp (PyAttribute(elist,"$ll")))
-             (mk_int 0)
-          ) ctx gabs
-      in
-      
-      let gabs = manager.exec
-          (mk_assign
-             (mk_exp (PyAttribute(elist,"$lv")))
-             (mk_exp (Constant (PyEmptyValue)))
-          ) ctx gabs
+      let flow = man.exec ctx (mk_assign ll (mk_zero range) range) flow |>
+                 man.exec ctx (mk_assign lv (mk_empty range) range)
       in
 
-      
-      let iter_tmp = mktmp () in
-      let gabs = manager.exec (
-          mk_assign
-            (mk_exp (Var iter_tmp))
-            (mk_exp ~erange:elist.erange(PyCall (
-                 (mk_exp (PyAttribute (earg, "__iter__")),
-                  [],
-                  []
-                 )
-               )))
-        ) ctx gabs in
-      
-      let list_vval = mktmp () in
-      let gabs = manager.exec
-          (mk_assign_next_loop
-             iter_tmp
-             list_vval
-             (fun value ->
-                (mk_stmt (Expression (mk_exp (PyCall(
-                     (mk_addr (Builtins.class_method_function "list" "append" |> Builtins.builtin_address)),
-                     elist :: [value],
-                     []
-                   )))))
-             )
-          ) ctx gabs
-      in
+      man.eval ctx (Builtins.mk_builtin_call "iter" [arg] range) flow |>
+      eval_compose (fun iter flow ->
+          match ekind iter with
+          | E_addr iter ->
+            let flow = man.exec ctx
+                (mk_assign_next_loop
+                  iter
+                   (fun value ->
+                      mk_stmt (S_expression (Builtins.mk_builtin_call "list.append" [elist; value] range)) range
+                   )
+                   range
+                ) flow
+            in
 
-      let gabs = manager.exec (mk_stmt (RemoveAddrExp (mk_var iter_tmp))) ctx gabs in
-      
-      let exp' = {exp with ekind = Constant PyNone; etyp = TNone} in
-      [(exp', (gabs, [mk_stmt (RemoveAll iter_tmp); mk_stmt (RemoveAll list_vval)]))]
+            oeval_singleton (Some (mk_py_none range), flow, [])
+              
+          | _ -> assert false
+        )
 
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.append"}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))}) :: [e],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.append")})},
+        ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)}) :: [e],
         []
       )
       ->
-      let gabs = add_element alist e manager ctx gabs in
-      [{exp with ekind = Constant PyNone; etyp = TNone}, (gabs, [])]
+      let flow = add_element man ctx alist e range flow in
+      oeval_singleton (Some (mk_py_none range), flow, [])
 
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.insert"}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))}) :: args,
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.insert")})},
+        ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)}) :: args,
         []
       )
       ->
@@ -608,19 +385,17 @@ module Make(SubLayer : Framework.Layer.S) = struct
         match args with
         | [idx; e] ->
           (* FIXME: check that idx has an integer type *)
-          let gabs = add_element alist e manager ctx gabs in
-          [{exp with ekind = Constant PyNone; etyp = TNone}, (gabs, [])]
+          let flow = add_element man ctx alist e range flow in
+          oeval_singleton (Some (mk_py_none range), flow, [])
+
         | _ ->
-          let gabs = manager.exec
-              (mk_stmt (PyRaise (Some (mk_addr ~erange:exp.erange (Builtins.builtin_address "TypeError")))))
-              ctx gabs
-          in
-          [(exp, (gabs, []))]
+          let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+          oeval_singleton (None, flow, [])
       end
       
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.pop"}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))}) :: args,
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.pop")})},
+        ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)}) :: args,
         []
       )
       ->
@@ -630,259 +405,193 @@ module Make(SubLayer : Framework.Layer.S) = struct
           begin
             let idx =
               match args with
-              | [] -> mk_int 0
+              | [] -> mk_zero range
               | [x] -> x
               | _ -> assert false
             in
 
-            let ll = mk_ll alist in
-            let lv = mk_lv alist in
+            let ll = mk_ll alist range in
+            let lv = mk_lv alist range in
 
             let ok_cond =
               mk_binop
-                (mk_binop idx Ge (mk_unop Minus ll))
-                LAnd
-                (mk_binop idx Lt ll)
+                (mk_binop idx O_ge (mk_unop math_minus ll range) range)
+                O_log_and
+                (mk_binop idx O_lt ll range)
+                range
             in
-            let ok_gabs = manager.exec (mk_stmt (Assume ok_cond)) ctx gabs in
+            let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
             let ok_case =
-              if SubAbstract.is_bottom (subax.get_abs ok_gabs) then
-                []
+              if man.flow.is_cur_bottom ok_flow then
+                None
               else
-                let gabs = manager.exec (mk_assign ll (mk_binop ll Minus (mk_int 1))) ctx ok_gabs in
+                let flow = man.exec ctx (mk_assign ll (mk_binop ll math_minus (mk_one range) range) range) ok_flow in
                 let tmp = mktmp () in
-                let gabs = manager.exec (mk_stmt (Expand ((mk_var tmp), lv))) ctx gabs in
-                let exp' = {exp with ekind = Var tmp} in
-                (exp', (gabs, [mk_stmt (RemoveAll tmp)])) |>
-                re_eval manager ctx
+                let flow = man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow in
+                re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
             in
 
-            let error_cond = negate ok_cond in
-            let error_gabs = manager.exec (mk_stmt (Assume error_cond)) ctx gabs in
+            let error_cond = mk_not ok_cond range in
+            let error_flow = man.exec ctx (mk_assume error_cond range) flow in
             let error_case =
-              if SubAbstract.is_bottom (subax.get_abs error_gabs) then
-                []
+              if man.flow.is_cur_bottom error_flow then
+                None
               else
-                let gabs =  manager.exec
-                    (mk_stmt (PyRaise (Some (mk_addr ~erange:exp.erange (Builtins.builtin_address "IndexError")))))
-                    ctx error_gabs
-                in
-                [(exp, (gabs, []))]
+                let flow =  man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) error_flow in
+                oeval_singleton (None, flow, [])
             in
 
-            ok_case @ error_case
+            oeval_join ok_case error_case
             
           end
+
         | _ ->
-          let gabs = manager.exec
-              (mk_stmt (PyRaise (Some (mk_addr ~erange:exp.erange (Builtins.builtin_address "TypeError")))))
-              ctx gabs
-          in
-          [(exp, (gabs, []))]
+          let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+          oeval_singleton (None, flow, [])
       end
 
-    | PySliceSubscript(
-        {ekind = Constant (Addr ({akind = U_instance ({akind = B_class "list"}, _)} as alist))},
-        estart,
-        eend,
-        estep
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__add__")})},
+        [
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l1)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l2)}
+        ],
+        []
+      )
+      ->
+      let ll1 = mk_ll l1 range in
+      let lv1 = mk_lv l1 range in
+
+      let ll2 = mk_ll l2 range in
+      let lv2 = mk_lv l2 range in
+
+      eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+      oeval_compose (fun addr flow ->
+          let ll = mk_ll addr range in
+          let lv = mk_lv addr range in
+
+          let flow = man.exec ctx (mk_assign ll (mk_binop ll1 math_plus ll2 range) range) flow in
+          (* FIXME: improve precision by checing if l1 or l2 are empty *)
+          let flow1 = man.exec ctx (mk_assign lv lv1 ~mode:EXPAND range) flow in
+          let flow2 = man.exec ctx (mk_assign lv lv2 ~mode:EXPAND range) flow in
+          let flow = man.flow.join flow1 flow2 in
+
+          oeval_singleton (Some (mk_addr addr range), flow, [])
+        )
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__iadd__")})},
+        [
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l1)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l2)}
+        ],
+        []
+      )
+      ->
+      let ll1 = mk_ll l1 range in
+      let lv1 = mk_lv l1 range in
+
+      let ll2 = mk_ll l2 range in
+      let lv2 = mk_lv l2 range in
+
+      let flow = man.exec ctx (mk_assign ll1 (mk_binop ll1 math_plus ll2 range) range) flow in
+      (* FIXME: improve precision by checing if l1 or l2 are empty *)
+      let flow1 = man.exec ctx (mk_assign lv1 lv2 ~mode:EXPAND range) flow in
+      let flow = man.flow.join flow1 flow in
+
+      oeval_singleton (Some (mk_addr l1 range), flow, [])
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__mul__")})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)};
+         {etyp = T_int} as arg],
+        []
       ) ->
-      begin
+      let ll = mk_ll alist range in
+      let lv = mk_lv alist range in
 
-        let alist', gabs =
-          Addr.alloc_instance (Builtins.builtin_address "list") exp.erange manager ctx gabs
-        in
+      eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+      oeval_compose (fun addr' flow ->
+          let ll' = mk_ll addr' range in
+          let lv' = mk_lv addr' range in
 
-        let ll = mk_ll alist in
-        let lv = mk_lv alist in
+          let flow = man.exec ctx (mk_assign ll' (mk_binop ll math_mult arg range) range) flow in
+          let flow = man.exec ctx (mk_assign lv' lv ~mode:EXPAND range) flow in
+          
+          oeval_singleton (Some (mk_addr addr' range), flow, [])
+        )
 
-        let exp' = {exp with ekind = Constant (Addr alist'); etyp = TAddr} in
-        let ll' = mk_ll alist' in
-        let lv' = mk_lv alist' in
-
-        
-        fold_slice_length_cases (fun acc (lle', gabs) ->
-            debug "slice length %a in @ @[%a@]" Framework.Pp.pp_exp lle' SubAbstract.print (subax.get_abs gabs);
-            let in_cond =
-              mk_binop
-                (mk_binop (mk_int 0) Lt lle')
-                LAnd
-                (mk_binop lle' Le ll)
-            in
-            let in_gabs = manager.exec (mk_stmt (Assume in_cond)) ctx gabs in
-            let in_case =
-              if SubAbstract.is_bottom (subax.get_abs in_gabs) then
-                []
-              else
-                let gabs = manager.exec (mk_assign ll' lle') ctx in_gabs in
-                let gabs = manager.exec (mk_stmt (Expand (lv', lv))) ctx gabs in
-                [exp', (gabs, [])]
-            in
-
-            let empty_cond = mk_binop lle' Le (mk_int 0) in
-            let empty_gabs = manager.exec (mk_stmt (Assume empty_cond)) ctx gabs in
-            let empty_case =
-              if SubAbstract.is_bottom (subax.get_abs empty_gabs) then
-                []
-              else
-                let gabs = manager.exec (mk_assign ll' (mk_int 0)) ctx empty_gabs in
-                let gabs = manager.exec (mk_assign lv' (mk_exp (Constant PyEmptyValue))) ctx gabs in
-                [(exp', (gabs, []))]
-            in
-
-            let sup_cond = mk_binop lle' Gt ll in
-            let sup_gabs = manager.exec (mk_stmt (Assume sup_cond)) ctx gabs in
-            let sup_case =
-              if SubAbstract.is_bottom (subax.get_abs sup_gabs) then
-                []
-              else
-                let gabs = manager.exec (mk_assign ll' ll) ctx sup_gabs in
-                let gabs = manager.exec (mk_stmt (Expand (lv', lv))) ctx gabs in
-                let exp' = {exp with ekind = Constant (Addr alist'); etyp = TAddr} in
-                [exp', (gabs, [])]
-            in
-            acc @ in_case @ empty_case @ sup_case 
-          ) [] estart eend estep ll manager ctx subax gabs
-
-      end
-
-
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__add__"}))},
-        [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l1))};
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l2))}
-        ],
-        []
-      )
-      ->
-      let addr, gabs =
-        Addr.alloc_instance (Builtins.builtin_address "list") exp.erange manager ctx gabs
-      in
-
-      let ll = mk_ll addr in
-      let lv = mk_lv addr in
-
-      let ll1 = mk_ll l1 in
-      let lv1 = mk_lv l1 in
-
-      let ll2 = mk_ll l2 in
-      let lv2 = mk_lv l2 in
-
-      let gabs = manager.exec (mk_assign ll (mk_binop ll1 Plus ll2)) ctx gabs in
-      (* FIXME: improve precision by checing if l1 or l2 are empty *)
-      let gabs1 = manager.exec (mk_stmt (Expand (lv, lv1))) ctx gabs in
-      let gabs2 = manager.exec (mk_stmt (Expand (lv, lv2))) ctx gabs in
-      let gabs = manager.join gabs1 gabs2 in
-
-      [mk_addr ~erange:exp.erange addr, (gabs, [])]
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__iadd__"}))},
-        [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l1))};
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l2))}
-        ],
-        []
-      )
-      ->
-      let ll1 = mk_ll l1 in
-      let lv1 = mk_lv l1 in
-
-      let ll2 = mk_ll l2 in
-      let lv2 = mk_lv l2 in
-
-      let gabs = manager.exec (mk_assign ll1 (mk_binop ll1 Plus ll2)) ctx gabs in
-      (* FIXME: improve precision by checing if l1 or l2 are empty *)
-      let gabs1 = manager.exec (mk_stmt (Expand (lv1, lv2))) ctx gabs in
-      let gabs = manager.join gabs1 gabs in
-
-      [mk_addr ~erange:exp.erange l1, (gabs, [])]
-
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__mul__"}))},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))};
-         {etyp = TInt} as arg],
-        []
-      )
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__rmul__"}))},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))};
-         {etyp = TInt} as arg],
-        []
-      )
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__imul__"}))},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}  as alist))};
-         {etyp = TInt} as arg],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__imul__")})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)};
+         {etyp = T_int} as arg],
         []
       )
 
       ->
 
-      let addr', gabs = mult alist arg exp.erange manager ctx subax gabs in
-      [{exp with ekind = Constant (Addr addr'); etyp = TAddr}, (gabs, [])]
-        
+      let ll = mk_ll alist range in
 
-    | PyListComprehension(e, comprhs) ->
-      let exp, gabs, stmts = create_list [] exp.erange manager ctx subax gabs in
-      let addr = exp_to_addr exp in
-      let rec aux = function
-        | [] ->
-          mk_stmt (Expression (mk_exp (PyCall(
-              (mk_addr (Builtins.class_method_function "list" "append" |> Builtins.builtin_address)),
-              (mk_addr addr) :: [e],
-              []
-            ))))
+      let flow = man.exec ctx (mk_assign ll (mk_binop ll math_mult arg range) range) flow in
+      
+      oeval_singleton (Some (mk_addr alist range), flow, [])
 
-        | (target, iter, []) :: tl ->
-          mk_stmt (PyFor (
-              target,
-              iter,
-              aux tl,
-              mk_stmt nop
-            ))
+    | E_py_list_comprehension(e, comprhs) ->
+      create_list man ctx [] range flow |>
+      oeval_compose (fun addr flow ->
+          (* Iterate over comprehensions of the form (target, iter, conds) *)
+          let rec aux = function
+            | [] ->
+              mk_stmt (S_expression (Builtins.mk_builtin_call "list.append" [mk_addr addr range; e] range)) range
 
-        | (target, iter, [cond]) :: tl ->
-          mk_stmt (PyFor (
-              target,
-              iter,
-              mk_stmt (If (cond, aux tl, mk_stmt nop)),
-              mk_stmt nop
-            ))
+            | (target, iter, []) :: tl ->
+              mk_stmt (S_py_for (
+                  target,
+                  iter,
+                  aux tl,
+                  mk_block [] range
+                ))
+                range
 
-        | _ -> assert false
+            | (target, iter, [cond]) :: tl ->
+              mk_stmt (S_py_for (
+                  target,
+                  iter,
+                  mk_if cond (aux tl) (mk_block [] range) range,
+                  mk_block [] range
+                ))
+                range
+
+            | _ -> assert false
             
-      in
+          in
 
-      let stmt = aux comprhs in
-      let gabs = manager.exec stmt ctx gabs in
+          let stmt = aux comprhs in
+          let flow = man.exec ctx stmt flow in
 
-      let exp' = {exp with ekind = Constant (Addr addr); etyp = TAddr} in
-      [exp', (gabs, stmts)]
+          oeval_singleton (Some (mk_addr addr range), flow, [])
+        )
 
 
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__eq__"}))},
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__eq__")})},
         [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l1))};
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l2))}
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l1)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l2)}
         ],
         []
       )
       ->
       begin
-        let ll1 = mk_ll l1 and ll2 = mk_ll l2 in
-        let lv1 = mk_lv l1 and lv2 = mk_lv l2 in
+        let ll1 = mk_ll l1 range and ll2 = mk_ll l2 range in
+        let lv1 = mk_lv l1 range and lv2 = mk_lv l2 range in
 
-        let l1_empty_gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Eq mk_zero))) ctx gabs in
-        let l2_empty_gabs = manager.exec (mk_stmt (Assume (mk_binop ll2 Eq mk_zero))) ctx gabs in
+        let l1_empty_flow = man.exec ctx (mk_assume (mk_binop ll1 O_eq (mk_zero range) range) range) flow in
+        let l2_empty_flow = man.exec ctx (mk_assume (mk_binop ll2 O_eq (mk_zero range) range) range) flow in
 
         let can_be_true, can_be_false =
-          match SubAbstract.is_bottom @@ subax.get_abs l1_empty_gabs, SubAbstract.is_bottom @@ subax.get_abs l2_empty_gabs with
+          match man.flow.is_cur_bottom l1_empty_flow, man.flow.is_cur_bottom l2_empty_flow with
           | false, false -> true, false
           | false, true -> false, true
           | true, false -> false, true
@@ -891,15 +600,16 @@ module Make(SubLayer : Framework.Layer.S) = struct
         
         debug "check true";
 
+        (* (l1 == l2) => (ll1 == ll2 == 0) || ( (ll1 == ll2 >= 1) && (lv1 == lv2) ) *)
         let can_be_true =
           can_be_true ||
           (
-            let gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Ge mk_one))) ctx gabs |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll2 Ge mk_one))) ctx |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll1 Eq ll2))) ctx
+            let flow = man.exec ctx (mk_assume (mk_binop ll1 O_ge (mk_one range) range) range) flow |>
+                       man.exec ctx (mk_assume (mk_binop ll2 O_ge (mk_one range) range) range) |>
+                       man.exec ctx (mk_assume (mk_binop ll1 O_eq ll2 range) range)
             in
-            not @@ SubAbstract.is_bottom @@ subax.get_abs gabs &&
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv1 Eq lv2))) ctx gabs
+            not @@ man.flow.is_cur_bottom flow &&
+            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv1 O_eq lv2 range) range) flow
           )
         in
 
@@ -907,207 +617,68 @@ module Make(SubLayer : Framework.Layer.S) = struct
 
         debug "check false";
 
+        (* (l1 != l2) => (ll1 == 0 xor ll2 == 0) || ( ll1 >= 1 && ll2 >= 1 && (ll1 != ll2 || lv1 != lv2) ) *)
         let can_be_false =
           can_be_false || (
-            let gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Ge mk_one))) ctx gabs |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll2 Ge mk_one))) ctx
+            let flow = man.exec ctx (mk_assume (mk_binop ll1 O_ge (mk_one range) range) range) flow |>
+                       man.exec ctx (mk_assume (mk_binop ll2 O_ge (mk_one range) range) range)
             in
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop ll1 Ne ll2))) ctx gabs ||
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv1 Ne lv2))) ctx gabs
+            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop ll1 O_ne ll2 range) range) flow ||
+            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv1 O_ne lv2 range) range) flow
           )
         in
 
         debug "can be false = %b" can_be_false;
 
         match can_be_true, can_be_false with
-        | true, false -> [mk_true, (gabs, [])]
-        | false, true -> [mk_false, (gabs, [])]
-        | true, true -> [(mk_true, (gabs, [])); (mk_false, (gabs, []))] (* FIXME: imporove precision by partitioning gabs *)
-        | false, false -> [exp, (subax.set_abs gabs SubAbstract.bottom, [])]
+        | true, false -> oeval_singleton (Some (mk_true range), flow, [])
+        | false, true -> oeval_singleton (Some (mk_false range), flow, [])
+        | true, true -> oeval_join
+                          (oeval_singleton (Some (mk_true range), flow, []))
+                          (oeval_singleton (Some (mk_false range), flow, []))
+        | false, false -> oeval_singleton (None, flow, [])
       end
 
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__eq__"}))},
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__eq__")})},
         [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}))};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)})};
           _
         ],
         []
       )
       ->
-      [mk_false, (gabs, [])]
+      oeval_singleton (Some (mk_false range), flow, [])
 
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__ne__"}))},
-        [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l1))};
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as l2))}
-        ],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__ne__")})},
+        [e1; e2],
         []
       )
       ->
-
-      begin
-        let ll1 = mk_ll l1 and ll2 = mk_ll l2 in
-        let lv1 = mk_lv l1 and lv2 = mk_lv l2 in
-
-        let l1_empty_gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Eq mk_zero))) ctx gabs in
-        let l2_empty_gabs = manager.exec (mk_stmt (Assume (mk_binop ll2 Eq mk_zero))) ctx gabs in
-
-        let can_be_true, can_be_false =
-          match SubAbstract.is_bottom @@ subax.get_abs l1_empty_gabs, SubAbstract.is_bottom @@ subax.get_abs l2_empty_gabs with
-          | false, false -> false, true
-          | false, true -> true, false
-          | true, false -> true, false
-          | true, true -> true, true
-        in
-
-        let can_be_true =
-          can_be_true ||
-          (
-            let gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Ge mk_one))) ctx gabs |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll2 Ge mk_one))) ctx
-            in
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop ll1 Ne ll2))) ctx gabs ||
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv1 Ne lv2))) ctx gabs
-          )
-        in        
-        
-        let can_be_false =
-          can_be_false ||
-          (
-            let gabs = manager.exec (mk_stmt (Assume (mk_binop ll1 Ge mk_one))) ctx gabs |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll2 Ge mk_one))) ctx |>
-                       manager.exec (mk_stmt (Assume (mk_binop ll1 Eq ll2))) ctx
-            in
-            not @@ SubAbstract.is_bottom @@ subax.get_abs gabs &&
-            not @@ SubAbstract.is_bottom @@ subax.get_abs @@ manager.exec (mk_stmt (Assume (mk_binop lv1 Eq lv2))) ctx gabs
-          )
-        in
-
-        match can_be_true, can_be_false with
-        | true, false -> [mk_true, (gabs, [])]
-        | false, true -> [mk_false, (gabs, [])]
-        | true, true -> [(mk_true, (gabs, [])); (mk_false, (gabs, []))] (* FIXME: imporove precision by partitioning gabs *)
-        | false, false -> [exp, (subax.set_abs gabs SubAbstract.bottom, [])]
-      end
+      let exp' = Builtins.mk_builtin_call "list.__eq__" [e1; e2] range in
+      eval man ctx exp' flow |>
+      oeval_compose (fun res flow ->
+          match ekind res with
+          | E_constant (C_true) -> oeval_singleton (Some (mk_false range), flow, [])
+          | E_constant (C_false) -> oeval_singleton (Some (mk_true range), flow, [])
+          | _ -> assert false
+        )
 
 
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function "list.__ne__"}))},
-        [
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}))};
-          _
-        ],
-        []
-      )
-      ->
-      [mk_true, (gabs, [])]
-  
-
-    | PyCall({ekind = Constant (Addr ({akind = B_function f}))}, _, _)
-        when Builtins.is_class_dot_method "list" f ->
-
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
+        when Addr.is_builtin_class_function "list" f ->
         panic "List function %s not implemented" f
 
+    | _ -> None
 
-    | _ -> []
-
-  let exec stmt manager ctx ax_ subax_ gabs =
-    let subax = mk_domain_ax subax_ in
-    match skind stmt with
-    | Assign
-        (
-          {ekind = PyIndexSubscript(
-               {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}))},
-               index
-             )},
-          exp'
-        ) ->
-
-      panic "assign to list not done via __setitem__"
-
-    | Assign
-        (
-          {ekind = PySliceSubscript(
-               {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as alist))},
-               estart,
-               eend,
-               estep
-             )},
-          {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)} as alist2))}
-        ) ->
-
-      let ll2 = mk_ll alist2 in
-      let lv2 = mk_lv alist2 in
-
-      let ll = mk_ll alist in
-      let lv = mk_lv alist in
-
-
-      fold_slice_length_cases (fun acc (lle', gabs) ->
-          debug "slice length %a in @ @[%a@]" Framework.Pp.pp_exp lle' SubAbstract.print (subax.get_abs gabs);
-          let in_cond =
-            mk_binop
-              (mk_binop (mk_int 0) Lt lle')
-              LAnd
-              (mk_binop lle' Le ll)
-          in
-          let in_gabs = manager.exec (mk_stmt (Assume in_cond)) ctx gabs in
-          let in_case =
-            if SubAbstract.is_bottom (subax.get_abs in_gabs) then
-              manager.bottom
-            else
-              let ll' = mk_binop (mk_binop ll Minus lle') Plus ll2 in
-              let gabs = manager.exec (mk_assign ll ll') ctx in_gabs in
-              manager.exec (mk_stmt (Expand (lv, lv2))) ctx gabs |>
-              manager.join gabs
-          in
-            
-          let empty_cond = mk_binop lle' Le (mk_int 0) in
-          let empty_gabs = manager.exec (mk_stmt (Assume empty_cond)) ctx gabs in
-          let empty_case =
-            if SubAbstract.is_bottom (subax.get_abs empty_gabs) then
-              manager.bottom
-            else
-              empty_gabs
-          in
-
-          let sup_cond = mk_binop lle' Gt ll in
-          let sup_gabs = manager.exec (mk_stmt (Assume sup_cond)) ctx gabs in
-          let sup_case =
-            if SubAbstract.is_bottom (subax.get_abs sup_gabs) then
-              manager.bottom
-            else
-              let gabs = manager.exec (mk_assign ll ll2) ctx sup_gabs in
-              manager.exec (mk_stmt (Expand (lv, lv2))) ctx gabs |>
-              manager.join gabs
-          in
-          manager.join acc @@ manager.join in_case @@ manager.join empty_case sup_case
-        ) manager.bottom estart eend estep ll manager ctx subax gabs |>
-      stop
-
-
-    | Assign
-        (
-          {ekind = PySliceSubscript(
-               {ekind = Constant (Addr ({akind = U_instance({akind = B_class "list"}, _)}))},
-               estart,
-               eend,
-               estep
-             )},
-          ({ekind = Constant (Addr aiter)})
-        ) ->
-      panic "assign to list slice not supported"
-
+  let init man ctx prog flow = ctx, flow
   
-    | _ ->
-      continue gabs
+  let exec man ctx stmt flow = None
 
-  let ask _ _ = Framework.Query.top
+  let ask man ctx query flow = None
 
 end
 
 let setup () =
-  register name (module Make)
+  register_domain name (module Domain)

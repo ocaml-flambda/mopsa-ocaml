@@ -148,6 +148,17 @@ class bool(int):
     def __abs__(self): pass
     def __invert__(self): pass
 
+
+class list(object):
+    def __init__(self, itr): pass
+    def __len__(self): pass
+    def __getitem__(self, k): pass
+    def __setitem__(self, k, v): pass
+    def __iter__(self): pass
+
+def listiter(object):
+    def __next__(self): pass
+    
 class dict(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass

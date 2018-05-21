@@ -180,7 +180,7 @@ type expr_kind +=
   (** Head address. *)
   | E_addr of addr
 
-let mk_neg e t = mk_unop (O_minus t) e
+let mk_neg e = mk_unop (O_minus e.etyp) e
 
 let mk_not e = mk_unop O_log_not e
 
@@ -331,6 +331,9 @@ let mk_remove_var v = mk_stmt (S_remove_var v)
 
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
+
+let mk_while cond body range =
+  mk_stmt (S_while (cond, body)) range
 
 let mk_rebase_addr old recent mode range =
   mk_stmt (S_rebase_addr (old, recent, mode)) range

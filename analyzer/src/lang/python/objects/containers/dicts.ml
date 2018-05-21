@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Python data model for callables. *)
+(** Abstraction of Python dictionaries. *)
 
 open Framework.Domains
 open Framework.Ast

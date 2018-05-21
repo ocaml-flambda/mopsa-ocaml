@@ -25,7 +25,7 @@ lang.universal.numeric.domains.boxes = int congruence float
 lang.python = ast addr pp alarm utils visitor frontend builtins memory desugar objects libs program setup
 lang.python.memory = value nonrel
 lang.python.objects = class function object number containers data_model
-lang.python.objects.containers = dicts
+lang.python.objects.containers = lists dicts
 lang.python.objects.data_model = attribute callable arith_ops subscript
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup

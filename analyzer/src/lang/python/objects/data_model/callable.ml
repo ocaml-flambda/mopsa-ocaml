@@ -50,8 +50,11 @@ struct
 
            (* Calls on other kinds of addresses is handled by other domains *)
            | E_addr _ ->
-             let exp = {exp with ekind = E_py_call(f, args, [])} in
-             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
+             eval_list args (man.eval ctx) flow |>
+             eval_compose (fun args flow ->
+                 let exp = {exp with ekind = E_py_call(f, args, [])} in
+                 re_eval_singleton (man.eval ctx) (Some exp, flow, [])
+               )
 
            | _ -> assert false
         )

@@ -127,6 +127,11 @@ let split_class_dot_attribute x =
   | [modul; cls; attr] -> Some (modul ^ "." ^ cls, attr)
   | _ -> None
 
+let is_builtin_class_function cls f =
+  match split_class_dot_attribute f with
+  | None -> false
+  | Some (cls', _) -> cls = cls' && is_builtin f
+
 let find_type_class_name = function
   | T_int -> "int"
   | T_float -> "float"
