@@ -8,6 +8,7 @@ let init () =
     Containers.(
       Lists.setup ();
       Dicts.setup ();
+      Ranges.setup ();
     );
     Data_model.(
       Attribute.setup ();

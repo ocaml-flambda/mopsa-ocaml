@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of Python lists. *)
+(** Abstraction of Python list objects. *)
 
 open Framework.Domains
 open Framework.Ast

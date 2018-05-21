@@ -24,6 +24,7 @@
 
 	"python.objects.containers.lists",
         "python.objects.containers.dicts",
+        "python.objects.containers.ranges",
 
         "python.objects.data_model.attribute",
         "python.objects.data_model.subscript",

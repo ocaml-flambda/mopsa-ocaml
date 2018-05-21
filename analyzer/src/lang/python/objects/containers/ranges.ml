@@ -1,187 +1,136 @@
-open Framework.Domain
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Abstraction of Python range objects. *)
+
+open Framework.Domains
 open Framework.Ast
-open Framework.Query
 open Framework.Manager
-open Framework.Accessor
+open Framework.Pp
+open Framework.Eval
+open Framework.Domains.Stateless
+open Framework.Flow
+open Framework.Exceptions
 open Universal.Ast
+open Universal.Ast
+open Utils
 open Ast
 open Addr
-open XAst
-open Utils
-    
-let name = "python.objects.ranges"
 
-module Make(SubLayer : Framework.Layer.S) = struct
+let name = "python.objects.containers.ranges"
+let debug fmt = Debug.debug ~channel:name fmt
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
-  
-  module SubAbstract = SubLayer.Abstract
+module Domain =
+struct
 
-  module Abstract = Framework.Lattice.EmptyLattice
-  module Flow = Framework.Lattice.EmptyLattice
+  let mk_start addr range = mk_py_addr_attr addr "$start" ~etyp:T_int range
+  let mk_stop addr range = mk_py_addr_attr addr "$stop" ~etyp:T_int range
+  let mk_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
 
-  let has_abstract = false
-  let has_flow = false
-  
-  type t = Abstract.t * Flow.t
-  type st = SubLayer.t
-          
-  let eval (exp : exp) manager ctx ax_ subax_ gabs =
-    let subax = mk_domain_ax subax_ in
+  let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function (name)})},
-        (
-          ({ekind = Constant (Addr arange)} as erange) ::
-          args
-        ),
+    (* FIXME: this should be moved to range.__new__ *)
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "range.__init__")}},
+        ({ekind = E_addr arange}) :: args,
         []
-      )
-      when name = (Builtins.class_method_function "range" "__init__")
-      ->
+      ) ->
+      let start = mk_start arange range in
+      let stop = mk_stop arange range in
 
-      let start, stop=
+      let estart, estop=
         match args with
-        | [{etyp = TInt} as start; {etyp = TInt} as stop] -> start, stop
-        | [{etyp = TInt} as stop] -> mk_int 0, stop
+        | [{etyp = T_int} as start; {etyp = T_int} as stop] -> start, stop
+        | [{etyp = T_int} as stop] -> mk_zero range, stop
         | _ -> panic "range not supported"
       in
-    
-      let gabs = manager.exec (
-          mk_assign
-            (mk_exp (PyAttribute (erange, "$start")))
-            start
-        ) ctx gabs
+
+      let flow = man.exec ctx (mk_assign start estart range) flow |>
+                 man.exec ctx (mk_assign stop estop range)
       in
 
-      let gabs = manager.exec (
-          mk_assign
-            (mk_exp (PyAttribute (erange, "$stop")))
-            stop
-        ) ctx gabs
-      in
-        
-      let exp' = {exp with ekind = Constant PyNone; etyp = TNone} in
-      [exp', (gabs, [])]
+      oeval_singleton (Some (mk_py_none range), flow, [])
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("range.__len__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "range"}, _)}))} as rexp],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin("range.__len__"))}},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "range", _)}, _)} as arange)}],
         []
       ) ->
 
-      let start = mk_exp (PyAttribute (rexp, "$start")) in
-      let stop = mk_exp (PyAttribute (rexp, "$stop")) in      
-      let exp' = mk_exp (BinOp(Minus, stop, start)) in
-      let cond = mk_exp (BinOp (Ge, exp', mk_int 0)) in
-      let gabs_pos = manager.exec (
-          mk_stmt (Assume cond)
-        ) ctx gabs in
-      let gabs_neg = manager.exec (
-          mk_stmt (Assume (negate cond))
-        ) ctx gabs in
+      let start = mk_start arange range in
+      let stop = mk_stop arange range in      
+      let exp' = mk_binop stop math_minus start range in
+      let cond = mk_binop exp' O_ge (mk_zero range) range in
 
-      [(exp', (gabs_pos, [])); (mk_int 0, (gabs_neg, []))] |>
-      re_eval_list manager ctx
+      let flow_pos = man.exec ctx (mk_assume cond range) flow in
+      let flow_neg = man.exec ctx (mk_assume (mk_not cond range) range) flow in
 
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function("range.__iter__")}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "range"}, _)}  as range))}) :: [],
+      oeval_join
+        (re_eval_singleton (man.eval ctx) (Some exp', flow_pos, []))
+        (re_eval_singleton (man.eval ctx) (Some (mk_zero range), flow_neg, []))
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("range.__iter__"))})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "range", _)}, _)} as arange)}],
         []
-      )
-      ->
+      ) ->
 
-      let aiter, gabs =
-        Addr.alloc_instance (Builtins.builtin_address "rangeiter") ~param:(Some (Range range)) exp.erange manager ctx gabs
-      in
+      eval_alloc_instance man ctx (Addr.find_builtin "rangeiter") (Some (Range arange)) range flow |>
+      oeval_compose (fun iter flow ->
+          let counter = mk_counter iter range in
+          let flow = man.exec ctx (mk_assign counter (mk_zero range) range) flow in
+          oeval_singleton (Some (mk_addr iter range), flow, [])
+        )
 
-      let iter = mk_addr ~erange:exp.erange aiter in
-      
-      let gabs = manager.exec (
-          mk_assign
-            (mk_exp (PyAttribute (iter, "$counter")))
-            (mk_int 0)
-        ) ctx gabs
-      in
-
-      [(iter, (gabs, []))]
-
-    | PyCall(
-        {ekind = Constant (Addr ({akind = B_function(fname)}))},
-        ({ekind = Constant (Addr ({akind = U_instance({akind = B_class "rangeiter"}, Some (Range range))}))} as eiter) :: [],
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("rangeiter.__next__"))})},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "rangeiter", _)}, Some (Range arange))} as aiter)}],
         []
-      )
-      when (fname = Builtins.class_method_function "rangeiter" "__next__")
-      ->
-      let erange = mk_addr range in
-      
+      ) ->
+      let start = mk_start arange range in
+      let stop = mk_stop arange range in
+      let counter = mk_counter aiter range in
       let cond = 
         mk_in ~right_strict:true
-          (mk_binop (mk_exp (PyAttribute (eiter, "$counter"))) Plus (mk_exp (PyAttribute (erange, "$start"))))
-          (mk_exp (PyAttribute (erange, "$start")))
-          (mk_exp (PyAttribute (erange, "$stop")))
+          (mk_binop counter math_plus start range)
+          start
+          stop
+          range
       in
 
-      let cond' = negate cond in
+      let cond' = mk_not cond range in
 
-      let gabs_in = manager.exec (
-          mk_stmt (Assume cond)
-        ) ctx gabs in
+      let flow_in = man.exec ctx (mk_assume cond range) flow in
+      let flow_out = man.exec ctx (mk_assume cond' range) flow in
 
-      let gabs_out = manager.exec (
-          mk_stmt (Assume cond')
-        ) ctx gabs in
+      let flow_in' = man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) range) range) flow_in in
+      let flow_out' = man.exec ctx (Utils.mk_builtin_raise "StopIteration" range) flow_out in
 
-
-      let tmp' = Universal.Ast.mktmp () in
-      let gabs_in' =
-        manager.exec (
-          mk_assign
-            (mk_exp (Var tmp'))
-            (mk_binop
-               (mk_exp (PyAttribute (erange, "$start")))
-               Plus
-               (mk_exp (PyAttribute (eiter, "$counter")))
-            )
-        ) ctx gabs_in
-        |>
-        manager.exec (
-          mk_assign
-            (mk_exp (PyAttribute (eiter, "$counter")))
-            (mk_binop
-               (mk_exp (PyAttribute (eiter, "$counter")))
-               Plus
-               (mk_int 1)
-            )
-        ) ctx  
-      in
-
-      let gabs_out' =
-        manager.exec (
-          mk_stmt (PyRaise (Some (mk_addr ~erange:exp.erange (Builtins.builtin_address "StopIteration"))))
-        ) ctx gabs_out in
-
-      let ignore_stmt = [mk_stmt (RemoveAll tmp')] in
-
-      ((mk_exp (Var tmp'), (gabs_in', ignore_stmt)) |> re_eval manager ctx) @
-      [(exp, (gabs_out', ignore_stmt))]
+      oeval_join
+        (re_eval_singleton (man.eval ctx) (Some (mk_binop counter math_minus (mk_one range) range), flow_in', []))
+        (oeval_singleton (None, flow_out', []))
 
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("range.__contains__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "range"}, _)}))}  as range; {etyp = TInt} as value],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin("range.__contains__"))}},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "range", _)}, _)} as arange)};
+         {etyp = T_int} as value],
         []
       ) ->
       begin
 
-        let start = mk_exp (PyAttribute (range, "$start")) in
-        let stop = mk_exp (PyAttribute (range, "$stop")) in      
+        let start = mk_start arange range in
+        let stop = mk_stop arange range in
 
         let can_be_true =
-          not @@ SubAbstract.is_bottom @@
-          subax.get_abs @@
-          manager.exec (mk_stmt (Assume (mk_in ~right_strict:true value start stop))) ctx gabs
+          not @@ man.flow.is_cur_bottom @@
+          man.exec ctx (mk_assume (mk_in ~right_strict:true value start stop range) range) flow
         in
 
         debug "can be true = %b" can_be_true;
@@ -189,42 +138,40 @@ module Make(SubLayer : Framework.Layer.S) = struct
         debug "check false";
 
         let can_be_false =
-          not @@ SubAbstract.is_bottom @@
-          subax.get_abs @@
-          manager.exec (mk_stmt (Assume (negate (mk_in ~right_strict:true value start stop)))) ctx gabs
+          not @@ man.flow.is_cur_bottom @@
+          man.exec ctx (mk_assume (mk_not (mk_in ~right_strict:true value start stop range) range) range) flow
         in
 
         debug "can be false = %b" can_be_false;
 
         match can_be_true, can_be_false with
-        | true, false -> [mk_true, (gabs, [])]
-        | false, true -> [mk_false, (gabs, [])]
-        | true, true -> [(mk_true, (gabs, [])); (mk_false, (gabs, []))] (* FIXME: imporove precision by partitioning gabs *)
-        | false, false -> [exp, (subax.set_abs gabs SubAbstract.bottom, [])]
+        | true, false -> oeval_singleton (Some (mk_true range), flow, [])
+        | false, true -> oeval_singleton (Some (mk_false range), flow, [])
+        | true, true -> oeval_join
+                          (oeval_singleton (Some (mk_true range), flow, []))
+                          (oeval_singleton (Some (mk_false range), flow, []))
+        | false, false -> oeval_singleton (None, flow, [])
 
       end  
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function("range.__contains__")})},
-        [{ekind = Constant (Addr ({akind = U_instance({akind = B_class "range"}, _)}))}; _],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin("range.__contains__"))}},
+        [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "range", _)}, _)})}; _],
         []
       ) ->
       panic "range.__contains__ on non-ints not supported"
-  
 
-    | PyCall({ekind = Constant (Addr ({akind = B_function f}))}, _, _)
-      when Builtins.is_class_dot_method "range" f ->
-      
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
+      when Addr.is_builtin_class_function "range" f ->
       panic "Range function %s not implemented" f
 
+    | _ -> None
 
-    | _ -> []
-
-  let exec _ _ _ _ _ gabs = continue gabs
-  let ask _ _ = Framework.Query.top
-
+  let init _ ctx _ flow = ctx, flow
+  let exec _ _ _ _ = None
+  let ask _ _ _ _ = None
 
 end
 
 let setup () =
-  register name (module Make)
+  register_domain name (module Domain)

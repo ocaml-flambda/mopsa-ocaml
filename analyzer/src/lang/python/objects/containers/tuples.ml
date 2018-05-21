@@ -1,3 +1,13 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Abstraction of Python tuples. *)
+
 open Framework.Domain
 open Framework.Ast
 open Framework.Query
@@ -9,7 +19,7 @@ open Addr
 open XAst
 open Utils
     
-let name = "python.objects.tuples"
+let name = "python.objects.containers.tuples"
 
 module Make(SubLayer : Framework.Layer.S) = struct
 
