@@ -9,6 +9,7 @@ let init () =
       Lists.setup ();
       Dicts.setup ();
       Ranges.setup ();
+      Sets.setup ();
     );
     Data_model.(
       Attribute.setup ();

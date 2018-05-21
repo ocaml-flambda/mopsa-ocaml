@@ -8,200 +8,143 @@
 
 (** Abstraction of Python mutable sets. *)
 
-open Framework.Domain
+open Framework.Domains
 open Framework.Ast
-open Framework.Query
 open Framework.Manager
-open Framework.Accessor
+open Framework.Pp
+open Framework.Eval
+open Framework.Domains.Stateless
+open Framework.Flow
+open Framework.Exceptions
 open Universal.Ast
+open Universal.Ast
+open Utils
 open Ast
 open Addr
-open XAst
-open Utils
-    
+
 let name = "python.objects.containers.sets"
+let debug fmt = Debug.debug ~channel:name fmt
 
-module Make(SubLayer : Framework.Layer.S) = struct
+module Domain = struct
 
-  let name = name
-  let debug fmt = Debug.debug ~channel:name fmt
-  
-  module Abstract = Framework.Lattice.EmptyLattice
-  module Flow = Framework.Lattice.EmptyLattice
-  module SubAbstract = SubLayer.Abstract
+  (** Auxiliary variable for storing the values of a set *)
+  let mk_sv addr range = mk_py_addr_attr addr "$sv" range
 
-  let has_abstract = false
-  let has_flow = false
-  
-  type t = Abstract.t * Flow.t
-  type st = SubLayer.t
+  (** Auxiliary variable representing the emptiness of a set *)
+  let mk_se addr range = mk_py_addr_attr addr "$se" ~etyp:T_bool range
 
-  let mk_sv addr = mk_exp (PyAttribute(mk_addr addr, "$sv"))
-  let mk_se addr = mk_exp ~etyp:TBool (PyAttribute (mk_addr addr, "$se"))
-
-          
-  let eval (exp : exp) manager ctx ax_ subax_ gabs =
-    let subax = mk_domain_ax subax_ in
+  let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function "set.__init__"})},
-        [{ekind = Constant (Addr set)}],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "set.__init__")}},
+        [{ekind = E_addr set}],
         []
       )
       ->
-      let se = mk_se set in
-      let sv = mk_sv set in
+      let se = mk_se set range in
+      let sv = mk_sv set range in
 
-      let gabs = manager.exec
-          (mk_assign se mk_true)
-          ctx gabs
+      let flow = man.exec ctx (mk_assign se (mk_true range) range) flow |>
+                 man.exec ctx (mk_assign sv (mk_empty range) range)
       in
 
-      let gabs = manager.exec
-          (mk_assign sv (mk_constant PyEmptyValue ~etyp:TEmptyValue))
-          ctx gabs
-      in
+      oeval_singleton (Some (mk_py_none range), flow, [])
 
-
-      [mk_constant PyNone ~etyp:TNone, (gabs, [])]
-
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function "set.__init__"})},
-        [
-          {ekind = Constant (Addr set)};
-          iterable
-        ],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "set.__init__")}},
+        [{ekind = E_addr set}; iterable],
         []
       )
       ->
+      let se = mk_se set range in
 
-      let se = mk_se set in
+      let flow = man.exec ctx (mk_assign se (mk_true range) range) flow in
 
-      let gabs = manager.exec (mk_assign se mk_true) ctx gabs in
-
-
-      let iterv = mktmp () in
-      let iter = mk_var iterv in
-      let gabs = manager.exec (
-          mk_assign
-            iter
-            (mk_exp ~erange:iterable.erange(PyCall (
-                 (mk_exp (PyAttribute (iterable, "__iter__")),
-                  [],
-                  []
+      man.eval ctx (Utils.mk_builtin_call "iter" [iterable] range) flow |>
+      eval_compose (fun iter flow ->
+          let next = Utils.mk_builtin_call "next" [iter] range in
+          let flow = man.exec ctx
+              (Utils.mk_try_stopiteration
+                 (mk_while 
+                    (mk_true range)
+                    (mk_stmt (S_expression (Utils.mk_builtin_call "set.add" [mk_addr set range; next] range)) range)
+                    range
                  )
-               )))
-        ) ctx gabs in
+                 (mk_block [] range)
+                 range
+              )
+              flow
+          in
+          oeval_singleton (Some (mk_py_none range), flow, [])
+        )
 
-      let next = mk_exp (PyCall(
-          mk_addr (Builtins.builtin_address "next"),
-          [iter],
-          []
-        ))
-      in
-
-      let gabs = manager.exec
-          (mk_try_stopiteration
-            (mk_stmt (While (
-                 mk_true,
-                 (mk_stmt (Expression (mk_exp (PyCall(
-                     (mk_addr (Builtins.builtin_address "set.add")),
-                     [mk_addr set; next],
-                     []
-                   )))))
-               )))
-            (mk_stmt nop)
-          )
-          ctx gabs
-      in
-
-      let gabs = manager.exec (mk_stmt (RemoveAddrExp iter)) ctx gabs in
-
-      let exp' = mk_constant PyNone ~etyp:TNone in
-      [(exp', (gabs, [mk_stmt (RemoveAll iterv)]))]
-
-    | PySet(el) ->
+    | E_py_set(el) ->
       panic "set not supported"
 
-    | PySetComprehension(e, comprhs) ->
+    | E_py_set_comprehension(e, comprhs) ->
       panic "set comprehension not supported"
 
-
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function "set.add"})},
-        [
-          {ekind = Constant (Addr set)};
-          value
-        ],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "set.add")}},
+        [{ekind = E_addr set}; value],
         []
-      )
-      ->
+      ) ->
 
-      let sv = mk_sv set in
-      let se = mk_se set in
+      let sv = mk_sv set range in
+      let se = mk_se set range in
 
-
-      let empty_gabs = manager.exec (mk_stmt (Assume se)) ctx gabs in
+      let empty_flow = man.exec ctx (mk_assume se range) flow in
       let empty_case =
-        if SubAbstract.is_bottom (subax.get_abs empty_gabs) then
-          []
+        if man.flow.is_cur_bottom empty_flow then
+          None
         else
-          let gabs = manager.exec (mk_assign sv value) ctx empty_gabs |>
-                     manager.exec (mk_assign se mk_false) ctx |>
-                     (fun gabs ->
-                        debug "empty gabs =@\n@[  %a@]" manager.print gabs;
-                        gabs
-                     )
+          let flow = man.exec ctx (mk_assign sv value range) empty_flow |>
+                     man.exec ctx (mk_assign se (mk_false range) range)
           in
-          [mk_constant PyNone ~etyp:TNone, (gabs, [])]
+          oeval_singleton (Some (mk_py_none range), flow, [])
       in
 
-      let non_empty_gabs = manager.exec (mk_stmt (Assume (negate se))) ctx gabs in
+      let non_empty_flow = man.exec ctx (mk_assume (mk_not se range) range) flow in
       let non_empty_case =
-        if SubAbstract.is_bottom (subax.get_abs non_empty_gabs) then
-          []
+        if man.flow.is_cur_bottom non_empty_flow then
+          None
         else
-          let gabs = manager.exec (mk_assign sv value) ctx non_empty_gabs |>
-                     manager.join non_empty_gabs |>
-                     (fun gabs ->
-                        debug "non empty gabs =@\n@[  %a@]" manager.print gabs;
-                        gabs
-                     )
+          let flow = man.exec ctx (mk_assign sv value range) non_empty_flow |>
+                     man.flow.join non_empty_flow
           in
-          [mk_constant PyNone ~etyp:TNone, (gabs, [])]
+          oeval_singleton (Some (mk_py_none range), flow, [])
       in
 
-      empty_case @ non_empty_case
+      oeval_join empty_case non_empty_case
 
-    | PyCall(
-        {ekind = Constant (Addr {akind = B_function "set.clear"})},
-        [{ekind = Constant (Addr set)}],
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "set.clear")}},
+        [{ekind = E_addr set}],
         []
-      )
-      ->
+      ) ->
 
-      let sv = mk_sv set in
-      let se = mk_se set in
+      let sv = mk_sv set range in
+      let se = mk_se set range in
 
-      let gabs = manager.exec (mk_assign sv (mk_constant PyEmptyValue ~etyp:TEmptyValue)) ctx gabs |>
-                 manager.exec (mk_assign se mk_true) ctx
+      let flow = man.exec ctx (mk_assign sv (mk_empty range) range) flow |>
+                 man.exec ctx (mk_assign se (mk_true range) range)
       in
-      [mk_constant PyNone ~etyp:TNone, (gabs, [])]
+      oeval_singleton (Some (mk_py_none range), flow, [])
 
-    | PyCall({ekind = Constant (Addr ({akind = B_function f}))}, _, _)
-      when Builtins.is_class_dot_method "set" f ->
-
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
+      when Addr.is_builtin_class_function "set" f ->
       panic "Set function %s not implemented" f
-
-
         
-    | _ -> []
+    | _ -> None
 
-  let exec _ _ _ _ _ gabs = continue gabs
-  let ask _ _ = Framework.Query.top
+  let init man ctx prog flow = ctx, flow
+  
+  let exec man ctx stmt flow = None
 
+  let ask man ctx query flow = None
 
 end
 
 let setup () =
-  register name (module Make)
+  register_domain name (module Domain)
