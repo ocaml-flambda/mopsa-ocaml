@@ -44,7 +44,7 @@ struct
   let is_bool_function f =
     match ekind f with
     | E_var v -> v.vname = "bool"
-    | E_addr a -> compare_addr a (Addr.from_string "bool") = 0
+    | E_addr a -> compare_addr a (Addr.find_builtin "bool") = 0
     | _ -> false
 
   let exec man ctx stmt flow =
@@ -54,7 +54,7 @@ struct
       None
     | S_if(e, body, orelse) ->
       debug "decorating %a with bool" Framework.Pp.pp_expr e;
-      let e' = Builtins.mk_builtin_call "bool" [e] e.erange in
+      let e' = Utils.mk_builtin_call "bool" [e] e.erange in
       let stmt' = {stmt with skind = S_if(e', body, orelse)} in
       man.exec ctx stmt' flow |>
       return

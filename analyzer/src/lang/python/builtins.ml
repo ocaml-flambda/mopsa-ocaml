@@ -22,17 +22,6 @@ let common_builtin_range = mk_fresh_range ()
 
 let builtin_range name = tag_range common_builtin_range "%s" name
 
-let mk_builtin_raise exn range = assert false
-
-let mk_builtin_call f params range =
-  mk_py_call (mk_addr (from_string f) range) params range
-
-let mk_hasattr obj attr range =
-  mk_builtin_call "hasattr" [obj; mk_string attr range] range
-
-let mk_addr_hasattr obj attr range =
-  mk_hasattr (mk_addr obj range) attr range
-
 let mk_builtin_module_addr modl =
   let range = builtin_range modl in
   {
@@ -43,8 +32,12 @@ let mk_builtin_module_addr modl =
 
 
 let mk_builtin_class_addr base cls =
-  let name = mk_unname base cls.py_cls_var.vname in
-  let bases = List.map from_expr cls.py_cls_bases in
+  let name = mk_dot_name base cls.py_cls_var.vname in
+  let bases = List.map (fun base ->
+      match ekind base with
+      | E_var v -> find_builtin v.vname
+      | _ -> assert false
+    ) cls.py_cls_bases in
   let range = builtin_range name in
   {
     addr_kind = A_py_class (C_builtin name, bases);
@@ -53,7 +46,7 @@ let mk_builtin_class_addr base cls =
   }
 
 let mk_builtin_function_addr base fundec =
-  let name = mk_unname base fundec.py_func_var.vname in
+  let name = mk_dot_name base fundec.py_func_var.vname in
   let range = builtin_range name in
   {
     addr_kind = A_py_function (F_builtin name);
@@ -79,7 +72,7 @@ let rec parse_classes modl stmt =
   | S_py_class(cls) ->
     let addr = mk_builtin_class_addr modl cls in
     classes :=  addr :: !classes;
-    let base = mk_unname modl cls.py_cls_var.vname in
+    let base = mk_dot_name modl cls.py_cls_var.vname in
     parse_functions (Some base) cls.py_cls_body
 
   | S_block(block) ->

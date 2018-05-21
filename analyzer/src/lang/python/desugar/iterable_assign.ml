@@ -55,7 +55,7 @@ struct
              *   (man.exec ctx) man.flow *)
 
           | _ ->
-            man.exec ctx (Builtins.mk_builtin_raise "TypeError" (tag_range range "error")) flow
+            man.exec ctx (Utils.mk_builtin_raise "TypeError" (tag_range range "error")) flow
         )
         (man.exec ctx) man.flow  |>
       return
@@ -68,7 +68,7 @@ struct
           mk_assign
             e ~mode
             (mk_py_call
-               (mk_addr (Addr.from_string "next") (tag_range range "next addr"))
+               (mk_addr (Addr.find_builtin "next") (tag_range range "next addr"))
                [mk_addr iter (tag_range range "iter addr")]
                (tag_range range "next call")
             )
@@ -82,9 +82,9 @@ struct
       mk_try
         block
         [mk_except
-           (Some (mk_addr (Addr.from_string "StopIteration") (tag_range range "stop iter")))
+           (Some (mk_addr (Addr.find_builtin "StopIteration") (tag_range range "stop iter")))
            None
-           (Builtins.mk_builtin_raise "ValueError" (tag_range range "error raise"))
+           (Utils.mk_builtin_raise "ValueError" (tag_range range "error raise"))
         ]
         (mk_nop (tag_range range "empty try else"))
         (mk_nop (tag_range range "empty try finally"))

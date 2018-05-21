@@ -184,7 +184,7 @@ struct
       panic "dict() not supported"
 
     | E_py_dict (keys, values) ->
-      eval_alloc_instance man ctx (Addr.from_string "dict") None range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "dict") None range flow |>
       oeval_compose (fun addr flow ->
           let dl = mk_dl addr range and dv = mk_dv addr range in
           eval_list (keys @ values) (man.eval ctx) flow |>
@@ -262,7 +262,7 @@ struct
           let error_flow =
             let keyset' = K.remove kv keyset in
             map_domain_cur (add addr keyset') man flow |>
-            man.exec ctx (Builtins.mk_builtin_raise "KeyError" range)
+            man.exec ctx (Utils.mk_builtin_raise "KeyError" range)
           in
           oeval_join
             (re_eval_singleton (man.eval ctx) (Some ok_exp, ok_flow, [clean_stmt]))
@@ -328,7 +328,7 @@ struct
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "dict", _)}, _)}  as addr)}) :: [],
         []
       ) ->
-      eval_alloc_instance man ctx (Addr.from_string "dict_values") (Some (Dict addr)) range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "dict_values") (Some (Dict addr)) range flow |>
       oeval_compose (fun addr flow ->
           oeval_singleton (Some (mk_addr addr range), flow, [])
         )
@@ -338,7 +338,7 @@ struct
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "dict_values", _)}, Some (Dict dict))})}) :: [],
         []
       ) ->
-      eval_alloc_instance man ctx (Addr.from_string "dict_valueiterator") (Some (Dict dict)) range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "dict_valueiterator") (Some (Dict dict)) range flow |>
       oeval_compose (fun iter flow ->
           let flow = man.exec ctx (mk_assign (mk_iter_counter iter range) (mk_zero range) range) flow in
           oeval_singleton (Some (mk_addr iter range), flow, [])
@@ -374,7 +374,7 @@ struct
         if man.flow.is_cur_bottom out_flow then
           None
         else
-          let flow = man.exec ctx (Builtins.mk_builtin_raise "StopIteration" range) out_flow in
+          let flow = man.exec ctx (Utils.mk_builtin_raise "StopIteration" range) out_flow in
           oeval_singleton (None, flow, [])
       in
 

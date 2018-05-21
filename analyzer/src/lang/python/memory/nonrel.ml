@@ -97,7 +97,7 @@ struct
     match ekind exp with
     | E_var v when is_builtin v.vname ->
       debug "builtin";
-      oeval_singleton (Some (mk_addr (Addr.from_expr exp) range, []), flow, [])
+      oeval_singleton (Some (mk_addr (Addr.find_builtin v.vname) range, []), flow, [])
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
@@ -110,7 +110,7 @@ struct
           match typ with
           (* Raise an exception when the variable maybe undefined *)
           | T_py_undefined ->
-            let stmt = Builtins.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
+            let stmt = Utils.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
             let flow = man.exec ctx stmt flow' in
             oeval_singleton (None, flow, []) |>
             oeval_join acc

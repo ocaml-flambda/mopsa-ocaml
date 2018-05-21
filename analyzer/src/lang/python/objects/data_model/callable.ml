@@ -40,7 +40,7 @@ struct
            match ekind f with
            (* Calls on non-object variables and constants is not allowed *)
            | E_var _ | E_constant _ ->
-             let stmt = Builtins.mk_builtin_raise "TypeError" range in
+             let stmt = Utils.mk_builtin_raise "TypeError" range in
              let flow = man.exec ctx stmt flow in
              oeval_singleton (None, flow, [])
 

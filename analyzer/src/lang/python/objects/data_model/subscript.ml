@@ -36,7 +36,7 @@ struct
           let obj, index = match el with [obj; index] -> obj, index | _ -> assert false in
           let cls = classof obj in
 
-          let ok_cond = Builtins.mk_addr_hasattr cls "__getitem__" range in
+          let ok_cond = Utils.mk_addr_hasattr cls "__getitem__" range in
           let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
           let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
 
@@ -50,7 +50,7 @@ struct
           let error_case =
             if man.flow.is_cur_bottom error_flow then None
             else
-              let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) error_flow in
+              let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) error_flow in
               oeval_singleton (None, flow, [])
           in
 
@@ -70,7 +70,7 @@ struct
         (fun el flow ->
           let exp, obj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
           let cls = classof obj in
-          let ok_cond = Builtins.mk_addr_hasattr cls "__setitem__" range in
+          let ok_cond = Utils.mk_addr_hasattr cls "__setitem__" range in
           let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
           let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
 
@@ -86,7 +86,7 @@ struct
             if man.flow.is_cur_bottom error_flow then
               man.flow.bottom
             else
-              man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow
+              man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
           in
 
           man.flow.join ok_case error_case

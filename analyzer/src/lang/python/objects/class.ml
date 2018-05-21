@@ -48,33 +48,32 @@ struct
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
       eval_list cls.py_cls_bases (man.eval ctx) flow |>
-      eval_to_exec
+      eval_to_oexec
         (fun bases flow ->
            if List.for_all can_inherit_from bases then
              let bases =
                match bases with
-               | [] -> [Addr.from_string "object"]
+               | [] -> [Addr.find_builtin "object"]
                | _ ->
                  List.map (function {ekind = E_addr addr} -> addr | _ -> assert false)  bases
              in
-             Universal.Utils.compose_alloc_exec
-               (fun addr flow ->
-                  let flow = man.exec ctx
-                      (mk_assign
-                         (mk_var cls.py_cls_var range)
-                         (mk_addr addr range)
-                         range
-                      ) flow
-                  in
-                  man.exec ctx cls.py_cls_body flow
-               )
-               (Addr.mk_class_addr cls bases) stmt.srange man ctx flow
+             Addr.eval_alloc man ctx (A_py_class (C_user cls, bases)) stmt.srange flow |>
+             oeval_to_oexec (fun addr flow ->
+                 let flow = man.exec ctx
+                     (mk_assign
+                        (mk_var cls.py_cls_var range)
+                        (mk_addr addr range)
+                        range
+                     ) flow
+                 in
+                 man.exec ctx cls.py_cls_body flow |>
+                 return
+               ) (man.exec ctx) man.flow
            else
-             man.exec ctx
-               (Builtins.mk_builtin_raise "TypeError" range) flow
+             man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow |>
+             return
         )
-        (man.exec ctx) man.flow  |>
-      return
+        (man.exec ctx) man.flow
 
     | _ ->
       None

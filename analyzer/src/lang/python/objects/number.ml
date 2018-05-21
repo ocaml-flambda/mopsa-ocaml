@@ -25,21 +25,21 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain= struct
 
   let is_number_function f =
-    match Addr.split_class_dot_attribute f with
+    match Addr.split_dot_name f with
     | Some (cls, _) ->
       (cls = "int" || cls = "float" || cls = "bool")
     | None -> false
 
   let is_number_binop_function f =
-    match Addr.split_class_dot_attribute f with
+    match Addr.split_dot_name f with
     | Some (cls, f) ->
-      (cls = "int" || cls = "float" || cls = "bool") && (is_binop_function f)
+      (cls = "int" || cls = "float" || cls = "bool") && (Operators.is_binop_function f)
     | None -> false
 
   let is_number_unop_function f =
-    match Addr.split_class_dot_attribute f with
+    match Addr.split_dot_name f with
     | Some (cls, f) ->
-      (cls = "int" || cls = "float" || cls = "bool") && (is_unop_function f)
+      (cls = "int" || cls = "float" || cls = "bool") && (Operators.is_unop_function f)
     | None -> false
 
 
@@ -117,7 +117,7 @@ module Domain= struct
           | _ ->
             let cls = Addr.classof arg in
             let bool_case =
-              let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) flow in
+              let flow = man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) flow in
               if man.flow.is_cur_bottom flow then
                 None
               else
@@ -129,7 +129,7 @@ module Domain= struct
                     | T_any -> assert false
                     | _ ->
                       let flow = man.exec ctx
-                          (mk_builtin_raise "TypeError" range)
+                          (Utils.mk_builtin_raise "TypeError" range)
                           flow
                       in
                       oeval_singleton (None, flow, [])
@@ -137,10 +137,10 @@ module Domain= struct
 
             in
 
-            let no_bool_flow = man.exec ctx (mk_assume (mk_not (mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) range) flow in
+            let no_bool_flow = man.exec ctx (mk_assume (mk_not (Utils.mk_builtin_call "hasattr" [arg; mk_string "__bool__" range] range) range) range) flow in
 
             let len_case =
-              let flow = man.exec ctx (mk_assume (mk_builtin_call "hasattr" [arg; mk_string "__len__" range] range) range) no_bool_flow in
+              let flow = man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [arg; mk_string "__len__" range] range) range) no_bool_flow in
               if man.flow.is_cur_bottom flow then
                 None
               else
@@ -178,7 +178,7 @@ module Domain= struct
             in
 
             let default_case =
-              let flow = man.exec ctx (mk_assume (mk_not (mk_hasattr arg "__len__" range) range) range) no_bool_flow in
+              let flow = man.exec ctx (mk_assume (mk_not (Utils.mk_hasattr arg "__len__" range) range) range) no_bool_flow in
               if man.flow.is_cur_bottom flow then
                 None
               else
@@ -191,7 +191,7 @@ module Domain= struct
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__new__")}}, _, []) ->
       let flow = man.exec ctx
-          (mk_builtin_raise "TypeError" range)
+          (Utils.mk_builtin_raise "TypeError" range)
           flow
       in
       oeval_singleton (None, flow, [])
@@ -250,7 +250,7 @@ module Domain= struct
                           oeval_join acc
                         else if Z.equal base Z.one || Z.lt base Z.zero || Z.gt base (Z.of_int 32)  then
                           let flow = man.exec ctx
-                              (mk_builtin_raise "ValueError" range)
+                              (Utils.mk_builtin_raise "ValueError" range)
                               flow
                           in
                           oeval_singleton (None, flow, []) |>
@@ -269,7 +269,7 @@ module Domain= struct
                           oeval_join acc
                       with Invalid_argument _ ->
                         let flow = man.exec ctx
-                            (mk_builtin_raise "ValueError" range)
+                            (Utils.mk_builtin_raise "ValueError" range)
                             flow
                         in
                         oeval_singleton (None, flow, []) |>
@@ -289,7 +289,7 @@ module Domain= struct
         | _ ->
 
           let flow = man.exec ctx
-              (mk_builtin_raise "TypeError" range)
+              (Utils.mk_builtin_raise "TypeError" range)
               flow
           in
           oeval_singleton (None, flow, [])
@@ -326,7 +326,7 @@ module Domain= struct
 
       ->
       let flow = man.exec ctx
-          (mk_builtin_raise "TypeError" range)
+          (Utils.mk_builtin_raise "TypeError" range)
           flow
       in
       oeval_singleton (None, flow, [])
@@ -382,8 +382,8 @@ module Domain= struct
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin f)}}, [e1; e2], [])
       when is_number_binop_function f ->
-      let _, f = split_class_dot_attribute f |> Option.none_to_exn in
-      let op = fun_to_binop f in
+      let _, f = split_dot_name f |> Option.none_to_exn in
+      let op = Operators.fun_to_binop f in
       if is_binop_valid op e1.etyp e2.etyp then
         let t = coerce op e1.etyp e2.etyp in
         let op' = change_operator_type t op in
@@ -396,8 +396,8 @@ module Domain= struct
       when is_number_unop_function f
       ->
       debug "arithmetic unop";
-      let _, f = split_class_dot_attribute f |> Option.none_to_exn in
-      let op = fun_to_unop f in
+      let _, f = split_dot_name f |> Option.none_to_exn in
+      let op = Operators.fun_to_unop f in
       let t =
         match e.etyp with
         | T_int -> T_int

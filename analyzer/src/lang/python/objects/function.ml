@@ -34,17 +34,16 @@ struct
       debug "creating function object";
       (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
-      Universal.Utils.compose_alloc_exec
-        (fun addr flow ->
-           man.exec ctx
-             (mk_assign
-                (mk_var func.py_func_var range)
-                (mk_addr addr range)
-                range
-             ) flow
-        )
-        (Addr.mk_function_addr func) range man ctx flow  |>
-      return
+      Addr.eval_alloc man ctx (A_py_function (F_user func)) stmt.srange flow |>
+      oeval_to_oexec (fun addr flow ->
+          man.exec ctx
+            (mk_assign
+               (mk_var func.py_func_var range)
+               (mk_addr addr range)
+               range
+            ) flow |>
+          return
+        ) (man.exec ctx) man.flow
     | _ ->
       None
 
@@ -65,7 +64,7 @@ struct
 
       if List.length pyfundec.py_func_parameters < List.length nondefault_args then
         let flow =
-          man.exec ctx (Builtins.mk_builtin_raise "TypeError" exp.erange) flow
+          man.exec ctx (Utils.mk_builtin_raise "TypeError" exp.erange) flow
         in
         oeval_singleton (None, flow, [])
 
@@ -86,7 +85,7 @@ struct
         let args = fill_with_default default_args nondefault_args args in
         if List.length args < List.length nondefault_args then
           let flow =
-            man.exec ctx (Builtins.mk_builtin_raise "TypeError" exp.erange) flow
+            man.exec ctx (Utils.mk_builtin_raise "TypeError" exp.erange) flow
           in
           oeval_singleton (None, flow, [])
         else

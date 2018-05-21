@@ -55,7 +55,7 @@ struct
       eval_compose (fun obj flow ->
           let cls = classof obj in
           Universal.Utils.assume_to_eval
-            (Builtins.mk_addr_hasattr cls "__iter__" range)
+            (Utils.mk_addr_hasattr cls "__iter__" range)
             (fun true_flow ->
                (* Call iter and check that it returns an object with an attribute __next__ *)
                man.eval ctx (mk_py_call (mk_py_addr_attr cls "__iter__" range) [obj] range) true_flow |>
@@ -63,16 +63,16 @@ struct
                    match ekind iter with
                    | E_addr iter ->
                      Universal.Utils.assume_to_eval
-                       (Builtins.mk_addr_hasattr iter "__next__" range)
+                       (Utils.mk_addr_hasattr iter "__next__" range)
                        (fun true_flow -> oeval_singleton (Some (mk_addr iter range), true_flow, []))
-                       (fun false_flow -> oeval_singleton (None, man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) false_flow, []))
+                       (fun false_flow -> oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow, []))
                        man ctx flow ()
 
                    | _ ->
-                     oeval_singleton (None, man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow, [])
+                     oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow, [])
                  )
             )
-            (fun false_flow -> oeval_singleton (None, man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) false_flow, []))
+            (fun false_flow -> oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow, []))
             man ctx flow ()
         )
 
@@ -86,17 +86,17 @@ struct
       eval_compose (fun obj flow ->
           let cls = classof obj in
           Universal.Utils.assume_to_eval
-            (Builtins.mk_addr_hasattr cls "__len__" range)
+            (Utils.mk_addr_hasattr cls "__len__" range)
             (fun true_flow ->
                (* Call __len__ and check that it returns an integer *)
                man.eval ctx (mk_py_call (mk_py_addr_attr cls "__len__" range) [obj] range) true_flow |>
                eval_compose (fun len flow ->
                    match etyp len with
                    | T_int -> oeval_singleton (Some len, flow, [])
-                   | _ -> oeval_singleton (None, man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) true_flow, [])
+                   | _ -> oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) true_flow, [])
                  )
             )
-            (fun false_flow -> oeval_singleton (None, man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) false_flow, []))
+            (fun false_flow -> oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow, []))
             man ctx flow ()
         )
 

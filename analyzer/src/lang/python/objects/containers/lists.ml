@@ -64,7 +64,7 @@ module Domain = struct
     Utils.mk_try_stopiteration
       (mk_while
          (mk_true range)
-         (assign_stmt (Builtins.mk_builtin_call "next" [mk_addr iter range] range))
+         (assign_stmt (Utils.mk_builtin_call "next" [mk_addr iter range] range))
          range
       )
       (mk_block [] range)
@@ -143,7 +143,7 @@ module Domain = struct
 
 
   let create_list man ctx el range flow =
-    eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+    eval_alloc_instance man ctx (Addr.find_builtin "list") None range flow |>
     oeval_compose (fun addr flow ->
         let flow = set_list_value man ctx addr el range flow |>
                    set_list_length man ctx addr el range
@@ -163,7 +163,7 @@ module Domain = struct
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)}) :: [],
         []
       ) ->
-      eval_alloc_instance man ctx (Addr.from_string "listiter") (Some (List alist)) range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "listiter") (Some (List alist)) range flow |>
       oeval_compose (fun aiter flow ->
           let flow = man.exec ctx (mk_assign (mk_iter_counter aiter range) (mk_zero range) range) flow in
           oeval_singleton (Some (mk_addr aiter range), flow, [])
@@ -199,7 +199,7 @@ module Domain = struct
         if man.flow.is_cur_bottom out_flow then
           None
         else
-          let flow = man.exec ctx (Builtins.mk_builtin_raise "StopIteration" range) out_flow in
+          let flow = man.exec ctx (Utils.mk_builtin_raise "StopIteration" range) out_flow in
           oeval_singleton (None, flow, [])
       in
 
@@ -266,7 +266,7 @@ module Domain = struct
         if man.flow.is_cur_bottom flow_fail then
           None
         else
-          let flow_fail =  man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) flow_fail in
+          let flow_fail =  man.exec ctx (Utils.mk_builtin_raise "IndexError" range) flow_fail in
           oeval_singleton (None, flow_fail, [])
       in
 
@@ -317,7 +317,7 @@ module Domain = struct
         if man.flow.is_cur_bottom fail_flow then
           man.flow.bottom
         else
-          man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) fail_flow
+          man.exec ctx (Utils.mk_builtin_raise "IndexError" range) fail_flow
       in
 
       let flow = man.flow.join safe_case fail_case in
@@ -347,7 +347,7 @@ module Domain = struct
                  man.exec ctx (mk_assign lv (mk_empty range) range)
       in
 
-      man.eval ctx (Builtins.mk_builtin_call "iter" [arg] range) flow |>
+      man.eval ctx (Utils.mk_builtin_call "iter" [arg] range) flow |>
       eval_compose (fun iter flow ->
           match ekind iter with
           | E_addr iter ->
@@ -355,7 +355,7 @@ module Domain = struct
                 (mk_assign_next_loop
                   iter
                    (fun value ->
-                      mk_stmt (S_expression (Builtins.mk_builtin_call "list.append" [elist; value] range)) range
+                      mk_stmt (S_expression (Utils.mk_builtin_call "list.append" [elist; value] range)) range
                    )
                    range
                 ) flow
@@ -389,7 +389,7 @@ module Domain = struct
           oeval_singleton (Some (mk_py_none range), flow, [])
 
         | _ ->
-          let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+          let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
           oeval_singleton (None, flow, [])
       end
       
@@ -437,7 +437,7 @@ module Domain = struct
               if man.flow.is_cur_bottom error_flow then
                 None
               else
-                let flow =  man.exec ctx (Builtins.mk_builtin_raise "IndexError" range) error_flow in
+                let flow =  man.exec ctx (Utils.mk_builtin_raise "IndexError" range) error_flow in
                 oeval_singleton (None, flow, [])
             in
 
@@ -446,7 +446,7 @@ module Domain = struct
           end
 
         | _ ->
-          let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+          let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
           oeval_singleton (None, flow, [])
       end
 
@@ -466,7 +466,7 @@ module Domain = struct
       let ll2 = mk_ll l2 range in
       let lv2 = mk_lv l2 range in
 
-      eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "list") None range flow |>
       oeval_compose (fun addr flow ->
           let ll = mk_ll addr range in
           let lv = mk_lv addr range in
@@ -511,7 +511,7 @@ module Domain = struct
       let ll = mk_ll alist range in
       let lv = mk_lv alist range in
 
-      eval_alloc_instance man ctx (Addr.from_string "list") None range flow |>
+      eval_alloc_instance man ctx (Addr.find_builtin "list") None range flow |>
       oeval_compose (fun addr' flow ->
           let ll' = mk_ll addr' range in
           let lv' = mk_lv addr' range in
@@ -543,7 +543,7 @@ module Domain = struct
           (* Iterate over comprehensions of the form (target, iter, conds) *)
           let rec aux = function
             | [] ->
-              mk_stmt (S_expression (Builtins.mk_builtin_call "list.append" [mk_addr addr range; e] range)) range
+              mk_stmt (S_expression (Utils.mk_builtin_call "list.append" [mk_addr addr range; e] range)) range
 
             | (target, iter, []) :: tl ->
               mk_stmt (S_py_for (
@@ -656,7 +656,7 @@ module Domain = struct
         []
       )
       ->
-      let exp' = Builtins.mk_builtin_call "list.__eq__" [e1; e2] range in
+      let exp' = Utils.mk_builtin_call "list.__eq__" [e1; e2] range in
       eval man ctx exp' flow |>
       oeval_compose (fun res flow ->
           match ekind res with

@@ -41,11 +41,11 @@ struct
            | {ekind = E_addr ({addr_kind = A_py_class _} as cls)} :: tl ->
              debug "Create a new instance";
              re_eval_singleton (man.eval ctx)
-               (Some (mk_expr (Universal.Ast.E_alloc_addr (Addr.mk_instance_addr cls None, range)) range), flow, [])
+               (Some (mk_expr (Universal.Ast.E_alloc_addr ((A_py_instance (cls, None)), range)) range), flow, [])
 
            | _ ->
              debug "Error in creating a new instance";
-             let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+             let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
              oeval_singleton (None, flow, [])
         )
 

@@ -20,7 +20,7 @@ open Framework.Domains.Stateless
 open Universal.Ast
 open Ast
 open Addr
-open Builtins
+open Operators
 
 let name = "python.objects.data_model.arith_ops"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -40,7 +40,8 @@ module Domain = struct
           let rop_fun = binop_to_rev_fun op in
 
           if e1.etyp <> T_addr && e2.etyp <> T_addr then
-            let f = mk_addr (Addr.find_type_function e1.etyp op_fun) range in
+            let cls1 = Addr.classof e1 in
+            let f = mk_py_addr_attr cls1  op_fun range in
             let exp = mk_py_call f [e1; e2] range in
             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
           else
@@ -55,7 +56,7 @@ module Domain = struct
 
             let tmp = mktmp () in
 
-            let add_cond = mk_builtin_call "hasattr" [e1; mk_string op_fun range] range in
+            let add_cond = Utils.mk_builtin_call "hasattr" [e1; mk_string op_fun range] range in
 
             debug "Calling has_attribute";
             let has_add_flow = man.exec ctx (mk_assume add_cond range) flow in
@@ -111,8 +112,8 @@ module Domain = struct
               if man.flow.is_cur_bottom pre_radd_flow then
                 man.flow.bottom, man.flow.bottom
               else
-                man.exec ctx (mk_assume (mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) pre_radd_flow,
-                man.exec ctx (mk_assume (mk_not (mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) range) pre_radd_flow
+                man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) pre_radd_flow,
+                man.exec ctx (mk_assume (mk_not (Utils.mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) range) pre_radd_flow
             in
             let post_radd_flow =
               if man.flow.is_cur_bottom has_radd_flow then
@@ -162,7 +163,7 @@ module Domain = struct
                 None
               else
                 let flow = man.exec ctx
-                    (mk_builtin_raise "TypeError" range)
+                    (Utils.mk_builtin_raise "TypeError" range)
                     flow
                 in
                 oeval_singleton (None, flow, [mk_remove_var tmp range]) 
@@ -181,12 +182,13 @@ module Domain = struct
           let op_fun = unop_to_fun op in
 
           if e.etyp <> T_addr then
-            let f = mk_addr (Addr.find_type_function e.etyp op_fun) range in
+            let cls = Addr.classof e in
+            let f = mk_py_addr_attr cls op_fun range in
             let exp' = mk_py_call f [e] range in
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
             let cls = classof e in
-            let ok_cond = mk_builtin_call "hasattr" [e; mk_string op_fun range] range in
+            let ok_cond = Utils.mk_builtin_call "hasattr" [e; mk_string op_fun range] range in
             let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
             let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
 
@@ -203,7 +205,7 @@ module Domain = struct
                 None
               else
                 let flow = man.exec ctx
-                    (mk_builtin_raise "TypeError" range)
+                    (Utils.mk_builtin_raise "TypeError" range)
                     flow
                 in
                 oeval_singleton (None, flow, [])

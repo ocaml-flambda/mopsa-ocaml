@@ -94,7 +94,7 @@ struct
     debug "mro of %a" Universal.Pp.pp_addr addr;
     let l = match addr.addr_kind with
     | A_py_class(C_user cls, bases) -> addr :: (List.map get_addr_mro bases |> List.flatten)
-    | A_py_class(C_builtin cls, bases) -> (Addr.from_string cls) :: (List.map get_addr_mro bases |> List.flatten)
+    | A_py_class(C_builtin cls, bases) -> (Addr.find_builtin cls) :: (List.map get_addr_mro bases |> List.flatten)
     | A_py_instance(cls, _) -> get_addr_mro cls
     | _ -> assert false
     in
@@ -136,7 +136,8 @@ struct
 
     | A_py_class(C_builtin name, _)
     | A_py_module(M_builtin name) ->
-      Addr.eval_attribute name attr range
+      let addr = Addr.find_builtin_attribute name attr in
+      mk_addr addr range
 
     | _ ->
       assert false
@@ -197,7 +198,7 @@ struct
                   let rec aux flow = function
                     | [] ->
                       let flow = man.exec ctx
-                          (Builtins.mk_builtin_raise "AttributeError" range)
+                          (Utils.mk_builtin_raise "AttributeError" range)
                           flow
                       in
                       oeval_singleton (None, flow, [])
@@ -217,7 +218,7 @@ struct
                                  match ekind f with
                                  (* Attribute is a function of the class => bound the method to the instance *)
                                  | E_addr ({addr_kind = A_py_function _} as f) ->
-                                   let exp = mk_expr (E_alloc_addr(mk_method_addr f addr, range)) range in
+                                   let exp = mk_expr (E_alloc_addr(A_py_method(f, addr), range)) range in
                                    re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
 
                                  | _ ->
@@ -258,7 +259,7 @@ struct
               man flow ()
 
           | [v; {ekind = E_constant (C_string attr)}] when etyp v |> is_atomic_type->
-            let cls = Builtins.(find_type_class_name v.etyp |> from_string) in
+            let cls = Addr.classof obj in
             if_flow_eval
               (assume_is_attribute cls attr man ctx)
               (assume_is_not_attribute cls attr man ctx)
@@ -268,7 +269,7 @@ struct
 
           | _ ->
             let flow = man.exec ctx
-                (Builtins.mk_builtin_raise "TypeError" range)
+                (Utils.mk_builtin_raise "TypeError" range)
                 flow
             in
             oeval_singleton (None, flow, [])
@@ -292,7 +293,7 @@ struct
              in
              man.exec ctx (mk_assign ~mode lval rval stmt.srange) flow
            | _ ->
-             man.exec ctx (Builtins.mk_builtin_raise "AttributeError" stmt.srange) flow
+             man.exec ctx (Utils.mk_builtin_raise "AttributeError" stmt.srange) flow
         )
         (man.exec ctx) man.flow  |>
       return

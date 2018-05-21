@@ -29,7 +29,7 @@ struct
   let is_bool_function f =
     match ekind f with
     | E_var v -> v.vname = "bool"
-    | E_addr a -> compare_addr a (Addr.from_string "bool") = 0
+    | E_addr a -> compare_addr a (Addr.find_builtin "bool") = 0
     | _ -> false
 
   let eval man ctx exp flow =
@@ -58,7 +58,7 @@ struct
 
     | E_unop(O_py_not, e) ->
       let e' =
-        if is_bool_function e then e else Builtins.mk_builtin_call "bool" [e] e.erange
+        if is_bool_function e then e else Utils.mk_builtin_call "bool" [e] e.erange
       in
       Universal.Utils.assume_to_eval e'
         (fun true_flow -> oeval_singleton (Some (mk_false exp.erange), true_flow, []))
