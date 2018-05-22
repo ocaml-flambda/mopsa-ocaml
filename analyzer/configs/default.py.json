@@ -11,7 +11,7 @@
         "python.desugar.iterable_assign",
 
         "python.flows.exceptions",
-        
+
 	"universal.flows.intraproc",
         "universal.flows.interproc",
         "universal.flows.loops",
@@ -23,6 +23,7 @@
         "python.objects.function",
 	"python.objects.object",
         "python.objects.number",
+        "python.objects.strings",
 
 	"python.objects.containers.lists",
         "python.objects.containers.dicts",

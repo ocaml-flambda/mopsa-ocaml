@@ -148,6 +148,20 @@ class bool(int):
     def __abs__(self): pass
     def __invert__(self): pass
 
+class str(object):
+    def __new__(cls, arg): pass
+
+    def __eq__(self, other): pass
+    def __ne__(self, other): pass
+    def __ge__(self, other): pass
+    def __gt__(self, other): pass
+    def __lt__(self, other): pass
+    def __le__(self, other): pass
+
+    def __bool__(self): pass
+    def __len__(self): pass
+
+    def splitlines(self): pass
 
 class list(object):
     def __init__(self, itr): pass
@@ -158,7 +172,7 @@ class list(object):
 
 def listiter(object):
     def __next__(self): pass
-    
+
 class dict(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass

@@ -5,6 +5,7 @@ let init () =
     Class.setup ();
     Function.setup ();
     Number.setup ();
+    Strings.setup ();
     Containers.(
       Lists.setup ();
       Dicts.setup ();
