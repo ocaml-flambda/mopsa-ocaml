@@ -264,7 +264,7 @@ let mk_var v erange =
 let mk_binop left op right ?(etyp = T_any) erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange
 
-let mk_unop op operand erange =
-  mk_expr (E_unop (op, operand)) erange
+let mk_unop op operand ?(etyp = T_any) erange =
+  mk_expr (E_unop (op, operand)) ~etyp erange
 
 let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)

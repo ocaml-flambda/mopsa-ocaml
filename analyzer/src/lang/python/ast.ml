@@ -41,12 +41,42 @@ type typ +=
 type operator +=
   | O_py_and (** and *)
   | O_py_or (** or *)
+  | O_py_not (** not *)
   | O_py_floor_div (** // *)
   | O_py_is (** is *)
   | O_py_is_not (** is not *)
   | O_py_in (** in *)
   | O_py_not_in (** not in *)
   | O_py_mat_mult (** @ *)
+
+
+let is_arith_op = function
+  | Universal.Ast.O_plus T_any
+  | Universal.Ast.O_minus T_any
+  | Universal.Ast.O_mult T_any
+  | O_py_mat_mult
+  | Universal.Ast.O_div T_any
+  | O_py_floor_div
+  | Universal.Ast.O_mod T_any
+  | Universal.Ast.O_pow
+  | Universal.Ast.O_bit_lshift
+  | Universal.Ast.O_bit_rshift
+  | Universal.Ast.O_bit_and
+  | Universal.Ast.O_bit_xor
+  | Universal.Ast.O_bit_or ->
+    true
+
+  | _ -> false
+
+let is_comp_op = function
+  | Universal.Ast.O_eq
+  | Universal.Ast.O_ne
+  | Universal.Ast.O_lt
+  | Universal.Ast.O_le
+  | Universal.Ast.O_gt
+  | Universal.Ast.O_ge -> true
+  | _ -> false
+
 
 (** Lambda functions. *)
 type py_lambda = {
@@ -234,8 +264,14 @@ let mk_raise exc range =
 let mk_py_call func args range =
   mk_expr (E_py_call (func, args, [])) range
 
-let mk_py_attr addr attr range =
-  mk_expr (E_py_attribute (Universal.Ast.mk_addr addr (tag_range range "addr"), attr)) range
+let mk_py_attr obj attr ?(etyp=T_any) range =
+  mk_expr (E_py_attribute (obj, attr)) ~etyp range
+
+let mk_py_addr_attr addr attr ?(etyp=T_any) range =
+  mk_py_attr (Universal.Ast.mk_addr addr (tag_range range "addr")) attr ~etyp range
 
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range
+
+let mk_py_not_implemented range =
+  mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range

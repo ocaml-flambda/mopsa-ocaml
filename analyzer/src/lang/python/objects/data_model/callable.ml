@@ -40,7 +40,7 @@ struct
            match ekind f with
            (* Calls on non-object variables and constants is not allowed *)
            | E_var _ | E_constant _ ->
-             let stmt = Builtins.mk_builtin_raise "TypeError" (tag_range range "call") in
+             let stmt = Utils.mk_builtin_raise "TypeError" range in
              let flow = man.exec ctx stmt flow in
              oeval_singleton (None, flow, [])
 
@@ -50,8 +50,11 @@ struct
 
            (* Calls on other kinds of addresses is handled by other domains *)
            | E_addr _ ->
-             let exp = {exp with ekind = E_py_call(f, args, [])} in
-             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
+             eval_list args (man.eval ctx) flow |>
+             eval_compose (fun args flow ->
+                 let exp = {exp with ekind = E_py_call(f, args, [])} in
+                 re_eval_singleton (man.eval ctx) (Some exp, flow, [])
+               )
 
            | _ -> assert false
         )

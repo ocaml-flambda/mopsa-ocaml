@@ -25,6 +25,7 @@ open Framework.Utils
 open Universal.Ast
 open Ast
 open Value
+open Addr
 
 let name = "python.memory.nonrel"
 
@@ -65,7 +66,7 @@ struct
         (fun e flow ->
            match ekind e with
            | E_addr(addr) ->
-             let v = Value.addr (Value.AddrLattice.singleton addr) in
+             let v = Value.addr (Value.A.singleton addr) in
              map_domain_cur (Nonrel.add var v) man flow |>
              return_flow
            | _ ->
@@ -94,12 +95,13 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_var v when Builtins.is_builtin v.vname ->
+    | E_var v when is_builtin v.vname ->
       debug "builtin";
-      oeval_singleton (Some (mk_addr (Builtins.from_expr exp) range, []), flow, [])
+      oeval_singleton (Some (mk_addr (Addr.find_builtin v.vname) range, []), flow, [])
 
     (* Refine the type of a variable using its current abstract value *)
     | E_var v  ->
+      debug "var %a" Framework.Pp.pp_var v;
       let nonrel = get_domain_cur man flow in
       let value = Nonrel.find v nonrel in
       Value.fold_type (fun acc (typ, value') ->
@@ -108,17 +110,17 @@ struct
           match typ with
           (* Raise an exception when the variable maybe undefined *)
           | T_py_undefined ->
-            let stmt = Builtins.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
+            let stmt = Utils.mk_builtin_raise "UnboundLocalError" (tag_range range "undef") in
             let flow = man.exec ctx stmt flow' in
             oeval_singleton (None, flow, []) |>
             oeval_join acc
 
           (* Partition w.r.t. to all current addresses *)
           | T_addr ->
-            if Value.AddrLattice.is_top value'.addr then
+            if Value.A.is_top value'.addr then
               Framework.Exceptions.panic "top address found"
             else
-              Value.AddrLattice.fold (fun addr acc ->
+              Value.A.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)
                   let exp' = {exp with ekind = E_addr addr; etyp = typ} in
                   oeval_singleton (Some (exp', []), flow', []) |>

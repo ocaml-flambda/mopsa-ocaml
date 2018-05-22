@@ -41,17 +41,25 @@ struct
            | {ekind = E_addr ({addr_kind = A_py_class _} as cls)} :: tl ->
              debug "Create a new instance";
              re_eval_singleton (man.eval ctx)
-               (Some (mk_expr (Universal.Ast.E_alloc_addr (Addr.mk_instance_addr cls None, range)) range), flow, [])
+               (Some (mk_expr (Universal.Ast.E_alloc_addr ((A_py_instance (cls, None)), range)) range), flow, [])
 
            | _ ->
              debug "Error in creating a new instance";
-             let flow = man.exec ctx (Builtins.mk_builtin_raise "TypeError" range) flow in
+             let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
              oeval_singleton (None, flow, [])
         )
 
     (* Calls to object.__init__ *)
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__init__")})}, args, []) ->
       oeval_singleton (Some (mk_py_none range), flow, [])
+
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__eq__")})}, args, [])
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__ne__")})}, args, [])
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__lt__")})}, args, [])
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__le__")})}, args, [])
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__ge__")})}, args, [])
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__gt__")})}, args, []) ->
+      oeval_singleton (Some (mk_py_not_implemented range), flow, [])
 
 
     | _ -> None

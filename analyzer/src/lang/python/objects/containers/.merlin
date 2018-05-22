@@ -3,8 +3,8 @@ B ../../../../../../parsers/c/lib
 B ../../../../../../parsers/python/lib
 B ../../../../../_build
 B ../../../../../_build/src
-B ../../../../../_build/src/lang/python/containers/dicts
-B ../../../../../_build/src/lang/python/containers
+B ../../../../../_build/src/lang/python/objects/containers
+B ../../../../../_build/src/lang/python/objects
 B ../../../../../_build/src/lang/python
 B ../../../../../_build/src/lang
 B ../../../../../_build/src

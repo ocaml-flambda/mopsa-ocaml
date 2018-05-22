@@ -180,9 +180,9 @@ type expr_kind +=
   (** Head address. *)
   | E_addr of addr
 
-let mk_neg e t = mk_unop (O_minus t) e
+let mk_neg e = mk_unop (O_minus e.etyp) e ~etyp:e.etyp
 
-let mk_not e = mk_unop O_log_not e
+let mk_not e = mk_unop O_log_not e ~etyp:T_bool
 
 let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
@@ -204,6 +204,9 @@ let mk_float_interval a b range =
 
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
+
+let mk_empty range =
+  mk_constant ~etyp:T_empty C_empty range
 
 let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
   match strict, left_strict, right_strict with
@@ -328,6 +331,9 @@ let mk_remove_var v = mk_stmt (S_remove_var v)
 
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
+
+let mk_while cond body range =
+  mk_stmt (S_while (cond, body)) range
 
 let mk_rebase_addr old recent mode range =
   mk_stmt (S_rebase_addr (old, recent, mode)) range

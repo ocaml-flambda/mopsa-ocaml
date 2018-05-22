@@ -14,6 +14,7 @@ open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Context
+open Framework.Query
 open Framework.Exec
 open Ast
 
@@ -328,9 +329,37 @@ struct
 
     | _ -> fail
 
-  let refine man ctx channel flow = None
+  (* Evaluation of expressions into an abstract value *)
+  type _ query +=
+    | QEval : expr -> Value.t query
 
-  let ask man ctx query flow = None
+  (* Register reply handler *)
+  let () =
+    register_reply_manager {
+      domatch = (let check : type a. a query -> (a, Value.t) eq option =
+                   function
+                   | QEval _ -> Some Eq
+                   | _ -> None
+                 in
+                 check
+                );
+      join = Value.join;
+      meet = Value.meet;
+    }
+
+
+  let ask : type r. ('a, t) manager -> context -> r query -> 'a flow -> r option =
+    fun man ctx query flow ->
+      let open Framework.Query in
+      match query with
+      | QEval e ->
+        let a = get_domain_cur man flow in
+        let value = eval_value a e in
+        Some value
+
+      | _ -> None
+
+  let refine man ctx channel flow = None
 
   let eval exp man ctx flow = None
 

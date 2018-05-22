@@ -42,7 +42,7 @@ struct
               man.flow.bottom
             else
               man.exec ctx (
-                Builtins.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
+                Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
               ) flow
           in
 

@@ -55,9 +55,9 @@ let () =
       | O_bit_and -> pp_print_string fmt "&"
       | O_bit_or -> pp_print_string fmt "|"
       | O_bit_xor -> pp_print_string fmt "^"
-      | O_log_or -> pp_print_string fmt "or"
-      | O_log_and -> pp_print_string fmt "and"
-      | O_log_not -> pp_print_string fmt "not"
+      | O_log_or -> pp_print_string fmt "lor"
+      | O_log_and -> pp_print_string fmt "land"
+      | O_log_not -> pp_print_string fmt "lnot"
       | O_sqrt -> pp_print_string fmt "sqrt"
       | O_bit_invert -> pp_print_string fmt "~"
       | O_bit_rshift -> pp_print_string fmt ">>"
@@ -84,6 +84,7 @@ let () =
       | T_string -> pp_print_string fmt "string"
       | T_bool -> pp_print_string fmt "bool"
       | T_addr -> pp_print_string fmt "addr"
+      | T_empty -> pp_print_string fmt "empty"
       | _ -> default fmt typ
   );
   register_pp_expr (fun default fmt exp ->

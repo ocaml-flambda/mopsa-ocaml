@@ -1,29 +1,42 @@
 let init () =
-  
+
   Objects.(
     Object.setup ();
     Class.setup ();
     Function.setup ();
+    Number.setup ();
+    Strings.setup ();
+    Containers.(
+      Lists.setup ();
+      Dicts.setup ();
+      Ranges.setup ();
+      Sets.setup ();
+      Tuples.setup ();
+    );
     Data_model.(
       Attribute.setup ();
       Callable.setup ();
+      Arith_ops.setup ();
+      Subscript.setup ();
+      Compare_ops.setup ();
     );
-  );  
-  
-  (* Flows.(
-   *   
-   * ); *)
+  );
+
+  Flows.(
+    Exceptions.setup ();
+  );
 
   Desugar.(
-    Andor.setup ();
+    Bool.setup ();
     Assert.setup ();
-    Ifexpr.setup ();
+    If.setup ();
     Import.setup ();
     Iterable_assign.setup ();
   );
 
   Libs.(
     Mopsa.setup ();
+    Stdlib.setup ();
   );
 
   Memory.(
