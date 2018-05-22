@@ -140,15 +140,18 @@ struct
               let flow' =
                 man.eval ctx e flow |>
                 eval_to_exec (fun e flow ->
-                    let cls = Addr.classof e in
-                    if Addr.issubclass cls (Addr.find_builtin "BaseException") then
-                      if not (Addr.isinstance eaddr cls) then
-                        man.flow.set TCur man.env.bottom flow
+                    match ekind e with
+                    | E_addr cls ->
+                      if Addr.issubclass cls (Addr.find_builtin "BaseException") then
+                        if not (Addr.isinstance eaddr cls) then
+                          man.flow.set TCur man.env.bottom flow
+                        else
+                          match excpt.py_excpt_name with
+                          | None -> flow
+                          | Some v -> man.exec ctx (mk_assign (mk_var v range) (mk_addr eaddr range) range) flow
                       else
-                        match excpt.py_excpt_name with
-                        | None -> flow
-                        | Some v -> man.exec ctx (mk_assign (mk_var v range) (mk_addr eaddr range) range) flow
-                    else
+                        man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
+                    | _ ->
                       man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
                   ) (man.exec ctx) man.flow
               in
@@ -178,11 +181,13 @@ struct
               let flow' =
                 man.eval ctx e flow |>
                 eval_to_exec (fun e flow ->
-                    let cls = Addr.classof e in
-                    if Addr.issubclass cls (Addr.find_builtin "BaseException") && not (Addr.isinstance eaddr cls) then
+                    match ekind e with
+                    | E_addr cls ->
+                      if Addr.issubclass cls (Addr.find_builtin "BaseException") && not (Addr.isinstance eaddr cls) then
                         man.flow.add (TExn eaddr) env flow
-                    else
-                      flow
+                      else
+                        flow
+                    | _ -> flow
                   )  (man.exec ctx) man.flow
               in
               man.flow.fold (fun acc env tk ->
@@ -225,4 +230,8 @@ struct
 end
 
 let setup () =
-  register_domain name (module Domain)
+  register_domain name (module Domain);
+  register_pp_token (fun next fmt -> function
+      | TExn(exn) -> Format.fprintf fmt "exn:%a" Universal.Pp.pp_addr exn
+      | tk -> next fmt tk
+    )

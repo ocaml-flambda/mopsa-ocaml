@@ -90,17 +90,6 @@ struct
 
     | _ -> assert false
 
-  let rec get_addr_mro addr =
-    debug "mro of %a" Universal.Pp.pp_addr addr;
-    let l = match addr.addr_kind with
-    | A_py_class(C_user cls, bases) -> addr :: (List.map get_addr_mro bases |> List.flatten)
-    | A_py_class(C_builtin cls, bases) -> (Addr.find_builtin cls) :: (List.map get_addr_mro bases |> List.flatten)
-    | A_py_instance(cls, _) -> get_addr_mro cls
-    | _ -> assert false
-    in
-    debug "|mro| = %d" (List.length l);
-    l
-
   let assume_is_attribute addr attr man ctx flow =
     debug "checking presence of attr %s in %a" attr Universal.Pp.pp_addr addr;
     if is_static_attribute addr attr then
@@ -194,7 +183,7 @@ struct
                )
                (* Case when the attribute does not exist => check in mro *)
                (fun false_flow ->
-                  let mro = get_addr_mro addr in
+                  let mro = Addr.mro addr in
                   let rec aux flow = function
                     | [] ->
                       let flow = man.exec ctx

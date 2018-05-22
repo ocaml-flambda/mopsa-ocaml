@@ -196,6 +196,9 @@ module Domain= struct
       in
       oeval_singleton (None, flow, [])
 
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "bool.__bool__")}}, [{etyp = T_bool} as self], []) ->
+      oeval_singleton (Some self, flow, [])
+
 
     (** Integers *)
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "int.__new__")}}, [cls], [])

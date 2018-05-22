@@ -156,6 +156,7 @@ let atomaic_type_to_class_name = function
 
 (** Address of the (type) class of an expression *)
 let classof e =
+  debug "classof %a(%a)" Framework.Pp.pp_expr e Framework.Pp.pp_typ e.etyp;
   match etyp e with
   | T_int | T_float | T_bool | T_string -> atomaic_type_to_class_name e.etyp |> find_builtin
   | T_addr ->
@@ -167,11 +168,35 @@ let classof e =
     end
   | _ -> assert false
 
-(** Check class membership of an instance *)
-let isinstance obj cls = assert false
+
+let rec mro addr =
+  debug "mro of %a" Universal.Pp.pp_addr addr;
+  let l = match addr.addr_kind with
+    | A_py_class(C_user cls, bases) -> addr :: (List.map mro bases |> List.flatten)
+    | A_py_class(C_builtin cls, bases) -> (find_builtin cls) :: (List.map mro bases |> List.flatten)
+    | A_py_instance(cls, _) -> mro cls
+    | _ -> assert false
+  in
+  debug "|mro| = %d" (List.length l);
+  l
+
 
 (** Check class inheritance  *)
-let issubclass cls1 cls2 = assert false
+let issubclass cls1 cls2 =
+  List.exists (fun base -> compare_addr base cls2 = 0) (mro cls1)
+
+(** Check class membership of an instance *)
+let isinstance obj cls =
+  match obj.addr_kind, cls.addr_kind with
+  | A_py_instance(cls', _), A_py_class _ ->
+    issubclass cls' cls
+
+  | A_py_class _, A_py_class (C_builtin "type", _)-> true
+
+  | A_py_class _, _ -> false
+
+  | _ -> assert false
+
 
 let () =
   Universal.Pp.(

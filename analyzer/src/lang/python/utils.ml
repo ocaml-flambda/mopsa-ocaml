@@ -3,8 +3,6 @@ open Universal.Ast
 open Framework.Pp
 open Universal.Pp
 open Ast
-(* open XAst
- * open Addr *)
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt
 
@@ -17,7 +15,8 @@ let rec partition_list_by_length n l =
       hd :: lhd, ltl
     | _ -> assert false
 
-let mk_builtin_raise exn range = assert false
+let mk_builtin_raise exn range =
+  mk_stmt (S_py_raise (Some (mk_addr (Addr.find_builtin exn) range))) range
 
 let mk_builtin_call f params range =
   mk_py_call (mk_addr (Addr.find_builtin f) range) params range

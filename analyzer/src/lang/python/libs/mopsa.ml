@@ -48,29 +48,140 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    (* Calls to _mopsa_assert_equal function *)
+    (* Calls to mopsa.assert_equal function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin f)}},
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}},
         [x; y], []
-      ) when f = "_mopsa_assert_equal_" || f = "mopsa.assert_equal" ->
+      ) ->
       let range = erange exp in
       check man ctx (mk_binop x O_eq y (tag_range range "eq")) range flow
 
-    (* Calls to _mopsa_assert_true function *)
+    (* Calls to mopsa.assert_true function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin f)}},
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_true")}},
         [x], []
-      ) when f = "_mopsa_assert_true_" || f = "mopsa.assert_true" ->
+      ) ->
       let range = erange exp in
       check man ctx x range  flow
 
-    (* Calls to _mopsa_assert_false function *)
+    (* Calls to mopsa.assert_false function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin f)}},
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_false")}},
         [x], []
-      ) when f = "_mopsa_assert_false_" || f = "mopsa.assert_false" ->
+      )  ->
       let range = erange exp in
       check man ctx (mk_not x (tag_range range "not")) range flow
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}},
+        [cond], []
+      )  ->
+      let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
+      let flow = man.exec ctx stmt flow in
+      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}},
+        [], []
+      )  ->
+      begin
+        let error_env = man.flow.fold (fun acc env -> function
+            | Flows.Exceptions.TExn _ -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let exception BottomFound in
+        try
+          let cond =
+            match man.flow.is_cur_bottom flow, man.env.is_bottom error_env with
+            | false, true -> mk_one
+            | true, false -> mk_zero
+            | false, false -> mk_int_interval 0 1
+            | true, true -> raise BottomFound
+          in
+          let stmt = mk_assert (cond exp.erange) exp.erange in
+          let cur = man.flow.get TCur flow in
+          let flow = man.flow.set TCur man.env.top flow |>
+                     man.exec ctx stmt |>
+                     man.flow.set TCur cur
+          in
+          oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        with BottomFound ->
+          oeval_singleton (None, flow, [])
+      end
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}},
+        [], []
+      )  ->
+      begin
+        let error_env = man.flow.fold (fun acc env -> function
+            | Flows.Exceptions.TExn _ -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let cond =
+          match man.flow.is_cur_bottom flow, man.env.is_bottom error_env with
+          | false, true -> mk_zero
+          | true, false -> mk_one
+          | false, false -> mk_int_interval 0 1
+          | true, true -> mk_zero
+        in
+        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let cur = man.flow.get TCur flow in
+        let flow = man.flow.set TCur man.env.top flow in
+        let flow = man.exec ctx stmt flow |>
+                   man.flow.filter (fun _ -> function Flows.Exceptions.TExn _ -> false | _ -> true) |>
+                   man.flow.set TCur cur
+        in
+        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+      end
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}},
+        [{ekind = E_addr cls}], []
+      )  ->
+      begin
+        let this_error_env = man.flow.fold (fun acc env -> function
+            | Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let cond =
+          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env with
+          | true, false -> mk_one
+          | _, true -> mk_zero
+          | false, false ->  mk_int_interval 0 1
+        in
+        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let cur = man.flow.get TCur flow in
+        let flow = man.flow.set TCur man.env.top flow in
+        let flow = man.exec ctx stmt flow |>
+                   man.flow.filter (fun _ -> function Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
+                   man.flow.set TCur cur
+        in
+        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+      end
+
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}},
+        [{ekind = E_addr cls}], []
+      )  ->
+      begin
+        let error_env = man.flow.fold (fun acc env -> function
+            | Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> man.env.join acc env
+            | _ -> acc
+          ) man.env.bottom flow in
+        let cur = man.flow.get TCur flow in
+        let cur' = if man.env.is_bottom cur then man.env.top else cur in
+        let cond = if man.env.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
+        let stmt = mk_assert cond exp.erange in
+        let flow' = man.flow.set TCur cur' flow |>
+                   man.exec ctx stmt |>
+                   man.flow.filter (fun _ -> function Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
+                   man.flow.set TCur cur
+        in
+        oeval_singleton (Some (mk_int 0 exp.erange), flow', [])
+      end
+
 
     | _ ->
       None

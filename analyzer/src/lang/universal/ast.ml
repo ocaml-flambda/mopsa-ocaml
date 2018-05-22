@@ -180,9 +180,9 @@ type expr_kind +=
   (** Head address. *)
   | E_addr of addr
 
-let mk_neg e = mk_unop (O_minus e.etyp) e
+let mk_neg e = mk_unop (O_minus e.etyp) e ~etyp:e.etyp
 
-let mk_not e = mk_unop O_log_not e
+let mk_not e = mk_unop O_log_not e ~etyp:T_bool
 
 let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
