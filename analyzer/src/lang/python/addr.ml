@@ -27,7 +27,7 @@ let debug fmt = Debug.debug ~channel:"python.addr" fmt
 (** Parameters of instances of some builtin-in types *)
 type obj_param =
   | List of Universal.Ast.addr (* the address of the iterated list used by listiter *)
-  | Tuple of Universal.Ast.addr 
+  | Tuple of Universal.Ast.addr
   | Dict of Universal.Ast.addr
   | Range of Universal.Ast.addr
   | Generator of py_fundec
@@ -105,7 +105,7 @@ let builtin_name addr =
   | A_py_function(F_builtin name)
   | A_py_module(M_builtin name) -> name
   | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr addr
-      
+
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
   debug "searching for builtin %s" name;
@@ -125,6 +125,8 @@ let find_builtin_attribute obj attr =
 
 (** Check whether a built-in exists given its name *)
 let is_builtin name = List.exists (fun addr -> name = builtin_name addr) (all ())
+
+let is_builtin_addr addr = List.mem addr (all ())
 
 (** Check whether a built-in module exists given its name *)
 let is_builtin_module name = List.exists (fun addr -> name = builtin_name addr) !modules
@@ -183,17 +185,21 @@ let rec mro addr =
 
 (** Check class inheritance  *)
 let issubclass cls1 cls2 =
-  List.exists (fun base -> compare_addr base cls2 = 0) (mro cls1)
+  debug "issubclass %a %a" Universal.Pp.pp_addr cls1 Universal.Pp.pp_addr cls2;
+  let b = List.exists (fun base -> compare_addr base cls2 = 0) (mro cls1) in
+  debug "b = %b" b;
+  b
 
 (** Check class membership of an instance *)
 let isinstance obj cls =
+  debug "isinstance %a %a" Universal.Pp.pp_addr obj Universal.Pp.pp_addr cls;
   match obj.addr_kind, cls.addr_kind with
   | A_py_instance(cls', _), A_py_class _ ->
     issubclass cls' cls
 
-  | A_py_class _, A_py_class (C_builtin "type", _)-> true
+  | A_py_class _, A_py_class (C_builtin "type", _)-> debug "true"; true
 
-  | A_py_class _, _ -> false
+  | A_py_class _, _ -> debug "false"; false
 
   | _ -> assert false
 

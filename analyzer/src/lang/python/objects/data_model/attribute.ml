@@ -225,6 +225,20 @@ struct
                   in
                   aux false_flow mro
                )
+               ~bottom_case:(fun () ->
+                   (* In a bottom environment, the only thing that we
+                      can do is to search for builtins attributes and
+                      resolve them statically *)
+                   if Addr.is_builtin_addr addr  then
+                     let name = Addr.builtin_name addr in
+                     if Addr.is_builtin_attribute name attr then
+                       let exp' = mk_addr (Addr.find_builtin_attribute name attr) range in
+                       oeval_singleton (Some exp', flow, [])
+                     else
+                       oeval_singleton (None, flow, [])
+                   else
+                     oeval_singleton (None, flow, [])
+                 )
                man flow ()
 
            (* Access to an ordinary attribute of atomic types *)

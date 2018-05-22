@@ -69,48 +69,62 @@ struct
         oeval_singleton (None, flow, [])
 
       else
-        (* Fill missing args with default parameters *)
-        let default_args = List.map (function Some e -> e | None -> assert false) default_args in
-        let rec fill_with_default dfs ndfs args =
-          match args with
-          | [] -> dfs
-          | arg :: args' ->
-            match ndfs with
-            | [] ->
-              let dfs' = List.tl dfs in
-              arg :: (fill_with_default dfs' [] args')
-            | _ :: ndfs' ->
-              arg :: (fill_with_default dfs ndfs' args')
+      if List.length args > (List.length pyfundec.py_func_parameters) then
+        let flow =
+          man.exec ctx (Utils.mk_builtin_raise "TypeError" exp.erange) flow
         in
-        let args = fill_with_default default_args nondefault_args args in
-        if List.length args < List.length nondefault_args then
-          let flow =
-            man.exec ctx (Utils.mk_builtin_raise "TypeError" exp.erange) flow
-          in
-          oeval_singleton (None, flow, [])
-        else
-          (* Give the call to {!Universal} *)
-          let tmp = mktmp () in
-          let fundec = {
-            fun_name = var_uniq_name (pyfundec.py_func_var);
-            fun_parameters = pyfundec.py_func_parameters;
-            fun_locvars = pyfundec.py_func_locals;
-            fun_body = pyfundec.py_func_body;
-            fun_return_type = T_any;
-          } in
+        oeval_singleton (None, flow, [])
+      else
+        let args =
+          if List.length args = (List.length pyfundec.py_func_parameters) then
+            args
+          else
+            (* Fill missing args with default parameters *)
+            let default_args = List.map (function Some e -> e | None -> assert false) default_args in
+            let rec fill_with_default dfs ndfs args =
+              match args with
+              | [] -> dfs
+              | arg :: args' ->
+                match ndfs with
+                | [] ->
+                  (* let dfs' = List.tl dfs in *)
+                  arg :: (fill_with_default dfs [] args')
+                | _ :: ndfs' ->
+                  arg :: (fill_with_default dfs ndfs' args')
+            in
+
+            debug "|params| = %d" (List.length pyfundec.py_func_parameters);
+            debug "|args| = %d" (List.length args);
+            debug "|default| = %d" (List.length default_args);
+            debug "|non-default| = %d" (List.length nondefault_args);
+            let args = fill_with_default default_args nondefault_args args in
+
+            debug "|args'| = %d" (List.length args);
+            args
+        in
+        assert (List.length args = (List.length pyfundec.py_func_parameters));
+        (* Give the call to {!Universal} *)
+        let tmp = mktmp () in
+        let fundec = {
+          fun_name = var_uniq_name (pyfundec.py_func_var);
+          fun_parameters = pyfundec.py_func_parameters;
+          fun_locvars = pyfundec.py_func_locals;
+          fun_body = pyfundec.py_func_body;
+          fun_return_type = T_any;
+        } in
 
 
-          let flow =
-            man.exec ctx
-              (mk_assign
-                 (mk_var tmp exp.erange)
-                 (mk_call fundec args exp.erange)
-                 exp.erange
-              )
-              flow
-          in
-          let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
-          re_eval_singleton (man.eval ctx) evl
+        let flow =
+          man.exec ctx
+            (mk_assign
+               (mk_var tmp exp.erange)
+               (mk_call fundec args exp.erange)
+               exp.erange
+            )
+            flow
+        in
+        let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
+        re_eval_singleton (man.eval ctx) evl
 
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_method(f, obj)}},

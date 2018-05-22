@@ -140,6 +140,7 @@ struct
         [{ekind = E_addr cls}], []
       )  ->
       begin
+        debug "begin assert_exception";
         let this_error_env = man.flow.fold (fun acc env -> function
             | Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> man.env.join acc env
             | _ -> acc

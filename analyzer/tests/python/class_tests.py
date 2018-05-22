@@ -1,42 +1,42 @@
 import mopsa
 
-# def test_init():
-#     class C:
-#         def __init__(self):
-#             self.x = 10
-#     c = C()
-#     mopsa.assert_equal(c.x, 10)
+def test_init():
+    class C:
+        def __init__(self):
+            self.x = 10
+    c = C()
+    mopsa.assert_equal(c.x, 10)
 
 
-# def test_static_attribute():
-#     class C:
-#         x = 100
-#         def f(self):
-#             return self.x
+def test_static_attribute():
+    class C:
+        x = 100
+        def f(self):
+            return self.x
 
-#     c1 = C()
-#     mopsa.assert_equal(c1.x, 100)
+    c1 = C()
+    mopsa.assert_equal(c1.x, 100)
 
-# def test_static_attribute_change():
-#     class C:
-#         x = 100
+def test_static_attribute_change():
+    class C:
+        x = 100
 
-#     c1 = C()
-#     c2 = C()
-#     c2.x = 200
-#     mopsa.assert_equal(c1.x, 100)
-#     C.x = 300
-#     mopsa.assert_equal(c1.x, 300)
-#     mopsa.assert_equal(c2.x, 200)
+    c1 = C()
+    c2 = C()
+    c2.x = 200
+    mopsa.assert_equal(c1.x, 100)
+    C.x = 300
+    mopsa.assert_equal(c1.x, 300)
+    mopsa.assert_equal(c2.x, 200)
 
-# def test_method_call():
-#     class A:
-#         x = 10
-#         def f(self):
-#             return self.x + 1
+def test_method_call():
+    class A:
+        x = 10
+        def f(self):
+            return self.x + 1
 
-#     a = A()
-#     mopsa.assert_equal(a.f(), 11)
+    a = A()
+    mopsa.assert_equal(a.f(), 11)
 
 def test_instance_in_condition():
     class C: pass

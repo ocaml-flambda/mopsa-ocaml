@@ -19,8 +19,8 @@ def test_global():
     incr(10)
     mopsa.assert_equal(i, 11)
 
-# def test_arg_mismatch():
-#     def f(x):
-#         return x
-#     y = f(1, 2)
-#     mopsa.assert_error(TypeError)
+def test_arg_mismatch():
+    def f(x):
+        return x
+    y = f(1, 2)
+    mopsa.assert_exception(TypeError)
