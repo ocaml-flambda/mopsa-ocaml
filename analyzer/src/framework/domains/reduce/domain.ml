@@ -67,6 +67,7 @@ let orflow_join man = Option.option_neutral2 (rflow_join man)
 type 'a reval_case = (Ast.expr * merger list, 'a) eval_case
 type 'a revals = (Ast.expr * merger list, 'a) evals
 
+
 (** Abstract domain signature. *)
 module type DOMAIN =
 sig
@@ -138,6 +139,10 @@ end
 
 let flow_of_rflow rflow =
   rflow.out
+
+let evals_of_revals revals =
+  Dnf.map (fun (a,b,c) -> match a with Some (x,y) -> Some(x),b,c | None -> (None,b,c)) revals
+
 let return_flow_no_opt flow = {
   out = flow;
   publish = [];

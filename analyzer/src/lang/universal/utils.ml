@@ -47,6 +47,14 @@ let switch_exec
   | [] -> man.flow.bottom
 
 
+let print_cond_list fmt cl =
+  Format.fprintf fmt "[%a]"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+       (fun fmt (e,b) -> Format.fprintf fmt "%b(%a)" b Framework.Pp.pp_expr e)
+    )
+    cl
+
 let switch_rexec
     (cases : (((expr * bool) list) * ('a Framework.Flow.flow -> 'a Framework.Domains.Reduce.Domain.rflow)) list)
     man ctx flow
@@ -65,7 +73,9 @@ let switch_rexec
         ) flow cond
       |> t
     in
-    List.fold_left (fun acc (cond, t) -> RF.rflow_join man.flow (one cond t) acc) (one cond t) q
+    List.fold_left (fun acc (cond, t) ->
+        let res = one cond t in
+        RF.rflow_join man.flow res acc) (one cond t) q
   | [] -> man.flow.bottom |> RF.return_flow_no_opt
 
 

@@ -12,6 +12,7 @@ let init () =
       Smashing.setup ();
       Reductions.(
         Expand_smashing.setup ();
+        Initzero_expand.setup ();
       );
       Initzero.setup ();
     );

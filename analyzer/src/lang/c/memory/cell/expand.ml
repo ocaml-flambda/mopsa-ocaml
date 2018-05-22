@@ -93,6 +93,10 @@ let mk_ocell_points_to (c : ocell) range =
 let mk_xcell_points_to (c : xcell) range =
   mk_expr ~etyp:(pointer_type c.t) (E_c_points_to (E_p_var (c.b,mk_int 0 (tag_range range "offset"),c.t))) (tag_range range "pointsto")
 
+let cell_type c = match c with
+  | OffsetCell oc -> oc.t
+  | AnyCell c -> c.t
+
 (** Annotate variables with cell information. *)
 type var_kind +=
   | V_expand_cell of cell
@@ -513,7 +517,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let rmin, rmax = rangeof v.vtyp in
             let cond = range_cond lval rmin rmax (erange lval) in
             let stmt' = (mk_assume cond (tag_range range "assume range")) in
-            let () = debug "cell_expand assume %a" Framework.Pp.pp_stmt stmt' in
             match SubDomain.exec subman ctx stmt' flow with
             | Some flow -> flow
             | None -> assert false
@@ -528,7 +531,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       return
 
     | _ -> assert false
-
 
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
@@ -550,8 +552,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       SubDomain.exec subman ctx stmt' flow |>
       oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
 
-    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      (* For the rval, we use the manager eval to simplify the expression *)
+    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->      (* For the rval, we use the manager eval to simplify the expression *)
       man.eval ctx rval flow |>
       eval_to_orexec (fun rval flow ->
           (* However, the lval, we use our local eval so that the reduced product will not evict our simplifications *)
@@ -570,6 +571,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   and eval man subman ctx exp flow =
     let range = erange exp in
     match ekind exp with
+    | E_var ({vkind = V_expand_cell (OffsetCell _ | AnyCell _ )}) ->
+      oeval_singleton (Some exp, flow, [])
+      |> add_eval_mergers []
+
     | E_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
       debug "evaluating a scalar variable %a" pp_var v;
       let u = get_domain_cur man flow in
@@ -583,18 +588,19 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       re_eval_singleton (man.eval ctx) (Some (mk_var v exp.erange), flow'', []) |>
       add_eval_mergers []
 
-    | E_c_address_of e ->
-      man.eval ctx e flow |>
-      eval_compose (fun e flow ->
-          match ekind e with
-          | E_var ({vkind = V_expand_cell (OffsetCell c)}) ->
-            oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
-            add_eval_mergers []
-          | E_var ({vkind = V_expand_cell (AnyCell c)}) ->
-            oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
-            add_eval_mergers []
-          | _ -> None
-        )
+    (* | E_c_address_of e ->
+     *   man.eval ctx e flow |>
+     *   eval_compose (fun e' flow ->
+     *       let () = debug "I was asked address of &%a, got &%a" Framework.Pp.pp_expr e Framework.Pp.pp_expr e in
+     *       match ekind e' with
+     *       | E_var ({vkind = V_expand_cell (OffsetCell c)}) ->
+     *         oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
+     *         add_eval_mergers []
+     *       | E_var ({vkind = V_expand_cell (AnyCell c)}) ->
+     *         oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
+     *         add_eval_mergers []
+     *       | _ -> None
+     *     ) *)
 
     | E_c_deref(p) ->
       man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
@@ -642,6 +648,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             Debug.fail "arrow access to function pointers"
 
           | E_c_points_to(E_p_var (base, offset, t)) ->
+            let idx' = idx in
             man.eval ctx idx flow |>
             eval_compose (fun idx flow ->
                 let offset' = mk_binop offset math_plus (mk_binop idx math_mult (mk_z (sizeof_type t) exp.erange) exp.erange) exp.erange in
@@ -747,6 +754,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
           | _ -> assert false
         )
 
+    | E_c_resolve_pointer({ekind = E_c_address_of e}) ->
+      man.eval ctx e flow |>
+      eval_compose (fun e' flow ->
+          match ekind e' with
+          | E_var ({vkind = V_expand_cell (OffsetCell c)}) ->
+            oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | E_var ({vkind = V_expand_cell (AnyCell c)}) ->
+            oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | _ -> None
+        )
+
+    | E_c_resolve_pointer(e) ->
+      man.eval ctx e flow |>
+      eval_compose (fun e' flow ->
+          match ekind e' with
+          | E_var ({vkind = V_expand_cell (OffsetCell c)}) when (is_c_array_type c.t) || (is_c_struct_type c.t) ->
+            oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | E_var ({vkind = V_expand_cell (AnyCell c)}) when (is_c_array_type c.t) || (is_c_struct_type c.t) ->
+            oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
+            add_eval_mergers []
+          | _ -> None
+        )
+
 
     | _ -> None
 
@@ -769,7 +802,17 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                         set_domain_cur s' subman
             in
             let stmt = mk_assign (mk_var v range) e range in
-            sub_exec subman ctx stmt flow'
+            man.exec ctx stmt flow'
+          (* OLD version : *)
+          (* let v = annotate_var_kind v in
+           * let u = get_domain_cur man flow in
+           * let s = get_domain_cur subman flow in
+           * let (u', s') = add_var ctx range v (u, s) in
+           * let flow' = set_domain_cur u' man flow |>
+           *             set_domain_cur s' subman
+           * in
+           * let stmt = mk_assign (mk_var v range) e range in
+           *    (\* sub_exec subman ctx stmt flow' *\) *)
 
           | _ -> assert false
         );

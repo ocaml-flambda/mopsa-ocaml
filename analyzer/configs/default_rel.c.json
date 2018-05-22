@@ -12,7 +12,7 @@
         //Desugarisation
         "c.desugar.andor",
         "c.desugar.stmt_rvals",
-	      "c.desugar.records",
+	"c.desugar.records",
         "c.desugar.loops",
 
         //Flows
@@ -28,8 +28,7 @@
             "unify": "universal.heap.recency",
             "over": {
                 //Memory abstraction
-                "reduce-unify": ["c.memory.cell.expand","c.memory.cell.initzero"],
-                "reductions": ["c.memory.cell.reductions.initzero_expand"],
+                "reduce-unify": ["c.memory.cell.expand"],
                 "over": {
                     "iter": [
                         "c.memory.pointer",

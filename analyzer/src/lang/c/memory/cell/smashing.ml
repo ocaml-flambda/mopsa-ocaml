@@ -96,7 +96,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
   let is_bottom x = false
 
   let widening ctx = join
-    
+
   (** Pretty printer. *)
   let print fmt c =
     Format.fprintf fmt "smash cells: @[%a@]@\n"
@@ -145,10 +145,10 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     debug "var_of_cell %a in @[%a@]" pp_cell c print cs;
     match exist_and_find_cell c cs with
     | Some (v, _) -> debug "already exists"; v
-    | None -> 
-      debug "new cell"; 
+    | None ->
+      debug "new cell";
       var_of_new_cell c
-        
+
   let add_var ctx range (v : var) (u, s) =
     debug "add_var %a in %a" pp_var v print u;
     if CS.mem v u then u, s
@@ -183,7 +183,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     if man.flow.is_cur_bottom flow then empty ()
     else
       let cell_size = sizeof_type typ in
-      
+
       let rec static_offset_case base_size =
       debug "static base case";
       match Universal.Utils.expr_to_z offset with
@@ -298,7 +298,6 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
             let rmin, rmax = rangeof v.vtyp in
             let cond = range_cond lval rmin rmax (erange lval) in
             let stmt' = (mk_assume cond (tag_range range "assume range")) in
-            let () = debug "cell_smash assume %a" Framework.Pp.pp_stmt stmt' in
             match SubDomain.exec subman ctx stmt' flow with
             | Some flow -> flow
             | None -> assert false
@@ -310,7 +309,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
 
     | _ -> assert false
 
-    
+
   let rec exec man subman ctx stmt flow =
     let range = stmt.srange in
     match skind stmt with
@@ -538,7 +537,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
                         set_domain_cur s' subman
             in
             let stmt = mk_assign (mk_var v range) e range in
-            sub_exec subman ctx stmt flow'
+            man.exec ctx stmt flow'
 
           | _ -> assert false
         );

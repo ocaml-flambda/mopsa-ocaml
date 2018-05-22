@@ -184,47 +184,57 @@ struct
       let pt = E_p_var (V a, mk_zero range, under_array_type a.vtyp) in
       oeval_singleton (Some pt, flow, [])
 
-    | E_var a when is_c_array_type a.vtyp ->
-      debug "points to array var";
-      (
-        match man.ask ctx (Query.QExtractVarBase a) flow with
-        | Some (b, o) ->
-          let pt = E_p_var (b, o, under_array_type a.vtyp) in
-          oeval_singleton (Some pt, flow, [])
-        | None -> assert false
-      )
+    (* | E_var a when is_c_array_type a.vtyp ->
+     *   debug "points to array var";
+     *   (
+     *     match man.ask ctx (Query.QExtractVarBase a) flow with
+     *     | Some (b, o) ->
+     *       let pt = E_p_var (b, o, under_array_type a.vtyp) in
+     *       oeval_singleton (Some pt, flow, [])
+     *     | None -> assert false
+     *   ) *)
+
 
     | E_c_address_of(e) when is_c_array_type e.etyp || is_c_function_type e.etyp ->
       debug "address of an array or a function";
       man.eval ctx e flow |>
       eval_compose (eval_p man ctx)
 
-    | E_c_address_of(e) ->
-      debug "other addresses";
-      man.eval ctx exp flow |>
-      eval_compose (fun e flow ->
-          match ekind e with
-          | E_c_points_to pexpr -> oeval_singleton (Some pexpr, flow, [])
-          | _ -> Debug.fail "E_c_adress_of(e) in eval_p yielded %a" Framework.Pp.pp_expr e
+    | E_c_address_of({ekind = E_c_array_subscript(e1, e2)} as e) ->
+      let pt = pointer_type (etyp e) in
+      eval_p man ctx
+        (mk_binop
+           ({ekind = E_c_cast(e1,false); etyp = pt; erange = tag_range range "t0"})
+           (O_plus pt)
+           e2
+           (tag_range range "t1")
         )
-    (* |>
-       * eval_compose
-       *   (fun e flow ->
-       *      match ekind e with
-       *      | E_var v ->
-       *        (
-       *          debug "address of var %a" pp_var v;
-       *          match man.ask ctx (Query.QExtractVarBase v) flow with
-       *          | Some (b, o) ->
-       *            let pt = E_p_var (b, o, v.vtyp) in
-       *            oeval_singleton (Some pt, flow, [])
-       *
-       *          | None ->
-       *            assert false
-       *        )
-       *
-       *      | _ -> Debug.fail "eval_p: &(%a) not known" pp_expr e;
-       *   ) *)
+        flow
+
+    | E_c_address_of({ekind = E_c_member_access (e, i, f)}) ->
+      let pt = pointer_type (T_c_integer C_signed_char) in
+      let record = match remove_typedef e.etyp with T_c_record r -> r | _ -> assert false in
+      let field = List.nth record.c_record_fields i in
+      let offset' = mk_int field.c_field_offset exp.erange in
+      eval_p man ctx
+        (mk_binop
+           ({ekind = E_c_cast(e,false); etyp = pt; erange = tag_range range "t0"})
+           (O_plus pt)
+           offset'
+           (tag_range range "t1")
+        )
+        flow
+
+    | E_c_address_of({ekind = E_c_deref (e)}) ->
+      eval_p man ctx e flow
+    (* | E_c_address_of(e) ->
+     *   debug "other addresses";
+     *   man.eval ctx exp flow |>
+     *   eval_compose (fun e flow ->
+     *       match ekind e with
+     *       | E_c_points_to pexpr -> oeval_singleton (Some pexpr, flow, [])
+     *       | _ -> Debug.fail "E_c_adress_of(e) in eval_p yielded %a" Framework.Pp.pp_expr e
+     *     ) *)
 
     | E_binop(O_plus _, e1, e2) when
         ((is_c_pointer_type e1.etyp || is_c_array_type e1.etyp) && (is_c_int_type e2.etyp || is_int_type e2.etyp)) ||
@@ -272,7 +282,15 @@ struct
       oeval_singleton (Some pexpr, flow, [])
 
     | _ ->
-      panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
+      let exp' = mk_c_resolve_pointer exp (tag_range range "t0") in
+      let () = debug "calling on other domain to eval_p %a" Framework.Pp.pp_expr exp' in
+      man.eval ctx exp' flow
+      |> eval_compose (fun e flow ->
+          match ekind e with
+          | E_c_points_to pe -> oeval_singleton (Some pe, flow, [])
+          | _ -> panic "eval_p: unsupported expression %a in %a" pp_expr exp pp_range_verbose exp.erange
+        )
+
 
   let rec exec man ctx stmt flow =
     debug "exec %a" pp_stmt stmt;
@@ -337,8 +355,7 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_c_resolve_pointer p ->
-      man.eval ctx p flow |>
-      eval_compose (eval_p man ctx) |>
+      eval_p man ctx p flow |>
       oeval_compose (fun pt flow ->
           let exp' = {exp with ekind = E_c_points_to pt} in
           oeval_singleton (Some exp', flow, [])

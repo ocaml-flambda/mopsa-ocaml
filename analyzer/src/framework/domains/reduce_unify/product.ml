@@ -95,7 +95,6 @@ module Make(Head: DOMAIN)(Tail: DOMAIN)(Reduction: Reduce.Reduction.REDUCTION) :
     debug "done";
     rflow
 
-
   let eval man subman ctx exp flow =
     let hman = head_man man in
     let tman = tail_man man in

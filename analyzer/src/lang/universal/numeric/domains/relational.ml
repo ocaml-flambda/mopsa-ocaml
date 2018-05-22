@@ -15,11 +15,18 @@ open Framework.Manager
 open Framework.Ast
 open Framework.Exec
 open Framework.Utils
+open Framework.Eval
+open Framework.Flow
 open Ast
 
 let name = "universal.numeric.domains.relational"
 
 let debug fmt = Debug.debug ~channel:name fmt
+
+let pp_env = Apron.Environment.print
+    ~first:("[")
+    ~sep:(",")
+    ~last:("]")
 
 module type APRONMANAGER =
 sig
@@ -48,6 +55,8 @@ struct
 
   let var_to_apron v =
     (* assert (v.vtyp <> TAny); *)
+    (* FIXME: remove the following line : *)
+    let v = {v with vtyp = T_int} in
     Format.fprintf Format.str_formatter "%s:%a" (var_uniq_name v) Framework.Pp.pp_typ v.vtyp;
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
@@ -64,12 +73,16 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (function {vtyp = T_int} -> true | _ -> false) lv
+          (* FIXME : this sould be the following line : *)
+          (* List.filter (function {vtyp = T_int} -> true | _ -> false) lv *)
+          (fun x -> x) lv
         )
         (
           Array.of_list @@
           List.map var_to_apron @@
+          (* FIXME : this sould be the following line : *)
           List.filter (function {vtyp = T_float} -> true | _ -> false) lv
+          (* (fun x -> x) lv *)
         )
     in
     Apron.Abstract1.change_environment ApronManager.man abs env' false
@@ -105,11 +118,6 @@ struct
   let print fmt abs =
     Format.fprintf fmt "rel: @[%a@]"
       Apron.Abstract1.print abs
-
-  let pp_env = Apron.Environment.print
-      ~first:("[")
-      ~sep:(",")
-      ~last:("]")
 
   let refine_var_type var =
     match var.vtyp with
@@ -155,35 +163,38 @@ struct
       Apron.Abstract1.change_environment ApronManager.man abs new_env true |>
       return_cur
 
-    | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
-        let v = {v with vtyp = e.etyp} in
-        let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
-        try
-          let aenv = Apron.Abstract1.env abs in
-          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
-          Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
-          return_cur
-        with Unsupported ->
-          exec man ctx {stmt with skind = S_remove_var v} flow
-      end
+    (* | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
+     *     let v = {v with vtyp = e.etyp} in
+     *     let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
+     *     try
+     *       let aenv = Apron.Abstract1.env abs in
+     *       let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
+     *       Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
+     *       return_cur
+     *     with Unsupported ->
+     *       exec man ctx {stmt with skind = S_remove_var v} flow
+     *   end *)
 
     (* FIXME : Need to chexk type of e *)
     | S_assign({ekind = E_var v}, e, STRONG) -> begin
-        let v = {v with vtyp = T_int} in
-        let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
-        try
-          let aenv = Apron.Abstract1.env abs in
-          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
-          Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
-          return_cur
-        with Unsupported ->
-          exec man ctx {stmt with skind = S_remove_var v} flow
+        man.eval ctx e flow |>
+        eval_to_oexec (fun e flow ->
+            let v = {v with vtyp = T_int} in
+            let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
+            try
+              let aenv = Apron.Abstract1.env abs in
+              let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
+              Apron.Abstract1.assign_texpr ApronManager.man abs (var_to_apron v) texp None |>
+              return_cur
+            with Unsupported ->
+              exec man ctx {stmt with skind = S_remove_var v} flow
+          ) (man.exec ctx) man.flow
       end
-
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
       assert false
 
-    | S_assign(({ekind = E_var x}), {ekind = E_var ({vtyp = T_int | T_float} as x0)}, EXPAND) ->
+    (*FIXME : Need to check type of variable :*)
+    | S_assign(({ekind = E_var x}), {ekind = E_var (x0)}, EXPAND) ->
       let abs = add_missing_vars abs [x0] in
       let abs = set_domain_cur abs man flow |>
                 exec man ctx (mk_stmt (S_remove_var x) stmt.srange) |>
@@ -198,38 +209,43 @@ struct
       exec man ctx {stmt with skind = S_remove_var v} flow
 
     | S_assume(e) -> begin
-        let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
-        let env = Apron.Abstract1.env abs in
-        try
-          let e' = bexp_to_apron e in
-          e' |> Dnf.to_list |> List.map (fun c ->
-              c |> List.map ( fun (op,e1,typ1,e2,typ2) ->
-                  let typ =
-                    match typ1, typ2 with
-                    | T_int, T_int -> Apron.Texpr1.Int
-                    | T_float, T_int
-                    | T_int, T_float
-                    | T_float, T_float -> Apron.Texpr1.Real
-                    (*FIXME : This is a partial fix : *)
-                    | _,_ -> Apron.Texpr1.Int
-                    | _ -> Debug.fail "Unsupported case (%a, %a) in stmt @[%a@]"
-                             Framework.Pp.pp_typ typ1
-                             Framework.Pp.pp_typ typ2
-                             Framework.Pp.pp_stmt stmt
-                  in
-                  let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, default_rounding) in
-                  let diff_texpr = Apron.Texpr1.of_expr env diff in
-                  let cons = Apron.Tcons1.make diff_texpr op in
-                  (* let abs' = Apron.Abstract1.meet_tcons_array ApronManager.man abs (tcons_array_of_tcons_list env [cons]) in *)
-                  cons
-                ) |> tcons_array_of_tcons_list env
-              |> Apron.Abstract1.meet_tcons_array ApronManager.man abs
-            ) |> List.fold_left (fun acc abs ->
-              Apron.Abstract1.join ApronManager.man acc abs
-            ) (Apron.Abstract1.bottom ApronManager.man env) |>
-          return_cur
-        with Unsupported ->
-          return_cur abs
+        man.eval ctx e flow |>
+        eval_to_oexec
+          (fun e flow ->
+             let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
+             let env = Apron.Abstract1.env abs in
+             try
+               let e' = bexp_to_apron e in
+               e' |> Dnf.to_list |> List.map (fun c ->
+                   c |> List.map ( fun (op,e1,typ1,e2,typ2) ->
+                       let typ =
+                         match typ1, typ2 with
+                         | T_int, T_int -> Apron.Texpr1.Int
+                         | T_float, T_int
+                         | T_int, T_float
+                         | T_float, T_float -> Apron.Texpr1.Real
+                         (*FIXME : This is a partial fix : *)
+                         | _,_ -> Apron.Texpr1.Int
+                         | _ -> Debug.fail "Unsupported case (%a, %a) in stmt @[%a@]"
+                                  Framework.Pp.pp_typ typ1
+                                  Framework.Pp.pp_typ typ2
+                                  Framework.Pp.pp_stmt stmt
+                       in
+                       let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, default_rounding) in
+                       let diff_texpr = Apron.Texpr1.of_expr env diff in
+                       Apron.Tcons1.make diff_texpr op
+                     ) |> tcons_array_of_tcons_list env
+                   |> Apron.Abstract1.meet_tcons_array ApronManager.man abs
+                 ) |> List.fold_left (fun acc abs ->
+                   Apron.Abstract1.join ApronManager.man acc abs
+                 ) (Apron.Abstract1.bottom ApronManager.man env) |>
+               (fun x ->
+                  return_cur x)
+             with Unsupported ->
+               (* FIXME : this is also a partial fix : *)
+               (* return_cur abs *)
+               None
+          ) (man.exec ctx) man.flow
       end
 
     | S_rename_var( v, v') ->
@@ -240,24 +256,29 @@ struct
 
     | _ -> None
 
-  (** {2 Queries} *)
+  and get_bounds man exp flow =
+    let abs = get_domain_cur man flow in
+    try
+      let lv =  Framework.Visitor.expr_vars exp in
+      let abs = add_missing_vars abs lv in
+      let env = Apron.Abstract1.env abs in
+      let e' = exp_to_apron exp in
+      let texp = Apron.Texpr1.of_expr env e' in
+      let itv = Apron.Abstract1.bound_texpr ApronManager.man abs texp in
+      let rep = Values.Int.of_apron itv in
+      rep
+    with
+    | Unsupported ->
+      Values.Int.top
+
+      (** {2 Queries} *)
   and ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
     fun man ctx query flow ->
       match query with
       | Query.QIntInterval exp ->
-        begin
-          let abs = get_domain_cur man flow in
-          try
-            None
-            (* let lv =  Framework.Visitor.expr_vars exp in
-             * let abs = add_missing_vars abs lv in
-             * let env = Apron.Abstract1.env abs in
-             * let texp = Apron.Texpr1.of_expr env (exp_to_apron exp) in
-             * let itv = Apron.Abstract1.bound_texpr ApronManager.man abs texp in
-             * Some (Values.Int.of_apron itv) *)
-          with
-          | Unsupported -> Some (Values.Int.top)
-        end
+        Some (get_bounds man exp flow)
+      | Query.QIntStepInterval exp ->
+        Some (get_bounds man exp flow, Z.one)
       | _ ->
         None
   (** {2 Transformers to Apron syntax} *)
@@ -301,7 +322,8 @@ struct
 
     | E_constant(C_float f) -> Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f))
 
-    | E_var ({vtyp = T_int | T_float} as x) -> Apron.Texpr1.Var(var_to_apron x)
+    (* | E_var ({vtyp = T_int | T_float} as x) -> Apron.Texpr1.Var(var_to_apron x) *)
+    | E_var (x) -> Apron.Texpr1.Var(var_to_apron x)
 
     (* | Var x -> top_by_type x.vtyp *)
 
@@ -321,7 +343,28 @@ struct
       let typ' = typ_to_apron T_float in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', default_rounding)
 
-    | _ -> raise Unsupported
+    | E_unop(O_wrap(g, d), e) ->
+      let r = erange e in
+
+      mk_binop
+        (mk_z g (tag_range r "t0"))
+        (O_plus T_int)
+        (mk_binop
+           (mk_binop
+              e
+              (O_minus T_int)
+              (mk_z g (tag_range r "t5"))
+              (tag_range r "t4")
+           )
+           (O_mod T_int)
+           (mk_z (Z.(d-g+one)) (tag_range r "t3"))
+           (tag_range r "t2")
+        )
+        (tag_range r "t1")
+      |> exp_to_apron
+
+    | _ -> Debug.warn "[exp_to_apron] : failed to transform %a of type %a" Framework.Pp.pp_expr exp Framework.Pp.pp_typ (etyp exp);
+      raise Unsupported
 
   and typ_to_apron = function
     | T_int -> Apron.Texpr1.Int
@@ -397,7 +440,37 @@ struct
     ) l in
     cond_array
 
-  let eval _ _ _ _ = None
+  let eval  man ctx exp flow =
+    match ekind exp with
+    | E_binop((O_plus T_int | O_minus T_int  | O_mult T_int  | O_div T_int  | O_mod T_int  |
+               O_eq | O_ne | O_lt | O_le | O_gt | O_ge |
+               O_log_and | O_log_or | O_bit_and | O_bit_or |
+               O_bit_xor | O_bit_lshift | O_bit_rshift as op), e1, e2) ->
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose
+        (fun el flow ->
+           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+           let exp' = {exp with ekind = E_binop(op, e1, e2)} in
+           oeval_singleton (Some (exp'), flow, [])
+        )
+
+    | E_unop((O_wrap(g, d) as op, e)) ->
+      man.eval ctx e flow |>
+      eval_compose
+        (fun e flow ->
+           let exp' = {exp with ekind = E_unop(op, e)} in
+           oeval_singleton (Some (exp'), flow, [])
+        )
+
+    | E_unop((O_minus T_int | O_plus T_int  | O_log_not | O_bit_invert | O_sqrt as op), e) ->
+      man.eval ctx e flow |>
+      eval_compose
+        (fun e flow ->
+           let exp' = {exp with ekind = E_unop(op, e)} in
+           oeval_singleton (Some (exp'), flow, [])
+        )
+
+    | _ -> None
 
 end
 
