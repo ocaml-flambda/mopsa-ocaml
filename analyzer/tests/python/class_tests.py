@@ -52,3 +52,10 @@ def test_instance_in_condition():
         y = 2
     mopsa.assert_equal(x, 1)
     mopsa.assert_equal(y, 2)
+
+def test_attribute_error():
+    class C: pass
+
+    x = C()
+    y = x.a
+    mopsa.assert_exception(AttributeError)

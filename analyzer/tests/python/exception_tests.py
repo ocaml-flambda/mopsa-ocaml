@@ -21,3 +21,7 @@ def test_unreachable_test():
         x = 10
     mopsa.assert_safe()
     mopsa.assert_equal(x, 10)
+
+def test_incorrect_raise():
+    raise 2
+    mopsa.assert_exception(TypeError)

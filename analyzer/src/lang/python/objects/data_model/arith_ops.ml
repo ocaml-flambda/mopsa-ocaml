@@ -56,7 +56,7 @@ module Domain = struct
 
             let tmp = mktmp () in
 
-            let add_cond = Utils.mk_builtin_call "hasattr" [e1; mk_string op_fun range] range in
+            let add_cond = Utils.mk_builtin_call "hasattr" [mk_addr cls1 range; mk_string op_fun range] range in
 
             debug "Calling has_attribute";
             let has_add_flow = man.exec ctx (mk_assume add_cond range) flow in
@@ -112,8 +112,8 @@ module Domain = struct
               if man.flow.is_cur_bottom pre_radd_flow then
                 man.flow.bottom, man.flow.bottom
               else
-                man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) pre_radd_flow,
-                man.exec ctx (mk_assume (mk_not (Utils.mk_builtin_call "hasattr" [e2; mk_string rop_fun range] range) range) range) pre_radd_flow
+                man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range) range) pre_radd_flow,
+                man.exec ctx (mk_assume (mk_not (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range) range) range) pre_radd_flow
             in
             let post_radd_flow =
               if man.flow.is_cur_bottom has_radd_flow then
@@ -188,7 +188,7 @@ module Domain = struct
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
             let cls = classof e in
-            let ok_cond = Utils.mk_builtin_call "hasattr" [e; mk_string op_fun range] range in
+            let ok_cond = Utils.mk_builtin_call "hasattr" [mk_addr cls range; mk_string op_fun range] range in
             let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
             let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
 

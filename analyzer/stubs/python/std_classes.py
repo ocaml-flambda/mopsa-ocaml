@@ -169,6 +169,7 @@ class list(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass
     def __iter__(self): pass
+    def __add__(self, o): pass
 
 def listiter(object):
     def __next__(self): pass

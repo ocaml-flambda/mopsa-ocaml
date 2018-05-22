@@ -258,7 +258,21 @@ struct
               (assume_is_attribute addr attr man ctx)
               (assume_is_not_attribute addr attr man ctx)
               (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
-              (fun false_flow -> oeval_singleton (Some (mk_false range), false_flow, []))
+              (fun false_flow ->
+                 let mro = Addr.mro addr in
+                 let rec aux flow = function
+                   | [] -> oeval_singleton (Some (mk_false range), false_flow, [])
+                   | cls :: tl ->
+                     (* Check existence of the attribute in the class *)
+                     if_flow_eval
+                       (assume_is_attribute cls attr man ctx)
+                       (assume_is_not_attribute cls attr man ctx)
+                       (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
+                       (fun false_flow -> aux false_flow tl)
+                       man flow ()
+                 in
+                 aux false_flow mro
+              )
               man flow ()
 
           | [v; {ekind = E_constant (C_string attr)}] when etyp v |> is_atomic_type->
