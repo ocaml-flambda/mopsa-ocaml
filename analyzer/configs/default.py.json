@@ -10,6 +10,8 @@
         "python.desugar.import",
         "python.desugar.iterable_assign",
 
+        "python.flows.exceptions",
+        
 	"universal.flows.intraproc",
         "universal.flows.interproc",
         "universal.flows.loops",

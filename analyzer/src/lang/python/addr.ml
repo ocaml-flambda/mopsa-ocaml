@@ -167,6 +167,12 @@ let classof e =
     end
   | _ -> assert false
 
+(** Check class membership of an instance *)
+let isinstance obj cls = assert false
+
+(** Check class inheritance  *)
+let issubclass cls1 cls2 = assert false
+
 let () =
   Universal.Pp.(
     Format.(

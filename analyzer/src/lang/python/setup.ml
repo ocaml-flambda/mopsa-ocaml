@@ -21,9 +21,9 @@ let init () =
     );
   );
 
-  (* Flows.(
-   *
-   * ); *)
+  Flows.(
+    Exceptions.setup ();
+  );
 
   Desugar.(
     Bool.setup ();
