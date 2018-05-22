@@ -17,6 +17,7 @@ let init () =
       Callable.setup ();
       Arith_ops.setup ();
       Subscript.setup ();
+      Compare_ops.setup ();
     );
   );
 

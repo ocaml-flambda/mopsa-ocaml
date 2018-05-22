@@ -388,7 +388,7 @@ module Domain= struct
         let t = coerce op e1.etyp e2.etyp in
         let op' = change_operator_type t op in
         let exp' = mk_binop e1 op' e2 ~etyp:t range in
-        re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+        oeval_singleton (Some exp', flow, [])
       else
         oeval_singleton (Some (mk_py_not_implemented range), flow, [])
 
@@ -407,7 +407,7 @@ module Domain= struct
       in
       let op' = change_operator_type t op in
       let exp' = mk_unop op' e ~etyp:t range in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+      oeval_singleton (Some exp', flow, [])
 
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)

@@ -27,10 +27,11 @@
         "python.objects.containers.ranges",
         "python.objects.containers.sets",
         "python.objects.containers.tuples",
-	
+
         "python.objects.data_model.attribute",
         "python.objects.data_model.subscript",
         "python.objects.data_model.arith_ops",
+        "python.objects.data_model.compare_ops",
         "python.objects.data_model.callable",
 
         {
