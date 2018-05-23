@@ -60,22 +60,26 @@ struct
     match skind stmt with
     (* For assignments, we handle the case of addresses, otherwise we give it
        to {!Nonrel}. *)
-    | S_assign({ekind = E_var var} as evar, e, ((STRONG | EXPAND) as kind)) ->
+    | S_assign({ekind = E_var var} as evar, e, mode) ->
       man.eval ctx e flow |>
       eval_to_orexec
         (fun e flow ->
            match ekind e with
            | E_addr(addr) ->
              let v = Value.addr (Value.A.singleton addr) in
-             map_domain_cur (Nonrel.add var v) man flow |>
-             return_flow
+             let flow' = match mode with
+               | STRONG | EXPAND ->
+                 map_domain_cur (Nonrel.add var v) man flow
+               | WEAK ->
+                 let old = get_domain_cur man flow |> find var in
+                 let v' = Value.join old v in
+                 map_domain_cur (Nonrel.add var v') man flow
+             in
+             return_flow flow'
            | _ ->
-             Nonrel.exec man ctx {stmt with skind = S_assign (evar, e,kind)} flow
+             Nonrel.exec man ctx {stmt with skind = S_assign (evar, e, mode)} flow
         )
         (man.exec ctx) man.flow
-
-    | S_assign({ekind = E_var var}, e, WEAK) ->
-      assert false
 
     (* Modify variables already pointing to a1 in order to point to a2. *)
     | S_rebase_addr(a1, a2, mode) ->
