@@ -582,8 +582,8 @@ let setup () =
       | V_access_path c1, V_access_path c2 -> compare_ap c1 c2
       | _ -> next vk1 vk2
     );
-  register_pp_vkind (fun next fmt vk ->
-      match vk with
+  register_pp_var (fun next fmt v ->
+      match v.vkind with
       | V_access_path c -> pp_ap fmt c
-      | _ -> next fmt vk
+      | _ -> next fmt v
     )

@@ -209,16 +209,17 @@ let isinstance obj cls =
 let () =
   Universal.Pp.(
     Format.(
-      register_pp_addr_kind (fun default fmt ak ->
-          match ak with
-          | A_py_class(C_user c, _) -> fprintf fmt "class %a" pp_var c.py_cls_var
-          | A_py_class(C_builtin c, _) -> fprintf fmt "class %s" c
-          | A_py_function(F_user f) -> fprintf fmt "fun %a" pp_var f.py_func_var
-          | A_py_function(F_builtin f) -> fprintf fmt "fun %s" f
-          | A_py_instance(c, _) -> fprintf fmt "inst of %a" pp_addr c
-          | A_py_method(f, obj) -> fprintf fmt "method %a on %a" pp_addr f pp_addr obj
-          | A_py_module(M_builtin m) -> fprintf fmt "%s" m
-          | _ -> default fmt ak
+      register_pp_addr (fun default fmt a ->
+          match a.addr_kind, Universal.Heap.Recency.is_weak a with
+          | A_py_class(C_user c, _), _ -> fprintf fmt "(C %a)" pp_var c.py_cls_var
+          | A_py_class(C_builtin c, _), _ -> fprintf fmt "(C %s)" c
+          | A_py_function(F_user f), _ -> fprintf fmt "[F %a]" pp_var f.py_func_var
+          | A_py_function(F_builtin f), _ -> fprintf fmt "[F %s]" f
+          | A_py_instance(c, _), false -> fprintf fmt "<I %a @@ %a>" pp_addr c pp_range a.addr_range
+          | A_py_instance(c, _), true -> fprintf fmt "<I %a @weak %a>" pp_addr c pp_range a.addr_range
+          | A_py_method(f, obj), _ -> fprintf fmt "{M %a on %a}" pp_addr f pp_addr obj
+          | A_py_module(M_builtin m), _ -> fprintf fmt "%s" m
+          | _ -> default fmt a
         )
     )
   )

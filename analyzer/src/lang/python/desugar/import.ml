@@ -51,10 +51,11 @@ struct
       return
 
     | S_py_import(modul, vasname, vroot)  ->
-      assert false
+      Framework.Exceptions.fail "import %s not supported" modul
 
     | S_py_import_from(modul, name, vmodul) ->
-      assert false
+      Framework.Exceptions.fail "import %s from %s not supported" modul name
+
     | _ ->
       None
 

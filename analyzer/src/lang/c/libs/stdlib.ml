@@ -109,9 +109,11 @@ let setup () =
       | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
       | _ -> next ak1 ak2
     );
-  Universal.Pp.register_pp_addr_kind (fun next fmt ak ->
-      match ak with
-      | A_c_static_malloc s -> Format.fprintf fmt "static malloc(%a)" Z.pp_print s
-      | A_c_dynamic_malloc -> Format.fprintf fmt "dynamic malloc"
-      | _ -> next fmt ak
+  Universal.Pp.register_pp_addr (fun next fmt addr ->
+      match addr.addr_kind, Universal.Heap.Recency.is_weak addr with
+      | A_c_static_malloc s, false-> Format.fprintf fmt "@@{static(%a), %a}" Z.pp_print s Framework.Pp.pp_range addr.addr_range
+      | A_c_static_malloc s, true-> Format.fprintf fmt "@@{static(%a), %a, weak}" Z.pp_print s Framework.Pp.pp_range addr.addr_range
+      | A_c_dynamic_malloc, false -> Format.fprintf fmt "@@{dynamic, %a}" Framework.Pp.pp_range addr.addr_range
+      | A_c_dynamic_malloc, true -> Format.fprintf fmt "@@{dynamic, %a, weak}" Framework.Pp.pp_range addr.addr_range
+      | _ -> next fmt addr
     )
