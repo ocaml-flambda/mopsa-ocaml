@@ -65,6 +65,31 @@ struct
         (fun false_flow -> oeval_singleton (Some (mk_true exp.erange), false_flow, []))
         man ctx flow ()
 
+    | E_py_multi_compare(left, ops, rights) ->
+      debug "multi compare";
+      let range = erange exp in
+      man.eval ctx left flow |>
+      eval_compose (fun left flow ->
+          debug "left evaluated";
+          let rec aux left flow = function
+            | [] ->
+              debug "leaf case -> true";
+              oeval_singleton (Some (mk_true range), flow, [])
+
+            | (op, right) :: tl ->
+              man.eval ctx right flow |>
+              eval_compose (fun right flow ->
+                  Universal.Utils.assume_to_eval
+                    (mk_binop left op right range)
+                    (fun true_flow -> aux right true_flow tl)
+                    (fun false_flow -> oeval_singleton (Some (mk_false range), flow, []))
+                    man ctx flow ()
+                )
+          in
+          aux left flow (List.combine ops rights)
+        )
+
+
     | _ -> None
 
 
