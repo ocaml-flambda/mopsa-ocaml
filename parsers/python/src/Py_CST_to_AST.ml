@@ -385,7 +385,7 @@ and find_lvals_in_stmt stmt =
 
   | ClassDef (name, bases, keywords, body, decorators) -> [name]
 
-  | Assign (targets, _) -> 
+  | Assign (targets, _) ->
     targets |> List.fold_left (fun acc t -> find_lvals_in_expr t @ acc) []
 
   | AugAssign (target, _, _) ->

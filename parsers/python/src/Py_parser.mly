@@ -97,12 +97,17 @@ nl_stmt_list:
 ;
 
 decorator:
-    | AT dotted_name NEWLINE { {erange = pos_to_range $startpos($2) $endpos($2); ekind = Name ($2, Load)} }
-    | AT dotted_name LPAR RPAR NEWLINE { {erange = pos_to_range $startpos($2) $endpos($4); ekind = Call ({erange = pos_to_range $startpos($2) $endpos($2); ekind = Name($2, Load)}, [], [])} }
-    | AT dotted_name LPAR arglist RPAR NEWLINE
-        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ({erange = pos_to_range $startpos($2) $endpos($2); ekind = Name($2, Load)}, fst $4, snd $4)} }
-    | AT dotted_name LPAR arglist COMMARPAR NEWLINE 
-        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ({erange = pos_to_range $startpos($2) $endpos($2); ekind = Name($2, Load)}, fst $4, snd $4)} }
+    | AT decor_name NEWLINE { $2 }
+    | AT decor_name LPAR RPAR NEWLINE { {erange = pos_to_range $startpos($2) $endpos($4); ekind = Call ($2, [], [])} }
+    | AT decor_name LPAR arglist RPAR NEWLINE
+        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
+    | AT decor_name LPAR arglist COMMARPAR NEWLINE 
+        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
+;
+
+decor_name:
+    | name                    { {erange = pos_to_range $startpos $endpos; ekind = Name ($1, Load)} }
+    | decor_name DOT name     { {erange = pos_to_range $startpos $endpos; ekind = Attribute ($1, $3, Load)} }
 ;
 
 decorators:
