@@ -16,6 +16,7 @@ let init () =
       );
       Initzero.setup ();
     );
+    Decomposer.setup ();
     Machine_integers.setup ();
     Pointer.setup ();
     Access_path.setup ();

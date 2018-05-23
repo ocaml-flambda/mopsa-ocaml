@@ -314,7 +314,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
   | t ->
-    Debug.warn "to_clang_type: %a not a C type" Framework.Pp.pp_typ t; assert false
+    Debug.fail "to_clang_type: %a not a C type" Framework.Pp.pp_typ t
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {

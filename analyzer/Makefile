@@ -30,7 +30,7 @@ lang.python.objects.data_model = attribute callable arith_ops subscript compare_
 lang.python.flows = exceptions
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
-lang.c.memory = base query pointer init cell machine_integers access_path structured
+lang.c.memory = base query pointer init cell decomposer machine_integers access_path structured
 lang.c.memory.cell = initzero expand smashing reductions
 lang.c.flows = goto interproc switch
 

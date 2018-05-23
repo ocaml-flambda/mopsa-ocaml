@@ -54,9 +54,6 @@ struct
     (Apron.Abstract1.change_environment ApronManager.man abs2 env false)
 
   let var_to_apron v =
-    (* assert (v.vtyp <> TAny); *)
-    (* FIXME: remove the following line : *)
-    let v = {v with vtyp = T_int} in
     Format.fprintf Format.str_formatter "%s:%a" (var_uniq_name v) Framework.Pp.pp_typ v.vtyp;
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
@@ -73,16 +70,12 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          (* FIXME : this sould be the following line : *)
-          (* List.filter (function {vtyp = T_int} -> true | _ -> false) lv *)
-          (fun x -> x) lv
+          List.filter (function {vtyp = T_int} -> true | _ -> false) lv
         )
         (
           Array.of_list @@
           List.map var_to_apron @@
-          (* FIXME : this sould be the following line : *)
           List.filter (function {vtyp = T_float} -> true | _ -> false) lv
-          (* (fun x -> x) lv *)
         )
     in
     Apron.Abstract1.change_environment ApronManager.man abs env' false
@@ -126,9 +119,7 @@ struct
     | T_any ->
       [{var with vtyp = T_int}; {var with vtyp = T_float}]
     | _ ->
-      (* FIXME : this is probably wrong : *)
-      [{var with vtyp = T_int}]
-      (* Debug.fail "[refine_var_type] in relational called on %a" Framework.Pp.pp_typ var.vtyp *)
+      Debug.fail "[refine_var_type] in relational called on %a" Framework.Pp.pp_typ var.vtyp
 
   (* {2 Transfer functions} *)
   let init man ctx prog flow =
@@ -175,8 +166,7 @@ struct
      *       exec man ctx {stmt with skind = S_remove_var v} flow
      *   end *)
 
-    (* FIXME : Need to chexk type of e *)
-    | S_assign({ekind = E_var v}, e, STRONG) -> begin
+    | S_assign({ekind = E_var v}, ({etyp = T_int | T_float} as e), STRONG) -> begin
         man.eval ctx e flow |>
         eval_to_oexec (fun e flow ->
             let v = {v with vtyp = T_int} in
@@ -193,8 +183,8 @@ struct
     | S_assign({ekind = E_var v}, ({etyp = T_int | T_float}), WEAK) ->
       assert false
 
-    (*FIXME : Need to check type of variable :*)
-    | S_assign(({ekind = E_var x}), {ekind = E_var (x0)}, EXPAND) ->
+
+    | S_assign(({ekind = E_var x; etyp = T_int | T_float}), {ekind = E_var (x0); etyp = T_int | T_float}, EXPAND) ->
       let abs = add_missing_vars abs [x0] in
       let abs = set_domain_cur abs man flow |>
                 exec man ctx (mk_stmt (S_remove_var x) stmt.srange) |>
@@ -209,6 +199,7 @@ struct
       exec man ctx {stmt with skind = S_remove_var v} flow
 
     | S_assume(e) -> begin
+        let () = debug "until now looks ok" in
         man.eval ctx e flow |>
         eval_to_oexec
           (fun e flow ->
@@ -224,8 +215,6 @@ struct
                          | T_float, T_int
                          | T_int, T_float
                          | T_float, T_float -> Apron.Texpr1.Real
-                         (*FIXME : This is a partial fix : *)
-                         | _,_ -> Apron.Texpr1.Int
                          | _ -> Debug.fail "Unsupported case (%a, %a) in stmt @[%a@]"
                                   Framework.Pp.pp_typ typ1
                                   Framework.Pp.pp_typ typ2
@@ -242,9 +231,7 @@ struct
                (fun x ->
                   return_cur x)
              with Unsupported ->
-               (* FIXME : this is also a partial fix : *)
-               (* return_cur abs *)
-               None
+               return_cur abs
           ) (man.exec ctx) man.flow
       end
 
@@ -369,8 +356,7 @@ struct
   and typ_to_apron = function
     | T_int -> Apron.Texpr1.Int
     | T_float -> Apron.Texpr1.Real
-    (* FIXME : This is a partial fix *)
-    | _ -> Apron.Texpr1.Int
+    | _ -> assert false
 
   and bexp_to_apron exp =
     match ekind exp with
