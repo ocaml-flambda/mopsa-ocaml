@@ -134,6 +134,14 @@ struct
       let exp' = mk_py_call (mk_addr f range) ((mk_addr obj range) :: args) range in
       re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_method_atomic(f, obj)}},
+        args,
+        []
+      ) ->
+      let exp' = mk_py_call (mk_addr f range) (obj :: args) range in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
 
     | _ -> None
 

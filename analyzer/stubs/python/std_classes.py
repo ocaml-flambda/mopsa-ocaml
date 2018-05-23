@@ -42,6 +42,7 @@ class int(object):
     def __truediv__(self, other): pass
     def __floordiv__(self, other): pass
     def __mod__(self, other): pass
+    def __pow__(self, other): pass
     def __divmod__(self, other): pass
     def __lshift__(self, other): pass
     def __rshift__(self, other): pass
@@ -84,36 +85,24 @@ class float(object):
     def __add__(self, other): pass
     def __sub__(self, other): pass
     def __mul__(self, other): pass
-    def __matmul__(self, other): pass
     def __truediv__(self, other): pass
     def __floordiv__(self, other): pass
+    def __pow__(self, other): pass
     def __mod__(self, other): pass
     def __divmod__(self, other): pass
-    def __lshift__(self, other): pass
-    def __rshift__(self, other): pass
-    def __and__(self, other): pass
-    def __xor__(self, other): pass
-    def __or__(self, other): pass
 
     def __radd__(self, other): pass
     def __rsub__(self, other): pass
     def __rmul__(self, other): pass
-    def __rmatmul__(self, other): pass
     def __rtruediv__(self, other): pass
     def __rfloordiv__(self, other): pass
     def __rmod__(self, other): pass
     def __rdivmod__(self, other): pass
     def __rpow__(self, other): pass
-    def __rlshift__(self, other): pass
-    def __rrshift__(self, other): pass
-    def __rand__(self, other): pass
-    def __rxor__(self, other): pass
-    def __ror__(self, other): pass
 
     def __neg__(self): pass
     def __pos__(self): pass
     def __abs__(self): pass
-    def __invert__(self): pass
 
 class bool(int):
     def __new__(cls, args): pass
@@ -133,6 +122,7 @@ class bool(int):
     def __matmul__(self, other): pass
     def __truediv__(self, other): pass
     def __floordiv__(self, other): pass
+    def __pow__(self, other): pass
     def __mod__(self, other): pass
     def __divmod__(self, other): pass
     def __lshift__(self, other): pass
@@ -183,6 +173,8 @@ class list(object):
     def __setitem__(self, k, v): pass
     def __iter__(self): pass
     def __add__(self, o): pass
+
+    def append(self, x): pass
 
 class listiter(object):
     def __next__(self): pass

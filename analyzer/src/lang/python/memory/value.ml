@@ -554,7 +554,6 @@ let fwd_binop op abs1 abs2 =
       float = F.fwd_binop op abs1.float abs2.float;
     }
 
-  (* FIXME : use operator types *)
   | O_div T_float ->
     let abs1, abs2 = coerce abs1 abs2 in
     let abs1 = cast T_float abs1 and abs2 = cast T_float abs2 in

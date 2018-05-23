@@ -54,126 +54,86 @@ module Domain = struct
               | _ -> (compare_typ e1.etyp e2.etyp) = 0
             in
 
-            let tmp = mktmp () in
+            Universal.Utils.assume_to_eval
+              (Utils.mk_builtin_call "hasattr" [mk_addr cls1 range; mk_string op_fun range] range)
+              (fun true_flow ->
+                 man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) true_flow |>
+                 eval_compose (fun r flow ->
+                     match ekind r with
+                     | E_constant (C_py_not_implemented) ->
+                       if is_same_type e1 e2 then
+                         let flow = man.exec ctx
+                             (Utils.mk_builtin_raise "TypeError" range)
+                             flow
+                         in
+                         oeval_singleton (None, flow, [])
+                       else
+                         Universal.Utils.assume_to_eval
+                           (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range)
+                           (fun true_flow ->
+                              man.eval ctx (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
+                              eval_compose (fun r flow ->
+                                  match ekind r with
+                                  | E_constant (C_py_not_implemented) ->
+                                    let flow = man.exec ctx
+                                        (Utils.mk_builtin_raise "TypeError" range)
+                                        flow
+                                    in
+                                    oeval_singleton (None, flow, [])
+                                  | _ ->
+                                    oeval_singleton (Some r, flow, [])
+                                )
+                           )
+                           (fun false_flow ->
+                              let flow = man.exec ctx
+                                  (Utils.mk_builtin_raise "TypeError" range)
+                                  false_flow
+                              in
+                              oeval_singleton (None, flow, [])
 
-            let add_cond = Utils.mk_builtin_call "hasattr" [mk_addr cls1 range; mk_string op_fun range] range in
-
-            debug "Calling has_attribute";
-            let has_add_flow = man.exec ctx (mk_assume add_cond range) flow in
-
-            debug "Calling not has_attribute";
-            let not_has_add_flow = man.exec ctx (mk_assume (mk_not add_cond range) range) flow in
-
-            let post_add_flow =
-              if man.flow.is_cur_bottom has_add_flow then
-                man.flow.bottom
-              else
-                man.exec ctx
-                  (mk_assign
-                     (mk_var tmp range)
-                     (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range)
-                     range
-                  ) has_add_flow
-
-            in
-
-            let add_cases =
-              if man.flow.is_cur_bottom post_add_flow then
-                None
-              else
-                let flow = man.exec ctx
-                    (mk_assume (mk_binop (mk_var tmp range) O_ne (mk_py_not_implemented range) range) range)
-                    post_add_flow
-                in
-                re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
-
-            in
-
-            let add_error_case =
-              if man.flow.is_cur_bottom post_add_flow && not (man.flow.is_cur_bottom has_add_flow) then
-                let _ = debug "add error case" in
-                oeval_singleton (None, post_add_flow, [mk_remove_var tmp range]) 
-              else
-                None
-            in
-
-            let pre_radd_flow =
-              if is_same_type e1 e2 then
-                man.flow.bottom
-              else
-                let add_notimplemeted_flow = man.exec ctx
-                    (mk_assume (mk_binop (mk_var tmp range) O_eq (mk_py_not_implemented range) range) range)
-                    post_add_flow
-                in
-                man.flow.join not_has_add_flow add_notimplemeted_flow
-            in
-
-            let has_radd_flow, not_has_radd_flow =
-              if man.flow.is_cur_bottom pre_radd_flow then
-                man.flow.bottom, man.flow.bottom
-              else
-                man.exec ctx (mk_assume (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range) range) pre_radd_flow,
-                man.exec ctx (mk_assume (mk_not (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range) range) range) pre_radd_flow
-            in
-            let post_radd_flow =
-              if man.flow.is_cur_bottom has_radd_flow then
-                man.flow.bottom
-              else
-                man.exec ctx
-                  (mk_assign
-                     (mk_var tmp range)
-                     (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range)
-                     range
-                  ) has_radd_flow
-            in
-
-            let radd_cases =
-              if man.flow.is_cur_bottom post_radd_flow then
-                None
-              else
-                let flow = man.exec ctx
-                    (mk_assume (mk_binop (mk_var tmp range) O_ne (mk_py_not_implemented range) range) range)
-                    post_radd_flow
-                in
-                re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
-
-            in
-
-            let type_error_flow =
-              if is_same_type e1 e2 then (
-                debug "same type";
-                not_has_add_flow
-              ) else (
-                if man.flow.is_cur_bottom post_radd_flow then
-                  man.flow.bottom
-                else (
-                  debug "check not implemented on@\ [%a]" man.flow.print post_radd_flow;
-                  let add_notimplemeted_flow = man.exec ctx
-                      (mk_assume (mk_binop (mk_var tmp range) O_eq (mk_py_not_implemented range) range) range)
-                      post_radd_flow
-                  in
-                  debug "check not implemented on@\ [%a]" man.flow.print post_radd_flow;
-                  man.flow.join not_has_radd_flow add_notimplemeted_flow
-                )
+                           )
+                           man ctx flow ()
+                     | _ ->
+                       oeval_singleton (Some r, flow, [])
+                   )
               )
-            in
+              (fun false_flow ->
+                 if is_same_type e1 e2 then
+                   let flow = man.exec ctx
+                       (Utils.mk_builtin_raise "TypeError" range)
+                       flow
+                   in
+                   oeval_singleton (None, flow, [])
+                 else
+                   Universal.Utils.assume_to_eval
+                     (Utils.mk_builtin_call "hasattr" [mk_addr cls2 range; mk_string rop_fun range] range)
+                     (fun true_flow ->
+                        man.eval ctx (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
+                        eval_compose (fun r flow ->
+                            match ekind r with
+                            | E_constant (C_py_not_implemented) ->
+                              let flow = man.exec ctx
+                                  (Utils.mk_builtin_raise "TypeError" range)
+                                  flow
+                              in
+                              oeval_singleton (None, flow, [])
+                            | _ ->
+                              oeval_singleton (Some r, flow, [])
+                          )
+                     )
+                     (fun false_flow ->
+                        let flow = man.exec ctx
+                            (Utils.mk_builtin_raise "TypeError" range)
+                            flow
+                        in
+                        oeval_singleton (None, flow, [])
 
-            let type_error_cases =
-              if man.flow.is_cur_bottom type_error_flow then
-                None
-              else
-                let flow = man.exec ctx
-                    (Utils.mk_builtin_raise "TypeError" range)
-                    flow
-                in
-                oeval_singleton (None, flow, [mk_remove_var tmp range]) 
-
-            in
-
-            oeval_join add_cases add_error_case |> oeval_join radd_cases |> oeval_join type_error_cases
-
+                     )
+                     man ctx flow ()
+              )
+              man ctx flow ()
         )
-
+        
     | E_unop(op, e) when is_arith_op op ->
       debug "Resolving unary operator %a" Framework.Pp.pp_operator op;
       man.eval ctx e flow |>
@@ -188,31 +148,20 @@ module Domain = struct
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
             let cls = classof e in
-            let ok_cond = Utils.mk_builtin_call "hasattr" [mk_addr cls range; mk_string op_fun range] range in
-            let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
-            let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
-
-            let ok_case =
-              if man.flow.is_cur_bottom ok_flow then
-                None
-              else
-                let exp' = mk_py_call (mk_py_addr_attr cls op_fun range) [e] range in
-                re_eval_singleton (man.eval ctx) (Some exp', ok_flow, [])
-            in
-
-            let error_case =
-              if man.flow.is_cur_bottom error_flow then
-                None
-              else
-                let flow = man.exec ctx
-                    (Utils.mk_builtin_raise "TypeError" range)
-                    flow
-                in
-                oeval_singleton (None, flow, [])
-            in
-
-            oeval_join ok_case error_case
-
+            Universal.Utils.assume_to_eval
+              (Utils.mk_builtin_call "hasattr" [mk_addr cls range; mk_string op_fun range] range)
+              (fun true_flow ->
+                 man.eval ctx (mk_py_call (mk_py_addr_attr cls op_fun range) [e] range) true_flow |>
+                 return
+              )
+              (fun false_flow ->
+                 let flow = man.exec ctx
+                     (Utils.mk_builtin_raise "TypeError" range)
+                     false_flow
+                 in
+                 oeval_singleton (None, flow, [])
+              )
+              man ctx flow ()
         )
 
     | _ -> None
