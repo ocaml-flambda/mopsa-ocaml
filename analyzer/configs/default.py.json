@@ -37,6 +37,7 @@
         "python.objects.data_model.subscript",
         "python.objects.data_model.arith_ops",
         "python.objects.data_model.compare_ops",
+        "python.objects.data_model.aug_assign",
         "python.objects.data_model.callable",
 
         {

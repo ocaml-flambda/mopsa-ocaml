@@ -19,6 +19,7 @@ let init () =
       Arith_ops.setup ();
       Subscript.setup ();
       Compare_ops.setup ();
+      Aug_assign.setup ();
     );
   );
 

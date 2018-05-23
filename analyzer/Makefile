@@ -26,7 +26,7 @@ lang.python = ast addr pp alarm utils visitor frontend builtins operators memory
 lang.python.memory = value nonrel
 lang.python.objects = class function object number strings containers data_model
 lang.python.objects.containers = lists dicts ranges sets tuples
-lang.python.objects.data_model = attribute callable arith_ops subscript compare_ops
+lang.python.objects.data_model = attribute callable arith_ops subscript compare_ops aug_assign
 lang.python.flows = exceptions
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup

@@ -47,6 +47,6 @@ def test_exit_reraise_exception():
             return False
 
     with C() as c:
-        raise Exception
+        raise RuntimeError
 
-    mopsa.assert_exception(Exception)
+    mopsa.assert_exception(RuntimeError)
