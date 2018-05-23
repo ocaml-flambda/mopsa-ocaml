@@ -9,6 +9,7 @@
         "python.desugar.if",
         "python.desugar.import",
         "python.desugar.iterable_assign",
+        "python.desugar.with",
 
         "python.flows.exceptions",
 

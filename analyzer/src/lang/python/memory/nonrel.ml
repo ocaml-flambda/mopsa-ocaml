@@ -99,8 +99,11 @@ struct
       debug "builtin";
       oeval_singleton (Some (mk_addr (Addr.find_builtin v.vname) range, []), flow, [])
 
+    (* Return an empty expression when cur is bottom *)
+    | E_var v when man.flow.is_cur_bottom flow -> oeval_singleton (None, flow, [])
+
     (* Refine the type of a variable using its current abstract value *)
-    | E_var v  ->
+    | E_var v ->
       debug "var %a" Framework.Pp.pp_var v;
       let nonrel = get_domain_cur man flow in
       let value = Nonrel.find v nonrel in
