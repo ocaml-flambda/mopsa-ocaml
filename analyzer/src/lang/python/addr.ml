@@ -154,13 +154,15 @@ let atomaic_type_to_class_name = function
   | T_float -> "float"
   | T_bool -> "bool"
   | T_string -> "str"
+  | T_py_none -> "NoneType"
+  | T_py_not_implemented -> "NotImplementedType"
   | _ -> assert false
 
 (** Address of the (type) class of an expression *)
 let classof e =
   debug "classof %a(%a)" Framework.Pp.pp_expr e Framework.Pp.pp_typ e.etyp;
   match etyp e with
-  | T_int | T_float | T_bool | T_string -> atomaic_type_to_class_name e.etyp |> find_builtin
+  | T_int | T_float | T_bool | T_string | T_py_none | T_py_not_implemented -> atomaic_type_to_class_name e.etyp |> find_builtin
   | T_addr ->
     begin
       let addr = match ekind e with E_addr addr -> addr | _ -> assert false in

@@ -208,3 +208,6 @@ class tuple(object):
 
 class tupleiter(object):
     def __next__(self): pass
+
+class NotImplementedType(object): pass
+class NoneType(object): pass

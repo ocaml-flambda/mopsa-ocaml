@@ -19,9 +19,11 @@ open Ast
 let name = "universal.heap.recency"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let assign_mode_of_addr addr =
-  if addr.addr_uid = Pool.recent_uid then STRONG else WEAK
+let is_weak addr =
+  if addr.addr_uid = Pool.recent_uid then false else true
 
+let assign_mode_of_addr addr =
+  if is_weak addr then WEAK else STRONG
 
 module Make(Sub: Framework.Domains.Stateful.DOMAIN) =
 struct

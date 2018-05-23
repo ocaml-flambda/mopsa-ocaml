@@ -28,6 +28,33 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain = struct
 
+  (* check equality by inspecting types and instance addresses. Return
+     None when comparison can not be determined. *)
+  let is_equal ((e1: expr), (cls1: addr)) ((e2: expr), (cls2: addr)) : bool option =
+    (* different type => not equal *)
+    if compare_addr cls1 cls2 <> 0 then Some false
+    else
+      match ekind e1, ekind e2 with
+      | E_addr addr1, E_addr addr2 ->
+        (* different addresses => not equal *)
+        if compare_addr addr1 addr2 <> 0 then
+          Some false
+        else
+          (* same strong addresses => equal *)
+        if not (Universal.Heap.Recency.is_weak addr1) || not (Universal.Heap.Recency.is_weak addr2) then
+          Some true
+        else
+          (* cannot say anything with weak addresses *)
+          None
+
+      (* one of the arguments is not in the heap => not equal *)
+      (* FIXME: is this reachable? *)
+      | E_addr _, _ | _, E_addr _ -> Some false
+
+      (* FIXME: this is sound, but certainly imprecise *)
+      | _ -> None
+
+
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
@@ -48,6 +75,8 @@ module Domain = struct
           in
 
           let cls1 = Addr.classof e1 in
+          let cls2 = Addr.classof e2 in
+
           man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) flow |>
           eval_compose (fun cmp flow ->
               match ekind cmp with
@@ -56,7 +85,18 @@ module Domain = struct
                 begin
                   match op with
                   | O_eq | O_ne ->
-                    Framework.Exceptions.panic "default O_eq/O_ne not yet implemented"
+                    (* Apply default equality test *)
+                    begin
+                      match op, is_equal (e1, cls1) (e2, cls2) with
+                      | O_eq, Some true -> oeval_singleton (Some (mk_true range), flow, [])
+                      | O_eq, Some false -> oeval_singleton (Some (mk_false range), flow, [])
+                      | O_ne, Some true -> oeval_singleton (Some (mk_false range), flow, [])
+                      | O_ne, Some false -> oeval_singleton (Some (mk_true range), flow, [])
+                      | _, None -> oeval_join
+                                     (oeval_singleton (Some (mk_true range), flow, []))
+                                     (oeval_singleton (Some (mk_false range), flow, []))
+                      | _ -> assert false
+                    end
                   | _ ->
                     let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
                     oeval_singleton (None, flow, [])
