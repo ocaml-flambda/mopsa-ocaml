@@ -641,8 +641,8 @@ let setup () =
       | V_smash_cell c1, V_smash_cell c2 -> compare_cell c1 c2
       | _ -> next vk1 vk2
     );
-  register_pp_vkind (fun next fmt vk ->
-      match vk with
+  register_pp_var (fun next fmt v ->
+      match v.vkind with
       | V_smash_cell c -> pp_cell fmt c
-      | _ -> next fmt vk
+      | _ -> next fmt v
     )

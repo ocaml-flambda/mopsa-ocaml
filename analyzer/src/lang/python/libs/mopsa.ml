@@ -23,6 +23,10 @@ let name = "python.libs.mopsa"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
+let check man ctx cond range flow =
+  let flow = man.exec ctx (mk_stmt (Universal.Ast.S_assert cond) range) flow in
+  oeval_singleton (Some (mk_py_none range), flow, [])
+
 
 (*==========================================================================*)
 (**                               {2 Domain }                               *)
@@ -41,10 +45,6 @@ struct
   let exec man ctx stmt flow = None
 
   let init _ ctx _ flow = ctx, flow
-
-  let check man ctx cond range flow =
-    let flow = man.exec ctx (mk_stmt (Universal.Ast.S_assert cond) range) flow in
-    oeval_singleton (Some (mk_py_none range), flow, [])
 
   let eval man ctx exp flow =
     match ekind exp with

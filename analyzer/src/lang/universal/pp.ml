@@ -14,14 +14,13 @@ open Ast
 open Format
 
 
-let rec pp_addr_kind_chain : (formatter -> addr_kind -> unit) ref = ref (fun fmt ak ->
+let rec pp_addr_chain : (formatter -> addr -> unit) ref = ref (fun fmt addr ->
     failwith "Pp: Unknown address kind"
   )
 
-and register_pp_addr_kind pp = pp_addr_kind_chain := pp !pp_addr_kind_chain
+and register_pp_addr pp = pp_addr_chain := pp !pp_addr_chain
 
-and pp_addr fmt addr =
-  fprintf fmt "@@{%a,%a,%d}" !pp_addr_kind_chain addr.addr_kind pp_range addr.addr_range addr.addr_uid
+and pp_addr fmt addr = !pp_addr_chain fmt addr
 
 let () =
   register_pp_operator (fun default fmt -> function

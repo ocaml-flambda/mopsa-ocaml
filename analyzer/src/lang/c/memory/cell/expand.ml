@@ -172,6 +172,14 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     with
     | Found (v, c) -> Some (v, c)
 
+  let exist_and_find_cells f cs =
+    CS.fold (fun v acc ->
+        match v with
+        | ({vkind = V_expand_cell oc} as v) ->
+          if f oc then v::acc else acc
+        | _ -> acc
+      ) cs []
+
   let var_of_ocell (c: ocell) cs =
     match exist_and_find_cell (fun c' -> compare c c' = 0) cs with
     | Some (v, _) -> v
@@ -510,6 +518,7 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | V_expand_cell (OffsetCell _) ->
       let lval = mk_var v range in
       let stmt = mk_assign lval rval ~mode range in
+      let () = debug "giving back stmt %a" Framework.Pp.pp_stmt stmt in
       SubDomain.exec subman ctx stmt flow |>
       oflow_compose (
         fun flow ->
@@ -543,19 +552,32 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
     | S_rename_var(v, v') ->
       assert false
 
-    | S_remove_var ({vkind = V_orig | V_expand_cell _} as v) when is_c_int_type v.vtyp ->
+    | S_remove_var ({vkind = V_orig} as v) when is_c_type v.vtyp ->
       let u = get_domain_cur man flow in
-      let v' = annotate_var_kind v in
-      let u' = remove v' u in
-      let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v')} in
+      let l = exist_and_find_cells (fun c -> compare_base (base_of_cell c) (Base.V v) = 0) u in
+      let u' = List.fold_left (fun acc v -> remove v acc) u l in
+      let stmtl = List.map (fun v -> {stmt with skind = Universal.Ast.S_remove_var(v)}) l in
+      let mergers = List.map (fun v -> mk_remove_var v stmt.srange) l in
+      let flow = set_domain_cur u' man flow in
+      Some (List.fold_left (fun flow stmt ->
+          SubDomain.exec subman ctx stmt flow |> oflow_extract
+        ) flow stmtl)
+      |> oflow_compose (add_flow_mergers mergers)
+
+    | S_remove_var ({vkind = V_expand_cell c} as v) when is_c_type v.vtyp ->
+      let u = get_domain_cur man flow in
+      let u' = remove v u in
+      let stmt' = {stmt with skind = Universal.Ast.S_remove_var(v)} in
       let flow = set_domain_cur u' man flow in
       SubDomain.exec subman ctx stmt' flow |>
-      oflow_compose (add_flow_mergers [mk_remove_var v' stmt.srange])
+      oflow_compose (add_flow_mergers [mk_remove_var v stmt.srange])
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->      (* For the rval, we use the manager eval to simplify the expression *)
+      let () = debug "I grabbed %a" Framework.Pp.pp_stmt stmt in
       man.eval ctx rval flow |>
       eval_to_orexec (fun rval flow ->
           (* However, the lval, we use our local eval so that the reduced product will not evict our simplifications *)
+          let () = debug "evaluated rv : %a" Framework.Pp.pp_expr rval in
           eval man subman ctx lval flow |>
           oeval_to_orexec (fun (lval, _) flow ->
               match ekind lval with
@@ -906,10 +928,11 @@ let setup () =
       | V_expand_cell c1, V_expand_cell c2 -> compare_cell c1 c2
       | _ -> next vk1 vk2
     );
-  register_pp_vkind (fun next fmt vk ->
-      match vk with
-      | V_expand_cell c -> pp_cell fmt c
-      | _ -> next fmt vk
+  register_pp_var (fun next fmt v ->
+      match v.vkind with
+      | V_expand_cell c ->
+        Format.fprintf fmt "%a:%a" pp_cell c Framework.Pp.pp_typ v.vtyp
+      | _ -> next fmt v
     );
   Framework.Options.register (
     "-cell-max-expand",

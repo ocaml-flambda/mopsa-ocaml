@@ -9,6 +9,7 @@
         "python.desugar.if",
         "python.desugar.import",
         "python.desugar.iterable_assign",
+        "python.desugar.with",
 
         "python.flows.exceptions",
 
@@ -18,6 +19,7 @@
 
         "python.libs.mopsa",
         "python.libs.stdlib",
+        "python.libs.unittest",
 
         "python.objects.class",
         "python.objects.function",
@@ -35,6 +37,7 @@
         "python.objects.data_model.subscript",
         "python.objects.data_model.arith_ops",
         "python.objects.data_model.compare_ops",
+        "python.objects.data_model.aug_assign",
         "python.objects.data_model.callable",
 
         {

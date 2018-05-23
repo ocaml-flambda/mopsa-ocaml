@@ -585,9 +585,9 @@ let setup () =
       (* | V_tmp(b1,o1), V_tmp(b2,o2) -> compare_composer [(fun () -> compare_base b1 b2); (fun () -> compare o1 o2)] *)
       | _ -> next vk1 vk2
     );
-  register_pp_vkind (fun next fmt vk ->
-      match vk with
+  register_pp_var (fun next fmt v ->
+      match v.vkind with
       | V_zero c -> print_bound fmt c
       (* | V_tmp(b,o)  -> Format.fprintf fmt "<%a,%a)>"pp_base fmt b *)
-      | _ -> next fmt vk
+      | _ -> next fmt v
     )

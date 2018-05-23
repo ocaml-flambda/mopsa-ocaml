@@ -116,7 +116,7 @@ let to_universal_type t =
       T_float
   else
     match t with
-    | T_int | T_float | T_bool | T_any -> t
+    | T_int | T_float | T_bool | T_any | T_empty | T_c_void -> t
     | _ -> Debug.fail "[to_universal_type] in machine_integers called on non scalar type ; %a" Framework.Pp.pp_typ t
 
 let var_machine_integers v =
@@ -182,9 +182,9 @@ struct
         match ekind exp with
         | E_binop(op, e, e')
           when op |> is_c_div ->
-          man.eval ctx e' flow |>
+          loc_eval man ctx e' flow |>
           check_division man ctx range
-            (fun e' tflow -> re_eval_singleton (man.eval ctx)
+            (fun e' tflow -> re_eval_singleton (loc_eval man ctx)
                 (Some { exp with ekind = E_binop(to_math_op op, e, e')}, tflow, [])
             )
             (fun e' fflow ->
@@ -196,18 +196,19 @@ struct
             )
 
         | E_unop(op, e) when is_c_int_op op ->
+          let () = debug "case 1" in
           let typ = etyp exp in
           let rmin, rmax = rangeof typ in
           let nop = to_math_op op in
-          man.eval ctx {exp with ekind = E_unop(nop, e) } flow  |>
+          loc_eval man ctx {exp with ekind = E_unop(nop, e) } flow  |>
           check_overflow typ man ctx range
-            (fun e tflow -> oeval_singleton (Some e, tflow, []))
+            (fun e tflow -> re_eval_singleton (loc_eval man ctx) (Some e, tflow, []))
             (fun e fflow ->
                let cur = man.flow.get TCur fflow in
                let () = debug "Adding alarm flow : %a" man.env.print cur in
                let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
                in
-               re_eval_singleton (man.eval ctx)
+               re_eval_singleton (loc_eval man ctx)
                  (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
                         etyp   = typ;
                         erange = tag_range range "wrap"
@@ -216,18 +217,19 @@ struct
             )
 
         | E_binop(op, e, e') when is_c_int_op op ->
+          let () = debug "case 2" in
           let typ = etyp exp in
           let rmin, rmax = rangeof typ in
           let nop = to_math_op op in
-          man.eval ctx {exp with ekind = E_binop(nop, e, e') } flow |>
+          loc_eval man ctx {exp with ekind = E_binop(nop, e, e') } flow |>
           check_overflow typ man ctx range
-            (fun e tflow -> oeval_singleton (Some e, tflow, []))
+            (fun e tflow -> re_eval_singleton (loc_eval man ctx) (Some e, tflow, []))
             (fun e fflow ->
                let cur = man.flow.get TCur fflow in
                let () = debug "Adding alarm flow : %a" man.env.print cur in
                let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
                in
-               re_eval_singleton (man.eval ctx)
+               re_eval_singleton (loc_eval man ctx)
                  (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
                         etyp   = typ;
                         erange = tag_range range "wrap"
@@ -236,6 +238,7 @@ struct
             )
 
         | E_binop(op, e, e') ->
+          let () = debug "case 3" in
           eval_list [e; e'] (loc_eval man ctx) flow |>
           eval_compose (fun el flow ->
               match el with
@@ -249,6 +252,7 @@ struct
             )
 
         | E_unop(op, e) ->
+          let () = debug "case 4" in
           eval_list [e] (loc_eval man ctx) flow |>
           eval_compose (fun el flow ->
               match el with
@@ -261,24 +265,35 @@ struct
               | _ -> assert false
             )
 
+        | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
+          let () = debug "case 9" in
+          let r = exp |> etyp |> rangeof in
+          if range_leq (z,z) r then
+            oeval_singleton (Some (mk_z z range), flow, [])
+          else
+            let cur = man.flow.get TCur flow in
+            let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
+            oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
+
 
         | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
+          let () = debug "case 5" in
           let t  = etyp exp in
           let t' = etyp e in
           let r = rangeof t in
           let r' = rangeof t' in
           if range_leq r' r then
-            re_eval_singleton (man.eval ctx) (Some e, flow, [])
+            re_eval_singleton (loc_eval man ctx) (Some e, flow, [])
           else
             let rmin, rmax = rangeof t in
-            man.eval ctx e flow |>
+            loc_eval man ctx e flow |>
             check_overflow t man ctx range
-              (fun e tflow -> oeval_singleton (Some {e with etyp = t}, tflow, []))
+              (fun e tflow -> re_eval_singleton (loc_eval man ctx) (Some {e with etyp = t}, tflow, []))
               (fun e fflow ->
                  if b && not (!cast_alarm) then
                    begin
                      debug "false flow : %a" man.flow.print fflow ;
-                     re_eval_singleton (man.eval ctx)
+                     re_eval_singleton (loc_eval man ctx)
                        (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
                               etyp   = t;
                               erange = tag_range range "wrap"
@@ -291,7 +306,7 @@ struct
                      let cur = man.flow.get TCur fflow in
                      let fflow2 = man.flow.add (Alarms.TIntegerOverflow range) cur fflow
                      in
-                     re_eval_singleton (man.eval ctx)
+                     re_eval_singleton (loc_eval man ctx)
                        (Some({ekind  = E_unop(O_wrap(rmin, rmax), e);
                               etyp   = t;
                               erange = tag_range range "wrap"
@@ -301,18 +316,11 @@ struct
               )
 
         | E_constant(C_c_character (c, _)) ->
-          re_eval_singleton (man.eval ctx) (Some ({exp with ekind = E_constant (C_int c)}), flow, [])
-
-        | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
-          let r = exp |> etyp |> rangeof in
-          if range_leq (z,z) r then
-            oeval_singleton (Some (mk_z z range), flow, [])
-          else
-            let cur = man.flow.get TCur flow in
-            let flow2 = man.flow.add (Alarms.TIntegerOverflow range) cur flow in
-            oeval_singleton (Some (mk_z (wrap_z z r) (tag_range range "wrapped")), flow2, [])
+          let () = debug "case 6" in
+          re_eval_singleton (loc_eval man ctx) (Some ({exp with ekind = E_constant (C_int c)}), flow, [])
 
         | E_var v ->
+          let () = debug "case 8" in
           oeval_singleton
             (Some {exp with ekind = E_var({v with vtyp = to_universal_type v.vtyp}); etyp = to_universal_type (etyp exp)},
              flow,
@@ -331,7 +339,9 @@ struct
                           giving back to man"
               Framework.Pp.pp_expr exp
           in
-          Some (man.eval ctx exp flow)
+          man.eval ctx exp flow |>
+          eval_compose
+            (fun e flow -> leval man ctx e flow)
       end
 
   let rec eval man ctx exp flow =
@@ -341,45 +351,53 @@ struct
     oeval_singleton (Some s, flow, [])
 
   let universalize man ctx stmt flow =
-    if is_stmt_universal stmt then
-      lift stmt flow
-    else
-      match skind stmt with
-      | S_assign(e, e', m) ->
-        eval_list [e; e'] (loc_eval man ctx) flow |>
-        eval_compose (fun el flow ->
-            match el with
-            | [e; e'] ->
-              lift {stmt with skind = S_assign(e, e', m)} flow
-            | _ -> assert false
-          )
+    (* if is_stmt_universal stmt then
+     *   lift stmt flow
+     * else *)
+    match skind stmt with
+    | S_assign(e, e', m) ->
+      eval_list [e; e'] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          eval_list el (loc_eval man ctx) flow |>
+          eval_compose (fun el flow ->
+              match el with
+              | [e; e'] ->
+                lift {stmt with skind = S_assign(e, e', m)} flow
+              | _ -> assert false
+            )
+        )
 
-      | S_assume(e) ->
-        let () = debug "got stmt %a" Framework.Pp.pp_stmt stmt in
-        eval_list [e] (loc_eval man ctx) flow |>
-        eval_compose (fun el flow ->
-            match el with
-            | [e] ->
-              lift {stmt with skind = S_assume(e)} flow
-            | _ -> assert false
-          )
+    | S_assume(e) ->
+      let () = debug "got stmt %a" Framework.Pp.pp_stmt stmt in
+      eval_list [e] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          eval_list el (loc_eval man ctx) flow |>
+          eval_compose (fun el flow ->
+              match el with
+              | [e] ->
+                lift {stmt with skind = S_assume(e)} flow
+              | _ -> assert false
+            )
+        )
 
-      | S_rename_var(v, v') ->
-        lift {stmt with skind = S_rename_var(var_machine_integers v,
-                                                       var_machine_integers v')} flow
 
-      | S_project_vars vars ->
-        lift {stmt with skind = S_project_vars(List.map var_machine_integers vars)} flow
+    | S_rename_var(v, v') ->
+      lift {stmt with skind = S_rename_var(var_machine_integers v,
+                                           var_machine_integers v')} flow
 
-      | S_remove_var v ->
-        lift {stmt with skind = S_remove_var (var_machine_integers v)} flow
+    | S_project_vars vars ->
+      lift {stmt with skind = S_project_vars(List.map var_machine_integers vars)} flow
 
-      | _ -> None
+    | S_remove_var v ->
+      lift {stmt with skind = S_remove_var (var_machine_integers v)} flow
+
+    | _ -> None
 
   let exec man ctx stmt flow =
     let () = debug "machine_integers input exec : %a" Framework.Pp.pp_stmt stmt in
     universalize man ctx stmt flow |>
     oeval_to_oexec (fun s flow ->
+        let () = debug "passing : %a" Framework.Pp.pp_stmt stmt in
         N.exec man ctx s flow
       ) (man.exec ctx) man.flow
 
@@ -388,7 +406,13 @@ struct
       let xl = eval_list el (loc_eval man ctx) flow in
       eval_substitute (fun (x, f, sl) ->
           match x with
-          | Some el -> N.ask man ctx (builder el) f
+          | Some el ->
+            let () =
+              match el with
+              | p::q -> debug "eval is : %a" Framework.Pp.pp_expr p
+              | [] -> ()
+            in
+            N.ask man ctx (builder el) f
           | None -> None
         ) (Framework.Query.join query) (Framework.Query.meet query) xl
     end
@@ -402,8 +426,8 @@ struct
         begin
           let rep = pass_on query man ctx [exp] flow (fun l -> Universal.Numeric.Query.QIntInterval (List.nth l 0)) in
           let () = match rep with
-          | Some itv -> debug "I am asked bounds on %a answer is %a in@\n%a" Framework.Pp.pp_expr exp Universal.Numeric.Values.Int.print itv man.flow.print flow
-          | None -> debug "I am asked bounds on %a answer is None" Framework.Pp.pp_expr exp
+            | Some itv -> debug "I am asked bounds on %a answer is %a in@\n%a" Framework.Pp.pp_expr exp Universal.Numeric.Values.Int.print itv man.flow.print flow
+            | None -> debug "I am asked bounds on %a answer is None" Framework.Pp.pp_expr exp
           in rep
         end
 

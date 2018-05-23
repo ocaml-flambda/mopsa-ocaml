@@ -15,7 +15,7 @@ framework.domains.reduce_unify = domain root product
 lang = universal c python
 
 lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
-lang.universal.heap = pool recency
+lang.universal.heap = pool query recency
 lang.universal.nonrel = value domain
 lang.universal.numeric = values query reduction domains
 lang.universal.numeric.values = int congruence float
@@ -26,11 +26,11 @@ lang.python = ast addr pp alarm utils visitor frontend builtins operators memory
 lang.python.memory = value nonrel
 lang.python.objects = class function object number strings containers data_model
 lang.python.objects.containers = lists dicts ranges sets tuples
-lang.python.objects.data_model = attribute callable arith_ops subscript compare_ops
+lang.python.objects.data_model = attribute callable arith_ops subscript compare_ops aug_assign
 lang.python.flows = exceptions
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
-lang.c.memory = base query pointer init cell machine_integers access_path structured
+lang.c.memory = base query pointer init cell decomposer machine_integers access_path structured
 lang.c.memory.cell = initzero expand smashing reductions
 lang.c.flows = goto interproc switch
 

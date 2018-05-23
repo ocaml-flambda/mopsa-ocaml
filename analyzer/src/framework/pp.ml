@@ -14,16 +14,15 @@ open Format
 open Ast
 
 
-let rec pp_vkind_chain : (formatter -> var_kind -> unit) ref = ref (fun fmt vk ->
-    match vk with
-    | V_orig -> ()
+let rec pp_var_chain : (formatter -> var-> unit) ref = ref (fun fmt v ->
+    match v.vkind with
+    | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
     | _ -> failwith "Pp: Unknown variable kind"
   )
 
-and register_pp_vkind pp = pp_vkind_chain := pp !pp_vkind_chain
+and register_pp_var pp = pp_var_chain := pp !pp_var_chain
 
-let pp_var_kind fmt vk = !pp_vkind_chain fmt vk
-
+let pp_var fmt v = !pp_var_chain fmt v
 
 (* Processing chain for the extensible type [Ast.expr] *)
 let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
@@ -84,19 +83,13 @@ and register_pp_operator pp = pp_operator_chain := pp !pp_operator_chain
 and register_pp_constant pp = pp_constant_chain := pp !pp_constant_chain
 
 (* These functions start the chain processing *)
-and pp_expr fmt expr =
-  Format.fprintf fmt "(%a:%a)" !pp_expr_chain expr pp_typ expr.etyp
+and pp_expr fmt expr = !pp_expr_chain fmt expr
 
 and pp_stmt fmt stmt = !pp_stmt_chain fmt stmt
 
 and pp_program fmt prg = !pp_program_chain fmt prg
 
 and pp_typ fmt typ = !pp_typ_chain fmt typ
-
-and pp_var fmt v =
-  match v.vkind with
-  | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
-  | _ -> fprintf fmt "%a@%d" pp_var_kind v.vkind v.vuid
 
 and pp_location fmt loc =
   Format.fprintf fmt "%d:%d" loc.loc_line loc.loc_column

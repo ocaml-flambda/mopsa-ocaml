@@ -19,6 +19,7 @@ let init () =
       Arith_ops.setup ();
       Subscript.setup ();
       Compare_ops.setup ();
+      Aug_assign.setup ();
     );
   );
 
@@ -32,11 +33,13 @@ let init () =
     If.setup ();
     Import.setup ();
     Iterable_assign.setup ();
+    With.setup ();
   );
 
   Libs.(
     Mopsa.setup ();
     Stdlib.setup ();
+    Unittest.setup ();
   );
 
   Memory.(

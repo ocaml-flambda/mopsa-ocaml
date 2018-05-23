@@ -32,6 +32,7 @@
                 "over": {
                     "iter": [
                         "c.memory.pointer",
+                        "c.memory.decomposer",
                         { "fun" : "c.memory.machine_integers",
                           "arg" : "universal.numeric.domains.boxes.int"
                         }
