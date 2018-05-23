@@ -1,12 +1,25 @@
+import mopsa
+
 class object:
     def __new__(cls, args): pass
     def __init__(self, args): pass
 
+    @mopsa.stub
     def __eq__(self, other): return NotImplemented
+
+    @mopsa.stub
     def __ne__(self, other): return NotImplemented
+
+    @mopsa.stub
     def __ge__(self, other): return NotImplemented
+
+    @mopsa.stub
     def __gt__(self, other): return NotImplemented
+
+    @mopsa.stub
     def __lt__(self, other): return NotImplemented
+
+    @mopsa.stub
     def __le__(self, other): return NotImplemented
 
 
@@ -171,7 +184,7 @@ class list(object):
     def __iter__(self): pass
     def __add__(self, o): pass
 
-def listiter(object):
+class listiter(object):
     def __next__(self): pass
 
 class dict(object):

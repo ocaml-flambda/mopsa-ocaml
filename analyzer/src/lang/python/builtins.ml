@@ -54,12 +54,29 @@ let mk_builtin_function_addr base fundec =
     addr_uid = -1;
   }
 
+let mk_stub_function_addr base fundec =
+  let name = mk_dot_name base fundec.py_func_var.vname in
+  let fundec = {fundec with py_func_var = {fundec.py_func_var with vname = name}} in
+  let range = builtin_range name in
+  {
+    addr_kind = A_py_function (F_user fundec);
+    addr_range = range;
+    addr_uid = -1;
+  }
 
+
+let is_stub_decorator d =
+  match ekind d with
+  | E_py_attribute({ekind = E_var {vname = "mopsa"}}, "stub") -> true
+  | _ -> false
 
 let rec parse_functions base stmt =
   match skind stmt with
-  | S_py_function(fundec) ->
+  | S_py_function({py_func_decorators = []} as fundec) ->
     functions := (mk_builtin_function_addr base fundec) :: !functions
+
+  | S_py_function({py_func_decorators = [d]} as fundec) when is_stub_decorator d ->
+    functions := (mk_stub_function_addr base fundec) :: !functions
 
   | S_block(block) ->
     List.iter (parse_functions base) block

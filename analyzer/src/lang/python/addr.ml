@@ -104,6 +104,7 @@ let builtin_name addr =
   | A_py_class(C_builtin name, _)
   | A_py_function(F_builtin name)
   | A_py_module(M_builtin name) -> name
+  | A_py_function(F_user f) -> f.py_func_var.vname
   | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr addr
 
 (** Search for the address of a builtin given its name *)

@@ -89,8 +89,24 @@ struct
     | _ ->
       Nonrel.exec man ctx stmt flow
 
-  let ask man ctx query flow  =
-    Nonrel.ask man ctx query flow
+  let ask : type r. ('a, t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
+    fun man ctx query flow ->
+      match query with
+      | Universal.Numeric.Query.QIntInterval (e) ->
+        begin
+          let e' = Framework.Visitor.map_expr
+              (function {ekind = E_var v} as e -> {e with ekind = E_var {v with vtyp = T_any}} | x -> x)
+              (function x -> x)
+              e
+          in
+          let cur = get_domain_cur man flow in
+          let v = Nonrel.eval_value cur e' in
+          match type_of v with
+          | [T_int] -> Some v.int
+          | _ -> None
+        end
+
+      | _ -> Nonrel.ask man ctx query flow
 
   let eval man ctx exp flow =
     let range = erange exp in

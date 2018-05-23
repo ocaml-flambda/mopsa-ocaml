@@ -100,6 +100,26 @@ struct
             man ctx flow ()
         )
 
+    (* Calls to built-in function next *)
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "next")}},
+        [obj], []
+      )  ->
+      (* Check that the class of obj has an attribute __next__ *)
+      man.eval ctx obj flow |>
+      eval_compose (fun obj flow ->
+          let cls = classof obj in
+          Universal.Utils.assume_to_eval
+            (Utils.mk_addr_hasattr cls "__next__" range)
+            (fun true_flow ->
+               (Some (mk_py_call (mk_py_addr_attr cls "__next__" range) [obj] range), true_flow, []) |>
+               re_eval_singleton (man.eval ctx)
+            )
+            (fun false_flow -> oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow, []))
+            man ctx flow ()
+        )
+
+
     | _ ->
       None
 

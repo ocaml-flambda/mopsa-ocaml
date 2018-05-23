@@ -1,3 +1,4 @@
+# Assertions
 def assert_equal(x, y): pass
 def assert_not_equal(x, y): pass
 def assert_true(cond): pass
@@ -6,3 +7,11 @@ def assert_exists(cond): pass
 def assert_safe(cond): pass
 def assert_exception(exn): pass
 def assert_exception_exists(exn): pass
+
+# Ranges
+def rand_int(a, b): pass
+def nondet(): pass
+
+# Decorators
+def stub(f): pass
+def not_supported(f): pass
