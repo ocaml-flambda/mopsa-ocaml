@@ -46,7 +46,7 @@ let eval_iter (f: ('a, 'b) eval_case -> unit) (evals: ('a, 'b) evals) : unit =
   List.flatten |>
   List.iter f
 
-let eval_fold (f: 'c -> ('a, 'b) eval_case -> unit) (x: 'c) (evals: ('a, 'b) evals) : 'c =
+let eval_fold (f: 'c -> ('a, 'b) eval_case -> 'c) (x: 'c) (evals: ('a, 'b) evals) : 'c =
   Dnf.to_list evals |>
   List.flatten |>
   List.fold_left f x
@@ -97,6 +97,13 @@ let oeval_meet
     (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
   =
   Option.option_neutral2 (eval_meet ~fand) oevl1 oevl2
+
+
+let oeval_iter (f: ('a, 'b) eval_case -> unit) (evals: ('a, 'b) evals option) : unit =
+  Option.option_dfl1 (fun () -> ()) (eval_iter f) evals
+
+let oeval_fold (f: 'c -> ('a, 'b) eval_case -> 'c) (x: 'c) (evals: ('a, 'b) evals option) : 'c =
+  Option.option_dfl1 (fun () -> x) (eval_fold f x) evals
 
 
 let oeval_merge

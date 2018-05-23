@@ -103,7 +103,15 @@ struct
 
     | _ -> None
 
-  let ask man subman ctx query flow = None
+  let ask : type r. ('a, t) manager -> ('a, Sub.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
+    fun man subman ctx query flow ->
+      match query with
+      | Query.QAllocatedAddresses ->
+        let pool = get_domain_cur man flow in
+        let addrs = Pool.AddrSet.elements pool.recent @ Pool.AddrSet.elements pool.old in
+        Some addrs
+
+      | _ -> None
 
 
 end

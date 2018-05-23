@@ -15,7 +15,7 @@ framework.domains.reduce_unify = domain root product
 lang = universal c python
 
 lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
-lang.universal.heap = pool recency
+lang.universal.heap = pool query recency
 lang.universal.nonrel = value domain
 lang.universal.numeric = values query reduction domains
 lang.universal.numeric.values = int congruence float
