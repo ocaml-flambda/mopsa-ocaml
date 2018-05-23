@@ -129,7 +129,9 @@ struct
       | Query.QIntInterval e ->
         let a = get_domain_cur man flow in
         let v = eval_value a e in
+        debug "I am asked bounds on %a answer is %a in@\n%a" Framework.Pp.pp_expr e Value.print v man.flow.print flow;
         Some v
+
 
       | Query.QIntStepInterval e ->
         let a = get_domain_cur man flow in

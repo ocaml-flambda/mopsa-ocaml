@@ -288,13 +288,13 @@ module Domain(SubDomain: Framework.Domains.Stateful.DOMAIN) = struct
       | AnyCell c ->
         let (a, b) = rangeof c.t in
         let e = mk_z_interval a b range in
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:T_int range) range) in
         u, local_exec ctx stmt s
 
       | OffsetCell _ ->
         match phi v u range with
         | Nexp (Some e) ->
-          let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e range) range) in
+          let stmt = Universal.Ast.(mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:T_int range) range) in
           CS.add v u, local_exec ctx stmt s
 
         | Nexp None -> CS.add v u, s

@@ -12,7 +12,7 @@
         //Desugarisation
         "c.desugar.andor",
         "c.desugar.stmt_rvals",
-	"c.desugar.records",
+	      "c.desugar.records",
         "c.desugar.loops",
 
         //Flows
@@ -32,9 +32,9 @@
                 "over": {
                     "iter": [
                         "c.memory.pointer",
-                        "c.memory.machine_integers",
-                        //Numeric abstraction
-                        "universal.numeric.domains.boxes.int"
+                        { "fun" : "c.memory.machine_integers",
+                          "arg" : "universal.numeric.domains.boxes.int"
+                        }
                     ]
                 }
             }

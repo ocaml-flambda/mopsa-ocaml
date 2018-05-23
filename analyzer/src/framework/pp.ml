@@ -24,10 +24,6 @@ and register_pp_vkind pp = pp_vkind_chain := pp !pp_vkind_chain
 
 let pp_var_kind fmt vk = !pp_vkind_chain fmt vk
 
-let pp_var fmt v =
-  match v.vkind with
-  | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
-  | _ -> fprintf fmt "%a@%d" pp_var_kind v.vkind v.vuid
 
 (* Processing chain for the extensible type [Ast.expr] *)
 let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
@@ -96,6 +92,11 @@ and pp_stmt fmt stmt = !pp_stmt_chain fmt stmt
 and pp_program fmt prg = !pp_program_chain fmt prg
 
 and pp_typ fmt typ = !pp_typ_chain fmt typ
+
+and pp_var fmt v =
+  match v.vkind with
+  | V_orig -> fprintf fmt "%s@%d" v.vname v.vuid
+  | _ -> fprintf fmt "%a@%d" pp_var_kind v.vkind v.vuid
 
 and pp_location fmt loc =
   Format.fprintf fmt "%d:%d" loc.loc_line loc.loc_column

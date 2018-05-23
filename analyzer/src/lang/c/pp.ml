@@ -61,7 +61,7 @@ let () =
       | T_c_enum(enum) -> fprintf fmt "enum %s" enum.c_enum_org_name
 
       | T_c_bitfield(t, size) -> assert false
-      | T_c_builtin_fn -> assert false
+      | T_c_builtin_fn -> fprintf fmt "builtin_fn"
       | _ -> default fmt typ
     );
   register_pp_constant (fun next fmt c ->
