@@ -58,6 +58,8 @@ struct
 
         )
 
+    | E_py_slice_subscript _ ->
+      Framework.Exceptions.panic "slices not supported"
 
     | _ -> None
 
@@ -93,6 +95,9 @@ struct
 
         ) (man.exec ctx) man.flow |>
       return
+
+    | S_assign({ekind = E_py_slice_subscript _}, exp, mode) ->
+      Framework.Exceptions.panic "slices not supported"
 
     | _ -> None
 

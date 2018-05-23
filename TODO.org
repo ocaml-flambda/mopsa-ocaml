@@ -130,5 +130,3 @@
 *** constructor tuple on iterators
 ** Non-relational abstraction
 *** Investigate seprate non-relelations maps where each map key domain is limited to a particular variable type.
-** Stubs
-*** distinguish between concrete/abstract stubs
