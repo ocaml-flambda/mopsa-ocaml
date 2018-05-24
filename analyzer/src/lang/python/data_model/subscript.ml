@@ -21,7 +21,7 @@ open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.objects.data_model.subscript"
+let name = "python.data_model.subscript"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =
@@ -58,8 +58,28 @@ struct
 
         )
 
-    | E_py_slice_subscript _ ->
-      Framework.Exceptions.panic "slices not supported"
+    | E_py_slice_subscript(obj, start, stop, step) ->
+      eval_list [obj; start; stop; step] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
+          let cls = classof obj in
+
+          Universal.Utils.assume_to_eval
+            (Utils.mk_addr_hasattr cls "__getitem__" range)
+            (fun true_flow ->
+               man.eval ctx (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
+               eval_compose (fun slice flow ->
+                   let exp' = mk_py_call (mk_py_addr_attr cls "__getitem__" range) [obj; slice] range in
+                   re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+                 )
+            )
+            (fun false_flow ->
+               let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow in
+               oeval_singleton (None, flow, [])
+            )
+            man ctx flow ()
+        )
+
 
     | _ -> None
 
@@ -96,8 +116,28 @@ struct
         ) (man.exec ctx) man.flow |>
       return
 
-    | S_assign({ekind = E_py_slice_subscript _}, exp, mode) ->
-      Framework.Exceptions.panic "slices not supported"
+    | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp, mode) ->
+      eval_list [obj; start; stop; step] (man.eval ctx) flow |>
+      eval_to_exec (fun el flow ->
+          let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
+          let cls = classof obj in
+
+          Universal.Utils.assume_to_exec
+            (Utils.mk_addr_hasattr cls "__setitem__" range)
+            (fun true_flow ->
+               man.eval ctx (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
+               eval_to_exec (fun slice flow ->
+                   let exp' = mk_py_call (mk_py_addr_attr cls "__setitem__" range) [obj; slice; exp] range in
+                   man.exec ctx {stmt with skind = S_expression(exp')} flow
+                 ) (man.exec ctx) man.flow
+            )
+            (fun false_flow ->
+               man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow
+            )
+            man ctx flow ()
+        ) (man.exec ctx) man.flow |>
+      return
+
 
     | _ -> None
 

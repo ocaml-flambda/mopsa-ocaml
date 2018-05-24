@@ -19,7 +19,7 @@ open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.objects.data_model.callable"
+let name = "python.data_model.callable"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =

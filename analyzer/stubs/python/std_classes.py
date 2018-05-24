@@ -195,6 +195,7 @@ class range(object):
     def __len__(self): pass
     def __iter__(self): pass
     def __contains__(self, v): pass
+    def __getitem__(self, k): pass
 
 class rangeiter(object):
     def __next__(self): pass
@@ -210,9 +211,13 @@ class set(object):
 class tuple(object):
     def __init__(self): pass
     def __iter__(self): pass
+    def __getitem__(self, k): pass
 
 class tupleiter(object):
     def __next__(self): pass
+
+class slice(object):
+    def __new__(self, args): pass
 
 class NotImplementedType(object): pass
 class NoneType(object): pass

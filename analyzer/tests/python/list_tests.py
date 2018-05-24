@@ -15,3 +15,8 @@ def test_add():
     l2 = l1 + [4, 5]
     n = len(l2)
     mopsa.assert_equal(n, 5)
+
+def test_list_slice():
+    l1 = [1, 2, 3, 4]
+    l2 = l1[1:3]
+    mopsa.assert_equal(len(l2), 2)

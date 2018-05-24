@@ -23,7 +23,7 @@ open Ast
 open Addr
 open Operators
 
-let name = "python.objects.data_model.aug_assign"
+let name = "python.data_model.aug_assign"
 let debug fmt = Debug.debug ~channel:name fmt
 
 

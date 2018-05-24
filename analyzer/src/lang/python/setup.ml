@@ -6,6 +6,7 @@ let init () =
     Function.setup ();
     Number.setup ();
     Strings.setup ();
+    Slices.setup ();
     Containers.(
       Lists.setup ();
       Dicts.setup ();
@@ -13,14 +14,15 @@ let init () =
       Sets.setup ();
       Tuples.setup ();
     );
-    Data_model.(
-      Attribute.setup ();
-      Callable.setup ();
-      Arith_ops.setup ();
-      Subscript.setup ();
-      Compare_ops.setup ();
-      Aug_assign.setup ();
-    );
+  );
+
+  Data_model.(
+    Attribute.setup ();
+    Callable.setup ();
+    Arith_ops.setup ();
+    Subscript.setup ();
+    Compare_ops.setup ();
+    Aug_assign.setup ();
   );
 
   Flows.(

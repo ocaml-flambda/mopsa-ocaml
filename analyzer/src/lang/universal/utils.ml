@@ -26,6 +26,27 @@ let assume_to_eval cond
     true_case false_case bottom_case merge_case
     man flow
 
+let switch_eval
+    (cases : (((expr * bool) list) * ('a Framework.Flow.flow -> (expr, 'a) Framework.Eval.evals option)) list)
+    man ctx flow
+  : (expr, 'a) Framework.Eval.evals option =
+  match cases with
+  | (cond, t) :: q ->
+    let one (cond : (expr * bool) list) t =
+      List.fold_left (fun acc (x, b) ->
+          let s =
+            if b then (mk_assume x (tag_range x.erange "true assume"))
+            else (mk_assume (mk_not x (tag_range x.erange "neg"))
+                    (tag_range x.erange "false assume"))
+          in
+          man.exec ctx s acc
+        ) flow cond
+      |> t
+    in
+    List.fold_left (fun acc (cond, t) -> Framework.Eval.oeval_join (one cond t) acc) (one cond t) q
+  | [] -> None
+
+
 let switch_exec
     (cases : (((expr * bool) list) * ('a Framework.Flow.flow -> 'a Framework.Flow.flow)) list)
     man ctx flow

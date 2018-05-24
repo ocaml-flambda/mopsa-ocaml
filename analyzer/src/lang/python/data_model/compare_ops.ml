@@ -22,7 +22,7 @@ open Ast
 open Addr
 open Operators
 
-let name = "python.objects.data_model.compare_ops"
+let name = "python.data_model.compare_ops"
 let debug fmt = Debug.debug ~channel:name fmt
 
 

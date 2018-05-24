@@ -21,7 +21,7 @@ open Addr
 open Utils
 
 
-let name = "python.objects.data_model.attribute"
+let name = "python.data_model.attribute"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
