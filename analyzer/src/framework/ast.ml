@@ -209,7 +209,7 @@ let compare_var v1 v2 =
   ]
 
 let mkv ?(vtyp = T_any) ?(vkind = V_orig) ?(vuid=0) vname =
-  {vname; vuid = 0; vtyp; vkind}
+  {vname; vuid; vtyp; vkind}
 
 let tmp_counter = ref 100
 
