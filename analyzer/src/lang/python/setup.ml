@@ -36,6 +36,7 @@ let init () =
     Import.setup ();
     Iterable_assign.setup ();
     With.setup ();
+    Loops.setup ();
   );
 
   Libs.(
