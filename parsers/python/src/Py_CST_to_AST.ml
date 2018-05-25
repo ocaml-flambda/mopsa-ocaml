@@ -372,7 +372,7 @@ and translate_comprehension = function
 
 and translate_var name = {
   name;
-  uid = -1;
+  uid = 0;
 }
 
 and find_lvals_in_block sl =

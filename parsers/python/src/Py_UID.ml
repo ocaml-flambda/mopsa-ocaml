@@ -245,7 +245,7 @@ and find_in_scope (globals, lscope) v =
     List.find (fun v' -> v.name = v'.name) globals
   with Not_found ->
     if List.mem v.name Py_builtins.all then
-      { name = v.name; uid = -1}
+      { name = v.name; uid = 0}
     else
       Debug.fail "Unbounded variable %a" Py_pp.print_var v
 
