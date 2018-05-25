@@ -43,6 +43,7 @@ let init () =
     Mopsa.setup ();
     Stdlib.setup ();
     Unittest.setup ();
+    Math.setup ();
   );
 
   Memory.(

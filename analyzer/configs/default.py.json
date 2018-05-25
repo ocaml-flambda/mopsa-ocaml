@@ -21,6 +21,7 @@
         "python.libs.mopsa",
         "python.libs.stdlib",
         "python.libs.unittest",
+        "python.libs.math",
 
         "python.objects.class",
         "python.objects.function",

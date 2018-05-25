@@ -76,7 +76,7 @@ module Domain = struct
     let flow = man.exec ctx
         (mk_assign
            (mk_ll addr range)
-           (mk_binop (mk_ll addr range) math_plus (mk_one range) range)
+           (mk_binop (mk_ll addr range) math_plus (mk_one range) ~etyp:T_int range)
            range
         ) flow
     in
@@ -121,7 +121,7 @@ module Domain = struct
   let check_index_access man ctx alist index range flow =
     let ll = mk_ll alist range in
     let cond_safe = mk_binop
-        (mk_binop index O_ge (mk_neg ll range) range)
+        (mk_binop index O_ge (mk_unop math_minus ll ~etyp:T_int range) range)
         O_log_and
         (mk_binop index O_lt ll range)
         range
@@ -187,7 +187,7 @@ module Domain = struct
           let tmp = mktmp () in
           let flow =
             man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow |>
-            man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) range) range)
+            man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) ~etyp:T_int range) range)
           in
           re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
 
@@ -506,7 +506,7 @@ module Domain = struct
 
             let ok_cond =
               mk_binop
-                (mk_binop idx O_ge (mk_unop math_minus ll range) range)
+                (mk_binop idx O_ge (mk_unop math_minus ll ~etyp:T_int range) range)
                 O_log_and
                 (mk_binop idx O_lt ll range)
                 range
@@ -516,7 +516,7 @@ module Domain = struct
               if man.flow.is_cur_bottom ok_flow then
                 None
               else
-                let flow = man.exec ctx (mk_assign ll (mk_binop ll math_minus (mk_one range) range) range) ok_flow in
+                let flow = man.exec ctx (mk_assign ll (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range) ok_flow in
                 let tmp = mktmp () in
                 let flow = man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow in
                 re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
@@ -562,7 +562,7 @@ module Domain = struct
           let ll = mk_ll addr range in
           let lv = mk_lv addr range in
 
-          let flow = man.exec ctx (mk_assign ll (mk_binop ll1 math_plus ll2 range) range) flow in
+          let flow = man.exec ctx (mk_assign ll (mk_binop ll1 math_plus ll2 ~etyp:T_int range) range) flow in
           (* FIXME: improve precision by checing if l1 or l2 are empty *)
           let flow1 = man.exec ctx (mk_assign lv lv1 ~mode:EXPAND range) flow in
           let flow2 = man.exec ctx (mk_assign lv lv2 ~mode:EXPAND range) flow in
@@ -586,7 +586,7 @@ module Domain = struct
       let ll2 = mk_ll l2 range in
       let lv2 = mk_lv l2 range in
 
-      let flow = man.exec ctx (mk_assign ll1 (mk_binop ll1 math_plus ll2 range) range) flow in
+      let flow = man.exec ctx (mk_assign ll1 (mk_binop ll1 math_plus ll2 ~etyp:T_int range) range) flow in
       (* FIXME: improve precision by checing if l1 or l2 are empty *)
       let flow1 = man.exec ctx (mk_assign lv1 lv2 ~mode:EXPAND range) flow in
       let flow = man.flow.join flow1 flow in
@@ -607,7 +607,7 @@ module Domain = struct
           let ll' = mk_ll addr' range in
           let lv' = mk_lv addr' range in
 
-          let flow = man.exec ctx (mk_assign ll' (mk_binop ll math_mult arg range) range) flow in
+          let flow = man.exec ctx (mk_assign ll' (mk_binop ll math_mult arg ~etyp:T_int range) range) flow in
           let flow = man.exec ctx (mk_assign lv' lv ~mode:EXPAND range) flow in
 
           oeval_singleton (Some (mk_addr addr' range), flow, [])
@@ -624,7 +624,7 @@ module Domain = struct
 
       let ll = mk_ll alist range in
 
-      let flow = man.exec ctx (mk_assign ll (mk_binop ll math_mult arg range) range) flow in
+      let flow = man.exec ctx (mk_assign ll (mk_binop ll math_mult arg ~etyp:T_int range) range) flow in
 
       oeval_singleton (Some (mk_addr alist range), flow, [])
 

@@ -19,3 +19,5 @@ points = [Point(0)] * n
 for i in range(n):
     points[i] = Point(i)
 
+for p in points:
+    p.normalize()

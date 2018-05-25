@@ -35,14 +35,11 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    (* FIXME: this should be moved to range.__new__ *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "range.__init__")}},
-        ({ekind = E_addr arange}) :: args,
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "range.__new__")}},
+        cls :: args,
         []
       ) ->
-      let start = mk_start arange range in
-      let stop = mk_stop arange range in
 
       let estart, estop=
         match args with
@@ -51,11 +48,20 @@ struct
         | _ -> panic "range not supported"
       in
 
-      let flow = man.exec ctx (mk_assign start estart range) flow |>
-                 man.exec ctx (mk_assign stop estop range)
-      in
+      man.eval ctx (mk_py_call (mk_py_addr_attr (Addr.find_builtin "object") "__new__" range) [cls] range) flow |>
+      eval_compose (fun obj flow ->
+          match ekind obj with
+          | E_addr addr ->
+            let start = mk_start addr range in
+            let stop = mk_stop addr range in
 
-      oeval_singleton (Some (mk_py_none range), flow, [])
+            let flow = man.exec ctx (mk_assign start estart range) flow |>
+                       man.exec ctx (mk_assign stop estop range)
+            in
+            oeval_singleton (Some (mk_addr addr range), flow, [])
+
+          | _ -> assert false
+        )
 
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_function (F_builtin("range.__len__"))}},
@@ -64,8 +70,8 @@ struct
       ) ->
 
       let start = mk_start arange range in
-      let stop = mk_stop arange range in      
-      let exp' = mk_binop stop math_minus start range in
+      let stop = mk_stop arange range in
+      let exp' = mk_binop stop math_minus start ~etyp:T_int range in
       let cond = mk_binop exp' O_ge (mk_zero range) range in
 
       let flow_pos = man.exec ctx (mk_assume cond range) flow in
@@ -96,9 +102,9 @@ struct
       let start = mk_start arange range in
       let stop = mk_stop arange range in
       let counter = mk_counter aiter range in
-      let cond = 
+      let cond =
         mk_in ~right_strict:true
-          (mk_binop counter math_plus start range)
+          (mk_binop counter math_plus start ~etyp:T_int range)
           start
           stop
           range
@@ -109,11 +115,11 @@ struct
       let flow_in = man.exec ctx (mk_assume cond range) flow in
       let flow_out = man.exec ctx (mk_assume cond' range) flow in
 
-      let flow_in' = man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) range) range) flow_in in
+      let flow_in' = man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) ~etyp:T_int range) range) flow_in in
       let flow_out' = man.exec ctx (Utils.mk_builtin_raise "StopIteration" range) flow_out in
 
       oeval_join
-        (re_eval_singleton (man.eval ctx) (Some (mk_binop counter math_minus (mk_one range) range), flow_in', []))
+        (re_eval_singleton (man.eval ctx) (Some (mk_binop counter math_minus (mk_one range) ~etyp:T_int range), flow_in', []))
         (oeval_singleton (None, flow_out', []))
 
 
@@ -152,7 +158,7 @@ struct
                           (oeval_singleton (Some (mk_false range), flow, []))
         | false, false -> oeval_singleton (None, flow, [])
 
-      end  
+      end
 
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_function (F_builtin("range.__contains__"))}},

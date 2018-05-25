@@ -9,8 +9,9 @@ def assert_exception(exn): pass
 def assert_exception_exists(exn): pass
 
 # Ranges
-def rand_int(a, b): pass
-def nondet(): pass
+def random_int(a, b): pass
+def random_float(a, b): pass
+def random_bool(): pass
 
 # Decorators
 def stub(f): pass

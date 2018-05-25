@@ -34,7 +34,7 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
       [
         (ll, mk_binop estart O_ge ll range);
         (mk_zero range, mk_binop (mk_binop ll math_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
-        (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_neg ll range) (mk_zero range) range);
+        (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
         (estart, mk_in estart (mk_zero range) ll range)
       ]
   in
@@ -51,7 +51,7 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
       [
         (ll, mk_binop eend O_ge ll range);
         (mk_zero range, mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
-        (mk_binop ll math_plus eend ~etyp:T_int range, mk_in ~strict:true eend (mk_neg ll range) (mk_zero range) range);
+        (mk_binop ll math_plus eend ~etyp:T_int range, mk_in ~strict:true eend (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
         (eend, mk_in eend (mk_zero range) ll range)
       ]
   in
@@ -84,7 +84,7 @@ let fold_decreasing_slice_length_cases man ctx f x0 estart eend ll range flow =
       [
         (mk_binop ll math_minus (mk_one range) ~etyp:T_int range, mk_binop estart O_ge (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range);
         (mk_zero range, mk_binop (mk_binop ll math_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
-        (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_neg ll range) (mk_zero range) range);
+        (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
         (estart, mk_in estart (mk_zero range) (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range)
       ]
   in
@@ -101,7 +101,7 @@ let fold_decreasing_slice_length_cases man ctx f x0 estart eend ll range flow =
       [
         (ll, mk_binop eend O_ge (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range);
         (mk_zero range, mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
-        (mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) math_plus (mk_one range) range, mk_in ~strict:true eend (mk_neg ll range) (mk_zero range) range);
+        (mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) math_plus (mk_one range) range, mk_in ~strict:true eend (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
         (mk_binop eend math_plus (mk_one range) ~etyp:T_int range, mk_in eend (mk_zero range) ll range)
       ]
   in

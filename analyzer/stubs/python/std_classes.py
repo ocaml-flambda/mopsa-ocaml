@@ -173,8 +173,10 @@ class list(object):
     def __setitem__(self, k, v): pass
     def __iter__(self): pass
     def __add__(self, o): pass
-
+    def __mul__(self, o): pass
     def append(self, x): pass
+    def insert(self, x): pass
+    def pop(self): pass
 
 class listiter(object):
     def __next__(self): pass
@@ -182,7 +184,7 @@ class listiter(object):
 class dict(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass
-    def __values__(self): pass
+    def values(self): pass
 
 class dict_values(object):
     def __iter__(self): pass
@@ -191,7 +193,7 @@ class dict_valueiterator(object):
     def __next__(self): pass
 
 class range(object):
-    def __init__(self, start, stop): pass
+    def __new__(cls, args): pass
     def __len__(self): pass
     def __iter__(self): pass
     def __contains__(self, v): pass
