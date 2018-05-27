@@ -6,11 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Different kinds of exceptions raised by domains and processed by
-    the analyzer. *)
+(** Common exceptions raised by domains and processed by the
+   analyzer. *)
 
 (*==========================================================================*)
-                        (** {2 Panic} *)
+(**                              {2 Panic}                                  *)
 (*==========================================================================*)
 
 
@@ -19,9 +19,16 @@
 *)
 exception Panic of string
 
+exception PanicAt of Ast.range * string
+
 let panic fmt =
   Format.kasprintf (fun str ->
       raise (Panic str)
+    ) fmt
+
+let panic_at range fmt =
+  Format.kasprintf (fun str ->
+      raise (PanicAt (range, str))
     ) fmt
 
 

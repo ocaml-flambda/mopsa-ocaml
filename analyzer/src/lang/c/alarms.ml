@@ -86,6 +86,7 @@ module Domain = struct
               let alarm = {
                 alarm_kind = AOutOfBound;
                 alarm_range = range;
+                alarm_level = ERROR;
               } in
               alarm :: acc
 
@@ -93,12 +94,14 @@ module Domain = struct
               let alarm = {
                 alarm_kind = ANullDeref;
                 alarm_range = range;
+                alarm_level = ERROR;
               } in
               alarm :: acc
 
             | TInvalidDeref(range) ->
               let alarm = {
                 alarm_kind = AInvalidDeref;
+                alarm_level = ERROR;
                 alarm_range = range;
               } in
               alarm :: acc
@@ -106,6 +109,7 @@ module Domain = struct
             | TIntegerOverflow(range) ->
               let alarm = {
                 alarm_kind = AIntegerOverflow;
+                alarm_level = ERROR;
                 alarm_range = range;
               } in
               alarm :: acc
@@ -114,6 +118,7 @@ module Domain = struct
               let alarm = {
                 alarm_kind = ADivideByZero;
                 alarm_range = range;
+                alarm_level = ERROR;
               } in
               alarm :: acc
 

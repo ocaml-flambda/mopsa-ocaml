@@ -57,6 +57,7 @@ let perform_analysis (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.prog
 
 type analysis_results =
   | ExcPanic of string
+  | ExcPanicAt of Ast.range * string
   | ExcUncaught of string * string
   | Success of float * Framework.Alarm.alarm list option
 
@@ -71,7 +72,8 @@ let bench_printing analysis_res =
          ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
          Framework.Alarm.pp_alarm_bench
       ) alarms
-  | ExcPanic s ->
+  | ExcPanic s
+  | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)
     Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s\"}}" s
   | ExcUncaught(s,s') ->
     Format.printf "{\"exc\": {\"etype\": \"Uncaught\", \"info\" : \"%s in %s\"}}" s s'
@@ -90,7 +92,8 @@ let verbose_printing analysis_res =
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
          Framework.Alarm.pp_alarm
       ) alarms
-  | ExcPanic s ->
+  | ExcPanic s
+  | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)
     Debug.fail "Panic: %s" s
   | ExcUncaught(name, backtrace)  ->
     Debug.fail "Uncaught analyzer exception in %s@\n%s"
@@ -151,6 +154,7 @@ let () =
             Success(t, alarms)
           with
           | Framework.Exceptions.Panic msg -> ExcPanic (String.escaped msg)
+          | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range, String.escaped msg)
           | e -> ExcUncaught(String.escaped (Printexc.to_string e), Printexc.get_backtrace ())
         in
         match Options.(common_options.output_mode) with

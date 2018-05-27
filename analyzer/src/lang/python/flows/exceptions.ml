@@ -216,6 +216,7 @@ struct
               let alarm = {
                 alarm_kind = Alarm.UncaughtException(exn_name);
                 alarm_range = exn.addr_range;
+                alarm_level = ERROR;
               }
               in
               alarm :: acc
