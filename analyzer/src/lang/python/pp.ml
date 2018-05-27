@@ -178,7 +178,7 @@ let () =
 
       | S_py_function(func) ->
         fprintf fmt "%a@\ndef %a(%a):@\n@[<h 2>  %a@]"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decorators
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decors
           pp_var func.py_func_var
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_parameters
           pp_stmt func.py_func_body

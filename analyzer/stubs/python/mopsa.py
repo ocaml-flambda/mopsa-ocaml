@@ -15,4 +15,4 @@ def random_bool(): pass
 
 # Decorators
 def stub(f): pass
-def not_supported(f): pass
+def unsupported(f): pass

@@ -223,3 +223,36 @@ class slice(object):
 
 class NotImplementedType(object): pass
 class NoneType(object): pass
+
+@mopsa.unsupported
+class bytearray(object): pass
+
+@mopsa.unsupported
+class bytes(object): pass
+
+@mopsa.unsupported
+class classmethod(object):pass
+
+@mopsa.unsupported
+class frozenset(object): pass
+
+@mopsa.unsupported
+class map(object): pass
+
+@mopsa.unsupported
+class memoryview(object): pass
+
+@mopsa.unsupported
+class property(object): pass
+
+@mopsa.unsupported
+class reversed(object): pass
+
+@mopsa.unsupported
+class staticmethod(object): pass
+
+@mopsa.unsupported
+class super(object): pass
+
+@mopsa.unsupported
+class zip(object): pass

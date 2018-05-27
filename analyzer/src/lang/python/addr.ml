@@ -37,11 +37,13 @@ type obj_param =
 type class_address =
   | C_builtin of string (* name of a built-in class *)
   | C_user of py_clsdec (* declaration of a user class *)
+  | C_unsupported of string (** unsupported class *)
 
 (** Functions *)
 type function_address =
   | F_builtin of string (* name of a builtin function *)
   | F_user of py_fundec (* declaration of a user function *)
+  | F_unsupported of string (** unsupported function *)
 
 (** Modules *)
 type module_address =
@@ -103,7 +105,9 @@ let split_dot_name x =
 let builtin_name addr =
   match addr.addr_kind with
   | A_py_class(C_builtin name, _)
+  | A_py_class(C_unsupported name, _)
   | A_py_function(F_builtin name)
+  | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr addr
@@ -111,9 +115,14 @@ let builtin_name addr =
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
   debug "searching for builtin %s" name;
-  List.find (fun addr ->
+  let addr = List.find (fun addr ->
       name = builtin_name addr
     ) (all ())
+  in
+  match addr.addr_kind with
+  | A_py_class(C_unsupported name, _) -> Framework.Exceptions.panic "Unsupported class %s" name
+  | A_py_function (F_unsupported name) -> Framework.Exceptions.panic "Unsupported function %s" name
+  | _ -> addr
 
 (** Search for the address of an attribute of a builtin, given its name *)
 let find_builtin_attribute obj attr =
@@ -214,9 +223,9 @@ let () =
       register_pp_addr (fun default fmt a ->
           match a.addr_kind, Universal.Heap.Recency.is_weak a with
           | A_py_class(C_user c, _), _ -> fprintf fmt "(C %a)" pp_var c.py_cls_var
-          | A_py_class(C_builtin c, _), _ -> fprintf fmt "(C %s)" c
+          | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "(C %s)" c
           | A_py_function(F_user f), _ -> fprintf fmt "[F %a]" pp_var f.py_func_var
-          | A_py_function(F_builtin f), _ -> fprintf fmt "[F %s]" f
+          | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "[F %s]" f
           | A_py_instance(c, _), false -> fprintf fmt "<I %a @@ %a>" pp_addr c pp_range a.addr_range
           | A_py_instance(c, _), true -> fprintf fmt "<I %a @weak %a>" pp_addr c pp_range a.addr_range
           | A_py_method(f, obj), _ -> fprintf fmt "{M %a on %a}" pp_addr f pp_addr obj
