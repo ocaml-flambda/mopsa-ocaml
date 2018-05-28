@@ -16,29 +16,37 @@
         "c.desugar.loops",
 
         //Flows
-        "c.flows.switch",
-        "c.flows.interproc",
-        "universal.flows.loops",
-        "universal.flows.intraproc",
-        "universal.flows.interproc",
-        "c.flows.goto",
+        { "fun" : "universal.flows.memoisation",
+          "arg" :
+          {
+              "iter" :
+              [
+                  "c.flows.switch",
+                  "c.flows.interproc",
+                  "universal.flows.loops",
+                  "universal.flows.intraproc",
+                  "universal.flows.interproc",
+                  "c.flows.goto",
 
-        //Heap abstraction
-        {
-            "unify": "universal.heap.recency",
-            "over": {
-                //Memory abstraction
-                "reduce-unify": ["c.memory.cell.expand"],
-                "over": {
-                    "iter": [
-                        "c.memory.pointer",
-                        "c.memory.decomposer",
-                        { "fun" : "c.memory.machine_integers",
-                          "arg" : "universal.numeric.domains.boxes.int"
-                        }
-                    ]
-                }
-            }
+                  //Heap abstraction
+                  {
+                      "unify": "universal.heap.recency",
+                      "over": {
+                          //Memory abstraction
+                          "reduce-unify": ["c.memory.cell.expand"],
+                          "over": {
+                              "iter": [
+                                  "c.memory.pointer",
+                                  "c.memory.decomposer",
+                                  { "fun" : "c.memory.machine_integers",
+                                    "arg" : "universal.numeric.domains.boxes.int"
+                                  }
+                              ]
+                          }
+                      }
+                  }
+              ]
+          }
         }
     ]
 }
