@@ -324,7 +324,7 @@ struct
 
 
     | E_py_call(
-        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("dict.__values__"))})},
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("dict.values"))})},
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "dict", _)}, _)}  as addr)}) :: [],
         []
       ) ->
@@ -334,7 +334,7 @@ struct
         )
 
     | E_py_call(
-        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("dict_value.__iter__"))})},
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin("dict_values.__iter__"))})},
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "dict_values", _)}, Some (Dict dict))})}) :: [],
         []
       ) ->

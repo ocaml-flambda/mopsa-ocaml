@@ -21,8 +21,7 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     let func_locals = List.map create_new_uid f.func_locals in
     let func_parameters = List.map create_new_uid f.func_parameters in
     let func_defaults = List.map (translate_expr_option scope) f.func_defaults in
-    (* FIXME: decorators should be resolved in the current scope *)
-    let func_decors = f.func_decors in
+    let func_decors = List.map (translate_expr scope) f.func_decors in
     let func_return = translate_expr_option scope f.func_return in
     let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters)) lscope in
     let new_lscope = func_var :: func_parameters @ func_locals @ func_nonlocals @ parent_scope in
@@ -45,6 +44,7 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     | S_class cls ->
       let cls_var = find_in_scope scope cls.cls_var in
       let cls_static_attributes = List.map create_new_uid cls.cls_static_attributes in
+      let cls_decors = List.map (translate_expr scope) cls.cls_decors in
       let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (cls_var :: cls_static_attributes)) lscope in
       let new_lscope = cls_var :: cls_static_attributes @ parent_scope in
       {stmt with
@@ -53,8 +53,7 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
            cls_body = translate_stmt (globals, new_lscope) cls.cls_body;
            cls_static_attributes;
            cls_bases = List.map (translate_expr scope) cls.cls_bases;
-           (* FIXME: decorators should be resolved in the current scope *)
-           cls_decors = cls.cls_decors;
+           cls_decors;
            cls_keywords = List.map (fun (k, v) -> (k, translate_expr scope v)) cls.cls_keywords;
          }
       }
@@ -246,7 +245,7 @@ and find_in_scope (globals, lscope) v =
     List.find (fun v' -> v.name = v'.name) globals
   with Not_found ->
     if List.mem v.name Py_builtins.all then
-      { name = v.name; uid = -1}
+      { name = v.name; uid = 0}
     else
       Debug.fail "Unbounded variable %a" Py_pp.print_var v
 

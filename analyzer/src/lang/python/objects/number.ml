@@ -65,13 +65,13 @@ module Domain= struct
     match op with
     | O_eq | O_ne | O_lt | O_le | O_gt | O_ge ->
       T_bool
+    | O_div T_any -> T_float
     | _ ->
       match t1, t2 with
       | T_bool, T_bool ->
         begin
           match op with
           | O_plus T_any | O_minus T_any | O_mult T_any | O_py_floor_div | O_bit_lshift | O_bit_rshift -> T_int
-          | O_div T_any -> T_float
           | O_bit_and | O_bit_or | O_bit_xor -> T_bool
           | _ -> assert false
         end

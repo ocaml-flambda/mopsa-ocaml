@@ -18,10 +18,16 @@ open Ast
 (** Extensible type of alarm kinds, defined by domains. *)
 type alarm_kind = ..
 
+type alarm_level =
+  | ERROR
+  | WARNING
+  | PANIC
+  
 (** An alarm *)
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_range : range;       (** the range of the program where the alarm was detected *)
+  alarm_level : alarm_level;
 }
 
 let alarm_compare_chain : (alarm -> alarm -> int) ref = ref (fun a1 a2 -> compare a1.alarm_kind a2.alarm_kind)
@@ -78,8 +84,14 @@ let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alar
 
 let register_pp_alarm pp = pp_alarm_chain := pp !pp_alarm_chain
 
+let pp_alarm_level fmt = function
+  | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
+  | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
+  | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
+
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "%a  @[%a@]@\nIn %a" ((Debug.color "red") Format.pp_print_string) "✘"
+  Format.fprintf fmt "%a  @[%a@]@\nIn %a"
+    pp_alarm_level alarm.alarm_level
     !pp_alarm_chain alarm
     Pp.pp_range_verbose alarm.alarm_range
 

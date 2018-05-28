@@ -151,6 +151,7 @@ type py_fundec = {
   py_func_locals: var list; (** list of local variables *)
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
+  py_func_decors: expr list;
 }
 
 (** A Python class *)

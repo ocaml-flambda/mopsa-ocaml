@@ -270,14 +270,25 @@ let of_constant c =
   match c with
   | C_true -> boolean (B.singleton true)
   | C_false -> boolean (B.singleton false)
-  | C_py_none -> none  (N.singleton c)
+  | C_top T_bool -> boolean B.top
+
+  | C_py_none | C_top T_py_none -> none  (N.singleton c)
+
   | C_int n -> integer (I.of_constant c)
   | C_int_interval _ -> integer (I.of_constant c)
+  | C_top T_int -> integer I.top
+
   | C_float n -> float (F.of_constant c)
   | C_float_interval _ -> float (F.of_constant c)
-  | C_py_not_implemented -> notimplem  (NI.singleton c)
-  | C_empty -> emptyvalue  (E.singleton c)
+  | C_top T_float -> float F.top
+
+  | C_py_not_implemented | C_top T_py_not_implemented -> notimplem  (NI.singleton c)
+
+  | C_empty | C_top T_empty -> emptyvalue  (E.singleton c)
+
   | C_string s -> string (S.singleton s)
+  | C_top T_string -> string S.top
+
   | _ -> top
 
 (** Type predicates *)
@@ -554,7 +565,6 @@ let fwd_binop op abs1 abs2 =
       float = F.fwd_binop op abs1.float abs2.float;
     }
 
-  (* FIXME : use operator types *)
   | O_div T_float ->
     let abs1, abs2 = coerce abs1 abs2 in
     let abs1 = cast T_float abs1 and abs2 = cast T_float abs2 in

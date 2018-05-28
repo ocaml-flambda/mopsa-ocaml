@@ -53,14 +53,6 @@ struct
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__init__")})}, args, []) ->
       oeval_singleton (Some (mk_py_none range), flow, [])
 
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__eq__")})}, args, [])
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__ne__")})}, args, [])
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__lt__")})}, args, [])
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__le__")})}, args, [])
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__ge__")})}, args, [])
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__gt__")})}, args, []) ->
-      oeval_singleton (Some (mk_py_not_implemented range), flow, [])
-
 
     | _ -> None
 

@@ -29,35 +29,16 @@ struct
     match skind stmt with
     | S_assign({ekind = E_py_tuple(el)}, exp, kind)
     | S_assign({ekind = E_py_list(el)}, exp, kind) ->
-      man.eval ctx exp flow |>
+      man.eval ctx (Utils.mk_builtin_call "iter" [exp] range) flow |>
       eval_to_exec
-        (fun exp flow ->
-          match ekind exp with
-            | E_addr addr ->
-              Framework.Exceptions.panic "python heap operations not supported"
-
-            (* let iter_expr = mk_expr
-             *     (E_py_call (
-             *         (mk_expr
-             *            (E_addr_attribute (addr, "__iter__"))
-             *            (tag_range range "iter attr")),
-             *         [],[]
-             *       ))
-             *     (tag_range range "iter call")
-             * in
-             * man.eval ctx iter_expr flow |>
-             * eval_to_exec
-             *   (fun iter flow ->
-             *      match ekind iter with
-             *      | E_addr(addr) -> assign_iter man ctx el addr kind range flow
-             *      | _ -> assert false
-             *   )
-             *   (man.exec ctx) man.flow *)
-
-          | _ ->
-            man.exec ctx (Utils.mk_builtin_raise "TypeError" (tag_range range "error")) flow
+        (fun iter flow ->
+           match ekind iter with
+           | E_addr(addr) -> assign_iter man ctx el addr kind range flow
+           | _ -> assert false
         )
-        (man.exec ctx) man.flow  |>
+        (man.exec ctx) man.flow
+
+      |>
       return
 
     | _ -> None
@@ -67,11 +48,7 @@ struct
       List.fold_left (fun acc e ->
           mk_assign
             e ~mode
-            (mk_py_call
-               (mk_addr (Addr.find_builtin "next") (tag_range range "next addr"))
-               [mk_addr iter (tag_range range "iter addr")]
-               (tag_range range "next call")
-            )
+            (Utils.mk_builtin_call "next" [mk_addr iter (tag_range range "iter addr")] range)
             (tag_range range "next assign")
           :: acc
         ) [] el |>

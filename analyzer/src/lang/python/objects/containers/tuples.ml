@@ -40,7 +40,7 @@ module Domain = struct
 
   (** Iterator counter *)
   let mk_iter_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
-          
+
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
@@ -74,7 +74,7 @@ module Domain = struct
         []
       ) ->
       panic "tuple.__getitem__ not supported"
-  
+
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_function (F_builtin "tuple.__init__")}},
         ({ekind = E_addr _} :: args),
@@ -89,7 +89,7 @@ module Domain = struct
         []
       ) ->
       panic "tuple.__len__ not supported"
-        
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "tuple.__iter__")})},
         [({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tuple", _)}, _)}  as tuple)})],
@@ -100,7 +100,7 @@ module Domain = struct
           let flow = man.exec ctx (mk_assign (mk_iter_counter aiter range) (mk_zero range) range) flow in
           oeval_singleton (Some (mk_addr aiter range), flow, [])
         )
-      
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "tupleiter.__next__")})},
         [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "tupleiter", _)}, Some (Tuple tuple))}  as iter)}],
@@ -118,6 +118,7 @@ module Domain = struct
         else
           man.eval ctx counter in_flow |>
           eval_compose (fun counter flow ->
+              debug "checking interval of %a" pp_expr counter;
               match man.ask ctx (Universal.Numeric.Query.QIntInterval counter) flow with
               | Some itv ->
                 debug "itv = %a" Universal.Numeric.Values.Int.print itv;
@@ -158,7 +159,7 @@ module Domain = struct
     | _ -> None
 
   let init man ctx prog flow = ctx, flow
-  
+
   let exec man ctx stmt flow = None
 
   let ask man ctx query flow = None

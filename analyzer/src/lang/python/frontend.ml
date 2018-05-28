@@ -126,6 +126,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_func_locals = List.map from_var f.func_locals;
         py_func_body = from_stmt f.func_body;
         py_func_is_generator = f.func_is_generator;
+        py_func_decors = List.map from_exp f.func_decors;
       }
 
     | S_class cls ->
@@ -134,8 +135,8 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_cls_body = from_stmt cls.cls_body;
         py_cls_bases = List.map from_exp cls.cls_bases;
         py_cls_static_attributes = List.map from_var cls.cls_static_attributes;
-        py_cls_decors = List.map from_exp cls.cls_decors;
         py_cls_keywords = List.map (fun (k, v) -> (k, from_exp v)) cls.cls_keywords;
+        py_cls_decors = List.map from_exp cls.cls_decors;
       }
 
     | S_for (target,iter,body,orelse) ->

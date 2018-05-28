@@ -25,13 +25,13 @@ open Bot
 
 let name = "python.objects.containers.lists"
 let debug fmt = Debug.debug ~channel:name fmt
-    
+
 
 module Domain = struct
 
   let mk_ll addr range = mk_py_addr_attr addr "$ll" ~etyp:T_int range
   let mk_lv addr range = mk_py_addr_attr addr "$lv" range
-      
+
   let set_list_length man ctx addr el range flow =
     man.exec ctx
       (mk_assign
@@ -39,7 +39,7 @@ module Domain = struct
          (mk_int (List.length el) range)
          range
       ) flow
-  
+
   let set_list_value man ctx addr el range flow =
     match el with
     | [] ->
@@ -69,14 +69,14 @@ module Domain = struct
       )
       (mk_block [] range)
       range
-      
+
   let mk_iter_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
 
   let add_element man ctx addr e range flow =
     let flow = man.exec ctx
-        (mk_assign 
+        (mk_assign
            (mk_ll addr range)
-           (mk_binop (mk_ll addr range) math_plus (mk_one range) range)
+           (mk_binop (mk_ll addr range) math_plus (mk_one range) ~etyp:T_int range)
            range
         ) flow
     in
@@ -88,7 +88,7 @@ module Domain = struct
            range
         ) flow
       in
-    
+
       let nonempty_list_flow =
         man.exec ctx
           (mk_assume
@@ -101,7 +101,7 @@ module Domain = struct
         man.flow.print empty_list_flow
         man.flow.print nonempty_list_flow
       ;
-        
+
       man.flow.join (
         debug "add1";
         let flow' = man.exec ctx
@@ -110,18 +110,18 @@ module Domain = struct
         in
         debug "add1 flow = @\n@[  %a@]" man.flow.print flow';
         flow'
-      ) ( 
+      ) (
         let flow' = man.exec ctx
           (mk_assign (mk_lv addr range) e range)
           empty_list_flow in
         debug "add2 flow = @\n@[  %a@]" man.flow.print flow';
         flow'
-      ) 
+      )
 
   let check_index_access man ctx alist index range flow =
     let ll = mk_ll alist range in
     let cond_safe = mk_binop
-        (mk_binop index O_ge (mk_neg ll range) range)
+        (mk_binop index O_ge (mk_unop math_minus ll ~etyp:T_int range) range)
         O_log_and
         (mk_binop index O_lt ll range)
         range
@@ -150,14 +150,14 @@ module Domain = struct
         in
         oeval_singleton (Some addr, flow, [])
       )
- 
+
   let rec eval man ctx exp flow =
     let range = exp.erange in
     match ekind exp with
     | E_py_list (el) ->
       create_list man ctx el range flow  |>
       oeval_compose (fun addr flow -> oeval_singleton (Some (mk_addr addr range), flow, []))
-      
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin("list.__iter__"))})},
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)}) :: [],
@@ -168,7 +168,7 @@ module Domain = struct
           let flow = man.exec ctx (mk_assign (mk_iter_counter aiter range) (mk_zero range) range) flow in
           oeval_singleton (Some (mk_addr aiter range), flow, [])
         )
-        
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin("listiter.__next__"))})},
         [{ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "listiter", _)}, Some (List alist))}  as aiter)}],
@@ -187,10 +187,10 @@ module Domain = struct
           let tmp = mktmp () in
           let flow =
             man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow |>
-            man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) range) range)
+            man.exec ctx (mk_assign counter (mk_binop counter math_plus (mk_one range) ~etyp:T_int range) range)
           in
           re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
-            
+
       in
 
       let out_cond = mk_binop counter O_eq ll range in
@@ -240,13 +240,13 @@ module Domain = struct
                           (oeval_singleton (Some (mk_false range), flow, []))
         | false, false -> oeval_singleton (None, flow, [])
 
-      end  
-      
+      end
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__getitem__")})},
         [
           {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)};
-          index
+          ({etyp = T_int} as index)
         ],
         []
       ) ->
@@ -262,7 +262,7 @@ module Domain = struct
           re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow_safe, [mk_remove_var tmp range])
       in
 
-      let fail_case = 
+      let fail_case =
         if man.flow.is_cur_bottom flow_fail then
           None
         else
@@ -273,10 +273,61 @@ module Domain = struct
       oeval_join safe_case fail_case
 
     | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__getitem__")})},
+        [
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "slice", _)}, _)} as aslice)};
+        ],
+        []
+      ) ->
+        let ll = mk_ll alist range in
+        let lv = mk_lv alist range in
+
+        eval_alloc_instance man ctx (Addr.find_builtin "list") None range flow |>
+        oeval_compose (fun addr flow ->
+
+            let exp' = mk_addr addr range in
+            let ll' = mk_ll addr range in
+            let lv' = mk_lv addr range in
+
+            Slices.fold_slice_length_cases man ctx (fun acc (lle', flow) ->
+                debug "slice length %a in @ @[%a@]" Framework.Pp.pp_expr lle' man.flow.print flow;
+                Universal.Utils.switch_eval
+                  [
+                    [(mk_binop (mk_binop (mk_zero range) O_lt lle' range) O_log_and (mk_binop lle' O_le ll range) range), true],
+                    (fun flow ->
+                       let flow = man.exec ctx (mk_assign ll' lle' range) flow in
+                       let flow = man.exec ctx (mk_assign lv' lv ~mode:EXPAND range) flow in
+                       oeval_singleton (Some exp', flow, [])
+                    );
+                    [mk_binop lle' O_le (mk_zero range) range, true],
+                    (fun flow ->
+                       let flow = man.exec ctx (mk_assign ll' (mk_zero range) range) flow in
+                       let flow = man.exec ctx (mk_assign lv' (mk_empty range) range) flow in
+                       oeval_singleton (Some exp', flow, [])
+                    );
+                    [mk_binop lle' O_gt ll range, true],
+                    (fun flow ->
+                       let flow = man.exec ctx (mk_assign ll' ll range) flow in
+                       let flow = man.exec ctx (mk_assign lv' lv ~mode:EXPAND  range) flow in
+                       oeval_singleton (Some exp', flow, [])
+                    )
+                  ] man ctx flow |>
+                oeval_join acc
+              ) None aslice ll range flow
+          )
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__getitem__")})},
+        _, []
+      ) ->
+      assert false
+
+    | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__setitem__")})},
         [
           {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as alist)};
-          index;
+          ({etyp = T_int} as index);
           exp'
         ],
         []
@@ -313,7 +364,7 @@ module Domain = struct
           man.flow.join singleton_flow otherwise_flow
       in
 
-      let fail_case = 
+      let fail_case =
         if man.flow.is_cur_bottom fail_flow then
           man.flow.bottom
         else
@@ -322,7 +373,47 @@ module Domain = struct
 
       let flow = man.flow.join safe_case fail_case in
       oeval_singleton (Some (mk_py_none range), flow, [])
-               
+
+
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__setitem__")})},
+        [
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l1)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "slice", _)}, _)} as slice)};
+          {ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)} as l2)}
+        ],
+        []
+      ) ->
+
+      let ll2 = mk_ll l2 range in
+      let lv2 = mk_lv l2 range in
+
+      let ll = mk_ll l1 range in
+      let lv = mk_lv l1 range in
+
+      let flow' = Slices.fold_slice_length_cases man ctx (fun acc (lle', flow) ->
+          debug "slice length %a in @ @[%a@]" Framework.Pp.pp_expr lle' man.flow.print flow;
+          Universal.Utils.switch_exec
+            [
+              [(mk_binop (mk_binop (mk_zero range) O_lt lle' range) O_log_and (mk_binop lle' O_le ll range) range), true],
+              (fun flow ->
+                 let ll' = mk_binop (mk_binop ll math_minus lle' range ~etyp:T_int) math_plus ll2  range ~etyp:T_int in
+                 let flow = man.exec ctx (mk_assign ll ll' range) flow in
+                 man.exec ctx (mk_assign lv lv2 ~mode:EXPAND range) flow
+              );
+              [mk_binop lle' O_le (mk_zero range) range, true],
+              (fun flow -> flow);
+              [mk_binop lle' O_gt ll range, true],
+              (fun flow ->
+                 let flow = man.exec ctx (mk_assign ll ll2 range) flow in
+                 man.exec ctx (mk_assign lv lv2 ~mode:EXPAND range) flow
+              )
+            ] man ctx flow |>
+          man.flow.join acc
+        ) man.flow.bottom slice ll range flow
+      in
+      oeval_singleton (Some (mk_py_none range), flow', [])
+
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_function (F_builtin("list.__len__"))}},
         [{ekind = E_addr ({addr_kind = A_py_instance(({addr_kind = A_py_class (C_builtin "list", _)}), _)} as alist)}],
@@ -362,7 +453,7 @@ module Domain = struct
             in
 
             oeval_singleton (Some (mk_py_none range), flow, [])
-              
+
           | _ -> assert false
         )
 
@@ -392,7 +483,7 @@ module Domain = struct
           let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
           oeval_singleton (None, flow, [])
       end
-      
+
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.pop")})},
         ({ekind = E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "list", _)}, _)}  as alist)}) :: args,
@@ -415,7 +506,7 @@ module Domain = struct
 
             let ok_cond =
               mk_binop
-                (mk_binop idx O_ge (mk_unop math_minus ll range) range)
+                (mk_binop idx O_ge (mk_unop math_minus ll ~etyp:T_int range) range)
                 O_log_and
                 (mk_binop idx O_lt ll range)
                 range
@@ -425,7 +516,7 @@ module Domain = struct
               if man.flow.is_cur_bottom ok_flow then
                 None
               else
-                let flow = man.exec ctx (mk_assign ll (mk_binop ll math_minus (mk_one range) range) range) ok_flow in
+                let flow = man.exec ctx (mk_assign ll (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range) ok_flow in
                 let tmp = mktmp () in
                 let flow = man.exec ctx (mk_assign (mk_var tmp range) lv ~mode:EXPAND range) flow in
                 re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
@@ -442,7 +533,7 @@ module Domain = struct
             in
 
             oeval_join ok_case error_case
-            
+
           end
 
         | _ ->
@@ -471,7 +562,7 @@ module Domain = struct
           let ll = mk_ll addr range in
           let lv = mk_lv addr range in
 
-          let flow = man.exec ctx (mk_assign ll (mk_binop ll1 math_plus ll2 range) range) flow in
+          let flow = man.exec ctx (mk_assign ll (mk_binop ll1 math_plus ll2 ~etyp:T_int range) range) flow in
           (* FIXME: improve precision by checing if l1 or l2 are empty *)
           let flow1 = man.exec ctx (mk_assign lv lv1 ~mode:EXPAND range) flow in
           let flow2 = man.exec ctx (mk_assign lv lv2 ~mode:EXPAND range) flow in
@@ -495,7 +586,7 @@ module Domain = struct
       let ll2 = mk_ll l2 range in
       let lv2 = mk_lv l2 range in
 
-      let flow = man.exec ctx (mk_assign ll1 (mk_binop ll1 math_plus ll2 range) range) flow in
+      let flow = man.exec ctx (mk_assign ll1 (mk_binop ll1 math_plus ll2 ~etyp:T_int range) range) flow in
       (* FIXME: improve precision by checing if l1 or l2 are empty *)
       let flow1 = man.exec ctx (mk_assign lv1 lv2 ~mode:EXPAND range) flow in
       let flow = man.flow.join flow1 flow in
@@ -516,9 +607,9 @@ module Domain = struct
           let ll' = mk_ll addr' range in
           let lv' = mk_lv addr' range in
 
-          let flow = man.exec ctx (mk_assign ll' (mk_binop ll math_mult arg range) range) flow in
+          let flow = man.exec ctx (mk_assign ll' (mk_binop ll math_mult arg ~etyp:T_int range) range) flow in
           let flow = man.exec ctx (mk_assign lv' lv ~mode:EXPAND range) flow in
-          
+
           oeval_singleton (Some (mk_addr addr' range), flow, [])
         )
 
@@ -533,8 +624,8 @@ module Domain = struct
 
       let ll = mk_ll alist range in
 
-      let flow = man.exec ctx (mk_assign ll (mk_binop ll math_mult arg range) range) flow in
-      
+      let flow = man.exec ctx (mk_assign ll (mk_binop ll math_mult arg ~etyp:T_int range) range) flow in
+
       oeval_singleton (Some (mk_addr alist range), flow, [])
 
     | E_py_list_comprehension(e, comprhs) ->
@@ -564,7 +655,7 @@ module Domain = struct
                 range
 
             | _ -> assert false
-            
+
           in
 
           let stmt = aux comprhs in
@@ -597,7 +688,7 @@ module Domain = struct
           | true, false -> false, true
           | true, true -> true, true
         in
-        
+
         debug "check true";
 
         (* (l1 == l2) => (ll1 == ll2 == 0) || ( (ll1 == ll2 >= 1) && (lv1 == lv2) ) *)
@@ -673,7 +764,7 @@ module Domain = struct
     | _ -> None
 
   let init man ctx prog flow = ctx, flow
-  
+
   let exec man ctx stmt flow = None
 
   let ask man ctx query flow = None

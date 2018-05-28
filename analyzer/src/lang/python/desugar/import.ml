@@ -50,11 +50,16 @@ struct
       ) |>
       return
 
+    | S_py_import_from(modul, name, vmodul) when Addr.is_builtin_module modul ->
+      let addr = Addr.find_builtin_attribute modul name in
+      man.exec ctx (mk_assign (mk_var vmodul range) (mk_addr addr range) range) flow |>
+      return
+
     | S_py_import(modul, vasname, vroot)  ->
       Framework.Exceptions.fail "import %s not supported" modul
 
-    | S_py_import_from(modul, name, vmodul) ->
-      Framework.Exceptions.fail "import %s from %s not supported" modul name
+    | S_py_import_from(modul, name, vmodul) when Addr.is_builtin_module modul ->
+      Framework.Exceptions.fail "import %s from %s not supported" name modul
 
     | _ ->
       None

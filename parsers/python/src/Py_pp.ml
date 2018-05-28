@@ -9,10 +9,7 @@ open Format
 let str = pp_print_string
 
 let rec print_var fmt v =
-  if v.uid <> -1 then
-    fprintf fmt "%s@@%d" v.name v.uid
-  else
-    fprintf fmt "%s" v.name
+  fprintf fmt "%s@@%d" v.name v.uid
 
 and print_program fmt p = print_stmt fmt p.prog_body
 

@@ -11,7 +11,6 @@ class TestCase:
     def assertRaises(self, exn, f, args): pass
     def fail(self, msg): pass
 
-class ExceptionContext:
-    pass
+class ExceptionContext: pass
 
 def main(): pass

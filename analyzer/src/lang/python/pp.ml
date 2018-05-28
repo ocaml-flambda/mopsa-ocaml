@@ -177,7 +177,8 @@ let () =
         fprintf fmt "class %a:@\n@[<h 2>  %a@]" pp_var cls.py_cls_var pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
-        fprintf fmt "def %a(%a):@\n@[<h 2>  %a@]"
+        fprintf fmt "%a@\ndef %a(%a):@\n@[<h 2>  %a@]"
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt d -> fprintf fmt "@@%a" pp_expr d)) func.py_func_decors
           pp_var func.py_func_var
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) func.py_func_parameters
           pp_stmt func.py_func_body

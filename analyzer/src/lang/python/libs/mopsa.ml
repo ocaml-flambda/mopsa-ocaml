@@ -47,7 +47,50 @@ struct
   let init _ ctx _ flow = ctx, flow
 
   let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [
+        {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
+      ], []) ->
+      oeval_singleton (Some (mk_z_interval l u range), flow, [])
+
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [l; u], []) ->
+      begin
+        match ekind l, ekind u with
+        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_z_interval l u range), flow, [])
+        | _ ->
+          let tmp = mktmp () in
+          let l = Utils.mk_builtin_call "int" [l] range in
+          let u = Utils.mk_builtin_call "int" [u] range in
+          let flow = man.exec ctx (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
+                     man.exec ctx (mk_assume (mk_in (mk_var tmp range) l u range) range)
+          in
+          oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
+      end
+
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_float")}}, [l; u], []) ->
+      begin
+        match ekind l, ekind u with
+        | E_constant (C_float l), E_constant (C_float u) -> oeval_singleton (Some (mk_float_interval l u range), flow, [])
+        | E_constant (C_float l), E_constant (C_int u) -> oeval_singleton (Some (mk_float_interval l (Z.to_float u) range), flow, [])
+        | E_constant (C_int l), E_constant (C_float u) -> oeval_singleton (Some (mk_float_interval (Z.to_float l) u range), flow, [])
+        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_float_interval (Z.to_float l) (Z.to_float u) range), flow, [])
+        | _ ->
+          let tmp = mktmp () in
+          let l = Utils.mk_builtin_call "float" [l] range in
+          let u = Utils.mk_builtin_call "float" [u] range in
+          let flow = man.exec ctx (mk_assign (mk_var tmp range) (mk_top T_float range) range) flow |>
+                     man.exec ctx (mk_assume (mk_in (mk_var tmp range) l u range) range)
+          in
+          oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
+      end
+
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_bool")}}, [], []) ->
+      oeval_join
+        (oeval_singleton (Some (mk_true range), flow, []))
+        (oeval_singleton (Some (mk_false range), flow, []))
+
+
     (* Calls to mopsa.assert_equal function *)
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}},

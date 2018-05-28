@@ -108,6 +108,7 @@ struct
               manager.flow.add TCur aenv acc
 
             | TReturn(_, Some e) ->
+              debug "assign return expression";
               manager.flow.set TCur aenv manager.flow.bottom |>
               manager.exec ctx (mk_assign tmp e (tag_range range "return assign")) |>
               manager.flow.join acc

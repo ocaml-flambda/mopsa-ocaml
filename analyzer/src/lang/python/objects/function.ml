@@ -102,29 +102,34 @@ struct
             debug "|args'| = %d" (List.length args);
             args
         in
-        assert (List.length args = (List.length pyfundec.py_func_parameters));
-        (* Give the call to {!Universal} *)
-        let tmp = mktmp () in
-        let fundec = {
-          fun_name = var_uniq_name (pyfundec.py_func_var);
-          fun_parameters = pyfundec.py_func_parameters;
-          fun_locvars = pyfundec.py_func_locals;
-          fun_body = pyfundec.py_func_body;
-          fun_return_type = T_any;
-        } in
+        if List.length args <> (List.length pyfundec.py_func_parameters) then
+          let flow =
+            man.exec ctx (Utils.mk_builtin_raise "TypeError" exp.erange) flow
+          in
+          oeval_singleton (None, flow, [])
+        else
+          (* Give the call to {!Universal} *)
+          let tmp = mktmp () in
+          let fundec = {
+            fun_name = var_uniq_name (pyfundec.py_func_var);
+            fun_parameters = pyfundec.py_func_parameters;
+            fun_locvars = pyfundec.py_func_locals;
+            fun_body = pyfundec.py_func_body;
+            fun_return_type = T_any;
+          } in
 
 
-        let flow =
-          man.exec ctx
-            (mk_assign
-               (mk_var tmp exp.erange)
-               (mk_call fundec args exp.erange)
-               exp.erange
-            )
-            flow
-        in
-        let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
-        re_eval_singleton (man.eval ctx) evl
+          let flow =
+            man.exec ctx
+              (mk_assign
+                 (mk_var tmp exp.erange)
+                 (mk_call fundec args exp.erange)
+                 exp.erange
+              )
+              flow
+          in
+          let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
+          re_eval_singleton (man.eval ctx) evl
 
     | E_py_call(
         {ekind = E_addr {addr_kind = A_py_method(f, obj)}},
@@ -132,6 +137,14 @@ struct
         []
       ) ->
       let exp' = mk_py_call (mk_addr f range) ((mk_addr obj range) :: args) range in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_method_atomic(f, obj)}},
+        args,
+        []
+      ) ->
+      let exp' = mk_py_call (mk_addr f range) (obj :: args) range in
       re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
 

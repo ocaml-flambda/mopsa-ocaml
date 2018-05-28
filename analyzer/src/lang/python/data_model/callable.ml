@@ -19,7 +19,7 @@ open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.objects.data_model.callable"
+let name = "python.data_model.callable"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain =
@@ -32,6 +32,12 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
+    | E_py_call({ekind = E_addr _}, _, _) ->
+      (* Calls to addresses should be captured by other domains. If we
+         are here, then we are missing an implementation of the
+         function *)
+      Framework.Exceptions.panic "call %a can not be resolved" pp_expr exp
+
     | E_py_call(f, args, []) ->
       debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
       man.eval ctx f flow |>

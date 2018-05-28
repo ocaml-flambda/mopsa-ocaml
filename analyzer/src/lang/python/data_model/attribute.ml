@@ -21,7 +21,7 @@ open Addr
 open Utils
 
 
-let name = "python.objects.data_model.attribute"
+let name = "python.data_model.attribute"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -243,7 +243,38 @@ struct
 
            (* Access to an ordinary attribute of atomic types *)
            | _ when etyp obj |> is_atomic_type ->
-             Framework.Exceptions.panic "access to attributes of atomic types not supported"
+             debug "resolving attribute %s of atomic type exp %a" attr Framework.Pp.pp_expr obj;
+             let cls = Addr.classof obj in
+             debug "class %a" Universal.Pp.pp_addr cls;
+             if_flow_eval
+               (assume_is_attribute cls attr man ctx)
+               (assume_is_not_attribute cls attr man ctx)
+               (fun true_flow ->
+                  (* Check method case *)
+                  debug "has attribute";
+                  man.eval ctx (mk_py_addr_attr cls attr range) true_flow |>
+                  eval_compose (fun f flow ->
+                      debug "attribute evaluated to %a" Framework.Pp.pp_expr f;
+                      match ekind f with
+                      (* Attribute is a function of the class => bound the method to the instance *)
+                      | E_addr ({addr_kind = A_py_function _} as f) ->
+                        let exp = mk_expr (E_alloc_addr(A_py_method_atomic(f, obj), range)) range in
+                        re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
+
+                      | _ ->
+                        let exp = mk_attribute_expr cls attr exp.etyp range in
+                        re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
+                    )
+               )
+               (fun false_flow ->
+                  debug "attribute not found";
+                  let flow = man.exec ctx
+                      (Utils.mk_builtin_raise "AttributeError" range)
+                      false_flow
+                  in
+                  oeval_singleton (None, flow, [])
+               )
+               man flow ()
 
            | _ -> assert false
         )

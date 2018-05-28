@@ -10,6 +10,7 @@
         "python.desugar.import",
         "python.desugar.iterable_assign",
         "python.desugar.with",
+        "python.desugar.loops",
 
         "python.flows.exceptions",
 
@@ -20,12 +21,14 @@
         "python.libs.mopsa",
         "python.libs.stdlib",
         "python.libs.unittest",
+        "python.libs.math",
 
         "python.objects.class",
         "python.objects.function",
 	"python.objects.object",
         "python.objects.number",
         "python.objects.strings",
+        "python.objects.slices",
 
 	"python.objects.containers.lists",
         "python.objects.containers.dicts",
@@ -33,12 +36,12 @@
         "python.objects.containers.sets",
         "python.objects.containers.tuples",
 
-        "python.objects.data_model.attribute",
-        "python.objects.data_model.subscript",
-        "python.objects.data_model.arith_ops",
-        "python.objects.data_model.compare_ops",
-        "python.objects.data_model.aug_assign",
-        "python.objects.data_model.callable",
+        "python.data_model.attribute",
+        "python.data_model.subscript",
+        "python.data_model.arith_ops",
+        "python.data_model.compare_ops",
+        "python.data_model.aug_assign",
+        "python.data_model.callable",
 
         {
             "unify": "universal.heap.recency",

@@ -209,7 +209,7 @@ let compare_var v1 v2 =
   ]
 
 let mkv ?(vtyp = T_any) ?(vkind = V_orig) ?(vuid=0) vname =
-  {vname; vuid = 0; vtyp; vkind}
+  {vname; vuid; vtyp; vkind}
 
 let tmp_counter = ref 100
 
@@ -230,6 +230,9 @@ type operator = ..
 
 type constant = ..
 (** Extensible type of constants. *)
+
+type constant +=
+  | C_top of typ (** top value of a specific type *)
 
 type expr = {
   ekind: expr_kind;
@@ -268,3 +271,5 @@ let mk_unop op operand ?(etyp = T_any) erange =
   mk_expr (E_unop (op, operand)) ~etyp erange
 
 let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
+
+let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
