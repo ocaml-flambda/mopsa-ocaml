@@ -38,7 +38,7 @@ type token +=
   | TSafeAssert of string (** test function *) * range
   | TFailAssert of expr (** condition *) * string (** test function *) * range
   | TMayAssert of expr (** condition *) * string (** test function *) * range
-  | TPanic of string (** message *) * range
+  | TPanic of string (** message *) * string (** test function *) * range
 
 
 (*==========================================================================*)
@@ -48,7 +48,7 @@ type token +=
 type alarm_kind +=
   | AFailTest of expr (** condition *)* string (** test function *)
   | AMayTest of expr (** condition *)* string (** test function *)
-  | APanic of string (** panic message *)
+  | APanic of string (** panic message *) * string (** test function *)
 
 (*==========================================================================*)
 (**                        {2 Abstract domain }                             *)
@@ -81,12 +81,12 @@ struct
         with
         | Framework.Exceptions.Panic (msg) ->
           Debug.warn "Panic: @[%s@]" msg;
-          let flow1 = man.flow.add (TPanic (msg, test.srange)) (man.flow.get TCur flow) flow in
+          let flow1 = man.flow.add (TPanic (msg, name, test.srange)) (man.flow.get TCur flow) flow in
           man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
         | Framework.Exceptions.PanicAt (range, msg) ->
           Debug.warn "Panic: @[%s@] at %a" msg Framework.Pp.pp_range range;
-          let flow1 = man.flow.add (TPanic (name, range)) (man.flow.get TCur flow) flow in
+          let flow1 = man.flow.add (TPanic (msg, name, range)) (man.flow.get TCur flow) flow in
           man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
       ) (man.flow.bottom, 0, 0, 0, 0)
@@ -177,9 +177,9 @@ struct
               } in
               alarm :: acc
 
-            | TPanic(msg, range) ->
+            | TPanic(msg, test, range) ->
               let alarm = {
-                alarm_kind = APanic (msg);
+                alarm_kind = APanic (msg, test);
                 alarm_range = range;
                 alarm_level = PANIC;
               } in
@@ -207,30 +207,43 @@ let setup () =
       match tk1, tk2 with
       | TSafeAssert (_, r1), TSafeAssert (_, r2)
       | TFailAssert (_, _, r1), TFailAssert (_, _, r2)
-      | TMayAssert (_, _, r1), TMayAssert (_, _, r2)
-      | TPanic(_, r1), TPanic(_, r2) ->
+      | TMayAssert (_, _, r1), TMayAssert (_, _, r2) ->
         compare_range r1 r2
+      | TPanic(msg1, t1, r1), TPanic(msg2, t2, r2) ->
+        compare_composer [
+          (fun () -> compare msg1 msg2);
+          (fun () -> compare t1 t2);
+          (fun () -> compare_range r1 r2);
+        ]
       | _ -> next tk1 tk2
     );
   register_pp_token (fun next fmt -> function
       | TSafeAssert (test, r) -> Format.fprintf fmt "safe@%s:%a" test Framework.Pp.pp_range r
       | TFailAssert (_, test, r) -> Format.fprintf fmt "fail@%s:%a" test Framework.Pp.pp_range r
       | TMayAssert (_, test, r) -> Format.fprintf fmt "may@%s:%a" test Framework.Pp.pp_range r
-      | TPanic (msg, r) -> Format.fprintf fmt "panic@%a" Framework.Pp.pp_range r
+      | TPanic (msg, test, r) -> Format.fprintf fmt "panic@%s:%s" msg test
       | tk -> next fmt tk
     );
   register_alarm_compare (fun next a1 a2 ->
       match a1.alarm_kind, a2.alarm_kind with
       | AFailTest (cond1, t1), AFailTest (cond2, t2)
-      | AMayTest (cond1, t1), AMayTest (cond2, t2) -> compare_range cond1.erange cond2.erange
-      | APanic msg1, APanic msg2 -> compare msg1 msg2
+      | AMayTest (cond1, t1), AMayTest (cond2, t2) ->
+        compare_composer [
+          (fun () -> compare t1 t2);
+          (fun () -> compare_range cond1.erange cond2.erange)
+        ]
+      | APanic (msg1, test1), APanic (msg2, test2) ->
+        compare_composer [
+          (fun () -> compare msg1 msg2);
+          (fun () -> compare test1 test2);
+        ]
       | _ -> next a1 a2
     );
   register_pp_alarm (fun next fmt alarm ->
       match alarm.alarm_kind with
       | AFailTest(cond, t) -> Format.fprintf fmt "Assertion %a in %s fails" Framework.Pp.pp_expr cond t
       | AMayTest(cond, t) -> Format.fprintf fmt "Assertion %a in %s may fail" Framework.Pp.pp_expr cond t
-      | APanic(msg) -> Format.fprintf fmt "[panic] %s" msg
+      | APanic(msg, t) -> Format.fprintf fmt "Panic in %s: %s" t msg
       | _ -> next fmt alarm
     );
   register_key_equality {
