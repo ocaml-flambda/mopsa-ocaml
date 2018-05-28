@@ -119,6 +119,52 @@ struct
             man ctx flow ()
         )
 
+    (* Calls to isinstance built-in function *)
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "isinstance")}},
+        [obj; cls], []
+      )  ->
+      eval_list [obj; cls] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let obj, cls = match el with [obj; cls] -> obj, cls | _ -> assert false in
+          (* cases of cls: class or tuple of classes *)
+          match ekind cls with
+          (* Case 1: class *)
+          | E_addr ({addr_kind = A_py_class(_)} as cls)->
+            let cls0 = classof obj in
+            if Addr.issubclass cls0 cls then
+              oeval_singleton (Some (mk_true range), flow, [])
+            else
+              oeval_singleton (Some (mk_false range), flow, [])
+
+          (* Case 2: tuple *)
+          | E_addr {addr_kind = A_py_instance({addr_kind = A_py_class(C_builtin "tuple", _)}, _)} ->
+            Framework.Exceptions.panic_at range "isinstance: tuple of classes not supported"
+
+          | _ ->
+            oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow, [])
+        )
+
+    (* Calls to issubclass built-in function *)
+    | E_py_call(
+        {ekind = E_addr {addr_kind = A_py_function (F_builtin "issubclass")}},
+        [cls1; cls2], []
+      )  ->
+      eval_list [cls1; cls2] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          match el with
+          | [{ekind = (E_addr ({addr_kind = A_py_class(_)} as cls1))}; {ekind = (E_addr ({addr_kind = A_py_class(_)} as cls2))}] ->
+            if Addr.issubclass cls1 cls2 then
+              oeval_singleton (Some (mk_true range), flow, [])
+            else
+              oeval_singleton (Some (mk_false range), flow, [])
+
+          | [{ekind = (E_addr {addr_kind = A_py_class(_)})}; {ekind = (E_addr ({addr_kind = A_py_instance({addr_kind = A_py_class(C_builtin "tuple", _)}, _)}))}] ->
+            Framework.Exceptions.panic_at range "issubclass: tuple of classes not supported"
+
+          | _ ->
+            oeval_singleton (None, man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow, [])
+        )
 
     | _ ->
       None
