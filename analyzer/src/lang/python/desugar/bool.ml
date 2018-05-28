@@ -33,6 +33,7 @@ struct
     | _ -> false
 
   let eval man ctx exp flow =
+    let range = erange exp in
     match ekind exp with
     | E_binop(O_py_and, e1, e2) ->
       man.eval ctx e1 flow |>
@@ -44,7 +45,37 @@ struct
              man ctx flow ()
         )
 
+    | E_binop(O_py_is, e1, e2) ->
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+          let cls1 = Addr.classof e1 and cls2 = Addr.classof e2 in
+          if compare_addr cls1 cls2 <> 0 then
+            oeval_singleton (Some (mk_false range), flow, [])
+          else
+            match etyp e1, ekind e1, ekind e2 with
+            | T_string, _, _ ->
+              oeval_join
+                (oeval_singleton (Some (mk_false exp.erange), flow, []))
+                (oeval_singleton (Some (mk_true exp.erange), flow, []))
 
+            | T_addr, E_addr a1, E_addr a2 ->
+              begin
+                match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
+                | false, false, true -> oeval_singleton (Some (mk_true range), flow, [])
+                | false, false, false -> oeval_singleton (Some (mk_false range), flow, [])
+                | true, true, false -> oeval_singleton (Some (mk_false range), flow, [])
+                | _ ->
+                  oeval_join
+                    (oeval_singleton (Some (mk_false range), flow, []))
+                    (oeval_singleton (Some (mk_true range), flow, []))
+              end
+
+            | _ -> re_eval_singleton (man.eval ctx) (Some (mk_binop e1 O_eq e2 range), flow, [])
+        )
+
+    | E_binop(O_py_is_not, e1, e2) ->
+      re_eval_singleton (man.eval ctx) (Some (mk_not (mk_binop e1 O_py_is e2 range) range), flow, [])
 
     | E_binop(O_py_or, e1, e2) ->
       man.eval ctx e1 flow |>

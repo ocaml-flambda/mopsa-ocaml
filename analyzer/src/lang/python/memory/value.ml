@@ -607,33 +607,6 @@ let fwd_binop op abs1 abs2 =
         ) abs1.bool B.bottom
     }
 
-  | O_py_is ->
-    let can_be_true = not @@ is_bottom @@ meet abs1 abs2 in
-    (* FIXME: weak addresses make "is" returns false *)
-    let can_be_false =
-      (not @@ S.is_bottom abs1.string && not @@ S.is_bottom abs2.string) ||
-      (not @@ is_bottom abs1 && not @@ is_bottom abs2 && is_bottom @@ meet abs1 abs2)
-    in
-    debug "is forward evaluation: can_be_true = %b, can_be_false = %b" can_be_true can_be_false;
-    (match can_be_true, can_be_false with
-     | true, false -> of_constant C_true
-     | false, true -> of_constant C_false
-     | true, true -> boolean B.top
-     | false, false -> bottom)
-
-  | O_py_is_not ->
-    let can_be_false = not @@ is_bottom @@ meet abs1 abs2 in
-    let can_be_true =
-      (not @@ S.is_bottom abs1.string && not @@ S.is_bottom abs2.string) ||
-      (not @@ is_bottom abs1 && not @@ is_bottom abs2 && is_bottom @@ meet abs1 abs2)
-    in
-    debug "is not forward evaluation: can_be_true = %b, can_be_false = %b" can_be_true can_be_false;
-    (match can_be_true, can_be_false with
-     | true, false -> of_constant C_true
-     | false, true -> of_constant C_false
-     | true, true -> boolean B.top
-     | false, false -> bottom)
-
   | _ ->
     Debug.fail "fwd_binop %a not implemented" Framework.Pp.pp_operator op
 

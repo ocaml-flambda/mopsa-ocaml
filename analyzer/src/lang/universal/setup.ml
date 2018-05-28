@@ -14,7 +14,7 @@ let init () =
     Intraproc.setup ();
     Interproc.setup ();
     Loops.setup ();
-    Memoisation.setup ();
+    (* Memoisation.setup (); *)
   );
   Heap.Recency.setup ();
   ()
