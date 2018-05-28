@@ -198,22 +198,23 @@ let rec mro addr =
 
 (** Check class inheritance  *)
 let issubclass cls1 cls2 =
-  debug "issubclass %a %a" Universal.Pp.pp_addr cls1 Universal.Pp.pp_addr cls2;
-  let b = List.exists (fun base -> compare_addr base cls2 = 0) (mro cls1) in
-  debug "b = %b" b;
-  b
+  match cls1.addr_kind, cls2.addr_kind with
+  | A_py_class _, A_py_class (C_builtin "type", _)-> true
+  | A_py_class _, A_py_class _ ->
+    debug "issubclass %a %a" Universal.Pp.pp_addr cls1 Universal.Pp.pp_addr cls2;
+    let b = List.exists (fun base -> compare_addr base cls2 = 0) (mro cls1) in
+    debug "b = %b" b;
+    b
+  | _ -> false
 
 (** Check class membership of an instance *)
 let isinstance obj cls =
   debug "isinstance %a %a" Universal.Pp.pp_addr obj Universal.Pp.pp_addr cls;
   match obj.addr_kind, cls.addr_kind with
-  | A_py_instance(cls', _), A_py_class _ ->
-    issubclass cls' cls
-
-  | A_py_class _, A_py_class (C_builtin "type", _)-> debug "true"; true
-
-  | A_py_class _, _ -> debug "false"; false
-
+  | A_py_instance(cls', _), A_py_class _ -> issubclass cls' cls
+  | A_py_instance(cls', _),  _ -> false
+  | A_py_class _, A_py_class (C_builtin "type", _)-> true
+  | A_py_class _, _ -> false
   | _ -> assert false
 
 

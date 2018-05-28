@@ -52,7 +52,7 @@ struct
 
       (* Execute try body *)
       let try_flow = man.exec ctx body flow0 in
-
+      debug "post try flow:@\n  @[%a@]" man.flow.print try_flow;
       (* Execute handlers *)
       let flow_caught, flow_uncaught = List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
           let caught = exec_except man ctx excpt range acc_uncaught in
@@ -107,17 +107,18 @@ struct
 
 
     | S_py_raise None ->
-      Framework.Exceptions.panic "exceptions: re-raise previous caught exception not supported"
+      Framework.Exceptions.panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
 
 
     | _ -> None
 
 
   and exec_except man ctx excpt range flow =
-    debug "exec except";
+    debug "exec except on@ @[%a@]" man.flow.print flow;
     let flow0 = man.flow.set TCur man.env.bottom flow |>
                 man.flow.filter (fun _ -> function TExn _ -> false | _ -> true)
     in
+    debug "exec except flow0@ @[%a@]" man.flow.print flow0;
     let flow1 =
       match excpt.py_excpt_type with
       (* Default except case: catch all exceptions *)
@@ -151,15 +152,19 @@ struct
                           | Some v -> man.exec ctx (mk_assign (mk_var v range) (mk_addr eaddr range) range) flow
                       else
                         man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
-                    | _ ->
-                      man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
+
+                    | _ -> man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
                   ) (man.exec ctx) man.flow
               in
-              let cur = man.flow.get TCur flow' in
-              man.flow.add TCur cur acc
+              man.flow.fold (fun acc env tk ->
+                  match tk with
+                  | TCur | TExn _ -> man.flow.add tk env acc
+                  | _ -> acc
+                ) acc flow'
             | _ -> acc
           ) flow0 flow
     in
+    debug "except flow1 =@ @[%a@]" man.flow.print flow1;
     (* Execute exception handler *)
     man.exec ctx excpt.py_excpt_body flow1
 

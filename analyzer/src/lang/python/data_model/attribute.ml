@@ -158,6 +158,18 @@ struct
   let rec eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
+    (* Special attributes *)
+    | E_py_attribute(obj, ("__dict__" as attr))
+    | E_py_attribute(obj, ("__class__" as attr))
+    | E_py_attribute(obj, ("__bases__" as attr))
+    | E_py_attribute(obj, ("__name__" as attr))
+    | E_py_attribute(obj, ("__qualname__" as attr))
+    | E_py_attribute(obj, ("__mro__" as attr))
+    | E_py_attribute(obj, ("mro" as attr))
+    | E_py_attribute(obj, ("__subclass__" as attr)) ->
+      Framework.Exceptions.panic_at range "Access to special attribute %s not supported" attr
+
+    (* Other attributes *)
     | E_py_attribute(obj, attr) ->
       (* Evaluate [obj] and check the resulting cases. *)
       man.eval ctx obj flow |>
@@ -284,6 +296,16 @@ struct
       eval_list [obj; attr] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           match el with
+          | [_; {ekind = E_constant (C_string  ("__dict__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__class__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__bases__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__name__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__qualname__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__mro__" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("mro" as attr))}]
+          | [_; {ekind = E_constant (C_string  ("__subclass__" as attr))}] ->
+            Framework.Exceptions.panic_at range "calls to hasattr on special attribute %s not supported" attr
+
           | [{ekind = E_addr addr}; {ekind = E_constant (C_string attr)}] ->
             if_flow_eval
               (assume_is_attribute addr attr man ctx)

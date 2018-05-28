@@ -86,10 +86,10 @@ struct
       end
 
     | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_bool")}}, [], []) ->
-      oeval_join
-        (oeval_singleton (Some (mk_true range), flow, []))
-        (oeval_singleton (Some (mk_false range), flow, []))
+      oeval_singleton (Some (mk_top T_bool range), flow, [])
 
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_string")}}, [], []) ->
+      oeval_singleton (Some (mk_top T_string range), flow, [])
 
     (* Calls to mopsa.assert_equal function *)
     | E_py_call(

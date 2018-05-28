@@ -37,6 +37,11 @@ struct
     | A_py_function (F_user f) -> f.py_func_var.vname
     | _ -> assert false
 
+  let is_test_function name =
+    if String.length name < 5 then false
+    else String.sub name 0 4 = "test"
+
+
   (*==========================================================================*)
   (**                       {2 Transfer functions }                           *)
   (*==========================================================================*)
@@ -72,12 +77,28 @@ struct
           ) ([], flow) test_cases
       in
 
+      let functions = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
+                      Option.none_to_exn |>
+                      List.filter (fun addr ->
+                          match addr.addr_kind with
+                          | A_py_function(F_user func) -> true
+                          | _ -> false
+                        ) |>
+                      List.map (fun addr ->
+                          match addr.addr_kind with
+                          | A_py_function(F_user func) -> func
+                          | _ -> assert false
+                        )
+      in
       (* Fold over the class methods and bind them to self *)
       let tests =
         List.fold_left (fun tests (self, cls) ->
             List.fold_left (fun tests v ->
-                let stmt = mk_stmt (S_expression (mk_py_call (mk_py_addr_attr self v.vname range) [] range)) range in
-                (v.vname, stmt) :: tests
+                match is_test_function v.vname, List.find_opt (fun f -> compare_var f.py_func_var v = 0) functions with
+                | false, _ | _, None -> tests
+                | true, Some f ->
+                  let stmt = mk_stmt (S_expression (mk_py_call (mk_py_addr_attr self v.vname range) [] range)) range in
+                  (v.vname, stmt) :: tests
               ) tests cls.py_cls_static_attributes
           ) [] selfs
       in

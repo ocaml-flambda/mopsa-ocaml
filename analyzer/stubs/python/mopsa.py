@@ -12,6 +12,7 @@ def assert_exception_exists(exn): pass
 def random_int(a, b): pass
 def random_float(a, b): pass
 def random_bool(): pass
+def random_string(): pass
 
 # Decorators
 def stub(f): pass

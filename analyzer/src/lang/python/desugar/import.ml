@@ -56,10 +56,10 @@ struct
       return
 
     | S_py_import(modul, vasname, vroot)  ->
-      Framework.Exceptions.fail "import %s not supported" modul
+      Framework.Exceptions.panic "module %s not supported" modul
 
-    | S_py_import_from(modul, name, vmodul) when Addr.is_builtin_module modul ->
-      Framework.Exceptions.fail "import %s from %s not supported" name modul
+    | S_py_import_from(modul, name, vmodul) ->
+      Framework.Exceptions.panic "module %s not supported" modul
 
     | _ ->
       None

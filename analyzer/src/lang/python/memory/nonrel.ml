@@ -83,7 +83,7 @@ struct
 
     (* Modify variables already pointing to a1 in order to point to a2. *)
     | S_rebase_addr(a1, a2, mode) ->
-      Framework.Exceptions.panic "python heap operations not supported"
+      Framework.Exceptions.panic_at stmt.srange "python heap operations not supported"
       (* map_domain_cur (
        *   Nonrel.map (fun v -> Value.rebase_addr a1 a2 v)
        * ) man flow |>
@@ -141,7 +141,7 @@ struct
           (* Partition w.r.t. to all current addresses *)
           | T_addr ->
             if Value.A.is_top value'.addr then
-              Framework.Exceptions.panic "top address found"
+              Framework.Exceptions.panic_at range "top address found"
             else
               Value.A.fold (fun addr acc ->
                   (* TODO: refine cur by pointing v to a singleton address addr *)

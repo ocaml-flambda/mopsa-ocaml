@@ -215,7 +215,7 @@ and translate_expr_option scope = function
 
 and translate_except_handler scope = function
   | (typ, v, body) ->
-    (typ, (match v with None -> None | Some v -> Some (find_in_scope scope v)), translate_stmt scope body)
+    (translate_expr_option scope typ, (match v with None -> None | Some v -> Some (find_in_scope scope v)), translate_stmt scope body)
 
 and translate_comprehension (comprhs, scope) (target, iter, conds) =
   let (globals, lscope) = scope in

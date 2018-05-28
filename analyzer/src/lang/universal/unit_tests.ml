@@ -77,7 +77,22 @@ struct
             ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
             ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail
           ;
-          man.flow.join acc flow1, nb_ok + ok, nb_fail + fail, nb_may_fail + may_fail, nb_panic
+          let is_fail = fail > 0 in
+          let is_may_fail = may_fail > 0 in
+          let is_panic = false in
+          let is_ok =
+            not is_fail &&
+            not is_may_fail &&
+            not is_panic (* &&
+             * man.flow.fold (fun acc env tk ->
+             *     match tk with
+             *     | TSafeAssert _ | TFailAssert _ | TMayAssert _ -> acc
+             *     | Flows.Interproc.TReturn _ -> acc
+             *     | TCur -> acc
+             *     | _ -> acc && man.env.is_bottom env
+             *   ) true flow1 *)
+          in
+          man.flow.join acc flow1, nb_ok + (if is_ok then 1 else 0), nb_fail + (if is_fail then 1 else 0), nb_may_fail + (if is_may_fail then 1 else 0), nb_panic
         with
         | Framework.Exceptions.Panic (msg) ->
           Debug.warn "Panic: @[%s@]" msg;
@@ -102,7 +117,7 @@ struct
       debug "Starting tests";
       let flow1, ok, fail, may_fail, panic = execute_test_functions man ctx tests flow in
       Debug.debug ~channel:(name ^ ".summary")
-        "Analysis of %s done@\n %a assertion%a passed@\n %a assertion%a failed@\n %a assertion%a unproven\n %a test%a panicked"
+        "Analysis of %s done@\n %a test%a passed@\n %a test%a failed@\n %a test%a unproven\n %a test%a ignored"
         file
         ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
         ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
