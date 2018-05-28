@@ -25,6 +25,9 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                       {2 Loops flow token}                              *)
 (*==========================================================================*)
 
+let should_memo s =
+  false
+
 type token +=
   | TReturn of range * expr option
   (** Control flows reaching a return statement at a given location range
@@ -81,9 +84,17 @@ struct
           (tag_range range "assign param block")
       in
 
+      let body =
+        if should_memo f.fun_name then
+          mk_stmt
+            (Memoisation.S_memoisation f.fun_body)
+            (tag_range (erange exp) "memo")
+        else f.fun_body
+      in
+
       (* Execute body *)
       let flow1 = manager.exec ctx init_block flow0 |>
-                  manager.exec ctx f.fun_body
+                  manager.exec ctx body
       in
 
       (* Temporary variable to store return expressions *)

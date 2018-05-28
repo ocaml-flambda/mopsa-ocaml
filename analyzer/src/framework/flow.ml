@@ -51,7 +51,6 @@ let register_pp_token pp = pp_token_chain := pp !pp_token_chain
 
 let pp_token fmt ft = !pp_token_chain fmt ft
 
-
 (*==========================================================================*)
                            (** {2 Flows map} *)
 (*==========================================================================*)
@@ -66,6 +65,19 @@ module Map = MapExt.Make(
   )
 
 type 'a flow = 'a Map.t with_top
+
+let print vprinter fmt (a : 'a flow) =
+  let open Format in
+  top_fprint (fun fmt m ->
+      if Map.is_empty m then
+        pp_print_string fmt "⊥"
+      else
+        fprintf fmt "@[<v>%a@]"
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+             (fun fmt (k, v) -> fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k vprinter v)
+          ) (Map.bindings m)
+    ) fmt a
 
 
 (*==========================================================================*)
@@ -155,19 +167,7 @@ let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
         fabs1 fabs2
     );
 
-  print = (fun fmt a ->
-      let open Format in
-      top_fprint (fun fmt m ->
-          if Map.is_empty m then
-            pp_print_string fmt "⊥"
-          else
-            fprintf fmt "@[<v>%a@]"
-              (pp_print_list
-                 ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-                 (fun fmt (k, v) -> fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k value.print v)
-              ) (Map.bindings m)
-        ) fmt a
-    );
+  print = print value.print;
 
   get = (fun tk fabs ->
       try
