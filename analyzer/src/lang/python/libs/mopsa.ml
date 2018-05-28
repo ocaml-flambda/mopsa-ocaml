@@ -68,6 +68,9 @@ struct
           oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
       end
 
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [], []) ->
+      oeval_singleton (Some (mk_top T_int range), flow, [])
+
     | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_float")}}, [l; u], []) ->
       begin
         match ekind l, ekind u with
@@ -84,6 +87,9 @@ struct
           in
           oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
       end
+
+    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_float")}}, [], []) ->
+      oeval_singleton (Some (mk_top T_float range), flow, [])
 
     | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_bool")}}, [], []) ->
       oeval_singleton (Some (mk_top T_bool range), flow, [])

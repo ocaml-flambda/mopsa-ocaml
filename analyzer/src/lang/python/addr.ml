@@ -115,24 +115,28 @@ let builtin_name addr =
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
   debug "searching for builtin %s" name;
-  let addr = List.find (fun addr ->
+  List.find (fun addr ->
       name = builtin_name addr
     ) (all ())
-  in
+
+let is_unsupported addr =
   match addr.addr_kind with
-  | A_py_class(C_unsupported name, _) -> Framework.Exceptions.panic "Unsupported class %s" name
-  | A_py_function (F_unsupported name) -> Framework.Exceptions.panic "Unsupported function %s" name
-  | _ -> addr
+  | A_py_class(C_unsupported _, _)
+  | A_py_function (F_unsupported _) -> true
+  | _ -> false
+
 
 (** Search for the address of an attribute of a builtin, given its name *)
 let find_builtin_attribute obj attr =
   let base = find_builtin obj in
-  match base.addr_kind with
-  | A_py_module(M_builtin name)
-  | A_py_class(C_builtin name, _) ->
-    find_builtin (mk_dot_name (Some name) attr)
-
-  | _ -> assert false
+  if is_unsupported base then
+    Framework.Exceptions.panic "Unsupported builtin %s" obj
+  else
+    match base.addr_kind with
+    | A_py_module(M_builtin name)
+    | A_py_class(C_builtin name, _) ->
+      find_builtin (mk_dot_name (Some name) attr)
+    | _ -> assert false
 
 (** Check whether a built-in exists given its name *)
 let is_builtin name = List.exists (fun addr -> name = builtin_name addr) (all ())
@@ -145,12 +149,14 @@ let is_builtin_module name = List.exists (fun addr -> name = builtin_name addr) 
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute name attr =
   let base = find_builtin name in
-  match base.addr_kind with
-  | A_py_module(M_builtin name)
-  | A_py_class(C_builtin name, _) ->
-    is_builtin (mk_dot_name (Some name) attr)
-
-  | _ -> false
+  if is_unsupported base then
+    Framework.Exceptions.panic "Unsupported builtin %s" name
+  else
+    match base.addr_kind with
+    | A_py_module(M_builtin name)
+    | A_py_class(C_builtin name, _) ->
+      is_builtin (mk_dot_name (Some name) attr)
+    | _ -> false
 
 (** Check whether a dot-named function [f] is a member of the class [cls] *)
 let is_builtin_class_function cls f =

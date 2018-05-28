@@ -174,6 +174,7 @@ class list(object):
     def __iter__(self): pass
     def __add__(self, o): pass
     def __mul__(self, o): pass
+    def __contains__(self, v): pass
     def append(self, x): pass
     def insert(self, x): pass
     def pop(self): pass

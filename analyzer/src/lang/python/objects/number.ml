@@ -242,6 +242,10 @@ module Domain= struct
             let tmp = mktmp ~vtyp:T_int () in
             let n = mk_var tmp range in
             try
+              let low, up = Memory.Value.(I.get_bounds base.int) in
+              if Z.(geq (up - low) (of_int 5)) then
+                oeval_singleton (Some (mk_top T_int range), flow, [])
+              else
               Memory.Value.(S.fold (fun s acc ->
                   let s = String.trim s in
                   I.fold (fun acc base ->

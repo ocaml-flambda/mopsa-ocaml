@@ -153,9 +153,7 @@ struct
         match can_be_true, can_be_false with
         | true, false -> oeval_singleton (Some (mk_true range), flow, [])
         | false, true -> oeval_singleton (Some (mk_false range), flow, [])
-        | true, true -> oeval_join
-                          (oeval_singleton (Some (mk_true range), flow, []))
-                          (oeval_singleton (Some (mk_false range), flow, []))
+        | true, true -> oeval_singleton (Some (mk_top T_bool range), flow, [])
         | false, false -> oeval_singleton (None, flow, [])
 
       end

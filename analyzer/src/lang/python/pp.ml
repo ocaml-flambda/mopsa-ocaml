@@ -64,7 +64,7 @@ let () =
   register_pp_expr (fun default fmt exp ->
       match ekind exp with
       | E_py_attribute(obj, attr) ->
-        fprintf fmt "%a.%s" pp_expr obj attr
+        fprintf fmt "pyattr %a.%s" pp_expr obj attr
       | E_py_list(elts) ->
         fprintf fmt "[%a]"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) elts

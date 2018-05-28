@@ -54,21 +54,14 @@ struct
             oeval_singleton (Some (mk_false range), flow, [])
           else
             match etyp e1, ekind e1, ekind e2 with
-            | T_string, _, _ ->
-              oeval_join
-                (oeval_singleton (Some (mk_false exp.erange), flow, []))
-                (oeval_singleton (Some (mk_true exp.erange), flow, []))
-
+            | T_string, _, _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
             | T_addr, E_addr a1, E_addr a2 ->
               begin
                 match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
                 | false, false, true -> oeval_singleton (Some (mk_true range), flow, [])
                 | false, false, false -> oeval_singleton (Some (mk_false range), flow, [])
                 | true, true, false -> oeval_singleton (Some (mk_false range), flow, [])
-                | _ ->
-                  oeval_join
-                    (oeval_singleton (Some (mk_false range), flow, []))
-                    (oeval_singleton (Some (mk_true range), flow, []))
+                | _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
               end
 
             | _ -> re_eval_singleton (man.eval ctx) (Some (mk_binop e1 O_eq e2 range), flow, [])
@@ -76,6 +69,57 @@ struct
 
     | E_binop(O_py_is_not, e1, e2) ->
       re_eval_singleton (man.eval ctx) (Some (mk_not (mk_binop e1 O_py_is e2 range) range), flow, [])
+
+
+    | E_binop(O_py_in, e1, e2) ->
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+          let cls2 = Addr.classof e2 in
+          Universal.Utils.assume_to_eval
+            (Utils.mk_addr_hasattr cls2 "__contains__" range)
+            (fun true_flow ->
+               let exp' = mk_py_call (mk_py_addr_attr cls2 "__contains__" range) [e2; e1] range in
+               re_eval_singleton (man.eval ctx) (Some exp', true_flow, [])
+            )
+            (fun false_flow ->
+               Universal.Utils.assume_to_eval
+                 (Utils.mk_addr_hasattr cls2 "__iter__" range)
+                 (fun true_flow ->
+                    let v = mktmp () in
+                    let stmt = mk_stmt (S_py_for (
+                        mk_var v range,
+                        e2,
+                        mk_if
+                          (mk_binop (mk_var v range) O_eq e1 range)
+                          (mk_stmt S_break range)
+                          (mk_block [] range)
+                          range,
+                        (mk_block [] range)
+                      )) range
+                    in
+                    let flow = man.exec ctx stmt true_flow in
+                    re_eval_singleton (man.eval ctx) (Some (mk_var v range), flow, [mk_remove_var v range])
+                 )
+                 (fun false_flow ->
+                    Universal.Utils.assume_to_eval
+                      (Utils.mk_addr_hasattr cls2 "__getitem__" range)
+                      (fun true_flow ->
+                         Framework.Exceptions.panic_at range "evaluating 'in' operator using __getitem__ not supported"
+                      )
+                      (fun false_flow ->
+                         let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                         oeval_singleton (None, flow, [])
+                      )
+                      man ctx false_flow ()
+                 )
+                 man ctx false_flow ()
+            ) man ctx flow ()
+        )
+
+    | E_binop(O_py_not_in, e1, e2) ->
+      re_eval_singleton (man.eval ctx) (Some (mk_not (mk_binop e1 O_py_in e2 range) range), flow, [])
+
 
     | E_binop(O_py_or, e1, e2) ->
       man.eval ctx e1 flow |>

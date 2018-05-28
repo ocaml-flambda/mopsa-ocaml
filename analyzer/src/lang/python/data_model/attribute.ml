@@ -86,6 +86,9 @@ struct
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       Addr.is_builtin_attribute name attr
 
+    | A_py_class(_) when Addr.is_unsupported addr ->
+      Framework.Exceptions.panic "access to attribute of unsupported object %a" Universal.Pp.pp_addr addr;
+
     | A_py_function _ | A_py_instance _ -> false
 
     | _ -> assert false
@@ -179,7 +182,7 @@ struct
            (* Access to an abstract attribute of an object *)
            | E_addr addr when is_abstract_attribute attr ->
              let exp' = mk_attribute_expr addr attr exp.etyp range in
-             oeval_singleton (Some exp', flow, [])
+             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
            (* Access to an ordinary attribute of an object *)
            | E_addr addr  ->

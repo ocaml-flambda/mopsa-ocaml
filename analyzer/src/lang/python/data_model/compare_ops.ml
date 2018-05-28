@@ -92,9 +92,7 @@ module Domain = struct
                       | O_eq, Some false -> oeval_singleton (Some (mk_false range), flow, [])
                       | O_ne, Some true -> oeval_singleton (Some (mk_false range), flow, [])
                       | O_ne, Some false -> oeval_singleton (Some (mk_true range), flow, [])
-                      | _, None -> oeval_join
-                                     (oeval_singleton (Some (mk_true range), flow, []))
-                                     (oeval_singleton (Some (mk_false range), flow, []))
+                      | _, None -> oeval_singleton (Some (mk_top T_bool range), flow, [])
                       | _ -> assert false
                     end
                   | _ ->

@@ -2,8 +2,8 @@ import sys
 
 import unittest
 from test import support
-from test.test_grammar import (VALID_UNDERSCORE_LITERALS,
-                               INVALID_UNDERSCORE_LITERALS)
+# from test.test_grammar import (VALID_UNDERSCORE_LITERALS,
+#                                INVALID_UNDERSCORE_LITERALS)
 
 L = [
         ('0', 0),
