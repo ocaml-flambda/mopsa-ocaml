@@ -113,6 +113,48 @@ struct
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIsInstance")})}, [test; arg1; arg2], []) ->
       Mopsa.check man ctx (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
 
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, test :: exn :: f :: args, []) ->
+      let stmt = mk_try
+          (mk_block [
+              mk_stmt (S_expression (mk_py_call f args range)) range;
+              Utils.mk_builtin_raise "AssertionError" range
+            ] range)
+          [
+            mk_except
+              (Some exn)
+              None
+              (mk_block [] range);
+            mk_except
+              None
+              None
+              (Utils.mk_builtin_raise "AssertionError" range)
+          ]
+          (mk_block [] range)
+          (mk_block [] range)
+          range
+      in
+      let flow = man.exec ctx stmt flow in
+      oeval_singleton (Some (mk_py_none range), flow, [])
+
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, [test; exn], []) ->
+      (* Instantiate ExceptionContext with the given exception exn *)
+      let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
+      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+
+
+    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")})},[self; typ; exn; trace], []) ->
+      Universal.Utils.assume_to_eval
+        (mk_binop exn O_eq (mk_py_none range) range)
+        (fun true_flow -> oeval_singleton (Some (mk_py_none range), true_flow, []))
+        (fun false_flow ->
+           Universal.Utils.assume_to_eval
+             (Utils.mk_builtin_call "issubclass" [exn; (mk_py_attr self "expected" range)] range)
+             (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
+             (fun false_flow -> oeval_singleton (Some (mk_false range), false_flow, []))
+             man ctx false_flow ()
+        )
+        man ctx flow ()
+
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
       when Addr.is_builtin_class_function "unittest.TestCase" f ->
       Framework.Exceptions.panic "unittest.TestCase function %s not implemented" f

@@ -1,4 +1,4 @@
-class BaseException(): pass
+class BaseException(object): pass
 class SystemExit(BaseException): pass
 class KeyboardInterrupt(BaseException): pass
 class GeneratorExit(BaseException): pass
