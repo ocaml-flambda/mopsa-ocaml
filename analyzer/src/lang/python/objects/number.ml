@@ -95,7 +95,7 @@ module Domain= struct
     | O_mod _ -> O_mod t
     | op -> op
 
-  let eval man ctx exp flow =
+  let rec eval man ctx exp flow =
     let range = exp.erange in
     match ekind exp with
     (** Boleans *)
@@ -220,24 +220,19 @@ module Domain= struct
       Framework.Exceptions.panic "int(float) not supported"
 
 
-    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "int.__new__")}}, cls :: ({etyp = T_string} as arg) :: base, [])
+    | E_py_call(({ekind = E_addr {addr_kind = A_py_function (F_builtin "int.__new__")}} as f), [cls; ({etyp = T_string} as arg)], []) ->
+      eval man ctx {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow
+
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "int.__new__")}}, [cls; ({etyp = T_string} as arg); base], [])
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "int.__new__")}}, [cls; ({etyp = T_string} as arg)], [(Some "base", base)])
       ->
       begin
         debug "int with base";
-        match base with
-        | [] | [{etyp = T_int}] ->
+        match etyp base with
+        | T_int ->
           begin
             let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
-            let base =
-              match base with
-              | [] ->
-                Memory.Value.of_constant (C_int (Z.of_int 10))
-
-              | [b] ->
-                man.ask ctx (Memory.Nonrel.Domain.QEval b) flow |> Option.none_to_exn
-
-              | _ -> assert false
-            in
+            let base = man.ask ctx (Memory.Nonrel.Domain.QEval base) flow |> Option.none_to_exn in
             debug "base = %a" Memory.Value.print base;
             let tmp = mktmp ~vtyp:T_int () in
             let n = mk_var tmp range in
@@ -289,12 +284,10 @@ module Domain= struct
 
           end
 
-        | [{etyp = T_addr}] ->
+        | T_addr ->
           Framework.Exceptions.panic "Instance as base not supported in int conversion"
 
-
         | _ ->
-
           let flow = man.exec ctx
               (Utils.mk_builtin_raise "TypeError" range)
               flow

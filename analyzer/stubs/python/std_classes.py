@@ -173,7 +173,11 @@ class list(object):
     def __setitem__(self, k, v): pass
     def __iter__(self): pass
     def __add__(self, o): pass
+    def __iadd__(self, o): pass
     def __mul__(self, o): pass
+    def __imul__(self, o): pass
+    def __eq__(self, o): pass
+    def __ne__(self, o): pass
     def __contains__(self, v): pass
     def append(self, x): pass
     def insert(self, x): pass

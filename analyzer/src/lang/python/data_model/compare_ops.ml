@@ -62,7 +62,6 @@ module Domain = struct
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-
           let op_fun, rop_fun =
             match op with
             | O_eq -> "__eq__", "__eq__"
@@ -79,8 +78,8 @@ module Domain = struct
 
           man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) flow |>
           eval_compose (fun cmp flow ->
-              match ekind cmp with
-              | E_constant (C_py_not_implemented) ->
+              match etyp cmp with
+              | T_py_not_implemented ->
                 (* FIXME: subclass priority check is not implemented *)
                 begin
                   match op with

@@ -59,8 +59,8 @@ module Domain = struct
               (fun true_flow ->
                  man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) true_flow |>
                  eval_compose (fun r flow ->
-                     match ekind r with
-                     | E_constant (C_py_not_implemented) ->
+                     match etyp r with
+                     | T_py_not_implemented ->
                        if is_same_type e1 e2 then
                          let flow = man.exec ctx
                              (Utils.mk_builtin_raise "TypeError" range)
@@ -73,8 +73,8 @@ module Domain = struct
                            (fun true_flow ->
                               man.eval ctx (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                               eval_compose (fun r flow ->
-                                  match ekind r with
-                                  | E_constant (C_py_not_implemented) ->
+                                  match etyp r with
+                                  | T_py_not_implemented ->
                                     let flow = man.exec ctx
                                         (Utils.mk_builtin_raise "TypeError" range)
                                         flow
@@ -110,8 +110,8 @@ module Domain = struct
                      (fun true_flow ->
                         man.eval ctx (mk_py_call (mk_py_addr_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                         eval_compose (fun r flow ->
-                            match ekind r with
-                            | E_constant (C_py_not_implemented) ->
+                            match etyp r with
+                            | T_py_not_implemented ->
                               let flow = man.exec ctx
                                   (Utils.mk_builtin_raise "TypeError" range)
                                   flow

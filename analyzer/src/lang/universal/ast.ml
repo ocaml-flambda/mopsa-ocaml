@@ -318,8 +318,17 @@ let mk_assign ?(mode = STRONG)v e =
 let mk_assume e =
   mk_stmt (S_assume e)
 
-let mk_assert e =
-  mk_stmt (S_assert e)
+let mk_assert e range =
+  mk_stmt (S_assert e) range
+
+let mk_simple_assert e b1 b2 range =
+  mk_stmt (S_simple_assert (e, b1, b2)) range
+
+let mk_assert_reachable range =
+  mk_simple_assert (mk_true range) true false range
+
+let mk_assert_unreachable range =
+  mk_simple_assert (mk_true range) true true range
 
 let mk_block block = mk_stmt (S_block block)
 

@@ -1,5 +1,4 @@
 import sys
-from test import list_tests
 import pickle
 import unittest
 

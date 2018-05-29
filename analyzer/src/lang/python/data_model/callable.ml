@@ -65,6 +65,9 @@ struct
            | _ -> assert false
         )
 
+    | E_py_call(f, args, _) ->
+      Framework.Exceptions.panic_at range "calls with keyword arguments not supported"
+
     | _ -> None
 
 

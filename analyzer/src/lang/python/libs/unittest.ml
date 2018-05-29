@@ -138,17 +138,17 @@ struct
       let stmt = mk_try
           (mk_block [
               mk_stmt (S_expression (mk_py_call f args range)) range;
-              Utils.mk_builtin_raise "AssertionError" range
+              mk_assert_unreachable range
             ] range)
           [
             mk_except
               (Some exn)
               None
-              (mk_block [] range);
+              (mk_assert_reachable range);
             mk_except
               None
               None
-              (Utils.mk_builtin_raise "AssertionError" range)
+              (mk_assert_unreachable range)
           ]
           (mk_block [] range)
           (mk_block [] range)
@@ -166,12 +166,23 @@ struct
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")})},[self; typ; exn; trace], []) ->
       Universal.Utils.assume_to_eval
         (mk_binop exn O_eq (mk_py_none range) range)
-        (fun true_flow -> oeval_singleton (Some (mk_py_none range), true_flow, []))
+        (fun true_flow ->
+           (* No exception raised => assertion failed *)
+           let flow = man.exec ctx (mk_assert_unreachable range) true_flow in
+           oeval_singleton (None, flow, [])
+        )
         (fun false_flow ->
+           (* Check that the caught exception is an instance of the expected exception *)
            Universal.Utils.assume_to_eval
-             (Utils.mk_builtin_call "issubclass" [exn; (mk_py_attr self "expected" range)] range)
-             (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
-             (fun false_flow -> oeval_singleton (Some (mk_false range), false_flow, []))
+             (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
+             (fun true_flow ->
+                let flow = man.exec ctx (mk_assert_reachable range) true_flow in
+                oeval_singleton (Some (mk_true range), flow, [])
+             )
+             (fun false_flow ->
+                let flow = man.exec ctx (mk_assert_unreachable range) false_flow in
+                oeval_singleton (None, flow, [])
+             )
              man ctx false_flow ()
         )
         man ctx flow ()
