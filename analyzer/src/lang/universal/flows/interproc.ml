@@ -85,11 +85,11 @@ struct
       in
 
       let body =
-        (* if should_memo f.fun_name then
-         *   mk_stmt
-         *     (Memoisation.S_memoisation f.fun_body)
-         *     (tag_range (erange exp) "memo")
-         * else *)
+        if should_memo f.fun_name then
+          mk_stmt
+            (Memoisation.S_memoisation f.fun_body)
+            (tag_range (erange exp) "memo")
+        else
           f.fun_body
       in
 

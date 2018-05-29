@@ -15,12 +15,12 @@
 	      "c.desugar.records",
         "c.desugar.loops",
 
-        //Flows
-//        { "fun" : "universal.flows.memoisation",
-//          "arg" :
-//          {
-//              "iter" :
-//              [
+//        Flows
+        { "fun" : "universal.flows.memoisation",
+          "arg" :
+          {
+              "iter" :
+              [
                   "c.flows.switch",
                   "c.flows.interproc",
                   "universal.flows.loops",
@@ -45,8 +45,8 @@
                           }
                       }
                   }
-//              ]
-//          }
-//        }
+              ]
+          }
+        }
     ]
 }
