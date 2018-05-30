@@ -50,7 +50,7 @@ struct
           let v = List.find (fun v -> v.vname = name) globals in
           mk_var v range
         | A_py_module(M_builtin m) ->
-          let addr = Addr.find_builtin_attribute m name in
+          let addr = Addr.find_builtin_attribute addr name in
           mk_addr addr range
         | _ -> assert false
       in

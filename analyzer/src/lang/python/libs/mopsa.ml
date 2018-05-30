@@ -255,6 +255,10 @@ let is_builtin_fundec = function
   | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var {vname = "mopsa"}}, "builtin")}, _, [])}]} -> true
   | _ -> false
 
+let is_builtin_clsdec = function
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var {vname = "mopsa"}}, "builtin")}, _, [])}]} -> true
+  | _ -> false
+
 let is_unsupported_fundec = function
   | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var {vname = "mopsa"}}, "unsupported")}]} -> true
   | _ -> false
@@ -266,6 +270,10 @@ let is_unsupported_clsdec = function
 
 let builtin_fundec_name = function
   | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var {vname = "mopsa"}}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
+  | _ -> raise Not_found
+
+let builtin_clsdec_name = function
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var {vname = "mopsa"}}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
   | _ -> raise Not_found
 
 

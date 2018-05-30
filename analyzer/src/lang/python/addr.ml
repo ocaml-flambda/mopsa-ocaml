@@ -100,14 +100,15 @@ let split_dot_name x =
   | [modul; cls; attr] -> Some (modul ^ "." ^ cls, attr)
   | _ -> None
 
-(** Name of a builtin address *)
-let builtin_name addr =
+(** Name of an address *)
+let addr_name addr =
   match addr.addr_kind with
   | A_py_class(C_builtin name, _) | A_py_class(C_unsupported name, _)
   | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
-  | A_py_module(M_builtin name)
+  | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
     -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
+  | A_py_class(C_user c, _) -> c.py_cls_var.vname
   | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr addr
 
 
@@ -124,7 +125,7 @@ let add_builtin_module addr () =
 let find_builtin name =
   debug "searching for builtin %s" name;
   List.find (fun addr ->
-      name = builtin_name addr
+      name = addr_name addr
     ) (all ())
 
 let is_unsupported addr =
@@ -134,26 +135,28 @@ let is_unsupported addr =
   | _ -> false
 
 
-(** Search for the address of an attribute of a builtin, given its name *)
-let find_builtin_attribute obj attr =
-  let base = find_builtin obj in
+(** Search for the address of a builtin attribute *)
+let find_builtin_attribute base attr =
+  let name = addr_name base in
   if is_unsupported base then
-    Framework.Exceptions.panic "Unsupported builtin %s" obj
+    Framework.Exceptions.panic "Unsupported builtin %s" name
   else
     match base.addr_kind with
-    | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
+    | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
+      find_builtin (mk_dot_name (Some name) attr)
+    | A_py_class(C_user cls, _) ->
+      let name = cls.py_cls_var.vname in
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
 (** Check whether a built-in exists given its name *)
-let is_builtin name = List.exists (fun addr -> name = builtin_name addr) (all ())
+let is_builtin name = List.exists (fun addr -> name = addr_name addr) (all ())
 
 let is_builtin_addr addr = List.mem addr (all ())
 
 (** Check whether an attribute of a built-in object exists, given its name *)
-let is_builtin_attribute name attr =
-  debug "is_builtin_attribute %s.%s" name attr;
-  let base = find_builtin name in
+let is_builtin_attribute base attr =
+  let name = addr_name base in
   if is_unsupported base then
     Framework.Exceptions.panic "Unsupported builtin %s" name
   else
@@ -205,8 +208,7 @@ let classof e =
 let rec mro addr =
   debug "mro of %a" Universal.Pp.pp_addr addr;
   let l = match addr.addr_kind with
-    | A_py_class(C_user cls, bases) -> addr :: (List.map mro bases |> List.flatten)
-    | A_py_class(C_builtin cls, bases) -> (find_builtin cls) :: (List.map mro bases |> List.flatten)
+    | A_py_class(_, bases) -> addr :: (List.map mro bases |> List.flatten)
     | A_py_instance(cls, _) -> mro cls
     | _ -> assert false
   in

@@ -80,6 +80,9 @@ struct
 
   let is_static_attribute addr attr =
     match addr.addr_kind with
+    | A_py_class(_) when Addr.is_unsupported addr ->
+      Framework.Exceptions.panic "access to attribute of unsupported object %a" Universal.Pp.pp_addr addr;
+
     | A_py_class(C_user cls, _) ->
       List.exists (fun v -> v.vname = attr) cls.py_cls_static_attributes
 
@@ -87,10 +90,8 @@ struct
       List.exists (fun v -> v.vname = attr) globals
 
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
-      Addr.is_builtin_attribute name attr
+      Addr.is_builtin_attribute addr attr
 
-    | A_py_class(_) when Addr.is_unsupported addr ->
-      Framework.Exceptions.panic "access to attribute of unsupported object %a" Universal.Pp.pp_addr addr;
 
     | A_py_function _ | A_py_instance _ -> false
 
@@ -130,11 +131,17 @@ struct
       mk_var v range
 
     | A_py_module(M_user(name, globals)) ->
-      let v = List.find (fun v -> v.vname = attr) globals in
-      mk_var v range
+      begin
+        try
+          let addr = Addr.find_builtin_attribute addr attr in
+          mk_addr addr range
+        with Not_found ->
+          let v = List.find (fun v -> v.vname = attr) globals in
+          mk_var v range
+      end
 
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
-      let addr = Addr.find_builtin_attribute name attr in
+      let addr = Addr.find_builtin_attribute addr attr in
       mk_addr addr range
 
 
@@ -251,13 +258,9 @@ struct
                    (* In a bottom environment, the only thing that we
                       can do is to search for builtins attributes and
                       resolve them statically *)
-                   if Addr.is_builtin_addr addr  then
-                     let name = Addr.builtin_name addr in
-                     if Addr.is_builtin_attribute name attr then
-                       let exp' = mk_addr (Addr.find_builtin_attribute name attr) range in
-                       oeval_singleton (Some exp', flow, [])
-                     else
-                       oeval_singleton (None, flow, [])
+                   if Addr.is_builtin_addr addr && Addr.is_builtin_attribute addr attr then
+                     let exp' = mk_addr (Addr.find_builtin_attribute addr attr) range in
+                     oeval_singleton (Some exp', flow, [])
                    else
                      oeval_singleton (None, flow, [])
                  )

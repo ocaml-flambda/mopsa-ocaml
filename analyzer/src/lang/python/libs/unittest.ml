@@ -50,7 +50,7 @@ struct
     let range = exp.erange in
     match ekind exp with
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.main")})}, [], []) ->
-      (* Search for all classes that inherit from TestCase *)
+      debug "Search for all classes that inherit from TestCase";
       let test_cases = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
                        Option.none_to_exn |>
                        List.filter (fun addr ->

@@ -14,6 +14,7 @@ open Framework.Manager
 open Framework.Flow
 open Framework.Ast
 open Framework.Eval
+open Framework.Exec
 open Universal.Ast
 open Ast
 
@@ -50,13 +51,20 @@ struct
   let exec man ctx stmt flow =
     (* Transform if(e) into if(bool(e)) *)
     match skind stmt with
-    | S_if({ekind = E_py_call(f, _, _)}, _, _) when is_bool_function f ->
-      None
-    | S_if(e, body, orelse) ->
-      debug "decorating %a with bool" Framework.Pp.pp_expr e;
-      let e' = Utils.mk_builtin_call "bool" [e] e.erange in
-      let stmt' = {stmt with skind = S_if(e', body, orelse)} in
-      man.exec ctx stmt' flow |>
+    | S_if(({etyp = T_any} as e), body, orelse) ->
+      man.eval ctx e flow |>
+      eval_to_exec (fun e' flow ->
+          match etyp e' with
+          | T_bool ->
+            let stmt' = {stmt with skind = S_if(e', body, orelse)} in
+            man.exec ctx stmt' flow
+
+          | _ ->
+            debug "decorating %a with bool" Framework.Pp.pp_expr e;
+            let e' = Utils.mk_builtin_call "bool" [e] e.erange in
+            let stmt' = {stmt with skind = S_if(e', body, orelse)} in
+            man.exec ctx stmt' flow
+        ) (man.exec ctx) man.flow |>
       return
 
     | _ -> None

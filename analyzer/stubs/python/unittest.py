@@ -1,5 +1,6 @@
 import mopsa
 
+@mopsa.builtin("unittest.TestCase")
 class TestCase:
     @mopsa.builtin("unittest.TestCase.assertTrue")
     def assertTrue(self, cond): pass
@@ -34,6 +35,7 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.fail")
     def fail(self, msg): pass
 
+@mopsa.builtin("unittest.ExceptionContext")
 class ExceptionContext(object):
     def __init__(self, exn):
         self.expected = exn
@@ -41,7 +43,7 @@ class ExceptionContext(object):
     def __enter__(self):
         return self
 
-    @mopsa.builtin("unittest.TestCase.assertTrue")
+    @mopsa.builtin("unittest.ExceptionContext.__exit__")
     def __exit__(self, type, exn, trace): pass
 
 @mopsa.builtin("unittest.main")
