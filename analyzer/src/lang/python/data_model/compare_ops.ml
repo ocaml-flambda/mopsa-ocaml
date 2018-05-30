@@ -54,6 +54,10 @@ module Domain = struct
       (* FIXME: this is sound, but certainly imprecise *)
       | _ -> None
 
+  let is_empty e =
+    match etyp e with
+    | T_empty -> true
+    | _ -> false
 
   let eval man ctx exp flow =
     let range = erange exp in
@@ -62,44 +66,49 @@ module Domain = struct
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let op_fun, rop_fun =
-            match op with
-            | O_eq -> "__eq__", "__eq__"
-            | O_ne -> "__ne__", "__ne__"
-            | O_lt -> "__lt__", "__gt__"
-            | O_le -> "__le__", "__ge__"
-            | O_gt -> "__gt__", "__lt__"
-            | O_ge -> "__ge__", "__le__"
-            | _ -> assert false
-          in
 
-          let cls1 = Addr.classof e1 in
-          let cls2 = Addr.classof e2 in
+          if is_empty e1 || is_empty e2 then
+            oeval_singleton (Some (mk_binop e1 op e2 ~etyp:T_bool range), flow, [])
+          else
 
-          man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) flow |>
-          eval_compose (fun cmp flow ->
-              match etyp cmp with
-              | T_py_not_implemented ->
-                (* FIXME: subclass priority check is not implemented *)
-                begin
-                  match op with
-                  | O_eq | O_ne ->
-                    (* Apply default equality test *)
-                    begin
-                      match op, is_equal (e1, cls1) (e2, cls2) with
-                      | O_eq, Some true -> oeval_singleton (Some (mk_true range), flow, [])
-                      | O_eq, Some false -> oeval_singleton (Some (mk_false range), flow, [])
-                      | O_ne, Some true -> oeval_singleton (Some (mk_false range), flow, [])
-                      | O_ne, Some false -> oeval_singleton (Some (mk_true range), flow, [])
-                      | _, None -> oeval_singleton (Some (mk_top T_bool range), flow, [])
-                      | _ -> assert false
-                    end
-                  | _ ->
-                    let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-                    oeval_singleton (None, flow, [])
-                end
-              | _ -> oeval_singleton (Some cmp, flow, [])
-            )
+            let op_fun, rop_fun =
+              match op with
+              | O_eq -> "__eq__", "__eq__"
+              | O_ne -> "__ne__", "__ne__"
+              | O_lt -> "__lt__", "__gt__"
+              | O_le -> "__le__", "__ge__"
+              | O_gt -> "__gt__", "__lt__"
+              | O_ge -> "__ge__", "__le__"
+              | _ -> assert false
+            in
+
+            let cls1 = Addr.classof e1 in
+            let cls2 = Addr.classof e2 in
+
+            man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) flow |>
+            eval_compose (fun cmp flow ->
+                match etyp cmp with
+                | T_py_not_implemented ->
+                  (* FIXME: subclass priority check is not implemented *)
+                  begin
+                    match op with
+                    | O_eq | O_ne ->
+                      (* Apply default equality test *)
+                      begin
+                        match op, is_equal (e1, cls1) (e2, cls2) with
+                        | O_eq, Some true -> oeval_singleton (Some (mk_true range), flow, [])
+                        | O_eq, Some false -> oeval_singleton (Some (mk_false range), flow, [])
+                        | O_ne, Some true -> oeval_singleton (Some (mk_false range), flow, [])
+                        | O_ne, Some false -> oeval_singleton (Some (mk_true range), flow, [])
+                        | _, None -> oeval_singleton (Some (mk_top T_bool range), flow, [])
+                        | _ -> assert false
+                      end
+                    | _ ->
+                      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+                      oeval_singleton (None, flow, [])
+                  end
+                | _ -> oeval_singleton (Some cmp, flow, [])
+              )
         )
 
     | _ -> None
