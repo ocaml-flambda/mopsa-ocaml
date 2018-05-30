@@ -13,6 +13,7 @@ open Framework.Ast
 open Framework.Manager
 open Framework.Pp
 open Framework.Eval
+open Framework.Exec
 open Framework.Domains.Stateless
 open Framework.Flow
 open Framework.Exceptions
@@ -73,50 +74,20 @@ module Domain = struct
   let mk_iter_counter addr range = mk_py_addr_attr addr "$counter" ~etyp:T_int range
 
   let add_element man ctx addr e range flow =
-    let flow = man.exec ctx
-        (mk_assign
-           (mk_ll addr range)
-           (mk_binop (mk_ll addr range) math_plus (mk_one range) ~etyp:T_int range)
-           range
-        ) flow
-    in
+    man.eval ctx e flow |>
+    eval_to_exec (fun e flow ->
+        Universal.Utils.assume_to_exec
+          (mk_binop (mk_ll addr range) O_eq (mk_zero range) range)
+          (fun true_flow ->
+             man.exec ctx (mk_assign (mk_ll addr range) (mk_one range) range) true_flow |>
+             man.exec ctx (mk_assign (mk_lv addr range) e range)
+          )
+          (fun false_flow ->
+             man.exec ctx (mk_assign (mk_ll addr range) (mk_binop (mk_ll addr range) math_plus (mk_one range) ~etyp:T_int range) range) false_flow |>
+             man.exec ctx (mk_assign (mk_lv addr range) e range ~mode:WEAK)
+          ) man ctx flow ()
+      ) (man.exec ctx) man.flow
 
-    let empty_list_flow =
-      man.exec ctx
-        (mk_assume
-           (mk_binop (mk_ll addr range) O_eq (mk_one range) range)
-           range
-        ) flow
-      in
-
-      let nonempty_list_flow =
-        man.exec ctx
-          (mk_assume
-             (mk_binop (mk_ll addr range) O_gt (mk_one range) range)
-             range
-          ) flow
-      in
-
-      debug "empty_list_flow = @\n@[  %a@]@\n nonempty_list_flow = @\n@[  %a@]"
-        man.flow.print empty_list_flow
-        man.flow.print nonempty_list_flow
-      ;
-
-      man.flow.join (
-        debug "add1";
-        let flow' = man.exec ctx
-          (mk_assign (mk_lv addr range) e range ~mode:WEAK)
-          nonempty_list_flow
-        in
-        debug "add1 flow = @\n@[  %a@]" man.flow.print flow';
-        flow'
-      ) (
-        let flow' = man.exec ctx
-          (mk_assign (mk_lv addr range) e range)
-          empty_list_flow in
-        debug "add2 flow = @\n@[  %a@]" man.flow.print flow';
-        flow'
-      )
 
   let check_index_access man ctx alist index range flow =
     let ll = mk_ll alist range in
@@ -420,15 +391,7 @@ module Domain = struct
       let exp' = mk_ll alist range in
       re_eval_singleton (man.eval ctx) (Some exp', flow, [])
 
-    | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "list.__init__")}},
-        [
-          {ekind = E_addr alist} as elist;
-          arg
-        ],
-        []
-      )
-      ->
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "list.__init__")}},[{ekind = E_addr alist} as elist; arg], []) ->
       let ll = mk_ll alist range in
       let lv = mk_lv alist range in
 
@@ -672,59 +635,27 @@ module Domain = struct
         []
       )
       ->
-      begin
         let ll1 = mk_ll l1 range and ll2 = mk_ll l2 range in
         let lv1 = mk_lv l1 range and lv2 = mk_lv l2 range in
 
-        let l1_empty_flow = man.exec ctx (mk_assume (mk_binop ll1 O_eq (mk_zero range) range) range) flow in
-        let l2_empty_flow = man.exec ctx (mk_assume (mk_binop ll2 O_eq (mk_zero range) range) range) flow in
+        Universal.Utils.switch_eval
+          [
+            [(mk_binop ll1 O_eq ll2 range, true); (mk_binop ll1 O_le (mk_one range) range, true); (mk_binop ll2 O_le (mk_one range) range, true); (mk_binop lv1 O_eq lv2 range, true)],
+            (fun flow -> oeval_singleton (Some (mk_true range), flow, []));
 
-        let can_be_true, can_be_false =
-          match man.flow.is_cur_bottom l1_empty_flow, man.flow.is_cur_bottom l2_empty_flow with
-          | false, false -> true, false
-          | false, true -> false, true
-          | true, false -> false, true
-          | true, true -> true, true
-        in
+            [(mk_binop ll1 O_eq ll2 range, true); (mk_binop ll1 O_le (mk_one range) range, true); (mk_binop ll2 O_le (mk_one range) range, true); (mk_binop lv1 O_ne lv2 range, true)],
+            (fun flow -> oeval_singleton (Some (mk_false range), flow, []));
 
-        debug "check true";
+            [(mk_binop ll1 O_ne ll2 range, true)],
+            (fun flow -> oeval_singleton (Some (mk_false range), flow, []));
 
-        (* (l1 == l2) => (ll1 == ll2 == 0) || ( (ll1 == ll2 >= 1) && (lv1 == lv2) ) *)
-        let can_be_true =
-          can_be_true ||
-          (
-            let flow = man.exec ctx (mk_assume (mk_binop ll1 O_ge (mk_one range) range) range) flow |>
-                       man.exec ctx (mk_assume (mk_binop ll2 O_ge (mk_one range) range) range) |>
-                       man.exec ctx (mk_assume (mk_binop ll1 O_eq ll2 range) range)
-            in
-            not @@ man.flow.is_cur_bottom flow &&
-            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv1 O_eq lv2 range) range) flow
-          )
-        in
+            [(mk_binop ll1 O_eq ll2 range, true); (mk_binop ll1 O_gt (mk_one range) range, true)],
+            (fun flow -> oeval_singleton (Some (mk_top T_bool range), flow, []));
 
-        debug "can be true = %b" can_be_true;
-
-        debug "check false";
-
-        (* (l1 != l2) => (ll1 == 0 xor ll2 == 0) || ( ll1 >= 1 && ll2 >= 1 && (ll1 != ll2 || lv1 != lv2) ) *)
-        let can_be_false =
-          can_be_false || (
-            let flow = man.exec ctx (mk_assume (mk_binop ll1 O_ge (mk_one range) range) range) flow |>
-                       man.exec ctx (mk_assume (mk_binop ll2 O_ge (mk_one range) range) range)
-            in
-            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop ll1 O_ne ll2 range) range) flow ||
-            not @@ man.flow.is_cur_bottom @@ man.exec ctx (mk_assume (mk_binop lv1 O_ne lv2 range) range) flow
-          )
-        in
-
-        debug "can be false = %b" can_be_false;
-
-        match can_be_true, can_be_false with
-        | true, false -> oeval_singleton (Some (mk_true range), flow, [])
-        | false, true -> oeval_singleton (Some (mk_false range), flow, [])
-        | true, true -> oeval_singleton (Some (mk_top T_bool range), flow, [])
-        | false, false -> oeval_singleton (None, flow, [])
-      end
+            [(mk_binop ll1 O_eq ll2 range, true); (mk_binop ll2 O_gt (mk_one range) range, true)],
+            (fun flow -> oeval_singleton (Some (mk_top T_bool range), flow, []));
+          ]
+          man ctx flow
 
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "list.__eq__")})},
@@ -749,6 +680,7 @@ module Domain = struct
           match ekind res with
           | E_constant (C_true) -> oeval_singleton (Some (mk_false range), flow, [])
           | E_constant (C_false) -> oeval_singleton (Some (mk_true range), flow, [])
+          | E_constant (C_top T_bool) -> oeval_singleton (Some res, flow, [])
           | _ -> assert false
         )
 
