@@ -31,7 +31,6 @@ type obj_param =
   | Dict of Universal.Ast.addr
   | Range of Universal.Ast.addr
   | Generator of py_fundec
-  | AssumedExn of Universal.Ast.addr
 
 (** Classes *)
 type class_address =
@@ -45,9 +44,9 @@ type function_address =
   | F_user of py_fundec (* declaration of a user function *)
   | F_unsupported of string (** unsupported function *)
 
-(** Modules *)
 type module_address =
-  | M_builtin of string (* name of a builtin module *)
+  | M_user of string (** name *) * var list (** globals *)
+  | M_builtin of string (** name *)
 
 (** Kinds of Python addresses *)
 type Universal.Ast.addr_kind +=
@@ -56,7 +55,7 @@ type Universal.Ast.addr_kind +=
   | A_py_instance of Universal.Ast.addr (** class of the instance *) * obj_param option (** optional parameters *)
   | A_py_method of Universal.Ast.addr (** address of the function to bind *) * Universal.Ast.addr (** bound instance *)
   | A_py_method_atomic of Universal.Ast.addr (** address of the function to bind *) * expr (** bound atomic value *)
-  | A_py_module of module_address (** module *)
+  | A_py_module of module_address
 
 
 (** Allocate an object on the heap and return its address as an evaluation *)
@@ -74,17 +73,17 @@ let eval_alloc (man: ('a, 't) manager) ctx kind range flow : (addr, 'a) evals op
 let eval_alloc_instance (man: ('a, 't) manager) ctx cls params range flow : (addr, 'a) evals option =
   eval_alloc man ctx (A_py_instance(cls, params)) range flow
 
+
 (*==========================================================================*)
 (**                           {2 Built-ins}                                 *)
 (*==========================================================================*)
 
 
 (** Lists of built-ins *)
-let modules : addr list ref = ref []
 let classes : addr list ref = ref []
 let functions : addr list ref = ref []
-let exceptions : addr list ref = ref []
-let all () = !modules @ !classes @ !functions @ !exceptions
+let modules : addr list ref = ref []
+let all () = !classes @ !functions @ !modules
 
 (** Name of a builtin with an optional dot notation in case of
    sub-objects (methods of classes, etc.) *)
@@ -104,13 +103,22 @@ let split_dot_name x =
 (** Name of a builtin address *)
 let builtin_name addr =
   match addr.addr_kind with
-  | A_py_class(C_builtin name, _)
-  | A_py_class(C_unsupported name, _)
-  | A_py_function(F_builtin name)
-  | A_py_function(F_unsupported name)
-  | A_py_module(M_builtin name) -> name
+  | A_py_class(C_builtin name, _) | A_py_class(C_unsupported name, _)
+  | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
+  | A_py_module(M_builtin name)
+    -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr addr
+
+
+let add_builtin_class addr () =
+  classes := addr :: !classes
+
+let add_builtin_function addr () =
+  functions := addr :: !functions
+
+let add_builtin_module addr () =
+  modules := addr :: !modules
 
 (** Search for the address of a builtin given its name *)
 let find_builtin name =
@@ -133,8 +141,7 @@ let find_builtin_attribute obj attr =
     Framework.Exceptions.panic "Unsupported builtin %s" obj
   else
     match base.addr_kind with
-    | A_py_module(M_builtin name)
-    | A_py_class(C_builtin name, _) ->
+    | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
@@ -143,18 +150,15 @@ let is_builtin name = List.exists (fun addr -> name = builtin_name addr) (all ()
 
 let is_builtin_addr addr = List.mem addr (all ())
 
-(** Check whether a built-in module exists given its name *)
-let is_builtin_module name = List.exists (fun addr -> name = builtin_name addr) !modules
-
 (** Check whether an attribute of a built-in object exists, given its name *)
 let is_builtin_attribute name attr =
+  debug "is_builtin_attribute %s.%s" name attr;
   let base = find_builtin name in
   if is_unsupported base then
     Framework.Exceptions.panic "Unsupported builtin %s" name
   else
     match base.addr_kind with
-    | A_py_module(M_builtin name)
-    | A_py_class(C_builtin name, _) ->
+    | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       is_builtin (mk_dot_name (Some name) attr)
     | _ -> false
 
@@ -174,6 +178,14 @@ let atomaic_type_to_class_name = function
   | T_py_none -> "NoneType"
   | T_py_not_implemented -> "NotImplementedType"
   | _ -> assert false
+
+
+
+
+(*==========================================================================*)
+(**                      {2 Utility functions}                              *)
+(*==========================================================================*)
+
 
 (** Address of the (type) class of an expression *)
 let classof e =
@@ -229,15 +241,15 @@ let () =
     Format.(
       register_pp_addr (fun default fmt a ->
           match a.addr_kind, Universal.Heap.Recency.is_weak a with
-          | A_py_class(C_user c, _), _ -> fprintf fmt "(C %a)" pp_var c.py_cls_var
-          | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "(C %s)" c
-          | A_py_function(F_user f), _ -> fprintf fmt "[F %a]" pp_var f.py_func_var
-          | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "[F %s]" f
-          | A_py_instance(c, _), false -> fprintf fmt "<I %a @@ %a>" pp_addr c pp_range a.addr_range
-          | A_py_instance(c, _), true -> fprintf fmt "<I %a @weak %a>" pp_addr c pp_range a.addr_range
-          | A_py_method(f, obj), _ -> fprintf fmt "{M %a on %a}" pp_addr f pp_addr obj
-          | A_py_method_atomic(f, obj), _ -> fprintf fmt "{M %a on %a}" pp_addr f pp_expr obj
-          | A_py_module(M_builtin m), _ -> fprintf fmt "%s" m
+          | A_py_class(C_user c, _), _ -> fprintf fmt "{%a}" pp_var c.py_cls_var
+          | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "{%s}" c
+          | A_py_function(F_user f), _ -> fprintf fmt "function %a" pp_var f.py_func_var
+          | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "function %s" f
+          | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr c pp_range a.addr_range
+          | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr c pp_range a.addr_range
+          | A_py_method(f, obj), _ -> fprintf fmt "method %a of %a" pp_addr f pp_addr obj
+          | A_py_method_atomic(f, obj), _ -> fprintf fmt "method %a of %a}" pp_addr f pp_expr obj
+          | A_py_module(M_user(m, _) | M_builtin(m)), _ -> fprintf fmt "module %s" m
           | _ -> default fmt a
         )
     )

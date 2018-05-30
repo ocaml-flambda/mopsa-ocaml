@@ -34,7 +34,14 @@ struct
       debug "creating function object";
       (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
-      Addr.eval_alloc man ctx (A_py_function (F_user func)) stmt.srange flow |>
+      let kind =
+        if Libs.Mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
+        if Libs.Mopsa.is_builtin_fundec func then
+          let name = Libs.Mopsa.builtin_fundec_name func in
+          F_builtin name
+        else F_user func
+      in
+      Addr.eval_alloc man ctx (A_py_function kind) stmt.srange flow |>
       oeval_to_oexec (fun addr flow ->
           man.exec ctx
             (mk_assign

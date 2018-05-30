@@ -46,9 +46,16 @@ struct
 
     (** Initialize special variable __name__ *)
     let range = mk_fresh_range () in
+    let v = {
+      vname = "__name__";
+      vuid = 0;
+      vtyp = T_any;
+      vkind = V_orig;
+    }
+    in
     let stmt =
       mk_assign
-        (mk_var (mkv "__name__" ~vtyp:T_any) (tag_range range "__name__ lval"))
+        (mk_var v (tag_range range "__name__ lval"))
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string (tag_range range "__name__"))
         range
     in
@@ -56,9 +63,16 @@ struct
 
     (** Initialize special variable __file__ *)
     let range = mk_fresh_range () in
+    let v = {
+      vname = "__file__";
+      vuid = 0;
+      vtyp = T_any;
+      vkind = V_orig;
+    }
+    in
     let stmt =
         mk_assign
-          (mk_var (mkv "__file__" ~vtyp:T_any) (tag_range range "__file__ lval"))
+          (mk_var v (tag_range range "__file__ lval"))
           (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string (tag_range range "__file__"))
           range
     in

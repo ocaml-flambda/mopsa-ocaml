@@ -1,4 +1,4 @@
 import mopsa
 
-class support(object):
-    TESTFN = mopsa.random_string()
+@mopsa.unsupported
+class support(object): pass

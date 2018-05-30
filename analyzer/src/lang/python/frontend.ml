@@ -66,7 +66,12 @@ and parse_file (filename: string) =
 (** Create a Universal.var variable from Py_AST.var *)
 and from_var v =
   let open Framework.Ast in
-  mkv v.name ~vuid:v.uid ~vtyp:T_any ~vkind:V_orig
+  {
+    vname = v.name;
+    vuid = v.uid;
+    vtyp = T_any;
+    vkind = V_orig;
+  }
 
 (** Translate a Python program into a Framework.Ast.stmt *)
 and from_program filename (p: Py_AST.program) : Framework.Ast.program =
@@ -169,7 +174,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
     | S_import(modul, None, vroot) -> S_py_import(modul, None, from_var vroot)
     | S_import(modul, Some vasname, vroot) -> S_py_import(modul, Some (from_var vasname), from_var vroot)
 
-    | S_import_from(modul, name, vname) -> S_py_import_from(modul, name, from_var vname)
+    | S_import_from(modul, name, vroot, vname) -> S_py_import_from(modul, name, from_var vroot, from_var vname)
 
     | S_with(ctx, target, body) ->
       S_py_with(

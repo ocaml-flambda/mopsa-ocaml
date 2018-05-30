@@ -57,7 +57,11 @@ struct
                | _ ->
                  List.map (function {ekind = E_addr addr} -> addr | _ -> assert false)  bases
              in
-             Addr.eval_alloc man ctx (A_py_class (C_user cls, bases)) stmt.srange flow |>
+             let kind =
+               if Libs.Mopsa.is_unsupported_clsdec cls then C_unsupported cls.py_cls_var.vname
+               else C_user cls
+             in
+             Addr.eval_alloc man ctx (A_py_class (kind, bases)) stmt.srange flow |>
              oeval_to_oexec (fun addr flow ->
                  let flow = man.exec ctx
                      (mk_assign

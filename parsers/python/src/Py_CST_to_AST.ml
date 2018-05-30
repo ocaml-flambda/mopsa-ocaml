@@ -140,8 +140,10 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
       )
       
     | ImportFrom (Some modl, [(name, asname)], Some 0) ->
+      let hd = module_hd modl in
+      let vroot = translate_var hd in
       let asvar = match asname with None -> translate_var name | Some asname -> translate_var asname in
-      S_import_from(modl, name, asvar)
+      S_import_from(modl, name, vroot, asvar)
 
     | ImportFrom (Some modl, aliases, Some 0) ->
       S_block (
@@ -417,7 +419,11 @@ and find_lvals_in_stmt stmt =
         acc @ find_lvals_in_stmt stmt
       ) []
 
-  | ImportFrom (_, names, _) ->
+  | ImportFrom (Some modl, names, _) ->
+    let hd = module_hd modl in
+    hd :: (names |> List.map (function (name, None) -> name | (_, Some asname) -> asname))
+
+  | ImportFrom (None, names, _) ->
     names |> List.map (function (name, None) -> name | (_, Some asname) -> asname)
 
   | With (ctxl, body) ->

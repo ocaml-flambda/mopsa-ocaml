@@ -22,7 +22,7 @@ lang.universal.numeric.values = int congruence float
 lang.universal.numeric.domains = boxes relational
 lang.universal.numeric.domains.boxes = int congruence float
 
-lang.python = ast addr pp alarm utils visitor frontend builtins operators memory desugar data_model objects flows libs program setup
+lang.python = ast addr pp alarm utils visitor frontend operators memory flows libs desugar data_model objects program setup
 lang.python.memory = value nonrel
 lang.python.objects = class function object number strings slices containers
 lang.python.objects.containers = lists dicts ranges sets tuples

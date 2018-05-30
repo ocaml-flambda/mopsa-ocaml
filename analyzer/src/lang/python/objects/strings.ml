@@ -62,6 +62,10 @@ module Domain = struct
       let exp' = mk_binop e1 O_eq e2 ~etyp:T_bool range in
       oeval_singleton (Some exp', flow, [])
 
+    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__ne__")}}, [{etyp=T_string} as e1; {etyp=T_string} as e2], []) ->
+      let exp' = mk_binop e1 O_ne e2 ~etyp:T_bool range in
+      oeval_singleton (Some exp', flow, [])
+
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__eq__")}}, [_; _], []) ->
       oeval_singleton (Some (mk_py_not_implemented range), flow, [])
 

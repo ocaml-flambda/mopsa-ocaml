@@ -137,14 +137,9 @@ let () =
           try
             let prog =
               match Options.(common_options.lang) with
-              | "c" ->
-                Lang.C.Setup.start ();
-                Lang.C.Frontend.parse_program !files
-              | "python" ->
-                Lang.Python.Setup.start ();
-                Lang.Python.Frontend.parse_program !files
-              | _ ->
-                Framework.Exceptions.panic "Unknown language"
+              | "c" -> Lang.C.Frontend.parse_program !files
+              | "python" -> Lang.Python.Frontend.parse_program !files
+              | _ -> Framework.Exceptions.panic "Unknown language"
             in
             Debug.info "Parsing configuration file ...";
             let config = get_config_path () in

@@ -17,7 +17,6 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 open Addr
-open Builtins
 
 let name = "python.objects.number"
 let debug fmt = Debug.debug ~channel:name fmt

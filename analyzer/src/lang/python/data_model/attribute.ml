@@ -83,6 +83,9 @@ struct
     | A_py_class(C_user cls, _) ->
       List.exists (fun v -> v.vname = attr) cls.py_cls_static_attributes
 
+    | A_py_module(M_user(_, globals)) ->
+      List.exists (fun v -> v.vname = attr) globals
+
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       Addr.is_builtin_attribute name attr
 
@@ -126,10 +129,14 @@ struct
       let v = cls.py_cls_static_attributes |> List.find (fun v -> v.vname = attr) in
       mk_var v range
 
-    | A_py_class(C_builtin name, _)
-    | A_py_module(M_builtin name) ->
+    | A_py_module(M_user(name, globals)) ->
+      let v = List.find (fun v -> v.vname = attr) globals in
+      mk_var v range
+
+    | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
       let addr = Addr.find_builtin_attribute name attr in
       mk_addr addr range
+
 
     | _ ->
       assert false

@@ -90,7 +90,7 @@ and stmt_kind =
        stmt option (** final body *)
 
   | S_import of string (** module *) * var option (** asname *) * var (** root module var *)
-  | S_import_from of string (** module *) * string (** name *) * var (** module var *)
+  | S_import_from of string (** module *) * string (** name *) * var (** root module var *) * var (** module var *)
   (** Import statements *)
 
   | S_delete of expr

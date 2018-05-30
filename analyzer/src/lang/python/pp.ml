@@ -223,7 +223,7 @@ let () =
           (fun fmt -> function None -> () | Some name -> fprintf fmt " as %a" pp_var name) asname
 
 
-      | S_py_import_from(mdl, name, asname) ->
+      | S_py_import_from(mdl, name, vroot, asname) ->
         fprintf fmt "from %s import %s as %a"
           mdl
           name

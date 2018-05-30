@@ -95,8 +95,8 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     | S_import(modul, Some vasname, vroot) ->
       {stmt with skind = S_import(modul, Some (find_in_scope scope vasname), find_in_scope scope vroot)}
 
-    | S_import_from(modul, name, vname) ->
-      {stmt with skind = S_import_from(modul, name, find_in_scope scope vname)}
+    | S_import_from(modul, name, vroot, vname) ->
+      {stmt with skind = S_import_from(modul, name, find_in_scope scope vroot, find_in_scope scope vname)}
 
     | S_delete e ->
       {stmt with skind = S_delete (translate_expr scope e)}

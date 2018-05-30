@@ -209,13 +209,14 @@ type stmt_kind +=
 
   (** package import *)
   | S_py_import of string (** module *) *
-                var option (** asname *) *
-                var (** root module *)
+                   var option (** asname *) *
+                   var (** root module *)
 
 
   | S_py_import_from of string (** module *) *
-                     string (** name *) *
-                     var (** module var *)
+                        string (** name *) *
+                        var (** root module *) *
+                        var (** module var *)
 
   | S_py_delete of expr
 

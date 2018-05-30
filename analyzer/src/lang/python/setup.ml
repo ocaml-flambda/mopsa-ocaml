@@ -53,7 +53,3 @@ let init () =
   Program.setup ();
 
   ()
-
-let start () =
-  Builtins.setup ();
-  ()

@@ -70,7 +70,7 @@ and print_stmt fmt (stmt: Py_AST.stmt) =
       print_var vroot
       (fun fmt -> function None -> () | Some name -> fprintf fmt " as %a" print_var name) asname
 
-  | S_import_from(mdl, name, asname) ->
+  | S_import_from(mdl, name, _, asname) ->
     fprintf fmt "from %s import %s as %a"
       mdl
       name

@@ -17,3 +17,4 @@ def random_string(): pass
 # Decorators
 def stub(f): pass
 def unsupported(f): pass
+def builtin(f, name): pass
