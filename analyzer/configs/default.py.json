@@ -27,6 +27,7 @@
         "python.objects.function",
 	"python.objects.object",
         "python.objects.number",
+        "python.objects.complexes",
         "python.objects.strings",
         "python.objects.slices",
 

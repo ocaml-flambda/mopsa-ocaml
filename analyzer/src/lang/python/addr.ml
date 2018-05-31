@@ -179,6 +179,7 @@ let atomaic_type_to_class_name = function
   | T_bool -> "bool"
   | T_string -> "str"
   | T_py_none -> "NoneType"
+  | T_py_complex -> "complex"
   | T_py_not_implemented -> "NotImplementedType"
   | _ -> assert false
 
@@ -194,12 +195,16 @@ let atomaic_type_to_class_name = function
 let classof e =
   debug "classof %a(%a)" Framework.Pp.pp_expr e Framework.Pp.pp_typ e.etyp;
   match etyp e with
-  | T_int | T_float | T_bool | T_string | T_py_none | T_py_not_implemented -> atomaic_type_to_class_name e.etyp |> find_builtin
+  | T_int | T_float | T_bool | T_string | T_py_complex | T_py_none | T_py_not_implemented -> atomaic_type_to_class_name e.etyp |> find_builtin
   | T_addr ->
     begin
       let addr = match ekind e with E_addr addr -> addr | _ -> assert false in
       match addr.addr_kind with
       | A_py_instance(cls, _) -> cls
+      | A_py_class _ -> find_builtin "type"
+      | A_py_function _ -> find_builtin "function"
+      | A_py_method _ -> find_builtin "method"
+      | A_py_module _ -> find_builtin "module"
       | _ -> assert false
     end
   | _ -> assert false

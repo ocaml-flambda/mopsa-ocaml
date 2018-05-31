@@ -7,17 +7,17 @@ import os
 
 class BoolTest(unittest.TestCase):
 
-    # def test_subclass(self):
-    #     try:
-    #         class C(bool):
-    #             pass
-    #     except TypeError:
-    #         pass
-    #     else:
-    #         self.fail("bool should not be subclassable")
+    def test_subclass(self):
+        try:
+            class C(bool):
+                pass
+        except TypeError:
+            pass
+        else:
+            self.fail("bool should not be subclassable")
 
-    #     self.assertRaises(TypeError, int.__new__, bool, 0)
-    # need to add the information of class to functions in order to determine if a call to __new__(c, ...) is correct (i.e. cls(__new__) == most derive class of c defining __new__ 
+        self.assertRaises(TypeError, int.__new__, bool, 0)
+        # need to add the information of class to functions in order to determine if a call to __new__(c, ...) is correct (i.e. cls(__new__) == most derive class of c defining __new__
 
     def test_print(self):
         try:

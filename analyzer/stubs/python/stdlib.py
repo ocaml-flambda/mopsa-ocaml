@@ -27,6 +27,20 @@ class object:
     @mopsa.stub
     def __le__(self, other): return NotImplemented
 
+class type(object):
+    def __new__(cls, args): pass
+    def __call__(self, args): pass
+
+class function(object):
+    def __new__(cls, args): pass
+    def __call__(self, args): pass
+
+class method(object):
+    def __new__(cls, args): pass
+    def __call__(self, args): pass
+
+class module(object):
+    def __new__(cls, args): pass
 
 class int(object):
     def __new__(cls, args): pass
@@ -155,6 +169,40 @@ class bool(int):
     def __pos__(self): pass
     def __abs__(self): pass
     def __invert__(self): pass
+
+class complex(object):
+    def __new__(cls, args): pass
+
+    def __eq__(self, other): pass
+    def __ne__(self, other): pass
+    def __ge__(self, other): pass
+    def __gt__(self, other): pass
+    def __lt__(self, other): pass
+    def __le__(self, other): pass
+
+    def __bool__(self): pass
+
+    def __add__(self, other): pass
+    def __sub__(self, other): pass
+    def __mul__(self, other): pass
+    def __truediv__(self, other): pass
+    def __floordiv__(self, other): pass
+    def __pow__(self, other): pass
+    def __mod__(self, other): pass
+    def __divmod__(self, other): pass
+
+    def __radd__(self, other): pass
+    def __rsub__(self, other): pass
+    def __rmul__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __rfloordiv__(self, other): pass
+    def __rmod__(self, other): pass
+    def __rdivmod__(self, other): pass
+    def __rpow__(self, other): pass
+
+    def __neg__(self): pass
+    def __pos__(self): pass
+    def __abs__(self): pass
 
 class str(object):
     def __new__(cls, arg): pass

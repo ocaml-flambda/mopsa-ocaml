@@ -6,6 +6,7 @@ let init () =
     Function.setup ();
     Number.setup ();
     Strings.setup ();
+    Complexes.setup ();
     Slices.setup ();
     Containers.(
       Lists.setup ();

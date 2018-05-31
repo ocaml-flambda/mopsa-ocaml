@@ -1,29 +1,10 @@
 # Python test set -- built-in functions
 
-import ast
-import builtins
-import collections
-import decimal
-import fractions
-import io
-import locale
 import os
 import pickle
-import platform
-import random
-import re
 import sys
-import traceback
-import types
 import unittest
-import warnings
-from operator import neg
-from test.support import TESTFN, unlink,  run_unittest, check_warnings
-from test.support.script_helper import assert_python_ok
-try:
-    import pty, signal
-except ImportError:
-    pty = signal = None
+import test
 
 
 class Squares:
@@ -334,7 +315,7 @@ class BuiltinTest(unittest.TestCase):
 
     def test_open(self):
         self.write_testfile()
-        fp = open(TESTFN, 'r')
+        fp = open(test.support.TESTFN, 'r')
         with fp:
             self.assertEqual(fp.readline(4), '1+1\n')
             self.assertEqual(fp.readline(), 'The quick brown fox jumps over the lazy dog.\n')
