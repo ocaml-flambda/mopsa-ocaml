@@ -28,6 +28,7 @@ let init () =
 
   Flows.(
     Exceptions.setup ();
+    Generators.setup ();
   );
 
   Desugar.(

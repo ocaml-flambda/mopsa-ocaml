@@ -13,6 +13,7 @@
         "python.desugar.loops",
 
         "python.flows.exceptions",
+        "python.flows.generators",
 
 	"universal.flows.intraproc",
         "universal.flows.interproc",

@@ -27,7 +27,7 @@ lang.python.memory = value nonrel
 lang.python.objects = class function object number complexes strings slices containers
 lang.python.objects.containers = lists dicts ranges sets tuples
 lang.python.data_model = attribute callable arith_ops subscript compare_ops aug_assign
-lang.python.flows = exceptions
+lang.python.flows = exceptions generators
 
 lang.c = ast frontend pp visitor alarms program flows desugar libs memory setup
 lang.c.memory = base query pointer init cell decomposer machine_integers access_path structured
