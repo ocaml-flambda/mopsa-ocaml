@@ -19,8 +19,10 @@ def test_two_yields():
 
 def test_argument():
     def gen(x):
-        yield x + 1
-        yield x + 2
+        x = x + 1
+        yield x
+        x = x + 1
+        yield x
     g = gen(10)
     x = next(g)
     x = next(g)
