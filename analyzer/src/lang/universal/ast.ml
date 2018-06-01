@@ -336,6 +336,8 @@ let mk_nop = mk_block []
 
 let mk_remove_var v = mk_stmt (S_remove_var v)
 
+let mk_project_vars vars = mk_stmt (S_project_vars vars)
+
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
 

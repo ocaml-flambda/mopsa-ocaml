@@ -218,6 +218,10 @@ class str(object):
 
     def splitlines(self): pass
 
+class generator(object):
+    def __iter__(self): pass
+    def __next__(self): pass
+
 class list(object):
     def __init__(self, itr): pass
     def __len__(self): pass
