@@ -57,7 +57,7 @@ module Domain = struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    (* Creation of a generator *)
+    (* E⟦ g(e1, e2, ...) | is_generator(g) ⟧ *)
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_user func)})}, args, [])
       when func.py_func_is_generator = true
       ->
@@ -91,19 +91,25 @@ module Domain = struct
             )
         )
 
-    (* generator.__iter__(self) simply returns self if it is a generator *)
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__iter__")})}, [self], []) ->
-      begin
-        match ekind self with
-        | E_addr {addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "generator", _)}, _)} ->
-          oeval_singleton (Some self, flow, [])
+    (* E⟦ generator.__iter__(self) | isinstance(self, generator) ⟧ *)
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__iter__")})},
+        [{ekind = E_addr {addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "generator", _)}, _)}} as self],
+        []
+      ) ->
+      oeval_singleton (Some self, flow, [])
 
-        | _ ->
-          let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-        oeval_singleton (None, flow, [])
-      end
+    (* E⟦ generator.__iter__(self) | ¬ isinstance(self, generator) ⟧ *)
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__iter__")})},
+        _,
+        []
+      ) ->
+      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+      oeval_singleton (None, flow, [])
 
-    (* Retrieve the next value of a generator *)
+
+    (* E⟦ generator.__next__(self) | isinstance(self, generator) ⟧ *)
     | E_py_call(
         {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__next__")})},
         [{ekind = E_addr ({addr_kind = A_py_instance(_, Some (Generator func))} as addr)}],
@@ -111,10 +117,19 @@ module Domain = struct
       ) ->
       assert false
 
-    (* Yield a value *)
+    (* E⟦ generator.__next__(self) | ¬ isinstance(self, generator) ⟧ *)
+    | E_py_call(
+        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__next__")})},
+        [{ekind = E_addr ({addr_kind = A_py_instance(_, Some (Generator func))} as addr)}],
+        []
+      ) ->
+      assert false
+
+    (* E⟦ yield e ⟧ *)
     | E_py_yield e ->
       assert false
 
+    (* E⟦ x for x in g | isinstance(g, generator) ⟧ *)
     | E_py_generator_comprehension _ ->
       Framework.Exceptions.panic "Generator comprehension not supported"
 
