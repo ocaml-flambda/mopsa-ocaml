@@ -131,22 +131,23 @@ let fold_slice_length_cases man ctx f x0 slice ll range flow =
       (* FIXME: what do we do with cleaners> *)
       let start, stop, step = match el with Some [start; stop; step] -> start, stop, step | _ -> assert false in
       let vstep = man.ask ctx (Memory.Nonrel.Domain.QEval step) flow |> Option.none_to_exn in
-      match Memory.Value.type_of vstep with
-      | [T_py_none] -> fold_increasing_slice_length_cases man ctx f x0 start stop ll range flow
-      | [T_int] ->
-        let itv = vstep.Memory.Value.int in
-        if Memory.Value.I.is_constant itv then
-          let a, _ = Memory.Value.I.get_bounds itv in
-          if Z.(equal a one) then
-            fold_increasing_slice_length_cases man ctx f x0 start stop ll range flow
-          else
-          if Z.(equal a (- one)) then
-            fold_decreasing_slice_length_cases man ctx f x0 start stop ll range flow
-          else
-            Debug.fail "Unsupported slice step"
-        else
-          Debug.fail "Unsupported slice step"
-      | _ -> Debug.fail "Unsupported slice step"
+      assert false
+      (* match Memory.Value.type_of vstep with
+       * | [T_py_none] -> fold_increasing_slice_length_cases man ctx f x0 start stop ll range flow
+       * | [T_int] ->
+       *   let itv = vstep.Memory.Value.int in
+       *   if Memory.Value.I.is_constant itv then
+       *     let a, _ = Memory.Value.I.get_bounds itv in
+       *     if Z.(equal a one) then
+       *       fold_increasing_slice_length_cases man ctx f x0 start stop ll range flow
+       *     else
+       *     if Z.(equal a (- one)) then
+       *       fold_decreasing_slice_length_cases man ctx f x0 start stop ll range flow
+       *     else
+       *       Debug.fail "Unsupported slice step"
+       *   else
+       *     Debug.fail "Unsupported slice step"
+       * | _ -> Debug.fail "Unsupported slice step" *)
     ) x0
 
 module Domain = struct

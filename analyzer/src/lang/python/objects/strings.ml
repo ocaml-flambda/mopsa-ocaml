@@ -50,13 +50,14 @@ module Domain = struct
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__len__")}}, [{etyp = T_string} as arg], []) ->
       let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
-      if Memory.Value.(S.is_top s.string) then
-        Framework.Exceptions.panic "str.__len__ on top"
-      else
-        Memory.Value.S.fold (fun s acc ->
-            oeval_join acc
-              (oeval_singleton (Some (mk_int (String.length s) range), flow, []))
-          ) s.Memory.Value.string None
+      (* if Memory.Value.(S.is_top s.string) then
+       *   Framework.Exceptions.panic "str.__len__ on top"
+       * else
+       *   Memory.Value.S.fold (fun s acc ->
+       *       oeval_join acc
+       *         (oeval_singleton (Some (mk_int (String.length s) range), flow, []))
+       *     ) s.Memory.Value.string None *)
+      assert false
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__eq__")}}, [{etyp=T_string} as e1; {etyp=T_string} as e2], []) ->
       let exp' = mk_binop e1 O_eq e2 ~etyp:T_bool range in

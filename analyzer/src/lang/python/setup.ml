@@ -4,10 +4,14 @@ let init () =
     Object.setup ();
     Class.setup ();
     Function.setup ();
-    Number.setup ();
     Strings.setup ();
-    Complexes.setup ();
     Slices.setup ();
+    (* Numbers.(
+     *   Int.setup ();
+     *   Float.setup ();
+     *   Bool.setup ();
+     *   Complx.setup ();
+     * ); *)
     Containers.(
       Lists.setup ();
       Dicts.setup ();
@@ -49,6 +53,7 @@ let init () =
   );
 
   Memory.(
+    Env.setup ();
     Nonrel.setup ();
   );
 

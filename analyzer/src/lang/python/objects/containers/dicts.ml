@@ -27,7 +27,7 @@ let name = "python.objects.containers.dicts"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
-module V = Memory.Value
+module V = Memory.Nonrel.Value
 
 
 (*==========================================================================*)
@@ -172,7 +172,7 @@ struct
 
   let eval_key man ctx k flow =
     match ekind k with
-    | E_constant c -> Memory.Value.of_constant c
+    | E_constant c -> Memory.Nonrel.Value.of_constant c
     | _ ->
       man.ask ctx (Memory.Nonrel.Domain.QEval k) flow |> Option.none_to_exn
 
