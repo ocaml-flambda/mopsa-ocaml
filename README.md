@@ -42,7 +42,7 @@ Tested on Fedora 27:
 ```bash
 sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel
 opam init
-eval $(opam env)
+eval $(opam config env)
 opam install apron ocp-pack-split zarith menhir yojson
 make
 
