@@ -370,8 +370,6 @@ and from_exp exp =
       ),
       T_any
 
-    | E_undefined -> assert false
-
 
   in
   {ekind; etyp; erange = from_range exp.erange}

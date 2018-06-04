@@ -34,7 +34,7 @@ module Domain = struct
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__new__")}}, [cls; arg], []) ->
       (* FIXME: call repr when necessary *)
-      let cls = classof arg in
+      let cls = classof @@ addr_of_expr arg in
       let exp = mk_py_call (mk_py_addr_attr cls "__str__" range) [arg] range in
       man.eval ctx exp flow |>
       eval_compose (fun exp flow ->
@@ -49,7 +49,7 @@ module Domain = struct
       oeval_singleton (Some (mk_int (String.length s) range), flow, [])
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__len__")}}, [{etyp = T_string} as arg], []) ->
-      let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
+      (* let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in *)
       (* if Memory.Value.(S.is_top s.string) then
        *   Framework.Exceptions.panic "str.__len__ on top"
        * else

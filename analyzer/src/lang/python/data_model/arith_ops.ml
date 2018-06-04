@@ -40,12 +40,12 @@ module Domain = struct
           let rop_fun = binop_to_rev_fun op in
 
           if e1.etyp <> T_addr && e2.etyp <> T_addr then
-            let cls1 = Addr.classof e1 in
+            let cls1 = Addr.classof @@ addr_of_expr e1 in
             let f = mk_py_addr_attr cls1  op_fun range in
             let exp = mk_py_call f [e1; e2] range in
             re_eval_singleton (man.eval ctx) (Some exp, flow, [])
           else
-            let cls1 = classof e1 and cls2 = classof e2 in
+            let cls1 = classof @@ addr_of_expr e1 and cls2 = classof @@ addr_of_expr e2 in
             let is_same_type e1 e2 =
               match ekind e1, ekind e2 with
               | E_addr {addr_kind = A_py_instance(cls1, _)}, E_addr {addr_kind = A_py_instance(cls2, _)} ->
@@ -142,12 +142,12 @@ module Domain = struct
           let op_fun = unop_to_fun op in
 
           if e.etyp <> T_addr then
-            let cls = Addr.classof e in
+            let cls = Addr.classof @@ addr_of_expr e in
             let f = mk_py_addr_attr cls op_fun range in
             let exp' = mk_py_call f [e] range in
             re_eval_singleton (man.eval ctx) (Some exp', flow, [])
           else
-            let cls = classof e in
+            let cls = classof @@ addr_of_expr e in
             Universal.Utils.assume_to_eval
               (Utils.mk_builtin_call "hasattr" [mk_addr cls range; mk_string op_fun range] range)
               (fun true_flow ->

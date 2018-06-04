@@ -32,7 +32,7 @@ struct
       man.eval ctx context flow |>
       eval_to_exec (fun context flow ->
           (* Enter the context *)
-          let cls = Addr.classof context in
+          let cls = Addr.classof @@ addr_of_expr context in
           let eenter = mk_py_call (mk_py_addr_attr cls "__enter__" erange) [context] erange in
           let flow =
             match target with

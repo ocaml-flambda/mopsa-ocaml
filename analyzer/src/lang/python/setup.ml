@@ -1,5 +1,10 @@
 let init () =
 
+  Memory.(
+    Addr_env.setup ();
+    Value_env.setup ();
+  );
+
   Objects.(
     Object.setup ();
     Class.setup ();
@@ -50,11 +55,6 @@ let init () =
     Stdlib.setup ();
     Unittest.setup ();
     Math.setup ();
-  );
-
-  Memory.(
-    Env.setup ();
-    Nonrel.setup ();
   );
 
   Program.setup ();

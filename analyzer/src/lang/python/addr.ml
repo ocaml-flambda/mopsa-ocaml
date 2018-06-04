@@ -185,28 +185,20 @@ let atomaic_type_to_class_name = function
 
 
 
-
 (*==========================================================================*)
 (**                      {2 Utility functions}                              *)
 (*==========================================================================*)
 
 
 (** Address of the (type) class of an expression *)
-let classof e =
-  debug "classof %a(%a)" Framework.Pp.pp_expr e Framework.Pp.pp_typ e.etyp;
-  match etyp e with
-  | T_int | T_float | T_bool | T_string | T_py_complex | T_py_none | T_py_not_implemented -> atomaic_type_to_class_name e.etyp |> find_builtin
-  | T_addr ->
-    begin
-      let addr = match ekind e with E_addr addr -> addr | _ -> assert false in
-      match addr.addr_kind with
-      | A_py_instance(cls, _) -> cls
-      | A_py_class _ -> find_builtin "type"
-      | A_py_function _ -> find_builtin "function"
-      | A_py_method _ -> find_builtin "method"
-      | A_py_module _ -> find_builtin "module"
-      | _ -> assert false
-    end
+let classof addr =
+  debug "classof %a" Universal.Pp.pp_addr addr;
+  match addr.addr_kind with
+  | A_py_instance(cls, _) -> cls
+  | A_py_class _ -> find_builtin "type"
+  | A_py_function _ -> find_builtin "function"
+  | A_py_method _ -> find_builtin "method"
+  | A_py_module _ -> find_builtin "module"
   | _ -> assert false
 
 
@@ -220,6 +212,17 @@ let rec mro addr =
   debug "|mro| = %d" (List.length l);
   l
 
+(** Return the closest non-heap (i.e. non-user defined) base class of
+   an address *)
+let most_derive_builtin_base addr =
+  let rec aux =
+    function
+    | [a] when is_builtin_addr a -> a
+    | a :: tl when is_builtin_addr a -> a
+    | a :: tl -> aux tl
+    | [] -> assert false
+  in
+  aux (mro addr)
 
 (** Check class inheritance  *)
 let issubclass cls1 cls2 =
@@ -240,6 +243,59 @@ let isinstance obj cls =
   | A_py_instance(cls', _),  _ -> false
   | A_py_class _, A_py_class (C_builtin "type", _)-> true
   | A_py_class _, _ -> false
+  | _ -> assert false
+
+
+(** Unique allocation range for atomic values *)
+let common_range = mk_file_range "_mopsa_stdlib.py"
+
+(** Compute the address of an atomic type *)
+let of_atomic_type ~weak t range =
+  let cls = atomaic_type_to_class_name t |> find_builtin in
+  {
+    addr_kind = A_py_instance(cls, None);
+    addr_range = range;
+    addr_uid = if weak then Universal.Heap.Pool.old_uid else Universal.Heap.Pool.recent_uid;
+  }
+
+let has_atomic_type addr =
+  let cls = classof addr in
+  let builtin_base = most_derive_builtin_base cls in
+  match builtin_base.addr_kind with
+  | A_py_class (C_builtin "int", _)
+  | A_py_class (C_builtin "float", _)
+  | A_py_class (C_builtin "bool", _)
+  | A_py_class (C_builtin "complex", _)
+  | A_py_class (C_builtin "str", _)
+  | A_py_class (C_builtin "NoneType", _)
+  | A_py_class (C_builtin "NotImplementedType", _) -> true
+  | _ -> false
+
+(** Atomic type of an address *)
+let to_atomic_type a =
+  let cls = classof a in
+  let builtin_base = most_derive_builtin_base cls in
+  match builtin_base.addr_kind with
+  | A_py_class (C_builtin "int", _) -> T_int
+  | A_py_class (C_builtin "float", _) -> T_float
+  | A_py_class (C_builtin "bool", _) -> T_bool
+  | A_py_class (C_builtin "complex", _) -> T_py_complex
+  | A_py_class (C_builtin "str", _) -> T_string
+  | A_py_class (C_builtin "NoneType", _) -> T_py_none
+  | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
+  | _ -> Framework.Exceptions.fail "%a is not an address of an atomic type" Universal.Pp.pp_addr a
+
+(** Address of a constant *)
+let of_constant c range =
+  match c with
+  | C_int _ | C_int_interval _ -> of_atomic_type ~weak:true T_int range
+  | C_float _ | C_float_interval _ -> of_atomic_type ~weak:true T_float range
+  | C_py_imag _ -> of_atomic_type ~weak:true T_py_complex range
+  | C_true | C_false -> of_atomic_type ~weak:false T_bool common_range
+  | C_string _ -> of_atomic_type ~weak:true T_string range
+  | C_py_none -> of_atomic_type ~weak:false T_py_none common_range
+  | C_py_not_implemented -> of_atomic_type ~weak:false T_py_not_implemented common_range
+  | C_top t -> of_atomic_type ~weak:true t range
   | _ -> assert false
 
 

@@ -39,7 +39,7 @@ module Domain = struct
           let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
           let op_fun = Operators.binop_to_incr_fun op in
-          let cls = Addr.classof x in
+          let cls = Addr.classof @@ addr_of_expr x in
           Universal.Utils.assume_to_exec
             (Utils.mk_addr_hasattr cls op_fun range)
             (fun true_flow ->

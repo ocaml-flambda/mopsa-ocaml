@@ -49,8 +49,8 @@
             "unify": "universal.heap.recency",
             "over": {
 		"iter": [
-		    "python.memory.env",
-		    "python.memory.nonrel"
+		    "python.memory.addr_env",
+		    "python.memory.value_env"
 		]
 	    }
         }

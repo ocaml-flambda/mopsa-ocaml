@@ -129,8 +129,8 @@ let fold_slice_length_cases man ctx f x0 slice ll range flow =
   eval_list [mk_start slice range; mk_stop slice range; mk_step slice range] (man.eval ctx) flow |>
   eval_fold (fun acc (el, flow, cleaners) ->
       (* FIXME: what do we do with cleaners> *)
-      let start, stop, step = match el with Some [start; stop; step] -> start, stop, step | _ -> assert false in
-      let vstep = man.ask ctx (Memory.Nonrel.Domain.QEval step) flow |> Option.none_to_exn in
+      (* let start, stop, step = match el with Some [start; stop; step] -> start, stop, step | _ -> assert false in
+       * let vstep = man.ask ctx (Memory.Nonrel.Domain.QEval step) flow |> Option.none_to_exn in *)
       assert false
       (* match Memory.Value.type_of vstep with
        * | [T_py_none] -> fold_increasing_slice_length_cases man ctx f x0 start stop ll range flow

@@ -222,8 +222,6 @@ and expr_kind =
     (** Yield expression *)
     | E_yield of expr
 
-    | E_undefined
-
     (** Binary operator expressions *)
     | E_binop of
         expr (** left operand *) * binop * expr (** right operand *)

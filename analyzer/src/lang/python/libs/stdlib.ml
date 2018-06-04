@@ -53,7 +53,7 @@ struct
       (* Check that the class of obj has an attribute __iter__ *)
       man.eval ctx obj flow |>
       eval_compose (fun obj flow ->
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
           Universal.Utils.assume_to_eval
             (Utils.mk_addr_hasattr cls "__iter__" range)
             (fun true_flow ->
@@ -84,7 +84,7 @@ struct
       (* Check that the class of obj has an attribute __len__ *)
       man.eval ctx obj flow |>
       eval_compose (fun obj flow ->
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
           Universal.Utils.assume_to_eval
             (Utils.mk_addr_hasattr cls "__len__" range)
             (fun true_flow ->
@@ -108,7 +108,7 @@ struct
       (* Check that the class of obj has an attribute __next__ *)
       man.eval ctx obj flow |>
       eval_compose (fun obj flow ->
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
           Universal.Utils.assume_to_eval
             (Utils.mk_addr_hasattr cls "__next__" range)
             (fun true_flow ->
@@ -131,7 +131,7 @@ struct
           match ekind cls with
           (* Case 1: class *)
           | E_addr ({addr_kind = A_py_class(_)} as cls)->
-            let cls0 = classof obj in
+            let cls0 = classof @@ addr_of_expr obj in
             if Addr.issubclass cls0 cls then
               oeval_singleton (Some (mk_true range), flow, [])
             else

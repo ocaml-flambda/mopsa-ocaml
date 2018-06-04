@@ -82,8 +82,8 @@ module Domain = struct
               | _ -> assert false
             in
 
-            let cls1 = Addr.classof e1 in
-            let cls2 = Addr.classof e2 in
+            let cls1 = Addr.classof @@ addr_of_expr e1 in
+            let cls2 = Addr.classof @@ addr_of_expr e2 in
 
             man.eval ctx (mk_py_call (mk_py_addr_attr cls1 op_fun range) [e1; e2] range) flow |>
             eval_compose (fun cmp flow ->

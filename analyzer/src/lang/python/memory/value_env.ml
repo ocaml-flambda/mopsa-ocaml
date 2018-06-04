@@ -21,7 +21,7 @@ open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.memory.nonrel"
+let name = "python.memory.value_env"
 let debug fmt = Debug.debug ~channel:name fmt
 
 

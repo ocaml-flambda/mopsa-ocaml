@@ -28,6 +28,7 @@ struct
   let exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
+    (* S⟦ assert(e, msg) ⟧ *)
     | S_py_assert (e, msg)->
       man.eval ctx e flow |>
       eval_to_exec

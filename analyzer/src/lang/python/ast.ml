@@ -17,7 +17,6 @@ open Framework.Ast
 
 type constant +=
   | C_py_none
-  | C_py_undefined
   | C_py_not_implemented
   | C_py_imag of float
 
@@ -28,7 +27,6 @@ type constant +=
 
 (** Python-specific types *)
 type typ +=
-  | T_py_undefined
   | T_py_not_implemented
   | T_py_complex
   | T_py_none
@@ -86,6 +84,8 @@ type py_lambda = {
 }
 
 type expr_kind +=
+  | E_py_undefined of bool (* is it global? *)
+  | E_py_addr_value of Universal.Ast.addr * expr (** symbolic value associated to an address *)
   | E_py_list of expr list
   | E_py_index_subscript of expr (** object *) * expr (** index *)
   | E_py_slice_subscript of expr (** object *) * expr (** start *) * expr (** end *) * expr (** step *)
@@ -277,3 +277,11 @@ let mk_py_none range =
 
 let mk_py_not_implemented range =
   mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range
+
+let mk_py_addr_value addr e range =
+  mk_expr (E_py_addr_value (addr, e)) range
+
+let addr_of_expr e =
+  match ekind e with
+  | Universal.Ast.E_addr addr | E_py_addr_value(addr, _) -> addr
+  | _ -> assert false

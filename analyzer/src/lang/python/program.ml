@@ -30,14 +30,14 @@ struct
 
   let init_globals man ctx filename globals flow =
     (* Initialize global variables with C_py_undefined constant *)
-    let range = mk_fresh_range () in
+    let range = mk_file_range filename in
     let stmt =
       mk_block
         (List.mapi (fun i v ->
              mk_assign
-               (mk_var v (tag_range range "lval %d" i))
-               (mk_constant C_py_undefined ~etyp:T_py_undefined (tag_range range "undef %d" i))
-               (tag_range range "undef assign %d" i)
+               (mk_var v range)
+               (mk_expr (E_py_undefined true) range)
+               range
            ) globals
         )
         range
@@ -45,7 +45,6 @@ struct
     let flow1 = man.exec ctx stmt flow in
 
     (** Initialize special variable __name__ *)
-    let range = mk_fresh_range () in
     let v = {
       vname = "__name__";
       vuid = 0;
@@ -55,14 +54,13 @@ struct
     in
     let stmt =
       mk_assign
-        (mk_var v (tag_range range "__name__ lval"))
-        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string (tag_range range "__name__"))
+        (mk_var v range)
+        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
         range
     in
     let flow2 = man.exec ctx stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let range = mk_fresh_range () in
     let v = {
       vname = "__file__";
       vuid = 0;
@@ -72,8 +70,8 @@ struct
     in
     let stmt =
         mk_assign
-          (mk_var v (tag_range range "__file__ lval"))
-          (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string (tag_range range "__file__"))
+          (mk_var v range)
+          (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string range)
           range
     in
     let flow3 = man.exec ctx stmt flow2 in

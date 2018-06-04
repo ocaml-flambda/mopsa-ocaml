@@ -35,6 +35,7 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
+    (* E⟦ e1 and e2 ⟧ *)
     | E_binop(O_py_and, e1, e2) ->
       man.eval ctx e1 flow |>
       eval_compose
@@ -45,11 +46,23 @@ struct
              man ctx flow ()
         )
 
+    (* E⟦ e1 or e2 ⟧ *)
+    | E_binop(O_py_or, e1, e2) ->
+      man.eval ctx e1 flow |>
+      eval_compose
+        (fun e1 flow1 ->
+           Universal.Utils.assume_to_eval e1
+             (fun true_flow -> oeval_singleton (Some e1, true_flow, []))
+             (fun false_flow -> Some (man.eval ctx e2 false_flow))
+             man ctx flow ()
+        )
+
+    (* E⟦ e1 is e2 ⟧ *)
     | E_binop(O_py_is, e1, e2) ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let cls1 = Addr.classof e1 and cls2 = Addr.classof e2 in
+          let cls1 = Addr.classof @@ addr_of_expr e1 and cls2 = Addr.classof @@ addr_of_expr e2 in
           if compare_addr cls1 cls2 <> 0 then
             oeval_singleton (Some (mk_false range), flow, [])
           else
@@ -67,15 +80,16 @@ struct
             | _ -> re_eval_singleton (man.eval ctx) (Some (mk_binop e1 O_eq e2 range), flow, [])
         )
 
+    (* E⟦ e1 is not e2 ⟧ *)
     | E_binop(O_py_is_not, e1, e2) ->
       re_eval_singleton (man.eval ctx) (Some (mk_not (mk_binop e1 O_py_is e2 range) range), flow, [])
 
-
+    (* E⟦ e1 in e2 ⟧ *)
     | E_binop(O_py_in, e1, e2) ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let cls2 = Addr.classof e2 in
+          let cls2 = Addr.classof @@ addr_of_expr e2 in
           Universal.Utils.assume_to_eval
             (Utils.mk_addr_hasattr cls2 "__contains__" range)
             (fun true_flow ->
@@ -117,20 +131,12 @@ struct
             ) man ctx flow ()
         )
 
+    (* E⟦ e1 in e2 ⟧ *)
     | E_binop(O_py_not_in, e1, e2) ->
       re_eval_singleton (man.eval ctx) (Some (mk_not (mk_binop e1 O_py_in e2 range) range), flow, [])
 
 
-    | E_binop(O_py_or, e1, e2) ->
-      man.eval ctx e1 flow |>
-      eval_compose
-        (fun e1 flow1 ->
-           Universal.Utils.assume_to_eval e1
-             (fun true_flow -> oeval_singleton (Some e1, true_flow, []))
-             (fun false_flow -> Some (man.eval ctx e2 false_flow))
-             man ctx flow ()
-        )
-
+    (* E⟦ not e ⟧ *)
     | E_unop(O_py_not, e) ->
       let e' =
         if is_bool_function e then e else Utils.mk_builtin_call "bool" [e] e.erange
@@ -140,6 +146,7 @@ struct
         (fun false_flow -> oeval_singleton (Some (mk_true exp.erange), false_flow, []))
         man ctx flow ()
 
+    (* E⟦ e1 op e2 op e3 ... ⟧ *)
     | E_py_multi_compare(left, ops, rights) ->
       debug "multi compare";
       let range = erange exp in

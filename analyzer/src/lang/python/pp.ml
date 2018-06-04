@@ -36,14 +36,12 @@ let () =
     );
   register_pp_typ (fun default fmt typ ->
     match typ with
-    | T_py_undefined -> pp_print_string fmt "undef"
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
     | _ -> default fmt typ
     );
   register_pp_constant (fun default fmt -> function
-      | C_py_undefined -> pp_print_string fmt "undefined"
       | C_py_none -> pp_print_string fmt "None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
@@ -63,6 +61,9 @@ let () =
     );
   register_pp_expr (fun default fmt exp ->
       match ekind exp with
+      | E_py_undefined true -> fprintf fmt "global undef"
+      | E_py_undefined false -> fprintf fmt "local undef"
+      | E_py_addr_value(a, e) -> fprintf fmt "⟪%a, %a⟫" pp_expr e Universal.Pp.pp_addr a
       | E_py_attribute(obj, attr) ->
         fprintf fmt "pyattr %a.%s" pp_expr obj attr
       | E_py_list(elts) ->

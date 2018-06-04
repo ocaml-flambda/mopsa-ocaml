@@ -269,7 +269,7 @@ struct
            (* Access to an ordinary attribute of atomic types *)
            | _ when etyp obj |> is_atomic_type ->
              debug "resolving attribute %s of atomic type exp %a" attr Framework.Pp.pp_expr obj;
-             let cls = Addr.classof obj in
+             let cls = Addr.classof @@ addr_of_expr obj in
              debug "class %a" Universal.Pp.pp_addr cls;
              if_flow_eval
                (assume_is_attribute cls attr man ctx)
@@ -342,7 +342,7 @@ struct
               man flow ()
 
           | [v; {ekind = E_constant (C_string attr)}] when etyp v |> is_atomic_type->
-            let cls = Addr.classof obj in
+            let cls = Addr.classof @@ addr_of_expr obj in
             if_flow_eval
               (assume_is_attribute cls attr man ctx)
               (assume_is_not_attribute cls attr man ctx)

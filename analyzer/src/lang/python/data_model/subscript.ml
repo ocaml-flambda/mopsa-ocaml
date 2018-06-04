@@ -34,7 +34,7 @@ struct
       eval_list [obj; index] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let obj, index = match el with [obj; index] -> obj, index | _ -> assert false in
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
 
           let ok_cond = Utils.mk_addr_hasattr cls "__getitem__" range in
           let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
@@ -62,7 +62,7 @@ struct
       eval_list [obj; start; stop; step] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
 
           Universal.Utils.assume_to_eval
             (Utils.mk_addr_hasattr cls "__getitem__" range)
@@ -91,7 +91,7 @@ struct
       eval_to_exec
         (fun el flow ->
           let exp, obj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
           let ok_cond = Utils.mk_addr_hasattr cls "__setitem__" range in
           let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
           let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
@@ -120,7 +120,7 @@ struct
       eval_list [obj; start; stop; step] (man.eval ctx) flow |>
       eval_to_exec (fun el flow ->
           let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-          let cls = classof obj in
+          let cls = classof @@ addr_of_expr obj in
 
           Universal.Utils.assume_to_exec
             (Utils.mk_addr_hasattr cls "__setitem__" range)

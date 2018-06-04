@@ -27,21 +27,25 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 
 type token +=
-  | TGenStart of addr (** Initial generator flows *)
-  | TGenNext of addr * range (** Flows starting from a call to
-                                __next__ that should resume execution
-                                 at the given location point *)
-  | TGenYield of addr * expr * range (** Flow starting from a yield
-                                        expression and suspended until
-                                        reaching the calling next
-                                         statement *)
-  | TGenStop of addr (** Flows reaching the end of the generator *)
+  | TGenStart of addr
+  (** Initial generator flows *)
+
+  | TGenNext of addr * range
+  (** Flows starting from a call to __next__ that should resume
+      execution at the given location point *)
+
+  | TGenYield of addr * expr * range
+  (** Flow starting from a yield expression and suspended until
+      reaching the calling next statement *)
+
+  | TGenStop of addr
+  (** Flows reaching the end of the generator *)
 
 
 
-(* Generator framing: encode a generator local variable into a
-     uniquely named variable depending on the address of the instance
-     generator. *)
+(** Generator framing: tag local variables with the address of the
+   generator in order to keep separate variables of different
+   instances, while allowing the inference of relations. *)
 type var_kind +=
   | V_gen_frame of addr (** address of the instance *)
 
@@ -52,6 +56,7 @@ let mk_framed_var v addr =
   | _ -> assert false
 
 
+(** The current generator being analyzed is stored in the context. *)
 type _ Framework.Context.key +=
   | KCurGenerator: addr Framework.Context.key
 

@@ -115,7 +115,13 @@ struct
           in
           oeval_singleton (None, flow, [])
         else
-          (* Give the call to {!Universal} *)
+          (* Initialize local variables to undefined value and give the call to {!Universal} *)
+          let flow = man.exec ctx
+              (mk_block (List.mapi (fun i v ->
+                   mk_assign (mk_var v range) (mk_expr (E_py_undefined false) range) range
+                 ) pyfundec.py_func_locals) range)
+              flow
+          in
           let tmp = mktmp () in
           let fundec = {
             fun_name = var_uniq_name (pyfundec.py_func_var);
