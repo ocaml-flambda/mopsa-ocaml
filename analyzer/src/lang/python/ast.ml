@@ -285,3 +285,30 @@ let addr_of_expr e =
   match ekind e with
   | Universal.Ast.E_addr addr | E_py_addr_value(addr, _) -> addr
   | _ -> assert false
+
+let rec is_py_expr e =
+  match ekind e with
+  | E_py_undefined _
+  | E_py_addr_value _
+  | E_py_list _
+  | E_py_index_subscript _
+  | E_py_slice_subscript _
+  | E_py_attribute _
+  | E_py_dict _
+  | E_py_set _
+  | E_py_generator_comprehension _
+  | E_py_list_comprehension _
+  | E_py_set_comprehension _
+  | E_py_dict_comprehension _
+  | E_py_call _
+  | E_py_yield _
+  | E_py_if _
+  | E_py_tuple _
+  | E_py_bytes _
+  | E_py_lambda _
+  | E_py_multi_compare _
+  | E_constant _ -> true
+  | E_var {vkind = V_orig} -> true
+  | E_unop(_, e) -> is_py_expr e
+  | E_binop(_, e1, e2) -> is_py_expr e1 && is_py_expr e2
+  | _ -> false

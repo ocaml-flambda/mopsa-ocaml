@@ -107,17 +107,6 @@ struct
         ) (man.exec ctx) man.flow |>
       return
 
-    (* S⟦ ?e ⟧ *)
-    | S_assume(e) ->
-      man.eval ctx e flow |>
-      eval_to_exec (fun e flow ->
-          match ekind e with
-          | E_addr a -> assert false
-          | E_py_addr_value(a, ev) -> assert false
-          | _ -> assert false
-        ) (man.exec ctx) man.flow |>
-      return
-
     | _ -> None
 
   and assign_addr man ctx v av mode flow =

@@ -11,8 +11,10 @@
 open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
+open Framework.Lattice
 open Framework.Flow
 open Framework.Eval
+open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
@@ -175,7 +177,26 @@ struct
     | _ -> None
 
 
-  let exec _ _ _ _  = None
+  let rec exec man ctx stmt flow =
+    let range = srange stmt in
+    match skind stmt with
+    (* S⟦ ?e ⟧ *)
+    | S_assume(e) when is_py_expr e ->
+      debug "%a" Framework.Pp.pp_stmt stmt;
+      man.eval ctx e flow |>
+      eval_to_exec (fun e flow ->
+          man.eval ctx (Utils.mk_builtin_call "bool" [e] range) flow |>
+          eval_to_exec (fun b flow ->
+              match ekind b with
+              | E_py_addr_value(_, {ekind = E_constant (C_true)}) -> flow
+              | E_py_addr_value(_, {ekind = E_constant (C_false)}) -> man.flow.set TCur man.env.bottom flow
+              | _ -> Framework.Exceptions.fail "call to bool returned a non boolean expression %a" Framework.Pp.pp_expr b
+            ) (man.exec ctx) man.flow
+        ) (man.exec ctx) man.flow |>
+      return
+
+    | _ -> None
+
 
   let ask _ _ _ _ = None
 

@@ -291,7 +291,7 @@ let of_constant c range =
   | C_int _ | C_int_interval _ -> of_atomic_type ~weak:true T_int range
   | C_float _ | C_float_interval _ -> of_atomic_type ~weak:true T_float range
   | C_py_imag _ -> of_atomic_type ~weak:true T_py_complex range
-  | C_true | C_false -> of_atomic_type ~weak:false T_bool common_range
+  | C_true | C_false -> of_atomic_type ~weak:true T_bool range
   | C_string _ -> of_atomic_type ~weak:true T_string range
   | C_py_none -> of_atomic_type ~weak:false T_py_none common_range
   | C_py_not_implemented -> of_atomic_type ~weak:false T_py_not_implemented common_range

@@ -20,6 +20,7 @@ open Framework.Utils
 open Universal.Ast
 open Ast
 open Addr
+open Addr_env
 
 let name = "python.memory.value_env"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -29,6 +30,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 (**                             {2 Values}                                  *)
 (*==========================================================================*)
 
+(** NoneType singleton lattice *)
 module N = Framework.Lattices.Enum.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_none]
@@ -36,19 +38,21 @@ module N = Framework.Lattices.Enum.Make(struct
   end
   )
 
+(** Boolean lattice *)
 module B = Framework.Lattices.Enum.Make(struct
     type t = bool
     let values = [true; false]
     let print = Format.pp_print_bool
   end)
 
+(** Powerset lattice of finite strings *)
 module S = Framework.Lattices.Top_set.Make(struct
     type t = string
     let compare = compare
     let print fmt s = Format.fprintf fmt "\"%s\"" s
   end)
 
-
+(** NotImplementedType singleton lattice *)
 module NI = Framework.Lattices.Enum.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_not_implemented]
@@ -56,10 +60,13 @@ module NI = Framework.Lattices.Enum.Make(struct
   end
   )
 
+(** Integer intervals lattice *)
 module I = Universal.Numeric.Values.Int
 
+(** Float intervals lattices *)
 module F = Universal.Numeric.Values.Float
 
+(** Full value abstraction *)
 module Value =
 struct
 
@@ -170,7 +177,7 @@ struct
     float = F.join abs1.float abs2.float;
     notimplem = NI.join abs1.notimplem abs2.notimplem;
   }
-  
+
   let meet abs1 abs2 = {
     none = N.meet abs1.none abs2.none;
     bool = B.meet abs1.bool abs2.bool;
@@ -246,234 +253,70 @@ struct
 
   (** Boolean predicates *)
   let can_be_true abs =
-    (B.mem true abs.bool) ||
-    (S.exists (fun s -> s <> "") abs.string) ||
     (I.can_be_true abs.int) ||
-    (F.can_be_true abs.float) ||
-    (not @@ NI.is_bottom abs.notimplem)
+    (F.can_be_true abs.float)
 
   let can_be_false abs =
-    (not @@ N.is_bottom abs.none) ||
-    (S.exists (fun s -> s = "") abs.string) ||
-    (B.mem false abs.bool) ||
     (I.can_be_false abs.int) ||
     (F.can_be_false abs.float)
 
 
   (** Forward evaluation of unary operators *)
-  let fwd_unop op abs =
-    match op with
-    | O_sqrt ->
-      { bottom with float = F.fwd_unop op abs.float }
-
-    | O_plus T_int | O_minus T_int ->
-      {bottom with int = I.fwd_unop op abs.int}
-
-    | O_plus T_float | O_minus T_float ->
-      {bottom with float = F.fwd_unop op abs.float}
-
-    | _ ->
-      Debug.fail "fwd_unop %a not implemented" Framework.Pp.pp_operator op
+  let fwd_unop op abs = {
+    bottom with
+    int = I.fwd_unop op abs.int;
+    float = F.fwd_unop op abs.float;
+  }
 
   (** Filtering functions *)
   let assume_true abs = {
-    none = N.bottom;
-    bool = B.meet abs.bool (B.singleton true);
-    string = S.filter (fun s -> s <> "") abs.string;
+    abs with
     int = I.assume_true abs.int;
     float = F.assume_true abs.float;
-    notimplem = abs.notimplem;
   }
 
 
   let assume_false abs = {
-    none = abs.none;
-    bool = B.meet abs.bool (B.singleton false);
-    string = S.filter (fun s -> s = "") abs.string;
+    abs with
     int = I.assume_false abs.int;
     float = F.assume_false abs.float;
-    notimplem = NI.bottom;
   }
 
   (** Forwared evaluation of binary operators *)
-  let fwd_binop op abs1 abs2 =
-    match op with
-    | O_plus T_int | O_minus T_int | O_mult T_int | O_mod T_int  ->
-      {
-        bottom with
-        int = I.fwd_binop op abs1.int abs2.int;
-      }
-
-    | O_plus T_float | O_minus T_float | O_mult T_float | O_mod T_float ->
-      {
-        bottom with
-        float = F.fwd_binop op abs1.float abs2.float;
-      }
-
-    | O_pow ->
-      {
-        bottom with
-        int = I.fwd_binop op abs1.int abs2.int;
-        float = F.fwd_binop op abs1.float abs2.float;
-      }
-
-    | O_div T_float ->
-      {
-        bottom with
-        float = F.fwd_binop op abs1.float abs2.float;
-      }
-
-    | O_py_floor_div ->
-      {
-        bottom with
-        (* FIXME : use operator types *)
-        int = I.fwd_binop math_div abs1.int abs2.int;
-      }
-
-    | O_bit_and
-    | O_bit_or
-    | O_bit_xor
-    | O_bit_lshift
-    | O_bit_rshift
-      ->
-      {
-        bottom with
-        int = I.fwd_binop op abs1.int abs2.int;
-        bool = B.fold (fun b1 acc ->
-            B.fold (fun b2 acc ->
-                let op =
-                  match op with
-                    O_bit_and -> (&&)
-                  | O_bit_or -> (||)
-                  | O_bit_xor -> (<>)
-                  | _ -> assert false
-                in
-                B.singleton (op b1 b2) |> B.join acc
-              ) abs2.bool acc
-          ) abs1.bool B.bottom
-      }
-
-    | _ ->
-      Debug.fail "fwd_binop %a not implemented" Framework.Pp.pp_operator op
+  let fwd_binop op abs1 abs2 = {
+    bottom with
+    int = I.fwd_binop op abs1.int abs2.int;
+    float = F.fwd_binop op abs1.float abs2.float;
+  }
 
   let mk_true = boolean (B.singleton true)
   let mk_false = boolean (B.singleton false)
 
   let fwd_filter op abs1 abs2 =
-    match op with
-    | O_eq -> not @@ is_bottom @@ meet abs1 abs2
-    | O_ne ->
-      (is_bottom @@ meet abs1 abs2) ||
-      (
-        not @@ S.is_bottom abs1.string ||
-        not @@ S.is_bottom abs2.string &&
-        (
-          S.is_bottom @@ S.meet abs1.string abs2.string ||
-          try
-            (S.cardinal abs1.string > 1) ||
-            (S.cardinal abs2.string > 1)
-          with Top.Found_TOP -> true
-        )
-      ) ||
-      (I.fwd_filter op abs1.int abs2.int) ||
-      (F.fwd_filter op abs1.float abs2.float)
-
-    | O_lt ->
-      (B.mem false abs1.bool && B.mem true abs1.bool) ||
-      (I.fwd_filter op abs1.int abs2.int) ||
-      (F.fwd_filter op abs1.float abs2.float)
-    | O_le ->
-      (not @@ B.is_bottom @@ B.meet abs1.bool abs2.bool) ||
-      (B.mem false abs1.bool && B.mem true abs1.bool) ||
-      (I.fwd_filter op abs1.int abs2.int) ||
-      (F.fwd_filter op abs1.float abs2.float)
-    | O_gt ->
-      (B.mem true abs1.bool && B.mem false abs1.bool) ||
-      (I.fwd_filter op abs1.int abs2.int) ||
-      (F.fwd_filter op abs1.float abs2.float)
-    | O_ge ->
-      (not @@ B.is_bottom @@ B.meet abs1.bool abs2.bool) ||
-      (B.mem true abs1.bool && B.mem false abs1.bool) ||
-      (I.fwd_filter op abs1.int abs2.int) ||
-      (F.fwd_filter op abs1.float abs2.float)
-
-    | _ -> assert false
+    (I.fwd_filter op abs1.int abs2.int) ||
+    (F.fwd_filter op abs1.float abs2.float)
 
 
   let bwd_unop op abs rabs =
-    match op with
-    | O_sqrt ->
-      Framework.Exceptions.panic "bwd evaluation of sqrt not supported"
-    (* FIXME : use operator types *)
-    | O_minus _ ->
-      {bottom with int = I.bwd_unop op abs.int rabs.int; float = F.bwd_unop op abs.float rabs.float}
-    (* FIXME : use operator types *)
-    | O_plus _ ->
-      {bottom with int = abs.int; float = abs.float}
-
-    | _ ->
-      assert false
+    {bottom with
+     int = I.bwd_unop op abs.int rabs.int;
+     float = F.bwd_unop op abs.float rabs.float
+    }
 
   (** Backward evaluation of binary operators *)
   let bwd_binop_default abs1 abs2 = (abs1, abs2)
   let bwd_binop op abs1 abs2 rabs =
-    match op with
-    (* FIXME : use operator types *)
-    | O_plus _ | O_minus _ | O_mult _ | O_div _ | O_mod _ ->
-      let int1, int2 = I.bwd_binop op abs1.int abs2.int rabs.int in
-      let float1, float2 = F.bwd_binop op abs1.float abs2.float rabs.float in
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-    (* FIXME : use operator types *)
-    | O_pow
-    | O_py_and
-    | O_py_or
-    | O_py_floor_div
-    | O_bit_and
-    | O_bit_or
-    | O_bit_xor
-    | O_bit_lshift
-    | O_bit_rshift
-    | O_py_is
-    | O_py_is_not
-      ->
-      bwd_binop_default abs1 abs2
-
-    | _ ->
-      assert false
+    let int1, int2 = I.bwd_binop op abs1.int abs2.int rabs.int in
+    let float1, float2 = F.bwd_binop op abs1.float abs2.float rabs.float in
+    {abs1 with int = int1; float = float1},
+    {abs2 with int = int2; float = float2}
 
   (** Backward filters of comparison operators *)
   let bwd_filter op abs1 abs2 =
     let int1, int2 = I.bwd_filter op abs1.int abs2.int in
     let float1, float2 = F.bwd_filter op abs1.float abs2.float in
-
-    match op with
-    | O_eq ->
-      let abs = meet abs1 abs2 in
-      {abs with int = int1; float = float1},
-      {abs with int = int2; float = float2}
-
-    | O_ne ->
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-
-    | O_lt ->
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-
-    | O_le ->
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-
-    | O_gt ->
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-
-    | O_ge ->
-      {abs1 with int = int1; float = float1},
-      {abs2 with int = int2; float = float2}
-
-    | _ -> assert false
+    {abs1 with int = int1; float = float1},
+    {abs2 with int = int2; float = float2}
 
 end
 
@@ -481,6 +324,24 @@ module Domain =
 struct
 
   include Universal.Nonrel.Domain.Make(Value)
+
+  let print fmt m =
+    Format.fprintf fmt "values: @[%a@]@\n" print m
+
+  let init man ctx prog flow = ctx, set_domain_cur top man flow
+
+  let exec man ctx stmt flow =
+    match skind stmt with
+    (* S⟦ v = e ⟧ *)
+    | S_assign({ekind = E_var {vkind = V_py_value_var _}}, e, mode) ->
+      debug "assign value";
+      exec man ctx stmt flow
+
+    | S_assume(e) when not (is_py_expr e) ->
+      exec man ctx stmt flow
+
+    | _ -> None
+
 
 end
 
