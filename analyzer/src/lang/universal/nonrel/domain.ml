@@ -283,48 +283,36 @@ struct
 
 
     | S_assign({ekind = E_var var}, e, (STRONG | EXPAND)) ->
-      man.eval ctx e flow |>
-      eval_to_exec
-        (fun e flow ->
-           map_domain_cur (fun a ->
-               let v = eval_value a e in
-               VarMap.add var v a
-             ) man flow
-        )
-        (man.exec ctx) man.flow |>
+      map_domain_cur (fun a ->
+          let v = eval_value a e in
+          VarMap.add var v a
+        ) man flow
+      |>
       return_flow
 
     | S_assign({ekind = E_var var}, e, WEAK) ->
-      man.eval ctx e flow |>
-      eval_to_exec
-        (fun e flow ->
-           map_domain_cur (fun a ->
-               let v = eval_value a e in
-               let a' = VarMap.add var v a in
-               join a a'
-             ) man flow
-        )
-        (man.exec ctx) man.flow |>
+      map_domain_cur (fun a ->
+          let v = eval_value a e in
+          let a' = VarMap.add var v a in
+          join a a'
+        ) man flow
+      |>
       return_flow
 
     | S_assume e ->
-      man.eval ctx e flow |>
-      eval_to_exec
-        (fun e flow ->
-           debug "assume %a" Framework.Pp.pp_expr e;
-           map_domain_cur (fun a ->
-               debug "cur = %a" print a;
-               let (_,r) as t = annotate_expr a e in
-               debug "post annotate %a" Value.print r;
-               let rr = Value.assume_true r in
-               debug "assume true %a" Value.print rr;
-               if Value.is_bottom rr then bottom else
-                 let a' = refine_expr a t rr in
-                 debug "post refine %a" print a';
-                 a'
-             ) man flow
-        )
-        (man.exec ctx) man.flow |>
+      debug "assume %a" Framework.Pp.pp_expr e;
+      map_domain_cur (fun a ->
+          debug "cur = %a" print a;
+          let (_,r) as t = annotate_expr a e in
+          debug "post annotate %a" Value.print r;
+          let rr = Value.assume_true r in
+          debug "assume true %a" Value.print rr;
+          if Value.is_bottom rr then bottom else
+            let a' = refine_expr a t rr in
+            debug "post refine %a" print a';
+            a'
+        ) man flow
+      |>
       return_flow
 
     | _ -> fail
