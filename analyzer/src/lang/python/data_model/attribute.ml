@@ -253,39 +253,47 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
       eval_list [obj; attr] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
-          match el with
-          | [_; {ekind = E_constant (C_string  ("__dict__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__class__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__bases__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__name__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__qualname__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__mro__" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("mro" as attr))}]
-          | [_; {ekind = E_constant (C_string  ("__subclass__" as attr))}] ->
-            Framework.Exceptions.panic_at range "calls to hasattr on special attribute %s not supported" attr
-
-          | [eobj; {ekind = E_constant (C_string attr)}] ->
-            let obj = object_of_expr eobj in
-            if_flow_eval
-              (assume_is_attribute obj attr man ctx)
-              (assume_is_not_attribute obj attr man ctx)
-              (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
-              (fun false_flow ->
-                 let mro = Addr.mro obj in
-                 let rec aux flow = function
-                   | [] -> oeval_singleton (Some (mk_false range), false_flow, [])
-                   | cls :: tl ->
-                     (* Check existence of the attribute in the class *)
-                     if_flow_eval
-                       (assume_is_attribute cls attr man ctx)
-                       (assume_is_not_attribute cls attr man ctx)
-                       (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
-                       (fun false_flow -> aux false_flow tl)
-                       man flow ()
-                 in
-                 aux false_flow mro
-              )
-              man flow ()
+          (* FIXME: attr are no longer constants, but objects! *)
+          let eobj, eattr = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+          match Addr.type_of_object @@ object_of_expr eattr with
+          | T_string ->
+            let ev = value_of_object @@ object_of_expr eattr |> Option.none_to_exn in
+            let s = man.ask ctx (Memory.Query.QString ev) flow |> Option.none_to_exn in
+            if Memory.Value.S.is_top s then
+              Framework.Exceptions.panic_at range "hasattr: top argument"
+            else
+            if Memory.Value.S.exists (
+                function
+                | "__dict__" | "__class__" | "__bases__" | "__name__"
+                | "__qualname__"| "__mro__" | "mro" | "__subclass__" -> true
+                | _ -> false
+              ) s then
+              Framework.Exceptions.panic_at range "calls to hasattr on special attributes not supported"
+            else
+              Memory.Value.S.fold (fun attr acc ->
+                  let obj = object_of_expr eobj in
+                  if_flow_eval
+                    (assume_is_attribute obj attr man ctx)
+                    (assume_is_not_attribute obj attr man ctx)
+                    (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
+                    (fun false_flow ->
+                       let mro = Addr.mro obj in
+                       let rec aux flow = function
+                         | [] -> oeval_singleton (Some (mk_false range), false_flow, [])
+                         | cls :: tl ->
+                           (* Check existence of the attribute in the class *)
+                           if_flow_eval
+                             (assume_is_attribute cls attr man ctx)
+                             (assume_is_not_attribute cls attr man ctx)
+                             (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
+                             (fun false_flow -> aux false_flow tl)
+                             man flow ()
+                       in
+                       aux false_flow mro
+                    )
+                    man flow () |>
+                  oeval_join acc
+                ) s None                
 
           | _ ->
             let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in

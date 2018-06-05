@@ -11,6 +11,7 @@
 type _ Framework.Query.query +=
   | QBool : Framework.Ast.expr -> Value.B.t Framework.Query.query
   | QInt : Framework.Ast.expr -> Value.I.t Framework.Query.query
+  | QString : Framework.Ast.expr -> Value.S.t Framework.Query.query
 
 let () =
   Framework.Query.(
@@ -36,6 +37,18 @@ let () =
                 );
       join = Value.I.join;
       meet = Value.I.meet;
+    };
+
+    register_reply_manager {
+      domatch = (let check : type a. a query -> (a, Value.S.t) eq option =
+                   function
+                   | QString _ -> Some Eq
+                   | _ -> None
+                 in
+                 check
+                );
+      join = Value.S.join;
+      meet = Value.S.meet;
     };
 
   )

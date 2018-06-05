@@ -109,7 +109,8 @@ and pp_range fmt range =
   | Range_file f ->
     Format.fprintf fmt "%s" f
   | Range_fresh uid ->
-    Format.fprintf fmt "!%d" uid
+    (* Format.fprintf fmt "!%d" uid *)
+    ()
   | Range_tagged (t, r) ->
     Format.fprintf fmt "%a<%s>" pp_range r t
 

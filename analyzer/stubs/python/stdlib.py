@@ -230,7 +230,7 @@ class str(object):
     def expandtabs(self): pass
     def find(self): pass
     def format(self): pass
-    def format(self)_ pass
+    def format(self): pass
     def index(self): pass
     def isalnum(self): pass
     def isalpha(self): pass
