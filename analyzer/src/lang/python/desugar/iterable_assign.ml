@@ -59,7 +59,7 @@ struct
       mk_try
         block
         [mk_except
-           (Some (mk_addr (Addr.find_builtin "StopIteration") (tag_range range "stop iter")))
+           (Some (mk_py_object (Addr.find_builtin "StopIteration") (tag_range range "stop iter")))
            None
            (Utils.mk_builtin_raise "ValueError" (tag_range range "error raise"))
         ]

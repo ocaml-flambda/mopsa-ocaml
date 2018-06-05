@@ -16,7 +16,8 @@ open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
-
+open Addr
+    
 let name = "python.desugar.with"
 
 module Domain =
@@ -30,20 +31,21 @@ struct
       let erange = context.erange in
       (* Evaluate the context *)
       man.eval ctx context flow |>
-      eval_to_exec (fun context flow ->
+      eval_to_exec (fun econtext flow ->
           (* Enter the context *)
-          let cls = Addr.classof @@ addr_of_expr context in
-          let eenter = mk_py_call (mk_py_addr_attr cls "__enter__" erange) [context] erange in
+          let context = object_of_expr econtext in
+          let cls = Addr.class_of_object context in
+          let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
           let flow =
             match target with
-            | None -> debug "no target"; man.exec ctx (mk_stmt (S_expression eenter) srange)  flow
-            | Some x -> debug "target %a" Framework.Pp.pp_expr x; man.exec ctx (mk_assign x eenter srange) flow
+            | None -> man.exec ctx (mk_stmt (S_expression eenter) srange)  flow
+            | Some x -> man.exec ctx (mk_assign x eenter srange) flow
           in
 
           (* Execute body *)
           let tmpexn = mktmp () in
           let tmpret = mktmp () in
-          let eexit e1 e2 e3 = mk_py_call (mk_py_addr_attr cls "__exit__" erange) [context; e1; e2; e3] erange in
+          let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
           let stmt =
             mk_try
               (mk_block [
@@ -59,7 +61,7 @@ struct
                   )
                 ] srange)
               [mk_except
-                 (Some (mk_addr (Addr.find_builtin "BaseException") srange))
+                 (Some (mk_py_object (Addr.find_builtin "BaseException") srange))
                  (Some tmpexn)
                  (mk_block [
                      (* In case of exception, call __exit__ and give the exception as argument *)

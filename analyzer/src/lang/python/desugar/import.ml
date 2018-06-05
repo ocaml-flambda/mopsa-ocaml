@@ -34,24 +34,24 @@ struct
       Framework.Exceptions.panic_at range "import from sub-module %s not supported" modul
 
     | S_py_import(modul, vasname, vroot) ->
-      let addr, flow = import_module man ctx modul range flow in
+      let obj, flow = import_module man ctx modul range flow in
       let v = match vasname with
         | None -> vroot
         | Some v -> v
       in
-      man.exec ctx (mk_assign (mk_var v range) (mk_addr addr range) range) flow |>
+      man.exec ctx (mk_assign (mk_var v range) (mk_py_object obj range) range) flow |>
       return
 
     | S_py_import_from(modul, name, _, vmodul) ->
-      let addr, flow = import_module man ctx modul range flow in
+      let obj, flow = import_module man ctx modul range flow in
       let e =
-        match addr.addr_kind with
+        match Addr.kind_of_object obj with
         | A_py_module(M_user(_, globals)) ->
           let v = List.find (fun v -> v.vname = name) globals in
           mk_var v range
         | A_py_module(M_builtin m) ->
-          let addr = Addr.find_builtin_attribute addr name in
-          mk_addr addr range
+          let obj = Addr.find_builtin_attribute obj name in
+          mk_py_object obj range
         | _ -> assert false
       in
       man.exec ctx (mk_assign (mk_var vmodul range) e range) flow |>
@@ -63,7 +63,7 @@ struct
 
   (** Search for the module in the search path and parse its body *)
   and import_module man ctx name range flow =
-    if Addr.is_builtin name then
+    if Addr.is_builtin_name name then
       Addr.find_builtin name, flow
     else
       let dir =
@@ -86,7 +86,7 @@ struct
         }
         in
         let flow' = man.exec ctx body flow in
-        addr, flow'
+        (addr, None), flow'
 
 
   (** Parse and import a builtin module *)
@@ -122,10 +122,10 @@ struct
           let addr = {
             addr_kind = A_py_class (kind, bases);
             addr_range = range;
-            addr_uid = -1;
+            addr_uid = 0;
           }
           in
-          Addr.add_builtin_class addr ();
+          Addr.add_builtin_class (addr, None) ();
           parse (Some name) cls.py_cls_body
 
         | S_py_function(fundec) ->
@@ -139,15 +139,15 @@ struct
           let addr = {
             addr_kind = A_py_function kind;
             addr_range = range;
-            addr_uid = -1;
+            addr_uid = 0;
           }
           in
-          Addr.add_builtin_function addr ()
+          Addr.add_builtin_function (addr, None) ()
 
         | S_block(block) ->
           List.iter (parse base) block
 
-        | S_py_import(name, _, _) when Addr.is_builtin name -> ()
+        | S_py_import(name, _, _) when Addr.is_builtin_name name -> ()
 
         | _ -> Framework.Exceptions.fail "stmt %a not supported in %s" Framework.Pp.pp_stmt stmt file
 
@@ -160,7 +160,7 @@ struct
           addr_uid = 0;
         }
         in
-        Addr.add_builtin_module addr ()
+        Addr.add_builtin_module (addr, None) ()
       else
         ()
 

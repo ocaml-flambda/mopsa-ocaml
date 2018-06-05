@@ -49,12 +49,12 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
         {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
       ], []) ->
       oeval_singleton (Some (mk_z_interval l u range), flow, [])
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [l; u], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
       begin
         match ekind l, ekind u with
         | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_z_interval l u range), flow, [])
@@ -68,10 +68,10 @@ struct
           oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
       end
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_int")}}, [], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
       oeval_singleton (Some (mk_top T_int range), flow, [])
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_float")}}, [l; u], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
       begin
         match ekind l, ekind u with
         | E_constant (C_float l), E_constant (C_float u) -> oeval_singleton (Some (mk_float_interval l u range), flow, [])
@@ -88,18 +88,18 @@ struct
           oeval_singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
       end
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_float")}}, [], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
       oeval_singleton (Some (mk_top T_float range), flow, [])
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_bool")}}, [], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
       oeval_singleton (Some (mk_top T_bool range), flow, [])
 
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.random_string")}}, [], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
       oeval_singleton (Some (mk_top T_string range), flow, [])
 
     (* Calls to mopsa.assert_equal function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)},
         [x; y], []
       ) ->
       let range = erange exp in
@@ -107,7 +107,7 @@ struct
 
     (* Calls to mopsa.assert_true function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_true")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_true")}, _)},
         [x], []
       ) ->
       let range = erange exp in
@@ -115,14 +115,14 @@ struct
 
     (* Calls to mopsa.assert_false function *)
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_false")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_false")}, _)},
         [x], []
       )  ->
       let range = erange exp in
       check man ctx (mk_not x (tag_range range "not")) range flow
 
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)},
         [cond], []
       )  ->
       let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
@@ -130,7 +130,7 @@ struct
       oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
 
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
         [], []
       )  ->
       begin
@@ -159,7 +159,7 @@ struct
       end
 
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}},
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)},
         [], []
       )  ->
       begin
@@ -185,8 +185,8 @@ struct
       end
 
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}},
-        [{ekind = E_addr cls}], []
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)},
+        [{ekind = E_py_object cls}], []
       )  ->
       begin
         debug "begin assert_exception";
@@ -212,8 +212,8 @@ struct
 
 
     | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}},
-        [{ekind = E_addr cls}], []
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)},
+        [{ekind = E_py_object cls}], []
       )  ->
       begin
         let error_env = man.flow.fold (fun acc env -> function

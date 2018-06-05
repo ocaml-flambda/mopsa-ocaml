@@ -31,8 +31,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 (*==========================================================================*)
 
 type token +=
-  | TExn of addr (** address of the exception instance *)
-
+  | TExn of py_object (** Flows emerging from a raised exception instance *)
 
 
 (*==========================================================================*)
@@ -84,31 +83,29 @@ struct
       man.eval ctx exp flow |>
       eval_to_oexec (fun exp flow ->
           match ekind exp with
-          | E_addr ({addr_kind = A_py_instance _} as addr) ->
-            if Addr.isinstance addr (Addr.find_builtin "BaseException") then
+          | E_py_object obj ->
+            if Addr.isinstance obj (Addr.find_builtin "BaseException") then
               let cur = man.flow.get TCur flow in
-              let flow' = man.flow.add (TExn addr) cur flow |>
+              let flow' = man.flow.add (TExn obj) cur flow |>
                           man.flow.set TCur man.env.bottom
               in
               return flow'
             else
+            if Addr.isclass obj then
+              eval_alloc_instance man ctx obj None range flow |>
+              oeval_to_oexec (fun obj flow ->
+                  exec man ctx {stmt with skind = S_py_raise(Some (mk_py_object obj range))} flow
+                ) (man.exec ctx) man.flow
+            else
               man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow |>
               return
 
-          | E_addr ({addr_kind = A_py_class _} as cls) ->
-            eval_alloc_instance man ctx cls None range flow |>
-            oeval_to_oexec (fun addr flow ->
-                exec man ctx {stmt with skind = S_py_raise(Some (mk_addr addr range))} flow
-              ) (man.exec ctx) man.flow
-          | _ ->
-            man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow |>
-            return
+          | _ -> assert false
         ) (man.exec ctx) man.flow
 
 
     | S_py_raise None ->
       Framework.Exceptions.panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
-
 
     | _ -> None
 
@@ -135,25 +132,25 @@ struct
         (* Add exception that match expression e *)
         man.flow.fold (fun acc env tk ->
             match tk with
-            | TExn eaddr ->
+            | TExn exn ->
               (* Evaluate e in env to check if it corresponds to eaddr *)
               let flow = man.flow.set TCur env flow0 in
               let flow' =
                 man.eval ctx e flow |>
                 eval_to_exec (fun e flow ->
                     match ekind e with
-                    | E_addr cls ->
-                      if Addr.issubclass cls (Addr.find_builtin "BaseException") then
-                        if not (Addr.isinstance eaddr cls) then
+                    | E_py_object obj ->
+                      if Addr.issubclass obj (Addr.find_builtin "BaseException") then
+                        if not (Addr.isinstance exn obj) then
                           man.flow.set TCur man.env.bottom flow
                         else
                           match excpt.py_excpt_name with
                           | None -> flow
-                          | Some v -> man.exec ctx (mk_assign (mk_var v range) (mk_addr eaddr range) range) flow
+                          | Some v -> man.exec ctx (mk_assign (mk_var v range) (mk_py_object exn range) range) flow
                       else
                         man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
 
-                    | _ -> man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
+                    | _ -> assert false
                   ) (man.exec ctx) man.flow
               in
               man.flow.fold (fun acc env tk ->
@@ -180,16 +177,16 @@ struct
       | Some e ->
         man.flow.fold (fun acc env tk ->
             match tk with
-            | TExn eaddr ->
-              (* Evaluate e in env to check if it corresponds to eaddr *)
+            | TExn exn ->
+              (* Evaluate e in env to check if it corresponds to exn *)
               let flow = man.flow.set TCur env flow0 in
               let flow' =
                 man.eval ctx e flow |>
                 eval_to_exec (fun e flow ->
                     match ekind e with
-                    | E_addr cls ->
-                      if Addr.issubclass cls (Addr.find_builtin "BaseException") && not (Addr.isinstance eaddr cls) then
-                        man.flow.add (TExn eaddr) env flow
+                    | E_py_object obj ->
+                      if Addr.issubclass obj (Addr.find_builtin "BaseException") && not (Addr.isinstance exn obj) then
+                        man.flow.add (TExn exn) env flow
                       else
                         flow
                     | _ -> flow
@@ -212,15 +209,11 @@ struct
         let alarms = man.flow.fold (fun acc env tk ->
             match tk with
             | TExn exn ->
-              let exn_name =
-                match exn.addr_kind with
-                | A_py_instance({addr_kind = A_py_class(C_user(cls), _)}, _) -> cls.py_cls_var.vname
-                | A_py_instance({addr_kind = A_py_class(C_builtin(name), _)}, _) -> name
-                | _ -> assert false
-              in
+              let exn_name = Addr.class_of_object exn |> Addr.object_name in
+              let range = Addr.addr_of_object exn |> Universal.Ast.range_of_addr in
               let alarm = {
                 alarm_kind = Alarm.UncaughtException(exn_name);
-                alarm_range = exn.addr_range;
+                alarm_range = range;
                 alarm_level = ERROR;
               }
               in
@@ -238,6 +231,6 @@ end
 let setup () =
   register_domain name (module Domain);
   register_pp_token (fun next fmt -> function
-      | TExn(exn) -> Format.fprintf fmt "exn:%a" Universal.Pp.pp_addr exn
+      | TExn(exn) -> Format.fprintf fmt "exn:%a" Pp.pp_py_object exn
       | tk -> next fmt tk
     )

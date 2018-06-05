@@ -116,7 +116,7 @@ let to_universal_type t =
       T_float
   else
     match t with
-    | T_int | T_float | T_bool | T_any | T_empty | T_c_void -> t
+    | T_int | T_float | T_bool | T_any | T_c_void -> t
     | _ -> Debug.fail "[to_universal_type] in machine_integers called on non scalar type ; %a" Framework.Pp.pp_typ t
 
 let var_machine_integers v =

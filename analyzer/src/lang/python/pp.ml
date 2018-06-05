@@ -13,7 +13,6 @@ open Framework.Ast
 open Framework.Pp
 open Ast
 open Format
-open Addr
 
 let pp_except fmt e =
   fprintf fmt "except %a%a:@\n@[<h 2>  %a@]"
@@ -27,6 +26,10 @@ let pp_except fmt e =
     ) e.py_excpt_name
     pp_stmt e.py_excpt_body
 
+let pp_py_object fmt (obj: py_object) =
+  match obj with
+  | (addr, None) -> Universal.Pp.pp_addr fmt addr
+  | (addr, Some e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Pp.pp_addr addr pp_expr e 
 
 let () =
   register_pp_program (fun default fmt prog ->
@@ -63,7 +66,7 @@ let () =
       match ekind exp with
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
-      | E_py_addr_value(a, e) -> fprintf fmt "⟪%a, %a⟫" pp_expr e Universal.Pp.pp_addr a
+      | E_py_object obj -> pp_py_object fmt obj
       | E_py_attribute(obj, attr) ->
         fprintf fmt "pyattr %a.%s" pp_expr obj attr
       | E_py_list(elts) ->

@@ -42,11 +42,11 @@ struct
         else F_user func
       in
       Addr.eval_alloc man ctx (A_py_function kind) stmt.srange flow |>
-      oeval_to_oexec (fun addr flow ->
+      oeval_to_oexec (fun obj flow ->
           man.exec ctx
             (mk_assign
                (mk_var func.py_func_var range)
-               (mk_addr addr range)
+               (mk_py_object obj range)
                range
             ) flow |>
           return
@@ -61,11 +61,7 @@ struct
     match ekind exp with
     (* Calls to user-defined functions are translated to {!Universal.Ast.E_call}
        in order to be handled by other domains *)
-    | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_function(F_user pyfundec)}},
-        args,
-        []
-      ) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, []) ->
       (* First check the correct number of arguments *)
       let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
 
@@ -144,22 +140,9 @@ struct
           let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
           re_eval_singleton (man.eval ctx) evl
 
-    | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_method(f, obj)}},
-        args,
-        []
-      ) ->
-      let exp' = mk_py_call (mk_addr f range) ((mk_addr obj range) :: args) range in
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, obj)}, _)}, args, []) ->
+      let exp' = mk_py_call (mk_py_object f range) ((mk_py_object obj range) :: args) range in
       re_eval_singleton (man.eval ctx) (Some exp', flow, [])
-
-    | E_py_call(
-        {ekind = E_addr {addr_kind = A_py_method_atomic(f, obj)}},
-        args,
-        []
-      ) ->
-      let exp' = mk_py_call (mk_addr f range) (obj :: args) range in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
-
 
     | _ -> None
 

@@ -33,43 +33,36 @@ struct
     | E_py_index_subscript(obj, index) ->
       eval_list [obj; index] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
-          let obj, index = match el with [obj; index] -> obj, index | _ -> assert false in
-          let cls = classof @@ addr_of_expr obj in
+          let eobj, index = match el with [obj; index] -> obj, index | _ -> assert false in
+          let obj = object_of_expr eobj in
+          let cls = Addr.class_of_object obj in
 
-          let ok_cond = Utils.mk_addr_hasattr cls "__getitem__" range in
-          let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
-          let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
-
-          let ok_case =
-            if man.flow.is_cur_bottom ok_flow then None
-            else
-              let exp' = mk_py_call (mk_py_addr_attr cls "__getitem__" range) [obj; index] range in
-              re_eval_singleton (man.eval ctx) (Some exp', ok_flow, [])
-          in
-
-          let error_case =
-            if man.flow.is_cur_bottom error_flow then None
-            else
-              let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) error_flow in
-              oeval_singleton (None, flow, [])
-          in
-
-          oeval_join ok_case error_case
-
+          Universal.Utils.assume_to_eval
+            (Utils.mk_object_hasattr cls "__getitem__" range)
+            (fun true_flow ->
+              let exp' = mk_py_call (mk_py_object_attr cls "__getitem__" range) [eobj; index] range in
+              re_eval_singleton (man.eval ctx) (Some exp', true_flow, [])
+            )
+            (fun false_flow ->
+               let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow in
+               oeval_singleton (None, flow, [])
+            )
+            man ctx flow ()
         )
 
     | E_py_slice_subscript(obj, start, stop, step) ->
       eval_list [obj; start; stop; step] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
-          let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-          let cls = classof @@ addr_of_expr obj in
+          let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
+          let obj = object_of_expr eobj in
+          let cls = Addr.class_of_object obj in
 
           Universal.Utils.assume_to_eval
-            (Utils.mk_addr_hasattr cls "__getitem__" range)
+            (Utils.mk_object_hasattr cls "__getitem__" range)
             (fun true_flow ->
                man.eval ctx (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                eval_compose (fun slice flow ->
-                   let exp' = mk_py_call (mk_py_addr_attr cls "__getitem__" range) [obj; slice] range in
+                   let exp' = mk_py_call (mk_py_object_attr cls "__getitem__" range) [eobj; slice] range in
                    re_eval_singleton (man.eval ctx) (Some exp', flow, [])
                  )
             )
@@ -90,44 +83,37 @@ struct
       eval_list [exp; obj; index] (man.eval ctx) flow |>
       eval_to_exec
         (fun el flow ->
-          let exp, obj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
-          let cls = classof @@ addr_of_expr obj in
-          let ok_cond = Utils.mk_addr_hasattr cls "__setitem__" range in
-          let ok_flow = man.exec ctx (mk_assume ok_cond range) flow in
-          let error_flow = man.exec ctx (mk_assume (mk_not ok_cond range) range) flow in
+           let exp, eobj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
+           let obj = object_of_expr eobj in
+           let cls = Addr.class_of_object obj in
 
-          let ok_case =
-            if man.flow.is_cur_bottom ok_flow then
-                man.flow.bottom
-            else
-              let exp' = mk_py_call (mk_py_addr_attr cls "__setitem__" range) [obj; index; exp] range in
-              man.exec ctx {stmt with skind = S_expression(exp')} ok_flow
-          in
-
-          let error_case =
-            if man.flow.is_cur_bottom error_flow then
-              man.flow.bottom
-            else
-              man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow
-          in
-
-          man.flow.join ok_case error_case
-
+           Universal.Utils.assume_to_exec
+             (Utils.mk_object_hasattr cls "__setitem__" range)
+             (fun true_flow ->
+                let exp' = mk_py_call (mk_py_object_attr cls "__setitem__" range) [eobj; index; exp] range in
+                man.exec ctx {stmt with skind = S_expression(exp')} true_flow
+             )
+             (fun false_flow ->
+                man.exec ctx (Utils.mk_builtin_raise "TypeError" range) false_flow
+             )
+             man ctx flow ()
+             
         ) (man.exec ctx) man.flow |>
       return
 
     | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp, mode) ->
-      eval_list [obj; start; stop; step] (man.eval ctx) flow |>
+      eval_list [exp; obj; start; stop; step] (man.eval ctx) flow |>
       eval_to_exec (fun el flow ->
-          let obj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-          let cls = classof @@ addr_of_expr obj in
+          let exp, eobj, start, stop, step = match el with [exp; obj; start; stop; step] -> exp, obj, start, stop, step | _ -> assert false in
+           let obj = object_of_expr eobj in
+           let cls = Addr.class_of_object obj in
 
           Universal.Utils.assume_to_exec
-            (Utils.mk_addr_hasattr cls "__setitem__" range)
+            (Utils.mk_object_hasattr cls "__setitem__" range)
             (fun true_flow ->
                man.eval ctx (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                eval_to_exec (fun slice flow ->
-                   let exp' = mk_py_call (mk_py_addr_attr cls "__setitem__" range) [obj; slice; exp] range in
+                   let exp' = mk_py_call (mk_py_object_attr cls "__setitem__" range) [eobj; slice; exp] range in
                    man.exec ctx {stmt with skind = S_expression(exp')} flow
                  ) (man.exec ctx) man.flow
             )

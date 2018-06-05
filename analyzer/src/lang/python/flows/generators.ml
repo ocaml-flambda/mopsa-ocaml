@@ -27,18 +27,18 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 
 type token +=
-  | TGenStart of addr
+  | TGenStart of py_object
   (** Initial generator flows *)
 
-  | TGenNext of addr * range
+  | TGenNext of py_object * range
   (** Flows starting from a call to __next__ that should resume
       execution at the given location point *)
 
-  | TGenYield of addr * expr * range
+  | TGenYield of py_object * expr * range
   (** Flow starting from a yield expression and suspended until
       reaching the calling next statement *)
 
-  | TGenStop of addr
+  | TGenStop of py_object
   (** Flows reaching the end of the generator *)
 
 
@@ -47,34 +47,39 @@ type token +=
    generator in order to keep separate variables of different
    instances, while allowing the inference of relations. *)
 type var_kind +=
-  | V_gen_frame of addr (** address of the instance *)
+  | V_gen_frame of py_object (** generator instance *)
 
-let mk_framed_var v addr =
+let mk_framed_var v obj =
   match vkind v with
-  | V_orig -> {v with vkind = V_gen_frame addr}
+  | V_orig -> {v with vkind = V_gen_frame obj}
   | V_gen_frame _ -> v
   | _ -> assert false
 
 
 (** The current generator being analyzed is stored in the context. *)
 type _ Framework.Context.key +=
-  | KCurGenerator: addr Framework.Context.key
+  | KCurGenerator: py_object Framework.Context.key
 
 
 module Domain = struct
 
+  let get_generator_function obj =
+    match kind_of_object obj with
+    | A_py_instance(_, Some (Generator f)) -> f
+    | _ -> assert false
+  
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     (* E⟦ g(e1, e2, ...) | is_generator(g) ⟧ *)
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_user func)})}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_user func)}, _)}, args, [])
       when func.py_func_is_generator = true
       ->
       eval_list args (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           (* Create the generator instance *)
           eval_alloc_instance man ctx (Addr.find_builtin "generator") (Some (Generator func)) range flow |>
-          oeval_compose (fun addr flow ->
+          oeval_compose (fun obj flow ->
               let flow0 = flow in
               (* Assign arguments to parameters in a new flow *)
 
@@ -83,7 +88,7 @@ module Domain = struct
                 Framework.Exceptions.panic_at range "generators: only calls with correct number of arguments is supported"
               else
                 (* Change all parameters into framed variables *)
-                let params = List.map (fun v -> mk_framed_var v addr) func.py_func_parameters in
+                let params = List.map (fun v -> mk_framed_var v obj) func.py_func_parameters in
 
                 (* Perform assignments to arguments *)
                 let flow1 = List.fold_left (fun flow (v, e) ->
@@ -95,18 +100,17 @@ module Domain = struct
                 let cur' = man.exec ctx (mk_project_vars params range) flow1 |>
                            man.flow.get TCur
                 in
-                let flow2 = man.flow.add (TGenStart addr) cur' flow0 in
-                oeval_singleton (Some (mk_addr addr range), flow2, [])
+                let flow2 = man.flow.add (TGenStart obj) cur' flow0 in
+                oeval_singleton (Some (mk_py_object obj range), flow2, [])
             )
         )
 
     (* E⟦ generator.__iter__(self) | isinstance(self, generator) ⟧ *)
     | E_py_call(
-        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__iter__")})},
-        [{ekind = E_addr {addr_kind = A_py_instance({addr_kind = A_py_class (C_builtin "generator", _)}, _)}} as self],
-        []
-      ) ->
-      oeval_singleton (Some self, flow, [])
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "generator.__iter__")}, _)},
+        [{ekind = E_py_object self} as arg], []
+      ) when Addr.isinstance self (Addr.find_builtin "generator") ->
+      oeval_singleton (Some arg, flow, [])
 
     (* E⟦ generator.__iter__(self) | ¬ isinstance(self, generator) ⟧ *)
     | E_py_call(
@@ -120,20 +124,22 @@ module Domain = struct
 
     (* E⟦ generator.__next__(self) | isinstance(self, generator) ⟧ *)
     | E_py_call(
-        {ekind = E_addr ({addr_kind = A_py_function (F_builtin "generator.__next__")})},
-        [{ekind = E_addr ({addr_kind = A_py_instance(_, Some (Generator func))} as addr)}],
-        []
-      ) ->
+        {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "generator.__next__")}, _)},
+        [{ekind = E_py_object self}], []
+      ) when Addr.isinstance self (Addr.find_builtin "generator") ->
+
+      let func = get_generator_function self in
+
       (* Keep the input cur environment *)
       let cur = man.flow.get TCur flow in
 
       (* Compute the next tokens *)
       let flow1 = man.flow.fold (fun acc env -> function
           | TCur -> acc
-          | TGenStart(g) when compare_addr g addr = 0 -> man.flow.add TCur env acc
+          | TGenStart(g) when compare_py_object g self = 0 -> man.flow.add TCur env acc
           | TGenNext _ -> acc
 
-          | TGenYield(g, _, r) when compare_addr g addr = 0 -> man.flow.add (TGenNext(g, r)) env acc
+          | TGenYield(g, _, r) when compare_py_object g self = 0 -> man.flow.add (TGenNext(g, r)) env acc
           | TGenYield _ -> acc
 
           | TGenStop(g) -> acc (* this case is handled later *)
@@ -156,23 +162,23 @@ module Domain = struct
       let body' = Framework.Visitor.map_stmt
           (fun expr ->
              match ekind expr with
-             | E_var v when is_local v -> {expr with ekind = E_var (mk_framed_var v addr)}
+             | E_var v when is_local v -> {expr with ekind = E_var (mk_framed_var v self)}
              | _ -> expr
           )
           (fun stmt -> stmt)
           func.py_func_body
       in
       debug "body after variable renaming:@\n @[%a@]" pp_stmt body';
-      let locals' = List.map (fun v -> mk_framed_var v addr) (func.py_func_locals @ func.py_func_parameters) in
+      let locals' = List.map (fun v -> mk_framed_var v self) (func.py_func_locals @ func.py_func_parameters) in
 
       (* Execute the body statement *)
-      let ctx' = Framework.Context.add KCurGenerator addr ctx in
+      let ctx' = Framework.Context.add KCurGenerator self ctx in
       let flow3 = man.exec ctx' body' flow2 in
 
       (* Add the input stop flows  *)
       let flow3 = man.flow.fold (fun acc env tk ->
           match tk with
-          | TGenStop(g) when compare_addr g addr = 0 -> man.flow.add tk env acc
+          | TGenStop(g) when compare_py_object g self = 0 -> man.flow.add tk env acc
           | _ -> acc
         ) flow3 flow
       in
@@ -182,16 +188,16 @@ module Domain = struct
       let flow4 = man.flow.fold (fun acc env tk ->
           match tk with
           | Universal.Flows.Interproc.TReturn _ -> man.flow.add tk env acc
-          | TGenStart(g) when compare_addr g addr <> 0 -> man.flow.add tk env acc
-          | TGenYield(g, _, _) when compare_addr g addr <> 0 -> man.flow.add tk env acc
-          | TGenStop(g) when compare_addr g addr <> 0 -> man.flow.add tk env acc
+          | TGenStart(g) when compare_py_object g self <> 0 -> man.flow.add tk env acc
+          | TGenYield(g, _, _) when compare_py_object g self <> 0 -> man.flow.add tk env acc
+          | TGenStop(g) when compare_py_object g self <> 0 -> man.flow.add tk env acc
           | _ -> acc
         ) man.flow.bottom flow
       in
 
       (* Process the resulting yield, return and exception flows *)
       man.flow.fold (fun acc env -> function
-          | TGenYield(g, e, r) when compare_addr g addr = 0 ->
+          | TGenYield(g, e, r) when compare_py_object g self = 0 ->
             (* Assign the yielded value to a temporary return variable *)
             let tmp = mktmp () in
             let flow = man.flow.set TCur env flow4 |>
@@ -213,7 +219,7 @@ module Domain = struct
 
           | Exceptions.TExn exn ->
             (* Save env in the token TGenStop and re-raise the exception *)
-            let flow = man.flow.add (TGenStop(addr)) env flow4 |>
+            let flow = man.flow.add (TGenStop(self)) env flow4 |>
                        man.flow.set (Exceptions.TExn exn) env
             in
             oeval_singleton (None, flow, []) |>
@@ -222,7 +228,7 @@ module Domain = struct
           | TGenStop _
           | Universal.Flows.Interproc.TReturn _ ->
             (* Save env in the token TGenStop and raise a StopIteration exception *)
-            let flow = man.flow.add (TGenStop(addr)) env flow4 |>
+            let flow = man.flow.add (TGenStop(self)) env flow4 |>
                        man.flow.set TCur env |>
                        man.exec ctx (Utils.mk_builtin_raise "StopIteration" range)
             in
@@ -270,39 +276,39 @@ let setup () =
   (* Flow tokens *)
   let open Format in
   let open Framework.Pp in
-  let open Universal.Pp in
+  let open Pp in
   register_pp_token (fun next fmt -> function
-      | TGenStart(gen) -> fprintf fmt "gstart(%a)" pp_addr gen
-      | TGenNext(gen, r) -> fprintf fmt "gnext(%a) -> %a" pp_addr gen pp_range r
-      | TGenYield(gen, e, r) -> fprintf fmt "gyield(%a) <- %a" pp_addr gen pp_range r
-      | TGenStop(gen) -> fprintf fmt "gstop(%a)" pp_addr gen
+      | TGenStart(gen) -> fprintf fmt "gstart(%a)" pp_py_object gen
+      | TGenNext(gen, r) -> fprintf fmt "gnext(%a) -> %a" pp_py_object gen pp_range r
+      | TGenYield(gen, e, r) -> fprintf fmt "gyield(%a) <- %a" pp_py_object gen pp_range r
+      | TGenStop(gen) -> fprintf fmt "gstop(%a)" pp_py_object gen
       | tk -> next fmt tk
     );
   register_token_compare (fun next tk1 tk2 ->
       match tk1, tk2 with
-      | TGenStart(g1), TGenStart(g2) -> compare_addr g1 g2
+      | TGenStart(g1), TGenStart(g2) -> compare_py_object g1 g2
       | TGenNext(g1, r1), TGenNext(g2, r2) ->
         compare_composer [
-          (fun () -> compare_addr g1 g2);
+          (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]
       | TGenYield(g1, _, r1), TGenYield(g2, _, r2) ->
         compare_composer [
-          (fun () -> compare_addr g1 g2);
+          (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]
-      | TGenStop(g1), TGenStop(g2) -> compare_addr g1 g2
+      | TGenStop(g1), TGenStop(g2) -> compare_py_object g1 g2
       | _ -> next tk1 tk2
     );
   (* Variable kinds *)
   register_pp_var (fun next fmt v ->
       match vkind v with
-      | V_gen_frame(g) -> fprintf fmt "∥%s~%a∥" v.vname pp_addr g
+      | V_gen_frame(g) -> fprintf fmt "∥%s~%a∥" v.vname pp_py_object g
       | _ -> next fmt v
     );
   register_vkind_compare (fun next vk1 vk2 ->
       match vk1, vk2 with
-      | V_gen_frame g1, V_gen_frame g2 -> compare_addr g1 g2
+      | V_gen_frame g1, V_gen_frame g2 -> compare_py_object g1 g2
       | _ -> next vk1 vk2
     );
   (* Context *)

@@ -36,6 +36,13 @@ type typ +=
                            (** {2 Expressions} *)
 (*==========================================================================*)
 
+(** Python objects *)
+type py_object = Universal.Ast.addr (** uid + type *) * expr option (** value representation *)
+
+let compare_py_object (obj1: py_object) (obj2: py_object) : int =
+  let addr1 = fst obj1 and addr2 = fst obj2 in
+  Universal.Ast.compare_addr addr1 addr2
+
 type operator +=
   | O_py_and (** and *)
   | O_py_or (** or *)
@@ -85,7 +92,7 @@ type py_lambda = {
 
 type expr_kind +=
   | E_py_undefined of bool (* is it global? *)
-  | E_py_addr_value of Universal.Ast.addr * expr (** symbolic value associated to an address *)
+  | E_py_object of py_object
   | E_py_list of expr list
   | E_py_index_subscript of expr (** object *) * expr (** index *)
   | E_py_slice_subscript of expr (** object *) * expr (** start *) * expr (** end *) * expr (** step *)
@@ -269,27 +276,27 @@ let mk_py_call func args range =
 let mk_py_attr obj attr ?(etyp=T_any) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
-let mk_py_addr_attr addr attr ?(etyp=T_any) range =
-  mk_py_attr (Universal.Ast.mk_addr addr (tag_range range "addr")) attr ~etyp range
+let mk_py_object (addr, e) range =
+  mk_expr (E_py_object (addr, e)) range
 
-let mk_py_none range =
-  mk_constant ~etyp:T_py_none C_py_none range
+let mk_py_object_attr obj attr ?(etyp=T_any) range =
+  mk_py_attr (mk_py_object obj range) attr ~etyp range
 
-let mk_py_not_implemented range =
-  mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range
-
-let mk_py_addr_value addr e range =
-  mk_expr (E_py_addr_value (addr, e)) range
-
-let addr_of_expr e =
+let object_of_expr e =
   match ekind e with
-  | Universal.Ast.E_addr addr | E_py_addr_value(addr, _) -> addr
+  | E_py_object o -> o
   | _ -> assert false
+
+let addr_of_object (obj:py_object) : Universal.Ast.addr =
+  fst obj
+
+let value_of_object (obj:py_object) : expr option =
+  snd obj
 
 let rec is_py_expr e =
   match ekind e with
   | E_py_undefined _
-  | E_py_addr_value _
+  | E_py_object _
   | E_py_list _
   | E_py_index_subscript _
   | E_py_slice_subscript _

@@ -28,12 +28,6 @@ struct
 
   let init _ ctx _ flow = ctx, flow
 
-  let is_bool_function f =
-    match ekind f with
-    | E_var v -> v.vname = "bool"
-    | E_addr a -> compare_addr a (Addr.find_builtin "bool") = 0
-    | _ -> false
-
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
@@ -64,22 +58,17 @@ struct
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let cls1 = Addr.classof @@ addr_of_expr e1 and cls2 = Addr.classof @@ addr_of_expr e2 in
-          if compare_addr cls1 cls2 <> 0 then
+          let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
+          let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in
+          if compare_py_object cls1 cls2 <> 0 then
             oeval_singleton (Some (mk_false range), flow, [])
           else
-            match etyp e1, ekind e1, ekind e2 with
-            | T_string, _, _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
-            | T_addr, E_addr a1, E_addr a2 ->
-              begin
-                match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
-                | false, false, true -> oeval_singleton (Some (mk_true range), flow, [])
-                | false, false, false -> oeval_singleton (Some (mk_false range), flow, [])
-                | true, true, false -> oeval_singleton (Some (mk_false range), flow, [])
-                | _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
-              end
-
-            | _ -> re_eval_singleton (man.eval ctx) (Some (mk_binop e1 O_eq e2 range), flow, [])
+            let a1 = addr_of_object o1 and a2 = addr_of_object o2 in
+            match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
+            | false, false, true -> oeval_singleton (Some (mk_true range), flow, [])
+            | false, false, false -> oeval_singleton (Some (mk_false range), flow, [])
+            | true, true, false -> oeval_singleton (Some (mk_false range), flow, [])
+            | _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
         )
 
     (* E⟦ e1 is not e2 ⟧ *)
@@ -91,16 +80,17 @@ struct
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let cls2 = Addr.classof @@ addr_of_expr e2 in
+          let o2 = object_of_expr e2 in
+          let cls2 = Addr.class_of_object o2 in
           Universal.Utils.assume_to_eval
-            (Utils.mk_addr_hasattr cls2 "__contains__" range)
+            (Utils.mk_object_hasattr cls2 "__contains__" range)
             (fun true_flow ->
-               let exp' = mk_py_call (mk_py_addr_attr cls2 "__contains__" range) [e2; e1] range in
+               let exp' = mk_py_call (mk_py_object_attr cls2 "__contains__" range) [e2; e1] range in
                re_eval_singleton (man.eval ctx) (Some exp', true_flow, [])
             )
             (fun false_flow ->
                Universal.Utils.assume_to_eval
-                 (Utils.mk_addr_hasattr cls2 "__iter__" range)
+                 (Utils.mk_object_hasattr cls2 "__iter__" range)
                  (fun true_flow ->
                     let v = mktmp () in
                     let stmt = mk_stmt (S_py_for (
@@ -119,7 +109,7 @@ struct
                  )
                  (fun false_flow ->
                     Universal.Utils.assume_to_eval
-                      (Utils.mk_addr_hasattr cls2 "__getitem__" range)
+                      (Utils.mk_object_hasattr cls2 "__getitem__" range)
                       (fun true_flow ->
                          Framework.Exceptions.panic_at range "evaluating 'in' operator using __getitem__ not supported"
                       )
@@ -139,10 +129,7 @@ struct
 
 
     (* E⟦ not e ⟧ *)
-    | E_unop(O_py_not, e) ->
-      let e' =
-        if is_bool_function e then e else Utils.mk_builtin_call "bool" [e] e.erange
-      in
+    | E_unop(O_py_not, e') ->
       Universal.Utils.assume_to_eval e'
         (fun true_flow -> oeval_singleton (Some (mk_false exp.erange), true_flow, []))
         (fun false_flow -> oeval_singleton (Some (mk_true exp.erange), false_flow, []))
@@ -182,16 +169,34 @@ struct
     match skind stmt with
     (* S⟦ ?e ⟧ *)
     | S_assume(e) when is_py_expr e ->
-      debug "%a" Framework.Pp.pp_stmt stmt;
+
+      let check_bool e ~otherwise flow =
+        let o = object_of_expr e in
+        if Addr.isinstance o (Addr.find_builtin "bool") then
+          match value_of_object o with
+          | None -> otherwise flow
+          | Some e ->
+            let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
+            Memory.Value.B.fold (fun b acc ->
+                if b then flow
+                else acc
+              ) a (man.flow.set TCur man.env.bottom flow)
+        else
+          otherwise flow
+      in
+      
       man.eval ctx e flow |>
       eval_to_exec (fun e flow ->
-          man.eval ctx (Utils.mk_builtin_call "bool" [e] range) flow |>
-          eval_to_exec (fun b flow ->
-              match ekind b with
-              | E_py_addr_value(_, {ekind = E_constant (C_true)}) -> flow
-              | E_py_addr_value(_, {ekind = E_constant (C_false)}) -> man.flow.set TCur man.env.bottom flow
-              | _ -> Framework.Exceptions.fail "call to bool returned a non boolean expression %a" Framework.Pp.pp_expr b
-            ) (man.exec ctx) man.flow
+          check_bool e
+            ~otherwise:(fun flow ->
+                man.eval ctx (Utils.mk_builtin_call "bool" [e] range) flow |>
+                eval_to_exec (fun b flow ->
+                    check_bool b
+                      ~otherwise:(fun flow ->
+                          Framework.Exceptions.fail "call to bool returned a non boolean expression %a" Framework.Pp.pp_expr b
+                        ) flow
+                  ) (man.exec ctx) man.flow
+              ) flow
         ) (man.exec ctx) man.flow |>
       return
 

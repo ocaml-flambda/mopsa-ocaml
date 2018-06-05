@@ -54,8 +54,7 @@ struct
              let bases =
                match bases with
                | [] -> [Addr.find_builtin "object"]
-               | _ ->
-                 List.map (function {ekind = E_addr addr} -> addr | _ -> assert false)  bases
+               | _ -> List.map object_of_expr  bases
              in
              if Libs.Mopsa.is_builtin_clsdec cls then
                let name = Libs.Mopsa.builtin_clsdec_name cls in
@@ -68,13 +67,10 @@ struct
                return flow
              else
                Addr.eval_alloc man ctx (A_py_class (C_user cls, bases)) stmt.srange flow |>
-               oeval_to_oexec (fun addr flow ->
+               oeval_to_oexec (fun obj flow ->
                    let flow = man.exec ctx
-                       (mk_assign
-                          (mk_var cls.py_cls_var range)
-                          (mk_addr addr range)
-                          range
-                       ) flow
+                       (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range)
+                       flow
                    in
                    man.exec ctx cls.py_cls_body flow |>
                    return
@@ -95,7 +91,7 @@ struct
       addr_uid = 0;
     }
     in
-    Addr.add_builtin_class addr ();
+    Addr.add_builtin_class (addr, None) ();
 
     (* Parse the body of the class *)
     let rec parse base stmt =
@@ -115,10 +111,10 @@ struct
         let addr = {
           addr_kind = A_py_class (kind, bases);
           addr_range = range;
-          addr_uid = -1;
+          addr_uid = 0;
         }
         in
-        Addr.add_builtin_class addr ();
+        Addr.add_builtin_class (addr, None) ();
         parse (Some name) cls.py_cls_body
 
       | S_py_function(fundec) ->
@@ -135,7 +131,7 @@ struct
           addr_uid = -1;
         }
         in
-        Addr.add_builtin_function addr ()
+        Addr.add_builtin_function (addr, None) ()
 
       | S_block(block) ->
         List.iter (parse base) block
@@ -148,51 +144,28 @@ struct
   let init _ ctx _ flow = ctx, flow
 
 
-  let instantiate_object man ctx cls args range flow =
-    debug "Instantiate class %a object" Universal.Pp.pp_addr cls;
-    let tmp = mktmp () in
-
-    (* Call __new__ *)
-    let flow =
-      man.exec ctx
-        (mk_assign
-           (mk_var tmp range)
-           (mk_py_call
-              (mk_py_addr_attr cls "__new__" range)
-              ((mk_addr cls range) :: args)
-              range
-           )
-           range
-        )
-        flow
-    in
-
-    (* Call __init__ *)
-    (* FIXME: execute __init__ only if __new__ returned an instance of cls *)
-    let flow =
-      man.exec ctx
-        (mk_stmt
-           (S_expression(
-               mk_py_call
-                 (mk_py_addr_attr cls "__init__" range)
-                 ((mk_var tmp range) :: args)
-                 range
-             ))
-           range
-        ) flow
-    in
-    (* FIXME: check that __init__ always returns None *)
-
-    let evl = (Some (mk_var tmp range), flow, [mk_remove_var tmp range]) in
-    re_eval_singleton (man.eval ctx) evl
-
-
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
     (* Calls to classes to instantiate objects *)
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_class _} as cls)}, args, []) ->
-      instantiate_object man ctx cls args range flow
+    | E_py_call({ekind = E_py_object cls}, args, []) when Addr.isclass cls ->
+      (* Call __new__ *)
+      man.eval ctx (mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range) flow |>
+      eval_compose (fun eobj flow ->
+          let obj = object_of_expr eobj in
+          if Addr.isinstance obj cls then
+            (* Call __init__ *)
+            man.eval ctx (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>
+            eval_compose (fun r flow ->
+                if is_none r then
+                  oeval_singleton (Some eobj, flow, [])
+                else
+                  let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+                  oeval_singleton (None, flow, [])
+               )
+           else
+             oeval_singleton (Some eobj, flow, [])
+        )
 
     | _ -> None
 

@@ -23,7 +23,7 @@ lang.universal.numeric.domains = boxes relational
 lang.universal.numeric.domains.boxes = int congruence float
 
 lang.python = ast addr pp alarm utils visitor frontend operators memory flows libs desugar data_model objects program setup
-lang.python.memory = addr_env value_env
+lang.python.memory = value query addr_env value_env
 lang.python.objects = class function object strings slices containers
 lang.python.objects.containers = lists dicts ranges sets tuples
 lang.python.data_model = attribute callable arith_ops subscript compare_ops aug_assign

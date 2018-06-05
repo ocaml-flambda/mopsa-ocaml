@@ -66,22 +66,10 @@ struct
   let is_abstract_attribute attr =
     String.get attr 0 = '$'
 
-  (** Check whether a type is atomic. *)
-  let is_atomic_type = function
-    | T_int
-    | T_float
-    | T_bool
-    | T_string
-    | T_py_none
-    | T_py_not_implemented ->
-      true
-    | _ ->
-      false
-
-  let is_static_attribute addr attr =
-    match addr.addr_kind with
-    | A_py_class(_) when Addr.is_unsupported addr ->
-      Framework.Exceptions.panic "access to attribute of unsupported object %a" Universal.Pp.pp_addr addr;
+  let is_static_attribute obj attr =
+    match kind_of_object obj with
+    | A_py_class(_) when Addr.is_object_unsupported obj ->
+      Framework.Exceptions.panic "access to attribute of unsupported object %a" Pp.pp_py_object obj;
 
     | A_py_class(C_user cls, _) ->
       List.exists (fun v -> v.vname = attr) cls.py_cls_static_attributes
@@ -90,18 +78,19 @@ struct
       List.exists (fun v -> v.vname = attr) globals
 
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
-      Addr.is_builtin_attribute addr attr
+      Addr.is_builtin_attribute obj attr
 
 
     | A_py_function _ | A_py_instance _ -> false
 
     | _ -> assert false
 
-  let assume_is_attribute addr attr man ctx flow =
-    debug "checking presence of attr %s in %a" attr Universal.Pp.pp_addr addr;
-    if is_static_attribute addr attr then
+  let assume_is_attribute obj attr man ctx flow =
+    debug "checking presence of attr %s in %a" attr Pp.pp_py_object obj;
+    if is_static_attribute obj attr then
       flow
     else
+      let addr = addr_of_object obj in
       map_domain_cur (fun a ->
           if AttrSet.may_mem (addr, attr) a then
             let _ = debug "attr may exist" in
@@ -111,10 +100,11 @@ struct
             AttrSet.bottom
         ) man flow
 
-  let assume_is_not_attribute addr attr man ctx flow =
-    if is_static_attribute addr attr then
+  let assume_is_not_attribute obj attr man ctx flow =
+    if is_static_attribute obj attr then
       set_domain_cur bottom man flow
     else
+      let addr = addr_of_object obj in
       map_domain_cur (fun a ->
           if AttrSet.must_mem (addr, attr) a then
             let _ = debug "attr must exist" in
@@ -124,31 +114,29 @@ struct
             AttrSet.remove (addr, attr) a
         ) man flow
 
-  let mk_static_attribute addr attr range =
-    match addr.addr_kind with
+  let mk_static_attribute obj attr range =
+    match kind_of_object obj with
     | A_py_class(C_user cls, _) ->
       let v = cls.py_cls_static_attributes |> List.find (fun v -> v.vname = attr) in
       mk_var v range
 
-    | A_py_module(M_user(name, globals)) ->
-      begin
-        try
-          let addr = Addr.find_builtin_attribute addr attr in
-          mk_addr addr range
-        with Not_found ->
-          let v = List.find (fun v -> v.vname = attr) globals in
-          mk_var v range
-      end
+    | A_py_module(M_user(name, globals)) when Addr.is_builtin_attribute obj attr ->
+      let obj = Addr.find_builtin_attribute obj attr in
+      mk_py_object obj range
+
+    | A_py_module(M_user(name, globals))  ->
+      let v = List.find (fun v -> v.vname = attr) globals in
+      mk_var v range
 
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
-      let addr = Addr.find_builtin_attribute addr attr in
-      mk_addr addr range
-
+      let obj = Addr.find_builtin_attribute obj attr in
+      mk_py_object obj range
 
     | _ ->
       assert false
 
-  let mk_attribute_var addr attr range =
+  let mk_attribute_var obj attr range =
+    let addr = addr_of_object obj in
     let v = {
       vname = (
         let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Pp.pp_addr addr attr in
@@ -163,12 +151,12 @@ struct
     mk_var v range
 
 
-  let mk_attribute_expr addr attr etyp range =
+  let mk_attribute_expr obj attr etyp range =
     let e =
-      if is_static_attribute addr attr then
-        mk_static_attribute addr attr range
+      if is_static_attribute obj attr then
+        mk_static_attribute obj attr range
       else
-        mk_attribute_var addr attr range
+        mk_attribute_var obj attr range
     in
     {e with etyp}
 
@@ -191,34 +179,30 @@ struct
       (* Evaluate [obj] and check the resulting cases. *)
       man.eval ctx obj flow |>
       eval_compose
-        (fun obj flow ->
-           match ekind obj with
-           (* Access to an abstract attribute of an object *)
-           | E_addr addr when is_abstract_attribute attr ->
-             let exp' = mk_attribute_expr addr attr exp.etyp range in
+        (fun eobj flow ->
+           let obj = object_of_expr eobj in
+           if is_abstract_attribute attr then
+             (* Access to an abstract attribute of an object *)
+             let exp' = mk_attribute_expr obj attr exp.etyp range in
              re_eval_singleton (man.eval ctx) (Some exp', flow, [])
-
-           (* Access to an ordinary attribute of an object *)
-           | E_addr addr  ->
+           else
+             (* Access to an ordinary attribute of an object *)
              if_flow_eval
-               (assume_is_attribute addr attr man ctx)
-               (assume_is_not_attribute addr attr man ctx)
+               (assume_is_attribute obj attr man ctx)
+               (assume_is_not_attribute obj attr man ctx)
                (* Case when the attribute is local*)
                (fun true_flow ->
                   debug "instance attribute found locally";
                   debug "attribute %s found, exp = %a" attr Framework.Pp.pp_expr exp;
-                  let exp' = mk_attribute_expr addr attr exp.etyp range in
+                  let exp' = mk_attribute_expr obj attr exp.etyp range in
                   re_eval_singleton (man.eval ctx) (Some exp', true_flow, [])
                )
                (* Case when the attribute does not exist => check in mro *)
                (fun false_flow ->
-                  let mro = Addr.mro addr in
+                  let mro = Addr.mro obj in
                   let rec aux flow = function
                     | [] ->
-                      let flow = man.exec ctx
-                          (Utils.mk_builtin_raise "AttributeError" range)
-                          flow
-                      in
+                      let flow = man.exec ctx (Utils.mk_builtin_raise "AttributeError" range) flow in
                       oeval_singleton (None, flow, [])
 
                     | cls :: tl ->
@@ -228,22 +212,20 @@ struct
                         (assume_is_not_attribute cls attr man ctx)
                         (fun true_flow ->
                            (* Check method case *)
-                           match addr.addr_kind with
+                           match kind_of_object obj with
                            (* In case of an instance, check that cls.attr is a function before binding it *)
                            | A_py_instance _ ->
-                             man.eval ctx (mk_py_addr_attr cls attr range) true_flow |>
-                             eval_compose (fun f flow ->
-                                 match ekind f with
+                             man.eval ctx (mk_py_object_attr cls attr range) true_flow |>
+                             eval_compose (fun eobj' flow ->
+                                 let obj' = object_of_expr eobj' in
                                  (* Attribute is a function of the class => bound the method to the instance *)
-                                 | E_addr ({addr_kind = A_py_function _} as f) ->
-                                   let exp = mk_expr (E_alloc_addr(A_py_method(f, addr), range)) range in
+                                 if Addr.isinstance obj' (Addr.find_builtin "function") then
+                                   let exp = mk_expr (E_alloc_addr(A_py_method(obj', obj), range)) range in
                                    re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
-
-                                 | _ ->
+                                 else
                                    let exp = mk_attribute_expr cls attr exp.etyp range in
                                    re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
                                )
-
                            (* No method binding for non-instances *)
                            | _ ->
                              let exp = mk_attribute_expr cls attr exp.etyp range in
@@ -258,54 +240,17 @@ struct
                    (* In a bottom environment, the only thing that we
                       can do is to search for builtins attributes and
                       resolve them statically *)
-                   if Addr.is_builtin_addr addr && Addr.is_builtin_attribute addr attr then
-                     let exp' = mk_addr (Addr.find_builtin_attribute addr attr) range in
+                   if Addr.is_builtin obj && Addr.is_builtin_attribute obj attr then
+                     let exp' = mk_py_object (Addr.find_builtin_attribute obj attr) range in
                      oeval_singleton (Some exp', flow, [])
                    else
                      oeval_singleton (None, flow, [])
                  )
                man flow ()
-
-           (* Access to an ordinary attribute of atomic types *)
-           | _ when etyp obj |> is_atomic_type ->
-             debug "resolving attribute %s of atomic type exp %a" attr Framework.Pp.pp_expr obj;
-             let cls = Addr.classof @@ addr_of_expr obj in
-             debug "class %a" Universal.Pp.pp_addr cls;
-             if_flow_eval
-               (assume_is_attribute cls attr man ctx)
-               (assume_is_not_attribute cls attr man ctx)
-               (fun true_flow ->
-                  (* Check method case *)
-                  debug "has attribute";
-                  man.eval ctx (mk_py_addr_attr cls attr range) true_flow |>
-                  eval_compose (fun f flow ->
-                      debug "attribute evaluated to %a" Framework.Pp.pp_expr f;
-                      match ekind f with
-                      (* Attribute is a function of the class => bound the method to the instance *)
-                      | E_addr ({addr_kind = A_py_function _} as f) ->
-                        let exp = mk_expr (E_alloc_addr(A_py_method_atomic(f, obj), range)) range in
-                        re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
-
-                      | _ ->
-                        let exp = mk_attribute_expr cls attr exp.etyp range in
-                        re_eval_singleton (man.eval ctx) (Some exp, true_flow, [])
-                    )
-               )
-               (fun false_flow ->
-                  debug "attribute not found";
-                  let flow = man.exec ctx
-                      (Utils.mk_builtin_raise "AttributeError" range)
-                      false_flow
-                  in
-                  oeval_singleton (None, flow, [])
-               )
-               man flow ()
-
-           | _ -> assert false
         )
 
     (* Calls to hasattr *)
-    | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "hasattr")}}, [obj; attr], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
       eval_list [obj; attr] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           match el with
@@ -319,13 +264,14 @@ struct
           | [_; {ekind = E_constant (C_string  ("__subclass__" as attr))}] ->
             Framework.Exceptions.panic_at range "calls to hasattr on special attribute %s not supported" attr
 
-          | [{ekind = E_addr addr}; {ekind = E_constant (C_string attr)}] ->
+          | [eobj; {ekind = E_constant (C_string attr)}] ->
+            let obj = object_of_expr eobj in
             if_flow_eval
-              (assume_is_attribute addr attr man ctx)
-              (assume_is_not_attribute addr attr man ctx)
+              (assume_is_attribute obj attr man ctx)
+              (assume_is_not_attribute obj attr man ctx)
               (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
               (fun false_flow ->
-                 let mro = Addr.mro addr in
+                 let mro = Addr.mro obj in
                  let rec aux flow = function
                    | [] -> oeval_singleton (Some (mk_false range), false_flow, [])
                    | cls :: tl ->
@@ -341,20 +287,8 @@ struct
               )
               man flow ()
 
-          | [v; {ekind = E_constant (C_string attr)}] when etyp v |> is_atomic_type->
-            let cls = Addr.classof @@ addr_of_expr obj in
-            if_flow_eval
-              (assume_is_attribute cls attr man ctx)
-              (assume_is_not_attribute cls attr man ctx)
-              (fun true_flow -> oeval_singleton (Some (mk_true range), true_flow, []))
-              (fun false_flow -> oeval_singleton (Some (mk_false range), false_flow, []))
-              man flow ()
-
           | _ ->
-            let flow = man.exec ctx
-                (Utils.mk_builtin_raise "TypeError" range)
-                flow
-            in
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
             oeval_singleton (None, flow, [])
         )
     | _ -> None
@@ -367,12 +301,13 @@ struct
       eval_to_exec
         (fun el flow ->
            match el with
-           | [rval; {ekind = E_addr obj; erange}] ->
+           | [rval; {ekind = E_py_object obj; erange}] ->
              let lval, flow =
                if is_static_attribute obj attr then
                  mk_static_attribute obj attr erange, flow
                else
-                 mk_attribute_var obj attr erange, map_domain_cur (add (obj, attr)) man flow
+                 let addr = addr_of_object obj in
+                 mk_attribute_var obj attr erange, map_domain_cur (add (addr, attr)) man flow
              in
              man.exec ctx (mk_assign ~mode lval rval stmt.srange) flow
            | _ ->

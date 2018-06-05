@@ -17,9 +17,7 @@ let () =
       match ekind exp with
       | E_py_undefined _ -> leaf exp
 
-      | E_py_addr_value(a, e) ->
-        {exprs = [e]; stmts = [];},
-        (function {exprs = [e]} -> {exp with ekind = E_py_addr_value(a, e)} | _ -> assert false)
+      | E_py_object _ -> leaf exp
 
       | E_py_list elts ->
         {exprs = elts; stmts = [];},

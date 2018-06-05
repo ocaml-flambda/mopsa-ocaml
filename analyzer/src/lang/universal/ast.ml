@@ -21,7 +21,6 @@ type typ +=
   | T_string (** Strings. *)
   | T_bool (** Booleans. *)
   | T_addr (** Heap addresses. *)
-  | T_empty (** Value type of empty arrays *)
 
 
 let () =
@@ -32,7 +31,6 @@ let () =
       | T_string, T_string
       | T_bool, T_bool
       | T_addr, T_addr
-      | T_empty, T_empty -> 0
       | _ -> next t1 t2
     )
 
@@ -136,9 +134,6 @@ let compare_addr a1 a2 =
     (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
   ]
 
-
-
-
 (*==========================================================================*)
                            (** {2 Functions} *)
 (*==========================================================================*)
@@ -202,9 +197,6 @@ let mk_float_interval a b range =
 
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
-
-let mk_empty range =
-  mk_constant ~etyp:T_empty C_empty range
 
 let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
   match strict, left_strict, right_strict with
@@ -352,3 +344,7 @@ let mk_call fundec args range =
       mk_expr (E_function fundec) (tag_range range "fun"),
       args
     )) range
+
+let kind_of_addr addr = addr.addr_kind
+
+let range_of_addr addr = addr.addr_range

@@ -16,23 +16,22 @@ let rec partition_list_by_length n l =
     | _ -> assert false
 
 let mk_builtin_raise exn range =
-  mk_stmt (S_py_raise (Some (mk_addr (Addr.find_builtin exn) range))) range
+  mk_stmt (S_py_raise (Some (mk_py_object (Addr.find_builtin exn) range))) range
 
 let mk_builtin_call f params range =
-  mk_py_call (mk_addr (Addr.find_builtin f) range) params range
+  mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
-let mk_hasattr obj attr range =
-  mk_builtin_call "hasattr" [obj; mk_string attr range] range
+let mk_hasattr e attr range =
+  mk_builtin_call "hasattr" [e; mk_string attr range] range
 
-let mk_addr_hasattr obj attr range =
-  mk_hasattr (mk_addr obj range) attr range
-
+let mk_object_hasattr obj attr range =
+  mk_hasattr (mk_py_object obj range) attr range
 
 let mk_try_stopiteration body except range =
   mk_try
     body
     [mk_except
-       (Some (mk_addr (Addr.find_builtin "StopIteration") range))
+       (Some (mk_py_object (Addr.find_builtin "StopIteration") range))
        None
        except
     ]

@@ -49,7 +49,7 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call ({ekind = E_addr {addr_kind = A_py_function (F_builtin "math.sqrt")}}, [e], []) ->
+    | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
       let exp' = mk_unop O_sqrt e ~etyp:T_float range in
       oeval_singleton (Some exp', flow, [])
 

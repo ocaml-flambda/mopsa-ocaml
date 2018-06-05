@@ -95,11 +95,13 @@ struct
 
           | E_py_undefined false -> assign_addr man ctx v PyAddr.Undef_local mode flow
 
-          | E_addr a -> assign_addr man ctx v (PyAddr.Def a) mode flow
+          | E_py_object(addr, None)
+          | E_addr addr ->
+            assign_addr man ctx v (PyAddr.Def addr) mode flow
 
-          | E_py_addr_value(a, ev) ->
-            let flow = assign_addr man ctx v (PyAddr.Def a) mode flow in
-            let t = Addr.to_atomic_type a in
+          | E_py_object((addr, Some ev) as obj) ->
+            let flow = assign_addr man ctx v (PyAddr.Def addr) mode flow in
+            let t = Addr.type_of_object obj in
             let v' = mk_py_value_var v t in
             man.exec ctx (mk_assign (mk_var v' range) ev ~mode range) flow
 
@@ -121,11 +123,6 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    (* E⟦ c | c ∈ Const ⟧ *)
-    | E_constant c ->
-      let addr = Addr.of_constant c range in
-      oeval_singleton (Some (mk_py_addr_value addr exp range), flow, [])
-
     (* E⟦ v | v ∈ Var ⟧ *)
     | E_var ({vkind = V_orig} as v) ->
       let cur = get_domain_cur man flow in
@@ -144,10 +141,10 @@ struct
             oeval_singleton (None, flow, []) |>
             oeval_join acc
 
-          | PyAddr.Def addr when Addr.has_atomic_type addr ->
-            let t = Addr.to_atomic_type addr in
+          | PyAddr.Def addr when Addr.is_atomic_object (addr, None) ->
+            let t = Addr.type_of_object (addr, None) in
             let vv = mk_py_value_var v t in
-            oeval_singleton (Some (mk_py_addr_value addr (mk_var vv range) range), flow, []) |>
+            oeval_singleton (Some (mk_py_object (addr, Some (mk_var vv range)) range), flow, []) |>
             oeval_join acc
 
           | PyAddr.Def addr ->

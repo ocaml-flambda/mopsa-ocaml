@@ -72,7 +72,6 @@ let () =
       | C_float_interval(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
       | C_true -> pp_print_string fmt "True"
       | C_false -> pp_print_string fmt "False"
-      | C_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
 
@@ -83,7 +82,6 @@ let () =
       | T_string -> pp_print_string fmt "string"
       | T_bool -> pp_print_string fmt "bool"
       | T_addr -> pp_print_string fmt "addr"
-      | T_empty -> pp_print_string fmt "empty"
       | _ -> default fmt typ
   );
   register_pp_expr (fun default fmt exp ->

@@ -39,11 +39,11 @@ module Domain = struct
           let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
           let op_fun = Operators.binop_to_incr_fun op in
-          let cls = Addr.classof @@ addr_of_expr x in
+          let cls = Addr.class_of_object @@ object_of_expr x in
           Universal.Utils.assume_to_exec
-            (Utils.mk_addr_hasattr cls op_fun range)
+            (Utils.mk_object_hasattr cls op_fun range)
             (fun true_flow ->
-                let stmt = mk_assign x0 (mk_py_call (mk_py_addr_attr cls op_fun range) [x; e] range) range in
+                let stmt = mk_assign x0 (mk_py_call (mk_py_object_attr cls op_fun range) [x; e] range) range in
                 man.exec ctx stmt true_flow
             )
             (fun false_flow ->

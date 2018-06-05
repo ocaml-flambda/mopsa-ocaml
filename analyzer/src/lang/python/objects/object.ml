@@ -32,16 +32,18 @@ struct
     let range = erange exp in
     match ekind exp with
     (* Calls to object.__new__ *)
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__new__")})}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
       debug "call to object.__new__";
       eval_list args (man.eval ctx) flow |>
       eval_compose
         (fun args flow ->
            match args with
-           | {ekind = E_addr ({addr_kind = A_py_class _} as cls)} :: tl ->
-             debug "Create a new instance";
-             re_eval_singleton (man.eval ctx)
-               (Some (mk_expr (Universal.Ast.E_alloc_addr ((A_py_instance (cls, None)), range)) range), flow, [])
+           | cls :: tl ->
+             let cls = object_of_expr cls in
+             eval_alloc_instance man ctx cls None range flow |>
+             oeval_compose (fun obj flow ->
+                 oeval_singleton (Some (mk_py_object obj range), flow, [])
+               )
 
            | _ ->
              debug "Error in creating a new instance";
@@ -50,7 +52,7 @@ struct
         )
 
     (* Calls to object.__init__ *)
-    | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "object.__init__")})}, args, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
       oeval_singleton (Some (mk_py_none range), flow, [])
 
 

@@ -55,7 +55,7 @@ struct
                        Option.none_to_exn |>
                        List.filter (fun addr ->
                            match addr.addr_kind with
-                           | A_py_class(cls, {addr_kind = A_py_class (C_builtin "unittest.TestCase", _)} :: _) -> true
+                           | A_py_class(cls, ({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _) :: _) -> true
                            | _ -> false
                          ) |>
                        List.map (fun addr ->
@@ -68,7 +68,7 @@ struct
       let selfs, flow =
         List.fold_left (fun (selfs, flow) (addr, cls) ->
             (* Allocate an instance of the test class *)
-            Addr.eval_alloc_instance man ctx addr None range flow |>
+            Addr.eval_alloc_instance man ctx (addr, None) None range flow |>
             oeval_fold (fun (selfs, _) (addr, flow, _) ->
                 match addr with
                 | Some self -> (self, cls) :: selfs, flow
@@ -97,7 +97,7 @@ struct
                 match is_test_function v.vname, List.find_opt (fun f -> compare_var f.py_func_var v = 0) functions with
                 | false, _ | _, None -> tests
                 | true, Some f ->
-                  let stmt = mk_stmt (S_expression (mk_py_call (mk_py_addr_attr self v.vname range) [] range)) range in
+                  let stmt = mk_stmt (S_expression (mk_py_call (mk_py_object_attr self v.vname range) [] range)) range in
                   (v.vname, stmt) :: tests
               ) tests cls.py_cls_static_attributes
           ) [] selfs
