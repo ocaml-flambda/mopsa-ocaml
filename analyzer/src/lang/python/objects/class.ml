@@ -26,63 +26,68 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
-  let can_inherit_from exp =
-    match ekind exp with
-    | E_addr {addr_kind = A_py_class (C_builtin "bool", _)} ->
-      false
-
-    | E_addr {addr_kind = A_py_class (C_builtin "int", _) }
-    | E_addr {addr_kind = A_py_class (C_builtin "float", _) }
-    | E_addr {addr_kind = A_py_class (C_builtin "string", _) } ->
-      Framework.Exceptions.panic "Inheritance from builtin classes not supported"
-
-    | E_addr {addr_kind = A_py_class _ } ->
-      true
-
-    | _ ->
-      false
-
   let rec exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
+    (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
       eval_list cls.py_cls_bases (man.eval ctx) flow |>
       eval_to_oexec
         (fun bases flow ->
-           if List.for_all can_inherit_from bases then
-             let bases =
-               match bases with
-               | [] -> [Addr.find_builtin "object"]
-               | _ -> List.map object_of_expr  bases
-             in
-             if Libs.Mopsa.is_builtin_clsdec cls then
-               let name = Libs.Mopsa.builtin_clsdec_name cls in
-               create_builtin_class (C_builtin name) name cls bases range;
-               return flow
-             else
-             if Libs.Mopsa.is_unsupported_clsdec cls then
-               let name = cls.py_cls_var.vname in
-               create_builtin_class (C_unsupported name) name cls bases range;
-               return flow
-             else
-               Addr.eval_alloc man ctx (A_py_class (C_user cls, bases)) stmt.srange flow |>
-               oeval_to_oexec (fun obj flow ->
-                   let flow = man.exec ctx
-                       (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range)
-                       flow
-                   in
-                   man.exec ctx cls.py_cls_body flow |>
-                   return
-                 ) (man.exec ctx) man.flow
+           let bases' =
+             match bases with
+             | [] -> [Addr.find_builtin "object"]
+             | _ -> List.map object_of_expr  bases
+           in
+           if Libs.Mopsa.is_builtin_clsdec cls then
+             let name = Libs.Mopsa.builtin_clsdec_name cls in
+             create_builtin_class (C_builtin name) name cls bases' range;
+             return flow
            else
-             man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow |>
-             return
+           if Libs.Mopsa.is_unsupported_clsdec cls then
+             let name = cls.py_cls_var.vname in
+             create_builtin_class (C_unsupported name) name cls bases' range;
+             return flow
+           else
+             Addr.eval_alloc man ctx (A_py_class (C_user cls, bases')) stmt.srange flow |>
+             oeval_to_oexec (fun obj flow ->
+                 let flow = man.exec ctx
+                     (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range)
+                     flow
+                 in
+                 man.exec ctx cls.py_cls_body flow |>
+                 return
+               ) (man.exec ctx) man.flow
         )
         (man.exec ctx) man.flow
 
     | _ -> None
 
+  and eval man ctx exp flow =
+    let range = erange exp in
+    match ekind exp with
+    (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
+    | E_py_call({ekind = E_py_object cls}, args, []) when Addr.isclass cls ->
+      (* Call __new__ *)
+      man.eval ctx (mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range) flow |>
+      eval_compose (fun eobj flow ->
+          let obj = object_of_expr eobj in
+          if Addr.isinstance obj cls then
+            (* Call __init__ *)
+            man.eval ctx (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>
+            eval_compose (fun r flow ->
+                if is_none r then
+                  oeval_singleton (Some eobj, flow, [])
+                else
+                  let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+                  oeval_singleton (None, flow, [])
+              )
+          else
+            oeval_singleton (Some eobj, flow, [])
+        )
+
+    | _ -> None
 
   and create_builtin_class kind name cls bases range =
     let addr = {
@@ -142,32 +147,6 @@ struct
 
 
   let init _ ctx _ flow = ctx, flow
-
-
-  let eval man ctx exp flow =
-    let range = erange exp in
-    match ekind exp with
-    (* Calls to classes to instantiate objects *)
-    | E_py_call({ekind = E_py_object cls}, args, []) when Addr.isclass cls ->
-      (* Call __new__ *)
-      man.eval ctx (mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range) flow |>
-      eval_compose (fun eobj flow ->
-          let obj = object_of_expr eobj in
-          if Addr.isinstance obj cls then
-            (* Call __init__ *)
-            man.eval ctx (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>
-            eval_compose (fun r flow ->
-                if is_none r then
-                  oeval_singleton (Some eobj, flow, [])
-                else
-                  let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-                  oeval_singleton (None, flow, [])
-               )
-           else
-             oeval_singleton (Some eobj, flow, [])
-        )
-
-    | _ -> None
 
   let ask _ _ _ _ = None
 

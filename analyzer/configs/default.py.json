@@ -27,8 +27,10 @@
         "python.objects.class",
         "python.objects.function",
 	"python.objects.object",
-        // "python.objects.number",
-        // "python.objects.complexes",
+        "python.objects.numbers.int",
+        "python.objects.numbers.float",
+        "python.objects.numbers.bool",
+	"python.objects.numbers.complx",
         "python.objects.strings",
         "python.objects.slices",
 

@@ -31,9 +31,8 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    (* Calls to object.__new__ *)
+    (* 𝔼⟦ object.__new__(cls, args) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
-      debug "call to object.__new__";
       eval_list args (man.eval ctx) flow |>
       eval_compose
         (fun args flow ->
@@ -51,7 +50,7 @@ struct
              oeval_singleton (None, flow, [])
         )
 
-    (* Calls to object.__init__ *)
+    (* 𝔼⟦ object.__init__(self, args, ...) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
       oeval_singleton (Some (mk_py_none range), flow, [])
 

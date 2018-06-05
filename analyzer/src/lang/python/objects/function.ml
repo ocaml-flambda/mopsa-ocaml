@@ -29,7 +29,7 @@ struct
   let exec man ctx stmt flow =
     let range = srange stmt in
     match skind stmt with
-    (* Function definition *)
+    (* 𝕊⟦ def f(arg1, ...): body ⟧ *)
     | S_py_function(func) ->
       debug "creating function object";
       (* Allocate an object for the function and assign it to the variable
@@ -59,8 +59,7 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    (* Calls to user-defined functions are translated to {!Universal.Ast.E_call}
-       in order to be handled by other domains *)
+    (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, []) ->
       (* First check the correct number of arguments *)
       let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
@@ -140,6 +139,7 @@ struct
           let evl = (Some {exp with ekind = E_var tmp}, flow, [mk_remove_var tmp exp.erange]) in
           re_eval_singleton (man.eval ctx) evl
 
+    (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, obj)}, _)}, args, []) ->
       let exp' = mk_py_call (mk_py_object f range) ((mk_py_object obj range) :: args) range in
       re_eval_singleton (man.eval ctx) (Some exp', flow, [])

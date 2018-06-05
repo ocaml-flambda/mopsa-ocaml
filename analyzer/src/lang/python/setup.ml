@@ -11,12 +11,12 @@ let init () =
     Function.setup ();
     Strings.setup ();
     Slices.setup ();
-    (* Numbers.(
-     *   Int.setup ();
-     *   Float.setup ();
-     *   Bool.setup ();
-     *   Complx.setup ();
-     * ); *)
+    Numbers.(
+      Int.setup ();
+      (* Float.setup ();
+       * Bool.setup ();
+       * Complx.setup (); *)
+    );
     Containers.(
       Lists.setup ();
       Dicts.setup ();

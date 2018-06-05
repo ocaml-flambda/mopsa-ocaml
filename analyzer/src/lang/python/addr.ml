@@ -287,26 +287,107 @@ let is_none r =
   let o = object_of_expr r in
   isinstance o (find_builtin "NoneType")
 
+let none_range = mk_fresh_range ()
 let mk_py_none range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NoneType", None);
-      addr_range = range;
-      addr_uid = 0;
+      addr_range = none_range;
+      addr_uid = Universal.Heap.Pool.recent_uid;
     }
   in
   let e = mk_constant ~etyp:T_py_none C_py_none range in
   mk_py_object (addr, Some e) range
 
+
+let not_implemented_range = mk_fresh_range ()
 let mk_py_not_implemented range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NotImplementedType", None);
-      addr_range = range;
-      addr_uid = 0;
+      addr_range = not_implemented_range;
+      addr_uid = Universal.Heap.Pool.recent_uid;
     }
   in
   let e = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
   mk_py_object (addr, Some e) range
 
+let int_range = mk_fresh_range ()
+let mk_py_z z range =
+  let addr = Universal.Ast.{
+      addr_kind = A_py_instance (find_builtin "int", None);
+      addr_range = int_range;
+      addr_uid = Universal.Heap.Pool.old_uid;
+    }
+  in
+  let e = Universal.Ast.mk_z z range in
+  mk_py_object (addr, Some e) range
+
+let mk_py_int n range = mk_py_z (Z.of_int n) range
+
+let mk_py_zero range = mk_py_z Z.zero range
+
+let mk_py_one range = mk_py_z Z.one range
+    
+let float_range = mk_fresh_range ()
+let mk_py_float f range =
+  let addr = Universal.Ast.{
+      addr_kind = A_py_instance (find_builtin "float", None);
+      addr_range = float_range;
+      addr_uid = Universal.Heap.Pool.old_uid;
+    }
+  in
+  let e = Universal.Ast.mk_float f range in
+  mk_py_object (addr, Some e) range
+
+let bool_range = mk_fresh_range ()
+let mk_py_bool b range =
+  let addr = Universal.Ast.{
+      addr_kind = A_py_instance (find_builtin "bool", None);
+      addr_range = bool_range;
+      addr_uid = Universal.Heap.Pool.old_uid;
+    }
+  in
+  let e = Universal.Ast.mk_bool b range in
+  mk_py_object (addr, Some e) range
+
+let mk_py_true range = mk_py_bool true range
+
+let mk_py_false range = mk_py_bool false range
+
+let string_range = mk_fresh_range ()
+let mk_py_string s range =
+  let addr = Universal.Ast.{
+      addr_kind = A_py_instance (find_builtin "str", None);
+      addr_range = string_range;
+      addr_uid = Universal.Heap.Pool.old_uid;
+    }
+  in
+  let e = Universal.Ast.mk_string s range in
+  mk_py_object (addr, Some e) range
+
+let complex_range = mk_fresh_range ()
+let mk_py_imag j range =
+  let addr = Universal.Ast.{
+      addr_kind = A_py_instance (find_builtin "complex", None);
+      addr_range = complex_range;
+      addr_uid = Universal.Heap.Pool.old_uid;
+    }
+  in
+  let e = mk_constant ~etyp:T_py_complex (C_py_imag j) range in
+  mk_py_object (addr, Some e) range
+
+
+let mk_py_constant c range =
+  let open Universal.Ast in
+  match c with
+  | C_int z -> mk_py_z z range
+  | C_float f -> mk_py_float f range
+  | C_true -> mk_py_bool true range
+  | C_false -> mk_py_bool false range
+  | C_string s -> mk_py_string s range
+  | C_py_none -> mk_py_none range
+  | C_py_not_implemented -> mk_py_not_implemented range
+  | C_py_imag j -> mk_py_imag j range
+  | _ -> Framework.Exceptions.panic_at range "mk_py_constant: unknown constant %a" Framework.Pp.pp_constant c
 
 let () =
   Universal.Pp.(
