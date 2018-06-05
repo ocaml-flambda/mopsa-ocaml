@@ -27,14 +27,26 @@ class object:
     @mopsa.stub
     def __le__(self, other): return NotImplemented
 
+    def __format__(self): pass
+    def __getattribute__(self, attr): pass
+    def __hash__(self, attr): pass
+    def __reduce__(self): pass
+    def __setattr__(self, attr, v): pass
+    def __sizeof__(self): pass
+    def __str__(self): pass
+
 class type(object):
     def __new__(cls, args): pass
+    def __init__(self): pass
     def __call__(self, args): pass
-
+    def __repr__(self): pass
+    
 class function(object):
     def __new__(cls, args): pass
     def __call__(self, args): pass
-
+    def __get__(self): pass
+    def __repr__(self): pass
+    
 class method(object):
     def __new__(cls, args): pass
     def __call__(self, args): pass
@@ -43,202 +55,264 @@ class module(object):
     def __new__(cls, args): pass
 
 class int(object):
-    def __new__(cls, args): pass
-
-    def __eq__(self, other): pass
-    def __ne__(self, other): pass
-    def __ge__(self, other): pass
-    def __gt__(self, other): pass
-    def __lt__(self, other): pass
-    def __le__(self, other): pass
-
-    def __bool__(self): pass
-
+    def __abs__(self): pass
     def __add__(self, other): pass
-    def __sub__(self, other): pass
-    def __mul__(self, other): pass
-    def __matmul__(self, other): pass
-    def __truediv__(self, other): pass
-    def __floordiv__(self, other): pass
-    def __mod__(self, other): pass
-    def __pow__(self, other): pass
-    def __divmod__(self, other): pass
-    def __lshift__(self, other): pass
-    def __rshift__(self, other): pass
     def __and__(self, other): pass
-    def __xor__(self, other): pass
-    def __or__(self, other): pass
-
-    def __radd__(self, other): pass
-    def __rsub__(self, other): pass
-    def __rmul__(self, other): pass
-    def __rmatmul__(self, other): pass
-    def __rtruediv__(self, other): pass
-    def __rfloordiv__(self, other): pass
-    def __rmod__(self, other): pass
-    def __rdivmod__(self, other): pass
-    def __rpow__(self, other): pass
-    def __rlshift__(self, other): pass
-    def __rrshift__(self, other): pass
-    def __rand__(self, other): pass
-    def __rxor__(self, other): pass
-    def __ror__(self, other): pass
-
-    def __neg__(self): pass
-    def __pos__(self): pass
-    def __abs__(self): pass
-    def __invert__(self): pass
-
-class float(object):
-    def __new__(cls, args): pass
-
-    def __eq__(self, other): pass
-    def __ne__(self, other): pass
-    def __ge__(self, other): pass
-    def __gt__(self, other): pass
-    def __lt__(self, other): pass
-    def __le__(self, other): pass
-
     def __bool__(self): pass
-
-    def __add__(self, other): pass
-    def __sub__(self, other): pass
-    def __mul__(self, other): pass
-    def __truediv__(self, other): pass
-    def __floordiv__(self, other): pass
-    def __pow__(self, other): pass
-    def __mod__(self, other): pass
+    def __ceil__(self): pass
     def __divmod__(self, other): pass
-
-    def __radd__(self, other): pass
-    def __rsub__(self, other): pass
-    def __rmul__(self, other): pass
-    def __rtruediv__(self, other): pass
-    def __rfloordiv__(self, other): pass
-    def __rmod__(self, other): pass
-    def __rdivmod__(self, other): pass
-    def __rpow__(self, other): pass
-
+    def __eq__(self, other): pass
+    def __float__(self): pass
+    def __floor__(self): pass
+    def __floordiv__(self, other): pass
+    def __format__(self): pass
+    def __ge__(self, other): pass
+    def __getattribute__(self, attr): pass
+    def __getnewargs__(self): pass
+    def __gt__(self, other): pass
+    def __hash__(self): pass
+    def __index__(self): pass
+    def __int__(self): pass
+    def __invert__(self): pass
+    def __le__(self, other): pass
+    def __lshift__(self, other): pass
+    def __lt__(self, other): pass
+    def __mod__(self, other): pass
+    def __mul__(self, other): pass
+    def __ne__(self, other): pass
     def __neg__(self): pass
+    def __new__(cls, args): pass
+    def __or__(self, other): pass
+    def __pow__(self, other): pass
     def __pos__(self): pass
-    def __abs__(self): pass
+    def __radd__(self, other): pass
+    def __rand__(self, other): pass
+    def __rdivmod__(self, other): pass
+    def __repr__(self): pass
+    def __rfloordiv__(self, other): pass
+    def __rshift__(self, other): pass
+    def __rmod__(self, other): pass
+    def __rmul__(self, other): pass
+    def __ror__(self, other): pass
+    def __round__(self): pass
+    def __rpow__(self, other): pass
+    def __rrshift__(self, other): pass
+    def __rshift__(self, other): pass
+    def __rsub__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __rxor__(self, other): pass
+    def __sizeof__(self): pass
+    def __str__(self): pass
+    def __sub__(self, other): pass
+    def __truediv__(self, other): pass
+    def __xor__(self, other): pass
 
 class bool(int):
-    def __new__(cls, args): pass
-
-    def __eq__(self, other): pass
-    def __ne__(self, other): pass
-    def __ge__(self, other): pass
-    def __gt__(self, other): pass
-    def __lt__(self, other): pass
-    def __le__(self, other): pass
-
-    def __bool__(self): pass
-
-    def __add__(self, other): pass
-    def __sub__(self, other): pass
-    def __mul__(self, other): pass
-    def __matmul__(self, other): pass
-    def __truediv__(self, other): pass
-    def __floordiv__(self, other): pass
-    def __pow__(self, other): pass
-    def __mod__(self, other): pass
-    def __divmod__(self, other): pass
-    def __lshift__(self, other): pass
-    def __rshift__(self, other): pass
     def __and__(self, other): pass
-    def __xor__(self, other): pass
     def __or__(self, other): pass
+    def __rand__(self, other): pass
+    def __repr__(self): pass
+    def __ror__(self, other): pass
+    def __rxor__(self, other): pass
+    def __str__(self): pass
+    def __xor__(self, other): pass
 
+    
+class float(object):
+    def __abs__(self): pass
+    def __add__(self, other): pass
+    def __bool__(self): pass
+    def __divmod__(self, other): pass
+    def __eq__(self, other): pass
+    def __float__(self): pass
+    def __floordiv__(self, other): pass
+    def __format__(self): pass
+    def __ge__(self, other): pass
+    def __getattribute__(self, attr): pass
+    def __getnewargs__(self): pass
+    def __gt__(self, other): pass
+    def __hash__(self): pass
+    def __int__(self): pass
+    def __le__(self, other): pass
+    def __lt__(self, other): pass
+    def __mod__(self, other): pass
+    def __mul__(self, other): pass
+    def __ne__(self, other): pass
+    def __neg__(self): pass
+    def __new__(cls, args): pass
+    def __pow__(self, other): pass
+    def __pos__(self): pass
     def __radd__(self, other): pass
-    def __rsub__(self, other): pass
-    def __rmul__(self, other): pass
-    def __rmatmul__(self, other): pass
-    def __rtruediv__(self, other): pass
+    def __rdivmod__(self, other): pass
+    def __repr__(self): pass
     def __rfloordiv__(self, other): pass
     def __rmod__(self, other): pass
-    def __rdivmod__(self, other): pass
+    def __rmul__(self, other): pass
+    def __round__(self): pass
     def __rpow__(self, other): pass
-    def __rlshift__(self, other): pass
-    def __rrshift__(self, other): pass
-    def __rand__(self, other): pass
-    def __rxor__(self, other): pass
-    def __ror__(self, other): pass
-
-    def __neg__(self): pass
-    def __pos__(self): pass
-    def __abs__(self): pass
-    def __invert__(self): pass
+    def __rsub__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __sizeof__(self): pass
+    def __str__(self): pass
+    def __sub__(self, other): pass
+    def __truediv__(self, other): pass
+    def __trunc__(self): pass
 
 class complex(object):
-    def __new__(cls, args): pass
-
-    def __eq__(self, other): pass
-    def __ne__(self, other): pass
-    def __ge__(self, other): pass
-    def __gt__(self, other): pass
-    def __lt__(self, other): pass
-    def __le__(self, other): pass
-
-    def __bool__(self): pass
-
+    def __abs__(self): pass
     def __add__(self, other): pass
-    def __sub__(self, other): pass
-    def __mul__(self, other): pass
-    def __truediv__(self, other): pass
-    def __floordiv__(self, other): pass
-    def __pow__(self, other): pass
-    def __mod__(self, other): pass
+    def __bool__(self): pass
     def __divmod__(self, other): pass
-
+    def __eq__(self, other): pass
+    def __float__(self): pass
+    def __floordiv__(self, other): pass
+    def __format__(self): pass
+    def __ge__(self, other): pass
+    def __getattribute__(self, attr): pass
+    def __getnewargs__(self): pass
+    def __gt__(self, other): pass
+    def __hash__(self): pass
+    def __int__(self): pass
+    def __le__(self, other): pass
+    def __lt__(self, other): pass
+    def __mod__(self, other): pass
+    def __mul__(self, other): pass
+    def __ne__(self, other): pass
+    def __neg__(self): pass
+    def __new__(cls, args): pass
+    def __pow__(self, other): pass
+    def __pos__(self): pass
     def __radd__(self, other): pass
-    def __rsub__(self, other): pass
-    def __rmul__(self, other): pass
-    def __rtruediv__(self, other): pass
+    def __rdivmod__(self, other): pass
+    def __repr__(self): pass
     def __rfloordiv__(self, other): pass
     def __rmod__(self, other): pass
-    def __rdivmod__(self, other): pass
+    def __rmul__(self, other): pass
     def __rpow__(self, other): pass
-
-    def __neg__(self): pass
-    def __pos__(self): pass
-    def __abs__(self): pass
+    def __rsub__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __sizeof__(self): pass
+    def __str__(self): pass
+    def __sub__(self, other): pass
+    def __truediv__(self, other): pass
+    def conjugate(self): pass
 
 class str(object):
-    def __new__(cls, arg): pass
-
+    def __add__(self, other): pass
+    def __contains__(self, other): pass
     def __eq__(self, other): pass
-    def __ne__(self, other): pass
+    def __format__(self): pass
     def __ge__(self, other): pass
+    def __getattribute__(self, attr): pass
+    def __getitem__(self, i): pass
+    def __getnewargs__(self): pass
     def __gt__(self, other): pass
-    def __lt__(self, other): pass
+    def __hash__(self): pass
+    def __iter__(self): pass    
     def __le__(self, other): pass
-
-    def __len__(self): pass
-
+    def __len__(self): pass    
+    def __lt__(self, other): pass
+    def __mod__(self, other): pass
+    def __mul__(self, other): pass
+    def __ne__(self, other): pass
+    def __new__(cls, args): pass
+    def __repr__(self): pass
+    def __rmod__(self, other): pass
+    def __rmul__(self, other): pass
+    def __sizeof__(self): pass
+    def __str__(self): pass
+    def capitalize(self): pass
+    def casefold(self): pass
+    def center(self): pass
+    def count(self): pass
+    def encode(self): pass
+    def endswith(self): pass
+    def expandtabs(self): pass
+    def find(self): pass
+    def format(self): pass
+    def format(self)_ pass
+    def index(self): pass
+    def isalnum(self): pass
+    def isalpha(self): pass
+    def isdecimal(self): pass
+    def isdigit(self): pass
+    def isidentifier(self): pass
+    def islower(self): pass
+    def isnumeric(self): pass
+    def isprintable(self): pass
+    def isspace(self): pass
+    def istitle(self): pass
+    def isupper(self): pass
+    def join(self): pass
+    def ljust(self): pass
+    def lower(self): pass
+    def lstrip(self): pass
+    def maketrans(self): pass
+    def partition(self): pass
+    def replace(self): pass
+    def rfind(self): pass
+    def rindex(self): pass
+    def rjust(self): pass
+    def rpartition(self): pass
+    def rsplit(self): pass
+    def rstrip(self): pass
+    def split(self): pass
     def splitlines(self): pass
+    def startswith(self): pass
+    def strip(self): pass
+    def swapcase(self): pass
+    def title(self): pass
+    def translate(self): pass
+    def upper(self): pass
+    def zfill(self): pass
 
 class generator(object):
+    def __del__(self): pass
+    def __eq__(self): pass
+    def __format__(self): pass
+    def __getattribute__(self): pass
     def __iter__(self): pass
+    def __repr__(self): pass
     def __next__(self): pass
+    def close(self): pass
+    def send(self): pass
+    def throw(self): pass
 
 class list(object):
-    def __init__(self, itr): pass
-    def __len__(self): pass
-    def __getitem__(self, k): pass
-    def __setitem__(self, k, v): pass
-    def __iter__(self): pass
     def __add__(self, o): pass
-    def __iadd__(self, o): pass
-    def __mul__(self, o): pass
-    def __imul__(self, o): pass
-    def __eq__(self, o): pass
-    def __ne__(self, o): pass
     def __contains__(self, v): pass
-    def append(self, x): pass
-    def insert(self, x): pass
+    def __delitem__(self, k): pass
+    def __eq__(self, o): pass
+    def __ge__(self, o): pass
+    def __getattribute__(self, a): pass
+    def __getitem__(self, k): pass
+    def __gt__(self, o): pass
+    def __iadd__(self, o): pass
+    def __imul__(self, o): pass
+    def __init__(self, itr): pass
+    def __iter__(self): pass
+    def __le__(self, o): pass
+    def __len__(self): pass
+    def __lt__(self, o): pass
+    def __mul__(self, o): pass
+    def __ne__(self, o): pass
+    def __repr__(self, o): pass
+    def __rmul__(self, o): pass
+    def __setitem__(self, k, v): pass
+    def __sizeof__(self, o): pass
+    def append(self): pass
+    def clear(self): pass
+    def copy(self): pass
+    def count(self): pass
+    def extend(self): pass
+    def index(self): pass
+    def insert(self): pass
     def pop(self): pass
+    def remove(self): pass
+    def reverse(self): pass
+    def sort(self): pass
 
+    
 class listiter(object):
     def __next__(self): pass
 
