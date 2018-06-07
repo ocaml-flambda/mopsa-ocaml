@@ -19,6 +19,7 @@ type constant +=
   | C_py_none
   | C_py_not_implemented
   | C_py_imag of float
+  | C_py_empty (** empty value of heap objects inheriting from object *)
 
 
 (*==========================================================================*)
@@ -30,6 +31,7 @@ type typ +=
   | T_py_not_implemented
   | T_py_complex
   | T_py_none
+  | T_py_empty
 
 
 (*==========================================================================*)
@@ -37,7 +39,7 @@ type typ +=
 (*==========================================================================*)
 
 (** Python objects *)
-type py_object = Universal.Ast.addr (** uid + type *) * expr option (** value representation *)
+type py_object = Universal.Ast.addr (** uid + type *) * expr (** value representation *)
 
 let compare_py_object (obj1: py_object) (obj2: py_object) : int =
   let addr1 = fst obj1 and addr2 = fst obj2 in
@@ -282,6 +284,9 @@ let mk_py_object (addr, e) range =
 let mk_py_object_attr obj attr ?(etyp=T_any) range =
   mk_py_attr (mk_py_object obj range) attr ~etyp range
 
+let mk_py_empty range =
+  mk_constant C_py_empty ~etyp:T_py_empty range
+
 let object_of_expr e =
   match ekind e with
   | E_py_object o -> o
@@ -290,7 +295,7 @@ let object_of_expr e =
 let addr_of_object (obj:py_object) : Universal.Ast.addr =
   fst obj
 
-let value_of_object (obj:py_object) : expr option =
+let value_of_object (obj:py_object) : expr =
   snd obj
 
 let rec is_py_expr e =

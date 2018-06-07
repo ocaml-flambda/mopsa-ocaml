@@ -40,7 +40,8 @@ struct
            | cls :: tl ->
              let cls = object_of_expr cls in
              eval_alloc_instance man ctx cls None range flow |>
-             oeval_compose (fun obj flow ->
+             oeval_compose (fun addr flow ->
+                 let obj = (addr, mk_py_empty range) in
                  oeval_singleton (Some (mk_py_object obj range), flow, [])
                )
 

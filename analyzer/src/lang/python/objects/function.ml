@@ -42,7 +42,8 @@ struct
         else F_user func
       in
       Addr.eval_alloc man ctx (A_py_function kind) stmt.srange flow |>
-      oeval_to_oexec (fun obj flow ->
+      oeval_to_oexec (fun addr flow ->
+          let obj = (addr, mk_py_empty range) in
           man.exec ctx
             (mk_assign
                (mk_var func.py_func_var range)

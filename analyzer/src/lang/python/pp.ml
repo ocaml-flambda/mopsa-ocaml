@@ -28,8 +28,7 @@ let pp_except fmt e =
 
 let pp_py_object fmt (obj: py_object) =
   match obj with
-  | (addr, None) -> Universal.Pp.pp_addr fmt addr
-  | (addr, Some e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Pp.pp_addr addr pp_expr e 
+  | (addr, e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Pp.pp_addr addr pp_expr e 
 
 let () =
   register_pp_program (fun default fmt prog ->
@@ -42,12 +41,14 @@ let () =
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
+    | T_py_empty -> pp_print_string fmt "empty"
     | _ -> default fmt typ
     );
   register_pp_constant (fun default fmt -> function
       | C_py_none -> pp_print_string fmt "None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
+      | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
   register_pp_operator (fun default fmt -> function

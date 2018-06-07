@@ -79,7 +79,8 @@ module Domain = struct
       eval_compose (fun el flow ->
           (* Create the generator instance *)
           eval_alloc_instance man ctx (Addr.find_builtin "generator") (Some (Generator func)) range flow |>
-          oeval_compose (fun obj flow ->
+          oeval_compose (fun addr flow ->
+              let obj = (addr, mk_py_empty range) in
               let flow0 = flow in
               (* Assign arguments to parameters in a new flow *)
 

@@ -95,11 +95,7 @@ struct
 
           | E_py_undefined false -> assign_addr man ctx v PyAddr.Undef_local mode flow
 
-          | E_py_object(addr, None)
-          | E_addr addr ->
-            assign_addr man ctx v (PyAddr.Def addr) mode flow
-
-          | E_py_object((addr, Some ev) as obj) ->
+          | E_py_object((addr, ev) as obj) ->
             let flow = assign_addr man ctx v (PyAddr.Def addr) mode flow in
             let t = Addr.type_of_object obj in
             let v' = mk_py_value_var v t in
@@ -141,14 +137,10 @@ struct
             oeval_singleton (None, flow, []) |>
             oeval_join acc
 
-          | PyAddr.Def addr when Addr.is_atomic_object (addr, None) ->
-            let t = Addr.type_of_object (addr, None) in
-            let vv = mk_py_value_var v t in
-            oeval_singleton (Some (mk_py_object (addr, Some (mk_var vv range)) range), flow, []) |>
-            oeval_join acc
-
           | PyAddr.Def addr ->
-            oeval_singleton (Some (mk_addr addr range), flow, []) |>
+            let t = Addr.type_of_object (addr, mk_py_empty range) in
+            let vv = mk_py_value_var v t in
+            oeval_singleton (Some (mk_py_object (addr, mk_var vv range) range), flow, []) |>
             oeval_join acc
 
         ) aset None

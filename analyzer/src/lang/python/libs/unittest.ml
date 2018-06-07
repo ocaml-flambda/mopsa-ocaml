@@ -68,10 +68,10 @@ struct
       let selfs, flow =
         List.fold_left (fun (selfs, flow) (addr, cls) ->
             (* Allocate an instance of the test class *)
-            Addr.eval_alloc_instance man ctx (addr, None) None range flow |>
+            Addr.eval_alloc_instance man ctx (addr, mk_py_empty range) None range flow |>
             oeval_fold (fun (selfs, _) (addr, flow, _) ->
                 match addr with
-                | Some self -> (self, cls) :: selfs, flow
+                | Some addr -> ((addr, mk_py_empty range), cls) :: selfs, flow
                 | None -> assert false
               ) (selfs, flow)
           ) ([], flow) test_cases
