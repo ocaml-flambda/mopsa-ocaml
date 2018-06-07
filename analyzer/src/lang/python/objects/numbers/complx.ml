@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Complex numbers *)
+(** Python complex numbers. *)
 
 open Framework.Domains.Stateless
 open Framework.Domains
@@ -18,7 +18,7 @@ open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.objects.complexes"
+let name = "python.objects.numbers.complx"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain= struct

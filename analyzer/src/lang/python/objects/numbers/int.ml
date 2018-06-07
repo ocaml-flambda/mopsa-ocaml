@@ -82,7 +82,88 @@ module Domain= struct
     | E_constant (C_int n) ->
       oeval_singleton (Some (mk_py_z n range), flow, [])
 
+    (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {+, -, x, ...} ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      when is_arithmetic_op_fun f ->
+      let e1' = Utils.mk_builtin_call "int" [e1] range in
+      let e2' = Utils.mk_builtin_call "int" [e2] range in
+      eval_list [e1'; e2'] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+          let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
+          let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
+          let op = arithmetic_op f in
+          oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
+        )
+
+    (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+      when is_compare_op_fun f ->
+      eval_list [e1; e2] (man.eval ctx) flow |>
+      eval_compose (fun el flow ->
+          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+          let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
+          if not (Addr.issubclass o1 (Addr.find_builtin "int")) then
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
+          else
+          if not (Addr.issubclass o2 (Addr.find_builtin "int")) then
+            oeval_singleton (Some (mk_py_not_implemented range), flow, [])
+          else
+            let e1' = Utils.mk_builtin_call "int" [e1] range in
+            let e2' = Utils.mk_builtin_call "int" [e2] range in
+            eval_list [e1'; e2'] (man.eval ctx) flow |>
+            eval_compose (fun el flow ->
+                let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
+                let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
+                let op = compare_op f in
+                Universal.Utils.assume_to_eval
+                  (mk_binop ev1 op ev2 ~etyp:T_bool range)
+                  (fun true_flow -> oeval_singleton (Some (mk_py_bool true range), true_flow, []))
+                  (fun false_flow -> oeval_singleton (Some (mk_py_bool false range), false_flow, []))
+                  man ctx flow ()
+              )
+        )
+
+    (* 𝔼⟦ int.__op__(e1, e2, ...) ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, [])
+      when is_arithmetic_op_fun f ->
+      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+      oeval_singleton (None, flow, [])
+
+  
     | _ -> None
+
+
+  and is_arithmetic_op_fun = function
+    | "int.__add__"
+    | "int.__sub__"
+    | "int.__mul__" -> true
+    | _ -> false
+
+  and is_compare_op_fun = function
+    | "int.__eq__"
+    | "int.__ne__"
+    | "int.__lt__"
+    | "int.__le__"
+    | "int.__gt__"
+    | "int.__ge__" -> true
+    | _ -> false
+
+  and arithmetic_op = function
+    | "int.__add__" -> math_plus
+    | "int.__sub__" -> math_minus
+    | "int.__mul__" -> math_mult
+    | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
+
+  and compare_op = function
+    | "int.__eq__" -> O_eq
+    | "int.__ne__" -> O_ne
+    | "int.__lt__" -> O_lt
+    | "int.__le__" -> O_le
+    | "int.__gt__" -> O_gt
+    | "int.__ge__" -> O_ge
+    | _ -> assert false
 
 
   let init man ctx prog flow = ctx, flow

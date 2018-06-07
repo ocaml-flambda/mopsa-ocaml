@@ -173,14 +173,17 @@ struct
       let check_bool e ~otherwise flow =
         let o = object_of_expr e in
         if Addr.isinstance o (Addr.find_builtin "bool") then
-          match value_of_object o with
-          | None -> otherwise flow
-          | Some e ->
+          let e = value_of_object o in
+          match etyp e with
+          | T_bool ->
             let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
             Memory.Value.B.fold (fun b acc ->
                 if b then flow
                 else acc
               ) a (man.flow.set TCur man.env.bottom flow)
+
+          | _ -> otherwise flow
+
         else
           otherwise flow
       in

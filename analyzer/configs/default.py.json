@@ -28,9 +28,9 @@
         "python.objects.function",
 	"python.objects.object",
         "python.objects.numbers.int",
-        // "python.objects.numbers.float",
-        // "python.objects.numbers.bool",
-	// "python.objects.numbers.complx",
+        "python.objects.numbers.float",
+        "python.objects.numbers.bool",
+	"python.objects.numbers.complx",
         "python.objects.strings",
         "python.objects.slices",
 

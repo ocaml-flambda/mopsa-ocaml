@@ -13,9 +13,9 @@ let init () =
     Slices.setup ();
     Numbers.(
       Int.setup ();
-      (* Float.setup ();
-       * Bool.setup ();
-       * Complx.setup (); *)
+      Float.setup ();
+      Bool.setup ();
+      Complx.setup ();
     );
     Containers.(
       Lists.setup ();
