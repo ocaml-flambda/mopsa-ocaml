@@ -62,7 +62,7 @@ module Domain= struct
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {+, -, x, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-      when is_arithmetic_op_fun f ->
+      when is_arithmetic_binop_fun f ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -76,7 +76,7 @@ module Domain= struct
             eval_compose (fun e2 flow ->
                 let o2 = object_of_expr e2 in
                 let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
-                let op = arithmetic_op f in
+                let op = arithmetic_binop f in
                 oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
               )
         )
@@ -110,9 +110,31 @@ module Domain= struct
               )
         )
 
+    (* 𝔼⟦ int.__op__(e) | op ∈ {-, +, ~, abs} ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
+      when is_unop_fun f ->
+      man.eval ctx e flow |>
+      eval_compose (fun e flow ->
+          let o = object_of_expr e in
+          if not (Addr.isinstance o (Addr.find_builtin "int")) then
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
+          else
+            let ev = value_of_object o in
+            let ev' =
+              match f with
+                  | "int.__neg__" -> mk_unop math_minus ev ~etyp:T_int range
+                  | "int.__pos__" -> ev
+                  | "int.__abs__" -> Framework.Exceptions.panic_at range "int.__abs__ not supported"
+                  | "int.__invert__" -> mk_unop O_bit_invert ev ~etyp:T_int range
+                  | _ -> assert false
+            in
+            oeval_singleton (Some (mk_py_int_expr ev' range), flow, [])
+        )
+
     (* 𝔼⟦ int.__op__(e1, e2, ..., en) | n != 2 ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, [])
-      when is_arithmetic_op_fun f || is_compare_op_fun f ->
+      when is_arithmetic_binop_fun f || is_compare_op_fun f ->
       let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
       oeval_singleton (None, flow, [])
 
@@ -235,10 +257,36 @@ module Domain= struct
 
 
 
-  and is_arithmetic_op_fun = function
+  and is_arithmetic_binop_fun = function
     | "int.__add__"
+    | "int.__radd__"
+    | "int.__and__"
+    | "int.__rand__"
+    | "int.__floordiv__"
+    | "int.__rfloordiv__"
+    | "int.__lshift__"
+    | "int.__rlshift__"
+    | "int.__mod__"
+    | "int.__rmod__"
+    | "int.__mul__"
+    | "int.__rmul__"
+    | "int.__or__"
+    | "int.__ror__"
+    | "int.__pow__"
+    | "int.__rpow__"
+    | "int.__truediv__"
+    | "int.__rtruediv__"
     | "int.__sub__"
-    | "int.__mul__" -> true
+    | "int.__rsub__"
+    | "int.__xor__"
+    | "int.__rxor__" -> true
+    | _ -> false
+
+  and is_unop_fun = function
+    | "int.__neg__"
+    | "int.__pos__"
+    | "int.__abs__"
+    | "int.__invert__" -> true
     | _ -> false
 
   and is_compare_op_fun = function
@@ -250,10 +298,29 @@ module Domain= struct
     | "int.__ge__" -> true
     | _ -> false
 
-  and arithmetic_op = function
-    | "int.__add__" -> math_plus
-    | "int.__sub__" -> math_minus
-    | "int.__mul__" -> math_mult
+  and arithmetic_binop = function
+    | "int.__add__"
+    | "int.__radd__" -> math_plus
+    | "int.__and__"
+    | "int.__rand__" -> O_bit_and
+    | "int.__floordiv__"
+    | "int.__rfloordiv__" -> O_py_floor_div
+    | "int.__lshift__"
+    | "int.__rlshift__" -> O_bit_lshift
+    | "int.__mod__"
+    | "int.__rmod__" -> math_mod
+    | "int.__mul__"
+    | "int.__rmul__" -> math_mult
+    | "int.__or__"
+    | "int.__ror__" -> O_bit_or
+    | "int.__pow__"
+    | "int.__rpow__" -> O_pow
+    | "int.__truediv__"
+    | "int.__rtruediv__" -> math_div
+    | "int.__sub__"
+    | "int.__rsub__" -> math_minus
+    | "int.__xor__"
+    | "int.__rxor__" -> O_bit_xor
     | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function

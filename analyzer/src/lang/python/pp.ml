@@ -55,7 +55,6 @@ let () =
   register_pp_operator (fun default fmt -> function
       | O_py_and -> pp_print_string fmt "and"
       | O_py_or -> pp_print_string fmt "or"
-      | O_py_not -> pp_print_string fmt "not"
       | O_py_floor_div -> pp_print_string fmt "//"
       | O_py_is -> pp_print_string fmt "is"
       | O_py_is_not -> pp_print_string fmt "is not"

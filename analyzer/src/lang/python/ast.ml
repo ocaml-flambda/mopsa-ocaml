@@ -48,7 +48,6 @@ let compare_py_object (obj1: py_object) (obj2: py_object) : int =
 type operator +=
   | O_py_and (** and *)
   | O_py_or (** or *)
-  | O_py_not (** not *)
   | O_py_floor_div (** // *)
   | O_py_is (** is *)
   | O_py_is_not (** is not *)

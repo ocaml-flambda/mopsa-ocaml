@@ -425,7 +425,7 @@ and from_comparison_op : Py_CST.cmpop -> Framework.Ast.operator = function
   | NotIn -> O_py_not_in
 
 and from_unop = function
-  | Not -> Ast.O_py_not
+  | Not -> Universal.Ast.O_log_not
   | USub -> Universal.Ast.O_minus T_any
   | UAdd -> Universal.Ast.O_plus T_any
   | Invert -> Universal.Ast.O_bit_invert

@@ -130,7 +130,7 @@ struct
 
 
     (* E⟦ not e ⟧ *)
-    | E_unop((O_py_not | Universal.Ast.O_log_not), e') when is_py_expr e' ->
+    | E_unop(Universal.Ast.O_log_not, e') when is_py_expr e' ->
       man.eval ctx e' flow |>
       eval_compose (fun e' flow ->
           let o = object_of_expr e' in
