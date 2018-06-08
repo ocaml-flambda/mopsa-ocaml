@@ -131,9 +131,9 @@ struct
           if Addr.isclass cls then
             let cls0 = Addr.class_of_object obj in
             if Addr.issubclass cls0 cls then
-              oeval_singleton (Some (mk_true range), flow, [])
+              oeval_singleton (Some (mk_py_true range), flow, [])
             else
-              oeval_singleton (Some (mk_false range), flow, [])
+              oeval_singleton (Some (mk_py_false range), flow, [])
           else
           if Addr.isinstance cls (Addr.find_builtin "tuple") then
             Framework.Exceptions.panic_at range "isinstance: tuple of classes not supported"
@@ -154,9 +154,9 @@ struct
 
           if Addr.isclass cls1 && Addr.isclass cls2 then
             if Addr.issubclass cls1 cls2 then
-              oeval_singleton (Some (mk_true range), flow, [])
+              oeval_singleton (Some (mk_py_true range), flow, [])
             else
-              oeval_singleton (Some (mk_false range), flow, [])
+              oeval_singleton (Some (mk_py_false range), flow, [])
           else
           if Addr.isinstance cls2 (Addr.find_builtin "tuple") then
             Framework.Exceptions.panic_at range "issubclass: tuple of classes not supported"

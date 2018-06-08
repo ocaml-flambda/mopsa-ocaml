@@ -32,9 +32,7 @@ struct
       man.eval ctx (Utils.mk_builtin_call "iter" [exp] range) flow |>
       eval_to_exec
         (fun iter flow ->
-           match ekind iter with
-           | E_addr(addr) -> assign_iter man ctx el addr kind range flow
-           | _ -> assert false
+           assign_iter man ctx el iter kind range flow
         )
         (man.exec ctx) man.flow
 
@@ -48,7 +46,7 @@ struct
       List.fold_left (fun acc e ->
           mk_assign
             e ~mode
-            (Utils.mk_builtin_call "next" [mk_addr iter (tag_range range "iter addr")] range)
+            (Utils.mk_builtin_call "next" [iter] range)
             (tag_range range "next assign")
           :: acc
         ) [] el |>

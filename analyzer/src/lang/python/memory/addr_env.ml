@@ -148,7 +148,7 @@ struct
             oeval_join acc
 
           | PyAddr.Def addr ->
-            oeval_singleton (Some (mk_addr addr range), flow, []) |>
+            oeval_singleton (Some (mk_py_object (addr, None) range), flow, []) |>
             oeval_join acc
 
         ) aset None

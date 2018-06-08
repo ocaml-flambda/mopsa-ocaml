@@ -32,7 +32,7 @@ struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_addr _}, _, _) ->
+    | E_py_call({ekind = E_py_object _}, _, _) ->
       (* Calls to addresses should be captured by other domains. If we
          are here, then we are missing an implementation of the
          function *)
@@ -51,11 +51,11 @@ struct
              oeval_singleton (None, flow, [])
 
            (* Calls on instances is OK if __call__ is defined *)
-           | E_addr {addr_kind = A_py_instance(cls, None)} ->
+           | E_py_object ({addr_kind = A_py_instance(cls, None)}, _) ->
              assert false
 
            (* Calls on other kinds of addresses is handled by other domains *)
-           | E_addr _ ->
+           | E_py_object _ ->
              eval_list args (man.eval ctx) flow |>
              eval_compose (fun args flow ->
                  let exp = {exp with ekind = E_py_call(f, args, [])} in

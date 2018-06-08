@@ -18,6 +18,7 @@ open Framework.Exec
 open Framework.Ast
 open Universal.Ast
 open Ast
+open Addr
 
 let name = "python.desugar.bool"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -61,14 +62,14 @@ struct
           let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
           let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in
           if compare_py_object cls1 cls2 <> 0 then
-            oeval_singleton (Some (mk_false range), flow, [])
+            oeval_singleton (Some (mk_py_false range), flow, [])
           else
             let a1 = addr_of_object o1 and a2 = addr_of_object o2 in
             match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
-            | false, false, true -> oeval_singleton (Some (mk_true range), flow, [])
-            | false, false, false -> oeval_singleton (Some (mk_false range), flow, [])
-            | true, true, false -> oeval_singleton (Some (mk_false range), flow, [])
-            | _ -> oeval_singleton (Some (mk_top T_bool range), flow, [])
+            | false, false, true -> oeval_singleton (Some (mk_py_true range), flow, [])
+            | false, false, false -> oeval_singleton (Some (mk_py_false range), flow, [])
+            | true, true, false -> oeval_singleton (Some (mk_py_false range), flow, [])
+            | _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])
         )
 
     (* E⟦ e1 is not e2 ⟧ *)
@@ -131,8 +132,8 @@ struct
     (* E⟦ not e ⟧ *)
     | E_unop(O_py_not, e') ->
       Universal.Utils.assume_to_eval e'
-        (fun true_flow -> oeval_singleton (Some (mk_false exp.erange), true_flow, []))
-        (fun false_flow -> oeval_singleton (Some (mk_true exp.erange), false_flow, []))
+        (fun true_flow -> oeval_singleton (Some (mk_py_false exp.erange), true_flow, []))
+        (fun false_flow -> oeval_singleton (Some (mk_py_true exp.erange), false_flow, []))
         man ctx flow ()
 
     (* E⟦ e1 op e2 op e3 ... ⟧ *)
@@ -145,7 +146,7 @@ struct
           let rec aux left flow = function
             | [] ->
               debug "leaf case -> true";
-              oeval_singleton (Some (mk_true range), flow, [])
+              oeval_singleton (Some (mk_py_true range), flow, [])
 
             | (op, right) :: tl ->
               man.eval ctx right flow |>
@@ -153,7 +154,7 @@ struct
                   Universal.Utils.assume_to_eval
                     (mk_binop left op right range)
                     (fun true_flow -> aux right true_flow tl)
-                    (fun false_flow -> oeval_singleton (Some (mk_false range), flow, []))
+                    (fun false_flow -> oeval_singleton (Some (mk_py_false range), flow, []))
                     man ctx flow ()
                 )
           in

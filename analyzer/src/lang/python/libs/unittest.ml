@@ -177,7 +177,7 @@ struct
              (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
              (fun true_flow ->
                 let flow = man.exec ctx (mk_assert_reachable range) true_flow in
-                oeval_singleton (Some (mk_true range), flow, [])
+                oeval_singleton (Some (mk_py_true range), flow, [])
              )
              (fun false_flow ->
                 let flow = man.exec ctx (mk_assert_unreachable range) false_flow in

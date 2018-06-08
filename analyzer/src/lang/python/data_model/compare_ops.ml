@@ -75,11 +75,11 @@ module Domain = struct
                     (* Apply default equality test *)
                     begin
                       match op, is_equal e1 e2 with
-                      | O_eq, Some true -> oeval_singleton (Some (mk_true range), flow, [])
-                      | O_eq, Some false -> oeval_singleton (Some (mk_false range), flow, [])
-                      | O_ne, Some true -> oeval_singleton (Some (mk_false range), flow, [])
-                      | O_ne, Some false -> oeval_singleton (Some (mk_true range), flow, [])
-                      | _, None -> oeval_singleton (Some (mk_top T_bool range), flow, [])
+                      | O_eq, Some true -> oeval_singleton (Some (mk_py_true range), flow, [])
+                      | O_eq, Some false -> oeval_singleton (Some (mk_py_false range), flow, [])
+                      | O_ne, Some true -> oeval_singleton (Some (mk_py_false range), flow, [])
+                      | O_ne, Some false -> oeval_singleton (Some (mk_py_true range), flow, [])
+                      | _, None -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])
                       | _ -> assert false
                     end
                   | _ ->

@@ -13,6 +13,7 @@ open Framework.Domains.Reduce.Domain
 open Framework.Flow
 open Framework.Manager
 open Framework.Query
+open Framework.Context
 open Framework.Eval
 open Framework.Exec
 open Framework.Ast
@@ -47,6 +48,32 @@ struct
       exec man ctx stmt flow
 
     | _ -> None
+
+  let ask : type r. ('a, t) manager -> context -> r query -> 'a flow -> r option =
+    fun man ctx query flow ->
+    match query with
+      | Query.QBool e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some v.Value.bool
+
+      | Query.QInt e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some v.Value.int
+
+      | Query.QFloat e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some v.Value.float
+
+      | Query.QString e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some v.Value.string
+
+      | _ -> None
+
 
 
 end

@@ -311,59 +311,57 @@ let mk_py_not_implemented range =
   mk_py_object (addr, Some e) range
 
 let int_range = mk_fresh_range ()
-let mk_py_z z range =
+let mk_py_int_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "int", None);
       addr_range = int_range;
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  let e = Universal.Ast.mk_z z range in
   mk_py_object (addr, Some e) range
 
+let mk_py_z z range = mk_py_int_expr (Universal.Ast.mk_z z range) range
 let mk_py_int n range = mk_py_z (Z.of_int n) range
-
 let mk_py_zero range = mk_py_z Z.zero range
-
 let mk_py_one range = mk_py_z Z.one range
-    
+
 let float_range = mk_fresh_range ()
-let mk_py_float f range =
+let mk_py_float_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "float", None);
       addr_range = float_range;
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  let e = Universal.Ast.mk_float f range in
   mk_py_object (addr, Some e) range
 
+let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
+
 let bool_range = mk_fresh_range ()
-let mk_py_bool b range =
+let mk_py_bool_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "bool", None);
       addr_range = bool_range;
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  let e = Universal.Ast.mk_bool b range in
   mk_py_object (addr, Some e) range
 
-let mk_py_true range = mk_py_bool true range
-
-let mk_py_false range = mk_py_bool false range
+let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_true range) range
+let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_false range) range
 
 let string_range = mk_fresh_range ()
-let mk_py_string s range =
+let mk_py_string_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "str", None);
       addr_range = string_range;
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  let e = Universal.Ast.mk_string s range in
   mk_py_object (addr, Some e) range
 
+let mk_py_string s range = mk_py_string_expr (Universal.Ast.mk_string s range) range
+    
 let complex_range = mk_fresh_range ()
 let mk_py_imag j range =
   let addr = Universal.Ast.{
@@ -375,14 +373,22 @@ let mk_py_imag j range =
   let e = mk_constant ~etyp:T_py_complex (C_py_imag j) range in
   mk_py_object (addr, Some e) range
 
+let mk_py_top t range =
+  let open Universal.Ast in
+  match t with
+  | T_int -> mk_py_int_expr (Framework.Ast.mk_top T_int range) range
+  | T_float -> mk_py_float_expr (Framework.Ast.mk_top T_float range) range
+  | T_bool -> mk_py_bool_expr (Framework.Ast.mk_top T_bool range) range
+  | T_string -> mk_py_string_expr (Framework.Ast.mk_top T_string range) range
+  | _ -> assert false
 
 let mk_py_constant c range =
   let open Universal.Ast in
   match c with
   | C_int z -> mk_py_z z range
   | C_float f -> mk_py_float f range
-  | C_true -> mk_py_bool true range
-  | C_false -> mk_py_bool false range
+  | C_true -> mk_py_true range
+  | C_false -> mk_py_false range
   | C_string s -> mk_py_string s range
   | C_py_none -> mk_py_none range
   | C_py_not_implemented -> mk_py_not_implemented range
