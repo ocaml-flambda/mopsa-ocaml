@@ -62,7 +62,7 @@ module Domain= struct
          eval_compose (fun ret flow ->
              let o = object_of_expr ret in
              if Addr.isinstance o (Addr.find_builtin "bool") then
-               oeval_singleton (Some exp, flow, [])
+               oeval_singleton (Some ret, flow, [])
              else
                let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
                oeval_singleton (None, flow, [])

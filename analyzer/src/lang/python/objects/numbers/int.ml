@@ -33,23 +33,28 @@ module Domain= struct
 
         | [arg] ->
           let obj = object_of_expr arg in
-          begin match type_of_object obj, kwds with
-            | T_int, [] -> oeval_singleton (Some arg, flow, [])
-            | T_string, [] -> new_int_from_string man ctx arg (mk_int 10 range) range flow
-            | T_string, [Some "base", base] -> new_int_from_string man ctx arg base range flow
-            | _, [] -> new_int_from_object man ctx arg range flow
-            | _ -> assert false
-          end
+          if Addr.isinstance obj (Addr.find_builtin "int") then
+            let e = value_of_object obj in
+            oeval_singleton (Some (mk_py_int_expr e range), flow, [])
+          else
+          if Addr.isinstance obj (Addr.find_builtin "str") then
+            let base = match kwds with
+              | [] -> mk_int 10 range
+              | [Some "base", base] -> base
+              | _ -> assert false
+            in
+            new_int_from_string man ctx arg base range flow
+          else
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
 
         | [arg; base] ->
           let obj = object_of_expr arg in
-          begin match type_of_object obj with
-            | T_string -> new_int_from_string man ctx arg base range flow
-            | _ ->
-              let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-              oeval_singleton (None, flow, [])
-
-          end
+          if Addr.isinstance obj (Addr.find_builtin "str") then
+            new_int_from_string man ctx arg base range flow
+          else
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
 
         | _ ->
           let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
