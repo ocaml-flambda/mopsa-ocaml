@@ -114,7 +114,12 @@ struct
           (* Initialize local variables to undefined value and give the call to {!Universal} *)
           let flow = man.exec ctx
               (mk_block (List.mapi (fun i v ->
-                   mk_assign (mk_var v range) (mk_expr (E_py_undefined false) range) range
+                   let e =
+                     (* Initialize locals with the same name of a builtin with its address *)
+                     if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+                     else mk_expr (E_py_undefined false) range
+                   in
+                   mk_assign (mk_var v range) e range
                  ) pyfundec.py_func_locals) range)
               flow
           in

@@ -134,6 +134,14 @@ struct
           let cur' = add v (ASet.singleton a) cur in
           let flow' = set_domain_cur cur' man flow in
           match a with
+          | PyAddr.Undef_global when Addr.is_builtin_name v.vname ->
+            oeval_singleton (Some (mk_py_object (Addr.find_builtin v.vname) range), flow, []) |>
+            oeval_join acc
+
+          | PyAddr.Undef_local when Addr.is_builtin_name v.vname ->
+            oeval_singleton (Some (mk_py_object (Addr.find_builtin v.vname) range), flow, []) |>
+            oeval_join acc
+
           | PyAddr.Undef_global ->
              let flow = man.exec ctx (Utils.mk_builtin_raise "NameError" range) flow' in
              oeval_singleton (None, flow, []) |>

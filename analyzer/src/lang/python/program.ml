@@ -34,10 +34,12 @@ struct
     let stmt =
       mk_block
         (List.mapi (fun i v ->
-             mk_assign
-               (mk_var v range)
-               (mk_expr (E_py_undefined true) range)
-               range
+             let e =
+               (* Initialize globals with the same name of a builtin with its address *)
+               if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+               else mk_expr (E_py_undefined true) range
+             in
+             mk_assign (mk_var v range) e range
            ) globals
         )
         range
@@ -102,7 +104,7 @@ struct
     let range = mk_file_range file in
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.vname, test.py_func_body)
+          (test.py_func_var.vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
