@@ -146,7 +146,12 @@ module Domain= struct
               (fun false_flow -> oeval_singleton (Some (mk_py_bool true range), flow, []))
         (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
               man ctx flow ()
-        )                              
+        )
+
+    (* 𝔼⟦ int.__bool__(arg1, arg2, ..., argn) | n != 1 ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, _, []) ->
+      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+      oeval_singleton (None, flow, [])
   
     | _ -> None
 
