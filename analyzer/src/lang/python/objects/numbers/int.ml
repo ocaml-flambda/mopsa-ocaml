@@ -125,12 +125,28 @@ module Domain= struct
               )
         )
 
-    (* 𝔼⟦ int.__op__(e1, e2, ...) ⟧ *)
+    (* 𝔼⟦ int.__op__(e1, e2, ..., en) | n != 2 ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, [])
-      when is_arithmetic_op_fun f ->
+      when is_arithmetic_op_fun f || is_compare_op_fun f ->
       let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
       oeval_singleton (None, flow, [])
 
+    (* 𝔼⟦ int.__bool__(self) ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, [self], []) ->
+      man.eval ctx self flow |>
+      eval_compose (fun self flow ->
+          let o = object_of_expr self in
+          if not (Addr.isinstance o (Addr.find_builtin "int")) then
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
+          else
+            Universal.Utils.assume_to_eval
+              (mk_binop self O_eq (mk_py_int 0 range) range)
+              (fun true_flow -> oeval_singleton (Some (mk_py_bool false range), flow, []))
+              (fun false_flow -> oeval_singleton (Some (mk_py_bool true range), flow, []))
+        (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
+              man ctx flow ()
+        )                              
   
     | _ -> None
 
