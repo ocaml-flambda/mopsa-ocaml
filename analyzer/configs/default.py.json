@@ -33,6 +33,7 @@
 	"python.objects.numbers.complx",
         "python.objects.strings",
         "python.objects.slices",
+        "python.objects.nones",
 
 	"python.objects.containers.lists",
         "python.objects.containers.dicts",

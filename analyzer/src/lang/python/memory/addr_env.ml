@@ -105,6 +105,13 @@ struct
         ) (man.exec ctx) man.flow |>
       return
 
+    | S_remove_var ({vkind = V_orig} as v) ->
+      let flow = map_domain_cur (remove v) man flow in
+      let v' = mk_py_value_var v T_any in
+      man.exec ctx (mk_remove_var v' range) flow |>
+      return
+
+
     | _ -> None
 
   and assign_addr man ctx v av mode flow =

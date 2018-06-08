@@ -40,12 +40,14 @@ struct
   let exec man ctx stmt flow =
     match skind stmt with
     (* S⟦ v = e ⟧ *)
-    | S_assign({ekind = E_var {vkind = V_py_value_var _}}, e, mode) ->
+    | S_assign({ekind = E_var {vkind = V_py_value_var _}}, _, _)
+    | S_remove_var ({vkind = V_py_value_var _} ) ->
       debug "assign value";
       exec man ctx stmt flow
 
     | S_assume(e) when not (is_py_expr e) ->
       exec man ctx stmt flow
+
 
     | _ -> None
 
