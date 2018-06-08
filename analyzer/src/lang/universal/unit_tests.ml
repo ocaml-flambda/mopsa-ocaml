@@ -50,6 +50,13 @@ type alarm_kind +=
   | AMayTest of expr (** condition *)* string (** test function *)
   | APanic of string (** panic message *) * string (** test function *)
 
+
+(*==========================================================================*)
+(**                      {2 Command line option }                           *)
+(*==========================================================================*)
+
+let opt_test_functions = ref []
+
 (*==========================================================================*)
 (**                        {2 Abstract domain }                             *)
 (*==========================================================================*)
@@ -60,49 +67,52 @@ struct
 
   let execute_test_functions man ctx tests flow =
     tests |> List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
-        debug "Executing %s" name;
-        let ctx = Framework.Context.add KCurTestName name ctx in
-        try
-          (* Call the function *)
-          let flow1 = man.exec ctx test flow in
-          let ok, fail, may_fail = man.flow.fold (fun (ok, fail, may_fail) env -> function
-              | TSafeAssert _ -> (ok + 1, fail, may_fail)
-              | TFailAssert _ -> (ok, fail + 1, may_fail)
-              | TMayAssert _ -> (ok, fail, may_fail + 1)
-              | _ -> (ok, fail, may_fail)
-            ) (0, 0, 0) flow1 in
-          debug "Execution of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven"
-            name
-            ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
-            ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
-            ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail
-          ;
-          let is_fail = fail > 0 in
-          let is_may_fail = may_fail > 0 in
-          let is_panic = false in
-          let is_ok =
-            not is_fail &&
-            not is_may_fail &&
-            not is_panic (* &&
-             * man.flow.fold (fun acc env tk ->
-             *     match tk with
-             *     | TSafeAssert _ | TFailAssert _ | TMayAssert _ -> acc
-             *     | Flows.Interproc.TReturn _ -> acc
-             *     | TCur -> acc
-             *     | _ -> acc && man.env.is_bottom env
-             *   ) true flow1 *)
-          in
-          man.flow.join acc flow1, nb_ok + (if is_ok then 1 else 0), nb_fail + (if is_fail then 1 else 0), nb_may_fail + (if is_may_fail then 1 else 0), nb_panic
-        with
-        | Framework.Exceptions.Panic (msg) ->
-          Debug.warn "Panic: @[%s@]" msg;
-          let flow1 = man.flow.add (TPanic (msg, name, test.srange)) (man.flow.get TCur flow) flow in
-          man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+        if List.length !opt_test_functions > 0 && not (List.mem name !opt_test_functions) then
+          (acc, nb_ok, nb_fail, nb_may_fail, nb_panic)
+        else
+          let ctx = Framework.Context.add KCurTestName name ctx in
+          try
+            (* Call the function *)
+            debug "Executing %s" name;
+            let flow1 = man.exec ctx test flow in
+            let ok, fail, may_fail = man.flow.fold (fun (ok, fail, may_fail) env -> function
+                | TSafeAssert _ -> (ok + 1, fail, may_fail)
+                | TFailAssert _ -> (ok, fail + 1, may_fail)
+                | TMayAssert _ -> (ok, fail, may_fail + 1)
+                | _ -> (ok, fail, may_fail)
+              ) (0, 0, 0) flow1 in
+            debug "Execution of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven"
+              name
+              ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
+              ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
+              ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail
+            ;
+            let is_fail = fail > 0 in
+            let is_may_fail = may_fail > 0 in
+            let is_panic = false in
+            let is_ok =
+              not is_fail &&
+              not is_may_fail &&
+              not is_panic (* &&
+                            * man.flow.fold (fun acc env tk ->
+                            *     match tk with
+                            *     | TSafeAssert _ | TFailAssert _ | TMayAssert _ -> acc
+                            *     | Flows.Interproc.TReturn _ -> acc
+                            *     | TCur -> acc
+                            *     | _ -> acc && man.env.is_bottom env
+                            *   ) true flow1 *)
+            in
+            man.flow.join acc flow1, nb_ok + (if is_ok then 1 else 0), nb_fail + (if is_fail then 1 else 0), nb_may_fail + (if is_may_fail then 1 else 0), nb_panic
+          with
+          | Framework.Exceptions.Panic (msg) ->
+            Debug.warn "Panic: @[%s@]" msg;
+            let flow1 = man.flow.add (TPanic (msg, name, test.srange)) (man.flow.get TCur flow) flow in
+            man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
-        | Framework.Exceptions.PanicAt (range, msg) ->
-          Debug.warn "Panic: @[%s@] at %a" msg Framework.Pp.pp_range range;
-          let flow1 = man.flow.add (TPanic (msg, name, range)) (man.flow.get TCur flow) flow in
-          man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
+          | Framework.Exceptions.PanicAt (range, msg) ->
+            Debug.warn "Panic: @[%s@] at %a" msg Framework.Pp.pp_range range;
+            let flow1 = man.flow.add (TPanic (msg, name, range)) (man.flow.get TCur flow) flow in
+            man.flow.join acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
       ) (man.flow.bottom, 0, 0, 0, 0)
 
@@ -269,4 +279,13 @@ let setup () =
                 | _ -> chain.check k1 k2
             in
             f);
-  }
+  };
+  Framework.Options.(register (
+      "-test-function",
+      Arg.String (fun s ->
+          let l = String.split_on_char ',' s in
+          opt_test_functions := l
+        ),
+      " names of test functions to analyze, separated by ','"
+    ));
+  ()
