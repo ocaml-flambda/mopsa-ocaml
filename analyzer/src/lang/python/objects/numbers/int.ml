@@ -63,15 +63,22 @@ module Domain= struct
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {+, -, x, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_arithmetic_op_fun f ->
-      let e1' = Utils.mk_builtin_call "int" [e1] range in
-      let e2' = Utils.mk_builtin_call "int" [e2] range in
-      eval_list [e1'; e2'] (man.eval ctx) flow |>
+      eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
-          let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
-          let op = arithmetic_op f in
-          oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
+          let o1 = object_of_expr e1 in
+          if not (Addr.isinstance o1 (Addr.find_builtin "int")) then
+            let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+            oeval_singleton (None, flow, [])
+          else
+            let e2' = Utils.mk_builtin_call "int" [e2] range in
+            man.eval ctx e2' flow |>
+            eval_compose (fun e2 flow ->
+                let o2 = object_of_expr e2 in
+                let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
+                let op = arithmetic_op f in
+                oeval_singleton (Some (mk_py_float_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
+              )
         )
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
