@@ -9,25 +9,12 @@
 (** Queries on abstract values. *)
 
 type _ Framework.Query.query +=
-  | QBool : Framework.Ast.expr -> Value.B.t Framework.Query.query
   | QInt : Framework.Ast.expr -> Value.I.t Framework.Query.query
   | QFloat : Framework.Ast.expr -> Value.F.t Framework.Query.query
   | QString : Framework.Ast.expr -> Value.S.t Framework.Query.query
 
 let () =
   Framework.Query.(
-    register_reply_manager {
-      domatch = (let check : type a. a query -> (a, Value.B.t) eq option =
-                   function
-                   | QBool _ -> Some Eq
-                   | _ -> None
-                 in
-                 check
-                );
-      join = Value.B.join;
-      meet = Value.B.meet;
-    };
-
     register_reply_manager {
       domatch = (let check : type a. a query -> (a, Value.I.t) eq option =
                    function

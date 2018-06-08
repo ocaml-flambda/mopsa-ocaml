@@ -136,21 +136,23 @@ struct
           let o = object_of_expr e' in
           if Addr.isinstance o (Addr.find_builtin "bool") then
             let e = value_of_object o in
-            let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
-            Memory.Value.B.fold (fun b acc ->
-                if b then oeval_singleton (Some (mk_py_false range), flow, []) |> oeval_join acc
-                else oeval_singleton (Some (mk_py_true range), flow, []) |> oeval_join acc
-              ) a None
+            let a = man.ask ctx (Memory.Query.QInt e) flow |> Option.none_to_exn in
+            match Memory.Value.I.can_be_true a, Memory.Value.I.can_be_false a with
+            | true, false -> oeval_singleton (Some (mk_py_false range), flow, [])
+            | false, true -> oeval_singleton (Some (mk_py_true range), flow, [])
+            | true, true -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])
+            | false, false -> oeval_singleton (None, flow, [])
           else
             man.eval ctx (Utils.mk_builtin_call "bool" [e'] range) flow |>
             eval_compose (fun ret flow ->
                 let o = object_of_expr ret in
                 let e = value_of_object o in
-                let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
-                Memory.Value.B.fold (fun b acc ->
-                    if b then oeval_singleton (Some (mk_py_false range), flow, []) |> oeval_join acc
-                    else oeval_singleton (Some (mk_py_true range), flow, []) |> oeval_join acc
-                  ) a None
+                let a = man.ask ctx (Memory.Query.QInt e) flow |> Option.none_to_exn in
+                match Memory.Value.I.can_be_true a, Memory.Value.I.can_be_false a with
+                | true, false -> oeval_singleton (Some (mk_py_false range), flow, [])
+                | false, true -> oeval_singleton (Some (mk_py_true range), flow, [])
+                | true, true -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])
+                | false, false -> oeval_singleton (None, flow, [])
               )
         )
 
@@ -193,20 +195,16 @@ struct
         let o = object_of_expr e in
         if Addr.isinstance o (Addr.find_builtin "bool") then
           let e = value_of_object o in
-          match etyp e with
-          | T_bool ->
-            let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
-            Memory.Value.B.fold (fun b acc ->
-                if b then flow
-                else acc
-              ) a (man.flow.set TCur man.env.bottom flow)
-
-          | _ -> otherwise flow
-
+          let a = man.ask ctx (Memory.Query.QInt e) flow |> Option.none_to_exn in
+          match Memory.Value.I.can_be_true a, Memory.Value.I.can_be_false a with
+          | true, false -> flow
+          | false, true -> man.flow.set TCur man.env.bottom flow
+          | true, true -> flow
+          | false, false -> man.flow.set TCur man.env.bottom flow
         else
           otherwise flow
       in
-      
+
       man.eval ctx e flow |>
       eval_to_exec (fun e flow ->
           check_bool e

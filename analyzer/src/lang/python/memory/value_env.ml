@@ -52,11 +52,6 @@ struct
   let ask : type r. ('a, t) manager -> context -> r query -> 'a flow -> r option =
     fun man ctx query flow ->
     match query with
-      | Query.QBool e ->
-        let a = get_domain_cur man flow in
-        let v = eval_value a e in
-        Some v.Value.bool
-
       | Query.QInt e ->
         let a = get_domain_cur man flow in
         let v = eval_value a e in

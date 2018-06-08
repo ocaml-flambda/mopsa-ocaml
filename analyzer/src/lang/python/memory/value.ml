@@ -36,13 +36,6 @@ module N = Framework.Lattices.Enum.Make(struct
   end
   )
 
-(** Boolean lattice *)
-module B = Framework.Lattices.Enum.Make(struct
-    type t = bool
-    let values = [true; false]
-    let print = Format.pp_print_bool
-  end)
-
 (** Powerset lattice of finite strings *)
 module S = Framework.Lattices.Top_set.Make(struct
     type t = string
@@ -81,7 +74,6 @@ module F = Universal.Numeric.Values.Float
 
 type t = {
   none: N.t;
-  bool: B.t;
   string: S.t;
   int : I.t;
   float : F.t;
@@ -91,7 +83,6 @@ type t = {
 
 let bottom = {
   none = N.bottom;
-  bool = B.bottom;
   string = S.bottom;
   int = I.bottom;
   float = F.bottom;
@@ -102,7 +93,6 @@ let bottom = {
 
 let top = {
   none = N.top;
-  bool = B.top;
   string = S.top;
   int = I.top;
   float = F.top;
@@ -112,7 +102,6 @@ let top = {
 
 let is_bottom abs =
   N.is_bottom abs.none &&
-  B.is_bottom abs.bool &&
   S.is_bottom abs.string &&
   I.is_bottom abs.int &&
   F.is_bottom abs.float &&
@@ -122,7 +111,6 @@ let is_bottom abs =
 
 let is_top abs =
   N.is_top abs.none &&
-  B.is_top abs.bool &&
   S.is_top abs.string &&
   I.is_top abs.int &&
   F.is_top abs.float &&
@@ -153,11 +141,6 @@ let print fmt abs =
       pred := true;
     );
 
-    if not (B.is_bottom abs.bool) then (
-      fprintf fmt "%s b: %a " (if !pred then "∨" else "") B.print abs.bool;
-      pred := true;
-    );
-
     if not (S.is_bottom abs.string) then (
       fprintf fmt "%s s: %a " (if !pred then "∨" else "") S.print abs.string;
       pred := true;
@@ -177,7 +160,6 @@ let print fmt abs =
 
 let leq abs1 abs2 =
   N.leq abs1.none abs2.none &&
-  B.leq abs1.bool abs2.bool &&
   S.leq abs1.string abs2.string &&
   I.leq abs1.int abs2.int &&
   F.leq abs1.float abs2.float &&
@@ -186,7 +168,6 @@ let leq abs1 abs2 =
 
 let join abs1 abs2 = {
   none = N.join abs1.none abs2.none;
-  bool = B.join abs1.bool abs2.bool;
   string = S.join abs1.string abs2.string;
   int = I.join abs1.int abs2.int;
   float = F.join abs1.float abs2.float;
@@ -196,7 +177,6 @@ let join abs1 abs2 = {
 
 let meet abs1 abs2 = {
   none = N.meet abs1.none abs2.none;
-  bool = B.meet abs1.bool abs2.bool;
   string = S.meet abs1.string abs2.string;
   int = I.meet abs1.int abs2.int;
   float = F.meet abs1.float abs2.float;
@@ -206,7 +186,6 @@ let meet abs1 abs2 = {
 
 let widening ctx abs1 abs2 = {
   none = N.widening ctx abs1.none abs2.none;
-  bool = B.widening ctx abs1.bool abs2.bool;
   string = S.widening ctx abs1.string abs2.string;
   int = I.widening ctx abs1.int abs2.int;
   float = F.widening ctx abs1.float abs2.float;
@@ -215,11 +194,6 @@ let widening ctx abs1 abs2 = {
 }
 
 (** Creation of uniquely typed values *)
-let boolean b = {
-  bottom with
-  bool = b;
-}
-
 let none n = {
   bottom with
   none = n;
@@ -253,9 +227,9 @@ let empty e = {
 (** Creation of a value from a program constant *)
 let of_constant c =
   match c with
-  | C_true -> boolean (B.singleton true)
-  | C_false -> boolean (B.singleton false)
-  | C_top T_bool -> boolean B.top
+  | C_true -> integer (I.of_constant (C_int Z.one))
+  | C_false -> integer (I.of_constant (C_int Z.zero))
+  | C_top T_bool -> integer (I.of_constant (C_int_interval (Z.zero, Z.one)))
 
   | C_py_none | C_top T_py_none -> none  (N.singleton c)
 
@@ -314,8 +288,8 @@ let fwd_binop op abs1 abs2 = {
   float = F.fwd_binop op abs1.float abs2.float;
 }
 
-let mk_true = boolean (B.singleton true)
-let mk_false = boolean (B.singleton false)
+let mk_true = integer (I.of_constant (C_int Z.one))
+let mk_false = integer (I.of_constant (C_int Z.zero))
 
 let fwd_filter op abs1 abs2 =
   (I.fwd_filter op abs1.int abs2.int) ||
