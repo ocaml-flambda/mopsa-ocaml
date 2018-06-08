@@ -17,6 +17,7 @@ let init () =
       Bool.setup ();
       Complx.setup ();
     );
+    Nones.setup ();
     Containers.(
       Lists.setup ();
       Dicts.setup ();

@@ -52,12 +52,12 @@ struct
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
         {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
       ], []) ->
-      oeval_singleton (Some (mk_z_interval l u range), flow, [])
+      oeval_singleton (Some (mk_py_z_interval l u range), flow, [])
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
       begin
         match ekind l, ekind u with
-        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_z_interval l u range), flow, [])
+        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_py_z_interval l u range), flow, [])
         | _ ->
           let tmp = mktmp () in
           let l = Utils.mk_builtin_call "int" [l] range in
@@ -69,15 +69,15 @@ struct
       end
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
-      oeval_singleton (Some (mk_top T_int range), flow, [])
+      oeval_singleton (Some (mk_py_top T_int range), flow, [])
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
       begin
         match ekind l, ekind u with
-        | E_constant (C_float l), E_constant (C_float u) -> oeval_singleton (Some (mk_float_interval l u range), flow, [])
-        | E_constant (C_float l), E_constant (C_int u) -> oeval_singleton (Some (mk_float_interval l (Z.to_float u) range), flow, [])
-        | E_constant (C_int l), E_constant (C_float u) -> oeval_singleton (Some (mk_float_interval (Z.to_float l) u range), flow, [])
-        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_float_interval (Z.to_float l) (Z.to_float u) range), flow, [])
+        | E_constant (C_float l), E_constant (C_float u) -> oeval_singleton (Some (mk_py_float_interval l u range), flow, [])
+        | E_constant (C_float l), E_constant (C_int u) -> oeval_singleton (Some (mk_py_float_interval l (Z.to_float u) range), flow, [])
+        | E_constant (C_int l), E_constant (C_float u) -> oeval_singleton (Some (mk_py_float_interval (Z.to_float l) u range), flow, [])
+        | E_constant (C_int l), E_constant (C_int u) -> oeval_singleton (Some (mk_py_float_interval (Z.to_float l) (Z.to_float u) range), flow, [])
         | _ ->
           let tmp = mktmp () in
           let l = Utils.mk_builtin_call "float" [l] range in
@@ -89,13 +89,13 @@ struct
       end
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
-      oeval_singleton (Some (mk_top T_float range), flow, [])
+      oeval_singleton (Some (mk_py_top T_float range), flow, [])
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
-      oeval_singleton (Some (mk_top T_bool range), flow, [])
+      oeval_singleton (Some (mk_py_top T_bool range), flow, [])
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
-      oeval_singleton (Some (mk_top T_string range), flow, [])
+      oeval_singleton (Some (mk_py_top T_string range), flow, [])
 
     (* Calls to mopsa.assert_equal function *)
     | E_py_call(
@@ -127,7 +127,7 @@ struct
       )  ->
       let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec ctx stmt flow in
-      oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+      oeval_singleton (Some (mk_py_int 0 exp.erange), flow, [])
 
     | E_py_call(
         {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
@@ -153,7 +153,7 @@ struct
                      man.exec ctx stmt |>
                      man.flow.set TCur cur
           in
-          oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+          oeval_singleton (Some (mk_py_int 0 exp.erange), flow, [])
         with BottomFound ->
           oeval_singleton (None, flow, [])
       end
@@ -181,7 +181,7 @@ struct
                    man.flow.filter (fun _ -> function Flows.Exceptions.TExn _ -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        oeval_singleton (Some (mk_py_int 0 exp.erange), flow, [])
       end
 
     | E_py_call(
@@ -207,7 +207,7 @@ struct
                    man.flow.filter (fun _ -> function Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        oeval_singleton (Some (mk_py_int 0 exp.erange), flow, [])
       end
 
 
@@ -229,7 +229,7 @@ struct
                    man.flow.filter (fun _ -> function Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
                    man.flow.set TCur cur
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow', [])
+        oeval_singleton (Some (mk_py_int 0 exp.erange), flow', [])
       end
 
 

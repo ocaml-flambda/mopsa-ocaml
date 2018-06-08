@@ -321,6 +321,7 @@ let mk_py_int_expr e range =
   mk_py_object (addr, e) range
 
 let mk_py_z z range = mk_py_int_expr (Universal.Ast.mk_z z range) range
+let mk_py_z_interval z1 z2 range = mk_py_int_expr (Universal.Ast.mk_z_interval z1 z2 range) range
 let mk_py_int n range = mk_py_z (Z.of_int n) range
 let mk_py_zero range = mk_py_z Z.zero range
 let mk_py_one range = mk_py_z Z.one range
@@ -336,6 +337,7 @@ let mk_py_float_expr e range =
   mk_py_object (addr, e) range
 
 let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
+let mk_py_float_interval f1 f2 range = mk_py_int_expr (Universal.Ast.mk_float_interval f1 f2 range) range
 
 let bool_range = mk_fresh_range ()
 let mk_py_bool_expr e range =
