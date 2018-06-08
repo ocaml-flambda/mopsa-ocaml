@@ -147,8 +147,9 @@ module Domain= struct
             let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
             oeval_singleton (None, flow, [])
           else
+            let ev = value_of_object o in
             Universal.Utils.assume_to_eval
-              (mk_binop self O_eq (mk_py_int 0 range) range)
+              (mk_binop ev O_eq (mk_zero range) range)
               (fun true_flow -> oeval_singleton (Some (mk_py_false range), flow, []))
               (fun false_flow -> oeval_singleton (Some (mk_py_true range), flow, []))
               (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
