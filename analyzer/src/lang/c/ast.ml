@@ -471,7 +471,7 @@ let sizeof_expr (t:typ) range : expr =
             (* error range "sizeof" "array with no size"*)
             mk_zero range
        in
-       mk_binop (doit t) (O_mult T_int) len range
+       mk_binop (doit t) O_mult len range
     | T_c_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
     | T_c_function _ | T_c_builtin_fn -> invalid_arg "sizeof_expr: size of function"
     | T_c_typedef t -> doit (t.c_typedef_def)
@@ -523,23 +523,23 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
   let open Universal.Ast in
   mk_binop
     (mk_int l (tag_range range "l"))
-    math_plus
+    O_plus
     (mk_binop
        (mk_binop
           (mk_var v (tag_range range "v"))
-          math_minus
+          O_minus
           (mk_int l (tag_range range "l"))
           (tag_range range "?")
        )
-       math_mod
+       O_mod
        (mk_binop
           (mk_binop
              (mk_int h (tag_range range "v"))
-             (O_minus T_int)
+             O_minus
              (mk_int l (tag_range range "l"))
              (tag_range range "?")
           )
-          math_plus
+          O_plus
           (mk_one (tag_range range "1"))
           (tag_range range "+1")
        )

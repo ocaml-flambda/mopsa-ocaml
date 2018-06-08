@@ -171,9 +171,9 @@ module Domain= struct
     | _ -> false
 
   and arithmetic_op = function
-    | "float.__add__" -> math_plus
-    | "float.__sub__" -> math_minus
-    | "float.__mul__" -> math_mult
+    | "float.__add__" -> O_plus
+    | "float.__sub__" -> O_minus
+    | "float.__mul__" -> O_mult
     | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function

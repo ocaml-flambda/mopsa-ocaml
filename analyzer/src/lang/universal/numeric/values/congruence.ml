@@ -70,19 +70,19 @@ let of_constant = function
 let fwd_unop op a =
   match op with
   | O_log_not -> bot_lift1 C.log_not a
-  | O_minus T_int -> bot_lift1 C.neg a
-  | O_plus T_int -> a
+  | O_minus  -> bot_lift1 C.neg a
+  | O_plus  -> a
   | _ -> top
 
 let fwd_binop op a1 a2 =
   match op with
-  | O_plus T_int  -> bot_lift2 C.add a1 a2
-  | O_minus T_int -> bot_lift2 C.sub a1 a2
-  | O_mult T_int  -> bot_lift2 C.mul a1 a2
-  | O_div T_int   -> bot_absorb2 C.div a1 a2
+  | O_plus   -> bot_lift2 C.add a1 a2
+  | O_minus  -> bot_lift2 C.sub a1 a2
+  | O_mult   -> bot_lift2 C.mul a1 a2
+  | O_div    -> bot_absorb2 C.div a1 a2
   | O_log_or   -> bot_lift2 C.log_or a1 a2
   | O_log_and  -> bot_lift2 C.log_and a1 a2
-  | O_mod T_int   -> bot_absorb2 C.rem a1 a2
+  | O_mod    -> bot_absorb2 C.rem a1 a2
   | O_bit_rshift -> bot_absorb2 C.shift_right a1 a2
   | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
   | _     -> top
@@ -108,7 +108,7 @@ let bwd_unop op abs rabs =
     let a, r = bot_to_exn abs, bot_to_exn rabs in
     let aa = match op with
       | O_log_not -> assert false
-      | O_minus T_int -> bot_to_exn (C.bwd_neg a r)
+      | O_minus  -> bot_to_exn (C.bwd_neg a r)
       | _ -> assert false
     in
     Nb aa
@@ -121,11 +121,11 @@ let bwd_binop op a1 a2 r =
     let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
     let aa1, aa2 =
       match op with
-      | O_plus T_int  -> bot_to_exn (C.bwd_add a1 a2 r)
-      | O_minus T_int -> bot_to_exn (C.bwd_sub a1 a2 r)
-      | O_mult T_int  -> bot_to_exn (C.bwd_mul a1 a2 r)
-      | O_div T_int   -> bot_to_exn (C.bwd_div a1 a2 r)
-      | O_mod T_int   -> bot_to_exn (C.bwd_rem a1 a2 r)
+      | O_plus   -> bot_to_exn (C.bwd_add a1 a2 r)
+      | O_minus  -> bot_to_exn (C.bwd_sub a1 a2 r)
+      | O_mult   -> bot_to_exn (C.bwd_mul a1 a2 r)
+      | O_div    -> bot_to_exn (C.bwd_div a1 a2 r)
+      | O_mod    -> bot_to_exn (C.bwd_rem a1 a2 r)
       | O_bit_rshift -> bot_to_exn (C.bwd_shift_right a1 a2 r)
       | O_bit_lshift -> bot_to_exn (C.bwd_shift_left a1 a2 r)
       | _ -> assert false

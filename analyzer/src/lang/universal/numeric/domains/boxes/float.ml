@@ -33,7 +33,7 @@ struct
 
   let eval man ctx exp flow =
     match ekind exp with
-    | E_binop((O_plus T_int | O_minus T_int  | O_mult T_int  | O_div T_int  | O_mod T_int  |
+    | E_binop((O_plus  | O_minus   | O_mult   | O_div   | O_mod   |
                O_eq  | O_ne | O_lt | O_le | O_gt | O_ge |
                O_log_and | O_log_or as op), e1, e2) ->
       eval_list [e1; e2] (man.eval ctx) flow |>
@@ -44,7 +44,7 @@ struct
            oeval_singleton (Some (exp', []), flow, [])
         )
 
-    | E_unop((O_minus T_int | O_plus T_int  | O_log_not | O_sqrt as op), e) ->
+    | E_unop((O_minus  | O_plus   | O_log_not | O_sqrt as op), e) ->
       man.eval ctx e flow |>
       eval_compose
         (fun e flow ->

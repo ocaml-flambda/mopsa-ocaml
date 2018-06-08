@@ -57,13 +57,13 @@ type operator +=
 
 
 let is_arith_op = function
-  | Universal.Ast.O_plus T_any
-  | Universal.Ast.O_minus T_any
-  | Universal.Ast.O_mult T_any
+  | Universal.Ast.O_plus
+  | Universal.Ast.O_minus
+  | Universal.Ast.O_mult
   | O_py_mat_mult
-  | Universal.Ast.O_div T_any
+  | Universal.Ast.O_div
   | O_py_floor_div
-  | Universal.Ast.O_mod T_any
+  | Universal.Ast.O_mod
   | Universal.Ast.O_pow
   | Universal.Ast.O_bit_lshift
   | Universal.Ast.O_bit_rshift

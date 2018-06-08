@@ -31,8 +31,8 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
     if is_none estart then [mk_zero range, mk_one range]
     else [
       (ll, mk_binop estart O_ge ll range);
-      (mk_zero range, mk_binop (mk_binop ll math_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
-      (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
+      (mk_zero range, mk_binop (mk_binop ll O_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
+      (mk_binop ll O_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop O_minus ll ~etyp:T_int range) (mk_zero range) range);
       (estart, mk_in estart (mk_zero range) ll range)
     ]
   in
@@ -46,8 +46,8 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
     if is_none eend then [ll, mk_one range]
     else [
       (ll, mk_binop eend O_ge ll range);
-      (mk_zero range, mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
-      (mk_binop ll math_plus eend ~etyp:T_int range, mk_in ~strict:true eend (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
+      (mk_zero range, mk_binop (mk_binop ll O_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
+      (mk_binop ll O_plus eend ~etyp:T_int range, mk_in ~strict:true eend (mk_unop O_minus ll ~etyp:T_int range) (mk_zero range) range);
       (eend, mk_in eend (mk_zero range) ll range)
     ]
   in
@@ -65,7 +65,7 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
             if man.flow.is_cur_bottom flow then
               acc
             else
-              ((mk_binop eend math_minus estart ~etyp:T_int range), flow) :: acc
+              ((mk_binop eend O_minus estart ~etyp:T_int range), flow) :: acc
           ) acc
       ) []
   in
@@ -74,12 +74,12 @@ let fold_increasing_slice_length_cases man ctx f x0 estart eend ll range flow =
 let fold_decreasing_slice_length_cases man ctx f x0 estart eend ll range flow =
   debug "decreasing slice case";
   let start_cases =
-    if is_none estart then [mk_binop ll math_minus (mk_one range) range, mk_one range]
+    if is_none estart then [mk_binop ll O_minus (mk_one range) range, mk_one range]
     else [
-      (mk_binop ll math_minus (mk_one range) ~etyp:T_int range, mk_binop estart O_ge (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range);
-      (mk_zero range, mk_binop (mk_binop ll math_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
-      (mk_binop ll math_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
-      (estart, mk_in estart (mk_zero range) (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range)
+      (mk_binop ll O_minus (mk_one range) ~etyp:T_int range, mk_binop estart O_ge (mk_binop ll O_minus (mk_one range) ~etyp:T_int range) range);
+      (mk_zero range, mk_binop (mk_binop ll O_plus estart ~etyp:T_int range) O_le (mk_zero range) range);
+      (mk_binop ll O_plus estart ~etyp:T_int range, mk_in ~strict:true estart (mk_unop O_minus ll ~etyp:T_int range) (mk_zero range) range);
+      (estart, mk_in estart (mk_zero range) (mk_binop ll O_minus (mk_one range) ~etyp:T_int range) range)
     ]
   in
   debug "start cases";
@@ -91,10 +91,10 @@ let fold_decreasing_slice_length_cases man ctx f x0 estart eend ll range flow =
   let end_cases =
     if is_none eend then [mk_zero range, mk_one range]
     else [
-      (ll, mk_binop eend O_ge (mk_binop ll math_minus (mk_one range) ~etyp:T_int range) range);
-      (mk_zero range, mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
-      (mk_binop (mk_binop ll math_plus eend ~etyp:T_int range) math_plus (mk_one range) range, mk_in ~strict:true eend (mk_unop math_minus ll ~etyp:T_int range) (mk_zero range) range);
-      (mk_binop eend math_plus (mk_one range) ~etyp:T_int range, mk_in eend (mk_zero range) ll range)
+      (ll, mk_binop eend O_ge (mk_binop ll O_minus (mk_one range) ~etyp:T_int range) range);
+      (mk_zero range, mk_binop (mk_binop ll O_plus eend ~etyp:T_int range) O_le (mk_zero range) range);
+      (mk_binop (mk_binop ll O_plus eend ~etyp:T_int range) O_plus (mk_one range) range, mk_in ~strict:true eend (mk_unop O_minus ll ~etyp:T_int range) (mk_zero range) range);
+      (mk_binop eend O_plus (mk_one range) ~etyp:T_int range, mk_in eend (mk_zero range) ll range)
     ]
   in
   debug "end cases";
@@ -111,7 +111,7 @@ let fold_decreasing_slice_length_cases man ctx f x0 estart eend ll range flow =
             if man.flow.is_cur_bottom flow then
               acc
             else
-              (mk_binop (mk_binop estart math_minus eend ~etyp:T_int range) math_plus (mk_one range) ~etyp:T_int range, flow) :: acc
+              (mk_binop (mk_binop estart O_minus eend ~etyp:T_int range) O_plus (mk_one range) ~etyp:T_int range, flow) :: acc
           ) acc
       ) []
   in

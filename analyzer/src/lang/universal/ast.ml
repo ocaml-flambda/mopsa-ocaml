@@ -58,50 +58,37 @@ type constant +=
 
 type operator +=
   (** Unary operators *)
-  | O_log_not (** Logical negation *)
-  | O_sqrt (** Square root *)
-  | O_bit_invert (** bitwise ~ *)
+  | O_log_not      (** Logical negation *)
+  | O_sqrt         (** Square root *)
+  | O_bit_invert   (** bitwise ~ *)
 
 
   (** Binary operators *)
-  | O_plus of typ (** + *)
-  | O_minus of typ (** - *)
-  | O_mult of typ (** * *)
-  | O_div of typ (** / *)
-  | O_mod of typ (** % *)
-  | O_pow (** power *)
+  | O_plus       (** + *)
+  | O_minus      (** - *)
+  | O_mult       (** * *)
+  | O_div        (** / *)
+  | O_mod        (** % *)
+  | O_pow        (** power *)
 
-  | O_eq (** == *)
-  | O_ne (** != *)
-  | O_lt (** < *)
-  | O_le (** <= *)
-  | O_gt (** > *)
-  | O_ge (** >= *)
+  | O_eq         (** == *)
+  | O_ne         (** != *)
+  | O_lt         (** < *)
+  | O_le         (** <= *)
+  | O_gt         (** > *)
+  | O_ge         (** >= *)
 
-  | O_log_or (** || *)
-  | O_log_and (** && *)
+  | O_log_or     (** || *)
+  | O_log_and    (** && *)
 
-  | O_bit_and (** & *)
-  | O_bit_or (** | *)
-  | O_bit_xor (** ^ *)
+  | O_bit_and    (** & *)
+  | O_bit_or     (** | *)
+  | O_bit_xor    (** ^ *)
   | O_bit_rshift (** >> *)
   | O_bit_lshift (** << *)
 
   | O_wrap of Z.t * Z.t (** wrap *)
 
-let math_plus = O_plus T_int
-let math_minus = O_minus T_int
-let math_div = O_div T_int
-let math_mult = O_mult T_int
-let math_mod = O_mod T_int
-
-let to_math_op op = match op with
-  | O_plus t -> O_plus T_int
-  | O_minus t -> O_minus T_int
-  | O_mult t -> O_mult T_int
-  | O_div t -> O_div T_int
-  | O_mod t -> O_mod T_int
-  | _ -> op
 
 let is_int_type = function
   | T_int -> true

@@ -88,11 +88,11 @@ module Domain= struct
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
-          if not (Addr.issubclass o1 (Addr.find_builtin "int")) then
+          if not (Addr.isinstance o1 (Addr.find_builtin "int")) then
             let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
             oeval_singleton (None, flow, [])
           else
-          if not (Addr.issubclass o2 (Addr.find_builtin "int")) then
+          if not (Addr.isinstance o2 (Addr.find_builtin "int")) then
             oeval_singleton (Some (mk_py_not_implemented range), flow, [])
           else
             let e1' = Utils.mk_builtin_call "int" [e1] range in
@@ -123,7 +123,7 @@ module Domain= struct
             let ev = value_of_object o in
             let ev' =
               match f with
-                  | "int.__neg__" -> mk_unop math_minus ev ~etyp:T_int range
+                  | "int.__neg__" -> mk_unop O_minus ev ~etyp:T_int range
                   | "int.__pos__" -> ev
                   | "int.__abs__" -> Framework.Exceptions.panic_at range "int.__abs__ not supported"
                   | "int.__invert__" -> mk_unop O_bit_invert ev ~etyp:T_int range
@@ -300,7 +300,7 @@ module Domain= struct
 
   and arithmetic_binop = function
     | "int.__add__"
-    | "int.__radd__" -> math_plus
+    | "int.__radd__" -> O_plus
     | "int.__and__"
     | "int.__rand__" -> O_bit_and
     | "int.__floordiv__"
@@ -308,17 +308,17 @@ module Domain= struct
     | "int.__lshift__"
     | "int.__rlshift__" -> O_bit_lshift
     | "int.__mod__"
-    | "int.__rmod__" -> math_mod
+    | "int.__rmod__" -> O_mod
     | "int.__mul__"
-    | "int.__rmul__" -> math_mult
+    | "int.__rmul__" -> O_mult
     | "int.__or__"
     | "int.__ror__" -> O_bit_or
     | "int.__pow__"
     | "int.__rpow__" -> O_pow
     | "int.__truediv__"
-    | "int.__rtruediv__" -> math_div
+    | "int.__rtruediv__" -> O_div
     | "int.__sub__"
-    | "int.__rsub__" -> math_minus
+    | "int.__rsub__" -> O_minus
     | "int.__xor__"
     | "int.__rxor__" -> O_bit_xor
     | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f

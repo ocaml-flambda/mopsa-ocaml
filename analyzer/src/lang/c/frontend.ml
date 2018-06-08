@@ -258,8 +258,8 @@ and from_expr ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_variable v -> E_var (from_var v)
     | C_AST.E_function f -> Ast.E_c_function (from_function f)
     | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr f, Array.map from_expr args |> Array.to_list)
-    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr e)
-    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr e1, from_expr e2)
+    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op, from_expr e)
+    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op, from_expr e1, from_expr e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr e, true)
     | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr e, false)
     | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr lval, from_expr rval)
@@ -285,17 +285,17 @@ and from_expr_option : C_AST.expr option -> Framework.Ast.expr option = function
   | None -> None
   | Some e -> Some (from_expr e)
 
-and from_unary_operator op t = match op with
-  | C_AST.NEG -> O_minus t
+and from_unary_operator op = match op with
+  | C_AST.NEG -> O_minus
   | C_AST.BIT_NOT -> O_bit_invert
   | C_AST.LOGICAL_NOT -> O_log_not
 
-and from_binary_operator op t = match op with
-  | C_AST.O_arithmetic (C_AST.ADD) -> O_plus t
-  | C_AST.O_arithmetic (C_AST.SUB) -> O_minus t
-  | C_AST.O_arithmetic (C_AST.MUL) -> O_mult t
-  | C_AST.O_arithmetic (C_AST.DIV) -> O_div t
-  | C_AST.O_arithmetic (C_AST.MOD) -> O_mod t
+and from_binary_operator op = match op with
+  | C_AST.O_arithmetic (C_AST.ADD) -> O_plus
+  | C_AST.O_arithmetic (C_AST.SUB) -> O_minus
+  | C_AST.O_arithmetic (C_AST.MUL) -> O_mult
+  | C_AST.O_arithmetic (C_AST.DIV) -> O_div
+  | C_AST.O_arithmetic (C_AST.MOD) -> O_mod
   | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> O_bit_lshift
   | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> O_bit_rshift
   | C_AST.O_arithmetic (C_AST.BIT_AND) -> O_bit_and

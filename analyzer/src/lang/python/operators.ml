@@ -20,13 +20,13 @@ open Ast
 
 (** Binary operator of a magic function *)
 let fun_to_binop = function
-  | "__add__" -> O_plus T_any
-  | "__sub__" -> O_minus T_any
-  | "__mul__" -> O_mult T_any
+  | "__add__" -> O_plus
+  | "__sub__" -> O_minus
+  | "__mul__" -> O_mult
   | "__matmul__" -> O_py_mat_mult
-  | "__truediv__" -> O_div T_any
+  | "__truediv__" -> O_div
   | "__floordiv__" -> O_py_floor_div
-  | "__mod__" -> O_mod T_any
+  | "__mod__" -> O_mod
   | "__pow__" -> O_pow
   | "__lshift__" -> O_bit_lshift
   | "__rshift__" -> O_bit_rshift
@@ -39,26 +39,26 @@ let fun_to_binop = function
   | "__le__" -> O_le
   | "__gt__" -> O_gt
   | "__ge__" -> O_ge
-  | "__radd__" -> O_plus T_any
-  | "__rsub__" -> O_minus T_any
-  | "__rmul__" -> O_mult T_any
+  | "__radd__" -> O_plus
+  | "__rsub__" -> O_minus
+  | "__rmul__" -> O_mult
   | "__rmatmul__" -> O_py_mat_mult
-  | "__rtruediv__" -> O_div T_any
+  | "__rtruediv__" -> O_div
   | "__rfloordiv__" -> O_py_floor_div
-  | "__rmod__" -> O_mod T_any
+  | "__rmod__" -> O_mod
   | "__rpow__" -> O_pow
   | "__rlshift__" -> O_bit_lshift
   | "__rrshift__" -> O_bit_rshift
   | "__rand__" -> O_bit_and
   | "__rxor__" -> O_bit_xor
   | "__ror__" -> O_bit_or
-  | "__iadd__" -> O_plus T_any
-  | "__isub__" -> O_minus T_any
-  | "__imul__" -> O_mult T_any
+  | "__iadd__" -> O_plus
+  | "__isub__" -> O_minus
+  | "__imul__" -> O_mult
   | "__imatmul__" -> O_py_mat_mult
-  | "__itruediv__" -> O_div T_any
+  | "__itruediv__" -> O_div
   | "__ifloordiv__" -> O_py_floor_div
-  | "__imod__" -> O_mod T_any
+  | "__imod__" -> O_mod
   | "__ipow__" -> O_pow
   | "__ilshift__" -> O_bit_lshift
   | "__irshift__" -> O_bit_rshift
@@ -69,13 +69,13 @@ let fun_to_binop = function
 
 (** Magic function of a binary operator *)
 let binop_to_fun = function
-  | O_plus T_any -> "__add__"
-  | O_minus T_any -> "__sub__"
-  | O_mult T_any -> "__mul__"
+  | O_plus -> "__add__"
+  | O_minus -> "__sub__"
+  | O_mult -> "__mul__"
   | O_py_mat_mult -> "__matmul__"
-  | O_div T_any -> "__truediv__"
+  | O_div -> "__truediv__"
   | O_py_floor_div -> "__floordiv__"
-  | O_mod T_any -> "__mod__"
+  | O_mod -> "__mod__"
   | O_pow -> "__pow__"
   | O_bit_lshift -> "__lshift__"
   | O_bit_rshift -> "__rshift__"
@@ -92,13 +92,13 @@ let binop_to_fun = function
 
 (** Right magic function of a binary operator *)
 let binop_to_rev_fun = function
-  | O_plus T_any -> "__radd__"
-  | O_minus T_any -> "__rsub__"
-  | O_mult T_any -> "__rmul__"
+  | O_plus -> "__radd__"
+  | O_minus -> "__rsub__"
+  | O_mult -> "__rmul__"
   | O_py_mat_mult -> "__rmatmul__"
-  | O_div T_any -> "__rtruediv__"
+  | O_div -> "__rtruediv__"
   | O_py_floor_div -> "__rfloordiv__"
-  | O_mod T_any -> "__rmod__"
+  | O_mod -> "__rmod__"
   | O_pow -> "__rpow__"
   | O_bit_lshift -> "__rlshift__"
   | O_bit_rshift -> "__rrshift__"
@@ -110,13 +110,13 @@ let binop_to_rev_fun = function
 
 (** Increment magic function of a binary operator *)
 let binop_to_incr_fun = function
-  | O_plus T_any -> "__iadd__"
-  | O_minus T_any -> "__isub__"
-  | O_mult T_any -> "__imul__"
+  | O_plus -> "__iadd__"
+  | O_minus -> "__isub__"
+  | O_mult -> "__imul__"
   | O_py_mat_mult -> "__imatmul__"
-  | O_div T_any -> "__itruediv__"
+  | O_div -> "__itruediv__"
   | O_py_floor_div -> "__ifloordiv__"
-  | O_mod T_any -> "__imod__"
+  | O_mod -> "__imod__"
   | O_pow -> "__ipow__"
   | O_bit_lshift -> "__ilshift__"
   | O_bit_rshift -> "__irshift__"
@@ -183,8 +183,8 @@ let is_binop_function = function
 (** Unary operator of a magic function *)
 let fun_to_unop = function
   | "__not__" -> O_log_not
-  | "__neg__" -> O_minus T_any
-  | "__pos__" -> O_plus T_any
+  | "__neg__" -> O_minus
+  | "__pos__" -> O_plus
   | "__invert__" -> O_bit_invert
   | _ -> assert false
 
@@ -201,7 +201,7 @@ let is_unop_function = function
 (** Magic function of an unary operator *)
 let unop_to_fun = function
   | O_log_not -> "__not__"
-  | O_plus T_any -> "__pos__"
-  | O_minus T_any -> "__neg__"
+  | O_plus -> "__pos__"
+  | O_minus -> "__neg__"
   | O_bit_invert -> "__invert__"
   | _ -> assert false

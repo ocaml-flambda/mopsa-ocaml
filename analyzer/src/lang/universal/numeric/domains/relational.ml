@@ -282,11 +282,11 @@ struct
       Apron.Texpr1.Cst(Apron.Coeff.Interval Apron.Interval.top)
 
   and binop_to_apron = function
-    | O_plus T_int -> Apron.Texpr1.Add
-    | O_minus T_int -> Apron.Texpr1.Sub
-    | O_mult T_int -> Apron.Texpr1.Mul
-    | O_div T_int -> Apron.Texpr1.Div
-    | O_mod T_int -> Apron.Texpr1.Mod
+    | O_plus  -> Apron.Texpr1.Add
+    | O_minus  -> Apron.Texpr1.Sub
+    | O_mult  -> Apron.Texpr1.Mul
+    | O_div  -> Apron.Texpr1.Div
+    | O_mod  -> Apron.Texpr1.Mod
     | _ -> raise Unsupported
 
   and exp_to_apron exp =
@@ -320,7 +320,7 @@ struct
        let typ' = typ_to_apron exp.etyp in
        Apron.Texpr1.Binop(binop', e1', e2', typ', default_rounding)
 
-    | E_unop(O_minus T_int, e) ->
+    | E_unop(O_minus , e) ->
       let e' = exp_to_apron e in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', default_rounding)
@@ -335,15 +335,15 @@ struct
 
       mk_binop
         (mk_z g (tag_range r "t0"))
-        (O_plus T_int)
+        (O_plus )
         (mk_binop
            (mk_binop
               e
-              (O_minus T_int)
+              (O_minus )
               (mk_z g (tag_range r "t5"))
               (tag_range r "t4")
            )
-           (O_mod T_int)
+           (O_mod )
            (mk_z (Z.(d-g+one)) (tag_range r "t3"))
            (tag_range r "t2")
         )
@@ -428,7 +428,7 @@ struct
 
   let eval  man ctx exp flow =
     match ekind exp with
-    | E_binop((O_plus T_int | O_minus T_int  | O_mult T_int  | O_div T_int  | O_mod T_int  |
+    | E_binop((O_plus  | O_minus   | O_mult   | O_div   | O_mod   |
                O_eq | O_ne | O_lt | O_le | O_gt | O_ge |
                O_log_and | O_log_or | O_bit_and | O_bit_or |
                O_bit_xor | O_bit_lshift | O_bit_rshift as op), e1, e2) ->
@@ -448,7 +448,7 @@ struct
            oeval_singleton (Some (exp'), flow, [])
         )
 
-    | E_unop((O_minus T_int | O_plus T_int  | O_log_not | O_bit_invert | O_sqrt as op), e) ->
+    | E_unop((O_minus  | O_plus   | O_log_not | O_bit_invert | O_sqrt as op), e) ->
       man.eval ctx e flow |>
       eval_compose
         (fun e flow ->
