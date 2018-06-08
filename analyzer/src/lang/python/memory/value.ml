@@ -58,6 +58,14 @@ module NI = Framework.Lattices.Enum.Make(struct
   end
   )
 
+(** Empty value singleton lattice *)
+module E = Framework.Lattices.Enum.Make(struct
+    type t = Framework.Ast.constant
+    let values = [C_py_empty]
+    let print fmt c = Framework.Pp.pp_constant fmt c
+  end
+  )
+
 (** Integer intervals lattice *)
 module I = Universal.Numeric.Values.Int
 
@@ -78,6 +86,7 @@ type t = {
   int : I.t;
   float : F.t;
   notimplem: NI.t;
+  empty: E.t;
 }
 
 let bottom = {
@@ -87,6 +96,7 @@ let bottom = {
   int = I.bottom;
   float = F.bottom;
   notimplem = NI.bottom;
+  empty = E.bottom;
 }
 
 
@@ -97,6 +107,7 @@ let top = {
   int = I.top;
   float = F.top;
   notimplem = NI.top;
+  empty = E.top;
 }
 
 let is_bottom abs =
@@ -106,7 +117,8 @@ let is_bottom abs =
   I.is_bottom abs.int &&
   F.is_bottom abs.float &&
   F.is_bottom abs.float &&
-  NI.is_bottom abs.notimplem
+  NI.is_bottom abs.notimplem &&
+  E.is_bottom abs.empty
 
 let is_top abs =
   N.is_top abs.none &&
@@ -114,7 +126,8 @@ let is_top abs =
   S.is_top abs.string &&
   I.is_top abs.int &&
   F.is_top abs.float &&
-  NI.is_top abs.notimplem
+  NI.is_top abs.notimplem &&
+  E.is_top abs.empty
 
 
 let init = top
@@ -168,7 +181,8 @@ let leq abs1 abs2 =
   S.leq abs1.string abs2.string &&
   I.leq abs1.int abs2.int &&
   F.leq abs1.float abs2.float &&
-  NI.leq abs1.notimplem abs2.notimplem
+  NI.leq abs1.notimplem abs2.notimplem &&
+  E.leq abs1.empty abs2.empty
 
 let join abs1 abs2 = {
   none = N.join abs1.none abs2.none;
@@ -177,6 +191,7 @@ let join abs1 abs2 = {
   int = I.join abs1.int abs2.int;
   float = F.join abs1.float abs2.float;
   notimplem = NI.join abs1.notimplem abs2.notimplem;
+  empty = E.join abs1.empty abs2.empty;
 }
 
 let meet abs1 abs2 = {
@@ -186,6 +201,7 @@ let meet abs1 abs2 = {
   int = I.meet abs1.int abs2.int;
   float = F.meet abs1.float abs2.float;
   notimplem = NI.meet abs1.notimplem abs2.notimplem;
+  empty = E.meet abs1.empty abs2.empty;
 }
 
 let widening ctx abs1 abs2 = {
@@ -195,6 +211,7 @@ let widening ctx abs1 abs2 = {
   int = I.widening ctx abs1.int abs2.int;
   float = F.widening ctx abs1.float abs2.float;
   notimplem = NI.widening ctx abs1.notimplem abs2.notimplem;
+  empty = E.widening ctx abs1.empty abs2.empty;
 }
 
 (** Creation of uniquely typed values *)
@@ -228,6 +245,11 @@ let notimplem ne = {
   notimplem = ne
 }
 
+let empty e = {
+  bottom with
+  empty = e
+}
+
 (** Creation of a value from a program constant *)
 let of_constant c =
   match c with
@@ -250,6 +272,8 @@ let of_constant c =
   | C_string s -> string (S.singleton s)
   | C_top T_string -> string S.top
 
+  | C_py_empty | C_top T_py_empty -> empty  (E.singleton c)
+
   | _ -> top
 
 (** Boolean predicates *)
@@ -264,7 +288,7 @@ let can_be_false abs =
 
 (** Forward evaluation of unary operators *)
 let fwd_unop op abs = {
-  bottom with
+  abs with
   int = I.fwd_unop op abs.int;
   float = F.fwd_unop op abs.float;
 }

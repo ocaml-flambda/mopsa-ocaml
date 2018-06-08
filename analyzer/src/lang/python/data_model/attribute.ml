@@ -257,7 +257,7 @@ struct
           let eobj, eattr = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           match Addr.type_of_object @@ object_of_expr eattr with
           | T_string ->
-            let ev = value_of_object @@ object_of_expr eattr |> Option.none_to_exn in
+            let ev = value_of_object @@ object_of_expr eattr in
             let s = man.ask ctx (Memory.Query.QString ev) flow |> Option.none_to_exn in
             if Memory.Value.S.is_top s then
               Framework.Exceptions.panic_at range "hasattr: top argument"

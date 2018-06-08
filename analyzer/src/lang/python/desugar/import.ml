@@ -86,7 +86,7 @@ struct
         }
         in
         let flow' = man.exec ctx body flow in
-        (addr, None), flow'
+        (addr, mk_py_empty range), flow'
 
 
   (** Parse and import a builtin module *)
@@ -125,7 +125,7 @@ struct
             addr_uid = 0;
           }
           in
-          Addr.add_builtin_class (addr, None) ();
+          Addr.add_builtin_class (addr, mk_py_empty range) ();
           parse (Some name) cls.py_cls_body
 
         | S_py_function(fundec) ->
@@ -142,7 +142,7 @@ struct
             addr_uid = 0;
           }
           in
-          Addr.add_builtin_function (addr, None) ()
+          Addr.add_builtin_function (addr, mk_py_empty range) ()
 
         | S_block(block) ->
           List.iter (parse base) block
@@ -160,7 +160,7 @@ struct
           addr_uid = 0;
         }
         in
-        Addr.add_builtin_module (addr, None) ()
+        Addr.add_builtin_module (addr, mk_py_empty range) ()
       else
         ()
 

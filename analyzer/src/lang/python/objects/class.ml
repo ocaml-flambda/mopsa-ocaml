@@ -51,7 +51,8 @@ struct
              return flow
            else
              Addr.eval_alloc man ctx (A_py_class (C_user cls, bases')) stmt.srange flow |>
-             oeval_to_oexec (fun obj flow ->
+             oeval_to_oexec (fun addr flow ->
+                 let obj = (addr, mk_py_empty range) in
                  let flow = man.exec ctx
                      (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range)
                      flow
@@ -96,7 +97,7 @@ struct
       addr_uid = 0;
     }
     in
-    Addr.add_builtin_class (addr, None) ();
+    Addr.add_builtin_class (addr, mk_py_empty range) ();
 
     (* Parse the body of the class *)
     let rec parse base stmt =
@@ -119,7 +120,7 @@ struct
           addr_uid = 0;
         }
         in
-        Addr.add_builtin_class (addr, None) ();
+        Addr.add_builtin_class (addr, mk_py_empty range) ();
         parse (Some name) cls.py_cls_body
 
       | S_py_function(fundec) ->
@@ -136,7 +137,7 @@ struct
           addr_uid = -1;
         }
         in
-        Addr.add_builtin_function (addr, None) ()
+        Addr.add_builtin_function (addr, mk_py_empty range) ()
 
       | S_block(block) ->
         List.iter (parse base) block

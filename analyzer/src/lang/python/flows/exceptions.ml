@@ -93,7 +93,8 @@ struct
             else
             if Addr.isclass obj then
               eval_alloc_instance man ctx obj None range flow |>
-              oeval_to_oexec (fun obj flow ->
+              oeval_to_oexec (fun addr flow ->
+                  let obj = (addr, mk_py_empty range) in
                   exec man ctx {stmt with skind = S_py_raise(Some (mk_py_object obj range))} flow
                 ) (man.exec ctx) man.flow
             else

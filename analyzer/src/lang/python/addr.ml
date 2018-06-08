@@ -56,18 +56,18 @@ type Universal.Ast.addr_kind +=
 
 
 (** Allocate an object on the heap and return its address as an evaluation *)
-let eval_alloc (man: ('a, 't) manager) ctx kind range flow : (py_object, 'a) evals option =
+let eval_alloc (man: ('a, 't) manager) ctx kind range flow : (Universal.Ast.addr, 'a) evals option =
   let exp = Universal.Ast.mk_alloc_addr kind range range in
   man.eval ctx exp flow |>
   eval_compose (fun exp flow ->
       match ekind exp with
-      | Universal.Ast.E_addr addr -> oeval_singleton (Some (addr, None), flow, [])
+      | Universal.Ast.E_addr addr -> oeval_singleton (Some addr, flow, [])
       | _ -> Framework.Exceptions.panic "eval_alloc: allocation returned a non-address express %a" Framework.Pp.pp_expr exp
     )
 
 
 (** Allocate an instance and return its address as an evaluation *)
-let eval_alloc_instance (man: ('a, 't) manager) ctx cls params range flow : (py_object, 'a) evals option =
+let eval_alloc_instance (man: ('a, 't) manager) ctx cls params range flow : (Universal.Ast.addr, 'a) evals option =
   eval_alloc man ctx (A_py_instance(cls, params)) range flow
 
 
@@ -273,7 +273,7 @@ let type_of_object obj =
   | A_py_class (C_builtin "str", _) -> T_string
   | A_py_class (C_builtin "NoneType", _) -> T_py_none
   | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
-  | _ -> T_any
+  | _ -> T_py_empty
 
 let is_weak obj =
   let addr = addr_of_object obj in
@@ -296,7 +296,7 @@ let mk_py_none range =
     }
   in
   let e = mk_constant ~etyp:T_py_none C_py_none range in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 
 let not_implemented_range = mk_fresh_range ()
@@ -308,7 +308,7 @@ let mk_py_not_implemented range =
     }
   in
   let e = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let int_range = mk_fresh_range ()
 let mk_py_int_expr e range =
@@ -318,7 +318,7 @@ let mk_py_int_expr e range =
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let mk_py_z z range = mk_py_int_expr (Universal.Ast.mk_z z range) range
 let mk_py_int n range = mk_py_z (Z.of_int n) range
@@ -333,7 +333,7 @@ let mk_py_float_expr e range =
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
 
@@ -345,7 +345,7 @@ let mk_py_bool_expr e range =
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_true range) range
 let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_false range) range
@@ -358,10 +358,10 @@ let mk_py_string_expr e range =
       addr_uid = Universal.Heap.Pool.old_uid;
     }
   in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let mk_py_string s range = mk_py_string_expr (Universal.Ast.mk_string s range) range
-    
+
 let complex_range = mk_fresh_range ()
 let mk_py_imag j range =
   let addr = Universal.Ast.{
@@ -371,7 +371,7 @@ let mk_py_imag j range =
     }
   in
   let e = mk_constant ~etyp:T_py_complex (C_py_imag j) range in
-  mk_py_object (addr, Some e) range
+  mk_py_object (addr, e) range
 
 let mk_py_top t range =
   let open Universal.Ast in
