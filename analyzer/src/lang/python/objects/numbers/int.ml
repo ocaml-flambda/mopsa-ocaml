@@ -111,6 +111,7 @@ module Domain= struct
                   (mk_binop ev1 op ev2 ~etyp:T_bool range)
                   (fun true_flow -> oeval_singleton (Some (mk_py_true range), true_flow, []))
                   (fun false_flow -> oeval_singleton (Some (mk_py_false range), false_flow, []))
+                  ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, []))
                   man ctx flow ()
               )
         )
@@ -157,7 +158,7 @@ module Domain= struct
               (mk_binop ev O_eq (mk_zero range) range)
               (fun true_flow -> oeval_singleton (Some (mk_py_false range), flow, []))
               (fun false_flow -> oeval_singleton (Some (mk_py_true range), flow, []))
-              (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
+              ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, []))
               man ctx flow ()
         )
 
