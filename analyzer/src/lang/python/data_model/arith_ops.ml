@@ -31,7 +31,7 @@ module Domain = struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(op, e1, e2) when is_arith_op op ->
+    | E_binop(op, e1, e2) when is_arith_op op && is_py_expr e1 && is_py_expr e2 ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -40,7 +40,6 @@ module Domain = struct
           let rop_fun = binop_to_rev_fun op in
 
           let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
-
           let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in
 
           let is_same_type = compare_py_object cls1 cls2 = 0 in
@@ -102,7 +101,7 @@ module Domain = struct
             man ctx flow ()
         )
 
-    | E_unop(op, e) when is_arith_op op ->
+    | E_unop(op, e) when is_arith_op op && is_py_expr e ->
       debug "Resolving unary operator %a" Framework.Pp.pp_operator op;
       man.eval ctx e flow |>
       eval_compose (fun e flow ->

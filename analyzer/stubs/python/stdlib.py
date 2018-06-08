@@ -40,13 +40,13 @@ class type(object):
     def __init__(self): pass
     def __call__(self, args): pass
     def __repr__(self): pass
-    
+
 class function(object):
     def __new__(cls, args): pass
     def __call__(self, args): pass
     def __get__(self): pass
     def __repr__(self): pass
-    
+
 class method(object):
     def __new__(cls, args): pass
     def __call__(self, args): pass
@@ -109,6 +109,7 @@ class int(object):
 
 class bool(int):
     def __and__(self, other): pass
+    def __new__(self, args): pass
     def __or__(self, other): pass
     def __rand__(self, other): pass
     def __repr__(self): pass
@@ -117,7 +118,7 @@ class bool(int):
     def __str__(self): pass
     def __xor__(self, other): pass
 
-    
+
 class float(object):
     def __abs__(self): pass
     def __add__(self, other): pass
@@ -208,9 +209,9 @@ class str(object):
     def __getnewargs__(self): pass
     def __gt__(self, other): pass
     def __hash__(self): pass
-    def __iter__(self): pass    
+    def __iter__(self): pass
     def __le__(self, other): pass
-    def __len__(self): pass    
+    def __len__(self): pass
     def __lt__(self, other): pass
     def __mod__(self, other): pass
     def __mul__(self, other): pass
@@ -312,7 +313,7 @@ class list(object):
     def reverse(self): pass
     def sort(self): pass
 
-    
+
 class listiter(object):
     def __next__(self): pass
 

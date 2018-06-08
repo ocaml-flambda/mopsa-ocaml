@@ -77,7 +77,7 @@ module Domain= struct
                 let o2 = object_of_expr e2 in
                 let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
                 let op = arithmetic_op f in
-                oeval_singleton (Some (mk_py_float_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
+                oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
               )
         )
 
@@ -129,7 +129,7 @@ module Domain= struct
               (mk_binop self O_eq (mk_py_int 0 range) range)
               (fun true_flow -> oeval_singleton (Some (mk_py_false range), flow, []))
               (fun false_flow -> oeval_singleton (Some (mk_py_true range), flow, []))
-        (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
+              (* ~merge_case:(fun _ _ -> oeval_singleton (Some (mk_py_top T_bool range), flow, [])) *)
               man ctx flow ()
         )
 

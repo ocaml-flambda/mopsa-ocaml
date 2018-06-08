@@ -47,7 +47,7 @@ module Domain = struct
   let eval man ctx exp flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(op, e1, e2) when is_comp_op op ->
+    | E_binop(op, e1, e2) when is_comp_op op && is_py_expr e1 && is_py_expr e2 ->
       eval_list [e1; e2] (man.eval ctx) flow |>
       eval_compose (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in

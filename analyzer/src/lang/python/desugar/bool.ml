@@ -130,11 +130,29 @@ struct
 
 
     (* E⟦ not e ⟧ *)
-    | E_unop(O_py_not, e') ->
-      Universal.Utils.assume_to_eval e'
-        (fun true_flow -> oeval_singleton (Some (mk_py_false exp.erange), true_flow, []))
-        (fun false_flow -> oeval_singleton (Some (mk_py_true exp.erange), false_flow, []))
-        man ctx flow ()
+    | E_unop((O_py_not | Universal.Ast.O_log_not), e') when is_py_expr e' ->
+      man.eval ctx e' flow |>
+      eval_compose (fun e' flow ->
+          let o = object_of_expr e' in
+          if Addr.isinstance o (Addr.find_builtin "bool") then
+            let e = value_of_object o in
+            let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
+            Memory.Value.B.fold (fun b acc ->
+                if b then oeval_singleton (Some (mk_py_false range), flow, []) |> oeval_join acc
+                else oeval_singleton (Some (mk_py_true range), flow, []) |> oeval_join acc
+              ) a None
+          else
+            man.eval ctx (Utils.mk_builtin_call "bool" [e'] range) flow |>
+            eval_compose (fun ret flow ->
+                let o = object_of_expr ret in
+                let e = value_of_object o in
+                let a = man.ask ctx (Memory.Query.QBool e) flow |> Option.none_to_exn in
+                Memory.Value.B.fold (fun b acc ->
+                    if b then oeval_singleton (Some (mk_py_false range), flow, []) |> oeval_join acc
+                    else oeval_singleton (Some (mk_py_true range), flow, []) |> oeval_join acc
+                  ) a None
+              )
+        )
 
     (* E⟦ e1 op e2 op e3 ... ⟧ *)
     | E_py_multi_compare(left, ops, rights) ->
