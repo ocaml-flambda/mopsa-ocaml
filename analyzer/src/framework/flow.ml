@@ -66,180 +66,123 @@ module Map = MapExt.Make(
 
 type 'a flow = 'a Map.t with_top
 
-let print vprinter fmt (a : 'a flow) =
+let bottom : 'a flow = Nt Map.empty
+
+let top : 'a flow = TOP
+
+let is_bottom (flow: 'a flow) ~(is_value_bottom: 'a -> bool) : bool =
+  top_dfl1 false (fun m ->
+      Map.for_all (fun _ v -> is_value_bottom v) m
+    ) flow
+
+
+let is_top (flow: 'a flow) : bool =
+  top_dfl1 true (fun _ -> false) flow
+
+
+let leq (flow1: 'a flow) (flow2: 'a flow) ~(is_value_bottom: 'a -> bool) ~(value_leq: 'a -> 'a -> bool) : bool =
+  top_included
+    (Map.for_all2zo
+       (fun _ v1 -> is_value_bottom v1) (* non-⊥ ⊈ ⊥ *)
+       (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
+       (fun _ v1 v2 -> value_leq v1 v2)
+    )
+    flow1 flow2
+
+let join (flow1: 'a flow) (flow2: 'a flow) ~(value_join: 'a -> 'a -> 'a) : 'a flow =
+  top_lift2
+    (Map.map2zo
+       (fun _ v1 -> v1)
+       (fun _ v2 -> v2)
+       (fun _ v1 v2 -> value_join v1 v2)
+    )
+    flow1 flow2
+
+let meet (flow1: 'a flow) (flow2: 'a flow) ~(value_bottom: 'a) ~(value_meet: 'a -> 'a -> 'a) : 'a flow =
+  top_neutral2
+    (fun b1 b2 ->
+       Map.map2zo
+         (fun _ v1 -> value_bottom)
+         (fun _ v2 -> value_bottom)
+         (fun _ v1 v2 -> value_meet v1 v2)
+         b1 b2
+    )
+    flow1 flow2
+
+let widening (ctx: Context.context) (flow1: 'a flow) (flow2: 'a flow) ~(value_widening: Context.context -> 'a -> 'a -> 'a) : 'a flow =
+  top_lift2
+    (Map.map2zo
+       (fun _ v1 -> v1)
+       (fun _ v2 -> v2)
+       (fun _ v1 v2 -> value_widening ctx v1 v2)
+    )
+    flow1 flow2
+
+let print ~(value_print: Format.formatter -> 'a -> unit) fmt (flow : 'a flow) : unit=
   let open Format in
   top_fprint (fun fmt m ->
-      if Map.is_empty m then
-        pp_print_string fmt "⊥"
+      if Map.is_empty m then pp_print_string fmt "⊥"
       else
         fprintf fmt "@[<v>%a@]"
           (pp_print_list
              ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-             (fun fmt (k, v) -> fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k vprinter v)
+             (fun fmt (k, v) -> fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k value_print v)
           ) (Map.bindings m)
-    ) fmt a
+    ) fmt flow
 
 
-(*==========================================================================*)
-                           (** {2 Flows manager} *)
-(*==========================================================================*)
+
+let get (tk: token) (flow: 'a flow) ~(value_bottom: 'a) ~(value_top: 'a) : 'a =
+  try
+    let m = top_to_exn flow in
+    try Map.find tk m with Not_found -> value_bottom
+  with Found_TOP -> value_top
 
 
-type 'a flow_manager = {
-  bottom : 'a flow;
-  top : 'a flow;
-  is_bottom : 'a flow -> bool;
-  is_cur_bottom : 'a flow -> bool;
-  is_top : 'a flow -> bool;
-  leq : 'a flow -> 'a flow -> bool;
-  join : 'a flow -> 'a flow -> 'a flow;
-  meet : 'a flow -> 'a flow -> 'a flow;
-  widening : Context.context -> 'a flow -> 'a flow -> 'a flow;
-  print : Format.formatter -> 'a flow -> unit;
-  get : token -> 'a flow -> 'a;
-  set : token -> 'a -> 'a flow -> 'a flow;
-  add : token -> 'a -> 'a flow -> 'a flow;
-  remove : token -> 'a flow -> 'a flow;
-  filter : ('a -> token -> bool) -> 'a flow -> 'a flow;
-  map : 'b. ('a -> token -> 'b) -> 'a flow -> 'b flow;
-  fold : 'b. ('b -> 'a -> token -> 'b) -> 'b -> 'a flow -> 'b;
-  merge : (token -> 'a option -> 'a option -> 'a option) -> 'a flow -> 'a flow -> 'a flow;
-}
+let set (tk: token) (a: 'a) (flow: 'a flow) ~(is_value_bottom: 'a -> bool) : 'a flow =
+  top_lift1 (fun m ->
+      if is_value_bottom a then Map.remove tk m
+      else Map.add tk a m
+    ) flow
 
-let lift_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
-  bottom = Nt Map.empty;
-  top = TOP;
-  is_bottom = (fun fabs ->
-      top_dfl1 false (fun m ->
-          Map.for_all (fun _ v -> value.is_bottom v) m
-        ) fabs
-    );
-
-  is_cur_bottom = (fun fabs ->
-      top_dfl1 false (fun m ->
-          try Map.find TCur m |> value.is_bottom with Not_found -> true
-        ) fabs
-    );
-
-  is_top = (fun fabs ->
-      top_dfl1 true (fun _ -> false) fabs
-    );
-
-  leq = (fun fabs1 fabs2 ->
-      top_included
-        (Map.for_all2zo
-           (fun _ v1 -> value.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
-           (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-           (fun _ v1 v2 -> value.leq v1 v2)
-        )
-        fabs1 fabs2
-    );
-
-  join = (fun fabs1 fabs2 ->
-      top_lift2
-        (Map.map2zo
-           (fun _ v1 -> v1)
-           (fun _ v2 -> v2)
-           (fun _ v1 v2 -> value.join v1 v2)
-        )
-        fabs1 fabs2
-    );
-
-  meet = (fun fabs1 fabs2 ->
-      top_neutral2
-        (fun b1 b2 ->
-           Map.map2zo
-             (fun _ v1 -> value.bottom)
-             (fun _ v2 -> value.bottom)
-             (fun _ v1 v2 -> value.meet v1 v2)
-             b1 b2
-        )
-        fabs1 fabs2
-    );
-
-  widening = (fun ctx fabs1 fabs2 ->
-      top_lift2
-        (Map.map2zo
-           (fun _ v1 -> v1)
-           (fun _ v2 -> v2)
-           (fun _ v1 v2 -> value.widening ctx v1 v2)
-        )
-        fabs1 fabs2
-    );
-
-  print = print value.print;
-
-  get = (fun tk fabs ->
-      try
-        let m = top_to_exn fabs in
-        try Map.find tk m with Not_found -> value.bottom
-      with Found_TOP -> value.top
-    );
-
-  set = (fun tk abs fabs ->
-      top_lift1 (fun m ->
-          if value.is_bottom abs then
-            Map.remove tk m
-          else
-            Map.add tk abs m
-        ) fabs
-    );
-
-  remove = (fun tk fabs ->
-      top_lift1 (Map.remove tk) fabs
-    );
-
-  filter = (fun f fabs ->
-      top_lift1 (Map.filter (fun tk a -> f a tk)) fabs
-    );
-
-  add = (fun tk a fabs ->
-      top_lift1 (fun m ->
-          if value.is_bottom a then
-            m
-          else
-            let a' =
-              try
-                let old = Map.find tk m in
-                value.join a old
-              with Not_found ->
-                a
-            in
-            Map.add tk a' m
-        ) fabs
-    );
-
-  map = (
-    let g : type b. ('a -> token -> b) -> 'a flow -> b flow =
-      fun f fabs ->
-        top_lift1 (Map.mapi (fun tk a -> f a tk)) fabs
-    in
-    g
-  );
+let remove (tk: token) (flow: 'a flow) : 'a flow =
+  top_lift1 (Map.remove tk) flow
 
 
-  fold = (
-    let g : type b. (b -> 'a -> token -> b) -> b -> 'a flow -> b =
-      fun f x fabs ->
-        let m = top_to_exn fabs in
-        Map.fold (fun tk a acc -> f acc a tk) m x
-    in
-    g
-  );
+let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
+  top_lift1 (Map.filter f) flow
 
-  merge = (fun f flow1 flow2 ->
-      let exec tk a b =
-        match f tk a b with
-        | None -> value.bottom
-        | Some v -> v
-      in
-      top_lift2
-        (Map.map2zo
-           (fun tk v1 -> exec tk (Some v1) None)
-           (fun tk v2 -> exec tk None (Some v2))
-           (fun tk v1 v2 -> exec tk (Some v1) (Some v2))
-        )
-        flow1 flow2
+let add (tk: token) (a: 'a) (flow: 'a flow) ~(is_value_bottom: 'a -> bool) ~(value_join: 'a -> 'a -> 'a) : 'a flow =
+  top_lift1 (fun m ->
+      if is_value_bottom a then m
+      else
+        let a' =
+          try
+            let old = Map.find tk m in
+            value_join a old
+          with Not_found ->
+            a
+        in
+        Map.add tk a' m
+    ) flow
 
-    );
-}
+let map (f: token -> 'a -> 'b) (flow: 'a flow) : 'b flow =
+  top_lift1 (Map.mapi f) flow
+
+let fold (f: token -> 'a -> 'b -> 'b) (flow: 'a flow) (x: 'b) : 'b =
+  let m = top_to_exn flow in
+  Map.fold f m x
+
+let merge (f: token -> 'a option -> 'a option -> 'a option) (flow1: 'a flow) (flow2: 'a flow) ~(value_bottom: 'a) : 'a flow =
+  let exec tk a b =
+    match f tk a b with
+    | None -> value_bottom
+    | Some v -> v
+  in
+  top_lift2
+    (Map.map2zo
+       (fun tk v1 -> exec tk (Some v1) None)
+       (fun tk v2 -> exec tk None (Some v2))
+       (fun tk v1 v2 -> exec tk (Some v1) (Some v2))
+    )
+    flow1 flow2

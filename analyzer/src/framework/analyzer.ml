@@ -13,12 +13,12 @@
 
 
 open Ast
-open Visitor
 open Lattice
 open Flow
 open Manager
-open Domains.Stateful
+open Domain
 open Eval
+open Exec
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
@@ -41,7 +41,7 @@ struct
     print = Domain.print;
   }
 
-  let flow_manager = Flow.lift_lattice_manager env_manager
+  let flow_manager = flow_of_lattice_manager env_manager
 
   (** Top-level accessor. *)
   let ax = {
@@ -49,126 +49,192 @@ struct
     set = (fun gabs' gabs -> gabs');
   }
 
-  (** Abstract transfer function of statements. *)
 
-  let rec exec ctx stmt (fa: Domain.t flow) =
+  (** Map giving the [exec] transfer function of a zone *)
+  module ExecMap = MapExt.Make(struct type t = Zone.t let compare = compare end)
+
+
+  (** Map giving the [eval] evaluation function of a zone path *)
+  module EvalMap = MapExt.Make(struct type t = Zone.path let compare = Zone.compare_path end)
+
+
+  let exec_cache = ref []
+
+
+  let eval_cache = ref []
+
+
+  (*==========================================================================*)
+  (**                        {2 Initialization}                               *)
+  (*==========================================================================*)
+
+  let rec init prog =
+    let flow = flow_manager.bottom |>
+               flow_manager.set TCur env_manager.top
+    in
+    match Domain.init prog manager Context.empty flow with
+    | None -> Context.empty, flow
+    | Some (ctx, flow) -> ctx, flow
+
+
+
+  (*==========================================================================*)
+  (**                     {2 Statements execution}                            *)
+  (*==========================================================================*)
+
+  (** Build the map of exec functions *)
+  and exec_map =
+    (* Iterate over the required zones of domain D *)
+    List.fold_left (fun acc zone ->
+        if ExecMap.mem zone acc then acc
+        else
+          begin
+            debug "Searching for an exec function for the zone %a" Zone.print zone;
+            match List.find_opt (fun z -> Zone.leq z zone) Domain.export_exec with
+            | Some z ->
+              let f = Domain.exec z in
+              debug "exec for %a found" Zone.print zone;
+              ExecMap.add zone f acc
+
+            | None -> Debug.fail "exec for %a not found" Zone.print zone
+          end
+      ) ExecMap.empty Domain.import_exec
+
+
+  and exec (zone: Zone.t) (stmt: Ast.stmt) (ctx: Context.context) (flow: Domain.t flow) : Domain.t flow =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
-      Pp.pp_range_verbose stmt.srange
-      Pp.pp_stmt stmt manager.flow.print fa
+      Utils.Location.pp_range_verbose stmt.srange
+      pp_stmt stmt manager.flow.print flow
     ;
     let timer = Timing.start () in
-    let res =
-      let fa1 = Domain.exec manager ctx stmt fa in
-      match fa1 with
-      | None ->
-        Exceptions.panic
-          "Unable to analyze statement in %a:@\n @[%a@]"
-          Pp.pp_range_verbose stmt.srange
-          Pp.pp_stmt stmt
 
-      | Some fa1 ->
-        fa1
-    in
-    let t = Timing.stop timer in
-    Debug.debug
-      ~channel:"framework.analyzer.profiler"
-      "exec done in %.6fs of:@\n@[<v>  %a@]"
-      t Pp.pp_stmt stmt
-    ;
-    debug
-      "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-      Pp.pp_stmt stmt manager.flow.print fa manager.flow.print res
-    ;
-    res
+    let zone_exec = ExecMap.find zone exec_map in
+
+    use_cache
+      (zone, ctx, stmt, flow) exec_cache
+      ~otherwise:(fun () ->
+          match zone_exec stmt manager ctx flow with
+          | None ->
+            Utils.Exceptions.panic
+              "Unable to analyze statement in %a:@\n @[%a@]"
+              Utils.Location.pp_range_verbose stmt.srange
+              pp_stmt stmt
+
+          | Some post -> post.flow
+        )
+    |>
+    (fun res ->
+       let t = Timing.stop timer in
+       Debug.debug ~channel:"framework.analyzer.profiler"
+         "exec done in %.6fs of:@\n@[<v>  %a@]"
+         t pp_stmt stmt
+       ;
+       debug
+         "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+         pp_stmt stmt manager.flow.print flow manager.flow.print res
+       ;
+       res
+    )
+
+
+
+
+  (*==========================================================================*)
+  (**                   {2 Evaluation of expressions}                         *)
+  (*==========================================================================*)
+
+  (** Build the map of [eval] functions *)
+  and eval_map =
+    (* Iterate over the required zone paths of domain Domain *)
+    List.fold_left (fun acc zpath ->
+        if EvalMap.mem zpath acc then acc
+        else
+          begin
+            debug "Searching for eval function for the zone path %a" Zone.print_path zpath;
+            match List.find_opt (fun p -> Zone.path_leq p zpath) Domain.export_eval with
+            | Some p ->
+              let f = Domain.eval p in
+              debug "eval for %a found" Zone.print_path zpath;
+              EvalMap.add zpath f acc
+
+            | None -> Debug.fail "eval for %a not found" Zone.print_path zpath
+          end
+      ) EvalMap.empty Domain.import_eval
+
 
   (** Evaluation of expressions. *)
-  and eval ctx exp fa =
+  and eval (zpath: Zone.path) (exp: Ast.expr) (ctx: Context.context) (flow: 'a flow) : (Ast.expr, 'a) Eval.evals =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
-      Pp.pp_range_verbose exp.erange
-      Pp.pp_expr exp manager.flow.print fa
+      Utils.Location.pp_range_verbose exp.erange
+      pp_expr exp manager.flow.print flow
     ;
     let timer = Timing.start () in
-    let res =
-      let evl = Domain.eval manager ctx exp fa in
-      match evl with
-      | Some evl -> evl
-      | None -> eval_singleton (Some exp, fa, [])
-    in
-    let t = Timing.stop timer in
-    Debug.debug
-      ~channel:"framework.analyzer.profiler"
-      "eval done in %.6fs of @[%a@]"
-      t Pp.pp_expr exp
-    ;
-    debug
-      "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-      Pp.pp_expr exp manager.flow.print fa (pp_evals Pp.pp_expr) res
-    ;
-    res
+    let path_eval = EvalMap.find zpath eval_map in
+    use_cache
+      (zpath, ctx, exp, flow) eval_cache
+      ~otherwise:(fun () ->
+         match path_eval exp manager ctx flow with
+           | Some evl ->
+             Eval.iter (fun e flow ->
+                 add_to_cache (zpath, ctx, e, flow) (Eval.singleton (Some e) flow) eval_cache;
+               ) evl;
+             evl
+           | None -> Eval.singleton (Some exp) flow
+        )
+    |>
+    (fun res ->
+       let t = Timing.stop timer in
+       Debug.debug
+         ~channel:"framework.analyzer.profiler"
+         "eval done in %.6fs of @[%a@]"
+         t pp_expr exp
+       ;
+       debug
+         "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+         pp_expr exp manager.flow.print flow (Eval.print ~print_case:pp_expr) res
+       ;
+       res
+    )
 
 
   (** Query handler. *)
-  and ask : type b. Context.context -> b Query.query -> 'a -> b option =
-    fun ctx query gabs ->
-      Domain.ask manager ctx query gabs
+  and ask : type r. r Query.query -> _ -> _ -> r option =
+    fun query ctx flow -> Domain.ask query manager ctx flow
 
-  and ecache = ref []
-  and scache = ref []
 
-  and add_to_cache : type a. a list ref -> a -> unit =
-    fun cache x ->
-    cache := x :: (
-        if List.length !cache < Options.(common_options.cache_size) then !cache
-        else List.rev @@ List.tl @@ List.rev !cache
-      )
-
-  and exec_cache ctx stmt flow =
-    if Options.(common_options.cache_size) == 0 then exec ctx stmt flow
+  and use_cache : type a b. a -> (a * b) list ref -> otherwise:(unit -> b) -> b =
+    fun k cache ~otherwise ->
+    if Utils.Options.(common_options.cache_size) == 0 then
+      otherwise ()
     else
       try
-        let flow' = List.assoc (ctx, stmt, flow) !scache in
-        debug "exec from cache";
-        flow'
+        let res = List.assoc k !cache in
+        debug "from cache";
+        res
       with Not_found ->
-        let flow' = exec ctx stmt flow in
-        add_to_cache scache ((ctx, stmt, flow), flow');
-        flow'
+        let res = otherwise () in
+        add_to_cache k res cache;
+        res
 
-  and eval_cache ctx exp flow =
-    if Options.(common_options.cache_size) == 0 then eval ctx exp flow
-    else
-      try
-        let evl = List.assoc (ctx, exp, flow) !ecache in
-        debug "eval from cache";
-        evl
-      with Not_found ->
-        let evals = eval ctx exp flow in
-        add_to_cache ecache ((ctx, exp, flow), evals);
-        eval_iter (fun (e, flow, _) ->
-            match e with
-            | Some e -> add_to_cache ecache ((ctx, e, flow), eval_singleton (Some e, flow, []));
-            | None -> ()
-          ) evals;
-        evals
+  and add_to_cache : type a b. a -> b -> (a * b) list ref -> unit =
+    fun k v cache ->
+      cache := (k, v) :: (
+          if List.length !cache < Utils.Options.(common_options.cache_size) then !cache
+          else List.rev @@ List.tl @@ List.rev !cache
+        )
+
 
   (** Top level manager *)
 
   and manager = {
     env = env_manager;
     flow = flow_manager;
-    exec = exec_cache;
-    eval = eval_cache;
+    exec = exec;
+    eval = eval;
     ask = ask;
     ax = ax;
   }
-
-  let init prog =
-    let fa = flow_manager.bottom |>
-             flow_manager.set TCur env_manager.top
-    in
-    Domain.init  manager Context.empty prog fa
-
 
 end

@@ -15,9 +15,9 @@
 *)
 
 open Manager
-open Stateful
+open Domain
 
-module Make(Head: DOMAIN)(Tail: DOMAIN) =
+module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
 struct
 
   type t = Head.t * Tail.t
@@ -56,27 +56,66 @@ struct
     }
   }
 
-  let init man ctx prog fa =
-    let ctx, fa = Head.init (head_man man) ctx prog fa in
-    Tail.init (tail_man man) ctx prog fa
+  let init prog man ctx flow =
+    let ctx, flow = match Head.init prog (head_man man) ctx flow with
+      | None -> ctx, flow
+      | Some x -> x
+    in
+    Tail.init prog (tail_man man) ctx flow
 
-  let exec man ctx stmt gabs =
-    let gabs' = Head.exec (head_man man) ctx stmt gabs in
-    match gabs' with
-    | None -> Tail.exec (tail_man man) ctx stmt gabs
-    | _ -> gabs'
+  let import_exec = Head.import_exec @ Tail.import_exec
+  let export_exec = Head.export_exec @ Tail.export_exec
+
+  let exec zone =
+    match List.find_opt (fun z -> Zone.leq z zone) Head.export_exec, List.find_opt (fun z -> Zone.leq z zone) Tail.export_exec with
+    | Some z, None ->
+      let f = Head.exec z in
+      (fun stmt man ctx flow -> f stmt (head_man man) ctx flow)
+
+    | None, Some z ->
+      let f = Tail.exec z in
+      (fun stmt man ctx flow -> f stmt (tail_man man) ctx flow)
+
+    | Some z1, Some z2 ->
+      let f1 = Head.exec z1 in
+      let f2 = Tail.exec z2 in
+      (fun stmt man ctx flow ->
+        match f1 stmt (head_man man) ctx flow with
+        | Some post -> Some post
+        | None -> f2 stmt (tail_man man) ctx flow
+      )
+
+    | None, None -> raise Not_found
 
 
-  let eval man ctx exp gabs =
-    let head_ev = Head.eval (head_man man) ctx exp gabs in
-    match head_ev with
-    | None -> Tail.eval (tail_man man) ctx exp gabs
-    | _ -> head_ev
+  let import_eval = Head.import_eval @ Tail.import_eval
+  let export_eval = Head.export_eval @ Tail.export_eval
+
+  let eval zpath =
+    match List.find_opt (fun p -> Zone.path_leq p zpath) Head.export_eval, List.find_opt (fun p -> Zone.path_leq p zpath) Tail.export_eval with
+    | Some p, None ->
+      let f = Head.eval p in
+      (fun exp man ctx flow -> f exp (head_man man) ctx flow)
+
+    | None, Some p ->
+      let f = Tail.eval p in
+      (fun exp man ctx flow -> f exp (tail_man man) ctx flow)
+
+    | Some p1, Some p2 ->
+      let f1 = Head.eval p1 in
+      let f2 = Tail.eval p2 in
+      (fun exp man ctx flow ->
+         match f1 exp (head_man man) ctx flow with
+         | Some evl -> Some evl
+         | None -> f2 exp (tail_man man) ctx flow
+      )
+
+    | None, None -> raise Not_found
 
 
-  let ask man ctx query gabs =
-    let head_reply = Head.ask (head_man man) ctx query gabs in
-    let tail_reply = Tail.ask (tail_man man) ctx query gabs in
+  let ask query man ctx flow =
+    let head_reply = Head.ask query (head_man man) ctx flow in
+    let tail_reply = Tail.ask query (tail_man man) ctx flow in
     Query.join query head_reply tail_reply
 
 end

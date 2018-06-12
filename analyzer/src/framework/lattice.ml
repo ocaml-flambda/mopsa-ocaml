@@ -9,7 +9,7 @@
 open Context
 
 
-(** Signature of a lattice module.*)
+(** Signature of a lattice.*)
 module type LATTICE =
 sig
 
@@ -58,16 +58,3 @@ sig
 
 
 end
-
-(** Lattice manager. *)
-type 'a lattice_manager = {
-  bottom : 'a;
-  top : 'a;
-  is_bottom : 'a -> bool;
-  is_top : 'a -> bool;
-  leq : 'a -> 'a -> bool;
-  join : 'a -> 'a -> 'a;
-  meet : 'a -> 'a -> 'a;
-  widening : context -> 'a -> 'a -> 'a;
-  print : Format.formatter -> 'a -> unit;
-}

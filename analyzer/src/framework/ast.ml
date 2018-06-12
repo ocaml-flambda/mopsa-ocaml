@@ -7,156 +7,19 @@
 (****************************************************************************)
 
 
-
 (** Extensible Abstract Syntax Tree. *)
 
-
-(**
-   [compare_composer cl] applies a list of comparison functions [cl] in sequence
-   and stops when encountering the first non-zero result.
-*)
-let rec compare_composer = function
-  | [] -> 0
-  | cmp :: tl ->
-    let r = cmp () in
-    if r <> 0 then r else compare_composer tl
-
-(**
-   [compare_list cmp l1 l2] compare two lists using [cmp] to compare each pair of elements.
-   Stops when encountering the first non-zero result, or one list is
-   smaller than the other.
- *)
-let rec compare_list (cmp:'a -> 'a -> int) (l1:'a list) (l2:'a list) : int =
-  match l1, l2 with
-  | [],[] -> 0
-  | [],_ -> -1
-  | _,[] -> 1
-  | h1::t1, h2::t2 ->
-     let r = cmp h1 h2 in
-     if r <> 0 then r else compare_list cmp t1 t2
+open Utils
 
 
 (*==========================================================================*)
-                 (**     {2 Locations and ranges}      *)
-(*==========================================================================*)
-
-type loc = {
-  loc_file: string; (** Filename. *)
-  loc_line: int; (** Line number. *)
-  loc_column: int; (** Column number. *)
-}
-(** Location of an AST node. *)
-
-type range_orig = {
-  range_begin: loc; (** Start location. *)
-  range_end: loc; (** End location. *)
-}
-(** Location range of an AST node. *)
-
-type range_tag = string
-(** Range tags can be used to annotate AST nodes added by the abstract domains,
-    that are not textually present in the source files. *)
-
-(** Location range of AST nodes. *)
-type range =
-  | Range_file of string (** range covering an entire file *)
-  | Range_origin of range_orig (** original range from source files *)
-  | Range_fresh of int (** non-original fresh range with unique id *)
-  | Range_tagged of range_tag * range
-
-(** Tag a range with a (formatted) annotation. *)
-let tag_range range fmt =
-  Format.kasprintf (fun tag ->
-      Range_tagged (tag, range)
-    ) fmt
-
-let mk_loc file line column =
-  {loc_file = file; loc_line = line; loc_column = column}
-
-let mk_range loc1 loc2 =
-  {range_begin = loc1; range_end = loc2}
-
-let fresh_range_counter = ref 0
-
-let mk_fresh_range () =
-  incr fresh_range_counter;
-  Range_fresh !fresh_range_counter
-
-let mk_file_range f = Range_file f
-
-let rec get_origin_range = function
-  | Range_origin range -> range
-  | Range_file filename -> mk_range (mk_loc filename 1 1) (mk_loc filename (-1) (-1))
-  | Range_tagged(_, range) -> get_origin_range range
-  | Range_fresh _ -> failwith "get_origin_range: call on non-original range"
-
-(** Comparison function of locations. *)
-let compare_location (l1: loc) (l2: loc) =
-  compare_composer [
-    (fun () -> compare l1.loc_file l2.loc_file);
-    (fun () -> compare l1.loc_line l2.loc_line);
-    (fun () -> compare l1.loc_column l2.loc_column);
-  ]
-
-(** Comparison function of ranges. *)
-let rec compare_range (r1: range) (r2: range) =
-  match r1, r2 with
-  | Range_origin r1, Range_origin r2 ->
-    compare_composer [
-      (fun () -> compare_location r1.range_begin r2.range_begin);
-      (fun () -> compare_location r1.range_end r2.range_end);
-    ]
-  | Range_file f1, Range_file f2 -> compare f1 f2
-  | Range_tagged(t1, r1), Range_tagged(t2, r2) ->
-    compare_composer [
-      (fun () -> compare_range r1 r2);
-      (fun () -> compare t1 t2)
-    ]
-  | Range_fresh(uid1), Range_fresh(uid2) -> compare uid1 uid2
-  | _ -> compare r1 r2
-
-(*==========================================================================*)
-                        (** {2 Programs} *)
-(*==========================================================================*)
-type program_kind = ..
-(** Extensible type for describing analyzed programs. *)
-
-type program = {
-  prog_kind : program_kind;
-  prog_file : string;
-}
-
-(*==========================================================================*)
-                     (**      {2 Statements}      *)
-(*==========================================================================*)
-
-type stmt_kind = ..
-(** Extensible statements kinds. *)
-
-type stmt_kind +=
-  | S_program of program
-  (** Program to be analyzed *)
-
-type stmt = {
-  skind : stmt_kind; (** Kind of the statement. *)
-  srange : range; (** Location range of the statement. *)
-}
-(** Statements with their kind and range. *)
-
-let skind (stmt: stmt) = stmt.skind
-let srange (stmt: stmt) = stmt.srange
-let mk_stmt skind srange =
-  {skind; srange}
-
-
-
-(*==========================================================================*)
-                      (**      {2 Types}      *)
+(**                             {2 Types}                                   *)
 (*==========================================================================*)
 
 type typ = ..
 (** Extensible type of expression types. *)
 
+(** Basic types *)
 type typ +=
   | T_any (** Generic unknown type. *)
 
@@ -172,58 +35,67 @@ let register_typ_compare cmp =
 
 let compare_typ t1 t2 = !typ_compare_chain t1 t2
 
+
+
+
 (*==========================================================================*)
-                      (**      {2 Variables}      *)
+(**                           {2 Variables}                                 *)
 (*==========================================================================*)
 
 type var = {
-  vname : string; (** original name of the variable. *)
-  vuid : int; (** unique identifier. *)
-  vtyp : typ; (** type of the variable. *)
-  vkind : var_kind; (** extra kind of the variable. *)
+  vname : string;  (** original name of the variable. *)
+  vuid  : int;     (** unique identifier. *)
+  vtyp  : typ;     (** type of the variable. *)
 }
 (** variables *)
 
-and var_kind = ..
-
-type var_kind +=
-  | V_orig (** original program variables. *)
-
-let vkind v = v.vkind
-
-let vkind_compare_chain : (var_kind -> var_kind -> int) ref = ref (fun vk1 vk2 ->
-    match vk1, vk2 with
-    | V_orig, V_orig -> 0
-    | _ -> compare vk1 vk2
-  )
-
-let register_vkind_compare cmp =
-  vkind_compare_chain := cmp !vkind_compare_chain
-
+(** Compare two variables *)
 let compare_var v1 v2 =
-  compare_composer [
+  Compare.compose [
     (fun () -> compare v1.vname v2.vname);
     (fun () -> compare v1.vuid v2.vuid);
     (fun () -> compare_typ v1.vtyp v2.vtyp);
-    (fun () -> !vkind_compare_chain v1.vkind v2.vkind);
   ]
 
 let tmp_counter = ref 100
 
 (** Create a temporary variable with a unique name. *)
-let mktmp ?(vtyp = T_any) ?(vkind = V_orig) () =
+let mktmp ?(vtyp = T_any) () =
   incr tmp_counter;
   let vname = "$tmp" ^ (string_of_int !tmp_counter) in
-  {vname; vuid = !tmp_counter; vtyp; vkind}
+  {vname; vuid = !tmp_counter; vtyp}
+
+
+
 
 
 (*==========================================================================*)
-                      (**      {2 Expressions}      *)
+(**                            {2 Expressions}                              *)
 (*==========================================================================*)
 
 
 type operator = ..
 (** Extensible type of operators (unary, binary, etc.). *)
+
+(** Basic operators *)
+type operator +=
+  | O_plus       (** + *)
+  | O_minus      (** - *)
+  | O_mult       (** * *)
+  | O_div        (** / *)
+  | O_mod        (** % *)
+
+  | O_eq         (** == *)
+  | O_ne         (** != *)
+  | O_lt         (** < *)
+  | O_le         (** <= *)
+  | O_gt         (** > *)
+  | O_ge         (** >= *)
+
+  | O_log_not    (** Logical negation *)
+  | O_log_or     (** || *)
+  | O_log_and    (** && *)
+
 
 type constant = ..
 (** Extensible type of constants. *)
@@ -234,19 +106,27 @@ type constant +=
 type expr = {
   ekind: expr_kind;
   etyp: typ;
-  erange: range;
+  erange: Location.range;
 }
 
 (** Extensible type of expressions. *)
 and expr_kind = ..
 
+(** Some basic expressions *)
 type expr_kind +=
-  | E_var of var (** variables *)
-  | E_constant of constant (** constants *)
-  | E_unop of operator * expr (** unary operator expressions *)
-  | E_binop of operator * expr * expr (** binary operator expressions *)
+  | E_var of var
+  (** variables *)
 
-(** Type-decorated expressions. *)
+  | E_constant of constant
+  (** constants *)
+
+  | E_unop of operator * expr
+  (** unary operator expressions *)
+
+  | E_binop of operator * expr * expr
+  (** binary operator expressions *)
+
+
 
 let ekind (e: expr) = e.ekind
 let etyp (e: expr) = e.etyp
@@ -270,3 +150,156 @@ let mk_unop op operand ?(etyp = T_any) erange =
 let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
 
 let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
+
+let mk_not ~etyp e = mk_unop O_log_not e ~etyp
+
+(*==========================================================================*)
+                        (** {2 Programs} *)
+(*==========================================================================*)
+type program_kind = ..
+(** Extensible type for describing analyzed programs. *)
+
+type program = {
+  prog_kind : program_kind;
+  prog_file : string;
+}
+
+(*==========================================================================*)
+                     (**      {2 Statements}      *)
+(*==========================================================================*)
+
+type stmt_kind = ..
+(** Extensible statements kinds. *)
+
+
+(** Mode of an assignment *)
+type assign_mode =
+  | STRONG
+  | WEAK
+  | EXPAND
+
+
+(** Basic statements *)
+type stmt_kind +=
+  | S_program of program
+  (** Program to be analyzed *)
+
+  | S_assign of expr (** lhs *) * expr (** rhs *) * assign_mode (** assignment mode *)
+  (** Assignments *)
+
+  | S_assume of expr (** condition *)
+
+  | S_rename_var of var (** old *) * var (** new *)
+  (** Rename a variable into another*)
+
+  | S_remove_var of var
+  (** Remove a variable from the abstract environments. *)
+
+  | S_project_vars of var list
+  (** Project the abstract environments on the given list of variables. *)
+
+
+type stmt = {
+  skind : stmt_kind; (** Kind of the statement. *)
+  srange : Location.range; (** Location range of the statement. *)
+}
+(** Statements with their kind and range. *)
+
+let skind (stmt: stmt) = stmt.skind
+let srange (stmt: stmt) = stmt.srange
+let mk_stmt skind srange = {skind; srange}
+
+let mk_rename v v' =
+  mk_stmt (S_rename_var (v, v'))
+
+let mk_assign ?(mode = STRONG)v e =
+  mk_stmt (S_assign (v, e, mode))
+
+let mk_assume e =
+  mk_stmt (S_assume e)
+
+let mk_remove_var v = mk_stmt (S_remove_var v)
+
+let mk_project_vars vars = mk_stmt (S_project_vars vars)
+
+
+
+
+
+(*==========================================================================*)
+(**                      {2 Pretty printers}                                *)
+(*==========================================================================*)
+
+open Format
+
+let pp_var fmt v = fprintf fmt "%s@%d" v.vname v.vuid
+
+(* Processing chain for the extensible type [Ast.expr] *)
+let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
+  ref (fun fmt expr ->
+      match ekind expr with
+      | E_constant c -> pp_constant fmt c
+      | E_var(v) -> pp_var fmt v
+      | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
+      | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
+      | _ -> failwith "Pp: Unknown expression"
+    )
+
+(* Processing chain for the extensible type [Ast.stmt] *)
+and pp_stmt_chain : (Format.formatter -> stmt -> unit) ref =
+  ref (fun fmt stmt ->
+      match skind stmt with
+      | S_program prog -> pp_program fmt prog
+      | _ -> failwith "Pp: Unknown statement"
+    )
+
+(* Processing chain for the extensible type [Ast.program] *)
+and pp_program_chain : (Format.formatter -> program -> unit) ref =
+  ref (fun fmt prg ->
+      failwith "Pp: Unknown program"
+    )
+
+(* Processing chain for the extensible type [Ast.stmt] *)
+and pp_typ_chain : (Format.formatter -> typ -> unit) ref =
+  ref (fun fmt typ ->
+      match typ with
+      | T_any -> fprintf fmt "?"
+      | _ -> failwith "Pp: Unknown type"
+    )
+
+(* Processing chain for the extensible type [Ast.operator] *)
+and pp_operator_chain : (Format.formatter -> operator -> unit) ref =
+  ref (fun fmt op ->
+      failwith "Pp: Unknown operator"
+    )
+
+(* Processing chain for the extensible type [Ast.constant] *)
+and pp_constant_chain : (Format.formatter -> constant -> unit) ref =
+  ref (fun fmt c ->
+      match c with
+      | C_top T_any -> fprintf fmt "⊤"
+      | C_top t -> fprintf fmt "⊤:%a" pp_typ t
+      | _ -> failwith "Pp: Unknown constant"
+    )
+
+
+
+(* To register a new pp, we just give the previous chain as argument to pp
+ * so that it can call the chain when it can not handle the given case
+ *)
+
+and register_pp_expr pp = pp_expr_chain := pp !pp_expr_chain
+and register_pp_stmt pp = pp_stmt_chain := pp !pp_stmt_chain
+and register_pp_program pp = pp_program_chain := pp !pp_program_chain
+and register_pp_typ pp = pp_typ_chain := pp !pp_typ_chain
+and register_pp_operator pp = pp_operator_chain := pp !pp_operator_chain
+and register_pp_constant pp = pp_constant_chain := pp !pp_constant_chain
+
+
+(* These functions start the chain processing *)
+and pp_expr fmt expr = !pp_expr_chain fmt expr
+and pp_stmt fmt stmt = !pp_stmt_chain fmt stmt
+and pp_program fmt prg = !pp_program_chain fmt prg
+and pp_typ fmt typ = !pp_typ_chain fmt typ
+and pp_operator fmt op = !pp_operator_chain fmt op
+and pp_constant fmt c = !pp_constant_chain fmt c

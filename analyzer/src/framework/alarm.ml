@@ -7,9 +7,10 @@
 (****************************************************************************)
 
 
-(** Reporting of potential errors inferred by abstract domains. *)
+(** Alarms allows reporting potential errors inferred by abstract domains. *)
 
 open Ast
+open Utils
 
 (*==========================================================================*)
                            (** {2 Type} *)
@@ -22,11 +23,11 @@ type alarm_level =
   | ERROR
   | WARNING
   | PANIC
-  
+
 (** An alarm *)
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
-  alarm_range : range;       (** the range of the program where the alarm was detected *)
+  alarm_range : Location.range;       (** the range of the program where the alarm was detected *)
   alarm_level : alarm_level;
 }
 
@@ -36,8 +37,8 @@ let register_alarm_compare cmp =
   alarm_compare_chain := cmp !alarm_compare_chain
 
 let compare_alarm a1 a2 =
-  compare_composer [
-    (fun () -> compare_range a1.alarm_range a2.alarm_range);
+  Compare.compose [
+    (fun () -> Location.compare_range a1.alarm_range a2.alarm_range);
     (fun () -> !alarm_compare_chain a1 a2);
   ]
 
@@ -74,6 +75,7 @@ let () =
     }
   )
 
+
 (*==========================================================================*)
                            (** {2 Printing} *)
 (*==========================================================================*)
@@ -93,9 +95,9 @@ let pp_alarm fmt alarm =
   Format.fprintf fmt "%a  @[%a@]@\nIn %a"
     pp_alarm_level alarm.alarm_level
     !pp_alarm_chain alarm
-    Pp.pp_range_verbose alarm.alarm_range
+    Location.pp_range_verbose alarm.alarm_range
 
 let pp_alarm_bench fmt alarm =
   Format.fprintf fmt "{\"type\": \"%a\",\"range\": \"%a\"}"
     !pp_alarm_chain alarm
-    Pp.pp_range_verbose alarm.alarm_range
+    Location.pp_range_verbose alarm.alarm_range

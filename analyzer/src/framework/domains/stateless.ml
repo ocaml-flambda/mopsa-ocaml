@@ -22,29 +22,12 @@ open Eval
 module type DOMAIN =
 sig
 
-  val init :
-    ('a, unit) manager -> Context.context -> Ast.program -> 'a flow ->
-    Context.context * 'a flow
-
-  (** Abstract transfer function of statements. *)
-  val exec:
-    ('a, unit) manager -> Context.context -> Ast.stmt -> 'a flow ->
-    'a flow option
-
-  (** Abstract (symbolic) evaluation of expressions. *)
-  val eval:
-    ('a, unit) manager -> Context.context -> Ast.expr -> 'a flow ->
-    (Ast.expr, 'a) evals option
-
-  (** Handler of generic queries. *)
-  val ask:
-    ('a, unit) manager -> Context.context -> 'r Query.query -> 'a flow ->
-    'r option
+  include Domain.DOMAIN with type t := unit
 
 end
 
 (** Create a stateful domain from a stateless one. *)
-module MakeStatefulDomain(Domain: DOMAIN) : Stateful.DOMAIN =
+module MakeStatefulDomain(D: DOMAIN) : Domain.DOMAIN =
 struct
 
   type t = unit
@@ -60,10 +43,17 @@ struct
   let print _ _ = ()
 
 
-  let init = Domain.init
-  let exec  = Domain.exec
-  let eval = Domain.eval
-  let ask = Domain.ask
+  let init = D.init
+
+  let import_exec = D.import_exec
+  let export_exec = D.export_exec
+  let exec  = D.exec
+
+  let import_eval = D.import_eval
+  let export_eval = D.export_eval
+  let eval = D.eval
+
+  let ask = D.ask
 
 end
 
@@ -71,8 +61,8 @@ end
 
 let register_domain name modl =
   let module D = (val modl : DOMAIN) in
-  let module GD = MakeStatefulDomain(D) in
-  Stateful.register_domain name (module GD)
+  let module SD = MakeStatefulDomain(D) in
+  Domain.register_domain name (module SD)
 
 let return x = Some x
 let fail = None

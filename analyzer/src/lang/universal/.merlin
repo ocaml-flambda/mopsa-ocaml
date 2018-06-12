@@ -1,9 +1,0 @@
-B ../../../../utils/lib
-B ../../../../parsers/c/lib
-B ../../../../parsers/python/lib
-B ../../../_build
-B ../../../_build/src
-B ../../../_build/src/lang/universal
-B ../../../_build/src/lang
-B ../../../_build/src
-PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

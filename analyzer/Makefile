@@ -3,37 +3,11 @@ TARGET_NATIVES = mopsa
 MOPSAROOT = ..
 
 #Packs
-mopsa = framework lang main
+mopsa = framework
 
-framework = options ast query pp alarm context lattice lattices visitor exceptions flow eval manager exec utils domains analyzer config
-framework.lattices = enum top_set partial_map total_map range_set
-framework.domains = stateful stateless reduce fun iter unify reduce_unify
-framework.domains.reduce = domain reduction root product
-framework.domains.unify = domain root
-framework.domains.reduce_unify = domain root product
+framework = utils ast query context lattice flow zone value eval exec manager domain analyzer lattices domains
+framework.utils = compare location options exceptions
 
-lang = universal c python
-
-lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
-lang.universal.heap = pool query recency
-lang.universal.nonrel = value domain
-lang.universal.numeric = values query reduction domains
-lang.universal.numeric.values = int congruence float
-lang.universal.numeric.domains = boxes relational
-lang.universal.numeric.domains.boxes = int congruence float
-
-lang.python = ast addr pp alarm utils visitor frontend operators memory flows libs desugar data_model objects program setup
-lang.python.memory = value query addr_env value_env
-lang.python.objects = class function object numbers strings slices nones containers
-lang.python.objects.numbers = int bool float complx
-lang.python.objects.containers = lists dicts ranges sets tuples
-lang.python.data_model = attribute callable arith_ops subscript compare_ops aug_assign
-lang.python.flows = exceptions generators
-
-lang.c = ast frontend setup #pp visitor alarms program flows desugar libs memory setup
-#lang.c.memory = base query pointer init cell decomposer machine_integers access_path structured
-#lang.c.memory.cell = initzero expand smashing reductions
-#lang.c.flows = goto interproc switch
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

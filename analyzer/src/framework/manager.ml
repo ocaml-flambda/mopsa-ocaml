@@ -6,10 +6,6 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Lattice
-open Flow
-open Eval
-    
 (**
    A manager provides to a domain:
    - the operators of global flow abstraction and its the underlying environment
@@ -18,6 +14,8 @@ open Eval
    - and the transfer functions of the top-level analyzer.
 *)
 
+open Lattice
+open Flow
 
 let debug fmt = Debug.debug ~channel:"framework.manager" fmt
 
@@ -40,16 +38,83 @@ type ('a, 'b) accessor = {
 
 
 (*==========================================================================*)
-(**                            {2 Manager}                                  *)
+(**                         {2 Lattice manager}                             *)
 (*==========================================================================*)
 
 
-(** An instance of type [('a, 'b) manager] encapsulates the lattice operators
+(** Lattice manager. *)
+type 'a lattice_manager = {
+  bottom : 'a;
+  top : 'a;
+  is_bottom : 'a -> bool;
+  is_top : 'a -> bool;
+  leq : 'a -> 'a -> bool;
+  join : 'a -> 'a -> 'a;
+  meet : 'a -> 'a -> 'a;
+  widening : Context.context -> 'a -> 'a -> 'a;
+  print : Format.formatter -> 'a -> unit;
+}
+
+
+
+(*==========================================================================*)
+                           (** {2 Flow manager} *)
+(*==========================================================================*)
+
+
+type 'a flow_manager = {
+  bottom : 'a flow;
+  top : 'a flow;
+  is_bottom : 'a flow -> bool;
+  is_top : 'a flow -> bool;
+  leq : 'a flow -> 'a flow -> bool;
+  join : 'a flow -> 'a flow -> 'a flow;
+  meet : 'a flow -> 'a flow -> 'a flow;
+  widening : Context.context -> 'a flow -> 'a flow -> 'a flow;
+  print : Format.formatter -> 'a flow -> unit;
+  get : token -> 'a flow -> 'a;
+  set : token -> 'a -> 'a flow -> 'a flow;
+  add : token -> 'a -> 'a flow -> 'a flow;
+  remove : token -> 'a flow -> 'a flow;
+  filter : (token -> 'a -> bool) -> 'a flow -> 'a flow;
+  map : 'b. (token -> 'a -> 'b) -> 'a flow -> 'b flow;
+  fold : 'b. (token -> 'a -> 'b -> 'b) -> 'a flow -> 'b -> 'b;
+  merge : (token -> 'a option -> 'a option -> 'a option) -> 'a flow -> 'a flow -> 'a flow;
+}
+
+let flow_of_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
+  bottom = Flow.bottom;
+  top = Flow.top;
+  is_bottom = Flow.is_bottom ~is_value_bottom:value.is_bottom;
+  is_top = Flow.is_top;
+  leq = Flow.leq ~is_value_bottom:value.is_bottom ~value_leq:value.leq;
+  join = Flow.join ~value_join:value.join;
+  meet = Flow.meet ~value_meet:value.meet ~value_bottom:value.bottom;
+  widening = Flow.widening ~value_widening:value.widening;
+  print = Flow.print ~value_print:value.print;
+  get = Flow.get ~value_bottom:value.bottom ~value_top:value.top;
+  set = Flow.set ~is_value_bottom:value.is_bottom;
+  add = Flow.add ~is_value_bottom:value.is_bottom ~value_join:value.join;
+  remove = Flow.remove;
+  filter = Flow.filter;
+  map = Flow.map;
+  fold = Flow.fold;
+  merge = Flow.merge ~value_bottom:value.bottom;
+}
+
+
+
+(*==========================================================================*)
+                           (** {2 Analysis manager} *)
+(*==========================================================================*)
+
+
+(** An instance of type [('a, 't) manager] encapsulates the lattice operators
     of the global environment abstraction ['a] and its flow abstraction
     ['a Flow.t], the top-level transfer functions [exec], [eval] and [ask],
-    and the accessor to the domain abstraction ['b] within ['a].
+    and the accessor to the domain abstraction ['t] within ['a].
 *)
-type ('a, 'b) manager = {
+type ('a, 't) manager = {
   (** Environment abstraction. *)
   env : 'a lattice_manager;
 
@@ -57,21 +122,29 @@ type ('a, 'b) manager = {
   flow : 'a flow_manager;
 
   (** Statement transfer function. *)
-  exec :
-    Context.context -> Ast.stmt -> 'a flow ->
-    'a flow;
+  exec : Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
 
-  (** Expression transfer function. *)
-  eval :
-    Context.context -> Ast.expr -> 'a flow ->
-    (Ast.expr, 'a) Eval.evals;
+  (** Expression evaluation function. *)
+  eval : Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.evals;
 
   (** Query transfer function. *)
-  ask : 'r. Context.context -> 'r Query.query -> 'a flow -> 'r option;
+  ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
 
   (** Domain accessor. *)
-  ax : ('a, 'b) accessor;
+  ax : ('a, 't) accessor;
 }
+
+
+
+
+(*==========================================================================*)
+                           (** {2 Utility functions} *)
+(*==========================================================================*)
+
+let is_cur_bottom man flow =
+  man.flow.get TCur flow |>
+  man.env.is_bottom
+
 
 (** Update the domain abstraction of the TCur flow *)
 let map_domain_cur f man flow =
@@ -93,35 +166,45 @@ let get_domain_cur man flow =
     man.ax.get
 
 
-(*==========================================================================*)
-(**                         {2 Utility functions}                           *)
-(*==========================================================================*)
+(** [post_eval zone f man ctx flow evals] computes the post-condition of
+   transfer function [f] over all evaluation cases in [evals] *)
+let post_eval
+    (zone: Zone.t)
+    (f: Ast.expr -> 'a flow -> 'a Exec.post)
+    (man: ('a, 't) manager) (ctx: Context.context) (flow: 'a flow)
+    (evals: (Ast.expr, 'a) Eval.evals)
+  : 'a Exec.post =
+  Eval.(merge
+          (fun eval ->
+             let post = match eval.case with
+               | None -> Exec.singleton eval.flow
+               | Some exp -> f exp eval.flow
+             in
+             List.fold_left (fun acc stmt ->
+                 let flow = acc.Exec.flow in
+                 let flow' = man.exec zone stmt ctx flow in
+                 {acc with Exec.flow = flow'}
+               ) post eval.cleaner
+          )
+          evals
+          ~join:(Exec.join ~flow_join:man.flow.join)
+       )
 
-let if_flow
-    (true_cond: 'a flow -> 'a flow)
-    (false_cond: 'a flow -> 'a flow)
-    (true_branch: 'a flow -> 'b)
-    (false_branch: 'a flow -> 'b)
-    (bottom_branch: unit -> 'b)
-    (merge: 'a flow -> 'a flow -> 'b)
-    man flow
-  : 'b =
-  let true_flow = true_cond flow
-  and false_flow = false_cond flow in
-  debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
-    man.flow.print true_flow
-    man.flow.print false_flow
-  ;
-  match man.flow.is_cur_bottom true_flow, man.flow.is_cur_bottom false_flow with
-  | false, true -> debug "true branch"; true_branch true_flow
-  | true, false -> debug "true branch"; false_branch false_flow
-  | false, false -> debug "merge branch"; merge true_flow false_flow
-  | true, true -> debug "bottom branch"; bottom_branch ()
+(** [eval_list zpath el man ctx flow] folds the evaluations of expressions in [el] *)
+let eval_list
+    (zpath: Zone.path)
+    (l: Ast.expr list)
+    (man: ('a, 't) manager) ctx (flow: 'a flow)
+  : (Ast.expr list, 'a) Eval.evals =
+  let rec aux expl flow clean = function
+    | [] ->
+      Eval.singleton (Some (List.rev expl)) flow ~cleaner:clean
 
-let if_flow_eval
-    true_flow false_flow
-    true_case false_case man flow
-    ?(bottom_case=(fun () -> oeval_singleton (None, flow, [])))
-    ?(merge_case=(fun flow1 flow2 -> oeval_join (true_case flow1) (false_case flow2)))
-    () =
-  if_flow true_flow false_flow true_case false_case bottom_case merge_case man flow
+    | exp :: tl ->
+      man.eval zpath exp ctx flow |>
+      Eval.map_with_cleaner
+        (fun exp' flow clean' ->
+           aux (exp' :: expl) flow (clean @ clean') tl
+        )
+  in
+  aux [] flow [] l

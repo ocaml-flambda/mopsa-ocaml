@@ -1,0 +1,90 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Zones define boundaries of sub-languages in an analysis. They are
+    used as arguments of the transfer functions [exec] and [eval] in
+    order to select appropriate kinds of domains to answer.
+*)
+
+
+(*==========================================================================*)
+                           (** {2 Zones} *)
+(*==========================================================================*)
+
+(** Zones are defined by languages extensions.*)
+type t = ..
+
+type t +=
+  | Z_top (** ⊤ includes all languages of the analyzer *)
+
+let top = Z_top
+
+(** Compare two zones.  Zones are assumed to be plain variant types,
+   so there is no need to define a (total) compare function.  *)
+let compare (z1: t) (z2: t) : int = compare z1 z2
+
+
+(** Chain of partial order definitions. *)
+let partial_order_chain : (t -> t -> bool) ref = ref (
+    fun z1 z2 ->
+      match z1, z2 with
+      | _, Z_top -> true
+      | Z_top, _ -> false
+      | _ -> false
+  )
+
+
+(** Add a definition of a partial order. *)
+let register_partial_order (f: (t -> t -> bool) -> t -> t -> bool) =
+  partial_order_chain := f !partial_order_chain
+
+(** Partial order test. *)
+let leq (z1: t) (z2: t) =
+  !partial_order_chain z1 z2
+
+
+(*==========================================================================*)
+                           (** {2 Paths} *)
+(*==========================================================================*)
+
+
+
+(** A path is defined by a source zone of the argument expression and
+   a destination zone required for the result. *)
+type path = t (** source *) * t (** destination *)
+
+
+(** Compare two paths. *)
+let compare_path ((z1, z2): path) ((z1', z2'): path) =
+  let c1 = compare z1 z1' in
+  if c1 <> 0 then c1
+  else compare z2 z2'
+
+(** (z1, z2) ⊆ (z1', z2') iff. z1' ⊆ z1 and z2' ⊆ z2. *)
+let path_leq ((z1, z2): path) ((z1', z2'): path) =
+  leq z1' z1
+  && leq z2' z2
+
+
+(*==========================================================================*)
+                           (** {2 Printing} *)
+(*==========================================================================*)
+
+let pp_chain : (Format.formatter -> t -> unit) ref = ref (fun fmt zone ->
+    match zone with
+    | Z_top -> Format.fprintf fmt "⊤"
+    | _ -> failwith "Pp: Unknown zone"
+  )
+
+let register_pp pp = pp_chain := pp !pp_chain
+
+let print fmt (zone: t) =
+  Format.fprintf fmt "[%a]" !pp_chain zone
+
+let print_path fmt ((z1, z2): path) =
+  Format.fprintf fmt "%a -> %a" print z1 print z2
