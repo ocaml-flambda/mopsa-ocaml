@@ -164,7 +164,7 @@ struct
 
 
   (** Evaluation of expressions. *)
-  and eval (zpath: Zone.path) (exp: Ast.expr) (ctx: Context.context) (flow: 'a flow) : (Ast.expr, 'a) Eval.evals =
+  and eval (zpath: Zone.path) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.evals =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Utils.Location.pp_range_verbose exp.erange

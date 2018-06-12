@@ -32,8 +32,8 @@ let append_cleaner (evl: ('e, 'a) evals) (cleaner: Ast.stmt list) : ('e, 'a) eva
       {ev with cleaner = ev.cleaner @ cleaner}
     ) evl
 
-let map_with_cleaner
-    (f: 'e -> 'a flow -> Ast.stmt list -> ('x, 'b) evals)
+let map_clause
+    (f: 'e -> 'a flow -> Ast.stmt list -> ('x, 'a) evals)
     (evls: ('e, 'a) evals)
   : ('x, 'a) evals =
   List.map (fun ev ->
@@ -46,10 +46,10 @@ let map_with_cleaner
 
 
 let map
-    (f: 'e -> 'a flow -> ('x, 'b) evals)
+    (f: 'e -> 'a flow -> ('x, 'a) evals)
     (evls: ('e, 'a) evals)
   : ('x, 'a) evals =
-  map_with_cleaner (fun case flow cleaners ->
+  map_clause (fun case flow cleaners ->
       let ev' = f case flow in
       append_cleaner ev' cleaners
     ) evls

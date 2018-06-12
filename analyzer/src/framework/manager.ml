@@ -202,7 +202,7 @@ let eval_list
 
     | exp :: tl ->
       man.eval zpath exp ctx flow |>
-      Eval.map_with_cleaner
+      Eval.map_clause
         (fun exp' flow clean' ->
            aux (exp' :: expl) flow (clean @ clean') tl
         )
