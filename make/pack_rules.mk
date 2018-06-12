@@ -13,11 +13,14 @@ define PACK_template =
  #Sub-sources
  SML_$(1) = $$(wildcard $$(SPATH_$(1))/*.ml)
  BML_$(1) = $$(SML_$(1):$$(SRC)/%=$$(BSRC)/%)
+ SMLI_$(1) = $$(wildcard $$(SPATH_$(1))/*.mli)
+ BMLI_$(1) = $$(SMLI_$(1):$$(SRC)/%=$$(BSRC)/%)
 
  #Dependencies of sub-sources to be generated
  DEPS_$(1) = $$(BML_$(1):%.ml=%.dep)
 
  #Object files
+ CMI_$(1) = $$(BML_$(1):%.ml=%.cmi)
  CMO_$(1) = $$(BML_$(1):%.ml=%.cmo)
  CMX_$(1) = $$(BML_$(1):%.ml=%.cmx)
 
@@ -51,6 +54,11 @@ define PACK_template =
  $$(CMX_$(1)): %.cmx: %.ml | %.dep
 	@echo "Compiling $$<"
 	@$$(OCAMLFIND)  $$(OCAMLOPT) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$(LIBCMXA) $$< -o $$@
+
+ $$(CMI_$(1)): %.cmi: %.mli | %.dep
+	@echo "Compiling $$<"
+	@$$(OCAMLFIND)  $$(OCAMLC) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$< -c -o $$@
+
 
  #Compile the pack
  $$(BPATH_$(1)).cmo: %.cmo: $$(LS_$(1):%=$$(BPATH_$(1))/%.cmo) | %.ml
