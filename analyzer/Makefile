@@ -10,7 +10,8 @@ framework.utils = compare location options exceptions
 
 lang = universal
 
-lang.universal = ast pp visitor flows setup
+lang.universal = ast pp visitor flows heap setup
+lang.universal.heap = pool query recency
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

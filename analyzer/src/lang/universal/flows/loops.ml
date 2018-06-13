@@ -64,7 +64,7 @@ struct
   let import_exec = []
   let export_exec = [Framework.Zone.top]
 
-  let rec exec (stmt: stmt) (man: ('a, unit) manager) ctx flow =
+  let rec exec zone (stmt: stmt) (man: ('a, unit) manager) ctx flow =
     match skind stmt with
     | S_while(cond, body) ->
       debug "while:@\n abs = @[%a@]" man.flow.print flow;
@@ -190,9 +190,6 @@ struct
         | TContinue -> man.env.bottom
         | _ -> eabs
       ) flow
-
-
-  let exec zone = exec
 
   let import_eval = []
   let export_eval = []
