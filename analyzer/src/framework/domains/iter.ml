@@ -67,25 +67,25 @@ struct
   let export_exec = Head.export_exec @ Tail.export_exec
 
   let exec zone =
-    match List.find_opt (fun z -> Zone.leq z zone) Head.export_exec, List.find_opt (fun z -> Zone.leq z zone) Tail.export_exec with
-    | Some z, None ->
-      let f = Head.exec z in
+    match List.find_all (fun z -> Zone.leq z zone) Head.export_exec, List.find_all (fun z -> Zone.leq z zone) Tail.export_exec with
+    | [], [] -> raise Not_found
+
+    | l, [] ->
+      let f = Analyzer.mk_exec_of_zone_list l Head.exec in
       (fun stmt man ctx flow -> f stmt (head_man man) ctx flow)
 
-    | None, Some z ->
-      let f = Tail.exec z in
+    | [], l ->
+      let f = Analyzer.mk_exec_of_zone_list l Tail.exec in
       (fun stmt man ctx flow -> f stmt (tail_man man) ctx flow)
 
-    | Some z1, Some z2 ->
-      let f1 = Head.exec z1 in
-      let f2 = Tail.exec z2 in
+    | l1, l2 ->
+      let f1 = Analyzer.mk_exec_of_zone_list l1 Head.exec in
+      let f2 = Analyzer.mk_exec_of_zone_list l2 Tail.exec in
       (fun stmt man ctx flow ->
-        match f1 stmt (head_man man) ctx flow with
-        | Some post -> Some post
-        | None -> f2 stmt (tail_man man) ctx flow
+         match f1 stmt (head_man man) ctx flow with
+         | Some post -> Some post
+         | None -> f2 stmt (tail_man man) ctx flow
       )
-
-    | None, None -> raise Not_found
 
 
   let import_eval = Head.import_eval @ Tail.import_eval
