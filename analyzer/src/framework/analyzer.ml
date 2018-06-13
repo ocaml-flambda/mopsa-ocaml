@@ -18,12 +18,12 @@ open Flow
 open Manager
 open Domain
 open Eval
-open Exec
+open Post
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 let mk_exec_of_zone_list (l: Zone.t list) exec =
-  (fun (stmt: Ast.stmt) (man: ('a, 't) manager) ctx (flow: 'a flow) : 'a Exec.post option ->
+  (fun (stmt: Ast.stmt) (man: ('a, 't) manager) ctx (flow: 'a flow) : 'a Post.t option ->
      let rec aux =
        function
        | [] -> None
@@ -36,7 +36,7 @@ let mk_exec_of_zone_list (l: Zone.t list) exec =
   )
 
 let mk_eval_of_zone_path_list (l: Zone.path list) eval =
-  (fun (exp: Ast.expr) (man: ('a, 't) manager) ctx (flow: 'a flow) : (Ast.expr, 'a) Eval.evals option ->
+  (fun (exp: Ast.expr) (man: ('a, 't) manager) ctx (flow: 'a flow) : (Ast.expr, 'a) Eval.t option ->
      let rec aux =
        function
        | [] -> None
@@ -192,7 +192,7 @@ struct
 
 
   (** Evaluation of expressions. *)
-  and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.evals =
+  and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.t =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Utils.Location.pp_range_verbose exp.erange

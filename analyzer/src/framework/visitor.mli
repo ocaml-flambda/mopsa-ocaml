@@ -26,7 +26,7 @@ type parts = {
 }
 (** Parts are the direct sub-elements of an AST node *)
 
-type 'a structure
+type 'a structure = parts * (parts -> 'a)
 (** A structure of an extensible type ['a] is a tuple composed of two elements:
     the parts and a builder function.
 *)
@@ -43,7 +43,7 @@ type 'a chain = ('a -> 'a structure) ref
 
 
 (** Leaf nodes are identity composer *)
-val leaf (x: 'a) : 'a structure
+val leaf : 'a -> 'a structure
 
 (** To register a visitor of new expressions, [register_exp_visitor]
     should be called with a function having two arguments:
@@ -71,12 +71,12 @@ val map_expr :
     [map_stmt fe fs] on them, and finally gathering the results with
     the builder of [fe e].
 *)
-                    
+
 
 val map_stmt :
   (Ast.expr -> Ast.expr) ->
   (Ast.stmt -> Ast.stmt) ->
-  Ast.stmt -> Ast.stmt =
+  Ast.stmt -> Ast.stmt
 (** [map_stmt fe fs s] same as [map_expr] but on statements. *)
 
 val fold_expr :
@@ -107,5 +107,5 @@ val fold_map_stmt :
 val expr_vars : Ast.expr -> Ast.var list
 (** Extract variables from an expression *)
 
-val stmt_vars : Ast.stmt -> var list
+val stmt_vars : Ast.stmt -> Ast.var list
 (** Extract variables from a statement *)

@@ -17,45 +17,45 @@ type ('e, 'a) clause = {
 }
 (** Evaluation clause *)
 
-type ('e, 'a) evals
+type ('e, 'a) t
 (** Evaluations *)
 
 
-val singleton : 'e option -> ?cleaner:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) evals
+val singleton : 'e option -> ?cleaner:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) t
 (** Evaluation singleton *)
 
-val join : ('e, 'a) evals -> ('e, 'a) evals -> ('e, 'a) evals
+val join : ('e, 'a) t -> ('e, 'a) t -> ('e, 'a) t
 (** Compute the union of two evaluations *)
 
-val append_cleaner : ('e, 'a) evals -> Ast.stmt list -> ('e, 'a) evals 
+val append_cleaner : Ast.stmt list -> ('e, 'a) t -> ('e, 'a) t
 (** Add cleaners to an evaluation *)
 
 val map_clause:
-    ('e -> 'a Flow.flow -> Ast.stmt list -> ('x, 'a) evals) ->
-    ('e, 'a) evals ->
-    ('x, 'a) evals
+    ('e -> 'a Flow.flow -> Ast.stmt list -> ('x, 'a) t) ->
+    ('e, 'a) t ->
+    ('x, 'a) t
 (** [map_clause f evls] applies the evaluation function [f] on each
    clause of [evls] and joins the results *)
 
 val map:
-    ('e -> 'a Flow.flow -> ('x, 'a) evals) ->
-    ('e, 'a) evals ->
-    ('x, 'a) evals
+    ('e -> 'a Flow.flow -> ('x, 'a) t) ->
+    ('e, 'a) t ->
+    ('x, 'a) t
 (** [map f evls] is similar to [map_clause f evls] with the difference
    that [f] is given only the case and the flow of the clause, but not
    the cleaners *)
 
 val iter:
     ('e -> 'a Flow.flow -> unit) ->
-    ('e, 'a) evals ->
+    ('e, 'a) t ->
     unit
 (** Iterate over the clauses of an evaluation *)
 
 val merge:
     (('e, 'a) clause -> 'b) ->
     join:('b -> 'b -> 'b) ->
-    ('e, 'a) evals ->
+    ('e, 'a) t ->
     'b
 (** Merge the clauses of an evaluation *)
 
-val print : Format.formatter -> ('e, 'a) evals -> print_case:(Format.formatter -> 'e -> unit) -> unit
+val print : Format.formatter -> ('e, 'a) t -> print_case:(Format.formatter -> 'e -> unit) -> unit

@@ -13,19 +13,19 @@ open Flow
 
 type reduction_channel = ..
 
-type 'a post = {
+type 'a t = {
   flow : 'a flow;
   channels : reduction_channel list;
   mergers : Ast.stmt list;
 }
 
-let singleton ?(channels = []) ?(mergers = []) flow = {
+let of_flow ?(channels = []) ?(mergers = []) flow = {
   flow;
   channels;
   mergers;
 }
 
-let join (post1: 'a post) (post2: 'a post) ~(flow_join: 'a flow -> 'a flow -> 'a flow) : 'a post =
+let join (post1: 'a t) (post2: 'a t) ~(flow_join: 'a flow -> 'a flow -> 'a flow) : 'a t =
   {
     flow     = flow_join post1.flow post2.flow;
     channels = post1.channels @ post2.channels;

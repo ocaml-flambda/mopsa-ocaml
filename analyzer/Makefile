@@ -3,11 +3,14 @@ TARGET_NATIVES = mopsa
 MOPSAROOT = ..
 
 #Packs
-mopsa = framework
+mopsa = framework lang
 
-framework = utils ast query context lattice flow zone value eval exec manager domain analyzer lattices domains
+framework = utils ast visitor query context lattice flow zone value eval post manager domain analyzer lattices domains essentials
 framework.utils = compare location options exceptions
 
+lang = universal
+
+lang.universal = ast pp visitor flows setup
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

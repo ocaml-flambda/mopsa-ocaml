@@ -11,7 +11,6 @@
 open Flow
 open Lattice
 open Manager
-open Eval
 
 
 (*==========================================================================*)
@@ -22,7 +21,21 @@ open Eval
 module type DOMAIN =
 sig
 
-  include Domain.DOMAIN with type t := unit
+  val init : Ast.program -> ('a, unit) manager -> Context.context -> 'a flow -> (Context.context * 'a flow) option
+
+  (** Abstract transfer function of statements. *)
+  val import_exec : Zone.t list
+  val export_exec : Zone.t list
+  val exec: Zone.t -> Ast.stmt -> ('a, unit) manager -> Context.context -> 'a flow -> 'a Post.t option
+
+  (** Abstract (symbolic) evaluation of expressions. *)
+  val import_eval : Zone.path list
+  val export_eval : Zone.path list
+  val eval: Zone.path -> Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t option
+
+  (** Handler of generic queries. *)
+  val ask: 'r Query.query -> ('a, unit) manager -> Context.context -> 'a flow -> 'r option
+
 
 end
 
@@ -63,6 +76,3 @@ let register_domain name modl =
   let module D = (val modl : DOMAIN) in
   let module SD = MakeStatefulDomain(D) in
   Domain.register_domain name (module SD)
-
-let return x = Some x
-let fail = None

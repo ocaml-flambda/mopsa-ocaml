@@ -34,8 +34,7 @@ type parts = {
 (** A structure of an extensible type ['a] is a tuple composed of two elements:
     the parts and a builder function.
 *)
-type 'a structure =
-  parts * (parts -> 'a)
+type 'a structure = parts * (parts -> 'a)
 
 (*==========================================================================*)
                         (** {2 Visitors chains} *)
@@ -65,7 +64,7 @@ let expr_chain : Ast.expr chain = ref (fun exp ->
         {exprs = [e1; e2]; stmts = []},
         (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
     | _ ->
-      Debug.fail "Unknown expression %a" Pp.pp_expr exp
+      Debug.fail "Unknown expression %a" pp_expr exp
   )
 
 let stmt_chain : Ast.stmt chain = ref (fun stmt ->

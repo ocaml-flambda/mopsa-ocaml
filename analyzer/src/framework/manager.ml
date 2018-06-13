@@ -125,7 +125,7 @@ type ('a, 't) manager = {
   exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
 
   (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.evals;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
@@ -169,33 +169,33 @@ let get_domain_cur man flow =
 (** [post_eval zone f man ctx flow evals] computes the post-condition of
    transfer function [f] over all evaluation cases in [evals] *)
 let post_eval
-    (zone: Zone.t)
-    (f: Ast.expr -> 'a flow -> 'a Exec.post)
-    (man: ('a, 't) manager) (ctx: Context.context) (flow: 'a flow)
-    (evals: (Ast.expr, 'a) Eval.evals)
-  : 'a Exec.post =
+    ?(zone = Zone.top)
+    (f: Ast.expr -> 'a flow -> 'a Post.t)
+    (man: ('a, 't) manager) (ctx: Context.context)
+    (evals: (Ast.expr, 'a) Eval.t)
+  : 'a Post.t =
   Eval.(merge
           (fun eval ->
              let post = match eval.case with
-               | None -> Exec.singleton eval.flow
+               | None -> Post.of_flow eval.flow
                | Some exp -> f exp eval.flow
              in
              List.fold_left (fun acc stmt ->
-                 let flow = acc.Exec.flow in
+                 let flow = acc.Post.flow in
                  let flow' = man.exec ~zone stmt ctx flow in
-                 {acc with Exec.flow = flow'}
+                 {acc with Post.flow = flow'}
                ) post eval.cleaner
           )
           evals
-          ~join:(Exec.join ~flow_join:man.flow.join)
+          ~join:(Post.join ~flow_join:man.flow.join)
        )
 
 (** [eval_list zpath el man ctx flow] folds the evaluations of expressions in [el] *)
 let eval_list
-    (zpath: Zone.path)
+    ?(zpath = Zone.path_top)
     (l: Ast.expr list)
     (man: ('a, 't) manager) ctx (flow: 'a flow)
-  : (Ast.expr list, 'a) Eval.evals =
+  : (Ast.expr list, 'a) Eval.t =
   let rec aux expl flow clean = function
     | [] ->
       Eval.singleton (Some (List.rev expl)) flow ~cleaner:clean

@@ -93,7 +93,7 @@ type ('a, 't) manager = {
   exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a Flow.flow -> 'a Flow.flow;
 
   (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.evals;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.t;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a Flow.flow -> 'r option;
@@ -125,10 +125,10 @@ val get_domain_cur : ('a, 't) manager -> 'a Flow.flow -> 't
 (** [get_domain_cur] retrieves the domain' abstract element in the [TCur] flow *)
 
 
-val post_eval : Zone.t -> (Ast.expr -> 'a Flow.flow -> 'a Exec.post) -> ('a, 't) manager -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.evals -> 'a Exec.post
+val post_eval : ?zone:Zone.t -> (Ast.expr -> 'a Flow.flow -> 'a Post.t) -> ('a, 't) manager -> Context.context -> (Ast.expr, 'a) Eval.t -> 'a Post.t
 (** [post_eval zone f man ctx flow evals] computes the post-condition of
    transfer function [f] over all evaluation cases in [evals] *)
 
 
-val eval_list : Zone.path -> Ast.expr list -> ('a, 't) manager -> Context.context -> 'a Flow.flow -> (Ast.expr list, 'a) Eval.evals
+val eval_list : ?zpath:Zone.path -> Ast.expr list -> ('a, 't) manager -> Context.context -> 'a Flow.flow -> (Ast.expr list, 'a) Eval.t
 (** [eval_list zpath el man ctx flow] folds the evaluations of expressions in [el] *)

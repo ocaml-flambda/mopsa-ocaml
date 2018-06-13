@@ -19,23 +19,23 @@ type ('e, 'a) clause = {
   cleaner: Ast.stmt list;
 }
 
-type ('e, 'a) evals = ('e, 'a) clause list
+type ('e, 'a) t = ('e, 'a) clause list
 
-let singleton (case: 'e option) ?(cleaner = []) (flow: 'a flow) : ('e, 'a) evals =
+let singleton (case: 'e option) ?(cleaner = []) (flow: 'a flow) : ('e, 'a) t =
   [{case; flow; cleaner}]
 
-let join (evl1: ('e, 'a) evals)  (evl2: ('e, 'a) evals) : ('e, 'a) evals =
+let join (evl1: ('e, 'a) t)  (evl2: ('e, 'a) t) : ('e, 'a) t =
   evl1 @ evl2
 
-let append_cleaner (evl: ('e, 'a) evals) (cleaner: Ast.stmt list) : ('e, 'a) evals =
+let append_cleaner (cleaner: Ast.stmt list) (evl: ('e, 'a) t) : ('e, 'a) t =
   List.map (fun ev ->
       {ev with cleaner = ev.cleaner @ cleaner}
     ) evl
 
 let map_clause
-    (f: 'e -> 'a flow -> Ast.stmt list -> ('x, 'a) evals)
-    (evls: ('e, 'a) evals)
-  : ('x, 'a) evals =
+    (f: 'e -> 'a flow -> Ast.stmt list -> ('x, 'a) t)
+    (evls: ('e, 'a) t)
+  : ('x, 'a) t =
   List.map (fun ev ->
       match ev.case with
       | None -> singleton None ev.flow
@@ -46,17 +46,17 @@ let map_clause
 
 
 let map
-    (f: 'e -> 'a flow -> ('x, 'a) evals)
-    (evls: ('e, 'a) evals)
-  : ('x, 'a) evals =
+    (f: 'e -> 'a flow -> ('x, 'a) t)
+    (evls: ('e, 'a) t)
+  : ('x, 'a) t =
   map_clause (fun case flow cleaners ->
       let ev' = f case flow in
-      append_cleaner ev' cleaners
+      append_cleaner cleaners ev'
     ) evls
 
 let iter
     (f: 'e -> 'a flow -> unit)
-    (evls: ('e, 'a) evals)
+    (evls: ('e, 'a) t)
   : unit =
   List.iter (fun ev ->
       match ev.case with
@@ -67,7 +67,7 @@ let iter
 let merge
     (f: ('e, 'a) clause -> 'b)
     ~(join: 'b -> 'b -> 'b)
-    (evals: ('e, 'a) evals)
+    (evals: ('e, 'a) t)
   : 'b =
   let l = List.map f evals in
   match l with
@@ -76,7 +76,7 @@ let merge
     List.fold_left join hd tl
 
 
-let print fmt (evals: ('e, 'a) evals) ~(print_case: Format.formatter -> 'e -> unit) : unit =
+let print fmt (evals: ('e, 'a) t) ~(print_case: Format.formatter -> 'e -> unit) : unit =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
     (fun fmt ev ->

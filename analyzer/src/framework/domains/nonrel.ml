@@ -36,7 +36,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:"framework.domains.nonrel" fmt
 
-
+  let return x = Some x
 
   (*==========================================================================*)
                      (** {2 Expression manipulations} *)

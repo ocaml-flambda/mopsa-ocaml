@@ -10,15 +10,15 @@
 type reduction_channel
 (** Post-condition reduction channels *)
 
-type 'a post = {
+type 'a t = {
   flow      : 'a Flow.flow;            (** Post-condition flow *)
   channels  : reduction_channel list;  (** Published post-condition reductions *)
   mergers   : Ast.stmt list;           (** Meet mergers *)
 }
 (** Post-condition of [exec] transfer functions *)
 
-val singleton : ?channels:reduction_channel list -> ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a post
-(** Singleton post-condition *)
+val of_flow : ?channels:reduction_channel list -> ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a t
+(** Create a post-condition from a flow *)
 
-val join : 'a post -> 'a post -> flow_join:('a Flow.flow -> 'a Flow.flow -> 'a Flow.flow) -> 'a post
+val join : 'a t -> 'a t -> flow_join:('a Flow.flow -> 'a Flow.flow -> 'a Flow.flow) -> 'a t
 (** Join two post-conditions *)

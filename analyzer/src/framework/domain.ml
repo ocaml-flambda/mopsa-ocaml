@@ -29,12 +29,12 @@ sig
   (** Abstract transfer function of statements. *)
   val import_exec : Zone.t list
   val export_exec : Zone.t list
-  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Exec.post option
+  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.t option
 
   (** Abstract (symbolic) evaluation of expressions. *)
   val import_eval : Zone.path list
   val export_eval : Zone.path list
-  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.evals option
+  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t option
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, t) manager -> Context.context -> 'a flow -> 'r option
@@ -44,7 +44,3 @@ end
 let domains : (string * (module DOMAIN)) list ref = ref []
 let register_domain name modl = domains := (name, modl) :: !domains
 let find_domain name = List.assoc name !domains
-
-
-let return x = Some x
-let fail = None
