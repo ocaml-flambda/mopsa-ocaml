@@ -92,25 +92,26 @@ struct
   let export_eval = Head.export_eval @ Tail.export_eval
 
   let eval zpath =
-    match List.find_opt (fun p -> Zone.path_leq p zpath) Head.export_eval, List.find_opt (fun p -> Zone.path_leq p zpath) Tail.export_eval with
-    | Some p, None ->
-      let f = Head.eval p in
+    match List.find_all (fun p -> Zone.path_leq p zpath) Head.export_eval, List.find_all (fun p -> Zone.path_leq p zpath) Tail.export_eval with
+    | [], [] -> raise Not_found
+
+    | l, [] ->
+      let f = Analyzer.mk_eval_of_zone_path_list l Head.eval in
       (fun exp man ctx flow -> f exp (head_man man) ctx flow)
 
-    | None, Some p ->
-      let f = Tail.eval p in
+    | [], l ->
+      let f = Analyzer.mk_eval_of_zone_path_list l Tail.eval in
       (fun exp man ctx flow -> f exp (tail_man man) ctx flow)
 
-    | Some p1, Some p2 ->
-      let f1 = Head.eval p1 in
-      let f2 = Tail.eval p2 in
+    | l1, l2 ->
+      let f1 = Analyzer.mk_eval_of_zone_path_list l1 Head.eval in
+      let f2 = Analyzer.mk_eval_of_zone_path_list l2 Tail.eval in
       (fun exp man ctx flow ->
          match f1 exp (head_man man) ctx flow with
          | Some evl -> Some evl
          | None -> f2 exp (tail_man man) ctx flow
       )
 
-    | None, None -> raise Not_found
 
 
   let ask query man ctx flow =

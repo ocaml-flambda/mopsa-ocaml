@@ -22,6 +22,32 @@ open Exec
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
+let mk_exec_of_zone_list (l: Zone.t list) exec =
+  (fun (stmt: Ast.stmt) (man: ('a, 't) manager) ctx (flow: 'a flow) : 'a Exec.post option ->
+     let rec aux =
+       function
+       | [] -> None
+       | z :: tl ->
+         match exec z stmt man ctx flow with
+         | None -> aux tl
+         | Some ret -> Some ret
+     in
+     aux l
+  )
+
+let mk_eval_of_zone_path_list (l: Zone.path list) eval =
+  (fun (exp: Ast.expr) (man: ('a, 't) manager) ctx (flow: 'a flow) : (Ast.expr, 'a) Eval.evals option ->
+     let rec aux =
+       function
+       | [] -> None
+       | p :: tl ->
+         match eval p exp man ctx flow with
+         | None -> aux tl
+         | Some ret -> Some ret
+     in
+     aux l
+  )
+
 
 (**
    Functor to create an [Analyzer] module from an top-level abstract domain.
@@ -90,18 +116,19 @@ struct
         else
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_opt (fun z -> Zone.leq z zone) Domain.export_exec with
-            | Some z ->
-              let f = Domain.exec z in
+            match List.find_all (fun z -> Zone.leq z zone) Domain.export_exec with
+            | [] -> Debug.fail "exec for %a not found" Zone.print zone
+
+            | l ->
+              let f = mk_exec_of_zone_list l Domain.exec in
+
               debug "exec for %a found" Zone.print zone;
               ExecMap.add zone f acc
-
-            | None -> Debug.fail "exec for %a not found" Zone.print zone
           end
-      ) ExecMap.empty Domain.import_exec
+      ) ExecMap.empty (Zone.top :: Domain.import_exec)
 
 
-  and exec (zone: Zone.t) (stmt: Ast.stmt) (ctx: Context.context) (flow: Domain.t flow) : Domain.t flow =
+  and exec ?(zone = Zone.top) (stmt: Ast.stmt) (ctx: Context.context) (flow: Domain.t flow) : Domain.t flow =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Utils.Location.pp_range_verbose stmt.srange
@@ -152,19 +179,20 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print_path zpath;
-            match List.find_opt (fun p -> Zone.path_leq p zpath) Domain.export_eval with
-            | Some p ->
-              let f = Domain.eval p in
+            match List.find_all (fun p -> Zone.path_leq p zpath) Domain.export_eval with
+            | [] -> Debug.fail "eval for %a not found" Zone.print_path zpath
+
+            | l ->
+              let f = mk_eval_of_zone_path_list l Domain.eval in
               debug "eval for %a found" Zone.print_path zpath;
               EvalMap.add zpath f acc
 
-            | None -> Debug.fail "eval for %a not found" Zone.print_path zpath
           end
-      ) EvalMap.empty Domain.import_eval
+      ) EvalMap.empty (Zone.path_top :: Domain.import_eval)
 
 
   (** Evaluation of expressions. *)
-  and eval (zpath: Zone.path) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.evals =
+  and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.evals =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Utils.Location.pp_range_verbose exp.erange

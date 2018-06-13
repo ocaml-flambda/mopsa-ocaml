@@ -58,6 +58,7 @@ let leq (z1: t) (z2: t) =
    a destination zone required for the result. *)
 type path = t (** source *) * t (** destination *)
 
+let path_top = top, top
 
 (** Compare two paths. *)
 let compare_path ((z1, z2): path) ((z1', z2'): path) =

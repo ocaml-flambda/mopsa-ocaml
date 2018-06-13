@@ -122,10 +122,10 @@ type ('a, 't) manager = {
   flow : 'a flow_manager;
 
   (** Statement transfer function. *)
-  exec : Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
+  exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
 
   (** Expression evaluation function. *)
-  eval : Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.evals;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.evals;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
@@ -182,7 +182,7 @@ let post_eval
              in
              List.fold_left (fun acc stmt ->
                  let flow = acc.Exec.flow in
-                 let flow' = man.exec zone stmt ctx flow in
+                 let flow' = man.exec ~zone stmt ctx flow in
                  {acc with Exec.flow = flow'}
                ) post eval.cleaner
           )
@@ -201,7 +201,7 @@ let eval_list
       Eval.singleton (Some (List.rev expl)) flow ~cleaner:clean
 
     | exp :: tl ->
-      man.eval zpath exp ctx flow |>
+      man.eval ~zpath exp ctx flow |>
       Eval.map_clause
         (fun exp' flow clean' ->
            aux (exp' :: expl) flow (clean @ clean') tl

@@ -90,10 +90,10 @@ type ('a, 't) manager = {
   flow : 'a flow_manager;
 
   (** Statement transfer function. *)
-  exec : Zone.t -> Ast.stmt -> Context.context -> 'a Flow.flow -> 'a Flow.flow;
+  exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a Flow.flow -> 'a Flow.flow;
 
   (** Expression evaluation function. *)
-  eval : Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.evals;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.evals;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a Flow.flow -> 'r option;
