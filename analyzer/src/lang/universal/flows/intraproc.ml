@@ -30,7 +30,8 @@ struct
     match skind stmt with
     | S_expression(e) ->
       man.eval e ctx flow |>
-      post_eval (fun e flow -> Post.of_flow flow) man ctx |>
+      post_eval_option man ctx @@ fun e flow ->
+      Post.of_flow flow |>
       return
 
     | S_block(block) ->
