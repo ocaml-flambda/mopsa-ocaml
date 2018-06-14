@@ -7,7 +7,11 @@
 (****************************************************************************)
 
 (** Stacked domains are functor allowing doing unifications before
-    binary operators (⊆, ∪, ∩, and ▿) over an argument domain.
+   binary operators (⊆, ∪, ∩, and ▽) over an argument sub-domain.
+
+   Note that the abstract element of the sub-domain is outside the
+   scope of the stacked domain. An additional manager is therefore
+   given to transfer functions.
 *)
 
 open Manager

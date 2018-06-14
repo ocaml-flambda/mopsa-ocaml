@@ -5,13 +5,15 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang
 
-framework = utils ast visitor query context lattice flow zone value eval post manager domain analyzer lattices domains essentials
+framework = utils ast visitor query context lattice flow zone value eval post manager domain analyzer lattices domains essentials config
 framework.utils = compare location options exceptions
 
 lang = universal
 
-lang.universal = ast pp visitor flows heap setup
-lang.universal.heap = pool query recency
+lang.universal = ast pp visitor zone flows heap numeric setup
+lang.universal.heap = query recency
+lang.universal.numeric = values relational
+lang.universal.numeric.values = int congruence float
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

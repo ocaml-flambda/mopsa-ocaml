@@ -6,22 +6,23 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Essential modules. *)
+(** Zones for the Universal language. *)
 
-(** AST *)
-include Ast
-module Visitor = Visitor
+type Framework.Zone.t +=
+  | Z_num
+  | Z_num_int
+  | Z_num_float
 
-include Manager
-
-module Flow = Flow
-
-module Context = Context
-
-module Post = Post
-
-module Eval = Eval
-
-module Exceptions = Utils.Exceptions
-
-let return x = Some x
+let () =
+  Framework.Zone.register_partial_order (fun next z1 z2 ->
+      match z1, z2 with
+      | (Z_num_int | Z_num_float), Z_num -> true
+      | _ -> next z1 z2
+    );
+  Framework.Zone.register_pp (fun next fmt z ->
+      match z with
+      | Z_num -> Format.fprintf fmt "num"
+      | Z_num_int -> Format.fprintf fmt "int"
+      | Z_num_float -> Format.fprintf fmt "real"
+      | _ -> next fmt z
+    )

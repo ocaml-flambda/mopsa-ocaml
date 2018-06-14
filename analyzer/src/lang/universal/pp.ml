@@ -54,8 +54,6 @@ let () =
       | C_float(f) -> pp_print_float fmt f
       | C_int_interval(a,b) -> fprintf fmt "[%a,%a]" Z.pp_print a Z.pp_print b
       | C_float_interval(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
-      | C_true -> pp_print_string fmt "True"
-      | C_false -> pp_print_string fmt "False"
       | c -> default fmt c
     );
 
@@ -64,7 +62,6 @@ let () =
       | T_int -> pp_print_string fmt "int"
       | T_float -> pp_print_string fmt "float"
       | T_string -> pp_print_string fmt "string"
-      | T_bool -> pp_print_string fmt "bool"
       | T_addr -> pp_print_string fmt "addr"
       | _ -> default fmt typ
   );

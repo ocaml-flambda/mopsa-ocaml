@@ -19,20 +19,8 @@ type typ +=
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float (** Floating-point real numbers. *)
   | T_string (** Strings. *)
-  | T_bool (** Booleans. *)
   | T_addr (** Heap addresses. *)
 
-
-let () =
-  Framework.Ast.register_typ_compare (fun next t1 t2 ->
-      match t1, t2 with
-      | T_int, T_int
-      | T_float, T_float
-      | T_string, T_string
-      | T_bool, T_bool
-      | T_addr, T_addr
-      | _ -> next t1 t2
-    )
 
 (*==========================================================================*)
                            (** {2 Constants} *)
@@ -45,8 +33,6 @@ type constant +=
   | C_string of string (** String constants. *)
   | C_int_interval of Z.t * Z.t (** Integer ranges. *)
   | C_float_interval of float * float (** Float ranges. *)
-  | C_true (** Boolean true value. *)
-  | C_false (** Boolean false value. *)
 (** Constants. *)
 
 
@@ -161,7 +147,7 @@ type expr_kind +=
   (** Head address. *)
   | E_addr of addr
 
-let mk_not e = mk_unop O_log_not e ~etyp:T_bool
+let mk_not e = mk_unop O_log_not e
 
 let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
@@ -218,10 +204,6 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 
-let mk_bool b = mk_constant ~etyp:T_bool (if b then C_true else C_false)
-let mk_true = mk_bool true
-let mk_false = mk_bool false
-
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
@@ -273,10 +255,10 @@ let mk_simple_assert e b1 b2 range =
   mk_stmt (S_simple_assert (e, b1, b2)) range
 
 let mk_assert_reachable range =
-  mk_simple_assert (mk_true range) true false range
+  mk_simple_assert (mk_one range) true false range
 
 let mk_assert_unreachable range =
-  mk_simple_assert (mk_true range) true true range
+  mk_simple_assert (mk_one range) true true range
 
 let mk_block block = mk_stmt (S_block block)
 
