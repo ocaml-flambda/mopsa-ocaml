@@ -139,7 +139,7 @@ struct
       return_cur
 
     | S_assign({ekind = E_var v}, e, STRONG) ->
-      man.eval ~zpath:(Framework.Zone.Z_top, Zone.Z_num) e ctx flow |> post_eval_option man ctx @@ fun e flow ->
+      post_eval ~zpath:(Framework.Zone.Z_top, Zone.Z_num) e man ctx flow @@ fun e flow ->
       let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
       begin try
           let aenv = Apron.Abstract1.env abs in
@@ -158,7 +158,7 @@ struct
 
     | S_assume(e) -> begin
         let () = debug "until now looks ok" in
-        man.eval e ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |> post_eval_option man ctx @@ fun e flow ->
+        post_eval e ~zpath:(Framework.Zone.Z_top, Zone.Z_num) man ctx flow @@ fun e flow ->
         let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env abs in
         try
@@ -355,14 +355,14 @@ struct
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      man.eval ~zpath:(Framework.Zone.top, Zone.Z_num) e1 ctx flow |> Eval.map_option @@ fun e1 flow ->
-      man.eval ~zpath:(Framework.Zone.top, Zone.Z_num) e2 ctx flow |> Eval.map_option @@ fun e2 flow ->
+      map_eval ~zpath:(Framework.Zone.top, Zone.Z_num) e1 man ctx flow @@ fun e1 flow ->
+      map_eval ~zpath:(Framework.Zone.top, Zone.Z_num) e2 man ctx flow @@ fun e2 flow ->
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
       Eval.singleton (Some exp') flow |>
       return
 
     | E_unop(op, e) ->
-      man.eval ~zpath:(Framework.Zone.top, Zone.Z_num) e ctx flow |> Eval.map_option @@ fun e flow ->
+      map_eval ~zpath:(Framework.Zone.top, Zone.Z_num) e man ctx flow @@ fun e flow ->
       let exp' = {exp with ekind = E_unop(op, e)} in
       Eval.singleton (Some exp') flow |>
       return

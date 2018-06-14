@@ -29,8 +29,7 @@ struct
   let exec zone stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      man.eval e ctx flow |>
-      post_eval_option man ctx @@ fun e flow ->
+      post_eval e man ctx flow @@ fun e flow ->
       Post.of_flow flow |>
       return
 

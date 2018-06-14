@@ -38,18 +38,10 @@ val map_clause:
    clause of [evls] and joins the results *)
 
 val map:
-    ('e -> 'a Flow.flow -> ('x, 'a) t) ->
-    ('e, 'a) t ->
-    ('x, 'a) t
-(** [map f evls] is similar to [map_clause f evls] with the difference
-   that [f] is given only the case and the flow of the clause, but not
-    the cleaners *)
-
-val map_option:
   ('e -> 'a Flow.flow -> ('x, 'a) t option) ->
   ('e, 'a) t ->
   ('x, 'a) t option
-(** [map_option f evls] is similar to [map] but returns optional evaluations *)
+(** [map f evls] applies f on cases of [evls]  *)
 
 val iter:
     ('e -> 'a Flow.flow -> unit) ->

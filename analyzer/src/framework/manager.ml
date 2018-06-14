@@ -166,61 +166,42 @@ let get_domain_cur man flow =
     man.ax.get
 
 
-(** [post_eval zone f man ctx flow evals] computes the post-condition of
-   transfer function [f] over all evaluation cases in [evals] *)
-let post_eval
-    ?(zone = Zone.top)
-    man ctx
-    (f: Ast.expr -> 'a flow -> 'a Post.t)
-    (evals: (Ast.expr, 'a) Eval.t)
-  : 'a Post.t =
-  Eval.(merge
-          (fun eval ->
-             let post = match eval.case with
-               | None -> Post.of_flow eval.flow
-               | Some exp -> f exp eval.flow
-             in
-             List.fold_left (fun acc stmt ->
-                 let flow = acc.Post.flow in
-                 let flow' = man.exec ~zone stmt ctx flow in
-                 {acc with Post.flow = flow'}
-               ) post eval.cleaner
-          )
-          evals
-          ~join:(Post.join ~flow_join:man.flow.join)
-       )
+let map_eval
+    ?(zpath = Zone.path_top) e man ctx flow
+    (f: Ast.expr -> 'a flow -> (Ast.expr, 'a) Eval.t option)
+  : (Ast.expr, 'a) Eval.t option =
+  man.eval ~zpath e ctx flow |>
+  Eval.map f
 
-let post_eval_option
-    ?(zone = Zone.top)
-    man ctx
+let post_eval
+    ?(zpath = Zone.path_top) e man ctx flow
     (f: Ast.expr -> 'a flow -> 'a Post.t option)
-    (evals: (Ast.expr, 'a) Eval.t)
   : 'a Post.t option =
   let join_option x y =
     match x, y with
     | None, a | a, None -> a
     | Some a, Some b -> Some (Post.join ~flow_join:man.flow.join a b)
   in
-  Eval.(merge
-          (fun eval ->
-             let post = match eval.case with
-               | None -> Some (Post.of_flow eval.flow)
-               | Some exp -> f exp eval.flow
-             in
-             match post with
-             | None -> None
-             | Some post ->
-               let post' = List.fold_left (fun acc stmt ->
-                   let flow = acc.Post.flow in
-                   let flow' = man.exec ~zone stmt ctx flow in
-                   {acc with Post.flow = flow'}
-                 ) post eval.cleaner
-               in
-               Some post'
-          )
-          evals
-          ~join:join_option
-       )
+  let open Eval in
+  man.eval ~zpath e ctx flow |>
+  Eval.merge
+    (fun eval ->
+       let post = match eval.case with
+         | None -> Some (Post.of_flow eval.flow)
+         | Some exp -> f exp eval.flow
+       in
+       match post with
+       | None -> None
+       | Some post ->
+         let post' = List.fold_left (fun acc stmt ->
+             let flow = acc.Post.flow in
+             let flow' = man.exec stmt ctx flow in
+             {acc with Post.flow = flow'}
+           ) post eval.cleaner
+         in
+         Some post'
+    )~join:join_option
+
 
 
 (** [eval_list zpath el man ctx flow] folds the evaluations of expressions in [el] *)

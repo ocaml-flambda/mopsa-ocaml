@@ -46,19 +46,6 @@ let map_clause
 
 
 let map
-    (f: 'e -> 'a flow -> ('x, 'a) t)
-    (evls: ('e, 'a) t)
-  : ('x, 'a) t =
-  List.map (fun ev ->
-      match ev.case with
-      | None -> singleton None ev.flow
-      | Some case -> f case ev.flow |>
-                    append_cleaner ev.cleaner
-    ) evls
-  |>
-  List.concat
-
-let map_option
     (f: 'e -> 'a flow -> ('x, 'a) t option)
     (evls: ('e, 'a) t)
   : ('x, 'a) t option =
