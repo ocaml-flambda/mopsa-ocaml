@@ -39,7 +39,7 @@ let map_clause
   List.map (fun ev ->
       match ev.case with
       | None -> singleton None ev.flow
-      | Some ret -> f ret ev.flow ev.cleaner
+      | Some case -> f case ev.flow ev.cleaner
     ) evls
   |>
   List.concat
@@ -49,10 +49,34 @@ let map
     (f: 'e -> 'a flow -> ('x, 'a) t)
     (evls: ('e, 'a) t)
   : ('x, 'a) t =
-  map_clause (fun case flow cleaners ->
-      let ev' = f case flow in
-      append_cleaner cleaners ev'
+  List.map (fun ev ->
+      match ev.case with
+      | None -> singleton None ev.flow
+      | Some case -> f case ev.flow |>
+                    append_cleaner ev.cleaner
     ) evls
+  |>
+  List.concat
+
+let map_option
+    (f: 'e -> 'a flow -> ('x, 'a) t option)
+    (evls: ('e, 'a) t)
+  : ('x, 'a) t option =
+  let add_to_option x o =
+    match o with
+    | None -> Some x
+    | Some y -> Some (y @ x)
+  in
+  List.fold_left (fun acc ev ->
+      match ev.case with
+      | None -> add_to_option (singleton None ev.flow) acc
+      | Some case ->
+        match f case ev.flow with
+        | None -> acc
+        | Some ret ->
+          add_to_option (append_cleaner ev.cleaner ret) acc
+    ) None evls
+
 
 let iter
     (f: 'e -> 'a flow -> unit)

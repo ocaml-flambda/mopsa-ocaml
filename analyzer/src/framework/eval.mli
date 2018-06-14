@@ -43,7 +43,13 @@ val map:
     ('x, 'a) t
 (** [map f evls] is similar to [map_clause f evls] with the difference
    that [f] is given only the case and the flow of the clause, but not
-   the cleaners *)
+    the cleaners *)
+
+val map_option:
+  ('e -> 'a Flow.flow -> ('x, 'a) t option) ->
+  ('e, 'a) t ->
+  ('x, 'a) t option
+(** [map_option f evls] is similar to [map] but returns optional evaluations *)
 
 val iter:
     ('e -> 'a Flow.flow -> unit) ->

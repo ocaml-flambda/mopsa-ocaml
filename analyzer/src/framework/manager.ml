@@ -170,8 +170,8 @@ let get_domain_cur man flow =
    transfer function [f] over all evaluation cases in [evals] *)
 let post_eval
     ?(zone = Zone.top)
+    man ctx
     (f: Ast.expr -> 'a flow -> 'a Post.t)
-    (man: ('a, 't) manager) (ctx: Context.context)
     (evals: (Ast.expr, 'a) Eval.t)
   : 'a Post.t =
   Eval.(merge
@@ -189,6 +189,39 @@ let post_eval
           evals
           ~join:(Post.join ~flow_join:man.flow.join)
        )
+
+let post_eval_option
+    ?(zone = Zone.top)
+    man ctx
+    (f: Ast.expr -> 'a flow -> 'a Post.t option)
+    (evals: (Ast.expr, 'a) Eval.t)
+  : 'a Post.t option =
+  let join_option x y =
+    match x, y with
+    | None, a | a, None -> a
+    | Some a, Some b -> Some (Post.join ~flow_join:man.flow.join a b)
+  in
+  Eval.(merge
+          (fun eval ->
+             let post = match eval.case with
+               | None -> Some (Post.of_flow eval.flow)
+               | Some exp -> f exp eval.flow
+             in
+             match post with
+             | None -> None
+             | Some post ->
+               let post' = List.fold_left (fun acc stmt ->
+                   let flow = acc.Post.flow in
+                   let flow' = man.exec ~zone stmt ctx flow in
+                   {acc with Post.flow = flow'}
+                 ) post eval.cleaner
+               in
+               Some post'
+          )
+          evals
+          ~join:join_option
+       )
+
 
 (** [eval_list zpath el man ctx flow] folds the evaluations of expressions in [el] *)
 let eval_list
