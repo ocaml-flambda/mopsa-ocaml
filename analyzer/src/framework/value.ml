@@ -66,4 +66,15 @@ sig
   val can_be_false : t -> bool
   (** Test whether a value can evaluate to false. *)
 
+
+  (*==========================================================================*)
+                           (** {2 Value zone} *)
+  (*==========================================================================*)
+  val zone : Zone.t
+  (** Language zone in which the value abstraction is defined *)
+
 end
+
+let values : (string * (module VALUE)) list ref = ref []
+let register_value name modl = values := (name, modl) :: !values
+let find_value name = List.assoc name !values

@@ -8,7 +8,6 @@
 
 (** Generic domain for non-relational value abstractions. *)
 
-open Domain
 open Value
 open Manager
 open Ast
@@ -248,13 +247,17 @@ struct
   (*==========================================================================*)
 
 
-  let init man ctx prog flow =
+  let init prog man ctx flow =
     Some (ctx, set_domain_cur top man flow)
 
-  let rec exec stmt man ctx flow =
+  let import_exec = []
+  let export_exec = [Value.zone]
+
+  let rec exec zone stmt man ctx flow =
     match skind stmt with
     | S_remove_var v ->
       map_domain_cur (VarMap.remove v) man flow |>
+      Post.of_flow |>
       return
 
     | S_project_vars vars ->
@@ -263,6 +266,7 @@ struct
               if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
             ) a a
         ) man flow |>
+      Post.of_flow |>
       return
 
     | S_rename_var (var1, var2) ->
@@ -270,25 +274,26 @@ struct
           let v = VarMap.find var1 a in
           VarMap.remove var1 a |> VarMap.add var2 v
         ) man flow |>
+      Post.of_flow |>
       return
 
 
-    | S_assign({ekind = E_var var}, e, (STRONG | EXPAND)) ->
-      map_domain_cur (fun a ->
-          let v = eval_value a e in
-          VarMap.add var v a
-        ) man flow |>
-      return
-
-    | S_assign({ekind = E_var var}, e, WEAK) ->
+    | S_assign({ekind = E_var var}, e, mode) ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |>
+      post_eval_option ~zone:Value.zone man ctx @@ fun e flow ->
       map_domain_cur (fun a ->
           let v = eval_value a e in
           let a' = VarMap.add var v a in
-          join a a'
+          match mode with
+          | STRONG | EXPAND -> a'
+          | WEAK -> join a a'
         ) man flow |>
+      Post.of_flow |>
       return
 
     | S_assume e ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |>
+      post_eval_option ~zone:Value.zone man ctx @@ fun e flow ->
       map_domain_cur (fun a ->
           debug "cur = %a" print a;
           let (_,r) as t = annotate_expr a e in
@@ -301,9 +306,58 @@ struct
             a'
         ) man flow
       |>
+      Post.of_flow |>
       return
 
     | _ -> None
 
 
+  let import_eval = [(Zone.top, Value.zone)]
+  let export_eval = [(Value.zone, Value.zone)]
+
+  let eval zpath exp man ctx flow =
+    match ekind exp with
+    | E_binop(op, e1, e2) ->
+      man.eval ~zpath:(Zone.top, Value.zone) e1 ctx flow |> Eval.map_option @@ fun e1 flow ->
+      man.eval ~zpath:(Zone.top, Value.zone) e2 ctx flow |> Eval.map_option @@ fun e2 flow ->
+      let exp' = {exp with ekind = E_binop(op, e1, e2)} in
+      Eval.singleton (Some exp') flow |>
+      return
+
+    | E_unop(op, e) ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |> Eval.map_option @@ fun e flow ->
+      let exp' = {exp with ekind = E_unop(op, e)} in
+      Eval.singleton (Some exp') flow |>
+      return
+
+    | _ -> None
+
+
+  type _ Query.query +=
+    | QEval : expr -> Value.t Query.query
+
+
+  let ask : type r. r Query.query -> _ -> _ -> _ -> r option =
+    fun query man ctx flow ->
+      match query with
+      | QEval e ->
+        let a = get_domain_cur man flow in
+        let v = eval_value a e in
+        Some v
+
+      | _ -> None
+
+  let () =
+    Query.(register_reply_manager {
+        domatch = (let check : type a. a query -> (a, Value.t) eq option =
+                     function
+                     | QEval _ -> Some Eq
+                     | _ -> None
+                   in
+                   check
+                  );
+        join = (fun v1 v2 -> Value.join v1 v2);
+        meet = (fun v1 v2 -> Value.meet v1 v2);
+      };
+      )
 end
