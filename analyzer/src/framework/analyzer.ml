@@ -221,7 +221,9 @@ struct
        ;
        debug
          "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-         pp_expr exp manager.flow.print flow (Eval.print ~print_case:pp_expr) res
+         pp_expr exp
+         manager.flow.print flow
+         (Eval.print ~print_result:pp_expr) res
        ;
        res
     )

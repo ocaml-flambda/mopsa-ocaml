@@ -10,6 +10,7 @@
 
 open Value
 open Manager
+open Composers
 open Ast
 
 
@@ -253,6 +254,11 @@ struct
   let import_exec = []
   let export_exec = [Value.zone]
 
+  let zpath = Zone.top, Value.zone
+  let import_eval = [zpath]
+  let export_eval = [(Value.zone, Value.zone)]
+  
+
   let rec exec zone stmt man ctx flow =
     match skind stmt with
     | S_remove_var v ->
@@ -279,7 +285,7 @@ struct
 
 
     | S_assign({ekind = E_var var}, e, mode) ->
-      post_eval ~zpath:(Zone.top, Value.zone) e man ctx flow @@ fun e flow ->
+      post_eval zpath e man ctx flow @@ fun e flow ->
       map_domain_cur (fun a ->
           let v = eval_value a e in
           let a' = VarMap.add var v a in
@@ -291,7 +297,7 @@ struct
       return
 
     | S_assume e ->
-      post_eval ~zpath:(Zone.top, Value.zone) e man ctx flow @@ fun e flow ->
+      post_eval zpath e man ctx flow @@ fun e flow ->
       map_domain_cur (fun a ->
           debug "cur = %a" print a;
           let (_,r) as t = annotate_expr a e in
@@ -310,20 +316,17 @@ struct
     | _ -> None
 
 
-  let import_eval = [(Zone.top, Value.zone)]
-  let export_eval = [(Value.zone, Value.zone)]
-
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      map_eval ~zpath:(Zone.top, Value.zone) e1 man ctx flow @@ fun e1 flow ->
-      map_eval ~zpath:(Zone.top, Value.zone) e2 man ctx flow @@ fun e2 flow ->
+      map_eval zpath e1 man ctx flow @@ fun e1 flow ->
+      map_eval zpath e2 man ctx flow @@ fun e2 flow ->
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
       Eval.singleton (Some exp') flow |>
       return
 
     | E_unop(op, e) ->
-      map_eval ~zpath:(Zone.top, Value.zone) e man ctx flow @@ fun e flow ->
+      map_eval zpath e man ctx flow @@ fun e flow ->
       let exp' = {exp with ekind = E_unop(op, e)} in
       Eval.singleton (Some exp') flow |>
       return

@@ -10,50 +10,46 @@
 (** Evaluations of expressions *)
 
 
-type ('e, 'a) clause = {
-  case    : 'e option;          (** Evaluation case *)
-  flow    : 'a Flow.flow;       (** Case flow *)
-  cleaner : Ast.stmt list;      (** Post-eval cleaners *)
+type ('e, 'a) case = {
+  result    : 'e option;          (** Evaluation result *)
+  flow      : 'a Flow.flow;       (** Result flow *)
+  cleaners   : Ast.stmt list;      (** Post-eval cleaners *)
 }
-(** Evaluation clause *)
+(** Evaluation case *)
 
 type ('e, 'a) t
 (** Evaluations *)
 
 
-val singleton : 'e option -> ?cleaner:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) t
+val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) t
 (** Evaluation singleton *)
 
 val join : ('e, 'a) t -> ('e, 'a) t -> ('e, 'a) t
 (** Compute the union of two evaluations *)
 
-val append_cleaner : Ast.stmt list -> ('e, 'a) t -> ('e, 'a) t
+val add_cleaners : Ast.stmt list -> ('e, 'a) t -> ('e, 'a) t
 (** Add cleaners to an evaluation *)
 
-val map_clause:
+val map:
     ('e -> 'a Flow.flow -> Ast.stmt list -> ('x, 'a) t) ->
     ('e, 'a) t ->
     ('x, 'a) t
-(** [map_clause f evls] applies the evaluation function [f] on each
-   clause of [evls] and joins the results *)
+(** [map f evls] applies the evaluation function [f] on each
+   case of [evls] and joins the results *)
 
-val map:
-  ('e -> 'a Flow.flow -> ('x, 'a) t option) ->
-  ('e, 'a) t ->
-  ('x, 'a) t option
-(** [map f evls] applies f on cases of [evls]  *)
+val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) t -> 'b
 
 val iter:
     ('e -> 'a Flow.flow -> unit) ->
     ('e, 'a) t ->
     unit
-(** Iterate over the clauses of an evaluation *)
+(** Iterate over the cases of an evaluation *)
 
 val merge:
-    (('e, 'a) clause -> 'b) ->
+    (('e, 'a) case -> 'b) ->
     join:('b -> 'b -> 'b) ->
     ('e, 'a) t ->
     'b
-(** Merge the clauses of an evaluation *)
+(** Merge the cases of an evaluation *)
 
-val print : Format.formatter -> ('e, 'a) t -> print_case:(Format.formatter -> 'e -> unit) -> unit
+val print : Format.formatter -> ('e, 'a) t -> print_result:(Format.formatter -> 'e -> unit) -> unit

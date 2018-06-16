@@ -7,18 +7,18 @@
 (****************************************************************************)
 
 
-type reduction_channel
-(** Post-condition reduction channels *)
-
 type 'a t = {
   flow      : 'a Flow.flow;            (** Post-condition flow *)
-  channels  : reduction_channel list;  (** Published post-condition reductions *)
   mergers   : Ast.stmt list;           (** Meet mergers *)
 }
 (** Post-condition of [exec] transfer functions *)
 
-val of_flow : ?channels:reduction_channel list -> ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a t
+val of_flow : ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a t
 (** Create a post-condition from a flow *)
+
+val add_mergers : Ast.stmt list -> 'a t -> 'a t
+(** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
 
 val join : 'a t -> 'a t -> flow_join:('a Flow.flow -> 'a Flow.flow -> 'a Flow.flow) -> 'a t
 (** Join two post-conditions *)
+

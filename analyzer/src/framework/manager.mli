@@ -123,11 +123,3 @@ val set_domain_cur : 't -> ('a, 't) manager -> 'a Flow.flow -> 'a Flow.flow
 
 val get_domain_cur : ('a, 't) manager -> 'a Flow.flow -> 't
 (** [get_domain_cur] retrieves the domain' abstract element in the [TCur] flow *)
-
-
-val map_eval : ?zpath:Zone.path -> Ast.expr -> ('a, 'b) manager -> Context.context -> 'a Flow.flow -> (Ast.expr -> 'a Flow.flow -> (Ast.expr, 'a) Eval.t option) -> (Ast.expr, 'a) Eval.t option
-(** [map_eval] evaluates expression [e] and maps its results using [f] *)
-
-val post_eval : ?zpath:Zone.path -> Ast.expr -> ('a, 'b) manager -> Context.context -> 'a Flow.flow -> (Ast.expr -> 'a Flow.flow -> 'a Post.t option) -> 'a Post.t option
-(** [post_eval zpath e man ctx flow f] evaluates expression [e] and computes the post-condition
-   of transfer function [f] over all evaluation cases *)

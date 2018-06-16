@@ -22,6 +22,8 @@ module Post = Post
 
 module Eval = Eval
 
+include Composers
+
 module Exceptions = Utils.Exceptions
 
 let return x = Some x

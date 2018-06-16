@@ -138,7 +138,7 @@ struct
 
       (* Re-evaluate the expression [tmp] from the top-level *)
       man.eval tmp ctx flow3 |>
-      Eval.append_cleaner [mk_remove_var tmpv range] |>
+      Eval.add_cleaners [mk_remove_var tmpv range] |>
       return
 
     | _ -> None

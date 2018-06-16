@@ -13,56 +13,36 @@
 open Ast
 open Flow
 
-type ('e, 'a) clause = {
-  case: 'e option;
-  flow: 'a flow;
-  cleaner: Ast.stmt list;
+type ('e, 'a) case = {
+  result    : 'e option;
+  flow      : 'a flow;
+  cleaners  : Ast.stmt list;
 }
 
-type ('e, 'a) t = ('e, 'a) clause list
+type ('e, 'a) t = ('e, 'a) case list
 
-let singleton (case: 'e option) ?(cleaner = []) (flow: 'a flow) : ('e, 'a) t =
-  [{case; flow; cleaner}]
+let singleton (result: 'e option) ?(cleaners = []) (flow: 'a flow) : ('e, 'a) t =
+  [{result; flow; cleaners}]
 
 let join (evl1: ('e, 'a) t)  (evl2: ('e, 'a) t) : ('e, 'a) t =
   evl1 @ evl2
 
-let append_cleaner (cleaner: Ast.stmt list) (evl: ('e, 'a) t) : ('e, 'a) t =
+let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) t) : ('e, 'a) t =
   List.map (fun ev ->
-      {ev with cleaner = ev.cleaner @ cleaner}
+      {ev with cleaners = ev.cleaners @ cleaners}
     ) evl
 
-let map_clause
+let map
     (f: 'e -> 'a flow -> Ast.stmt list -> ('x, 'a) t)
     (evls: ('e, 'a) t)
   : ('x, 'a) t =
   List.map (fun ev ->
-      match ev.case with
+      match ev.result with
       | None -> singleton None ev.flow
-      | Some case -> f case ev.flow ev.cleaner
+      | Some result -> f result ev.flow ev.cleaners
     ) evls
   |>
   List.concat
-
-
-let map
-    (f: 'e -> 'a flow -> ('x, 'a) t option)
-    (evls: ('e, 'a) t)
-  : ('x, 'a) t option =
-  let add_to_option x o =
-    match o with
-    | None -> Some x
-    | Some y -> Some (y @ x)
-  in
-  List.fold_left (fun acc ev ->
-      match ev.case with
-      | None -> add_to_option (singleton None ev.flow) acc
-      | Some case ->
-        match f case ev.flow with
-        | None -> acc
-        | Some ret ->
-          add_to_option (append_cleaner ev.cleaner ret) acc
-    ) None evls
 
 
 let iter
@@ -70,13 +50,20 @@ let iter
     (evls: ('e, 'a) t)
   : unit =
   List.iter (fun ev ->
-      match ev.case with
+      match ev.result with
       | None -> ()
       | Some ret -> f ret ev.flow
     ) evls
 
+let fold
+    (f: 'b -> ('e, 'a) case -> 'b)
+    (init: 'b)
+    (evals: ('e, 'a) t)
+  : 'b =
+  List.fold_left f init evals
+
 let merge
-    (f: ('e, 'a) clause -> 'b)
+    (f: ('e, 'a) case -> 'b)
     ~(join: 'b -> 'b -> 'b)
     (evals: ('e, 'a) t)
   : 'b =
@@ -87,13 +74,13 @@ let merge
     List.fold_left join hd tl
 
 
-let print fmt (evals: ('e, 'a) t) ~(print_case: Format.formatter -> 'e -> unit) : unit =
+let print fmt (evals: ('e, 'a) t) ~(print_result: Format.formatter -> 'e -> unit) : unit =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
     (fun fmt ev ->
-       match ev.case with
+       match ev.result with
        | None -> Format.pp_print_string fmt "ϵ"
-       | Some x -> print_case fmt x
+       | Some x -> print_result fmt x
     )
     fmt
     evals

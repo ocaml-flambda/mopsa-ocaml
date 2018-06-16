@@ -26,10 +26,14 @@ struct
   let import_exec = []
   let export_exec = [Framework.Zone.top]
 
+  let zpath = Framework.Zone.top, Framework.Zone.top
+  let import_eval = [zpath]
+  let export_eval = []
+
   let exec zone stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      post_eval e man ctx flow @@ fun e flow ->
+      post_eval zpath e man ctx flow @@ fun e flow ->
       Post.of_flow flow |>
       return
 
@@ -51,10 +55,6 @@ struct
       return
 
     | _ -> None
-
-
-  let import_eval = []
-  let export_eval = []
 
   let eval _ _ _ _ _   = None
 

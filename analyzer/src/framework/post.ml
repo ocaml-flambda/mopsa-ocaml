@@ -11,23 +11,23 @@
 
 open Flow
 
-type reduction_channel = ..
-
 type 'a t = {
   flow : 'a flow;
-  channels : reduction_channel list;
   mergers : Ast.stmt list;
 }
 
-let of_flow ?(channels = []) ?(mergers = []) flow = {
+let of_flow ?(mergers = []) flow = {
   flow;
-  channels;
   mergers;
+}
+
+let add_mergers mergers flow = {
+  flow with
+  mergers = flow.mergers @ mergers;
 }
 
 let join (post1: 'a t) (post2: 'a t) ~(flow_join: 'a flow -> 'a flow -> 'a flow) : 'a t =
   {
     flow     = flow_join post1.flow post2.flow;
-    channels = post1.channels @ post2.channels;
     mergers  = post1.mergers @ post2.mergers;
   }
