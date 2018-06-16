@@ -12,7 +12,7 @@ lang = universal
 
 lang.universal = ast pp visitor zone flows heap numeric setup
 lang.universal.heap = query recency
-lang.universal.numeric = values relational
+lang.universal.numeric = values reductions relational
 lang.universal.numeric.values = int congruence float
 
 #Packages
