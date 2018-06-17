@@ -8,12 +8,22 @@ mopsa = framework lang
 framework = utils ast visitor query context lattice flow zone value eval post manager domain analyzer lattices composers domains essentials config
 framework.utils = compare location options exceptions
 
-lang = universal
+lang = universal python
 
 lang.universal = ast pp visitor zone flows heap numeric setup
 lang.universal.heap = query recency
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = int congruence float
+
+
+lang.python = ast addr alarm utils visitor frontend operators memory flows libs desugar data_model objects program setup
+lang.python.memory = value query addr_env value_env
+lang.python.objects = class function object numbers strings slices nones containers
+lang.python.objects.numbers = int bool float complx
+lang.python.objects.containers = lists dicts ranges sets tuples
+lang.python.data_model = attribute callable arith_ops subscript compare_ops aug_assign
+lang.python.flows = exceptions generators
+
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
