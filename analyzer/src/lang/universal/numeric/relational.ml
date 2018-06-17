@@ -373,10 +373,9 @@ struct
 end
 
 
+module Oct = Make(struct type t = Oct.t let name = "oct" let man = Oct.manager_alloc () end)
+module Poly = Make(struct type t = Polka.strict Polka.t let name = "poly" let man = Polka.manager_alloc_strict () end)
 
 let setup () =
-  let module Oct = Make(struct type t = Oct.t let name = "oct" let man = Oct.manager_alloc () end) in
-  let module Poly = Make(struct type t = Polka.strict Polka.t let name = "poly" let man = Polka.manager_alloc_strict () end) in
-
   Framework.Domain.register_domain (name ^ ".octagon") (module Oct);
   Framework.Domain.register_domain (name ^ ".polyhedra") (module Poly);
