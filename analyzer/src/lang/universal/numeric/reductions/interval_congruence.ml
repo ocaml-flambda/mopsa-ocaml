@@ -12,7 +12,7 @@ open Framework.Essentials
 open Framework.Domains.Reductions.Value_reduction
 open Ast
 
-let name = "universal.numeric.reductions.int_congruence"
+let name = "universal.numeric.reductions.integer_congruence"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module I = Values.Int.Value
@@ -27,8 +27,8 @@ struct
 
   let reduce man v =
     try
-      let itv = Bot.bot_to_exn @@ man.get Int v in
-      let cgr = Bot.bot_to_exn @@ man.get Cgr v in
+      let itv = man.get Int v |> Bot.bot_to_exn in
+      let cgr = man.get Cgr v |> Bot.bot_to_exn in
       let reduction = Congruences.IntCong.meet_inter cgr itv in
       let cgr, itv = Bot.bot_to_exn reduction in
       man.set Cgr (Bot.Nb cgr) v |>
@@ -40,8 +40,7 @@ end
 
 
 let () =
-  register_reduction {
-    name;
+  register_reduction name {
     pool = Pool.[Value (Int, (module I)); Value (Cgr, (module C))];
     eq = (
       let f : type a b. a key -> b key -> (a, b) Pool.eq option = fun k1 k2 ->

@@ -8,20 +8,28 @@
 
 (** Reduction of non-relation abstract values. *)
 
+(** Keys for identifying value abstractions within a pool *)
 type _ key = ..
 
+(** A value abstraction is composed of a key and a module of type Value.VALUE *)
 type 'a value = Value : 'a key * (module Value.VALUE with type t = 'a) -> 'a value
 
+(** A pool of value abstractions *)
 module Pool =
 struct
+
+  (** A pool is encoded as GADT tuples *)
   type 'a t =
   | [] : unit t
   | (::) : 'a value * 'b t -> ('a * 'b) t
 
+  (** Key equality witness *)
   type (_,_) eq = Eq : ('a, 'a) eq
 end
 
-
+(** Pool manager defines point-wise lattice operators for the product
+   value abstraction. It also provides get/set functions to access
+   individual values abstractions via keys *)
 type 'a pool_manager = {
   bottom : 'a;
   top : 'a;
@@ -36,11 +44,17 @@ type 'a pool_manager = {
   set : 't. 't key -> 't -> 'a -> 'a;
 }
 
+(** Signature for reductions of the product value abstraction *)
 module type REDUCTION =
 sig
+
+  (** Reduction operator called automatically after point-wise
+     application of transfer functions (fwd_unop, fwd_binop, etc.) *)
   val reduce : 'a pool_manager -> 'a -> 'a
 end
 
+(** Functor module to create a reduced product value abstraction given
+   a pool and a reduction operator *)
 module Make
     (P: sig
        type t
@@ -355,18 +369,18 @@ struct
 
 end
 
+(** Polymorphic record type describing a product pool, used during registration *)
 type 'a info = {
-  name : string;
   pool: 'a Pool.t;
   eq : 'b 'c. 'b key -> 'c key -> ('b, 'c) Pool.eq option
 }
 
-
-let register_reduction (type a) (info: a info) (reduction: (module REDUCTION)) =
+(** Register a reduced product value abstraction *)
+let register_reduction (type a) (name: string) (info: a info) (reduction: (module REDUCTION)) =
   let module V = Make(struct
       type t = a
       let pool = info.pool
       let eq = info.eq
     end)
       (val reduction : REDUCTION) in
-  Value.register_value info.name (module V)
+  Value.register_value name (module V)
