@@ -33,7 +33,7 @@ type 'a product_manager = {
 
 module ProductPost =
 struct
-  type ('a, 't) post = Post : 't key * 'a Post.t -> ('a, 't) post
+  type ('a, 't) post = Post : 't key * 'a Post.t option -> ('a, 't) post
 
   type ('a, 't) t =
     | [] : ('a, unit) t
@@ -43,7 +43,7 @@ end
 
 module ProductEval =
 struct
-  type ('a, 't) eval = Eval : 't key * (Ast.expr, 'a) Eval.t -> ('a, 't) eval
+  type ('a, 't) eval = Eval : 't key * (Ast.expr, 'a) Eval.t option -> ('a, 't) eval
 
   type ('a, 't) t =
     | [] : ('a, unit) t
@@ -52,7 +52,7 @@ struct
 end
 
 type ('a, 't) eval_accessor = {
-  get : 'u. 'u key -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) Eval.t;
+  get : 'u. 'u key -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) Eval.t option;
 }
 
 
@@ -247,7 +247,6 @@ struct
     { get }
   
   let exec zone stmt man ctx flow =
-    let exception Found_None in
     let pman = product_manager man in
     (* Dispatch statement to domains in a point-wise way *)
     let rec dispatch: type t. t Pool.t -> ('a, t) ProductPost.t =
@@ -257,37 +256,43 @@ struct
         | Pool.(hd :: tl) ->
           let Pool.Domain (k,d) = hd in
           let module D = (val d) in
-          match D.exec zone stmt (pman.get k) ctx flow with
-          | None -> raise Found_None
-          | Some post -> ProductPost.((Post (k, post)) :: (dispatch tl))
+          let post = D.exec zone stmt (pman.get k) ctx flow in
+          ProductPost.((Post (k, post)) :: (dispatch tl))
     in
-    try
-      let post = dispatch P.pool in
-      (* Compute meet mergers *)
-      let rec set_mergers : type t. ('a, t) ProductPost.t -> Ast.stmt list -> Ast.stmt list * ('a, t) ProductPost.t = fun ppost before ->
-        match ppost with
-        | ProductPost.[] -> [], ppost
-        | ProductPost.(hd :: tl) ->
-          let ProductPost.Post (k, post) = hd in
+    let post = dispatch P.pool in
+    (* Compute meet mergers *)
+    let rec set_mergers : type t. ('a, t) ProductPost.t -> Ast.stmt list -> Ast.stmt list * ('a, t) ProductPost.t = fun ppost before ->
+      match ppost with
+      | ProductPost.[] -> [], ppost
+      | ProductPost.(hd :: tl) ->
+        let ProductPost.Post (k, post) = hd in
+        match post with
+        | None ->
+          let after, ret = set_mergers tl before in
+          after, ProductPost.((Post (k, post)) :: ret)
+        | Some post ->
           let this = post.Post.mergers in
           let after, ret = set_mergers tl (before @ this) in
-          (after @ this), ProductPost.((Post (k, Post.{post with mergers = before @ after})) :: ret)
-      in
-      let _, post' = set_mergers post [] in
-      (* Merge post-conditions *)
-      let rec merge : type t. ('a, t) ProductPost.t -> 'a Flow.flow = fun ppost ->
-        match ppost with
-        | ProductPost.[] -> man.flow.top
-        | ProductPost.(hd :: tl) ->
-          let ProductPost.Post (k, post) = hd in
+          let post' = Post.{post with mergers = before @ after} in
+          (after @ this), ProductPost.((Post (k, Some post')) :: ret)
+    in
+    let _, post' = set_mergers post [] in
+    (* Merge post-conditions *)
+    let rec merge : type t. ('a, t) ProductPost.t -> 'a Flow.flow = fun ppost ->
+      match ppost with
+      | ProductPost.[] -> man.flow.top
+      | ProductPost.(hd :: tl) ->
+        let ProductPost.Post (k, post) = hd in
+        match post with
+        | None -> merge tl
+        | Some post ->
           let mergers = post.Post.mergers in
           let man = pman.get k in
           let flow' = List.fold_left (fun flow stmt -> man.exec stmt ctx flow) post.flow mergers in
           man.flow.meet flow' (merge tl)
-      in
-      let flow' = merge post' in
-      Reduction.exec stmt pman ctx flow'
-    with Found_None -> None
+    in
+    let flow' = merge post' in
+    Reduction.exec stmt pman ctx flow'
 
   let import_eval =
     match P.pool with
@@ -306,8 +311,8 @@ struct
     | _ -> assert false
 
   let eval_accessor evl =
-    let get : type b c. b key -> ('a, c) ProductEval.t -> (Ast.expr, 'a) Eval.t = fun k eval ->
-      let rec aux : type d. ('a, d) ProductEval.t -> (Ast.expr, 'a) Eval.t = fun eval ->
+    let get : type b c. b key -> ('a, c) ProductEval.t -> (Ast.expr, 'a) Eval.t option = fun k eval ->
+      let rec aux : type d. ('a, d) ProductEval.t -> (Ast.expr, 'a) Eval.t option = fun eval ->
         match eval with
         | ProductEval.[] -> raise Not_found
         | ProductEval.(hd :: tl) ->
@@ -323,7 +328,6 @@ struct
   
   let eval zpath exp man ctx flow =
     let pman = product_manager man in
-    let exception Found_None in
     (* Dispatch exp to domains in a point-wise way *)
     let rec dispatch: type t. t Pool.t -> ('a, t) ProductEval.t =
       fun pool ->
@@ -332,15 +336,11 @@ struct
         | Pool.(hd :: tl) ->
           let Pool.Domain (k,d) = hd in
           let module D = (val d) in
-          match D.eval zpath exp (pman.get k) ctx flow with
-          | None -> raise Found_None
-          | Some evl -> ProductEval.((Eval (k, evl)) :: (dispatch tl))
+          let evl = D.eval zpath exp (pman.get k) ctx flow in
+          ProductEval.((Eval (k, evl)) :: (dispatch tl))
     in
-    try
-      let eval = dispatch P.pool in
-      Reduction.eval exp pman (eval_accessor eval) ctx eval
-    with Found_None -> None
-
+    let eval = dispatch P.pool in
+    Reduction.eval exp pman (eval_accessor eval) ctx eval
 
   let ask query man ctx flow = None
 
