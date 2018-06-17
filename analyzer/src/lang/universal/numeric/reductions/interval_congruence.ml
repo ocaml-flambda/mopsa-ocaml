@@ -25,7 +25,7 @@ type _ key +=
 module Reduction : REDUCTION =
 struct
 
-  let reduce man v =
+  let reduce (man: 'a Pool.manager) (v: 'a) : 'a =
     try
       let itv = man.get Int v |> Bot.bot_to_exn in
       let cgr = man.get Cgr v |> Bot.bot_to_exn in
@@ -43,7 +43,7 @@ let () =
   register_reduction name {
     pool = Pool.[Value (Int, (module I)); Value (Cgr, (module C))];
     eq = (
-      let f : type a b. a key -> b key -> (a, b) Pool.eq option = fun k1 k2 ->
+      let f : type a b. a key -> b key -> (a, b) eq option = fun k1 k2 ->
         match k1, k2 with
         | Int, Int -> Some Eq
         | Cgr, Cgr -> Some Eq
