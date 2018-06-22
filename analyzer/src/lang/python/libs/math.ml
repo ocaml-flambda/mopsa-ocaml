@@ -8,24 +8,14 @@
 
 (** Math Python library. *)
 
+open Framework.Essentials
 open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Lattice
-open Framework.Eval
-open Framework.Flow
-open Framework.Ast
 open Universal.Ast
 open Ast
 open Addr
 
 let name = "python.libs.math"
 let debug fmt = Debug.debug ~channel:name fmt
-
-
-let check man ctx cond range flow =
-  let flow = man.exec ctx (mk_stmt (Universal.Ast.S_assert cond) range) flow in
-  oeval_singleton (Some (mk_py_none range), flow, [])
 
 
 (*==========================================================================*)
@@ -41,17 +31,25 @@ struct
   (**                       {2 Transfer functions }                           *)
   (*==========================================================================*)
 
+  let init prog man ctx flow = None
 
-  let exec man ctx stmt flow = None
+  let import_exec = []
+  let export_exec = []
 
-  let init _ ctx _ flow = ctx, flow
+  let exec zone stmt man ctx flow = None
 
-  let eval man ctx exp flow =
+  let import_eval = [Zone.Z_py, Zone.Z_py_object]
+  let export_eval = [Zone.Z_py, Zone.Z_py_object]
+
+  let eval zpath exp man ctx flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
-      let exp' = mk_unop O_sqrt e ~etyp:T_float range in
-      oeval_singleton (Some exp', flow, [])
+      bind_eval (Zone.Z_py, Zone.Z_py_object) e man ctx flow @@ fun e flow ->
+      let ev = object_of_expr e |> value_of_object in
+      let exp' = mk_py_float_expr (mk_unop O_sqrt ev range) range in
+      Eval.singleton (Some exp') flow |>
+      return
 
     | _ ->
       None
@@ -69,4 +67,4 @@ end
 
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  register_domain name (module Domain)

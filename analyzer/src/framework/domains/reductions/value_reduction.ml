@@ -26,25 +26,25 @@ struct
   | [] : unit t
   | (::) : 'a value * 'b t -> ('a * 'b) t
 
-  (** Pool manager defines point-wise lattice operators for the product
+end
+
+(** Pool manager defines point-wise lattice operators for the product
       value abstraction. It also provides get/set functions to access
       individual values abstractions via keys *)
-  type 'a manager = {
-    bottom : 'a;
-    top : 'a;
-    is_bottom : 'a -> bool;
-    is_top : 'a -> bool;
-    leq : 'a -> 'a -> bool;
-    join : 'a -> 'a -> 'a;
-    meet : 'a -> 'a -> 'a;
-    widening : Context.context -> 'a -> 'a -> 'a;
-    print : Format.formatter -> 'a -> unit;
-    get : 't. 't key -> 'a -> 't;
-    set : 't. 't key -> 't -> 'a -> 'a;
-  }
+type 'a pool_manager = {
+  bottom : 'a;
+  top : 'a;
+  is_bottom : 'a -> bool;
+  is_top : 'a -> bool;
+  leq : 'a -> 'a -> bool;
+  join : 'a -> 'a -> 'a;
+  meet : 'a -> 'a -> 'a;
+  widening : Context.context -> 'a -> 'a -> 'a;
+  print : Format.formatter -> 'a -> unit;
+  get : 't. 't key -> 'a -> 't;
+  set : 't. 't key -> 't -> 'a -> 'a;
+}
 
-
-end
 
 
 (** Signature for reductions of the product value abstraction *)
@@ -53,7 +53,7 @@ sig
 
   (** Reduction operator called automatically after point-wise
      application of transfer functions (fwd_unop, fwd_binop, etc.) *)
-  val reduce : 'a Pool.manager -> 'a -> 'a
+  val reduce : 'a pool_manager -> 'a -> 'a
 end
 
 (** Functor module to create a reduced product value abstraction given
@@ -194,7 +194,7 @@ struct
     in
     aux P.pool
 
-  let man : t Pool.manager = {
+  let man : t pool_manager = {
     bottom;
     top;
     is_bottom;

@@ -9,12 +9,7 @@
 (** Unittest library. *)
 
 open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Lattice
-open Framework.Eval
-open Framework.Flow
-open Framework.Ast
+open Framework.Essentials
 open Universal.Ast
 open Ast
 open Addr
@@ -46,50 +41,40 @@ struct
   (**                       {2 Transfer functions }                           *)
   (*==========================================================================*)
 
-  let eval man ctx exp flow =
+  let eval zpath exp man ctx flow =
     let range = exp.erange in
     match ekind exp with
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.main")})}, [], []) ->
       debug "Search for all classes that inherit from TestCase";
-      let test_cases = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-                       Option.none_to_exn |>
-                       List.filter (fun addr ->
-                           match addr.addr_kind with
-                           | A_py_class(cls, ({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _) :: _) -> true
-                           | _ -> false
-                         ) |>
-                       List.map (fun addr ->
-                           match addr.addr_kind with
-                           | A_py_class(C_user cls, _) -> addr, cls
-                           | _ -> assert false
-                         )
+      let globals = Framework.Context.find Program.KPyGlobals ctx in
+      let test_cases, functions = List.fold_left (fun acc glob ->
+          man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var glob range) ctx flow |>
+          Eval.fold (fun (tests, funs) case ->
+              match case.Eval.result with
+              | Some {ekind = E_py_object ({addr_kind = A_py_class(C_user cls, [({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _)])} as addr, _)} ->
+                (addr, cls) :: tests, funs
+              | Some {ekind = E_py_object ({addr_kind = A_py_function (F_user f)}, _)} ->
+                tests, f :: funs
+              | _ -> tests, funs
+            ) acc
+        ) ([], []) globals
       in
       (* Instantiate the test classes *)
       let selfs, flow =
         List.fold_left (fun (selfs, flow) (addr, cls) ->
             (* Allocate an instance of the test class *)
-            Addr.eval_alloc_instance man ctx (addr, mk_py_empty range) None range flow |>
-            oeval_fold (fun (selfs, _) (addr, flow, _) ->
-                match addr with
-                | Some addr -> ((addr, mk_py_empty range), cls) :: selfs, flow
-                | None -> assert false
+            man.eval
+              ~zpath:(Universal.Zone.Z_heap, Universal.Zone.Z_heap)
+              (mk_alloc_instance (addr, mk_py_empty range) range)
+              ctx flow |>
+            Eval.fold (fun (selfs, _) case ->
+                match case.Eval.result with
+                | Some {ekind = E_addr addr} -> ((addr, mk_py_empty range), cls) :: selfs, case.Eval.flow
+                | _ -> assert false
               ) (selfs, flow)
           ) ([], flow) test_cases
       in
 
-      let functions = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-                      Option.none_to_exn |>
-                      List.filter (fun addr ->
-                          match addr.addr_kind with
-                          | A_py_function(F_user func) -> true
-                          | _ -> false
-                        ) |>
-                      List.map (fun addr ->
-                          match addr.addr_kind with
-                          | A_py_function(F_user func) -> func
-                          | _ -> assert false
-                        )
-      in
       (* Fold over the class methods and bind them to self *)
       let tests =
         List.fold_left (fun tests (self, cls) ->
@@ -103,36 +88,36 @@ struct
           ) [] selfs
       in
 
-      let flow = man.exec ctx (mk_stmt (Universal.Ast.S_unit_tests ("file", tests)) range) flow in
-      oeval_singleton (Some (mk_py_none range), flow, [])
+      let flow = man.exec (mk_stmt (Universal.Ast.S_unit_tests ("file", tests)) range) ctx flow in
+      Eval.return (Some (mk_py_none range)) flow
 
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_binop arg1 O_eq arg2 range) range flow
+      Mopsa.check (mk_binop arg1 O_eq arg2 range) range  man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertTrue")})}, [test; cond], []) ->
-      Mopsa.check man ctx cond range flow
+      Mopsa.check cond range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")})}, [test; cond], []) ->
-      Mopsa.check man ctx (mk_not cond range) range flow
+      Mopsa.check (mk_not cond range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIs")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_binop arg1 O_py_is arg2 range) range flow
+      Mopsa.check (mk_binop arg1 O_py_is arg2 range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsNot")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_binop arg1 O_py_is_not arg2 range) range flow
+      Mopsa.check (mk_binop arg1 O_py_is_not arg2 range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIn")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_binop arg1 O_py_in arg2 range) range flow
+      Mopsa.check (mk_binop arg1 O_py_in arg2 range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIn")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_binop arg1 O_py_not_in arg2 range) range flow
+      Mopsa.check (mk_binop arg1 O_py_not_in arg2 range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsInstance")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
+      Mopsa.check (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIsInstance")})}, [test; arg1; arg2], []) ->
-      Mopsa.check man ctx (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
+      Mopsa.check (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range man ctx flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, test :: exn :: f :: args, []) ->
       let stmt = mk_try
@@ -154,13 +139,14 @@ struct
           (mk_block [] range)
           range
       in
-      let flow = man.exec ctx stmt flow in
-      oeval_singleton (Some (mk_py_none range), flow, [])
+      let flow = man.exec stmt ctx flow in
+      Eval.return (Some (mk_py_none range)) flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, [test; exn], []) ->
       (* Instantiate ExceptionContext with the given exception exn *)
       let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, [])
+      man.eval exp' ctx flow |>
+      return
 
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")})},[self; typ; exn; trace], []) ->

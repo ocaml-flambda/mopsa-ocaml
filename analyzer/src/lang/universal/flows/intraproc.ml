@@ -33,7 +33,7 @@ struct
   let exec zone stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      post_eval zpath e man ctx flow @@ fun e flow ->
+      bind_post zpath e man ctx flow @@ fun e flow ->
       Post.of_flow flow |>
       return
 

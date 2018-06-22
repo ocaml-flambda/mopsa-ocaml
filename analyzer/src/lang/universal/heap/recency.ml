@@ -110,7 +110,7 @@ struct
   let exec zone man subman ctx stmt flow = None
 
   let import_eval = []
-  let export_eval = [Framework.Zone.path_top]
+  let export_eval = [Zone.Z_heap, Zone.Z_heap]
 
   let eval zpath exp man subman ctx flow =
     let range = erange exp in

@@ -18,6 +18,10 @@ open Flow
 open Manager
 open Eval
 
+type 'a interface = {
+  export : 'a list;
+  import : 'a list;
+}
 
 module type DOMAIN =
 sig
@@ -27,14 +31,12 @@ sig
   val init : Ast.program -> ('a, t) manager -> Context.context -> 'a flow -> (Context.context * 'a flow) option
 
   (** Abstract transfer function of statements. *)
-  val import_exec : Zone.t list
-  val export_exec : Zone.t list
-  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.t option
+  val exec_zone : Zone.t interface
+  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.t
 
   (** Abstract (symbolic) evaluation of expressions. *)
-  val import_eval : Zone.path list
-  val export_eval : Zone.path list
-  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t option
+  val eval_zone : Zone.path interface
+  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, t) manager -> Context.context -> 'a flow -> 'r option

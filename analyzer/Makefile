@@ -5,7 +5,7 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang
 
-framework = utils ast visitor query context lattice flow zone value eval post manager domain analyzer lattices composers domains essentials config
+framework = location ast visitor options query context lattice flow zone exceptions value manager eval post domain analyzer lattices domains alarm essentials config
 framework.utils = compare location options exceptions
 
 lang = universal python
@@ -16,8 +16,8 @@ lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = int congruence float
 
 
-lang.python = ast addr alarm utils visitor frontend operators memory flows libs desugar data_model objects program setup
-lang.python.memory = value query addr_env value_env
+lang.python = ast addr alarm utils visitor frontend zone program operators memory flows libs desugar data_model objects setup
+lang.python.memory = value query env
 lang.python.objects = class function object numbers strings slices nones containers
 lang.python.objects.numbers = int bool float complx
 lang.python.objects.containers = lists dicts ranges sets tuples

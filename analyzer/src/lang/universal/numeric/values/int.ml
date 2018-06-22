@@ -149,7 +149,7 @@ struct
         | O_bit_xor -> bot_to_exn (I.bwd_bit_xor a1 a2 r)
         | O_bit_rshift -> bot_to_exn (I.bwd_shift_right a1 a2 r)
         | O_bit_lshift -> bot_to_exn (I.bwd_shift_left a1 a2 r)
-        | _ -> Exceptions.fail "bwd_binop: unknown operator %a" Framework.Ast.pp_operator op
+        | _ -> Framework.Utils.Exceptions.fail "bwd_binop: unknown operator %a" Framework.Ast.pp_operator op
       in
       Nb aa1, Nb aa2
     with Found_BOT ->
@@ -166,7 +166,7 @@ struct
         | O_gt -> bot_to_exn (I.filter_gt a1 a2)
         | O_le -> bot_to_exn (I.filter_leq a1 a2)
         | O_ge -> bot_to_exn (I.filter_geq a1 a2)
-        | _ -> Exceptions.fail "bwd_filter: unknown operator %a" pp_operator op
+        | _ -> Framework.Utils.Exceptions.fail "bwd_filter: unknown operator %a" pp_operator op
       in
       Nb aa1, Nb aa2
     with Found_BOT ->

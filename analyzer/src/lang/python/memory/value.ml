@@ -8,17 +8,10 @@
 
 (** Non-relational abstraction of Python values. *)
 
-open Framework.Flow
-open Framework.Manager
-open Framework.Query
-open Framework.Eval
-open Framework.Exec
-open Framework.Ast
-open Framework.Utils
+open Framework.Essentials
 open Universal.Ast
 open Ast
 open Addr
-open Addr_env
 
 let name = "python.memory.value"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -29,41 +22,41 @@ let debug fmt = Debug.debug ~channel:name fmt
 (*==========================================================================*)
 
 (** NoneType singleton lattice *)
-module N = Framework.Lattices.Enum.Make(struct
+module N = Framework.Lattices.Finite_powerset.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_none]
-    let print fmt c = Framework.Pp.pp_constant fmt c
+    let print fmt c = pp_constant fmt c
   end
   )
 
 (** Powerset lattice of finite strings *)
-module S = Framework.Lattices.Top_set.Make(struct
+module S = Framework.Lattices.Powerset.Make(struct
     type t = string
     let compare = compare
     let print fmt s = Format.fprintf fmt "\"%s\"" s
   end)
 
 (** NotImplementedType singleton lattice *)
-module NI = Framework.Lattices.Enum.Make(struct
+module NI = Framework.Lattices.Finite_powerset.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_not_implemented]
-    let print fmt c = Framework.Pp.pp_constant fmt c
+    let print fmt c = pp_constant fmt c
   end
   )
 
 (** Empty value singleton lattice *)
-module E = Framework.Lattices.Enum.Make(struct
+module E = Framework.Lattices.Finite_powerset.Make(struct
     type t = Framework.Ast.constant
     let values = [C_py_empty]
-    let print fmt c = Framework.Pp.pp_constant fmt c
+    let print fmt c = pp_constant fmt c
   end
   )
 
 (** Integer intervals lattice *)
-module I = Universal.Numeric.Values.Int
+module I = Universal.Numeric.Values.Int.Value
 
 (** Float intervals lattices *)
-module F = Universal.Numeric.Values.Float
+module F = Universal.Numeric.Values.Float.Value
 
 
 
@@ -116,9 +109,6 @@ let is_top abs =
   F.is_top abs.float &&
   NI.is_top abs.notimplem &&
   E.is_top abs.empty
-
-
-let init = top
 
 let print fmt abs =
   let open Format in
@@ -224,13 +214,11 @@ let empty e = {
   empty = e
 }
 
+let zone = Zone.Z_py_value
+
 (** Creation of a value from a program constant *)
 let of_constant c =
   match c with
-  | C_true -> integer (I.of_constant (C_int Z.one))
-  | C_false -> integer (I.of_constant (C_int Z.zero))
-  | C_top T_bool -> integer (I.of_constant (C_int_interval (Z.zero, Z.one)))
-
   | C_py_none | C_top T_py_none -> none  (N.singleton c)
 
   | C_int n -> integer (I.of_constant c)
@@ -288,8 +276,10 @@ let fwd_binop op abs1 abs2 = {
   float = F.fwd_binop op abs1.float abs2.float;
 }
 
-let mk_true = integer (I.of_constant (C_int Z.one))
-let mk_false = integer (I.of_constant (C_int Z.zero))
+let of_bool = function
+  | Some true -> integer (I.of_constant (C_int Z.one))
+  | Some false -> integer (I.of_constant (C_int Z.zero))
+  | None -> integer (I.of_constant (C_int_interval (Z.zero, Z.one)))
 
 let fwd_filter op abs1 abs2 =
   (I.fwd_filter op abs1.int abs2.int) ||

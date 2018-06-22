@@ -8,6 +8,8 @@
 
 (** Generic n-ary reduction mechanism of abstract domains. *)
 
+open Manager
+
 (** Keys for identifying domains within a pool *)
 type _ key = ..
 
@@ -288,7 +290,7 @@ struct
         | Some post ->
           let mergers = post.Post.mergers in
           let man = pman.get k in
-          let flow' = List.fold_left (fun flow stmt -> man.exec stmt ctx flow) post.flow mergers in
+          let flow' = List.fold_left (fun flow stmt -> man.exec stmt ctx flow) post.Post.flow mergers in
           man.flow.meet flow' (merge tl)
     in
     let flow' = merge post' in

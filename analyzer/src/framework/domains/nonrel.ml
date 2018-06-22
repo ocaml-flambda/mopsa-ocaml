@@ -285,7 +285,7 @@ struct
 
 
     | S_assign({ekind = E_var var}, e, mode) ->
-      post_eval zpath e man ctx flow @@ fun e flow ->
+      bind_post zpath e man ctx flow @@ fun e flow ->
       map_domain_cur (fun a ->
           let v = eval_value a e in
           let a' = VarMap.add var v a in
@@ -297,7 +297,7 @@ struct
       return
 
     | S_assume e ->
-      post_eval zpath e man ctx flow @@ fun e flow ->
+      bind_post zpath e man ctx flow @@ fun e flow ->
       map_domain_cur (fun a ->
           debug "cur = %a" print a;
           let (_,r) as t = annotate_expr a e in
@@ -319,14 +319,14 @@ struct
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      map_eval zpath e1 man ctx flow @@ fun e1 flow ->
-      map_eval zpath e2 man ctx flow @@ fun e2 flow ->
+      bind_eval zpath e1 man ctx flow @@ fun e1 flow ->
+      bind_eval zpath e2 man ctx flow @@ fun e2 flow ->
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
       Eval.singleton (Some exp') flow |>
       return
 
     | E_unop(op, e) ->
-      map_eval zpath e man ctx flow @@ fun e flow ->
+      bind_eval zpath e man ctx flow @@ fun e flow ->
       let exp' = {exp with ekind = E_unop(op, e)} in
       Eval.singleton (Some exp') flow |>
       return

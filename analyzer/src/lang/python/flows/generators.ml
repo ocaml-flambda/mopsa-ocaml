@@ -8,16 +8,8 @@
 
 (** Abstraction of generators *)
 
+open Framework.Essentials
 open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Lattice
-open Framework.Flow
-open Framework.Ast
-open Framework.Pp
-open Framework.Eval
-open Framework.Exec
-open Framework.Alarm
 open Universal.Ast
 open Ast
 open Addr
@@ -26,7 +18,7 @@ let name = "python.flows.generators"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
-type token +=
+type Flow.token +=
   | TGenStart of py_object
   (** Initial generator flows *)
 
@@ -43,17 +35,12 @@ type token +=
 
 
 
-(** Generator framing: tag local variables with the address of the
-   generator in order to keep separate variables of different
-   instances, while allowing the inference of relations. *)
-type var_kind +=
-  | V_gen_frame of py_object (** generator instance *)
-
 let mk_framed_var v obj =
-  match vkind v with
-  | V_orig -> {v with vkind = V_gen_frame obj}
-  | V_gen_frame _ -> v
-  | _ -> assert false
+  let vname =
+    Format.fprintf Format.str_formatter "∥%s~%a∥" v.vname pp_py_object obj;
+    Format.flush_str_formatter ()
+  in
+  {v with vname}
 
 
 (** The current generator being analyzed is stored in the context. *)
@@ -67,51 +54,65 @@ module Domain = struct
     match kind_of_object obj with
     | A_py_instance(_, Some (Generator f)) -> f
     | _ -> assert false
-  
-  let eval man ctx exp flow =
+
+  let import_exec = []
+  let export_exec = [Zone.Z_py]
+
+  let import_eval = [Zone.Z_py, Zone.Z_py_object; Universal.Zone.Z_heap, Universal.Zone.Z_heap]
+  let export_eval = []
+
+  let eval zpath exp man ctx flow =
     let range = erange exp in
     match ekind exp with
     (* E⟦ g(e1, e2, ...) | is_generator(g) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_user func)}, _)}, args, [])
       when func.py_func_is_generator = true
       ->
-      eval_list args (man.eval ctx) flow |>
-      eval_compose (fun el flow ->
-          (* Create the generator instance *)
-          eval_alloc_instance man ctx (Addr.find_builtin "generator") (Some (Generator func)) range flow |>
-          oeval_compose (fun addr flow ->
-              let obj = (addr, mk_py_empty range) in
-              let flow0 = flow in
-              (* Assign arguments to parameters in a new flow *)
+      bind_eval_list (Zone.Z_py, Zone.Z_py_object) args man ctx flow
+      @@ fun el flow ->
+      (* Create the generator instance *)
+      bind_eval
+        (Universal.Zone.Z_heap, Universal.Zone.Z_heap)
+        (mk_alloc_instance (Addr.find_builtin "generator") ~params:(Some (Generator func)) range)
+        man ctx flow
+      @@ fun alloc flow ->
+      begin match ekind alloc with
+        | E_addr addr ->
+          let obj = (addr, mk_py_empty range) in
+          let flow0 = flow in
+          (* Assign arguments to parameters in a new flow *)
 
-              (* FIXME: default arguments in generators are not supported yet *)
-              if List.length args <> List.length func.py_func_parameters then
-                Framework.Exceptions.panic_at range "generators: only calls with correct number of arguments is supported"
-              else
-                (* Change all parameters into framed variables *)
-                let params = List.map (fun v -> mk_framed_var v obj) func.py_func_parameters in
+          (* FIXME: default arguments in generators are not supported yet *)
+          if List.length args <> List.length func.py_func_parameters then
+            Framework.Utils.Exceptions.panic_at range "generators: only calls with correct number of arguments is supported"
+          else
+            (* Change all parameters into framed variables *)
+            let params = List.map (fun v -> mk_framed_var v obj) func.py_func_parameters in
 
-                (* Perform assignments to arguments *)
-                let flow1 = List.fold_left (fun flow (v, e) ->
-                    man.exec ctx (mk_assign (mk_var v range) e range) flow
-                  ) flow (List.combine params args)
-                in
+            (* Perform assignments to arguments *)
+            let flow1 = List.fold_left (fun flow (v, e) ->
+                man.exec (mk_assign (mk_var v range) e range) ctx flow
+              ) flow (List.combine params args)
+            in
 
-                (* Save the projected cur env in the initial flow of the generator *)
-                let cur' = man.exec ctx (mk_project_vars params range) flow1 |>
-                           man.flow.get TCur
-                in
-                let flow2 = man.flow.add (TGenStart obj) cur' flow0 in
-                oeval_singleton (Some (mk_py_object obj range), flow2, [])
-            )
-        )
+            (* Save the projected cur env in the initial flow of the generator *)
+            let cur' = man.exec (mk_project_vars params range) ctx flow1 |>
+                       man.flow.get Flow.TCur
+            in
+            let flow2 = man.flow.add (TGenStart obj) cur' flow0 in
+            Eval.singleton (Some (mk_py_object obj range)) flow2 |>
+            return
+
+        | _ -> assert false
+      end
 
     (* E⟦ generator.__iter__(self) | isinstance(self, generator) ⟧ *)
     | E_py_call(
         {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "generator.__iter__")}, _)},
         [{ekind = E_py_object self} as arg], []
       ) when Addr.isinstance self (Addr.find_builtin "generator") ->
-      oeval_singleton (Some arg, flow, [])
+      Eval.singleton (Some arg) flow |>
+      return
 
     (* E⟦ generator.__iter__(self) | ¬ isinstance(self, generator) ⟧ *)
     | E_py_call(
@@ -119,8 +120,9 @@ module Domain = struct
         _,
         []
       ) ->
-      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-      oeval_singleton (None, flow, [])
+      let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow in
+      Eval.singleton None flow |>
+      return
 
 
     (* E⟦ generator.__next__(self) | isinstance(self, generator) ⟧ *)
@@ -132,12 +134,13 @@ module Domain = struct
       let func = get_generator_function self in
 
       (* Keep the input cur environment *)
-      let cur = man.flow.get TCur flow in
+      let cur = man.flow.get Flow.TCur flow in
 
       (* Compute the next tokens *)
-      let flow1 = man.flow.fold (fun acc env -> function
-          | TCur -> acc
-          | TGenStart(g) when compare_py_object g self = 0 -> man.flow.add TCur env acc
+      let flow1 = man.flow.fold (fun tk env acc ->
+          match tk with
+          | Flow.TCur -> acc
+          | TGenStart(g) when compare_py_object g self = 0 -> man.flow.add Flow.TCur env acc
           | TGenNext _ -> acc
 
           | TGenYield(g, _, r) when compare_py_object g self = 0 -> man.flow.add (TGenNext(g, r)) env acc
@@ -146,13 +149,14 @@ module Domain = struct
           | TGenStop(g) -> acc (* this case is handled later *)
           | Universal.Flows.Interproc.TReturn _ -> acc
           | tk -> man.flow.add tk env acc
-        ) man.flow.bottom flow
+        ) flow man.flow.bottom
       in
 
       (* Filter flow by location reachability *)
       (* FIXME: add relational counter *)
-      let flow2 = man.flow.map (fun env -> function
-          | TCur -> man.env.meet env cur
+      let flow2 = man.flow.map (fun tk env ->
+          match tk with
+          | Flow.TCur -> man.env.meet env cur
           | TGenNext(g, r) -> man.env.meet env cur
           | _ -> env
         ) flow1
@@ -174,70 +178,72 @@ module Domain = struct
 
       (* Execute the body statement *)
       let ctx' = Framework.Context.add KCurGenerator self ctx in
-      let flow3 = man.exec ctx' body' flow2 in
+      let flow3 = man.exec body' ctx' flow2 in
 
       (* Add the input stop flows  *)
-      let flow3 = man.flow.fold (fun acc env tk ->
+      let flow3 = man.flow.fold (fun tk env acc ->
           match tk with
           | TGenStop(g) when compare_py_object g self = 0 -> man.flow.add tk env acc
           | _ -> acc
-        ) flow3 flow
+        ) flow flow3
       in
 
 
       (* Restore the input flows *)
-      let flow4 = man.flow.fold (fun acc env tk ->
+      let flow4 = man.flow.fold (fun tk env acc ->
           match tk with
           | Universal.Flows.Interproc.TReturn _ -> man.flow.add tk env acc
           | TGenStart(g) when compare_py_object g self <> 0 -> man.flow.add tk env acc
           | TGenYield(g, _, _) when compare_py_object g self <> 0 -> man.flow.add tk env acc
           | TGenStop(g) when compare_py_object g self <> 0 -> man.flow.add tk env acc
           | _ -> acc
-        ) man.flow.bottom flow
+        ) flow man.flow.bottom
       in
 
       (* Process the resulting yield, return and exception flows *)
-      man.flow.fold (fun acc env -> function
+      man.flow.fold (fun tk env acc ->
+          match tk with
           | TGenYield(g, e, r) when compare_py_object g self = 0 ->
             (* Assign the yielded value to a temporary return variable *)
             let tmp = mktmp () in
-            let flow = man.flow.set TCur env flow4 |>
-                       man.exec ctx (mk_assign (mk_var tmp range) e range)
+            let flow = man.flow.set Flow.TCur env flow4 |>
+                       man.exec (mk_assign (mk_var tmp range) e range) ctx
             in
             (* Clean the cur environment by removing the generator local variables *)
             let flow = List.fold_left (fun acc v ->
-                man.exec ctx (mk_remove_var v range) acc
+                man.exec (mk_remove_var v range) ctx acc
               ) flow locals'
             in
             (* Clean the yield frame by projecting on the generator local variables *)
-            let cur' = man.flow.set TCur env flow4 |>
-                       man.exec ctx (mk_project_vars locals' range) |>
-                       man.flow.get TCur
+            let cur' = man.flow.set Flow.TCur env flow4 |>
+                       man.exec (mk_project_vars locals' range) ctx |>
+                       man.flow.get Flow.TCur
             in
             let flow = man.flow.set (TGenYield(g, e, r)) cur' flow in
-            re_eval_singleton (man.eval ctx) (Some (mk_var tmp range), flow, [mk_remove_var tmp range]) |>
-            oeval_join acc
+            let evl = man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var tmp range) ctx flow |>
+                      Eval.add_cleaners [mk_remove_var tmp range]
+            in
+            evl :: acc
 
           | Exceptions.TExn exn ->
             (* Save env in the token TGenStop and re-raise the exception *)
             let flow = man.flow.add (TGenStop(self)) env flow4 |>
                        man.flow.set (Exceptions.TExn exn) env
             in
-            oeval_singleton (None, flow, []) |>
-            oeval_join acc
+            Eval.singleton None flow :: acc
 
           | TGenStop _
           | Universal.Flows.Interproc.TReturn _ ->
             (* Save env in the token TGenStop and raise a StopIteration exception *)
             let flow = man.flow.add (TGenStop(self)) env flow4 |>
-                       man.flow.set TCur env |>
-                       man.exec ctx (Utils.mk_builtin_raise "StopIteration" range)
+                       man.flow.set Flow.TCur env |>
+                       man.exec (Utils.mk_builtin_raise "StopIteration" range) ctx
             in
-            oeval_singleton (None, flow, []) |>
-            oeval_join acc
+            Eval.singleton None flow :: acc
 
           | _ -> acc
-        ) None flow3
+        ) flow3 [] |>
+      Eval.of_list
 
     (* E⟦ generator.__next__(self) | ¬ isinstance(self, generator) ⟧ *)
     | E_py_call(
@@ -245,30 +251,32 @@ module Domain = struct
         _,
         []
       ) ->
-      let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-      oeval_singleton (None, flow, [])
+      let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow in
+      Eval.singleton None flow |>
+      return
 
     (* E⟦ yield e ⟧ *)
     | E_py_yield e ->
       let g = Framework.Context.find KCurGenerator ctx in
-      let flow = man.flow.fold (fun acc env tk ->
+      let flow = man.flow.fold (fun tk env acc ->
           match tk with
-          | TCur -> man.flow.add (TGenYield(g, e, range)) env acc
-          | TGenNext(g, r) -> man.flow.add TCur env acc
+          | Flow.TCur -> man.flow.add (TGenYield(g, e, range)) env acc
+          | TGenNext(g, r) -> man.flow.add Flow.TCur env acc
           | _ -> man.flow.add tk env acc
-        ) man.flow.bottom flow
+        ) flow man.flow.bottom
       in
-      oeval_singleton (None, flow, [])
+      Eval.singleton None flow |>
+      return
 
     (* E⟦ x for x in g | isinstance(g, generator) ⟧ *)
     | E_py_generator_comprehension _ ->
-      Framework.Exceptions.panic "Generator comprehension not supported"
+      Framework.Utils.Exceptions.panic_at range "Generator comprehension not supported"
 
     | _ -> None
 
-  let init man ctx prog flow = ctx, flow
-  let exec man ctx stmt flow = None
-  let ask man ctx query flow = None
+  let init prog man ctx flow = None
+  let exec zone stmt man ctx flow = None
+  let ask query man ctx flow = None
 
 end
 
@@ -276,41 +284,28 @@ let setup () =
   register_domain name (module Domain);
   (* Flow tokens *)
   let open Format in
-  let open Framework.Pp in
-  let open Pp in
-  register_pp_token (fun next fmt -> function
+  Flow.register_pp_token (fun next fmt -> function
       | TGenStart(gen) -> fprintf fmt "gstart(%a)" pp_py_object gen
       | TGenNext(gen, r) -> fprintf fmt "gnext(%a) -> %a" pp_py_object gen pp_range r
       | TGenYield(gen, e, r) -> fprintf fmt "gyield(%a) <- %a" pp_py_object gen pp_range r
       | TGenStop(gen) -> fprintf fmt "gstop(%a)" pp_py_object gen
       | tk -> next fmt tk
     );
-  register_token_compare (fun next tk1 tk2 ->
+  Flow.register_token_compare (fun next tk1 tk2 ->
       match tk1, tk2 with
       | TGenStart(g1), TGenStart(g2) -> compare_py_object g1 g2
       | TGenNext(g1, r1), TGenNext(g2, r2) ->
-        compare_composer [
+        Framework.Utils.Compare.compose [
           (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]
       | TGenYield(g1, _, r1), TGenYield(g2, _, r2) ->
-        compare_composer [
+        Framework.Utils.Compare.compose [
           (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]
       | TGenStop(g1), TGenStop(g2) -> compare_py_object g1 g2
       | _ -> next tk1 tk2
-    );
-  (* Variable kinds *)
-  register_pp_var (fun next fmt v ->
-      match vkind v with
-      | V_gen_frame(g) -> fprintf fmt "∥%s~%a∥" v.vname pp_py_object g
-      | _ -> next fmt v
-    );
-  register_vkind_compare (fun next vk1 vk2 ->
-      match vk1, vk2 with
-      | V_gen_frame g1, V_gen_frame g2 -> compare_py_object g1 g2
-      | _ -> next vk1 vk2
     );
   (* Context *)
   let open Framework.Context in

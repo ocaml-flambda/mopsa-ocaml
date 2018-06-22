@@ -131,7 +131,7 @@ struct
   and exec ?(zone = Zone.top) (stmt: Ast.stmt) (ctx: Context.context) (flow: Domain.t flow) : Domain.t flow =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
-      Utils.Location.pp_range_verbose stmt.srange
+      Location.pp_range_verbose stmt.srange
       pp_stmt stmt manager.flow.print flow
     ;
     let timer = Timing.start () in
@@ -143,9 +143,9 @@ struct
       ~otherwise:(fun () ->
           match zone_exec stmt manager ctx flow with
           | None ->
-            Utils.Exceptions.panic
+            Exceptions.panic
               "Unable to analyze statement in %a:@\n @[%a@]"
-              Utils.Location.pp_range_verbose stmt.srange
+              Location.pp_range_verbose stmt.srange
               pp_stmt stmt
 
           | Some post -> post.flow
@@ -195,7 +195,7 @@ struct
   and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.t =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
-      Utils.Location.pp_range_verbose exp.erange
+      Location.pp_range_verbose exp.erange
       pp_expr exp manager.flow.print flow
     ;
     let timer = Timing.start () in
@@ -223,7 +223,7 @@ struct
          "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
          pp_expr exp
          manager.flow.print flow
-         (Eval.print ~print_result:pp_expr) res
+         (pp_eval ~pp:pp_expr) res
        ;
        res
     )
@@ -236,7 +236,7 @@ struct
 
   and use_cache : type a b. a -> (a * b) list ref -> otherwise:(unit -> b) -> b =
     fun k cache ~otherwise ->
-    if Utils.Options.(common_options.cache_size) == 0 then
+    if Options.(common_options.cache_size) == 0 then
       otherwise ()
     else
       try
@@ -251,7 +251,7 @@ struct
   and add_to_cache : type a b. a -> b -> (a * b) list ref -> unit =
     fun k v cache ->
       cache := (k, v) :: (
-          if List.length !cache < Utils.Options.(common_options.cache_size) then !cache
+          if List.length !cache < Options.(common_options.cache_size) then !cache
           else List.rev @@ List.tl @@ List.rev !cache
         )
 

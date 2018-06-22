@@ -24,6 +24,13 @@ module Eval = Eval
 
 include Composers
 
-module Exceptions = Utils.Exceptions
+include Utils.Location
 
 let return x = Some x
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print = pp_var
+end

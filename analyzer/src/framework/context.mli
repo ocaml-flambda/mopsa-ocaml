@@ -50,7 +50,7 @@
 
 
 (** Extensible GADT for cells keys. *)
-type _ key
+type _ key = ..
 
 (** A context cell with a key and a content. *)
 type 'a cell
@@ -67,7 +67,7 @@ type context = xcell list
 (*==========================================================================*)
 
 (** Key equality witness. *)
-type (_, _) eq
+type (_, _) eq = Eq : ('a, 'a) eq
 
 (** [chain.check k1 k2] verifies that the type of both keys is equal. *)
 type chain = {

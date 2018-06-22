@@ -143,7 +143,7 @@ struct
       return_cur
 
     | S_assign({ekind = E_var v}, e, STRONG) ->
-      post_eval zpath e man ctx flow @@ fun e flow ->
+      bind_post zpath e man ctx flow @@ fun e flow ->
       let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
       begin try
           let aenv = Apron.Abstract1.env abs in
@@ -162,7 +162,7 @@ struct
 
     | S_assume(e) -> begin
         let () = debug "until now looks ok" in
-        post_eval zpath e man ctx flow @@ fun e flow ->
+        bind_post zpath e man ctx flow @@ fun e flow ->
         let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env abs in
         try
@@ -356,14 +356,14 @@ struct
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      map_eval zpath e1 man ctx flow @@ fun e1 flow ->
-      map_eval zpath e2 man ctx flow @@ fun e2 flow ->
+      bind_eval zpath e1 man ctx flow @@ fun e1 flow ->
+      bind_eval zpath e2 man ctx flow @@ fun e2 flow ->
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
       Eval.singleton (Some exp') flow |>
       return
 
     | E_unop(op, e) ->
-      map_eval zpath e man ctx flow @@ fun e flow ->
+      bind_eval zpath e man ctx flow @@ fun e flow ->
       let exp' = {exp with ekind = E_unop(op, e)} in
       Eval.singleton (Some exp') flow |>
       return

@@ -9,12 +9,20 @@
 
 (** Alarms allows reporting potential errors inferred by abstract domains. *)
 
-type alarm_kind
+type alarm_kind = ..
 
-type alarm_level
+type alarm_level =
+  | ERROR
+  | WARNING
+  | PANIC
 
-type alarm
-  
+type alarm = {
+  alarm_kind : alarm_kind;   (** the kind of the alarm *)
+  alarm_range : Utils.Location.range;       (** the range of the program where the alarm was detected *)
+  alarm_level : alarm_level;
+}
+
+
 val register_alarm_compare: ((alarm -> alarm -> int) -> alarm -> alarm -> int) -> unit
 
 val compare_alarm : alarm -> alarm -> int

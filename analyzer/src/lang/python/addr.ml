@@ -9,6 +9,7 @@
 (** Heap addresses of Python objects. *)
 
 open Framework.Essentials
+open Universal.Ast
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
@@ -52,20 +53,8 @@ type Universal.Ast.addr_kind +=
   | A_py_module of module_address
 
 
-(** Allocate an object on the heap and return its address as an evaluation *)
-let eval_alloc (man: ('a, 't) manager) ctx kind range flow : (Universal.Ast.addr, 'a) Eval.t option =
-  let exp = Universal.Ast.mk_alloc_addr kind range range in
-  man.eval exp ctx flow |>
-  map (fun exp flow ->
-      match ekind exp with
-      | Universal.Ast.E_addr addr -> Eval.singleton (Some addr) flow |> return
-      | _ -> Exceptions.panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
-    )
-
-
-(** Allocate an instance and return its address as an evaluation *)
-let eval_alloc_instance (man: ('a, 't) manager) ctx cls params range flow : (Universal.Ast.addr, 'a) evals option =
-  eval_alloc man ctx (A_py_instance(cls, params)) range flow
+let mk_alloc_instance cls ?(params = None) range =
+  Universal.Ast.mk_alloc_addr (A_py_instance(cls, params)) range range
 
 
 (*==========================================================================*)
@@ -110,7 +99,7 @@ let object_name obj =
     -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | A_py_class(C_user c, _) -> c.py_cls_var.vname
-  | _ -> Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr (addr_of_object obj)
+  | _ -> Framework.Utils.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
   classes := obj :: !classes
@@ -142,7 +131,7 @@ let is_builtin obj = List.mem obj (all ())
 let is_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Exceptions.panic "Unsupported builtin %s" name
+    Framework.Utils.Exceptions.panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
@@ -153,7 +142,7 @@ let is_builtin_attribute base attr =
 let find_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Exceptions.panic "Unsupported builtin %s" name
+    Framework.Utils.Exceptions.panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
@@ -284,35 +273,35 @@ let is_none r =
   let o = object_of_expr r in
   isinstance o (find_builtin "NoneType")
 
-let none_range = mk_fresh_range ()
+let none_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_none range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NoneType", None);
       addr_range = none_range;
-      addr_uid = Universal.Heap.Pool.recent_uid;
+      addr_uid = Universal.Heap.Recency.strong_addr_uid;
     }
   in
   let e = mk_constant ~etyp:T_py_none C_py_none range in
   mk_py_object (addr, e) range
 
 
-let not_implemented_range = mk_fresh_range ()
+let not_implemented_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_not_implemented range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NotImplementedType", None);
       addr_range = not_implemented_range;
-      addr_uid = Universal.Heap.Pool.recent_uid;
+      addr_uid = Universal.Heap.Recency.strong_addr_uid;
     }
   in
   let e = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
   mk_py_object (addr, e) range
 
-let int_range = mk_fresh_range ()
+let int_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_int_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "int", None);
       addr_range = int_range;
-      addr_uid = Universal.Heap.Pool.old_uid;
+      addr_uid = Universal.Heap.Recency.weak_addr_uid;
     }
   in
   mk_py_object (addr, e) range
@@ -323,12 +312,12 @@ let mk_py_int n range = mk_py_z (Z.of_int n) range
 let mk_py_zero range = mk_py_z Z.zero range
 let mk_py_one range = mk_py_z Z.one range
 
-let float_range = mk_fresh_range ()
+let float_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_float_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "float", None);
       addr_range = float_range;
-      addr_uid = Universal.Heap.Pool.old_uid;
+      addr_uid = Universal.Heap.Recency.weak_addr_uid;
     }
   in
   mk_py_object (addr, e) range
@@ -336,37 +325,37 @@ let mk_py_float_expr e range =
 let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
 let mk_py_float_interval f1 f2 range = mk_py_int_expr (Universal.Ast.mk_float_interval f1 f2 range) range
 
-let bool_range = mk_fresh_range ()
+let bool_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_bool_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "bool", None);
       addr_range = bool_range;
-      addr_uid = Universal.Heap.Pool.old_uid;
+      addr_uid = Universal.Heap.Recency.weak_addr_uid;
     }
   in
   mk_py_object (addr, e) range
 
-let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_true range) range
-let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_false range) range
+let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_one range) range
+let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_zero range) range
 
-let string_range = mk_fresh_range ()
+let string_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_string_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "str", None);
       addr_range = string_range;
-      addr_uid = Universal.Heap.Pool.old_uid;
+      addr_uid = Universal.Heap.Recency.weak_addr_uid;
     }
   in
   mk_py_object (addr, e) range
 
 let mk_py_string s range = mk_py_string_expr (Universal.Ast.mk_string s range) range
 
-let complex_range = mk_fresh_range ()
+let complex_range = Framework.Utils.Location.mk_fresh_range ()
 let mk_py_imag j range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "complex", None);
       addr_range = complex_range;
-      addr_uid = Universal.Heap.Pool.old_uid;
+      addr_uid = Universal.Heap.Recency.weak_addr_uid;
     }
   in
   let e = mk_constant ~etyp:T_py_complex (C_py_imag j) range in
@@ -375,9 +364,9 @@ let mk_py_imag j range =
 let mk_py_top t range =
   let open Universal.Ast in
   match t with
+  | T_py_bool -> mk_py_bool_expr (mk_int_interval 0 1 range) range
   | T_int -> mk_py_int_expr (Framework.Ast.mk_top T_int range) range
   | T_float -> mk_py_float_expr (Framework.Ast.mk_top T_float range) range
-  | T_bool -> mk_py_bool_expr (Framework.Ast.mk_top T_bool range) range
   | T_string -> mk_py_string_expr (Framework.Ast.mk_top T_string range) range
   | _ -> assert false
 
@@ -386,13 +375,11 @@ let mk_py_constant c range =
   match c with
   | C_int z -> mk_py_z z range
   | C_float f -> mk_py_float f range
-  | C_true -> mk_py_true range
-  | C_false -> mk_py_false range
   | C_string s -> mk_py_string s range
   | C_py_none -> mk_py_none range
   | C_py_not_implemented -> mk_py_not_implemented range
   | C_py_imag j -> mk_py_imag j range
-  | _ -> Framework.Exceptions.panic_at range "mk_py_constant: unknown constant %a" Framework.Pp.pp_constant c
+  | _ -> Framework.Utils.Exceptions.panic_at range "mk_py_constant: unknown constant %a" pp_constant c
 
 let () =
   Universal.Pp.(
@@ -403,8 +390,8 @@ let () =
           | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "{%s}" c
           | A_py_function(F_user f), _ -> fprintf fmt "function %a" pp_var f.py_func_var
           | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "function %s" f
-          | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr (addr_of_object c) pp_range a.addr_range
-          | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr (addr_of_object c) pp_range a.addr_range
+          | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr (addr_of_object c) Framework.Utils.Location.pp_range a.addr_range
+          | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr (addr_of_object c) Framework.Utils.Location.pp_range a.addr_range
           | A_py_method(f, obj), _ -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
           | A_py_module(M_user(m, _) | M_builtin(m)), _ -> fprintf fmt "module %s" m
           | _ -> default fmt a

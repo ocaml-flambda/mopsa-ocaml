@@ -208,12 +208,12 @@ and from_exp_option : Py_AST.expr option -> Framework.Ast.expr option
 and from_exp exp =
   let ekind, etyp = match exp.ekind with
     | E_true ->
-      E_constant (Universal.Ast.C_true),
-      Universal.Ast.T_bool
+      E_constant (Ast.C_py_true),
+      Ast.T_py_bool
 
     | E_false ->
-      E_constant (Universal.Ast.C_false),
-      Universal.Ast.T_bool
+      E_constant (Ast.C_py_false),
+      Ast.T_py_bool
 
     | E_none ->
       E_constant (C_py_none),
@@ -374,18 +374,18 @@ and from_exp exp =
   {ekind; etyp; erange = from_range exp.erange}
 
 
-and from_location loc : Framework.Ast.loc =
-  {
+and from_location loc : Framework.Utils.Location.loc =
+  Framework.Utils.Location.{
     loc_file = loc.file;
     loc_line = loc.line;
     loc_column = loc.column;
   }
 
 and from_range range =
-  Range_origin {
+  Framework.Utils.Location.(Range_origin {
     range_begin = from_location range.rbegin;
     range_end = from_location range.rend;
-  }
+  })
 
 and from_binop : Py_AST.binop -> Framework.Ast.operator = function
   | O_arithmetic op -> from_arithmetic_op op

@@ -10,10 +10,7 @@
 
 
 open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
-open Framework.Ast
+open Framework.Essentials
 open Universal.Ast
 open Ast
 
@@ -21,14 +18,22 @@ let name = "python.program"
 let debug fmt = Debug.debug ~channel:name fmt
 
 
+(** Store list of global variables in the context. *)
+type _ Framework.Context.key +=
+  | KPyGlobals: var list Framework.Context.key
+
 module Domain =
 struct
 
-  let init _ ctx _ flow = ctx, flow
+  let init prog man ctx flow =
+    match prog.prog_kind with
+    | Py_program(globals, _) ->
+      let ctx' = Framework.Context.add KPyGlobals globals ctx in
+      Some (ctx', flow)
 
-  let eval man ctx exp flow = None
+    | _ -> None
 
-  let init_globals man ctx filename globals flow =
+  let init_globals filename globals man ctx flow =
     (* Initialize global variables with C_py_undefined constant *)
     let range = mk_file_range filename in
     let stmt =
@@ -44,14 +49,13 @@ struct
         )
         range
     in
-    let flow1 = man.exec ctx stmt flow in
+    let flow1 = man.exec stmt ctx flow in
 
     (** Initialize special variable __name__ *)
     let v = {
       vname = "__name__";
       vuid = 0;
       vtyp = T_any;
-      vkind = V_orig;
     }
     in
     let stmt =
@@ -60,14 +64,13 @@ struct
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
         range
     in
-    let flow2 = man.exec ctx stmt flow1 in
+    let flow2 = man.exec stmt ctx flow1 in
 
     (** Initialize special variable __file__ *)
     let v = {
       vname = "__file__";
       vuid = 0;
       vtyp = T_any;
-      vkind = V_orig;
     }
     in
     let stmt =
@@ -76,7 +79,7 @@ struct
           (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string range)
           range
     in
-    let flow3 = man.exec ctx stmt flow2 in
+    let flow3 = man.exec stmt ctx flow2 in
 
     flow3
 
@@ -109,36 +112,57 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
+  let import_exec = [Zone.Z_py]
+  let export_exec = [Zone.Z_py]
 
-  let exec man ctx stmt flow  =
+  let exec zone stmt man ctx flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when not Framework.Options.(common_options.unit_test_mode) ->
+      when not Framework.Utils.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
-      init_globals man ctx prog_file globals flow |>
+      init_globals prog_file globals man ctx flow |>
       (* Execute the body *)
-      man.exec ctx body |>
+      man.exec body ctx |>
+      Post.of_flow |>
       return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when Framework.Options.(common_options.unit_test_mode) ->
+      when Framework.Utils.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
-      let flow1 = init_globals man ctx prog_file globals flow in
+      let flow1 = init_globals prog_file globals man ctx flow in
 
       (* Execute the body *)
-      let flow2 = man.exec ctx body flow1 in
+      let flow2 = man.exec body ctx flow1 in
 
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests prog_file tests in
-      return (man.exec ctx stmt flow2)
-
+      man.exec stmt ctx flow2 |>
+      Post.of_flow |>
+      return
 
     | _ -> None
+
+
+  let import_eval = []
+  let export_eval = []
+
+  let eval zpath exp man ctx flow = None
+
 
   let ask _ _ _ _ = None
 
 end
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  register_domain name (module Domain);
+  Framework.Context.(register_key_equality {
+    case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
+              fun chain k1 k2 ->
+                match k1, k2 with
+                | KPyGlobals, KPyGlobals -> Some Eq
+                | _ -> chain.check k1 k2
+            in
+            f);
+  })
+

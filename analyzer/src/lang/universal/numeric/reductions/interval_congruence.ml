@@ -25,7 +25,7 @@ type _ key +=
 module Reduction : REDUCTION =
 struct
 
-  let reduce (man: 'a Pool.manager) (v: 'a) : 'a =
+  let reduce (man: 'a pool_manager) (v: 'a) : 'a =
     try
       let itv = man.get Int v |> Bot.bot_to_exn in
       let cgr = man.get Cgr v |> Bot.bot_to_exn in
