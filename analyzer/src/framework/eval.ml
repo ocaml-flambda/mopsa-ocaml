@@ -119,20 +119,6 @@ let bind
       join evl' acc
     ) None evl
 
-let bind_list
-    (el: Ast.expr list)
-    (man: ('a, 't) manager) ?(zpath = Zone.path_top) ctx flow
-  : ('e, 'a) eval =
-  let rec aux el flow = function
-    | [] -> case (Some (List.rev el)) flow
-
-    | e :: tl ->
-      man.eval ~zpath e ctx flow |>
-      bind_ @@ fun e flow ->
-      aux (e :: el) flow tl
-  in
-  aux [] flow el
-
 let assume
     cond ?(zone = Zone.top)
     ~fthen ~felse

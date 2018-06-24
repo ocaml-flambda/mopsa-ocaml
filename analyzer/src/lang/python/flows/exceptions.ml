@@ -33,12 +33,19 @@ type Flow.token +=
 module Domain =
 struct
 
-  let import_exec = []
-  let export_exec = [Zone.Z_py]
 
-  let import_eval = [Zone.Z_py, Zone.Z_py_object]
-  let export_eval = []
+  let exec_interface = Framework.Domain.{
+      import = [];
+      export = [Zone.Z_py];
+    }
 
+  let eval_interface = Framework.Domain.{
+      import = [
+        (Zone.Z_py, Zone.Z_py_object);
+        (Universal.Zone.Z_heap, Universal.Zone.Z_heap)
+      ];
+      export = [];
+    }
 
   let exec_except excpt range (man: ('a, unit) manager) ctx (flow: 'a Flow.flow) : 'a Flow.flow =
     debug "exec except on@ @[%a@]" man.flow.print flow;
@@ -64,8 +71,9 @@ struct
             match tk with
             | TExn exn ->
               (* Evaluate e in env to check if it corresponds to eaddr *)
-              let flow = man.flow.set Flow.TCur env flow0 in
-              bind_flow (Zone.Z_py, Zone.Z_py_object) e man ctx flow @@ fun e flow ->
+              man.flow.set Flow.TCur env flow0 |>
+              man.eval e ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx |>
+              Post.bind_flow man ctx @@ fun e flow ->
               begin match ekind e with
                 | E_py_object obj ->
                   let flow' =
@@ -86,7 +94,7 @@ struct
                 | _ -> assert false
               end
             | _ -> acc
-          ) flow0 flow
+          ) flow flow0
     in
     debug "except flow1 =@ @[%a@]" man.flow.print flow1;
     (* Execute exception handler *)
@@ -106,8 +114,9 @@ struct
           match tk with
           | TExn exn ->
             (* Evaluate e in env to check if it corresponds to exn *)
-            let flow = man.flow.set Flow.TCur env flow0 in
-            bind_flow (Zone.Z_py, Zone.Z_py_object) e man ctx flow @@ fun e flow ->
+            man.flow.set Flow.TCur env flow0 |>
+            man.eval e ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx |>
+            Post.bind_flow man ctx @@ fun e flow ->
             begin match ekind e with
               | E_py_object obj ->
                 let flow' =
@@ -167,38 +176,37 @@ struct
           | _ -> acc
         ) old_flow flow |>
 
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_py_raise(Some exp) ->
-      bind_post (Zone.Z_py, Zone.Z_py_object) exp man ctx flow @@ fun exp flow ->
+      man.eval exp ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Post.bind man ctx @@ fun exp flow ->
       begin match ekind exp with
         | E_py_object obj ->
-          let flow' =
-            if Addr.isinstance obj (Addr.find_builtin "BaseException") then
-              let cur = man.flow.get Flow.TCur flow in
-              man.flow.add (TExn obj) cur flow |>
-              man.flow.set Flow.TCur man.env.bottom
-            else
-            if Addr.isclass obj then
-              bind_flow (Universal.Zone.Z_heap, Universal.Zone.Z_heap) (mk_alloc_instance obj range) man ctx flow @@ fun alloc flow ->
-              match ekind alloc with
-              | E_addr addr ->
-                let obj = (addr, mk_py_empty range) in
-                man.exec {stmt with skind = S_py_raise(Some (mk_py_object obj range))} ctx flow
-              | _ -> assert false
-            else
-              man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow
-          in
-
-          Post.of_flow flow'|>
-          return
+          if Addr.isinstance obj (Addr.find_builtin "BaseException") then
+            let cur = man.flow.get Flow.TCur flow in
+            man.flow.add (TExn obj) cur flow |>
+            man.flow.set Flow.TCur man.env.bottom |>
+            Post.return
+          else
+          if Addr.isclass obj then
+            man.eval (mk_alloc_instance obj range) ~zpath:(Universal.Zone.Z_heap, Universal.Zone.Z_heap) ctx flow |>
+            Post.bind  man ctx @@ fun alloc flow ->
+            match ekind alloc with
+            | E_addr addr ->
+              let obj = (addr, mk_py_empty range) in
+              man.exec {stmt with skind = S_py_raise(Some (mk_py_object obj range))} ctx flow |>
+              Post.return
+            | _ -> assert false
+          else
+            man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow |>
+            Post.return
 
         | _ -> assert false
       end
 
     | S_py_raise None ->
-      Framework.Utils.Exceptions.panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
+      Framework.Exceptions.panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
 
     | _ -> None
 

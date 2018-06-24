@@ -41,6 +41,17 @@ struct
   (**                       {2 Transfer functions }                           *)
   (*==========================================================================*)
 
+
+  let exec_interface = Framework.Domain.{
+      import = [];
+      export = [];
+    }
+
+  let eval_interface = Framework.Domain.{
+      import = [Zone.Z_py, Zone.Z_py_object];
+      export = [];
+    }
+  
   let eval zpath exp man ctx flow =
     let range = exp.erange in
     match ekind exp with
@@ -49,8 +60,8 @@ struct
       let globals = Framework.Context.find Program.KPyGlobals ctx in
       let test_cases, functions = List.fold_left (fun acc glob ->
           man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var glob range) ctx flow |>
-          Eval.fold (fun (tests, funs) case ->
-              match case.Eval.result with
+          Eval.fold_ (fun (tests, funs) case ->
+              match case.result with
               | Some {ekind = E_py_object ({addr_kind = A_py_class(C_user cls, [({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _)])} as addr, _)} ->
                 (addr, cls) :: tests, funs
               | Some {ekind = E_py_object ({addr_kind = A_py_function (F_user f)}, _)} ->
@@ -67,9 +78,9 @@ struct
               ~zpath:(Universal.Zone.Z_heap, Universal.Zone.Z_heap)
               (mk_alloc_instance (addr, mk_py_empty range) range)
               ctx flow |>
-            Eval.fold (fun (selfs, _) case ->
-                match case.Eval.result with
-                | Some {ekind = E_addr addr} -> ((addr, mk_py_empty range), cls) :: selfs, case.Eval.flow
+            Eval.fold_ (fun (selfs, _) case ->
+                match case.result with
+                | Some {ekind = E_addr addr} -> ((addr, mk_py_empty range), cls) :: selfs, case.flow
                 | _ -> assert false
               ) (selfs, flow)
           ) ([], flow) test_cases
@@ -89,7 +100,7 @@ struct
       in
 
       let flow = man.exec (mk_stmt (Universal.Ast.S_unit_tests ("file", tests)) range) ctx flow in
-      Eval.return (Some (mk_py_none range)) flow
+      Eval.singleton (Some (mk_py_none range)) flow
 
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")})}, [test; arg1; arg2], []) ->
@@ -140,34 +151,34 @@ struct
           range
       in
       let flow = man.exec stmt ctx flow in
-      Eval.return (Some (mk_py_none range)) flow
+      Eval.singleton (Some (mk_py_none range)) flow
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, [test; exn], []) ->
       (* Instantiate ExceptionContext with the given exception exn *)
       let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
       man.eval exp' ctx flow |>
-      return
+      Eval.return
 
 
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")})},[self; typ; exn; trace], []) ->
-      Universal.Utils.assume_to_eval
-        (mk_binop exn O_eq (mk_py_none range) range)
-        (fun true_flow ->
+      Eval.assume
+        (mk_binop exn O_eq (mk_py_none range) range) ~zone:Zone.Z_py
+        ~fthen:(fun true_flow ->
            (* No exception raised => assertion failed *)
-           let flow = man.exec ctx (mk_assert_unreachable range) true_flow in
-           oeval_singleton (None, flow, [])
+           let flow = man.exec (mk_assert_unreachable range) ctx true_flow in
+           Eval.empty flow
         )
-        (fun false_flow ->
+        ~felse:(fun false_flow ->
            (* Check that the caught exception is an instance of the expected exception *)
-           Universal.Utils.assume_to_eval
-             (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
-             (fun true_flow ->
-                let flow = man.exec ctx (mk_assert_reachable range) true_flow in
-                oeval_singleton (Some (mk_py_true range), flow, [])
+           Eval.assume
+             (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range) ~zone:Zone.Z_py
+             ~fthen:(fun true_flow ->
+                let flow = man.exec (mk_assert_reachable range) ctx true_flow in
+                Eval.singleton (Some (mk_py_true range)) flow
              )
-             (fun false_flow ->
-                let flow = man.exec ctx (mk_assert_unreachable range) false_flow in
-                oeval_singleton (None, flow, [])
+             ~felse:(fun false_flow ->
+                let flow = man.exec (mk_assert_unreachable range) ctx false_flow in
+                Eval.empty flow
              )
              man ctx false_flow ()
         )
@@ -179,8 +190,8 @@ struct
 
     | _ -> None
 
-  let init _ ctx _ flow = ctx, flow
-  let exec man ctx stmt flow = None
+  let init prog man ctx flow = None
+  let exec zone stmt man ctx flow = None
   let ask _ _ _ _ = None
 
 end
@@ -194,4 +205,4 @@ end
 
 
 let setup () =
-  Stateless.register_domain name (module Domain)
+  register_domain name (module Domain)

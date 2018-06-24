@@ -178,3 +178,24 @@ let set_cur a man flow =
 let get_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
+
+
+let eval_list
+    (el: Ast.expr list)
+    (man: ('a, 't) manager) ?(zpath = Zone.path_top) ctx flow
+  : ('e, 'a) eval =
+  let rec aux el flow cleaners = function
+    | [] -> [{result = Some (List.rev el); flow; cleaners}]
+
+    | e :: tl ->
+      let evl = man.eval ~zpath e ctx flow in
+      List.fold_left (fun acc case ->
+          match case.result with
+          | None -> {case with result = None}
+                    :: acc
+
+          | Some e -> (aux (e :: el) flow (cleaners @ case.cleaners) tl)
+                      @ acc
+      ) [] evl
+  in
+  aux [] flow [] el

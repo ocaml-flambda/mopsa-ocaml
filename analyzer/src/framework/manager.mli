@@ -137,3 +137,5 @@ val set_cur : 't -> ('a, 't) manager -> 'a Flow.flow -> 'a Flow.flow
 
 val get_cur : ('a, 't) manager -> 'a Flow.flow -> 't
 (** [get_cur] retrieves the domain' abstract element in the [TCur] flow *)
+
+val eval_list : Ast.expr list -> ('a, 't) manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow -> (Ast.expr list, 'a) eval

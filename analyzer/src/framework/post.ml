@@ -51,6 +51,24 @@ let bind
                   join ~fjoin:man.flow.join acc
     ) None evl
 
+let bind_flow
+    ?(zone = Zone.top) (man: ('a, 't) Manager.manager) ctx
+    (f: 'e -> 'a Flow.flow -> 'a Flow.flow)
+    (evl: ('e, 'a) eval)
+  : 'a Flow.flow =
+  Eval.fold_ (fun acc case ->
+      match case.result with
+      | None -> man.flow.join case.flow  acc
+
+      | Some e ->
+        let flow' = f e case.flow in
+        List.fold_left (fun acc stmt ->
+            man.exec ~zone stmt ctx acc
+          ) flow' case.cleaners |>
+        man.flow.join acc
+    ) man.flow.bottom evl
+
+
 let assume
     cond ?(zone = Zone.top)
     ~fthen ~felse

@@ -99,7 +99,7 @@ let object_name obj =
     -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | A_py_class(C_user c, _) -> c.py_cls_var.vname
-  | _ -> Framework.Utils.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr (addr_of_object obj)
+  | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Pp.pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
   classes := obj :: !classes
@@ -131,7 +131,7 @@ let is_builtin obj = List.mem obj (all ())
 let is_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Framework.Utils.Exceptions.panic "Unsupported builtin %s" name
+    Framework.Exceptions.panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
@@ -142,7 +142,7 @@ let is_builtin_attribute base attr =
 let find_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Framework.Utils.Exceptions.panic "Unsupported builtin %s" name
+    Framework.Exceptions.panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
@@ -273,7 +273,7 @@ let is_none r =
   let o = object_of_expr r in
   isinstance o (find_builtin "NoneType")
 
-let none_range = Framework.Utils.Location.mk_fresh_range ()
+let none_range = Framework.Location.mk_fresh_range ()
 let mk_py_none range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NoneType", None);
@@ -285,7 +285,7 @@ let mk_py_none range =
   mk_py_object (addr, e) range
 
 
-let not_implemented_range = Framework.Utils.Location.mk_fresh_range ()
+let not_implemented_range = Framework.Location.mk_fresh_range ()
 let mk_py_not_implemented range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "NotImplementedType", None);
@@ -296,7 +296,7 @@ let mk_py_not_implemented range =
   let e = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
   mk_py_object (addr, e) range
 
-let int_range = Framework.Utils.Location.mk_fresh_range ()
+let int_range = Framework.Location.mk_fresh_range ()
 let mk_py_int_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "int", None);
@@ -312,7 +312,7 @@ let mk_py_int n range = mk_py_z (Z.of_int n) range
 let mk_py_zero range = mk_py_z Z.zero range
 let mk_py_one range = mk_py_z Z.one range
 
-let float_range = Framework.Utils.Location.mk_fresh_range ()
+let float_range = Framework.Location.mk_fresh_range ()
 let mk_py_float_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "float", None);
@@ -325,7 +325,7 @@ let mk_py_float_expr e range =
 let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
 let mk_py_float_interval f1 f2 range = mk_py_int_expr (Universal.Ast.mk_float_interval f1 f2 range) range
 
-let bool_range = Framework.Utils.Location.mk_fresh_range ()
+let bool_range = Framework.Location.mk_fresh_range ()
 let mk_py_bool_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "bool", None);
@@ -338,7 +338,7 @@ let mk_py_bool_expr e range =
 let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_one range) range
 let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_zero range) range
 
-let string_range = Framework.Utils.Location.mk_fresh_range ()
+let string_range = Framework.Location.mk_fresh_range ()
 let mk_py_string_expr e range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "str", None);
@@ -350,7 +350,7 @@ let mk_py_string_expr e range =
 
 let mk_py_string s range = mk_py_string_expr (Universal.Ast.mk_string s range) range
 
-let complex_range = Framework.Utils.Location.mk_fresh_range ()
+let complex_range = Framework.Location.mk_fresh_range ()
 let mk_py_imag j range =
   let addr = Universal.Ast.{
       addr_kind = A_py_instance (find_builtin "complex", None);
@@ -379,7 +379,7 @@ let mk_py_constant c range =
   | C_py_none -> mk_py_none range
   | C_py_not_implemented -> mk_py_not_implemented range
   | C_py_imag j -> mk_py_imag j range
-  | _ -> Framework.Utils.Exceptions.panic_at range "mk_py_constant: unknown constant %a" pp_constant c
+  | _ -> Framework.Exceptions.panic_at range "mk_py_constant: unknown constant %a" pp_constant c
 
 let () =
   Universal.Pp.(
@@ -390,8 +390,8 @@ let () =
           | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "{%s}" c
           | A_py_function(F_user f), _ -> fprintf fmt "function %a" pp_var f.py_func_var
           | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "function %s" f
-          | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr (addr_of_object c) Framework.Utils.Location.pp_range a.addr_range
-          | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr (addr_of_object c) Framework.Utils.Location.pp_range a.addr_range
+          | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr (addr_of_object c) Framework.Location.pp_range a.addr_range
+          | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr (addr_of_object c) Framework.Location.pp_range a.addr_range
           | A_py_method(f, obj), _ -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
           | A_py_module(M_user(m, _) | M_builtin(m)), _ -> fprintf fmt "module %s" m
           | _ -> default fmt a

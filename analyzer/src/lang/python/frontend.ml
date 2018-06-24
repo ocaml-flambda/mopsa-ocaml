@@ -193,7 +193,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
   {skind = skind'; srange = srange'}
 
 (** Translate an optional statement into en eventual empty one *)
-and from_stmt_option : Framework.Utils.Location.range -> Py_AST.stmt option -> Framework.Ast.stmt
+and from_stmt_option : Framework.Location.range -> Py_AST.stmt option -> Framework.Ast.stmt
   = fun none_case_range -> function
     | None -> {skind = Universal.Ast.S_block []; srange = none_case_range}
     | Some s -> from_stmt s
@@ -374,15 +374,15 @@ and from_exp exp =
   {ekind; etyp; erange = from_range exp.erange}
 
 
-and from_location loc : Framework.Utils.Location.loc =
-  Framework.Utils.Location.{
+and from_location loc : Framework.Location.loc =
+  Framework.Location.{
     loc_file = loc.file;
     loc_line = loc.line;
     loc_column = loc.column;
   }
 
 and from_range range =
-  Framework.Utils.Location.(Range_origin {
+  Framework.Location.(Range_origin {
     range_begin = from_location range.rbegin;
     range_end = from_location range.rend;
   })

@@ -74,10 +74,10 @@ struct
     }
     in
     let stmt =
-        mk_assign
-          (mk_var v range)
-          (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string range)
-          range
+      mk_assign
+        (mk_var v range)
+        (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string range)
+        range
     in
     let flow3 = man.exec stmt ctx flow2 in
 
@@ -93,14 +93,14 @@ struct
 
   let get_test_functions body =
     Framework.Visitor.fold_stmt
-        (fun acc exp -> acc)
-        (fun acc stmt ->
-           match skind stmt with
-           | S_py_function(fundec)
-             when is_test fundec  ->
-             fundec :: acc
-           | _ -> acc
-        ) [] body
+      (fun acc exp -> acc)
+      (fun acc stmt ->
+         match skind stmt with
+         | S_py_function(fundec)
+           when is_test fundec  ->
+           fundec :: acc
+         | _ -> acc
+      ) [] body
 
 
   let mk_py_unit_tests file tests =
@@ -112,22 +112,23 @@ struct
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
-  let import_exec = [Zone.Z_py]
-  let export_exec = [Zone.Z_py]
+  let exec_interface = Framework.Domain.{
+      import = [Zone.Z_py];
+      export = [Zone.Z_py];
+    }
 
   let exec zone stmt man ctx flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when not Framework.Utils.Options.(common_options.unit_test_mode) ->
+      when not Framework.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
       init_globals prog_file globals man ctx flow |>
       (* Execute the body *)
       man.exec body ctx |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when Framework.Utils.Options.(common_options.unit_test_mode) ->
+      when Framework.Options.(common_options.unit_test_mode) ->
       (* Initialize global variables *)
       let flow1 = init_globals prog_file globals man ctx flow in
 
@@ -138,14 +139,15 @@ struct
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests prog_file tests in
       man.exec stmt ctx flow2 |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | _ -> None
 
 
-  let import_eval = []
-  let export_eval = []
+  let eval_interface = Framework.Domain.{
+      import = [];
+      export = [];
+    }
 
   let eval zpath exp man ctx flow = None
 
@@ -157,12 +159,12 @@ end
 let setup () =
   register_domain name (module Domain);
   Framework.Context.(register_key_equality {
-    case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
-              fun chain k1 k2 ->
-                match k1, k2 with
-                | KPyGlobals, KPyGlobals -> Some Eq
-                | _ -> chain.check k1 k2
-            in
-            f);
-  })
+      case = (let f : type a b. chain -> a key -> b key -> (a, b) eq option =
+                fun chain k1 k2 ->
+                  match k1, k2 with
+                  | KPyGlobals, KPyGlobals -> Some Eq
+                  | _ -> chain.check k1 k2
+              in
+              f);
+    })
 

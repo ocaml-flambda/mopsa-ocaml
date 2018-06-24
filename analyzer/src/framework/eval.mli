@@ -15,9 +15,12 @@ val case : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval
 val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval option
 (** Singleton evaluation *)
 
+val empty : 'a Flow.flow -> ('e, 'a) eval option
+
 val join : ('e, 'a) eval option -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Compute the union of two evaluations *)
 
+val add_cleaners_ : Ast.stmt list -> ('e, 'a) eval -> ('e, 'a) eval
 val add_cleaners : Ast.stmt list -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Add cleaners to an evaluation *)
 

@@ -31,6 +31,10 @@ val bind :
   ?zone:Zone.t -> ('a, 't) Manager.manager -> Context.context ->
   ('e -> 'a Flow.flow -> 'a post option) -> ('e, 'a) eval -> 'a post option
 
+val bind_flow :
+  ?zone:Zone.t -> ('a, 't) Manager.manager -> Context.context ->
+  ('e -> 'a Flow.flow -> 'a Flow.flow) -> ('e, 'a) eval -> 'a Flow.flow
+
 val assume :
   Ast.expr -> ?zone:Zone.t ->
   fthen:('a Flow.flow -> 'a post option) ->
