@@ -104,6 +104,21 @@ let flow_of_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
 
 
 (*==========================================================================*)
+                           (** {2 Evaluations} *)
+(*==========================================================================*)
+
+
+type ('e, 'a) case = {
+  result : 'e option;
+  flow: 'a flow;
+  cleaners: Ast.stmt list;
+}
+
+type ('e, 'a) eval = ('e, 'a) case list
+
+
+
+(*==========================================================================*)
                            (** {2 Analysis manager} *)
 (*==========================================================================*)
 
@@ -124,7 +139,7 @@ type ('a, 't) manager = {
   exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
 
   (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.eval;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) eval;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
@@ -163,17 +178,3 @@ let set_cur a man flow =
 let get_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
-
-let eval_list
-    (el: Ast.expr list)
-    (man: ('a, 't) manager) ?(zpath = Zone.path_top) ctx flow
-  : ('e, 'a) Eval.eval =
-  let rec aux el flow = function
-    | [] -> Eval.case (Some (List.rev el)) flow
-
-    | e :: tl ->
-      man.eval ~zpath e ctx flow |>
-      Eval.bind_ @@ fun e flow ->
-      aux (e :: el) flow tl
-  in
-  aux [] flow el

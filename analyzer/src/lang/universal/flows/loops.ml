@@ -10,6 +10,7 @@
 
 
 open Framework.Essentials
+open Framework.Domains.Stateless
 open Ast
 
 
@@ -61,8 +62,10 @@ struct
 
   let init prog man ctx flow = None
 
-  let import_exec = []
-  let export_exec = [Framework.Zone.top]
+  let exec_interface = Framework.Domain.{
+    import = [];
+    export = [Framework.Zone.top];
+  }
 
   let rec exec zone (stmt: stmt) (man: ('a, unit) manager) ctx flow =
     match skind stmt with
@@ -105,21 +108,19 @@ struct
 
       debug "while post abs:@\n abs = @[%a@]" man.flow.print res1;
 
-      return (Framework.Post.of_flow res1)
+      Post.return res1
 
     | S_break ->
       let cur = man.flow.get Flow.TCur flow in
       man.flow.add TBreak cur flow |>
       man.flow.remove Flow.TCur |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_continue ->
       let cur = man.flow.get Flow.TCur flow in
       man.flow.add TContinue cur flow |>
       man.flow.remove Flow.TCur |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | _ ->
       None
@@ -190,8 +191,10 @@ struct
         | _ -> eabs
       ) flow
 
-  let import_eval = []
-  let export_eval = []
+  let eval_interface = Framework.Domain.{
+    import = [];
+    export = [];
+  }
 
   let eval zpath _ _ _ _ = None
 
@@ -206,9 +209,9 @@ end
 
 let setup () =
   Framework.Domains.Stateless.register_domain name (module Domain);
-  Framework.Utils.Options.register (
+  Framework.Options.register (
     "-widening-delay", Arg.Set_int opt_loop_widening_delay, " number of iterations before applying a widening (default: 0)"
   );
-  Framework.Utils.Options.register (
+  Framework.Options.register (
     "-loop-unrolling", Arg.Set_int opt_loop_unrolling, " number of unrolling iterations before joining the environments (default: 1)"
   )

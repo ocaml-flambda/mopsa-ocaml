@@ -6,6 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Manager
 
 type 'a post = {
   flow : 'a Flow.flow;
@@ -28,4 +29,21 @@ val join : 'a post option -> 'a post option -> fjoin:('a Flow.flow -> 'a Flow.fl
 
 val bind :
   ?zone:Zone.t -> ('a, 't) Manager.manager -> Context.context ->
-  ('e -> 'a Flow.flow -> 'a post option) -> ('e, 'a) Eval.eval -> 'a post option
+  ('e -> 'a Flow.flow -> 'a post option) -> ('e, 'a) eval -> 'a post option
+
+val assume :
+  Ast.expr -> ?zone:Zone.t ->
+  fthen:('a Flow.flow -> 'a post option) ->
+  felse:('a Flow.flow -> 'a post option) ->
+  ('a, 't) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ?fboth:('a Flow.flow -> 'a Flow.flow -> 'a post option) ->
+  ?fnone:(unit -> 'a post option) ->
+  unit ->
+  'a post option
+
+val switch :
+  ((Ast.expr * bool) list * ('a Flow.flow -> 'a post option)) list ->
+  ?zone:Zone.t ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  'a post option
+

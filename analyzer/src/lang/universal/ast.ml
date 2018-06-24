@@ -8,7 +8,7 @@
 
 (** Abstract Syntax Tree extension for the simple Universal language. *)
 
-open Framework.Ast
+open Framework.Essentials
 
 (*==========================================================================*)
                            (** {2 Types} *)
@@ -88,7 +88,7 @@ type addr_kind = ..
 (** Heap addresses. *)
 type addr = {
   addr_kind : addr_kind; (** Kind of a heap address. *)
-  addr_range : Framework.Utils.Location.range; (** Range of the allocation site. *)
+  addr_range : Framework.Location.range; (** Range of the allocation site. *)
   addr_uid : int; (** Unique identifier. *)
 }
 
@@ -100,8 +100,8 @@ let register_addr_kind_compare cmp =
   addr_kind_compare_chain := cmp !addr_kind_compare_chain
 
 let compare_addr a1 a2 =
-  Framework.Utils.Compare.compose [
-    (fun () -> Framework.Utils.Location.compare_range a1.addr_range a2.addr_range);
+  Compare.compose [
+    (fun () -> compare_range a1.addr_range a2.addr_range);
     (fun () -> compare a1.addr_uid a2.addr_uid);
     (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
   ]
@@ -142,7 +142,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind * Framework.Utils.Location.range
+  | E_alloc_addr of addr_kind * range
 
   (** Head address. *)
   | E_addr of addr

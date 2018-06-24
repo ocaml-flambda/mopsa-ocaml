@@ -32,7 +32,7 @@ sig
 
   (** Abstract (symbolic) evaluation of expressions. *)
   val eval_interface : Zone.path interface
-  val eval: Zone.path -> Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.eval option
+  val eval: Zone.path -> Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) eval option
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, unit) manager -> Context.context -> 'a flow -> 'r option

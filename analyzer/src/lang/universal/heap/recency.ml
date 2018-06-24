@@ -101,23 +101,26 @@ struct
   (**                        {2 Transfer functions}                           *)
   (*==========================================================================*)
 
-  let init prog man ctx flow =
-    Some (ctx, set_domain_cur empty man flow)
+  let init prog man ctx flow = Some (ctx, set_cur empty man flow)
 
-  let import_exec = []
-  let export_exec = []
+  let exec_interface = Framework.Domain.{
+    import = [];
+    export = [];
+  }
 
   let exec zone man subman ctx stmt flow = None
 
-  let import_eval = []
-  let export_eval = [Zone.Z_heap, Zone.Z_heap]
+  let eval_interface = Framework.Domain.{
+    import = [];
+    export = [Zone.Z_heap, Zone.Z_heap];
+  }
 
   let eval zpath exp man subman ctx flow =
     let range = erange exp in
     match ekind exp with
     (* Allocation of a head address *)
     | E_alloc_addr(addr_kind, addr_range) ->
-      let pool = get_domain_cur man flow in
+      let pool = get_cur man flow in
 
       let recent_addr = {
         addr_kind;
@@ -154,10 +157,9 @@ struct
           assert false
       in
 
-      let flow2 = set_domain_cur (add_recent recent_addr pool) man flow1 in
+      let flow2 = set_cur (add_recent recent_addr pool) man flow1 in
 
-      Eval.singleton (Some (mk_addr recent_addr range)) flow2 |>
-      return
+      Eval.singleton (Some (mk_addr recent_addr range)) flow2
 
 
     | _ -> None
@@ -166,7 +168,7 @@ struct
     fun query man subman ctx flow ->
       match query with
       | Query.QAllocatedAddresses ->
-        let pool = get_domain_cur man flow in
+        let pool = get_cur man flow in
         let addrs = AddrSet.elements pool.recent @ AddrSet.elements pool.old in
         Some addrs
 

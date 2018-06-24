@@ -22,7 +22,7 @@ let should_memo s =
   false
 
 type Flow.token +=
-  | TReturn of Framework.Utils.Location.range * expr option
+  | TReturn of range * expr option
   (** Control flows reaching a return statement at a given location range
       and returning an optional expression. *)
 
@@ -41,8 +41,10 @@ struct
 
   let init prog man ctx flow = None
 
-  let import_exec = []
-  let export_exec = [Framework.Zone.top]
+  let exec_interface = Framework.Domain.{
+    import = [];
+    export = [Framework.Zone.top];
+  }
 
   let exec zone stmt man ctx flow =
     match skind stmt with
@@ -50,14 +52,15 @@ struct
       let cur = man.flow.get Flow.TCur flow in
       man.flow.add (TReturn(stmt.srange, eo)) cur flow |>
       man.flow.remove Flow.TCur |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | _ -> None
 
 
-  let import_eval = []
-  let export_eval = [Framework.Zone.path_top]
+  let eval_interface = Framework.Domain.{
+    import = [];
+    export = [Framework.Zone.path_top];
+  }
 
   let eval zpath exp man ctx flow  =
     let range = erange exp in
@@ -138,8 +141,8 @@ struct
 
       (* Re-evaluate the expression [tmp] from the top-level *)
       man.eval tmp ctx flow3 |>
-      Eval.add_cleaners [mk_remove_var tmpv range] |>
-      return
+      Eval.return |>
+      Eval.add_cleaners [mk_remove_var tmpv range]
 
     | _ -> None
 
@@ -152,10 +155,10 @@ let setup () =
   Framework.Domains.Stateless.register_domain name (module Domain);
   Flow.register_token_compare (fun next tk1 tk2 ->
       match tk1, tk2 with
-      | TReturn(r1, _), TReturn(r2, _) -> Framework.Utils.Location.compare_range r1 r2
+      | TReturn(r1, _), TReturn(r2, _) -> compare_range r1 r2
       | _ -> next tk1 tk2
     );
   Flow.register_pp_token (fun next fmt -> function
-      | TReturn(r, _) -> Format.fprintf fmt "ret@%a" Framework.Utils.Location.pp_range r
+      | TReturn(r, _) -> Format.fprintf fmt "ret@%a" pp_range r
       | tk -> next fmt tk
     )

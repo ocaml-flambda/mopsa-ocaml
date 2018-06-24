@@ -8,7 +8,7 @@
 
 (** Pretty printer of the Universal extension to the AST. *)
 
-open Framework.Ast
+open Framework.Essentials
 open Ast
 open Format
 
@@ -77,7 +77,7 @@ let () =
           pp_expr f
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
       | E_alloc_addr(akind, range) ->
-        fprintf fmt "alloc(%a)" Framework.Utils.Location.pp_range range
+        fprintf fmt "alloc(%a)" pp_range range
       | E_addr addr -> pp_addr fmt addr
       | _ -> default fmt exp
     );

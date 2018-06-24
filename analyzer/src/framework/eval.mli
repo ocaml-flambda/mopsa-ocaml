@@ -6,14 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-type ('e, 'a) case = {
-  result : 'e option;
-  flow: 'a Flow.flow;
-  cleaners: Ast.stmt list;
-}
-
-type ('e, 'a) eval
+open Manager
 
 val return : ('e, 'a) eval -> ('e, 'a) eval option
 
@@ -40,5 +33,21 @@ val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval option -> 'b option
 
 val bind_ : ('e -> 'a Flow.flow -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
 val bind : ('e -> 'a Flow.flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val assume :
+  Ast.expr -> ?zone:Zone.t ->
+  fthen:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  felse:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ?fboth:('a Flow.flow -> 'a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  ?fnone:(unit -> ('e, 'a) Manager.eval option) ->
+  unit ->
+  ('e, 'a) Manager.eval option
+
+val switch :
+  ((Ast.expr * bool) list * ('a Flow.flow -> ('e, 'a) eval option)) list ->
+  ?zone:Zone.t ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ('e, 'a) eval option
 
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit

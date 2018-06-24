@@ -73,6 +73,20 @@ val flow_of_lattice_manager : 'a lattice_manager -> 'a flow_manager
 
 
 (*==========================================================================*)
+                           (** {2 Evaluations} *)
+(*==========================================================================*)
+
+
+type ('e, 'a) case = {
+  result : 'e option;
+  flow: 'a Flow.flow;
+  cleaners: Ast.stmt list;
+}
+
+type ('e, 'a) eval = ('e, 'a) case list
+
+
+(*==========================================================================*)
                        (** {2 Analysis manager} *)
 (*==========================================================================*)
 
@@ -94,7 +108,7 @@ type ('a, 't) manager = {
   exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a Flow.flow -> 'a Flow.flow;
 
   (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.eval;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) eval;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a Flow.flow -> 'r option;
