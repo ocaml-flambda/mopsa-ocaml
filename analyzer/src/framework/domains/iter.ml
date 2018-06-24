@@ -63,11 +63,13 @@ struct
     in
     Tail.init prog (tail_man man) ctx flow
 
-  let import_exec = Head.import_exec @ Tail.import_exec
-  let export_exec = Head.export_exec @ Tail.export_exec
+  let exec_interface = Domain.{
+    import = Head.exec_interface.import @ Tail.exec_interface.import;
+    export = Head.exec_interface.export @ Tail.exec_interface.export;
+  }
 
   let exec zone =
-    match List.find_all (fun z -> Zone.leq z zone) Head.export_exec, List.find_all (fun z -> Zone.leq z zone) Tail.export_exec with
+    match List.find_all (fun z -> Zone.leq z zone) Head.exec_interface.Domain.export, List.find_all (fun z -> Zone.leq z zone) Tail.exec_interface.Domain.export with
     | [], [] -> raise Not_found
 
     | l, [] ->
@@ -88,11 +90,13 @@ struct
       )
 
 
-  let import_eval = Head.import_eval @ Tail.import_eval
-  let export_eval = Head.export_eval @ Tail.export_eval
+  let eval_interface = Domain.{
+    import = Head.eval_interface.import @ Tail.eval_interface.import;
+    export = Head.eval_interface.export @ Tail.eval_interface.export;
+  }
 
   let eval zpath =
-    match List.find_all (fun p -> Zone.path_leq p zpath) Head.export_eval, List.find_all (fun p -> Zone.path_leq p zpath) Tail.export_eval with
+    match List.find_all (fun p -> Zone.path_leq p zpath) Head.eval_interface.Domain.export, List.find_all (fun p -> Zone.path_leq p zpath) Tail.eval_interface.Domain.export with
     | [], [] -> raise Not_found
 
     | l, [] ->

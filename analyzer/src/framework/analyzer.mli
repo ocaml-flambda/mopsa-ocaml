@@ -17,7 +17,7 @@ sig
 
   val exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> Domain.t Flow.flow -> Domain.t Flow.flow
 
-  val eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> Domain.t Flow.flow -> (Ast.expr, Domain.t) Eval.t
+  val eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> Domain.t Flow.flow -> (Ast.expr, Domain.t) Eval.eval
 
   val ask : 'r Query.query -> Context.context -> Domain.t Flow.flow -> 'r option
 
@@ -27,11 +27,11 @@ end
 
 val mk_exec_of_zone_list :
   Zone.t list ->
-  (Zone.t -> Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.t option) ->
-  (Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.t option)
+  (Zone.t -> Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.post option) ->
+  (Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.post option)
 
 
 val mk_eval_of_zone_path_list :
   Zone.path list ->
-  (Zone.path -> Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Eval.t option) ->
-  (Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Eval.t option)
+  (Zone.path -> Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Eval.eval option) ->
+  (Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Eval.eval option)

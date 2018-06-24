@@ -5,7 +5,7 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang
 
-framework = location ast visitor options query context lattice flow zone exceptions value manager eval post domain analyzer lattices domains alarm essentials config
+framework = location ast visitor options query context lattice flow zone exceptions value eval manager post domain analyzer lattices domains alarm essentials config
 framework.utils = compare location options exceptions
 
 lang = universal python

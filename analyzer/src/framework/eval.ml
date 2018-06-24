@@ -12,47 +12,112 @@
 
 open Ast
 open Flow
-open Manager
 
-type ('e, 'a) case = ('e, 'a) Manager.eval_case
-type ('e, 'a) t = ('e, 'a) eval option
 
-let singleton (result: 'e option) ?(cleaners = []) (flow: 'a flow) : ('e, 'a) t = Some (singleton_eval result flow cleaners)
+type ('e, 'a) case = {
+  result : 'e option;
+  flow: 'a flow;
+  cleaners: Ast.stmt list;
+}
 
-let empty flow = singleton None flow
+type ('e, 'a) eval = ('e, 'a) case list
 
-let join (evl1: ('e, 'a) t)  (evl2: ('e, 'a) t) : ('e, 'a) t =
-  Option.option_lift2 Manager.join_eval evl1 evl2
+let return evl = Some evl
 
-let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) t) : ('e, 'a) t =
-  Option.option_lift1 (Manager.add_cleaners cleaners) evl
+let case result ?(cleaners = []) flow = [{ result; flow; cleaners }]
+
+let singleton result ?(cleaners = []) flow = return (case result flow ~cleaners)
+
+let empty flow = singleton None flow ~cleaners:[]
+
+let join (evl1: ('e, 'a) eval option)  (evl2: ('e, 'a) eval option) : ('e, 'a) eval option =
+  Option.option_lift2 (@) evl1 evl2
+
+let map_
+    (f: 'e -> 'a flow -> ('f, 'b) case)
+    (evl: ('e, 'a) eval)
+  : ('f, 'b) eval =
+  List.map (fun case ->
+      match case.result with
+      | None -> {result = None; flow = case.flow; cleaners = []}
+      | Some result ->
+        let case' = f result case.flow in
+        {case' with cleaners = case.cleaners @ case'.cleaners}
+    ) evl
 
 let map
     (f: 'e -> 'a flow -> ('f, 'b) case)
-    (evl: ('e, 'a) t)
-  : ('f, 'b) t =
-  Option.option_lift1 (
-    Manager.map_eval (fun e flow cleaners ->
-        let case = f e flow in
-        {case with cleaners = cleaners @ case.cleaners}
-      )
-  ) evl
+    (evl: ('e, 'a) eval option)
+  : ('f, 'b) eval option =
+  Option.option_lift1 (map_ f) evl
+
+let add_cleaners_ (cleaners: Ast.stmt list) (evl: ('e, 'a) eval) : ('e, 'a) eval =
+  map_ (fun e flow ->
+      {result = Some e; flow; cleaners}
+    ) evl
+
+let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) eval option) : ('e, 'a) eval option =
+  Option.option_lift1 (add_cleaners_ cleaners) evl
+
+let fold_
+    (f: 'b -> ('e, 'a) case -> 'b)
+    (init: 'b)
+    (evl: ('e, 'a) eval)
+  : 'b =
+  List.fold_left f init evl
 
 let fold
     (f: 'b -> ('e, 'a) case -> 'b)
     (init: 'b)
-    (evl: ('e, 'a) t)
+    (evl: ('e, 'a) eval option)
   : 'b option =
-  Option.option_lift1 (fold_eval f init) evl
+  Option.option_lift1 (fold_ f init) evl
+
+
+let iter_
+    (f: 'e -> 'a Flow.flow -> unit)
+    (evl: ('e, 'a) eval)
+  : unit =
+  List.iter (fun case ->
+      match case.result with
+      | None -> ()
+      | Some e -> f e case.flow
+    ) evl
+
+let iter
+    (f: 'e -> 'a Flow.flow -> unit)
+    (evl: ('e, 'a) eval option)
+  : unit =
+  Option.option_apply (iter_ f) (fun () -> ()) evl
+
+let fold
+    (f: 'b -> ('e, 'a) case -> 'b)
+    (init: 'b)
+    (evl: ('e, 'a) eval option)
+  : 'b option =
+  Option.option_lift1 (fold_ f init) evl
+
+
+let bind_
+    (f: 'e -> 'a flow -> ('f, 'a) eval)
+    (evl: ('e, 'a) eval)
+  : ('f, 'a) eval =
+  fold_ (fun acc x ->
+      let evl' =
+        match x.result with
+        | None -> case None x.flow
+        | Some result -> f result x.flow |>
+                         add_cleaners_ x.cleaners
+      in
+      evl' @ acc
+    ) [] evl
 
 
 let bind
-  (e: Ast.expr)
-  (man: ('a, 't) Manager.manager) ?(zpath = Zone.path_top) ctx flow
-  (f: Ast.expr -> 'a flow -> ('e, 'a) t)
-  : ('e, 'a) t =
-  let evl = man.eval ~zpath e ctx flow in
-  fold_eval (fun acc case ->
+    (f: 'e -> 'a flow -> ('f, 'a) eval option)
+    (evl: ('e, 'a) eval)
+  : ('f, 'a) eval option =
+  fold_ (fun acc case ->
       let evl' =
         match case.result with
         | None -> empty case.flow
@@ -62,24 +127,14 @@ let bind
       join evl' acc
     ) None evl
 
-let bind_list
-    (el: Ast.expr list)
-    (man: ('a, 't) Manager.manager) ?(zpath = Zone.path_top) ctx flow
-    (f: Ast.expr list -> 'a flow -> ('e, 'a) t)
-  : ('e, 'a) t =
-  let rec aux el clean flow = function
-    | [] ->
-      f (List.rev el) flow |>
-      add_cleaners clean
 
-    | e :: tl ->
-      let evl = man.eval ~zpath e ctx flow in
-      fold_eval
-        (fun acc case ->
-           match case.result with
-           | None -> empty case.flow |> join acc
-           | Some e' -> aux (e' :: el) (clean @ case.cleaners) case.flow tl |>
-                        join acc
-        ) None evl
-  in
-  aux [] [] flow el
+let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
+    (fun fmt ev ->
+       match ev.result with
+       | None -> Format.pp_print_string fmt "ϵ"
+       | Some x -> pp fmt x
+    )
+    fmt
+    evl

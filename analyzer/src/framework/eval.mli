@@ -7,35 +7,38 @@
 (****************************************************************************)
 
 
-(** Evaluations of expressions *)
-type ('e, 'a) case = ('e, 'a) Manager.eval_case
-type ('e, 'a) t
-(** Evaluations *)
+type ('e, 'a) case = {
+  result : 'e option;
+  flow: 'a Flow.flow;
+  cleaners: Ast.stmt list;
+}
 
-val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) t
-(** Evaluation singleton *)
+type ('e, 'a) eval
 
-val join : ('e, 'a) t -> ('e, 'a) t -> ('e, 'a) t
+val return : ('e, 'a) eval -> ('e, 'a) eval option
+
+val case : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval
+
+val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval option
+(** Singleton evaluation *)
+
+val join : ('e, 'a) eval option -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Compute the union of two evaluations *)
 
-val add_cleaners : Ast.stmt list -> ('e, 'a) t -> ('e, 'a) t
+val add_cleaners : Ast.stmt list -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Add cleaners to an evaluation *)
 
-val map:
-    ('e -> 'a Flow.flow -> ('f, 'a) case) ->
-    ('e, 'a) t ->
-    ('f, 'a) t
-(** [map f evls] applies the evaluation function [f] on each
-   case of [evls] and joins the results *)
 
-val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) t -> 'b option
+val map_: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval -> ('f, 'a) eval
+val map: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval option -> ('f, 'a) eval option
 
-val bind :
-  Ast.expr -> ('a, 't) Manager.manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow ->
-  (Ast.expr -> 'a Flow.flow -> ('e, 'a) t) ->
-  ('e, 'a) t
+val iter_: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval -> unit
+val iter: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval option -> unit
 
-val bind_list :
-  Ast.expr list -> ('a, 't) Manager.manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow ->
-  (Ast.expr list -> 'a Flow.flow -> ('e, 'a) t) ->
-  ('e, 'a) t
+val fold_: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval  -> 'b
+val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval option -> 'b option
+
+val bind_ : ('e -> 'a Flow.flow -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
+val bind : ('e -> 'a Flow.flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit

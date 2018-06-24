@@ -22,11 +22,7 @@ module Post = Post
 
 module Eval = Eval
 
-include Composers
-
-include Utils.Location
-
-let return x = Some x
+include Location
 
 module Var =
 struct

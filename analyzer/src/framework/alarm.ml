@@ -10,7 +10,6 @@
 (** Alarms allows reporting potential errors inferred by abstract domains. *)
 
 open Ast
-open Utils
 
 (*==========================================================================*)
                            (** {2 Type} *)

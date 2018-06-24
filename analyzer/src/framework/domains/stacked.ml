@@ -16,6 +16,9 @@
 
 open Manager
 
+type 'a interface = 'a Domain.interface
+
+
 (** Abstract domain signature. *)
 module type DOMAIN = functor(SubDomain: Domain.DOMAIN) ->
 sig
@@ -30,14 +33,12 @@ sig
   val init : Ast.program -> ('a, t) manager -> Context.context -> 'a Flow.flow -> (Context.context * 'a Flow.flow) option
 
   (** Abstract transfer function of statements. *)
-  val import_exec : Zone.t list
-  val export_exec : Zone.t list
-  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'a Flow.flow -> 'a Post.t option
+  val exec_interface : Zone.t interface
+  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'a Flow.flow -> 'a Post.post option
 
   (** Abstract (symbolic) evaluation of expressions. *)
-  val import_eval : Zone.path list
-  val export_eval : Zone.path list
-  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.t option
+  val eval_interface : Zone.path interface
+  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) Eval.eval option
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, t) manager -> ('a, SubDomain.t) manager -> Context.context -> 'a Flow.flow -> 'r option
@@ -103,11 +104,13 @@ struct
     SubDomain.init prog (tail_man man) ctx flow
 
 
-  let import_exec = StackDomain.import_exec @ SubDomain.import_exec
-  let export_exec = StackDomain.export_exec @ SubDomain.export_exec
+  let exec_interface = Domain.{
+    import = StackDomain.exec_interface.import @ SubDomain.exec_interface.import;
+    export = StackDomain.exec_interface.export @ SubDomain.exec_interface.export;
+  }
 
   let exec zone =
-    match List.find_all (fun z -> Zone.leq z zone) StackDomain.export_exec, List.find_all (fun z -> Zone.leq z zone) SubDomain.export_exec with
+    match List.find_all (fun z -> Zone.leq z zone) StackDomain.exec_interface.Domain.export, List.find_all (fun z -> Zone.leq z zone) SubDomain.exec_interface.Domain.export with
     | [], [] -> raise Not_found
 
     | l, [] ->
@@ -125,12 +128,13 @@ struct
          | None -> f2 stmt man ctx flow
       )
 
-
-  let import_eval = StackDomain.import_eval @ SubDomain.import_eval
-  let export_eval = StackDomain.export_eval @ SubDomain.export_eval
+  let eval_interface = Domain.{
+    import = StackDomain.eval_interface.import @ SubDomain.eval_interface.import;
+    export = StackDomain.eval_interface.export @ SubDomain.eval_interface.export;
+  }
 
   let eval zpath =
-    match List.find_all (fun p -> Zone.path_leq p zpath) StackDomain.export_eval, List.find_all (fun p -> Zone.path_leq p zpath) SubDomain.export_eval with
+    match List.find_all (fun p -> Zone.path_leq p zpath) StackDomain.eval_interface.Domain.export, List.find_all (fun p -> Zone.path_leq p zpath) SubDomain.eval_interface.Domain.export with
     | [], [] -> raise Not_found
 
     | l, [] ->

@@ -17,8 +17,6 @@ type 'a post = {
   mergers : Ast.stmt list;
 }
 
-type 'a t = 'a post option
-
 let return ?(mergers = []) flow = Some {flow; mergers}
 
 let map f pc =
@@ -27,7 +25,7 @@ let map f pc =
 let add_mergers mergers pc =
   Option.option_lift1 (fun p -> {p with mergers = p.mergers @ mergers}) pc
 
-let join (pc1: 'a t) (pc2: 'a t) ~(fjoin: 'a flow -> 'a flow -> 'a flow) : 'a t =
+let join (pc1: 'a post option) (pc2: 'a post option) ~(fjoin: 'a flow -> 'a flow -> 'a flow) : 'a post option =
   Option.option_neutral2 (fun post1 post2 ->
       {
         flow     = fjoin post1.flow post2.flow;
@@ -36,21 +34,19 @@ let join (pc1: 'a t) (pc2: 'a t) ~(fjoin: 'a flow -> 'a flow -> 'a flow) : 'a t 
     ) pc1 pc2
 
 let bind
-    (e: Ast.expr)
-    ?(zpath = Zone.path_top)
-    (man: ('a, 't) Manager.manager) ctx flow
-    (f: 'e -> 'a Flow.flow -> 'a t)
-  : 'a t =
-  let _, zone = zpath in
-  man.eval e ~zpath ctx flow |>
-  fold_eval (fun acc case ->
-      match case.result with
-      | None -> return case.flow |> join ~fjoin:man.flow.join acc
-      | Some e -> f e case.flow |>
+    ?(zone = Zone.top) (man: ('a, 't) Manager.manager) ctx
+    (f: 'e -> 'a Flow.flow -> 'a post option) (evl: ('e, 'a) Eval.eval)
+  : 'a post option =
+  Eval.fold_ (fun acc case ->
+      match case.Eval.result with
+      | None -> return case.Eval.flow |>
+                join ~fjoin:man.flow.join acc
+
+      | Some e -> f e case.Eval.flow |>
                   map (fun flow ->
                       List.fold_left (fun acc stmt ->
                           man.exec ~zone stmt ctx acc
-                        ) flow case.cleaners
+                        ) flow case.Eval.cleaners
                     ) |>
                   join ~fjoin:man.flow.join acc
-    ) None
+    ) None evl

@@ -103,81 +103,6 @@ let flow_of_lattice_manager (value: 'a lattice_manager) : ('a flow_manager) = {
 }
 
 
-
-(*==========================================================================*)
-(**                            {2 Evaluations}                              *)
-(*==========================================================================*)
-
-type ('e, 'a) eval_case = {
-  result : 'e option;
-  flow: 'a flow;
-  cleaners: Ast.stmt list;
-}
-
-type ('e, 'a) eval = ('e, 'a) eval_case list
-
-let singleton_eval result flow cleaners = [{ result; flow; cleaners }]
-
-let empty_eval flow = [{ result = None; flow; cleaners = []}]
-
-let join_eval e1 e2 = e2 @ e2
-
-let add_eval result flow cleaners evl = { result; flow; cleaners } :: evl
-
-let map_eval
-    (f: 'e -> 'a flow -> Ast.stmt list -> ('f, 'a) eval_case)
-    (eval : ('e, 'a) eval)
-  : ('f, 'a) eval =
-  List.map (fun case ->
-      match case.result with
-      | None -> {result = None; flow = case.flow; cleaners = []}
-      | Some result -> f result case.flow case.cleaners
-    ) eval
-
-let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) eval) : ('e, 'a) eval =
-  map_eval (fun e flow cleaners' ->
-      {result = Some e; flow; cleaners = cleaners' @ cleaners}
-    ) evl
-
-let bind_eval
-    (f: 'e -> 'a flow -> ('f, 'a) eval)
-    (eval: ('e, 'a) eval)
-  : ('f, 'a) eval =
-  List.fold_left (fun acc case ->
-      (match case.result with
-        | None -> empty_eval case.flow
-        | Some result -> f result case.flow
-      )
-      |>
-      map_eval (fun e' flow' cleaner' ->
-          {result = Some e'; flow = flow'; cleaners = case.cleaners @ cleaner'}
-        )
-      |>
-      join_eval acc
-    ) [] eval
-
-
-let fold_eval
-    (f: 'b -> ('e, 'a) eval_case -> 'b)
-    (init: 'b)
-    (evl: ('e, 'a) eval)
-  : 'b =
-  List.fold_left f init evl
-
-
-let pp_eval ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
-    (fun fmt ev ->
-       match ev.result with
-       | None -> Format.pp_print_string fmt "ϵ"
-       | Some x -> pp fmt x
-    )
-    fmt
-    evl
-
-
-
 (*==========================================================================*)
                            (** {2 Analysis manager} *)
 (*==========================================================================*)
@@ -199,7 +124,7 @@ type ('a, 't) manager = {
   exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a flow -> 'a flow;
 
   (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) eval;
+  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.eval;
 
   (** Query transfer function. *)
   ask : 'r. 'r Query.query -> Context.context -> 'a flow -> 'r option;
@@ -238,3 +163,17 @@ let set_cur a man flow =
 let get_cur man flow =
     man.flow.get TCur flow |>
     man.ax.get
+
+let eval_list
+    (el: Ast.expr list)
+    (man: ('a, 't) manager) ?(zpath = Zone.path_top) ctx flow
+  : ('e, 'a) Eval.eval =
+  let rec aux el flow = function
+    | [] -> Eval.case (Some (List.rev el)) flow
+
+    | e :: tl ->
+      man.eval ~zpath e ctx flow |>
+      Eval.bind_ @@ fun e flow ->
+      aux (e :: el) flow tl
+  in
+  aux [] flow el
