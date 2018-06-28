@@ -761,8 +761,25 @@ let get_c_fun_body f =
   | None ->
     mk_block [] (Framework.Ast.mk_fresh_range ())
 
+
+let format_to_string prt x =
+  let b = Buffer.create 12 in
+  let f = Format.formatter_of_buffer b in
+  let () = Format.fprintf f "%a%!" prt x in
+  Buffer.contents b
+
 let get_c_fun_body_panic f =
   match f.c_func_body with
   | Some stmt -> stmt
   | None ->
-    raise (Framework.Exceptions.Panic ("empty bodied function"^(f.c_func_var.vname)))
+    let f = fun fmt () ->
+      Format.fprintf fmt "empty function %a : %a -> %a"
+        Framework.Pp.pp_var f.c_func_var
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+           (fun fmt x -> Format.fprintf fmt "%a" Framework.Pp.pp_typ (x.vtyp))
+        ) f.c_func_parameters
+        Framework.Pp.pp_typ (f.c_func_return)
+    in
+    let s = format_to_string f () in
+    raise (Framework.Exceptions.Panic (s))
