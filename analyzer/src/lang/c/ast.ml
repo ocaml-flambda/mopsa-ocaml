@@ -187,7 +187,7 @@ type c_fundec = {
   c_func_is_static: bool;
   c_func_return: typ; (** type of returned value *)
   c_func_parameters: var list; (** function parameters *)
-  c_func_body: stmt; (** function body *)
+  c_func_body: stmt option; (** function body *)
   c_func_static_vars: (var * c_init option) list; (** static variables declared in the function and their initialization *)
   c_func_local_vars: (var * c_init option) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
@@ -754,3 +754,15 @@ let range_cond e_mint rmin rmax range =
    etyp = T_bool;
    erange = tag_range range "wrap_full"
   }
+
+let get_c_fun_body f =
+  match f.c_func_body with
+  | Some stmt -> stmt
+  | None ->
+    mk_block [] (Framework.Ast.mk_fresh_range ())
+
+let get_c_fun_body_panic f =
+  match f.c_func_body with
+  | Some stmt -> stmt
+  | None ->
+    raise (Framework.Exceptions.Panic ("empty bodied function"^(f.c_func_var.vname)))

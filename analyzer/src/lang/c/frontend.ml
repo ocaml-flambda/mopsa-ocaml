@@ -144,7 +144,7 @@ and from_function : C_AST.func -> Ast.c_fundec =
       c_func_is_static = func.func_is_static;
       c_func_return = from_typ func.func_return;
       c_func_parameters = Array.to_list func.func_parameters |> List.map from_var ;
-      c_func_body = from_block_option (from_range func.func_range) func.func_body;
+      c_func_body = from_body_option (from_range func.func_range) func.func_body;
       c_func_static_vars = List.map from_var_with_init func.func_static_vars;
       c_func_local_vars = List.map from_var_with_init func.func_local_vars;
       c_func_variadic = func.func_variadic;
@@ -202,7 +202,7 @@ and from_typ (tc: C_AST.type_qual) : Framework.Ast.typ =
         c_enum_integer_type = from_integer_type e.enum_integer_type;
         c_enum_range = from_range e.enum_range;
       }
-        
+
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
   in
   if qual.C_AST.qual_is_const then
@@ -370,6 +370,10 @@ and from_block_option (range: Framework.Ast.range) (block: C_AST.block option) :
   | None -> mk_nop range
   | Some stmtl -> from_block range stmtl
 
+and from_body_option (range: Framework.Ast.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+  match block with
+  | None -> None
+  | Some stmtl -> Some (from_block range stmtl)
 
 and construct_string_table globals funcs =
   (* Collect all string litterals and replace them by unique variables *)
@@ -421,14 +425,16 @@ and construct_string_table globals funcs =
       table, Some init
 
   in
+
   let table, funcs =
     List.fold_left (fun (table, funcs) f ->
         (* Visit and change the body *)
+        let body_init = get_c_fun_body f in
         let table, body' =
           Framework.Visitor.fold_map_stmt
             (fun acc e -> visit_expr acc e)
             (fun acc s -> acc, s)
-            table f.c_func_body
+            table body_init
         in
         (* Visit and change the locals *)
         let table, locals' = List.fold_left (fun (table, locals) (v, init) ->
@@ -436,11 +442,12 @@ and construct_string_table globals funcs =
             table, (v, init') :: locals
           ) (table, []) f.c_func_local_vars
         in
-        debug "fun: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt f.c_func_body Framework.Pp.pp_stmt body';
-        table, {f with c_func_body = body'; c_func_local_vars = List.rev locals'} :: funcs
+        debug "fun: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt body_init Framework.Pp.pp_stmt body';
+        table, {f with c_func_body = Some body'; c_func_local_vars = List.rev locals'} :: funcs
       ) (StringTable.empty, []) funcs
   in
   let funcs = List.fold_left (fun acc f ->
+      let body_init = get_c_fun_body f in
       let body' =
         Framework.Visitor.map_stmt
           (fun e ->
@@ -453,10 +460,10 @@ and construct_string_table globals funcs =
              | _ -> e
           )
           (fun s -> s)
-          f.c_func_body
+          body_init
       in
-      debug "fun2: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt f.c_func_body Framework.Pp.pp_stmt body';
-      {f with c_func_body = body'} :: funcs
+      debug "fun2: %a@\nbody = @[%a@]@\nbody' = @[%a@]" Framework.Pp.pp_var f.c_func_var Framework.Pp.pp_stmt body_init Framework.Pp.pp_stmt body';
+      {f with c_func_body = Some body'} :: funcs
     ) ([]) funcs
   in
   (* Add table entries to the global variables *)

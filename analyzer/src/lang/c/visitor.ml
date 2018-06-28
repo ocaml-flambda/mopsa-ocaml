@@ -194,15 +194,22 @@ let () =
 
         (* Construct the parts of the program *)
         let exprs = exprs_in_vars globals @ exprs_in_funcs funcs in
-        let stmts = List.map (fun f -> f.c_func_body) funcs in
-
-        {exprs; stmts},
+        let stmts = List.map (fun f -> Ast.get_c_fun_body f) funcs in
+        let empty_functions = List.map (fun f -> match f.c_func_body with | Some _ -> true | None -> false) funcs in
+        ({exprs; stmts},
         (function {exprs; stmts} ->
            (* Re-construct the program from its parts *)
            let globals, exprs = vars_in_exprs exprs globals in
-           let funcs, _ = funcs_in_exprs exprs stmts funcs in
+           let funcs, _ = funcs_in_exprs exprs
+               (List.map2 (fun x b -> if b then
+                              Some x
+                            else None
+                          )
+                  stmts empty_functions
+               ) funcs
+           in
            {stmt with skind = S_program({prog with prog_kind = C_program(globals, funcs)})}
-        )
+        ))
 
       | S_c_local_declaration(v, init) ->
         let exprs = exprs_in_init_option init in

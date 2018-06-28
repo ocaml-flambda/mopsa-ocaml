@@ -132,7 +132,7 @@ let () =
                pp_typ f.c_func_return
                pp_var f.c_func_var
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
-               pp_stmt f.c_func_body
+               pp_stmt (Ast.get_c_fun_body f)
           )
           fmt funcs
 

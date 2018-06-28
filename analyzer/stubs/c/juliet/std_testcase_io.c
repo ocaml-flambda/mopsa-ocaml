@@ -18,32 +18,32 @@ int globalReturnsTrueOrFalse()
 }
 
 
-void printLine(const char * line) {}
+void printLine(const char * line) {return;}
 
-void printWLine(const wchar_t * line) {}
+void printWLine(const wchar_t * line) {return;}
 
-void printIntLine (int intNumber) {}
+void printIntLine (int intNumber) {return;}
 
-void printShortLine (short shortNumber) {}
+void printShortLine (short shortNumber) {return;}
 
-void printFloatLine (float floatNumber) {}
+void printFloatLine (float floatNumber) {return;}
 
-void printLongLine(long longNumber) {}
+void printLongLine(long longNumber) {return;}
 
-void printLongLongLine(int64_t longLongIntNumber) {}
+void printLongLongLine(int64_t longLongIntNumber) {return;}
 
-void printSizeTLine(size_t sizeTNumber) {}
+void printSizeTLine(size_t sizeTNumber) {return;}
 
-void printHexCharLine(char charHex) {}
+void printHexCharLine(char charHex) {return;}
 
-void printWcharLine(wchar_t wideChar) {}
+void printWcharLine(wchar_t wideChar) {return;}
 
-void printUnsignedLine(unsigned unsignedNumber) {}
+void printUnsignedLine(unsigned unsignedNumber) {return;}
 
-void printHexUnsignedCharLine(unsigned char unsignedCharacter) {}
+void printHexUnsignedCharLine(unsigned char unsignedCharacter) {return;}
 
-void printDoubleLine(double doubleNumber) {}
+void printDoubleLine(double doubleNumber) {return;}
 
-void printStructLine(const twoIntsStruct * structTwoIntsStruct) {}
+void printStructLine(const twoIntsStruct * structTwoIntsStruct) {return;}
 
-void printBytesLine(const unsigned char * bytes, size_t numBytes) {}
+void printBytesLine(const unsigned char * bytes, size_t numBytes) {return;}
