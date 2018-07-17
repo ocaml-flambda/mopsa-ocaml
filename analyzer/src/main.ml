@@ -125,6 +125,10 @@ let get_config_path () =
       if Sys.file_exists config'' then config''
       else Framework.Exceptions.fail "Unable to find configuration file %s" config
 
+let error_msg_printer s =
+  if Options.common_options.Options.escape_string_error_message then
+    String.escaped s
+  else s
 
 let () =
   init ();
@@ -139,18 +143,20 @@ let () =
               match Options.(common_options.lang) with
               | "c" -> Lang.C.Frontend.parse_program !files
               | "python" -> Lang.Python.Frontend.parse_program !files
+              | "universal" -> Lang.Universal.Frontend.parse_program !files
               | _ -> Framework.Exceptions.panic "Unknown language"
             in
             Debug.info "Parsing configuration file ...";
             let config = get_config_path () in
             let domain = Config.parse config in
             (* Start the analysis *)
+            let () = Debug.debug ~channel:("main") "%a" Framework.Pp.pp_program prog in
             let t, alarms = perform_analysis domain prog in
             Success(t, alarms)
           with
-          | Framework.Exceptions.Panic msg -> ExcPanic (String.escaped msg)
-          | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range, String.escaped msg)
-          | e -> ExcUncaught(String.escaped (Printexc.to_string e), Printexc.get_backtrace ())
+          | Framework.Exceptions.Panic msg -> ExcPanic (error_msg_printer msg)
+          | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range, error_msg_printer msg)
+          | e -> ExcUncaught(error_msg_printer (Printexc.to_string e), Printexc.get_backtrace ())
         in
         match Options.(common_options.output_mode) with
         | "bench" ->

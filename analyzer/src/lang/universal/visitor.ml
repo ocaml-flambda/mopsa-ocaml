@@ -34,6 +34,10 @@ let () =
         (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
 
       | _ -> default exp
+
+      | E_len(e) ->
+        {exprs = [e]; stmts = []},
+        (fun parts -> {exp with ekind = (E_len(List.hd parts.exprs))})
     );
 
   register_stmt_visitor (fun default stmt ->

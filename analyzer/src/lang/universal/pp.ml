@@ -61,6 +61,7 @@ let () =
       | O_bit_invert -> pp_print_string fmt "~"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
+      | O_concat -> pp_print_string fmt "@"
       | O_wrap(l,u)  -> Format.fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
       | op -> default fmt op
     );
@@ -84,6 +85,9 @@ let () =
       | T_bool -> pp_print_string fmt "bool"
       | T_addr -> pp_print_string fmt "addr"
       | T_empty -> pp_print_string fmt "empty"
+      | T_char -> pp_print_string fmt "char"
+      | T_array t -> Format.fprintf fmt "[%a]"
+                       pp_typ t
       | _ -> default fmt typ
   );
   register_pp_expr (fun default fmt exp ->
@@ -94,12 +98,13 @@ let () =
       | E_subscript(v, e) -> fprintf fmt "%a[%a]" pp_expr v pp_expr e
       | E_function(f) -> fprintf fmt "fun %s" f.fun_name
       | E_call(f, args) ->
-        fprintf fmt "%a(%a);"
+        fprintf fmt "%a(%a)"
           pp_expr f
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
       | E_alloc_addr(akind, range) ->
         fprintf fmt "alloc(%a)" pp_range range
       | E_addr addr -> pp_addr fmt addr
+      | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
       | _ -> default fmt exp
     );
 
@@ -146,5 +151,27 @@ let () =
           | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
         end
       | _ -> default fmt stmt
+    );
+  register_pp_program (fun default fmt prg ->
+      match prg.prog_kind with
+      | Ast.U_program (u_prog) ->
+        Format.fprintf fmt "@[<v>%a@,%a@]"
+          (
+            pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+              (fun fmt f ->
+                 fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+                   pp_typ f.fun_return_type
+                   Format.pp_print_string f.fun_name
+                   (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+                      (fun fmt v -> Format.fprintf fmt "%a %a"
+                          pp_typ v.vtyp
+                          pp_var v
+                      )
+                   ) f.fun_parameters
+                   pp_stmt f.fun_body
+              )
+          ) u_prog.universal_fundecs
+          pp_stmt u_prog.universal_main
+      | _ -> default fmt prg
     );
   ()

@@ -22,7 +22,8 @@ type typ +=
   | T_bool (** Booleans. *)
   | T_addr (** Heap addresses. *)
   | T_empty (** Value type of empty arrays *)
-
+  | T_array of typ (** Array of [typ] *)
+  | T_char
 
 let () =
   Framework.Ast.register_typ_compare (fun next t1 t2 ->
@@ -32,7 +33,9 @@ let () =
       | T_string, T_string
       | T_bool, T_bool
       | T_addr, T_addr
+      | T_char, T_char
       | T_empty, T_empty -> 0
+      | T_array t1, T_array t2 -> compare_typ t1 t2
       | _ -> next t1 t2
     )
 
@@ -64,7 +67,6 @@ type operator +=
   | O_sqrt (** Square root *)
   | O_bit_invert (** bitwise ~ *)
 
-
   (** Binary operators *)
   | O_plus of typ (** + *)
   | O_minus of typ (** - *)
@@ -89,6 +91,7 @@ type operator +=
   | O_bit_rshift (** >> *)
   | O_bit_lshift (** << *)
 
+  | O_concat (** @ *)
   | O_wrap of Z.t * Z.t (** wrap *)
 
 let math_plus = O_plus T_int
@@ -138,7 +141,6 @@ let compare_addr a1 a2 =
 
 
 
-
 (*==========================================================================*)
                            (** {2 Functions} *)
 (*==========================================================================*)
@@ -149,11 +151,24 @@ type fundec = {
   fun_name: string; (** unique name of the function *)
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
-  fun_body: stmt; (** body of the function *)
+  mutable fun_body: stmt; (** body of the function *)
   fun_return_type: typ; (** return type *)
 }
 
 
+(*==========================================================================*)
+                           (** {2 Programs} *)
+(*==========================================================================*)
+
+
+type universal_program =
+  {
+    universal_gvars   : var list;
+    universal_fundecs : fundec list;
+    universal_main    : stmt;
+  }
+type program_kind +=
+  | U_program of universal_program
 
 (*==========================================================================*)
                            (** {2 Expressions} *)
@@ -168,7 +183,6 @@ type expr_kind +=
   | E_call of expr (** Function expression *) * expr list (** List of arguments *)
 
   (** Array value as a list of expressions *)
-
   | E_array of expr list
 
   (** Subscript access to an indexed object (arrays) *)
@@ -179,6 +193,9 @@ type expr_kind +=
 
   (** Head address. *)
   | E_addr of addr
+
+  (** Length of array or string *)
+  | E_len of expr
 
 let mk_not e = mk_unop O_log_not e ~etyp:T_bool
 
@@ -281,6 +298,7 @@ type stmt_kind +=
   | S_while of expr (** loop condition *) *
              stmt (** loop body *)
   (** While loops *)
+
 
   | S_break (** Loop break *)
 

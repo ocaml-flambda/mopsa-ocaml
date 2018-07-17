@@ -27,6 +27,7 @@ type common_options = {
   mutable reduce_iter : int;
   mutable output_mode : string;
   mutable cache_size : int;
+  mutable escape_string_error_message : bool;
 }
 
 let common_options = {
@@ -37,6 +38,7 @@ let common_options = {
   reduce_iter = 1;
   output_mode = "verbose";
   cache_size = 10;
+  escape_string_error_message = false;
 }
 
 let setup () =
@@ -86,6 +88,11 @@ let setup () =
     "-cache-size",
     Arg.Int(fun n -> common_options.cache_size <- n),
     " size of exec/eval cache"
+  );
+  register (
+    "-bench-mode",
+    Arg.Bool(fun b -> common_options.escape_string_error_message <- b),
+    " should error message string be escaped"
   );
 
   ()

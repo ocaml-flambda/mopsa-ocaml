@@ -14,7 +14,7 @@ framework.domains.reduce_unify = domain root product
 
 lang = universal c python
 
-lang.universal = ast pp visitor utils flows heap nonrel numeric unit_tests setup
+lang.universal = ast pp visitor utils frontend flows heap nonrel numeric unit_tests setup
 lang.universal.heap = pool query recency
 lang.universal.nonrel = value domain
 lang.universal.numeric = values query reduction domains
@@ -38,8 +38,8 @@ lang.c.flows = goto interproc switch
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
-INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib
-LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa
+INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
+LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)

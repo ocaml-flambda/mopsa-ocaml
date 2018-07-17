@@ -6,12 +6,14 @@ all:
 	$(MAKE) -C utils
 	$(MAKE) -C parsers/c
 	$(MAKE) -C parsers/python
+	$(MAKE) -C parsers/universal
 	$(MAKE) -C analyzer
 
 tests:
 	$(MAKE) -C utils tests
 	$(MAKE) -C parsers/c tests
 	$(MAKE) -C parsers/python tests
+	$(MAKE) -C parsers/universal tests
 	$(MAKE) -C analyzer tests
 
 analyzer-tests:
@@ -21,10 +23,12 @@ merlin:
 	$(MAKE) -C utils merlin
 	$(MAKE) -C parsers/c merlin
 	$(MAKE) -C parsers/python merlin
+	$(MAKE) -C parsers/universal merlin
 	$(MAKE) -C analyzer merlin
 
 clean:
 	$(MAKE) -C utils clean
 	$(MAKE) -C parsers/c clean
 	$(MAKE) -C parsers/python clean
+	$(MAKE) -C parsers/universal merlin
 	$(MAKE) -C analyzer clean
