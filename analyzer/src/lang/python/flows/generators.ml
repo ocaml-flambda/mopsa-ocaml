@@ -55,12 +55,19 @@ module Domain = struct
     | A_py_instance(_, Some (Generator f)) -> f
     | _ -> assert false
 
-  let import_exec = []
-  let export_exec = [Zone.Z_py]
+  let exec_interface = Framework.Domain.{
+      import = [];
+      export = [Zone.Z_py];
+    }
 
-  let import_eval = [Zone.Z_py, Zone.Z_py_object; Universal.Zone.Z_heap, Universal.Zone.Z_heap]
-  let export_eval = []
-
+  let eval_interface = Framework.Domain.{
+      import = [
+        (Zone.Z_py, Zone.Z_py_object);
+        (Universal.Zone.Z_heap, Universal.Zone.Z_heap)
+      ];
+      export = [];
+    }
+  
   let eval zpath exp man ctx flow =
     let range = erange exp in
     match ekind exp with
@@ -68,14 +75,12 @@ module Domain = struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_user func)}, _)}, args, [])
       when func.py_func_is_generator = true
       ->
-      bind_eval_list (Zone.Z_py, Zone.Z_py_object) args man ctx flow
-      @@ fun el flow ->
+      eval_list args ~zpath:(Zone.Z_py, Zone.Z_py_object) man ctx flow |>
+      Eval.bind @@ fun el flow ->
       (* Create the generator instance *)
-      bind_eval
-        (Universal.Zone.Z_heap, Universal.Zone.Z_heap)
-        (mk_alloc_instance (Addr.find_builtin "generator") ~params:(Some (Generator func)) range)
-        man ctx flow
-      @@ fun alloc flow ->
+      man.eval (mk_alloc_instance (Addr.find_builtin "generator") ~params:(Some (Generator func)) range)
+        ~zpath:(Universal.Zone.Z_heap, Universal.Zone.Z_heap) ctx flow |>
+      Eval.bind @@ fun alloc flow ->
       begin match ekind alloc with
         | E_addr addr ->
           let obj = (addr, mk_py_empty range) in
@@ -84,7 +89,7 @@ module Domain = struct
 
           (* FIXME: default arguments in generators are not supported yet *)
           if List.length args <> List.length func.py_func_parameters then
-            Framework.Utils.Exceptions.panic_at range "generators: only calls with correct number of arguments is supported"
+            Framework.Exceptions.panic_at range "generators: only calls with correct number of arguments is supported"
           else
             (* Change all parameters into framed variables *)
             let params = List.map (fun v -> mk_framed_var v obj) func.py_func_parameters in
@@ -100,8 +105,7 @@ module Domain = struct
                        man.flow.get Flow.TCur
             in
             let flow2 = man.flow.add (TGenStart obj) cur' flow0 in
-            Eval.singleton (Some (mk_py_object obj range)) flow2 |>
-            return
+            Eval.singleton (Some (mk_py_object obj range)) flow2
 
         | _ -> assert false
       end
@@ -111,8 +115,7 @@ module Domain = struct
         {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "generator.__iter__")}, _)},
         [{ekind = E_py_object self} as arg], []
       ) when Addr.isinstance self (Addr.find_builtin "generator") ->
-      Eval.singleton (Some arg) flow |>
-      return
+      Eval.singleton (Some arg) flow
 
     (* E⟦ generator.__iter__(self) | ¬ isinstance(self, generator) ⟧ *)
     | E_py_call(
@@ -121,8 +124,7 @@ module Domain = struct
         []
       ) ->
       let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow in
-      Eval.singleton None flow |>
-      return
+      Eval.empty flow
 
 
     (* E⟦ generator.__next__(self) | isinstance(self, generator) ⟧ *)
@@ -219,31 +221,30 @@ module Domain = struct
                        man.exec (mk_project_vars locals' range) ctx |>
                        man.flow.get Flow.TCur
             in
-            let flow = man.flow.set (TGenYield(g, e, r)) cur' flow in
-            let evl = man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var tmp range) ctx flow |>
-                      Eval.add_cleaners [mk_remove_var tmp range]
-            in
-            evl :: acc
+            man.flow.set (TGenYield(g, e, r)) cur' flow |>
+            man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var tmp range) ctx |>
+            Eval.return |>
+            Eval.add_cleaners [mk_remove_var tmp range] |>
+            Eval.join acc
 
           | Exceptions.TExn exn ->
             (* Save env in the token TGenStop and re-raise the exception *)
-            let flow = man.flow.add (TGenStop(self)) env flow4 |>
-                       man.flow.set (Exceptions.TExn exn) env
-            in
-            Eval.singleton None flow :: acc
+            man.flow.add (TGenStop(self)) env flow4 |>
+            man.flow.set (Exceptions.TExn exn) env |>
+            Eval.empty |>
+            Eval.join acc
 
           | TGenStop _
           | Universal.Flows.Interproc.TReturn _ ->
             (* Save env in the token TGenStop and raise a StopIteration exception *)
-            let flow = man.flow.add (TGenStop(self)) env flow4 |>
-                       man.flow.set Flow.TCur env |>
-                       man.exec (Utils.mk_builtin_raise "StopIteration" range) ctx
-            in
-            Eval.singleton None flow :: acc
+            man.flow.add (TGenStop(self)) env flow4 |>
+            man.flow.set Flow.TCur env |>
+            man.exec (Utils.mk_builtin_raise "StopIteration" range) ctx |>
+            Eval.empty |>
+            Eval.join acc
 
           | _ -> acc
-        ) flow3 [] |>
-      Eval.of_list
+        ) flow3 None
 
     (* E⟦ generator.__next__(self) | ¬ isinstance(self, generator) ⟧ *)
     | E_py_call(
@@ -252,8 +253,7 @@ module Domain = struct
         []
       ) ->
       let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) ctx flow in
-      Eval.singleton None flow |>
-      return
+      Eval.empty flow
 
     (* E⟦ yield e ⟧ *)
     | E_py_yield e ->
@@ -265,12 +265,11 @@ module Domain = struct
           | _ -> man.flow.add tk env acc
         ) flow man.flow.bottom
       in
-      Eval.singleton None flow |>
-      return
+      Eval.empty flow
 
     (* E⟦ x for x in g | isinstance(g, generator) ⟧ *)
     | E_py_generator_comprehension _ ->
-      Framework.Utils.Exceptions.panic_at range "Generator comprehension not supported"
+      Framework.Exceptions.panic_at range "Generator comprehension not supported"
 
     | _ -> None
 
@@ -295,12 +294,12 @@ let setup () =
       match tk1, tk2 with
       | TGenStart(g1), TGenStart(g2) -> compare_py_object g1 g2
       | TGenNext(g1, r1), TGenNext(g2, r2) ->
-        Framework.Utils.Compare.compose [
+        Compare.compose [
           (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]
       | TGenYield(g1, _, r1), TGenYield(g2, _, r2) ->
-        Framework.Utils.Compare.compose [
+        Compare.compose [
           (fun () -> compare_py_object g1 g2);
           (fun () -> compare_range r1 r2);
         ]

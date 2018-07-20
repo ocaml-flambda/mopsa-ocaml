@@ -20,7 +20,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 let check cond range man ctx flow =
   let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) ctx flow in
-  Eval.return (Some (mk_py_none range)) flow
+  Eval.singleton (Some (mk_py_none range)) flow
 
 
 (*==========================================================================*)
@@ -39,29 +39,37 @@ struct
 
   let init prog man ctx flow = None
 
-  let import_exec = [Zone.Z_py]
-  let export_exec = []
+
+  let exec_interface = Framework.Domain.{
+      import = [Zone.Z_py];
+      export = [];
+    }
+
+  let eval_interface = Framework.Domain.{
+      import = [Zone.Z_py, Zone.Z_py_object];
+      export = [Zone.Z_py, Zone.Z_py_object];
+    }
 
   let exec zone stmt man ctx flow = None
-
-  let import_eval = [Zone.Z_py, Zone.Z_py_object]
-  let export_eval = [Zone.Z_py, Zone.Z_py_object]
 
   let eval zpath exp man ctx flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
-      Eval.singleton (Some (mk_py_top T_int range)) flow |>
-      return
+      Eval.singleton (Some (mk_py_top T_int range)) flow
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
-      bind_eval (Zone.Z_py, Zone.Z_py_object) l man ctx flow @@ fun l flow ->
-      bind_eval (Zone.Z_py, Zone.Z_py_object) u man ctx flow @@ fun u flow ->
+      man.eval l ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Eval.bind @@ fun l flow ->
+
+      man.eval u ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Eval.bind @@ fun u flow ->
+
       let lv = object_of_expr l |> value_of_object in
       let uv = object_of_expr u |> value_of_object in
+
       begin match ekind lv, ekind uv with
-        | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_z_interval l u range)) flow |>
-                                                        return
+        | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_z_interval l u range)) flow
         | _ ->
           let tmp = mktmp () in
           let l = Utils.mk_builtin_call "int" [l] range in
@@ -70,20 +78,25 @@ struct
                      man.exec ~zone:Zone.Z_py (mk_assume (mk_in (mk_var tmp range) l u range) range) ctx
           in
           man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var tmp range) ctx flow |>
-          Eval.add_cleaners [mk_remove_var tmp range] |>
-          return
+          Eval.add_cleaners_ [mk_remove_var tmp range] |>
+          Eval.return
       end
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
-      bind_eval (Zone.Z_py, Zone.Z_py_object) l man ctx flow @@ fun l flow ->
-      bind_eval (Zone.Z_py, Zone.Z_py_object) u man ctx flow @@ fun u flow ->
+            man.eval l ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Eval.bind @@ fun l flow ->
+
+      man.eval u ~zpath:(Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Eval.bind @@ fun u flow ->
+
       let lv = object_of_expr l |> value_of_object in
       let uv = object_of_expr u |> value_of_object in
+
       begin match ekind lv, ekind uv with
-        | E_constant (C_float l), E_constant (C_float u) -> Eval.return (Some (mk_py_float_interval l u range)) flow
-        | E_constant (C_float l), E_constant (C_int u) -> Eval.return (Some (mk_py_float_interval l (Z.to_float u) range)) flow
-        | E_constant (C_int l), E_constant (C_float u) -> Eval.return (Some (mk_py_float_interval (Z.to_float l) u range)) flow
-        | E_constant (C_int l), E_constant (C_int u) -> Eval.return (Some (mk_py_float_interval (Z.to_float l) (Z.to_float u) range)) flow
+        | E_constant (C_float l), E_constant (C_float u) -> Eval.singleton (Some (mk_py_float_interval l u range)) flow
+        | E_constant (C_float l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_float_interval l (Z.to_float u) range)) flow
+        | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) u range)) flow
+        | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) (Z.to_float u) range)) flow
         | _ ->
           let tmp = mktmp () in
           let l = Utils.mk_builtin_call "float" [l] range in
@@ -92,18 +105,18 @@ struct
                      man.exec ~zone:Zone.Z_py (mk_assume (mk_in (mk_var tmp range) l u range) range) ctx
           in
           man.eval ~zpath:(Zone.Z_py, Zone.Z_py_object) (mk_var tmp range) ctx flow |>
-          Eval.add_cleaners [mk_remove_var tmp range] |>
-          return
+          Eval.add_cleaners_ [mk_remove_var tmp range] |>
+          Eval.return
       end
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
-      Eval.return (Some (mk_py_top T_float range)) flow
+      Eval.singleton (Some (mk_py_top T_float range)) flow
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
-      Eval.return (Some (mk_py_top T_py_bool range)) flow
+      Eval.singleton (Some (mk_py_top T_py_bool range)) flow
 
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
-      Eval.return (Some (mk_py_top T_string range)) flow
+      Eval.singleton (Some (mk_py_top T_string range)) flow
 
     (* Calls to mopsa.assert_equal function *)
     | E_py_call(
@@ -135,7 +148,7 @@ struct
       )  ->
       let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec stmt ctx flow in
-      Eval.return (Some (mk_py_none exp.erange)) flow
+      Eval.singleton (Some (mk_py_none exp.erange)) flow
 
     | E_py_call(
         {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
@@ -162,9 +175,9 @@ struct
                      man.exec stmt ctx |>
                      man.flow.set Flow.TCur cur
           in
-          Eval.return (Some (mk_py_none exp.erange)) flow
+          Eval.singleton (Some (mk_py_none exp.erange)) flow
         with BottomFound ->
-          Eval.return None flow
+          Eval.empty flow
       end
 
     | E_py_call(
@@ -191,7 +204,7 @@ struct
                    man.flow.filter (fun tk _ -> match tk with Flows.Exceptions.TExn _ -> false | _ -> true) |>
                    man.flow.set Flow.TCur cur
         in
-        Eval.return (Some (mk_py_none exp.erange)) flow
+        Eval.singleton (Some (mk_py_none exp.erange)) flow
       end
 
     | E_py_call(
@@ -218,7 +231,7 @@ struct
                    man.flow.filter (fun tk _ -> match tk with Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
                    man.flow.set Flow.TCur cur
         in
-        Eval.return (Some (mk_py_none exp.erange)) flow
+        Eval.singleton (Some (mk_py_none exp.erange)) flow
       end
 
 
@@ -241,7 +254,7 @@ struct
                    man.flow.filter (fun tk _ -> match tk with Flows.Exceptions.TExn exn when Addr.isinstance exn cls -> false | _ -> true) |>
                    man.flow.set Flow.TCur cur
         in
-        Eval.return (Some (mk_py_none exp.erange)) flow'
+        Eval.singleton (Some (mk_py_none exp.erange)) flow'
       end
 
 

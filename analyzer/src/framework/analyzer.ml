@@ -23,7 +23,7 @@ open Post
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 let mk_exec_of_zone_list (l: Zone.t list) exec =
-  (fun (stmt: Ast.stmt) (man: ('a, 't) manager) ctx (flow: 'a flow) : 'a Post.t option ->
+  (fun (stmt: Ast.stmt) (man: ('a, 't) manager) ctx (flow: 'a flow) : 'a Post.post option ->
      let rec aux =
        function
        | [] -> None
@@ -36,7 +36,7 @@ let mk_exec_of_zone_list (l: Zone.t list) exec =
   )
 
 let mk_eval_of_zone_path_list (l: Zone.path list) eval =
-  (fun (exp: Ast.expr) (man: ('a, 't) manager) ctx (flow: 'a flow) : (Ast.expr, 'a) Eval.t option ->
+  (fun (exp: Ast.expr) (man: ('a, 't) manager) ctx (flow: 'a flow) : (Ast.expr, 'a) eval option ->
      let rec aux =
        function
        | [] -> None
@@ -116,7 +116,7 @@ struct
         else
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_all (fun z -> Zone.leq z zone) Domain.export_exec with
+            match List.find_all (fun z -> Zone.leq z zone) Domain.exec_interface.export with
             | [] -> Debug.fail "exec for %a not found" Zone.print zone
 
             | l ->
@@ -125,7 +125,7 @@ struct
               debug "exec for %a found" Zone.print zone;
               ExecMap.add zone f acc
           end
-      ) ExecMap.empty (Zone.top :: Domain.import_exec)
+      ) ExecMap.empty (Zone.top :: Domain.exec_interface.import)
 
 
   and exec ?(zone = Zone.top) (stmt: Ast.stmt) (ctx: Context.context) (flow: Domain.t flow) : Domain.t flow =
@@ -179,7 +179,7 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print_path zpath;
-            match List.find_all (fun p -> Zone.path_leq p zpath) Domain.export_eval with
+            match List.find_all (fun p -> Zone.path_leq p zpath) Domain.eval_interface.export with
             | [] -> Debug.fail "eval for %a not found" Zone.print_path zpath
 
             | l ->
@@ -188,11 +188,11 @@ struct
               EvalMap.add zpath f acc
 
           end
-      ) EvalMap.empty (Zone.path_top :: Domain.import_eval)
+      ) EvalMap.empty (Zone.path_top :: Domain.eval_interface.import)
 
 
   (** Evaluation of expressions. *)
-  and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) Eval.t =
+  and eval ?(zpath = Zone.path_top) (exp: Ast.expr) (ctx: Context.context) (flow: Domain.t flow) : (Ast.expr, Domain.t) eval =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
@@ -200,16 +200,16 @@ struct
     ;
     let timer = Timing.start () in
     let path_eval = EvalMap.find zpath eval_map in
-    use_cache
-      (zpath, ctx, exp, flow) eval_cache
+    use_cache (zpath, ctx, exp, flow)
+      eval_cache
       ~otherwise:(fun () ->
          match path_eval exp manager ctx flow with
            | Some evl ->
-             Eval.iter (fun e flow ->
-                 add_to_cache (zpath, ctx, e, flow) (Eval.singleton (Some e) flow) eval_cache;
+             Eval.iter_ (fun e flow ->
+                 add_to_cache (zpath, ctx, e, flow) (Eval.case (Some e) flow) eval_cache;
                ) evl;
              evl
-           | None -> Eval.singleton (Some exp) flow
+           | None -> Eval.case (Some exp) flow
         )
     |>
     (fun res ->
@@ -223,7 +223,7 @@ struct
          "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
          pp_expr exp
          manager.flow.print flow
-         (pp_eval ~pp:pp_expr) res
+         (Eval.print ~pp:pp_expr) res
        ;
        res
     )

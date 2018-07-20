@@ -23,24 +23,21 @@ struct
 
   let init prog man ctx flow = None
 
-  let import_exec = []
-  let export_exec = [Framework.Zone.top]
-
-  let zpath = Framework.Zone.top, Framework.Zone.top
-  let import_eval = [zpath]
-  let export_eval = []
+  let exec_interface = Framework.Domain.{
+    import = [];
+    export = [Framework.Zone.top];
+  }
 
   let exec zone stmt man ctx flow =
     match skind stmt with
     | S_expression(e) ->
-      bind_post zpath e man ctx flow @@ fun e flow ->
-      Post.of_flow flow |>
-      return
+      man.eval e ctx flow |>
+      Post.bind man ctx @@ fun e flow ->
+      Post.return flow
 
     | S_block(block) ->
       List.fold_left (fun acc stmt -> man.exec stmt ctx acc) flow block |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_if(cond, s1, s2) ->
       let range = srange stmt in
@@ -51,11 +48,15 @@ struct
                   man.exec s2 ctx
       in
       man.flow.join flow1 flow2 |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | _ -> None
 
+  let eval_interface = Framework.Domain.{
+    import = [];
+    export = [];
+  }
+      
   let eval _ _ _ _ _   = None
 
   let ask _ _ _ _  = None

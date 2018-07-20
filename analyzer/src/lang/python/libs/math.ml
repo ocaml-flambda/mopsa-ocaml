@@ -33,23 +33,27 @@ struct
 
   let init prog man ctx flow = None
 
-  let import_exec = []
-  let export_exec = []
+  let exec_interface = Framework.Domain.{
+      import = [];
+      export = [];
+    }
+
+  let eval_interface = Framework.Domain.{
+      import = [Zone.Z_py, Zone.Z_py_object];
+      export = [Zone.Z_py, Zone.Z_py_object];
+    }
 
   let exec zone stmt man ctx flow = None
-
-  let import_eval = [Zone.Z_py, Zone.Z_py_object]
-  let export_eval = [Zone.Z_py, Zone.Z_py_object]
 
   let eval zpath exp man ctx flow =
     let range = erange exp in
     match ekind exp with
     | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
-      bind_eval (Zone.Z_py, Zone.Z_py_object) e man ctx flow @@ fun e flow ->
+      man.eval e ~zpath: (Zone.Z_py, Zone.Z_py_object) ctx flow |>
+      Eval.bind @@ fun e flow ->
       let ev = object_of_expr e |> value_of_object in
       let exp' = mk_py_float_expr (mk_unop O_sqrt ev range) range in
-      Eval.singleton (Some exp') flow |>
-      return
+      Eval.singleton (Some exp') flow
 
     | _ ->
       None

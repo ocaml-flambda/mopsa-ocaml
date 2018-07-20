@@ -31,12 +31,12 @@ sig
   val init : Ast.program -> ('a, t) manager -> Context.context -> 'a flow -> (Context.context * 'a flow) option
 
   (** Abstract transfer function of statements. *)
-  val exec_zone : Zone.t interface
-  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.t
+  val exec_interface : Zone.t interface
+  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.post option
 
   (** Abstract (symbolic) evaluation of expressions. *)
-  val eval_zone : Zone.path interface
-  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t
+  val eval_interface : Zone.path interface
+  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) eval option
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, t) manager -> Context.context -> 'a flow -> 'r option

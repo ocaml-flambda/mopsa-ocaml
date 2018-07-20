@@ -104,22 +104,18 @@ struct
       Apron.Abstract1.print abs
 
   (* {2 Transfer functions} *)
-  let init prog man ctx flow =
-    Some (ctx, set_domain_cur top man flow)
+  let init prog man ctx flow = Some (ctx, set_cur top man flow)
 
-  let import_exec = []
-  let export_exec = [Zone.Z_num]
-
-  let zpath = Framework.Zone.Z_top, Zone.Z_num
-  let import_eval = [zpath]
-  let export_eval = [Zone.Z_num, Zone.Z_num]
+  let exec_interface = Framework.Domain.{
+    import = [];
+    export = [Zone.Z_num];
+  }
 
   let rec exec zone stmt man ctx flow =
-    let abs = get_domain_cur man flow in
+    let abs = get_cur man flow in
     let return_cur abs =
-      set_domain_cur abs man flow |>
-      Post.of_flow |>
-      return
+      set_cur abs man flow |>
+      Post.return
     in
     match skind stmt with
     | S_remove_var var ->
@@ -143,7 +139,8 @@ struct
       return_cur
 
     | S_assign({ekind = E_var v}, e, STRONG) ->
-      bind_post zpath e man ctx flow @@ fun e flow ->
+      man.eval e ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |>
+      Post.bind man ctx @@ fun e flow ->
       let abs = add_missing_vars abs (v :: (Framework.Visitor.expr_vars e)) in
       begin try
           let aenv = Apron.Abstract1.env abs in
@@ -162,7 +159,8 @@ struct
 
     | S_assume(e) -> begin
         let () = debug "until now looks ok" in
-        bind_post zpath e man ctx flow @@ fun e flow ->
+        man.eval e ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |>
+        Post.bind man ctx @@ fun e flow ->
         let abs = add_missing_vars  abs (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env abs in
         try
@@ -200,7 +198,7 @@ struct
     | _ -> None
 
   and get_bounds man exp flow =
-    let abs = get_domain_cur man flow in
+    let abs = get_cur man flow in
     try
       let lv =  Framework.Visitor.expr_vars exp in
       let abs = add_missing_vars abs lv in
@@ -353,20 +351,30 @@ struct
     ) l in
     cond_array
 
+
+  let eval_interface = Framework.Domain.{
+    import = [Framework.Zone.Z_top, Zone.Z_num];
+    export = [Zone.Z_num, Zone.Z_num];
+  }
+
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      bind_eval zpath e1 man ctx flow @@ fun e1 flow ->
-      bind_eval zpath e2 man ctx flow @@ fun e2 flow ->
+      man.eval e1 ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |>
+      Eval.bind @@ fun e1 flow ->
+
+      man.eval e2 ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |>
+      Eval.bind @@ fun e2 flow ->
+
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-      Eval.singleton (Some exp') flow |>
-      return
+      Eval.singleton (Some exp') flow
 
     | E_unop(op, e) ->
-      bind_eval zpath e man ctx flow @@ fun e flow ->
+      man.eval e ~zpath:(Framework.Zone.Z_top, Zone.Z_num) ctx flow |>
+      Eval.bind @@ fun e1 flow ->
+
       let exp' = {exp with ekind = E_unop(op, e)} in
-      Eval.singleton (Some exp') flow |>
-      return
+      Eval.singleton (Some exp') flow
 
     | _ -> None
 

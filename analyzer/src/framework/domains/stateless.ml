@@ -18,20 +18,21 @@ open Manager
 (*==========================================================================*)
 
 
+type 'a interface = 'a Domain.interface
+
+
 module type DOMAIN =
 sig
 
   val init : Ast.program -> ('a, unit) manager -> Context.context -> 'a flow -> (Context.context * 'a flow) option
 
   (** Abstract transfer function of statements. *)
-  val import_exec : Zone.t list
-  val export_exec : Zone.t list
-  val exec: Zone.t -> Ast.stmt -> ('a, unit) manager -> Context.context -> 'a flow -> 'a Post.t option
+  val exec_interface : Zone.t interface
+  val exec: Zone.t -> Ast.stmt -> ('a, unit) manager -> Context.context -> 'a flow -> 'a Post.post option
 
   (** Abstract (symbolic) evaluation of expressions. *)
-  val import_eval : Zone.path list
-  val export_eval : Zone.path list
-  val eval: Zone.path -> Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) Eval.t option
+  val eval_interface : Zone.path interface
+  val eval: Zone.path -> Ast.expr -> ('a, unit) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) eval option
 
   (** Handler of generic queries. *)
   val ask: 'r Query.query -> ('a, unit) manager -> Context.context -> 'a flow -> 'r option
@@ -58,12 +59,10 @@ struct
 
   let init = D.init
 
-  let import_exec = D.import_exec
-  let export_exec = D.export_exec
+  let exec_interface = D.exec_interface
   let exec  = D.exec
 
-  let import_eval = D.import_eval
-  let export_eval = D.export_eval
+  let eval_interface = D.eval_interface
   let eval = D.eval
 
   let ask = D.ask

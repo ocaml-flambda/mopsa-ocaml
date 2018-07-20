@@ -10,7 +10,6 @@
 
 open Value
 open Manager
-open Composers
 open Ast
 
 
@@ -248,57 +247,56 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man ctx flow =
-    Some (ctx, set_domain_cur top man flow)
+  let init prog man ctx flow = Some (ctx, set_cur top man flow)
 
-  let import_exec = []
-  let export_exec = [Value.zone]
+  let exec_interface = Domain.{
+    import = [];
+    export = [Value.zone];
+  }
 
-  let zpath = Zone.top, Value.zone
-  let import_eval = [zpath]
-  let export_eval = [(Value.zone, Value.zone)]
+  let eval_interface = Domain.{
+    import = [Zone.top, Value.zone];
+    export = [Value.zone, Value.zone];
+  }
   
 
   let rec exec zone stmt man ctx flow =
     match skind stmt with
     | S_remove_var v ->
-      map_domain_cur (VarMap.remove v) man flow |>
-      Post.of_flow |>
-      return
+      map_cur (VarMap.remove v) man flow |>
+      Post.return
 
     | S_project_vars vars ->
-      map_domain_cur (fun a ->
+      map_cur (fun a ->
           VarMap.fold (fun v _ acc ->
               if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
             ) a a
         ) man flow |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_rename_var (var1, var2) ->
-      map_domain_cur (fun a ->
+      map_cur (fun a ->
           let v = VarMap.find var1 a in
           VarMap.remove var1 a |> VarMap.add var2 v
         ) man flow |>
-      Post.of_flow |>
-      return
-
+      Post.return
 
     | S_assign({ekind = E_var var}, e, mode) ->
-      bind_post zpath e man ctx flow @@ fun e flow ->
-      map_domain_cur (fun a ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |>
+      Post.bind man ctx @@ fun e flow ->
+      map_cur (fun a ->
           let v = eval_value a e in
           let a' = VarMap.add var v a in
           match mode with
           | STRONG | EXPAND -> a'
           | WEAK -> join a a'
         ) man flow |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | S_assume e ->
-      bind_post zpath e man ctx flow @@ fun e flow ->
-      map_domain_cur (fun a ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |>
+      Post.bind man ctx @@ fun e flow ->
+      map_cur (fun a ->
           debug "cur = %a" print a;
           let (_,r) as t = annotate_expr a e in
           debug "post annotate %a" Value.print r;
@@ -310,8 +308,7 @@ struct
             a'
         ) man flow
       |>
-      Post.of_flow |>
-      return
+      Post.return
 
     | _ -> None
 
@@ -319,17 +316,21 @@ struct
   let eval zpath exp man ctx flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
-      bind_eval zpath e1 man ctx flow @@ fun e1 flow ->
-      bind_eval zpath e2 man ctx flow @@ fun e2 flow ->
+      man.eval ~zpath:(Zone.top, Value.zone) e1 ctx flow |>
+      Eval.bind @@ fun e1 flow ->
+
+      man.eval ~zpath:(Zone.top, Value.zone) e2 ctx flow |>
+      Eval.bind @@ fun e2 flow ->
+
       let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-      Eval.singleton (Some exp') flow |>
-      return
+      Eval.singleton (Some exp') flow
 
     | E_unop(op, e) ->
-      bind_eval zpath e man ctx flow @@ fun e flow ->
+      man.eval ~zpath:(Zone.top, Value.zone) e ctx flow |>
+      Eval.bind @@ fun e flow ->
+
       let exp' = {exp with ekind = E_unop(op, e)} in
-      Eval.singleton (Some exp') flow |>
-      return
+      Eval.singleton (Some exp') flow
 
     | _ -> None
 
@@ -342,7 +343,7 @@ struct
     fun query man ctx flow ->
       match query with
       | QEval e ->
-        let a = get_domain_cur man flow in
+        let a = get_cur man flow in
         let v = eval_value a e in
         Some v
 

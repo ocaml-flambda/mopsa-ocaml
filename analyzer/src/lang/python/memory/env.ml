@@ -58,58 +58,59 @@ struct
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
-  let init prog man ctx flow = Some (ctx, set_domain_cur top man flow)
+  let init prog man ctx flow = Some (ctx, set_cur top man flow)
 
-  let import_exec = [Zone.Z_py_value]
-  let export_exec = [Zone.Z_py]
+  let exec_interface = Framework.Domain.{
+      import = [Zone.Z_py_value];
+      export = [Zone.Z_py];
+    }
 
   let py_to_obj = Zone.Z_py, Zone.Z_py_object
-  let import_eval = []
-  let export_eval = [py_to_obj]
-
+    let eval_interface = Framework.Domain.{
+      import = [];
+      export = [py_to_obj];
+    }
+  
   let rec exec zone stmt man ctx flow =
     let range = srange stmt in
     match skind stmt with
     (* S⟦ v = e ⟧ *)
     | S_assign({ekind = E_var v}, e, mode) ->
-      bind_post py_to_obj e man ctx flow @@ fun e flow ->
+      man.eval e ~zpath:py_to_obj ctx flow |>
+      Post.bind man ctx @@ fun e flow ->
       begin match ekind e with
         | E_py_undefined true ->
           assign_addr man ctx v PyAddr.Undef_global mode flow |>
-          Post.of_flow |>
-          return
+          Post.return
 
         | E_py_undefined false ->
           assign_addr man ctx v PyAddr.Undef_local mode flow  |>
-          Post.of_flow |>
-          return
+          Post.return
 
         | E_py_object(addr, ev) ->
           let flow' = assign_addr man ctx v (PyAddr.Def addr) mode flow in
           let stmt' = mk_assign (mk_var v range) ev ~mode range in
           man.exec ~zone:Zone.Z_py_value stmt' ctx flow' |>
-          Post.of_flow |>
-          return
+          Post.return
 
         | _ -> assert false
       end
 
     | S_remove_var v ->
-      let flow = map_domain_cur (remove v) man flow in
+      let flow = map_cur (remove v) man flow in
       man.exec ~zone:Zone.Z_py_value stmt ctx flow |>
-      Post.of_flow |>
-      return
-
+      Post.return
 
     | _ -> None
 
+
   and assign_addr man ctx v av mode flow =
-    let cur = get_domain_cur man flow in
+    let cur = get_cur man flow in
     let aset = match mode with
       | STRONG | EXPAND -> ASet.singleton av
       | WEAK -> ASet.add av (find v cur)
     in
-    set_domain_cur (add v aset cur) man flow
+    set_cur (add v aset cur) man flow
 
 
   let eval zpath exp man ctx flow =
@@ -117,33 +118,37 @@ struct
     match ekind exp with
     (* E⟦ v | v ∈ Var ⟧ *)
     | E_var v ->
-      let cur = get_domain_cur man flow in
+      let cur = get_cur man flow in
       let aset = find v cur in
       ASet.fold (fun a acc ->
           let cur' = add v (ASet.singleton a) cur in
-          let flow' = set_domain_cur cur' man flow in
+          let flow' = set_cur cur' man flow in
           match a with
           | PyAddr.Undef_global when Addr.is_builtin_name v.vname ->
-            Eval.singleton (Some (mk_py_object (Addr.find_builtin v.vname) range)) flow :: acc
+            Eval.singleton (Some (mk_py_object (Addr.find_builtin v.vname) range)) flow |>
+            Eval.join acc
 
           | PyAddr.Undef_local when Addr.is_builtin_name v.vname ->
-            Eval.singleton (Some (mk_py_object (Addr.find_builtin v.vname) range)) flow :: acc
+            Eval.singleton (Some (mk_py_object (Addr.find_builtin v.vname) range)) flow |>
+            Eval.join acc
 
           | PyAddr.Undef_global ->
              let flow = man.exec (Utils.mk_builtin_raise "NameError" range) ctx flow' in
-             Eval.singleton None flow :: acc
+             Eval.empty flow  |>
+             Eval.join acc
 
           | PyAddr.Undef_local ->
             let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) ctx flow' in
-            Eval.singleton None flow :: acc
+            Eval.empty flow |>
+            Eval.join acc
 
           | PyAddr.Def addr ->
             let t = Addr.type_of_object (addr, mk_py_empty range) in
             let vv = {v with vtyp = t} in
-            Eval.singleton (Some (mk_py_object (addr, mk_var vv range) range)) flow :: acc
+            Eval.singleton (Some (mk_py_object (addr, mk_var vv range) range)) flow |>
+            Eval.join acc
 
-        ) aset [] |>
-      Eval.of_list
+        ) aset None
 
     | _ -> None
 

@@ -6,36 +6,51 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Manager
 
-(** Evaluations of expressions *)
-type ('e, 'a) case = ('e, 'a) Manager.eval_case
-type ('e, 'a) t
-(** Evaluations *)
+val return : ('e, 'a) eval -> ('e, 'a) eval option
 
-val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) t
-(** Evaluation singleton *)
+val case : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval
 
-val join : ('e, 'a) t -> ('e, 'a) t -> ('e, 'a) t
+val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval option
+(** Singleton evaluation *)
+
+val empty : 'a Flow.flow -> ('e, 'a) eval option
+
+val join : ('e, 'a) eval option -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Compute the union of two evaluations *)
 
-val add_cleaners : Ast.stmt list -> ('e, 'a) t -> ('e, 'a) t
+val add_cleaners_ : Ast.stmt list -> ('e, 'a) eval -> ('e, 'a) eval
+val add_cleaners : Ast.stmt list -> ('e, 'a) eval option -> ('e, 'a) eval option
 (** Add cleaners to an evaluation *)
 
-val map:
-    ('e -> 'a Flow.flow -> ('f, 'a) case) ->
-    ('e, 'a) t ->
-    ('f, 'a) t
-(** [map f evls] applies the evaluation function [f] on each
-   case of [evls] and joins the results *)
 
-val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) t -> 'b option
+val map_: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval -> ('f, 'a) eval
+val map: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval option -> ('f, 'a) eval option
 
-val bind :
-  Ast.expr -> ('a, 't) Manager.manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow ->
-  (Ast.expr -> 'a Flow.flow -> ('e, 'a) t) ->
-  ('e, 'a) t
+val iter_: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval -> unit
+val iter: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval option -> unit
 
-val bind_list :
-  Ast.expr list -> ('a, 't) Manager.manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow ->
-  (Ast.expr list -> 'a Flow.flow -> ('e, 'a) t) ->
-  ('e, 'a) t
+val fold_: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval  -> 'b
+val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval option -> 'b option
+
+val bind_ : ('e -> 'a Flow.flow -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
+val bind : ('e -> 'a Flow.flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val assume :
+  Ast.expr -> ?zone:Zone.t ->
+  fthen:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  felse:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ?fboth:('a Flow.flow -> 'a Flow.flow -> ('e, 'a) Manager.eval option) ->
+  ?fnone:(unit -> ('e, 'a) Manager.eval option) ->
+  unit ->
+  ('e, 'a) Manager.eval option
+
+val switch :
+  ((Ast.expr * bool) list * ('a Flow.flow -> ('e, 'a) eval option)) list ->
+  ?zone:Zone.t ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ('e, 'a) eval option
+
+val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit

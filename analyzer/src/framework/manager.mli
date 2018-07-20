@@ -73,41 +73,17 @@ val flow_of_lattice_manager : 'a lattice_manager -> 'a flow_manager
 
 
 (*==========================================================================*)
-(**                           {2 Evaluations}                               *)
+                           (** {2 Evaluations} *)
 (*==========================================================================*)
 
 
-type ('e, 'a) eval_case = {
+type ('e, 'a) case = {
   result : 'e option;
   flow: 'a Flow.flow;
   cleaners: Ast.stmt list;
 }
 
-type ('e, 'a) eval
-
-val singleton_eval : 'e option -> 'a Flow.flow -> Ast.stmt list -> ('e, 'a) eval
-
-val empty_eval : 'a Flow.flow -> ('e, 'a) eval
-
-val join_eval : ('e, 'a) eval -> ('e, 'a) eval -> ('e, 'a) eval
-
-val add_eval : 'e option -> 'a Flow.flow -> Ast.stmt list -> ('e, 'a) eval -> ('e, 'a) eval
-
-val map_eval :
-    ('e -> 'a Flow.flow -> Ast.stmt list -> ('f, 'a) eval_case) ->
-    ('e, 'a) eval ->
-    ('f, 'a) eval
-
-val bind_eval :
-    ('e -> 'a Flow.flow -> ('f, 'a) eval) ->
-    ('e, 'a) eval ->
-    ('f, 'a) eval
-
-val fold_eval :
-    ('b -> ('e, 'a) eval_case -> 'b) -> 'b -> ('e, 'a) eval -> 'b
-
-
-val add_cleaners : Ast.stmt list -> ('e, 'a) eval -> ('e, 'a) eval
+type ('e, 'a) eval = ('e, 'a) case list
 
 
 (*==========================================================================*)
@@ -161,3 +137,5 @@ val set_cur : 't -> ('a, 't) manager -> 'a Flow.flow -> 'a Flow.flow
 
 val get_cur : ('a, 't) manager -> 'a Flow.flow -> 't
 (** [get_cur] retrieves the domain' abstract element in the [TCur] flow *)
+
+val eval_list : Ast.expr list -> ('a, 't) manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow -> (Ast.expr list, 'a) eval

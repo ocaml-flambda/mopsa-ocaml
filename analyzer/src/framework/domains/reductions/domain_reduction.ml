@@ -35,35 +35,35 @@ type 'a product_manager = {
 
 module ProductPost =
 struct
-  type ('a, 't) post = Post : 't key * 'a Post.t option -> ('a, 't) post
+  type ('a, 't) v = Post : 't key * 'a Post.post option -> ('a, 't) v
 
   type ('a, 't) t =
     | [] : ('a, unit) t
-    | (::) : ('a, 't) post * ('a, 'u) t -> ('a, 't * 'u) t
+    | (::) : ('a, 't) v * ('a, 'u) t -> ('a, 't * 'u) t
 
 end
 
 module ProductEval =
 struct
-  type ('a, 't) eval = Eval : 't key * (Ast.expr, 'a) Eval.t option -> ('a, 't) eval
+  type ('a, 't) v = Eval : 't key * (Ast.expr, 'a) eval option -> ('a, 't) v
 
   type ('a, 't) t =
     | [] : ('a, unit) t
-    | (::) : ('a, 't) eval * ('a, 'u) t -> ('a, 't * 'u) t
+    | (::) : ('a, 't) v * ('a, 'u) t -> ('a, 't * 'u) t
 
 end
 
 type ('a, 't) eval_accessor = {
-  get : 'u. 'u key -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) Eval.t option;
+  get : 'u. 'u key -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) eval option;
 }
 
 
 (** Signature for reductions *)
 module type REDUCTION =
 sig
-  val exec : Ast.stmt -> 'a product_manager -> Context.context -> 'a Flow.flow -> 'a Post.t option
+  val exec : Ast.stmt -> 'a product_manager -> Context.context -> 'a Flow.flow -> 'a Post.post option
 
-  val eval : Ast.expr -> 'a product_manager -> ('a, 't) eval_accessor -> Context.context -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) Eval.t option
+  val eval : Ast.expr -> 'a product_manager -> ('a, 't) eval_accessor -> Context.context -> ('a, 't) ProductEval.t -> (Ast.expr, 'a) eval option
 end
 
 (** Functor module to create a reduced product abstract domain given a
@@ -213,26 +213,6 @@ struct
     in
     aux P.pool man ctx flow
 
-
-  (** FIXME: support only the case when all domains of the pool have
-     the same import_exec/export_exec and import_eval/export_eval *)
-
-  let import_exec =
-    match P.pool with
-    | Pool.(hd :: tl) ->
-      let Pool.Domain (_,d) = hd in
-      let module D = (val d) in
-      D.import_exec
-    | _ -> assert false
-
-  let export_exec =
-      match P.pool with
-    | Pool.(hd :: tl) ->
-      let Pool.Domain (_,d) = hd in
-      let module D = (val d) in
-      D.export_exec
-    | _ -> assert false
-
   let product_manager (man: ('a, P.t) Manager.manager) : 'a product_manager =
     let get : type b. b key -> ('a, b) Manager.manager = fun k ->
       let rec aux : type t. t Pool.t -> ('a, t) Manager.manager -> ('a, b) Manager.manager = fun pool man ->
@@ -248,6 +228,16 @@ struct
     in
     { get }
   
+  (** FIXME: support only the case when all domains of the pool have
+     the same exec_interface *)
+  let exec_interface =
+    match P.pool with
+    | Pool.(hd :: tl) ->
+      let Pool.Domain (_,d) = hd in
+      let module D = (val d) in
+      D.exec_interface
+    | _ -> assert false
+
   let exec zone stmt man ctx flow =
     let pman = product_manager man in
     (* Dispatch statement to domains in a point-wise way *)
@@ -296,25 +286,12 @@ struct
     let flow' = merge post' in
     Reduction.exec stmt pman ctx flow'
 
-  let import_eval =
-    match P.pool with
-    | Pool.(hd :: tl) ->
-      let Pool.Domain (_,d) = hd in
-      let module D = (val d) in
-      D.import_eval
-    | _ -> assert false
-
-  let export_eval =
-    match P.pool with
-    | Pool.(hd :: tl) ->
-      let Pool.Domain (_,d) = hd in
-      let module D = (val d) in
-      D.export_eval
-    | _ -> assert false
+  (** FIXME: support only the case when all domains of the pool have
+     the same exec_interface *)
 
   let eval_accessor evl =
-    let get : type b c. b key -> ('a, c) ProductEval.t -> (Ast.expr, 'a) Eval.t option = fun k eval ->
-      let rec aux : type d. ('a, d) ProductEval.t -> (Ast.expr, 'a) Eval.t option = fun eval ->
+    let get : type b c. b key -> ('a, c) ProductEval.t -> (Ast.expr, 'a) eval option = fun k eval ->
+      let rec aux : type d. ('a, d) ProductEval.t -> (Ast.expr, 'a) eval option = fun eval ->
         match eval with
         | ProductEval.[] -> raise Not_found
         | ProductEval.(hd :: tl) ->
@@ -327,6 +304,15 @@ struct
     in
     ProductEval.{ get }
 
+  (** FIXME: support only the case when all domains of the pool have
+     the same eval_interface *)
+  let eval_interface =
+    match P.pool with
+    | Pool.(hd :: tl) ->
+      let Pool.Domain (_,d) = hd in
+      let module D = (val d) in
+      D.eval_interface
+    | _ -> assert false
   
   let eval zpath exp man ctx flow =
     let pman = product_manager man in

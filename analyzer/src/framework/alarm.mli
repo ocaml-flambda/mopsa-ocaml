@@ -18,7 +18,7 @@ type alarm_level =
 
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
-  alarm_range : Utils.Location.range;       (** the range of the program where the alarm was detected *)
+  alarm_range : Location.range;       (** the range of the program where the alarm was detected *)
   alarm_level : alarm_level;
 }
 

@@ -6,32 +6,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Manager
 
 type 'a post = {
   flow : 'a Flow.flow;
   mergers : Ast.stmt list;
 }
-
-type 'a t
-(** Post-condition of [exec] transfer functions *)
+(** Post-conditions of statement transfer functions *)
 
 
-
-val return : ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a t
+val return : ?mergers:Ast.stmt list -> 'a Flow.flow -> 'a post option
 (** Create a post-condition from a flow *)
 
-val map : ('a Flow.flow -> 'b Flow.flow) -> 'a t -> 'b t
+val map : ('a Flow.flow -> 'b Flow.flow) -> 'a post option -> 'b post option
 (** Map the flow of a post-condition *)
 
-val add_mergers : Ast.stmt list -> 'a t -> 'a t
+val add_mergers : Ast.stmt list -> 'a post option -> 'a post option
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
 
-val join : 'a t -> 'a t -> fjoin:('a Flow.flow -> 'a Flow.flow -> 'a Flow.flow) -> 'a t
+val join : 'a post option -> 'a post option -> fjoin:('a Flow.flow -> 'a Flow.flow -> 'a Flow.flow) -> 'a post option
 (** Join two post-conditions *)
 
 val bind :
-    Ast.expr ->
-    ?zpath:Zone.path ->
-    ('a, 't) Manager.manager -> Context.context -> 'a Flow.flow ->
-    (Ast.expr -> 'a Flow.flow -> 'a t) ->
-    'a t
+  ?zone:Zone.t -> ('a, 't) Manager.manager -> Context.context ->
+  ('e -> 'a Flow.flow -> 'a post option) -> ('e, 'a) eval -> 'a post option
+
+val bind_flow :
+  ?zone:Zone.t -> ('a, 't) Manager.manager -> Context.context ->
+  ('e -> 'a Flow.flow -> 'a Flow.flow) -> ('e, 'a) eval -> 'a Flow.flow
+
+val assume :
+  Ast.expr -> ?zone:Zone.t ->
+  fthen:('a Flow.flow -> 'a post option) ->
+  felse:('a Flow.flow -> 'a post option) ->
+  ('a, 't) Manager.manager -> Context.context -> 'a Flow.flow ->
+  ?fboth:('a Flow.flow -> 'a Flow.flow -> 'a post option) ->
+  ?fnone:(unit -> 'a post option) ->
+  unit ->
+  'a post option
+
+val switch :
+  ((Ast.expr * bool) list * ('a Flow.flow -> 'a post option)) list ->
+  ?zone:Zone.t ->
+  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
+  'a post option
+
