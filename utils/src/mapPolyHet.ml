@@ -6,51 +6,53 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Maps with heterogeneous contents.
+(** Maps with polymorphic heterogeneous contents.
 
     [module M = Make(Key)] creates a module for encoding mappings from
-    ['a Key.t] to ['a], where ['a] can change from one mapping to another.
+    [('a, 'b) Key.t] to ['b], where ['b] is a polymorphic in ['a] and
+    can change from one mapping to another.
 
-    For a key [t K], an equality witness should be defined as follows:
+    For a key [('a, 'a t) K], an equality witness should be defined as
+    follows:
     {[
       M.register {
-        eq = (let check : type a. a Key.t -> (t, a) eq option = function
-            | K -> some Eq
-            | _ -> None
-           in
-           check);
+        eq = (let check : type b y. (b, y) Key.t -> ('a, b, 'a t, y) eq option =
+                function
+                | K -> some Eq
+                | _ -> None
+              in check);
       }
-    ]}
+   ]}
 *)
 
 (** Witness of type equality *)
-type (_, _) eq = Eq : ('a, 'a) eq
+type (_, _, _, _) eq = Eq : ('a, 'a, 'b, 'b) eq
 
 (** Signature of keys *)
 module type KEY =
 sig
-  type 'a t
+  type ('a, 'b) t
 end
 
 module Make(Key: KEY) =
 struct
 
-  type 'a w = {
-    eq : 'b. 'b Key.t -> ('a, 'b) eq option;
+  type ('a, 'b) w = {
+    eq : 'c 'd. ('c, 'd) Key.t -> ('a, 'c, 'b, 'd) eq option;
   }
 
-  type v = V : 'a w * 'a -> v
+  type 'a v = V : ('a, 'b) w * 'b -> 'a v
 
-  type t = v list
+  type 'a t = 'a v list
 
-  type xw = XWitness : 'a w -> xw
+  type xw = XWitness : ('a, 'b) w -> xw
 
   let witness_pool : xw list ref = ref []
 
   let register witness = witness_pool := (XWitness witness) :: !witness_pool
 
   let find_witness k () =
-    let rec aux : type a. a Key.t -> xw list -> a w =
+    let rec aux : type a b. (a, b) Key.t -> xw list -> (a, b) w =
       fun k l ->
         match l with
         | [] -> raise Not_found
@@ -62,9 +64,9 @@ struct
     in
     aux k !witness_pool
 
-  let empty : t = []
+  let empty : 'a t = []
 
-  let rec add : type a. a Key.t -> a -> t -> t =
+  let rec add : type b. ('a, b) Key.t -> b -> 'a t -> 'a t =
     fun k v -> function
       | [] -> [ V(find_witness k (), v)]
       | hd :: tl ->
@@ -73,7 +75,7 @@ struct
         | Some Eq -> (V (w, v)) :: tl
         | None -> hd :: (add k v tl)
 
-  let rec find : type a. a Key.t -> t -> a =
+  let rec find : type b. ('a, b) Key.t -> 'a t -> b =
     fun k -> function
       | [] -> raise Not_found
       | hd :: tl ->
