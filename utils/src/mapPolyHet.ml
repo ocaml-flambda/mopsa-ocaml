@@ -18,7 +18,7 @@
       M.register {
         eq = (let check : type b y. (b, y) Key.t -> ('a, b, 'a t, y) eq option =
                 function
-                | K -> some Eq
+                | K -> Some Eq
                 | _ -> None
               in check);
       }
@@ -26,7 +26,7 @@
 *)
 
 (** Witness of type equality *)
-type (_, _, _, _) eq = Eq : ('a, 'a, 'b, 'b) eq
+type (_, _) eq = Eq : ('b, 'b) eq
 
 (** Signature of keys *)
 module type KEY =
@@ -34,54 +34,90 @@ sig
   type ('a, 'b) t
 end
 
-module Make(Key: KEY) =
+module Make = functor(Key: KEY) ->
 struct
 
   type ('a, 'b) w = {
-    eq : 'c 'd. ('c, 'd) Key.t -> ('a, 'c, 'b, 'd) eq option;
+    eq : 'c. ('a, 'c) Key.t -> ('b, 'c) eq option;
   }
 
-  type 'a v = V : ('a, 'b) w * 'b -> 'a v
+  type 'a vl =
+    | []   : 'a vl
+    | (::) : (('a, 'b) w * 'b) * 'a vl -> 'a vl
 
-  type 'a t = 'a v list
+  type 'a wl =
+    | [] : 'a wl
+    | (::) : (('a, 'b) w) * 'a wl -> 'a wl
 
-  type xw = XWitness : ('a, 'b) w -> xw
+  type 'a t = {
+    values: 'a vl;
+    witnesses  : 'a wl;
+  }
 
-  let witness_pool : xw list ref = ref []
+  let register (w: ('a, 'b) w) (m: 'a t) : 'a t =
+    {m with witnesses = w :: m.witnesses}
 
-  let register witness = witness_pool := (XWitness witness) :: !witness_pool
-
-  let find_witness k () =
-    let rec aux : type a b. (a, b) Key.t -> xw list -> (a, b) w =
-      fun k l ->
-        match l with
+  let find_witness (k: ('a, 'b) Key.t) (m: 'a t) : ('a, 'b) w =
+    let rec aux : type b. ('a, b) Key.t -> 'a wl -> ('a, b) w =
+      fun k -> function
         | [] -> raise Not_found
-        | hd :: tl ->
-          let XWitness w = hd in
+        | w :: tl ->
           match w.eq k with
           | Some Eq -> w
           | None -> aux k tl
     in
-    aux k !witness_pool
+    aux k m.witnesses
 
-  let empty : 'a t = []
+  let empty = {
+    values = [];
+    witnesses = [];
+  }
 
-  let rec add : type b. ('a, b) Key.t -> b -> 'a t -> 'a t =
-    fun k v -> function
-      | [] -> [ V(find_witness k (), v)]
-      | hd :: tl ->
-        let V (w, _) = hd in
-        match w.eq k with
-        | Some Eq -> (V (w, v)) :: tl
-        | None -> hd :: (add k v tl)
+  let add : type b. ('a, b) Key.t -> b -> 'a t -> 'a t =
+    fun k v m ->
+      let rec aux : type b. ('a, b) Key.t -> b -> 'a vl -> 'a vl =
+        fun k v -> function
+          | [] -> [(find_witness k m, v)]
+          | hd :: tl ->
+            let (w, _) = hd in
+            match w.eq k with
+            | Some Eq -> (w, v) :: tl
+            | None -> hd :: (aux k v tl)
+      in
+      {m with values = aux k v m.values}
 
-  let rec find : type b. ('a, b) Key.t -> 'a t -> b =
-    fun k -> function
-      | [] -> raise Not_found
-      | hd :: tl ->
-        let V (w, v) = hd in
-        match w.eq k with
-        | Some Eq -> v
-        | None -> find k tl
+  let find : type b. ('a, b) Key.t -> 'a t -> b =
+    fun k m ->
+      let rec aux : type c. ('a, c) Key.t -> 'a vl -> c =
+        fun k -> function
+          | [] -> raise Not_found
+          | hd :: tl ->
+            let (w, v) = hd in
+            match w.eq k with
+            | Some Eq -> v
+            | None -> aux k tl
+      in
+      aux k m.values
 
 end
+
+
+(*
+
+module type D = sig
+val init : 'a list -> 'a M.t -> 'a M.t
+end;;
+
+module D1 : D = struct
+let init (type a) (x: a list) (m: a M.t) : a M.t =
+  M.(register {eq = (
+      let check : type c. (a, c) key -> (a list, c) eq option =
+        function
+        | KCache -> Some Eq
+        | _ -> None
+      in
+      check
+    )} m)
+end;;
+
+*)
