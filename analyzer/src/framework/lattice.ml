@@ -6,17 +6,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Context
-
-
-(** Signature of a lattice.*)
+(** Signature module of a lattice. *)
 module type LATTICE =
 sig
 
   (** {2 Structure} *)
 
   type t
-  (** Type of the elements of the lattice. *)
+  (** Type of the abstract elements of the lattice. *)
 
   val bottom: t
   (** Least element of the lattice. *)
@@ -28,10 +25,10 @@ sig
   (** {2 Predicates} *)
 
   val is_bottom: t -> bool
-  (** Test whether a value is bottom or not. *)
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
 
   val is_top: t -> bool
-  (** Test whether a value is top or not. *)
+  (** [is_top a] tests whether [a] is top or not. *)
 
   val leq: t -> t -> bool
   (** Partial order relation.
@@ -40,14 +37,14 @@ sig
 
   (** {2 Operators} *)
 
-  val join: t -> t -> t
-  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+  val join: 'a Annotation.t -> t -> t -> t
+  (** [join annot a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: t -> t -> t
-  (** [join a1 a2] computes a lower bound of [a1] and [a2]. *)
+  val meet: 'a Annotation.t -> t -> t -> t
+  (** [join annot a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widening: context -> t -> t -> t
-  (** [widening a1 a2] computes an upper bound of [a1] and [a2] that ensures
+  val widen: 'a Annotation.t -> t -> t -> t
+  (** [widening annot a1 a2] computes an upper bound of [a1] and [a2] that ensures
       stabilization of ascending chains. *)
 
 
