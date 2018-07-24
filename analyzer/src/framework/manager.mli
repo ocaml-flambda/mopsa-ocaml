@@ -6,136 +6,77 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-(*==========================================================================*)
-(**                            {2 Accessors}                                *)
-(*==========================================================================*)
-
-
 (**
-   An accessor of type [('a, 'b) accessor] allows retrieving/updating a domain
-    abstraction of type ['b] within the global analyzer abstraction ['a]
+   Managers provide access to operators and transfer functions over the
+   global abstract environment.
 *)
-type ('a, 'b) accessor = {
-  get : 'a -> 'b;       (** Returns the domain's abstract element. *)
-  set : 'b -> 'a -> 'a; (** Modifies the domain's abstract element and returns
-                            the updated global abstraction . *)
+
+
+(*==========================================================================*)
+(**                            {2 Flows}                                    *)
+(*==========================================================================*)
+
+type token = ..
+(** Flow tokens are used to tag abstract elements when encountered in a
+    relevant control point *)
+
+type token += TCur
+(** Token of current (active) execution flow *)
+
+module FlowMap : MapExtSig.S with type key = token
+(** Map of flows binding tokens to abstract elements *)
+
+type 'a flow = {
+  map   : 'a FlowMap.t;
+  annot : 'a Annotation.t;
 }
-
-
-
-(*==========================================================================*)
-(**                         {2 Lattice manager}                             *)
-(*==========================================================================*)
-
-
-(** Lattice manager. *)
-type 'a lattice_manager = {
-  bottom : 'a;
-  top : 'a;
-  is_bottom : 'a -> bool;
-  is_top : 'a -> bool;
-  leq : 'a -> 'a -> bool;
-  join : 'a -> 'a -> 'a;
-  meet : 'a -> 'a -> 'a;
-  widening : Context.context -> 'a -> 'a -> 'a;
-  print : Format.formatter -> 'a -> unit;
-}
-
+(** An abstract flow is a flow map augmented with an annotation *)
 
 
 (*==========================================================================*)
-                           (** {2 Flow manager} *)
-(*==========================================================================*)
-
-(** Flow manager *)
-type 'a flow_manager = {
-  bottom : 'a Flow.flow;
-  top : 'a Flow.flow;
-  is_bottom : 'a Flow.flow -> bool;
-  is_top : 'a Flow.flow -> bool;
-  leq : 'a Flow.flow -> 'a Flow.flow -> bool;
-  join : 'a Flow.flow -> 'a Flow.flow -> 'a Flow.flow;
-  meet : 'a Flow.flow -> 'a Flow.flow -> 'a Flow.flow;
-  widening : Context.context -> 'a Flow.flow -> 'a Flow.flow -> 'a Flow.flow;
-  print : Format.formatter -> 'a Flow.flow -> unit;
-  get : Flow.token -> 'a Flow.flow -> 'a;
-  set : Flow.token -> 'a -> 'a Flow.flow -> 'a Flow.flow;
-  add : Flow.token -> 'a -> 'a Flow.flow -> 'a Flow.flow;
-  remove : Flow.token -> 'a Flow.flow -> 'a Flow.flow;
-  filter : (Flow.token -> 'a -> bool) -> 'a Flow.flow -> 'a Flow.flow;
-  map : 'b. (Flow.token -> 'a -> 'b) -> 'a Flow.flow -> 'b Flow.flow;
-  fold : 'b. (Flow.token -> 'a -> 'b -> 'b) -> 'a Flow.flow -> 'b -> 'b;
-  merge : (Flow.token -> 'a option -> 'a option -> 'a option) -> 'a Flow.flow -> 'a Flow.flow -> 'a Flow.flow;
-}
-
-val flow_of_lattice_manager : 'a lattice_manager -> 'a flow_manager
-
-
-(*==========================================================================*)
-                           (** {2 Evaluations} *)
+(**                          {2 Evaluations}                                *)
 (*==========================================================================*)
 
 
-type ('e, 'a) case = {
-  result : 'e option;
-  flow: 'a Flow.flow;
+type ('a, 'e) evl_case = {
+  exp : 'e option;
+  flow: 'a flow;
   cleaners: Ast.stmt list;
 }
 
-type ('e, 'a) eval = ('e, 'a) case list
+type ('a, 'e) evl = ('a, 'e) evl_case Dnf.t
 
 
 (*==========================================================================*)
-                       (** {2 Analysis manager} *)
+(**                             {2 Managers}                                *)
 (*==========================================================================*)
 
 
 
-(** An instance of type [('a, 't) manager] encapsulates the lattice operators
-    of the global environment abstraction ['a] and its flow abstraction
-    ['a Flow.t], the top-level transfer functions [exec], [eval] and [ask],
-    and the accessor to the domain abstraction ['t] within ['a].
+(**
+   An instance of type [('a, 't) man] encapsulates the lattice
+   operators of the global environment abstraction ['a], the top-level
+   transfer functions [exec], [eval] and [ask], and the accessor to
+   the domain abstraction ['t] within ['a].
 *)
-type ('a, 't) manager = {
-  (** Environment abstraction. *)
-  env : 'a lattice_manager;
+type ('a, 't) man = {
+  (* Functions on the global abstract element *)
+  bottom    : 'a;
+  top       : 'a;
+  is_bottom : 'a -> bool;
+  is_top    : 'a -> bool;
+  leq       : 'a -> 'a -> bool;
+  join      : 'a Annotation.t -> 'a -> 'a -> 'a;
+  meet      : 'a Annotation.t -> 'a -> 'a -> 'a;
+  widen     : 'a Annotation.t -> 'a -> 'a -> 'a;
+  print     : Format.formatter -> 'a -> unit;
 
-  (** Flow abstraction. *)
-  flow : 'a flow_manager;
+  (* Accessors to the domain's abstract element *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
 
-  (** Statement transfer function. *)
-  exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> 'a Flow.flow -> 'a Flow.flow;
-
-  (** Expression evaluation function. *)
-  eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> 'a Flow.flow -> (Ast.expr, 'a) eval;
-
-  (** Query transfer function. *)
-  ask : 'r. 'r Query.query -> Context.context -> 'a Flow.flow -> 'r option;
-
-  (** Domain accessor. *)
-  ax : ('a, 't) accessor;
+  (** Transfer functions *)
+  exec : ?zone:Zone.t -> Ast.stmt -> 'a flow -> 'a flow;
+  eval : ?zpath:Zone.path -> Ast.expr -> 'a flow -> ('a, Ast.expr) evl;
+  ask : 'r. ?zone:Zone.t -> 'r Query.query -> 'a flow -> 'r;
 }
-
-
-
-(*==========================================================================*)
-                           (** {2 Utility functions} *)
-(*==========================================================================*)
-
-val is_cur_bottom : ('a, 't) manager -> 'a Flow.flow -> bool
-(** Check whether TCur flows are empty *)
-
-val map_cur : ('t -> 't) -> ('a, 't) manager -> 'a Flow.flow -> 'a Flow.flow
-(** [map_cur f man flow] applies function [f] on the domain's
-   abstract element (as pointed by the accessor in [man]) in the
-   [TCur] flow *)
-
-val set_cur : 't -> ('a, 't) manager -> 'a Flow.flow -> 'a Flow.flow
-(** [set_cur a man flow] changes the domain's abstract element to [a] in the [TCur] flow *)
-
-
-val get_cur : ('a, 't) manager -> 'a Flow.flow -> 't
-(** [get_cur] retrieves the domain' abstract element in the [TCur] flow *)
-
-val eval_list : Ast.expr list -> ('a, 't) manager -> ?zpath:Zone.path -> Context.context -> 'a Flow.flow -> (Ast.expr list, 'a) eval
