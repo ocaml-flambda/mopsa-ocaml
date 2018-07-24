@@ -25,9 +25,6 @@
    ]}
 *)
 
-(** Witness of type equality *)
-type (_, _) eq = Eq : ('b, 'b) eq
-
 (** Signature of keys *)
 module type KEY =
 sig
@@ -36,6 +33,10 @@ end
 
 module Make = functor(Key: KEY) ->
 struct
+
+  (** Witness of type equality *)
+  type (_, _) eq = Eq : ('b, 'b) eq
+
 
   type ('a, 'b) w = {
     eq : 'c. ('a, 'c) Key.t -> ('b, 'c) eq option;
@@ -57,10 +58,12 @@ struct
   let register (w: ('a, 'b) w) (m: 'a t) : 'a t =
     {m with witnesses = w :: m.witnesses}
 
+  exception Key_not_found
+
   let find_witness (k: ('a, 'b) Key.t) (m: 'a t) : ('a, 'b) w =
     let rec aux : type b. ('a, b) Key.t -> 'a wl -> ('a, b) w =
       fun k -> function
-        | [] -> raise Not_found
+        | [] -> raise Key_not_found
         | w :: tl ->
           match w.eq k with
           | Some Eq -> w

@@ -6,13 +6,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   A manager provides to a domain:
-   - the operators of global flow abstraction and its the underlying environment
-   abstraction,
-   - the accessor structure to its own abstraction
-   - and the transfer functions of the top-level analyzer.
-*)
+(** Managers provide access to operators and transfer functions over
+    the global abstract environment.
+ *)
 
 open Lattice
 open Flow
