@@ -71,6 +71,9 @@ type 'a flow = {
   annot : 'a Annotation.t;
 }
 
+let set_annot annot flow = {flow with annot}
+
+let get_annot flow = flow.annot
 
 (*==========================================================================*)
 (**                          {2 Evaluations}                                *)
@@ -84,7 +87,6 @@ type ('a, 'e) evl_case = {
 }
 
 type ('a, 'e) evl = ('a, 'e) evl_case Dnf.t
-
 
 (*==========================================================================*)
                            (** {2 Analysis manager} *)

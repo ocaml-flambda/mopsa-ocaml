@@ -8,49 +8,33 @@
 
 open Manager
 
-val return : ('e, 'a) eval -> ('e, 'a) eval option
+val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('a, 'e) evl
 
-val case : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval
+val empty : 'a flow -> ('a, 'e) evl
 
-val singleton : 'e option -> ?cleaners:Ast.stmt list -> 'a Flow.flow -> ('e, 'a) eval option
-(** Singleton evaluation *)
+val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
-val empty : 'a Flow.flow -> ('e, 'a) eval option
+val join_list : ('a, 'e) evl  list -> ('a, 'e) evl
 
-val join : ('e, 'a) eval option -> ('e, 'a) eval option -> ('e, 'a) eval option
-(** Compute the union of two evaluations *)
+val add_cleaners : Ast.stmt list -> ('a, 'e) evl  -> ('a, 'e) evl
 
-val add_cleaners_ : Ast.stmt list -> ('e, 'a) eval -> ('e, 'a) eval
-val add_cleaners : Ast.stmt list -> ('e, 'a) eval option -> ('e, 'a) eval option
-(** Add cleaners to an evaluation *)
-
-
-val map_: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval -> ('f, 'a) eval
-val map: ('e -> 'a Flow.flow -> ('f, 'a) case) -> ('e, 'a) eval option -> ('f, 'a) eval option
-
-val iter_: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval -> unit
-val iter: ('e -> 'a Flow.flow -> unit) -> ('e, 'a) eval option -> unit
-
-val fold_: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval  -> 'b
-val fold: ('b -> ('e, 'a) case -> 'b) -> 'b -> ('e, 'a) eval option -> 'b option
-
-val bind_ : ('e -> 'a Flow.flow -> ('f, 'a) eval) -> ('e, 'a) eval -> ('f, 'a) eval
-val bind : ('e -> 'a Flow.flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 
 val assume :
   Ast.expr -> ?zone:Zone.t ->
-  fthen:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
-  felse:('a Flow.flow -> ('e, 'a) Manager.eval option) ->
-  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
-  ?fboth:('a Flow.flow -> 'a Flow.flow -> ('e, 'a) Manager.eval option) ->
-  ?fnone:(unit -> ('e, 'a) Manager.eval option) ->
-  unit ->
-  ('e, 'a) Manager.eval option
+  fthen:('a flow -> ('a, 'e) evl ) ->
+  felse:('a flow -> ('a, 'e) evl ) ->
+  ?fboth:('a flow -> 'a flow -> ('a, 'e) evl ) ->
+  ?fnone:('a flow -> ('a, 'e) evl) ->
+  ('a, 'b) man -> 'a flow ->
+  ('a, 'e) evl
 
 val switch :
-  ((Ast.expr * bool) list * ('a Flow.flow -> ('e, 'a) eval option)) list ->
+  ((Ast.expr * bool) list * ('a flow -> ('a, 'e) evl )) list ->
   ?zone:Zone.t ->
-  ('a, 'b) Manager.manager -> Context.context -> 'a Flow.flow ->
-  ('e, 'a) eval option
+  ('a, 'b) Manager.man -> 'a flow ->
+  ('a, 'e) evl
 
-val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit
+val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) evl -> unit
+
+val return : ('a, 'e) evl -> ('a, 'e) evl option

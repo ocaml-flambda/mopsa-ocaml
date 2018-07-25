@@ -3,26 +3,17 @@ TARGET_NATIVES = mopsa
 MOPSAROOT = ..
 
 #Packs
-mopsa = framework lang
+mopsa = framework lang main
 
 framework = location ast visitor options query annotation lattice zone manager flow exceptions value eval post domain analyzer lattices domains alarm essentials config
 framework.utils = compare location options exceptions
 
-lang = universal python
+lang = universal
 
 lang.universal = ast pp visitor zone flows heap numeric setup
 lang.universal.heap = query recency
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = int congruence float
-
-
-lang.python = ast addr alarm utils visitor frontend zone program operators memory flows libs desugar data_model objects setup
-lang.python.memory = value query env
-lang.python.objects = class function object numbers strings slices nones containers
-lang.python.objects.numbers = int bool float complx
-lang.python.objects.containers = lists dicts ranges sets tuples
-lang.python.data_model = attribute callable arith_ops subscript compare_ops aug_assign
-lang.python.flows = exceptions generators
 
 
 #Packages

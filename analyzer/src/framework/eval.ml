@@ -14,133 +14,86 @@ open Ast
 open Flow
 open Manager
 
-let return evl = Some evl
+let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('a, 'e) evl =
+  Dnf.singleton {exp = Some e; flow; cleaners}
 
-let case result ?(cleaners = []) flow = [{ result; flow; cleaners }]
+let empty flow : ('a, 'e) evl  =
+  Dnf.singleton {exp = None; flow; cleaners = []}
 
-let singleton result ?(cleaners = []) flow = return (case result flow ~cleaners)
+let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
+  Dnf.mk_or evl1 evl2
 
-let empty flow = singleton None flow ~cleaners:[]
+let join_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
+  match l with
+  | [] -> assert false
+  | hd :: tl -> List.fold_left join hd tl
 
-let join (evl1: ('e, 'a) eval option)  (evl2: ('e, 'a) eval option) : ('e, 'a) eval option =
-  Option.option_lift2 (@) evl1 evl2
-
-let map_
-    (f: 'e -> 'a flow -> ('f, 'b) case)
-    (evl: ('e, 'a) eval)
-  : ('f, 'b) eval =
-  List.map (fun case ->
-      match case.result with
-      | None -> {result = None; flow = case.flow; cleaners = []}
-      | Some result ->
-        let case' = f result case.flow in
-        {case' with cleaners = case.cleaners @ case'.cleaners}
-    ) evl
+let meet (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
+  Dnf.mk_and evl1 evl2
 
 let map
-    (f: 'e -> 'a flow -> ('f, 'b) case)
-    (evl: ('e, 'a) eval option)
-  : ('f, 'b) eval option =
-  Option.option_lift1 (map_ f) evl
+    (f: ('a, 'e) evl_case -> ('a, 'f) evl_case)
+    (evl: ('a, 'e) evl)
+  : ('a, 'f) evl =
+  Dnf.map f evl
 
-let add_cleaners_ (cleaners: Ast.stmt list) (evl: ('e, 'a) eval) : ('e, 'a) eval =
-  map_ (fun e flow ->
-      {result = Some e; flow; cleaners}
+let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  =
+  map (fun case ->
+      {case with cleaners = case.cleaners @ cleaners}
     ) evl
-
-let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) eval option) : ('e, 'a) eval option =
-  Option.option_lift1 (add_cleaners_ cleaners) evl
-
-let fold_
-    (f: 'b -> ('e, 'a) case -> 'b)
-    (init: 'b)
-    (evl: ('e, 'a) eval)
-  : 'b =
-  List.fold_left f init evl
-
-let fold
-    (f: 'b -> ('e, 'a) case -> 'b)
-    (init: 'b)
-    (evl: ('e, 'a) eval option)
-  : 'b option =
-  Option.option_lift1 (fold_ f init) evl
-
-
-let iter_
-    (f: 'e -> 'a Flow.flow -> unit)
-    (evl: ('e, 'a) eval)
-  : unit =
-  List.iter (fun case ->
-      match case.result with
-      | None -> ()
-      | Some e -> f e case.flow
-    ) evl
-
-let iter
-    (f: 'e -> 'a Flow.flow -> unit)
-    (evl: ('e, 'a) eval option)
-  : unit =
-  Option.option_apply (iter_ f) (fun () -> ()) evl
-
-let fold
-    (f: 'b -> ('e, 'a) case -> 'b)
-    (init: 'b)
-    (evl: ('e, 'a) eval option)
-  : 'b option =
-  Option.option_lift1 (fold_ f init) evl
-
-
-let bind_
-    (f: 'e -> 'a flow -> ('f, 'a) eval)
-    (evl: ('e, 'a) eval)
-  : ('f, 'a) eval =
-  fold_ (fun acc x ->
-      let evl' =
-        match x.result with
-        | None -> case None x.flow
-        | Some result -> f result x.flow |>
-                         add_cleaners_ x.cleaners
-      in
-      evl' @ acc
-    ) [] evl
-
 
 let bind
-    (f: 'e -> 'a flow -> ('f, 'a) eval option)
-    (evl: ('e, 'a) eval)
-  : ('f, 'a) eval option =
-  fold_ (fun acc case ->
+    (f: 'e -> 'a flow -> ('a, 'f) evl)
+    (evl: ('a, 'e) evl)
+  : ('a, 'f) evl =
+  (* [choose_annot evl] returns any annotation from evaluation flows
+     of [evl].
+     Should be applied only if [evl] has been correctly constructed
+     by propagating annotations in a flow-insensitive manner. *)
+  let choose_annot evl =
+    let case = Dnf.choose evl in
+    get_annot case.flow
+  in
+  let evl, _ = Dnf.fold2
+    (fun annot case ->
+      let flow' = set_annot annot case.flow in
       let evl' =
-        match case.result with
-        | None -> empty case.flow
-        | Some result -> f result case.flow |>
-                         add_cleaners case.cleaners
+        match case.exp with
+        | None -> empty flow'
+        | Some exp -> f exp flow'
       in
-      join evl' acc
-    ) None evl
+      let annot = choose_annot evl' in
+      (evl', annot)
+    )
+    join meet
+    (choose_annot evl) evl
+  in
+  evl
+
 
 let assume
     cond ?(zone = Zone.top)
     ~fthen ~felse
-    man ctx flow
-    ?(fboth = (fun flow1 flow2 -> join (fthen flow1) (felse flow2)))
-    ?(fnone = (fun () -> empty flow))
-    ()
-  : ('e, 'a) eval option =
-  let then_flow = man.exec ~zone (mk_assume cond cond.erange) ctx flow in
-  let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) ctx flow in
-  match Manager.is_cur_bottom man then_flow, Manager.is_cur_bottom man else_flow with
+    ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
+    ?(fnone = (fun flow -> empty flow))
+    man flow
+  : ('a, 'e) evl  =
+  let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
+  let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  match is_cur_bottom man then_flow, is_cur_bottom man else_flow with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
   | false, false -> fboth then_flow else_flow
-  | true, true -> fnone ()
+  | true, true -> fnone (Flow.join man then_flow else_flow)
 
 let switch
-    (cases : (((expr * bool) list) * ('a Flow.flow -> ('e, 'a) eval option)) list)
+    (cases : (((expr * bool) list) * ('a Flow.flow -> ('a, 'e) evl )) list)
     ?(zone = Zone.top)
-    man ctx flow
-  : ('e, 'a) eval option =
+    man flow
+  : ('a, 'e) evl  =
   match cases with
+  | [] -> assert false
+
   | (cond, t) :: q ->
     let one (cond : (expr * bool) list) t =
       List.fold_left (fun acc (x, b) ->
@@ -148,21 +101,29 @@ let switch
             if b then (mk_assume x x.erange)
             else (mk_assume (mk_not x x.erange) x.erange)
           in
-          man.exec ~zone s ctx acc
+          man.exec ~zone s acc
         ) flow cond
       |> t
     in
     List.fold_left (fun acc (cond, t) -> join (one cond t) acc) (one cond t) q
-  | [] -> None
-  
 
-let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
+
+let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;⋁@;")
-    (fun fmt ev ->
-       match ev.result with
-       | None -> Format.pp_print_string fmt "ϵ"
-       | Some x -> pp fmt x
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")
+    (fun fmt conj ->
+       Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∧@;")
+         (fun fmt case ->
+            match case.exp with
+            | None -> Format.pp_print_string fmt "ϵ"
+            | Some x -> pp fmt x
+         )
+         fmt
+         conj
     )
     fmt
-    evl
+    (Dnf.to_list evl)
+
+let return (evl: ('a, 'e) evl) : ('a, 'e) evl option =
+  Some evl

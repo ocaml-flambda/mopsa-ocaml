@@ -167,3 +167,8 @@ let merge (man: ('a, _) man) (f: token -> 'a option -> 'a option -> 'a option) (
     flow1.map flow2.map
   in
   {map; annot}
+
+
+let is_cur_bottom man flow =
+  get man TCur flow |>
+  man.is_bottom

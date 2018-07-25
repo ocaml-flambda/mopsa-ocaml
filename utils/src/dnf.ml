@@ -42,56 +42,60 @@ let map
   : 'b t =
   List.map (List.map f) dnf
 
-let substitute
-    (f: 'a -> 'b)
+let fold
+    (f: 'b -> 'a -> 'b)
     (join: 'b -> 'b -> 'b)
     (meet: 'b -> 'b -> 'b)
+    (init: 'b)
     (dnf: 'a t)
   : 'b =
-  let rec apply_conj = function
+  let rec apply_conj acc = function
     | [] -> assert false
-    | [e] -> f e
-    | e :: tl -> meet (f e) (apply_conj tl)
+    | [e] -> f acc e
+    | e :: tl ->
+      let acc1 = f acc e in
+      let acc2 = apply_conj acc1 tl in
+      meet acc1 acc2
   in
-  let rec apply_disj = function
-    | [conj] -> apply_conj conj
-    | conj :: tl -> join (apply_conj conj) (apply_disj tl)
+  let rec apply_disj acc = function
+    | [conj] -> apply_conj acc conj
+    | conj :: tl ->
+      let acc1 = apply_conj acc conj in
+      let acc2 = apply_disj acc1 tl in
+      join acc1 acc2
     | _ -> assert false
   in
-  apply_disj dnf
+  apply_disj init dnf
 
-let substitute2
-    (f: 'a -> 'b t)
-    (dnf: 'a t) : 'b t =
-  substitute
-    f
-    mk_or
-    mk_and
-    dnf
-
-
-let collapse
+let fold2
+    (f: 'c -> 'a -> 'b * 'c)
     (join: 'b -> 'b -> 'b)
     (meet: 'b -> 'b -> 'b)
+    (init: 'c)
     (dnf: 'a t)
-  : 'b =
-  let rec apply_conj = function
+  : 'b * 'c =
+  let rec apply_conj acc = function
     | [] -> assert false
-    | [e] -> e
-    | e :: tl -> meet e (apply_conj tl)
+    | [e] -> f acc e
+    | e :: tl ->
+      let (b1, acc1) = f acc e in
+      let (b2, acc2) = apply_conj acc1 tl in
+      meet b1 b2, acc2
   in
-  let rec apply_disj = function
-    | [conj] -> apply_conj conj
-    | conj :: tl -> join (apply_conj conj) (apply_disj tl)
+  let rec apply_disj acc = function
+    | [conj] -> apply_conj acc conj
+    | conj :: tl ->
+      let (b1, acc1) = apply_conj acc conj in
+      let (b2, acc2) = apply_disj acc1 tl in
+      (join b1 b2, acc2)
     | _ -> assert false
   in
-  apply_disj dnf
+  apply_disj init dnf
 
-
-
-let distribute (ddnf : 'a t t) : 'a t=
-  collapse mk_or mk_and ddnf
+let choose (dnf: 'a t) : 'a =
+  match dnf with
+  | [] | [[]] -> failwith "Dnf.choose: empty argument"
+  | (hd :: _) :: _ -> hd
+  | _ -> assert false
 
 let to_list dnf = dnf
-
-
