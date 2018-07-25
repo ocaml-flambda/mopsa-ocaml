@@ -12,7 +12,7 @@
 open Ast
 open Manager
 
-type channel = Channel : 'r Query.t -> channel
+type channel = Channel : 'r Query.query -> channel
 
 type 'a post = {
   flow : 'a flow;

@@ -13,8 +13,6 @@
    overall flow abstraction and analysis manager.
 *)
 
-open Lattice
-open Flow
 open Manager
 open Eval
 
@@ -23,25 +21,25 @@ type 'a interface = {
   import : 'a list;
 }
 
+type _ dom = ..
+
 module type DOMAIN =
 sig
 
   include Lattice.LATTICE
 
-  val init : Ast.program -> ('a, t) manager -> Context.context -> 'a flow -> (Context.context * 'a flow) option
+  val id : t dom
 
-  (** Abstract transfer function of statements. *)
+  val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
+
   val exec_interface : Zone.t interface
-  val exec: Zone.t -> Ast.stmt -> ('a, t) manager -> Context.context -> 'a flow -> 'a Post.post option
-
-  (** Abstract (symbolic) evaluation of expressions. *)
   val eval_interface : Zone.path interface
-  val eval: Zone.path -> Ast.expr -> ('a, t) manager -> Context.context -> 'a flow -> (Ast.expr, 'a) eval option
+  val ask_interface : Zone.path interface
 
-  (** Handler of generic queries. *)
-  val ask: 'r Query.query -> ('a, t) manager -> Context.context -> 'a flow -> 'r option
+  val exec: Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
+  val eval: Zone.path -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
+  val ask: Zone.t -> 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end
-
 
 let domains : (string * (module DOMAIN)) list ref = ref []
 let register_domain name modl = domains := (name, modl) :: !domains

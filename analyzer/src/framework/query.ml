@@ -45,7 +45,7 @@
 (** {2 Queries} *)
 
 (** Type of a query, defined by domains and annotated with the type of the reply. *)
-type _ t = ..
+type _ query = ..
 
 (** Query type equality witness. *)
 type (_, _) eq = Eq : ('a, 'a) eq
@@ -55,7 +55,7 @@ type (_, _) eq = Eq : ('a, 'a) eq
 
 (** Query manager defines merge operators on replies. *)
 type 'r reply_manager = {
-  domatch : 'a. 'a t -> ('a, 'r) eq option;
+  domatch : 'a. 'a query -> ('a, 'r) eq option;
   join: 'r -> 'r -> 'r;
   meet: 'r -> 'r -> 'r;
 }
@@ -67,7 +67,7 @@ let reply_managers : xreply_manager list ref = ref []
 let register_reply_manager man =
   reply_managers := (Manager man) :: !reply_managers
 
-let is_query_manager: type a b. a t -> b reply_manager -> a reply_manager option =
+let is_query_manager: type a b. a query -> b reply_manager -> a reply_manager option =
   fun q man ->
     match man.domatch q with
     | None -> None
@@ -75,7 +75,7 @@ let is_query_manager: type a b. a t -> b reply_manager -> a reply_manager option
 
 
 let find_manager query () =
-  let rec aux : type a b. a t -> xreply_manager list -> a reply_manager =
+  let rec aux : type a b. a query -> xreply_manager list -> a reply_manager =
     fun query -> function
       | [] -> raise Not_found
       | hd :: tl ->
@@ -89,7 +89,7 @@ let find_manager query () =
 
 (** {2 Operators} *)
 
-let join : type a. a t -> a option -> a option -> a option =
+let join : type a. a query -> a option -> a option -> a option =
   fun q r1 r2 ->
     match r1, r2 with
     | None, r | r, None -> r
@@ -97,7 +97,7 @@ let join : type a. a t -> a option -> a option -> a option =
       let man = find_manager q () in
       Some (man.join r1 r2)
 
-let meet : type a. a t -> a option -> a option -> a option =
+let meet : type a. a query -> a option -> a option -> a option =
   fun q r1 r2 ->
     match r1, r2 with
     | None, r | r, None -> r

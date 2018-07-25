@@ -8,7 +8,7 @@
 
 open Manager
 
-type channel = Channel : 'r Query.t -> channel
+type channel = Channel : 'r Query.query -> channel
 (** Query-based reduction channel *)
 
 type 'a post = {
