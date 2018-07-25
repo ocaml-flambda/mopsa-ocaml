@@ -53,21 +53,14 @@ let leq (z1: t) (z2: t) =
 (*==========================================================================*)
 
 
-
-(** A path is defined by a source zone of the argument expression and
-   a destination zone required for the result. *)
-type path = t (** source *) * t (** destination *)
-
-let path_top = top, top
-
 (** Compare two paths. *)
-let compare_path ((z1, z2): path) ((z1', z2'): path) =
+let compare2 (z1, z2) (z1', z2') =
   let c1 = compare z1 z1' in
   if c1 <> 0 then c1
   else compare z2 z2'
 
 (** (z1, z2) ⊆ (z1', z2') iff. z1' ⊆ z1 and z2' ⊆ z2. *)
-let path_leq ((z1, z2): path) ((z1', z2'): path) =
+let leq2 (z1, z2) (z1', z2') =
   leq z1' z1
   && leq z2' z2
 
@@ -87,5 +80,5 @@ let register_pp pp = pp_chain := pp !pp_chain
 let print fmt (zone: t) =
   Format.fprintf fmt "[%a]" !pp_chain zone
 
-let print_path fmt ((z1, z2): path) =
+let print2 fmt (z1, z2) =
   Format.fprintf fmt "%a -> %a" print z1 print z2

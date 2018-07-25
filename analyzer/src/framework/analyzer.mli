@@ -6,32 +6,32 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-
 (** Analyzer - Central orchestrer of the analysis architecture. *)
+
+open Manager
 
 module Make(Domain : Domain.DOMAIN) :
 sig
 
-  val init : Ast.program -> Context.context * Domain.t Flow.flow
+  val init : Ast.program -> Domain.t flow
 
-  val exec : ?zone:Zone.t -> Ast.stmt -> Context.context -> Domain.t Flow.flow -> Domain.t Flow.flow
+  val exec : ?zone:Zone.t -> Ast.stmt -> Domain.t flow -> Domain.t flow
 
-  val eval : ?zpath:Zone.path -> Ast.expr -> Context.context -> Domain.t Flow.flow -> (Ast.expr, Domain.t) Manager.eval
+  val eval : ?zone:(Zone.t * Zone.t) -> Ast.expr -> Domain.t flow -> (Domain.t, Ast.expr) evl
 
-  val ask : 'r Query.query -> Context.context -> Domain.t Flow.flow -> 'r option
+  val ask : ?zone:Zone.t -> 'r Query.query -> Domain.t Flow.flow -> 'r
 
-  val manager : (Domain.t, Domain.t) Manager.manager
+  val man : (Domain.t, Domain.t) man
 
 end
 
 val mk_exec_of_zone_list :
   Zone.t list ->
-  (Zone.t -> Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.post option) ->
-  (Ast.stmt -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> 'a Post.post option)
+  (Zone.t -> Ast.stmt -> ('a, 't) man -> 'a flow -> 'a Post.post option) ->
+  (Ast.stmt -> ('a, 't) man -> 'a flow -> 'a Post.post option)
 
 
-val mk_eval_of_zone_path_list :
-  Zone.path list ->
-  (Zone.path -> Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Manager.eval option) ->
-  (Ast.expr -> ('a, 't) Manager.manager -> 'b -> 'a Flow.flow -> (Ast.expr, 'a) Manager.eval option)
+val mk_eval_of_zone_list :
+  (Zone.t * Zone.t) list ->
+  ((Zone.t * Zone.t) -> Ast.expr -> ('a, 't) man -> 'a flow -> ('a, Ast.expr) evl option) ->
+  (Ast.expr -> ('a, 't) man -> 'a flow -> ('a, Ast.expr) evl option)

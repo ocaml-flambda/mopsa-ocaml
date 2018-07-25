@@ -33,11 +33,11 @@ sig
   val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
 
   val exec_interface : Zone.t interface
-  val eval_interface : Zone.path interface
-  val ask_interface : Zone.path interface
+  val eval_interface : (Zone.t * Zone.t) interface
+  val ask_interface : Zone.t interface
 
   val exec: Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
-  val eval: Zone.path -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
+  val eval: (Zone.t * Zone.t) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
   val ask: Zone.t -> 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end
 

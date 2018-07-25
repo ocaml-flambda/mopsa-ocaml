@@ -18,26 +18,20 @@ type alarm_level =
 
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
-  alarm_range : Location.range;       (** the range of the program where the alarm was detected *)
   alarm_level : alarm_level;
 }
 
+type alarm_info = {
+  compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
+  print   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+}
 
-val register_alarm_compare: ((alarm -> alarm -> int) -> alarm -> alarm -> int) -> unit
+val register: alarm_info -> unit
 
-val compare_alarm : alarm -> alarm -> int
+val print : Format.formatter -> alarm -> unit
 
-
-(*==========================================================================*)
-                           (** {2 Query} *)
-(*==========================================================================*)
-
+val compare : alarm -> alarm -> int
 
 type _ Query.query +=
   | QGetAlarms: (alarm list) Query.query
   (** Query to extract collected alarms *)
-
-
-val register_pp_alarm : ((Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit) -> unit
-
-val pp_alarm : Format.formatter -> alarm -> unit
