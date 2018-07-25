@@ -18,6 +18,12 @@ val join_list : ('a, 'e) evl  list -> ('a, 'e) evl
 
 val add_cleaners : Ast.stmt list -> ('a, 'e) evl  -> ('a, 'e) evl
 
+val fold :
+    ('b -> ('a, 'e) evl_case -> 'b) ->
+    ('b -> 'b -> 'b) ->
+    ('b -> 'b -> 'b) ->
+    'b -> ('a, 'e) evl -> 'b
+
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 
 val assume :

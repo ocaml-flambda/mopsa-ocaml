@@ -42,6 +42,16 @@ let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  
       {case with cleaners = case.cleaners @ cleaners}
     ) evl
 
+let fold
+    (f: 'b -> ('a, 'e) evl_case -> 'b)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (init: 'b)
+    (evl: ('a, 'e) evl)
+  : 'b =
+  Dnf.fold f join meet init evl
+
+
 let bind
     (f: 'e -> 'a flow -> ('a, 'f) evl)
     (evl: ('a, 'e) evl)
