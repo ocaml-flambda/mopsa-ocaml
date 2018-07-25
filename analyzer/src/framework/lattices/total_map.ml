@@ -61,29 +61,29 @@ struct
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊤. *)
 
-  let join  (a1:t) (a2:t) : t =
+  let join annot (a1:t) (a2:t) : t =
     bot_neutral2
       (Map.map2zo
          (fun _ v1 -> Value.top) (* ⊤ *)
          (fun _ v2 -> Value.top) (* ⊤ *)
-         (fun _ v1 v2 -> Value.join  v1 v2)
+         (fun _ v1 v2 -> Value.join annot v1 v2)
       )
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊤. *)
 
 
-  let widening ctx (a1:t) (a2:t) : t =
+  let widen annot (a1:t) (a2:t) : t =
     bot_neutral2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.widening ctx v1 v2)
+         (fun _ v1 v2 -> Value.widen annot v1 v2)
       )
       a1 a2
   (** Widening (naive). *)
 
 
-  let meet  (a1:t) (a2:t) : t =
+  let meet annot (a1:t) (a2:t) : t =
     bot_absorb2
       (fun b1 b2 ->
         exn_to_bot
@@ -91,7 +91,7 @@ struct
              (fun _ v1 -> v1)
              (fun _ v2 -> v2)
              (fun _ v1 v2 ->
-                let v = Value.meet  v1 v2 in
+                let v = Value.meet annot v1 v2 in
                 if Value.leq v Value.bottom then
                   raise Found_BOT
                 else
@@ -118,16 +118,6 @@ struct
       ) fmt a
   (** Printing. *)
 
-
-  let debug_bin name op printres a1 a2 =
-    let r = op a1 a2 in
-    debug "@[%a@] %s@ @[%a@] ->@ @[@ %a@]" print a1 name print a2 printres r;
-    r
-
-  let leq = debug_bin "⊆" leq Format.pp_print_bool
-  let join = debug_bin "∪" join print
-  let meet = debug_bin "∩" meet print
-  let widening ctx = debug_bin "∇" (widening ctx) print
 
   let find (k: Key.t) (a: t) =
     try begin

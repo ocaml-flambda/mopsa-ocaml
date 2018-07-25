@@ -33,10 +33,10 @@ struct
   let leq abs1 abs2 =
     top_included Set.subset abs1 abs2
 
-  let join  abs1 abs2 =
+  let join annot  abs1 abs2 =
     top_lift2 Set.union abs1 abs2
 
-  let meet  abs1 abs2 =
+  let meet annot abs1 abs2 =
     top_neutral2 Set.inter abs1 abs2
 
   let subset = leq
@@ -48,7 +48,7 @@ struct
   let diff abs1 abs2 =
     top_neutral2 Set.diff abs1 abs2
 
-  let widening ctx abs1 abs2 =
+  let widen annot abs1 abs2 =
     top_absorb2
       (fun s1 s2 ->
          if Set.subset s2 s1 then

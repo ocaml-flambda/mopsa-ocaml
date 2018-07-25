@@ -62,32 +62,33 @@ struct
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊥. *)
 
-  let join  (a1:t) (a2:t) : t =
+  let join annot (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.join v1 v2)
+         (fun _ v1 v2 -> Value.join annot v1 v2)
       )
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊥. *)
 
-  let widening ctx (a1:t) (a2:t) : t =
+  let widening annot (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.widening ctx v1 v2)
+         (fun _ v1 v2 -> Value.widen annot v1 v2)
       )
       a1 a2
   (** Widening (naive). *)
-  let meet  (a1:t) (a2:t) : t =
+
+  let meet annot (a1:t) (a2:t) : t =
     top_neutral2
       (fun b1 b2 ->
           (Map.map2zo
              (fun _ v1 -> Value.bottom)
              (fun _ v2 -> Value.bottom)
-             (fun _ v1 v2 -> Value.meet  v1 v2)
+             (fun _ v1 v2 -> Value.meet annot v1 v2)
              b1) b2
       )
       a1 a2

@@ -21,8 +21,6 @@ type 'a interface = {
   import : 'a list;
 }
 
-type _ dom = ..
-
 module type DOMAIN =
 sig
 

@@ -32,11 +32,11 @@ struct
 
   let leq = Set.subset
 
-  let join  = Set.union
+  let join annot = Set.union
 
-  let meet  = Set.inter
+  let meet annot = Set.inter
 
-  let widening ctx = join
+  let widen  = join
 
   let print fmt abs =
     let open Format in
