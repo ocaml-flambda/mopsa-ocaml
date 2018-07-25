@@ -23,11 +23,23 @@ type token = ..
 type token += TCur
 (** Token of current (active) execution flow *)
 
-module FlowMap : MapExtSig.S with type key = token
+type token_info = {
+  compare : (token -> token -> int) -> token -> token -> int;
+  print   : (Format.formatter -> token -> unit) -> Format.formatter -> token -> unit;
+}
+
+val regiter_token : token_info -> unit
+
+module FlowMap : sig
+  include MapExtSig.S with type key = token
+  val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+end
 (** Map of flows binding tokens to abstract elements *)
 
+type 'a fmap = 'a FlowMap.t Top.with_top
+
 type 'a flow = {
-  map   : 'a FlowMap.t;
+  map   : 'a fmap;
   annot : 'a Annotation.t;
 }
 (** An abstract flow is a flow map augmented with an annotation *)
@@ -71,7 +83,7 @@ type ('a, 't) man = {
   widen     : 'a Annotation.t -> 'a -> 'a -> 'a;
   print     : Format.formatter -> 'a -> unit;
 
-  (* Accessors to the domain's abstract element *)
+  (* Accessors to abstract element ['t] of the domain *)
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
 

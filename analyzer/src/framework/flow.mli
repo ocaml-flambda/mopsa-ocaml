@@ -12,61 +12,39 @@
    the abstract environments of each flow token.
 *)
 
+type token = Manager.token
+type 'a flow = 'a Manager.flow
 
-(*==========================================================================*)
-                           (** {2 Tokens} *)
-(*==========================================================================*)
+val bottom    : 'a flow
 
+val top       : 'a flow
 
-type token = ..
+val is_bottom : ('a, _) Manager.man -> 'a flow -> bool
 
-type token += TCur
+val is_top    : ('a, _) Manager.man -> 'a flow -> bool
 
-val register_token_compare : ((token -> token -> int) -> token -> token -> int) -> unit
+val leq       : ('a, _) Manager.man -> 'a flow -> 'a flow -> bool
 
-val compare_token : token -> token -> int
+val join      : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
 
-val register_pp_token : ((Format.formatter -> token -> unit) -> Format.formatter -> token -> unit) -> unit
+val meet      : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
 
-val pp_token : Format.formatter -> token -> unit
+val widen     : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
 
-(*==========================================================================*)
-                           (** {2 Flows map} *)
-(*==========================================================================*)
+val print     : ('a, _) Manager.man -> Format.formatter -> 'a flow -> unit
 
+val get       : ('a, _) Manager.man -> token -> 'a flow -> 'a
 
-type 'a flow
+val set       : ('a, _) Manager.man -> token -> 'a -> 'a flow -> 'a flow
 
-val bottom : 'a flow
+val remove    : ('a, _) Manager.man -> token -> 'a flow -> 'a flow
 
-val top : 'a flow
+val filter    : ('a, _) Manager.man -> (token -> 'a -> bool) -> 'a flow -> 'a flow
 
-val is_bottom : 'a flow ->is_value_bottom:('a -> bool) -> bool
+val add       : ('a, _) Manager.man -> token -> 'a -> 'a flow -> 'a flow
 
-val is_top : 'a flow -> bool
+val map       : ('a, _) Manager.man -> (token -> 'a -> 'a) -> 'a flow -> 'a flow
 
-val leq : 'a flow -> 'a flow -> is_value_bottom:('a -> bool) -> value_leq:('a -> 'a -> bool) -> bool
+val fold      : ('a, _) Manager.man -> (token -> 'a -> 'b -> 'b) -> 'a flow -> 'b -> 'b
 
-val join : 'a flow -> 'a flow -> value_join:('a -> 'a -> 'a) -> 'a flow
-
-val meet : 'a flow -> 'a flow -> value_bottom:'a -> value_meet:('a -> 'a -> 'a) -> 'a flow
-
-val widening : Context.context -> 'a flow -> 'a flow -> value_widening:(Context.context -> 'a -> 'a -> 'a) -> 'a flow
-
-val print : value_print:(Format.formatter -> 'a -> unit) -> Format.formatter -> 'a flow -> unit
-
-val get : token -> 'a flow -> value_bottom:'a -> value_top:'a -> 'a
-
-val set : token -> 'a -> 'a flow -> is_value_bottom:('a -> bool) -> 'a flow
-
-val remove : token -> 'a flow -> 'a flow
-
-val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
-
-val add : token -> 'a -> 'a flow -> is_value_bottom:('a -> bool) -> value_join:('a -> 'a -> 'a) -> 'a flow
-
-val map : (token -> 'a -> 'b) -> 'a flow -> 'b flow
-
-val fold : (token -> 'a -> 'b -> 'b) -> 'a flow -> 'b -> 'b
-
-val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a flow -> 'a flow -> value_bottom:'a -> 'a flow
+val merge     : ('a, _) Manager.man -> (token -> 'a option -> 'a option -> 'a option) -> 'a flow -> 'a flow -> 'a flow

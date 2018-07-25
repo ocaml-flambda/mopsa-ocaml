@@ -44,16 +44,30 @@ let compare_token tk = !token_compare_chain tk
 
 let pp_token fmt ft = !print_token_chain fmt ft
 
-module FlowMap = MapExt.Make(
-  struct
-    type t = token
-    let compare = compare_token
-    let print = pp_token
-  end
-  )
+module FlowMap =
+struct
+  include MapExt.Make(
+    struct
+      type t = token
+      let compare = compare_token
+      let print = pp_token
+    end
+    )
+
+  let print pp_value fmt m =
+    if is_empty m then Format.pp_print_string fmt "⊥"
+    else
+      Format.fprintf fmt "@[<v>%a@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt (k, v) -> Format.fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k pp_value v)
+        ) (bindings m)
+end
+
+type 'a fmap = 'a FlowMap.t Top.with_top
 
 type 'a flow = {
-  map   : 'a FlowMap.t;
+  map   : 'a fmap;
   annot : 'a Annotation.t;
 }
 

@@ -14,175 +14,156 @@
 
 open Top
 open Lattice
+open Manager
 
-let debug fmt = Debug.debug ~channel:"framework.flow" fmt
-
-(*==========================================================================*)
-                           (** {2 Tokens} *)
-(*==========================================================================*)
-
-
-type token = ..
-(** Extensible type of flow tokens. *)
-
-type token +=
-  | TCur (** Flow of current executions. *)
+type token = Manager.token
+module FlowMap = Manager.FlowMap
+type 'a fmap = 'a Manager.fmap
+type 'a flow = 'a Manager.flow
 
 
-let token_compare_chain : (token -> token -> int) ref = ref (fun tk1 tk2 ->
-    match tk1, tk2 with
-    | TCur, TCur -> 0
-    | _ -> compare tk1 tk2
-  )
 
-let register_token_compare cmp =
-  token_compare_chain := cmp !token_compare_chain
+let bottom : 'a flow = {
+  map = Nt FlowMap.empty;
+  annot = Annotation.empty;
+}
 
-let compare_token tk = !token_compare_chain tk
+let top : 'a flow = {
+  map = TOP;
+  annot = Annotation.empty;
+}
 
-let pp_token_chain : (Format.formatter -> token -> unit) ref = ref (fun fmt ->
-    function
-    | TCur -> Format.pp_print_string fmt "cur"
-    | _ -> failwith "Pp: Unknown flow token"
-)
-
-
-let register_pp_token pp = pp_token_chain := pp !pp_token_chain
-
-let pp_token fmt ft = !pp_token_chain fmt ft
-
-(*==========================================================================*)
-                           (** {2 Flows map} *)
-(*==========================================================================*)
-
-
-module Map = MapExt.Make(
-  struct
-    type t = token
-    let compare tk1 tk2 = compare_token tk1 tk2
-    let print fmt tk = pp_token fmt tk
-  end
-  )
-
-type 'a flow = 'a Map.t with_top
-
-let bottom : 'a flow = Nt Map.empty
-
-let top : 'a flow = TOP
-
-let is_bottom (flow: 'a flow) ~(is_value_bottom: 'a -> bool) : bool =
+let is_bottom (man: ('a, _) man) (flow: 'a flow) : bool =
   top_dfl1 false (fun m ->
-      Map.for_all (fun _ v -> is_value_bottom v) m
-    ) flow
+      FlowMap.for_all (fun _ v -> man.is_bottom v) m
+    ) flow.map
 
 
-let is_top (flow: 'a flow) : bool =
-  top_dfl1 true (fun _ -> false) flow
+let is_top (man: ('a, _) man) (flow: 'a flow) : bool =
+  top_dfl1 true (fun _ -> false) flow.map
 
 
-let leq (flow1: 'a flow) (flow2: 'a flow) ~(is_value_bottom: 'a -> bool) ~(value_leq: 'a -> 'a -> bool) : bool =
+let leq (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : bool =
   top_included
-    (Map.for_all2zo
-       (fun _ v1 -> is_value_bottom v1) (* non-⊥ ⊈ ⊥ *)
+    (FlowMap.for_all2zo
+       (fun _ v1 -> man.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
        (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-       (fun _ v1 v2 -> value_leq v1 v2)
+       (fun _ v1 v2 -> man.leq v1 v2)
     )
-    flow1 flow2
+    flow1.map flow2.map
 
-let join (flow1: 'a flow) (flow2: 'a flow) ~(value_join: 'a -> 'a -> 'a) : 'a flow =
-  top_lift2
-    (Map.map2zo
-       (fun _ v1 -> v1)
-       (fun _ v2 -> v2)
-       (fun _ v1 v2 -> value_join v1 v2)
-    )
-    flow1 flow2
+let join (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  (* FIXME: we choose here one annotation, which is correct but too
+     coarse. We need to fold the annotation through the two flows *)
+  let annot = flow2.annot in
+  let map = top_lift2
+      (FlowMap.map2zo
+         (fun _ v1 -> v1)
+         (fun _ v2 -> v2)
+         (fun _ v1 v2 -> man.join annot v1 v2)
+      )
+      flow1.map flow2.map
+  in
+  {map; annot}
 
-let meet (flow1: 'a flow) (flow2: 'a flow) ~(value_bottom: 'a) ~(value_meet: 'a -> 'a -> 'a) : 'a flow =
-  top_neutral2
-    (fun b1 b2 ->
-       Map.map2zo
-         (fun _ v1 -> value_bottom)
-         (fun _ v2 -> value_bottom)
-         (fun _ v1 v2 -> value_meet v1 v2)
-         b1 b2
-    )
-    flow1 flow2
+let meet (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  (* FIXME: we choose here one annotation, which is correct but too
+     coarse. We need to fold the annotation through the two flows *)
+  let annot = flow2.annot in
+  let map = top_neutral2
+      (fun b1 b2 ->
+         FlowMap.map2zo
+           (fun _ v1 -> man.bottom)
+           (fun _ v2 -> man.bottom)
+           (fun _ v1 v2 -> man.meet annot v1 v2)
+           b1 b2
+      )
+      flow1.map flow2.map
+  in
+  {map; annot}
 
-let widening (ctx: Context.context) (flow1: 'a flow) (flow2: 'a flow) ~(value_widening: Context.context -> 'a -> 'a -> 'a) : 'a flow =
-  top_lift2
-    (Map.map2zo
-       (fun _ v1 -> v1)
-       (fun _ v2 -> v2)
-       (fun _ v1 v2 -> value_widening ctx v1 v2)
-    )
-    flow1 flow2
+let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  (* FIXME: we choose here one annotation, which is correct but too
+     coarse. We need to fold the annotation through the two flows *)
+  let annot = flow2.annot in
+  let map = top_lift2
+      (FlowMap.map2zo
+         (fun _ v1 -> v1)
+         (fun _ v2 -> v2)
+         (fun _ v1 v2 -> man.widen annot v1 v2)
+      )
+      flow1.map flow2.map
+  in
+  {map; annot}
 
-let print ~(value_print: Format.formatter -> 'a -> unit) fmt (flow : 'a flow) : unit=
-  let open Format in
-  top_fprint (fun fmt m ->
-      if Map.is_empty m then pp_print_string fmt "⊥"
-      else
-        fprintf fmt "@[<v>%a@]"
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-             (fun fmt (k, v) -> fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k value_print v)
-          ) (Map.bindings m)
-    ) fmt flow
+let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
+  top_fprint (FlowMap.print man.print) fmt flow.map
 
 
-
-let get (tk: token) (flow: 'a flow) ~(value_bottom: 'a) ~(value_top: 'a) : 'a =
+let get (man: ('a, _) man) (tk: token) (flow: 'a flow) : 'a =
   try
-    let m = top_to_exn flow in
-    try Map.find tk m with Not_found -> value_bottom
-  with Found_TOP -> value_top
+    let m = top_to_exn flow.map in
+    try FlowMap.find tk m with Not_found -> man.bottom
+  with Found_TOP -> man.top
 
 
-let set (tk: token) (a: 'a) (flow: 'a flow) ~(is_value_bottom: 'a -> bool) : 'a flow =
-  top_lift1 (fun m ->
-      if is_value_bottom a then Map.remove tk m
-      else Map.add tk a m
-    ) flow
+let set (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (fun m ->
+      if man.is_bottom a then FlowMap.remove tk m
+      else FlowMap.add tk a m
+    ) flow.map
+  in
+  {flow with map}
 
-let remove (tk: token) (flow: 'a flow) : 'a flow =
-  top_lift1 (Map.remove tk) flow
+let remove (man: ('a, _) man) (tk: token) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (FlowMap.remove tk) flow.map in
+  {flow with map}
 
 
-let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
-  top_lift1 (Map.filter f) flow
+let filter (man: ('a, _) man) (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (FlowMap.filter f) flow.map in
+  {flow with map}
 
-let add (tk: token) (a: 'a) (flow: 'a flow) ~(is_value_bottom: 'a -> bool) ~(value_join: 'a -> 'a -> 'a) : 'a flow =
-  top_lift1 (fun m ->
-      if is_value_bottom a then m
+let add (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
+  let annot = flow.annot in
+  let map = top_lift1 (fun m ->
+      if man.is_bottom a then m
       else
         let a' =
           try
-            let old = Map.find tk m in
-            value_join a old
+            let old = FlowMap.find tk m in
+            man.join annot a old
           with Not_found ->
             a
         in
-        Map.add tk a' m
-    ) flow
+        FlowMap.add tk a' m
+    ) flow.map
+  in
+  {map; annot}
 
-let map (f: token -> 'a -> 'b) (flow: 'a flow) : 'b flow =
-  top_lift1 (Map.mapi f) flow
+let map (man: ('a, _) man) (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (FlowMap.mapi f) flow.map in
+  {flow with map}
 
-let fold (f: token -> 'a -> 'b -> 'b) (flow: 'a flow) (x: 'b) : 'b =
-  let m = top_to_exn flow in
-  Map.fold f m x
+let fold (man: ('a, _) man) (f: token -> 'a -> 'b -> 'b) (flow: 'a flow) (init: 'b) : 'b =
+  let m = top_to_exn flow.map in
+  FlowMap.fold f m init
 
-let merge (f: token -> 'a option -> 'a option -> 'a option) (flow1: 'a flow) (flow2: 'a flow) ~(value_bottom: 'a) : 'a flow =
-  let exec tk a b =
+let merge (man: ('a, _) man) (f: token -> 'a option -> 'a option -> 'a option) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+  (* FIXME: we choose here one annotation, which is correct but too
+     coarse. We need to fold the annotation through the two flows *)
+  let annot = flow2.annot in
+  let fopt tk a b =
     match f tk a b with
-    | None -> value_bottom
+    | None -> man.bottom
     | Some v -> v
   in
-  top_lift2
-    (Map.map2zo
-       (fun tk v1 -> exec tk (Some v1) None)
-       (fun tk v2 -> exec tk None (Some v2))
-       (fun tk v1 v2 -> exec tk (Some v1) (Some v2))
+  let map = top_lift2
+    (FlowMap.map2zo
+       (fun tk v1 -> fopt tk (Some v1) None)
+       (fun tk v2 -> fopt tk None (Some v2))
+       (fun tk v1 v2 -> fopt tk (Some v1) (Some v2))
     )
-    flow1 flow2
+    flow1.map flow2.map
+  in
+  {map; annot}
