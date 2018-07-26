@@ -30,27 +30,16 @@ MAKEROOT=$(MOPSAROOT)/make
 ## Rules ##
 ###########
 
-.PHONY: native lib-native lib-native-c clean deps merlin tests tests-deps doc
+.PHONY: native lib-native lib-native-c clean deps merlin doc
 
 -include $(MAKEROOT)/target_rules.mk
--include $(MAKEROOT)/pack_rules.mk
--include $(MAKEROOT)/dep_rules.mk
 -include $(MAKEROOT)/ocaml_rules.mk
+-include $(MAKEROOT)/pack_rules.mk
 -include $(MAKEROOT)/doc_rules.mk
--include $(MAKEROOT)/parser_rules.mk
 -include $(MAKEROOT)/c_rules.mk
--include $(MAKEROOT)/test_rules.mk
 
 
 ifneq ($(MAKECMDGOALS),clean)
-ifneq ($(MAKECMDGOALS),tests)
-$(info Generating packs templates)
-$(foreach pack,$(PACKS),$(eval $(call PACK_template,$(pack))))
--include $(BML:%.ml=%.dep)
--include $(BMLY:%.mly=%.ydep)
-endif
-endif
-
-ifeq ($(MAKECMDGOALS),tests)
--include $(TESTS_DEP)
+-include $(DEPS_ML)
+-include $(DEPS_MLI)
 endif

@@ -27,11 +27,9 @@ BIN = bin
 DOC = doc
 LIB = lib
 
-BSRC = $(BUILD)/$(SRC)
-BTESTS = $(BUILD)/$(TESTS)
 
 #PKGS += unix str
-INCLUDES += -I $(BUILD) -I $(BSRC)
+INCLUDES += -I $(BUILD)
 
 OCAMLFLAGS :=  -bin-annot -safe-string $(INCLUDES) $(OCAMLFLAGS) -g
 CFLAGS := $(CFLAGS) $(INCLUDES)

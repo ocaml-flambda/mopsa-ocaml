@@ -1,82 +1,36 @@
-# This template function generates for each pack the necessary recipes to compile its contents
-define PACK_template =
- #Some definitions
- SPATH_$(1) = $$(SRC)/$$(subst .,/,$(1))
- BPATH_$(1) = $$(SPATH_$(1):$$(SRC)/%=$$(BSRC)/%)
+##################################
+## Generate flags for each pack ##
+##################################
 
- #Pack name with capitalized parts
- NAME_$(1) = $$(shell sed -e "s/\b\(.\)/\u\1/g" <<< $(1))
-
- #Include directories
- INCLUDES_$(1) = $$(subst -I $$(SRC),-I $$(BSRC),$$(call includes,$$(SPATH_$(1))))
-
- #Sub-sources
- SML_$(1) = $$(wildcard $$(SPATH_$(1))/*.ml)
- BML_$(1) = $$(SML_$(1):$$(SRC)/%=$$(BSRC)/%)
- SMLI_$(1) = $$(wildcard $$(SPATH_$(1))/*.mli)
- BMLI_$(1) = $$(SMLI_$(1):$$(SRC)/%=$$(BSRC)/%)
-
- #Dependencies of sub-sources to be generated
- DEPS_$(1) = $$(BML_$(1):%.ml=%.dep)
-
- #Object files
- CMI_$(1) = $$(BML_$(1):%.ml=%.cmi)
- CMO_$(1) = $$(BML_$(1):%.ml=%.cmo)
- CMX_$(1) = $$(BML_$(1):%.ml=%.cmx)
-
- #Contents
- LS_$(1) = \
+define generate_pack_flags =
+ PACK_NAME_$(1) = $$(call pack_name,$(1))
+ PACK_CMX_$(1) = $$(BUILD)/$(1).cmx
+ INCLUDE_FLAG_$$(PACK_CMX_$(1)) = $$(patsubst $$(SRC)%,$$(BUILD)%, $$(call include_lineage,$$(SRC)/$(1)))
+ PACK_CONTENT_$(1) = \
 	$$(if $$($(1)),\
 		$$($(1)),\
-		$$(SML_$(1):$$(SPATH_$(1))/%.ml=%) $$(call subdirs,$$(SPATH_$(1)))\
+		$$(foreach f,$$(wildcard $$(SRC)/$(1)/*.ml) $$(shell find $$(SRC)/$(1)/* -maxdepth 0 -type d),$$(shell basename $$(f) .ml))\
 	)
-
- #Parent pack
- PARENT_$(1) = $$(subst /,.,$$(filter-out $$(BSRC), $$(patsubst $$(BSRC)/%, %, $$(shell realpath --relative-to=. $$(BPATH_$(1))/..))))
- PARENT_PACK_$(1) = $$(if $$(PARENT_$(1)), -for-pack $$(shell sed -e "s/\b\(.\)/\u\1/g" <<< $$(PARENT_$(1))), )
-
- #Merlin prefix
- MERLIN_PREFIX_$(1) = $$(shell sed -e "s/[^\/]*/../g" <<< $$(SPATH_$(1)))
-
- #Generate pack ml using ocp-pack.
- #Need to put an empty comment line at the beginning to get proper documentation.
- $$(BPATH_$(1)).ml: $$(LS_$(1):%=$$(BPATH_$(1))/%.ml)
-	@mkdir -p $$(@D)
-	@$$(OCPPACK) -o $$@ $$+
-	@$$(SED) -i '1s/^/(** *)\n/' $$@
-
- #Generate dependency files of the sub-sources in the pack
- $$(DEPS_$(1)): %.dep: %.ml | $$(ALL_ML)
-	@echo "Generating dependencies of $$<"
-	@$$(OCAMLDEP) $$(INCLUDES_$(1)) $$< > $$@
-
- #Compile the sub-sources with the right packing flags
- $$(CMX_$(1)): %.cmx: %.ml | %.dep
-	@echo "Compiling $$<"
-	@$$(OCAMLFIND)  $$(OCAMLOPT) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$(LIBCMXA) $$< -o $$@
-
- $$(CMI_$(1)): %.cmi: %.mli | %.dep
-	@echo "Compiling $$<"
-	@$$(OCAMLFIND)  $$(OCAMLC) -package "$$(PKGS)" $$(OCAMLFLAGS) -c -for-pack $$(NAME_$(1)) $$(INCLUDES_$(1)) $$< -c -o $$@
-
-
- #Compile the pack
- $$(BPATH_$(1)).cmo: %.cmo: $$(LS_$(1):%=$$(BPATH_$(1))/%.cmo) | %.ml
-	@echo "Packing $$@"
-	@$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -package "$$(PKGS)" -pack $$(PARENT_PACK_$(1)) $$(INCLUDES_$(1)) $$+ -o $$@
-
- $$(BPATH_$(1)).cmx: %.cmx: $$(LS_$(1):%=$$(BPATH_$(1))/%.cmx) | %.ml
-	@echo "Packing $$@"
-	@$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -package "$$(PKGS)" -pack $$(PARENT_PACK_$(1)) $$(INCLUDES_$(1))  $$+ -o $$@
-
- merlin: $$(SPATH_$(1))/.merlin
-
- $$(SPATH_$(1))/.merlin:
-	@echo "Generating .merlin for $(1)"
-	$$(foreach \
-		path,\
-		$$(filter-out -I,$$(INCLUDES) $$(INCLUDES_$(1))),\
-		$$(file >>$$@,B $$(MERLIN_PREFIX_$(1))/$$(path))\
+ PACK_DEP_$$(PACK_CMX_$(1)) = $$(patsubst %,$$(BUILD)/$(1)/%.cmx,$$(PACK_CONTENT_$(1)))
+ PARENT_PACK_$(1) = $$(patsubst /%,%,$$(patsubst $$(SRC)%,%,$$(shell realpath --relative-to=. $$(SRC)/$(1)/..)))
+ PACK_FLAG_$$(PACK_CMX_$(1)) = \
+	$$(if $$(PARENT_PACK_$(1)),\
+		-for-pack $$(call pack_name,$$(PARENT_PACK_$(1))),\
+		\
 	)
-	$$(file >>$$@,PKG $$(PKGS))
 endef
+
+$(foreach pack,$(PACKS),$(eval $(call generate_pack_flags,$(pack))))
+
+#####################################
+## Generate flags for each ml file ##
+#####################################
+
+define generate_ml_flags =
+ INCLUDE_FLAG_$(1) = $$(patsubst $$(SRC)%,$$(BUILD)%,$$(call include_lineage,$$(shell dirname $(1))))
+ PACK_NAME_$(1) = $$(call pack_name,$$(call pack_dir_of_ml,$(1)))
+ PACK_FLAG_$(1) = $$(if $$(filter $$(PACK_NAME_$(1)),.), ,-for-pack $$(PACK_NAME_$(1)))
+endef
+
+$(foreach ml,$(ML),$(eval $(call generate_ml_flags,$(ml))))
+$(foreach mli,$(MLI),$(eval $(call generate_ml_flags,$(mli))))
