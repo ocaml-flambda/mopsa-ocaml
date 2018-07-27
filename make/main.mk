@@ -42,4 +42,6 @@ MAKEROOT=$(MOPSAROOT)/make
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS_ML)
 -include $(DEPS_MLI)
+-include $(DEPS_MLL)
+-include $(DEPS_MLY)
 endif

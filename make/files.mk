@@ -1,14 +1,25 @@
 # OCaml sources
 ML = $(shell find $(SRC) -name "*.ml")
 MLI = $(shell find $(SRC) -name "*.mli")
+
+MLL = $(shell find $(SRC) -name "*.mll")
+ML_OF_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml)
+
+MLY = $(shell find $(SRC) -name "*.mly")
+ML_OF_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml)
+MLI_OF_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli)
+
 PACKS = $(patsubst $(SRC)/%,%,$(shell find $(SRC)/* -type d))
 ML_OF_PACKS = $(PACKS:%=$(BUILD)/%.ml)
+
 TOPML = $(shell $(OCAMLFIND) ocamldep -sort $(SRC)/*.ml)
 TOPPACKS = $(patsubst $(SRC)/%,%,$(shell find $(SRC)/* -maxdepth 0 -type d))
 
 # Dependencies
 DEPS_ML = $(ML:$(SRC)/%.ml=$(BUILD)/%.dep)
 DEPS_MLI = $(MLI:$(SRC)/%.mli=$(BUILD)/%.idep)
+DEPS_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.dep)
+DEPS_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.dep)
 
 # Objects
 CMI = $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmi)
@@ -20,6 +31,11 @@ CMX_FROM_CMI = $(CMI:%.cmi=%.cmx)
 
 CMO_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmo)
 CMX_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmx)
+
+CMX_FROM_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx)
+CMX_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx)
+CMI_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi)
+
 
 TOPCMX = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmx) $(TOPPACKS:%=$(BUILD)/%.cmx)
 
