@@ -32,11 +32,10 @@ MAKEROOT=$(MOPSAROOT)/make
 
 .PHONY: native lib-native lib-native-c clean deps merlin doc
 
--include $(MAKEROOT)/target_rules.mk
--include $(MAKEROOT)/ocaml_rules.mk
--include $(MAKEROOT)/pack_rules.mk
--include $(MAKEROOT)/doc_rules.mk
--include $(MAKEROOT)/c_rules.mk
+-include $(MAKEROOT)/target.mk
+-include $(MAKEROOT)/ocaml.mk
+-include $(MAKEROOT)/pack.mk
+-include $(MAKEROOT)/c.mk
 
 
 ifneq ($(MAKECMDGOALS),clean)
