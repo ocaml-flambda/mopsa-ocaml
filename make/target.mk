@@ -1,9 +1,9 @@
 .PHONY: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
-all: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
+all: $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS) $(MERLIN)
 
 clean:
-	-rm -rf $(BUILD)/* $(LIB)/* $(DOC)/*
+	-rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
 
 
 $(TARGET_NATIVES): %: $(BUILD)/%.native

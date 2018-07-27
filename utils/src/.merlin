@@ -1,2 +1,4 @@
-S .
-B ../_build/src
+S ../src/** 
+ B ../_build/**
+
+PKG str gmp zarith camlidl

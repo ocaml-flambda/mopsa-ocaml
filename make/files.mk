@@ -39,6 +39,9 @@ CMI_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi)
 
 TOPCMX = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmx) $(TOPPACKS:%=$(BUILD)/%.cmx)
 
+## Merlin
+MERLIN = $(SRC)/.merlin $(PACKS:%=$(SRC)/%/.merlin)
+
 ## C/C++ stubs
 C_OBJ = $(C_SRC:%.c=$(BUILD)/%.o)
 CC_OBJ = $(CC_SRC:%.cc=$(BUILD)/%.o)
@@ -55,3 +58,5 @@ is_directory = $(shell test -d $(basename $(1)) && echo 1 || echo 0)
 pack_dir_of_ml = $(shell dirname $(patsubst $(SRC)/%,%,$(1)))
 
 pack_name = $(subst /,.,$(shell $(SED) -e "s/\b\(.\)/\u\1/g" <<< $(1)))
+
+merlin_root_path = $(shell $(SED) -e "s/[^\/]\+\//\.\.\//g" -e "s/\/[^\/]\+$$//g" <<< $(1))

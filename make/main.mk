@@ -35,6 +35,7 @@ MAKEROOT=$(MOPSAROOT)/make
 -include $(MAKEROOT)/target.mk
 -include $(MAKEROOT)/ocaml.mk
 -include $(MAKEROOT)/pack.mk
+-include $(MAKEROOT)/merlin.mk
 -include $(MAKEROOT)/c.mk
 
 
