@@ -12,8 +12,6 @@ open Value
 open Manager
 open Ast
 
-
-
 module Make(Value: VALUE) =
 struct
 
