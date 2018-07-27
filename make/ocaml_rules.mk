@@ -45,10 +45,12 @@ $(ML_OF_PACKS): $(BUILD)/%.ml : $(SRC)/%
 
 
 $(ML_OF_MLL): $(BUILD)/%.ml: $(SRC)/%.mll
+	@mkdir -p $(@D)
 	@echo "Compiling $<"
 	$(OCAMLLEX) -q $< -o $@
 
 $(ML_OF_MLY): $(BUILD)/%.ml: $(SRC)/%.mly | $(BUILD)/%.dep
+	@mkdir -p $(@D)
 	@echo "Compiling $<"
 	$(MENHIR)  --explain  $< --base $(BUILD)/$*
 
@@ -96,6 +98,7 @@ $(DEPS_MLL): $(BUILD)/%.dep: $(BUILD)/%.ml | $(ML_OF_PACKS) $(ML_OF_MLY)
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
 
 $(DEPS_MLY): $(BUILD)/%.dep: $(SRC)/%.mly | $(ML_OF_PACKS)
+	@mkdir -p $(@D)
 	@echo "Generating dependencies for $<"
 	@$(MENHIR) --raw-depend --ocamldep '$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES) -I $(SRC)' $< > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
