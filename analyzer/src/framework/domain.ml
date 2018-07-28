@@ -30,7 +30,6 @@ sig
 
   val exec_interface : Zone.t interface
   val eval_interface : (Zone.t * Zone.t) interface
-  val ask_interface : Zone.t interface
 
   val exec: Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
   val eval: (Zone.t * Zone.t) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option

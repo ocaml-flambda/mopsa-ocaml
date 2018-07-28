@@ -17,11 +17,12 @@ open Lattice
 open Manager
 
 type token = Manager.token
+
 module FlowMap = Manager.FlowMap
+
 type 'a fmap = 'a Manager.fmap
+
 type 'a flow = 'a Manager.flow
-
-
 
 let bottom : 'a flow = {
   map = Nt FlowMap.empty;
@@ -43,12 +44,12 @@ let is_top (man: ('a, _) man) (flow: 'a flow) : bool =
   top_dfl1 true (fun _ -> false) flow.map
 
 
-let leq (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : bool =
+let subset (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : bool =
   top_included
     (FlowMap.for_all2zo
        (fun _ v1 -> man.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
        (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-       (fun _ v1 v2 -> man.leq v1 v2)
+       (fun _ v1 v2 -> man.subset v1 v2)
     )
     flow1.map flow2.map
 
@@ -100,14 +101,14 @@ let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
   top_fprint (FlowMap.print man.print) fmt flow.map
 
 
-let get (man: ('a, _) man) (tk: token) (flow: 'a flow) : 'a =
+let get (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a =
   try
     let m = top_to_exn flow.map in
     try FlowMap.find tk m with Not_found -> man.bottom
   with Found_TOP -> man.top
 
 
-let set (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
+let set (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (fun m ->
       if man.is_bottom a then FlowMap.remove tk m
       else FlowMap.add tk a m
@@ -115,16 +116,7 @@ let set (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
   in
   {flow with map}
 
-let remove (man: ('a, _) man) (tk: token) (flow: 'a flow) : 'a flow =
-  let map = top_lift1 (FlowMap.remove tk) flow.map in
-  {flow with map}
-
-
-let filter (man: ('a, _) man) (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
-  let map = top_lift1 (FlowMap.filter f) flow.map in
-  {flow with map}
-
-let add (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
+let add (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let annot = flow.annot in
   let map = top_lift1 (fun m ->
       if man.is_bottom a then m
@@ -141,15 +133,24 @@ let add (man: ('a, _) man) (tk: token) (a: 'a) (flow: 'a flow) : 'a flow =
   in
   {map; annot}
 
-let map (man: ('a, _) man) (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
+let remove (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (FlowMap.remove tk) flow.map in
+  {flow with map}
+
+let filter (f: token -> 'a -> bool) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+  let map = top_lift1 (FlowMap.filter f) flow.map in
+  {flow with map}
+
+
+let map (f: token -> 'a -> 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.mapi f) flow.map in
   {flow with map}
 
-let fold (man: ('a, _) man) (f: token -> 'a -> 'b -> 'b) (flow: 'a flow) (init: 'b) : 'b =
+let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (man: ('a, _) man) (flow: 'a flow) : 'b =
   let m = top_to_exn flow.map in
-  FlowMap.fold f m init
+  FlowMap.fold (fun tk a acc -> f acc tk a) m init
 
-let merge (man: ('a, _) man) (f: token -> 'a option -> 'a option -> 'a option) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   (* FIXME: we choose here one annotation, which is correct but too
      coarse. We need to fold the annotation through the two flows *)
   let annot = flow2.annot in
@@ -167,8 +168,3 @@ let merge (man: ('a, _) man) (f: token -> 'a option -> 'a option -> 'a option) (
     flow1.map flow2.map
   in
   {map; annot}
-
-
-let is_cur_bottom man flow =
-  get man TCur flow |>
-  man.is_bottom

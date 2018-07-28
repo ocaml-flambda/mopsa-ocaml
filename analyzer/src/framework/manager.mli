@@ -20,7 +20,7 @@ type token = ..
 (** Flow tokens are used to tag abstract elements when encountered in a
     relevant control point *)
 
-type token += TCur
+type token += T_cur
 (** Token of current (active) execution flow *)
 
 type token_info = {
@@ -55,7 +55,7 @@ val get_annot : 'a flow -> 'a Annotation.t
 
 
 type ('a, 'e) evl_case = {
-  exp : 'e option;
+  expr : 'e option;
   flow: 'a flow;
   cleaners: Ast.stmt list;
 }
@@ -79,8 +79,7 @@ type ('a, 't) man = {
   bottom    : 'a;
   top       : 'a;
   is_bottom : 'a -> bool;
-  is_top    : 'a -> bool;
-  leq       : 'a -> 'a -> bool;
+  subset    : 'a -> 'a -> bool;
   join      : 'a Annotation.t -> 'a -> 'a -> 'a;
   meet      : 'a Annotation.t -> 'a -> 'a -> 'a;
   widen     : 'a Annotation.t -> 'a -> 'a -> 'a;

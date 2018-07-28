@@ -14,7 +14,7 @@ type token = ..
 (** Flow tokens are used to tag abstract elements when encountered in a
     relevant control point *)
 
-type token += TCur
+type token += T_cur
 (** Token of current (active) execution flow *)
 
 type token_info = {
@@ -24,13 +24,13 @@ type token_info = {
 
 let token_compare_chain : (token -> token -> int) ref = ref (fun tk1 tk2 ->
     match tk1, tk2 with
-    | TCur, TCur -> 0
+    | T_cur, T_cur -> 0
     | _ -> compare tk1 tk2
   )
 
 let print_token_chain : (Format.formatter -> token -> unit) ref = ref (fun fmt ->
     function
-    | TCur -> Format.pp_print_string fmt "cur"
+    | T_cur -> Format.pp_print_string fmt "cur"
     | _ -> failwith "Pp: Unknown flow token"
 )
 
@@ -81,8 +81,8 @@ let get_annot flow = flow.annot
 
 
 type ('a, 'e) evl_case = {
-  exp : 'e option;
-  flow: 'a flow;
+  expr    : 'e option;
+  flow    : 'a flow;
   cleaners: Ast.stmt list;
 }
 
@@ -99,8 +99,7 @@ type ('a, 't) man = {
   bottom    : 'a;
   top       : 'a;
   is_bottom : 'a -> bool;
-  is_top    : 'a -> bool;
-  leq       : 'a -> 'a -> bool;
+  subset    : 'a -> 'a -> bool;
   join      : 'a Annotation.t -> 'a -> 'a -> 'a;
   meet      : 'a Annotation.t -> 'a -> 'a -> 'a;
   widen     : 'a Annotation.t -> 'a -> 'a -> 'a;

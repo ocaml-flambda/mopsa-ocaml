@@ -196,8 +196,7 @@ struct
     bottom = Domain.bottom;
     top = Domain.top;
     is_bottom = Domain.is_bottom;
-    is_top = Domain.is_top;
-    leq = Domain.leq;
+    subset = Domain.subset;
     join = Domain.join;
     meet = Domain.meet;
     widen = Domain.widen;
