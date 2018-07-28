@@ -65,7 +65,7 @@ struct
 
   let rec init prog : Domain.t flow =
     let flow0 = Flow.bottom  |>
-                Flow.set man TCur man.top
+                Flow.set T_cur man.top man
     in
     match Domain.init prog man flow0 with
     | None -> flow0

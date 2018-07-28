@@ -28,9 +28,7 @@ struct
 
   let is_bottom abs = Set.is_empty abs
 
-  let is_top abs = Set.cardinal abs = List.length Value.values
-
-  let leq = Set.subset
+  let subset = Set.subset
 
   let join annot = Set.union
 

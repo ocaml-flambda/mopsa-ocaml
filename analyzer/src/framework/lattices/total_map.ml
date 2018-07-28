@@ -46,17 +46,12 @@ struct
         Map.exists (fun _ v -> Value.is_bottom v) m
       ) abs
 
-  let is_top abs =
-    bot_dfl1 false (fun m ->
-        Map.for_all (fun _ v -> Value.is_top v) m
-      ) abs
-
-  let leq (a1:t) (a2:t) : bool =
+  let subset (a1:t) (a2:t) : bool =
     bot_included
       (Map.for_all2zo
          (fun _ v1 -> true) (* non-⊤ ⊆ ⊤ *)
-         (fun _ v2 -> Value.is_top v2)  (* ⊤ ⊈ non-⊤ *)
-         (fun _ v1 v2 -> Value.leq v1 v2)
+         (fun _ v2 -> Value.subset Value.top v2)  (* ⊤ ⊈ non-⊤ *)
+         (fun _ v1 v2 -> Value.subset v1 v2)
       )
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊤. *)
@@ -92,7 +87,7 @@ struct
              (fun _ v2 -> v2)
              (fun _ v1 v2 ->
                 let v = Value.meet annot v1 v2 in
-                if Value.leq v Value.bottom then
+                if Value.is_bottom v then
                   raise Found_BOT
                 else
                   v

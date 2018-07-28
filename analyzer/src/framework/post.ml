@@ -61,7 +61,7 @@ let bind
   Eval.fold (fun acc case ->
       let annot = get_annot acc.flow in
       let flow' = set_annot annot case.flow in
-      match case.exp with
+      match case.expr with
       | None -> join man acc {flow = flow'; mergers = []; publish = []; subscribe = []}
 
       | Some e ->
@@ -86,7 +86,7 @@ let assume
   : 'a post  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
   let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
-  match Flow.is_cur_bottom man then_flow, Flow.is_cur_bottom man else_flow with
+  match man.is_bottom (Flow.get T_cur man then_flow), man.is_bottom (Flow.get T_cur man else_flow) with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
   | false, false -> fboth then_flow else_flow

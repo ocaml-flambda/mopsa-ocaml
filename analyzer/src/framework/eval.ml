@@ -15,10 +15,10 @@ open Flow
 open Manager
 
 let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('a, 'e) evl =
-  Dnf.singleton {exp = Some e; flow; cleaners}
+  Dnf.singleton {expr = Some e; flow; cleaners}
 
 let empty flow : ('a, 'e) evl  =
-  Dnf.singleton {exp = None; flow; cleaners = []}
+  Dnf.singleton {expr = None; flow; cleaners = []}
 
 let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
   Dnf.mk_or evl1 evl2
@@ -68,9 +68,9 @@ let bind
     (fun annot case ->
       let flow' = set_annot annot case.flow in
       let evl' =
-        match case.exp with
+        match case.expr with
         | None -> empty flow'
-        | Some exp -> f exp flow'
+        | Some expr -> f expr flow'
       in
       let annot = choose_annot evl' in
       (evl', annot)
@@ -90,7 +90,7 @@ let assume
   : ('a, 'e) evl  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
   let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
-  match is_cur_bottom man then_flow, is_cur_bottom man else_flow with
+  match man.is_bottom (Flow.get T_cur man then_flow), man.is_bottom (Flow.get T_cur man else_flow) with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
   | false, false -> fboth then_flow else_flow
@@ -125,7 +125,7 @@ let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
        Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∧@;")
          (fun fmt case ->
-            match case.exp with
+            match case.expr with
             | None -> Format.pp_print_string fmt "ϵ"
             | Some x -> pp fmt x
          )

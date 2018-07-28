@@ -30,7 +30,7 @@ struct
 
   let top = TOP
 
-  let leq abs1 abs2 =
+  let subset abs1 abs2 =
     top_included Set.subset abs1 abs2
 
   let join annot  abs1 abs2 =
@@ -38,8 +38,6 @@ struct
 
   let meet annot abs1 abs2 =
     top_neutral2 Set.inter abs1 abs2
-
-  let subset = leq
 
   let union = join
 
@@ -112,8 +110,6 @@ struct
   let empty = bottom
 
   let is_bottom = is_empty
-
-  let is_top abs = (abs = TOP)
 
   let filter_dfl dfl f abs =
     top_dfl1 (Nt dfl) (fun s -> Nt (Set.filter f s)) abs
