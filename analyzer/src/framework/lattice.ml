@@ -13,13 +13,13 @@ sig
   (** {2 Structure} *)
 
   type t
-  (** Type of the abstract elements of the lattice. *)
+  (** Type of an abstract elements. *)
 
   val bottom: t
-  (** Least element of the lattice. *)
+  (** Least abstract element of the lattice. *)
 
   val top: t
-  (** Greatest element of the lattice. *)
+  (** Greatest abstract element of the lattice. *)
 
 
   (** {2 Predicates} *)
@@ -27,13 +27,9 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val is_top: t -> bool
-  (** [is_top a] tests whether [a] is top or not. *)
-
-  val leq: t -> t -> bool
-  (** Partial order relation.
-      [leq a1 a2] tests whether [a1] is related to (or included in) [a2].
-  *)
+  val subset: t -> t -> bool
+  (** Partial order relation. [leq a1 a2] tests whether [a1] is
+     related to (or included in) [a2]. *)
 
   (** {2 Operators} *)
 
@@ -47,11 +43,9 @@ sig
   (** [widening annot a1 a2] computes an upper bound of [a1] and [a2] that ensures
       stabilization of ascending chains. *)
 
-
   (** {2 Printing} *)
 
   val print: Format.formatter -> t -> unit
-  (** Printer of an element of the lattice. *)
-
+  (** Printer of an abstract element. *)
 
 end
