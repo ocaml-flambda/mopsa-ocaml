@@ -20,16 +20,14 @@ sig
   val of_constant : Ast.constant -> t
   (** Create a singleton abstract value from a constant. *)
 
-  val of_bool : bool option -> t
-
   (*==========================================================================*)
                           (** {2 Forward semantics} *)
   (*==========================================================================*)
 
-  val fwd_unop : Ast.operator -> t -> t
+  val unop : Ast.operator -> t -> t
   (** Forward evaluation of unary operators. *)
 
-  val fwd_binop : Ast.operator -> t -> t -> t
+  val binop : Ast.operator -> t -> t -> t
   (** Forward evaluation of binary operators. *)
 
 
@@ -38,37 +36,40 @@ sig
   (*==========================================================================*)
 
   val bwd_unop : Ast.operator -> t -> t -> t
-  (** Backward evaluation of unary operators. *)
+  (** Backward evaluation of unary operators.
+      [bwd_unop op x r] returns x':
+       - x' abstracts the set of v in x such as op v is in r
+       i.e., we fiter the abstract values x knowing the result r of applying
+       the operation on x
+
+       it is safe, as first approximation, to implement it as the identity:
+       let bwd_unop _ x _ = x
+     *)
 
   val bwd_binop : Ast.operator -> t -> t -> t -> t * t
-  (** Backward evaluation of binary operators. *)
+  (** Backward evaluation of binary operators.
+      [bwd_binop op x y r] returns (x',y') where
+      - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
+      - y' abstracts the set of v' in y such that v op v' is in r for some v  in x
+      i.e., we filter the abstract values x and y knowing that, after
+      applying the operation op, the result is in r
 
+      it is safe, as first approximation, to implement it as the identity:
+      let bwd_binop _ x y _ = (x,y)
+  *)
 
-  (*==========================================================================*)
-                         (** {2 Boolean comparisons} *)
-  (*==========================================================================*)
+  val compare : Ast.operator -> t -> t -> t * t
+  (** Forward evaluation of boolean comparisons. [compare op x y] returns (x',y') where:
+       - x' abstracts the set of v  in x such that v op v' is true for some v' in y
+       - y' abstracts the set of v' in y such that v op v' is true for some v  in x
+       i.e., we filter the abstract values x and y knowing that the test is true
 
-  val fwd_filter : Ast.operator -> t -> t -> bool
-  (** Forward evaluation of boolean comparisons. *)
-
-  val bwd_filter : Ast.operator -> t -> t -> t * t
-  (** Backward evaluation of boolean comparisons. *)
-
-  val assume_true : t -> t
-  (** Filter values that can evaluate to true. *)
-
-  val assume_false : t -> t
-  (** Filter values that can evaluate to false. *)
-
-  val can_be_true : t -> bool
-  (** Test whether a value can evaluate to true. *)
-
-  val can_be_false : t -> bool
-  (** Test whether a value can evaluate to false. *)
-
+       a safe, but not precise implementation, would be:
+       compare op x y = (x,y)
+  *)
 
   (*==========================================================================*)
-                           (** {2 Value zone} *)
+  (**                          {2 Value zone}                                 *)
   (*==========================================================================*)
   val zone : Zone.t
   (** Language zone in which the value abstraction is defined *)
