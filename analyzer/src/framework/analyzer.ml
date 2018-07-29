@@ -85,7 +85,7 @@ struct
         else
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_all (fun z -> Zone.leq z zone) Domain.exec_interface.export with
+            match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
             | [] -> Debug.fail "exec for %a not found" Zone.print zone
 
             | l ->
@@ -142,7 +142,7 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> Zone.leq2 p zpath) Domain.eval_interface.export with
+            match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
             | [] -> Debug.fail "eval for %a not found" Zone.print2 zpath
 
             | l ->
@@ -183,9 +183,9 @@ struct
     evl
 
   (** Query handler. *)
-  and ask : type r. ?zone:Zone.t -> r Query.query -> _ -> r =
-    fun ?(zone=Zone.top) query flow ->
-      match Domain.ask zone query man flow with
+  and ask : type r. r Query.query -> _ -> r =
+    fun query flow ->
+      match Domain.ask query man flow with
       | None -> Exceptions.fail "No reply for query"
       | Some r -> r
 

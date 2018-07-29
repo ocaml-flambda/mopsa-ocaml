@@ -31,9 +31,9 @@ sig
   val exec_interface : Zone.t interface
   val eval_interface : (Zone.t * Zone.t) interface
 
-  val exec: Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
-  val eval: (Zone.t * Zone.t) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask: Zone.t -> 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
+  val exec : Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
+  val eval : (Zone.t * Zone.t) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
+  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end
 
 type _ id = ..

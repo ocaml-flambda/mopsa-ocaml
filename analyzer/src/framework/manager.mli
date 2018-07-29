@@ -92,5 +92,5 @@ type ('a, 't) man = {
   (** Transfer functions *)
   exec : ?zone:Zone.t -> Ast.stmt -> 'a flow -> 'a flow;
   eval : ?zone:(Zone.t * Zone.t) -> Ast.expr -> 'a flow -> ('a, Ast.expr) evl;
-  ask : 'r. ?zone:Zone.t -> 'r Query.query -> 'a flow -> 'r;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
 }

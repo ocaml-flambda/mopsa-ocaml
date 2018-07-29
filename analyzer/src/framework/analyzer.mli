@@ -19,7 +19,7 @@ sig
 
   val eval : ?zone:(Zone.t * Zone.t) -> Ast.expr -> Domain.t flow -> (Domain.t, Ast.expr) evl
 
-  val ask : ?zone:Zone.t -> 'r Query.query -> Domain.t Flow.flow -> 'r
+  val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
 
   val man : (Domain.t, Domain.t) man
 
