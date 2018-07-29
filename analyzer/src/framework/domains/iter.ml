@@ -6,13 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Compose domains in sequence.
-
-    Lattice operations ([bottom], [top], [leq], etc.) are defined pointwise.
-    For [exec], [eval] and [ask], we return the result of the first domain
-    giving an non-empty answer.
-    The order of domains follows the order given in the configuration file.
-*)
+(** Iterator composer combines domains in sequence. Lattice operations
+   ([bottom], [top], [leq], etc.) are defined pointwise. For transfer
+   functions ([exec], [eval] and [ask]), the iterator returns the
+   result of the first domain giving an non-empty answer.  The order
+   of domains follows the order given in the configuration file.  *)
 
 open Manager
 open Domain

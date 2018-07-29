@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 
-(** Alarms allows reporting potential errors inferred by abstract domains. *)
+(** Alarms reporting potential errors inferred by abstract domains. *)
 
 type alarm_kind = ..
 
