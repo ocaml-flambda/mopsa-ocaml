@@ -1,5 +1,0 @@
-S ../src/** 
- B ../../../utils/lib/**
- B ../_build/**
-
-PKG zarith

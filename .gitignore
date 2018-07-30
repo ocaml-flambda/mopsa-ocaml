@@ -9,6 +9,9 @@ parsers/c/lib/**
 parsers/python/_build/**
 parsers/python/doc/**
 parsers/python/lib/**
+parsers/universal/_build/**
+parsers/universal/doc/**
+parsers/universal/lib/**
 bench/**
 *.native
 *.byte
