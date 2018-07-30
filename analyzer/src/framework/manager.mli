@@ -45,8 +45,10 @@ type 'a flow = {
 (** An abstract flow is a flow map augmented with an annotation *)
 
 val set_annot : 'a Annotation.t -> 'a flow -> 'a flow
+(** Change the annotation associated to a flow *)
 
 val get_annot : 'a flow -> 'a Annotation.t
+(** Returns the annotation associated to a flow *)
 
 
 (*==========================================================================*)
@@ -61,6 +63,8 @@ type ('a, 'e) evl_case = {
 }
 
 type ('a, 'e) evl = ('a, 'e) evl_case Dnf.t
+
+
 
 (*==========================================================================*)
 (**                             {2 Managers}                                *)

@@ -30,6 +30,8 @@ sig
   val binop : Ast.operator -> t -> t -> t
   (** Forward evaluation of binary operators. *)
 
+  val filter : t -> bool -> t
+  (** Keep values that may represent the argument truth value *)
 
   (*==========================================================================*)
                           (** {2 Backward operators} *)
@@ -78,12 +80,20 @@ sig
 end
 
 
-(** {2 Registration} *)
+
+(*==========================================================================*)
+(**                         {2 Registration} *)
+(*==========================================================================*)
+
 let values : (string * (module VALUE)) list ref = ref []
 let register_value name modl = values := (name, modl) :: !values
 let find_value name = List.assoc name !values
 
-(** {2 Default backward evaluators} *)
+
+
+(*==========================================================================*)
+(**                  {2 Default backward evaluators} *)
+(*==========================================================================*)
 
 let default_bwd_unop (op:Ast.operator) (x:'a) (r:'a) : 'a =
   x

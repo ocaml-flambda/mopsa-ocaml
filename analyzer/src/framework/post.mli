@@ -19,6 +19,10 @@ type 'a post = {
 }
 (** Post-conditions of statement transfer functions *)
 
+val bottom : 'a post
+
+val singleton : 'a flow -> 'a post
+
 val add_mergers : Ast.stmt list -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
 

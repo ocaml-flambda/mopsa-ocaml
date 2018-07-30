@@ -5,7 +5,7 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang main
 
-framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post domain analyzer lattices domains essentials config
+framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post domain analyzer lattices essentials domains config
 framework.domains.nonrel = value factory
 
 lang = universal
