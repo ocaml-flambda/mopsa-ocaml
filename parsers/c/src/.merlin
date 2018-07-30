@@ -1,0 +1,5 @@
+S ../src/** 
+ B ../../../utils/lib/**
+ B ../_build/**
+
+PKG str unix zarith
