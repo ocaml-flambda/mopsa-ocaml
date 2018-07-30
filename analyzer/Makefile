@@ -10,18 +10,15 @@ framework.domains.nonrel = value factory
 
 lang = universal
 
-lang.universal = ast pp visitor zone flows heap numeric setup
-lang.universal.heap = query recency
-lang.universal.numeric = values relational reductions
-lang.universal.numeric.values = int congruence float
+lang.universal = ast pp visitor frontend zone
 
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
-INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib
-LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa
+INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
+LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)

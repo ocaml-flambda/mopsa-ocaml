@@ -1,0 +1,2 @@
+_build/U_file_parser.cmx : _build/U_parser.cmx _build/U_lexer.cmx \
+    _build/U_ast_printer.cmx _build/U_ast.cmx _build/U_file_parser.cmi

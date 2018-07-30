@@ -1,0 +1,3 @@
+_build/U_parser.cmo : _build/U_ast.cmo _build/U_parser.cmi
+_build/U_parser.cmx : _build/U_ast.cmx _build/U_parser.cmi
+_build/U_parser.cmi : _build/U_ast.cmo

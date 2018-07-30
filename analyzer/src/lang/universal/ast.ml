@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 
+
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
@@ -20,7 +21,14 @@ type typ +=
   | T_float (** Floating-point real numbers. *)
   | T_string (** Strings. *)
   | T_addr (** Heap addresses. *)
+  | T_array of typ (** Array of [typ] *)
+  | T_char
 
+let () = register_typ_compare (fun next t1 t2 ->
+    match t1, t2 with
+    | T_array t1, T_array t2 -> compare_typ t1 t2
+    | _ -> next t1 t2
+  )
 
 (*==========================================================================*)
                            (** {2 Constants} *)
@@ -72,12 +80,11 @@ type operator +=
   | O_bit_rshift (** >> *)
   | O_bit_lshift (** << *)
 
+  | O_concat     (** concatenation of arrays and strings *)
+
   | O_wrap of Z.t * Z.t (** wrap *)
 
 
-let is_int_type = function
-  | T_int -> true
-  | _ -> false
 (*==========================================================================*)
                            (** {2 Heap addresses} *)
 (*==========================================================================*)
@@ -88,23 +95,33 @@ type addr_kind = ..
 (** Heap addresses. *)
 type addr = {
   addr_kind : addr_kind; (** Kind of a heap address. *)
-  addr_range : Framework.Location.range; (** Range of the allocation site. *)
   addr_uid : int; (** Unique identifier. *)
 }
 
-let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref = ref (fun ak1 ak2 ->
-    compare ak1 ak2
-  )
+type addr_info = {
+  compare : (addr -> addr -> int) -> addr -> addr -> int;
+  print   : (Format.formatter -> addr -> unit) -> Format.formatter -> addr -> unit;
+}
 
-let register_addr_kind_compare cmp =
-  addr_kind_compare_chain := cmp !addr_kind_compare_chain
+let addr_compare_chain : (addr -> addr -> int) ref =
+  ref (fun a1 a2 -> compare a1 a2)
+
+let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
+  ref (fun fmt a -> failwith "Pp: Unknown address")
 
 let compare_addr a1 a2 =
   Compare.compose [
-    (fun () -> compare_range a1.addr_range a2.addr_range);
     (fun () -> compare a1.addr_uid a2.addr_uid);
-    (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
+    (fun () -> !addr_compare_chain a1 a2);
   ]
+
+let pp_addr fmt a = !addr_pp_chain fmt a
+
+let register_addr info =
+  addr_compare_chain := info.compare !addr_compare_chain;
+  addr_pp_chain := info.print !addr_pp_chain;
+  ()
+
 
 (*==========================================================================*)
                            (** {2 Functions} *)
@@ -116,10 +133,23 @@ type fundec = {
   fun_name: string; (** unique name of the function *)
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
-  fun_body: stmt; (** body of the function *)
+  mutable fun_body: stmt; (** body of the function *)
   fun_return_type: typ; (** return type *)
 }
 
+
+
+(*==========================================================================*)
+                           (** {2 Programs} *)
+(*==========================================================================*)
+
+
+type program_kind +=
+  | U_program of {
+      universal_gvars   : var list;
+      universal_fundecs : fundec list;
+      universal_main    : stmt;
+    }
 
 
 (*==========================================================================*)
@@ -146,6 +176,13 @@ type expr_kind +=
 
   (** Head address. *)
   | E_addr of addr
+
+  (** Length of array or string *)
+  | E_len of expr
+
+(*==========================================================================*)
+                           (** {2 Utility functions} *)
+(*==========================================================================*)
 
 let mk_not e = mk_unop O_log_not e
 
@@ -262,6 +299,8 @@ let mk_assert_unreachable range =
 
 let mk_block block = mk_stmt (S_block block)
 
+let mk_nop range = mk_block [] range
+
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
 
@@ -278,5 +317,3 @@ let mk_call fundec args range =
     )) range
 
 let kind_of_addr addr = addr.addr_kind
-
-let range_of_addr addr = addr.addr_range
