@@ -209,7 +209,7 @@ struct
     export = [Value.zone, Value.zone];
   }
 
-  let rec exec zone stmt man ctx flow =
+  let rec exec zone stmt man flow =
     match skind stmt with
     | S_remove_var v ->
       Some (
@@ -284,8 +284,8 @@ struct
       )
 
 
-  let ask : type r. r Query.query -> _ -> _ -> _ -> r option =
-    fun query man ctx flow ->
+  let ask : type r. r Query.query -> _ -> _ -> r option =
+    fun query man flow ->
       match query with
       | QEval e ->
         let a = get_local T_cur man flow in
@@ -295,7 +295,7 @@ struct
       | _ -> None
 
 
-  let eval zpath exp man ctx flow =
+  let eval zpath exp man flow =
     match ekind exp with
     | E_binop(op, e1, e2) ->
       Some (
