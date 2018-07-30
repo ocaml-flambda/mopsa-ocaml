@@ -69,7 +69,9 @@ struct
   }
 
   let exec zone =
-    match List.find_all (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export, List.find_all (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export with
+    match List.find_all (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export,
+          List.find_all (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export
+    with
     | [], [] -> raise Not_found
 
     | l, [] ->
@@ -96,7 +98,9 @@ struct
   }
 
   let eval zpath =
-    match List.find_all (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export, List.find_all (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export with
+    match List.find_all (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export,
+          List.find_all (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export
+    with
     | [], [] -> raise Not_found
 
     | l, [] ->

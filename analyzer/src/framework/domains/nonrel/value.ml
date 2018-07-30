@@ -58,14 +58,15 @@ sig
       let bwd_binop _ x y _ = (x,y)
   *)
 
+
   val compare : Ast.operator -> t -> t -> t * t
-  (** Forward evaluation of boolean comparisons. [compare op x y] returns (x',y') where:
+  (** Backward evaluation of boolean comparisons. [compare op x y] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
        i.e., we filter the abstract values x and y knowing that the test is true
 
        a safe, but not precise implementation, would be:
-       compare op x y = (x,y)
+       compare _ x y = (x,y)
   *)
 
   (*==========================================================================*)
@@ -76,6 +77,19 @@ sig
 
 end
 
+
+(** {2 Registration} *)
 let values : (string * (module VALUE)) list ref = ref []
 let register_value name modl = values := (name, modl) :: !values
 let find_value name = List.assoc name !values
+
+(** {2 Default backward evaluators} *)
+
+let default_bwd_unop (op:Ast.operator) (x:'a) (r:'a) : 'a =
+  x
+
+let default_bwd_binop (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) =
+  (x, y)
+
+let default_compare (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) =
+  (x, y)
