@@ -33,7 +33,9 @@ struct
 
   include VarMap
 
-
+  let print fmt a =
+    Format.fprintf fmt "%s: @[%a@]@\n" Value.domain VarMap.print a
+  
   (*==========================================================================*)
   (**                    {2 Evaluation of expressions}                        *)
   (*==========================================================================*)

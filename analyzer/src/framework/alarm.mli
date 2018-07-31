@@ -33,5 +33,5 @@ val print : Format.formatter -> alarm -> unit
 val compare : alarm -> alarm -> int
 
 type _ Query.query +=
-  | QGetAlarms: (alarm list) Query.query
+  | Q_alarms: (alarm list) Query.query
   (** Query to extract collected alarms *)

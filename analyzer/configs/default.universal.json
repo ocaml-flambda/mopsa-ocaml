@@ -2,6 +2,6 @@
     "iter": [
 	"universal.iterators.program",
 	"universal.iterators.intraproc",
-	{ "nonrel": "universal.environment.nonrel.integers" }
+	{ "nonrel": "universal.numeric.values.int_interval" }
     ]
 }

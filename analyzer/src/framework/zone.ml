@@ -11,6 +11,7 @@
    [ask] in order to filter appropriate domains to use.
 *)
 
+let debug fmt = Debug.debug ~channel:"framework.zone" fmt
 
 (*==========================================================================*)
                            (** {2 Zones} *)
@@ -39,7 +40,7 @@ let subset_chain : (t -> t -> bool) ref = ref (
       match z1, z2 with
       | _, Z_top -> true
       | Z_top, _ -> false
-      | _ -> false
+      | _ -> z1 = z2
   )
 
 let pp_chain : (Format.formatter -> t -> unit) ref = ref (fun fmt zone ->
@@ -53,13 +54,17 @@ let register info =
   pp_chain := info.print !pp_chain;
   ()
 
-(** Partial order test. *)
-let subset (z1: t) (z2: t) =
-  !subset_chain z1 z2
-
 
 let print fmt (zone: t) =
   Format.fprintf fmt "[%a]" !pp_chain zone
+
+(** Partial order test. *)
+let subset (z1: t) (z2: t) =
+  debug "%a subset %a" print z1 print z2;
+  let b = !subset_chain z1 z2 in
+  debug "result: %b" b;
+  b
+
 
 (*==========================================================================*)
                            (** {2 Paths} *)
@@ -72,9 +77,10 @@ let compare2 (z1, z2) (z1', z2') =
   if c1 <> 0 then c1
   else compare z2 z2'
 
-(** (z1, z2) ⊆ (z1', z2') iff. z1' ⊆ z1 and z2' ⊆ z2. *)
-let subset2 (z1, z2) (z1', z2') =
-  subset z1' z1 && subset z2' z2
-
 let print2 fmt (z1, z2) =
   Format.fprintf fmt "%a -> %a" print z1 print z2
+
+(** (z1, z2) ⊆ (z1', z2') iff. z1 ⊆ z1' and z2 ⊆ z2'. *)
+let subset2 (z1, z2) (z1', z2') =
+  subset z1 z1' && subset z2 z2'
+

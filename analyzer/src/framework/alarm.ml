@@ -69,14 +69,14 @@ let print fmt alarm =
    Query used by {!Main} to extract all alarms from used domains.
 *)
 type _ Query.query +=
-  | QGetAlarms: (alarm list) Query.query
+  | Q_alarms: (alarm list) Query.query
 
 let () =
   Query.(
     register_reply_manager {
       domatch = (let check : type a. a query -> (a, alarm list) eq option =
                    function
-                   | QGetAlarms -> Some Eq
+                   | Q_alarms -> Some Eq
                    | _ -> None
                  in
                  check

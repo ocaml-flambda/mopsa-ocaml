@@ -56,5 +56,5 @@ struct
 
 end
 
-let setup () =
+let () =
   Framework.Domains.Stateless.register_domain name (module Domain)

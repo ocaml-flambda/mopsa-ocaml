@@ -10,13 +10,19 @@
 
 type Framework.Zone.t +=
   | Z_universal
+  | Z_universal_int
 
 let () =
   Framework.Zone.(register {
-      subset = (fun next z1 z2 -> next z1 z2);
+      subset = (fun next z1 z2 ->
+          match z1, z2 with
+          | Z_universal_int, Z_universal -> true
+          | _ -> next z1 z2
+        );
       print = (fun next fmt z ->
           match z with
           | Z_universal -> Format.fprintf fmt "universal"
+          | Z_universal_int -> Format.fprintf fmt "universal/int"
           | _ -> next fmt z
         );
     })

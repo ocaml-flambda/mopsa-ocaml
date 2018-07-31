@@ -86,7 +86,9 @@ struct
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
             match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
-            | [] -> Debug.fail "exec for %a not found" Zone.print zone
+            | [] ->
+              Debug.warn "exec for %a not found" Zone.print zone;
+              acc
 
             | l ->
               let f = mk_exec_of_zone_list l Domain.exec in
@@ -142,8 +144,10 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
-            | [] -> Debug.fail "eval for %a not found" Zone.print2 zpath
+            match List.find_all (fun p -> debug "checking %a" Zone.print2 p; Zone.subset2 p zpath) Domain.eval_interface.export with
+            | [] ->
+              Debug.warn "eval for %a not found" Zone.print2 zpath;
+              acc
 
             | l ->
               let f = mk_eval_of_zone_list l Domain.eval in
@@ -186,7 +190,7 @@ struct
   and ask : type r. r Query.query -> _ -> r =
     fun query flow ->
       match Domain.ask query man flow with
-      | None -> Exceptions.fail "No reply for query"
+      | None -> raise Not_found
       | Some r -> r
 
 

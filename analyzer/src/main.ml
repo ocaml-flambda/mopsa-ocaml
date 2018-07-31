@@ -50,7 +50,7 @@ let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
   Debug.info "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
 
   Debug.info "Collecting alarms ...";
-  let alarms = Analyzer.ask Alarm.QGetAlarms res in
+  let alarms = try Analyzer.ask Alarm.Q_alarms res with Not_found -> [] in
   t, alarms
 
 type analysis_results =
