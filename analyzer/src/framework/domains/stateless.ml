@@ -13,12 +13,10 @@ open Essentials
 module type S =
 sig
 
-
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-
-  val exec: Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval: Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask: 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
+  val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
+  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
 
 end
 

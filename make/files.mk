@@ -47,11 +47,13 @@ C_OBJ = $(C_SRC:%.c=$(BUILD)/%.o)
 CC_OBJ = $(CC_SRC:%.cc=$(BUILD)/%.o)
 
 ## Utility function
-include_lineage = \
+lineage = \
 	$(if $(filter $(1), $(SRC)), \
-		-I $(SRC), \
-		-I $(1) $(call include_lineage,$(shell realpath --relative-to=. $(1)/..))\
+		$(1), \
+		$(1) $(call lineage,$(shell realpath --relative-to=. $(1)/..))\
 	)
+
+include_lineage = $(foreach p,$(call lineage,$(1)),-I $(p))
 
 is_directory = $(shell test -d $(basename $(1)) && echo 1 || echo 0)
 
@@ -60,3 +62,5 @@ pack_dir_of_ml = $(shell dirname $(patsubst $(SRC)/%,%,$(1)))
 pack_name = $(subst /,.,$(shell $(SED) -e "s/\b\(.\)/\u\1/g" <<< $(1)))
 
 merlin_root_path = $(shell $(SED) -e "s/[^\/]\+\//\.\.\//g" -e "s/\/[^\/]\+$$//g" <<< $(1))
+
+merlin_lineage = $(patsubst $(SRC)%,$(call merlin_root_path,$(1))/_build%,$(call lineage,$(shell dirname $(1))))

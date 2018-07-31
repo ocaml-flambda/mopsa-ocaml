@@ -83,10 +83,8 @@ let print_results analysis_res =
       backtrace
 
 
-(** Return the path of the configuration file.
-    First, check the existence of environment variable MOPSACONFIG.
-    Otherwise, use the provided command line option -config.
-*)
+
+(** Return the path of the configuration file *)
 let get_config_path () =
   let config = Framework.Options.(common_options.config) in
   if Sys.file_exists config then config
@@ -98,32 +96,45 @@ let get_config_path () =
       if Sys.file_exists config'' then config''
       else Framework.Exceptions.fail "Unable to find configuration file %s" config
 
+
+
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program files =
   match Options.(common_options.lang) with
-  | "universal" -> Lang.Universal.Frontend.parse_program !files
+  | "universal" -> Lang.Universal.Frontend.parse_program files
   | _ -> Framework.Exceptions.panic "Unknown language"
 
-let () =
+
+
+(** Parse command line arguments and get all target source files *)
+let get_sources f () =
   init_from_env ();
   let files = ref [] in
   let n = Array.length Sys.argv in
   Arg.parse !Options.spec (fun filename ->
       files := filename :: !files;
       if !Arg.current = n - 1 then
-        let result = try
-            let prog = parse_program files in
-            let config = get_config_path () in
-            let domain = Config.parse config in
-
-            (* Start the analysis *)
-            let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
-            let t, alarms = perform_analysis domain prog in
-            Success(t, alarms)
-          with
-          | Framework.Exceptions.Panic msg -> ExcPanic  msg
-          | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range,  msg)
-          | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
-        in
-        print_results result
+        f !files
     ) "Modular Open Platform for Static Analysis"
+
+
+
+(** Main entry point *)
+let () =
+  get_sources (fun files ->
+      let result = try
+          let prog = parse_program files in
+          let config = get_config_path () in
+          let domain = Config.parse config in
+          
+          (* Start the analysis *)
+          let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
+          let t, alarms = perform_analysis domain prog in
+          Success(t, alarms)
+        with
+        | Framework.Exceptions.Panic msg -> ExcPanic  msg
+        | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range,  msg)
+        | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
+      in
+      print_results result
+    ) ()
