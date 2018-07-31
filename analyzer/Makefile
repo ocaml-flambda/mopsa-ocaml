@@ -12,7 +12,7 @@ framework.domains.nonrel = value factory
 lang = universal
 
 lang.universal = ast pp visitor frontend zone iterators
-lang.universal.iterators = program
+lang.universal.iterators = program intraproc
 
 
 #Packages
