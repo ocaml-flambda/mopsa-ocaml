@@ -13,12 +13,14 @@
    - a string ["name"] denotes a leaf domain.
 
    - [\{"iter": \[domain list\]\}] uses the iterator composer to
-   combine a list of domains in sequence.
+    combine a list of domains in sequence.
+    
+   - [\{"nonrel": value\}] constructs a non-relational abstract domain
+    over the argument value abstraction.
 
-   - [\{"nonrel": value\}] constructs a non-relational abstract
-   domain over the argument value abstraction.
-
-*)
+    - [\{"nonrel-product": \[value list\], "name": "X", "reductions": \[rule list\]\}] 
+    constructs a reduced product of a set of non-relational
+    value abstractions with some reduction rules *)
 
 
 val parse : string -> (module Domain.DOMAIN)

@@ -93,10 +93,49 @@ end
 (**                         {2 Registration} *)
 (*==========================================================================*)
 
-let values : (string * (module VALUE)) list ref = ref []
-let register_value name modl = values := (name, modl) :: !values
-let find_value name = List.assoc name !values
+type _ id = ..
 
+type (_, _) eq = Eq : ('a, 'a) eq
+
+type 'a info = {
+  name : string;
+  id : 'a id;
+  eq : 'b. 'b id -> ('a, 'b) eq option;
+  domain : (module VALUE with type t = 'a);
+}
+
+type pool =
+  | Nil : pool
+  | Cons : 'a info * pool -> pool
+
+let values : pool ref = ref Nil
+
+let register_value info = values := Cons (info, !values)
+
+let find_value name =
+  let rec aux = function
+    | Nil -> raise Not_found
+    | Cons(hd, tl) ->
+      if hd.name = name then
+        let module D = (val hd.domain) in
+        (module D : VALUE)
+      else aux tl
+  in
+  aux !values
+
+let rec find_pool (names: string list) : pool =
+  match names with
+  | [] -> Nil
+  | name :: names ->
+    let rec aux : pool -> pool =
+      fun pool ->
+        match pool with
+        | Nil -> raise Not_found
+        | Cons(hd, tl) ->
+          if hd.name = name then Cons(hd, find_pool names)
+          else aux tl
+    in
+    aux !values
 
 
 (*==========================================================================*)
