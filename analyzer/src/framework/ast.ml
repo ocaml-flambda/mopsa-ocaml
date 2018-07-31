@@ -76,12 +76,6 @@ type operator = ..
 
 (** Basic operators *)
 type operator +=
-  | O_plus       (** + *)
-  | O_minus      (** - *)
-  | O_mult       (** * *)
-  | O_div        (** / *)
-  | O_mod        (** % *)
-
   | O_eq         (** == *)
   | O_ne         (** != *)
   | O_lt         (** < *)
@@ -267,7 +261,17 @@ and pp_typ_chain : (Format.formatter -> typ -> unit) ref =
 (* Processing chain for the extensible type [Ast.operator] *)
 and pp_operator_chain : (Format.formatter -> operator -> unit) ref =
   ref (fun fmt op ->
-      failwith "Pp: Unknown operator"
+      match op with
+      | O_lt -> pp_print_string fmt "<"
+      | O_le -> pp_print_string fmt "<="
+      | O_gt -> pp_print_string fmt ">"
+      | O_ge -> pp_print_string fmt ">="
+      | O_eq -> pp_print_string fmt "=="
+      | O_ne -> pp_print_string fmt "!="
+      | O_log_or -> pp_print_string fmt "lor"
+      | O_log_and -> pp_print_string fmt "land"
+      | O_log_not -> pp_print_string fmt "lnot"
+      | _ -> failwith "Pp: Unknown operator"
     )
 
 (* Processing chain for the extensible type [Ast.constant] *)

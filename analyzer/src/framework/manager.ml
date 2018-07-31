@@ -35,7 +35,7 @@ let print_token_chain : (Format.formatter -> token -> unit) ref = ref (fun fmt -
 )
 
 
-let regiter_token info =
+let register_token info =
   token_compare_chain := info.compare !token_compare_chain;
   print_token_chain := info.print !print_token_chain;
   ()

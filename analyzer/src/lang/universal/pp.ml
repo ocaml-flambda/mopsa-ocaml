@@ -14,10 +14,15 @@ open Format
 
 let () =
   register_pp_operator (fun default fmt -> function
+      | O_plus -> pp_print_string fmt "+"
+      | O_minus -> pp_print_string fmt "-"
+      | O_mult -> pp_print_string fmt "*"
+      | O_div -> pp_print_string fmt "/"
+      | O_mod -> pp_print_string fmt "%"
+      | O_pow -> pp_print_string fmt "**"
       | O_sqrt -> pp_print_string fmt "sqrt"
       | O_bit_invert -> pp_print_string fmt "~"
       | O_wrap(l,u)  -> Format.fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
-      | O_pow -> pp_print_string fmt "**"
       | O_concat -> pp_print_string fmt "@"
       | O_bit_and -> pp_print_string fmt "&"
       | O_bit_or -> pp_print_string fmt "|"

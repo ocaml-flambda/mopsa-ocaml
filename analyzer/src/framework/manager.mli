@@ -28,7 +28,7 @@ type token_info = {
   print   : (Format.formatter -> token -> unit) -> Format.formatter -> token -> unit;
 }
 
-val regiter_token : token_info -> unit
+val register_token : token_info -> unit
 
 module FlowMap : sig
   include MapExtSig.S with type key = token

@@ -42,7 +42,7 @@ struct
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
-  let display = "int"
+  let display = "int interval"
 
   let of_constant = function
     | C_int i ->

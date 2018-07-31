@@ -56,6 +56,11 @@ type operator +=
   | O_wrap of Z.t * Z.t (** wrap *)
 
   (* Binary operators *)
+  | O_plus       (** + *)
+  | O_minus      (** - *)
+  | O_mult       (** * *)
+  | O_div        (** / *)
+  | O_mod        (** % *)
   | O_pow        (** power *)
   | O_bit_and    (** & *)
   | O_bit_or     (** | *)

@@ -12,9 +12,9 @@ framework.domains.nonrel = value factory
 lang = universal
 
 lang.universal = ast pp visitor frontend zone iterators numeric
-lang.universal.iterators = program intraproc
+lang.universal.iterators = program intraproc loops
 lang.numeric = values
-lang.numeric.values = integer_interval
+lang.numeric.values = integer_interval integer_congruence
 
 
 #Packages

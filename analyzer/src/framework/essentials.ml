@@ -27,6 +27,8 @@ include Location
 
 include Domain
 
+include Options
+
 module Var =
 struct
   type t = var

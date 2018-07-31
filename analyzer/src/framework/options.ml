@@ -15,7 +15,7 @@
 let spec : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
 
 (** Register a command-line option. *)
-let register (opt) =
+let register_option (opt) =
   spec := opt :: !spec
 
 
@@ -34,34 +34,34 @@ let common_options = {
 }
 
 let () =
-  register (
+  register_option (
     "-lang",
     Arg.String(fun f -> common_options.lang <- f),
     " target language"
   );
-  register (
+  register_option (
     "-config",
     Arg.String(fun f -> common_options.config <- f),
     " path to the domain configuration file"
   );
-  register (
+  register_option (
     "-test",
     Arg.Bool (fun m -> common_options.unit_test_mode <- m),
     " unit test mode (default: false)"
   );
-  register (
+  register_option (
     "-debug",
     Arg.String(fun f ->
         Debug.parse f
       ),
     " debug channels"
   );
-  register (
+  register_option (
     "-color",
     Arg.Bool(fun f -> Debug.print_color := f),
     " print debug messages in color (default: true)"
   );
-  register (
+  register_option (
     "-stub",
     Arg.String(fun f -> common_options.stubs <- f :: common_options.stubs),
     " path to a stub directory"
