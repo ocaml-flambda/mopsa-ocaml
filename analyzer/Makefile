@@ -7,14 +7,14 @@ mopsa = framework lang main
 
 framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post domain analyzer lattices essentials domains config
 framework.domains = stateless iter nonrel
-framework.domains.nonrel = value factory
+framework.domains.nonrel = value factory value_reduced_product
 
 lang = universal
 
 lang.universal = ast pp visitor frontend zone iterators numeric
 lang.universal.iterators = program intraproc loops
-lang.numeric = values
-lang.numeric.values = integer_interval integer_congruence
+lang.universal.numeric = values reductions
+lang.universal.numeric.values = integer_interval integer_congruence
 
 
 #Packages

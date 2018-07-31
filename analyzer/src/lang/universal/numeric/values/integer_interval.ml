@@ -143,5 +143,19 @@ struct
   
 end
 
+
+type _ Framework.Domains.Nonrel.Value.id +=
+  | V_integer_interval : Value.t Framework.Domains.Nonrel.Value.id
+
 let () =
-  Framework.Domains.Nonrel.Value.register_value name (module Value)
+  Framework.Domains.Nonrel.Value.(register_value {
+      name;
+      domain = (module Value);
+      id = V_integer_interval;
+      eq = (let compare : type b. b id -> (Value.t, b) eq option =
+              function
+              | V_integer_interval -> Some Eq
+              | _ -> None
+            in
+            compare);
+    })

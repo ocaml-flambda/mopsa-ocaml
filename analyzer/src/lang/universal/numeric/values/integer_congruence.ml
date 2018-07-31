@@ -124,6 +124,18 @@ struct
 
 end
 
+type _ Framework.Domains.Nonrel.Value.id +=
+  | V_integer_congruence : Value.t Framework.Domains.Nonrel.Value.id
 
 let () =
-  Framework.Domains.Nonrel.Value.register_value name (module Value)
+  Framework.Domains.Nonrel.Value.(register_value {
+      name;
+      id = V_integer_congruence;
+      domain = (module Value);
+      eq = (let compare : type b. b id -> (Value.t, b) eq option =
+              function
+              | V_integer_congruence -> Some Eq
+              | _ -> None
+            in
+            compare);
+    })
