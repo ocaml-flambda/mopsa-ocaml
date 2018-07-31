@@ -15,6 +15,8 @@
 open Manager
 open Domain
 
+let debug fmt = Debug.debug ~channel:"framework.domains.iter" fmt
+
 module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
 struct
 

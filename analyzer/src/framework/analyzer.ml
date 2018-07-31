@@ -18,29 +18,31 @@ open Post
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 let mk_exec_of_zone_list (l: Zone.t list) exec =
+  let exec_list = List.map exec l in
   (fun (stmt: Ast.stmt) (man: ('a, 't) man) (flow: 'a flow) : 'a Post.post option ->
      let rec aux =
        function
        | [] -> None
-       | z :: tl ->
-         match exec z stmt man flow with
+       | f :: tl ->
+         match f stmt man flow with
          | None -> aux tl
          | Some ret -> Some ret
      in
-     aux l
+     aux exec_list
   )
 
 let mk_eval_of_zone_list (l: (Zone.t * Zone.t) list) eval =
+  let eval_list = List.map eval l in
   (fun (exp: Ast.expr) (man: ('a, 't) man) (flow: 'a flow) : ('a, Ast.expr) evl option ->
      let rec aux =
        function
        | [] -> None
-       | p :: tl ->
-         match eval p exp man flow with
+       | f :: tl ->
+         match f exp man flow with
          | None -> aux tl
          | Some ret -> Some ret
      in
-     aux l
+     aux eval_list
   )
 
 
