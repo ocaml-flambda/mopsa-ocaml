@@ -50,43 +50,23 @@ type constant +=
 
 
 type operator +=
-  (** Unary operators *)
-  | O_log_not      (** Logical negation *)
+  (* Unary operators *)
   | O_sqrt         (** Square root *)
   | O_bit_invert   (** bitwise ~ *)
+  | O_wrap of Z.t * Z.t (** wrap *)
 
-
-  (** Binary operators *)
-  | O_plus       (** + *)
-  | O_minus      (** - *)
-  | O_mult       (** * *)
-  | O_div        (** / *)
-  | O_mod        (** % *)
+  (* Binary operators *)
   | O_pow        (** power *)
-
-  | O_eq         (** == *)
-  | O_ne         (** != *)
-  | O_lt         (** < *)
-  | O_le         (** <= *)
-  | O_gt         (** > *)
-  | O_ge         (** >= *)
-
-  | O_log_or     (** || *)
-  | O_log_and    (** && *)
-
   | O_bit_and    (** & *)
   | O_bit_or     (** | *)
   | O_bit_xor    (** ^ *)
   | O_bit_rshift (** >> *)
   | O_bit_lshift (** << *)
-
   | O_concat     (** concatenation of arrays and strings *)
-
-  | O_wrap of Z.t * Z.t (** wrap *)
 
 
 (*==========================================================================*)
-                           (** {2 Heap addresses} *)
+                         (** {2 Heap addresses} *)
 (*==========================================================================*)
 
 (** Kind of heap addresses, may be used to store extra information. *)
@@ -172,7 +152,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind * range
+  | E_alloc_addr of addr_kind
 
   (** Head address. *)
   | E_addr of addr
@@ -244,8 +224,8 @@ let mk_one = mk_int 1
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
-let mk_alloc_addr addr_kind addr_range range =
-  mk_expr (E_alloc_addr (addr_kind, addr_range)) ~etyp:T_addr range
+let mk_alloc_addr addr_kind range =
+  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
 
 
 
@@ -315,5 +295,3 @@ let mk_call fundec args range =
       mk_expr (E_function fundec) range,
       args
     )) range
-
-let kind_of_addr addr = addr.addr_kind

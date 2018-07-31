@@ -6,20 +6,28 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Build the global abstract domain from a json configuration file.
+(** Main handler of Universal programs. *)
 
-   The supported syntax for a [domain] is as follows:
+open Framework.Essentials
+open Framework.Domains.Stateless
+open Ast
 
-   - a string ["name"] denotes a leaf domain.
-
-   - [\{"iter": \[domain list\]\}] uses the iterator composer to
-   combine a list of domains in sequence.
-
-   - [\{"nonrel": value\}] constructs a non-relational abstract
-   domain over the argument value abstraction.
-
-*)
+let name = "universal.iterators.program"
+let debug fmt = Debug.debug ~channel:name fmt
 
 
-val parse : string -> (module Domain.DOMAIN)
-(** [parse path] constructs an abstract domain from a configuration file *)
+module Domain =
+struct
+
+  let init prog man flow = None
+  
+  let exec stmt man flow = None
+
+  let eval exp man flow = None
+
+  let ask query man flow = None
+
+end
+
+let () =
+  register_domain name (module Domain)

@@ -12,40 +12,18 @@ open Framework.Essentials
 open Ast
 open Format
 
-
-let rec pp_addr_chain : (formatter -> addr -> unit) ref = ref (fun fmt addr ->
-    failwith "Pp: Unknown address kind"
-  )
-
-and register_pp_addr pp = pp_addr_chain := pp !pp_addr_chain
-
-and pp_addr fmt addr = !pp_addr_chain fmt addr
-
 let () =
   register_pp_operator (fun default fmt -> function
-      | O_plus -> pp_print_string fmt "+"
-      | O_minus -> pp_print_string fmt "-"
-      | O_mult -> pp_print_string fmt "*"
-      | O_div -> pp_print_string fmt "/"
-      | O_mod -> pp_print_string fmt "%"
+      | O_sqrt -> pp_print_string fmt "sqrt"
+      | O_bit_invert -> pp_print_string fmt "~"
+      | O_wrap(l,u)  -> Format.fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
       | O_pow -> pp_print_string fmt "**"
-      | O_lt -> pp_print_string fmt "<"
-      | O_le -> pp_print_string fmt "<="
-      | O_gt -> pp_print_string fmt ">"
-      | O_ge -> pp_print_string fmt ">="
-      | O_eq -> pp_print_string fmt "=="
-      | O_ne -> pp_print_string fmt "!="
+      | O_concat -> pp_print_string fmt "@"
       | O_bit_and -> pp_print_string fmt "&"
       | O_bit_or -> pp_print_string fmt "|"
       | O_bit_xor -> pp_print_string fmt "^"
-      | O_log_or -> pp_print_string fmt "lor"
-      | O_log_and -> pp_print_string fmt "land"
-      | O_log_not -> pp_print_string fmt "lnot"
-      | O_sqrt -> pp_print_string fmt "sqrt"
-      | O_bit_invert -> pp_print_string fmt "~"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
-      | O_wrap(l,u)  -> Format.fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function
@@ -63,6 +41,8 @@ let () =
       | T_float -> pp_print_string fmt "float"
       | T_string -> pp_print_string fmt "string"
       | T_addr -> pp_print_string fmt "addr"
+      | T_char -> pp_print_string fmt "char"
+      | T_array t -> Format.fprintf fmt "[%a]" pp_typ t
       | _ -> default fmt typ
   );
   register_pp_expr (fun default fmt exp ->
@@ -76,9 +56,9 @@ let () =
         fprintf fmt "%a(%a);"
           pp_expr f
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
-      | E_alloc_addr(akind, range) ->
-        fprintf fmt "alloc(%a)" pp_range range
+      | E_alloc_addr(akind) -> fprintf fmt "alloc()"
       | E_addr addr -> pp_addr fmt addr
+      | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
       | _ -> default fmt exp
     );
 
@@ -125,5 +105,27 @@ let () =
           | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
         end
       | _ -> default fmt stmt
+    );
+  register_pp_program (fun default fmt prg ->
+      match prg.prog_kind with
+      | Ast.U_program (u_prog) ->
+        Format.fprintf fmt "@[<v>%a@,%a@]"
+          (
+            pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+              (fun fmt f ->
+                 fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+                   pp_typ f.fun_return_type
+                   Format.pp_print_string f.fun_name
+                   (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+                      (fun fmt v -> Format.fprintf fmt "%a %a"
+                          pp_typ v.vtyp
+                          pp_var v
+                      )
+                   ) f.fun_parameters
+                   pp_stmt f.fun_body
+              )
+          ) u_prog.universal_fundecs
+          pp_stmt u_prog.universal_main
+      | _ -> default fmt prg
     );
   ()

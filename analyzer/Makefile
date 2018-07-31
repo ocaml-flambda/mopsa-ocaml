@@ -6,11 +6,13 @@ MOPSAROOT = ..
 mopsa = framework lang main
 
 framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post domain analyzer lattices essentials domains config
+framework.domains = stateless iter nonrel
 framework.domains.nonrel = value factory
 
 lang = universal
 
-lang.universal = ast pp visitor frontend zone
+lang.universal = ast pp visitor frontend zone iterators
+lang.universal.iterators = program
 
 
 #Packages

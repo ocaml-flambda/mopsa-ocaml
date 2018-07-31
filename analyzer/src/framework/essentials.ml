@@ -19,10 +19,13 @@ module Flow = Flow
 module Annotation = Annotation
 
 module Post = Post
+type 'a post = 'a Post.post
 
 module Eval = Eval
 
 include Location
+
+include Domain
 
 module Var =
 struct

@@ -24,9 +24,6 @@ type common_options = {
   mutable config : string;
   mutable unit_test_mode : bool;
   mutable stubs : string list;
-  mutable reduce_iter : int;
-  mutable output_mode : string;
-  mutable cache_size : int;
 }
 
 let common_options = {
@@ -34,17 +31,9 @@ let common_options = {
   config = "";
   unit_test_mode = false;
   stubs = [];
-  reduce_iter = 1;
-  output_mode = "verbose";
-  cache_size = 10;
 }
 
-let setup () =
-  register (
-    "-output-mode",
-    Arg.String(fun s -> common_options.output_mode <- s),
-    " output mode (default: verbose)"
-  );
+let () =
   register (
     "-lang",
     Arg.String(fun f -> common_options.lang <- f),
@@ -76,16 +65,6 @@ let setup () =
     "-stub",
     Arg.String(fun f -> common_options.stubs <- f :: common_options.stubs),
     " path to a stub directory"
-  );
-  register (
-    "-reduce-iter",
-    Arg.Int(fun n -> common_options.reduce_iter <- n),
-    " maximal number of iterations of post-condition reductions"
-  );
-  register (
-    "-cache-size",
-    Arg.Int(fun n -> common_options.cache_size <- n),
-    " size of exec/eval cache"
   );
 
   ()

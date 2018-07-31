@@ -16,12 +16,13 @@ let debug fmt = Debug.debug ~channel:"framework.config" fmt
 let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "non-rel" obj -> build_non_rel @@ List.assoc "non-rel" obj
+  | `Assoc(obj) when List.mem_assoc "nonrel" obj -> build_non_rel @@ List.assoc "nonrel" obj
   | _ -> assert false
 
 and build_leaf name =
   try Domain.find name
   with Not_found -> Debug.fail "Domain %s not found" name
+      
 
 and build_iter json =
   let domains = json |> to_list |> List.map build_domain in
