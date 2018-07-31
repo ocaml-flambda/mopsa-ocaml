@@ -14,7 +14,7 @@ lang = universal
 lang.universal = ast pp visitor frontend zone iterators numeric
 lang.universal.iterators = program intraproc
 lang.numeric = values
-lang.numeric.values = int_interval
+lang.numeric.values = integer_interval
 
 
 #Packages

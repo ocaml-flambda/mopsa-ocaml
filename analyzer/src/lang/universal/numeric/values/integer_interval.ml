@@ -12,7 +12,7 @@ open Framework.Essentials
 open Ast
 open Bot
 
-let name = "universal.numeric.values.int_interval"
+let name = "universal.numeric.values.integer_interval"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Value =
@@ -42,7 +42,7 @@ struct
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
-  let domain = "int"
+  let display = "int"
 
   let of_constant = function
     | C_int i ->

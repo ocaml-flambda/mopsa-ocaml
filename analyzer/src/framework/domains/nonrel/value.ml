@@ -82,7 +82,7 @@ sig
   (**                          {2 Printing}                                   *)
   (*==========================================================================*)
   
-  val domain : string
+  val display : string
   (** Domain name displayed in printing *)
 
 end
