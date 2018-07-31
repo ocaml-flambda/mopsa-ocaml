@@ -441,7 +441,7 @@ let from_prog (p: U_ast.prog) : FA.program_kind =
     ) p.funs;
   let total = from_stmt (fst p.main) (snd p.main) var_ctx (Some fun_ctx) in
   let with_init = mk_block (init @ [total]) (from_extent ext) in
-  U_program
+  P_universal
     {
       universal_gvars   = gvars;
       universal_fundecs = (MS.bindings fun_ctx) |> List.map (snd);

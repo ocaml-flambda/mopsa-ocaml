@@ -108,7 +108,7 @@ let () =
     );
   register_pp_program (fun default fmt prg ->
       match prg.prog_kind with
-      | Ast.U_program (u_prog) ->
+      | Ast.P_universal (u_prog) ->
         Format.fprintf fmt "@[<v>%a@,%a@]"
           (
             pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")

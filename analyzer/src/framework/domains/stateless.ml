@@ -13,6 +13,7 @@ open Essentials
 module type S =
 sig
 
+  val zone : Zone.t
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
   val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
@@ -38,12 +39,12 @@ struct
   let init = D.init
 
   let exec_interface = {
-    export = [];
+    export = [D.zone];
     import = [];
   }
 
   let eval_interface = {
-    export = [];
+    export = [Zone.top, D.zone];
     import = [];
   }
   

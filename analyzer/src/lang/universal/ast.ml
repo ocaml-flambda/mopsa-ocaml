@@ -125,7 +125,7 @@ type fundec = {
 
 
 type program_kind +=
-  | U_program of {
+  | P_universal of {
       universal_gvars   : var list;
       universal_fundecs : fundec list;
       universal_main    : stmt;

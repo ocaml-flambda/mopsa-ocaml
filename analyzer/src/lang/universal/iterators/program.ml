@@ -19,9 +19,19 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
+  let zone = Zone.Z_universal
+
   let init prog man flow = None
   
-  let exec stmt man flow = None
+  let exec stmt man flow =
+    match skind stmt with
+    | S_program {prog_kind = P_universal{universal_main}} ->
+      Some (
+        man.exec universal_main flow |>
+        Post.singleton
+      )
+
+    | _ -> None
 
   let eval exp man flow = None
 

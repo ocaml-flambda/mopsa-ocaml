@@ -9,24 +9,14 @@
 (** Zones for the Universal language. *)
 
 type Framework.Zone.t +=
-  | Z_num
-  | Z_num_int
-  | Z_num_float
-  | Z_heap
+  | Z_universal
 
 let () =
   Framework.Zone.(register {
-      subset = (fun next z1 z2 ->
-          match z1, z2 with
-          | (Z_num_int | Z_num_float), Z_num -> true
-          | _ -> next z1 z2
-        );
+      subset = (fun next z1 z2 -> next z1 z2);
       print = (fun next fmt z ->
           match z with
-          | Z_heap -> Format.fprintf fmt "heap"
-          | Z_num -> Format.fprintf fmt "num"
-          | Z_num_int -> Format.fprintf fmt "int"
-          | Z_num_float -> Format.fprintf fmt "real"
+          | Z_universal -> Format.fprintf fmt "universal"
           | _ -> next fmt z
         );
     })
