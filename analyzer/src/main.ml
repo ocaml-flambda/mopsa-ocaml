@@ -38,7 +38,7 @@ let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
 
   Debug.info "Computing initial environments ...";
   let flow = Analyzer.init prog in
-  Debug.info "Result:@\n%a" (Flow.print Analyzer.man) flow;
+  Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
   let stmt =
     Ast.mk_stmt (Ast.S_program prog) Framework.Location.(mk_file_range prog.Framework.Ast.prog_file)
   in
@@ -47,7 +47,7 @@ let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
 
   let res = Analyzer.exec stmt flow in
   let t = Timing.stop t in
-  Debug.info "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
+  Debug.debug ~channel:"result" "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
 
   Debug.info "Collecting alarms ...";
   let alarms = try Analyzer.ask Alarm.Q_alarms res with Not_found -> [] in

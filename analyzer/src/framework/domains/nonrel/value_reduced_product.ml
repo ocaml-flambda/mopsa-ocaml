@@ -136,9 +136,13 @@ struct
     let rec aux : type a. a Pool.t -> Format.formatter -> a -> unit = fun pool fmt v ->
       match pool, v with
       | Pool.[], () -> ()
+      | Pool.[hd], (vhd, ()) ->
+        let module V = (val hd.domain) in
+        Format.fprintf fmt "%a" V.print vhd
+
       | Pool.(hd :: tl), (vhd, vtl) ->
         let module V = (val hd.domain) in
-        Format.fprintf fmt "%a, %a" V.print vhd (aux tl) vtl
+        Format.fprintf fmt "%a ∧ %a" V.print vhd (aux tl) vtl
     in
     aux Config.pool fmt v
 

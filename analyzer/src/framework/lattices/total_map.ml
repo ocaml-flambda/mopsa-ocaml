@@ -107,7 +107,7 @@ struct
             (pp_print_list
                ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
                (fun fmt (k, v) ->
-                  fprintf fmt "%a → @[<h2>  %a@]" Key.print k Value.print v
+                  fprintf fmt "%a  → @[<h2> %a@]" Key.print k Value.print v
                )
             ) (Map.bindings m)
       ) fmt a

@@ -1,5 +1,6 @@
 int x;
+
 x = 0;
-while (x<11) {
-  x = x + 3;
+while (x < 11) {
+  x = x + 2;
 }
