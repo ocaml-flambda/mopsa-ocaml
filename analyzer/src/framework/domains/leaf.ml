@@ -6,8 +6,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Leaf domains have access to their local abstractions only; the
-   global manager and its flow abstraction is not accessible. *)
+(** Leaf domains have a simplified interface that gives access to
+   their local abstractions only; the global manager and its flow
+   abstraction are not accessible. *)
 
 open Essentials
 
