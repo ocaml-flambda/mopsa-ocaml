@@ -29,16 +29,23 @@ struct
     try
       let i = man.get itv v |> Bot.bot_to_exn in
       let c = man.get cgr v |> Bot.bot_to_exn in
+
       let reduction = Congruences.IntCong.meet_inter c i in
-      let c, i = Bot.bot_to_exn reduction in
-      debug "result: %a and %a"
+      let c', i' = Bot.bot_to_exn reduction in
+      debug "reduce %a and %a => result: %a and %a"
         Values.Integer_interval.Value.print (Bot.Nb i)
         Values.Integer_congruence.Value.print (Bot.Nb c)
+        Values.Integer_interval.Value.print (Bot.Nb i')
+        Values.Integer_congruence.Value.print (Bot.Nb c')
       ;
-      man.set itv (Bot.Nb i) v |>
-      man.set cgr (Bot.Nb c)
+
+      man.set itv (Bot.Nb i') v |>
+      man.set cgr (Bot.Nb c')
     with Bot.Found_BOT ->
-      debug "bot";
+      debug "reduce %a and %a => result: ⊥"
+        Values.Integer_interval.Value.print (man.get itv v)
+        Values.Integer_congruence.Value.print (man.get cgr v)
+      ;
       man.bottom
 end
 
