@@ -18,6 +18,8 @@ module Domain : Framework.Domains.Stateless.S =
 struct
 
   let zone = Zone.Z_universal
+  let import_exec = []
+  let import_eval = []
 
   let init prog man flow = None
 
