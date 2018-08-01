@@ -4,7 +4,7 @@
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
 	//{"nonrel": "universal.numeric.values.integer_interval"}
-	"universal.numeric.relational.polyhedra"
+	"universal.numeric.relational.octagon"
 	// {
 	//     "nonrel-product": ["universal.numeric.values.integer_interval", "universal.numeric.values.integer_congruence"],
 	//     "name": "interval x congruence",

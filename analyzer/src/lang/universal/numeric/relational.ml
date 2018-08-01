@@ -67,8 +67,8 @@ struct
 
   let var_to_apron v =
     (match v.vtyp with
-    | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-    | T_float -> Format.fprintf Format.str_formatter "%s.:%d" v.vname v.vuid;
+    | T_int -> Format.fprintf Format.str_formatter "%s#%d" v.vname v.vuid;
+    | T_float -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
     | _ -> assert false);
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
@@ -127,94 +127,12 @@ struct
       Apron.Abstract1.print abs
 
 
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  let zone = Zone.Z_universal_num
-  
-  let init prog = top
-
-  exception UnsupportedExpression
-
-  let rec exec stmt a =
-    match skind stmt with
-    | S_remove_var var ->
-      let env = Apron.Abstract1.env a in
-      let vars =
-        List.filter (fun v -> is_env_var v a) [var] |>
-        List.map var_to_apron
-      in
-      let env = Apron.Environment.remove env (Array.of_list vars) in
-      Apron.Abstract1.change_environment ApronManager.man a env true
-
-    | S_project_vars vars ->
-      let env = Apron.Abstract1.env a in
-      let vars = List.map var_to_apron vars in
-      let old_vars1, old_vars2 = Apron.Environment.vars env in
-      let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
-      let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
-      let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
-      Apron.Abstract1.change_environment ApronManager.man a new_env true
-
-    | S_assign({ekind = E_var v}, e, STRONG) ->
-      let a = add_missing_vars a (v :: (Framework.Visitor.expr_vars e)) in
-      begin try
-          let aenv = Apron.Abstract1.env a in
-          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
-          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron v) texp None
-        with UnsupportedExpression ->
-          exec {stmt with skind = S_remove_var v} a
-      end
-
-    | S_assign({ekind = E_var v}, e, WEAK) ->
-      panic "relational: weak updates not yet supported"
-
-    | S_assign(({ekind = E_var x}), e, EXPAND) ->
-      panic "relational: expand not yet supported"
-
-    | S_assume(e) -> begin
-        let a = add_missing_vars  a (Framework.Visitor.expr_vars e) in
-        let env = Apron.Abstract1.env a in
-
-        let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
-        let meet_list l = tcons_array_of_tcons_list env l |>
-                        Apron.Abstract1.meet_tcons_array ApronManager.man a
-        in
-
-        try
-          bexp_to_apron e |>
-          Dnf.apply
-            (fun (op,e1,typ1,e2,typ2) ->
-                let typ =
-                  match typ1, typ2 with
-                  | T_int, T_int -> Apron.Texpr1.Int
-                  | T_float, T_int
-                  | T_int, T_float
-                  | T_float, T_float -> Apron.Texpr1.Real
-                  | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
-                in
-                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
-                let diff_texpr = Apron.Texpr1.of_expr env diff in
-                Apron.Tcons1.make diff_texpr op
-            )
-            meet_list join_list
-        with UnsupportedExpression ->
-          a
-      end
-
-    | S_rename_var( v, v') ->
-        Apron.Abstract1.rename_array ApronManager.man a
-          [| var_to_apron v  |]
-          [| var_to_apron v' |]
-
-    | _ -> top
-
-  and ask query a = None
-
   (** {2 Transformers to Apron syntax} *)
   (** ******************************** *)
 
-  and binop_to_apron = function
+  exception UnsupportedExpression
+  
+  let rec binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
     | O_minus  -> Apron.Texpr1.Sub
     | O_mult  -> Apron.Texpr1.Mul
@@ -346,6 +264,89 @@ struct
       Apron.Tcons1.array_set cond_array i c;
     ) l in
     cond_array
+  
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  let zone = Zone.Z_universal_num
+  
+  let init prog = top
+
+  let rec exec stmt a =
+    match skind stmt with
+    | S_remove_var var ->
+      let env = Apron.Abstract1.env a in
+      let vars =
+        List.filter (fun v -> is_env_var v a) [var] |>
+        List.map var_to_apron
+      in
+      let env = Apron.Environment.remove env (Array.of_list vars) in
+      Apron.Abstract1.change_environment ApronManager.man a env true
+
+    | S_project_vars vars ->
+      let env = Apron.Abstract1.env a in
+      let vars = List.map var_to_apron vars in
+      let old_vars1, old_vars2 = Apron.Environment.vars env in
+      let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
+      let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
+      let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
+      Apron.Abstract1.change_environment ApronManager.man a new_env true
+
+    | S_assign({ekind = E_var v}, e, STRONG) ->
+      let a = add_missing_vars a (v :: (Framework.Visitor.expr_vars e)) in
+      begin try
+          let aenv = Apron.Abstract1.env a in
+          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
+          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron v) texp None
+        with UnsupportedExpression ->
+          exec {stmt with skind = S_remove_var v} a
+      end
+
+    | S_assign({ekind = E_var v}, e, WEAK) ->
+      panic "relational: weak updates not yet supported"
+
+    | S_assign(({ekind = E_var x}), e, EXPAND) ->
+      panic "relational: expand not yet supported"
+
+    | S_assume(e) -> begin
+        let a = add_missing_vars  a (Framework.Visitor.expr_vars e) in
+        let env = Apron.Abstract1.env a in
+
+        let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
+        let meet_list l = tcons_array_of_tcons_list env l |>
+                        Apron.Abstract1.meet_tcons_array ApronManager.man a
+        in
+
+        try
+          bexp_to_apron e |>
+          Dnf.apply
+            (fun (op,e1,typ1,e2,typ2) ->
+                let typ =
+                  match typ1, typ2 with
+                  | T_int, T_int -> Apron.Texpr1.Int
+                  | T_float, T_int
+                  | T_int, T_float
+                  | T_float, T_float -> Apron.Texpr1.Real
+                  | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                in
+                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+                let diff_texpr = Apron.Texpr1.of_expr env diff in
+                Apron.Tcons1.make diff_texpr op
+            )
+            meet_list join_list
+        with UnsupportedExpression ->
+          a
+      end
+
+    | S_rename_var( v, v') ->
+        Apron.Abstract1.rename_array ApronManager.man a
+          [| var_to_apron v  |]
+          [| var_to_apron v' |]
+
+    | _ -> top
+
+  and ask query a = None
 
 end
 
