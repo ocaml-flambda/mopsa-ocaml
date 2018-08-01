@@ -68,7 +68,7 @@ struct
         Post.singleton flow'
       )
 
-    | S_remove_var _ | S_rename_var _ ->
+    | S_remove_var _ | S_rename_var _ | S_project_vars _ ->
       Some (
         map_local T_cur (D.exec stmt) man flow |>
         Post.singleton

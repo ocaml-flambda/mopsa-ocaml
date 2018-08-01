@@ -284,6 +284,11 @@ struct
       let env = Apron.Environment.remove env (Array.of_list vars) in
       Apron.Abstract1.change_environment ApronManager.man a env true
 
+    | S_rename_var( v, v') ->
+        Apron.Abstract1.rename_array ApronManager.man a
+          [| var_to_apron v  |]
+          [| var_to_apron v' |]
+
     | S_project_vars vars ->
       let env = Apron.Abstract1.env a in
       let vars = List.map var_to_apron vars in
@@ -338,11 +343,6 @@ struct
         with UnsupportedExpression ->
           a
       end
-
-    | S_rename_var( v, v') ->
-        Apron.Abstract1.rename_array ApronManager.man a
-          [| var_to_apron v  |]
-          [| var_to_apron v' |]
 
     | _ -> top
 
