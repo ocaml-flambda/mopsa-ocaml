@@ -112,6 +112,8 @@ let get_sources f () =
   let files = ref [] in
   let n = Array.length Sys.argv in
   Arg.parse !Options.spec (fun filename ->
+      if not (Sys.file_exists filename) then
+        Debug.fail "File %s does not exist" filename;
       files := filename :: !files;
       if !Arg.current = n - 1 then
         f !files
