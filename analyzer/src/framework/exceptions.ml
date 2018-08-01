@@ -31,5 +31,6 @@ let panic_at range fmt =
       raise (PanicAt (range, str))
     ) fmt
 
+let warn = Debug.warn
 
 let fail fmt = Debug.fail fmt

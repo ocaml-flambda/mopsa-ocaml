@@ -29,6 +29,8 @@ include Domain
 
 include Options
 
+include Exceptions
+
 module Var =
 struct
   type t = var

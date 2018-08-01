@@ -98,4 +98,17 @@ let choose (dnf: 'a t) : 'a =
   | (hd :: _) :: _ -> hd
   | _ -> assert false
 
+let apply
+    (f: 'a -> 'b)
+    (meet: 'b list -> 'c)
+    (join: 'c list -> 'd)
+    (dnf: 'a t)
+  : 'd =
+  join (
+    List.map (fun c ->
+        meet (List.map f c)
+      ) dnf
+  )
+  
+
 let to_list dnf = dnf

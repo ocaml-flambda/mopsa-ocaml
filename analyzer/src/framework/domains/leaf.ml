@@ -17,7 +17,7 @@ sig
 
   include Lattice.LATTICE
   
-  val init : Ast.program -> t -> t
+  val init : Ast.program -> t
 
   val zone : Zone.t
 
@@ -35,7 +35,7 @@ struct
 
   let init prog man flow =
     Some (
-      map_local T_cur (D.init prog) man flow
+      set_local T_cur (D.init prog) man flow
     )
 
   let exec_interface = {

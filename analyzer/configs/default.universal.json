@@ -4,10 +4,11 @@
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
 	//{"nonrel": "universal.numeric.values.integer_interval"}
-	{
-	    "nonrel-product": ["universal.numeric.values.integer_interval", "universal.numeric.values.integer_congruence"],
-	    "name": "interval x congruence",
-	    "reductions" : ["universal.numeric.reductions.integer_interval_congruence"]
-	}
+	"universal.numeric.relational.polyhedra"
+	// {
+	//     "nonrel-product": ["universal.numeric.values.integer_interval", "universal.numeric.values.integer_congruence"],
+	//     "name": "interval x congruence",
+	//     "reductions" : ["universal.numeric.reductions.integer_interval_congruence"]
+	// }
     ]
 }

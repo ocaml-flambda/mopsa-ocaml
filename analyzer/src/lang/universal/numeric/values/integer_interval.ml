@@ -23,7 +23,7 @@ struct
   type v = I.t
   type t = v with_bot
 
-  let zone = Zone.Z_universal_int
+  let zone = Zone.Z_universal_num
 
   let bottom = BOT
 
