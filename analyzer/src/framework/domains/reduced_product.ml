@@ -11,7 +11,10 @@
 open Essentials
 open Domain
 
-(** A pool of abstract domains *)
+
+(** Pool of abstract domains *)
+(** ************************ *)
+
 module Pool =
 struct
 
@@ -22,27 +25,21 @@ struct
 
 end
 
-(** Pool manager defines point-wise lattice operators for the product
-   abstraction. It also provides get/set functions to access
-   individual abstract elements via domains identifiers *)
+
+(* Pool manager defines get/set functions to access the abstract elements of a
+   domain within the pool via its identifier *)
 type 'a pool_man = {
-  bottom : 'a;
-  top : 'a;
-  is_bottom : 'a -> bool;
-  subset : 'a -> 'a -> bool;
-  join : 'a Annotation.t -> 'a -> 'a -> 'a;
-  meet : 'a Annotation.t -> 'a -> 'a -> 'a;
-  widen : 'a Annotation.t -> 'a -> 'a -> 'a;
-  print : Format.formatter -> 'a -> unit;
   get : 't. 't domain -> 'a -> 't;
   set : 't. 't domain -> 't -> 'a -> 'a;
 }
 
-(** Signature for reduction rules *)
+
+(** Reduction rules *)
+(** *************** *)
+
 module type REDUCTION =
 sig
-
-  val exec : Ast.stmt -> 'a pool_man -> 'a flow -> 'a flow
+  val exec : Ast.stmt -> 'a pool_man -> ('a, 'b) man -> 'a flow -> 'a flow
 end
 
 
@@ -54,8 +51,10 @@ let register_reduction name rule =
 let find_reduction name = List.assoc name !reductions
 
 
-(** Create a reduced product of a pool of abstract domains and a list
-   of reduction operators *)
+
+(** Functor of reduced products *)
+(** *************************** *)
+
 module Make
     (Config:
      sig
@@ -67,14 +66,24 @@ module Make
 struct
   type t = Config.t
 
+
+  (* Domain identification *)
+  (* ********************* *)
+
   type _ domain += D_reduced_product : t domain
 
   let name = "framework.domains.reduced_product"
+
   let id = D_reduced_product
+
   let identify : type a. a domain -> (t, a) eq option =
     function
     | D_reduced_product -> Some Eq
     | _ -> None
+
+
+  (* Lattice definition *)
+  (* ****************** *)  
 
   let bottom : t =
     let rec aux : type a. a Pool.t -> a = fun pool ->
@@ -162,6 +171,10 @@ struct
     in
     aux Config.pool fmt v
 
+
+  (* Managers *)
+  (* ******** *)
+
   let head_man (man: ('a, ('b * 'c)) man) : ('a, 'b) man = {
     man with
     get = (fun flow -> man.get flow |> fst);
@@ -175,14 +188,6 @@ struct
   }
 
   let pool_man (man:('a, t) man) : 'a pool_man = {
-    bottom = man.bottom;
-    top = man.top;
-    is_bottom = man.is_bottom;
-    subset = man.subset;
-    join = man.join;
-    meet = man.meet;
-    widen = man.widen;
-    print = man.print;
     get = (
       let f : type b. b domain -> 'a -> b = fun id env ->
         let rec aux : type b c. b domain -> c Pool.t -> ('a, c) man -> b = fun id pool man ->
@@ -221,6 +226,9 @@ struct
   }
 
 
+  (* Initialization *)
+  (* ************** *)
+
   let init prog man flow =
     let rec aux: type t. t Pool.t -> ('a, t) man -> 'a flow -> 'a flow option =
       fun pool man flow ->
@@ -234,6 +242,10 @@ struct
     in
     aux Config.pool man flow
 
+
+  (* Post-condition computation *)
+  (* ************************** *)
+
   (* FIXME: we support only the case when all domains of the pool have
      the same exec_interface *)
   let exec_interface =
@@ -244,14 +256,14 @@ struct
     | _ -> assert false
 
 
-  let reduce stmt man flow =
+  let reduce_exec stmt man flow =
     let pman = pool_man man in
     let rec apply flow (l: (module REDUCTION) list) =
       match l with
       | [] -> flow
       | hd :: tl ->
         let module R = (val hd : REDUCTION) in
-        apply (R.exec stmt pman flow) tl
+        apply (R.exec stmt pman man flow) tl
     in
     let rec lfp flow =
       let flow' = apply flow Config.rules in
@@ -310,18 +322,50 @@ struct
     match flow' with
     | None -> None
     | Some flow -> Some (
-        reduce stmt man flow |>
+        reduce_exec stmt man flow |>
         Post.singleton
       )
 
-  let eval = assert false
 
-  let eval_interface = assert false
+  (* Evaluations *)
+  (* *********** *)
+
+  (* FIXME: we support only the case when all domains of the pool have
+     the same eval_interface *)
+  let eval_interface =
+    match Config.pool with
+    | Pool.(hd :: tl) ->
+      let module D = (val hd) in
+      D.eval_interface
+    | _ -> assert false
+
+  let eval zone exp man flow =
+    (* Point-wise evaluation *)
+    let evls =
+      let rec aux: type t. t Pool.t -> ('a, t) man -> ('a, Ast.expr) evl option list =
+        fun pool man ->
+          match pool with
+          | Pool.[] -> []
+          | Pool.(hd :: tl) ->
+            let module D = (val hd) in
+            let evl = D.eval zone exp  (head_man man) flow in
+            evl :: (aux tl (tail_man man))
+      in
+      aux Config.pool man
+    in
+    assert false
+
+
+  (* Queries *)
+  (* ******** *)
 
   let ask = assert false
 
 end
 
+
+(* Domain factory from string identifiers *)
+(* ************************************** *)
 
 type xpool = P : 'a Pool.t -> xpool
 
