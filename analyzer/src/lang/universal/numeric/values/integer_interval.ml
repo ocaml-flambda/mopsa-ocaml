@@ -25,6 +25,7 @@ struct
 
   let id = V_integer_interval
   let name = "universal.numeric.values.integer_interval", "int itv"
+
   let identify : type a. a value -> (t, a) eq option =
     function
     | V_integer_interval -> Some Eq

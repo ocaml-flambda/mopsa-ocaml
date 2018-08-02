@@ -52,8 +52,10 @@ struct
   type t = ApronManager.t Apron.Abstract1.t
 
   type _ domain += D_universal_relational : t domain
+
   let id = D_universal_relational
   let name = "universal.numeric.relational." ^ ApronManager.name
+
   let identify : type a. a domain -> (t, a) eq option =
     function
     | D_universal_relational -> Some Eq

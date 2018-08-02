@@ -25,6 +25,7 @@ struct
 
   let id = V_integer_congruence
   let name = "universal.numeric.values.integer_congruence", "int congr"
+
   let identify : type a. a value -> (t, a) eq option =
     function
     | V_integer_congruence -> Some Eq
