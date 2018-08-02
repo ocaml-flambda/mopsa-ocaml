@@ -17,9 +17,10 @@ sig
 
   include Lattice.LATTICE
 
-  val me : t id
-  val eq : 'a id -> (t, 'a) eq option
-  
+  val name : string
+  val id : t domain
+  val identify : 'a domain -> (t, 'a) eq option
+
   val init : Ast.program -> t
 
   val zone : Zone.t
@@ -105,9 +106,6 @@ end
 
 
 
-let register_domain name modl =
+let register_domain modl =
   let module D = Make(val modl : S) in
-  Domain.register_domain {
-    name;
-    domain = (module D);
-  }
+  Domain.register_domain (module D)

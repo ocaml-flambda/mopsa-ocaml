@@ -17,7 +17,7 @@ struct
   (** A pool is encoded as GADT tuples *)
   type 'a t =
   | [] : unit t
-  | (::) : 'a Value.info * 'b t -> ('a * 'b) t
+  | (::) : (module VALUE with type t = 'a) * 'b t -> ('a * 'b) t
 
 end
 
@@ -33,8 +33,8 @@ type 'a pool_man = {
   meet : 'b. 'b Annotation.t -> 'a -> 'a -> 'a;
   widen : 'b. 'b Annotation.t -> 'a -> 'a -> 'a;
   print : Format.formatter -> 'a -> unit;
-  get : 't. 't Value.id -> 'a -> 't;
-  set : 't. 't Value.id -> 't -> 'a -> 'a;
+  get : 't. 't value -> 'a -> 't;
+  set : 't. 't value -> 't -> 'a -> 'a;
 }
 
 (** Signature for reduction rules *)
@@ -58,12 +58,21 @@ module Make
 struct
   type t = Config.t
 
+  type _ value += V_reduced_product : t value
+
+  let name = "framework.domains.nonre.value_reduced_product", Config.display
+  let id = V_reduced_product
+  let identify : type a. a value -> (t, a) eq option =
+    function
+    | V_reduced_product -> Some Eq
+    | _ -> None
+
   let bottom : t =
     let rec aux : type a. a Pool.t -> a = fun pool ->
       match pool with
       | Pool.[] -> ()
       | Pool.(hd :: tl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         let tl = aux tl in
         V.bottom, tl
     in
@@ -74,7 +83,7 @@ struct
       match pool with
       | Pool.[] -> ()
       | Pool.(hd :: tl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         let tl = aux tl in
         V.top, tl
     in
@@ -85,7 +94,7 @@ struct
       match pool, v with
       | Pool.[], () -> false
       | Pool.(hd :: tl), (vhd, vtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.is_bottom vhd || aux tl vtl
     in
     aux Config.pool v
@@ -95,7 +104,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> true
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.subset vhd1 vhd2 && aux tl vtl1 vtl2
     in
     aux Config.pool v1 v2
@@ -105,7 +114,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.join annot vhd1 vhd2, aux tl vtl1 vtl2
     in
     aux Config.pool v1 v2
@@ -115,7 +124,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.meet annot vhd1 vhd2, aux tl vtl1 vtl2
     in
     aux Config.pool v1 v2
@@ -125,7 +134,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.widen annot vhd1 vhd2, aux tl vtl1 vtl2
     in
     aux Config.pool v1 v2
@@ -135,11 +144,11 @@ struct
       match pool, v with
       | Pool.[], () -> ()
       | Pool.[hd], (vhd, ()) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         Format.fprintf fmt "%a" V.print vhd
 
       | Pool.(hd :: tl), (vhd, vtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         Format.fprintf fmt "%a ∧ %a" V.print vhd (aux tl) vtl
     in
     aux Config.pool fmt v
@@ -150,7 +159,7 @@ struct
     (* FIXME: check that all values are defined on the same zone *)
     match Config.pool with
     | Pool.(hd :: tl) ->
-      let module V = (val hd.domain) in
+      let module V = (val hd) in
       V.zone
     | _ -> assert false
 
@@ -159,7 +168,7 @@ struct
       match pool with
       | Pool.[] -> ()
       | Pool.(hd::tl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.of_constant c, aux tl
     in
     aux Config.pool
@@ -174,12 +183,13 @@ struct
     widen;
     print;
     get = (
-      let f : type a. a id -> t -> a = fun k v ->
-        let rec aux : type a b. a id -> b Pool.t -> b -> a = fun k pool v ->
+      let f : type a. a value -> t -> a = fun k v ->
+        let rec aux : type a b. a value -> b Pool.t -> b -> a = fun k pool v ->
           match pool, v with
           | Pool.[], () -> raise Not_found
           | Pool.(hd::tl), (vhd, vtl) ->
-            match hd.eq k with
+            let module V = (val hd) in
+            match V.identify k with
             | Some Eq -> vhd
             | None -> aux k tl vtl
         in
@@ -188,12 +198,13 @@ struct
       f
     );
     set = (
-      let f : type a. a id -> a -> t -> t = fun k x v ->
-        let rec aux : type a b. a id -> a -> b Pool.t -> b -> b = fun k x pool v ->
+      let f : type a. a value -> a -> t -> t = fun k x v ->
+        let rec aux : type a b. a value -> a -> b Pool.t -> b -> b = fun k x pool v ->
           match pool, v with
           | Pool.[], () -> raise Not_found
           | Pool.(hd::tl), (vhd, vtl) ->
-            match hd.eq k with
+            let module V = (val hd) in
+            match V.identify k with
             | Some Eq -> (x, vtl)
             | None -> (vhd, aux k x tl vtl)
         in
@@ -222,7 +233,7 @@ struct
       match pool, v with
       | Pool.[], () -> ()
       | Pool.(hd :: tl), (vhd, vtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.unop op vhd, aux tl vtl
     in
     let v' = aux Config.pool v in
@@ -233,7 +244,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.binop op vhd1 vhd2, aux tl vtl1 vtl2
     in
     let v' = aux Config.pool v1 v2 in
@@ -244,7 +255,7 @@ struct
       match pool, v with
       | Pool.[], () -> ()
       | Pool.(hd :: tl), (vhd, vtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.filter vhd b, aux tl vtl
     in
     let v' = aux Config.pool v in
@@ -255,7 +266,7 @@ struct
       match pool, v, r with
       | Pool.[], (), () -> ()
       | Pool.(hd :: tl), (vhd, vtl), (rhd, rtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         V.bwd_unop op vhd rhd, aux tl vtl rtl
     in
     let v' = aux Config.pool v r in
@@ -266,7 +277,7 @@ struct
       match pool, v1, v2, r with
       | Pool.[], (), (), () -> (), ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2), (rhd, rtl) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         let vhd1', vhd2' = V.bwd_binop op vhd1 vhd2 rhd in
         let vtl1', vtl2' = aux tl vtl1 vtl2 rtl in
         (vhd1', vtl1'), (vhd2', vtl2')
@@ -279,7 +290,7 @@ struct
       match pool, v1, v2 with
       | Pool.[], (), () -> (), ()
       | Pool.(hd :: tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd.domain) in
+        let module V = (val hd) in
         let vhd1', vhd2' = V.compare op vhd1 vhd2 in
         let vtl1', vtl2' = aux tl vtl1 vtl2 in
         (vhd1', vtl1'), (vhd2', vtl2')
@@ -301,19 +312,26 @@ type xpool = P : 'a Pool.t -> xpool
 let of_string (values: string list) (rules: string list) (display: string) : (module Value.VALUE) =
   let pool = find_pool values in
   let rules = List.map find_reduction rules in
-  
-  let open Pool in
-  let rec aux : pool -> xpool = function
-    | Nil -> P []
-    | Cons(hd, tl) ->
-      let P tl = aux tl in
-      P (hd :: tl)
+
+  let type_value (type a) (v : (module VALUE with type t = a)) =
+    let module V = (val v) in
+    (module V : VALUE with type t = a)
   in
 
-  let doit (type a) (pool: a Pool.t) =
+  let open Pool in
+  let rec type_pool : (module VALUE) list -> xpool = function
+    | [] -> P []
+    | hd :: tl ->
+      let module V = (val hd) in
+      let v = type_value (module V) in
+      let P tl = type_pool tl in
+      P (v :: tl)
+  in
+
+  let create_product (type a) (pool: a Pool.t) =
     let module V = Make(struct type t = a let pool = pool let rules = rules let display = display end) in
     (module V : Value.VALUE)
   in
 
-  let P pool = aux pool in
-  doit pool
+  let P pool = type_pool pool in
+  create_product pool

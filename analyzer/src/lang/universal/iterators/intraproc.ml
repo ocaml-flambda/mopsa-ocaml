@@ -11,19 +11,20 @@
 open Framework.Essentials
 open Ast
 
-let name = "universal.iterators.intraproc"
-let debug fmt = Debug.debug ~channel:name fmt
 
 module Domain : Framework.Domains.Stateless.S =
 struct
 
-  type _ id += D_universal_intraproc : unit id
+  type _ domain += D_universal_intraproc : unit domain
 
-  let me = D_universal_intraproc
-  let eq : type a. a id -> (unit, a) eq option =
+  let id = D_universal_intraproc
+  let name = "universal.iterators.intraproc"
+  let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_universal_intraproc -> Some Eq
     | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
 
   let zone = Zone.Z_universal
   let import_exec = []
@@ -67,4 +68,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain name (module Domain)
+  Framework.Domains.Stateless.register_domain (module Domain)

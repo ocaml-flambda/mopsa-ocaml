@@ -13,10 +13,6 @@ open Framework.Essentials
 open Framework.Domains.Stateless
 open Ast
 
-let name = "universal.iterators.loops"
-
-let debug fmt = Debug.debug ~channel:name fmt
-
 
 (*==========================================================================*)
 (**                         {2 Loops flow token}                            *)
@@ -65,15 +61,19 @@ let () =
 module Domain : Framework.Domains.Stateless.S =
 struct
 
-  type _ id += D_universal_loops : unit id
+  type _ domain += D_universal_loops : unit domain
 
-  let me = D_universal_loops
-  let eq : type a. a id -> (unit, a) eq option =
+  let id = D_universal_loops
+  let name = "universal.iterators.loops"
+  let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_universal_loops -> Some Eq
     | _ -> None
 
 
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  
   let zone = Zone.Z_universal
   let import_exec = []
   let import_eval = []
@@ -204,4 +204,4 @@ end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain name (module Domain);
+  Framework.Domains.Stateless.register_domain (module Domain);

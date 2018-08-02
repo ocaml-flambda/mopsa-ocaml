@@ -11,8 +11,6 @@
 open Value
 open Essentials
 
-let debug fmt = Debug.debug ~channel:"framework.domains.nonrel" fmt
-
 module Make(Value: VALUE) =
 struct
 
@@ -33,18 +31,21 @@ struct
 
   include VarMap
 
-  type _ Domain.id += D_nonrel : t Domain.id
+  type _ domain += D_nonrel : t domain
 
-  let me = D_nonrel
-  let eq : type a. a Domain.id -> (t, a) Domain.eq option =
+  let name = "framework.domains.nonrel"
+  let id = D_nonrel
+  let identify : type a. a domain -> (t, a) Domain.eq option =
     function
     | D_nonrel -> Some Eq
     | _ -> None
 
 
   let print fmt a =
-    Format.fprintf fmt "%s:@\n  @[%a@]@\n" Value.display VarMap.print a
-  
+    Format.fprintf fmt "%s:@\n  @[%a@]@\n" (snd @@ Value.name) VarMap.print a
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
   (*==========================================================================*)
   (**                    {2 Evaluation of expressions}                        *)
   (*==========================================================================*)

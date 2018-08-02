@@ -106,7 +106,7 @@ let find_value name =
     | [] -> raise Not_found
     | hd :: tl ->
       let module V = (val hd : VALUE) in
-      if V.name = name then
+      if (fst @@ V.name) = name then
         (module V : VALUE)
       else aux tl
   in

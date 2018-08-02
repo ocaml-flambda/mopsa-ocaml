@@ -15,18 +15,16 @@
 open Manager
 open Domain
 
-let debug fmt = Debug.debug ~channel:"framework.domains.iter" fmt
-
 module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
 struct
 
   type t = Head.t * Tail.t
 
-  type _ id += D_iter : t id
+  type _ domain += D_iter : t domain
 
   let id = D_iter
-
-  let identify : type b. b id -> (t, b) eq option =
+  let name = "framework.domains.iter"
+  let identify : type b. b domain -> (t, b) eq option =
     function
     | D_iter -> Some Eq
     | _ -> None

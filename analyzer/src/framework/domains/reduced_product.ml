@@ -17,24 +17,11 @@ struct
   (** A pool is encoded as GADT tuples *)
   type 'a t =
   | [] : unit t
-  | (::) : 'a Domain.info * 'b t -> ('a * 'b) t
+  | (::) : (module Domain.DOMAIN with type t = 'a) * 'b t -> ('a * 'b) t
 
 end
 
 (** Signature for reduction rules *)
 module type REDUCTION =
 sig
-end
-
-
-(** Functor module to create a reduced product abstract domain given a
-   pool of abstract domains and a reduction operator *)
-module Make(Config:
-            sig
-              type t
-              val pool : t Pool.t
-              val reductions : (module REDUCTION) list
-            end) =
-struct
-
 end

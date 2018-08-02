@@ -9,11 +9,9 @@
 (** Interval abstraction of integer values. *)
 
 open Framework.Essentials
+open Framework.Domains.Nonrel.Value
 open Ast
 open Bot
-
-let name = "universal.numeric.values.integer_interval"
-let debug fmt = Debug.debug ~channel:name fmt
 
 module Value =
 struct
@@ -22,6 +20,17 @@ struct
 
   type v = I.t
   type t = v with_bot
+
+  type _ value += V_integer_interval : t value
+
+  let id = V_integer_interval
+  let name = "universal.numeric.values.integer_interval", "int itv"
+  let identify : type a. a value -> (t, a) eq option =
+    function
+    | V_integer_interval -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
 
   let zone = Zone.Z_universal_num
 
@@ -41,8 +50,6 @@ struct
   let widen annot (a1:t) (a2:t) : t = I.widen_bot a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
-
-  let display = "int interval"
 
   let of_constant = function
     | C_int i ->
@@ -144,18 +151,5 @@ struct
 end
 
 
-type _ Framework.Domains.Nonrel.Value.id +=
-  | V_integer_interval : Value.t Framework.Domains.Nonrel.Value.id
-
 let () =
-  Framework.Domains.Nonrel.Value.(register_value {
-      name;
-      domain = (module Value);
-      id = V_integer_interval;
-      eq = (let compare : type b. b id -> (Value.t, b) eq option =
-              function
-              | V_integer_interval -> Some Eq
-              | _ -> None
-            in
-            compare);
-    })
+  register_value (module Value)

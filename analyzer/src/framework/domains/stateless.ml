@@ -13,8 +13,9 @@ open Essentials
 module type S =
 sig
 
-  val me : unit id
-  val eq : 'b id -> (unit, 'b) eq option
+  val name     : string
+  val id       : unit domain
+  val identify : 'b domain -> (unit, 'b) eq option
 
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
 
@@ -42,8 +43,9 @@ struct
   let widen _ _ _ = top
   let print _ _ = ()
 
-  let me = D.me
-  let eq = D.eq
+  let name = D.name
+  let id = D.id
+  let identify = D.identify
 
   let init = D.init
 
@@ -65,9 +67,6 @@ end
 
 
 
-let register_domain name modl =
+let register_domain modl =
   let module D = Make(val modl : S) in
-  Domain.register_domain {
-    name;
-    domain = (module D)
-  }
+  Domain.register_domain (module D)

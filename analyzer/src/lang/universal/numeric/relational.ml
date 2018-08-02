@@ -12,9 +12,6 @@ open Framework.Essentials
 open Framework.Domains.Leaf
 open Ast
 
-let name = "universal.numeric.relational"
-let debug fmt = Debug.debug ~channel:name fmt
-
 
 (****************************************************************************)
 (**                      {2 Command line options}                           *)
@@ -45,7 +42,8 @@ let () =
 module type APRONMANAGER =
 sig
   type t
-  val man: t Apron.Manager.t
+  val man : t Apron.Manager.t
+  val name : string
 end
 
 module Make(ApronManager : APRONMANAGER) =
@@ -53,13 +51,15 @@ struct
 
   type t = ApronManager.t Apron.Abstract1.t
 
-  type _ id += D_universal_relational : t id
-
-  let me = D_universal_relational
-  let eq : type a. a id -> (t, a) eq option =
+  type _ domain += D_universal_relational : t domain
+  let id = D_universal_relational
+  let name = "universal.numeric.relational." ^ ApronManager.name
+  let identify : type a. a domain -> (t, a) eq option =
     function
     | D_universal_relational -> Some Eq
     | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
 
 
   (** {2 Environment utility functions} *)
@@ -359,9 +359,9 @@ struct
 end
 
 
-module Oct = Make(struct type t = Oct.t let name = "oct" let man = Oct.manager_alloc () end)
-module Poly = Make(struct type t = Polka.strict Polka.t let name = "poly" let man = Polka.manager_alloc_strict () end)
+module Oct = Make(struct type t = Oct.t let name = "octagon" let man = Oct.manager_alloc () end)
+module Poly = Make(struct type t = Polka.strict Polka.t let name = "polyhedra" let man = Polka.manager_alloc_strict () end)
 
 let () =
-  register_domain (name ^ ".octagon") (module Oct);
-  register_domain (name ^ ".polyhedra") (module Poly);
+  register_domain (module Oct);
+  register_domain (module Poly);

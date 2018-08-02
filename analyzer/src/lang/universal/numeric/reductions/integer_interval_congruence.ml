@@ -18,8 +18,8 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Reduction : REDUCTION =
 struct
 
-  let itv = Values.Integer_interval.V_integer_interval
-  let cgr = Values.Integer_congruence.V_integer_congruence
+  let itv = Values.Integer_interval.Value.id
+  let cgr = Values.Integer_congruence.Value.id
 
   let reduce (man: 'a pool_man) (v: 'a) : 'a =
     debug "reduce %a and %a"

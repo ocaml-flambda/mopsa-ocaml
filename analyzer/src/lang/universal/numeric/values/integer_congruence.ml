@@ -9,11 +9,10 @@
 (** Congruence abstraction of integer values. *)
 
 open Framework.Essentials
+open Framework.Domains.Nonrel.Value
 open Ast
 open Bot
 
-let name = "universal.numeric.values.integer_congruence"
-let debug fmt = Debug.debug ~channel:name fmt
 
 module Value =
 struct
@@ -21,6 +20,17 @@ struct
 
   type v = C.t
   type t = v with_bot
+
+  type _ value += V_integer_congruence : t value
+
+  let id = V_integer_congruence
+  let name = "universal.numeric.values.integer_congruence", "int congr"
+  let identify : type a. a value -> (t, a) eq option =
+    function
+    | V_integer_congruence -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
 
   let zone = Zone.Z_universal_num
 
@@ -124,18 +134,5 @@ struct
 
 end
 
-type _ Framework.Domains.Nonrel.Value.id +=
-  | V_integer_congruence : Value.t Framework.Domains.Nonrel.Value.id
-
 let () =
-  Framework.Domains.Nonrel.Value.(register_value {
-      name;
-      id = V_integer_congruence;
-      domain = (module Value);
-      eq = (let compare : type b. b id -> (Value.t, b) eq option =
-              function
-              | V_integer_congruence -> Some Eq
-              | _ -> None
-            in
-            compare);
-    })
+  register_value (module Value)
