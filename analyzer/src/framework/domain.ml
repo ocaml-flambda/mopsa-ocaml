@@ -21,10 +21,18 @@ type 'a interface = {
   import : 'a list;
 }
 
+type _ domain = ..
+type (_, _) eq = Eq : ('a, 'a) eq
+
+
 module type DOMAIN =
 sig
 
   include Lattice.LATTICE
+
+  val id : t domain
+  val name : string
+  val identify : 'a domain -> (t, 'a) eq option
 
   val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
 
@@ -36,10 +44,29 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end
 
-let domains : (string * (module DOMAIN)) list ref = ref []
 
-let register name dom =
-  domains := (name, dom) :: !domains
+(*==========================================================================*)
+(**                         {2 Registration} *)
+(*==========================================================================*)
 
-let find name =
-  List.assoc name !domains
+
+let domains : (module DOMAIN) list ref = ref []
+
+let register_domain info = domains := info :: !domains
+
+let find_domain name =
+  let rec aux = function
+    | [] -> raise Not_found
+    | hd :: tl ->
+      let module D = (val hd : DOMAIN) in
+      if D.name = name then
+        (module D : DOMAIN)
+      else aux tl
+  in
+  aux !domains
+
+let find_pool (names: string list) : (module DOMAIN) list =
+  List.filter (fun d ->
+      let module D = (val d : DOMAIN) in
+      List.mem D.name names
+    ) !domains

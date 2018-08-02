@@ -37,8 +37,6 @@ type 'a pool_man = {
   set : 't. 't Value.id -> 't -> 'a -> 'a;
 }
 
-
-
 (** Signature for reduction rules *)
 module type REDUCTION =
 sig

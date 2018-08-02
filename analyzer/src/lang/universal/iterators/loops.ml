@@ -65,6 +65,15 @@ let () =
 module Domain : Framework.Domains.Stateless.S =
 struct
 
+  type _ id += D_universal_loops : unit id
+
+  let me = D_universal_loops
+  let eq : type a. a id -> (unit, a) eq option =
+    function
+    | D_universal_loops -> Some Eq
+    | _ -> None
+
+
   let zone = Zone.Z_universal
   let import_exec = []
   let import_eval = []

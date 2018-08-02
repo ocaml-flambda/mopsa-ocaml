@@ -19,6 +19,14 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain =
 struct
 
+  type _ id += D_universal_program : unit id
+
+  let me = D_universal_program
+  let eq : type a. a id -> (unit, a) eq option =
+    function
+    | D_universal_program -> Some Eq
+    | _ -> None
+
   let zone = Zone.Z_universal
   let import_exec = []
   let import_eval = []

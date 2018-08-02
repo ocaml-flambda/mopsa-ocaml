@@ -8,6 +8,11 @@
 
 (** Abstraction of values. *)
 
+type _ value = ..
+
+type (_, _) eq = Eq : ('a, 'a) eq
+
+
 module type VALUE =
 sig
 
@@ -16,6 +21,11 @@ sig
   (*==========================================================================*)
 
   include Lattice.LATTICE
+
+  val id : t value
+  val name : string * string
+  val identify : 'a value -> (t, 'a) eq option
+
 
   val of_constant : Ast.constant -> t
   (** Create a singleton abstract value from a constant. *)
@@ -78,13 +88,6 @@ sig
   val zone : Zone.t
   (** Language zone in which the value abstraction is defined *)
 
-  (*==========================================================================*)
-  (**                          {2 Printing}                                   *)
-  (*==========================================================================*)
-  
-  val display : string
-  (** Domain name displayed in printing *)
-
 end
 
 
@@ -93,49 +96,27 @@ end
 (**                         {2 Registration} *)
 (*==========================================================================*)
 
-type _ id = ..
 
-type (_, _) eq = Eq : ('a, 'a) eq
+let values : (module VALUE) list ref = ref []
 
-type 'a info = {
-  name : string;
-  id : 'a id;
-  eq : 'b. 'b id -> ('a, 'b) eq option;
-  domain : (module VALUE with type t = 'a);
-}
-
-type pool =
-  | Nil : pool
-  | Cons : 'a info * pool -> pool
-
-let values : pool ref = ref Nil
-
-let register_value info = values := Cons (info, !values)
+let register_value v = values := v :: !values
 
 let find_value name =
   let rec aux = function
-    | Nil -> raise Not_found
-    | Cons(hd, tl) ->
-      if hd.name = name then
-        let module D = (val hd.domain) in
-        (module D : VALUE)
+    | [] -> raise Not_found
+    | hd :: tl ->
+      let module V = (val hd : VALUE) in
+      if V.name = name then
+        (module V : VALUE)
       else aux tl
   in
   aux !values
 
-let rec find_pool (names: string list) : pool =
-  match names with
-  | [] -> Nil
-  | name :: names ->
-    let rec aux : pool -> pool =
-      fun pool ->
-        match pool with
-        | Nil -> raise Not_found
-        | Cons(hd, tl) ->
-          if hd.name = name then Cons(hd, find_pool names)
-          else aux tl
-    in
-    aux !values
+let rec find_pool (names: string list) : (module VALUE) list =
+  List.filter (fun v ->
+      let module V = (val v : VALUE) in
+      List.mem (fst @@ V.name) names
+    ) !values
 
 
 (*==========================================================================*)

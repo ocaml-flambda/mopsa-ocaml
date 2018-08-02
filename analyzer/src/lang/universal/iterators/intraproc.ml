@@ -17,6 +17,14 @@ let debug fmt = Debug.debug ~channel:name fmt
 module Domain : Framework.Domains.Stateless.S =
 struct
 
+  type _ id += D_universal_intraproc : unit id
+
+  let me = D_universal_intraproc
+  let eq : type a. a id -> (unit, a) eq option =
+    function
+    | D_universal_intraproc -> Some Eq
+    | _ -> None
+
   let zone = Zone.Z_universal
   let import_exec = []
   let import_eval = []

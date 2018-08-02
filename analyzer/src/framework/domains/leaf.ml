@@ -16,13 +16,15 @@ module type S =
 sig
 
   include Lattice.LATTICE
+
+  val me : t id
+  val eq : 'a id -> (t, 'a) eq option
   
   val init : Ast.program -> t
 
   val zone : Zone.t
 
   val exec : Ast.stmt -> t -> t
-
   val ask  : 'r Query.query -> t -> 'r option
 
 end
@@ -105,4 +107,7 @@ end
 
 let register_domain name modl =
   let module D = Make(val modl : S) in
-  Domain.register name (module D)
+  Domain.register_domain {
+    name;
+    domain = (module D);
+  }

@@ -22,6 +22,15 @@ struct
 
   type t = Head.t * Tail.t
 
+  type _ id += D_iter : t id
+
+  let id = D_iter
+
+  let identify : type b. b id -> (t, b) eq option =
+    function
+    | D_iter -> Some Eq
+    | _ -> None
+
   let bottom =
     Head.bottom, Tail.bottom
 

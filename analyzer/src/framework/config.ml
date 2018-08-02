@@ -21,7 +21,7 @@ let rec build_domain = function
   | _ -> assert false
 
 and build_leaf name =
-  try Domain.find name
+  try Domain.find_domain name
   with Not_found -> Debug.fail "Domain %s not found" name
       
 

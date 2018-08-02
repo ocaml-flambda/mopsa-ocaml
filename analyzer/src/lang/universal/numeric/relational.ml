@@ -53,6 +53,14 @@ struct
 
   type t = ApronManager.t Apron.Abstract1.t
 
+  type _ id += D_universal_relational : t id
+
+  let me = D_universal_relational
+  let eq : type a. a id -> (t, a) eq option =
+    function
+    | D_universal_relational -> Some Eq
+    | _ -> None
+
 
   (** {2 Environment utility functions} *)
   (** ********************************* *)

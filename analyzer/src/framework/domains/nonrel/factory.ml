@@ -16,10 +16,10 @@ let debug fmt = Debug.debug ~channel:"framework.domains.nonrel" fmt
 module Make(Value: VALUE) =
 struct
 
+
   (*==========================================================================*)
                           (** {2 Lattice structure} *)
   (*==========================================================================*)
-
 
   (** Map with variables as keys. Absent bindings are assumed to point to ⊤. *)
   module VarMap =
@@ -32,6 +32,15 @@ struct
     (Value)
 
   include VarMap
+
+  type _ Domain.id += D_nonrel : t Domain.id
+
+  let me = D_nonrel
+  let eq : type a. a Domain.id -> (t, a) Domain.eq option =
+    function
+    | D_nonrel -> Some Eq
+    | _ -> None
+
 
   let print fmt a =
     Format.fprintf fmt "%s:@\n  @[%a@]@\n" Value.display VarMap.print a
