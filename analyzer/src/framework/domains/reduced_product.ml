@@ -55,6 +55,11 @@ let find_reduction name = List.assoc name !reductions
 (** Functor of reduced products *)
 (** *************************** *)
 
+type _ domain +=
+  | D_empty : unit domain
+  | D_reduced_product : 'a domain * 'b domain -> ('a * 'b) domain
+
+
 module Make
     (Config:
      sig
@@ -70,20 +75,37 @@ struct
   (* Domain identification *)
   (* ********************* *)
 
-  type _ domain += D_reduced_product : t domain
-
   let name = "framework.domains.reduced_product"
 
-  let id = D_reduced_product
+  let id =
+    let rec aux : type a. a Pool.t -> a domain =
+      function
+      | Pool.[] -> D_empty
+      | Pool.(hd :: tl) ->
+        let module V = (val hd) in
+        D_reduced_product(V.id, aux tl)
+    in
+    aux Config.pool
 
   let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_reduced_product -> Some Eq
-    | _ -> None
+    fun id ->
+    let rec aux : type a b. a Pool.t -> b domain -> (a, b) eq option =
+      fun pool id ->
+        match pool, id with
+        | Pool.[], D_empty -> Some Eq
+        | Pool.(hd :: tl), D_reduced_product(id1, id2) ->
+          let module D = (val hd) in
+          begin match D.identify id1, aux tl id2 with
+            | Some Eq, Some Eq -> Some Eq
+            | _ -> None
+          end
+        | _ -> None
+    in
+    aux Config.pool id
 
 
   (* Lattice definition *)
-  (* ****************** *)  
+  (* ****************** *)
 
   let bottom : t =
     let rec aux : type a. a Pool.t -> a = fun pool ->

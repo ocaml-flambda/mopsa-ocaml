@@ -46,6 +46,12 @@ sig
   val reduce : 'a pool_man -> 'a -> 'a
 end
 
+
+type _ value +=
+  | V_empty : unit value
+  | V_reduced_product : 'a value * 'b value -> ('a * 'b) value
+
+
 (** Create a reduced product of a pool of value abstractions and reduction operators *)
 module Make
     (Config:
@@ -58,14 +64,34 @@ module Make
 struct
   type t = Config.t
 
-  type _ value += V_reduced_product : t value
 
   let name = "framework.domains.nonre.value_reduced_product", Config.display
-  let id = V_reduced_product
+
+  let id =
+    let rec aux : type a. a Pool.t -> a value =
+      function
+      | Pool.[] -> V_empty
+      | Pool.(hd :: tl) ->
+        let module V = (val hd) in
+        V_reduced_product(V.id, aux tl)
+    in
+    aux Config.pool
+
   let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_reduced_product -> Some Eq
-    | _ -> None
+    fun id ->
+    let rec aux : type a b. a Pool.t -> b value -> (a, b) eq option =
+      fun pool id ->
+        match pool, id with
+        | Pool.[], V_empty -> Some Eq
+        | Pool.(hd :: tl), V_reduced_product(id1, id2) ->
+          let module V = (val hd) in
+          begin match V.identify id1, aux tl id2 with
+            | Some Eq, Some Eq -> Some Eq
+            | _ -> None
+          end
+        | _ -> None
+    in
+    aux Config.pool id
 
   let bottom : t =
     let rec aux : type a. a Pool.t -> a = fun pool ->
