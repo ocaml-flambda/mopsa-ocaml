@@ -14,6 +14,9 @@ open Ast
 open Flow
 open Manager
 
+let case  (c: ('a, 'e) evl_case) : ('a, 'e) evl =
+  Dnf.singleton c
+
 let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('a, 'e) evl =
   Dnf.singleton {expr = Some e; flow; cleaners}
 
@@ -134,6 +137,9 @@ let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
     )
     fmt
     (Dnf.to_list evl)
+
+let to_dnf (evl: ('a, 'e) evl) : ('a, 'e) evl_case Dnf.t =
+  evl
 
 let return (evl: ('a, 'e) evl) : ('a, 'e) evl option =
   Some evl

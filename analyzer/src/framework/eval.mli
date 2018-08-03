@@ -8,13 +8,15 @@
 
 open Manager
 
+val case : ('a, 'e) evl_case -> ('a, 'e) evl
+
 val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('a, 'e) evl
 
 val empty : 'a flow -> ('a, 'e) evl
 
 val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
-val join_list : ('a, 'e) evl  list -> ('a, 'e) evl
+val join_list : ('a, 'e) evl list -> ('a, 'e) evl
 
 val add_cleaners : Ast.stmt list -> ('a, 'e) evl  -> ('a, 'e) evl
 
@@ -42,5 +44,7 @@ val switch :
   ('a, 'e) evl
 
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) evl -> unit
+
+val to_dnf : ('a, 'e) evl -> ('a, 'e) evl_case Dnf.t
 
 val return : ('a, 'e) evl -> ('a, 'e) evl option

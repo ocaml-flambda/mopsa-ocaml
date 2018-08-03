@@ -26,46 +26,82 @@ struct
 end
 
 
-(* Pool manager defines get/set functions to access the abstract elements of a
-   domain within the pool via its identifier *)
+(** State reductions *)
+(** **************** *)
+
+(* Pool managers define get/set functions to access the individual
+   abstract elements of a pool via domain identifiers *)
 type 'a pool_man = {
   get : 't. 't domain -> 'a -> 't;
   set : 't. 't domain -> 't -> 'a -> 'a;
 }
 
-
-(** Reduction rules *)
-(** *************** *)
-
-module type REDUCTION =
+(** Operator signature *)
+module type STATE_REDUCTION =
 sig
-  val exec : Ast.stmt -> 'a pool_man -> ('a, 'b) man -> 'a flow -> 'a flow
+  val reduce : Ast.stmt -> 'a pool_man -> ('a, 'b) man -> 'a flow -> 'a flow
+end
+
+(** Registration *)
+let state_reductions : (string * (module STATE_REDUCTION)) list ref = ref []
+let register_state_reduction name rule = state_reductions := (name, rule) :: !state_reductions
+let find_state_reduction name = List.assoc name !state_reductions
+
+
+
+(** Evaluation reductions *)
+(** ********************* *)
+
+(** Conjunction of product evaluations *)
+type 'a conj = ('a, Ast.expr) evl_case option list
+
+let conj_to_evl (c: 'a conj) : ('a, Ast.expr) evl option =
+  match List.partition (function None -> true | _ -> false) c with
+  | _, [] -> None
+  | _, l ->
+    Some (
+      List.map (function Some c -> Eval.case c | None -> assert false) l |>
+      Eval.join_list
+    )
+
+type 'a eval_man = {
+  get : 't. 't domain -> 'a conj -> (Ast.expr option * 'a flow) option;
+  set : 't. 't domain -> Ast.expr -> 'a flow -> 'a conj -> 'a conj;
+  remove : 't. 't domain -> 'a conj -> 'a conj;
+}
+
+(** Operator signature *)
+module type EVAL_REDUCTION =
+sig
+  val reduce : Ast.expr -> 'a eval_man -> 'a pool_man -> ('a, 'b) man -> 'a conj -> 'a conj
 end
 
 
-let reductions : (string * (module REDUCTION)) list ref = ref []
-
-let register_reduction name rule =
-  reductions := (name, rule) :: !reductions
-
-let find_reduction name = List.assoc name !reductions
+(** Registration *)
+let eval_reductions : (string * (module EVAL_REDUCTION)) list ref = ref []
+let register_eval_reduction name rule = eval_reductions := (name, rule) :: !eval_reductions
+let find_eval_reduction name = List.assoc name !eval_reductions
 
 
-
-(** Functor of reduced products *)
-(** *************************** *)
+(** Domain identification *)
+(** ********************* *)
 
 type _ domain +=
   | D_empty : unit domain
   | D_reduced_product : 'a domain * 'b domain -> ('a * 'b) domain
 
 
+
+(** Domain functor *)
+(** ************** *)
+
 module Make
     (Config:
      sig
        type t
        val pool : t Pool.t
-       val rules : (module REDUCTION) list
+       val state_rules : (module STATE_REDUCTION) list
+       val eval_rules : (module EVAL_REDUCTION) list
      end
     ) : DOMAIN =
 struct
@@ -129,7 +165,7 @@ struct
     in
     aux Config.pool
 
-  let is_bottom (v:t) : bool = 
+  let is_bottom (v:t) : bool =
     let rec aux : type a. a Pool.t -> a -> bool = fun pool v ->
       match pool, v with
       | Pool.[], () -> false
@@ -280,15 +316,15 @@ struct
 
   let reduce_exec stmt man flow =
     let pman = pool_man man in
-    let rec apply flow (l: (module REDUCTION) list) =
+    let rec apply flow (l: (module STATE_REDUCTION) list) =
       match l with
       | [] -> flow
       | hd :: tl ->
-        let module R = (val hd : REDUCTION) in
-        apply (R.exec stmt pman man flow) tl
+        let module R = (val hd : STATE_REDUCTION) in
+        apply (R.reduce stmt pman man flow) tl
     in
     let rec lfp flow =
-      let flow' = apply flow Config.rules in
+      let flow' = apply flow Config.state_rules in
       if Flow.subset man flow flow' then flow else lfp flow'
     in
     lfp flow
@@ -361,6 +397,76 @@ struct
       D.eval_interface
     | _ -> assert false
 
+  (** Evaluation manager *)
+  let eval_man (man: ('a, _) man) : 'a eval_man = {
+    get = (let f : type t. t domain -> 'a conj -> (Ast.expr option * 'a flow) option =
+             fun id conj ->
+               let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> (Ast.expr option * 'a flow) option =
+                 fun pool id conj ->
+                   match pool, conj with
+                   | Pool.[], [] -> raise Not_found
+                   | Pool.(hd :: tl), c :: ctl ->
+                     let module D = (val hd) in
+                     begin match D.identify id, c with
+                       | Some Eq, None -> None
+                       | Some Eq, Some {expr; flow} -> Some (expr, flow)
+                       | _ -> aux tl id ctl
+                     end
+                   | _ -> assert false
+               in
+               aux Config.pool id conj
+           in
+           f);
+    set = (let f : type t. t domain -> Ast.expr -> 'a flow -> 'a conj -> 'a conj =
+             fun id exp flow conj ->
+               let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> 'a conj =
+                 fun pool id conj ->
+                   match pool, conj with
+                   | Pool.[], [] -> []
+                   | Pool.(hd :: tl), c :: ctl ->
+                     let module D = (val hd) in
+                     begin match D.identify id with
+                       | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
+                       | None -> c :: (aux tl id ctl)
+                     end
+                   | _ -> assert false
+               in
+               aux Config.pool id conj
+           in
+           f);
+    remove = (let f : type t. t domain -> 'a conj -> 'a conj =
+                fun id conj ->
+                  let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> 'a conj =
+                    fun pool id conj ->
+                      match pool, conj with
+                      | Pool.[], [] -> []
+                      | Pool.(hd :: tl), c :: ctl ->
+                        let module D = (val hd) in
+                        begin match D.identify id with
+                          | Some Eq -> None :: ctl
+                          | None -> c :: (aux tl id ctl)
+                        end
+                      | _ -> assert false
+                  in
+                  aux Config.pool id conj
+              in
+              f
+             );
+  }
+
+  let reduce_eval exp man pevl =
+    let pman = pool_man man in
+    let eman = eval_man man in
+    let rec apply pevl (l: (module EVAL_REDUCTION) list) =
+      match l with
+      | [] -> pevl
+      | hd :: tl ->
+        let module R = (val hd : EVAL_REDUCTION) in
+        apply (R.reduce exp eman pman man pevl) tl
+    in
+    apply pevl Config.eval_rules
+
+
   let eval zone exp man flow =
     (* Point-wise evaluation *)
     let evls =
@@ -375,7 +481,39 @@ struct
       in
       aux Config.pool man
     in
-    assert false
+
+    (* Transform list of evaluations into list of conjunctions *)
+    let lconj =
+      let rec aux : type t. t Pool.t -> ('a, Ast.expr) evl option list -> 'a conj list =
+        fun pool evls ->
+          match pool, evls with
+          | Pool.[], [] -> [[]]
+          | Pool.(hd :: tl), evl :: evls ->
+            let evl' = aux tl evls in
+            begin match evl with
+              | None -> List.map (fun c -> None :: c) evl'
+              | Some evl ->
+                let l = Eval.to_dnf evl |>
+                        Dnf.to_list
+                in
+                List.fold_left (fun acc c ->
+                    match c with
+                    | [e] -> (List.map (fun c -> Some e :: c) evl') @ acc
+                    | _ -> failwith "Domains in a reduced product cannot return a conjunction"
+                  ) [] l
+            end
+          | _ -> assert false
+      in
+      aux Config.pool evls
+    in
+
+    (* Reduce each conjunction *)
+    let lconj' = List.map (reduce_eval exp man) lconj in
+
+    (* Combine conjunctions into an evaluation *)
+    List.fold_left (fun acc c ->
+        Option.option_neutral2 Eval.join acc (conj_to_evl c)
+      ) None lconj'
 
 
   (* Queries *)
@@ -393,7 +531,10 @@ type xpool = P : 'a Pool.t -> xpool
 
 let of_string (values: string list) (rules: string list) : (module DOMAIN) =
   let pool = find_pool values in
-  let rules = List.map find_reduction rules in
+
+  let state_rules, eval_rules = List.partition (fun rule -> List.mem_assoc rule !state_reductions) rules in
+  let state_rules = List.map find_state_reduction state_rules in
+  let eval_rules = List.map find_eval_reduction eval_rules in
 
   let type_domain (type a) (d : (module DOMAIN with type t = a)) =
     let module D = (val d) in
@@ -411,7 +552,7 @@ let of_string (values: string list) (rules: string list) : (module DOMAIN) =
   in
 
   let create_product (type a) (pool: a Pool.t) =
-    let module D = Make(struct type t = a let pool = pool let rules = rules end) in
+    let module D = Make(struct type t = a let pool = pool let state_rules = state_rules let eval_rules = eval_rules end) in
     (module D : DOMAIN)
   in
 
