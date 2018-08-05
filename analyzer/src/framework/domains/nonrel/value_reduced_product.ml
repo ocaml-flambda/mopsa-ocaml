@@ -21,6 +21,8 @@ struct
 
 end
 
+type 't pool = 't Pool.t
+
 (** Pool manager defines point-wise lattice operators for the product
       value abstraction. It also provides get/set functions to access
       individual values abstractions via keys *)
@@ -361,3 +363,19 @@ let of_string (values: string list) (rules: string list) (display: string) : (mo
 
   let P pool = type_pool pool in
   create_product pool
+
+
+(** Utility functions *)
+(** ***************** *)
+
+type 'a fld = {
+  doit : 't. 'a -> 't value -> 'a;
+}
+
+let rec fold : type t. 'a fld -> 'a -> t pool -> 'a =
+  fun f init pool ->
+    match pool with
+    | Pool.[] -> init
+    | Pool.(hd :: tl) ->
+      let module D = (val hd) in
+      fold f (f.doit init D.id) tl
