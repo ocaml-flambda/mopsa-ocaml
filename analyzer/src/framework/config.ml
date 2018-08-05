@@ -17,6 +17,7 @@ let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
   | `Assoc(obj) when List.mem_assoc "nonrel" obj -> build_non_rel @@ List.assoc "nonrel" obj
+  | `Assoc(obj) when List.mem_assoc "product" obj -> build_product obj
   | `Assoc(obj) when List.mem_assoc "nonrel-product" obj -> build_non_rel_product obj
   | _ -> assert false
 
@@ -53,12 +54,17 @@ and build_non_rel json =
   let module D = Factory.Make(V) in
   (module D : Domain.DOMAIN)
 
+and build_product assoc =
+  let pool = List.assoc "product" assoc |> to_list |> List.map build_domain in
+  let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
+  let module D = (val Domains.Reduced_product.make pool rules) in
+  (module D)
 
 and build_non_rel_product assoc =
   let pool = List.assoc "nonrel-product" assoc |> to_list |> List.map to_string in
   let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
   let name = List.assoc "name" assoc |> to_string in
-  let module V = (val Domains.Nonrel.Value_reduced_product.of_string pool rules name) in
+  let module V = (val Domains.Nonrel.Value_reduced_product.make pool rules name) in
   let module D = Domains.Nonrel.Factory.Make(V) in
   (module D)
 

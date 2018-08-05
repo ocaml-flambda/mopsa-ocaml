@@ -46,7 +46,7 @@ type _ value +=
 val register_reduction : string -> (module REDUCTION) -> unit
 val find_reduction : string -> (module REDUCTION)
 
-val of_string : string list -> string list -> string -> (module Value.VALUE)
+val make : string list -> string list -> string -> (module Value.VALUE)
 
 (* Utility functions *)
 type 'a fld = {
@@ -54,3 +54,10 @@ type 'a fld = {
 }
 
 val fold : 'a fld -> 'a -> 't pool -> 'a
+
+
+type fiter = {
+  doit : 't. 't value -> unit;
+}
+
+val iter : fiter -> 't pool -> unit

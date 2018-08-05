@@ -73,11 +73,17 @@ type _ domain +=
 (* Domain factory from string identifiers *)
 (* ************************************** *)
 
-val of_string : string list -> string list -> (module DOMAIN)
+val make : (module DOMAIN) list -> string list -> (module DOMAIN)
 
 (* Utility functions *)
-type 'a fld = {
+type 'a ffold = {
   doit : 't. 'a -> 't domain -> 'a;
 }
 
-val fold : 'a fld -> 'a -> 't pool -> 'a
+val fold : 'a ffold -> 'a -> 't pool -> 'a
+
+type fiter = {
+  doit : 't. 't domain -> unit;
+}
+
+val iter : fiter -> 't pool -> unit
