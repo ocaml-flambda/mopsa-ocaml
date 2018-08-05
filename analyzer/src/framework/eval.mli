@@ -18,6 +18,10 @@ val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
 val join_list : ('a, 'e) evl list -> ('a, 'e) evl
 
+val meet : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
+
+val meet_list : ('a, 'e) evl list -> ('a, 'e) evl
+
 val add_cleaners : Ast.stmt list -> ('a, 'e) evl  -> ('a, 'e) evl
 
 val fold :

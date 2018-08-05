@@ -12,6 +12,7 @@ open Essentials
 open Domain
 
 
+
 (** Pool of abstract domains *)
 (** ************************ *)
 
@@ -26,15 +27,41 @@ struct
 end
 
 
-(** State reductions *)
+
+(** Pool evaluations *)
 (** **************** *)
 
-(* Pool managers define get/set functions to access the individual
-   abstract elements of a pool via domain identifiers *)
+(** Each conjunction of point-wise evaluations are reduced individually *)
+type 'a econj = ('a, Ast.expr) evl_case option list
+
+(** Transform a conjunction into an evaluation *)
+let econj_to_eval (c: 'a econj) : ('a, Ast.expr) evl option =
+  match List.partition (function None -> true | _ -> false) c with
+  | _, [] -> None
+  | _, l ->
+    Some (
+      List.map (function Some c -> Eval.case c | None -> assert false) l |>
+      Eval.meet_list
+    )
+
+
+
+(** Pool manager *)
+(** ************ *)
+
 type 'a pool_man = {
-  get : 't. 't domain -> 'a -> 't;
-  set : 't. 't domain -> 't -> 'a -> 'a;
+  get_state : 't. 't domain -> 'a -> 't;
+  set_state : 't. 't domain -> 't -> 'a -> 'a;
+  get_eval : 't. 't domain -> 'a econj -> (Ast.expr option * 'a flow) option;
+  set_eval : 't. 't domain -> Ast.expr -> 'a flow -> 'a econj -> 'a econj;
+  remove_eval : 't. 't domain -> 'a econj -> 'a econj;
+
 }
+
+
+
+(** State reductions *)
+(** **************** *)
 
 (** Operator signature *)
 module type STATE_REDUCTION =
@@ -52,35 +79,17 @@ let find_state_reduction name = List.assoc name !state_reductions
 (** Evaluation reductions *)
 (** ********************* *)
 
-(** Conjunction of product evaluations *)
-type 'a conj = ('a, Ast.expr) evl_case option list
-
-let conj_to_evl (c: 'a conj) : ('a, Ast.expr) evl option =
-  match List.partition (function None -> true | _ -> false) c with
-  | _, [] -> None
-  | _, l ->
-    Some (
-      List.map (function Some c -> Eval.case c | None -> assert false) l |>
-      Eval.join_list
-    )
-
-type 'a eval_man = {
-  get : 't. 't domain -> 'a conj -> (Ast.expr option * 'a flow) option;
-  set : 't. 't domain -> Ast.expr -> 'a flow -> 'a conj -> 'a conj;
-  remove : 't. 't domain -> 'a conj -> 'a conj;
-}
-
 (** Operator signature *)
 module type EVAL_REDUCTION =
 sig
-  val reduce : Ast.expr -> 'a eval_man -> 'a pool_man -> ('a, 'b) man -> 'a conj -> 'a conj
+  val reduce : Ast.expr -> 'a pool_man -> ('a, 'b) man -> 'a econj -> 'a econj
 end
-
 
 (** Registration *)
 let eval_reductions : (string * (module EVAL_REDUCTION)) list ref = ref []
 let register_eval_reduction name rule = eval_reductions := (name, rule) :: !eval_reductions
 let find_eval_reduction name = List.assoc name !eval_reductions
+
 
 
 (** Domain identification *)
@@ -108,8 +117,8 @@ struct
   type t = Config.t
 
 
-  (* Domain identification *)
-  (* ********************* *)
+  (* Domain instance identification *)
+  (* ****************************** *)
 
   let name = "framework.domains.reduced_product"
 
@@ -246,7 +255,7 @@ struct
   }
 
   let pool_man (man:('a, t) man) : 'a pool_man = {
-    get = (
+    get_state = (
       let f : type b. b domain -> 'a -> b = fun id env ->
         let rec aux : type b c. b domain -> c Pool.t -> ('a, c) man -> b = fun id pool man ->
           match pool with
@@ -263,7 +272,7 @@ struct
       in
       f
     );
-    set = (
+    set_state = (
       let f : type b. b domain -> b -> 'a -> 'a = fun id a env ->
         let rec aux : type b c. b domain -> b -> c Pool.t -> ('a, c) man -> 'a =
           fun id a pool man ->
@@ -281,6 +290,59 @@ struct
       in
       f
     );
+    get_eval = (let f : type t. t domain -> 'a econj -> (Ast.expr option * 'a flow) option =
+                  fun id econj ->
+                    let rec aux : type s t. s Pool.t -> t domain -> 'a econj -> (Ast.expr option * 'a flow) option =
+                      fun pool id econj ->
+                        match pool, econj with
+                        | Pool.[], [] -> raise Not_found
+                        | Pool.(hd :: tl), c :: ctl ->
+                          let module D = (val hd) in
+                          begin match D.identify id, c with
+                            | Some Eq, None -> None
+                            | Some Eq, Some {expr; flow} -> Some (expr, flow)
+                            | _ -> aux tl id ctl
+                          end
+                        | _ -> assert false
+                    in
+                    aux Config.pool id econj
+                in
+                f);
+    set_eval = (let f : type t. t domain -> Ast.expr -> 'a flow -> 'a econj -> 'a econj =
+                  fun id exp flow econj ->
+                    let rec aux : type s t. s Pool.t -> t domain -> 'a econj -> 'a econj =
+                      fun pool id econj ->
+                        match pool, econj with
+                        | Pool.[], [] -> []
+                        | Pool.(hd :: tl), c :: ctl ->
+                          let module D = (val hd) in
+                          begin match D.identify id with
+                            | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
+                            | None -> c :: (aux tl id ctl)
+                          end
+                        | _ -> assert false
+                    in
+                    aux Config.pool id econj
+                in
+                f);
+    remove_eval = (let f : type t. t domain -> 'a econj -> 'a econj =
+                     fun id econj ->
+                       let rec aux : type s t. s Pool.t -> t domain -> 'a econj -> 'a econj =
+                         fun pool id econj ->
+                           match pool, econj with
+                           | Pool.[], [] -> []
+                           | Pool.(hd :: tl), c :: ctl ->
+                             let module D = (val hd) in
+                             begin match D.identify id with
+                               | Some Eq -> None :: ctl
+                               | None -> c :: (aux tl id ctl)
+                             end
+                           | _ -> assert false
+                       in
+                       aux Config.pool id econj
+                   in
+                   f
+                  );
   }
 
 
@@ -397,72 +459,14 @@ struct
       D.eval_interface
     | _ -> assert false
 
-  (** Evaluation manager *)
-  let eval_man (man: ('a, _) man) : 'a eval_man = {
-    get = (let f : type t. t domain -> 'a conj -> (Ast.expr option * 'a flow) option =
-             fun id conj ->
-               let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> (Ast.expr option * 'a flow) option =
-                 fun pool id conj ->
-                   match pool, conj with
-                   | Pool.[], [] -> raise Not_found
-                   | Pool.(hd :: tl), c :: ctl ->
-                     let module D = (val hd) in
-                     begin match D.identify id, c with
-                       | Some Eq, None -> None
-                       | Some Eq, Some {expr; flow} -> Some (expr, flow)
-                       | _ -> aux tl id ctl
-                     end
-                   | _ -> assert false
-               in
-               aux Config.pool id conj
-           in
-           f);
-    set = (let f : type t. t domain -> Ast.expr -> 'a flow -> 'a conj -> 'a conj =
-             fun id exp flow conj ->
-               let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> 'a conj =
-                 fun pool id conj ->
-                   match pool, conj with
-                   | Pool.[], [] -> []
-                   | Pool.(hd :: tl), c :: ctl ->
-                     let module D = (val hd) in
-                     begin match D.identify id with
-                       | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
-                       | None -> c :: (aux tl id ctl)
-                     end
-                   | _ -> assert false
-               in
-               aux Config.pool id conj
-           in
-           f);
-    remove = (let f : type t. t domain -> 'a conj -> 'a conj =
-                fun id conj ->
-                  let rec aux : type s t. s Pool.t -> t domain -> 'a conj -> 'a conj =
-                    fun pool id conj ->
-                      match pool, conj with
-                      | Pool.[], [] -> []
-                      | Pool.(hd :: tl), c :: ctl ->
-                        let module D = (val hd) in
-                        begin match D.identify id with
-                          | Some Eq -> None :: ctl
-                          | None -> c :: (aux tl id ctl)
-                        end
-                      | _ -> assert false
-                  in
-                  aux Config.pool id conj
-              in
-              f
-             );
-  }
-
   let reduce_eval exp man pevl =
     let pman = pool_man man in
-    let eman = eval_man man in
     let rec apply pevl (l: (module EVAL_REDUCTION) list) =
       match l with
       | [] -> pevl
       | hd :: tl ->
         let module R = (val hd : EVAL_REDUCTION) in
-        apply (R.reduce exp eman pman man pevl) tl
+        apply (R.reduce exp pman man pevl) tl
     in
     apply pevl Config.eval_rules
 
@@ -484,7 +488,7 @@ struct
 
     (* Transform list of evaluations into list of conjunctions *)
     let lconj =
-      let rec aux : type t. t Pool.t -> ('a, Ast.expr) evl option list -> 'a conj list =
+      let rec aux : type t. t Pool.t -> ('a, Ast.expr) evl option list -> 'a econj list =
         fun pool evls ->
           match pool, evls with
           | Pool.[], [] -> [[]]
@@ -512,14 +516,26 @@ struct
 
     (* Combine conjunctions into an evaluation *)
     List.fold_left (fun acc c ->
-        Option.option_neutral2 Eval.join acc (conj_to_evl c)
+        Option.option_neutral2 Eval.join acc (econj_to_eval c)
       ) None lconj'
 
 
   (* Queries *)
   (* ******** *)
 
-  let ask = assert false
+  let ask query man flow =
+    let rec aux : type t r. t Pool.t -> ('a, t) man -> r Query.query -> r option =
+      fun pool man query ->
+        match pool with
+        | Pool.[] -> None
+        | Pool.(hd :: tl) ->
+          let module D = (val hd) in
+          let r1 = D.ask query (head_man man) flow in
+          let r2 = aux tl (tail_man man) query in
+          Query.meet query r1 r2
+    in
+    aux Config.pool man query
+                  
 
 end
 

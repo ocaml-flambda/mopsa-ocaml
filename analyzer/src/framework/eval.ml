@@ -34,6 +34,11 @@ let join_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
 let meet (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
   Dnf.mk_and evl1 evl2
 
+let meet_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
+  match l with
+  | [] -> assert false
+  | hd :: tl -> List.fold_left meet hd tl
+
 let map
     (f: ('a, 'e) evl_case -> ('a, 'f) evl_case)
     (evl: ('a, 'e) evl)

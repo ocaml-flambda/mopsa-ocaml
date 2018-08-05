@@ -14,17 +14,12 @@ open Framework
 (** Initialize options from environment variables *)
 let init_from_env () =
   (* Initialize debug channels from the environment variable MOPSADEBUG. *)
-  (try
-     let debug = Unix.getenv "MOPSADEBUG" in
-     Debug.parse debug
-   with Not_found ->
-     ()
-  );
-  (try
-     Framework.Options.(common_options.config <- Unix.getenv "MOPSACONFIG");
-   with Not_found ->
-     ()
-  );
+  (try Debug.parse (Unix.getenv "MOPSADEBUG")
+   with Not_found -> ());
+
+  (* Get the path of configuration file from variable MOPSACONFIG *)
+  (try Options.(common_options.config <- Unix.getenv "MOPSACONFIG")
+   with Not_found ->());
   ()
 
 
@@ -106,8 +101,9 @@ let parse_program files =
 
 
 
-(** Parse command line arguments and get all target source files *)
-let get_sources f () =
+(** Parse command line arguments and apply [f] on the list of target
+   source files *)
+let iter_sources f () =
   init_from_env ();
   let files = ref [] in
   let n = Array.length Sys.argv in
@@ -123,7 +119,7 @@ let get_sources f () =
 
 (** Main entry point *)
 let () =
-  get_sources (fun files ->
+  iter_sources (fun files ->
       let result = try
           let prog = parse_program files in
           let config = get_config_path () in
