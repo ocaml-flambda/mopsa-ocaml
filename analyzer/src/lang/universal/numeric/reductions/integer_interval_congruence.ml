@@ -9,19 +9,20 @@
 (** Reduction operator for integer intervals and congruences. *)
 
 open Framework.Essentials
-open Framework.Domains.Nonrel.Value_reduced_product
+open Framework.Domains.Reduced_product.Reductions.Value_reduction
+open Framework.Domains.Reduced_product.Pool
 open Ast
 
 let name = "universal.numeric.reductions.integer_interval_congruence"
 let debug fmt = Debug.debug ~channel:name fmt
 
-module Reduction : REDUCTION =
+module Reduction : VALUE_REDUCTION =
 struct
 
   let itv = Values.Integer_interval.Value.id
   let cgr = Values.Integer_congruence.Value.id
 
-  let reduce (man: 'a pool_man) (v: 'a) : 'a =
+  let reduce (man: 'a value_man) (v: 'a) : 'a =
     debug "reduce %a and %a"
       Values.Integer_interval.Value.print (man.get itv v)
       Values.Integer_congruence.Value.print (man.get cgr v)
@@ -46,7 +47,8 @@ struct
         Values.Integer_interval.Value.print (man.get itv v)
         Values.Integer_congruence.Value.print (man.get cgr v)
       ;
-      man.bottom
+      man.set itv Values.Integer_interval.Value.bottom v |>
+      man.set cgr Values.Integer_congruence.Value.bottom
 end
 
 

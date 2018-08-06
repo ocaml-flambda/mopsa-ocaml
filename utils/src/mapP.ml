@@ -2,8 +2,8 @@
 
 (** Builder *)
 module Make
-    (K : Sig.VALUE)
-    (E : Sig.VALUE)
+    (K : ValueSig.S)
+    (E : ValueSig.S)
   :
   sig
     type +'a map

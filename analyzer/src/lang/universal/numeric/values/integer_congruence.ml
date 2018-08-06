@@ -9,7 +9,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Framework.Essentials
-open Framework.Domains.Nonrel.Value
+open Framework.Value
 open Ast
 open Bot
 

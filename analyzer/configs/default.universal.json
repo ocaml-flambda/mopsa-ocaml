@@ -3,12 +3,15 @@
 	"universal.iterators.program",
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
-	//{"nonrel": "universal.numeric.values.integer_interval"}
-	"universal.numeric.relational.octagon"
-	// {
-	//     "nonrel-product": ["universal.numeric.values.integer_interval", "universal.numeric.values.integer_congruence"],
-	//     "name": "interval x congruence",
-	//     "reductions" : ["universal.numeric.reductions.integer_interval_congruence"]
-	// }
+	{
+	    "product": [
+		"universal.numeric.values.integer_interval",
+		"universal.numeric.values.integer_congruence"
+		//"universal.numeric.relational.octagon"
+	    ],
+	    "reductions" : [
+		"universal.numeric.reductions.integer_interval_congruence"
+	    ]
+	}
     ]
 }

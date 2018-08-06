@@ -70,3 +70,9 @@ let find_pool (names: string list) : (module DOMAIN) list =
       let module D = (val d : DOMAIN) in
       List.mem D.name names
     ) !domains
+
+let mem_domain name =
+  List.exists (fun d ->
+      let module D = (val d : DOMAIN) in
+      D.name = name
+    ) !domains

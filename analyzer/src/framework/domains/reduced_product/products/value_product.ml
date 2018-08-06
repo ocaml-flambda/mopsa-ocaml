@@ -9,40 +9,11 @@
 (** N-ary reduced product of non-relational value abstractions. *)
 
 open Value
-
-(** A pool of value abstractions *)
-type 't pool =
-  | Nil : unit pool
-  | Cons : (module VALUE with type t = 'a) * 'b pool -> ('a * 'b) pool
-
-(** Pool manager defines point-wise lattice operators for the product
-      value abstraction. It also provides get/set functions to access
-      individual values abstractions via keys *)
-type 'a pool_man = {
-  bottom : 'a;
-  top : 'a;
-  is_bottom : 'a -> bool;
-  subset : 'a -> 'a -> bool;
-  join : 'b. 'b Annotation.t -> 'a -> 'a -> 'a;
-  meet : 'b. 'b Annotation.t -> 'a -> 'a -> 'a;
-  widen : 'b. 'b Annotation.t -> 'a -> 'a -> 'a;
-  print : Format.formatter -> 'a -> unit;
-  get : 't. 't value -> 'a -> 't;
-  set : 't. 't value -> 't -> 'a -> 'a;
-}
-
-(** Signature for reduction rules *)
-module type REDUCTION =
-sig
-
-  (** Reduction operator called after each point-wise application of
-     transfer functions (unop, bwd_unop, etc.) *)
-  val reduce : 'a pool_man -> 'a -> 'a
-end
-
+open Pool
+open Reductions.Value_reduction
 
 type _ value +=
-  | V_empty : unit value
+  | V_empty_product : unit value
   | V_reduced_product : 'a value * 'b value -> ('a * 'b) value
 
 
@@ -51,8 +22,8 @@ module Make
     (Config:
      sig
        type t
-       val pool : t pool
-       val rules : (module REDUCTION) list
+       val pool : t value_pool
+       val rules : (module VALUE_REDUCTION) list
        val display : string
      end) : Value.VALUE =
 struct
@@ -62,9 +33,9 @@ struct
   let name = "framework.domains.nonre.value_reduced_product", Config.display
 
   let id =
-    let rec aux : type a. a pool -> a value =
+    let rec aux : type a. a value_pool -> a value =
       function
-      | Nil -> V_empty
+      | Nil -> V_empty_product
       | Cons(hd, tl) ->
         let module V = (val hd) in
         V_reduced_product(V.id, aux tl)
@@ -73,10 +44,10 @@ struct
 
   let identify : type a. a value -> (t, a) eq option =
     fun id ->
-    let rec aux : type a b. a pool -> b value -> (a, b) eq option =
+    let rec aux : type a b. a value_pool -> b value -> (a, b) eq option =
       fun pool id ->
         match pool, id with
-        | Nil, V_empty -> Some Eq
+        | Nil, V_empty_product -> Some Eq
         | Cons(hd, tl), V_reduced_product(id1, id2) ->
           let module V = (val hd) in
           begin match V.identify id1, aux tl id2 with
@@ -88,7 +59,7 @@ struct
     aux Config.pool id
 
   let bottom : t =
-    let rec aux : type a. a pool -> a = fun pool ->
+    let rec aux : type a. a value_pool -> a = fun pool ->
       match pool with
       | Nil -> ()
       | Cons(hd, tl) ->
@@ -99,7 +70,7 @@ struct
     aux Config.pool
 
   let top : t =
-    let rec aux : type a. a pool -> a = fun pool ->
+    let rec aux : type a. a value_pool -> a = fun pool ->
       match pool with
       | Nil -> ()
       | Cons(hd, tl) ->
@@ -110,7 +81,7 @@ struct
     aux Config.pool
 
   let is_bottom (v:t) : bool = 
-    let rec aux : type a. a pool -> a -> bool = fun pool v ->
+    let rec aux : type a. a value_pool -> a -> bool = fun pool v ->
       match pool, v with
       | Nil, () -> false
       | Cons(hd, tl), (vhd, vtl) ->
@@ -120,7 +91,7 @@ struct
     aux Config.pool v
 
   let subset (v1:t) (v2:t) : bool =
-    let rec aux : type a. a pool -> a -> a -> bool = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> bool = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> true
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -130,7 +101,7 @@ struct
     aux Config.pool v1 v2
 
   let join annot (v1:t) (v2:t) : t =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -140,7 +111,7 @@ struct
     aux Config.pool v1 v2
 
   let meet annot (v1:t) (v2:t) =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -150,7 +121,7 @@ struct
     aux Config.pool v1 v2
 
   let widen annot v1 v2 =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -160,7 +131,7 @@ struct
     aux Config.pool v1 v2
 
   let print fmt v =
-    let rec aux : type a. a pool -> Format.formatter -> a -> unit = fun pool fmt v ->
+    let rec aux : type a. a value_pool -> Format.formatter -> a -> unit = fun pool fmt v ->
       match pool, v with
       | Nil, () -> ()
       | Cons(hd, Nil), (vhd, ()) ->
@@ -184,7 +155,7 @@ struct
     | _ -> assert false
 
   let of_constant (c: Ast.constant) : t =
-    let rec aux : type a. a pool -> a = fun pool ->
+    let rec aux : type a. a value_pool -> a = fun pool ->
       match pool with
       | Nil -> ()
       | Cons(hd, tl) ->
@@ -193,18 +164,25 @@ struct
     in
     aux Config.pool
 
-  let man : t pool_man = {
-    bottom;
-    top;
-    is_bottom;
-    subset;
-    join;
-    meet;
-    widen;
-    print;
+  let reduce man v =
+    let rec apply v (l: (module VALUE_REDUCTION) list) =
+      match l with
+      | [] -> v
+      | hd :: tl ->
+        let module R = (val hd : VALUE_REDUCTION) in
+        apply (R.reduce man v) tl
+    in
+    let rec lfp v =
+      let v' = apply v Config.rules in
+      if subset v v' then v else lfp v'
+    in
+    lfp v
+
+  let man : t value_man = {
+    pool = Config.pool;
     get = (
       let f : type a. a value -> t -> a = fun k v ->
-        let rec aux : type a b. a value -> b pool -> b -> a = fun k pool v ->
+        let rec aux : type a b. a value -> b value_pool -> b -> a = fun k pool v ->
           match pool, v with
           | Nil, () -> raise Not_found
           | Cons(hd, tl), (vhd, vtl) ->
@@ -219,7 +197,7 @@ struct
     );
     set = (
       let f : type a. a value -> a -> t -> t = fun k x v ->
-        let rec aux : type a b. a value -> a -> b pool -> b -> b = fun k x pool v ->
+        let rec aux : type a b. a value -> a -> b value_pool -> b -> b = fun k x pool v ->
           match pool, v with
           | Nil, () -> raise Not_found
           | Cons(hd, tl), (vhd, vtl) ->
@@ -234,22 +212,9 @@ struct
     );
   }
 
-  let reduce man v =
-    let rec apply v (l: (module REDUCTION) list) =
-      match l with
-      | [] -> v
-      | hd :: tl ->
-        let module R = (val hd : REDUCTION) in
-        apply (R.reduce man v) tl
-    in
-    let rec lfp v =
-      let v' = apply v Config.rules in
-      if subset v v' then v else lfp v'
-    in
-    lfp v
-  
+
   let unop op v =
-    let rec aux : type a. a pool -> a -> a = fun pool v ->
+    let rec aux : type a. a value_pool -> a -> a = fun pool v ->
       match pool, v with
       | Nil, () -> ()
       | Cons(hd, tl), (vhd, vtl) ->
@@ -260,7 +225,7 @@ struct
     reduce man v'
 
   let binop op v1 v2 =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -271,7 +236,7 @@ struct
     reduce man v'
 
   let filter v b =
-    let rec aux : type a. a pool -> a -> a = fun pool v ->
+    let rec aux : type a. a value_pool -> a -> a = fun pool v ->
       match pool, v with
       | Nil, () -> ()
       | Cons(hd, tl), (vhd, vtl) ->
@@ -282,7 +247,7 @@ struct
     reduce man v'
 
   let bwd_unop op v r =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v r ->
+    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v r ->
       match pool, v, r with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd, vtl), (rhd, rtl) ->
@@ -293,7 +258,7 @@ struct
     reduce man v'
 
   let bwd_binop op v1 v2 r =
-    let rec aux : type a. a pool -> a -> a -> a -> a * a = fun pool v1 v2 r ->
+    let rec aux : type a. a value_pool -> a -> a -> a -> a * a = fun pool v1 v2 r ->
       match pool, v1, v2, r with
       | Nil, (), (), () -> (), ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2), (rhd, rtl) ->
@@ -306,7 +271,7 @@ struct
     reduce man v1', reduce man v2'
 
   let compare op v1 v2 =
-    let rec aux : type a. a pool -> a -> a -> a * a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a * a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> (), ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -319,67 +284,3 @@ struct
     reduce man v1', reduce man v2'
 
 end
-
-let reductions : (string * (module REDUCTION)) list ref = ref []
-
-let register_reduction name rule =
-  reductions := (name, rule) :: !reductions
-
-let find_reduction name = List.assoc name !reductions
-
-type xpool = P : 'a pool -> xpool
-
-let make (values: string list) (rules: string list) (display: string) : (module Value.VALUE) =
-  let pool = find_pool values in
-  let rules = List.map find_reduction rules in
-
-  let type_value (type a) (v : (module VALUE with type t = a)) =
-    let module V = (val v) in
-    (module V : VALUE with type t = a)
-  in
-
-  let rec type_pool : (module VALUE) list -> xpool = function
-    | [] -> P Nil
-    | hd :: tl ->
-      let module V = (val hd) in
-      let v = type_value (module V) in
-      let P tl = type_pool tl in
-      P (Cons (v, tl))
-  in
-
-  let create_product (type a) (pool: a pool) =
-    let module V = Make(struct type t = a let pool = pool let rules = rules let display = display end) in
-    (module V : Value.VALUE)
-  in
-
-  let P pool = type_pool pool in
-  create_product pool
-
-
-(** Utility functions *)
-(** ***************** *)
-
-type 'a fld = {
-  doit : 't. 'a -> 't value -> 'a;
-}
-
-let rec fold : type t. 'a fld -> 'a -> t pool -> 'a =
-  fun f init pool ->
-    match pool with
-    | Nil -> init
-    | Cons(hd, tl) ->
-      let module D = (val hd) in
-      fold f (f.doit init D.id) tl
-
-type fiter = {
-  doit : 't. 't value -> unit;
-}
-
-let rec iter : type t. fiter -> t pool -> unit =
-  fun f pool ->
-    match pool with
-    | Nil -> ()
-    | Cons(hd, tl) ->
-      let module V = (val hd) in
-      f.doit V.id;
-      iter f tl

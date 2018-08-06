@@ -16,14 +16,19 @@ let debug fmt = Debug.debug ~channel:"framework.config" fmt
 let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "nonrel" obj -> build_non_rel @@ List.assoc "nonrel" obj
   | `Assoc(obj) when List.mem_assoc "product" obj -> build_product obj
-  | `Assoc(obj) when List.mem_assoc "nonrel-product" obj -> build_non_rel_product obj
   | _ -> assert false
 
 and build_leaf name =
   try Domain.find_domain name
-  with Not_found -> Debug.fail "Domain %s not found" name
+  with Not_found ->
+  try
+    let v = Value.find_value name in
+    let module V = (val v) in
+    let module D = Domains.Nonrel.Make(V) in
+    (module D)
+  with Not_found ->
+    Debug.fail "Domain %s not found" name
       
 
 and build_iter json =
@@ -43,29 +48,10 @@ and build_iter json =
   in
   aux domains
 
-and build_non_rel json =
-  let open Domains.Nonrel in
-  let value = json |> to_string |> (fun name ->
-      try Value.find_value name
-      with Not_found -> Debug.fail "Value %s not found" name
-    )
-  in
-  let module V = (val value : Value.VALUE) in
-  let module D = Factory.Make(V) in
-  (module D : Domain.DOMAIN)
-
 and build_product assoc =
-  let pool = List.assoc "product" assoc |> to_list |> List.map build_domain in
+  let pool = List.assoc "product" assoc |> to_list |> List.map to_string in
   let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
-  let module D = (val Domains.Reduced_product.make pool rules) in
-  (module D)
-
-and build_non_rel_product assoc =
-  let pool = List.assoc "nonrel-product" assoc |> to_list |> List.map to_string in
-  let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
-  let name = List.assoc "name" assoc |> to_string in
-  let module V = (val Domains.Nonrel.Value_reduced_product.make pool rules name) in
-  let module D = Domains.Nonrel.Factory.Make(V) in
+  let module D = (val Domains.Reduced_product.Factory.make pool rules) in
   (module D)
 
 

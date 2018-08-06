@@ -1,6 +1,6 @@
 (** Relation with printing builder *)
 
-module Make(L : Sig.VALUE)(R : Sig.VALUE) =
+module Make(L : ValueSig.S)(R : ValueSig.S) =
 struct
   exception Already_Paired
   module LR = Map.Make(L)
