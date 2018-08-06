@@ -44,19 +44,24 @@ let return_evl (c: 'a pool_evl) : ('a, Ast.expr) evl option =
 
 type 'v value_man = {
   pool : 'v value_pool;
+
   get  : 't. 't value -> 'v -> 't;
   set  : 't. 't value -> 't -> 'v -> 'v;
 }
 
+type ('a, 'v) nonrel_man = {
+  pool : 'v value_pool;
 
-type ('a, 'd, 'v) pool_man = {
-  pool : ('d, 'v) pool;
+  get : 't. 't value -> Ast.var -> 'a -> 't;
+  set : 't. 't value -> Ast.var -> 't -> 'a -> 'a;
+}
+
+
+type ('a, 'd) domain_man = {
+  pool : 'd domain_pool;
 
   get_state : 't. 't domain -> 'a -> 't;
   set_state : 't. 't domain -> 't -> 'a -> 'a;
-
-  get_value : 't. 't value -> 'a -> 't;
-  set_value : 't. 't value -> 't -> 'a -> 'a;
 
   get_eval : 't. 't domain -> 'a pool_evl -> (Ast.expr option * 'a flow) option;
   set_eval : 't. 't domain -> Ast.expr -> 'a flow -> 'a pool_evl -> 'a pool_evl;

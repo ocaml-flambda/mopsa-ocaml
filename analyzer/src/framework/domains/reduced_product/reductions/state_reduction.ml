@@ -11,12 +11,12 @@
 open Manager
 open Pool
 
-module type STATE_REDUCTION =
+module type REDUCTION =
 sig
-  val reduce : Ast.stmt -> ('a, 'd, 'v) pool_man -> ('a, 'b) man -> 'a flow -> 'a flow
+  val reduce : Ast.stmt -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a flow -> 'a flow
 end
 
 (** Registration *)
-let reductions : (string * (module STATE_REDUCTION)) list ref = ref []
+let reductions : (string * (module REDUCTION)) list ref = ref []
 let register_reduction name rule = reductions := (name, rule) :: !reductions
 let find_reduction name = List.assoc name !reductions

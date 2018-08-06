@@ -16,7 +16,7 @@ open Ast
 let name = "universal.numeric.reductions.integer_interval_congruence"
 let debug fmt = Debug.debug ~channel:name fmt
 
-module Reduction : VALUE_REDUCTION =
+module Reduction : REDUCTION =
 struct
 
   let itv = Values.Integer_interval.Value.id

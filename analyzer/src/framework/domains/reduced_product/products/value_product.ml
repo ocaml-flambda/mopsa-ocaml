@@ -23,7 +23,7 @@ module Make
      sig
        type t
        val pool : t value_pool
-       val rules : (module VALUE_REDUCTION) list
+       val rules : (module REDUCTION) list
        val display : string
      end) : Value.VALUE =
 struct
@@ -165,11 +165,11 @@ struct
     aux Config.pool
 
   let reduce man v =
-    let rec apply v (l: (module VALUE_REDUCTION) list) =
+    let rec apply v (l: (module REDUCTION) list) =
       match l with
       | [] -> v
       | hd :: tl ->
-        let module R = (val hd : VALUE_REDUCTION) in
+        let module R = (val hd : REDUCTION) in
         apply (R.reduce man v) tl
     in
     let rec lfp v =

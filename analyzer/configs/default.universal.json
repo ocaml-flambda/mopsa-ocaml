@@ -5,12 +5,12 @@
 	"universal.iterators.loops",
 	{
 	    "product": [
-		"universal.numeric.values.integer_interval",
-		"universal.numeric.values.integer_congruence"
-		//"universal.numeric.relational.octagon"
+		//"universal.numeric.values.integer_interval",
+		//"universal.numeric.values.integer_congruence"
+		"universal.numeric.relational.octagon"
 	    ],
 	    "reductions" : [
-		"universal.numeric.reductions.integer_interval_congruence"
+		//"universal.numeric.reductions.integer_interval_congruence"
 	    ]
 	}
     ]

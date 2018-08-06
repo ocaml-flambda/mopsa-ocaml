@@ -11,12 +11,12 @@
 open Manager
 open Pool
 
-module type VALUE_REDUCTION =
+module type REDUCTION =
 sig
   val reduce : 'v value_man -> 'v -> 'v
 end
 
 (** Registration *)
-let reductions : (string * (module VALUE_REDUCTION)) list ref = ref []
+let reductions : (string * (module REDUCTION)) list ref = ref []
 let register_reduction name rule = reductions := (name, rule) :: !reductions
 let find_reduction name = List.assoc name !reductions

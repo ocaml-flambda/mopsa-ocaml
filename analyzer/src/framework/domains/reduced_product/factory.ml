@@ -13,23 +13,27 @@ open Domain
 open Value
 open Pool
 
+
+(** Value product *)
+(** ************* *)
+
 type vp = V : 'a value_pool -> vp
 
-let make_value_product (pool: (module VALUE) list) (rules: (module Reductions.Value_reduction.VALUE_REDUCTION) list) : (module DOMAIN) =
-  let type_value (type a) (v : (module VALUE with type t = a)) =
+let type_value (type a) (v : (module VALUE with type t = a)) =
     let module V = (val v) in
     (module V : VALUE with type t = a)
-  in
-  
-  let rec type_pool : (module VALUE) list -> vp = function
-    | [] -> V Nil
-    | hd :: tl ->
-      let module V = (val hd) in
-      let v = type_value (module V) in
-      let V tl = type_pool tl in
-      V (Cons (v, tl))
-  in
-  
+
+let rec type_value_pool : (module VALUE) list -> vp = function
+  | [] -> V Nil
+  | hd :: tl ->
+    let module V = (val hd) in
+    let v = type_value (module V) in
+    let V tl = type_value_pool tl in
+    V (Cons (v, tl))
+
+let make_value_product (pool: (module VALUE) list) (rules: (module Reductions.Value_reduction.REDUCTION) list) : (module DOMAIN) =    
+  let V pool = type_value_pool pool in
+
   let create_product (type a) (pool: a value_pool) =
     let module V = Products.Value_product.Make(struct
         type t = a
@@ -41,8 +45,48 @@ let make_value_product (pool: (module VALUE) list) (rules: (module Reductions.Va
     (module D : DOMAIN)
   in
   
-  let V pool = type_pool pool in
   create_product pool
+
+
+
+(** Domain product *)
+(** ************** *)
+
+type dp = D : 'a domain_pool -> dp
+
+let type_domain (type a) (d : (module DOMAIN with type t = a)) =
+    let module D = (val d) in
+    (module D : DOMAIN with type t = a)
+
+let rec type_domain_pool : (module DOMAIN) list -> dp = function
+  | [] -> D Nil
+  | hd :: tl ->
+    let module D = (val hd) in
+    let d = type_domain (module D) in
+    let D tl = type_domain_pool tl in
+    D (Cons (d, tl))
+
+let make_domain_product (pool: (module DOMAIN) list) (state_rules: (module Reductions.State_reduction.REDUCTION) list) (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list) : (module DOMAIN) =    
+  let D pool = type_domain_pool pool in
+
+  let create_product (type u) (pool: u domain_pool) =
+    let module D = Products.Domain_product.Make(struct
+        type t = u
+        type v = unit
+        let pool = pool
+        let state_rules = state_rules
+        let eval_rules = eval_rules
+        let nonrel_man (man:('a, t) man) : ('a, v) nonrel_man = {
+          pool = Nil;
+          get = (fun _ _ _ -> assert false);
+          set = (fun _ _ _ a -> a);
+        }
+      end) in
+    (module D : DOMAIN)
+  in
+  
+  create_product pool
+
 
 
 let make (pool: string list) (rules: string list) : (module DOMAIN) =
@@ -61,7 +105,7 @@ let make (pool: string list) (rules: string list) : (module DOMAIN) =
   match domain_pool, value_pool with
   | [], [] -> Debug.fail "reduced product: empty pool"
   | [], _ -> make_value_product value_pool value_rules
-  | _ -> assert false
+  | _, [] -> make_domain_product domain_pool state_rules eval_rules
  
   (* let type_domain (type a) (d : (module DOMAIN with type t = a)) =
    *   let module D = (val d) in

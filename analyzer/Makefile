@@ -8,7 +8,7 @@ mopsa = framework lang main
 framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions value eval post domain analyzer lattices essentials domains config
 framework.domains = stateless iter nonrel leaf reduced_product
 framework.domains.reduced_product = pool reductions products factory
-framework.domains.reduced_product.products = value_product
+framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal
 

@@ -10,13 +10,13 @@
 
 open Essentials
 open Domain
-
+open Pool
 
 (** Domain identification *)
 (** ********************* *)
 
 type _ domain +=
-  | D_empty : unit domain
+  | D_empty_product : unit domain
   | D_reduced_product : 'a domain * 'b domain -> ('a * 'b) domain
 
 
@@ -28,9 +28,11 @@ module Make
     (Config:
      sig
        type t
-       val pool : t pool
-       val state_rules : (module STATE_REDUCTION) list
-       val eval_rules : (module EVAL_REDUCTION) list
+       type v
+       val pool : t domain_pool
+       val nonrel_man : ('a, t) man -> ('a, v) nonrel_man
+       val state_rules : (module Reductions.State_reduction.REDUCTION) list
+       val eval_rules : (module Reductions.Eval_reduction.REDUCTION) list
      end
     ) : DOMAIN =
 struct
@@ -43,9 +45,9 @@ struct
   let name = "framework.domains.reduced_product"
 
   let id =
-    let rec aux : type a. a pool -> a domain =
+    let rec aux : type a. a domain_pool -> a domain =
       function
-      | Nil -> D_empty
+      | Nil -> D_empty_product
       | Cons(hd, tl) ->
         let module V = (val hd) in
         D_reduced_product(V.id, aux tl)
@@ -54,10 +56,10 @@ struct
 
   let identify : type a. a domain -> (t, a) eq option =
     fun id ->
-    let rec aux : type a b. a pool -> b domain -> (a, b) eq option =
+    let rec aux : type a b. a domain_pool -> b domain -> (a, b) eq option =
       fun pool id ->
         match pool, id with
-        | Nil, D_empty -> Some Eq
+        | Nil, D_empty_product -> Some Eq
         | Cons(hd, tl), D_reduced_product(id1, id2) ->
           let module D = (val hd) in
           begin match D.identify id1, aux tl id2 with
@@ -73,7 +75,7 @@ struct
   (* ****************** *)
 
   let bottom : t =
-    let rec aux : type a. a pool -> a = fun pool ->
+    let rec aux : type a. a domain_pool -> a = fun pool ->
       match pool with
       | Nil -> ()
       | Cons(hd, tl) ->
@@ -84,7 +86,7 @@ struct
     aux Config.pool
 
   let top : t =
-    let rec aux : type a. a pool -> a = fun pool ->
+    let rec aux : type a. a domain_pool -> a = fun pool ->
       match pool with
       | Nil -> ()
       | Cons(hd, tl) ->
@@ -95,7 +97,7 @@ struct
     aux Config.pool
 
   let is_bottom (v:t) : bool =
-    let rec aux : type a. a pool -> a -> bool = fun pool v ->
+    let rec aux : type a. a domain_pool -> a -> bool = fun pool v ->
       match pool, v with
       | Nil, () -> false
       | Cons(hd, tl), (vhd, vtl) ->
@@ -105,7 +107,7 @@ struct
     aux Config.pool v
 
   let subset (v1:t) (v2:t) : bool =
-    let rec aux : type a. a pool -> a -> a -> bool = fun pool v1 v2 ->
+    let rec aux : type a. a domain_pool -> a -> a -> bool = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> true
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -115,7 +117,7 @@ struct
     aux Config.pool v1 v2
 
   let join annot (v1:t) (v2:t) : t =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -125,7 +127,7 @@ struct
     aux Config.pool v1 v2
 
   let meet annot (v1:t) (v2:t) =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -135,7 +137,7 @@ struct
     aux Config.pool v1 v2
 
   let widen annot v1 v2 =
-    let rec aux : type a. a pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
@@ -145,7 +147,7 @@ struct
     aux Config.pool v1 v2
 
   let print fmt v =
-    let rec aux : type a. a pool -> Format.formatter -> a -> unit = fun pool fmt v ->
+    let rec aux : type a. a domain_pool -> Format.formatter -> a -> unit = fun pool fmt v ->
       match pool, v with
       | Nil, () -> ()
       | Cons(hd, Nil), (vhd, ()) ->
@@ -174,10 +176,12 @@ struct
     set = (fun a flow -> man.set (man.get flow |> fst, a) flow);
   }
 
-  let pool_man (man:('a, t) man) : 'a pool_man = {
+  let domain_man man = {
+    pool = Config.pool;
+    
     get_state = (
       let f : type b. b domain -> 'a -> b = fun id env ->
-        let rec aux : type b c. b domain -> c pool -> ('a, c) man -> b = fun id pool man ->
+        let rec aux : type b c. b domain -> c domain_pool -> ('a, c) man -> b = fun id pool man ->
           match pool with
           | Nil -> raise Not_found
           | Cons(hd, tl) ->
@@ -194,7 +198,7 @@ struct
     );
     set_state = (
       let f : type b. b domain -> b -> 'a -> 'a = fun id a env ->
-        let rec aux : type b c. b domain -> b -> c pool -> ('a, c) man -> 'a =
+        let rec aux : type b c. b domain -> b -> c domain_pool -> ('a, c) man -> 'a =
           fun id a pool man ->
             match pool with
             | Nil -> raise Not_found
@@ -210,59 +214,63 @@ struct
       in
       f
     );
-    get_eval = (let f : type t. t domain -> 'a econj -> (Ast.expr option * 'a flow) option =
-                  fun id econj ->
-                    let rec aux : type s t. s pool -> t domain -> 'a econj -> (Ast.expr option * 'a flow) option =
-                      fun pool id econj ->
-                        match pool, econj with
-                        | Nil, [] -> raise Not_found
-                        | Cons(hd, tl), c :: ctl ->
-                          let module D = (val hd) in
-                          begin match D.identify id, c with
-                            | Some Eq, None -> None
-                            | Some Eq, Some {expr; flow} -> Some (expr, flow)
-                            | _ -> aux tl id ctl
-                          end
-                        | _ -> assert false
-                    in
-                    aux Config.pool id econj
-                in
-                f);
-    set_eval = (let f : type t. t domain -> Ast.expr -> 'a flow -> 'a econj -> 'a econj =
-                  fun id exp flow econj ->
-                    let rec aux : type s t. s pool -> t domain -> 'a econj -> 'a econj =
-                      fun pool id econj ->
-                        match pool, econj with
-                        | Nil, [] -> []
-                        | Cons(hd, tl), c :: ctl ->
-                          let module D = (val hd) in
-                          begin match D.identify id with
-                            | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
-                            | None -> c :: (aux tl id ctl)
-                          end
-                        | _ -> assert false
-                    in
-                    aux Config.pool id econj
-                in
-                f);
-    remove_eval = (let f : type t. t domain -> 'a econj -> 'a econj =
-                     fun id econj ->
-                       let rec aux : type s t. s pool -> t domain -> 'a econj -> 'a econj =
-                         fun pool id econj ->
-                           match pool, econj with
-                           | Nil, [] -> []
-                           | Cons(hd, tl), c :: ctl ->
-                             let module D = (val hd) in
-                             begin match D.identify id with
-                               | Some Eq -> None :: ctl
-                               | None -> c :: (aux tl id ctl)
-                             end
-                           | _ -> assert false
-                       in
-                       aux Config.pool id econj
-                   in
-                   f
-                  );
+
+    get_eval = (
+      let f : type t. t domain -> 'a pool_evl -> (Ast.expr option * 'a flow) option =
+        fun id econj ->
+          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> (Ast.expr option * 'a flow) option =
+            fun pool id econj ->
+              match pool, econj with
+              | Nil, [] -> raise Not_found
+              | Cons(hd, tl), c :: ctl ->
+                let module D = (val hd) in
+                begin match D.identify id, c with
+                  | Some Eq, None -> None
+                  | Some Eq, Some {expr; flow} -> Some (expr, flow)
+                  | _ -> aux tl id ctl
+                end
+              | _ -> assert false
+          in
+          aux Config.pool id econj
+      in
+      f);
+    set_eval = (
+      let f : type t. t domain -> Ast.expr -> 'a flow -> 'a pool_evl -> 'a pool_evl =
+        fun id exp flow econj ->
+          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> 'a pool_evl =
+            fun pool id econj ->
+              match pool, econj with
+              | Nil, [] -> []
+              | Cons(hd, tl), c :: ctl ->
+                let module D = (val hd) in
+                begin match D.identify id with
+                  | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
+                  | None -> c :: (aux tl id ctl)
+                end
+              | _ -> assert false
+          in
+          aux Config.pool id econj
+      in
+      f);
+    remove_eval = (
+      let f : type t. t domain -> 'a pool_evl -> 'a pool_evl =
+        fun id econj ->
+          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> 'a pool_evl =
+            fun pool id econj ->
+              match pool, econj with
+              | Nil, [] -> []
+              | Cons(hd, tl), c :: ctl ->
+                let module D = (val hd) in
+                begin match D.identify id with
+                  | Some Eq -> None :: ctl
+                  | None -> c :: (aux tl id ctl)
+                end
+              | _ -> assert false
+          in
+          aux Config.pool id econj
+      in
+      f
+    );
   }
 
 
@@ -270,7 +278,7 @@ struct
   (* ************** *)
 
   let init prog man flow =
-    let rec aux: type t. t pool -> ('a, t) man -> 'a flow -> 'a flow option =
+    let rec aux: type t. t domain_pool -> ('a, t) man -> 'a flow -> 'a flow option =
       fun pool man flow ->
         match pool with
         | Nil -> None
@@ -297,13 +305,13 @@ struct
 
 
   let reduce_exec stmt man flow =
-    let pman = pool_man man in
-    let rec apply flow (l: (module STATE_REDUCTION) list) =
+    let dman = domain_man man in
+    let rec apply flow (l: (module Reductions.State_reduction.REDUCTION) list) =
       match l with
       | [] -> flow
       | hd :: tl ->
-        let module R = (val hd : STATE_REDUCTION) in
-        apply (R.reduce stmt pman man flow) tl
+        let module R = (val hd : Reductions.State_reduction.REDUCTION) in
+        apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
     in
     let rec lfp flow =
       let flow' = apply flow Config.state_rules in
@@ -314,7 +322,7 @@ struct
   let exec zone stmt man flow =
     (* Point-wise exec *)
     let posts =
-      let rec aux: type t. t pool -> ('a, t) man -> 'a post option list =
+      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a post option list =
         fun pool man ->
           match pool with
           | Nil -> []
@@ -342,7 +350,7 @@ struct
     in
     (* Apply mergers *)
     let flow' =
-      let rec aux : type t. t pool -> ('a, t) man -> 'a post option list -> Ast.stmt list list -> 'a Flow.flow option =
+      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> Ast.stmt list list -> 'a Flow.flow option =
         fun pool man posts mergers  ->
           match pool, posts, mergers with
           | Nil, _, _ -> None
@@ -380,13 +388,13 @@ struct
     | _ -> assert false
 
   let reduce_eval exp man pevl =
-    let pman = pool_man man in
-    let rec apply pevl (l: (module EVAL_REDUCTION) list) =
+    let dman = domain_man man in
+    let rec apply pevl (l: (module Reductions.Eval_reduction.REDUCTION) list) =
       match l with
       | [] -> pevl
       | hd :: tl ->
-        let module R = (val hd : EVAL_REDUCTION) in
-        apply (R.reduce exp pman man pevl) tl
+        let module R = (val hd : Reductions.Eval_reduction.REDUCTION) in
+        apply (R.reduce exp dman (Config.nonrel_man man) man pevl) tl
     in
     apply pevl Config.eval_rules
 
@@ -394,7 +402,7 @@ struct
   let eval zone exp man flow =
     (* Point-wise evaluation *)
     let evls =
-      let rec aux: type t. t pool -> ('a, t) man -> ('a, Ast.expr) evl option list =
+      let rec aux: type t. t domain_pool -> ('a, t) man -> ('a, Ast.expr) evl option list =
         fun pool man ->
           match pool with
           | Nil -> []
@@ -408,7 +416,7 @@ struct
 
     (* Transform list of evaluations into list of conjunctions *)
     let lconj =
-      let rec aux : type t. t pool -> ('a, Ast.expr) evl option list -> 'a econj list =
+      let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a pool_evl list =
         fun pool evls ->
           match pool, evls with
           | Nil, [] -> [[]]
@@ -436,7 +444,7 @@ struct
 
     (* Combine conjunctions into an evaluation *)
     List.fold_left (fun acc c ->
-        Option.option_neutral2 Eval.join acc (econj_to_eval c)
+        Option.option_neutral2 Eval.join acc (return_evl c)
       ) None lconj'
 
 
@@ -444,7 +452,7 @@ struct
   (* ******** *)
 
   let ask query man flow =
-    let rec aux : type t r. t pool -> ('a, t) man -> r Query.query -> r option =
+    let rec aux : type t r. t domain_pool -> ('a, t) man -> r Query.query -> r option =
       fun pool man query ->
         match pool with
         | Nil -> None
@@ -458,67 +466,3 @@ struct
                   
 
 end
-
-
-(* Domain factory from string identifiers *)
-(* ************************************** *)
-
-type xpool = P : 'a pool -> xpool
-
-let make (pool: (module DOMAIN) list) (rules: string list) : (module DOMAIN) =
-  let state_rules, eval_rules = List.partition (fun rule -> List.mem_assoc rule !state_reductions) rules in
-  let state_rules = List.map find_state_reduction state_rules in
-  let eval_rules = List.map find_eval_reduction eval_rules in
-
-  let type_domain (type a) (d : (module DOMAIN with type t = a)) =
-    let module D = (val d) in
-    (module D : DOMAIN with type t = a)
-  in
-
-  let rec type_pool : (module DOMAIN) list -> xpool = function
-    | [] -> P Nil
-    | hd :: tl ->
-      let module D = (val hd) in
-      let d = type_domain (module D) in
-      let P tl = type_pool tl in
-      P (Cons (d, tl))
-  in
-
-  let create_product (type a) (pool: a pool) =
-    let module D = Make(struct type t = a let pool = pool let state_rules = state_rules let eval_rules = eval_rules end) in
-    (module D : DOMAIN)
-  in
-
-  let P pool = type_pool pool in
-  create_product pool
-
-
-
-(** Utility functions *)
-(** ***************** *)
-
-type 'a ffold = {
-  doit : 't. 'a -> 't domain -> 'a;
-}
-
-let rec fold : type t. 'a ffold -> 'a -> t pool -> 'a =
-  fun f init pool ->
-    match pool with
-    | Nil -> init
-    | Cons(hd, tl) ->
-      let module D = (val hd) in
-      fold f (f.doit init D.id) tl
-
-
-type fiter = {
-  doit : 't. 't domain -> unit;
-}
-
-let rec iter : type t. fiter -> t pool -> unit =
-  fun f pool ->
-    match pool with
-    | Nil -> ()
-    | Cons(hd, tl) ->
-      let module D = (val hd) in
-      f.doit D.id;
-      iter f tl
