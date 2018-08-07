@@ -24,13 +24,22 @@ module Make
        type t
        val pool : t value_pool
        val rules : (module REDUCTION) list
-       val display : string
      end) : Value.VALUE =
 struct
   type t = Config.t
 
 
-  let name = "framework.domains.nonre.value_reduced_product", Config.display
+  let name = "framework.domains.nonre.value_reduced_product", (
+      let rec aux : type a. a value_pool -> string list =
+        function
+        | Nil -> []
+        | Cons(hd, tl) ->
+          let module V = (val hd) in
+          snd (V.name) :: aux tl
+      in
+      let names = aux Config.pool in
+      String.concat " x " names
+    )
 
   let id =
     let rec aux : type a. a value_pool -> a value =
@@ -143,8 +152,6 @@ struct
         Format.fprintf fmt "%a ∧ %a" V.print vhd (aux tl) vtl
     in
     aux Config.pool fmt v
-
-  let display = Config.display
 
   let zone =
     (* FIXME: check that all values are defined on the same zone *)

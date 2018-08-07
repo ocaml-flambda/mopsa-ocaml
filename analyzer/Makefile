@@ -34,7 +34,7 @@ include $(MOPSAROOT)/make/main.mk
 #tests
 TESTS = tests
 
-.PHONY: python-tests c-tests
+.PHONY: python-tests c-tests universal-tests
 
 python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
@@ -50,4 +50,12 @@ c-tests: mopsa
 		$(MOPSAROOT)/bin/mopsa -lang=c -test true -config configs/default.c.json -stub stubs/c $(MOPSAPARAM) $(test); \
 	)
 
-tests: c-tests python-tests
+universal-tests: mopsa
+	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
+		echo ""; \
+		echo "Running test $(test)"; \
+		$(MOPSAROOT)/scripts/mopsa-universal -test=true $(MOPSAPARAM) $(test); \
+	)
+
+
+tests: c-tests python-tests universal-tests

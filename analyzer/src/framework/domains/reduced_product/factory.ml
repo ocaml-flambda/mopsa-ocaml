@@ -88,6 +88,39 @@ let make_domain_product (pool: (module DOMAIN) list) (state_rules: (module Reduc
   create_product pool
 
 
+let make_mixed_product
+    (domain_pool: (module DOMAIN) list)
+    (value_pool: (module VALUE) list)
+    (state_rules: (module Reductions.State_reduction.REDUCTION) list)
+    (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list)
+    (value_rules: (module Reductions.Value_reduction.REDUCTION) list)
+  : (module DOMAIN) =
+  let V vpool = type_value_pool value_pool in
+  let nr = make_value_product value_pool value_rules in
+
+  let domain_pool' = nr :: domain_pool in
+  let D pool = type_domain_pool domain_pool' in
+
+  let create_product (type a b) (pool: a domain_pool) (vpool: b value_pool) =
+    let module D = Products.Domain_product.Make(struct
+        type t = a
+        type v = b
+        let pool = pool
+        let state_rules = state_rules
+        let eval_rules = eval_rules
+        let nonrel_man (man:('a, t) man) : ('a, v) nonrel_man = {
+          pool = vpool;
+          get = (fun _ _ _ -> assert false);
+          set = (fun _ _ _ a -> a);
+        }
+      end) in
+    (module D : DOMAIN)
+  in
+  
+  create_product pool vpool
+
+
+
 
 let make (pool: string list) (rules: string list) : (module DOMAIN) =
   let domain_pool, value_pool = List.partition Domain.mem_domain  pool in
@@ -106,25 +139,4 @@ let make (pool: string list) (rules: string list) : (module DOMAIN) =
   | [], [] -> Debug.fail "reduced product: empty pool"
   | [], _ -> make_value_product value_pool value_rules
   | _, [] -> make_domain_product domain_pool state_rules eval_rules
- 
-  (* let type_domain (type a) (d : (module DOMAIN with type t = a)) =
-   *   let module D = (val d) in
-   *   (module D : DOMAIN with type t = a)
-   * in
-   * 
-   * let rec type_pool : (module DOMAIN) list -> xpool = function
-   *   | [] -> P Nil
-   *   | hd :: tl ->
-   *     let module D = (val hd) in
-   *     let d = type_domain (module D) in
-   *     let P tl = type_pool tl in
-   *     P (Cons (d, tl))
-   * in
-   * 
-   * let create_product (type a) (pool: a pool) =
-   *   let module D = Make(struct type t = a let pool = pool let state_rules = state_rules let eval_rules = eval_rules end) in
-   *   (module D : DOMAIN)
-   * in
-   * 
-   * let P pool = type_pool pool in
-   * create_product pool *)
+  | _, _ -> make_mixed_product domain_pool value_pool state_rules eval_rules value_rules

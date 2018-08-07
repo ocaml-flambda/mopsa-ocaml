@@ -156,7 +156,7 @@ struct
 
       | Cons(hd, tl), (vhd, vtl) ->
         let module V = (val hd) in
-        Format.fprintf fmt "%a ∧ %a" V.print vhd (aux tl) vtl
+        Format.fprintf fmt "%a%a" V.print vhd (aux tl) vtl
     in
     aux Config.pool fmt v
 
