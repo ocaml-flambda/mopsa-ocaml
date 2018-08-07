@@ -216,9 +216,9 @@ struct
     );
 
     get_eval = (
-      let f : type t. t domain -> 'a pool_evl -> (Ast.expr option * 'a flow) option =
+      let f : type t. t domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option =
         fun id econj ->
-          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> (Ast.expr option * 'a flow) option =
+          let rec aux : type s t. s domain_pool -> t domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option =
             fun pool id econj ->
               match pool, econj with
               | Nil, [] -> raise Not_found
@@ -235,9 +235,9 @@ struct
       in
       f);
     set_eval = (
-      let f : type t. t domain -> Ast.expr -> 'a flow -> 'a pool_evl -> 'a pool_evl =
+      let f : type t. t domain -> Ast.expr -> 'a flow -> 'a evl_conj -> 'a evl_conj =
         fun id exp flow econj ->
-          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> 'a pool_evl =
+          let rec aux : type s t. s domain_pool -> t domain -> 'a evl_conj -> 'a evl_conj =
             fun pool id econj ->
               match pool, econj with
               | Nil, [] -> []
@@ -253,9 +253,9 @@ struct
       in
       f);
     remove_eval = (
-      let f : type t. t domain -> 'a pool_evl -> 'a pool_evl =
+      let f : type t. t domain -> 'a evl_conj -> 'a evl_conj =
         fun id econj ->
-          let rec aux : type s t. s domain_pool -> t domain -> 'a pool_evl -> 'a pool_evl =
+          let rec aux : type s t. s domain_pool -> t domain -> 'a evl_conj -> 'a evl_conj =
             fun pool id econj ->
               match pool, econj with
               | Nil, [] -> []
@@ -416,7 +416,7 @@ struct
 
     (* Transform list of evaluations into list of conjunctions *)
     let lconj =
-      let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a pool_evl list =
+      let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
         fun pool evls ->
           match pool, evls with
           | Nil, [] -> [[]]
@@ -444,7 +444,7 @@ struct
 
     (* Combine conjunctions into an evaluation *)
     List.fold_left (fun acc c ->
-        Option.option_neutral2 Eval.join acc (return_evl c)
+        Option.option_neutral2 Eval.join acc (conj_to_evl c)
       ) None lconj'
 
 

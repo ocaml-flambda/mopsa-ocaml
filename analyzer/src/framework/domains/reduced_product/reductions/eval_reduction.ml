@@ -13,7 +13,7 @@ open Pool
 
 module type REDUCTION =
 sig
-  val reduce : Ast.expr -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a pool_evl -> 'a pool_evl
+  val reduce : Ast.expr -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a evl_conj -> 'a evl_conj
 end
 
 (** Registration *)
