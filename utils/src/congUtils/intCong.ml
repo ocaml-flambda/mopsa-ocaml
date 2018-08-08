@@ -35,8 +35,8 @@ let is_valid ((a,b):t) : bool =
   a = Z.zero || (a > Z.zero && Z.zero <= b && b < a)
 
 
-module I = Intervals.IntItv
-module B = Intervals.IntBound
+module I = ItvUtils.IntItv
+module B = ItvUtils.IntBound
 
 
 (** {2 Arithmetic utilities} *)

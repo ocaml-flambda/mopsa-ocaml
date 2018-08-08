@@ -13,42 +13,43 @@ open Framework.Domains.Reduced_product.Reductions.Value_reduction
 open Framework.Domains.Reduced_product.Pool
 open Ast
 
-let name = "universal.numeric.reductions.integer_interval_congruence"
+let name = "universal.numeric.reductions.intervals_congruences"
 let debug fmt = Debug.debug ~channel:name fmt
 
 module Reduction : REDUCTION =
 struct
 
-  let itv = Values.Integer_interval.Value.id
-  let cgr = Values.Integer_congruence.Value.id
+  module I = Values.Intervals.Value
+  module C = Values.Congruences.Value   
 
   let reduce (man: 'a value_man) (v: 'a) : 'a =
     debug "reduce %a and %a"
-      Values.Integer_interval.Value.print (man.get itv v)
-      Values.Integer_congruence.Value.print (man.get cgr v)
+      I.print (man.get I.id v)
+      C.print (man.get C.id v)
     ;
     try
-      let i = man.get itv v |> Bot.bot_to_exn in
-      let c = man.get cgr v |> Bot.bot_to_exn in
+      let i = man.get I.id v |> Bot.bot_to_exn in
+      let c = man.get C.id v |> Bot.bot_to_exn in
 
-      let reduction = Congruences.IntCong.meet_inter c i in
+      let reduction = CongUtils.IntCong.meet_inter c i in
       let c', i' = Bot.bot_to_exn reduction in
+
       debug "reduce %a and %a => result: %a and %a"
-        Values.Integer_interval.Value.print (Bot.Nb i)
-        Values.Integer_congruence.Value.print (Bot.Nb c)
-        Values.Integer_interval.Value.print (Bot.Nb i')
-        Values.Integer_congruence.Value.print (Bot.Nb c')
+        I.print (Bot.Nb i)
+        C.print (Bot.Nb c)
+        I.print (Bot.Nb i')
+        C.print (Bot.Nb c')
       ;
 
-      man.set itv (Bot.Nb i') v |>
-      man.set cgr (Bot.Nb c')
+      man.set I.id (Bot.Nb i') v |>
+      man.set C.id(Bot.Nb c')
     with Bot.Found_BOT ->
       debug "reduce %a and %a => result: ⊥"
-        Values.Integer_interval.Value.print (man.get itv v)
-        Values.Integer_congruence.Value.print (man.get cgr v)
+        I.print (man.get I.id v)
+        C.print (man.get C.id v)
       ;
-      man.set itv Values.Integer_interval.Value.bottom v |>
-      man.set cgr Values.Integer_congruence.Value.bottom
+      man.set I.id I.bottom v |>
+      man.set C.id C.bottom
 end
 
 

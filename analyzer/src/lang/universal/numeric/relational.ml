@@ -83,6 +83,19 @@ struct
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
 
+  let apron_to_var v =
+    let v = Apron.Var.to_string v in
+    if Str.string_match (Str.regexp "\\([^#]+\\)#\\([0-9]+\\)") v 0 then
+      let vname = Str.matched_group 1 v in
+      let vuid = Str.matched_group 2 v |> int_of_string in
+      {vname; vuid; vtyp = T_int}
+    else
+    if Str.string_match (Str.regexp "\\([^@]+\\)@\\([0-9]+\\)") v 0 then
+      let vname = Str.matched_group 1 v in
+      let vuid = Str.matched_group 2 v |> int_of_string in
+      {vname; vuid; vtyp = T_float}
+    else raise (Invalid_argument v)
+
   let is_env_var v abs =
     let env = Apron.Abstract1.env abs in
     Apron.Environment.mem_var env (var_to_apron v)
@@ -358,6 +371,82 @@ struct
     | _ -> top
 
   and ask query a = None
+
+
+  let z_of_z2 z z' round =
+    let open Z in
+    let d, r = div_rem z z' in
+    if equal r zero then
+      d
+    else
+      begin
+        if round then
+          d + one
+        else
+          d
+      end
+
+  let z_of_mpzf mp =
+    Z.of_string (Mpzf.to_string mp)
+
+  let z_of_mpqf mp round =
+    let open Mpqf in
+    let l, r = to_mpzf2 mp in
+    let lz, rz = z_of_mpzf l, z_of_mpzf r in
+    z_of_z2 lz rz round
+
+  let z_of_apron_scalar a r =
+    let open Apron.Scalar in
+    match a, r with
+    | Float f, true  -> Z.of_float (ceil f)
+    | Float f, false -> Z.of_float (floor f)
+    | Mpqf q, _ ->  z_of_mpqf q r
+    | Mpfrf mpf, _ -> z_of_mpqf (Mpfr.to_mpq mpf) r
+  
+  let var_relations v a =
+    (* Get the linear constraints *)
+    let lincons_list =
+      let earray = Apron.Abstract1.to_lincons_array ApronManager.man a in
+      let rec iter i = if i == Apron.Lincons1.array_length earray then [] else (Apron.Lincons1.array_get earray i) :: (iter (i + 1)) in
+      iter 0
+    in
+
+    List.fold_left (fun acc lincons ->
+        let t_involved = ref false in
+        Apron.Lincons1.iter (fun c v' -> 
+            t_involved := !t_involved || ((compare_var v (apron_to_var v') = 0) && not (Apron.Coeff.is_zero c))
+          ) lincons;
+        (* If lincons is involved in the constraint, we keep all other variables with non null coefficients *)
+        if !t_involved then
+          let vars = ref [] in
+          Apron.Lincons1.iter (fun c v' ->
+              let v' = apron_to_var v' in
+              if compare_var v v' <> 0 && not (Apron.Coeff.is_zero c) then
+                vars := v' :: !vars
+            ) lincons;
+          !vars @ acc
+        else
+          acc
+      ) [] lincons_list |>
+    List.sort_uniq compare_var
+
+
+  let interval (v:var) (a:t) : (Values.Intervals.Value.t) =
+    let itv = Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) in
+    if Apron.Interval.is_bottom itv then
+      Values.Intervals.Value.bottom
+    else
+      let mi = itv.Apron.Interval.inf in
+      let ma = itv.Apron.Interval.sup in
+      let to_b m r =
+        let x = Apron.Scalar.is_infty m in
+        if x = 0 then Values.Intervals.Value.I.B.Finite (z_of_apron_scalar m r)
+        else if x > 0 then Values.Intervals.Value.I.B.PINF
+        else Values.Intervals.Value.I.B.MINF
+      in
+      Bot.Nb (to_b mi false, to_b ma true)
+
+
 
 end
 

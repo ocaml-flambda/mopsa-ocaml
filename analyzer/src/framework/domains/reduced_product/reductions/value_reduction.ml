@@ -10,7 +10,7 @@
 
 open Manager
 open Pool
-
+    
 module type REDUCTION =
 sig
   val reduce : 'v value_man -> 'v -> 'v

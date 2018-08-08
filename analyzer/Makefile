@@ -15,7 +15,7 @@ lang = universal
 lang.universal = ast pp visitor frontend zone iterators numeric
 lang.universal.iterators = program intraproc loops
 lang.universal.numeric = values relational reductions
-lang.universal.numeric.values = integer_interval integer_congruence
+lang.universal.numeric.values = intervals congruences
 
 
 #Packages

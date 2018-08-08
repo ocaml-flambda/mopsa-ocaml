@@ -42,9 +42,9 @@ type t_with_bot = t with_bot
 (** The type of possibly empty bitfields. *)
 
   
-module I = Intervals.IntItv
-module B = Intervals.IntBound
-module C = Congruences.IntCong
+module I = ItvUtils.IntItv
+module B = ItvUtils.IntBound
+module C = CongUtils.IntCong
 
 
 let is_valid ((set,clr):t) : bool =

@@ -38,7 +38,6 @@ let make_value_product (pool: (module VALUE) list) (rules: (module Reductions.Va
     let module V = Products.Value_product.Make(struct
         type t = a
         let pool = pool
-        let display = "?"
         let rules = rules
       end) in
     let module D = Nonrel.Make(V) in
@@ -96,28 +95,47 @@ let make_mixed_product
     (value_rules: (module Reductions.Value_reduction.REDUCTION) list)
   : (module DOMAIN) =
   let V vpool = type_value_pool value_pool in
-  let nr = make_value_product value_pool value_rules in
-
-  let domain_pool' = nr :: domain_pool in
-  let D pool = type_domain_pool domain_pool' in
+  let D dpool = type_domain_pool domain_pool in
 
   let create_product (type a b) (pool: a domain_pool) (vpool: b value_pool) =
+
+    let module V = Products.Value_product.Make(struct
+        type t = b
+        let pool = vpool
+        let rules = value_rules
+      end)
+    in
+
+    let module NR = Nonrel.Make(V) in
+    
     let module D = Products.Domain_product.Make(struct
-        type t = a
+        type t = NR.t * a
         type v = b
-        let pool = pool
+        let pool : t domain_pool = Cons((module NR), pool)
         let state_rules = state_rules
         let eval_rules = eval_rules
         let nonrel_man (man:('a, t) man) : ('a, v) nonrel_man = {
           pool = vpool;
-          get = (fun _ _ _ -> assert false);
-          set = (fun _ _ _ a -> a);
+          get = (fun id var a -> man.get a |>
+                                 fst |>
+                                 NR.find var |>
+                                 V.man.get id
+                );
+          set = (fun id var v a ->
+              let nr, tl = man.get a in
+              let vv = NR.find var nr in
+              let vv' = V.man.set id v vv |>
+                        V.reduce
+              in
+              let nr' = NR.add var vv' nr in
+              man.set (nr', tl) a
+            );
         }
       end) in
     (module D : DOMAIN)
   in
   
-  create_product pool vpool
+  create_product dpool vpool
 
 
 

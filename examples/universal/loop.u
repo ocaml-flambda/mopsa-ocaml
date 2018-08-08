@@ -1,6 +1,9 @@
 int x;
+int y;
 
 x = 0;
-while (x < 11) {
-  x = x + 2;
+y = x;
+while (x < 10) {
+  x = x + 1;
+  y = y + 1;
 }

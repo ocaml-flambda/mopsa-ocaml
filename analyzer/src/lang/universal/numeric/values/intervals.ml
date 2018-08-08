@@ -16,7 +16,7 @@ open Bot
 module Value =
 struct
 
-  module I = Intervals.IntItv
+  module I = ItvUtils.IntItv
 
   type v = I.t
   type t = v with_bot
@@ -24,7 +24,7 @@ struct
   type _ value += V_integer_interval : t value
 
   let id = V_integer_interval
-  let name = "universal.numeric.values.integer_interval", "int itv"
+  let name = "universal.numeric.values.intervals", "intervals"
 
   let identify : type a. a value -> (t, a) eq option =
     function
@@ -147,7 +147,6 @@ struct
       Nb aa1, Nb aa2
     with Found_BOT ->
       bottom, bottom
-
   
 end
 

@@ -24,7 +24,7 @@ module Make
        type t
        val pool : t value_pool
        val rules : (module REDUCTION) list
-     end) : Value.VALUE =
+     end)  =
 struct
   type t = Config.t
 
@@ -171,20 +171,6 @@ struct
     in
     aux Config.pool
 
-  let reduce man v =
-    let rec apply v (l: (module REDUCTION) list) =
-      match l with
-      | [] -> v
-      | hd :: tl ->
-        let module R = (val hd : REDUCTION) in
-        apply (R.reduce man v) tl
-    in
-    let rec lfp v =
-      let v' = apply v Config.rules in
-      if subset v v' then v else lfp v'
-    in
-    lfp v
-
   let man : t value_man = {
     pool = Config.pool;
     get = (
@@ -218,7 +204,21 @@ struct
       f
     );
   }
-
+  
+  let reduce v =
+    let rec apply v (l: (module REDUCTION) list) =
+      match l with
+      | [] -> v
+      | hd :: tl ->
+        let module R = (val hd : REDUCTION) in
+        apply (R.reduce man v) tl
+    in
+    let rec lfp v =
+      let v' = apply v Config.rules in
+      if subset v v' then v else lfp v'
+    in
+    lfp v
+  
 
   let unop op v =
     let rec aux : type a. a value_pool -> a -> a = fun pool v ->
@@ -229,7 +229,7 @@ struct
         V.unop op vhd, aux tl vtl
     in
     let v' = aux Config.pool v in
-    reduce man v'
+    reduce v'
 
   let binop op v1 v2 =
     let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
@@ -240,7 +240,7 @@ struct
         V.binop op vhd1 vhd2, aux tl vtl1 vtl2
     in
     let v' = aux Config.pool v1 v2 in
-    reduce man v'
+    reduce v'
 
   let filter v b =
     let rec aux : type a. a value_pool -> a -> a = fun pool v ->
@@ -251,7 +251,7 @@ struct
         V.filter vhd b, aux tl vtl
     in
     let v' = aux Config.pool v in
-    reduce man v'
+    reduce v'
 
   let bwd_unop op v r =
     let rec aux : type a. a value_pool -> a -> a -> a = fun pool v r ->
@@ -262,7 +262,7 @@ struct
         V.bwd_unop op vhd rhd, aux tl vtl rtl
     in
     let v' = aux Config.pool v r in
-    reduce man v'
+    reduce v'
 
   let bwd_binop op v1 v2 r =
     let rec aux : type a. a value_pool -> a -> a -> a -> a * a = fun pool v1 v2 r ->
@@ -275,7 +275,7 @@ struct
         (vhd1', vtl1'), (vhd2', vtl2')
     in
     let v1', v2' = aux Config.pool v1 v2 r in
-    reduce man v1', reduce man v2'
+    reduce v1', reduce v2'
 
   let compare op v1 v2 =
     let rec aux : type a. a value_pool -> a -> a -> a * a = fun pool v1 v2 ->
@@ -288,6 +288,6 @@ struct
         (vhd1', vtl1'), (vhd2', vtl2')
     in
     let v1', v2' = aux Config.pool v1 v2 in
-    reduce man v1', reduce man v2'
+    reduce v1', reduce v2'
 
 end

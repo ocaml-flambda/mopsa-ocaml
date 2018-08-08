@@ -16,7 +16,7 @@ open Bot
 
 module Value =
 struct
-  module C = Congruences.IntCong
+  module C = CongUtils.IntCong
 
   type v = C.t
   type t = v with_bot
@@ -24,7 +24,7 @@ struct
   type _ value += V_integer_congruence : t value
 
   let id = V_integer_congruence
-  let name = "universal.numeric.values.integer_congruence", "int congr"
+  let name = "universal.numeric.values.congruences", "congruences"
 
   let identify : type a. a value -> (t, a) eq option =
     function
