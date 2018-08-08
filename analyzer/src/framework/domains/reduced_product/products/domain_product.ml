@@ -19,7 +19,7 @@ type _ domain +=
   | D_empty_product : unit domain
   | D_reduced_product : 'a domain * 'b domain -> ('a * 'b) domain
 
-
+let debug fmt = Debug.debug ~channel:"framework.domains.reduced_product.products.domain_product" fmt
 
 (** Domain functor *)
 (** ************** *)
@@ -408,7 +408,9 @@ struct
           | Nil -> []
           | Cons(hd, tl) ->
             let module D = (val hd) in
+            debug "Evaluating %a with %s" pp_expr exp D.name;
             let evl = D.eval zone exp  (head_man man) flow in
+            debug "%s evaluated %a into %a" D.name pp_expr exp (Option.print (Eval.print ~pp:pp_expr)) evl;
             evl :: (aux tl (tail_man man))
       in
       aux Config.pool man

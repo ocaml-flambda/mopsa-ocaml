@@ -6,7 +6,7 @@
 	{
 	    "product": [
 		"universal.numeric.values.integer_interval",
-		//"universal.numeric.values.integer_congruence"
+		"universal.numeric.values.integer_congruence",
 		"universal.numeric.relational.octagon"
 	    ],
 	    "reductions" : [

@@ -64,10 +64,8 @@ let mktmp ?(vtyp = T_any) () =
 
 
 
-
-
 (*==========================================================================*)
-(**                            {2 Expressions}                              *)
+(**                            {2 Operators}                                *)
 (*==========================================================================*)
 
 
@@ -88,11 +86,36 @@ type operator +=
   | O_log_and    (** && *)
 
 
+let operator_compare_chain : (operator -> operator -> int) ref = ref Pervasives.compare
+let register_operator_compare cmp = operator_compare_chain := cmp !operator_compare_chain
+let compare_operator op1 op2 = !operator_compare_chain op1 op2
+
+
+(*==========================================================================*)
+(**                            {2 Constants}                                *)
+(*==========================================================================*)
+
+
 type constant = ..
 (** Extensible type of constants. *)
 
 type constant +=
   | C_top of typ (** top value of a specific type *)
+
+let constant_compare_chain : (constant -> constant -> int) ref =
+  ref (fun c1 c2 ->
+      match c1, c2 with
+      | C_top t1, C_top t2 -> compare_typ t1 t2
+      | _ -> Pervasives.compare c1 c2
+    )
+let register_constant_compare cmp = constant_compare_chain := cmp !constant_compare_chain
+let compare_constant op1 op2 = !constant_compare_chain op1 op2
+
+
+(*==========================================================================*)
+(**                           {2 Expressions}                               *)
+(*==========================================================================*)
+
 
 type expr = {
   ekind: expr_kind;
@@ -118,10 +141,33 @@ type expr_kind +=
   (** binary operator expressions *)
 
 
-
 let ekind (e: expr) = e.ekind
 let etyp (e: expr) = e.etyp
 let erange (e: expr) = e.erange
+
+let rec expr_compare_chain : (expr -> expr -> int) ref =
+  ref (fun e1 e2 ->
+      match ekind e1, ekind e2 with
+        | E_var v1, E_var v2 -> compare_var v1 v2
+        | E_constant c1, E_constant c2 -> compare_constant c1 c2
+        | E_unop(op1, e1), E_unop(op2, e2) ->
+          Compare.compose [
+            (fun () -> compare_operator op1 op2);
+            (fun () -> compare_expr e1 e2);
+          ]
+        | E_binop(op1, e1, e1'), E_binop(op2, e2, e2') ->
+          Compare.compose [
+            (fun () -> compare_operator op1 op2);
+            (fun () -> compare_expr e1 e2);
+            (fun () -> compare_expr e1' e2');
+          ]
+        | _ -> Pervasives.compare e1 e2
+    )
+and register_expr_compare cmp = expr_compare_chain := cmp !expr_compare_chain
+and compare_expr e1 e2 =
+  if e1 == e2 then 0 else !expr_compare_chain e1 e2
+
+
 let mk_expr
     ?(etyp = T_any)
     ekind
@@ -198,6 +244,42 @@ type stmt = {
 
 let skind (stmt: stmt) = stmt.skind
 let srange (stmt: stmt) = stmt.srange
+
+let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
+  ref (fun s1 s2 ->
+      match skind s1, skind s2 with
+      | S_assign(x1, e1, m1), S_assign(x2, e2, m2) ->
+        Compare.compose [
+          (fun () -> compare_expr x1 x2);
+          (fun () -> compare_expr e1 e2);
+          (fun () -> Pervasives.compare m1 m2);
+        ]
+
+      | S_assume(e1), S_assume(e2) -> compare_expr e1 e2
+
+      | S_rename_var(v1, v1'), S_rename_var(v2, v2') ->
+        Compare.compose [
+          (fun () -> compare_var v1 v2);
+          (fun () -> compare_var v1' v2');
+        ]
+        
+      | S_remove_var(v1), S_remove_var(v2) -> compare_var v1 v2
+
+      | S_project_vars(vl1), S_project_vars(vl2) ->
+        Compare.compose (
+          (fun () -> Pervasives.compare (List.length vl1) (List.length vl2))
+          ::
+          (List.map (fun (v1, v2) -> (fun () -> compare_var v1 v2)) @@ List.combine vl1 vl2)
+        )
+      | _ -> Pervasives.compare s1 s2
+    )
+
+and register_stmt_compare cmp = stmt_compare_chain := cmp !stmt_compare_chain
+
+and compare_stmt s1 s2 =
+  if s1 == s2 then 0 else !stmt_compare_chain s1 s2
+
+
 let mk_stmt skind srange = {skind; srange}
 
 let mk_rename v v' =
@@ -212,9 +294,6 @@ let mk_assume e =
 let mk_remove_var v = mk_stmt (S_remove_var v)
 
 let mk_project_vars vars = mk_stmt (S_project_vars vars)
-
-
-
 
 
 (*==========================================================================*)

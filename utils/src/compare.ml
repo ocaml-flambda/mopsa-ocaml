@@ -47,3 +47,9 @@ let triple_compare p q r =
         y
     else
       x
+
+(** [option_compare p] lifts [p: 'a -> 'a -> int] to ['a option -> 'a option -> int] *)
+let option_compare p q r =
+  match q, r with
+  | Some x, Some y -> p x y
+  | _ -> Pervasives.compare q r

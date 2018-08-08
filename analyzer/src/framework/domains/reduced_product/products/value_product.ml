@@ -38,7 +38,7 @@ struct
           snd (V.name) :: aux tl
       in
       let names = aux Config.pool in
-      String.concat " x " names
+      String.concat " ⊗ " names
     )
 
   let id =

@@ -24,11 +24,12 @@ type typ +=
   | T_array of typ (** Array of [typ] *)
   | T_char
 
-let () = register_typ_compare (fun next t1 t2 ->
-    match t1, t2 with
-    | T_array t1, T_array t2 -> compare_typ t1 t2
-    | _ -> next t1 t2
-  )
+let () =
+  register_typ_compare (fun next t1 t2 ->
+      match t1, t2 with
+      | T_array t1, T_array t2 -> compare_typ t1 t2
+      | _ -> next t1 t2
+    )
 
 (*==========================================================================*)
                            (** {2 Constants} *)
@@ -43,6 +44,24 @@ type constant +=
   | C_float_interval of float * float (** Float ranges. *)
 (** Constants. *)
 
+let () =
+  register_constant_compare (fun next c1 c2 ->
+      match c1, c2 with
+      | C_int z1, C_int z2 -> Z.compare z1 z2
+      | C_float f1, C_float f2 -> Pervasives.compare f1 f2
+      | C_string s1, C_string s2 -> Pervasives.compare s1 s2
+      | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
+        Compare.compose [
+          (fun () -> Z.compare z1 z2);
+          (fun () -> Z.compare z1' z2')
+        ]
+      | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
+        Compare.compose [
+          (fun () -> Pervasives.compare f1 f2);
+          (fun () -> Pervasives.compare f1' f2')
+        ]
+      | _ -> next c1 c2
+    )
 
 (*==========================================================================*)
                            (** {2 Operators} *)
@@ -69,6 +88,16 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
+let () =
+  register_operator_compare (fun next op1 op2 ->
+      match op1, op2 with
+      | O_wrap(l1, u1), O_wrap(l2, u2) ->
+        Compare.compose [
+          (fun () -> Z.compare l1 l2);
+          (fun () -> Z.compare u1 u2)
+        ]
+      | _ -> next op1 op2
+    )
 
 (*==========================================================================*)
                          (** {2 Heap addresses} *)
@@ -164,6 +193,36 @@ type expr_kind +=
 
   (** Length of array or string *)
   | E_len of expr
+
+let () =
+  register_expr_compare (fun next e1 e2 ->
+      match ekind e1, ekind e2 with
+      | E_function(f1), E_function(f2) -> Pervasives.compare f1.fun_name f2.fun_name
+
+      | E_call(f1, args1), E_call(f2, args2) ->
+        Compare.compose [
+          (fun () -> compare_expr f1 f2);
+          (fun () -> Compare.list_compare compare_expr args1 args2)
+        ]
+
+      | E_array(el1), E_array(el2) ->
+        Compare.list_compare compare_expr el1 el2
+
+      | E_subscript(a1, i1), E_subscript(a2, i2) ->
+        Compare.compose [
+          (fun () -> compare_expr a1 a2);
+          (fun () -> compare_expr i1 i2);
+        ]
+
+      | E_alloc_addr(a1), E_alloc_addr(a2) ->
+        compare_addr {addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
+
+      | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
+
+      | E_len(a1), E_len(a2) -> compare_expr a1 a2
+
+      | _ -> next e1 e2
+    )
 
 (*==========================================================================*)
                            (** {2 Utility functions} *)
@@ -269,6 +328,49 @@ type stmt_kind +=
 
   | S_assert of expr
   (** Unit tests assertions *)
+
+let () =
+  register_stmt_compare (fun next s1 s2 ->
+      match skind s1, skind s2 with
+      | S_expression(e1), S_expression(e2) -> compare_expr e1 e2
+
+      | S_if(c1,then1,else1), S_if(c2,then2,else2) ->
+        Compare.compose [
+          (fun () -> compare_expr c1 c2);
+          (fun () -> compare_stmt then1 then2);
+          (fun () -> compare_stmt else1 else2);
+        ]
+
+      | S_block(sl1), S_block(sl2) -> Compare.list_compare compare_stmt sl1 sl2
+
+      | S_return(e1), S_return(e2) -> Compare.option_compare compare_expr e1 e2
+
+      | S_while(c1, body1), S_while(c2, body2) ->
+        Compare.compose [
+          (fun () -> compare_expr c1 c2);
+          (fun () -> compare_stmt body1 body2)
+        ]
+
+      | S_rebase_addr(a1,a1',m1), S_rebase_addr(a2,a2',m2) ->
+        Compare.compose [
+          (fun () -> compare_addr a1 a2);
+          (fun () -> compare_addr a1' a2');
+          (fun () -> Pervasives.compare m1 m2);
+        ]
+
+      | S_unit_tests(f1, _), S_unit_tests(f2, _) -> Pervasives.compare f1 f2
+
+      | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
+        Compare.compose [
+          (fun () -> compare_expr e1 e2);
+          (fun () -> Pervasives.compare b1 b2);
+          (fun () -> Pervasives.compare b1' b2');
+        ]
+
+      | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+
+      | _ -> next s1 s2
+    )
 
 let mk_assert e range =
   mk_stmt (S_assert e) range

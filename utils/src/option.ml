@@ -81,3 +81,8 @@ let none_to_exn (a:'a option) : 'a =
   match a with None -> raise Found_None | Some x -> x
 let exn_to_none (f:'a ->'b)  (x:'a) : 'b option =
   try Some (f x) with Found_None -> None
+
+let print pp fmt x =
+  match x with
+  | None -> Format.fprintf fmt "None"
+  | Some a -> pp fmt a
