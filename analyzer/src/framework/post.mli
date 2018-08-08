@@ -47,3 +47,5 @@ val switch :
   ?zone:Zone.t ->
   ('a, 'b) man -> 'a flow ->
   'a post
+
+val print : ('a, _) man -> Format.formatter -> 'a post -> unit

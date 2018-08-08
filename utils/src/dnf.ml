@@ -16,22 +16,25 @@ let mk_true = [[]]
 
 let mk_false = []
 
-let rec mk_and ?(fand=(@)) (a: 'a t) (b: 'a t) : 'a t =
+let rec mk_and ?(fand=(@)) ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
    List.fold_left (fun acc conj1 ->
       List.fold_left (fun acc conj2 ->
           let conj = fand conj1 conj2 in
-          mk_or acc [conj]
+          let conj' = List.sort_uniq compare conj in
+          mk_or acc [conj']
         ) acc b
     ) mk_false a
 
-and mk_or (a: 'a t) (b: 'a t) : 'a t = a @ b
+and mk_or ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
+  a @ b |>
+  List.sort_uniq (Compare.list_compare compare)
 
-and mk_neg neg (a: 'a t) : 'a t =
+and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
   a |> List.fold_left (fun acc conj ->
       mk_and acc (
         conj |>
         List.fold_left (fun acc x ->
-            mk_or acc (neg x)
+            mk_or ~compare acc (neg x)
           ) []
       )
     ) [[]]

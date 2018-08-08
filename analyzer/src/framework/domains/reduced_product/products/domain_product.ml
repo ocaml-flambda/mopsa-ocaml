@@ -328,44 +328,70 @@ struct
           | Nil -> []
           | Cons(hd, tl) ->
             let module D = (val hd) in
+            debug "Executing %a with %s" pp_stmt stmt D.name;
             let post = D.exec zone stmt  (head_man man) flow in
+            debug "%s executed %a and returned %a" D.name pp_stmt stmt (Option.print (Post.print man)) post;
             post :: (aux tl (tail_man man))
       in
       aux Config.pool man
     in
-    (* Compute meet mergers *)
-    let mergers =
-      let rec aux posts before =
-        match posts with
-        | [] -> [], []
-        | None :: tl ->
-          let after, ret = aux tl before in
-          after, [] :: ret
-        | Some post :: tl ->
-          let this = post.Post.mergers in
-          let after, ret = aux tl (before @ this) in
-          (after @ this), (before @ after) :: ret
-      in
-      snd @@ aux posts []
-    in
-    (* Apply mergers *)
-    let flow' =
-      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> Ast.stmt list list -> 'a Flow.flow option =
-        fun pool man posts mergers  ->
-          match pool, posts, mergers with
-          | Nil, _, _ -> None
-          | Cons(hd, tl), (None :: ptl), (mhd :: mtl) ->
-            aux tl (tail_man man) ptl mtl
-          | Cons(hd, tl), (Some post :: ptl), (mhd :: mtl) ->
-            let man' = head_man man in
-            let flow' = List.fold_left (fun flow stmt -> man'.exec stmt flow) post.Post.flow mhd in
-            (match aux tl (tail_man man) ptl mtl with
-             | None -> Some flow'
-             | Some flow'' -> Some (Flow.meet man flow' flow'')
-            )
+
+    (* Merge post conditions. 
+       Each domain applies its merger statements on the post-conditions of the other domains,
+       and restores its local abstract element from its own post-condition.
+    *)
+    let merged_flows =
+      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list =
+        fun pool man posts ret ->
+          match pool, posts with
+          | Nil, [] -> ret
+          | Cons(hd, tl), None :: ptl -> aux tl (tail_man man) ptl ret
+          | Cons(hd, tl), (Some post) :: ptl ->
+            let module D = (val hd) in
+            let hman = head_man man in
+            let mergers = post.Post.mergers in
+            let flow = post.Post.flow in
+            (* Merge [ret] with the post-condition of [D] *)
+            let rec aux2: type u. u domain_pool -> 'a flow option list -> 'a flow option list =
+              fun pool' ret' ->
+                match pool', ret' with
+                | Nil, [] -> []
+                | Cons(hd', tl'), None :: ftl' -> None :: aux2 tl' ftl'
+                | Cons(hd', tl'), Some flow' :: ftl' ->
+                  let module D' = (val hd') in
+                  let flow' = match D.identify D'.id with
+                    | Some Eq -> flow'
+                    | None ->
+                      (* Apply mergers of D on the post-condition [post] *)
+                      let mflow' = List.fold_left (fun flow stmt -> man.exec stmt flow) flow' mergers in
+                      (* Restore the abstract element of D *)
+                      Flow.merge (fun tk a1 a2 ->
+                          match a1, a2 with
+                          | None, _ | _, None -> None
+                          | Some a1, Some a2 -> Some (hman.set (hman.get a1) a2)
+                        ) hman flow mflow'
+                  in
+                  Some flow' :: aux2 tl' ftl'
+                | _ -> assert false
+            in
+            let ret' = aux2 Config.pool ret in
+            aux tl (tail_man man) ptl ret'
           | _ -> assert false
       in
-      aux Config.pool man posts mergers
+      aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)  
+    in
+
+    (* Meet merged flows *)
+    let flow' =
+      let rec aux = function
+        | [] -> None
+        | None :: tl -> aux tl
+        | Some flow :: tl ->
+          match aux tl with
+          | None -> Some flow
+          | Some flow' -> Some (Flow.meet man flow flow')
+      in
+      aux merged_flows
     in
     match flow' with
     | None -> None

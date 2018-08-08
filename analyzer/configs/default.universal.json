@@ -10,7 +10,7 @@
 		"universal.numeric.relational.octagon"
 	    ],
 	    "reductions" : [
-		//"universal.numeric.reductions.integer_interval_congruence",
+		"universal.numeric.reductions.integer_interval_congruence",
 		"universal.numeric.reductions.integer_interval_octagon"
 	    ]
 	}

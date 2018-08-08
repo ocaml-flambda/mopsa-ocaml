@@ -112,3 +112,5 @@ let switch
       |> t
     in
     List.fold_left (fun acc (cond, t) -> join man (one cond t) acc) (one cond t) q
+
+let print man fmt post = Flow.print man fmt post.flow
