@@ -42,7 +42,7 @@ let compare_chain : (alarm -> alarm -> int) ref =
 let pp_chain : (Format.formatter -> alarm -> unit) ref =
   ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
 
-let register info =
+let register_alarm info =
   compare_chain := info.compare !compare_chain;
   pp_chain := info.print !pp_chain;
   ()

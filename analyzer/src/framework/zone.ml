@@ -18,24 +18,24 @@ let debug fmt = Debug.debug ~channel:"framework.zone" fmt
 (*==========================================================================*)
 
 (** Zones are defined by languages extensions.*)
-type t = ..
+type zone = ..
 
-type t +=
+type zone +=
   | Z_top (** ⊤ includes all languages of the analyzer *)
 
-let top = Z_top
+let top_zone = Z_top
 
 (** Compare two zones.  Zones are assumed to be plain variant types,
    so there is no need to define a (total) compare function.  *)
-let compare (z1: t) (z2: t) : int = Pervasives.compare z1 z2
+let compare_zone (z1: zone) (z2: zone) : int = Pervasives.compare z1 z2
 
 type info = {
-  subset : (t -> t -> bool) -> t -> t -> bool;
-  print  : (Format.formatter -> t -> unit) -> Format.formatter -> t -> unit;
+  subset : (zone -> zone -> bool) -> zone -> zone -> bool;
+  print  : (Format.formatter -> zone -> unit) -> Format.formatter -> zone -> unit;
 }
 
 (* Chain of partial order definitions. *)
-let subset_chain : (t -> t -> bool) ref = ref (
+let subset_zone_chain : (zone -> zone -> bool) ref = ref (
     fun z1 z2 ->
       match z1, z2 with
       | _, Z_top -> true
@@ -43,25 +43,25 @@ let subset_chain : (t -> t -> bool) ref = ref (
       | _ -> z1 = z2
   )
 
-let pp_chain : (Format.formatter -> t -> unit) ref = ref (fun fmt zone ->
+let pp_zone_chain : (Format.formatter -> zone -> unit) ref = ref (fun fmt zone ->
     match zone with
     | Z_top -> Format.fprintf fmt "⊤"
     | _ -> failwith "Pp: Unknown zone"
   )
 
-let register info =
-  subset_chain := info.subset !subset_chain;
-  pp_chain := info.print !pp_chain;
+let register_zone info =
+  subset_zone_chain := info.subset !subset_zone_chain;
+  pp_zone_chain := info.print !pp_zone_chain;
   ()
 
 
-let print fmt (zone: t) =
-  Format.fprintf fmt "[%a]" !pp_chain zone
+let pp_zone fmt (zone: zone) =
+  Format.fprintf fmt "[%a]" !pp_zone_chain zone
 
 (** Partial order test. *)
-let subset (z1: t) (z2: t) =
-  debug "%a subset %a" print z1 print z2;
-  let b = !subset_chain z1 z2 in
+let subset_zone (z1: zone) (z2: zone) =
+  debug "%a subset %a" pp_zone z1 pp_zone z2;
+  let b = !subset_zone_chain z1 z2 in
   debug "result: %b" b;
   b
 
@@ -72,15 +72,15 @@ let subset (z1: t) (z2: t) =
 
 
 (** Compare two paths. *)
-let compare2 (z1, z2) (z1', z2') =
+let compare_zone2 (z1, z2) (z1', z2') =
   let c1 = compare z1 z1' in
   if c1 <> 0 then c1
   else compare z2 z2'
 
-let print2 fmt (z1, z2) =
-  Format.fprintf fmt "%a -> %a" print z1 print z2
+let pp_zone2 fmt (z1, z2) =
+  Format.fprintf fmt "%a -> %a" pp_zone z1 pp_zone z2
 
 (** (z1, z2) ⊆ (z1', z2') iff. z1 ⊆ z1' and z2 ⊆ z2'. *)
-let subset2 (z1, z2) (z1', z2') =
-  subset z1 z1' && subset z2 z2'
+let subset_zone2 (z1, z2) (z1', z2') =
+  subset_zone z1 z1' && subset_zone z2 z2'
 

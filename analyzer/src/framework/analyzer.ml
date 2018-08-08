@@ -14,10 +14,11 @@ open Manager
 open Domain
 open Eval
 open Post
-
+open Zone
+    
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
-let mk_exec_of_zone_list (l: Zone.t list) exec =
+let mk_exec_of_zone_list (l: Zone.zone list) exec =
   let exec_list = List.map exec l in
   (fun (stmt: Ast.stmt) (man: ('a, 't) man) (flow: 'a flow) : 'a Post.post option ->
      let rec aux =
@@ -31,7 +32,7 @@ let mk_exec_of_zone_list (l: Zone.t list) exec =
      aux exec_list
   )
 
-let mk_eval_of_zone_list (l: (Zone.t * Zone.t) list) eval =
+let mk_eval_of_zone_list (l: (Zone.zone * Zone.zone) list) eval =
   let eval_list = List.map eval l in
   (fun (exp: Ast.expr) (man: ('a, 't) man) (flow: 'a flow) : ('a, Ast.expr) evl option ->
      let rec aux =
@@ -54,11 +55,11 @@ struct
 
 
   (** Map giving the [exec] transfer function of a zone *)
-  module ExecMap = MapExt.Make(struct type t = Zone.t let compare = compare end)
+  module ExecMap = MapExt.Make(struct type t = Zone.zone let compare = compare end)
 
 
   (** Map giving the [eval] evaluation function of a zone path *)
-  module EvalMap = MapExt.Make(struct type t = Zone.t * Zone.t let compare = Zone.compare2 end)
+  module EvalMap = MapExt.Make(struct type t = Zone.zone * Zone.zone let compare = Zone.compare_zone2 end)
 
 
   (*==========================================================================*)
@@ -66,7 +67,7 @@ struct
   (*==========================================================================*)
 
   let rec init prog : Domain.t flow =
-    let flow0 = Flow.bottom  |>
+    let flow0 = Flow.bottom Annotation.empty  |>
                 Flow.set T_cur man.top man
     in
     match Domain.init prog man flow0 with
@@ -86,22 +87,22 @@ struct
         if ExecMap.mem zone acc then acc
         else
           begin
-            debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
+            debug "Searching for an exec function for the zone %a" Zone.pp_zone zone;
+            match List.find_all (fun z -> subset_zone z zone) Domain.exec_interface.export with
             | [] ->
-              Debug.warn "exec for %a not found" Zone.print zone;
+              Debug.warn "exec for %a not found" Zone.pp_zone zone;
               acc
 
             | l ->
               let f = mk_exec_of_zone_list l Domain.exec in
 
-              debug "exec for %a found" Zone.print zone;
+              debug "exec for %a found" Zone.pp_zone zone;
               ExecMap.add zone f acc
           end
-      ) ExecMap.empty (Zone.top :: Domain.exec_interface.import)
+      ) ExecMap.empty (top_zone :: Domain.exec_interface.import)
 
 
-  and exec ?(zone = Zone.top) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
+  and exec ?(zone = top_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Location.pp_range_verbose stmt.srange
@@ -145,23 +146,23 @@ struct
         if EvalMap.mem zpath acc then acc
         else
           begin
-            debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> debug "checking %a" Zone.print2 p; Zone.subset2 p zpath) Domain.eval_interface.export with
+            debug "Searching for eval function for the zone path %a" pp_zone2 zpath;
+            match List.find_all (fun p -> debug "checking %a" pp_zone2 p; subset_zone2 p zpath) Domain.eval_interface.export with
             | [] ->
-              Debug.warn "eval for %a not found" Zone.print2 zpath;
+              Debug.warn "eval for %a not found" pp_zone2 zpath;
               acc
 
             | l ->
               let f = mk_eval_of_zone_list l Domain.eval in
-              debug "eval for %a found" Zone.print2 zpath;
+              debug "eval for %a found" pp_zone2 zpath;
               EvalMap.add zpath f acc
 
           end
-      ) EvalMap.empty ((Zone.top, Zone.top)  :: Domain.eval_interface.import)
+      ) EvalMap.empty ((top_zone, top_zone)  :: Domain.eval_interface.import)
 
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (top_zone, top_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange

@@ -36,11 +36,11 @@ sig
 
   val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
 
-  val exec_interface : Zone.t interface
-  val eval_interface : (Zone.t * Zone.t) interface
+  val exec_interface : Zone.zone interface
+  val eval_interface : (Zone.zone * Zone.zone) interface
 
-  val exec : Zone.t -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
-  val eval : (Zone.t * Zone.t) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
+  val exec : Zone.zone -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
+  val eval : (Zone.zone * Zone.zone) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end
 

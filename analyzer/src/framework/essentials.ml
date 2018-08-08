@@ -18,6 +18,8 @@ module Flow = Flow
 
 module Annotation = Annotation
 
+type 'a annot = 'a Annotation.annot
+
 module Post = Post
 type 'a post = 'a Post.post
 
@@ -30,6 +32,8 @@ include Domain
 include Options
 
 include Exceptions
+
+include Zone
 
 module Var =
 struct

@@ -19,9 +19,9 @@ sig
 
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
 
-  val zone : Zone.t
-  val import_exec : Zone.t list
-  val import_eval : (Zone.t * Zone.t) list
+  val zone : Zone.zone
+  val import_exec : Zone.zone list
+  val import_eval : (Zone.zone * Zone.zone) list
 
   val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
@@ -55,7 +55,7 @@ struct
   }
 
   let eval_interface = {
-    export = [Zone.top, D.zone];
+    export = [top_zone, D.zone];
     import = D.import_eval;
   }
   

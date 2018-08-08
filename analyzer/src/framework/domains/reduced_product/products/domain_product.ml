@@ -322,18 +322,21 @@ struct
   let exec zone stmt man flow =
     (* Point-wise exec *)
     let posts =
-      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a post option list =
-        fun pool man ->
+      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a annot -> 'a post option list =
+        fun pool man annot ->
           match pool with
           | Nil -> []
           | Cons(hd, tl) ->
             let module D = (val hd) in
-            debug "Executing %a with %s" pp_stmt stmt D.name;
-            let post = D.exec zone stmt  (head_man man) flow in
-            debug "%s executed %a and returned %a" D.name pp_stmt stmt (Option.print (Post.print man)) post;
-            post :: (aux tl (tail_man man))
+            debug "Exec on %s" D.name;
+            match D.exec zone stmt  (head_man man) flow with
+            | None -> None :: (aux tl (tail_man man) annot)
+            | Some post ->
+              let annot' = get_annot post.Post.flow in
+              (Some post) :: (aux tl (tail_man man) annot')
+            
       in
-      aux Config.pool man
+      aux Config.pool man (get_annot flow)
     in
 
     (* Merge post conditions. 
@@ -428,18 +431,23 @@ struct
   let eval zone exp man flow =
     (* Point-wise evaluation *)
     let evls =
-      let rec aux: type t. t domain_pool -> ('a, t) man -> ('a, Ast.expr) evl option list =
-        fun pool man ->
+      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a annot -> ('a, Ast.expr) evl option list =
+        fun pool man annot ->
           match pool with
           | Nil -> []
           | Cons(hd, tl) ->
             let module D = (val hd) in
-            debug "Evaluating %a with %s" pp_expr exp D.name;
-            let evl = D.eval zone exp  (head_man man) flow in
-            debug "%s evaluated %a into %a" D.name pp_expr exp (Option.print (Eval.print ~pp:pp_expr)) evl;
-            evl :: (aux tl (tail_man man))
+            match D.eval zone exp  (head_man man) flow with
+            | None -> None :: (aux tl (tail_man man) annot)
+            | Some evl ->
+              let annot' = Eval.choose evl |>
+                           snd |>
+                           get_annot
+              in
+              (Some evl) :: (aux tl (tail_man man) annot')
+            
       in
-      aux Config.pool man
+      aux Config.pool man (get_annot flow)
     in
 
     (* Transform list of evaluations into list of conjunctions *)

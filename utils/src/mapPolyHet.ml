@@ -35,8 +35,8 @@ module Make = functor(Key: KEY) ->
 struct
 
   (** Witness of type equality *)
-  type (_, _) eq = Eq : ('b, 'b) eq
 
+  type (_, _) eq = Eq : ('b, 'b) eq
 
   type ('a, 'b) w = {
     eq : 'c. ('a, 'c) Key.t -> ('b, 'c) eq option;

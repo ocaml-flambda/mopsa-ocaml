@@ -151,7 +151,7 @@ struct
      if r=true, keep the states that may satisfy the expression;
      if r=false, keep the states that may falsify the expression
   *)
-  let filter (annot: 'a Annotation.t) (a:t) (e:expr) (r:bool) : t =
+  let filter (annot: 'a annot) (a:t) (e:expr) (r:bool) : t =
 
     (* recursive exploration of the expression *)
     let rec doit a e r =
@@ -217,7 +217,7 @@ struct
   }
 
   let eval_interface = Domain.{
-    import = [Zone.top, Value.zone];
+    import = [top_zone, Value.zone];
     export = [Value.zone, Value.zone];
   }
 
@@ -252,7 +252,7 @@ struct
 
     | S_assign({ekind = E_var var}, e, mode) ->
       Some (
-        man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
+        man.eval ~zone:(top_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow' = map_local T_cur (fun a ->
             let _, v = eval a e in
             let a' = VarMap.add var v a in
@@ -266,7 +266,7 @@ struct
 
     | S_assume e ->
       Some (
-        man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
+        man.eval ~zone:(top_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow' = map_local T_cur (fun a ->
             filter (get_annot flow) a e true
           ) man flow
@@ -311,15 +311,15 @@ struct
     match ekind exp with
     | E_binop(op, e1, e2) ->
       Some (
-        man.eval ~zone:(Zone.top, Value.zone) e1 flow |> Eval.bind @@ fun e1 flow ->
-        man.eval ~zone:(Zone.top, Value.zone) e2 flow |> Eval.bind @@ fun e2 flow ->
+        man.eval ~zone:(top_zone, Value.zone) e1 flow |> Eval.bind @@ fun e1 flow ->
+        man.eval ~zone:(top_zone, Value.zone) e2 flow |> Eval.bind @@ fun e2 flow ->
         let exp' = {exp with ekind = E_binop(op, e1, e2)} in
         Eval.singleton exp' flow
       )
 
     | E_unop(op, e) ->
       Some (
-        man.eval ~zone:(Zone.top, Value.zone) e flow |> Eval.bind @@ fun e flow ->
+        man.eval ~zone:(top_zone, Value.zone) e flow |> Eval.bind @@ fun e flow ->
         let exp' = {exp with ekind = E_unop(op, e)} in
         Eval.singleton exp' flow
       )

@@ -17,6 +17,7 @@ let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
   | `Assoc(obj) when List.mem_assoc "product" obj -> build_product obj
+  | `Assoc(obj) when List.mem_assoc "functor" obj -> build_functor obj
   | _ -> assert false
 
 and build_leaf name =
@@ -53,6 +54,19 @@ and build_product assoc =
   let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
   let module D = (val Domains.Reduced_product.Factory.make pool rules) in
   (module D)
+
+and build_functor assoc =
+  let arg = List.assoc "arg" assoc in
+  let a = build_domain arg in
+  let module A = (val a : Domain.DOMAIN) in
+  let f = List.assoc "functor" assoc |> to_string in
+  try
+    let f = Domains.Functor.find_domain f in
+    let module F = (val f) in
+    let module D = F.Make(A) in
+    (module D : Domain.DOMAIN)
+  with Not_found ->
+    Debug.fail "Functor %s not found" f
 
 
 let parse (file: string) : (module Domain.DOMAIN) =

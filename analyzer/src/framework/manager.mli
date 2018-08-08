@@ -11,6 +11,7 @@
    global abstract environment.
 *)
 
+open Annotation
 
 (*==========================================================================*)
 (**                            {2 Flows}                                    *)
@@ -40,14 +41,14 @@ type 'a fmap = 'a FlowMap.t Top.with_top
 
 type 'a flow = {
   map   : 'a fmap;
-  annot : 'a Annotation.t;
+  annot : 'a annot;
 }
 (** An abstract flow is a flow map augmented with an annotation *)
 
-val set_annot : 'a Annotation.t -> 'a flow -> 'a flow
+val set_annot : 'a annot -> 'a flow -> 'a flow
 (** Change the annotation associated to a flow *)
 
-val get_annot : 'a flow -> 'a Annotation.t
+val get_annot : 'a flow -> 'a annot
 (** Returns the annotation associated to a flow *)
 
 
@@ -84,9 +85,9 @@ type ('a, 't) man = {
   top       : 'a;
   is_bottom : 'a -> bool;
   subset    : 'a -> 'a -> bool;
-  join      : 'a Annotation.t -> 'a -> 'a -> 'a;
-  meet      : 'a Annotation.t -> 'a -> 'a -> 'a;
-  widen     : 'a Annotation.t -> 'a -> 'a -> 'a;
+  join      : 'a annot -> 'a -> 'a -> 'a;
+  meet      : 'a annot -> 'a -> 'a -> 'a;
+  widen     : 'a annot -> 'a -> 'a -> 'a;
   print     : Format.formatter -> 'a -> unit;
 
   (* Accessors to abstract element ['t] of the domain *)
@@ -94,7 +95,7 @@ type ('a, 't) man = {
   set : 't -> 'a -> 'a;
 
   (** Transfer functions *)
-  exec : ?zone:Zone.t -> Ast.stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(Zone.t * Zone.t) -> Ast.expr -> 'a flow -> ('a, Ast.expr) evl;
+  exec : ?zone:Zone.zone -> Ast.stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(Zone.zone * Zone.zone) -> Ast.expr -> 'a flow -> ('a, Ast.expr) evl;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 }

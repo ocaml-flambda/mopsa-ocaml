@@ -16,7 +16,7 @@ type ('a, _) key = ..
 (** [('a, 'b) key] is a key for cells of type ['b] that can be
    polymorphic on ['a] *)
 
-type 'a t
+type 'a annot
 (** Type of annotations over an abstract type ['a] *)
 
 
@@ -24,17 +24,15 @@ type 'a t
 (**                      {2 Registering  keys}                              *)
 (*==========================================================================*)
 
-type (_, _) eq
-(** Equality predicate of two types *)
-
+type (_, _) eq = Eq : ('a, 'a) eq
 
 type ('a, 'b) w = {
   eq : 'c. ('a, 'c) key -> ('b, 'c) eq option;
 }
 (** [('a, 'b) w] defines an equality witness of a key [('a, 'b) key] *)
 
-val register : ('a, 'b) w -> 'a t -> 'a t
-(** [register w a] adds a new equality witness [w] to the annotation map [m] *)
+val register_annot : ('a, 'b) w -> 'a annot -> 'a annot
+(** [register_annot w a] adds a new equality witness [w] to the annotation map [m] *)
 
 
 (*==========================================================================*)
@@ -43,15 +41,18 @@ val register : ('a, 'b) w -> 'a t -> 'a t
 
 exception Key_not_found
 
-val empty : 'a t
+val empty : 'a annot
 (** Empty annotation *)
 
-val add : ('a, 'b) key -> 'b -> 'a t -> 'a t
+val add : ('a, 'b) key -> 'b -> 'a annot -> 'a annot
 (** [add k v a] returns a new annotation equal to [m] having a binding
    of key [k] to value [v]. Previous binding is removed if
    present. Raises [Key_not_found] if [k] was not registered in [m]
    *)
 
-val find : ('a, 'b) key -> 'a t -> 'b
+val find : ('a, 'b) key -> 'a annot -> 'b
 (** [find k m] returns the values bound to [k] in [m]. Raises
     [Not_found] if the binding is not found. *)
+
+val vlen : 'a annot -> int
+val wlen : 'a annot -> int

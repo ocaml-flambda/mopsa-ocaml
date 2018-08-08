@@ -19,8 +19,6 @@ type 'a post = {
 }
 (** Post-conditions of statement transfer functions *)
 
-val bottom : 'a post
-
 val singleton : 'a flow -> 'a post
 
 val add_mergers : Ast.stmt list -> 'a post -> 'a post
@@ -30,11 +28,11 @@ val join : ('a, _) man -> 'a post -> 'a post -> 'a post
 (** Join two post-conditions *)
 
 val bind :
-  ?zone:Zone.t -> ('a, _) man ->
+  ?zone:Zone.zone -> ('a, _) man ->
   ('e -> 'a flow -> 'a post) -> ('a, 'e) evl -> 'a post
 
 val assume :
-  Ast.expr -> ?zone:Zone.t -> ('a, _) man ->
+  Ast.expr -> ?zone:Zone.zone -> ('a, _) man ->
   fthen:('a Flow.flow -> 'a post) ->
   felse:('a Flow.flow -> 'a post) ->
   ?fboth:('a Flow.flow -> 'a Flow.flow -> 'a post) ->
@@ -44,7 +42,7 @@ val assume :
 
 val switch :
   ((Ast.expr * bool) list * ('a flow -> 'a post)) list ->
-  ?zone:Zone.t ->
+  ?zone:Zone.zone ->
   ('a, 'b) man -> 'a flow ->
   'a post
 

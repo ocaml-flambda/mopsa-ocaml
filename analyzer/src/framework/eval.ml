@@ -13,6 +13,7 @@
 open Ast
 open Flow
 open Manager
+open Zone
 
 let case  (c: ('a, 'e) evl_case) : ('a, 'e) evl =
   Dnf.singleton c
@@ -90,7 +91,7 @@ let bind
 
 
 let assume
-    cond ?(zone = Zone.top)
+    cond ?(zone = top_zone)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> empty flow))
@@ -106,7 +107,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> ('a, 'e) evl )) list)
-    ?(zone = Zone.top)
+    ?(zone = top_zone)
     man flow
   : ('a, 'e) evl  =
   match cases with
@@ -148,3 +149,7 @@ let to_dnf (evl: ('a, 'e) evl) : ('a, 'e) evl_case Dnf.t =
 
 let return (evl: ('a, 'e) evl) : ('a, 'e) evl option =
   Some evl
+
+let choose evl =
+  let case = Dnf.choose evl in
+  case.expr, case.flow

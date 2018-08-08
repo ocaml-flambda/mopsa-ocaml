@@ -85,7 +85,7 @@ sig
   (**                          {2 Value zone}                                 *)
   (*==========================================================================*)
 
-  val zone : Zone.t
+  val zone : Zone.zone
   (** Language zone in which the value abstraction is defined *)
 
 end

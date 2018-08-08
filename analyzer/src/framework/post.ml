@@ -11,6 +11,7 @@
 
 open Ast
 open Manager
+open Zone
 
 type channel = Channel : 'r Query.query -> channel
 
@@ -24,8 +25,8 @@ type 'a post = {
 let add_mergers mergers post =
   {post with mergers = post.mergers @ mergers}
 
-let bottom = {
-  flow = Flow.bottom;
+let bottom annot = {
+  flow = Flow.bottom annot;
   mergers = [];
   publish = [];
   subscribe = [];
@@ -55,9 +56,14 @@ let meet (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
   }
 
 let bind
-    ?(zone = Zone.top) (man: ('a, _) man)
-    (f: 'e -> 'a flow -> 'a post) (evl: ('a, 'e) evl)
+    ?(zone = top_zone) (man: ('a, _) man)
+    (f: 'e -> 'a flow -> 'a post)
+    (evl: ('a, 'e) evl)
   : 'a post =
+  let annot = Eval.choose evl |>
+              snd |>
+              get_annot
+  in
   Eval.fold (fun acc case ->
       let annot = get_annot acc.flow in
       let flow' = set_annot annot case.flow in
@@ -74,11 +80,11 @@ let bind
         let annot' = get_annot flow'' in
         let acc' = {acc with flow = set_annot annot' acc.flow} in
         join man acc' post'
-    ) (join man) (meet man) bottom evl
+    ) (join man) (meet man) (bottom annot) evl
 
 
 let assume
-    cond ?(zone = Zone.top) man
+    cond ?(zone = top_zone) man
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join man (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> singleton flow))
@@ -94,7 +100,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> 'a post )) list)
-    ?(zone = Zone.top)
+    ?(zone = top_zone)
     man flow
   : 'a post  =
   match cases with

@@ -166,7 +166,7 @@ struct
   and unroll cond body man flow =
     let rec loop i flow =
       debug "unrolling iteration %d" i;
-      if i = 0 then (flow, Flow.bottom)
+      if i = 0 then (flow, Flow.bottom (get_annot flow))
       else
         let flow1 =
           man.exec {skind = S_assume cond; srange = cond.erange} flow |>

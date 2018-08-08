@@ -12,16 +12,18 @@
    encodes the trace end point. A flow is then a map from tokens to
    abstract elements over-approximating the traces reaching that point. *)
 
+open Annotation
+
 type token = Manager.token
 (** Flow tokens *)
 
 type 'a flow = 'a Manager.flow
 (** Flow abstraction *)
 
-val bottom    : 'a flow
+val bottom    : 'a annot -> 'a flow
 (** Empty set of flows *)
 
-val top       : 'a flow
+val top       : 'a annot -> 'a flow
 (** Set of all possible flows *)
 
 val is_bottom : ('a, _) Manager.man -> 'a flow -> bool

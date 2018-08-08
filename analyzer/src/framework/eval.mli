@@ -33,7 +33,7 @@ val fold :
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 
 val assume :
-  Ast.expr -> ?zone:Zone.t ->
+  Ast.expr -> ?zone:Zone.zone ->
   fthen:('a flow -> ('a, 'e) evl ) ->
   felse:('a flow -> ('a, 'e) evl ) ->
   ?fboth:('a flow -> 'a flow -> ('a, 'e) evl ) ->
@@ -43,11 +43,17 @@ val assume :
 
 val switch :
   ((Ast.expr * bool) list * ('a flow -> ('a, 'e) evl )) list ->
-  ?zone:Zone.t ->
+  ?zone:Zone.zone ->
   ('a, 'b) Manager.man -> 'a flow ->
   ('a, 'e) evl
 
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) evl -> unit
+
+val map:
+  (('a, 'e) evl_case -> ('a, 'f) evl_case) ->
+  ('a, 'e) evl -> ('a, 'f) evl
+
+val choose : ('a, 'e) evl -> 'e option * 'a flow
 
 val to_dnf : ('a, 'e) evl -> ('a, 'e) evl_case Dnf.t
 

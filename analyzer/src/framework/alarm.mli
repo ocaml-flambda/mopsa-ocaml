@@ -26,7 +26,7 @@ type alarm_info = {
   print   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
 }
 
-val register: alarm_info -> unit
+val register_alarm: alarm_info -> unit
 
 val print : Format.formatter -> alarm -> unit
 

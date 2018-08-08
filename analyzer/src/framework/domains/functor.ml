@@ -6,25 +6,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Zones for the Universal language. *)
+(** Functor abstract domains. *)
 
-open Framework.Zone
+open Domain
 
-type zone +=
-  | Z_universal
-  | Z_universal_num
+module type S =
+sig
+  val name : string
+  module Make : functor(_ : DOMAIN) -> DOMAIN
+end
 
-let () =
-  register_zone {
-      subset = (fun next z1 z2 ->
-          match z1, z2 with
-          | Z_universal_num, Z_universal -> true
-          | _ -> next z1 z2
-        );
-      print = (fun next fmt z ->
-          match z with
-          | Z_universal -> Format.fprintf fmt "universal"
-          | Z_universal_num -> Format.fprintf fmt "universal/num"
-          | _ -> next fmt z
-        );
-    }
+let functors : (module S) list ref = ref []
+
+let register_domain f = functors := f :: !functors
+
+let rec find_domain name =
+  let rec aux = function
+  | [] -> raise Not_found
+  | hd :: tl ->
+    let module F = (val hd : S) in
+    if F.name = name then (module F : S) else aux tl
+  in
+  aux !functors

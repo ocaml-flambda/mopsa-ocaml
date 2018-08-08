@@ -24,14 +24,14 @@ type 'a fmap = 'a Manager.fmap
 
 type 'a flow = 'a Manager.flow
 
-let bottom : 'a flow = {
+let bottom annot : 'a flow = {
   map = Nt FlowMap.empty;
-  annot = Annotation.empty;
+  annot;
 }
 
-let top : 'a flow = {
+let top annot : 'a flow = {
   map = TOP;
-  annot = Annotation.empty;
+  annot;
 }
 
 let is_bottom (man: ('a, _) man) (flow: 'a flow) : bool =

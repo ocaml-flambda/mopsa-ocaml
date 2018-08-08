@@ -6,6 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
+open Annotation
+
 (** Signature module of a lattice. *)
 module type LATTICE =
 sig
@@ -33,13 +35,13 @@ sig
 
   (** {2 Operators} *)
 
-  val join: 'a Annotation.t -> t -> t -> t
+  val join: 'a annot -> t -> t -> t
   (** [join annot a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: 'a Annotation.t -> t -> t -> t
+  val meet: 'a annot -> t -> t -> t
   (** [join annot a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: 'a Annotation.t -> t -> t -> t
+  val widen: 'a annot -> t -> t -> t
   (** [widening annot a1 a2] computes an upper bound of [a1] and [a2] that ensures
       stabilization of ascending chains. *)
 
