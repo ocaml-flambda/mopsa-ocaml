@@ -49,7 +49,7 @@ module Domain = struct
       oeval_singleton (Some (mk_int (String.length s) range), flow, [])
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "str.__len__")}}, [{etyp = T_string} as arg], []) ->
-      let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
+      let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> OptionExt.none_to_exn in
       if Memory.Value.(S.is_top s.string) then
         Framework.Exceptions.panic "str.__len__ on top"
       else

@@ -84,26 +84,26 @@ let oeval_map
     (f: ('a, 'b) eval_case -> ('c, 'd) eval_case)
     (oevl: ('a, 'b) evals option) : ('c, 'd) evals option
   =
-  Option.option_lift1 (eval_map f) oevl
+  OptionExt.option_lift1 (eval_map f) oevl
 
 let oeval_join
     (oevl1: ('a, 'b) evals option)
     (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
   =
-  Option.option_neutral2 eval_join oevl1 oevl2
+  OptionExt.option_neutral2 eval_join oevl1 oevl2
 
 let oeval_meet
     ?(fand=(@)) (oevl1: ('a, 'b) evals option)
     (oevl2: ('a, 'b) evals option) : ('a, 'b) evals option
   =
-  Option.option_neutral2 (eval_meet ~fand) oevl1 oevl2
+  OptionExt.option_neutral2 (eval_meet ~fand) oevl1 oevl2
 
 
 let oeval_iter (f: ('a, 'b) eval_case -> unit) (evals: ('a, 'b) evals option) : unit =
-  Option.option_dfl1 (fun () -> ()) (eval_iter f) evals
+  OptionExt.option_dfl1 (fun () -> ()) (eval_iter f) evals
 
 let oeval_fold (f: 'c -> ('a, 'b) eval_case -> 'c) (x: 'c) (evals: ('a, 'b) evals option) : 'c =
-  Option.option_dfl1 (fun () -> x) (eval_fold f x) evals
+  OptionExt.option_dfl1 (fun () -> x) (eval_fold f x) evals
 
 
 let oeval_merge
@@ -113,7 +113,7 @@ let oeval_merge
     (none: unit -> 'c)
     (oevl: ('a, 'b) evals option) : 'c
   =
-  Option.option_dfl1 none (Dnf.substitute f join meet) oevl
+  OptionExt.option_dfl1 none (Dnf.substitute f join meet) oevl
 
 let oeval_merge2
     (f1: ('a, 'b) evals -> 'e)
@@ -121,7 +121,7 @@ let oeval_merge2
     (f12: ('a, 'b) evals -> ('c, 'd) evals -> 'e)
     (none: unit -> 'e)
     (oevl1: ('a, 'b) evals option) (oevl2: ('c, 'd) evals option) : 'e =
-  Option.option_apply2 f1 f2 f12 none oevl1 oevl2
+  OptionExt.option_apply2 f1 f2 f12 none oevl1 oevl2
 
 
 let oeval_substitute

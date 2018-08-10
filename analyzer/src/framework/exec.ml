@@ -2,19 +2,19 @@ open Flow
 open Manager
 open Eval
 
-let oflow_extract = Option.none_to_exn
+let oflow_extract = OptionExt.none_to_exn
 
 let oflow_extract_dfl dfl = function
   | None -> dfl
   | Some flow -> flow
 
 let oflow_join man =
-  Option.option_neutral2 man.flow.join
+  OptionExt.option_neutral2 man.flow.join
 
 
-let oflow_map f flow = Option.option_lift1 f flow
+let oflow_map f flow = OptionExt.option_lift1 f flow
 
-let oflow_merge f1 f2 f12 none flow1 flow2 = Option.option_apply2 f1 f2 f12 none flow1 flow2
+let oflow_merge f1 f2 f12 none flow1 flow2 = OptionExt.option_apply2 f1 f2 f12 none flow1 flow2
 
 let oflow_compose f = function
   | None -> None

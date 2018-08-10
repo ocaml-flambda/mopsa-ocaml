@@ -1,7 +1,7 @@
 TARGET_CLIBS = utils
 MOPSAROOT = ..
 
-utils = bot comp debug dnf equiv setExt setExtSig setP invRelation invRelationSig listExt mapExt mapP option printers relation relationSig sig timing top intervals congruences bitfields
+utils = bot comp debug dnf equiv setExt setExtSig setP invRelation invRelationSig listExt mapExt mapP optionExt printers relation relationSig sig timing top intervals congruences bitfields
 intervals = float intBound floatItv intItv
 
 #C files

@@ -52,7 +52,7 @@ struct
     | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.main")})}, [], []) ->
       debug "Search for all classes that inherit from TestCase";
       let test_cases = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-                       Option.none_to_exn |>
+                       OptionExt.none_to_exn |>
                        List.filter (fun addr ->
                            match addr.addr_kind with
                            | A_py_class(cls, {addr_kind = A_py_class (C_builtin "unittest.TestCase", _)} :: _) -> true
@@ -78,7 +78,7 @@ struct
       in
 
       let functions = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-                      Option.none_to_exn |>
+                      OptionExt.none_to_exn |>
                       List.filter (fun addr ->
                           match addr.addr_kind with
                           | A_py_function(F_user func) -> true

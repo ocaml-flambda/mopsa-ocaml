@@ -230,8 +230,8 @@ module Domain= struct
         match etyp base with
         | T_int ->
           begin
-            let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
-            let base = man.ask ctx (Memory.Nonrel.Domain.QEval base) flow |> Option.none_to_exn in
+            let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> OptionExt.none_to_exn in
+            let base = man.ask ctx (Memory.Nonrel.Domain.QEval base) flow |> OptionExt.none_to_exn in
             debug "base = %a" Memory.Value.print base;
             let tmp = mktmp ~vtyp:T_int () in
             let n = mk_var tmp range in
@@ -350,7 +350,7 @@ module Domain= struct
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "float.__new__")}}, [cls; {etyp = T_string} as arg], [])
       ->
       begin
-        let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> Option.none_to_exn in
+        let s = man.ask ctx (Memory.Nonrel.Domain.QEval arg) flow |> OptionExt.none_to_exn in
 
         let tmp = mktmp ~vtyp:T_int () in
         let f = mk_var tmp range in
@@ -381,7 +381,7 @@ module Domain= struct
 
     | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin f)}}, [e1; e2], [])
       when is_number_binop_function f ->
-      let _, f = split_dot_name f |> Option.none_to_exn in
+      let _, f = split_dot_name f |> OptionExt.none_to_exn in
       let op = Operators.fun_to_binop f in
       if is_binop_valid op e1.etyp e2.etyp then
         let t = coerce op e1.etyp e2.etyp in
@@ -395,7 +395,7 @@ module Domain= struct
       when is_number_unop_function f
       ->
       debug "arithmetic unop";
-      let _, f = split_dot_name f |> Option.none_to_exn in
+      let _, f = split_dot_name f |> OptionExt.none_to_exn in
       let op = Operators.fun_to_unop f in
       let t =
         match e.etyp with

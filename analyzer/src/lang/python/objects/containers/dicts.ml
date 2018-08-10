@@ -174,7 +174,7 @@ struct
     match ekind k with
     | E_constant c -> Memory.Value.of_constant c
     | _ ->
-      man.ask ctx (Memory.Nonrel.Domain.QEval k) flow |> Option.none_to_exn
+      man.ask ctx (Memory.Nonrel.Domain.QEval k) flow |> OptionExt.none_to_exn
 
   let eval man ctx exp flow =
     let range = exp.erange in

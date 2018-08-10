@@ -62,7 +62,7 @@ let rec rflow_meet (man: 'a flow_manager) rflow1 rflow2 = {
   (* mergers = List.filter (fun merger -> List.mem merger rflow1.mergers) rflow2.mergers; *)
 }
 
-let orflow_join man = Option.option_neutral2 (rflow_join man)
+let orflow_join man = OptionExt.option_neutral2 (rflow_join man)
 
 type 'a reval_case = (Ast.expr * merger list, 'a) eval_case
 type 'a revals = (Ast.expr * merger list, 'a) evals
