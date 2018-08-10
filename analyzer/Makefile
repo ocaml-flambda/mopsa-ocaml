@@ -12,7 +12,7 @@ framework.domains.reduce = domain reduction root product
 framework.domains.unify = domain root
 framework.domains.reduce_unify = domain root product
 
-lang = universal c python
+lang = universal c python cfg jvm
 
 lang.universal = ast pp visitor utils frontend flows heap nonrel numeric unit_tests setup
 lang.universal.heap = pool query recency
@@ -34,8 +34,12 @@ lang.c.memory = base query pointer init cell decomposer machine_integers access_
 lang.c.memory.cell = initzero expand smashing reductions
 lang.c.flows = goto interproc switch
 
+lang.cfg = ast
+
+lang.jvm = ast frontend
+
 #Packages
-PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib
 
 #Flags
 INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
