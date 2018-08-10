@@ -158,6 +158,63 @@ struct
       with Found_BOT ->
         bottom, bottom
     )
+
+  let z_of_z2 z z' round =
+    let open Z in
+    let d, r = div_rem z z' in
+    if equal r zero then
+      d
+    else
+      begin
+        if round then
+          d + one
+        else
+          d
+      end
+
+  let z_of_mpzf mp =
+    Z.of_string (Mpzf.to_string mp)
+
+  let z_of_mpqf mp round =
+    let open Mpqf in
+    let l, r = to_mpzf2 mp in
+    let lz, rz = z_of_mpzf l, z_of_mpzf r in
+    z_of_z2 lz rz round
+
+  let z_of_apron_scalar a r =
+    let open Apron.Scalar in
+    match a, r with
+    | Float f, true  -> Z.of_float (ceil f)
+    | Float f, false -> Z.of_float (floor f)
+    | Mpqf q, _ ->  z_of_mpqf q r
+    | Mpfrf mpf, _ -> z_of_mpqf (Mpfr.to_mpq mpf) r
+
+  let of_apron (itv: Apron.Interval.t) : t =
+    if Apron.Interval.is_bottom itv then
+      bottom
+    else
+      let mi = itv.Apron.Interval.inf in
+      let ma = itv.Apron.Interval.sup in
+      let to_b m r =
+        let x = Apron.Scalar.is_infty m in
+        if x = 0 then I.B.Finite (z_of_apron_scalar m r)
+        else if x > 0 then I.B.PINF
+        else I.B.MINF
+      in
+      Nb (to_b mi false, to_b ma true)
+
+  let to_apron (itv:t) : Apron.Interval.t =
+    match itv with
+    | BOT -> Apron.Interval.bottom
+    | Nb(a,b) ->
+      let bound_to_scalar b =
+        match b with
+        | I.B.MINF -> Apron.Scalar.of_infty (-1)
+        | I.B.PINF -> Apron.Scalar.of_infty 1
+        | I.B.Finite z -> Apron.Scalar.of_float (Z.to_float z)
+      in
+      Apron.Interval.of_infsup (bound_to_scalar a) (bound_to_scalar b)
+  
 end
 
 

@@ -376,38 +376,7 @@ struct
     | _ -> return top
 
   and ask query a = None
-
-
-  let z_of_z2 z z' round =
-    let open Z in
-    let d, r = div_rem z z' in
-    if equal r zero then
-      d
-    else
-      begin
-        if round then
-          d + one
-        else
-          d
-      end
-
-  let z_of_mpzf mp =
-    Z.of_string (Mpzf.to_string mp)
-
-  let z_of_mpqf mp round =
-    let open Mpqf in
-    let l, r = to_mpzf2 mp in
-    let lz, rz = z_of_mpzf l, z_of_mpzf r in
-    z_of_z2 lz rz round
-
-  let z_of_apron_scalar a r =
-    let open Apron.Scalar in
-    match a, r with
-    | Float f, true  -> Z.of_float (ceil f)
-    | Float f, false -> Z.of_float (floor f)
-    | Mpqf q, _ ->  z_of_mpqf q r
-    | Mpfrf mpf, _ -> z_of_mpqf (Mpfr.to_mpq mpf) r
-  
+ 
   let var_relations v a =
     (* Get the linear constraints *)
     let lincons_list =
@@ -437,20 +406,14 @@ struct
 
 
   let interval (v:var) (a:t) : (Values.Intervals.Value.t) =
-    let itv = Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) in
-    if Apron.Interval.is_bottom itv then
-      Values.Intervals.Value.bottom
-    else
-      let mi = itv.Apron.Interval.inf in
-      let ma = itv.Apron.Interval.sup in
-      let to_b m r =
-        let x = Apron.Scalar.is_infty m in
-        if x = 0 then Values.Intervals.Value.I.B.Finite (z_of_apron_scalar m r)
-        else if x > 0 then Values.Intervals.Value.I.B.PINF
-        else Values.Intervals.Value.I.B.MINF
-      in
-      Bot.Nb (to_b mi false, to_b ma true)
+    Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
+    Values.Intervals.Value.of_apron
 
+  let refine_interval v i a =
+    let env = Apron.Abstract1.env a in
+    let a' = Apron.Abstract1.of_box ApronManager.man env [|var_to_apron v|] [|Values.Intervals.Value.to_apron i|] in
+    let a, a' = unify a a' in
+    Apron.Abstract1.meet ApronManager.man a a'
 
 
 end

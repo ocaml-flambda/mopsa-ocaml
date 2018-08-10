@@ -11,6 +11,7 @@
 	    ],
 	    "reductions" : [
 		"universal.numeric.reductions.intervals_congruences",
+		"universal.numeric.reductions.intervals_octagons",
 		"universal.numeric.reductions.hidden_post_assume_relation"
 	    ]
 	}

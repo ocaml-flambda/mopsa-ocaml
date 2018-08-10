@@ -11,7 +11,7 @@
 open Value
 open Channel
 open Pool
-open Reductions.Value_reduction
+open Reductions
 
 type _ value +=
   | V_empty_product : unit value
@@ -24,7 +24,7 @@ module Make
      sig
        type t
        val pool : t value_pool
-       val rules : (module REDUCTION) list
+       val value_rules : (module Value_reduction.REDUCTION) list
      end)  =
 struct
   type t = Config.t
@@ -207,16 +207,16 @@ struct
   }
   
   let reduce (v: t) : t with_channel =
-    let rec apply (l: (module REDUCTION) list) v : t with_channel =
+    let rec apply (l: (module Value_reduction.REDUCTION) list) v : t with_channel =
       match l with
       | [] -> return v
       | hd :: tl ->
-        let module R = (val hd : REDUCTION) in
+        let module R = (val hd : Value_reduction.REDUCTION) in
         R.reduce man v |> bind @@ fun v' ->
         apply tl v'
     in
     let rec lfp v =
-      apply Config.rules v |> bind @@ fun v' ->
+      apply Config.value_rules v |> bind @@ fun v' ->
       if subset v v' then return v else lfp v'
     in
     lfp v

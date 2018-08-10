@@ -13,6 +13,7 @@ open Pool
 
 module type REDUCTION =
 sig
+  val trigger : Post.channel option
   val reduce : Ast.stmt -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a flow -> 'a flow
 end
 

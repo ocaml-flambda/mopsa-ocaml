@@ -21,6 +21,8 @@ struct
 
   module I = Values.Intervals.Value
   module O = Relational.Oct
+
+  let trigger = None
   
   let reduce stmt dman nman man flow : 'a flow =
     match skind stmt with

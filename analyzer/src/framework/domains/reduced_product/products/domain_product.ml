@@ -304,14 +304,17 @@ struct
     | _ -> assert false
 
 
-  let reduce_exec stmt man flow =
+  let reduce_exec stmt channels man flow =
     let dman = domain_man man in
     let rec apply flow (l: (module Reductions.State_reduction.REDUCTION) list) =
       match l with
       | [] -> flow
       | hd :: tl ->
         let module R = (val hd : Reductions.State_reduction.REDUCTION) in
-        apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
+        match R.trigger with
+        | Some ch when not (List.mem ch channels) -> apply flow tl
+        | Some ch -> apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
+        | None -> apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
     in
     let rec lfp flow =
       let flow' = apply flow Config.state_rules in
@@ -343,17 +346,18 @@ struct
        Each domain applies its merger statements on the post-conditions of the other domains,
        and restores its local abstract element from its own post-condition.
     *)
-    let merged_flows =
-      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list =
+    let merged_flows, channels =
+      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list * Post.channel list =
         fun pool man posts ret ->
           match pool, posts with
-          | Nil, [] -> ret
+          | Nil, [] -> ret, []
           | Cons(hd, tl), None :: ptl -> aux tl (tail_man man) ptl ret
           | Cons(hd, tl), (Some post) :: ptl ->
             let module D = (val hd) in
             let hman = head_man man in
             let mergers = post.Post.mergers in
             let flow = post.Post.flow in
+            let channels = post.Post.channels in
             (* Merge [ret] with the post-condition of [D] *)
             let rec aux2: type u. u domain_pool -> 'a flow option list -> 'a flow option list =
               fun pool' ret' ->
@@ -378,7 +382,8 @@ struct
                 | _ -> assert false
             in
             let ret' = aux2 Config.pool ret in
-            aux tl (tail_man man) ptl ret'
+            let ret'', channels' = aux tl (tail_man man) ptl ret' in
+            ret'', channels @ channels'
           | _ -> assert false
       in
       aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)  
@@ -399,7 +404,7 @@ struct
     match flow' with
     | None -> None
     | Some flow -> Some (
-        reduce_exec stmt man flow |>
+        reduce_exec stmt channels man flow |>
         Post.of_flow
       )
 

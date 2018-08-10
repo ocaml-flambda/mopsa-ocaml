@@ -31,14 +31,17 @@ let rec type_value_pool : (module VALUE) list -> vp = function
     let V tl = type_value_pool tl in
     V (Cons (v, tl))
 
-let make_value_product (pool: (module VALUE) list) (rules: (module Reductions.Value_reduction.REDUCTION) list) : (module DOMAIN) =    
+let make_value_product
+    (pool: (module VALUE) list)
+    (value_rules: (module Reductions.Value_reduction.REDUCTION) list)
+  : (module DOMAIN) =    
   let V pool = type_value_pool pool in
 
   let create_product (type a) (pool: a value_pool) =
     let module V = Products.Value_product.Make(struct
         type t = a
         let pool = pool
-        let rules = rules
+        let value_rules = value_rules
       end) in
     let module D = Nonrel.Make(V) in
     (module D : DOMAIN)
@@ -65,7 +68,11 @@ let rec type_domain_pool : (module DOMAIN) list -> dp = function
     let D tl = type_domain_pool tl in
     D (Cons (d, tl))
 
-let make_domain_product (pool: (module DOMAIN) list) (state_rules: (module Reductions.State_reduction.REDUCTION) list) (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list) : (module DOMAIN) =    
+let make_domain_product
+    (pool: (module DOMAIN) list)
+    (state_rules: (module Reductions.State_reduction.REDUCTION) list)
+    (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list)
+  : (module DOMAIN) =    
   let D pool = type_domain_pool pool in
 
   let create_product (type u) (pool: u domain_pool) =
@@ -102,7 +109,7 @@ let make_mixed_product
     let module V = Products.Value_product.Make(struct
         type t = b
         let pool = vpool
-        let rules = value_rules
+        let value_rules = value_rules
       end)
     in
 
