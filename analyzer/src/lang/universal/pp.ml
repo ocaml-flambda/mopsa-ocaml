@@ -109,6 +109,7 @@ let () =
           | false, false -> fprintf fmt "!is_bottom(assume(!%a))" pp_expr e
           | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
         end
+      | S_print -> fprintf fmt "print();"
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->

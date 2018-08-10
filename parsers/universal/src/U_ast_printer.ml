@@ -201,6 +201,9 @@ and print_stat fmt = function
     Format.fprintf fmt "assert (%a)"
       print_expr_ext e
 
+  | AST_print ->
+    Format.fprintf fmt "print ()"
+
   | AST_return e ->
     Format.fprintf fmt "return (%a)"
       print_expr_ext e

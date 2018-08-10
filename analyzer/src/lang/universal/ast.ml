@@ -329,6 +329,9 @@ type stmt_kind +=
   | S_assert of expr
   (** Unit tests assertions *)
 
+  | S_print
+  (** Print the abstract flow map at current location *)
+
 let () =
   register_stmt_compare (fun next s1 s2 ->
       match skind s1, skind s2 with

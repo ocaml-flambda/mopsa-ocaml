@@ -3,11 +3,16 @@ int y;
 
 x = 0;
 y = x;
+print();
+
 while (x < 10) {
   x = x + 1;
   y = y + 1;
 }
+print();
+
 
 while (x < 20) {
   x = x + 2;
 }
+print();

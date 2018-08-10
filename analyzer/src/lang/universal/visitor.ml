@@ -92,6 +92,8 @@ let () =
            {stmt with skind = S_unit_tests(file, tests)}
         )
 
+      | S_print -> leaf stmt
+
       | _ -> default stmt
     );
   ()

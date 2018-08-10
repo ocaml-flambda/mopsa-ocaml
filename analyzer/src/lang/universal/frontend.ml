@@ -314,6 +314,9 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
     let e = from_expr e ext var_ctx fun_ctx in
     mk_assert e range
 
+  | AST_print ->
+    mk_stmt S_print range
+
 
 let rec check_declaration_list (dl : U_ast.declaration ext list) =
   match dl with

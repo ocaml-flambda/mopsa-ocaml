@@ -108,8 +108,8 @@ let rec pp_location fmt loc =
   Format.fprintf fmt "%d:%d" loc.loc_line loc.loc_column
 
 and pp_location_verbose fmt loc =
-  Format.fprintf fmt "file %s, line %d:%d"
-    loc.loc_file loc.loc_line loc.loc_column
+  Format.fprintf fmt "File %s:%d"
+    loc.loc_file loc.loc_line
 
 and pp_range fmt range =
   match range with

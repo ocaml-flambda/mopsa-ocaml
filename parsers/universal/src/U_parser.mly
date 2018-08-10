@@ -231,6 +231,9 @@ stat:
 | TOK_ASSERT TOK_LPAREN e=ext(expr) TOK_RPAREN TOK_SEMICOLON
   { AST_assert e }
 
+| TOK_PRINT TOK_LPAREN TOK_RPAREN TOK_SEMICOLON
+  { AST_print }
+
 | TOK_RETURN e=ext(expr) TOK_SEMICOLON
    { AST_return e }
 

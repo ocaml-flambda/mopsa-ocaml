@@ -135,6 +135,8 @@ type stat =
   (* assertion: exit if the boolean expression does not hold *)
   | AST_assert of expr ext
 
+  | AST_print
+
 type fundec =
   {
     funname : var;

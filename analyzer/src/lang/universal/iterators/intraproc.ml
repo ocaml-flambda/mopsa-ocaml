@@ -60,6 +60,13 @@ struct
       let flow' = Flow.join man flow1 flow2 in
       Some (Post.of_flow flow')
 
+    | S_print ->
+      Debug.debug ~channel:"print" "%a@\n  @[%a@]"
+        pp_range_verbose (srange stmt)
+        (Flow.print man) flow
+      ;
+      Some (Post.of_flow flow)
+
     | _ -> None
       
   let eval exp man flow = None
