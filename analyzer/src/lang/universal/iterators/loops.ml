@@ -111,21 +111,21 @@ struct
 
       debug "while post abs:@\n abs = @[%a@]" (Flow.print man) res1;
 
-      Some (Post.singleton res1)
+      Some (Post.of_flow res1)
 
     | S_break ->
       let cur = Flow.get T_cur man flow in
       let flow' = Flow.add T_break cur man flow |>
                   Flow.remove T_cur man
       in
-      Some (Post.singleton flow')
+      Some (Post.of_flow flow')
 
     | S_continue ->
       let cur = Flow.get T_cur man flow in
       let flow' = Flow.add T_continue cur man flow |>
                   Flow.remove T_cur man
       in
-      Some (Post.singleton flow')
+      Some (Post.of_flow flow')
 
     | _ -> None
 

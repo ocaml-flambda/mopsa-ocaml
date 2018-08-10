@@ -400,7 +400,7 @@ struct
     | None -> None
     | Some flow -> Some (
         reduce_exec stmt man flow |>
-        Post.singleton
+        Post.of_flow
       )
 
 

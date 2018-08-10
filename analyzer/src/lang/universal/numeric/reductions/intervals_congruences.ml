@@ -22,7 +22,7 @@ struct
   module I = Values.Intervals.Value
   module C = Values.Congruences.Value   
 
-  let reduce (man: 'a value_man) (v: 'a) : 'a =
+  let reduce (man: 'a value_man) (v: 'a) : 'a with_channel =
     debug "reduce %a and %a"
       I.print (man.get I.id v)
       C.print (man.get C.id v)
@@ -42,14 +42,16 @@ struct
       ;
 
       man.set I.id (Bot.Nb i') v |>
-      man.set C.id(Bot.Nb c')
+      man.set C.id(Bot.Nb c') |>
+      return
     with Bot.Found_BOT ->
       debug "reduce %a and %a => result: ⊥"
         I.print (man.get I.id v)
         C.print (man.get C.id v)
       ;
       man.set I.id I.bottom v |>
-      man.set C.id C.bottom
+      man.set C.id C.bottom |>
+      return
 end
 
 

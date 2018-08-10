@@ -9,6 +9,7 @@
 (** N-ary reduced product of non-relational value abstractions. *)
 
 open Value
+open Channel
 open Pool
 open Reductions.Value_reduction
 
@@ -205,89 +206,101 @@ struct
     );
   }
   
-  let reduce v =
-    let rec apply v (l: (module REDUCTION) list) =
+  let reduce (v: t) : t with_channel =
+    let rec apply (l: (module REDUCTION) list) v : t with_channel =
       match l with
-      | [] -> v
+      | [] -> return v
       | hd :: tl ->
         let module R = (val hd : REDUCTION) in
-        apply (R.reduce man v) tl
+        R.reduce man v |> bind @@ fun v' ->
+        apply tl v'
     in
     let rec lfp v =
-      let v' = apply v Config.rules in
-      if subset v v' then v else lfp v'
+      apply Config.rules v |> bind @@ fun v' ->
+      if subset v v' then return v else lfp v'
     in
     lfp v
-  
 
   let unop op v =
-    let rec aux : type a. a value_pool -> a -> a = fun pool v ->
+    let rec aux : type a. a value_pool -> a -> a with_channel = fun pool v ->
       match pool, v with
-      | Nil, () -> ()
+      | Nil, () -> return ()
       | Cons(hd, tl), (vhd, vtl) ->
         let module V = (val hd) in
-        V.unop op vhd, aux tl vtl
+        V.unop op vhd |> bind @@ fun w1 ->
+        aux tl vtl |> bind @@ fun w2 ->
+        return (w1, w2)
     in
-    let v' = aux Config.pool v in
+    aux Config.pool v |> bind @@ fun v' ->
     reduce v'
 
   let binop op v1 v2 =
-    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> a with_channel = fun pool v1 v2 ->
       match pool, v1, v2 with
-      | Nil, (), () -> ()
+      | Nil, (), () -> return ()
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        V.binop op vhd1 vhd2, aux tl vtl1 vtl2
+        V.binop op vhd1 vhd2 |> bind @@ fun w1 ->
+        aux tl vtl1 vtl2 |> bind @@ fun w2 ->
+        return (w1, w2)
     in
-    let v' = aux Config.pool v1 v2 in
+    aux Config.pool v1 v2 |> bind @@ fun v' ->
     reduce v'
 
   let filter v b =
-    let rec aux : type a. a value_pool -> a -> a = fun pool v ->
+    let rec aux : type a. a value_pool -> a -> a with_channel = fun pool v ->
       match pool, v with
-      | Nil, () -> ()
+      | Nil, () -> return ()
       | Cons(hd, tl), (vhd, vtl) ->
         let module V = (val hd) in
-        V.filter vhd b, aux tl vtl
+        V.filter vhd b |> bind @@ fun w1 ->
+        aux tl vtl |> bind @@ fun w2 ->
+        return (w1, w2)
     in
-    let v' = aux Config.pool v in
+    aux Config.pool v |> bind @@ fun v' ->
     reduce v'
 
   let bwd_unop op v r =
-    let rec aux : type a. a value_pool -> a -> a -> a = fun pool v r ->
+    let rec aux : type a. a value_pool -> a -> a -> a with_channel = fun pool v r ->
       match pool, v, r with
-      | Nil, (), () -> ()
+      | Nil, (), () -> return ()
       | Cons(hd, tl), (vhd, vtl), (rhd, rtl) ->
         let module V = (val hd) in
-        V.bwd_unop op vhd rhd, aux tl vtl rtl
+        V.bwd_unop op vhd rhd |> bind @@ fun w1 ->
+        aux tl vtl rtl |> bind @@ fun w2 ->
+        return (w1, w2)
     in
-    let v' = aux Config.pool v r in
+    aux Config.pool v r |> bind @@ fun v' ->
     reduce v'
 
   let bwd_binop op v1 v2 r =
-    let rec aux : type a. a value_pool -> a -> a -> a -> a * a = fun pool v1 v2 r ->
+    let rec aux : type a. a value_pool -> a -> a -> a -> (a * a) with_channel = fun pool v1 v2 r ->
       match pool, v1, v2, r with
-      | Nil, (), (), () -> (), ()
+      | Nil, (), (), () -> return ((), ())
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2), (rhd, rtl) ->
         let module V = (val hd) in
-        let vhd1', vhd2' = V.bwd_binop op vhd1 vhd2 rhd in
-        let vtl1', vtl2' = aux tl vtl1 vtl2 rtl in
-        (vhd1', vtl1'), (vhd2', vtl2')
+        V.bwd_binop op vhd1 vhd2 rhd |> bind @@ fun (vhd1', vhd2') ->
+        aux tl vtl1 vtl2 rtl |> bind @@ fun (vtl1', vtl2') ->
+        return ((vhd1', vtl1'), (vhd2', vtl2'))
     in
-    let v1', v2' = aux Config.pool v1 v2 r in
-    reduce v1', reduce v2'
+    aux Config.pool v1 v2 r |> bind @@ fun (v1', v2') ->
+    reduce v1' |> bind @@ fun r1 ->
+    reduce v2' |> bind @@ fun r2 ->
+    return (r1, r2)
 
   let compare op v1 v2 =
-    let rec aux : type a. a value_pool -> a -> a -> a * a = fun pool v1 v2 ->
+    let rec aux : type a. a value_pool -> a -> a -> (a * a) with_channel = fun pool v1 v2 ->
       match pool, v1, v2 with
-      | Nil, (), () -> (), ()
+      | Nil, (), () -> return ((), ())
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        let vhd1', vhd2' = V.compare op vhd1 vhd2 in
-        let vtl1', vtl2' = aux tl vtl1 vtl2 in
-        (vhd1', vtl1'), (vhd2', vtl2')
+        V.compare op vhd1 vhd2 |> bind @@ fun (vhd1', vhd2') ->
+        aux tl vtl1 vtl2 |> bind @@ fun (vtl1', vtl2') ->
+        return ((vhd1', vtl1'), (vhd2', vtl2'))
     in
-    let v1', v2' = aux Config.pool v1 v2 in
-    reduce v1', reduce v2'
+    aux Config.pool v1 v2 |> bind @@ fun (v1', v2') ->
+    reduce v1' |> bind @@ fun r1 ->
+    reduce v2' |> bind @@ fun r2 ->
+    return (r1, r2)
 
 end

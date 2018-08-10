@@ -127,7 +127,8 @@ let make_mixed_product
               let vv' = V.man.set id v vv |>
                         V.reduce
               in
-              let nr' = NR.add var vv' nr in
+              let nr' = NR.add var vv'.Channel.value nr in
+              (* FIXME: reduction channels produced by [reduce] are lost here! *)
               man.set (nr', tl) a
             );
         }

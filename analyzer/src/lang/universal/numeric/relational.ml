@@ -306,12 +306,14 @@ struct
         List.map var_to_apron
       in
       let env = Apron.Environment.remove env (Array.of_list vars) in
-      Apron.Abstract1.change_environment ApronManager.man a env true
+      Apron.Abstract1.change_environment ApronManager.man a env true |>
+      return
 
     | S_rename_var( v, v') ->
         Apron.Abstract1.rename_array ApronManager.man a
           [| var_to_apron v  |]
-          [| var_to_apron v' |]
+          [| var_to_apron v' |] |>
+        return
 
     | S_project_vars vars ->
       let env = Apron.Abstract1.env a in
@@ -320,14 +322,16 @@ struct
       let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
       let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
       let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
-      Apron.Abstract1.change_environment ApronManager.man a new_env true
+      Apron.Abstract1.change_environment ApronManager.man a new_env true |>
+      return
 
     | S_assign({ekind = E_var v}, e, STRONG) ->
       let a = add_missing_vars a (v :: (Framework.Visitor.expr_vars e)) in
       begin try
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
-          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron v) texp None
+          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron v) texp None |>
+          return
         with UnsupportedExpression ->
           exec {stmt with skind = S_remove_var v} a
       end
@@ -363,12 +367,13 @@ struct
                 let diff_texpr = Apron.Texpr1.of_expr env diff in
                 Apron.Tcons1.make diff_texpr op
             )
-            meet_list join_list
+            meet_list join_list |>
+          return
         with UnsupportedExpression ->
-          a
+          return a
       end
 
-    | _ -> top
+    | _ -> return top
 
   and ask query a = None
 

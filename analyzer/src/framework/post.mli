@@ -8,21 +8,23 @@
 
 open Manager
 
-type channel = Channel : 'r Query.query -> channel
-(** Query-based reduction channel *)
+type channel = ..
+(** Reduction channels *)
 
 type 'a post = {
-  flow : 'a Flow.flow;
+  flow : 'a flow;
   mergers : Ast.stmt list;
-  publish : channel list;
-  subscribe : channel list;
+  channels : channel list;
 }
 (** Post-conditions of statement transfer functions *)
 
-val singleton : 'a flow -> 'a post
+val of_flow : 'a flow -> 'a post
 
 val add_mergers : Ast.stmt list -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
+
+val add_channels : channel list -> 'a post -> 'a post
+(** [add_channels ch p] adds reduction channels [ch] to post-condition [p] *)
 
 val join : ('a, _) man -> 'a post -> 'a post -> 'a post
 (** Join two post-conditions *)

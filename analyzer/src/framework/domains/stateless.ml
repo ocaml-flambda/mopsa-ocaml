@@ -55,7 +55,7 @@ struct
   }
 
   let eval_interface = {
-    export = [top_zone, D.zone];
+    export = [Zone.top, D.zone];
     import = D.import_eval;
   }
   

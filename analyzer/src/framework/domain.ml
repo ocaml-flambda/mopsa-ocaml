@@ -15,6 +15,7 @@
 
 open Manager
 open Eval
+open Post
 
 type 'a interface = {
   export : 'a list;
@@ -39,7 +40,7 @@ sig
   val exec_interface : Zone.zone interface
   val eval_interface : (Zone.zone * Zone.zone) interface
 
-  val exec : Zone.zone -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a Post.post option
+  val exec : Zone.zone -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a post option
   val eval : (Zone.zone * Zone.zone) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
 end

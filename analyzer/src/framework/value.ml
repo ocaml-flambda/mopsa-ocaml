@@ -8,10 +8,11 @@
 
 (** Abstraction of values. *)
 
+include Channel
+
 type _ value = ..
 
 type (_, _) eq = Eq : ('a, 'a) eq
-
 
 module type VALUE =
 sig
@@ -34,20 +35,20 @@ sig
                           (** {2 Forward semantics} *)
   (*==========================================================================*)
 
-  val unop : Ast.operator -> t -> t
+  val unop : Ast.operator -> t -> t with_channel
   (** Forward evaluation of unary operators. *)
 
-  val binop : Ast.operator -> t -> t -> t
+  val binop : Ast.operator -> t -> t -> t with_channel
   (** Forward evaluation of binary operators. *)
 
-  val filter : t -> bool -> t
+  val filter : t -> bool -> t with_channel
   (** Keep values that may represent the argument truth value *)
 
   (*==========================================================================*)
                           (** {2 Backward operators} *)
   (*==========================================================================*)
 
-  val bwd_unop : Ast.operator -> t -> t -> t
+  val bwd_unop : Ast.operator -> t -> t -> t with_channel
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -58,7 +59,7 @@ sig
        let bwd_unop _ x _ = x
      *)
 
-  val bwd_binop : Ast.operator -> t -> t -> t -> t * t
+  val bwd_binop : Ast.operator -> t -> t -> t -> (t * t) with_channel
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -71,7 +72,7 @@ sig
   *)
 
 
-  val compare : Ast.operator -> t -> t -> t * t
+  val compare : Ast.operator -> t -> t -> (t * t) with_channel
   (** Backward evaluation of boolean comparisons. [compare op x y] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -123,11 +124,11 @@ let rec find_pool (names: string list) : (module VALUE) list =
 (**                  {2 Default backward evaluators} *)
 (*==========================================================================*)
 
-let default_bwd_unop (op:Ast.operator) (x:'a) (r:'a) : 'a =
-  x
+let default_bwd_unop (op:Ast.operator) (x:'a) (r:'a) : 'a with_channel =
+  return x
 
-let default_bwd_binop (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) =
-  (x, y)
+let default_bwd_binop (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) with_channel =
+  return (x, y)
 
-let default_compare (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) =
-  (x, y)
+let default_compare (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) with_channel =
+  return (x, y)

@@ -13,6 +13,7 @@
    abstract elements over-approximating the traces reaching that point. *)
 
 open Annotation
+open Manager
 
 type token = Manager.token
 (** Flow tokens *)
@@ -26,45 +27,56 @@ val bottom    : 'a annot -> 'a flow
 val top       : 'a annot -> 'a flow
 (** Set of all possible flows *)
 
-val is_bottom : ('a, _) Manager.man -> 'a flow -> bool
+val is_bottom : ('a, _) man -> 'a flow -> bool
 (** Emptiness test *)
 
-val subset    : ('a, _) Manager.man -> 'a flow -> 'a flow -> bool
+val subset    : ('a, _) man -> 'a flow -> 'a flow -> bool
 (** Inclusion test *)
 
-val join      : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
+val join      : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Abstract union operator *)
 
-val meet      : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
+val meet      : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
 
-val widen     : ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
+val widen     : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Widening operator *)
 
-val print     : ('a, _) Manager.man -> Format.formatter -> 'a flow -> unit
+val print     : ('a, _) man -> Format.formatter -> 'a flow -> unit
 (** Pretty printer *)
 
-val get       : token -> ('a, _) Manager.man -> 'a flow -> 'a
+val get       : token -> ('a, _) man -> 'a flow -> 'a
 (** [get tk man flow] returns the abstract element associated to token
    [tk] in [flow]. Returns [man.bottom] the binding is not found. *)
 
-val set       : token -> 'a -> ('a, _) Manager.man -> 'a flow -> 'a flow
+val set       : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
 (** [set tk a man flow] overwrites the binding of token [tk] in [flow]
    with the abstract element [a]. *)
 
-val add       : token -> 'a -> ('a, _) Manager.man -> 'a flow -> 'a flow
+val add       : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
 (** [add tk a man flow] appends (by union) [a] to the existing binding
    of [tk] in [flow].  It is equivalent to [set tk (man.join a (get tk
    man flow)) man flow] *)
 
-val remove    : token -> ('a, _) Manager.man -> 'a flow -> 'a flow
+val remove    : token -> ('a, _) man -> 'a flow -> 'a flow
 (** [remove tk man flow] removes token [tk] from the map of [flow] *)
 
-val filter    : (token -> 'a -> bool) -> ('a, _) Manager.man -> 'a flow -> 'a flow
+val filter    : (token -> 'a -> bool) -> ('a, _) man -> 'a flow -> 'a flow
 (** [filter f man flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 
-val map       : (token -> 'a -> 'a) -> ('a, _) Manager.man -> 'a flow -> 'a flow
+val map       : (token -> 'a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
 
-val fold      : ('b -> token -> 'a -> 'b)  -> 'b -> ('a, _) Manager.man -> 'a flow -> 'b
+val fold      : ('b -> token -> 'a -> 'b)  -> 'b -> ('a, _) man -> 'a flow -> 'b
 
-val merge     : (token -> 'a option -> 'a option -> 'a option) -> ('a, _) Manager.man -> 'a flow -> 'a flow -> 'a flow
+val merge     : (token -> 'a option -> 'a option -> 'a option) -> ('a, _) man -> 'a flow -> 'a flow -> 'a flow
+
+val set_env   : token -> 't -> ('a, 't) man -> 'a flow -> 'a flow
+(** [set_env tk a man flow] overwrites the local part of a domain in
+   the abstract element bound to token [tk] in [flow] *)
+
+val get_env   : token -> ('a, 't) man -> 'a flow -> 't
+(** [get_env tk man flow] retrieves the local part of a domain in the
+   abstract element bound to token [tk] in [flow] *)
+
+val map_env : token -> ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
+(** [map_env tk f man flow] is equivalent to [set_env tk (f (get_env tk man flow)) man flow] *)

@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operators of non-relational abstract values *)
+(** Reduction operators based on channel subscription *)
 
 open Manager
 open Pool
@@ -14,10 +14,10 @@ include Channel
 
 module type REDUCTION =
 sig
-  val reduce : 'v value_man -> 'v -> 'v with_channel
+  val reduce : Post.channel -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a flow -> 'a flow
 end
 
 (** Registration *)
 let reductions : (string * (module REDUCTION)) list ref = ref []
-let register_reduction name rule = reductions := (name, rule) :: !reductions
+let registerreduction name rule = reductions := (name, rule) :: !reductions
 let find_reduction name = List.assoc name !reductions

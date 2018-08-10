@@ -91,7 +91,7 @@ let bind
 
 
 let assume
-    cond ?(zone = top_zone)
+    cond ?(zone = Zone.top)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> empty flow))
@@ -107,7 +107,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> ('a, 'e) evl )) list)
-    ?(zone = top_zone)
+    ?(zone = Zone.top)
     man flow
   : ('a, 'e) evl  =
   match cases with

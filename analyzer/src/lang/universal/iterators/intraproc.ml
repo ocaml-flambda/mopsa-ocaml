@@ -39,13 +39,13 @@ struct
       Some (
         man.eval e flow |>
         Post.bind man @@ fun e flow ->
-        Post.singleton flow
+        Post.of_flow flow
       )
 
     | S_block(block) ->
       Some (
         List.fold_left (fun acc stmt -> man.exec stmt acc) flow block |>
-        Post.singleton
+        Post.of_flow
       )
 
     | S_if(cond, s1, s2) ->
@@ -58,7 +58,7 @@ struct
       in
       (* FIXME: propagate annotations in flow insensitive way *)
       let flow' = Flow.join man flow1 flow2 in
-      Some (Post.singleton flow')
+      Some (Post.of_flow flow')
 
     | _ -> None
       

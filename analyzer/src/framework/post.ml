@@ -13,50 +13,48 @@ open Ast
 open Manager
 open Zone
 
-type channel = Channel : 'r Query.query -> channel
+type channel = ..
 
 type 'a post = {
   flow : 'a flow;
   mergers : Ast.stmt list;
-  publish: channel list;
-  subscribe : channel list;
+  channels : channel list;
 }
 
 let add_mergers mergers post =
   {post with mergers = post.mergers @ mergers}
 
+let add_channels channels post =
+  {post with channels = post.channels @ channels}
+
 let bottom annot = {
   flow = Flow.bottom annot;
   mergers = [];
-  publish = [];
-  subscribe = [];
+  channels = [];
 }
 
-let singleton flow = {
+let of_flow flow = {
   flow;
   mergers = [];
-  publish = [];
-  subscribe = [];
+  channels = [];
 }
 
 let join (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
   {
     flow     = Flow.join man post1.flow post2.flow;
     mergers  = post1.mergers @ post2.mergers;
-    publish  = post1.publish @ post2.publish;
-    subscribe  = post1.subscribe @ post2.subscribe;
+    channels  = post1.channels @ post2.channels;
   }
 
 let meet (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
   {
     flow     = Flow.meet man post1.flow post2.flow;
     mergers  = post1.mergers @ post2.mergers; (* FIXME *)
-    publish  = post1.publish @ post2.publish; (* FIXME *)
-    subscribe  = post1.subscribe @ post2.subscribe; (* FIXME *)
+    channels  = post1.channels @ post2.channels; (* FIXME *)
   }
 
 let bind
-    ?(zone = top_zone) (man: ('a, _) man)
+    ?(zone = Zone.top) (man: ('a, _) man)
     (f: 'e -> 'a flow -> 'a post)
     (evl: ('a, 'e) evl)
   : 'a post =
@@ -68,7 +66,7 @@ let bind
       let annot = get_annot acc.flow in
       let flow' = set_annot annot case.flow in
       match case.expr with
-      | None -> join man acc {flow = flow'; mergers = []; publish = []; subscribe = []}
+      | None -> join man acc (of_flow flow')
 
       | Some e ->
         let post = f e flow' in
@@ -84,10 +82,10 @@ let bind
 
 
 let assume
-    cond ?(zone = top_zone) man
+    cond ?(zone = Zone.top) man
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join man (fthen flow1) (felse flow2)))
-    ?(fnone = (fun flow -> singleton flow))
+    ?(fnone = (fun flow -> of_flow flow))
     flow
   : 'a post  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
@@ -100,7 +98,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> 'a post )) list)
-    ?(zone = top_zone)
+    ?(zone = Zone.top)
     man flow
   : 'a post  =
   match cases with

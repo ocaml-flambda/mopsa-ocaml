@@ -38,7 +38,7 @@ struct
     | S_program {prog_kind = P_universal{universal_main}} ->
       Some (
         man.exec universal_main flow |>
-        Post.singleton
+        Post.of_flow
       )
 
     | _ -> None
