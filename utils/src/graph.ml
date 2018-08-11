@@ -455,7 +455,51 @@ module Make(P:P) = (struct
   (*========================================================================*)
 
 
-                                     (* TODO *)
+  let print_dot fmt g name print_node print_edge print_tag =
+    (* numbering node and edge id *)
+    let nid = NodeHash.create 16
+    and eid = EdgeHash.create 16
+    and count = ref 0 in
+    EdgeHash.iter
+      (fun id _ -> incr count; EdgeHash.add eid id !count) g.g_edges;
+    (* header *)
+    Format.fprintf fmt "digraph %s {\n" name;
+    (* emit dot nodes for nodes and edges *)
+    NodeHash.iter
+      (fun id n ->
+        incr count;
+        NodeHash.add nid id !count;
+        Format.fprintf fmt "  n%i [label=\"%a\"];\n" !count print_node n
+      ) g.g_nodes;
+    EdgeHash.iter
+      (fun id e ->
+        incr count;
+        EdgeHash.add eid id !count;
+        Format.fprintf
+          fmt "  n%i [shape=box label=\"%a\"];\n" !count print_edge e
+      ) g.g_edges;
+    (* emit dot edges to connect nodes and edges *)
+    EdgeHash.iter
+      (fun id e ->
+        let did1 = EdgeHash.find eid id in
+        List.iter
+          (fun (tag,n) ->
+            let did2 = NodeHash.find nid n.n_id in
+            Format.fprintf
+              fmt "  n%i -> n%i [label=\"%a\"];\n"
+              did2 did1 print_tag tag
+          ) e.e_src;
+        List.iter
+          (fun (tag,n) ->
+            let did2 = NodeHash.find nid n.n_id in
+            Format.fprintf
+              fmt "  n%i -> n%i [label=\"%a\"];\n"
+              did1 did2 print_tag tag
+          ) e.e_dst
+      ) g.g_edges;
+    (* footer *)
+    Format.fprintf fmt "}\n"
+                     
     
 end: S with module P = P)
                  

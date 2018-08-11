@@ -404,5 +404,23 @@ module type S = sig
   val iter_edges: (('n,'e) edge -> unit) -> ('n,'e) graph -> unit
   (** Iterates a function on all edges, in no particular order. *)
 
+
+
+  (*========================================================================*)
+                         (** {2 Printing} *)
+  (*========================================================================*)
+
+
+  val print_dot: Format.formatter -> ('n,'e) graph -> string
+                 -> (Format.formatter -> ('n,'e) node -> unit)
+                 -> (Format.formatter -> ('n,'e) edge -> unit)
+                 -> (Format.formatter -> tag -> unit)
+                 -> unit
+  (** [print_dot channel graph name print_node print_edge print_tag]
+      outputs the graph in the specified channel in dot format.
+      In addition [name] gives the dot graph name.
+      The node, edge and tag printer functions are user-specified.
+   *)
+
     
 end
