@@ -1,0 +1,18 @@
+int i;
+int x;
+[int] a;
+
+i = 0;
+print();
+
+while (i<10) {
+  a[i] = 0;
+  i = i + 1;
+}
+print();
+
+x = a[0];
+print();
+
+x = a[i];
+print();

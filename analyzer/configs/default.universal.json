@@ -1,8 +1,14 @@
 {
     "iter": [
+	// Iterators
 	"universal.iterators.program",
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
+
+	// Array abstraction
+	"universal.arrays.expand",
+
+	// Numeric abstraction
 	{
 	    "product": [
 		"universal.numeric.values.intervals",

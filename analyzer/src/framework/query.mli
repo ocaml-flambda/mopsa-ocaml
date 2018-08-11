@@ -51,49 +51,16 @@ type _ query = ..
 type (_, _) eq = Eq : ('a, 'a) eq
 
 
-(** {2 Managers} *)
-
-(** Query manager defines merge operators on replies. *)
 type 'r info = {
   eq : 'a. 'a query -> ('a, 'r) eq option;
   join: 'r -> 'r -> 'r;
   meet: 'r -> 'r -> 'r;
 }
 
-type pool =
-  | [] : pool
-  | (::) : 'r info * pool -> pool
+val eq : 'a query -> 'b query -> ('a, 'b) eq option
 
-let pool : pool ref = ref []
+val register_query : 'a info -> unit
 
-let register_query info =
-  pool := info :: !pool
+val join : 'a query -> 'a -> 'a -> 'a
 
-let find query =
-  let rec aux : type a b. a query -> pool -> a info =
-    fun query -> function
-      | [] -> raise Not_found
-      | hd :: tl ->
-        match hd.eq query with
-        | Some Eq -> hd
-        | None -> aux query tl
-  in
-  aux query !pool
-
-
-(** {2 Operators} *)
-
-let join : type a. a query -> a -> a -> a =
-  fun q r1 r2 ->
-    let info = find q in
-    info.join r1 r2
-
-let meet : type a. a query -> a -> a  -> a =
-  fun q r1 r2 ->
-    let info = find q in
-    info.meet r1 r2
-
-let eq : type a b. a query -> b query -> (a, b) eq option =
-  fun q1 q2 ->
-    let info2 = find q2 in
-    info2.eq q1
+val meet : 'a query -> 'a -> 'a -> 'a

@@ -501,7 +501,7 @@ struct
           let module D = (val hd) in
           let r1 = D.ask query (head_man man) flow in
           let r2 = aux tl (tail_man man) query in
-          Query.meet query r1 r2
+          Option.option_neutral2 (Query.meet query) r1 r2
     in
     aux Config.pool man query
                   

@@ -60,10 +60,7 @@ let print fmt (zone: zone) =
 
 (** Partial order test. *)
 let subset (z1: zone) (z2: zone) =
-  debug "%a subset %a" print z1 print z2;
-  let b = !subset_chain z1 z2 in
-  debug "result: %b" b;
-  b
+  !subset_chain z1 z2
 
 
 (*==========================================================================*)

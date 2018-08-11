@@ -23,10 +23,12 @@ sig
 
   include Lattice.LATTICE
 
+  val zone : Zone.zone
+  (** Language zone in which the value abstraction is defined *)
+
   val id : t value
   val name : string * string
   val identify : 'a value -> (t, 'a) eq option
-
 
   val of_constant : Ast.constant -> t
   (** Create a singleton abstract value from a constant. *)
@@ -82,12 +84,12 @@ sig
        compare _ x y = (x,y)
   *)
 
+
   (*==========================================================================*)
-  (**                          {2 Value zone}                                 *)
+                             (** {2 Queries } *)
   (*==========================================================================*)
 
-  val zone : Zone.zone
-  (** Language zone in which the value abstraction is defined *)
+  val ask : 'a Query.query -> (Ast.expr -> t) -> 'a option
 
 end
 

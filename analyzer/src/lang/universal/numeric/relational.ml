@@ -79,12 +79,13 @@ struct
     (match v.vtyp with
     | T_int -> Format.fprintf Format.str_formatter "%s#%d" v.vname v.vuid;
     | T_float -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
-    | _ -> assert false);
+    | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
 
   let apron_to_var v =
     let v = Apron.Var.to_string v in
+    debug "apron_to_var %s" v;
     if Str.string_match (Str.regexp "\\([^#]+\\)#\\([0-9]+\\)") v 0 then
       let vname = Str.matched_group 1 v in
       let vuid = Str.matched_group 2 v |> int_of_string in

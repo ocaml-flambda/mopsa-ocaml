@@ -303,4 +303,18 @@ struct
     reduce v2' |> bind @@ fun r2 ->
     return (r1, r2)
 
+  let ask : type r. r Query.query -> (Ast.expr -> t) -> r option =
+    fun query eval ->
+      let rec aux : type a r. a value_pool -> r Query.query -> (Ast.expr -> a) -> r option =
+        fun pool query eval ->
+          match pool with
+          | Nil -> None
+          | Cons(hd, tl) ->
+            let module V = (val hd) in
+            let eval' = (fun exp -> fst @@ eval exp) in
+            match V.ask query eval' with
+            | None -> aux tl query (fun exp -> snd @@ eval exp)
+            | r -> r
+      in
+      aux Config.pool query eval
 end

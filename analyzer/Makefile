@@ -12,7 +12,7 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal
 
-lang.universal = ast pp visitor frontend zone iterators numeric
+lang.universal = ast pp visitor frontend zone iterators numeric arrays
 lang.universal.iterators = program intraproc loops
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences

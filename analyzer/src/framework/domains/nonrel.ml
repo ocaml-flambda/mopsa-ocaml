@@ -296,34 +296,10 @@ struct
     | _ -> None
 
 
-
-  type _ Query.query +=
-    | QEval : expr -> Value.t Query.query
-
-  let () =
-    Query.(register_reply_manager {
-        domatch = (let check : type a. a query -> (a, Value.t) eq option =
-                     function
-                     | QEval _ -> Some Eq
-                     | _ -> None
-                   in
-                   check
-                  );
-        join = (fun v1 v2 -> Value.join Annotation.empty v1 v2);
-        meet = (fun v1 v2 -> Value.meet Annotation.empty v1 v2);
-      };
-      )
-
-
   let ask : type r. r Query.query -> _ -> _ -> r option =
     fun query man flow ->
-      match query with
-      | QEval e ->
-        let a = Flow.get_env T_cur man flow in
-        let v = eval e a in
-        Some (snd @@ v.Channel.value)
-
-      | _ -> None
+      let a = Flow.get_env T_cur man flow in
+      Value.ask query (fun exp -> let v = eval exp a in snd v.value)
 
 
   let eval zpath exp man flow =

@@ -73,8 +73,8 @@ type _ Query.query +=
 
 let () =
   Query.(
-    register_reply_manager {
-      domatch = (let check : type a. a query -> (a, alarm list) eq option =
+    register_query {
+      eq = (let check : type a. a query -> (a, alarm list) eq option =
                    function
                    | Q_alarms -> Some Eq
                    | _ -> None

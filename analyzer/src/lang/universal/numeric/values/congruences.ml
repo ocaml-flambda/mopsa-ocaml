@@ -143,6 +143,9 @@ struct
       with Found_BOT ->
         bottom, bottom
     )
+
+  let ask query eval = None
+
 end
 
 let () =

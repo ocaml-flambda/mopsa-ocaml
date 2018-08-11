@@ -10,7 +10,7 @@
 
 open Top
 
-module type VALUE =
+module type ELT =
 sig
   type t
   val compare: t -> t -> int
@@ -18,9 +18,9 @@ sig
 end
 
 
-module Make(Value: VALUE) =
+module Make(Elt: ELT) =
 struct
-  module Set = Set.Make(Value)
+  module Set = Set.Make(Elt)
 
   type v = Set.t
 
@@ -66,7 +66,7 @@ struct
           fprintf fmt "@[<h>{";
           pp_print_list
             ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-            Value.print fmt l
+            Elt.print fmt l
           ;
           fprintf fmt "}@]";
           ()

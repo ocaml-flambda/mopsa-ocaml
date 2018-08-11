@@ -14,5 +14,6 @@ print();
 
 while (x < 20) {
   x = x + 2;
+  y = y + 2;
 }
 print();

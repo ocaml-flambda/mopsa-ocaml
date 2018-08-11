@@ -13,6 +13,7 @@ open Framework.Value
 open Ast
 open Bot
 
+
 module Value =
 struct
 
@@ -20,6 +21,9 @@ struct
 
   type v = I.t
   type t = v with_bot
+
+  type _ Framework.Query.query +=
+  | Q_interval : Framework.Ast.expr -> t Framework.Query.query
 
   type _ value += V_integer_interval : t value
 
@@ -159,6 +163,13 @@ struct
         bottom, bottom
     )
 
+  let ask : type r. r Framework.Query.query -> (expr -> t) -> r option =
+    fun query eval ->
+      match query with
+      | Q_interval e ->
+        Some (eval e)
+      | _ -> None
+
   let z_of_z2 z z' round =
     let open Z in
     let d, r = div_rem z z' in
@@ -214,6 +225,15 @@ struct
         | I.B.Finite z -> Apron.Scalar.of_float (Z.to_float z)
       in
       Apron.Interval.of_infsup (bound_to_scalar a) (bound_to_scalar b)
+
+  let is_bounded (itv:t) : bool =
+    bot_dfl1 true I.is_bounded itv
+
+  let bounds (itv:t) : Z.t * Z.t =
+    bot_dfl1 (Z.one, Z.zero) (function
+        | I.B.Finite a, I.B.Finite b -> (a, b)
+        | _ -> panic "bounds called on a unbounded interval %a" print itv
+      ) itv
   
 end
 

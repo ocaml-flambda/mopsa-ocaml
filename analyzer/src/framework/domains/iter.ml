@@ -65,11 +65,14 @@ struct
   }
 
   let init prog man flow =
-    let flow' = match Head.init prog (head_man man) flow with
-      | None -> flow
-      | Some flow' -> flow'
+    let flow', b = match Head.init prog (head_man man) flow with
+      | None -> flow, false
+      | Some flow' -> flow', true
     in
-    Tail.init prog (tail_man man) flow'
+    match Tail.init prog (tail_man man) flow', b with
+    | None, false -> None
+    | None, true -> Some flow'
+    | x, _ -> x
 
   let exec_interface = Domain.{
     import = Head.exec_interface.import @ Tail.exec_interface.import;
@@ -132,6 +135,6 @@ struct
   let ask query man flow =
     let head_reply = Head.ask query (head_man man) flow in
     let tail_reply = Tail.ask query (tail_man man) flow in
-    Query.join query head_reply tail_reply
+    Option.option_neutral2 (Query.join query) head_reply tail_reply
 
 end
