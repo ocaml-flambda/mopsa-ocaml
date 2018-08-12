@@ -162,6 +162,18 @@ module type S = sig
   val node_add_out: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Adds an outgoing edge to the node, with the given tag. *)
 
+  val node_add_in_list: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Adds incoming edges to the node, with the given tags. *)
+
+  val node_add_out_list: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Adds outgoing edges to the node, with the given tags. *)
+
+  val edge_add_src_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Adds source nodes to the edge, with the given tags. *)
+
+  val edge_add_dst_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Adds destinatino nodes to the edge, with the given tags. *)    
+
   val node_remove_tag_in: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Removes all the connections to the node incoming from the edge 
       with the given tag. 
@@ -210,6 +222,18 @@ module type S = sig
       No edge nor node is deleted 
    *)
     
+  val node_set_in: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Sets the incoming edges to the node, with the given tags. *)
+
+  val node_set_out: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Sets the outgoing edges to the node, with the given tags. *)
+
+  val edge_set_src: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Sets the source nodes to the edge, with the given tags. *)
+
+  val edge_set_dst: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Sets destinatino nodes to the edge, with the given tags. *)    
+
         
             
   (*========================================================================*)
@@ -271,7 +295,20 @@ module type S = sig
 
   val edge_tag_dst: ('n,'e) edge -> tag -> ('n,'e) node list
   (** List of edge destination nodes with the given tag. *)
-                           
+
+  val edge_src_size: ('n,'e) edge -> int
+  (** Number of edge source nodes. *)
+                 
+  val edge_dst_size: ('n,'e) edge -> int
+  (** Number of edge destination nodes. *)
+    
+  val edge_tag_src_size: ('n,'e) edge -> tag -> int
+  (** Number of edge source nodes with the given tag. *)
+
+  val edge_tag_dst_size: ('n,'e) edge -> tag -> int
+  (** Number of edge destination nodes with the given tag. *)
+
+    
   val node_id: ('n,'e) node -> node_id
   (** Node identifier. *)
 
@@ -292,6 +329,18 @@ module type S = sig
     
   val node_tag_out: ('n,'e) node -> tag -> ('n,'e) edge list
   (** List of edges outgoing from the node with the given tag. *)
+                         
+  val node_in_size: ('n,'e) node -> int
+  (** Number of edges incoming into the node. *)
+                                           
+  val node_out_size: ('n,'e) node -> int
+  (** Number of edges outgoing from the node. *)
+    
+  val node_tag_in_size: ('n,'e) node -> tag -> int
+  (** Number of edges incoming into the node with the given tag. *)
+    
+  val node_tag_out_size: ('n,'e) node -> tag -> int
+  (** Number of edges outgoing from the node with the given tag. *)
                          
   val node_entry_tag: ('n,'e) graph -> ('n,'e) node -> tag option
   (** If the node is an entry node, returns its tag, otherwise None. *)
@@ -404,13 +453,26 @@ module type S = sig
   val iter_edges: (('n,'e) edge -> unit) -> ('n,'e) graph -> unit
   (** Iterates a function on all edges, in no particular order. *)
 
+  val remove_orphan: ('n,'e) graph -> unit
+  (** Removes orphan nodes and edges.
+      Orphan nodes have no incoming nor outgoing edges, and orphan
+      edges have no source nor destination nodes.
+   *)
 
+    
 
   (*========================================================================*)
                          (** {2 Printing} *)
   (*========================================================================*)
 
 
+  val print: Format.formatter -> ('n,'e) graph 
+                 -> (Format.formatter -> ('n,'e) node -> unit)
+                 -> (Format.formatter -> ('n,'e) edge  -> unit)
+                 -> (Format.formatter -> ('n,'e) node -> tag -> ('n,'e) edge -> unit)
+                 -> (Format.formatter -> ('n,'e) edge -> tag -> ('n,'e) node -> unit)
+                 -> unit
+    
   val print_dot: Format.formatter -> ('n,'e) graph -> string
                  -> (Format.formatter -> ('n,'e) node -> unit)
                  -> (Format.formatter -> ('n,'e) edge -> unit)

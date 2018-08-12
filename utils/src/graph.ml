@@ -119,6 +119,16 @@ module Make(P:P) = (struct
   let tag_edge_eq  (t1,e1) (t2,e2) = edge_eq  e1 e2 && tag_eq  t1 t2
   let tag_edge_neq (t1,e1) (t2,e2) = edge_neq e1 e2 || tag_neq t1 t2
 
+  let node_compare n1 n2 = P.NodeId.compare n1.n_id n2.n_id
+  let edge_compare e1 e2 = P.EdgeId.compare e1.e_id e2.e_id
+  let tag_compare t1 t2 = P.Tag.compare t1 t2
+
+  let tag_node_compare (t1,n1) (t2,n2) =
+    if tag_neq t1 t2 then tag_compare t1 t2 else node_compare n1 n2
+
+  let tag_edge_compare (t1,e1) (t2,e2) =
+    if tag_neq t1 t2 then tag_compare t1 t2 else edge_compare e1 e2
+
   let filter_tag tag l =
     List.map snd (List.filter (fun (tag',_) -> tag_eq tag tag') l)
 
@@ -226,6 +236,19 @@ module Make(P:P) = (struct
     n.n_out <- (tag,e)::n.n_out;
     e.e_src <- (tag,n)::e.e_src
 
+  let node_add_in_list n v =
+    List.iter (fun (tag,e) -> node_add_in n tag e) v
+
+  let node_add_out_list n v =
+    List.iter (fun (tag,e) -> node_add_out n tag e) v
+
+  let edge_add_src_list e v =
+    List.iter (fun (tag,n) -> node_add_out n tag e) v
+
+  let edge_add_dst_list e v =
+    List.iter (fun (tag,n) -> node_add_in n tag e) v
+
+    
   let node_remove_tag_in n tag e =
     n.n_in  <- List.filter (tag_edge_neq (tag,e)) n.n_in;
     e.e_dst <- List.filter (tag_node_neq (tag,n)) e.e_dst
@@ -265,7 +288,23 @@ module Make(P:P) = (struct
         n.n_in <- List.filter (tag_edge_neq (tag,e)) n.n_in
       ) e.e_dst;
     e.e_dst <- []
+
+
+  let node_set_in n v =
+    node_remove_all_in n;
+    node_add_in_list n v
+
+  let node_set_out n v =
+    node_remove_all_in n;
+    node_add_out_list n v
+
+  let edge_set_src e v =
+    edge_remove_all_src e;
+    edge_add_src_list e v
     
+  let edge_set_dst e v =
+    edge_remove_all_dst e;
+    edge_add_dst_list e v
         
             
   (*========================================================================*)
@@ -298,8 +337,11 @@ module Make(P:P) = (struct
   let edge_dst e = e.e_dst
   let edge_tag_src e tag = filter_tag tag (edge_src e)
   let edge_tag_dst e tag = filter_tag tag (edge_dst e)
+  let edge_src_size e = List.length (edge_src e)
+  let edge_dst_size e = List.length (edge_dst e)
+  let edge_tag_src_size e tag = List.length (edge_tag_src e tag)
+  let edge_tag_dst_size e tag = List.length (edge_tag_dst e tag)
                            
-
   let node_id n = n.n_id
   let node_data n = n.n_data
   let node_set_data n data = n.n_data <- data
@@ -307,6 +349,10 @@ module Make(P:P) = (struct
   let node_out n = n.n_out
   let node_tag_in n tag = filter_tag tag (node_in n)
   let node_tag_out n tag = filter_tag tag (node_out n)
+  let node_in_size n = List.length (node_in n)
+  let node_out_size n = List.length (node_out n)
+  let node_tag_in_size n tag = List.length (node_tag_in n tag)
+  let node_tag_out_size n tag = List.length (node_tag_out n tag)
 
   let node_entry_tag g n =
     try Some (fst (List.find (fun (_,n') -> node_eq n n') g.g_entries))
@@ -447,6 +493,15 @@ module Make(P:P) = (struct
   let iter_edges f g = EdgeHash.iter (fun _ e -> f e) g.g_edges
 
 
+  let remove_orphan g =
+    iter_nodes
+      (fun n -> if n.n_in = [] && n.n_out = [] then remove_node g n)
+      g;
+    iter_edges
+      (fun e -> if e.e_src = [] && e.e_dst = [] then remove_edge g e)
+      g
+                     
+
                                      (* TODO *)
                      
     
@@ -455,13 +510,51 @@ module Make(P:P) = (struct
   (*========================================================================*)
 
 
+
+  let print fmt g print_node print_edge print_src print_dst =
+    (* ordering *)
+    let nodes = NodeHash.fold NodeMap.add g.g_nodes NodeMap.empty in
+    (* ensure that each edge is printer only once *)
+    let edges = EdgeHash.create 16 in
+    (* print each node *)
+    NodeMap.iter
+      (fun id n ->
+        print_node fmt n;
+        List.iter
+          (fun (_,e) ->
+            if not (EdgeHash.mem edges e.e_id) then (
+              EdgeHash.add edges e.e_id ();
+              List.iter
+                (fun (tag,n) -> print_src fmt n tag e)
+                (List.sort tag_node_compare e.e_src);
+              print_edge fmt e;
+              List.iter
+                (fun (tag,n) -> print_dst fmt e tag n)
+                (List.sort tag_node_compare e.e_dst)
+            )
+          )
+          (List.sort tag_edge_compare n.n_out)
+      ) nodes
+
+    
   let print_dot fmt g name print_node print_edge print_tag =
+    (* printing with escaped new lines *)
+    let buf = Buffer.create 16 in
+    let sfmt = Format.formatter_of_buffer buf in
+    let to_string p x =
+      Buffer.clear buf;
+      Format.fprintf sfmt "@[<v>%a@]@?" p x;
+      let s = Buffer.contents buf in
+      let ss = String.split_on_char '\n' s in
+      if List.length ss <= 1 then s
+      else (String.concat "\\l" ss)^"\\l"
+    in      
     (* numbering node and edge id *)
     let nid = NodeHash.create 16
     and eid = EdgeHash.create 16
     and count = ref 0 in
     EdgeHash.iter
-      (fun id _ -> incr count; EdgeHash.add eid id !count) g.g_edges;
+      (fun id _ -> incr count; EdgeHash.add eid id !count) g.g_edges;    
     (* header *)
     Format.fprintf fmt "digraph %s {\n" name;
     (* emit dot nodes for nodes and edges *)
@@ -469,14 +562,17 @@ module Make(P:P) = (struct
       (fun id n ->
         incr count;
         NodeHash.add nid id !count;
-        Format.fprintf fmt "  n%i [label=\"%a\"];\n" !count print_node n
+        Format.fprintf
+          fmt "  n%i [label=\"%s\"];\n"
+          !count (to_string print_node n)
       ) g.g_nodes;
     EdgeHash.iter
       (fun id e ->
         incr count;
         EdgeHash.add eid id !count;
         Format.fprintf
-          fmt "  n%i [shape=box label=\"%a\"];\n" !count print_edge e
+          fmt "  n%i [shape=box label=\"%s\"];\n"
+          !count (to_string print_edge e)
       ) g.g_edges;
     (* emit dot edges to connect nodes and edges *)
     EdgeHash.iter
@@ -486,15 +582,15 @@ module Make(P:P) = (struct
           (fun (tag,n) ->
             let did2 = NodeHash.find nid n.n_id in
             Format.fprintf
-              fmt "  n%i -> n%i [label=\"%a\"];\n"
-              did2 did1 print_tag tag
+              fmt "  n%i -> n%i [label=\"%s\"];\n"
+              did2 did1 (to_string print_tag tag)
           ) e.e_src;
         List.iter
           (fun (tag,n) ->
             let did2 = NodeHash.find nid n.n_id in
             Format.fprintf
-              fmt "  n%i -> n%i [label=\"%a\"];\n"
-              did1 did2 print_tag tag
+              fmt "  n%i -> n%i [label=\"%s\"];\n"
+              did1 did2 (to_string print_tag tag)
           ) e.e_dst
       ) g.g_edges;
     (* footer *)

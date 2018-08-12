@@ -25,13 +25,26 @@ open Cfg.Ast
                            (** {2 Types} *)
 (*==========================================================================*)
 
+   
 (** Use Javalib types. *)
 type typ +=
    | T_java of value_type
 
 
+let rec value_type_compare t1 t2 = match t1, t2 with
+  | TBasic b1, TBasic b2 -> basic_type_compare b1 b2
+  | TObject o1, TObject o2 -> object_type_compare o1 o2
+  | _ -> compare t1 t2
 
-             
+and basic_type_compare b1 b2 = compare b1 b2
+
+and object_type_compare t1 t2 = match t1, t2 with
+  | TClass c1, TClass c2 -> cn_compare c1 c2
+  | TArray v1, TArray v2 -> value_type_compare v1 v2
+  | _ -> compare t1 t2
+
+
+       
 (*==========================================================================*)
                            (** {2 Flows} *)
 (*==========================================================================*)
@@ -52,11 +65,18 @@ type token +=
 (*==========================================================================*)
 
 
+                    
+(** An opcode location is its offset in the bytecode array, starting
+    at 0 at the beginning of the method.
+ *)
+type op_loc = int
+
+                    
 (** Method code is specified as generic CFG with opcodes on edges.
     We use Javalib jopcodes as opcodes.
  *)
 type stmt_kind +=
-   | S_java_opcode of jopcode
+   | S_java_opcode of jopcode list
 
 
 
@@ -98,20 +118,38 @@ type program_kind +=
 
 
 let () =
-  register_pp_stmt
-    (fun next fmt stmt ->
+  register_pp_stmt (fun next fmt stmt ->
       match stmt.skind with
-      | S_java_opcode op -> Format.pp_print_string fmt (JPrint.jopcode op)
+      | S_java_opcode ops ->
+         let first = ref true in
+         List.iter
+           (fun op ->
+             if !first then first := false
+             else Format.fprintf fmt "@;";
+             Format.pp_print_string fmt (JPrint.jopcode op))
+           ops
       | _ -> next fmt stmt
     );
-  register_pp_typ
-    (fun next fmt typ ->
+  register_typ_compare (fun next t1 t2 ->
+      match t1, t2 with
+      | T_java v1, T_java v2 -> value_type_compare v1 v2
+      | _ -> next t1 t2
+    );
+  register_pp_typ (fun next fmt typ ->
       match typ with
       | T_java t -> Format.pp_print_string fmt (JPrint.value_type t)
       | _ -> next fmt typ
     );
-  register_pp_token
-    (fun next fmt token ->
+  register_token_compare (fun next t1 t2 ->
+      match t1, t2 with
+      | T_java_iftrue, T_java_iftrue
+      | T_java_jsr, T_java_jsr
+      | T_java_ret, T_java_ret
+      | T_java_exn, T_java_exn -> 0
+      | T_java_switch i1, T_java_switch i2 -> compare i1 i2
+      | _ -> next t1 t2                                            
+    );
+  register_pp_token (fun next fmt token ->
       match token with
       | T_java_iftrue -> Format.pp_print_string fmt "true"
       | T_java_jsr -> Format.pp_print_string fmt "jsr"
@@ -120,7 +158,6 @@ let () =
       | T_java_switch None -> Format.pp_print_string fmt "default"
       | T_java_switch (Some i) -> Format.fprintf fmt "case %li" i
       | _ -> next fmt token
-    );
-  (* TODO: register_typ_compare, register_token_compare *)
+    )
 
            

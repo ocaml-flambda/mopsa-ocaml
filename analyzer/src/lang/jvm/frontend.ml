@@ -77,14 +77,14 @@ let uid_of_class_method_signature c =
 
 
 (** Guess the end of the opcode starting at location i. *)
-let rec opcode_end (code:jopcode array) (i:int) : int =
+let rec opcode_end (code:jopcode array) (i:op_loc) : op_loc =
   if i+1 < Array.length code && code.(i+1) = OpInvalid
   then opcode_end code (i+1)
   else i
 
 
 (** Get the possible successors of the opcode at location i. *)  
-let opcode_succ (code:jopcode array) (i:int) : (token * int) list =
+let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
   (* opcode immediately following *)
   let succ = (opcode_end code i) + 1 in
   match code.(i) with
@@ -152,10 +152,10 @@ let opcode_succ (code:jopcode array) (i:int) : (token * int) list =
     
 
 (** Use bytecode position as locations *)
-let mk_jvm_loc (meth_uid:string) (pos:int) =
+let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
   mk_loc meth_uid pos 0
 
-let mk_jvm_range (meth_uid:string) (pos1:int) (pos2:int) =
+let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   Range_origin
     (mk_range (mk_jvm_loc meth_uid pos1) (mk_jvm_loc meth_uid pos2))
     
@@ -183,12 +183,44 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
             (fun (tag,p) -> tag, CFG.get_node g (mk_jvm_loc meth_uid p))
             (opcode_succ code i)
         in
-        let stmt = mk_stmt (S_java_opcode op) range in
+        let stmt = mk_stmt (S_java_opcode [op]) range in
         ignore (CFG.add_edge g range ~src ~dst stmt)
     ) code;
   ()
 
 
+(** Simplifies a CFG by merging edges connected simply through
+    a single node with TCut flows.
+    At the end, edges correspond to basic blocs instead of single
+    opcodes.
+ *)
+let coalesce_cfg g =
+  CFG.iter_nodes
+    (fun n ->
+      match CFG.node_in n, CFG.node_out n with
+      | [TCur, e1], [TCur, e2]
+           when CFG.edge_dst_size e1 = 1 && CFG.edge_src_size e2 = 1
+        ->
+         (match CFG.edge_data e1, CFG.edge_data e2 with
+          | { skind = S_java_opcode o1; srange = Range_origin r1; },
+            { skind = S_java_opcode o2; srange = Range_origin r2; }
+            ->
+             (* merge ranges *)
+             let r = Range_origin { r1 with range_end = r2.range_end } in
+             (* merge opcode lists *)
+             let s = mk_stmt (S_java_opcode (o1@o2)) r in
+             (* update graph *)
+             CFG.edge_set_data e1 s;
+             CFG.edge_set_dst e1 (CFG.edge_dst e2);
+             CFG.remove_edge g e2
+             (* n should be orphan here *)
+          | _ -> ())
+      | _ -> ()
+    ) g;
+  CFG.remove_orphan g
+  
+  
+  
 
 (*========================================================================*)
                      (** {2 Loading} *)
@@ -213,11 +245,12 @@ let load_method
   (* cfg construction *)
   (match jmethod.cm_implementation with
    | Native ->
-      Printf.printf "    [native]\n"
+      Format.printf "    [native]@\n"
    | Java j ->
       let jcode = Lazy.force j in
       let g = CFG.create () in
       fill_cfg meth.m_uid g jcode;
+      coalesce_cfg g;
       meth.m_cfg <- Some g;
 
       let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
@@ -228,7 +261,8 @@ let load_method
         (fun fmt e -> pp_stmt fmt (CFG.edge_data e))
         (fun fmt t -> pp_token fmt t);
       Format.pp_print_flush fmt ();
-      close_out f
+      close_out f;
+      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
   );
   meth
 
@@ -238,11 +272,11 @@ let load_class
       (class_name: class_name)
     : j_class =
   let jclass = get_class class_path class_name in
-  Printf.printf "class %s\n" (cn_name (get_name jclass));
+  Format.printf "class %s@\n" (cn_name (get_name jclass));
   let fields = get_fields jclass in
   FieldMap.iter
     (fun sign field ->
-      Printf.printf "  field %s\n" (JPrint.field_signature sign)
+      Format.printf "  field %s@\n" (JPrint.field_signature sign)
     ) fields;
   (* global class information *)
   let cls = {
@@ -256,7 +290,7 @@ let load_class
   (* translate each method *)
   MethodMap.iter
     (fun sign m ->
-      Printf.printf "  method %s\n" (JPrint.method_signature sign);
+      Format.printf "  method %s@\n" (JPrint.method_signature sign);
       let mm = load_method cls m in
       cls.c_methods <- MapExt.StringMap.add mm.m_uid mm cls.c_methods
     )
@@ -288,7 +322,7 @@ let java_lang_string = make_cn "java.lang.String"
 let java_lang_string_class = get_class class_path java_lang_string
 
 let _ =
-  Printf.printf "JVM test\n";
+  Format.printf "JVM test@\n";
   load_class class_path java_lang_string
   
 
