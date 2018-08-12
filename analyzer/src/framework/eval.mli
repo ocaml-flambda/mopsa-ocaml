@@ -53,7 +53,7 @@ val map:
   (('a, 'e) evl_case -> ('a, 'f) evl_case) ->
   ('a, 'e) evl -> ('a, 'f) evl
 
-val choose : ('a, 'e) evl -> 'e option * 'a flow
+val choose : ('a, 'e) evl -> ('e option * 'a flow) option
 
 val to_dnf : ('a, 'e) evl -> ('a, 'e) evl_case Dnf.t
 

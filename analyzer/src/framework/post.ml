@@ -59,8 +59,7 @@ let bind
     (evl: ('a, 'e) evl)
   : 'a post =
   let annot = Eval.choose evl |>
-              snd |>
-              get_annot
+              Option.option_dfl1 Annotation.empty (fun (_, flow) -> get_annot flow)
   in
   Eval.fold (fun acc case ->
       let annot = get_annot acc.flow in

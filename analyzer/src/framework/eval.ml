@@ -29,7 +29,7 @@ let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
 
 let join_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
   match l with
-  | [] -> assert false
+  | [] -> []
   | hd :: tl -> List.fold_left join hd tl
 
 let meet (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
@@ -70,8 +70,9 @@ let bind
      Should be applied only if [evl] has been correctly constructed
      by propagating annotations in a flow-insensitive manner. *)
   let choose_annot evl =
-    let case = Dnf.choose evl in
-    get_annot case.flow
+    match Dnf.choose evl with
+    | Some case -> get_annot case.flow
+    | None -> Annotation.empty
   in
   let evl, _ = Dnf.fold2
     (fun annot case ->
@@ -151,5 +152,6 @@ let return (evl: ('a, 'e) evl) : ('a, 'e) evl option =
   Some evl
 
 let choose evl =
-  let case = Dnf.choose evl in
-  case.expr, case.flow
+  match Dnf.choose evl with
+  | Some case -> Some (case.expr, case.flow)
+  | None -> None

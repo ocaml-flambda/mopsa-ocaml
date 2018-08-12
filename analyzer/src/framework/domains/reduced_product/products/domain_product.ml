@@ -436,23 +436,18 @@ struct
   let eval zone exp man flow =
     (* Point-wise evaluation *)
     let evls =
-      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a annot -> ('a, Ast.expr) evl option list =
-        fun pool man annot ->
+      let rec aux: type t. t domain_pool -> ('a, t) man -> ('a, Ast.expr) evl option list =
+        fun pool man ->
           match pool with
           | Nil -> []
           | Cons(hd, tl) ->
             let module D = (val hd) in
             match D.eval zone exp  (head_man man) flow with
-            | None -> None :: (aux tl (tail_man man) annot)
-            | Some evl ->
-              let annot' = Eval.choose evl |>
-                           snd |>
-                           get_annot
-              in
-              (Some evl) :: (aux tl (tail_man man) annot')
+            | None -> None :: aux tl (tail_man man)
+            | Some evl -> (Some evl) :: aux tl (tail_man man)
             
       in
-      aux Config.pool man (get_annot flow)
+      aux Config.pool man
     in
 
     (* Transform list of evaluations into list of conjunctions *)

@@ -134,9 +134,11 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.is_leq ApronManager.man abs1' abs2'
 
-  let join annot abs1 abs2 =
+  let join_ abs1 abs2 =
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.join ApronManager.man abs1' abs2'
+
+  let join annot abs1 abs2 = join_ abs1 abs2
 
   let meet annot abs1 abs2 =
     let abs1', abs2' = unify abs1 abs2 in
@@ -337,8 +339,10 @@ struct
           exec {stmt with skind = S_remove_var v} a
       end
 
-    | S_assign({ekind = E_var v}, e, WEAK) ->
-      panic "relational: weak updates not yet supported"
+    | S_assign({ekind = E_var v} as lval, e, WEAK) ->
+      exec {stmt with skind = S_assign(lval, e, STRONG)} a |> bind @@ fun a' ->
+      join_ a a' |>
+      return
 
     | S_assign(({ekind = E_var x}), e, EXPAND) ->
       panic "relational: expand not yet supported"

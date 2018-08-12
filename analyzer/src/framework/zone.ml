@@ -29,7 +29,7 @@ let top = Z_top
    so there is no need to define a (total) compare function.  *)
 let compare (z1: zone) (z2: zone) : int = Pervasives.compare z1 z2
 
-type info = {
+type zone_info = {
   subset : (zone -> zone -> bool) -> zone -> zone -> bool;
   print  : (Format.formatter -> zone -> unit) -> Format.formatter -> zone -> unit;
 }

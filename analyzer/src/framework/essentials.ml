@@ -35,8 +35,6 @@ include Options
 
 include Exceptions
 
-type zone = Zone.zone
-
 module Var =
 struct
   type t = var
@@ -44,3 +42,14 @@ struct
   let print = pp_var
 end
 
+type expr_info = {
+  compare : (Ast.expr -> Ast.expr -> int) -> Ast.expr -> Ast.expr -> int;
+  print : (Format.formatter -> Ast.expr -> unit) -> Format.formatter -> Ast.expr -> unit;
+  visit : (Ast.expr -> Ast.expr Visitor.structure) -> Ast.expr -> Ast.expr Visitor.structure;
+}
+
+let register_expr info =
+  Ast.register_expr_compare info.compare;
+  Ast.register_pp_expr info.print;
+  Visitor.register_expr_visitor info.visit;
+  ()

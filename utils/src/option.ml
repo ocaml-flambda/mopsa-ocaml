@@ -54,16 +54,16 @@ let option_equal (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
 let option_included (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
   match a,b with None, _ -> true | Some x, Some y -> f x y | _ -> false
 
-let option_dfl1 (dfl:unit -> 'b) (f:'a->'c) (a:'a option) : 'c =
-  match a with None -> dfl () | Some x -> f x
+let option_dfl1 (dfl:'b) (f:'a->'b) (a:'a option) : 'b =
+  match a with None -> dfl | Some x -> f x
 
 let option_dfl2
-    (dfl:unit -> 'c)
+    (dfl:'c)
     (f:'a->'b->'c)
     (a:'a option)
     (b:'b option) : 'c
   =
-  match a,b with None,_ | _,None -> dfl () | Some x, Some y -> f x y
+  match a,b with None,_ | _,None -> dfl | Some x, Some y -> f x y
 
 let option_compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
   match a, b with

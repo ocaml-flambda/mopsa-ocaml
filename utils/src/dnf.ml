@@ -53,7 +53,7 @@ let fold
     (dnf: 'a t)
   : 'b =
   let rec apply_conj acc = function
-    | [] -> assert false
+    | [] -> acc
     | [e] -> f acc e
     | e :: tl ->
       let acc1 = f acc e in
@@ -61,12 +61,12 @@ let fold
       meet acc1 acc2
   in
   let rec apply_disj acc = function
+    | [] -> acc
     | [conj] -> apply_conj acc conj
     | conj :: tl ->
       let acc1 = apply_conj acc conj in
       let acc2 = apply_disj acc1 tl in
       join acc1 acc2
-    | _ -> assert false
   in
   apply_disj init dnf
 
@@ -86,19 +86,19 @@ let fold2
       meet b1 b2, acc2
   in
   let rec apply_disj acc = function
+    | [] -> assert false
     | [conj] -> apply_conj acc conj
     | conj :: tl ->
       let (b1, acc1) = apply_conj acc conj in
       let (b2, acc2) = apply_disj acc1 tl in
       (join b1 b2, acc2)
-    | _ -> assert false
   in
   apply_disj init dnf
 
-let choose (dnf: 'a t) : 'a =
+let choose (dnf: 'a t) : 'a option =
   match dnf with
-  | [] | [[]] -> failwith "Dnf.choose: empty argument"
-  | (hd :: _) :: _ -> hd
+  | [] | [[]] -> None
+  | (hd :: _) :: _ -> Some hd
   | _ -> assert false
 
 let apply

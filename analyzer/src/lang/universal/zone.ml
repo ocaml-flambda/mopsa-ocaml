@@ -13,21 +13,17 @@ open Framework.Zone
 type zone +=
   | Z_universal
   | Z_universal_num
-  | Z_universal_lval
 
 let () =
   register_zone {
       subset = (fun next z1 z2 ->
           match z1, z2 with
-            | Z_universal_lval, Z_universal -> true
             | Z_universal_num, Z_universal -> true
-            | Z_universal_num, Z_universal_lval -> true
             | _ -> next z1 z2
         );
       print = (fun next fmt z ->
           match z with
           | Z_universal -> Format.fprintf fmt "universal"
-          | Z_universal_lval -> Format.fprintf fmt "universal/lval"
           | Z_universal_num -> Format.fprintf fmt "universal/num"
           | _ -> next fmt z
         );
