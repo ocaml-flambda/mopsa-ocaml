@@ -150,11 +150,12 @@ let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
      (* no successor *)
      []
     
-
+    
 (** Use bytecode position as locations *)
 let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
   mk_loc meth_uid pos 0
 
+(** Bytecode ranges *)
 let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   Range_origin
     (mk_range (mk_jvm_loc meth_uid pos1) (mk_jvm_loc meth_uid pos2))
@@ -172,18 +173,22 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
     ) code;
   let endloc = mk_jvm_loc meth_uid (Array.length code) in
   ignore (CFG.add_node g endloc ());
+  (* set entry *)
+  CFG.node_set_entry g (CFG.get_node g (mk_jvm_loc meth_uid 0)) (Some TCur);
   (* add opcodes (edges) *)
   Array.iteri
     (fun i op ->
       if op <> OpInvalid then
-        let range = mk_jvm_range meth_uid i ((opcode_end code i) + 1) in
-        let src = [TCur, CFG.get_node g (mk_jvm_loc meth_uid i)] in
+        let lend = opcode_end code i in
+        let range = mk_jvm_range meth_uid i lend in
+        let src_node = CFG.get_node g (mk_jvm_loc meth_uid i) in
+        let src = [TCur, src_node] in
         let dst =
           List.map
             (fun (tag,p) -> tag, CFG.get_node g (mk_jvm_loc meth_uid p))
             (opcode_succ code i)
         in
-        let stmt = mk_stmt (S_java_opcode [op]) range in
+        let stmt = mk_stmt (S_java_opcode [op,(i,lend)]) range in
         ignore (CFG.add_edge g range ~src ~dst stmt)
     ) code;
   ()
@@ -196,7 +201,7 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
  *)
 let coalesce_cfg g =
   CFG.iter_nodes
-    (fun n ->
+    (fun _ n ->
       match CFG.node_in n, CFG.node_out n with
       | [TCur, e1], [TCur, e2]
            when CFG.edge_dst_size e1 = 1 && CFG.edge_src_size e2 = 1
@@ -231,6 +236,7 @@ let load_method
       (cls: j_class)
       (jmethod: jcode concrete_method)
     : j_method =
+  let g = CFG.create () in
   (* method information *)
   let meth = {
       m_jmethod = jmethod;
@@ -239,7 +245,9 @@ let load_method
       m_name = ms_name jmethod.cm_signature;
       m_args = ms_args jmethod.cm_signature;
       m_ret = ms_rtype jmethod.cm_signature;
-      m_cfg = None;
+      m_cfg = g;
+      m_native = (jmethod.cm_implementation = Native);
+      m_static = jmethod.cm_static;
     }
   in
   (* cfg construction *)
@@ -248,21 +256,21 @@ let load_method
       Format.printf "    [native]@\n"
    | Java j ->
       let jcode = Lazy.force j in
-      let g = CFG.create () in
       fill_cfg meth.m_uid g jcode;
       coalesce_cfg g;
-      meth.m_cfg <- Some g;
-
       let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
       let fmt = Format.formatter_of_out_channel f in
       CFG.print_dot
-        fmt g meth.m_name
-        (fun fmt n -> Format.fprintf fmt "%i:" (CFG.node_id n).loc_line)
-        (fun fmt e -> pp_stmt fmt (CFG.edge_data e))
-        (fun fmt t -> pp_token fmt t);
+        { CFG.dot_node =
+            (fun fmt n -> Format.fprintf fmt "%i:" (CFG.node_id n).loc_line);
+          CFG.dot_edge = (fun fmt e -> pp_stmt fmt (CFG.edge_data e));
+          CFG.dot_tag = (fun fmt t -> pp_token fmt t);
+        }
+        meth.m_name fmt g ;
       Format.pp_print_flush fmt ();
       close_out f;
-      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
+      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()));
+      Precheck.analyze meth
   );
   meth
 
@@ -326,7 +334,4 @@ let _ =
   load_class class_path java_lang_string
   
 
-  
-
-  
-    
+ 

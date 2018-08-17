@@ -107,6 +107,10 @@ module type S = sig
   module EdgeSet: SetExtSig.S with type elt = edge_id
   (** Sets constructed from ordered type parameters. *)
        
+  module NodeMap: MapExtSig.S with type key = node_id
+  module EdgeMap: MapExtSig.S with type key = edge_id
+  (** Maps constructed from ordered type parameters. *)
+       
                    
            
   (*========================================================================*)
@@ -174,13 +178,13 @@ module type S = sig
   val edge_add_dst_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
   (** Adds destinatino nodes to the edge, with the given tags. *)    
 
-  val node_remove_tag_in: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  val node_remove_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Removes all the connections to the node incoming from the edge 
       with the given tag. 
       No edge nor node is deleted.
    *)
 
-  val node_remove_tag_out: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  val node_remove_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Removes all the connections from the node outgoing into the edge 
       with the given tag.
       No edge nor node is deleted.
@@ -253,6 +257,12 @@ module type S = sig
   val edge_set: ('n,'e) graph -> EdgeSet.t
   (** The set of edges in the graph as a set of identifiers. *)
 
+  val node_map: ('n,'e) graph -> ('n,'e) node NodeMap.t
+  (** The set of nodes in the graph as a map from identifiers to nodes. *)
+
+  val edge_map: ('n,'e) graph -> ('n,'e) edge EdgeMap.t
+  (** The set of edges in the graph as a map from identifiers to edges. *)
+
   val has_node: ('n,'e) graph -> node_id -> bool
   (** Whether the graph contains a node with this identifier. *)
 
@@ -290,10 +300,10 @@ module type S = sig
   val edge_dst: ('n,'e) edge -> (tag * ('n,'e) node) list
   (** List of edge destination nodes. *)
     
-  val edge_tag_src: ('n,'e) edge -> tag -> ('n,'e) node list
+  val edge_src_tag: ('n,'e) edge -> tag -> ('n,'e) node list
   (** List of edge source nodes with the given tag. *)
 
-  val edge_tag_dst: ('n,'e) edge -> tag -> ('n,'e) node list
+  val edge_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node list
   (** List of edge destination nodes with the given tag. *)
 
   val edge_src_size: ('n,'e) edge -> int
@@ -302,10 +312,10 @@ module type S = sig
   val edge_dst_size: ('n,'e) edge -> int
   (** Number of edge destination nodes. *)
     
-  val edge_tag_src_size: ('n,'e) edge -> tag -> int
+  val edge_src_tag_size: ('n,'e) edge -> tag -> int
   (** Number of edge source nodes with the given tag. *)
 
-  val edge_tag_dst_size: ('n,'e) edge -> tag -> int
+  val edge_dst_tag_size: ('n,'e) edge -> tag -> int
   (** Number of edge destination nodes with the given tag. *)
 
     
@@ -324,10 +334,10 @@ module type S = sig
   val node_out: ('n,'e) node -> (tag * ('n,'e) edge) list
   (** List of edges outgoing from the node. *)
     
-  val node_tag_in: ('n,'e) node -> tag -> ('n,'e) edge list
+  val node_in_tag: ('n,'e) node -> tag -> ('n,'e) edge list
   (** List of edges incoming into the node with the given tag. *)
     
-  val node_tag_out: ('n,'e) node -> tag -> ('n,'e) edge list
+  val node_out_tag: ('n,'e) node -> tag -> ('n,'e) edge list
   (** List of edges outgoing from the node with the given tag. *)
                          
   val node_in_size: ('n,'e) node -> int
@@ -336,10 +346,10 @@ module type S = sig
   val node_out_size: ('n,'e) node -> int
   (** Number of edges outgoing from the node. *)
     
-  val node_tag_in_size: ('n,'e) node -> tag -> int
+  val node_in_tag_size: ('n,'e) node -> tag -> int
   (** Number of edges incoming into the node with the given tag. *)
     
-  val node_tag_out_size: ('n,'e) node -> tag -> int
+  val node_out_tag_size: ('n,'e) node -> tag -> int
   (** Number of edges outgoing from the node with the given tag. *)
                          
   val node_entry_tag: ('n,'e) graph -> ('n,'e) node -> tag option
@@ -351,25 +361,25 @@ module type S = sig
   val node_has_edge_out: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is outgoing from the node. *)
     
-  val node_has_edge_tag_out: ('n,'e) node -> tag -> ('n,'e) edge -> bool
+  val node_has_edge_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
   (** Whether the given edge is outgoing from the node with the given tag. *)
                        
   val node_has_edge_in: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is incoming into the node. *)
                        
-  val node_has_edge_tag_in: ('n,'e) node -> tag -> ('n,'e) edge -> bool
+  val node_has_edge_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
   (** Whether the given edge is incoming into the node with the given tag. *)
 
   val edge_has_node_src: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as source. *)
     
-  val edge_has_node_tag_src: ('n,'e) edge -> tag -> ('n,'e) node -> bool
+  val edge_has_node_src_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
   (** Whether the edge has the node as source with the given tag. *)
 
   val edge_has_node_dst: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as destination. *)
     
-  val edge_has_node_tag_dst: ('n,'e) edge -> tag -> ('n,'e) node -> bool
+  val edge_has_node_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
   (** Whether the edge has the node as destination with the given tag. *)
 
   val node_out_nodes: ('n,'e) node
@@ -390,21 +400,21 @@ module type S = sig
       [edge] to the argument node.
    *)
 
-  val node_tag_out_nodes: ('n,'e) node -> tag -> tag
+  val node_out_nodes_tag: ('n,'e) node -> tag -> tag
                           -> (('n,'e) edge * ('n,'e) node) list
   (** Successor nodes of a given node connected through an edge
       with the specified tags.
-      [node_tag_out_nodes node tag1 tag2] returns a list of
+      [node_out_nodes_tag node tag1 tag2] returns a list of
       [(edge,node')] elements, where [tag1] connects the argument [node] 
       to an edge [edge] and [tag2] connects the edge [edge] to a
       successor node [node'].
    *)
 
-  val node_tag_in_nodes: ('n,'e) node -> tag -> tag
+  val node_in_nodes_tag: ('n,'e) node -> tag -> tag
                           -> (('n,'e) node * ('n,'e) edge) list
   (** Predecessor nodes of a given node connected through an edge
       with the specified tags.
-      [node_tag_in_nodes node tag1 tag2] returns a list of
+      [node_in_nodes_tag node tag1 tag2] returns a list of
       [(node',edge)] elements, where [tag1] connects the predecessor 
       [node'] to an edge [edge] and [tag2] connects the edge [edge] to a
       the argument node [node.
@@ -416,12 +426,12 @@ module type S = sig
   val node_has_node_in: ('n,'e) node -> ('n,'e) node -> bool
   (** Whether the first node has an incoming edge from the second node. *)
     
-  val node_has_node_tag_out: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
+  val node_has_node_out_tag: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
   (** Whether the first node has an outgoing edge with the first tag,
       going into the second node with the second tag.
    *)
 
-  val node_has_node_tag_in: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
+  val node_has_node_in_tag: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
   (** Whether the first node has an incoming edge with the first tag,
       coming from the second node with the second tag.
    *)
@@ -447,11 +457,75 @@ module type S = sig
       Also switches entry and exit nodes. 
    *)
     
-  val iter_nodes: (('n,'e) node -> unit) -> ('n,'e) graph -> unit
-  (** Iterates a function on all nodes, in no particular order. *)
+  val iter_nodes: (node_id -> ('n,'e) node -> unit) -> ('n,'e) graph -> unit
+  (** Iterates a function on all nodes.
+      The order in which the function is called is not specified.
+   *)
     
-  val iter_edges: (('n,'e) edge -> unit) -> ('n,'e) graph -> unit
-  (** Iterates a function on all edges, in no particular order. *)
+  val iter_edges: (edge_id -> ('n,'e) edge -> unit) -> ('n,'e) graph -> unit
+  (** Iterates a function on all edges.
+      The order in which the function is called is not specified.
+   *)
+
+  val map_nodes: (node_id -> ('n,'e) node -> 'a) -> ('n,'e) graph
+                 -> 'a NodeMap.t
+  (** Constructs a map from node identifiers, applying the given function.
+      The order in which the function is called is not specified.
+   *)
+    
+  val map_edges: (edge_id -> ('n,'e) edge -> 'a) -> ('n,'e) graph
+                 -> 'a EdgeMap.t
+  (** Constructs a map from edge identifiers, applying the given function. 
+      The order in which the function is called is not specified.
+   *)
+    
+  val fold_nodes: (node_id -> ('n,'e) node -> 'a -> 'a) -> ('n,'e) graph
+                  -> 'a -> 'a
+  (** Accumulates a function on all nodes.
+      The order in which the function is called is not specified.
+   *)
+    
+  val fold_edges: (edge_id -> ('n,'e) edge -> 'a -> 'a) -> ('n,'e) graph
+                  -> 'a -> 'a
+  (** Accumulates a function on all edges.    
+      The order in which the function is called is not specified.
+ *)
+
+  val iter_nodes_ordered: (node_id -> ('n,'e) node -> unit)
+                          -> ('n,'e) graph -> unit
+  (** Iterates a function on all nodes.
+      The function is called in increasing identifier order.
+   *)
+    
+  val iter_edges_ordered: (edge_id -> ('n,'e) edge -> unit)
+                          -> ('n,'e) graph -> unit
+  (** Iterates a function on all edges.
+      The function is called in increasing identifier order.
+   *)
+
+  val map_nodes_ordered: (node_id -> ('n,'e) node -> 'a)
+                         -> ('n,'e) graph -> 'a NodeMap.t
+  (** Constructs a map from node identifiers, applying the given function.
+      The function is called in increasing identifier order.
+   *)
+    
+  val map_edges_ordered: (edge_id -> ('n,'e) edge -> 'a)
+                         -> ('n,'e) graph -> 'a EdgeMap.t
+  (** Constructs a map from edge identifiers, applying the given function. 
+      The function is called in increasing identifier order.
+   *)
+    
+  val fold_nodes_ordered: (node_id -> ('n,'e) node -> 'a -> 'a)
+                          -> ('n,'e) graph -> 'a -> 'a
+  (** Accumulates a function on all nodes.
+      The function is called in increasing identifier order.
+   *)
+    
+  val fold_edges_ordered: (edge_id -> ('n,'e) edge -> 'a -> 'a)
+                          -> ('n,'e) graph -> 'a -> 'a
+  (** Accumulates a function on all edges.    
+      The function is called in increasing identifier order.
+ *)
 
   val remove_orphan: ('n,'e) graph -> unit
   (** Removes orphan nodes and edges.
@@ -466,19 +540,33 @@ module type S = sig
   (*========================================================================*)
 
 
-  val print: Format.formatter -> ('n,'e) graph 
-                 -> (Format.formatter -> ('n,'e) node -> unit)
-                 -> (Format.formatter -> ('n,'e) edge  -> unit)
-                 -> (Format.formatter -> ('n,'e) node -> tag -> ('n,'e) edge -> unit)
-                 -> (Format.formatter -> ('n,'e) edge -> tag -> ('n,'e) node -> unit)
-                 -> unit
+  (** Print in dot graph format. *)
+
+  type ('n,'e) printer = {
+      print_node: Format.formatter -> ('n,'e) node -> unit;
+      print_edge: Format.formatter -> ('n,'e) edge  -> unit;
+      print_src: Format.formatter -> ('n,'e) node -> tag -> ('n,'e) edge
+                 -> unit;
+      print_dst: Format.formatter -> ('n,'e) edge -> tag -> ('n,'e) node
+                 -> unit;
+      print_entry: Format.formatter -> ('n,'e) node -> tag -> unit;
+      print_exit: Format.formatter -> ('n,'e) node -> tag -> unit;
+    }
+
+  val print: ('n,'e) printer -> Format.formatter -> ('n,'e) graph -> unit
+
+
+  (** Print in dot graph format. *)
     
-  val print_dot: Format.formatter -> ('n,'e) graph -> string
-                 -> (Format.formatter -> ('n,'e) node -> unit)
-                 -> (Format.formatter -> ('n,'e) edge -> unit)
-                 -> (Format.formatter -> tag -> unit)
-                 -> unit
-  (** [print_dot channel graph name print_node print_edge print_tag]
+  type ('n,'e) dot_printer = {
+      dot_node: Format.formatter -> ('n,'e) node -> unit;
+      dot_edge: Format.formatter -> ('n,'e) edge -> unit;
+      dot_tag: Format.formatter -> tag -> unit;
+    }
+                           
+  val print_dot: ('n,'e) dot_printer -> string -> Format.formatter
+                 -> ('n,'e) graph -> unit
+  (** [print_dot channel graph name printer].
       outputs the graph in the specified channel in dot format.
       In addition [name] gives the dot graph name.
       The node, edge and tag printer functions are user-specified.

@@ -20,7 +20,7 @@ open Universal.Ast
 (*==========================================================================*)
 
 
-module Location =
+module Loc =
   struct    
     type t = loc (* maybe add a unique tag? *)
     let compare = compare_location
@@ -44,11 +44,18 @@ module Tag =
     let equal l1 l2 = compare l1 l2 = 0
   end
 
+module LocSet = SetExt.Make(Loc)
+module LocMap = MapExt.Make(Loc)
+module LocHash = Hashtbl.Make(Loc)
+
+module RangeSet = SetExt.Make(Range)
+module RangeMap = MapExt.Make(Range)
+module RangeHash = Hashtbl.Make(Range)
   
 (** Build CFG module. *)
 module CFG_Param =
   struct
-    module NodeId = Location
+    module NodeId = Loc
     (** Identify nodes by source location. *)
                   
     module EdgeId = Range
@@ -84,7 +91,7 @@ type stmt_kind +=
     single abstract state, using node flows.
  *)
 type token +=
-   | TLoc of Location.t
+   | TLoc of Loc.t
 
            
 
@@ -93,6 +100,36 @@ type token +=
 (*==========================================================================*)
 
 
+let cfg_printer = {
+    CFG.print_node = (fun fmt n ->
+      Format.fprintf fmt "%a:@;" pp_location (CFG.node_id n)
+    );
+    CFG.print_edge = (fun fmt e ->
+      Format.fprintf fmt "  @[<v>%a@]@;" pp_stmt (CFG.edge_data e)
+    );
+    CFG.print_src = (fun fmt n tag e -> 
+      Format.fprintf
+        fmt "  %a --[%a]-->@;"
+        pp_location (CFG.node_id n) pp_token tag
+    );
+    CFG.print_dst = (fun fmt e tag n -> 
+      Format.fprintf
+        fmt "  --[%a]--> %a@;"
+        pp_token tag pp_location (CFG.node_id n)
+    );
+    CFG.print_entry = (fun fmt n tag ->
+      Format.fprintf
+        fmt "  entry --[%a]--> %a@;"
+        pp_token tag pp_location (CFG.node_id n)
+    );
+    CFG.print_exit = (fun fmt n tag ->
+      Format.fprintf
+        fmt "  %a --[%a]--> exit@;"
+        pp_location (CFG.node_id n) pp_token tag
+    );
+  }
+                
+           
 let () =
   register_token_compare (fun next t1 t2 ->
       match t1, t2 with
@@ -106,27 +143,7 @@ let () =
     );
   register_pp_stmt (fun next fmt s ->
       match s.skind with
-      | S_CFG g ->
-         Format.fprintf fmt "@[<v>";
-         CFG.print
-           fmt g
-           (fun fmt n ->
-             Format.fprintf fmt "%a:@;" pp_location (CFG.node_id n)
-           )
-           (fun fmt e ->
-             Format.fprintf fmt "  @[<v>%a@]@;" pp_stmt (CFG.edge_data e)
-           )
-           (fun fmt n tag e -> 
-             Format.fprintf
-               fmt "  %a --[%a]-->@;"
-               pp_location (CFG.node_id n) pp_token tag
-           )
-           (fun fmt e tag n -> 
-             Format.fprintf
-               fmt "  --[%a]--> %a@;"
-               pp_location (CFG.node_id n) pp_token tag
-           );
-         Format.fprintf fmt "@]";
+      | S_CFG g -> Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g
       | _ -> next fmt s
     )
   

@@ -21,6 +21,10 @@ open Universal.Ast
 open Cfg.Ast
 
    
+let name = "jvm.ast"
+let debug fmt = Debug.debug ~channel:name fmt
+
+
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
@@ -71,12 +75,15 @@ type token +=
  *)
 type op_loc = int
 
+type op_range = op_loc * op_loc
+
+type jopcode_range = jopcode * op_range 
                     
 (** Method code is specified as generic CFG with opcodes on edges.
     We use Javalib jopcodes as opcodes.
  *)
 type stmt_kind +=
-   | S_java_opcode of jopcode list
+   | S_java_opcode of jopcode_range list
 
 
 
@@ -88,11 +95,13 @@ type stmt_kind +=
 type j_method = {
     m_jmethod: jcode concrete_method; (** Javalib data *)
     m_class: j_class; (** class defining the method *)
-    m_uid: string; (** unique name: contains the class name, method name and signature *)
+    m_uid: string; (** unique name  (class name + method name + signature *)
     m_name: string; (** name *)
     m_args: value_type list; (** type of arguments *)
     m_ret: value_type option; (** returned type (or None for void) *)
-    mutable m_cfg: cfg option; (** control-flow graph, None for native methods *)
+    m_native: bool; (** whether the method is native *)
+    m_static: bool; (** whether the method is static *)
+    m_cfg: cfg; (** control-flow graph; empty for native methods*)
   }
 
 and j_class = {
@@ -123,7 +132,7 @@ let () =
       | S_java_opcode ops ->
          let first = ref true in
          List.iter
-           (fun op ->
+           (fun (op,_) ->
              if !first then first := false
              else Format.fprintf fmt "@;";
              Format.pp_print_string fmt (JPrint.jopcode op))

@@ -36,7 +36,7 @@ lang.c.flows = goto interproc switch
 
 lang.cfg = ast
 
-lang.jvm = ast frontend
+lang.jvm = ast precheck frontend 
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib
