@@ -376,7 +376,7 @@ let exec (loc:loc) (ret:loc option) (op:jopcode) (x:astate) : astate * err list 
        let r1, a = pop a in
        let r2, a = pop a in
        let r3, a = pop a in
-       a |> push r1 |> push r2 |> push r3 |> push r1
+       a |> push r1 |> push r3 |> push r2 |> push r1
     | OpDup2 ->
        let r1, a = pop a in
        let r2, a = pop a in
@@ -414,8 +414,11 @@ let exec (loc:loc) (ret:loc option) (op:jopcode) (x:astate) : astate * err list 
     | OpIShl | OpIShr | OpIUShr | OpIAnd | OpIOr | OpIXor ->
        a |> pop_check A_int |> pop_check A_int |> push A_int
       
-    | OpLShl | OpLShr | OpLUShr | OpLAnd | OpLOr | OpLXor ->
+    | OpLAnd | OpLOr | OpLXor ->
        a |> pop_check_long |> pop_check_long |> push_long
+
+    | OpLShl | OpLShr | OpLUShr ->
+       a |> pop_check A_int |> pop_check_long |> push_long
 
     (* conversions *)
 
@@ -567,97 +570,79 @@ let method_start (static:bool) (args:value_type list) =
      - propagate through ret
      - exception handlers
      - check return 
-     - ensure termination (!)
-     - generalize, functorize and put in Cfg.Iterator
+     - ensure termination (widening)
    *)
-let analyze (m:j_method) =
-  (* graph *)
-  let g = m.m_cfg in
-  (* abstract state *)
-  let a = LocHash.create 16 in
 
-  (* worklist *)
-  let wl = ref LocSet.empty in
-  let wl_add l = wl := LocSet.add l !wl
-  and wl_is_empty () = LocSet.is_empty !wl
-  and wl_get () =
-    let m = LocSet.min_elt !wl in
-    wl := LocSet.remove m !wl;
-    m
-  in
+module Domain = struct
+
+  type t = astate_bot       
+
+  type manager = j_method
 
   (* error printing *)
   let print_err l =
     List.iter
       (fun (loc,op,msg) ->
         Format.printf
-          "precheck error at %a for opcode %s: %s@\n"
+          "precheck error at %a for %s: %s@\n"
           pp_location loc op msg
       ) l
-  in
-  
-  (* update *)
-  let get id = LocHash.find a id
-  and set id v =
-    let org = LocHash.find a id in
-    if not (subset_bot v org) then (
-      LocHash.replace a id v;
-      wl_add id
-    )
-  in
-    
-  (* init abstract state *)
-  CFG.iter_nodes (fun id _ -> LocHash.add a id BOT) g;
-  let init,err = method_start m.m_static m.m_args in
-  print_err err;
-  List.iter
-    (fun (_,n) -> set (CFG.node_id n) (Nb init))
-    (CFG.entries g);
 
-  (* iterate! *)
-  while not (wl_is_empty()) do
-    (* while there is some node in the work list *)
-    let id = wl_get () in
-    let n = CFG.get_node g id in
-    match get id with
-    | BOT -> ()
-    | Nb an ->
-       (* for each outgoing edge *)
-       List.iter
-         (fun (f,e) ->
-           let ret = match CFG.edge_dst_tag e T_java_ret with
-             | [n] -> Some (CFG.node_id n)
-             | _ -> None
-           in        
-           match (CFG.edge_data e).skind with
-           | S_java_opcode ops ->
-              (* apply the block transfer function *)
-              let an2,err2 = exec_block id ret ops an in
-              print_err err2;
-              (* for each destination node *)
-              List.iter
-                (fun (tag',n') ->
-                  (* compute the join *)
-                  let id' = CFG.node_id n' in
-                  let an3,err3 = join_bot (get id') (Nb an2)  in
-                  (* update the destination node *)
-                  let err3 = List.map (fun msg -> id, "join", msg) err3 in
-                  print_err err3;
-                  set id' an3
-                ) (CFG.edge_dst e)
-           | _ -> failwith "not Java bytecode in Precheck.analyze"
-         )
-         (CFG.node_out n)
-  done;
+  let bot m = BOT
 
-  (* print *)
+  let entry m id n flow =
+    let init,err = method_start m.m_static m.m_args in
+    print_err err;
+    Nb init
+
+  let join m loc a b =
+    let r,err = join_bot a b in
+    print_err (List.map (fun msg -> loc,"join",msg) err);
+    r
+                 
+  let widen = join
+
+  let join_n m loc l =
+    List.fold_left (join m loc) BOT l
+            
+  let subset m loc = subset_bot
+
+  let exec m loc i e =
+    let r =
+      match join_n m loc (List.map snd i) with
+      | BOT -> BOT
+      | Nb x ->
+         (* optional location of return flow *)
+         let ret = match CFG.edge_dst_tag e T_java_ret with
+           | [n] -> Some (CFG.node_id n)
+           | _ -> None
+         in
+         match (CFG.edge_data e).skind with
+         | S_java_opcode ops ->
+            let a,err = exec_block loc ret ops x in
+            print_err err;
+            Nb a
+         | _ -> failwith "not Java bytecode in Precheck.Domain.exec"
+    in
+    (* push the result to all outgoing flows *)
+    List.map (fun (t,_) -> t, r) (CFG.edge_dst e)
+
+            
+end
+
+
+module Analyze = Cfg.Iterator.Make(Domain)(Cfg.Iterator.SetWorklist)
+              
+
+let analyze (m:j_method) =
+  let r = Analyze.iterate m m.m_cfg in
+  (* print result *)
   Format.printf "precheck results:@\n";
   CFG.iter_nodes_ordered
     (fun id _ ->
       Format.printf
         "  %a: %a@\n"
-        pp_location id (bot_fprint pp_astate) (get id)
-    ) g;
+        pp_location id (bot_fprint pp_astate) (LocHash.find r id)
+    ) m.m_cfg;
   Format.printf "@\n"
-  
-  
+

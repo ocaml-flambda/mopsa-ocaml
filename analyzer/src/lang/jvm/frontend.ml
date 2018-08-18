@@ -275,11 +275,7 @@ let load_method
   meth
 
   
-let load_class
-      (class_path: class_path)
-      (class_name: class_name)
-    : j_class =
-  let jclass = get_class class_path class_name in
+let load_class jclass : j_class =
   Format.printf "class %s@\n" (cn_name (get_name jclass));
   let fields = get_fields jclass in
   FieldMap.iter
@@ -312,16 +308,18 @@ let load_class
                        (** {2 Test} *)
 (*========================================================================*)
 
+
+let jdk_path = "/opt/oracle-jdk-bin-1.8.0.181/"
    
 let class_path =
   class_path
     (String.concat
        ":"
-       ["/opt/oracle-jdk-bin-1.8.0.172/jre/lib/resources.jar";
-        "/opt/oracle-jdk-bin-1.8.0.172/jre/lib/rt.jar";
-        "/opt/oracle-jdk-bin-1.8.0.172/jre/lib/jsse.jar";
-        "/opt/oracle-jdk-bin-1.8.0.172/jre/lib/jce.jar";
-        "/opt/oracle-jdk-bin-1.8.0.172/jre/lib/charsets.jar"
+       [jdk_path ^ "jre/lib/resources.jar";
+        jdk_path ^ "jre/lib/rt.jar";
+        jdk_path ^ "jre/lib/jsse.jar";
+        jdk_path ^ "jre/lib/jce.jar";
+        jdk_path ^ "jre/lib/charsets.jar"
        ]
     )
 
@@ -331,7 +329,8 @@ let java_lang_string_class = get_class class_path java_lang_string
 
 let _ =
   Format.printf "JVM test@\n";
-  load_class class_path java_lang_string
+  iter (fun c -> ignore (load_class c)) (jdk_path ^ "jre/lib/rt.jar");
+  (* load_class (get_class class_path java_lang_string) *)
   
 
  

@@ -143,6 +143,7 @@ module type S = sig
       The edge identifier must be unique among the edges in the graph;
       raises [Invalid_argument] otherwise.
    *)
+
     
   val remove_node: ('n,'e) graph -> ('n,'e) node -> unit
   (** Removes a node if it exists in the graph; otherwise, do nothing.
@@ -154,12 +155,14 @@ module type S = sig
       All connections to source and destination nodes are removed.
    *)
 
+    
   val node_set_entry: ('n,'e) graph -> ('n,'e) node -> tag option -> unit
   (** Sets whether a node is an entry node with some tag, or not (None). *)
 
   val node_set_exit: ('n,'e) graph -> ('n,'e) node -> tag option -> unit
   (** Sets whether a node is an exit node with some tag, or not (None). *)
 
+    
   val node_add_in: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Adds an incoming edge to the node, with the given tag. *)
 
@@ -176,8 +179,40 @@ module type S = sig
   (** Adds source nodes to the edge, with the given tags. *)
 
   val edge_add_dst_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Adds destinatino nodes to the edge, with the given tags. *)    
+  (** Adds destination nodes to the edge, with the given tags. *)    
 
+
+  val node_add_in_once: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  (** Adds an incoming edge to the node, with the given tag, 
+      but only if not already present.
+   *)
+
+  val node_add_out_once: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  (** Adds an outgoing edge to the node, with the given tag,
+      but only if not already present.
+   *)
+
+  val node_add_in_list_once: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Adds incoming edges to the node, with the given tags,
+      but only if not already present.
+   *)
+
+  val node_add_out_list_once: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
+  (** Adds outgoing edges to the node, with the given tags,
+      but only if not already present.
+   *)
+
+  val edge_add_src_list_once: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Adds source nodes to the edge, with the given tags,
+      but only if not already present.
+   *)
+
+  val edge_add_dst_list_once: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
+  (** Adds destinatino nodes to the edge, with the given tags,
+      but only if not already present.
+   *)    
+
+    
   val node_remove_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> unit
   (** Removes all the connections to the node incoming from the edge 
       with the given tag. 
@@ -358,28 +393,28 @@ module type S = sig
   val node_exit_tag: ('n,'e) graph -> ('n,'e) node -> tag option
   (** If the node is an exit node, returns its tag, otherwise None. *)
 
-  val node_has_edge_out: ('n,'e) node -> ('n,'e) edge -> bool
+  val node_has_out: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is outgoing from the node. *)
     
-  val node_has_edge_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
+  val node_has_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
   (** Whether the given edge is outgoing from the node with the given tag. *)
                        
-  val node_has_edge_in: ('n,'e) node -> ('n,'e) edge -> bool
+  val node_has_in: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is incoming into the node. *)
                        
-  val node_has_edge_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
+  val node_has_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
   (** Whether the given edge is incoming into the node with the given tag. *)
 
-  val edge_has_node_src: ('n,'e) edge -> ('n,'e) node -> bool
+  val edge_has_src: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as source. *)
     
-  val edge_has_node_src_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
+  val edge_has_src_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
   (** Whether the edge has the node as source with the given tag. *)
 
-  val edge_has_node_dst: ('n,'e) edge -> ('n,'e) node -> bool
+  val edge_has_dst: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as destination. *)
     
-  val edge_has_node_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
+  val edge_has_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
   (** Whether the edge has the node as destination with the given tag. *)
 
   val node_out_nodes: ('n,'e) node

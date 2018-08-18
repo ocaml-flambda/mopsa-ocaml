@@ -73,8 +73,11 @@ module CFG = Graph.Make(CFG_Param)
     from the CFG. 
     This way, CFG can be kept immutable.
  *)
-type cfg = (unit, stmt) CFG.graph
-           
+type cfg  = (unit, stmt) CFG.graph
+type node = (unit, stmt) CFG.node
+type edge = (unit, stmt) CFG.edge
+
+          
 (** Adds CFG to statement. *)
 type stmt_kind +=
    | S_CFG of cfg

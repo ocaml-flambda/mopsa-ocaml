@@ -375,28 +375,28 @@ module Make(P:P) = (struct
     try Some (fst (List.find (fun (_,n') -> node_eq n n') g.g_exits))
     with Not_found -> None
 
-  let node_has_edge_out n e =
+  let node_has_out n e =
     List.exists (fun (_,e') -> edge_eq e e') n.n_out
                        
-  let node_has_edge_out_tag n tag e =
+  let node_has_out_tag n tag e =
     List.exists (tag_edge_eq (tag,e)) n.n_out
                        
-  let node_has_edge_in n e =
+  let node_has_in n e =
     List.exists (fun (_,e') -> edge_eq e e') n.n_in
                        
-  let node_has_edge_in_tag n tag e =
+  let node_has_in_tag n tag e =
     List.exists (tag_edge_eq (tag,e)) n.n_in
 
-  let edge_has_node_src e n =
+  let edge_has_src e n =
     List.exists (fun (_,n') -> node_eq n n') e.e_src
     
-  let edge_has_node_src_tag e tag n =
+  let edge_has_src_tag e tag n =
     List.exists (tag_node_eq (tag,n)) e.e_src
 
-  let edge_has_node_dst e n =
+  let edge_has_dst e n =
     List.exists (fun (_,n') -> node_eq n n') e.e_dst
     
-  let edge_has_node_dst_tag e tag n =
+  let edge_has_dst_tag e tag n =
     List.exists (tag_node_eq (tag,n)) e.e_dst
 
   let node_out_nodes n =
@@ -457,7 +457,27 @@ module Make(P:P) = (struct
       ) n1.n_in
 
 
+
+
+  let node_add_in_once n tag e =
+    if not (node_has_in_tag n tag e) then node_add_in n tag e
     
+  let node_add_out_once n tag e =
+    if not (node_has_out_tag n tag e) then node_add_out n tag e
+
+  let node_add_in_list_once n v =
+    List.iter (fun (tag,e) -> node_add_in_once n tag e) v
+
+  let node_add_out_list_once n v =
+    List.iter (fun (tag,e) -> node_add_out_once n tag e) v
+
+  let edge_add_src_list_once e v =
+    List.iter (fun (tag,n) -> node_add_out_once n tag e) v
+
+  let edge_add_dst_list_once e v =
+    List.iter (fun (tag,n) -> node_add_in_once n tag e) v
+
+
     
   (*========================================================================*)
                        (** {2 Global operations} *)
@@ -650,7 +670,7 @@ module Make(P:P) = (struct
         incr count;
         let did = NodeHash.find nid n.n_id in
         Format.fprintf
-          fmt "  n%i [style=dot label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
+          fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
           !count !count did (to_string p.dot_tag tag)       
       ) g.g_entries;
     List.iter
@@ -658,7 +678,7 @@ module Make(P:P) = (struct
         incr count;
         let did = NodeHash.find nid n.n_id in
         Format.fprintf
-          fmt "  n%i [style=dot label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
+          fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
           !count did !count (to_string p.dot_tag tag)       
       ) g.g_exits;
     (* footer *)

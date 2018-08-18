@@ -34,7 +34,7 @@ lang.c.memory = base query pointer init cell decomposer machine_integers access_
 lang.c.memory.cell = initzero expand smashing reductions
 lang.c.flows = goto interproc switch
 
-lang.cfg = ast
+lang.cfg = ast iterator
 
 lang.jvm = ast precheck frontend 
 
