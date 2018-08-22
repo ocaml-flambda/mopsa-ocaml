@@ -36,7 +36,7 @@ module Range =
     let equal l1 l2 = compare l1 l2 = 0
   end
 
-module Tag =
+module Port =
   struct
     type t = token
     let compare = compare_token
@@ -61,7 +61,7 @@ module CFG_Param =
     module EdgeId = Range
     (** Identify edges by source range. *)
 
-    module Tag = Tag
+    module Port = Port
     (** Edge outputs are distinguished by flow tokens. *)
   end
   
@@ -110,25 +110,25 @@ let cfg_printer = {
     CFG.print_edge = (fun fmt e ->
       Format.fprintf fmt "  @[<v>%a@]@;" pp_stmt (CFG.edge_data e)
     );
-    CFG.print_src = (fun fmt n tag e -> 
+    CFG.print_src = (fun fmt n port e -> 
       Format.fprintf
         fmt "  %a --[%a]-->@;"
-        pp_location (CFG.node_id n) pp_token tag
+        pp_location (CFG.node_id n) pp_token port
     );
-    CFG.print_dst = (fun fmt e tag n -> 
+    CFG.print_dst = (fun fmt e port n -> 
       Format.fprintf
         fmt "  --[%a]--> %a@;"
-        pp_token tag pp_location (CFG.node_id n)
+        pp_token port pp_location (CFG.node_id n)
     );
-    CFG.print_entry = (fun fmt n tag ->
+    CFG.print_entry = (fun fmt n port ->
       Format.fprintf
         fmt "  entry --[%a]--> %a@;"
-        pp_token tag pp_location (CFG.node_id n)
+        pp_token port pp_location (CFG.node_id n)
     );
-    CFG.print_exit = (fun fmt n tag ->
+    CFG.print_exit = (fun fmt n port ->
       Format.fprintf
         fmt "  %a --[%a]--> exit@;"
-        pp_location (CFG.node_id n) pp_token tag
+        pp_location (CFG.node_id n) pp_token port
     );
   }
                 

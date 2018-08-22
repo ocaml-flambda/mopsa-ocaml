@@ -21,8 +21,10 @@ having several edges incoming into the same node.
 An edge can have several destination nodes, to model conditionals with 
 several outputs from a basic block. Alternatively, several edges outgoing
 from the same node can be used to model conditionals.
-Tags help distinguish between the different mode sources and node 
-destinations of an edge.
+We use "ports" to distinguish and classify between the different
+source and destination nodes of an edge, and ports carry tags.
+It is possible to have a node connected to the same edge several times,
+either on equal or different ports.
 
 Nodes and edges have unique identifiers, ordered to serve as map keys.
 Each node and edge has a mutable data field of polymorphic type.
@@ -64,8 +66,8 @@ module type P = sig
   module EdgeId: ID_TYPE
   (** Unique edge identifiers, that can serve as keys in maps.  *)
 
-  module Tag: ID_TYPE
-  (** Connections between edges and nodes are tagged. *)
+  module Port: ID_TYPE
+  (** Edges connect to node through tagged ports. *)
      
 end
 
@@ -100,7 +102,7 @@ module type S = sig
   module P: P
   type node_id = P.NodeId.t
   type edge_id = P.EdgeId.t
-  type tag = P.Tag.t
+  type port = P.Port.t
   (** Export back types from the functor parameter. *)
               
   module NodeSet: SetExtSig.S with type elt = node_id
@@ -122,21 +124,21 @@ module type S = sig
   (** Creates an empty graph. *)
 
   val add_node: ('n,'e) graph -> node_id
-                -> ?inc:(tag * ('n,'e) edge) list
-                -> ?out:(tag * ('n,'e) edge) list
-                -> ?entry:tag -> ?exit:tag
+                -> ?inc:(port * ('n,'e) edge) list
+                -> ?out:(port * ('n,'e) edge) list
+                -> ?entry:port -> ?exit:port
                 -> 'n -> ('n,'e) node
   (** Adds a node to the graph.
       Optionally connects the node to incoming or outgoing edges.
-      Optionally sets as an entry or exit node with a tag (defaults to None,
+      Optionally sets as an entry or exit node on a port (defaults to None,
       i.e., not entry nor exit).
       The node identifier must be unique among the node in the graph;
       raises [Invalid_argument] otherwise.
    *)
     
   val add_edge: ('n,'e) graph -> edge_id
-                -> ?src:(tag * ('n,'e) node) list
-                -> ?dst:(tag * ('n,'e) node) list
+                -> ?src:(port * ('n,'e) node) list
+                -> ?dst:(port * ('n,'e) node) list
                 -> 'e -> ('n,'e) edge
   (** Adds an edge to the graph.
       Optionally connects the edge to source or destination nodes.
@@ -156,122 +158,148 @@ module type S = sig
    *)
 
     
-  val node_set_entry: ('n,'e) graph -> ('n,'e) node -> tag option -> unit
-  (** Sets whether a node is an entry node with some tag, or not (None). *)
+  val node_set_entry: ('n,'e) graph -> ('n,'e) node -> port option -> unit
+  (** Sets whether a node is an entry node on some port, or not (None). 
+      A given node can be entry for a single port at a time; 
+      previous entry ports are removed.
+   *)
 
-  val node_set_exit: ('n,'e) graph -> ('n,'e) node -> tag option -> unit
-  (** Sets whether a node is an exit node with some tag, or not (None). *)
+  val node_set_exit: ('n,'e) graph -> ('n,'e) node -> port option -> unit
+  (** Sets whether a node is an exit node on some port, or not (None). 
+      A given node can be exit on a single port at a time; 
+      previous exit ports are removed.
+   *)
 
     
-  val node_add_in: ('n,'e) node -> tag -> ('n,'e) edge -> unit
-  (** Adds an incoming edge to the node, with the given tag. *)
-
-  val node_add_out: ('n,'e) node -> tag -> ('n,'e) edge -> unit
-  (** Adds an outgoing edge to the node, with the given tag. *)
-
-  val node_add_in_list: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Adds incoming edges to the node, with the given tags. *)
-
-  val node_add_out_list: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Adds outgoing edges to the node, with the given tags. *)
-
-  val edge_add_src_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Adds source nodes to the edge, with the given tags. *)
-
-  val edge_add_dst_list: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Adds destination nodes to the edge, with the given tags. *)    
-
-
-  val node_add_in_once: ('n,'e) node -> tag -> ('n,'e) edge -> unit
-  (** Adds an incoming edge to the node, with the given tag, 
-      but only if not already present.
+  val node_add_in: ('n,'e) node -> port -> ('n,'e) edge -> unit
+  (** Adds an incoming edge to the node, on the given port. 
+      A node can be connected to the same edge several times, on
+      different or equal ports.
+      Use the [_unique] version to ensure that a node is connected to
+      an given edge on a given port only once.
    *)
 
-  val node_add_out_once: ('n,'e) node -> tag -> ('n,'e) edge -> unit
-  (** Adds an outgoing edge to the node, with the given tag,
-      but only if not already present.
+  val node_add_out: ('n,'e) node -> port -> ('n,'e) edge -> unit
+  (** Adds an outgoing edge to the node, on the given port. *)
+
+  val node_add_in_list: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Adds incoming edges to the node, on the given ports. *)
+
+  val node_add_out_list: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Adds outgoing edges to the node, on the given ports. *)
+
+  val edge_add_src_list: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Adds source nodes to the edge, on the given ports. *)
+
+  val edge_add_dst_list: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Adds destination nodes to the edge, on the given ports. *)    
+
+
+  val node_add_in_unique: ('n,'e) node -> port -> ('n,'e) edge -> unit
+  (** Adds an incoming edge to the node, on the given port, 
+      but only if not already present on this port.
+      Does not prevent the node to be connected to the edge on
+      other ports.
    *)
 
-  val node_add_in_list_once: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Adds incoming edges to the node, with the given tags,
-      but only if not already present.
+  val node_add_out_unique: ('n,'e) node -> port -> ('n,'e) edge -> unit
+  (** Adds an outgoing edge to the node, on the given port,
+      but only if not already present on this port.
    *)
 
-  val node_add_out_list_once: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Adds outgoing edges to the node, with the given tags,
-      but only if not already present.
+  val node_add_in_list_unique: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Adds incoming edges to the node, on the given ports,
+      but only if not already present on this port.
    *)
 
-  val edge_add_src_list_once: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Adds source nodes to the edge, with the given tags,
-      but only if not already present.
+  val node_add_out_list_unique: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Adds outgoing edges to the node, on the given ports,
+      but only if not already present on this port.
    *)
 
-  val edge_add_dst_list_once: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Adds destinatino nodes to the edge, with the given tags,
-      but only if not already present.
+  val edge_add_src_list_unique: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Adds source nodes to the edge, on the given ports,
+      but only if not already present on this port.
+   *)
+
+  val edge_add_dst_list_unique: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Adds destination nodes to the edge, on the given ports,
+      but only if not already present on this port.
    *)    
 
     
-  val node_remove_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  val node_remove_in_port: ('n,'e) node -> port -> ('n,'e) edge -> unit
   (** Removes all the connections to the node incoming from the edge 
-      with the given tag. 
+      on the given port. 
       No edge nor node is deleted.
    *)
 
-  val node_remove_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> unit
+  val node_remove_out_port: ('n,'e) node -> port -> ('n,'e) edge -> unit
   (** Removes all the connections from the node outgoing into the edge 
-      with the given tag.
+      on the given port.
       No edge nor node is deleted.
    *)
 
   val node_remove_in: ('n,'e) node -> ('n,'e) edge -> unit
   (** Removes all the connections to the node incoming into from the edge,
-      for all tags.
+      on all ports.
       No edge nor node is deleted.
    *)
     
   val node_remove_out: ('n,'e) node -> ('n,'e) edge -> unit
   (** Removes all the connections from the node incoming into the edge,
-      for all tags.      
+      on all ports.
       No edge nor node is deleted.
    *)
 
   val node_remove_all_in: ('n,'e) node -> unit
   (** Removes all the connections incoming into the node, 
-      for all edges and tags.
+      for all edges and ports.
       No edge nor node is deleted.
    *)
     
   val node_remove_all_out: ('n,'e) node -> unit
   (** Removes all the connections outgoing from the node, 
-      for all edges and tags.
+      for all edges and ports.
       No edge nor node is deleted.
    *)
 
   val edge_remove_all_src: ('n,'e) edge -> unit
   (** Removes all the connections at the source of the edge, 
-      for all nodes and tags.
+      for all nodes and ports.
       No edge nor node is deleted.
    *)
 
   val edge_remove_all_dst: ('n,'e) edge -> unit
   (** Removes all the connections at the destination of the edge, 
-      for all nodes and tags.
+      for all nodes and ports.
       No edge nor node is deleted 
    *)
     
-  val node_set_in: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Sets the incoming edges to the node, with the given tags. *)
+  val node_set_in: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Sets the incoming edges to the node, on the given ports. *)
 
-  val node_set_out: ('n,'e) node -> ((tag * ('n,'e) edge) list) -> unit
-  (** Sets the outgoing edges to the node, with the given tags. *)
+  val node_set_out: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Sets the outgoing edges to the node, on the given ports. *)
 
-  val edge_set_src: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Sets the source nodes to the edge, with the given tags. *)
+  val edge_set_src: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Sets the source nodes to the edge, on the given ports. *)
 
-  val edge_set_dst: ('n,'e) edge -> ((tag * ('n,'e) node) list) -> unit
-  (** Sets destinatino nodes to the edge, with the given tags. *)    
+  val edge_set_dst: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Sets destination nodes to the edge, on the given ports. *)    
+
+
+  val node_set_in_unique: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Sets the incoming edges to the node, on the given ports. *)
+
+  val node_set_out_unique: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
+  (** Sets the outgoing edges to the node, on the given ports. *)
+
+  val edge_set_src_unique: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Sets the source nodes to the edge, on the given ports. *)
+
+  val edge_set_dst_unique: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
+  (** Sets destination nodes to the edge, on the given ports. *)    
 
         
             
@@ -314,11 +342,11 @@ module type S = sig
       Raises [Not_found] if [has_edge] is false.
    *)
 
-  val entries: ('n,'e) graph -> (tag * ('n,'e) node) list
-  (** List of entry nodes, with tag. *)
+  val entries: ('n,'e) graph -> (port * ('n,'e) node) list
+  (** List of entry nodes, with port. *)
     
-  val exits: ('n,'e) graph -> (tag * ('n,'e) node) list
-  (** List of exist nodes, with tag. *)
+  val exits: ('n,'e) graph -> (port * ('n,'e) node) list
+  (** List of exist nodes, with port. *)
     
   val edge_id: ('n,'e) edge -> edge_id
   (** Edge identifier. *)
@@ -329,17 +357,17 @@ module type S = sig
   val edge_set_data: ('n,'e) edge -> 'e -> unit
   (** Sets custom data associated to the edge. *)
                            
-  val edge_src: ('n,'e) edge -> (tag * ('n,'e) node) list
+  val edge_src: ('n,'e) edge -> (port * ('n,'e) node) list
   (** List of edge source nodes. *)
                  
-  val edge_dst: ('n,'e) edge -> (tag * ('n,'e) node) list
+  val edge_dst: ('n,'e) edge -> (port * ('n,'e) node) list
   (** List of edge destination nodes. *)
     
-  val edge_src_tag: ('n,'e) edge -> tag -> ('n,'e) node list
-  (** List of edge source nodes with the given tag. *)
+  val edge_src_port: ('n,'e) edge -> port -> ('n,'e) node list
+  (** List of edge source nodes on the given port. *)
 
-  val edge_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node list
-  (** List of edge destination nodes with the given tag. *)
+  val edge_dst_port: ('n,'e) edge -> port -> ('n,'e) node list
+  (** List of edge destination nodes on the given port. *)
 
   val edge_src_size: ('n,'e) edge -> int
   (** Number of edge source nodes. *)
@@ -347,11 +375,11 @@ module type S = sig
   val edge_dst_size: ('n,'e) edge -> int
   (** Number of edge destination nodes. *)
     
-  val edge_src_tag_size: ('n,'e) edge -> tag -> int
-  (** Number of edge source nodes with the given tag. *)
+  val edge_src_port_size: ('n,'e) edge -> port -> int
+  (** Number of edge source nodes on the given port. *)
 
-  val edge_dst_tag_size: ('n,'e) edge -> tag -> int
-  (** Number of edge destination nodes with the given tag. *)
+  val edge_dst_port_size: ('n,'e) edge -> port -> int
+  (** Number of edge destination nodes on the given port. *)
 
     
   val node_id: ('n,'e) node -> node_id
@@ -363,17 +391,17 @@ module type S = sig
   val node_set_data: ('n,'e) node -> 'n -> unit
   (** Sets custom data associated to the node. *)
     
-  val node_in: ('n,'e) node -> (tag * ('n,'e) edge) list
+  val node_in: ('n,'e) node -> (port * ('n,'e) edge) list
   (** List of edges incoming into the node. *)
                                            
-  val node_out: ('n,'e) node -> (tag * ('n,'e) edge) list
+  val node_out: ('n,'e) node -> (port * ('n,'e) edge) list
   (** List of edges outgoing from the node. *)
     
-  val node_in_tag: ('n,'e) node -> tag -> ('n,'e) edge list
-  (** List of edges incoming into the node with the given tag. *)
+  val node_in_port: ('n,'e) node -> port -> ('n,'e) edge list
+  (** List of edges incoming into the node on the given port. *)
     
-  val node_out_tag: ('n,'e) node -> tag -> ('n,'e) edge list
-  (** List of edges outgoing from the node with the given tag. *)
+  val node_out_port: ('n,'e) node -> port -> ('n,'e) edge list
+  (** List of edges outgoing from the node on the given port. *)
                          
   val node_in_size: ('n,'e) node -> int
   (** Number of edges incoming into the node. *)
@@ -381,77 +409,77 @@ module type S = sig
   val node_out_size: ('n,'e) node -> int
   (** Number of edges outgoing from the node. *)
     
-  val node_in_tag_size: ('n,'e) node -> tag -> int
-  (** Number of edges incoming into the node with the given tag. *)
+  val node_in_port_size: ('n,'e) node -> port -> int
+  (** Number of edges incoming into the node on the given port. *)
     
-  val node_out_tag_size: ('n,'e) node -> tag -> int
-  (** Number of edges outgoing from the node with the given tag. *)
+  val node_out_port_size: ('n,'e) node -> port -> int
+  (** Number of edges outgoing from the node on the given port. *)
                          
-  val node_entry_tag: ('n,'e) graph -> ('n,'e) node -> tag option
-  (** If the node is an entry node, returns its tag, otherwise None. *)
+  val node_entry_port: ('n,'e) graph -> ('n,'e) node -> port option
+  (** If the node is an entry node, returns its port, otherwise None. *)
     
-  val node_exit_tag: ('n,'e) graph -> ('n,'e) node -> tag option
-  (** If the node is an exit node, returns its tag, otherwise None. *)
+  val node_exit_port: ('n,'e) graph -> ('n,'e) node -> port option
+  (** If the node is an exit node, returns its port, otherwise None. *)
 
   val node_has_out: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is outgoing from the node. *)
     
-  val node_has_out_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
-  (** Whether the given edge is outgoing from the node with the given tag. *)
+  val node_has_out_port: ('n,'e) node -> port -> ('n,'e) edge -> bool
+  (** Whether the given edge is outgoing from the node on the given port. *)
                        
   val node_has_in: ('n,'e) node -> ('n,'e) edge -> bool
   (** Whether the given edge is incoming into the node. *)
                        
-  val node_has_in_tag: ('n,'e) node -> tag -> ('n,'e) edge -> bool
-  (** Whether the given edge is incoming into the node with the given tag. *)
+  val node_has_in_port: ('n,'e) node -> port -> ('n,'e) edge -> bool
+  (** Whether the given edge is incoming into the node on the given port. *)
 
   val edge_has_src: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as source. *)
     
-  val edge_has_src_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
-  (** Whether the edge has the node as source with the given tag. *)
+  val edge_has_src_port: ('n,'e) edge -> port -> ('n,'e) node -> bool
+  (** Whether the edge has the node as source on the given port. *)
 
   val edge_has_dst: ('n,'e) edge -> ('n,'e) node -> bool
   (** Whether the edge has the node as destination. *)
     
-  val edge_has_dst_tag: ('n,'e) edge -> tag -> ('n,'e) node -> bool
-  (** Whether the edge has the node as destination with the given tag. *)
+  val edge_has_dst_port: ('n,'e) edge -> port -> ('n,'e) node -> bool
+  (** Whether the edge has the node as destination on the given port. *)
 
   val node_out_nodes: ('n,'e) node
-                      -> (tag * ('n,'e) edge * tag * ('n,'e) node) list
+                      -> (port * ('n,'e) edge * port * ('n,'e) node) list
   (** Successors nodes of a given node. 
-      Each returned element [(tag1,edge,tag2,node)] gives the tag [tag1]
+      Each returned element [(port1,edge,port2,node)] gives the port [port1]
       connecting the argument node to an edge [edge], the edge [edge], 
-      the tag [tag2] connecting the edge [edge] to the successor node [node], 
+      the port [port2] connecting the edge [edge] to the successor node [node], 
       and finally the successor node [node].
    *)
 
   val node_in_nodes: ('n,'e) node
-                      -> (('n,'e) node * tag * ('n,'e) edge * tag) list
+                      -> (('n,'e) node * port * ('n,'e) edge * port) list
   (** Predecessor nodes of a given node. 
-      Each returned element [(node,tag1,edge,tag2)] gives the predecessor 
-      node [node], the tag [tag1] connecting it to an edge [edge], 
-      the edge [edge], and finally the tag [tag2] connecting the edge 
+      Each returned element [(node,port1,edge,port2)] gives the predecessor 
+      node [node], the port [port1] connecting it to an edge [edge], 
+      the edge [edge], and finally the port [port2] connecting the edge 
       [edge] to the argument node.
    *)
 
-  val node_out_nodes_tag: ('n,'e) node -> tag -> tag
+  val node_out_nodes_port: ('n,'e) node -> port -> port
                           -> (('n,'e) edge * ('n,'e) node) list
   (** Successor nodes of a given node connected through an edge
-      with the specified tags.
-      [node_out_nodes_tag node tag1 tag2] returns a list of
-      [(edge,node')] elements, where [tag1] connects the argument [node] 
-      to an edge [edge] and [tag2] connects the edge [edge] to a
+      on the specified ports.
+      [node_out_nodes_port node port1 port2] returns a list of
+      [(edge,node')] elements, where [port1] connects the argument [node] 
+      to an edge [edge] and [port2] connects the edge [edge] to a
       successor node [node'].
    *)
 
-  val node_in_nodes_tag: ('n,'e) node -> tag -> tag
+  val node_in_nodes_port: ('n,'e) node -> port -> port
                           -> (('n,'e) node * ('n,'e) edge) list
   (** Predecessor nodes of a given node connected through an edge
-      with the specified tags.
-      [node_in_nodes_tag node tag1 tag2] returns a list of
-      [(node',edge)] elements, where [tag1] connects the predecessor 
-      [node'] to an edge [edge] and [tag2] connects the edge [edge] to a
+      on the specified ports.
+      [node_in_nodes_port node port1 port2] returns a list of
+      [(node',edge)] elements, where [port1] connects the predecessor 
+      [node'] to an edge [edge] and [port2] connects the edge [edge] to a
       the argument node [node.
    *)
 
@@ -461,14 +489,14 @@ module type S = sig
   val node_has_node_in: ('n,'e) node -> ('n,'e) node -> bool
   (** Whether the first node has an incoming edge from the second node. *)
     
-  val node_has_node_out_tag: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
-  (** Whether the first node has an outgoing edge with the first tag,
-      going into the second node with the second tag.
+  val node_has_node_out_port: ('n,'e) node -> port -> port -> ('n,'e) node -> bool
+  (** Whether the first node has an outgoing edge on the first port,
+      going into the second node on the second port.
    *)
 
-  val node_has_node_in_tag: ('n,'e) node -> tag -> tag -> ('n,'e) node -> bool
-  (** Whether the first node has an incoming edge with the first tag,
-      coming from the second node with the second tag.
+  val node_has_node_in_port: ('n,'e) node -> port -> port -> ('n,'e) node -> bool
+  (** Whether the first node has an incoming edge on the first port,
+      coming from the second node on the second port.
    *)
 
     
@@ -580,12 +608,12 @@ module type S = sig
   type ('n,'e) printer = {
       print_node: Format.formatter -> ('n,'e) node -> unit;
       print_edge: Format.formatter -> ('n,'e) edge  -> unit;
-      print_src: Format.formatter -> ('n,'e) node -> tag -> ('n,'e) edge
+      print_src: Format.formatter -> ('n,'e) node -> port -> ('n,'e) edge
                  -> unit;
-      print_dst: Format.formatter -> ('n,'e) edge -> tag -> ('n,'e) node
+      print_dst: Format.formatter -> ('n,'e) edge -> port -> ('n,'e) node
                  -> unit;
-      print_entry: Format.formatter -> ('n,'e) node -> tag -> unit;
-      print_exit: Format.formatter -> ('n,'e) node -> tag -> unit;
+      print_entry: Format.formatter -> ('n,'e) node -> port -> unit;
+      print_exit: Format.formatter -> ('n,'e) node -> port -> unit;
     }
 
   val print: ('n,'e) printer -> Format.formatter -> ('n,'e) graph -> unit
@@ -596,7 +624,7 @@ module type S = sig
   type ('n,'e) dot_printer = {
       dot_node: Format.formatter -> ('n,'e) node -> unit;
       dot_edge: Format.formatter -> ('n,'e) edge -> unit;
-      dot_tag: Format.formatter -> tag -> unit;
+      dot_port: Format.formatter -> port -> unit;
     }
                            
   val print_dot: ('n,'e) dot_printer -> string -> Format.formatter
@@ -604,7 +632,7 @@ module type S = sig
   (** [print_dot channel graph name printer].
       outputs the graph in the specified channel in dot format.
       In addition [name] gives the dot graph name.
-      The node, edge and tag printer functions are user-specified.
+      The node, edge and port printer functions are user-specified.
    *)
 
     

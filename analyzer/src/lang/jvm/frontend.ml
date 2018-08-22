@@ -185,7 +185,7 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
         let src = [TCur, src_node] in
         let dst =
           List.map
-            (fun (tag,p) -> tag, CFG.get_node g (mk_jvm_loc meth_uid p))
+            (fun (port,p) -> port, CFG.get_node g (mk_jvm_loc meth_uid p))
             (opcode_succ code i)
         in
         let stmt = mk_stmt (S_java_opcode [op,(i,lend)]) range in
@@ -264,7 +264,7 @@ let load_method
         { CFG.dot_node =
             (fun fmt n -> Format.fprintf fmt "%i:" (CFG.node_id n).loc_line);
           CFG.dot_edge = (fun fmt e -> pp_stmt fmt (CFG.edge_data e));
-          CFG.dot_tag = (fun fmt t -> pp_token fmt t);
+          CFG.dot_port = (fun fmt t -> pp_token fmt t);
         }
         meth.m_name fmt g ;
       Format.pp_print_flush fmt ();

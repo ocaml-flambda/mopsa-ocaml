@@ -602,18 +602,18 @@ module Domain = struct
                  
   let widen = join
 
-  let join_n m loc l =
+  let join_list m loc l =
     List.fold_left (join m loc) BOT l
             
   let subset m loc = subset_bot
 
   let exec m loc i e =
     let r =
-      match join_n m loc (List.map snd i) with
+      match join_list m loc (List.map snd i) with
       | BOT -> BOT
       | Nb x ->
          (* optional location of return flow *)
-         let ret = match CFG.edge_dst_tag e T_java_ret with
+         let ret = match CFG.edge_dst_port e T_java_ret with
            | [n] -> Some (CFG.node_id n)
            | _ -> None
          in

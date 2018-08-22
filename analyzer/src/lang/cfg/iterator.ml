@@ -20,17 +20,27 @@ open Ast
 (*==========================================================================*)
 
 
+(** Abstract domain for abstract values attached to nodes. 
+    Functions from this domain are called by the iterator.
+ *)
 module type DOMAIN = sig
 
   type t
   (** Abstract information attached to nodes. *)
 
   type manager
-  (** Global information. *)
+  (** Global information. 
+      This information is taken as argument by the iterator and
+      passed unchanged. You can store there additional information
+      not stored in the CFG.
+   *)
 
   val bot: manager -> t
+  (** ⊥ *) 
     
   val entry: manager -> loc -> node -> token -> t
+  (** *)
+    
     
   val exec: manager -> loc -> (token * t) list -> edge -> (token * t) list
 
@@ -89,7 +99,7 @@ module SetWorklist = (
   struct
 
     type t =
-      { dirty: LocSet.t ref; (** dirty nodes *)
+      { mutable dirty: LocSet.t; (** dirty nodes *)
         widen: LocSet.t; (** widening points *)
       }
 
@@ -100,29 +110,27 @@ module SetWorklist = (
           (fun id n acc ->
             (* whether n has a back-edge *)
             let i = CFG.node_in_nodes n in
-            if
-              List.exists
-                (fun (nn,_,_,_) ->
-                  Loc.compare (CFG.node_id nn) id > 0
-                ) i
+            if List.exists
+                 (fun (nn,_,_,_) -> Loc.compare (CFG.node_id nn) id > 0)
+                 i
             then LocSet.add id acc
             else acc
           )
           g LocSet.empty
       in
-      { dirty = ref LocSet.empty;
+      { dirty = LocSet.empty;
         widen = w;
       }
 
     let is_empty w =
-      LocSet.is_empty !(w.dirty)
+      LocSet.is_empty w.dirty
                  
     let dirty w id =
-      w.dirty := LocSet.add id !(w.dirty)
+      w.dirty <- LocSet.add id w.dirty
 
     let get w =
-      let id = LocSet.min_elt !(w.dirty) in
-      w.dirty := LocSet.remove id !(w.dirty);
+      let id = LocSet.min_elt w.dirty in
+      w.dirty <- LocSet.remove id w.dirty;
       id
 
     let is_widen w id =

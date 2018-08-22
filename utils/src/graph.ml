@@ -69,7 +69,7 @@ module Make(P:P) = (struct
   
   type node_id = P.NodeId.t
   type edge_id = P.EdgeId.t
-  type tag = P.Tag.t
+  type port = P.Port.t
              
   module NodeHash = Hashtbl.Make(P.NodeId)
   module EdgeHash = Hashtbl.Make(P.EdgeId)                 
@@ -83,20 +83,20 @@ module Make(P:P) = (struct
   type ('n,'e) node = {
       n_id: node_id;
       mutable n_data: 'n;
-      mutable n_in: (tag * ('n,'e) edge) list;
-      mutable n_out: (tag * ('n,'e) edge) list;
+      mutable n_in: (port * ('n,'e) edge) list;
+      mutable n_out: (port * ('n,'e) edge) list;
     }
             
   and ('n,'e) edge = {
       e_id: edge_id;
       mutable e_data: 'e;
-      mutable e_src: (tag * ('n,'e) node) list;
-      mutable e_dst: (tag * ('n,'e) node) list;
+      mutable e_src: (port * ('n,'e) node) list;
+      mutable e_dst: (port * ('n,'e) node) list;
     }
 
   and ('n,'e) graph = {
-      mutable g_entries: (tag * ('n,'e) node) list;
-      mutable g_exits: (tag * ('n,'e) node) list;
+      mutable g_entries: (port * ('n,'e) node) list;
+      mutable g_exits: (port * ('n,'e) node) list;
       mutable g_nodes: ('n,'e) node NodeHash.t;
       mutable g_edges: ('n,'e) edge EdgeHash.t;
     }
@@ -112,25 +112,25 @@ module Make(P:P) = (struct
   let node_neq n1 n2 = (P.NodeId.compare n1.n_id n2.n_id != 0)
   let edge_eq  e1 e2 = (P.EdgeId.compare e1.e_id e2.e_id == 0)
   let edge_neq e1 e2 = (P.EdgeId.compare e1.e_id e2.e_id != 0)
-  let tag_eq  t1 t2  = P.Tag.compare t1 t2 == 0
-  let tag_neq t1 t2  = P.Tag.compare t1 t2 != 0
-  let tag_node_eq  (t1,n1) (t2,n2) = node_eq  n1 n2 && tag_eq  t1 t2
-  let tag_node_neq (t1,n1) (t2,n2) = node_neq n1 n2 || tag_neq t1 t2
-  let tag_edge_eq  (t1,e1) (t2,e2) = edge_eq  e1 e2 && tag_eq  t1 t2
-  let tag_edge_neq (t1,e1) (t2,e2) = edge_neq e1 e2 || tag_neq t1 t2
+  let port_eq  t1 t2  = P.Port.compare t1 t2 == 0
+  let port_neq t1 t2  = P.Port.compare t1 t2 != 0
+  let port_node_eq  (t1,n1) (t2,n2) = node_eq  n1 n2 && port_eq  t1 t2
+  let port_node_neq (t1,n1) (t2,n2) = node_neq n1 n2 || port_neq t1 t2
+  let port_edge_eq  (t1,e1) (t2,e2) = edge_eq  e1 e2 && port_eq  t1 t2
+  let port_edge_neq (t1,e1) (t2,e2) = edge_neq e1 e2 || port_neq t1 t2
 
   let node_compare n1 n2 = P.NodeId.compare n1.n_id n2.n_id
   let edge_compare e1 e2 = P.EdgeId.compare e1.e_id e2.e_id
-  let tag_compare t1 t2 = P.Tag.compare t1 t2
+  let port_compare t1 t2 = P.Port.compare t1 t2
 
-  let tag_node_compare (t1,n1) (t2,n2) =
-    if tag_neq t1 t2 then tag_compare t1 t2 else node_compare n1 n2
+  let port_node_compare (t1,n1) (t2,n2) =
+    if port_neq t1 t2 then port_compare t1 t2 else node_compare n1 n2
 
-  let tag_edge_compare (t1,e1) (t2,e2) =
-    if tag_neq t1 t2 then tag_compare t1 t2 else edge_compare e1 e2
+  let port_edge_compare (t1,e1) (t2,e2) =
+    if port_neq t1 t2 then port_compare t1 t2 else edge_compare e1 e2
 
-  let filter_tag tag l =
-    List.map snd (List.filter (fun (tag',_) -> tag_eq tag tag') l)
+  let filter_port port l =
+    List.map snd (List.filter (fun (port',_) -> port_eq port port') l)
 
                          
 
@@ -156,8 +156,8 @@ module Make(P:P) = (struct
         n_out = out;
       }
     in
-    List.iter (fun (tag,e) -> e.e_dst <- (tag,n)::e.e_dst) inc;
-    List.iter (fun (tag,e) -> e.e_src <- (tag,n)::e.e_src) out;
+    List.iter (fun (port,e) -> e.e_dst <- (port,n)::e.e_dst) inc;
+    List.iter (fun (port,e) -> e.e_src <- (port,n)::e.e_src) out;
     (match entry with
      | Some entry -> g.g_entries <- (entry,n)::g.g_entries
      | None -> ()
@@ -179,8 +179,8 @@ module Make(P:P) = (struct
         e_dst = dst;
       }
     in
-    List.iter (fun (tag,n) -> n.n_out <- (tag,e):: n.n_out) src;
-    List.iter (fun (tag,n) -> n.n_in <- (tag,e):: n.n_in) dst;
+    List.iter (fun (port,n) -> n.n_out <- (port,e):: n.n_out) src;
+    List.iter (fun (port,n) -> n.n_in <- (port,e):: n.n_in) dst;
     EdgeHash.add g.g_edges id e;
     e
 
@@ -228,34 +228,34 @@ module Make(P:P) = (struct
     )
 
 
-  let node_add_in n tag e =
-    n.n_in  <- (tag,e)::n.n_in;
-    e.e_dst <- (tag,n)::e.e_dst
+  let node_add_in n port e =
+    n.n_in  <- (port,e)::n.n_in;
+    e.e_dst <- (port,n)::e.e_dst
 
-  let node_add_out n tag e =
-    n.n_out <- (tag,e)::n.n_out;
-    e.e_src <- (tag,n)::e.e_src
+  let node_add_out n port e =
+    n.n_out <- (port,e)::n.n_out;
+    e.e_src <- (port,n)::e.e_src
 
   let node_add_in_list n v =
-    List.iter (fun (tag,e) -> node_add_in n tag e) v
+    List.iter (fun (port,e) -> node_add_in n port e) v
 
   let node_add_out_list n v =
-    List.iter (fun (tag,e) -> node_add_out n tag e) v
+    List.iter (fun (port,e) -> node_add_out n port e) v
 
   let edge_add_src_list e v =
-    List.iter (fun (tag,n) -> node_add_out n tag e) v
+    List.iter (fun (port,n) -> node_add_out n port e) v
 
   let edge_add_dst_list e v =
-    List.iter (fun (tag,n) -> node_add_in n tag e) v
+    List.iter (fun (port,n) -> node_add_in n port e) v
 
     
-  let node_remove_in_tag n tag e =
-    n.n_in  <- List.filter (tag_edge_neq (tag,e)) n.n_in;
-    e.e_dst <- List.filter (tag_node_neq (tag,n)) e.e_dst
+  let node_remove_in_port n port e =
+    n.n_in  <- List.filter (port_edge_neq (port,e)) n.n_in;
+    e.e_dst <- List.filter (port_node_neq (port,n)) e.e_dst
 
-  let node_remove_out_tag n tag e =
-    e.e_src <- List.filter (tag_node_neq (tag,n)) e.e_src;
-    n.n_out <- List.filter (tag_edge_neq (tag,e)) n.n_out
+  let node_remove_out_port n port e =
+    e.e_src <- List.filter (port_node_neq (port,n)) e.e_src;
+    n.n_out <- List.filter (port_edge_neq (port,e)) n.n_out
 
   let node_remove_in n e =
     n.n_in  <- List.filter (fun (_,e') -> edge_neq e e') n.n_in;
@@ -266,26 +266,26 @@ module Make(P:P) = (struct
     e.e_src <- List.filter (fun (_,n') -> node_neq n n') e.e_src
 
   let node_remove_all_in n =
-    List.iter (fun (tag,e) ->
-        e.e_dst <- List.filter (tag_node_neq (tag,n)) e.e_dst
+    List.iter (fun (port,e) ->
+        e.e_dst <- List.filter (port_node_neq (port,n)) e.e_dst
       ) n.n_in;
     n.n_in <- []
     
   let node_remove_all_out n =
-    List.iter (fun (tag,e) ->
-        e.e_src <- List.filter (tag_node_neq (tag,n)) e.e_src
+    List.iter (fun (port,e) ->
+        e.e_src <- List.filter (port_node_neq (port,n)) e.e_src
       ) n.n_out;
     n.n_out <- []
     
   let edge_remove_all_src e =
-    List.iter (fun (tag,n) ->
-        n.n_out <- List.filter (tag_edge_neq (tag,e)) n.n_out
+    List.iter (fun (port,n) ->
+        n.n_out <- List.filter (port_edge_neq (port,e)) n.n_out
       ) e.e_src;
     e.e_src <- []
     
   let edge_remove_all_dst e =
-    List.iter (fun (tag,n) ->
-        n.n_in <- List.filter (tag_edge_neq (tag,e)) n.n_in
+    List.iter (fun (port,n) ->
+        n.n_in <- List.filter (port_edge_neq (port,e)) n.n_in
       ) e.e_dst;
     e.e_dst <- []
 
@@ -348,88 +348,88 @@ module Make(P:P) = (struct
   let edge_set_data e data = e.e_data <- data
   let edge_src e = e.e_src
   let edge_dst e = e.e_dst
-  let edge_src_tag e tag = filter_tag tag (edge_src e)
-  let edge_dst_tag e tag = filter_tag tag (edge_dst e)
+  let edge_src_port e port = filter_port port (edge_src e)
+  let edge_dst_port e port = filter_port port (edge_dst e)
   let edge_src_size e = List.length (edge_src e)
   let edge_dst_size e = List.length (edge_dst e)
-  let edge_src_tag_size e tag = List.length (edge_src_tag e tag)
-  let edge_dst_tag_size e tag = List.length (edge_dst_tag e tag)
+  let edge_src_port_size e port = List.length (edge_src_port e port)
+  let edge_dst_port_size e port = List.length (edge_dst_port e port)
                            
   let node_id n = n.n_id
   let node_data n = n.n_data
   let node_set_data n data = n.n_data <- data
   let node_in n = n.n_in
   let node_out n = n.n_out
-  let node_in_tag n tag = filter_tag tag (node_in n)
-  let node_out_tag n tag = filter_tag tag (node_out n)
+  let node_in_port n port = filter_port port (node_in n)
+  let node_out_port n port = filter_port port (node_out n)
   let node_in_size n = List.length (node_in n)
   let node_out_size n = List.length (node_out n)
-  let node_in_tag_size n tag = List.length (node_in_tag n tag)
-  let node_out_tag_size n tag = List.length (node_out_tag n tag)
+  let node_in_port_size n port = List.length (node_in_port n port)
+  let node_out_port_size n port = List.length (node_out_port n port)
 
-  let node_entry_tag g n =
+  let node_entry_port g n =
     try Some (fst (List.find (fun (_,n') -> node_eq n n') g.g_entries))
     with Not_found -> None
 
-  let node_exit_tag g n =
+  let node_exit_port g n =
     try Some (fst (List.find (fun (_,n') -> node_eq n n') g.g_exits))
     with Not_found -> None
 
   let node_has_out n e =
     List.exists (fun (_,e') -> edge_eq e e') n.n_out
                        
-  let node_has_out_tag n tag e =
-    List.exists (tag_edge_eq (tag,e)) n.n_out
+  let node_has_out_port n port e =
+    List.exists (port_edge_eq (port,e)) n.n_out
                        
   let node_has_in n e =
     List.exists (fun (_,e') -> edge_eq e e') n.n_in
                        
-  let node_has_in_tag n tag e =
-    List.exists (tag_edge_eq (tag,e)) n.n_in
+  let node_has_in_port n port e =
+    List.exists (port_edge_eq (port,e)) n.n_in
 
   let edge_has_src e n =
     List.exists (fun (_,n') -> node_eq n n') e.e_src
     
-  let edge_has_src_tag e tag n =
-    List.exists (tag_node_eq (tag,n)) e.e_src
+  let edge_has_src_port e port n =
+    List.exists (port_node_eq (port,n)) e.e_src
 
   let edge_has_dst e n =
     List.exists (fun (_,n') -> node_eq n n') e.e_dst
     
-  let edge_has_dst_tag e tag n =
-    List.exists (tag_node_eq (tag,n)) e.e_dst
+  let edge_has_dst_port e port n =
+    List.exists (port_node_eq (port,n)) e.e_dst
 
   let node_out_nodes n =
     List.concat
-      (List.map (fun (tag1,e) ->
-           List.map (fun (tag2,n2) -> (tag1,e,tag2,n2)) e.e_dst
+      (List.map (fun (port1,e) ->
+           List.map (fun (port2,n2) -> (port1,e,port2,n2)) e.e_dst
          ) n.n_out)
     
   let node_in_nodes n =
     List.concat
-      (List.map (fun (tag1,e) ->
-           List.map (fun (tag2,n2) -> (n2,tag2,e,tag1)) e.e_src
+      (List.map (fun (port1,e) ->
+           List.map (fun (port2,n2) -> (n2,port2,e,port1)) e.e_src
          ) n.n_in)
     
-  let node_out_nodes_tag n tag1 tag2 =
+  let node_out_nodes_port n port1 port2 =
     List.concat
-      (List.map (fun (tag,e) ->
-           if tag_neq tag tag1 then []
+      (List.map (fun (port,e) ->
+           if port_neq port port1 then []
            else
              List.map
                (fun (_,n2) -> (e,n2))
-               (List.filter (fun (tag,n2) -> tag_eq tag tag2) e.e_dst)
+               (List.filter (fun (port,n2) -> port_eq port port2) e.e_dst)
          ) n.n_out)
     
     
-  let node_in_nodes_tag n tag1 tag2 =
+  let node_in_nodes_port n port1 port2 =
     List.concat
-      (List.map (fun (tag,e) ->
-           if tag_neq tag tag1 then []
+      (List.map (fun (port,e) ->
+           if port_neq port port1 then []
            else
              List.map
                (fun (_,n2) -> (n2,e))
-               (List.filter (fun (tag,n2) -> tag_eq tag tag2) e.e_src)
+               (List.filter (fun (port,n2) -> port_eq port port2) e.e_src)
          ) n.n_in)
     
   let node_has_node_out n1 n2 =
@@ -442,42 +442,59 @@ module Make(P:P) = (struct
       (fun (_,e) -> List.exists (fun (_,n) -> node_eq n n2) e.e_src)
       n1.n_in
 
-  let node_has_node_out_tag n1 tag1 tag2 n2 =
+  let node_has_node_out_port n1 port1 port2 n2 =
     List.exists
-      (fun (tag,e) ->
-        tag_eq tag tag1 &&
-          List.exists (tag_node_eq (tag2,n2)) e.e_dst
+      (fun (port,e) ->
+        port_eq port port1 &&
+          List.exists (port_node_eq (port2,n2)) e.e_dst
       ) n1.n_out
 
-  let node_has_node_in_tag n1 tag1 tag2 n2 =
+  let node_has_node_in_port n1 port1 port2 n2 =
     List.exists
-      (fun (tag,e) ->
-        tag_eq tag tag1 &&
-          List.exists (tag_node_eq (tag2,n2)) e.e_src
+      (fun (port,e) ->
+        port_eq port port1 &&
+          List.exists (port_node_eq (port2,n2)) e.e_src
       ) n1.n_in
 
 
 
 
-  let node_add_in_once n tag e =
-    if not (node_has_in_tag n tag e) then node_add_in n tag e
+  let node_add_in_unique n port e =
+    if not (node_has_in_port n port e) then node_add_in n port e
     
-  let node_add_out_once n tag e =
-    if not (node_has_out_tag n tag e) then node_add_out n tag e
+  let node_add_out_unique n port e =
+    if not (node_has_out_port n port e) then node_add_out n port e
 
-  let node_add_in_list_once n v =
-    List.iter (fun (tag,e) -> node_add_in_once n tag e) v
+  let node_add_in_list_unique n v =
+    List.iter (fun (port,e) -> node_add_in_unique n port e) v
 
-  let node_add_out_list_once n v =
-    List.iter (fun (tag,e) -> node_add_out_once n tag e) v
+  let node_add_out_list_unique n v =
+    List.iter (fun (port,e) -> node_add_out_unique n port e) v
 
-  let edge_add_src_list_once e v =
-    List.iter (fun (tag,n) -> node_add_out_once n tag e) v
+  let edge_add_src_list_unique e v =
+    List.iter (fun (port,n) -> node_add_out_unique n port e) v
 
-  let edge_add_dst_list_once e v =
-    List.iter (fun (tag,n) -> node_add_in_once n tag e) v
+  let edge_add_dst_list_unique e v =
+    List.iter (fun (port,n) -> node_add_in_unique n port e) v
 
 
+  let node_set_in_unique n v =
+    node_remove_all_in n;
+    node_add_in_list_unique n v
+
+  let node_set_out_unique n v =
+    node_remove_all_in n;
+    node_add_out_list_unique n v
+
+  let edge_set_src_unique e v =
+    edge_remove_all_src e;
+    edge_add_src_list_unique e v
+    
+  let edge_set_dst_unique e v =
+    edge_remove_all_dst e;
+    edge_add_dst_list_unique e v
+
+    
     
   (*========================================================================*)
                        (** {2 Global operations} *)
@@ -495,19 +512,19 @@ module Make(P:P) = (struct
     NodeHash.iter
       (fun id n ->
         let nn = get_node gg id in
-        nn.n_in  <- List.map (fun (tag,e) -> tag, get_edge gg e.e_id) n.n_in;
-        nn.n_out <- List.map (fun (tag,e) -> tag, get_edge gg e.e_id) n.n_out
+        nn.n_in  <- List.map (fun (port,e) -> port, get_edge gg e.e_id) n.n_in;
+        nn.n_out <- List.map (fun (port,e) -> port, get_edge gg e.e_id) n.n_out
       ) g.g_nodes;
     EdgeHash.iter
       (fun id e ->
         let ee = get_edge gg id in
-        ee.e_src <- List.map (fun (tag,n) -> tag, get_node gg n.n_id) e.e_src;
-        ee.e_dst <- List.map (fun (tag,n) -> tag, get_node gg n.n_id) e.e_dst
+        ee.e_src <- List.map (fun (port,n) -> port, get_node gg n.n_id) e.e_src;
+        ee.e_dst <- List.map (fun (port,n) -> port, get_node gg n.n_id) e.e_dst
       ) g.g_edges;
     gg.g_entries <-
-      List.map (fun (tag,n) -> tag, get_node gg n.n_id) g.g_entries;
+      List.map (fun (port,n) -> port, get_node gg n.n_id) g.g_entries;
     gg.g_exits   <-
-      List.map (fun (tag,n) -> tag, get_node gg n.n_id) g.g_exits;
+      List.map (fun (port,n) -> port, get_node gg n.n_id) g.g_exits;
     gg
 
   let clone g = clone_map (fun n -> n) (fun e -> e) g
@@ -558,12 +575,12 @@ module Make(P:P) = (struct
   type ('n,'e) printer = {
       print_node: Format.formatter -> ('n,'e) node -> unit;
       print_edge: Format.formatter -> ('n,'e) edge  -> unit;
-      print_src: Format.formatter -> ('n,'e) node -> tag -> ('n,'e) edge
+      print_src: Format.formatter -> ('n,'e) node -> port -> ('n,'e) edge
                  -> unit;
-      print_dst: Format.formatter -> ('n,'e) edge -> tag -> ('n,'e) node
+      print_dst: Format.formatter -> ('n,'e) edge -> port -> ('n,'e) node
                  -> unit;
-      print_entry: Format.formatter -> ('n,'e) node -> tag -> unit;
-      print_exit: Format.formatter -> ('n,'e) node -> tag -> unit;
+      print_entry: Format.formatter -> ('n,'e) node -> port -> unit;
+      print_exit: Format.formatter -> ('n,'e) node -> port -> unit;
     }
     
 
@@ -575,29 +592,29 @@ module Make(P:P) = (struct
     (* print each node *)
     NodeMap.iter
       (fun id n ->
-        (match node_entry_tag g n with
+        (match node_entry_port g n with
          | None -> ()
-         | Some tag -> p.print_entry fmt n tag
+         | Some port -> p.print_entry fmt n port
         );
         p.print_node fmt n;
-        (match node_exit_tag g n with
+        (match node_exit_port g n with
          | None -> ()
-         | Some tag -> p.print_exit fmt n tag
+         | Some port -> p.print_exit fmt n port
         );
         List.iter
           (fun (_,e) ->
             if not (EdgeHash.mem edges e.e_id) then (
               EdgeHash.add edges e.e_id ();
               List.iter
-                (fun (tag,n) -> p.print_src fmt n tag e)
-                (List.sort tag_node_compare e.e_src);
+                (fun (port,n) -> p.print_src fmt n port e)
+                (List.sort port_node_compare e.e_src);
               p.print_edge fmt e;
               List.iter
-                (fun (tag,n) -> p.print_dst fmt e tag n)
-                (List.sort tag_node_compare e.e_dst)
+                (fun (port,n) -> p.print_dst fmt e port n)
+                (List.sort port_node_compare e.e_dst)
             )
           )
-          (List.sort tag_edge_compare n.n_out)
+          (List.sort port_edge_compare n.n_out)
       ) nodes
 
     
@@ -605,7 +622,7 @@ module Make(P:P) = (struct
   type ('n,'e) dot_printer = {
       dot_node: Format.formatter -> ('n,'e) node -> unit;
       dot_edge: Format.formatter -> ('n,'e) edge -> unit;
-      dot_tag: Format.formatter -> tag -> unit;
+      dot_port: Format.formatter -> port -> unit;
     }
                            
   let print_dot p name fmt g =
@@ -650,36 +667,36 @@ module Make(P:P) = (struct
       (fun id e ->
         let did1 = EdgeHash.find eid id in
         List.iter
-          (fun (tag,n) ->
+          (fun (port,n) ->
             let did2 = NodeHash.find nid n.n_id in
             Format.fprintf
               fmt "  n%i -> n%i [label=\"%s\"];\n"
-              did2 did1 (to_string p.dot_tag tag)
+              did2 did1 (to_string p.dot_port port)
           ) e.e_src;
         List.iter
-          (fun (tag,n) ->
+          (fun (port,n) ->
             let did2 = NodeHash.find nid n.n_id in
             Format.fprintf
               fmt "  n%i -> n%i [label=\"%s\"];\n"
-              did1 did2 (to_string p.dot_tag tag)
+              did1 did2 (to_string p.dot_port port)
           ) e.e_dst
       ) g.g_edges;
     (* entry / exit nodes *)
     List.iter
-      (fun (tag,n) ->
+      (fun (port,n) ->
         incr count;
         let did = NodeHash.find nid n.n_id in
         Format.fprintf
           fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
-          !count !count did (to_string p.dot_tag tag)       
+          !count !count did (to_string p.dot_port port)       
       ) g.g_entries;
     List.iter
-      (fun (tag,n) ->
+      (fun (port,n) ->
         incr count;
         let did = NodeHash.find nid n.n_id in
         Format.fprintf
           fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
-          !count did !count (to_string p.dot_tag tag)       
+          !count did !count (to_string p.dot_port port)       
       ) g.g_exits;
     (* footer *)
     Format.fprintf fmt "}\n"
