@@ -112,5 +112,6 @@ end
 
 
 let register_domain modl =
-  let module D = Make(val modl : S) in
+  let module M = (val modl : S) in
+  let module D = Make(M) in
   Domain.register_domain (module D)
