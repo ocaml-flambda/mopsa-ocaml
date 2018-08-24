@@ -52,7 +52,7 @@ struct
       | _ -> acc
     in
 
-    dman.fold_env {doit} cur
+    dman.fold {doit} cur
 
   (* Reduction operator *)
   let reduce stmt (dman: ('a, 'd) domain_man) (nrman: ('a, 'v) nonrel_man) man flow : 'a flow =

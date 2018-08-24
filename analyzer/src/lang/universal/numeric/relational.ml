@@ -386,11 +386,14 @@ struct
     (* Get the linear constraints *)
     let lincons_list =
       let earray = Apron.Abstract1.to_lincons_array ApronManager.man a in
-      let rec iter i = if i == Apron.Lincons1.array_length earray then [] else (Apron.Lincons1.array_get earray i) :: (iter (i + 1)) in
+      let rec iter i =
+        if i = Apron.Lincons1.array_length earray then []
+        else (Apron.Lincons1.array_get earray i) :: (iter (i + 1))
+      in
       iter 0
     in
 
-    List.fold_left (fun acc lincons ->
+    let rel1 = List.fold_left (fun acc lincons ->
         let t_involved = ref false in
         Apron.Lincons1.iter (fun c v' -> 
             t_involved := !t_involved || ((compare_var v (apron_to_var v') = 0) && not (Apron.Coeff.is_zero c))
@@ -406,8 +409,31 @@ struct
           !vars @ acc
         else
           acc
-      ) [] lincons_list |>
-    List.sort_uniq compare_var
+      ) [] lincons_list in
+
+    (* Add also constant variables *)
+    let rel2 = List.fold_left (fun acc lincons ->
+        let nb_non_zero_coeff = ref 0 in
+        Apron.Lincons1.iter (fun c v' ->
+            if compare_var v (apron_to_var v') = 0 || Apron.Coeff.is_zero c then
+              ()
+            else
+              nb_non_zero_coeff := !nb_non_zero_coeff + 1
+          ) lincons;
+        if !nb_non_zero_coeff = 1 then
+          let vars = ref [] in
+          Apron.Lincons1.iter (fun c v' ->
+              let v' = apron_to_var v' in
+              if compare_var v v' <> 0 && not (Apron.Coeff.is_zero c) then
+                vars := v' :: !vars
+            ) lincons;
+          !vars @ acc
+        else
+          acc
+      ) [] lincons_list
+    in
+    
+    List.sort_uniq compare_var (rel1 @ rel2)
 
 
   let get_interval (v:var) (a:t) : (Values.Intervals.Value.t) =

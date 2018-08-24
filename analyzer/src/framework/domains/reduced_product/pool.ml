@@ -37,7 +37,7 @@ let conj_to_evl (c: 'a evl_conj) : ('a, Ast.expr) evl option =
       Eval.meet_list
     )
 
-type 'a map_fun = {
+type 'a fold_fun = {
   doit : 't. 't domain -> 'a -> 'a
 }
 
@@ -52,7 +52,8 @@ type ('a, 'd) domain_man = {
   (** Set the abstract element of a member domain *)
   set_env : 't. 't domain -> 't -> 'a -> 'a;
 
-  fold_env : 'a map_fun -> 'a -> 'a;
+  (** Fold over the pool by applying the given function *)
+  fold : 'b. 'b fold_fun -> 'b -> 'b;
 
   (** Get the evaluation of a member domain *)
   get_eval : 't. 't domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option;

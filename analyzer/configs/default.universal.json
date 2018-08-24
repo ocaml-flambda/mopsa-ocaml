@@ -18,7 +18,7 @@
 	    "reductions" : [
 		"universal.numeric.reductions.intervals_congruences",
 		"universal.numeric.reductions.intervals_broadcast",
-		"universal.numeric.reductions.hidden_assume_relation"
+		"universal.numeric.reductions.implicit_assume_relation"
 	    ]
 	}
     ]

@@ -215,17 +215,20 @@ struct
       f
     );
 
-    fold_env = (fun f init ->
-        let rec aux : type b. b domain_pool -> 'a -> 'a =
+    fold = (
+      let f : type b. b fold_fun -> b -> b = fun g init ->
+        let rec aux : type c. c domain_pool -> b -> b =
           fun pool acc ->
             match pool with
             | Nil -> acc
             | Cons(hd, tl) ->
               let module D = (val hd) in
-              let acc' = f.doit D.id acc in
+              let acc' = g.doit D.id acc in
               aux tl acc'
         in
         aux Config.pool init
+      in
+      f
       );
 
     get_eval = (
