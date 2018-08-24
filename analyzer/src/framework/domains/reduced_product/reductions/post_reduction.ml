@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operators of abstract states *)
+(** Reduction operators of post-conditions *)
 
 open Manager
 open Pool

@@ -8,10 +8,7 @@
 
 (** Command-line options. *)
 
-(**
-  List of command-line options.
-  It can be extended by modules to add their own options.
-*)
+(** List of registered command-line options. *)
 let spec : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
 
 (** Register a command-line option. *)

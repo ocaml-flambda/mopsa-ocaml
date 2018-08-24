@@ -6,6 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Analyzer - Central orchestrer of the analysis architecture. *)
 
 open Ast
 open Lattice

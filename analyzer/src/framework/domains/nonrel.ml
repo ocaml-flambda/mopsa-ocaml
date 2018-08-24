@@ -224,7 +224,7 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man flow = Some (Flow.set_env T_cur top man flow)
+  let init prog man flow = Some (Flow.set_domain_env T_cur top man flow)
 
   let exec_interface = Domain.{
     import = [];
@@ -240,13 +240,13 @@ struct
     match skind stmt with
     | S_remove_var v ->
       Some (
-        let flow' = Flow.map_env T_cur (VarMap.remove v) man flow in
+        let flow' = Flow.map_domain_env T_cur (VarMap.remove v) man flow in
         Post.of_flow flow'
       )
 
     | S_project_vars vars ->
       Some (
-        let flow' = Flow.map_env T_cur (fun a ->
+        let flow' = Flow.map_domain_env T_cur (fun a ->
             VarMap.fold (fun v _ acc ->
                 if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
               ) a a
@@ -257,7 +257,7 @@ struct
 
     | S_rename_var (var1, var2) ->
       Some (
-        let flow' = Flow.map_env T_cur (fun a ->
+        let flow' = Flow.map_domain_env T_cur (fun a ->
             let v = VarMap.find var1 a in
             VarMap.remove var1 a |> VarMap.add var2 v
           ) man flow
@@ -268,7 +268,7 @@ struct
     | S_assign({ekind = E_var var}, e, mode) ->
       Some (
         man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
-        let flow', channels = Channel.map_env T_cur (fun a ->
+        let flow', channels = Channel.map_domain_env T_cur (fun a ->
             eval e a |> Channel.bind @@ fun (_,v) ->
             let a' = VarMap.add var v a in
             let a'' = match mode with
@@ -285,7 +285,7 @@ struct
     | S_assume e ->
       Some (
         man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
-        let flow', channels = Channel.map_env T_cur (fun a ->
+        let flow', channels = Channel.map_domain_env T_cur (fun a ->
             filter (get_annot flow) e true a
           ) man flow
         in
@@ -298,7 +298,7 @@ struct
 
   let ask : type r. r Query.query -> _ -> _ -> r option =
     fun query man flow ->
-      let a = Flow.get_env T_cur man flow in
+      let a = Flow.get_domain_env T_cur man flow in
       Value.ask query (fun exp -> let v = eval exp a in snd v.value)
 
 

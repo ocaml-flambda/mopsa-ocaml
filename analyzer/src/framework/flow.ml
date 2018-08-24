@@ -170,16 +170,11 @@ let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (
   {map; annot}
 
 
-(** [set_env tk a man flow] overwrites the local part of a domain in the
-   abstract element bound to token [tk] in [flow] *)
-let set_env (tk: token) (a:'t) (man:('a, 't) man) (flow:'a flow) : 'a flow =
+let set_domain_env (tk: token) (a:'t) (man:('a, 't) man) (flow:'a flow) : 'a flow =
   set tk (man.set a (get tk man flow)) man flow
 
-(** [get_env tk man flow] retrieves the local part of a domain in the
-   abstract element bound to token [tk] in [flow] *)
-let get_env (tk:token) (man:('a, 't) man) (flow:'a flow) : 't =
+let get_domain_env (tk:token) (man:('a, 't) man) (flow:'a flow) : 't =
   man.get (get tk man flow)
 
-(** [map_env tk f man flow] is equivalent to [set_env tk (f (get_env tk man flow)) man flow] *)
-let map_env (tk:token) (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
-  set_env tk (f (get_env tk man flow)) man flow
+let map_domain_env (tk:token) (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
+  set_domain_env tk (f (get_domain_env tk man flow)) man flow

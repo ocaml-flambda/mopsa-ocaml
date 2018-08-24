@@ -25,4 +25,5 @@
 
 
 val parse : string -> (module Domain.DOMAIN)
-(** [parse path] constructs an abstract domain from a configuration file *)
+(** [parse path] constructs an abstract domain from the path of a
+   configuration file *)

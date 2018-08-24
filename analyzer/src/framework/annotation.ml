@@ -6,6 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Annotations are used to add extra-information to flows. 
+    They are implemented as polymorphic maps so that annotations can be defined 
+    on top of the global abstraction.
+*)
+
 type ('a, _) key = ..
 
 type (_, _) eq = Eq : ('b, 'b) eq
@@ -27,21 +32,13 @@ type 'a annot = {
   witnesses  : 'a wl;
 }
 
-let vlen m =
+let cardinal m =
   let rec aux : type a. a vl -> int =
     function
     | [] -> 0
     | _ :: tl -> 1 + aux tl
   in
   aux m.values
-
-let wlen m =
-  let rec aux : type a. a wl -> int =
-    function
-    | [] -> 0
-    | _ :: tl -> 1 + aux tl
-  in
-  aux m.witnesses
 
 
 let register_annot (w: ('a, 'b) w) (m: 'a annot) : 'a annot =

@@ -6,7 +6,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Intra-procedural iterator handles blocks, assignments and tests *)
+(** Expansion abstraction of arrays with threshold.
+
+    When an array is accessed, a limited number of cells are
+    realized. Each realized cell is encoded with a distinct variable.
+*)
 
 open Framework.Essentials
 open Ast
@@ -19,8 +23,8 @@ module Cell =
 struct
   
   type t = {
-    array : var;
-    index : Z.t list;
+    array : var; (* base array variable *)
+    index : Z.t list; (* index path *)
   }
 
   let compare c1 c2 =
@@ -69,7 +73,9 @@ let () =
       );
   }
 
+
 (** Cell lval zone *)
+(** ************** *)
 
 type Framework.Zone.zone +=
   | Z_expand_cell_lval
@@ -110,9 +116,12 @@ struct
   (** Lattice structure *)
   (** ***************** *)
 
+  (* We keep the set of realized cells. Useful when an array
+     modification affects a large number of cells; we just remove the
+     previously realized cells of that array *)
   include Framework.Lattices.Powerset.Make(Cell)
 
-  let is_bottom a = false
+  let is_bottom _ = false
   let widen = join
   let print fmt a =
     Format.fprintf fmt "expand:@\n  @[%a@]@\n" print a
@@ -137,7 +146,7 @@ struct
 
   let init prog man flow =
     Some (
-      Flow.set_env T_cur empty man flow
+      Flow.set_domain_env T_cur empty man flow
     )
 
 
@@ -161,6 +170,7 @@ struct
   (** Post-conditions *)
   (** *************** *)
 
+  (* Iterate over the interval of the index [i]. *)
   let fold_cells i ~expand ~threshold init man flow =
     let open Numeric.Values.Intervals.Value in
     let itv = man.ask (Q_interval i) flow in
@@ -191,8 +201,9 @@ struct
     in
     {vname = name; vuid = c.Cell.array.vuid; vtyp = typ}
 
-  let index_in_interval (i:Z.t list) i' =
-    match i' with
+  (* Check whether the last index in an index path is covered by a given range *)
+  let index_in_interval (i:Z.t list) range : bool =
+    match range with
     | None -> true
     | Some (i0, min, max) ->
       let rec aux i1 i2 =
@@ -208,8 +219,9 @@ struct
       in
       aux i0 i
 
+  (* Remove previously realized cells of array [a] *)
   let ignore_old_cells a i e range man flow =
-    let env = Flow.get_env T_cur man flow in
+    let env = Flow.get_domain_env T_cur man flow in
     fold (fun c acc ->
         if
           compare_var c.Cell.array a = 0 &&
@@ -222,7 +234,8 @@ struct
           acc
       ) env flow
 
-
+  (* Compute the post-condition of <a:i0>[i] = e, where <a:i0> is the
+     cell of array a indexed by path i0 *)
   let assign_array_cell a i0 i e range mode man flow =
     man.eval i flow |> Post.bind man @@ fun i flow ->
     let flow' = fold_cells i
@@ -230,7 +243,7 @@ struct
             let c = mk_cell a (i0 @ [i]) in
             let v = mk_cell_var c e.etyp in
             let flow' = man.exec (mk_assign (mk_var v range) e ~mode range) flow |>
-                        Flow.map_env T_cur (add c) man
+                        Flow.map_domain_env T_cur (add c) man
             in
             Flow.join man acc flow'
           )
@@ -240,22 +253,26 @@ struct
     in
     Post.of_flow flow'
 
-  
+  (* Post-condition transfer function *)
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_assign({ekind = E_subscript(a, i)}, e, mode) ->
       Some (
         man.eval e flow |> Post.bind man @@ fun e flow ->
+        (* Evaluate a as an lval *)
         man.eval a flow ~zone:(Framework.Zone.top, Z_expand_cell_lval) |> Post.bind man @@ fun a flow ->
         match ekind a with
         | E_var a ->
+          (* a evaluated into a *)
           assign_array_cell a [] i e range mode man flow
 
         | E_cell_lval (a, Some i0) ->
+          (* a evaluated into <a:i0> *)
           assign_array_cell a i0 i e range mode man flow
 
         | E_cell_lval (a, None) ->
+          (* the number of cells when evaluating a is too large *)
           ignore_old_cells a None e range man flow |>
           Post.of_flow
 

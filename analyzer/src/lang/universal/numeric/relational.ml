@@ -410,11 +410,11 @@ struct
     List.sort_uniq compare_var
 
 
-  let interval (v:var) (a:t) : (Values.Intervals.Value.t) =
+  let get_interval (v:var) (a:t) : (Values.Intervals.Value.t) =
     Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
     Values.Intervals.Value.of_apron
 
-  let refine_interval v i a =
+  let set_interval v i a =
     let env = Apron.Abstract1.env a in
     let a' = Apron.Abstract1.of_box ApronManager.man env [|var_to_apron v|] [|Values.Intervals.Value.to_apron i|] in
     let a, a' = unify a a' in

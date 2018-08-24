@@ -8,8 +8,8 @@
 
 (** Essential modules. *)
 
-(** AST *)
 include Ast
+
 module Visitor = Visitor
 
 include Manager

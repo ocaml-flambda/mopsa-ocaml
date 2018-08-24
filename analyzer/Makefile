@@ -16,6 +16,7 @@ lang.universal = ast pp visitor frontend zone iterators numeric arrays
 lang.universal.iterators = program intraproc loops
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.reductions = channels intervals_congruences hidden_assume_relation intervals_broadcast
 
 
 #Packages

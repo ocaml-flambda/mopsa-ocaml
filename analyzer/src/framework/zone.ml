@@ -7,9 +7,8 @@
 (****************************************************************************)
 
 (** Zones define boundaries of sub-languages in an analysis. They are
-   used as arguments of the transfer functions [exec], [eval], and
-   [ask] in order to filter appropriate domains to use.
-*)
+   used as arguments of the transfer functions [exec] and [eval] in
+   order to filter appropriate domains to use.  *)
 
 let debug fmt = Debug.debug ~channel:"framework.zone" fmt
 

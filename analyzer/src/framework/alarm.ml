@@ -11,11 +11,6 @@
 
 open Ast
 
-(*==========================================================================*)
-                           (** {2 Type} *)
-(*==========================================================================*)
-
-(** Extensible type of alarm kinds, defined by domains. *)
 type alarm_kind = ..
 
 type alarm_level =
@@ -23,13 +18,10 @@ type alarm_level =
   | WARNING
   | PANIC
 
-(** An alarm *)
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_level : alarm_level;
 }
-
-(** {2 Registration} *)
 
 type alarm_info = {
   compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
@@ -60,33 +52,19 @@ let print fmt alarm =
     !pp_chain alarm
     
 
-(*==========================================================================*)
-                           (** {2 Query} *)
-(*==========================================================================*)
-
-
-(**
-   Query used by {!Main} to extract all alarms from used domains.
-*)
 type _ Query.query +=
   | Q_alarms: (alarm list) Query.query
 
 let () =
-  Query.(
-    register_query {
+  Query.(register_query {
       eq = (let check : type a. a query -> (a, alarm list) eq option =
-                   function
-                   | Q_alarms -> Some Eq
-                   | _ -> None
-                 in
-                 check
-                );
-      join = (fun al1 al2 ->
-          al1 @ al2
-        );
-
-      meet = (fun al1 al2 ->
-          List.filter (fun a -> List.mem a al2) al1
-        );
+              function
+              | Q_alarms -> Some Eq
+              | _ -> None
+            in
+            check
+           );
+      join = (fun al1 al2 -> al1 @ al2);
+      meet = (fun al1 al2 -> List.filter (fun a -> List.mem a al2) al1);
     }
   )

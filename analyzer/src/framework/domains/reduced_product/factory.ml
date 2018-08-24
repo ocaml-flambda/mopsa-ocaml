@@ -70,7 +70,7 @@ let rec type_domain_pool : (module DOMAIN) list -> dp = function
 
 let make_domain_product
     (pool: (module DOMAIN) list)
-    (state_rules: (module Reductions.State_reduction.REDUCTION) list)
+    (post_rules: (module Reductions.Post_reduction.REDUCTION) list)
     (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list)
   : (module DOMAIN) =    
   let D pool = type_domain_pool pool in
@@ -80,12 +80,12 @@ let make_domain_product
         type t = u
         type v = unit
         let pool = pool
-        let state_rules = state_rules
+        let post_rules = post_rules
         let eval_rules = eval_rules
         let nonrel_man (man:('a, t) man) : ('a, v) nonrel_man = {
           pool = Nil;
-          get = (fun _ _ _ -> assert false);
-          set = (fun _ _ _ a -> a);
+          get_var_value = (fun _ _ _ -> assert false);
+          set_var_value = (fun _ _ _ a -> a);
         }
       end) in
     (module D : DOMAIN)
@@ -97,7 +97,7 @@ let make_domain_product
 let make_mixed_product
     (domain_pool: (module DOMAIN) list)
     (value_pool: (module VALUE) list)
-    (state_rules: (module Reductions.State_reduction.REDUCTION) list)
+    (post_rules: (module Reductions.Post_reduction.REDUCTION) list)
     (eval_rules: (module Reductions.Eval_reduction.REDUCTION) list)
     (value_rules: (module Reductions.Value_reduction.REDUCTION) list)
   : (module DOMAIN) =
@@ -119,19 +119,19 @@ let make_mixed_product
         type t = NR.t * a
         type v = b
         let pool : t domain_pool = Cons((module NR), pool)
-        let state_rules = state_rules
+        let post_rules = post_rules
         let eval_rules = eval_rules
         let nonrel_man (man:('a, t) man) : ('a, v) nonrel_man = {
           pool = vpool;
-          get = (fun id var a -> man.get a |>
+          get_var_value = (fun id var a -> man.get a |>
                                  fst |>
                                  NR.find var |>
-                                 V.man.get id
+                                 V.man.get_value id
                 );
-          set = (fun id var v a ->
+          set_var_value = (fun id var v a ->
               let nr, tl = man.get a in
               let vv = NR.find var nr in
-              let vv' = V.man.set id v vv |>
+              let vv' = V.man.set_value id v vv |>
                         V.reduce
               in
               let nr' = NR.add var vv'.Channel.value nr in
@@ -154,15 +154,15 @@ let make (pool: string list) (rules: string list) : (module DOMAIN) =
   let domain_pool = List.map Domain.find_domain domain_pool in
   let value_pool = List.map Value.find_value value_pool in
   
-  let state_rules, other_rules = List.partition (fun rule -> List.mem_assoc rule !Reductions.State_reduction.reductions) rules in
+  let post_rules, other_rules = List.partition (fun rule -> List.mem_assoc rule !Reductions.Post_reduction.reductions) rules in
   let eval_rules, value_rules = List.partition (fun rule -> List.mem_assoc rule !Reductions.Eval_reduction.reductions) other_rules in
 
-  let state_rules = List.map Reductions.State_reduction.find_reduction state_rules in
+  let post_rules = List.map Reductions.Post_reduction.find_reduction post_rules in
   let eval_rules = List.map Reductions.Eval_reduction.find_reduction eval_rules in
   let value_rules = List.map Reductions.Value_reduction.find_reduction value_rules in
 
   match domain_pool, value_pool with
   | [], [] -> Debug.fail "reduced product: empty pool"
   | [], _ -> make_value_product value_pool value_rules
-  | _, [] -> make_domain_product domain_pool state_rules eval_rules
-  | _, _ -> make_mixed_product domain_pool value_pool state_rules eval_rules value_rules
+  | _, [] -> make_domain_product domain_pool post_rules eval_rules
+  | _, _ -> make_mixed_product domain_pool value_pool post_rules eval_rules value_rules

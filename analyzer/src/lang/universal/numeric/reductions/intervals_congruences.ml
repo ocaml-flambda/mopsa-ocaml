@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operator for integer intervals and congruences. *)
+(** Reduction operator for intervals and congruences. *)
 
 open Framework.Essentials
 open Framework.Domains.Reduced_product.Reductions
@@ -23,84 +23,37 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 module I = Values.Intervals.Value
 module C = Values.Congruences.Value
-module O = Relational.Oct   
 
-type Post.channel += C_interval_congruence
-
-module Reduction1 : Value_reduction.REDUCTION =
+module Reduction : Value_reduction.REDUCTION =
 struct
 
+  (* Reduce a congruence and an interval *)
+  let meet_cgr_itv c i =
+    match c, i with
+    | Bot.BOT, _ | _, Bot.BOT -> (C.bottom, I.bottom)
+    | Bot.Nb a, Bot.Nb b ->
+      match CongUtils.IntCong.meet_inter a b with
+      | Bot.BOT -> (C.bottom, I.bottom)
+      | Bot.Nb (a', b') ->
+        let c' = Bot.Nb a' and i' = Bot.Nb b' in
+        debug "reduce %a and %a => result: %a and %a" I.print i C.print c I.print i' C.print c';
+        (c', i')
+
+  (* Reduction operator *)
   let reduce (man: 'a value_man) (v: 'a) : 'a with_channel =
-    debug "reduce %a and %a"
-      I.print (man.get I.id v)
-      C.print (man.get C.id v)
-    ;
-    try
-      let i = man.get I.id v |> Bot.bot_to_exn in
-      let c = man.get C.id v |> Bot.bot_to_exn in
+    let c = man.get_value C.id v in
+    let i = man.get_value I.id v in
+    let c', i' = meet_cgr_itv c i in
 
-      let reduction = CongUtils.IntCong.meet_inter c i in
-      let c', i' = Bot.bot_to_exn reduction in
+    debug "reduce %a and %a => result: %a and %a" I.print i C.print c I.print i' C.print c';
 
-      debug "reduce %a and %a => result: %a and %a"
-        I.print (Bot.Nb i)
-        C.print (Bot.Nb c)
-        I.print (Bot.Nb i')
-        C.print (Bot.Nb c')
-      ;
+    let channels = if I.subset i i' then [] else [Channels.C_interval] in
 
-      let channels =
-        if ItvUtils.IntItv.equal i' i then []
-        else [C_interval_congruence]
-      in
-      man.set I.id (Bot.Nb i') v |>
-      man.set C.id (Bot.Nb c') |>
-      Value_reduction.return ~channels
-    with Bot.Found_BOT ->
-      debug "reduce %a and %a => result: ⊥"
-        I.print (man.get I.id v)
-        C.print (man.get C.id v)
-      ;
-      man.set I.id I.bottom v |>
-      man.set C.id C.bottom |>
-      Value_reduction.return
+    man.set_value I.id i' v |>
+    man.set_value C.id c' |>
+    Value_reduction.return ~channels
 end
 
 
 let () =
-  Value_reduction.register_reduction name (module Reduction1)
-
-
-(***************************************************************************)
-(*                            Second reduction                             *)
-(***************************************************************************)
-
-let name = "universal.numeric.reductions.intervals_octagons"
-let debug fmt = Debug.debug ~channel:name fmt
-
-module Reduction2 : State_reduction.REDUCTION =
-struct
-  let trigger = Some C_interval_congruence
-
-  let reduce stmt (dman: ('a, 'd) domain_man) (nman: ('a, 'v) nonrel_man) man flow : 'a flow =
-    match skind stmt with
-    | S_assume(e) ->
-      let vars = Framework.Visitor.expr_vars e in
-      List.fold_left (fun acc v ->
-          let cur = Flow.get T_cur man acc in
-          let i1 = nman.get I.id v cur in
-          let o = dman.get_state O.id cur in
-          let i2 = O.interval v o in
-          if I.subset i2 i1 then acc
-          else
-            let o' = O.refine_interval v i1 o in
-            let cur' = dman.set_state O.id o' cur in
-            Flow.set T_cur cur' man acc
-        ) flow vars
-
-    | _ -> flow
-
-end
-
-let () =
-  State_reduction.register_reduction name (module Reduction2)
+  Value_reduction.register_reduction name (module Reduction)

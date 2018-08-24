@@ -12,28 +12,20 @@
     manager on this type providing reply merging functions.
 
     Here is an example. Let us define a new interval query:
-    {[type _ query +=
-      | QInterval : var -> (int * int) query
-      ;;
-    ]}
+    {[type _ query += QInterval : var -> (int * int) query]}
 
     Next, an interval manager is registered as follows:
     {[register_query {
         eq = (let check : type a. a query -> (a, (int * int)) eq option =
-                     fun q ->
-                       match q with
-                       | QInterval _ -> Some Eq
-                       | _ -> None
-                   in
-                   check
-                  );
-        join = (fun (a1, a2) (b1, b2) ->
-            (min a1 b1, max a2 b2)
-          );
-
-        meet = (fun (a1, a2) (b1, b2) ->
-            (max a1 b1, min a2 b2)
-          );
+                fun q ->
+                  match q with
+                  | QInterval _ -> Some Eq
+                  | _ -> None
+              in
+              check
+             );
+        join = (fun (a1, a2) (b1, b2) -> (min a1 b1, max a2 b2));
+        meet = (fun (a1, a2) (b1, b2) -> (max a1 b1, min a2 b2));
       };;]}
 
     For instance, the join of two intervals of a query [q] can be obtained simply by:

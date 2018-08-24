@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 (**
-   Managers provide access to operators and transfer functions over the
+   Managers provide access to operators and transfer functions of the
    global abstract environment.
 *)
 

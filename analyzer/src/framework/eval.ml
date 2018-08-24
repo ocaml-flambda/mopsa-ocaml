@@ -9,7 +9,6 @@
 
 (** Evaluations of expressions *)
 
-
 open Ast
 open Flow
 open Manager
@@ -147,9 +146,6 @@ let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
 
 let to_dnf (evl: ('a, 'e) evl) : ('a, 'e) evl_case Dnf.t =
   evl
-
-let return (evl: ('a, 'e) evl) : ('a, 'e) evl option =
-  Some evl
 
 let choose evl =
   match Dnf.choose evl with

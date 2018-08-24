@@ -6,7 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains without lattice data structure. *)
+(** Stateless domains are domains without a lattice structure. Only
+   transfer functions are defined. *)
 
 open Essentials
 
@@ -16,13 +17,10 @@ sig
   val name     : string
   val id       : unit domain
   val identify : 'b domain -> (unit, 'b) eq option
-
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-
   val zone : Zone.zone
   val import_exec : Zone.zone list
   val import_eval : (Zone.zone * Zone.zone) list
-
+  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
   val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
   val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option

@@ -6,14 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   Unified method to visit, fold or modify an AST.
-
-   To allow visiting the extensible types of statements and expressions,
-   the developper should define its structure giving:
-   - its parts consisting of sub-expressions and sub-statements,
-   - its builder that can reconstitute the statement/expression from its parts.
-*)
+(** Visitor of statements and expressions. *)
 
 
 open Ast

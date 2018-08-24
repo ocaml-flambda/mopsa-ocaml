@@ -6,18 +6,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-(** Annotations are used to add extra-information to abstract
-   elements. They are implemented as polymorphic maps to allow define
-   annotations on top of the global abstraction.
+(** Annotations are used to add extra-information to flows. 
+    They are implemented as polymorphic maps so that annotations can be defined 
+    on top of the global abstraction.
 *)
 
 type ('a, _) key = ..
-(** [('a, 'b) key] is a key for cells of type ['b] that can be
-   polymorphic on ['a] *)
+(** Type [('a, 'b) key] defines a key for a cell of type ['b] that can
+   be polymorphic on ['a] *)
 
 type 'a annot
-(** Type of annotations over an abstract type ['a] *)
+(** Type of annotations over a parameter type ['a] *)
 
 
 (*==========================================================================*)
@@ -25,14 +24,16 @@ type 'a annot
 (*==========================================================================*)
 
 type (_, _) eq = Eq : ('a, 'a) eq
+(** Equality witness *)
 
 type ('a, 'b) w = {
   eq : 'c. ('a, 'c) key -> ('b, 'c) eq option;
 }
-(** [('a, 'b) w] defines an equality witness of a key [('a, 'b) key] *)
+(** [('a, 'b) w] defines an equality witness checker for a key [('a, 'b) key] *)
 
 val register_annot : ('a, 'b) w -> 'a annot -> 'a annot
-(** [register_annot w a] adds a new equality witness [w] to the annotation map [m] *)
+(** [register_annot w a] registers a new kind of annotations to an
+   annotation map [a], defined with a witness checker [w] *)
 
 
 (*==========================================================================*)
@@ -46,13 +47,13 @@ val empty : 'a annot
 
 val add : ('a, 'b) key -> 'b -> 'a annot -> 'a annot
 (** [add k v a] returns a new annotation equal to [m] having a binding
-   of key [k] to value [v]. Previous binding is removed if
+   from key [k] to value [v]. Previous binding is removed if
    present. Raises [Key_not_found] if [k] was not registered in [m]
    *)
 
 val find : ('a, 'b) key -> 'a annot -> 'b
-(** [find k m] returns the values bound to [k] in [m]. Raises
+(** [find k m] returns the value bound to [k] in [m]. Raises
     [Not_found] if the binding is not found. *)
 
-val vlen : 'a annot -> int
-val wlen : 'a annot -> int
+val cardinal : 'a annot -> int
+(** Number of values in a map *)

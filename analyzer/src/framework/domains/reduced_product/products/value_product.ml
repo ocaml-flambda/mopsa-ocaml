@@ -174,7 +174,7 @@ struct
 
   let man : t value_man = {
     pool = Config.pool;
-    get = (
+    get_value = (
       let f : type a. a value -> t -> a = fun k v ->
         let rec aux : type a b. a value -> b value_pool -> b -> a = fun k pool v ->
           match pool, v with
@@ -189,7 +189,7 @@ struct
       in
       f
     );
-    set = (
+    set_value = (
       let f : type a. a value -> a -> t -> t = fun k x v ->
         let rec aux : type a b. a value -> a -> b value_pool -> b -> b = fun k x pool v ->
           match pool, v with

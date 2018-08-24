@@ -6,6 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Post-conditions of a domain's [exec] transfer function *)
+
 open Manager
 
 type channel = ..
@@ -16,9 +18,10 @@ type 'a post = {
   mergers : Ast.stmt list;
   channels : channel list;
 }
-(** Post-conditions of statement transfer functions *)
+(** Post-conditions *)
 
 val of_flow : 'a flow -> 'a post
+(** [of_flow flow] returns a post-condition from a flow, without mergers and channels *)
 
 val add_mergers : Ast.stmt list -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)

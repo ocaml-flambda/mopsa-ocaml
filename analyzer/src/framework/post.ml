@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 
-(** Post-conditions of exec transfer functions *)
+(** Post-conditions of a domain's [exec] transfer function *)
 
 open Ast
 open Manager

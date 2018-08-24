@@ -123,7 +123,7 @@ let rec find_pool (names: string list) : (module VALUE) list =
 
 
 (*==========================================================================*)
-(**                  {2 Default backward evaluators} *)
+(**                  {2 Default backward functions} *)
 (*==========================================================================*)
 
 let default_bwd_unop (op:Ast.operator) (x:'a) (r:'a) : 'a with_channel =

@@ -31,7 +31,7 @@ module Make
        type v
        val pool : t domain_pool
        val nonrel_man : ('a, t) man -> ('a, v) nonrel_man
-       val state_rules : (module Reductions.State_reduction.REDUCTION) list
+       val post_rules : (module Reductions.Post_reduction.REDUCTION) list
        val eval_rules : (module Reductions.Eval_reduction.REDUCTION) list
      end
     ) : DOMAIN =
@@ -179,7 +179,7 @@ struct
   let domain_man man = {
     pool = Config.pool;
     
-    get_state = (
+    get_env = (
       let f : type b. b domain -> 'a -> b = fun id env ->
         let rec aux : type b c. b domain -> c domain_pool -> ('a, c) man -> b = fun id pool man ->
           match pool with
@@ -196,7 +196,7 @@ struct
       in
       f
     );
-    set_state = (
+    set_env = (
       let f : type b. b domain -> b -> 'a -> 'a = fun id a env ->
         let rec aux : type b c. b domain -> b -> c domain_pool -> ('a, c) man -> 'a =
           fun id a pool man ->
@@ -214,6 +214,19 @@ struct
       in
       f
     );
+
+    fold_env = (fun f init ->
+        let rec aux : type b. b domain_pool -> 'a -> 'a =
+          fun pool acc ->
+            match pool with
+            | Nil -> acc
+            | Cons(hd, tl) ->
+              let module D = (val hd) in
+              let acc' = f.doit D.id acc in
+              aux tl acc'
+        in
+        aux Config.pool init
+      );
 
     get_eval = (
       let f : type t. t domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option =
@@ -306,18 +319,18 @@ struct
 
   let reduce_exec stmt channels man flow =
     let dman = domain_man man in
-    let rec apply flow (l: (module Reductions.State_reduction.REDUCTION) list) =
+    let rec apply flow (l: (module Reductions.Post_reduction.REDUCTION) list) =
       match l with
       | [] -> flow
       | hd :: tl ->
-        let module R = (val hd : Reductions.State_reduction.REDUCTION) in
+        let module R = (val hd : Reductions.Post_reduction.REDUCTION) in
         match R.trigger with
         | Some ch when not (List.mem ch channels) -> apply flow tl
         | Some ch -> apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
         | None -> apply (R.reduce stmt dman (Config.nonrel_man man) man flow) tl
     in
     let rec lfp flow =
-      let flow' = apply flow Config.state_rules in
+      let flow' = apply flow Config.post_rules in
       if Flow.subset man flow flow' then flow else lfp flow'
     in
     lfp flow

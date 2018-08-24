@@ -40,7 +40,7 @@ struct
 
   let init prog man flow =
     Some (
-      Flow.set_env T_cur (D.init prog) man flow
+      Flow.set_domain_env T_cur (D.init prog) man flow
     )
 
   let exec_interface = {
@@ -60,7 +60,7 @@ struct
         man.eval ~zone:(Zone.top, D.zone) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e', mode)} in
-        let flow', channels = Channel.map_env T_cur (D.exec stmt') man flow in
+        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
         Post.of_flow flow' |>
         Post.add_channels channels
       )
@@ -70,14 +70,14 @@ struct
         man.eval ~zone:(Zone.top, D.zone) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
-        let flow', channels = Channel.map_env T_cur (D.exec stmt') man flow in
+        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
         Post.of_flow flow' |>
         Post.add_channels channels
       )
 
     | S_remove_var _ | S_rename_var _ | S_project_vars _ ->
       Some (
-        let flow', channels = Channel.map_env T_cur (D.exec stmt) man flow in
+        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt) man flow in
         Post.of_flow flow' |>
         Post.add_channels channels
       )
@@ -105,7 +105,7 @@ struct
     | _ -> None
 
   let ask query man flow =
-    D.ask query (Flow.get_env T_cur man flow)
+    D.ask query (Flow.get_domain_env T_cur man flow)
 
 end
 
