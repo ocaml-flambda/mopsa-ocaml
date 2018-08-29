@@ -188,6 +188,12 @@ module type S = sig
   val node_add_out_list: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
   (** Adds outgoing edges to the node, on the given ports. *)
 
+  val edge_add_src: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Adds a source node to the edge, on the given port. *)
+
+  val edge_add_dst: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Adds a destination node to the edge, on the given port. *)
+
   val edge_add_src_list: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
   (** Adds source nodes to the edge, on the given ports. *)
 
@@ -215,6 +221,16 @@ module type S = sig
   val node_add_out_list_unique: ('n,'e) node -> ((port * ('n,'e) edge) list) -> unit
   (** Adds outgoing edges to the node, on the given ports,
       but only if not already present on this port.
+   *)
+
+  val edge_add_src_unique: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Adds a source node to the edge, on the given port,
+      but only if not already present on this port.
+   *)
+    
+  val edge_add_dst_unique: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Adds a destination node to the edge, on the given port,
+      but only if not already present on this port.     
    *)
 
   val edge_add_src_list_unique: ('n,'e) edge -> ((port * ('n,'e) node) list) -> unit
@@ -261,6 +277,30 @@ module type S = sig
   val node_remove_all_out: ('n,'e) node -> unit
   (** Removes all the connections outgoing from the node, 
       for all edges and ports.
+      No edge nor node is deleted.
+   *)
+
+  val edge_remove_src_port: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Removes all the connections to the edge from the node
+      on the given port. 
+      No edge nor node is deleted.
+   *)
+
+  val edge_remove_dst_port: ('n,'e) edge -> port -> ('n,'e) node -> unit
+  (** Removes all the connections from the edge to the node
+      on the given port.
+      No edge nor node is deleted.
+   *)
+
+  val edge_remove_src: ('n,'e) edge -> ('n,'e) node -> unit
+  (** Removes all the connections to the edge from the node,
+      on all ports.
+      No edge nor node is deleted.
+   *)
+    
+  val edge_remove_dst: ('n,'e) edge -> ('n,'e) node -> unit
+  (** Removes all the connections from the edge to the node
+      on all ports.
       No edge nor node is deleted.
    *)
 

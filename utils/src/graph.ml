@@ -20,35 +20,35 @@ open GraphSig
 
 
 (** Use the polymorphic comparison, equality, and hashing. *)
-module IdGeneric(T : sig type t end) =
-  (struct
-    type t = T.t
-    let compare (x:t) (y:t) = compare x y
-    let equal (x:t) (y:t) = (x = y)
-    let hash (x:t) = Hashtbl.hash x
-  end: ID_TYPE with type t = T.t)        
+module IdGeneric(T : sig type t end) : (ID_TYPE with type t = T.t) =
+struct
+  type t = T.t
+  let compare (x:t) (y:t) = compare x y
+  let equal (x:t) (y:t) = (x = y)
+  let hash (x:t) = Hashtbl.hash x
+end
                 
 module IdInt = IdGeneric(struct type t = int end)
 module IdString = IdGeneric(struct type t = string end)
 
-module IdUnit =
-  (struct
-    type t = unit
-    let compare x y = 0
-    let equal x y = true
-    let hash x = 0
-  end: ID_TYPE with type t = unit)
+module IdUnit : (ID_TYPE with type t = unit) =
+struct
+  type t = unit
+  let compare x y = 0
+  let equal x y = true
+  let hash x = 0
+end
               
-module IdPair(A:ID_TYPE)(B:ID_TYPE) =
-  (struct
-    type t = A.t * B.t
-    let compare (a1,b1) (a2,b2) =
-      match A.compare a1 a2 with
-      | 0 -> B.compare b2 b2
-      | x -> x
-    let equal (a1,b1) (a2,b2) = A.equal a1 a2 && B.equal b1 b2
-    let hash (a,b) = A.hash a + B.hash b
-  end: ID_TYPE with type t = A.t * B.t)
+module IdPair(A:ID_TYPE)(B:ID_TYPE) : (ID_TYPE with type t = A.t * B.t) =
+struct
+  type t = A.t * B.t
+  let compare (a1,b1) (a2,b2) =
+    match A.compare a1 a2 with
+    | 0 -> B.compare b2 b2
+    | x -> x
+  let equal (a1,b1) (a2,b2) = A.equal a1 a2 && B.equal b1 b2
+  let hash (a,b) = A.hash a + B.hash b
+end
 
   
 
@@ -57,7 +57,8 @@ module IdPair(A:ID_TYPE)(B:ID_TYPE) =
 (*==========================================================================*)
 
               
-module Make(P:P) = (struct
+module Make(P:P) : (S with module P = P) =
+struct
 
                    
   (*========================================================================*)
@@ -242,6 +243,10 @@ module Make(P:P) = (struct
   let node_add_out_list n v =
     List.iter (fun (port,e) -> node_add_out n port e) v
 
+  let edge_add_src e port n = node_add_out n port e
+
+  let edge_add_dst e port n = node_add_in n port e
+    
   let edge_add_src_list e v =
     List.iter (fun (port,n) -> node_add_out n port e) v
 
@@ -276,6 +281,14 @@ module Make(P:P) = (struct
         e.e_src <- List.filter (port_node_neq (port,n)) e.e_src
       ) n.n_out;
     n.n_out <- []
+
+  let edge_remove_src_port e port n = node_remove_out_port n port e
+
+  let edge_remove_dst_port e port n = node_remove_in_port n port e
+    
+  let edge_remove_src e n = node_remove_out n e
+
+  let edge_remove_dst e n = node_remove_in n e
     
   let edge_remove_all_src e =
     List.iter (fun (port,n) ->
@@ -471,6 +484,10 @@ module Make(P:P) = (struct
   let node_add_out_list_unique n v =
     List.iter (fun (port,e) -> node_add_out_unique n port e) v
 
+  let edge_add_src_unique e port n = node_add_out_unique n port e
+
+  let edge_add_dst_unique e port n = node_add_in_unique n port e
+    
   let edge_add_src_list_unique e v =
     List.iter (fun (port,n) -> node_add_out_unique n port e) v
 
@@ -702,5 +719,5 @@ module Make(P:P) = (struct
     Format.fprintf fmt "}\n"
                      
     
-end: S with module P = P)
-                 
+end
+              

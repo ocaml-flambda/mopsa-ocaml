@@ -35,19 +35,25 @@ module type DOMAIN = sig
       not stored in the CFG.
    *)
 
-  val bot: manager -> t
-  (** ⊥ *) 
-    
   val entry: manager -> loc -> node -> token -> t
-  (** *)
-    
+  (** Initial state at each node. *)
     
   val exec: manager -> loc -> (token * t) list -> edge -> (token * t) list
+  (** Edge propagation.
+      Takes as arguments the input abstract elements, with associated flows.
+      Returns output abstract elements and specify on which flows to
+      propagate them.
 
-  val join: manager -> loc -> t -> t -> t 
+      The function is allowed to modify the list of destination nodes
+      of the edge being computed. 
+      All other modifications to the CFG are forbidden (for now).
+   *)
 
+
+  (** Lattice operations *)
+  val bot: manager -> t
+  val join: manager -> loc -> t -> t -> t
   val widen: manager -> loc -> t -> t -> t
-
   val subset: manager -> loc -> t -> t -> bool
 
 end
@@ -95,49 +101,48 @@ end
     Widening points are nodes with back-edges (i.e., with nodes with 
     a greater location flowing into it).
  *)
-module SetWorklist = (
-  struct
+module SetWorklist : STRATEGY = struct
 
-    type t =
-      { mutable dirty: LocSet.t; (** dirty nodes *)
-        widen: LocSet.t; (** widening points *)
-      }
-
-    let create g =
-      (* precompute widening points *)
-      let w =
-        CFG.fold_nodes
-          (fun id n acc ->
-            (* whether n has a back-edge *)
-            let i = CFG.node_in_nodes n in
-            if List.exists
-                 (fun (nn,_,_,_) -> Loc.compare (CFG.node_id nn) id > 0)
-                 i
-            then LocSet.add id acc
-            else acc
-          )
-          g LocSet.empty
-      in
-      { dirty = LocSet.empty;
-        widen = w;
-      }
-
-    let is_empty w =
-      LocSet.is_empty w.dirty
-                 
-    let dirty w id =
-      w.dirty <- LocSet.add id w.dirty
-
-    let get w =
-      let id = LocSet.min_elt w.dirty in
-      w.dirty <- LocSet.remove id w.dirty;
-      id
-
-    let is_widen w id =
-      LocSet.mem id w.widen
+  type t =
+    { mutable dirty: LocSet.t; (** dirty nodes *)
+      widen: LocSet.t; (** widening points *)
+    }
     
-  end
-  : STRATEGY)
+  let create g =
+    (* precompute widening points *)
+    let w =
+      CFG.fold_nodes
+        (fun id n acc ->
+          (* whether n has a back-edge *)
+          let i = CFG.node_in_nodes n in
+          if List.exists
+               (fun (nn,_,_,_) -> Loc.compare (CFG.node_id nn) id > 0)
+               i
+          then LocSet.add id acc
+          else acc
+        )
+        g LocSet.empty
+    in
+    { dirty = LocSet.empty;
+      widen = w;
+    }
+    
+  let is_empty w =
+    LocSet.is_empty w.dirty
+    
+  let dirty w id =
+    w.dirty <- LocSet.add id w.dirty
+    
+  let get w =
+    let id = LocSet.min_elt w.dirty in
+    w.dirty <- LocSet.remove id w.dirty;
+      id
+      
+  let is_widen w id =
+    LocSet.mem id w.widen
+    
+end
+
 
                     
         
@@ -192,7 +197,10 @@ module Make(D:DOMAIN)(S:STRATEGY) = struct
               (fun (ff,nn) -> ff, get (CFG.node_id nn))
               (CFG.edge_src e)
           in
-
+          (* TODO: join abstract elements with the same token before
+             passing them to exec ?
+           *)
+          
           (* call domain *)
           let dst = D.exec man id src e in
           

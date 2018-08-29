@@ -21,28 +21,28 @@ open Universal.Ast
 
 
 module Loc =
-  struct    
-    type t = loc (* maybe add a unique tag? *)
-    let compare = compare_location
-    let hash = Hashtbl.hash
-    let equal l1 l2 = compare l1 l2 = 0
-  end
+struct    
+  type t = loc (* maybe add a unique tag? *)
+  let compare = compare_location
+  let hash = Hashtbl.hash
+  let equal l1 l2 = compare l1 l2 = 0
+end
 
 module Range =
-  struct
-    type t = range
-    let compare = compare_range
-    let hash = Hashtbl.hash
-    let equal l1 l2 = compare l1 l2 = 0
-  end
+struct
+  type t = range
+  let compare = compare_range
+  let hash = Hashtbl.hash
+  let equal l1 l2 = compare l1 l2 = 0
+end
 
 module Port =
-  struct
-    type t = token
-    let compare = compare_token
-    let hash = Hashtbl.hash
-    let equal l1 l2 = compare l1 l2 = 0
-  end
+struct
+  type t = token
+  let compare = compare_token
+  let hash = Hashtbl.hash
+  let equal l1 l2 = compare l1 l2 = 0
+end
 
 module LocSet = SetExt.Make(Loc)
 module LocMap = MapExt.Make(Loc)
@@ -54,16 +54,16 @@ module RangeHash = Hashtbl.Make(Range)
   
 (** Build CFG module. *)
 module CFG_Param =
-  struct
-    module NodeId = Loc
-    (** Identify nodes by source location. *)
+struct
+  module NodeId = Loc
+  (** Identify nodes by source location. *)
                   
-    module EdgeId = Range
-    (** Identify edges by source range. *)
+  module EdgeId = Range
+  (** Identify edges by source range. *)
 
-    module Port = Port
-    (** Edge outputs are distinguished by flow tokens. *)
-  end
+  module Port = Port
+  (** Edge outputs are distinguished by flow tokens. *)
+end
   
 module CFG = Graph.Make(CFG_Param)
 

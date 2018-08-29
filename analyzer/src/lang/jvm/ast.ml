@@ -56,11 +56,20 @@ and object_type_compare t1 t2 = match t1, t2 with
              
 (** Non-direct control *)
 type token +=
-   | T_java_iftrue                  (** jump if test is true *)
-   | T_java_jsr                     (** subroutine jump *)
-   | T_java_ret                     (** return point *)
-   | T_java_exn                     (** exception *)
-   | T_java_switch of int32 option  (** switch (None for default) *)
+
+   (** conditionals *)
+   | F_java_if_true           (** jump if test is true *)
+
+   (** subroutines *)
+   | F_java_jsr               (** subroutine jump *)
+   | F_java_ret               (** return from subroutine *)
+   | F_java_ret_site          (** ret site: instruction following jsr *)
+
+   (** methods *)
+   | F_java_return_site       (** return site after a method call *)
+   
+   | F_java_exn                     (** exception *)
+   | F_java_switch of int32 option  (** switch (None for default) *)
 
              
 
@@ -151,21 +160,25 @@ let () =
     );
   register_token_compare (fun next t1 t2 ->
       match t1, t2 with
-      | T_java_iftrue, T_java_iftrue
-      | T_java_jsr, T_java_jsr
-      | T_java_ret, T_java_ret
-      | T_java_exn, T_java_exn -> 0
-      | T_java_switch i1, T_java_switch i2 -> compare i1 i2
+      | F_java_if_true, F_java_if_true
+      | F_java_jsr, F_java_jsr
+      | F_java_ret, F_java_ret
+      | F_java_ret_site, F_java_ret_site
+      | F_java_return_site, F_java_return_site
+      | F_java_exn, F_java_exn -> 0
+      | F_java_switch i1, F_java_switch i2 -> compare i1 i2
       | _ -> next t1 t2                                            
     );
   register_pp_token (fun next fmt token ->
       match token with
-      | T_java_iftrue -> Format.pp_print_string fmt "true"
-      | T_java_jsr -> Format.pp_print_string fmt "jsr"
-      | T_java_ret -> Format.pp_print_string fmt "ret"
-      | T_java_exn -> Format.pp_print_string fmt "exn"
-      | T_java_switch None -> Format.pp_print_string fmt "default"
-      | T_java_switch (Some i) -> Format.fprintf fmt "case %li" i
+      | F_java_if_true -> Format.pp_print_string fmt "true"
+      | F_java_jsr -> Format.pp_print_string fmt "jsr"
+      | F_java_ret -> Format.pp_print_string fmt "ret"
+      | F_java_ret_site -> Format.pp_print_string fmt "ret-site"
+      | F_java_return_site -> Format.pp_print_string fmt "return-site"
+      | F_java_exn -> Format.pp_print_string fmt "exn"
+      | F_java_switch None -> Format.pp_print_string fmt "default"
+      | F_java_switch (Some i) -> Format.fprintf fmt "case %li" i
       | _ -> next fmt token
     )
 

@@ -83,7 +83,7 @@ let rec opcode_end (code:jopcode array) (i:op_loc) : op_loc =
   else i
 
 
-(** Get the possible successors of the opcode at location i. *)  
+(** Get the possible successors of the opcode at location i. *)
 let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
   (* opcode immediately following *)
   let succ = (opcode_end code i) + 1 in
@@ -105,7 +105,7 @@ let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
      
   | OpIf (_,dst) | OpIfCmp (_,dst) ->
      (* flow to next instruction if false, jump of true *)
-     [(TCur, succ); (T_java_iftrue, i+dst)]
+     [(TCur, succ); (F_java_if_true, i+dst)]
 
   | OpGoto dst ->
      (* flow unconditionally to goto target *)
@@ -113,12 +113,12 @@ let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
 
   | OpJsr dst ->
      (* jump to subroutine, indirect return to next instruction *)
-     [(T_java_jsr, i+dst); (T_java_ret, succ)]
+     [(F_java_jsr, i+dst); (F_java_ret_site, succ)]
 
   | OpRet _
-  | OpThrow
+  | OpThrow 
   | OpReturn _ ->
-     (* indirect target, none until resolved *)
+     (* no target until resolved *)
      []
            
   | OpTableSwitch (def,low,_,offs) ->
@@ -127,44 +127,77 @@ let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
        Array.mapi
          (fun x off ->
            let v = Int32.add low (Int32.of_int x) in
-           T_java_switch (Some v),  i + off
+           F_java_switch (Some v),  i + off
          ) offs
      in
-     (T_java_switch None, i + def)::(Array.to_list ar)
+     (F_java_switch None, i + def)::(Array.to_list ar)
 
   | OpLookupSwitch (def,pairs) ->
      (* switch cases & default targets *)
      let l =
        List.map
          (fun (v,off) ->
-           T_java_switch (Some v),  i + off
+           F_java_switch (Some v),  i + off
          ) pairs
      in
-     (T_java_switch None, i + def)::l
+     (F_java_switch None, i + def)::l
      
   | OpInvoke _ ->
      (* indirect jump, indirect return to next instruction *)
-     [T_java_ret, succ]
+     [F_java_return_site, succ]
 
   | OpInvalid ->
      (* no successor *)
      []
     
+
+(** Whether the opcode can raise an exception. *)    
+let raises_exn (op:jopcode) : bool =
+  match op with
+  | OpArrayLength | OpArrayLoad _ | OpArrayStore _
+  | OpNew _ | OpNewArray _ | OpAMultiNewArray _
+  | OpCheckCast _ 
+  | OpThrow 
+  | OpReturn _
+  | OpGetStatic _ | OpPutStatic _ | OpGetField _ | OpPutField _
+  | OpDiv (`Int2Bool | `Long) | OpRem (`Int2Bool | `Long)
+  | OpInvoke _ 
+  | OpMonitorEnter | OpMonitorExit
+  | OpInvalid
+    -> true
+
+  | OpInstanceOf _
+  | OpLoad _ | OpStore _ | OpIInc _ | OpPop | OpPop2 | OpDup | OpDupX1
+  | OpDupX2 | OpDup2 | OpDup2X1 | OpDup2X2 | OpSwap | OpConst _
+  | OpAdd _ | OpSub _ | OpMult _ | OpNeg _
+  | OpDiv (`Float | `Double) | OpRem (`Float | `Double)
+  | OpIShl | OpLShl | OpIShr | OpLShr | OpIUShr | OpLUShr
+  | OpIAnd | OpLAnd | OpIOr | OpLOr | OpIXor | OpLXor
+  | OpI2L | OpI2F | OpI2D | OpL2I | OpL2F | OpL2D | OpF2I | OpF2L
+  | OpF2D | OpD2I | OpD2L | OpD2F | OpI2B | OpI2C | OpI2S | OpCmp _
+  | OpNop | OpBreakpoint | OpIf _| OpIfCmp _
+  | OpGoto _ | OpJsr _ | OpRet _
+  | OpTableSwitch _ | OpLookupSwitch _
+     -> false
+
     
 (** Use bytecode position as locations *)
 let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
   mk_loc meth_uid pos 0
 
+  
 (** Bytecode ranges *)
 let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   Range_origin
     (mk_range (mk_jvm_loc meth_uid pos1) (mk_jvm_loc meth_uid pos2))
-    
+
+  
 (** Fill-in [g] with a CFG for code [jcode].
     Uses the unique identifier [meth_uid] as location filename.
  *)
 let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
   let code = jcode.c_code in
+
   (* add locations (nodes) *)
   Array.iteri
     (fun i op ->
@@ -173,8 +206,23 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
     ) code;
   let endloc = mk_jvm_loc meth_uid (Array.length code) in
   ignore (CFG.add_node g endloc ());
+
   (* set entry *)
   CFG.node_set_entry g (CFG.get_node g (mk_jvm_loc meth_uid 0)) (Some TCur);
+
+  (* utility to get possible exception targets *)
+  let exn i =
+    List.fold_left
+      (fun acc e ->
+        if i < e.e_start || i >= e.e_end then acc
+        else
+          (F_java_exn,
+           CFG.get_node g (mk_jvm_loc meth_uid e.e_handler)
+          )::acc
+      )
+      [] jcode.c_exc_tbl
+  in
+
   (* add opcodes (edges) *)
   Array.iteri
     (fun i op ->
@@ -183,15 +231,22 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
         let range = mk_jvm_range meth_uid i lend in
         let src_node = CFG.get_node g (mk_jvm_loc meth_uid i) in
         let src = [TCur, src_node] in
+
+        (* get successors *)
         let dst =
           List.map
             (fun (port,p) -> port, CFG.get_node g (mk_jvm_loc meth_uid p))
             (opcode_succ code i)
         in
+        
+        (* connects exceptions *)
+        let dst = if raises_exn op then (exn i)@dst else dst in
+
+        (* add edge *)
         let stmt = mk_stmt (S_java_opcode [op,(i,lend)]) range in
-        ignore (CFG.add_edge g range ~src ~dst stmt)
-    ) code;
-  ()
+        ignore (CFG.add_edge g range ~src ~dst stmt);
+
+    ) code
 
 
 (** Simplifies a CFG by merging edges connected simply through
@@ -258,6 +313,7 @@ let load_method
       let jcode = Lazy.force j in
       fill_cfg meth.m_uid g jcode;
       coalesce_cfg g;
+      Precheck.analyze meth;
       let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
       let fmt = Format.formatter_of_out_channel f in
       CFG.print_dot
@@ -269,8 +325,7 @@ let load_method
         meth.m_name fmt g ;
       Format.pp_print_flush fmt ();
       close_out f;
-      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()));
-      Precheck.analyze meth
+      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
   );
   meth
 
@@ -294,9 +349,12 @@ let load_class jclass : j_class =
   (* translate each method *)
   MethodMap.iter
     (fun sign m ->
-      Format.printf "  method %s@\n" (JPrint.method_signature sign);
-      let mm = load_method cls m in
-      cls.c_methods <- MapExt.StringMap.add mm.m_uid mm cls.c_methods
+
+     (*if ms_name sign = "newClient" then*) (      
+        Format.printf "  method %s@\n" (JPrint.method_signature sign);
+        let mm = load_method cls m in
+        cls.c_methods <- MapExt.StringMap.add mm.m_uid mm cls.c_methods
+      )
     )
     (get_concrete_methods jclass);
   
@@ -329,8 +387,7 @@ let java_lang_string_class = get_class class_path java_lang_string
 
 let _ =
   Format.printf "JVM test@\n";
-  iter (fun c -> ignore (load_class c)) (jdk_path ^ "jre/lib/rt.jar");
-  (* load_class (get_class class_path java_lang_string) *)
-  
+  iter (fun c -> ignore (load_class c)) (jdk_path ^ "jre/lib/rt.jar")
+       (*  load_class (get_class class_path (make_cn "org.omg.stub.javax.management.remote.rmi._RMIServer_Stub"))  *)
 
  

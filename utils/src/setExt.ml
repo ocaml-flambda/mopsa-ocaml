@@ -679,7 +679,7 @@ module Make(Ord: OrderedType) =
         let first = ref true in
         o ch printer.print_begin;
         iter
-          (fun k e ->
+          (fun k ->
             if !first then first := false else o ch printer.print_sep;
             key ch k
           ) s;

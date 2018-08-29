@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Simple inter-method analysis to type the stack and register,
+(** Simple intraprocedural method analysis to type the stack and register,
     and infer the targets of returns from subroutines (ret).
     This analysis is similar in aim to the bytecode verification performed
     by the JVM.
@@ -17,6 +17,7 @@ open Javalib
 open JBasics
 open JCode
 open Framework.Ast
+open Framework.Flow
 open Framework.Pp
 open Cfg.Ast
 open Ast
@@ -126,7 +127,7 @@ let pp_aval fmt  = function
      Format.fprintf
        fmt "pc%a"
        (LocSet.fprint SetExt.printer_default pp_location) l
-           
+    
 let pp_astate fmt (a:astate) : unit =
   Format.fprintf
     fmt "@[stack=%a;@ regs=%a@]"
@@ -337,7 +338,12 @@ type err =
   * string (** operation *)
   * string (** error message *)
 
-  
+
+(** Executes one opcode.
+    Location loc of opcode is used for error reporting.
+    Location ret of next opcode is used by jsr to push return address.
+    Returns an abstract state and a list of errors.
+ *)
 let exec (loc:loc) (ret:loc option) (op:jopcode) (x:astate) : astate * err list =
   let a = x,[] in
   let r,err = match op with
@@ -532,6 +538,15 @@ let exec (loc:loc) (ret:loc option) (op:jopcode) (x:astate) : astate * err list 
   r, List.map (fun msg -> loc, JPrint.jopcode op, msg) err
 
 
+(** State when the exception is propagated to its handler. *)  
+let exec_exn (a:astate) : astate =
+  { a with a_stack = [A_ref] }
+
+  
+
+(** Executes an opcode block.
+    Also returns a list of errors.
+ *)  
 let exec_block (loc:loc) (ret:loc option) (l:jopcode_range list) (a:astate)
     : astate * err list =
   List.fold_left
@@ -541,6 +556,21 @@ let exec_block (loc:loc) (ret:loc option) (l:jopcode_range list) (a:astate)
     )
     (a,[]) l
 
+
+(** Given a state before a ret instruction, extracts the set of
+    return locations (returns empty if not ret or invalid register).
+ *)
+let rec block_ret (l:jopcode_range list) (x:astate) : LocSet.t =
+  match l with
+  | [] -> LocSet.empty
+  | [OpRet idx, _] ->
+     (match load idx (x,[]) with
+      | A_pc pc -> pc
+      | _ -> LocSet.empty
+     )
+    
+  | _::b -> block_ret b x
+  
   
   
 (** Initial state at method entry. *)
@@ -598,6 +628,7 @@ module Domain = struct
   let join m loc a b =
     let r,err = join_bot a b in
     print_err (List.map (fun msg -> loc,"join",msg) err);
+    (*    Format.printf "%a@.  %a@.  %a@.  %a@." pp_location loc (bot_fprint pp_astate) a (bot_fprint pp_astate) b (bot_fprint pp_astate) r; *)
     r
                  
   let widen = join
@@ -608,24 +639,59 @@ module Domain = struct
   let subset m loc = subset_bot
 
   let exec m loc i e =
-    let r =
-      match join_list m loc (List.map snd i) with
-      | BOT -> BOT
-      | Nb x ->
-         (* optional location of return flow *)
-         let ret = match CFG.edge_dst_port e T_java_ret with
-           | [n] -> Some (CFG.node_id n)
-           | _ -> None
-         in
-         match (CFG.edge_data e).skind with
-         | S_java_opcode ops ->
-            let a,err = exec_block loc ret ops x in
-            print_err err;
-            Nb a
+
+    (* merge abstract state inputs *)
+    match join_list m loc (List.map snd i) with
+    | BOT -> []
+    | Nb x ->
+
+       (* get ret site associated to a jsr instruction *)
+       let ret = match CFG.edge_dst_port e F_java_ret_site with
+         | [n] -> Some (CFG.node_id n)
+         | _ -> None
+       in
+       
+       (* execute transfer function *)
+       let ops = match (CFG.edge_data e).skind with
+         | S_java_opcode ops -> ops
          | _ -> failwith "not Java bytecode in Precheck.Domain.exec"
-    in
-    (* push the result to all outgoing flows *)
-    List.map (fun (t,_) -> t, r) (CFG.edge_dst e)
+       in
+       let r, err = exec_block loc ret ops x in
+       print_err err;
+
+       (* connect ret nodes to the ret site *)
+       LocSet.iter
+         (fun l ->
+           let n = CFG.get_node m.m_cfg l in
+           CFG.edge_add_dst_unique e F_java_ret n
+         )
+         (block_ret ops x);
+       
+       (* propagate to destination nodes *)
+       List.fold_left
+         (fun acc (t,n) ->
+           match t with
+           | TCur
+             | F_java_if_true
+             | F_java_jsr
+             | F_java_return_site
+             | F_java_switch _
+             | F_java_ret ->
+              (* direct propagation *)
+              (t, Nb r)::acc
+             
+           | F_java_exn ->
+              (* exception *)
+              (t, Nb (exec_exn r))::acc
+             
+           | F_java_ret_site ->
+              (* no direct propagation to from jsr to the ret site *)
+              acc
+             
+           | _ -> failwith "not Java flow in Precheck.Domain.exec"
+         )
+         []
+         (CFG.edge_dst e)
 
             
 end
