@@ -36,7 +36,7 @@ struct
   let print fmt c =
     Format.fprintf fmt "%a%a"
       pp_var c.array
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> ()) (fun fmt i -> Format.fprintf fmt "⦋%a⦌" Z.pp_print i)) c.index
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> ()) (fun fmt i -> Format.fprintf fmt "⟬%a⟭" Z.pp_print i)) c.index
 end
 
 

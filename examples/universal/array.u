@@ -2,8 +2,12 @@ int i;
 int j;
 int x;
 [int] a;
+[[int]] b;
 
 a[0] = 0;
 a[1] = 1;
 a[2] = a[0] + a[1];
+
+b[0][0] = 1;
+b[1][0] = a[0];
 print();

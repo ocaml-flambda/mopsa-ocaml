@@ -56,19 +56,19 @@ struct
 
   let identify : type a. a domain -> (t, a) eq option =
     fun id ->
-    let rec aux : type a b. a domain_pool -> b domain -> (a, b) eq option =
-      fun pool id ->
-        match pool, id with
-        | Nil, D_empty_product -> Some Eq
-        | Cons(hd, tl), D_reduced_product(id1, id2) ->
-          let module D = (val hd) in
-          begin match D.identify id1, aux tl id2 with
-            | Some Eq, Some Eq -> Some Eq
-            | _ -> None
-          end
-        | _ -> None
-    in
-    aux Config.pool id
+      let rec aux : type a b. a domain_pool -> b domain -> (a, b) eq option =
+        fun pool id ->
+          match pool, id with
+          | Nil, D_empty_product -> Some Eq
+          | Cons(hd, tl), D_reduced_product(id1, id2) ->
+            let module D = (val hd) in
+            begin match D.identify id1, aux tl id2 with
+              | Some Eq, Some Eq -> Some Eq
+              | _ -> None
+            end
+          | _ -> None
+      in
+      aux Config.pool id
 
 
   (* Lattice definition *)
@@ -178,7 +178,7 @@ struct
 
   let domain_man man = {
     pool = Config.pool;
-    
+
     get_env = (
       let f : type b. b domain -> 'a -> b = fun id env ->
         let rec aux : type b c. b domain -> c domain_pool -> ('a, c) man -> b = fun id pool man ->
@@ -229,7 +229,7 @@ struct
         aux Config.pool init
       in
       f
-      );
+    );
 
     get_eval = (
       let f : type t. t domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option =
@@ -310,15 +310,19 @@ struct
   (* Post-condition computation *)
   (* ************************** *)
 
-  (* FIXME: we support only the case when all domains of the pool have
-     the same exec_interface *)
   let exec_interface =
-    match Config.pool with
-    | Cons(hd, tl) ->
-      let module D = (val hd) in
-      D.exec_interface
-    | _ -> assert false
-
+    let rec aux : type a. a domain_pool -> Zone.zone interface =
+      function
+      | Nil -> {import = []; export = []}
+      | Cons(hd, tl) ->
+        let module D = (val hd) in
+        let after = aux tl in
+        {
+          import = D.exec_interface.import @ after.import;
+          export = D.exec_interface.export @ after.export;
+        }
+    in
+    aux Config.pool
 
   let reduce_exec stmt channels man flow =
     let dman = domain_man man in
@@ -338,104 +342,127 @@ struct
     in
     lfp flow
 
-  let exec zone stmt man flow =
-    (* Point-wise exec *)
-    let posts =
-      let rec aux: type t. t domain_pool -> ('a, t) man -> 'a annot -> 'a post option list =
-        fun pool man annot ->
-          match pool with
-          | Nil -> []
-          | Cons(hd, tl) ->
-            let module D = (val hd) in
-            debug "Exec on %s" D.name;
-            match D.exec zone stmt  (head_man man) flow with
-            | None -> None :: (aux tl (tail_man man) annot)
-            | Some post ->
-              let annot' = get_annot post.Post.flow in
-              (Some post) :: (aux tl (tail_man man) annot')
-            
+  let exec zone =
+    (* Get covering zones for domains in the pool *)
+    let zl =
+      let rec aux: type t. t domain_pool -> Zone.zone list list =
+        function
+        | Nil -> []
+        | Cons(hd, tl) ->
+          let module D = (val hd) in
+          let zl = List.find_all (fun z -> Zone.subset z zone) D.exec_interface.Domain.export in
+          zl :: aux tl
       in
-      aux Config.pool man (get_annot flow)
+      aux Config.pool
     in
+    (fun stmt man flow ->
+       (* Point-wise exec *)
+       let posts =
+         let rec aux: type t. t domain_pool -> Zone.zone list list -> ('a, t) man -> 'a annot -> 'a post option list =
+           fun pool zl man annot ->
+             match pool, zl with
+             | Nil, _ -> []
+             | Cons(hd, tl), [] :: ztl -> None :: (aux tl ztl (tail_man man) annot)
+             | Cons(hd, tl), zhd :: ztl ->
+               begin
+                 let module D = (val hd) in
+                 debug "Exec on %s" D.name;
+                 let exec = Analyzer.mk_exec_of_zone_list zhd D.exec in
+                 match exec stmt (head_man man) flow with
+                 | None -> None :: (aux tl ztl (tail_man man) annot)
+                 | Some post ->
+                   let annot' = get_annot post.Post.flow in
+                   (Some post) :: (aux tl ztl (tail_man man) annot')
+               end
+             | _ -> assert false
 
-    (* Merge post conditions. 
-       Each domain applies its merger statements on the post-conditions of the other domains,
-       and restores its local abstract element from its own post-condition.
-    *)
-    let merged_flows, channels =
-      let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list * Post.channel list =
-        fun pool man posts ret ->
-          match pool, posts with
-          | Nil, [] -> ret, []
-          | Cons(hd, tl), None :: ptl -> aux tl (tail_man man) ptl ret
-          | Cons(hd, tl), (Some post) :: ptl ->
-            let module D = (val hd) in
-            let hman = head_man man in
-            let mergers = post.Post.mergers in
-            let flow = post.Post.flow in
-            let channels = post.Post.channels in
-            (* Merge [ret] with the post-condition of [D] *)
-            let rec aux2: type u. u domain_pool -> 'a flow option list -> 'a flow option list =
-              fun pool' ret' ->
-                match pool', ret' with
-                | Nil, [] -> []
-                | Cons(hd', tl'), None :: ftl' -> None :: aux2 tl' ftl'
-                | Cons(hd', tl'), Some flow' :: ftl' ->
-                  let module D' = (val hd') in
-                  let flow' = match D.identify D'.id with
-                    | Some Eq -> flow'
-                    | None ->
-                      (* Apply mergers of D on the post-condition [post] *)
-                      let mflow' = List.fold_left (fun flow stmt -> man.exec stmt flow) flow' mergers in
-                      (* Restore the abstract element of D *)
-                      Flow.merge (fun tk a1 a2 ->
-                          match a1, a2 with
-                          | None, _ | _, None -> None
-                          | Some a1, Some a2 -> Some (hman.set (hman.get a1) a2)
-                        ) hman flow mflow'
-                  in
-                  Some flow' :: aux2 tl' ftl'
-                | _ -> assert false
-            in
-            let ret' = aux2 Config.pool ret in
-            let ret'', channels' = aux tl (tail_man man) ptl ret' in
-            ret'', channels @ channels'
-          | _ -> assert false
-      in
-      aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)  
-    in
+         in
+         aux Config.pool zl man (get_annot flow)
+       in
 
-    (* Meet merged flows *)
-    let flow' =
-      let rec aux = function
-        | [] -> None
-        | None :: tl -> aux tl
-        | Some flow :: tl ->
-          match aux tl with
-          | None -> Some flow
-          | Some flow' -> Some (Flow.meet man flow flow')
-      in
-      aux merged_flows
-    in
-    match flow' with
-    | None -> None
-    | Some flow -> Some (
-        reduce_exec stmt channels man flow |>
-        Post.of_flow
-      )
+       (* Merge post conditions. 
+          Each domain applies its merger statements on the post-conditions of the other domains,
+          and restores its local abstract element from its own post-condition.
+       *)
+       let merged_flows, channels =
+         let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list * Post.channel list =
+           fun pool man posts ret ->
+             match pool, posts with
+             | Nil, [] -> ret, []
+             | Cons(hd, tl), None :: ptl -> aux tl (tail_man man) ptl ret
+             | Cons(hd, tl), (Some post) :: ptl ->
+               let module D = (val hd) in
+               let hman = head_man man in
+               let mergers = post.Post.mergers in
+               let flow = post.Post.flow in
+               let channels = post.Post.channels in
+               (* Merge [ret] with the post-condition of [D] *)
+               let rec aux2: type u. u domain_pool -> 'a flow option list -> 'a flow option list =
+                 fun pool' ret' ->
+                   match pool', ret' with
+                   | Nil, [] -> []
+                   | Cons(hd', tl'), None :: ftl' -> None :: aux2 tl' ftl'
+                   | Cons(hd', tl'), Some flow' :: ftl' ->
+                     let module D' = (val hd') in
+                     let flow' = match D.identify D'.id with
+                       | Some Eq -> flow'
+                       | None ->
+                         (* Apply mergers of D on the post-condition [post] *)
+                         let mflow' = List.fold_left (fun flow stmt -> man.exec stmt flow) flow' mergers in
+                         (* Restore the abstract element of D *)
+                         Flow.merge (fun tk a1 a2 ->
+                             match a1, a2 with
+                             | None, _ | _, None -> None
+                             | Some a1, Some a2 -> Some (hman.set (hman.get a1) a2)
+                           ) hman flow mflow'
+                     in
+                     Some flow' :: aux2 tl' ftl'
+                   | _ -> assert false
+               in
+               let ret' = aux2 Config.pool ret in
+               let ret'', channels' = aux tl (tail_man man) ptl ret' in
+               ret'', channels @ channels'
+             | _ -> assert false
+         in
+         aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)  
+       in
 
+       (* Meet merged flows *)
+       let flow' =
+         let rec aux = function
+           | [] -> None
+           | None :: tl -> aux tl
+           | Some flow :: tl ->
+             match aux tl with
+             | None -> Some flow
+             | Some flow' -> Some (Flow.meet man flow flow')
+         in
+         aux merged_flows
+       in
+       match flow' with
+       | None -> None
+       | Some flow -> Some (
+           reduce_exec stmt channels man flow |>
+           Post.of_flow
+         )
+    )
 
   (* Evaluations *)
   (* *********** *)
 
-  (* FIXME: we support only the case when all domains of the pool have
-     the same eval_interface *)
   let eval_interface =
-    match Config.pool with
-    | Cons(hd, tl) ->
-      let module D = (val hd) in
-      D.eval_interface
-    | _ -> assert false
+    let rec aux : type a. a domain_pool -> (Zone.zone * Zone.zone) interface =
+      function
+      | Nil -> {import = []; export = []}
+      | Cons(hd, tl) ->
+        let module D = (val hd) in
+        let after = aux tl in
+        {
+          import = D.eval_interface.import @ after.import;
+          export = D.eval_interface.export @ after.export;
+        }
+    in
+    aux Config.pool
 
   let reduce_eval exp man pevl =
     let dman = domain_man man in
@@ -449,55 +476,74 @@ struct
     apply pevl Config.eval_rules
 
 
-  let eval zone exp man flow =
-    (* Point-wise evaluation *)
-    let evls =
-      let rec aux: type t. t domain_pool -> ('a, t) man -> ('a, Ast.expr) evl option list =
-        fun pool man ->
-          match pool with
-          | Nil -> []
-          | Cons(hd, tl) ->
-            let module D = (val hd) in
-            match D.eval zone exp  (head_man man) flow with
-            | None -> None :: aux tl (tail_man man)
-            | Some evl -> (Some evl) :: aux tl (tail_man man)
-            
+  let eval zone =
+    (* Computing covering zones of the given zone *)
+    let zl =
+      let rec aux: type t. t domain_pool -> (Zone.zone * Zone.zone) list list =
+        function
+        | Nil -> []
+        | Cons(hd, tl) ->
+          let module D = (val hd) in
+          let zl = List.find_all (fun z -> Zone.subset2 z zone) D.eval_interface.Domain.export in
+          zl :: aux tl
       in
-      aux Config.pool man
+      aux Config.pool
     in
+    (fun exp man flow ->
+       (* Point-wise evaluation *)
+       let evls =
+         let rec aux: type t. t domain_pool -> (Zone.zone * Zone.zone) list list -> ('a, t) man -> ('a, Ast.expr) evl option list =
+           fun pool zl man ->
+             match pool, zl with
+             | Nil, _ -> []
+             | Cons(hd, tl), [] :: ztl -> None :: aux tl ztl (tail_man man)
+             | Cons(hd, tl), zhd :: ztl ->
+               begin
+                 let module D = (val hd) in
+                 let eval = Analyzer.mk_eval_of_zone_list zhd D.eval in
+                 match eval exp (head_man man) flow with
+                 | None -> None :: aux tl ztl (tail_man man)
+                 | Some evl -> (Some evl) :: aux tl ztl (tail_man man)
+               end
+             | _ -> assert false
 
-    (* Transform list of evaluations into list of conjunctions *)
-    let lconj =
-      let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
-        fun pool evls ->
-          match pool, evls with
-          | Nil, [] -> [[]]
-          | Cons(hd, tl), evl :: evls ->
-            let evl' = aux tl evls in
-            begin match evl with
-              | None -> List.map (fun c -> None :: c) evl'
-              | Some evl ->
-                let l = Eval.to_dnf evl |>
-                        Dnf.to_list
-                in
-                List.fold_left (fun acc c ->
-                    match c with
-                    | [e] -> (List.map (fun c -> Some e :: c) evl') @ acc
-                    | _ -> failwith "Domains in a reduced product cannot return a conjunction"
-                  ) [] l
-            end
-          | _ -> assert false
-      in
-      aux Config.pool evls
-    in
+         in
+         aux Config.pool zl man
+       in
 
-    (* Reduce each conjunction *)
-    let lconj' = List.map (reduce_eval exp man) lconj in
+       (* Transform list of evaluations into list of conjunctions *)
+       let lconj =
+         let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
+           fun pool evls ->
+             match pool, evls with
+             | Nil, [] -> [[]]
+             | Cons(hd, tl), evl :: evls ->
+               let evl' = aux tl evls in
+               begin match evl with
+                 | None -> List.map (fun c -> None :: c) evl'
+                 | Some evl ->
+                   let l = Eval.to_dnf evl |>
+                           Dnf.to_list
+                   in
+                   List.fold_left (fun acc c ->
+                       match c with
+                       | [e] -> (List.map (fun c -> Some e :: c) evl') @ acc
+                       | _ -> failwith "Domains in a reduced product cannot return a conjunction"
+                     ) [] l
+               end
+             | _ -> assert false
+         in
+         aux Config.pool evls
+       in
 
-    (* Combine conjunctions into an evaluation *)
-    List.fold_left (fun acc c ->
-        Option.option_neutral2 Eval.join acc (conj_to_evl c)
-      ) None lconj'
+       (* Reduce each conjunction *)
+       let lconj' = List.map (reduce_eval exp man) lconj in
+
+       (* Combine conjunctions into an evaluation *)
+       List.fold_left (fun acc c ->
+           Option.option_neutral2 Eval.join acc (conj_to_evl c)
+         ) None lconj'
+    )
 
 
   (* Queries *)
