@@ -148,7 +148,7 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> debug "checking %a" Zone.print2 p; Zone.subset2 p zpath) Domain.eval_interface.export with
+            match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
             | [] ->
               Debug.warn "eval for %a not found" Zone.print2 zpath;
               acc

@@ -55,10 +55,10 @@ let compare_var v1 v2 =
     (fun () -> compare_typ v1.vtyp v2.vtyp);
   ]
 
-let tmp_counter = ref 100
+let tmp_counter = ref 1
 
 (** Create a temporary variable with a unique name. *)
-let mktmp ?(vtyp = T_any) () =
+let mk_tmp ?(vtyp = T_any) () =
   incr tmp_counter;
   let vname = "$tmp" ^ (string_of_int !tmp_counter) in
   {vname; vuid = !tmp_counter; vtyp}

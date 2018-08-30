@@ -79,7 +79,8 @@ let bind
       let evl' =
         match case.expr with
         | None -> empty flow'
-        | Some expr -> f expr flow'
+        | Some expr -> f expr flow' |>
+                       add_cleaners case.cleaners
       in
       let annot = choose_annot evl' in
       (evl', annot)

@@ -77,7 +77,7 @@ struct
 
   let var_to_apron v =
     (match v.vtyp with
-    | T_int -> Format.fprintf Format.str_formatter "%s#%d" v.vname v.vuid;
+    | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
     | T_float -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
     let name = Format.flush_str_formatter () in
@@ -86,7 +86,7 @@ struct
   let apron_to_var v =
     let v = Apron.Var.to_string v in
     debug "apron_to_var %s" v;
-    if Str.string_match (Str.regexp "\\([^#]+\\)#\\([0-9]+\\)") v 0 then
+    if Str.string_match (Str.regexp "\\([^:]+\\):\\([0-9]+\\)") v 0 then
       let vname = Str.matched_group 1 v in
       let vuid = Str.matched_group 2 v |> int_of_string in
       {vname; vuid; vtyp = T_int}
@@ -344,8 +344,13 @@ struct
       join_ a a' |>
       return
 
-    | S_assign(({ekind = E_var x}), e, EXPAND) ->
-      panic "relational: expand not yet supported"
+    | S_assign(({ekind = E_var x}), {ekind = E_var y}, EXPAND) ->
+      return @@ add_missing_vars a [y] |>
+      bind @@ exec (mk_stmt (S_remove_var x) stmt.srange) |>
+      bind @@ fun a' ->
+      let x = {x with vtyp = y.vtyp} in
+      Apron.Abstract1.expand ApronManager.man a' (var_to_apron y) [| var_to_apron x |] |>
+      return
 
     | S_assume(e) -> begin
         let a = add_missing_vars  a (Framework.Visitor.expr_vars e) in

@@ -238,20 +238,21 @@ struct
      cell of array a indexed by path i0 *)
   let assign_array_cell a i0 i e range mode man flow =
     man.eval i flow |> Post.bind man @@ fun i flow ->
-    let flow' = fold_cells i
-        ~expand:(fun acc i ->
+    let flow', cells = fold_cells i
+        ~expand:(fun (acc, cells) i ->
             let c = mk_cell a (i0 @ [i]) in
             let v = mk_cell_var c e.etyp in
             let flow' = man.exec (mk_assign (mk_var v range) e ~mode range) flow |>
                         Flow.map_domain_env T_cur (add c) man
             in
-            Flow.join man acc flow'
+            Flow.join man acc flow', v :: cells
           )
-        ~threshold:(fun acc (min,max) ->
-            ignore_old_cells a (Some (i0, min, max)) e range man acc
-          ) (Flow.bottom (get_annot flow)) man flow
+        ~threshold:(fun (acc, cells) (min,max) ->
+            ignore_old_cells a (Some (i0, min, max)) e range man acc, cells
+          ) (Flow.bottom (get_annot flow), []) man flow
     in
-    Post.of_flow flow'
+    Post.of_flow flow' |>
+    Post.add_mergers (List.map (fun c -> mk_remove_var c range) cells)
 
   (* Post-condition transfer function *)
   let exec zone stmt man flow =

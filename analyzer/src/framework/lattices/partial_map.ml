@@ -70,7 +70,7 @@ struct
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊥. *)
 
-  let widening annot (a1:t) (a2:t) : t =
+  let widen annot (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)

@@ -86,3 +86,5 @@ let print pp fmt x =
   match x with
   | None -> Format.fprintf fmt "None"
   | Some a -> pp fmt a
+
+let return x = Some x
