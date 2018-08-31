@@ -21,7 +21,7 @@
 	    "product": [
 		"universal.numeric.values.intervals",
 		"universal.numeric.values.congruences",
-		"universal.numeric.relational.polyhedra"
+		"universal.numeric.relational.octagon"
 	    ],
 	    "reductions" : [
 		"universal.numeric.reductions.intervals_congruences",
