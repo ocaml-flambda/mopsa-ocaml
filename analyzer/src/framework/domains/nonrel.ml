@@ -224,7 +224,12 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man flow = Some (Flow.set_domain_env T_cur top man flow)
+  let init prog man flow =
+    Some (
+      let flow' = Flow.set_domain_env T_cur top man flow in
+      debug "init %a" (Flow.print man) flow';
+      flow'
+    )
 
   let exec_interface = Domain.{
     import = [];
@@ -233,7 +238,7 @@ struct
 
   let eval_interface = Domain.{
     import = [Zone.top, Value.zone];
-    export = [Value.zone, Value.zone];
+    export = [Zone.top, Value.zone];
   }
 
   let rec exec zone stmt man flow =

@@ -75,8 +75,8 @@ struct
     | x, _ -> x
 
   let exec_interface = Domain.{
-    import = Head.exec_interface.import @ Tail.exec_interface.import;
-    export = Head.exec_interface.export @ Tail.exec_interface.export;
+    import = List.sort_uniq compare (Head.exec_interface.import @ Tail.exec_interface.import);
+    export = List.sort_uniq compare (Head.exec_interface.export @ Tail.exec_interface.export);
   }
 
   let exec zone =
@@ -104,8 +104,8 @@ struct
 
 
   let eval_interface = Domain.{
-    import = Head.eval_interface.import @ Tail.eval_interface.import;
-    export = Head.eval_interface.export @ Tail.eval_interface.export;
+    import = List.sort_uniq compare (Head.eval_interface.import @ Tail.eval_interface.import);
+    export = List.sort_uniq compare (Head.eval_interface.export @ Tail.eval_interface.export);
   }
 
   let eval zpath =

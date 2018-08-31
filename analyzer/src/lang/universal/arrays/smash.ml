@@ -25,7 +25,7 @@ let () = Framework.Zone.(register_zone {
       );
     print = (fun next fmt z ->
         match z with
-        | Z_smashing -> Format.fprintf fmt "smash"
+        | Z_smashing -> Format.fprintf fmt "universal/smash"
         | _ -> next fmt z
       )
   })
@@ -106,7 +106,9 @@ struct
 
   let init prog man flow =
     Some (
-      Flow.set_domain_env T_cur empty man flow
+      let flow' = Flow.set_domain_env T_cur empty man flow in
+      debug "init %a" (Flow.print man) flow';
+      flow'
     )
 
   

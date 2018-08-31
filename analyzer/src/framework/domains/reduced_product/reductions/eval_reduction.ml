@@ -18,5 +18,5 @@ end
 
 (** Registration *)
 let reductions : (string * (module REDUCTION)) list ref = ref []
-let registerreduction name rule = reductions := (name, rule) :: !reductions
+let register_reduction name rule = reductions := (name, rule) :: !reductions
 let find_reduction name = List.assoc name !reductions

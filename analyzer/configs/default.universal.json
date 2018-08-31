@@ -12,6 +12,7 @@
 		"universal.arrays.smash"
 	    ],
 	    "reductions": [
+		"universal.arrays.reductions.expand_smash"
 	    ]
 	},
 

@@ -20,6 +20,7 @@ open Zone
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 let mk_exec_of_zone_list (l: Zone.zone list) exec =
+  let l = List.sort_uniq Pervasives.compare l in
   let exec_list = List.map exec l in
   (fun (stmt: Ast.stmt) (man: ('a, 't) man) (flow: 'a flow) : 'a Post.post option ->
      let rec aux =
@@ -34,6 +35,7 @@ let mk_exec_of_zone_list (l: Zone.zone list) exec =
   )
 
 let mk_eval_of_zone_list (l: (Zone.zone * Zone.zone) list) eval =
+  let l = List.sort_uniq Pervasives.compare l in
   let eval_list = List.map eval l in
   (fun (exp: Ast.expr) (man: ('a, 't) man) (flow: 'a flow) : ('a, Ast.expr) evl option ->
      let rec aux =
@@ -100,7 +102,7 @@ struct
               debug "exec for %a found" Zone.print zone;
               ExecMap.add zone f acc
           end
-      ) ExecMap.empty (Zone.top :: Domain.exec_interface.import)
+      ) ExecMap.empty (List.sort_uniq Pervasives.compare (Zone.top :: Domain.exec_interface.import))
 
 
   and exec ?(zone = Zone.top) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
@@ -159,13 +161,14 @@ struct
               EvalMap.add zpath f acc
 
           end
-      ) EvalMap.empty ((Zone.top, Zone.top)  :: Domain.eval_interface.import)
+      ) EvalMap.empty (List.sort_uniq Pervasives.compare ((Zone.top, Zone.top)  :: Domain.eval_interface.import))
 
 
   (** Evaluation of expressions. *)
   and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     debug
-      "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
+      "eval expr on zone %a in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
+      Zone.print2 zone
       Location.pp_range_verbose exp.erange
       pp_expr exp (Flow.print man) flow
     ;

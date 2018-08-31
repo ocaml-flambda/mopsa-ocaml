@@ -346,7 +346,7 @@ struct
         man.eval a flow ~zone:(Framework.Zone.top, Z_expand_cell_lval) |> Eval.bind @@ fun a flow ->
         match ekind a with
         | E_cell_lval(a, Some i0) -> eval_array_cell a i0 i exp.etyp range man flow
-        | E_cell_lval(a, None) -> assert false
+        | E_cell_lval(a, None) -> Eval.singleton (mk_top exp.etyp range) flow
         | E_var a -> eval_array_cell a [] i exp.etyp range man flow
         | _ -> assert false
       )

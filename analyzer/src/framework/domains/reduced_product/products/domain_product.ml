@@ -260,7 +260,12 @@ struct
               | Cons(hd, tl), c :: ctl ->
                 let module D = (val hd) in
                 begin match D.identify id with
-                  | Some Eq -> Some {expr = Some exp; flow; cleaners = []} :: ctl
+                  | Some Eq ->
+                    let cleaners = match c with
+                      | None -> []
+                      | Some {cleaners} -> cleaners
+                    in
+                    Some {expr = Some exp; flow; cleaners} :: ctl
                   | None -> c :: (aux tl id ctl)
                 end
               | _ -> assert false
@@ -294,17 +299,17 @@ struct
   (* ************** *)
 
   let init prog man flow =
-    let rec aux: type t. t domain_pool -> ('a, t) man -> 'a flow -> 'a flow option =
-      fun pool man flow ->
+    let rec aux: type t. t domain_pool -> 'a flow option -> ('a, t) man -> 'a flow -> 'a flow option =
+      fun pool ret man flow ->
         match pool with
-        | Nil -> None
+        | Nil -> ret
         | Cons(hd, tl) ->
           let module D = (val hd) in
           match D.init prog (head_man man) flow with
-          | None -> aux tl (tail_man man) flow
-          | Some flow -> aux tl (tail_man man) flow
+          | None -> aux tl ret (tail_man man) flow
+          | Some flow' -> aux tl (Some flow') (tail_man man) flow'
     in
-    aux Config.pool man flow
+    aux Config.pool None man flow
 
 
   (* Post-condition computation *)
@@ -318,8 +323,8 @@ struct
         let module D = (val hd) in
         let after = aux tl in
         {
-          import = D.exec_interface.import @ after.import;
-          export = D.exec_interface.export @ after.export;
+          import = List.sort_uniq compare (D.exec_interface.import @ after.import);
+          export = List.sort_uniq compare (D.exec_interface.export @ after.export);
         }
     in
     aux Config.pool
@@ -366,7 +371,6 @@ struct
              | Cons(hd, tl), zhd :: ztl ->
                begin
                  let module D = (val hd) in
-                 debug "Exec on %s" D.name;
                  let exec = Analyzer.mk_exec_of_zone_list zhd D.exec in
                  match exec stmt (head_man man) flow with
                  | None -> None :: (aux tl ztl (tail_man man) annot)
@@ -458,8 +462,8 @@ struct
         let module D = (val hd) in
         let after = aux tl in
         {
-          import = D.eval_interface.import @ after.import;
-          export = D.eval_interface.export @ after.export;
+          import = List.sort_uniq compare (D.eval_interface.import @ after.import);
+          export = List.sort_uniq compare (D.eval_interface.export @ after.export);
         }
     in
     aux Config.pool
@@ -510,7 +514,6 @@ struct
          in
          aux Config.pool zl man
        in
-
        (* Transform list of evaluations into list of conjunctions *)
        let lconj =
          let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
