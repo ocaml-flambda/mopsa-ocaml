@@ -25,6 +25,11 @@ open Ast
 let name = "jvm.frontend"
 let debug fmt = Debug.debug ~channel:name fmt
 
+let dump_dot = false (** dump CFG in dot file *)
+let dump_exn_in_dot = false (** exception can clutter the dot file *)
+let dump_text = false (** dump CFG in text format *)
+let dump_field_list = false
+              
 
 (*========================================================================*)
                    (** {2 Utilities} *)
@@ -287,6 +292,8 @@ let coalesce_cfg g =
 (*========================================================================*)
 
 
+let nb_loaded_methods = ref 0
+  
 let load_method
       (cls: j_class)
       (jmethod: jcode concrete_method)
@@ -308,34 +315,48 @@ let load_method
   (* cfg construction *)
   (match jmethod.cm_implementation with
    | Native ->
-      Format.printf "    [native]@\n"
+      if dump_text then Format.printf "    [native]@\n"
    | Java j ->
+      incr nb_loaded_methods;
       let jcode = Lazy.force j in
       fill_cfg meth.m_uid g jcode;
       coalesce_cfg g;
       Precheck.analyze meth;
-      let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
-      let fmt = Format.formatter_of_out_channel f in
-      CFG.print_dot
-        { CFG.dot_node =
-            (fun fmt n -> Format.fprintf fmt "%i:" (CFG.node_id n).loc_line);
-          CFG.dot_edge = (fun fmt e -> pp_stmt fmt (CFG.edge_data e));
-          CFG.dot_port = (fun fmt t -> pp_token fmt t);
-        }
-        meth.m_name fmt g ;
-      Format.pp_print_flush fmt ();
-      close_out f;
-      Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
+      if dump_dot then (
+        let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
+        let fmt = Format.formatter_of_out_channel f in
+        CFG.print_dot
+          { CFG.dot_pp_node =
+              (fun fmt n -> Format.fprintf fmt "%i:" (CFG.node_id n).loc_line);
+            CFG.dot_pp_edge =
+              (fun fmt e -> pp_stmt fmt (CFG.edge_data e));
+            CFG.dot_pp_port =
+              (fun fmt t -> pp_token fmt t);
+            CFG.dot_filter_node = (fun x -> true);
+            CFG.dot_filter_edge = (fun x -> true);
+            CFG.dot_filter_port =
+              (fun x -> dump_exn_in_dot || x <> F_java_exn);
+          }
+          meth.m_name fmt g ;
+        Format.pp_print_flush fmt ();
+        close_out f
+      );
+      if dump_text then
+        Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
   );
   meth
 
-  
+
+let nb_loaded_classes = ref 0
+
 let load_class jclass : j_class =
-  Format.printf "class %s@\n" (cn_name (get_name jclass));
+  Format.printf "class %s@." (cn_name (get_name jclass));
+  incr nb_loaded_classes;
   let fields = get_fields jclass in
   FieldMap.iter
     (fun sign field ->
-      Format.printf "  field %s@\n" (JPrint.field_signature sign)
+      if dump_field_list then
+        Format.printf "  field %s@\n" (JPrint.field_signature sign)
     ) fields;
   (* global class information *)
   let cls = {
@@ -349,12 +370,10 @@ let load_class jclass : j_class =
   (* translate each method *)
   MethodMap.iter
     (fun sign m ->
-
-     (*if ms_name sign = "newClient" then*) (      
+      if dump_field_list then
         Format.printf "  method %s@\n" (JPrint.method_signature sign);
-        let mm = load_method cls m in
-        cls.c_methods <- MapExt.StringMap.add mm.m_uid mm cls.c_methods
-      )
+      let mm = load_method cls m in
+      cls.c_methods <- MapExt.StringMap.add mm.m_uid mm cls.c_methods
     )
     (get_concrete_methods jclass);
   
@@ -368,26 +387,55 @@ let load_class jclass : j_class =
 
 
 let jdk_path = "/opt/oracle-jdk-bin-1.8.0.181/"
-   
+let jdk_lib_path = jdk_path ^ "jre/lib/"
+             
 let class_path =
   class_path
     (String.concat
        ":"
-       [jdk_path ^ "jre/lib/resources.jar";
-        jdk_path ^ "jre/lib/rt.jar";
-        jdk_path ^ "jre/lib/jsse.jar";
-        jdk_path ^ "jre/lib/jce.jar";
-        jdk_path ^ "jre/lib/charsets.jar"
+       [jdk_lib_path ^ "resources.jar";
+        jdk_lib_path ^ "rt.jar";
+        jdk_lib_path ^ "jsse.jar";
+        jdk_lib_path ^ "jce.jar";
+        jdk_lib_path ^ "charsets.jar"
        ]
     )
 
-let java_lang_string = make_cn "java.lang.String"
-
-let java_lang_string_class = get_class class_path java_lang_string
+let nb_jar = ref 0
 
 let _ =
   Format.printf "JVM test@\n";
-  iter (fun c -> ignore (load_class c)) (jdk_path ^ "jre/lib/rt.jar")
-       (*  load_class (get_class class_path (make_cn "org.omg.stub.javax.management.remote.rmi._RMIServer_Stub"))  *)
+  List.iter
+    (fun x ->
+      incr nb_jar;
+      Format.printf "loading %s@\n" x;
+      iter (fun c -> ignore (load_class c)) x
+    )
+    [jdk_lib_path ^ "charsets.jar";
+     jdk_lib_path ^ "deploy.jar";
+     jdk_lib_path ^ "javaws.jar";
+     jdk_lib_path ^ "jce.jar";
+     jdk_lib_path ^ "jfxswt.jar";
+     jdk_lib_path ^ "jsse.jar";
+     jdk_lib_path ^ "plugin.jar";
+     jdk_lib_path ^ "rt.jar";
+     jdk_lib_path ^ "ext/cldrdata.jar";
+     jdk_lib_path ^ "ext/dnsns.jar";
+     jdk_lib_path ^ "ext/jaccess.jar";
+     jdk_lib_path ^ "ext/jfxrt.jar";
+     jdk_lib_path ^ "ext/localedata.jar";
+     jdk_lib_path ^ "ext/nashorn.jar";
+     jdk_lib_path ^ "ext/sunec.jar";
+     jdk_lib_path ^ "ext/sunjce_provider.jar";
+     jdk_lib_path ^ "ext/sunpkcs11.jar";
+     jdk_lib_path ^ "ext/zipfs.jar";     
+    ];
+
+    (*load_class (get_class class_path (make_cn "org.omg.stub.javax.management.remote.rmi._RMIConnection_Stub"))*)
+
+  Format.printf
+    "%i jar(s) loaded@\n%i class(es) loaded@\n%i method(s) loaded@\n%i error(s) found@\n"
+    !nb_jar !nb_loaded_classes !nb_loaded_methods !Precheck.nb_errors
+  
 
  

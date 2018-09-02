@@ -41,7 +41,7 @@ module type DOMAIN = sig
   val exec: manager -> loc -> (token * t) list -> edge -> (token * t) list
   (** Edge propagation.
       Takes as arguments the input abstract elements, with associated flows.
-      Returns output abstract elements and specify on which flows to
+      Returns output abstract elements and specifies on which flow to
       propagate them.
 
       The function is allowed to modify the list of destination nodes
