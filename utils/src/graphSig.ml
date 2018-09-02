@@ -662,9 +662,12 @@ module type S = sig
   (** Print in dot graph format. *)
     
   type ('n,'e) dot_printer = {
-      dot_node: Format.formatter -> ('n,'e) node -> unit;
-      dot_edge: Format.formatter -> ('n,'e) edge -> unit;
-      dot_port: Format.formatter -> port -> unit;
+      dot_pp_node: Format.formatter -> ('n,'e) node -> unit;
+      dot_pp_edge: Format.formatter -> ('n,'e) edge -> unit;
+      dot_pp_port: Format.formatter -> port -> unit;
+      dot_filter_node: ('n,'e) node -> bool;
+      dot_filter_edge: ('n,'e) edge -> bool;
+      dot_filter_port: port -> bool;
     }
                            
   val print_dot: ('n,'e) dot_printer -> string -> Format.formatter

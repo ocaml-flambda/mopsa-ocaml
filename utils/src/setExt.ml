@@ -687,9 +687,16 @@ module Make(Ord: OrderedType) =
       )
     (* internal printing helper *)
            
-    let print printer key ch l = print_gen output_string printer key ch l
-    let bprint printer key ch l = print_gen Buffer.add_string printer key ch l
-    let fprint printer key ch l = print_gen Format.pp_print_string printer key ch l
+    let print printer key ch l =
+      print_gen output_string printer key ch l
+
+    let bprint printer key ch l =
+      print_gen Buffer.add_string printer key ch l
+
+    let fprint printer key ch l =
+      print_gen
+        (fun fmt s -> Format.fprintf fmt "%s@," s)
+        printer key ch l
                                              
     let to_string printer key l =
       let b = Buffer.create 10 in

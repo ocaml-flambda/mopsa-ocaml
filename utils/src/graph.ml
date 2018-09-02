@@ -637,9 +637,12 @@ struct
     
 
   type ('n,'e) dot_printer = {
-      dot_node: Format.formatter -> ('n,'e) node -> unit;
-      dot_edge: Format.formatter -> ('n,'e) edge -> unit;
-      dot_port: Format.formatter -> port -> unit;
+      dot_pp_node: Format.formatter -> ('n,'e) node -> unit;
+      dot_pp_edge: Format.formatter -> ('n,'e) edge -> unit;
+      dot_pp_port: Format.formatter -> port -> unit;
+      dot_filter_node: ('n,'e) node -> bool;
+      dot_filter_edge: ('n,'e) edge -> bool;
+      dot_filter_port: port -> bool;
     }
                            
   let print_dot p name fmt g =
@@ -665,19 +668,23 @@ struct
     (* emit dot nodes for nodes and edges *)
     NodeHash.iter
       (fun id n ->
-        incr count;
-        NodeHash.add nid id !count;
-        Format.fprintf
-          fmt "  n%i [label=\"%s\"];\n"
-          !count (to_string p.dot_node n)
+        if p.dot_filter_node n then (
+          incr count;
+          NodeHash.add nid id !count;
+          Format.fprintf
+            fmt "  n%i [label=\"%s\"];\n"
+            !count (to_string p.dot_pp_node n)
+        )
       ) g.g_nodes;
     EdgeHash.iter
       (fun id e ->
-        incr count;
-        EdgeHash.add eid id !count;
-        Format.fprintf
-          fmt "  n%i [shape=box label=\"%s\"];\n"
-          !count (to_string p.dot_edge e)
+        if p.dot_filter_edge e then (
+          incr count;
+          EdgeHash.add eid id !count;
+          Format.fprintf
+            fmt "  n%i [shape=box label=\"%s\"];\n"
+            !count (to_string p.dot_pp_edge e)
+        )
       ) g.g_edges;
     (* emit dot edges to connect nodes and edges *)
     EdgeHash.iter
@@ -685,35 +692,43 @@ struct
         let did1 = EdgeHash.find eid id in
         List.iter
           (fun (port,n) ->
-            let did2 = NodeHash.find nid n.n_id in
-            Format.fprintf
-              fmt "  n%i -> n%i [label=\"%s\"];\n"
-              did2 did1 (to_string p.dot_port port)
+            if p.dot_filter_node n && p.dot_filter_port port && p.dot_filter_edge e then (
+              let did2 = NodeHash.find nid n.n_id in
+              Format.fprintf
+                fmt "  n%i -> n%i [label=\"%s\"];\n"
+                did2 did1 (to_string p.dot_pp_port port)
+            )
           ) e.e_src;
         List.iter
           (fun (port,n) ->
-            let did2 = NodeHash.find nid n.n_id in
-            Format.fprintf
-              fmt "  n%i -> n%i [label=\"%s\"];\n"
-              did1 did2 (to_string p.dot_port port)
+            if p.dot_filter_node n && p.dot_filter_port port && p.dot_filter_edge e then (
+              let did2 = NodeHash.find nid n.n_id in
+              Format.fprintf
+                fmt "  n%i -> n%i [label=\"%s\"];\n"
+                did1 did2 (to_string p.dot_pp_port port)
+            )
           ) e.e_dst
       ) g.g_edges;
     (* entry / exit nodes *)
     List.iter
       (fun (port,n) ->
-        incr count;
-        let did = NodeHash.find nid n.n_id in
-        Format.fprintf
-          fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
-          !count !count did (to_string p.dot_port port)       
+        if p.dot_filter_node n && p.dot_filter_port port then (
+          incr count;
+          let did = NodeHash.find nid n.n_id in
+          Format.fprintf
+            fmt "  n%i [shape=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
+            !count !count did (to_string p.dot_pp_port port)
+        )
       ) g.g_entries;
     List.iter
       (fun (port,n) ->
-        incr count;
-        let did = NodeHash.find nid n.n_id in
-        Format.fprintf
-          fmt "  n%i [style=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
-          !count did !count (to_string p.dot_port port)       
+        if p.dot_filter_node n && p.dot_filter_port port then (
+          incr count;
+          let did = NodeHash.find nid n.n_id in
+          Format.fprintf
+            fmt "  n%i [shape=point label=\"\"];\n  n%i -> n%i [label=\"%s\"];\n"
+            !count did !count (to_string p.dot_pp_port port)
+        )
       ) g.g_exits;
     (* footer *)
     Format.fprintf fmt "}\n"
