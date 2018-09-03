@@ -70,6 +70,8 @@ val filter    : (token -> 'a -> bool) -> ('a, _) man -> 'a flow -> 'a flow
 
 val map : (token -> 'a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
 
+val map_token : token -> ('a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
+
 val fold : ('b -> token -> 'a -> 'b)  -> 'b -> ('a, _) man -> 'a flow -> 'b
 
 val merge : (token -> 'a option -> 'a option -> 'a option) -> ('a, _) man -> 'a flow -> 'a flow -> 'a flow

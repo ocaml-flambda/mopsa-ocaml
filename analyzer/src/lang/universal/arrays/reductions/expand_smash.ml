@@ -25,23 +25,26 @@ struct
   module S = Smash.Domain
 
   (* Choose between an expand evaluation [e] and a smash evaluation [s] *)
-  let choose e s eflow sflow range dman man conj =
-    match ekind e with
+  let choose expand smash eflow sflow range dman man conj =
+    match ekind expand with
     | E_var _ ->
       (* In case we computed an expanded cell, we have to make sure that its value
          is as precise as the smash abstraction *)
-      let flow' = man.exec (mk_assign e s range) sflow |>
+      let flow' = man.exec (mk_assign expand smash range) sflow |>
+                  (* Keep the set of expanded cell from eflow, so just put it to ⊤ here *)
+                  Flow.map_token T_cur (dman.set_env E.id E.top) man |>
+                  (* Meet will compute the most precise value *)
                   Flow.meet man eflow
       in
       (* Remove smash temporary if any *)
       let flow'' =
-        match ekind s with
+        match ekind smash with
         | E_var v when String.sub v.vname 0 4 = "$tmp" ->
           man.exec (mk_remove_var v range) flow'
 
         | _ -> flow'
       in
-      dman.set_eval E.id e flow'' conj |>
+      dman.set_eval E.id expand flow'' conj |>
       dman.remove_eval S.id
 
     | E_constant (C_top _) ->

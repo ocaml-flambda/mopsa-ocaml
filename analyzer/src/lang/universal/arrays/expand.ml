@@ -319,7 +319,8 @@ struct
       let c = mk_cell a i in
       let v = mk_cell_var c typ in
       let e = mk_var v range in
-      Eval.singleton e flow
+      let flow' = Flow.map_domain_env T_cur (add c) man flow in
+      Eval.singleton e flow'
 
     | E_cell_lval(a, None) ->
       Eval.singleton (mk_top typ range) flow

@@ -146,6 +146,10 @@ let map (f: token -> 'a -> 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.mapi f) flow.map in
   {flow with map}
 
+let map_token tk (f: 'a -> 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+  set tk (f (get tk man flow)) man flow
+
+
 let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (man: ('a, _) man) (flow: 'a flow) : 'b =
   let m = top_to_exn flow.map in
   FlowMap.fold (fun tk a acc -> f acc tk a) m init
