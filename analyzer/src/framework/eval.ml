@@ -39,6 +39,11 @@ let meet_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
   | [] -> assert false
   | hd :: tl -> List.fold_left meet hd tl
 
+let iter (f: ('a, 'e) evl_case -> unit) (evl: ('a, 'e) evl) : unit =
+  Dnf.to_list evl |>
+  List.flatten |>
+  List.iter f
+
 let map
     (f: ('a, 'e) evl_case -> ('a, 'f) evl_case)
     (evl: ('a, 'e) evl)

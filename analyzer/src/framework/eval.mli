@@ -30,6 +30,8 @@ val fold :
     ('b -> 'b -> 'b) ->
     'b -> ('a, 'e) evl -> 'b
 
+val iter : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
+
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 
 val assume :

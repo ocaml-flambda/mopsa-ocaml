@@ -114,4 +114,4 @@ let apply
   )
   
 
-let to_list dnf = dnf
+let to_list (dnf: 'a t) : 'a list list = dnf

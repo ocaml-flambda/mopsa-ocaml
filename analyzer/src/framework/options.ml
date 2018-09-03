@@ -29,7 +29,7 @@ let common_options = {
   config = "";
   unit_test_mode = false;
   stubs = [];
-  cache = 10;
+  cache = 20;
 }
 
 let () =

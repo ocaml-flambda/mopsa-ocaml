@@ -49,6 +49,11 @@ struct
       with Not_found ->
         let evals = f exp flow in
         add_to_cache eval_cache ((exp, flow), evals);
+        Eval.iter (fun case ->
+            match case.expr with
+            | Some e -> add_to_cache eval_cache ((e, flow), Eval.singleton e flow);
+            | None -> ()
+          ) evals;
         evals
 
 end
