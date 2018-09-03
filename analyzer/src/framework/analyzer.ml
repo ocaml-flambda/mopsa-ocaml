@@ -56,6 +56,8 @@ let mk_eval_of_zone_list (l: (Zone.zone * Zone.zone) list) eval =
 module Make(Domain : DOMAIN) =
 struct
 
+  module Cache = Cache.Make(struct type t = Domain.t end)
+
 
   (** Map giving the [exec] transfer function of a zone *)
   module ExecMap = MapExt.Make(struct type t = Zone.zone let compare = compare end)
@@ -115,21 +117,24 @@ struct
 
     let zone_exec = ExecMap.find zone exec_map in
 
-    let flow' = match zone_exec stmt man flow with
-      | None ->
-        Exceptions.panic
-          "Unable to analyze statement in %a:@\n @[%a@]"
-          Location.pp_range_verbose stmt.srange
-          pp_stmt stmt
+    let flow' = Cache.exec (fun stmt flow ->
+        match zone_exec stmt man flow with
+        | None ->
+          Exceptions.panic
+            "Unable to analyze statement in %a:@\n @[%a@]"
+            Location.pp_range_verbose stmt.srange
+            pp_stmt stmt
 
-      | Some post -> post.flow
-
+        | Some post -> post.flow
+      ) stmt flow
     in
+
     let t = Timing.stop timer in
     Debug.debug ~channel:"framework.analyzer.profiler"
       "exec done in %.6fs of:@\n@[<v>  %a@]"
       t pp_stmt stmt
     ;
+
     debug
       "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_stmt stmt (Flow.print man) flow (Flow.print man) flow'
@@ -174,11 +179,14 @@ struct
     ;
     let timer = Timing.start () in
     let path_eval = EvalMap.find zone eval_map in
-    let evl = match path_eval exp man flow with
-      | Some evl -> evl
-      | None -> Eval.singleton exp flow
 
+    let evl = Cache.eval (fun exp flow ->
+        match path_eval exp man flow with
+        | Some evl -> evl
+        | None -> Eval.singleton exp flow
+      ) exp flow
     in
+
     let t = Timing.stop timer in
     Debug.debug
       ~channel:"framework.analyzer.profiler"
