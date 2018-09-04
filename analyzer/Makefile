@@ -13,12 +13,12 @@ framework.domains.reduced_product.products = value_product domain_product
 lang = universal c
 
 lang.universal = ast pp visitor frontend zone iterators numeric arrays
-lang.universal.iterators = program intraproc loops
+lang.universal.iterators = program intraproc loops interproc
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
-lang.c = ast frontend flows
+lang.c = ast frontend
 
 lang.c.flows = switch
 
