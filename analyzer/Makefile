@@ -10,7 +10,7 @@ framework.domains = stateless iter nonrel leaf functor reduced_product
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal
+lang = universal c
 
 lang.universal = ast pp visitor frontend zone iterators numeric arrays
 lang.universal.iterators = program intraproc loops
@@ -18,6 +18,9 @@ lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
+lang.c = ast frontend flows
+
+lang.c.flows = switch
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

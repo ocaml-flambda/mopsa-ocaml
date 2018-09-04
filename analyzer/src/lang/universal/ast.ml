@@ -17,6 +17,7 @@ open Framework.Essentials
 
 
 type typ +=
+  | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float (** Floating-point real numbers. *)
   | T_string (** Strings. *)
@@ -37,6 +38,7 @@ let () =
 
 
 type constant +=
+  | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)

@@ -32,6 +32,7 @@ let () =
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function
+      | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
       | C_string(s) -> fprintf fmt "\"%s\"" s
       | C_int(n) -> Z.pp_print fmt n
       | C_float(f) -> pp_print_float fmt f
@@ -41,7 +42,8 @@ let () =
     );
 
   register_pp_typ (fun default fmt typ ->
-    match typ with
+      match typ with
+      | T_bool -> pp_print_string fmt "bool"
       | T_int -> pp_print_string fmt "int"
       | T_float -> pp_print_string fmt "float"
       | T_string -> pp_print_string fmt "string"
