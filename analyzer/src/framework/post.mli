@@ -21,7 +21,12 @@ type 'a post = {
 (** Post-conditions *)
 
 val of_flow : 'a flow -> 'a post
-(** [of_flow flow] returns a post-condition from a flow, without mergers and channels *)
+(** [of_flow flow] returns a post-condition from a flow, without
+   mergers and channels *)
+
+val return : 'a flow -> 'a post option
+(** [of_flow flow] returns a post-condition option from a flow,
+   without mergers and channels *)
 
 val add_mergers : Ast.stmt list -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
