@@ -18,9 +18,11 @@ lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
-lang.c = zone ast frontend flows
+lang.c = zone ast frontend desugar flows
 
 lang.c.flows = switch goto
+
+lang.c.desugar = for
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
