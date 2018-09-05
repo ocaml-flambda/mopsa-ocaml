@@ -219,8 +219,15 @@ end
 (* Registration of a stacked domain *)
 (* ================================ *)
 
-let register_domain d1 d2 =
-  let module D1 = (val d1 : S) in
-  let module D2 = (val d2 : Domain.DOMAIN) in
-  let module D = Make(D1)(D2) in
-  Domain.register_domain (module D)
+let domains : (module S) list ref = ref []
+
+let register_domain f = domains := f :: !domains
+
+let rec find_domain name =
+  let rec aux = function
+  | [] -> raise Not_found
+  | hd :: tl ->
+    let module D = (val hd : S) in
+    if D.name = name then (module D : S) else aux tl
+  in
+  aux !domains

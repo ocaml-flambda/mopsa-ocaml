@@ -12,18 +12,21 @@
 
     The supported syntax for a [domain] is as follows:
 
-    - a string denotes a leaf domain or a non-relational value abstraction.
+    - a string denotes a leaf domain or a non-relational value
+   abstraction.
 
-    - [\{"functor": domain, "arg": domain\}] creates a functor domain 
-    parameterized by an argument domain.
+    - [\{"functor": domain, "arg": domain\}] creates a functor domain
+   parameterized by an argument domain.
 
     - [\{"iter": \[domain list\]\}] uses the iterator composer to
-    combine a list of domains in sequence.
-    
-    - [\{"product": \[string list\], "reductions": \[string list\]\}] 
-    constructs a reduced product of a set of abstract domains and 
-    non-relational value abstractions with some reduction rules 
-*)
+   combine a list of domains in sequence.
+
+    - [\{"product": \[string list\], "reductions": \[string list\]\}]
+   constructs a reduced product of a set of abstract domains and
+   non-relational value abstractions with some reduction rules
+
+    - [\{"stack": domain, "over": domain\}] combines two domains with
+   a stack configuration.  *)
 
 open Yojson.Basic
 open Yojson.Basic.Util
@@ -35,6 +38,7 @@ let rec build_domain = function
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
   | `Assoc(obj) when List.mem_assoc "product" obj -> build_product obj
   | `Assoc(obj) when List.mem_assoc "functor" obj -> build_functor obj
+  | `Assoc(obj) when List.mem_assoc "stack" obj -> build_stack obj
   | _ -> assert false
 
 and build_leaf name =
@@ -47,7 +51,7 @@ and build_leaf name =
     (module D)
   with Not_found ->
     Debug.fail "Domain %s not found" name
-      
+
 
 and build_iter json =
   let domains = json |> to_list |> List.map build_domain in
@@ -84,6 +88,21 @@ and build_functor assoc =
     (module D : Domain.DOMAIN)
   with Not_found ->
     Debug.fail "Functor %s not found" f
+
+and build_stack assoc =
+  let d1 = List.assoc "stack" assoc |> to_string in
+  let d2 = List.assoc "over" assoc in
+  try
+    let d1 = Domains.Stacked.find_domain d1 in
+    let module D1 = (val d1 : Domains.Stacked.S) in
+
+    let d2 = build_domain d2 in
+    let module D2 = (val d2 : Domain.DOMAIN) in
+
+    let module D = Domains.Stacked.Make(D1)(D2) in
+    (module D : Domain.DOMAIN)
+  with Not_found ->
+    Debug.fail "Stack domains %s not found" d1
 
 
 let parse (file: string) : (module Domain.DOMAIN) =
