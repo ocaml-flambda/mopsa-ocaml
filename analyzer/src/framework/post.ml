@@ -39,6 +39,9 @@ let of_flow flow = {
   channels = [];
 }
 
+let return flow =
+  Some (of_flow flow)
+
 let map_flow f p =
   {p with flow = f p.flow}
 

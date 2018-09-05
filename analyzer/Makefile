@@ -20,7 +20,7 @@ lang.universal.numeric.reductions = channels intervals_congruences implicit_assu
 
 lang.c = zone ast frontend flows
 
-lang.c.flows = switch
+lang.c.flows = switch goto
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

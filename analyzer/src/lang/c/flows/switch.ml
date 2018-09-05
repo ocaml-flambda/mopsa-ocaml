@@ -85,7 +85,6 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
-
     | S_c_switch(e, body) ->
 
       (* Save current switch expression to be stored back in flow at
@@ -107,14 +106,12 @@ struct
 
       (* Store e in the annotations and execute body. *)
       let flow0' = Flow.set_annot_2 KSwitchExpr e flow0 in
-      (* let annot  = Flow.get_annot flow0 in
-       * let annot' = Annotation.add KSwitchExpr e annot in
-       * let flow0' = Flow.set_annot annot' flow0 in *)
 
       (* let ctx = set_annot KSwitchExpr e ctx in *)
       let flow1 = man.exec body flow0' in
 
       (* Merge resulting T_cur, T_break and TSwitch (in case when there is no default case) *)
+
       let cur =
         man.join
           (Flow.get_annot flow1)
