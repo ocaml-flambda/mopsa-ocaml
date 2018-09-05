@@ -39,6 +39,9 @@ let of_flow flow = {
   channels = [];
 }
 
+let map_flow f p =
+  {p with flow = f p.flow}
+
 let join (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
   {
     flow     = Flow.join man post1.flow post2.flow;

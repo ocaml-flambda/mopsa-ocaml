@@ -13,7 +13,7 @@
     is identified with a unique token.
 
     Flow insensitive annotations are also maintained in the flow
-    abstraction.  
+    abstraction.
 *)
 
 open Annotation
@@ -90,3 +90,7 @@ val map_domain_env : token -> ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
 val get_annot : 'a flow -> 'a annot
 val set_annot : 'a annot -> 'a flow -> 'a flow
 val map_annot : ('a annot -> 'a annot) -> 'a flow -> 'a flow
+
+val get_annot_2 : ('a, 'b) Annotation.key -> 'a flow -> 'b
+val set_annot_2 : ('a, 'b) Annotation.key -> 'b -> 'a flow -> 'a flow
+val rm_annot_2  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow

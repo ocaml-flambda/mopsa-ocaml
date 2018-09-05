@@ -6,8 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Annotations are used to add extra-information to flows. 
-    They are implemented as polymorphic maps so that annotations can be defined 
+(** Annotations are used to add extra-information to flows.
+    They are implemented as polymorphic maps so that annotations can be defined
     on top of the global abstraction.
 *)
 
@@ -54,6 +54,10 @@ val add : ('a, 'b) key -> 'b -> 'a annot -> 'a annot
 val find : ('a, 'b) key -> 'a annot -> 'b
 (** [find k m] returns the value bound to [k] in [m]. Raises
     [Not_found] if the binding is not found. *)
+
+val remove : ('a, 'b) key -> 'a annot -> 'a annot
+(** [remove k m] removes binding with key [k] in [m]. Does nothing if
+   there was no such binding. *)
 
 val cardinal : 'a annot -> int
 (** Number of values in a map *)

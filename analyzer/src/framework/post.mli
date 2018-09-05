@@ -29,6 +29,9 @@ val add_mergers : Ast.stmt list -> 'a post -> 'a post
 val add_channels : channel list -> 'a post -> 'a post
 (** [add_channels ch p] adds reduction channels [ch] to post-condition [p] *)
 
+val map_flow : ('a flow -> 'a flow) -> 'a post -> 'a post
+(** [map_flow f p] applies [f] on the underlying flow in [p]*)
+
 val join : ('a, _) man -> 'a post -> 'a post -> 'a post
 (** Join two post-conditions *)
 

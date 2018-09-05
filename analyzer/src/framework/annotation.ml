@@ -6,8 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Annotations are used to add extra-information to flows. 
-    They are implemented as polymorphic maps so that annotations can be defined 
+(** Annotations are used to add extra-information to flows.
+    They are implemented as polymorphic maps so that annotations can be defined
     on top of the global abstraction.
 *)
 
@@ -88,3 +88,15 @@ let find : type b. ('a, b) key -> 'a annot -> b =
     in
     aux k m.values
 
+let remove : type b. ('a, b) key -> 'a annot -> 'a annot =
+  fun k m ->
+    let rec aux : type b. ('a, b) key -> 'a vl -> 'a vl =
+      fun k -> function
+        | [] -> []
+        | hd :: tl ->
+          let (w, _) = hd in
+          match w.eq k with
+          | Some Eq -> tl
+          | None -> hd :: (aux k tl)
+    in
+    {m with values = aux k m.values}

@@ -187,3 +187,18 @@ let map_domain_env (tk:token) (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : '
 let get_annot flow = flow.annot
 let set_annot annot flow = {flow with annot}
 let map_annot f flow = set_annot (f @@ get_annot flow) flow
+
+(* I think the following ought to be renamed get_annot ... so as to fit set_domain_env *)
+let get_annot_2 k flow =
+  let annot = get_annot flow in
+  Annotation.find k annot
+
+let set_annot_2 k v flow =
+  let annot = get_annot flow in
+  let annot' = Annotation.add k v annot in
+  set_annot annot' flow
+
+let rm_annot_2 k flow =
+  let annot = get_annot flow in
+  let annot' = Annotation.remove k annot in
+  set_annot annot' flow
