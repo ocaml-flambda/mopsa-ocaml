@@ -13,22 +13,8 @@ open Essentials
 
 module type S =
 sig
-  (* Unchanged from DOMAIN signature *)
-  type t
-  val bottom: t
-  val top: t
-  val is_bottom: t -> bool
-  val subset: t -> t -> bool
-  val print: Format.formatter -> t -> unit
-  val id : t domain
-  val name : string
-  val identify : 'a domain -> (t, 'a) eq option
-  val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val exec : Zone.zone -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a post option
-  val eval : (Zone.zone * Zone.zone) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
+  (* Most parts are unchanged from DOMAIN signature *)
+  include Domain.DOMAIN
 
   (* Binary lattice operators can unify the state of the underneath domain *)
   val join: 'a annot -> ('b, 'b) man -> t * 'b -> t * 'b -> t * 'b * 'b
