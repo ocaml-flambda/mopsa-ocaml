@@ -59,11 +59,11 @@ let bind
     (evl: ('a, 'e) evl)
   : 'a post =
   let annot = Eval.choose evl |>
-              Option.option_dfl1 Annotation.empty (fun (_, flow) -> get_annot flow)
+              Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_annot flow)
   in
   Eval.fold (fun acc case ->
-      let annot = get_annot acc.flow in
-      let flow' = set_annot annot case.flow in
+      let annot = Flow.get_annot acc.flow in
+      let flow' = Flow.set_annot annot case.flow in
       match case.expr with
       | None -> join man acc (of_flow flow')
 
@@ -74,8 +74,8 @@ let bind
           ) post.flow case.cleaners
         in
         let post' = {post with flow = flow''} in
-        let annot' = get_annot flow'' in
-        let acc' = {acc with flow = set_annot annot' acc.flow} in
+        let annot' = Flow.get_annot flow'' in
+        let acc' = {acc with flow = Flow.set_annot annot' acc.flow} in
         join man acc' post'
     ) (join man) (meet man) (bottom annot) evl
 

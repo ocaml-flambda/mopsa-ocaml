@@ -45,13 +45,6 @@ type 'a flow = {
 }
 (** An abstract flow is a flow map augmented with an annotation *)
 
-val set_annot : 'a annot -> 'a flow -> 'a flow
-(** Change the annotation associated to a flow *)
-
-val get_annot : 'a flow -> 'a annot
-(** Returns the annotation associated to a flow *)
-
-
 (*==========================================================================*)
 (**                          {2 Evaluations}                                *)
 (*==========================================================================*)

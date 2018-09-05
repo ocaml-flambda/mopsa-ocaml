@@ -86,3 +86,7 @@ val get_domain_env : token -> ('a, 't) man -> 'a flow -> 't
 
 val map_domain_env : token -> ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
 (** [map_domain_env tk f man flow] is equivalent to [set_domain_env tk (f (get_env tk man flow)) man flow] *)
+
+val get_annot : 'a flow -> 'a annot
+val set_annot : 'a annot -> 'a flow -> 'a flow
+val map_annot : ('a annot -> 'a annot) -> 'a flow -> 'a flow

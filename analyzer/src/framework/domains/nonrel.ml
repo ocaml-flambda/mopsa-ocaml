@@ -278,7 +278,7 @@ struct
             let a' = VarMap.add var v a in
             let a'' = match mode with
               | STRONG | EXPAND -> a'
-              | WEAK -> join (get_annot flow) a a'
+              | WEAK -> join (Flow.get_annot flow) a a'
             in
             Channel.return a''
           ) man flow
@@ -291,7 +291,7 @@ struct
       Some (
         man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
-            filter (get_annot flow) e true a
+            filter (Flow.get_annot flow) e true a
           ) man flow
         in
         Post.of_flow flow' |>

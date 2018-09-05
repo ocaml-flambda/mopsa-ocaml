@@ -249,7 +249,7 @@ struct
           )
         ~threshold:(fun (acc, cells) (min,max) ->
             ignore_old_cells a (Some (i0, min, max)) e range man acc, cells
-          ) (Flow.bottom (get_annot flow), []) man flow
+          ) (Flow.bottom (Flow.get_annot flow), []) man flow
     in
     Post.of_flow flow' |>
     Post.add_mergers (List.map (fun c -> mk_remove_var c range) cells)

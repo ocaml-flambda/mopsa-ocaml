@@ -38,6 +38,14 @@ let () =
 
 
 
+(** {2 Call stack annotation} *)
+(** ========================= *)
+
+type call_stack = fundec list
+
+type ('a, _) Annotation.key +=
+  | A_call_stack: ('a, call_stack) Annotation.key (** List of previously called functions *)
+
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -70,7 +78,20 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man flow = None
+  let init prog man (flow: 'a flow) =
+    Some (
+      (* Register call stack annotation *)
+      Flow.map_annot (
+        Annotation.(register_annot {
+            eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
+                    function
+                    | A_call_stack -> Some Eq
+                    | _ -> None
+                  in
+                  f);
+          })
+      ) flow
+    )
 
 
   (** Computation of post-conditions *)
@@ -111,8 +132,16 @@ struct
 
       let init_block = mk_block parameters_assign range in
 
+      (* Add f to call stack *)
+      let flow1 = Flow.map_annot (fun annot ->
+          let cs = try Annotation.find A_call_stack annot with Not_found -> [] in
+          let cs' = f :: cs in
+          Annotation.add A_call_stack cs' annot
+        ) flow0
+      in
+
       (* Execute body *)
-      let flow1 = man.exec init_block flow0 |>
+      let flow2 = man.exec init_block flow1 |>
                   man.exec f.fun_body
       in
 
@@ -120,7 +149,7 @@ struct
       let tmp = mk_tmp ~vtyp:f.fun_return_type () in
 
       (* Iterate over return flows and assign the returned value to tmp *)
-      let flow2 =
+      let flow3 =
         Flow.fold (fun acc tk env ->
             match tk with
             | T_return(_, None) -> Flow.add T_cur env man acc
@@ -133,7 +162,7 @@ struct
             | _ -> Flow.add tk env man acc
           )
           (Flow.remove T_cur man flow)
-          man flow1
+          man flow2
       in
 
       (* Remove parameters and local variables from the environment *)
@@ -145,11 +174,11 @@ struct
 
       let ignore_block = mk_block ignore_stmt_list range in
 
-      let flow3 = man.exec ignore_block flow2 in
+      let flow4 = man.exec ignore_block flow3 in
 
       (* Re-evaluate the expression [tmp] from the top-level *)
       Some (
-        man.eval (mk_var tmp range) flow3 |>
+        man.eval (mk_var tmp range) flow4 |>
         Eval.bind @@ fun e' flow ->
         Eval.singleton e' flow ~cleaners:[mk_remove_var tmp range]
       )

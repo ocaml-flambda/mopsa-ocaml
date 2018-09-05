@@ -73,10 +73,6 @@ type 'a flow = {
   annot : 'a annot;
 }
 
-let set_annot annot flow = {flow with annot}
-
-let get_annot flow = flow.annot
-
 (*==========================================================================*)
 (**                          {2 Evaluations}                                *)
 (*==========================================================================*)
