@@ -87,7 +87,7 @@ struct
 
   (** points-to set abstraction *)
   module PSL = struct
-    include Framework.Lattices.Top_set.Make(P)
+    include Framework.Lattices.Powerset.Make(P)
   end
 
   (** (cell -> pointsto lattice) lattice *)
