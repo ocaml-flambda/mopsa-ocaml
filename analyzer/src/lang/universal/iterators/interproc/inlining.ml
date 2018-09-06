@@ -58,7 +58,7 @@ struct
 
   type _ domain += D_universal_intraproc : unit domain
   let id = D_universal_intraproc
-  let name = "universal.iterators.intraproc"
+  let name = "universal.iterators.interproc"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_universal_intraproc -> Some Eq

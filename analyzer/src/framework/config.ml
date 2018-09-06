@@ -53,7 +53,11 @@ and build_iter json =
 and build_product assoc =
   let pool = List.assoc "product" assoc |> to_list |> List.map to_string in
   let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
-  let module D = (val Domains.Reduced_product.Factory.make pool rules) in
+  let sub =
+      try List.assoc "over" assoc |> build_domain
+      with Not_found -> (module Domains.Empty : Domain.DOMAIN)
+  in
+  let module D = (val Domains.Reduced_product.Factory.make pool rules sub) in
   (module D)
 
 and build_functor assoc =

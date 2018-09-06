@@ -202,6 +202,20 @@ struct
 end
 
 
+(* Create a stacked domain from a non-stacked one *)
+module MakeStacked(D: DOMAIN) =
+struct
+  (* Most values are similar *)
+  include D
+
+  (* Except binary operators *)
+  let join annot man (a1, b1) (a2, b2) = D.join annot a1 a2, b1, b2
+  let meet annot man (a1, b1) (a2, b2) = D.meet annot a1 a2, b1, b2
+  let widen annot man (a1, b1) (a2, b2) = D.widen annot a1 a2, b1, b2
+
+end
+
+
 (* Registration of a stacked domain *)
 (* ================================ *)
 
@@ -217,3 +231,9 @@ let rec find_domain name =
     if D.name = name then (module D : S) else aux tl
   in
   aux !domains
+
+let mem_domain name =
+  List.exists (fun d ->
+      let module D = (val d : S) in
+      D.name = name
+    ) !domains
