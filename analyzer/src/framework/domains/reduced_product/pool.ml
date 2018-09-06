@@ -17,7 +17,7 @@ open Value
 
 type 'a domain_pool =
   | Nil : unit domain_pool
-  | Cons : (module DOMAIN with type t = 'a) * 'b domain_pool -> ('a * 'b) domain_pool
+  | Cons : (module Stacked.S with type t = 'a) * 'b domain_pool -> ('a * 'b) domain_pool
 
 (** Product evaluations.
     Reduction operators do not process the whole

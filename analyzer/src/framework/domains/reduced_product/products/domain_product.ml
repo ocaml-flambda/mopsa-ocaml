@@ -16,8 +16,8 @@ open Pool
 (** ********************* *)
 
 type _ domain +=
-  | D_empty_product : unit domain
-  | D_reduced_product : 'a domain * 'b domain -> ('a * 'b) domain
+  | D_empty_product : 'o domain -> (unit * 'o) domain
+  | D_reduced_product : 'a domain * ('b * 'o) domain -> (('a * 'b) * 'o) domain
 
 let debug fmt = Debug.debug ~channel:"framework.domains.reduced_product.products.domain_product" fmt
 
@@ -25,18 +25,20 @@ let debug fmt = Debug.debug ~channel:"framework.domains.reduced_product.products
 (** ************** *)
 
 module Make
+    (Over: DOMAIN)
     (Config:
      sig
        type t
        type v
        val pool : t domain_pool
-       val nonrel_man : ('a, t) man -> ('a, v) nonrel_man
+       val nonrel_man : ('a, t * Over.t) man -> ('a, v) nonrel_man
        val post_rules : (module Reductions.Post_reduction.REDUCTION) list
        val eval_rules : (module Reductions.Eval_reduction.REDUCTION) list
      end
-    ) : DOMAIN =
+    )
+  : DOMAIN =
 struct
-  type t = Config.t
+  type t = Config.t * Over.t
 
 
   (* Domain instance identification *)
@@ -45,9 +47,9 @@ struct
   let name = "framework.domains.reduced_product"
 
   let id =
-    let rec aux : type a. a domain_pool -> a domain =
+    let rec aux : type a. a domain_pool -> (a * Over.t) domain =
       function
-      | Nil -> D_empty_product
+      | Nil -> D_empty_product Over.id
       | Cons(hd, tl) ->
         let module V = (val hd) in
         D_reduced_product(V.id, aux tl)
@@ -56,10 +58,14 @@ struct
 
   let identify : type a. a domain -> (t, a) eq option =
     fun id ->
-      let rec aux : type a b. a domain_pool -> b domain -> (a, b) eq option =
+      let rec aux : type a b. a domain_pool -> b domain -> (a * Over.t, b) eq option =
         fun pool id ->
           match pool, id with
-          | Nil, D_empty_product -> Some Eq
+          | Nil, D_empty_product(o) ->
+            begin match Over.identify o with
+              | Some Eq -> Some Eq
+              | None -> None
+            end
           | Cons(hd, tl), D_reduced_product(id1, id2) ->
             let module D = (val hd) in
             begin match D.identify id1, aux tl id2 with
@@ -83,7 +89,7 @@ struct
         let tl = aux tl in
         V.bottom, tl
     in
-    aux Config.pool
+    aux Config.pool, Over.bottom
 
   let top : t =
     let rec aux : type a. a domain_pool -> a = fun pool ->
@@ -94,9 +100,9 @@ struct
         let tl = aux tl in
         V.top, tl
     in
-    aux Config.pool
+    aux Config.pool, Over.top
 
-  let is_bottom (v:t) : bool =
+  let is_bottom ((a,o):t) : bool =
     let rec aux : type a. a domain_pool -> a -> bool = fun pool v ->
       match pool, v with
       | Nil, () -> false
@@ -104,9 +110,9 @@ struct
         let module V = (val hd) in
         V.is_bottom vhd || aux tl vtl
     in
-    aux Config.pool v
+    aux Config.pool a || Over.is_bottom o
 
-  let subset (v1:t) (v2:t) : bool =
+  let subset ((a1,o1):t) ((a2,o2):t) : bool =
     let rec aux : type a. a domain_pool -> a -> a -> bool = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> true
@@ -114,39 +120,115 @@ struct
         let module V = (val hd) in
         V.subset vhd1 vhd2 && aux tl vtl1 vtl2
     in
-    aux Config.pool v1 v2
+    aux Config.pool a1 a2 && Over.subset o1 o2
 
-  let join annot (v1:t) (v2:t) : t =
-    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
-      match pool, v1, v2 with
-      | Nil, (), () -> ()
+
+  (* Managers *)
+  (* ******** *)
+
+  let head_man (man: ('a, ('b * 'c) * Over.t) man) : ('a, 'b) man = {
+    man with
+    get = (fun flow -> man.get flow |> fst |> fst);
+    set = (fun b flow ->
+        let ((_, c), o) = man.get flow in
+        man.set ((b, c), o) flow
+      );
+  }
+
+  let tail_man (man: ('a, ('b * 'c) * Over.t) man) : ('a, 'c * Over.t) man = {
+    man with
+    get = (fun flow ->
+        let ((_, c), o) = man.get flow in
+        (c, o)
+      );
+    set = (fun (c, o) flow ->
+        let ((b, _), _) = man.get flow in
+        man.set ((b, c), o) flow
+      );
+  }
+
+  let over_man (man: ('a, t) man) : ('a, Over.t) man = {
+    man with
+    get = (fun flow ->
+        let (_, o) = man.get flow in
+        o
+      );
+    set = (fun o flow ->
+        let (a, _) = man.get flow in
+        man.set (a, o) flow
+      );
+  }
+
+
+  let rec over_local_man : (Over.t, Over.t) man = {
+    bottom = Over.bottom;
+    top = Over.top;
+    is_bottom = Over.is_bottom;
+    subset = Over.subset;
+    join = Over.join;
+    meet = Over.meet;
+    widen = Over.widen;
+    print = Over.print;
+    get = (fun o -> o);
+    set = (fun o _ -> o);
+    exec = (fun ?(zone=Zone.top) stmt flow ->
+        match Over.exec zone stmt over_local_man flow with
+        | Some post -> post.Post.flow
+        | None -> Debug.fail "product: sub-domain can not compute post-condition of %a" pp_stmt stmt;
+      );
+    eval = (fun ?(zone=(Zone.top, Zone.top)) exp flow ->
+        match Over.eval zone exp over_local_man flow with
+        | Some evl -> evl
+        | None -> Debug.fail "product: sub-domain can not evaluate %a" pp_expr exp;
+      );
+    ask = (fun query flow ->
+        match Over.ask query over_local_man flow with
+        | Some repl -> repl
+        | None -> Debug.fail "product: sub-domain can not answer query";
+      );
+  }
+
+
+  let join annot ((a1,o1):t) ((a2,o2):t) : t =
+    let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
+      match pool, a1, a2 with
+      | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        V.join annot vhd1 vhd2, aux tl vtl1 vtl2
+        let hd', o1', o2' = V.join annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
+        (hd', tl'), o1'', o2''
     in
-    aux Config.pool v1 v2
+    let a', o1', o2' = aux Config.pool (a1,o1) (a2,o2) in
+    a', Over.join annot o1' o2'
 
-  let meet annot (v1:t) (v2:t) =
-    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
-      match pool, v1, v2 with
-      | Nil, (), () -> ()
+  let meet annot ((a1,o1):t) ((a2,o2):t) =
+    let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
+      match pool, a1, a2 with
+      | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        V.meet annot vhd1 vhd2, aux tl vtl1 vtl2
+        let hd', o1', o2' = V.meet annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
+        (hd', tl'), o1'', o2''
     in
-    aux Config.pool v1 v2
+    let a', o1', o2' = aux Config.pool (a1,o1) (a2,o2) in
+    a', Over.meet annot o1' o2'
 
-  let widen annot v1 v2 =
-    let rec aux : type a. a domain_pool -> a -> a -> a = fun pool v1 v2 ->
-      match pool, v1, v2 with
-      | Nil, (), () -> ()
+  let widen annot ((a1,o1):t) ((a2,o2):t) =
+    let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
+      match pool, a1, a2 with
+      | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        V.widen annot vhd1 vhd2, aux tl vtl1 vtl2
+        let hd', o1', o2' = V.widen annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
+        (hd', tl'), o1'', o2''
     in
-    aux Config.pool v1 v2
+    let a', o1', o2' = aux Config.pool (a1,o1) (a2,o2) in
+    a', Over.widen annot o1' o2'
 
-  let print fmt v =
+  let print fmt (a,o) =
     let rec aux : type a. a domain_pool -> Format.formatter -> a -> unit = fun pool fmt v ->
       match pool, v with
       | Nil, () -> ()
@@ -158,30 +240,14 @@ struct
         let module V = (val hd) in
         Format.fprintf fmt "%a%a" V.print vhd (aux tl) vtl
     in
-    aux Config.pool fmt v
+    Format.fprintf fmt "%a%a" (aux Config.pool) a Over.print o
 
-
-  (* Managers *)
-  (* ******** *)
-
-  let head_man (man: ('a, ('b * 'c)) man) : ('a, 'b) man = {
-    man with
-    get = (fun flow -> man.get flow |> fst);
-    set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
-  }
-
-  let tail_man (man: ('a, ('b * 'c)) man) : ('a, 'c) man = {
-    man with
-    get = (fun flow -> man.get flow |> snd);
-    set = (fun a flow -> man.set (man.get flow |> fst, a) flow);
-  }
 
   let domain_man man = {
     pool = Config.pool;
-
     get_env = (
       let f : type b. b domain -> 'a -> b = fun id env ->
-        let rec aux : type b c. b domain -> c domain_pool -> ('a, c) man -> b = fun id pool man ->
+        let rec aux : type b c. b domain -> c domain_pool -> ('a, c * Over.t) man -> b = fun id pool man ->
           match pool with
           | Nil -> raise Not_found
           | Cons(hd, tl) ->
@@ -198,7 +264,7 @@ struct
     );
     set_env = (
       let f : type b. b domain -> b -> 'a -> 'a = fun id a env ->
-        let rec aux : type b c. b domain -> b -> c domain_pool -> ('a, c) man -> 'a =
+        let rec aux : type b c. b domain -> b -> c domain_pool -> ('a, c * Over.t) man -> 'a =
           fun id a pool man ->
             match pool with
             | Nil -> raise Not_found
@@ -299,7 +365,7 @@ struct
   (* ************** *)
 
   let init prog man flow =
-    let rec aux: type t. t domain_pool -> 'a flow option -> ('a, t) man -> 'a flow -> 'a flow option =
+    let rec aux: type b. b domain_pool -> 'a flow option -> ('a, b * Over.t) man -> 'a flow -> 'a flow option =
       fun pool ret man flow ->
         match pool with
         | Nil -> ret
@@ -318,7 +384,7 @@ struct
   let exec_interface =
     let rec aux : type a. a domain_pool -> Zone.zone interface =
       function
-      | Nil -> {import = []; export = []}
+      | Nil -> Over.exec_interface
       | Cons(hd, tl) ->
         let module D = (val hd) in
         let after = aux tl in
@@ -363,7 +429,7 @@ struct
     (fun stmt man flow ->
        (* Point-wise exec *)
        let posts =
-         let rec aux: type t. t domain_pool -> Zone.zone list list -> ('a, t) man -> 'a annot -> 'a post option list =
+         let rec aux: type b. b domain_pool -> Zone.zone list list -> ('a, b * Over.t) man -> 'a annot -> 'a post option list =
            fun pool zl man annot ->
              match pool, zl with
              | Nil, _ -> []
@@ -389,7 +455,7 @@ struct
           and restores its local abstract element from its own post-condition.
        *)
        let merged_flows, channels =
-         let rec aux : type t. t domain_pool -> ('a, t) man -> 'a post option list -> 'a flow option list -> 'a flow option list * Post.channel list =
+         let rec aux : type b. b domain_pool -> ('a, b * Over.t) man -> 'a post option list -> 'a flow option list -> 'a flow option list * Post.channel list =
            fun pool man posts ret ->
              match pool, posts with
              | Nil, [] -> ret, []
@@ -428,7 +494,7 @@ struct
                ret'', channels @ channels'
              | _ -> assert false
          in
-         aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)  
+         aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)
        in
 
        (* Meet merged flows *)
@@ -444,7 +510,7 @@ struct
          aux merged_flows
        in
        match flow' with
-       | None -> None
+       | None -> Over.exec zone stmt (over_man man) flow
        | Some flow -> Some (
            reduce_exec stmt channels man flow |>
            Post.of_flow
@@ -457,7 +523,7 @@ struct
   let eval_interface =
     let rec aux : type a. a domain_pool -> (Zone.zone * Zone.zone) interface =
       function
-      | Nil -> {import = []; export = []}
+      | Nil -> Over.eval_interface
       | Cons(hd, tl) ->
         let module D = (val hd) in
         let after = aux tl in
@@ -483,7 +549,7 @@ struct
   let eval zone =
     (* Computing covering zones of the given zone *)
     let zl =
-      let rec aux: type t. t domain_pool -> (Zone.zone * Zone.zone) list list =
+      let rec aux: type b. b domain_pool -> (Zone.zone * Zone.zone) list list =
         function
         | Nil -> []
         | Cons(hd, tl) ->
@@ -496,7 +562,7 @@ struct
     (fun exp man flow ->
        (* Point-wise evaluation *)
        let evls =
-         let rec aux: type t. t domain_pool -> (Zone.zone * Zone.zone) list list -> ('a, t) man -> ('a, Ast.expr) evl option list =
+         let rec aux: type b. b domain_pool -> (Zone.zone * Zone.zone) list list -> ('a, b * Over.t) man -> ('a, Ast.expr) evl option list =
            fun pool zl man ->
              match pool, zl with
              | Nil, _ -> []
@@ -516,7 +582,7 @@ struct
        in
        (* Transform list of evaluations into list of conjunctions *)
        let lconj =
-         let rec aux : type t. t domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
+         let rec aux : type b. b domain_pool -> ('a, Ast.expr) evl option list -> 'a evl_conj list =
            fun pool evls ->
              match pool, evls with
              | Nil, [] -> [[]]
@@ -543,9 +609,14 @@ struct
        let lconj' = List.map (reduce_eval exp man) lconj in
 
        (* Combine conjunctions into an evaluation *)
-       List.fold_left (fun acc c ->
+       let res = List.fold_left (fun acc c ->
            Option.option_neutral2 Eval.join acc (conj_to_evl c)
          ) None lconj'
+       in
+
+       match res with
+       | None -> Over.eval zone exp (over_man man) flow
+       | _ -> res
     )
 
 
@@ -553,17 +624,17 @@ struct
   (* ******** *)
 
   let ask query man flow =
-    let rec aux : type t r. t domain_pool -> ('a, t) man -> r Query.query -> r option =
-      fun pool man query ->
+    let rec aux : type b r. b domain_pool -> ('a, b * Over.t) man -> r Query.query -> r option =
+      fun pool man' query ->
         match pool with
-        | Nil -> None
+        | Nil -> Over.ask query (over_man man) flow
         | Cons(hd, tl) ->
           let module D = (val hd) in
-          let r1 = D.ask query (head_man man) flow in
-          let r2 = aux tl (tail_man man) query in
+          let r1 = D.ask query (head_man man') flow in
+          let r2 = aux tl (tail_man man') query in
           Option.option_neutral2 (Query.meet query) r1 r2
     in
     aux Config.pool man query
-                  
+
 
 end

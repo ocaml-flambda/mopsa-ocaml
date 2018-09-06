@@ -21,12 +21,15 @@
     - [\{"iter": \[domain list\]\}] uses the iterator composer to
    combine a list of domains in sequence.
 
-    - [\{"product": \[string list\], "reductions": \[string list\]\}]
-   constructs a reduced product of a set of abstract domains and
-   non-relational value abstractions with some reduction rules
-
     - [\{"stack": domain, "over": domain\}] combines two domains with
-   a stack configuration.  
+   a stack configuration.
+
+    - [\{"product": \[domain/value list\], "reductions": \[string
+   list\]\}, "over": domain] constructs a reduced product of a set of
+   abstract domains and non-relational value abstractions with some
+   reduction rules. A common sub-domain can be provided to construct a
+   stacked product.
+
 *)
 
 
