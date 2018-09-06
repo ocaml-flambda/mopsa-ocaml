@@ -293,7 +293,9 @@ let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 let mk_alloc_addr addr_kind range =
   mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
 
-
+let is_int_type = function
+  | T_int -> true
+  | _ -> false
 
 (*==========================================================================*)
                            (** {2 Statements} *)

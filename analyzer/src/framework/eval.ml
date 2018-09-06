@@ -14,13 +14,15 @@ open Flow
 open Manager
 open Zone
 
+let empty = Dnf.mk_false
+
 let case  (c: ('a, 'e) evl_case) : ('a, 'e) evl =
   Dnf.singleton c
 
 let singleton (e: 'e) ?(cleaners=[]) (flow: 'a flow) : ('a, 'e) evl =
   Dnf.singleton {expr = Some e; flow; cleaners}
 
-let empty flow : ('a, 'e) evl  =
+let empty_singleton flow : ('a, 'e) evl  =
   Dnf.singleton {expr = None; flow; cleaners = []}
 
 let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
@@ -83,7 +85,7 @@ let bind
       let flow' = set_annot annot case.flow in
       let evl' =
         match case.expr with
-        | None -> empty flow'
+        | None -> empty_singleton flow'
         | Some expr -> f expr flow' |>
                        add_cleaners case.cleaners
       in
@@ -100,7 +102,7 @@ let assume
     cond ?(zone = Zone.top)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
-    ?(fnone = (fun flow -> empty flow))
+    ?(fnone = (fun flow -> empty_singleton flow))
     man flow
   : ('a, 'e) evl  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
@@ -132,6 +134,28 @@ let switch
     in
     List.fold_left (fun acc (cond, t) -> join (one cond t) acc) (one cond t) q
 
+let eval_list
+    (l: 'e list)
+    (eval: 'e -> 'c flow -> ('c, 'b) evl)
+    ?(empty = (fun flow -> empty_singleton flow))
+    (flow: 'c flow)
+  : ('c, 'b list) evl =
+  let rec aux expl flow clean = function
+    | [] ->
+      singleton (List.rev expl) flow
+    | exp :: tl ->
+      eval exp flow |>
+      Dnf.substitute2
+        (fun case ->
+           let exp' = case.expr in
+           let flow = case.flow in
+           let clean' = case.cleaners in
+           match exp' with
+           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
+           | None -> empty_singleton flow
+        )
+  in
+  aux [] flow [] l
 
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list

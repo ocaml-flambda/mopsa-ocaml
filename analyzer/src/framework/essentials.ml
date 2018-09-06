@@ -40,6 +40,9 @@ struct
   type t = var
   let compare = compare_var
   let print = pp_var
+  let var_uniq_name v =
+    let () = Format.fprintf Format.str_formatter "%a" pp_var v in
+    Format.flush_str_formatter ();
 end
 
 type expr_info = {
