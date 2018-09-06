@@ -30,6 +30,8 @@ struct
 
   let top = TOP
 
+  let is_top (abs: t) = top_dfl1 true (fun x -> false) abs
+
   let subset abs1 abs2 =
     top_included Set.subset abs1 abs2
 
