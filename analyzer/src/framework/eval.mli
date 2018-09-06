@@ -8,11 +8,13 @@
 
 open Manager
 
+val empty : ('a, 'e) evl
+
 val case : ('a, 'e) evl_case -> ('a, 'e) evl
 
 val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('a, 'e) evl
 
-val empty : 'a flow -> ('a, 'e) evl
+val empty_singleton : 'a flow -> ('a, 'e) evl
 
 val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
@@ -33,6 +35,8 @@ val fold :
 val iter : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
 
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
+
+val eval_list : 'e list -> ('e -> 'a flow -> ('a, 'c) evl) -> ?empty:('a flow -> ('a, 'e) evl) -> 'a flow ->  ('a, 'c list) evl
 
 val assume :
   Ast.expr -> ?zone:Zone.zone ->

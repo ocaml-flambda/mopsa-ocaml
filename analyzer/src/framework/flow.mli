@@ -85,7 +85,21 @@ val get_domain_env : token -> ('a, 't) man -> 'a flow -> 't
    abstract element bound to token [tk] in [flow] *)
 
 val map_domain_env : token -> ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
-(** [map_domain_env tk f man flow] is equivalent to [set_domain_env tk (f (get_env tk man flow)) man flow] *)
+(** [map_domain_env tk f man flow] is equivalent to [set_domain_env tk
+   (f (get_domain env tk man flow)) man flow] *)
+
+val set_domain_cur : 't -> ('a, 't) man -> 'a flow -> 'a flow
+(** [set_domain_cur a man flow] overwrites the local part of a domain in
+   the abstract element bound to token T_cur in [flow] *)
+
+val get_domain_cur : ('a, 't) man -> 'a flow -> 't
+(** [get_domain_cur man flow] retrieves the local part of a domain in the
+   abstract element bound to token T_cur in [flow] *)
+
+
+val map_domain_cur : ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
+(** [map_domain_cur f man flow] is equivalent to [set_domain_cur (f
+   (get_domain_cur tk man flow)) man flow] *)
 
 val get_annot : 'a flow -> 'a annot
 val set_annot : 'a annot -> 'a flow -> 'a flow

@@ -30,7 +30,7 @@ let goto_wid_param = ref 3
 
 module Domain : Framework.Domains.Stateless.S =
 struct
-  (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
+
   (** Domain identification *)
   (** ===================== *)
 

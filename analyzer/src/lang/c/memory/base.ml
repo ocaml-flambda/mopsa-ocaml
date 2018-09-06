@@ -1,0 +1,33 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
+(** Base storage of program variables, distinguishing between stack and heap
+    storage.
+*)
+
+open Framework.Ast
+open Universal.Ast
+open Framework.Essentials
+
+(** lv base *)
+type base =
+  | V of var
+  | A of Universal.Ast.addr
+
+let pp_base fmt = function
+  | V v -> pp_var fmt v
+  | A a -> pp_addr fmt a
+
+let compare_base b b' = match b, b' with
+  | V v, V v' -> compare_var v v'
+  | A a, A a' -> Universal.Ast.compare_addr a a'
+  | _ -> compare b b'
+
+let base_uid = function
+  | V v -> v.vuid
+  | A a -> a.addr_uid

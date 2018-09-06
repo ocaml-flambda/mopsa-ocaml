@@ -95,6 +95,33 @@ let fold2
   in
   apply_disj init dnf
 
+let substitute
+    (f: 'a -> 'b)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (dnf: 'a t)
+  : 'b =
+  let rec apply_conj = function
+    | [] -> assert false
+    | [e] -> f e
+    | e :: tl -> meet (f e) (apply_conj tl)
+  in
+  let rec apply_disj = function
+    | [conj] -> apply_conj conj
+    | conj :: tl -> join (apply_conj conj) (apply_disj tl)
+    | _ -> assert false
+  in
+  apply_disj dnf
+
+let substitute2
+    (f: 'a -> 'b t)
+    (dnf: 'a t) : 'b t =
+  substitute
+    f
+    mk_or
+    mk_and
+    dnf
+
 let choose (dnf: 'a t) : 'a option =
   match dnf with
   | [] | [[]] -> None
@@ -112,6 +139,6 @@ let apply
         meet (List.map f c)
       ) dnf
   )
-  
+
 
 let to_list (dnf: 'a t) : 'a list list = dnf

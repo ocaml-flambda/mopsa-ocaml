@@ -183,6 +183,15 @@ let get_domain_env (tk:token) (man:('a, 't) man) (flow:'a flow) : 't =
 let map_domain_env (tk:token) (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
   set_domain_env tk (f (get_domain_env tk man flow)) man flow
 
+let set_domain_cur (a: 't) (man: ('a, 't) man) (flow: 'a flow): 'a flow =
+  set_domain_env T_cur a man flow
+
+let get_domain_cur (man: ('a, 't) man) (flow: 'a flow): 't =
+  get_domain_env T_cur man flow
+
+let map_domain_cur (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
+  map_domain_env T_cur f man flow
+
 
 let get_annot flow = flow.annot
 let set_annot annot flow = {flow with annot}
