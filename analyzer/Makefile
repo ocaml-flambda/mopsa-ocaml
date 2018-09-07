@@ -24,7 +24,7 @@ lang.c.flows = switch goto
 
 lang.c.desugar = for
 
-lang.c.memory = base pointer
+lang.c.memory = base pointer init_visitor cell
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
