@@ -74,9 +74,14 @@ let print_gen o printer elem ch l =
      o ch printer.print_end
 (* internal printing helper *)
        
-let print printer elem ch l = print_gen output_string printer elem ch l
-let bprint printer elem ch l = print_gen Buffer.add_string printer elem ch l
-let fprint printer elem ch l = print_gen Format.pp_print_string printer elem ch l
+let print printer elem ch l =
+  print_gen output_string printer elem ch l
+
+let bprint printer elem ch l =
+  print_gen Buffer.add_string printer elem ch l
+
+let fprint printer elem ch l =
+  print_gen (fun fmt s -> Format.fprintf fmt "%s@," s) printer elem ch l
 
 let to_string printer elem l =
   let b = Buffer.create 10 in
