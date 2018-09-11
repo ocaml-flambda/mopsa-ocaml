@@ -47,6 +47,7 @@ let cell_pp_chain : (Format.formatter -> cell -> unit) ref = ref (
 let register_cell_pp pp = cell_pp_chain := pp !cell_pp_chain
 let pp_cell fmt c = !cell_pp_chain fmt c
 
+
 (* Registration of a new cell *)
 (* ========================== *)
 
@@ -113,21 +114,26 @@ open Framework.Zone
 
 type zone +=
   | Z_c_cell
-  | Z_c_cell_deref_free
-  | Z_c_cell_points_to
+  | Z_c_points_to
 
 let () =
   register_zone {
-      subset = (fun next z1 z2 ->
-        match z1, z2 with
-        | Z_c_cell_deref_free, Z_c_cell -> true
-        | _ -> next z1 z2
-        );
+      subset = (fun next z1 z2 -> next z1 z2);
       print = (fun next fmt z ->
           match z with
           | Z_c_cell -> Format.fprintf fmt "c/cell"
-          | Z_c_cell_deref_free -> Format.fprintf fmt "c/cell/deref-free"
-          | Z_c_cell_points_to -> Format.fprintf fmt "c/cell/points-to"
+          | Z_c_points_to -> Format.fprintf fmt "c/points-to"
           | _ -> next fmt z
         );
     }
+
+
+(* Cell module *)
+(* =========== *)
+
+module Cell =
+struct
+  type t = cell
+  let compare = compare_cell
+  let print = pp_cell
+end
