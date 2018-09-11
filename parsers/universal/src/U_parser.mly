@@ -248,8 +248,6 @@ fundec:
 {{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
 
 prog:
-| st=ext(stat)
-       {{gvars = []; funs = [] ; main = st}}
 | st=ext(block_no_curly)
        {{gvars = []; funs = [] ; main = st}}
 | d=ext(declaration) prg=prog {add_declaration d prg}

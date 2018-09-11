@@ -1,5 +1,5 @@
-# OCaml sources
-ML = $(shell find $(SRC) -name "*.ml")
+# OCaml sources (except temporary files starting and ending with '#')
+ML = $(shell find $(SRC) -name "*.ml" | grep -v "\#*\#")
 MLI = $(shell find $(SRC) -name "*.mli")
 
 MLL = $(shell find $(SRC) -name "*.mll")

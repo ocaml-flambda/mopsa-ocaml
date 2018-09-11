@@ -80,16 +80,17 @@ struct
   let init prog man (flow: 'a flow) =
     Some (
       (* Register call stack annotation *)
-      flow |> Flow.map_annot (fun annot ->
-          Annotation.(register_annot {
-              eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
-                      function
-                      | A_call_stack -> Some Eq
-                      | _ -> None
-                    in
-                    f);
-            }) annot
-        )
+      let annot = Flow.get_annot flow in
+      let annot' = Annotation.(register_annot {
+          eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
+                  function
+                  | A_call_stack -> Some Eq
+                  | _ -> None
+                in
+                f);
+        }) annot
+      in
+      Flow.set_annot annot' flow
     )
 
 
