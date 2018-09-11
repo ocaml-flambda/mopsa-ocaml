@@ -21,10 +21,9 @@ lang.universal.numeric.reductions = channels intervals_congruences implicit_assu
 lang.c = zone ast frontend desugar flows memory
 
 lang.c.flows = switch goto
-
 lang.c.desugar = for
-
-lang.c.memory = base pointer init_visitor cell
+lang.c.memory = base init_visitor cell
+lang.c.memory.cell = typ pointer
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

@@ -13,18 +13,21 @@ open Framework.Zone
 type zone +=
   | Z_c
   | Z_c_scalar
+  | Z_c_num
 
 let () =
   register_zone {
       subset = (fun next z1 z2 ->
         match z1, z2 with
         | Z_c_scalar, Z_c -> true
+        | Z_c_num, Z_c_scalar -> true
         | _ -> next z1 z2
         );
       print = (fun next fmt z ->
           match z with
           | Z_c -> Format.fprintf fmt "c"
           | Z_c_scalar -> Format.fprintf fmt "c/scalar"
+          | Z_c_num -> Format.fprintf fmt "c/scalar/num"
           | _ -> next fmt z
         );
     }

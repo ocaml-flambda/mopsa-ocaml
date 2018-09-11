@@ -128,13 +128,24 @@ struct
   (** =============================== *)
 
   let exec_interface = {
-    export = [Zone.Z_c];
-    import = [Zone.Z_c_scalar];
+    export = [
+      Zone.Z_c_scalar
+    ];
+    import = [
+      Universal.Zone.Z_universal_num;
+      Zone.Z_c_ptr
+    ];
   }
 
   let eval_interface = {
-    export = [Framework.Zone.top, Zone.Z_c];
-    import = [Framework.Zone.top, Zone.Z_c_scalar];
+    export = [
+      (Zone.Z_c_scalar, Universal.Zone.Z_universal_num);
+      (Zone.Z_c_scalar, Zone.Z_c_ptr);
+    ];
+    import = [
+      (Zone.Z_c_scalar_deref_free, Universal.Zone.Z_universal_num);
+      (Zone.Z_c_scalar_deref_free, Zone.Z_c_ptr);
+    ];
   }
 
 
