@@ -192,6 +192,8 @@ let get_domain_cur (man: ('a, 't) man) (flow: 'a flow): 't =
 let map_domain_cur (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
   map_domain_env T_cur f man flow
 
+let is_cur_bottom (man : ('a, 't) man) (flow :'a flow) : bool =
+  man.is_bottom (get T_cur man flow)
 
 let get_annot flow = flow.annot
 let set_annot annot flow = {flow with annot}
