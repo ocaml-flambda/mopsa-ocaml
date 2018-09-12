@@ -84,15 +84,15 @@ struct
 
   let join annot (a1, b1) (a2, b2) =
     let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.join annot man2_local (a1, b1) (a2, b2)) b1 b2 in
-    a, D2.join annot b1' b2
+    a, D2.join annot b1' b2'
 
   let meet annot (a1, b1) (a2, b2) =
     let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.meet annot man2_local (a1, b1) (a2, b2)) b1 b2  in
-    a, D2.meet annot b1' b2
+    a, D2.meet annot b1' b2'
 
   let widen annot (a1, b1) (a2, b2) =
     let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.widen annot man2_local (a1, b1) (a2, b2)) b1 b2  in
-    a, D2.widen annot b1' b2
+    a, D2.widen annot b1' b2'
 
   let subset (a1, b1) (a2, b2) =
     let b, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.subset man2_local (a1, b1) (a2, b2)) b1 b2  in
