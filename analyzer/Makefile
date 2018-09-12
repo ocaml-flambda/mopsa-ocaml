@@ -20,7 +20,7 @@ lang.universal.numeric.reductions = channels intervals_congruences implicit_assu
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 
-lang.c.libs = stdlib
+lang.c.libs = c_stdlib
 lang.c.flows = switch goto
 lang.c.desugar = for
 lang.c.memory = base init_visitor cell

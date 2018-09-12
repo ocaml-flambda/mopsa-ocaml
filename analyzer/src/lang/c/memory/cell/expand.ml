@@ -476,7 +476,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
       match base with
       | V v -> static_base_case (sizeof_type v.vtyp)
-      | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_base_case s
+      | A {addr_kind = Libs.C_stdlib.A_c_static_malloc s} -> static_base_case s
       | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
 
 
