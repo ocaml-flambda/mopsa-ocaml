@@ -188,6 +188,7 @@ open Framework.Zone
 type zone +=
   | Z_c_cell
   | Z_c_points_to
+  | Z_c_deref_free
 
 let () =
   register_zone {
@@ -196,6 +197,7 @@ let () =
           match z with
           | Z_c_cell -> Format.fprintf fmt "c/cell"
           | Z_c_points_to -> Format.fprintf fmt "c/points-to"
+          | Z_c_deref_free -> Format.fprintf fmt "c/deref-free"
           | _ -> next fmt z
         );
     }
