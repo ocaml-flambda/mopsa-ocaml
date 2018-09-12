@@ -520,15 +520,15 @@ let int_rangeof t =
   let a,b = rangeof t in
   (Z.to_int a, Z.to_int b)
 
-(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
-  let open Universal.Ast in
+(** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
+let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
+    let open Universal.Ast in
   mk_binop
     (mk_int l (tag_range range "l"))
     O_plus
     (mk_binop
        (mk_binop
-          (mk_var v (tag_range range "v"))
+          e
           O_minus
           (mk_int l (tag_range range "l"))
           (tag_range range "?")
@@ -548,6 +548,12 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
        (tag_range range "h-l+1")
     )
     range
+
+(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
+let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
+  wrap_expr (mk_var v (tag_range range "v")) (l,h) range
+
+
 
 (** [is_c_int_type t] wheter [t] is an integer type *)
 let rec is_c_int_type ( t : typ) =

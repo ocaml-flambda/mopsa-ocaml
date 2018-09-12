@@ -14,6 +14,7 @@ type zone +=
   | Z_c
   | Z_c_scalar
   | Z_c_num
+  | Z_c_lval
 
 let () =
   register_zone {
@@ -28,6 +29,7 @@ let () =
           | Z_c -> Format.fprintf fmt "c"
           | Z_c_scalar -> Format.fprintf fmt "c/scalar"
           | Z_c_num -> Format.fprintf fmt "c/scalar/num"
+          | Z_c_lval -> Format.fprintf fmt "c/lval"
           | _ -> next fmt z
         );
     }

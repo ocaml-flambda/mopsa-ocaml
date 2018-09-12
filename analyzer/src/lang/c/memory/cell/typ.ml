@@ -12,6 +12,7 @@
 *)
 
 open Framework.Essentials
+open Framework.Visitor
 open Base
 
 (* To support different cell-based memory models, an extensible type
@@ -73,6 +74,10 @@ type expr_kind +=
   | E_c_points_to of base * expr * typ
   (* Reply to a points-to evaluation *)
 
+type stmt_kind +=
+  | S_c_remove_cell of cell
+  (* Ask for the removing of a cell *)
+
 let () =
   register_expr {
     compare = (fun next e1 e2 ->
@@ -102,8 +107,23 @@ let () =
           {exprs = [o]; stmts = []},
           (function {exprs = [o]} -> {e with ekind = E_c_points_to(b,o,t)} | _ -> assert false)
         | _ -> next e
-      );
-  }
+      )
+  };
+  register_stmt_visitor (fun next stmt ->
+      match skind stmt with
+      | S_c_remove_cell c ->
+        (* no expr? *)
+        {exprs = []; stmts = []},
+        (fun _ -> stmt)
+      | _ -> next stmt
+    );
+  register_pp_stmt (fun next fmt stmt ->
+      match skind stmt with
+      | S_c_remove_cell c ->
+        Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
+      | _ -> next fmt stmt
+    );
+
 
 
 (* Cell zoning *)
