@@ -49,7 +49,7 @@ let pp_chain : (Format.formatter -> zone -> unit) ref = ref (fun fmt zone ->
   )
 
 let register_zone info =
-  subset_chain := info.subset !subset_chain;
+  (* subset_chain := info.subset !subset_chain; *)
   pp_chain := info.print !pp_chain;
   ()
 

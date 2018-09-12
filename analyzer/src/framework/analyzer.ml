@@ -95,8 +95,7 @@ struct
             debug "Searching for an exec function for the zone %a" Zone.print zone;
             match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
             | [] ->
-              Debug.warn "exec for %a not found" Zone.print zone;
-              acc
+              Exceptions.panic "exec for %a not found" Zone.print zone
 
             | l ->
               let f = mk_exec_of_zone_list l Domain.exec in
@@ -157,8 +156,7 @@ struct
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
             match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
             | [] ->
-              Debug.warn "eval for %a not found" Zone.print2 zpath;
-              acc
+              Exceptions.panic "eval for %a not found" Zone.print2 zpath
 
             | l ->
               let f = mk_eval_of_zone_list l Domain.eval in

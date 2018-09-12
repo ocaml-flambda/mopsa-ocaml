@@ -45,12 +45,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_flows_switch : unit domain
-  let id = D_c_flows_switch
-  let name = "c.flows.switch"
+  type _ domain += D_c_switch : unit domain
+  let id = D_c_switch
+  let name = "c.iterators.switch"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_flows_switch -> Some Eq
+    | D_c_switch -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
