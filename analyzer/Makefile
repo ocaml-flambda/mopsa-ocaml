@@ -10,7 +10,7 @@ framework.domains = stateless iter nonrel leaf functor stacked reduced_product e
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal c
+lang = universal c python
 
 lang.universal = ast pp visitor frontend zone iterators numeric arrays
 lang.universal.iterators = program intraproc loops interproc
@@ -19,12 +19,12 @@ lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
 lang.c = zone ast frontend desugar flows memory
-
 lang.c.flows = switch goto
-
 lang.c.desugar = for
-
 lang.c.memory = base pointer init_visitor cell
+
+lang.python = ast addr pp frontend zone libs desugar program types
+lang.python.types = typingdomain typing t_string t_int
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

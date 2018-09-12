@@ -1,0 +1,3 @@
+#!/bin/bash
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+${MOPSADIR}/bin/mopsa -lang=python -debug=_ -config ${MOPSADIR}/analyzer/configs/python-types.json -stub ${MOPSADIR}/analyzer/stubs/python $@

@@ -35,7 +35,10 @@ struct
   let subset abs1 abs2 =
     top_included Set.subset abs1 abs2
 
-  let join annot  abs1 abs2 =
+  let equal abs1 abs2 =
+    top_equal Set.equal abs1 abs2
+
+  let join annot abs1 abs2 =
     top_lift2 Set.union abs1 abs2
 
   let meet annot abs1 abs2 =

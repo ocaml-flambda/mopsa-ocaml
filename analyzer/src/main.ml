@@ -97,6 +97,7 @@ let get_config_path () =
 let parse_program files =
   match Options.(common_options.lang) with
   | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "python" -> Lang.Python.Frontend.parse_program files
   | _ -> Framework.Exceptions.panic "Unknown language"
 
 
@@ -124,7 +125,7 @@ let () =
           let prog = parse_program files in
           let config = get_config_path () in
           let domain = Config.parse config in
-          
+
           (* Start the analysis *)
           let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
           let t, alarms = perform_analysis domain prog in
