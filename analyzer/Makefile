@@ -24,7 +24,7 @@ lang.c.libs = stdlib
 lang.c.flows = switch goto
 lang.c.desugar = for
 lang.c.memory = base init_visitor cell
-lang.c.memory.cell = typ pointer
+lang.c.memory.cell = typ pointer expand
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

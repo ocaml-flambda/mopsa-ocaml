@@ -30,11 +30,6 @@ type ocell = {
   t: typ;
 }
 
-(* type xcell = {
- *   b: base;
- *   t: typ;
- * } *)
-
 type cell +=
   | OffsetCell of ocell
 
@@ -80,9 +75,6 @@ let mk_remove_cell (c: ocell) range =
     (S_c_remove_cell (OffsetCell c))
     range
 
-(* let mk_ocell_points_to (c : ocell) range =
- *   mk_expr ~etyp:(pointer_type c.t) (E_c_points_to (E_p_var (c.b,mk_z c.o (tag_range range "offset"),c.t))) (tag_range range "pointsto") *)
-
 let mk_ocell_of_var v t =
   {b = Base.V v; o = Z.zero ; t = t}
 (* FIXME : offset should not be 0 *)
@@ -90,29 +82,11 @@ let mk_ocell_of_var v t =
 let base_of_ocell (c: ocell) =
   c.b
 
-(* let cell_type c = match c with
- *   | OffsetCell oc -> oc.t
- *   | AnyCell c -> c.t
- *
- * let type_of_cell = function
- *   | OffsetCell c -> c.t
- *   | AnyCell c -> c.t
- *
- * let base_of_cell = function
- *   | OffsetCell c -> c.b
- *   | AnyCell c -> c.b *)
-
 let var_of_new_ocell c =
   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_ocell c in Format.flush_str_formatter ());
     vuid = 0;
     vtyp = c.t;
   }
-
-(* let var_of_xcell (c: xcell) =
- *   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_xcell c in Format.flush_str_formatter ());
- *     vuid = 0;
- *     vtyp = c.t;
- *   } *)
 
 
 (*==========================================================================*)
@@ -121,6 +95,7 @@ let var_of_new_ocell c =
 
 
 module Domain (* : Framework.Domains.Stacked.S *) = struct
+
 
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -147,6 +122,20 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
   type t = CellSet.t Bot.with_bot
 
+  (** Domain identification *)
+  (** ===================== *)
+
+  type _ domain += D_c_cell_expand : t domain
+  let id = D_c_cell_expand
+  let name = "c.cell.expand"
+  let identify : type a. a domain -> (t, a) eq option =
+    function
+    | D_c_cell_expand -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
+
   let top = Bot.Nb CellSet.empty
   let bottom = Bot.BOT
 
@@ -156,12 +145,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   let add_cell c = Bot.bot_lift1 (CellSet.add c)
   let rm_cell c = Bot.bot_lift1 (CellSet.remove c)
 
-  (* let find_var c = function
-   *   | Top.TOP  -> Debug.fail "C.memory.cell.expand find_var called on \
-   *                             Top"
-   *   | Top.Nt r -> Bind.find_l c r *)
-
-  let is_bottom x = Bot.bot_dfl1 true (fun _ -> false)
+  let is_bottom (u: t) = match u with | Bot.BOT -> true | Bot.Nb _ -> false
 
   let diff u v =
     let u = Bot.bot_to_exn u in
@@ -280,7 +264,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
      abstraction [u] given a manager [subman] on the sub element of
      the stack [s] *)
-  let add_cons_cell_subman subman range (c: ocell) u s =
+  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: ocell) u (s: 'b flow) =
     if mem_cell c u then u, s
     else if not (is_c_scalar_type c.t) then u, s
     else if is_c_pointer_type (c.t) then
@@ -314,7 +298,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify subman ((u : t), s) ((u' : t), s') =
+  let unify (subman: ('b, 'b) man) ((u : t), (s: 'b flow)) ((u' : t), (s': 'b flow)) =
     let range = mk_fresh_range () in
     if is_bot u || is_bot u' then (u, s), (u', s')
     else
@@ -348,14 +332,16 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       ) (flow', []) (flow', []) u in
     (flow'', to_remove)
 
-  let join annot subman (u , s ) (u', s') =
+  let join annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
     let (u, s), (_, s') = unify subman (u, s) (u', s') in
     (u, s, s')
 
   let meet = join
   let widen = join
 
-  let subset = true
+  let subset (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
+    let (_, s), (_, s') = unify subman (u, s) (u', s') in
+    (true, s, s')
 
   let print = Bot.bot_fprint pp_cellset
 
@@ -364,7 +350,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     import = [Universal.Zone.Z_universal_num; Universal.Zone.Z_universal];
   }
   let eval_interface = {
-    export = [Zone.Z_c_scalar, Typ.Z_c_cell_deref_free];
+    export = [Zone.Z_c_scalar, Typ.Z_c_cell];
     import = [];
   }
 
@@ -506,7 +492,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let flow'' = man.exec ~zone:Universal.Zone.Z_universal (mk_block (to_remove @ [stmt; stmt']) range) flow' in
     (Post.add_mergers to_remove (Post.of_flow flow''))
 
-  let rec exec stmt man flow =
+  let rec exec zone stmt man flow =
     let range = stmt.srange in
     match skind stmt with
     (* | S_c_local_declaration(v, init) ->
@@ -542,7 +528,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       end |> Option.return
     | _ -> None
 
-  and eval zone exp man flow =
+  and eval (_, zone) exp man flow =
     let range = erange exp in
     match ekind exp, zone with
     | E_c_cell c, Zone.Z_c_lval ->
@@ -559,12 +545,12 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | E_c_deref(p), _ ->
       begin
-        man.eval ~zone:(Zone.Z_c, Typ.Z_c_cell_points_to) p flow |> Eval.bind @@ fun pe flow ->
+        man.eval ~zone:(Zone.Z_c, Typ.Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
-        | E_c_points_to(E_p_fun fundec) ->
+        | E_c_points_to(P_fun fundec) ->
           Eval.singleton {exp with ekind = E_c_function fundec} flow
 
-        | E_c_points_to(E_p_var (base, offset, t)) ->
+        | E_c_points_to(P_var (base, offset, t)) ->
           debug "E_p_var(%a, %a, %a)" pp_base base pp_expr offset pp_typ t;
           fold_cells
             (fun acc c flow ->
@@ -576,14 +562,14 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
             (fun () -> Eval.empty_singleton flow)
             Eval.empty base offset t exp.erange man flow
 
-        | E_c_points_to(E_p_null) ->
+        | E_c_points_to(P_null) ->
           let flow = Flow.add (Alarms.TNullDeref exp.erange) (Flow.get T_cur man flow) man flow |>
                      Flow.set T_cur man.bottom man
           in
           Eval.empty_singleton flow
 
 
-        | E_c_points_to(E_p_invalid) ->
+        | E_c_points_to(P_invalid) ->
           let flow = Flow.add (Alarms.TInvalidDeref exp.erange) (Flow.get T_cur man flow) man flow |>
                      Flow.set T_cur man.bottom man
           in
@@ -592,145 +578,6 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
         | _ -> assert false
       end |> Option.return
 
-    (* | E_c_array_subscript(arr, idx) ->
-     *   man.eval ctx (mk_c_resolve_pointer arr exp.erange) flow |>
-     *   eval_compose (fun pe flow ->
-     *       match ekind pe with
-     *       | E_c_points_to(E_p_fun fundec) ->
-     *         Debug.fail "arrow access to function pointers"
-     *
-     *       | E_c_points_to(E_p_var (base, offset, t)) ->
-     *         let idx' = idx in
-     *         man.eval ctx idx flow |>
-     *         eval_compose (fun idx flow ->
-     *             let offset' = mk_binop offset math_plus (mk_binop idx math_mult (mk_z (sizeof_type t) exp.erange) exp.erange) exp.erange in
-     *             debug "offset' = %a" pp_expr offset';
-     *             fold_cells
-     *               (fun acc v flow ->
-     *                  let exp' = {exp with ekind = E_var v} in
-     *                  oeval_singleton (Some (exp', []), flow, []) |>
-     *                  oeval_join acc
-     *               )
-     *               (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
-     *               (fun () -> oeval_singleton (None, flow, []))
-     *               None base offset' t exp.erange man subman ctx flow
-     *           )
-     *
-     *       | E_c_points_to(E_p_null) ->
-     *         let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | E_c_points_to(E_p_invalid) ->
-     *         let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | _ -> assert false
-     *     )
-     *
-     * | E_c_arrow_access(p, i, f) ->
-     *   man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
-     *   eval_compose (fun pe flow ->
-     *       match ekind pe with
-     *       | E_c_points_to(E_p_fun fundec) ->
-     *         Debug.fail "arrow access to function pointers"
-     *
-     *       | E_c_points_to(E_p_var (base, offset, t)) ->
-     *         let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
-     *         let field = List.nth record.c_record_fields i in
-     *         let offset' = mk_binop offset math_plus (mk_int field.c_field_offset exp.erange) exp.erange in
-     *         let t' = field.c_field_type in
-     *         fold_cells
-     *           (fun acc v flow ->
-     *              let exp' = {exp with ekind = E_var v} in
-     *              oeval_singleton (Some (exp', []), flow, []) |>
-     *              oeval_join acc
-     *           )
-     *           (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
-     *           (fun () -> oeval_singleton (None, flow, []))
-     *           None base offset' t' exp.erange man subman ctx flow
-     *
-     *       | E_c_points_to(E_p_null) ->
-     *         let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | E_c_points_to(E_p_invalid) ->
-     *         let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | _ -> assert false
-     *     )
-     *
-     * | E_c_member_access(r, i, f) ->
-     *   let p = mk_c_address_of r exp.erange in
-     *   man.eval ctx (mk_c_resolve_pointer p exp.erange) flow |>
-     *   eval_compose (fun pe flow ->
-     *       match ekind pe with
-     *       | E_c_points_to(E_p_fun fundec) ->
-     *         Debug.fail "arrow access to function pointers"
-     *
-     *       | E_c_points_to(E_p_var (base, offset, t)) ->
-     *         let record = match remove_typedef r.etyp with T_c_record r -> r | _ -> assert false in
-     *         let field = List.nth record.c_record_fields i in
-     *         let offset' = mk_binop offset math_plus (mk_int field.c_field_offset exp.erange) exp.erange in
-     *         let t' = field.c_field_type in
-     *         fold_cells
-     *           (fun acc v flow ->
-     *              let exp' = {exp with ekind = E_var v} in
-     *              oeval_singleton (Some (exp', []), flow, []) |>
-     *              oeval_join acc
-     *           )
-     *           (fun acc eflow -> oeval_singleton (None, eflow, []) |> oeval_join acc)
-     *           (fun () -> oeval_singleton (None, flow, []))
-     *           None base offset' t' exp.erange man subman ctx flow
-     *
-     *       | E_c_points_to(E_p_null) ->
-     *         let flow = man.flow.add (Alarms.TNullDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | E_c_points_to(E_p_invalid) ->
-     *         let flow = man.flow.add (Alarms.TInvalidDeref exp.erange) (man.flow.get T_cur flow) flow |>
-     *                    man.flow.set T_cur man.env.Framework.Lattice.bottom
-     *         in
-     *         oeval_singleton (None, flow, [])
-     *
-     *       | _ -> assert false
-     *     ) *)
-
-    | E_c_resolve_pointer({ekind = E_c_address_of e}), _ ->
-      begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_cell_lval) e flow |> Eval.bind @@ fun e' flow ->
-        match ekind e' with
-        | E_c_cell c ->
-          Eval.singleton (mk_ocell_points_to c range) flow
-        (* | E_var ({vkind = V_expand_cell (AnyCell c)}) ->
-                     *   oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
-                     *   add_eval_mergers [] *)
-        | _ -> assert false
-      end |> Option.return
-    (* | E_c_resolve_pointer(e) ->
-     *   man.eval ctx e flow |>
-     *   eval_compose (fun e' flow ->
-     *       match ekind e' with
-     *       | E_var ({vkind = V_expand_cell (OffsetCell c)}) when (is_c_array_type c.t) || (is_c_struct_type c.t) ->
-                       *         oeval_singleton (Some (mk_ocell_points_to c range), flow, []) |>
-                       *         add_eval_mergers []
-                       *       | E_var ({vkind = V_expand_cell (AnyCell c)}) when (is_c_array_type c.t) || (is_c_struct_type c.t) ->
-                       *         oeval_singleton (Some (mk_xcell_points_to c range), flow, []) |>
-                       *         add_eval_mergers []
-                       *       | _ -> None
-                       *     ) *)
-
-
     | _ -> None
 
 
@@ -738,110 +585,77 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (**                    {2 Cells Initialization}                             *)
   (*==========================================================================*)
 
-  (* and init_manager man subman ctx =
-   *   Init.{
-   *     (\* Initialization of scalars *\)
-   *     scalar = (fun v e range flow ->
-   *         match ekind v with
-   *         | E_var v ->
-   *           let v = annotate_var_kind v in
-   *           let u = get_domain_cur man flow in
-   *           let s = get_domain_cur subman flow in
-   *           let (u', s') = add_var ctx range v (u, s) in
-   *           let flow' = set_domain_cur u' man flow |>
-   *                       set_domain_cur s' subman
-   *           in
-   *           let stmt = mk_assign (mk_var v range) e range in
-   *           man.exec ctx stmt flow'
-   *         (\* OLD version : *\)
-   *         (\* let v = annotate_var_kind v in
-   *          * let u = get_domain_cur man flow in
-   *          * let s = get_domain_cur subman flow in
-   *          * let (u', s') = add_var ctx range v (u, s) in
-   *          * let flow' = set_domain_cur u' man flow |>
-   *          *             set_domain_cur s' subman
-   *          * in
-   *          * let stmt = mk_assign (mk_var v range) e range in
-   *          *    (\\* sub_exec subman ctx stmt flow' *\\) *\)
-   *
-   *         | _ -> assert false
-   *       );
-   *
-   *     (\* Initialization of arrays *\)
-   *     array =  (fun a is_global init_list range flow ->
-   *         match ekind a with
-   *         | E_var a ->
-   *           let rec aux i l flow =
-   *             if i = !opt_max_expand then flow
-   *             else
-   *               match l with
-   *               | [] -> flow
-   *               | init :: tl ->
-   *                 let c = annotate_var_kind a |> extract_ocell in
-   *                 let t' = under_array_type c.t in
-   *                 let ci = {b = c.b; o = Z.(c.o + (Z.of_int i) * (sizeof_type t')); t = t'} in
-   *                 let ai = var_of_new_ocell ci in
-   *                 let flow' = init_expr (init_manager man subman ctx) (mk_var ai range) is_global init range flow in
-   *                 aux (i + 1) tl flow'
-   *           in
-   *           aux 0 init_list flow
-   *         | _ -> assert false
-   *       );
-   *
-   *     (\* Initialization of structs *\)
-   *     record =  (fun s is_global init_list range flow ->
-   *         let s = match ekind s with E_var s -> s | _ -> assert false in
-   *         let c = annotate_var_kind s |> extract_ocell in
-   *         let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
-   *         match init_list with
-   *         | Parts l ->
-   *           let rec aux i l flow =
-   *             match l with
-   *             | [] -> flow
-   *             | init :: tl ->
-   *               let field = List.nth record.c_record_fields i in
-   *               let t' = field.c_field_type in
-   *               let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-   *               let ef = var_of_new_ocell cf in
-   *               let flow' = init_expr (init_manager man subman ctx) (mk_var ef range) is_global init range flow in
-   *               aux (i + 1) tl flow'
-   *           in
-   *           aux 0 l flow
-   *
-   *         | Expr e ->
-   *           record.c_record_fields |> List.fold_left (fun acc field ->
-   *               let t' = field.c_field_type in
-   *               let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-   *               let ef = var_of_new_ocell cf in
-   *               let init = C_init_expr (mk_c_member_access e field range) in
-   *               init_expr (init_manager man subman ctx) (mk_var ef range) is_global (Some init) range acc
-   *             ) flow
-   *       );
-   *   }
-   *
-   * and init man subman ctx prog flow =
-   *   let flow = set_domain_cur empty man flow in
-   *   match prog.prog_kind with
-   *   | C_program(globals, _) ->
-   *     let flow' = Init.fold_globals ctx (init_manager man subman ctx) globals flow in
-   *     ctx, flow'
-   *
-   *   | _ -> ctx, flow *)
+  and init_manager man =
+    Init_visitor.{
+      (* Initialization of scalars *)
+      scalar = (fun v e range flow ->
+          match ekind v with
+          | E_var v ->
+            let c = mk_ocell_of_var v v.vtyp in
+            let flow = add_cons_cell man range c flow in
+            let stmt = mk_assign (mk_var v range) e range in
+            man.exec stmt flow
+          | _ -> assert false
+        );
 
+      (* Initialization of arrays *)
+      array =  (fun a is_global init_list range flow ->
+          match ekind a with
+          | E_var a ->
+            let rec aux i l flow =
+              if i = !opt_max_expand then flow
+              else
+                match l with
+                | [] -> flow
+                | init :: tl ->
+                  let t' = under_array_type a.vtyp in
+                  let ci = {b = Base.V a; o = Z.(zero + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                  let ai = var_of_new_ocell ci in
+                  let flow' = init_expr (init_manager man) (mk_var ai range) is_global init range flow in
+                  aux (i + 1) tl flow'
+            in
+            aux 0 init_list flow
+          | _ -> assert false
+        );
 
-  (* let ask : type r. ('a, t) manager -> ('a, SubDomain.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a Framework.Flow.flow -> r option =
-   *   fun man subman ctx query flow ->
-   *     match query with
-   *     | Query.QExtractVarBase {vkind = V_expand_cell (OffsetCell c)} ->
-   *       Some (c.b, mk_z c.o (mk_fresh_range ()))
-   *
-   *     | Query.QExtractVarBase {vkind = V_expand_cell (AnyCell c)} ->
-   *       let range = mk_fresh_range () in
-   *       let cell_size = sizeof_type c.t in
-   *       let base_size = sizeof_type c.t in
-   *       Some (c.b, mk_z_interval Z.zero Z.(base_size - cell_size) range)
-   *
-   *     | _ -> None *)
+      (* Initialization of structs *)
+      record =  (fun s is_global init_list range flow ->
+          let s = match ekind s with E_var s -> s | _ -> assert false in
+          let c = mk_ocell_of_var s s.vtyp in
+          let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+          match init_list with
+          | Parts l ->
+            let rec aux i l flow =
+              match l with
+              | [] -> flow
+              | init :: tl ->
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
+                let ef = var_of_new_ocell cf in
+                let flow' = init_expr (init_manager man) (mk_var ef range) is_global init range flow in
+                aux (i + 1) tl flow'
+            in
+            aux 0 l flow
+
+          | Expr e ->
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
+                let ef = var_of_new_ocell cf in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                init_expr (init_manager man) (mk_var ef range) is_global (Some init) range acc
+              ) flow
+        );
+    }
+
+  and init prog man flow =
+    let flow = Flow.set_domain_cur top man flow in
+    match prog.prog_kind with
+    | C_program(globals, _) ->
+      Some (Init_visitor.init_globals (init_manager man) globals flow)
+    | _ ->
+      None
 
   let ask _ _ _ = None
 
@@ -849,19 +663,9 @@ end
 
 
 let setup () =
-  register_domain name (module Domain);
-  register_vkind_compare (fun next vk1 vk2 ->
-      match vk1, vk2 with
-      | V_expand_cell c1, V_expand_cell c2 -> compare_cell c1 c2
-      | _ -> next vk1 vk2
-    );
-  register_pp_var (fun next fmt v ->
-      match v.vkind with
-      | V_expand_cell c ->
-        Format.fprintf fmt "%a:%a" pp_cell c Framework.Pp.pp_typ v.vtyp
-      | _ -> next fmt v
-    );
-  Framework.Options.register (
+  Framework.Domains.Stacked.register_domain (module Domain);
+  (* register_domain name (module Domain); *)
+  Framework.Options.register_option (
     "-cell-max-expand",
     Arg.Set_int opt_max_expand,
     " maximal number of expanded cells (default: 1)"

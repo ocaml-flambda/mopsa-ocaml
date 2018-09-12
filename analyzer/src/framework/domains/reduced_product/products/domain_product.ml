@@ -112,16 +112,6 @@ struct
     in
     aux Config.pool a || Over.is_bottom o
 
-  let subset ((a1,o1):t) ((a2,o2):t) : bool =
-    let rec aux : type a. a domain_pool -> a -> a -> bool = fun pool v1 v2 ->
-      match pool, v1, v2 with
-      | Nil, (), () -> true
-      | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
-        let module V = (val hd) in
-        V.subset vhd1 vhd2 && aux tl vtl1 vtl2
-    in
-    aux Config.pool a1 a2 && Over.subset o1 o2
-
 
   (* Managers *)
   (* ******** *)
@@ -195,7 +185,11 @@ struct
       | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        let hd', o1', o2' = V.join annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let hd', o1', o2' =
+          Stacked.lift_to_flow over_local_man
+            (fun o1 o2 -> V.join annot over_local_man (vhd1, o1) (vhd2, o2))
+            o1 o2
+        in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
         (hd', tl'), o1'', o2''
     in
@@ -203,12 +197,17 @@ struct
     a', Over.join annot o1' o2'
 
   let meet annot ((a1,o1):t) ((a2,o2):t) =
+
     let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
       match pool, a1, a2 with
       | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        let hd', o1', o2' = V.meet annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let hd', o1', o2' =
+          Stacked.lift_to_flow over_local_man
+            (fun o1 o2 -> V.meet annot over_local_man (vhd1, o1) (vhd2, o2))
+            o1 o2
+        in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
         (hd', tl'), o1'', o2''
     in
@@ -221,12 +220,33 @@ struct
       | Nil, (), () -> (), o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        let hd', o1', o2' = V.widen annot over_local_man (vhd1, o1) (vhd2, o2) in
+        let hd', o1', o2' =
+          Stacked.lift_to_flow over_local_man
+            (fun o1 o2 -> V.widen annot over_local_man (vhd1, o1) (vhd2, o2))
+            o1 o2
+        in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
         (hd', tl'), o1'', o2''
     in
     let a', o1', o2' = aux Config.pool (a1,o1) (a2,o2) in
     a', Over.widen annot o1' o2'
+
+  let subset ((a1,o1):t) ((a2,o2):t) : bool =
+    let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> bool * Over.t * Over.t  = fun pool (a1, o1) (a2, o2) ->
+      match pool, a1, a2 with
+      | Nil, (), () -> true , o1, o2
+      | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
+        let module V = (val hd) in
+        let (b, o1' ,o2') =
+          Stacked.lift_to_flow over_local_man
+            (fun o1 o2 -> V.subset over_local_man (vhd1, o1) (vhd2, o2))
+            o1 o2
+        in
+        let (b', o1'' ,o2'') = aux tl (vtl1, o1') (vtl2, o2') in
+        (b && b', o1'', o2'')
+    in
+    let b, o1, o2 = aux Config.pool (a1, o1) (a2, o2) in
+    Over.subset o1 o2
 
   let print fmt (a,o) =
     let rec aux : type a. a domain_pool -> Format.formatter -> a -> unit = fun pool fmt v ->
@@ -450,7 +470,7 @@ struct
          aux Config.pool zl man (Flow.get_annot flow)
        in
 
-       (* Merge post conditions. 
+       (* Merge post conditions.
           Each domain applies its merger statements on the post-conditions of the other domains,
           and restores its local abstract element from its own post-condition.
        *)
