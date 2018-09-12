@@ -78,6 +78,7 @@ let info fmt = print_ "info" fmt
 
 let fail fmt =
   Format.kasprintf (fun str ->
+      Format.printf "@?";
       if !print_color then
         Format.eprintf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
       else
