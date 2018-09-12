@@ -291,7 +291,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
         let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add_cell c u) man |>
-        man.exec ~zone:(Universal.Zone.Z_universal_num) stmt
+        man.exec ~zone:(Typ.Z_c_cell) stmt
       | Nexp None ->
         Flow.set_domain_cur (add_cell c u) man f
       | Pexp Invalid -> assert false
@@ -347,11 +347,15 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
   let exec_interface = {
     export = [Zone.Z_c];
-    import = [Universal.Zone.Z_universal_num; Universal.Zone.Z_universal];
+    import = [Typ.Z_c_cell];
   }
   let eval_interface = {
     export = [Zone.Z_c_scalar, Typ.Z_c_cell];
-    import = [];
+    import = [
+      (Zone.Z_c, Zone.Z_c_lval);
+      (Zone.Z_c, Zone.Z_c_lval);
+      (Zone.Z_c, Typ.Z_c_points_to)
+    ];
   }
 
   (*==========================================================================*)
@@ -385,7 +389,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 if Z.gt o u then x
                 else
                   let c = {b = base; o; t = typ} in
-                  let flow = man.exec ~zone:(Universal.Zone.Z_universal_num)
+                  let flow = man.exec ~zone:(Typ.Z_c_cell)
                       (mk_assume
                          (mk_binop offset O_eq
                             (mk_z o range)
@@ -489,16 +493,16 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let rmin, rmax = rangeof c.t in
     let cond = range_cond lval rmin rmax (erange lval) in
     let stmt' = (mk_assume cond (tag_range range "assume range")) in
-    let flow'' = man.exec ~zone:Universal.Zone.Z_universal (mk_block (to_remove @ [stmt; stmt']) range) flow' in
+    let flow'' = man.exec ~zone:Typ.Z_c_cell (mk_block (to_remove @ [stmt; stmt']) range) flow' in
     (Post.add_mergers to_remove (Post.of_flow flow''))
 
   let rec exec zone stmt man flow =
     let range = stmt.srange in
     match skind stmt with
-    (* | S_c_local_declaration(v, init) ->
-     *   let v' = annotate_var_kind v in
-     *   Init.init_local (init_manager man subman ctx) v' init range flow |>
-     *   return_flow *)
+    | S_c_local_declaration(v, init) ->
+      Init_visitor.init_local (init_manager man) v init range flow
+      |> Post.of_flow
+      |> Option.return
 
     | S_rename_var(v, v') ->
       assert false
@@ -510,14 +514,14 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       let mergers = List.map (fun c -> mk_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in
       let flow = Flow.set_domain_cur u' man flow in
-      man.exec ~zone:Universal.Zone.Z_universal (mk_block to_exec_in_sub range) flow |>
+      man.exec ~zone:Typ.Z_c_cell (mk_block to_exec_in_sub range) flow |>
       Post.of_flow |>
       Post.add_mergers mergers |>
       Option.return
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
       begin
-        man.eval ~zone:(Zone.Z_c, Universal.Zone.Z_universal_num) rval flow
+        man.eval ~zone:(Zone.Z_c, Typ.Z_c_cell) rval flow
         |> Post.bind man @@ fun rval flow ->
         man.eval ~zone:(Zone.Z_c, Zone.Z_c_lval) lval flow
         |> Post.bind man @@ fun lval flow ->
@@ -528,22 +532,22 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       end |> Option.return
     | _ -> None
 
-  and eval (_, zone) exp man flow =
+  and eval zone exp man flow =
     let range = erange exp in
-    match ekind exp, zone with
-    | E_c_cell c, Zone.Z_c_lval ->
+    match ekind exp with
+    | E_c_cell c ->
       Eval.singleton exp flow |> Option.return
 
-    | E_var (v), _   when is_c_type v.vtyp ->
+    | E_var (v) when is_c_type v.vtyp ->
       begin
         debug "evaluating a scalar variable %a" pp_var v;
         let c = mk_ocell_of_var v v.vtyp  in
         let flow = add_cons_cell man range c flow in
         debug "new variable %a in %a" pp_var v (Flow.print man) flow;
-        man.eval ~zone:(Zone.Z_c_scalar, zone) {exp with ekind = E_c_cell (OffsetCell c)} flow
+        Eval.singleton {exp with ekind = E_c_cell (OffsetCell c)} flow
       end |> Option.return
 
-    | E_c_deref(p), _ ->
+    | E_c_deref(p) ->
       begin
         man.eval ~zone:(Zone.Z_c, Typ.Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
