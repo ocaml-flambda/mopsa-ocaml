@@ -96,6 +96,9 @@ val get_domain_cur : ('a, 't) man -> 'a flow -> 't
 (** [get_domain_cur man flow] retrieves the local part of a domain in the
    abstract element bound to token T_cur in [flow] *)
 
+val is_cur_bottom : ('a, 't) man -> 'a flow -> bool
+(** [is_cur_bottom man flow] tests wether the environement associated
+    with the T_cur token is bottom *)
 
 val map_domain_cur : ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
 (** [map_domain_cur f man flow] is equivalent to [set_domain_cur (f

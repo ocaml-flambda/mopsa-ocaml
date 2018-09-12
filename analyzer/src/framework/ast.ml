@@ -263,7 +263,7 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
           (fun () -> compare_var v1 v2);
           (fun () -> compare_var v1' v2');
         ]
-        
+
       | S_remove_var(v1), S_remove_var(v2) -> compare_var v1 v2
 
       | S_project_vars(vl1), S_project_vars(vl2) ->

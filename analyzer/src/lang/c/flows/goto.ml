@@ -36,7 +36,7 @@ struct
 
   type _ domain += D_c_flows_goto : unit domain
   let id = D_c_flows_goto
-  let name = "c.flows.switch"
+  let name = "c.flows.goto"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_flows_goto -> Some Eq

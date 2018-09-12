@@ -17,11 +17,25 @@ sig
   include Domain.DOMAIN
 
   (* Binary lattice operators can unify the state of the underneath domain *)
-  val join: 'a annot -> ('b, 'b) man -> t * 'b -> t * 'b -> t * 'b * 'b
-  val meet: 'a annot -> ('b, 'b) man -> t * 'b -> t * 'b -> t * 'b * 'b
-  val widen: 'a annot -> ('b, 'b) man -> t * 'b -> t * 'b -> t * 'b * 'b
+  val join: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow)-> t * ('b flow) * ('b flow)
+  val meet: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
+  val widen: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
+  val subset: ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> bool * ('b flow) * ('b flow)
 
 end
+
+let create_flow_cur_only (b: 'b) (man: ('b, 'b) man): 'b flow =
+  Flow.bottom Annotation.empty
+  |> Flow.add T_cur b man
+
+let get_env_from_flow_cur_only (f: 'b flow) (man: ('b, 'b) man): 'b =
+  Flow.get T_cur man f
+
+let lift_to_flow man f =
+  fun b1 b2 ->
+    let b1', b2' = create_flow_cur_only b1 man, create_flow_cur_only b2 man in
+    let (a, b1'', b2'') = f b1' b2' in
+    (a, get_env_from_flow_cur_only b1'' man, get_env_from_flow_cur_only b2'' man)
 
 (** Combine two domains with a stack configuration. *)
 module Make(D1: S)(D2: Domain.DOMAIN) : Domain.DOMAIN =
@@ -37,8 +51,6 @@ struct
   let top = D1.top, D2.top
 
   let is_bottom (a,b) = D1.is_bottom a || D2.is_bottom b
-
-  let subset (a1, b1) (a2, b2) = D1.subset a1 a2 && D2.subset b1 b2
 
   (* Local manager of D2, used in binary operators *)
   let rec man2_local : (D2.t, D2.t) man = {
@@ -69,17 +81,22 @@ struct
       );
   }
 
+
   let join annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = D1.join annot man2_local (a1, b1) (a2, b2) in
-    a, D2.join annot b1' b2
+    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.join annot man2_local (a1, b1) (a2, b2)) b1 b2 in
+    a, D2.join annot b1' b2'
 
   let meet annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = D1.meet annot man2_local (a1, b1) (a2, b2) in
-    a, D2.meet annot b1' b2
+    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.meet annot man2_local (a1, b1) (a2, b2)) b1 b2  in
+    a, D2.meet annot b1' b2'
 
   let widen annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = D1.widen annot man2_local (a1, b1) (a2, b2) in
-    a, D2.widen annot b1' b2
+    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.widen annot man2_local (a1, b1) (a2, b2)) b1 b2  in
+    a, D2.widen annot b1' b2'
+
+  let subset (a1, b1) (a2, b2) =
+    let b, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.subset man2_local (a1, b1) (a2, b2)) b1 b2  in
+    b && (D2.subset b1' b2')
 
   let print fmt (a, b) =
     Format.fprintf fmt "%a%a" D1.print a D2.print b
@@ -212,7 +229,7 @@ struct
   let join annot man (a1, b1) (a2, b2) = D.join annot a1 a2, b1, b2
   let meet annot man (a1, b1) (a2, b2) = D.meet annot a1 a2, b1, b2
   let widen annot man (a1, b1) (a2, b2) = D.widen annot a1 a2, b1, b2
-
+  let subset man (a1, b1) (a2, b2) = D.subset a1 a2, b1, b2
 end
 
 
