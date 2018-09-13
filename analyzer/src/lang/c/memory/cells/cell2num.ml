@@ -23,7 +23,7 @@ let get_num flow c =
     (CellNumEquiv.find_l c cne, flow)
   with
   | Not_found ->
-    let v = mk_tmp () in
+    let v = Cell.cell_to_var c in
     (v, Flow.set_annot (Annotation.add KCellNumEquiv (CellNumEquiv.add (c, v) cne) annot) flow)
 
 let get_cell flow v =
