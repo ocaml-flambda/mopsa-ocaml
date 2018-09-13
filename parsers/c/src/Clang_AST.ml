@@ -61,6 +61,27 @@ type range = {
 
 
 
+(** {2 Comments} *)
+
+type comment_kind =
+  | RCK_Invalid (** Invalid comment. *)
+  | RCK_OrdinaryBCPL (** Any normal BCPL comments. *)
+  | RCK_OrdinaryC (** Any normal C comment. *)
+  | RCK_BCPLSlash (** /// stuff  *)
+  | RCK_BCPLExcl  (** //! stuff  *)
+  | RCK_JavaDoc (** /** stuff */  *)
+  | RCK_Qt (** /*! stuff */, also used by HeaderDoc *)
+  | RCK_Merged 	(** Two or more documentation comments merged together. *)
+           
+type comment = {
+    com_text: string; (** Raw comment text with comment markers. *)
+    com_kind: comment_kind;
+    com_range: range;
+  }
+(** Raw comment found in the source file. *)
+
+             
+
 (** {2 AST} *)
 
 type uid = int
@@ -670,7 +691,7 @@ and access_specifier =
    | DesignatedInitExpr of (** sequence of designators *) designator array * (** designated initializer *) expr
    (** Represents a C99 designated initializer expression. A designated initializer expression (C99 6.7.8) contains one or more designators (which can be field designators, array designators, or GNU array-range designators) followed by an expression that initializes the field or element(s) that the designators refer to.
 
-          NOTE: Designators may not be useful for us. If I understand correctly, Clang's semantic analysis remvoes them by generating explicit nested list of initializers and putting designated initializers at the correct place. Similarly, default value for missing initializers are put explicitly...
+          NOTE: Designators may not be useful for us. If I understand correctly, Clang's semantic analysis removes them by generating explicit nested list of initializers and putting designated initializers at the correct place. Similarly, default value for missing initializers are put explicitly...
     *)
 
    | FloatingLiteral of (** C99 hexdecimal string representation *) string

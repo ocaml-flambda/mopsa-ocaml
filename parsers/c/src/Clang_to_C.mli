@@ -19,7 +19,7 @@ val create_context: string -> Clang_AST.target_info -> context
     Returns a context to manipulate the project.
  *)
                                                                           
-val add_translation_unit: context -> string -> Clang_AST.decl -> unit
+val add_translation_unit: context -> string -> Clang_AST.decl -> Clang_AST.comment list -> unit
 (** [add_translation_unit context name decl] converts a Clang definition
     of a translation unit with the given name (generally, the source C file)
     into a cAST and accumulates the definition to the projet.
