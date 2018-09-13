@@ -22,7 +22,7 @@ lang.c = zone ast alarms frontend libs desugar flows memory
 
 lang.c.libs = stdlib
 lang.c.flows = switch goto
-lang.c.desugar = for
+lang.c.desugar = for aggregate
 lang.c.memory = base init_visitor cell
 lang.c.memory.cell = typ pointer expand
 
