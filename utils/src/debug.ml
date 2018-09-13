@@ -44,9 +44,9 @@ let print_ channel fmt =
   if can_print channel then
     Format.kasprintf (fun str ->
         if !print_color then
-          Format.printf "\027[1;38;5;%dm[%s %.6f]\027[0m@\n@[%s@]@." (random_color channel) channel (Sys.time ()) str
+          Format.printf "\027[1;38;5;%dm[%s %.6f]\027[0m@\n@[%s@]@.@." (random_color channel) channel (Sys.time ()) str
         else
-          Format.printf "[%s %.6f]@\n@[%s@]@." channel (Sys.time ()) str
+          Format.printf "[%s %.6f]@\n@[%s@]@.@." channel (Sys.time ()) str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt

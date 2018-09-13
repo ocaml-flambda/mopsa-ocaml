@@ -11,7 +11,7 @@
 open Framework.Essentials
 open Ast
 
-module CellNumEquiv = Equiv.Make(Typ.Cell)(Var)
+module CellNumEquiv = Equiv.Make(Cell.Cell)(Var)
 
 type ('a, _) Annotation.key +=
   | KCellNumEquiv: ('a, CellNumEquiv.t) Annotation.key
@@ -73,7 +73,7 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    | Typ.E_c_cell c ->
+    | Cell.E_c_cell c ->
       let range = erange exp in
       let v, flow = get_num flow c in
       let exp = mk_var v (tag_range range "cell2num") in

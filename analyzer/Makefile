@@ -6,7 +6,7 @@ MOPSAROOT = ..
 mopsa = framework lang main
 
 framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post channel value domain cache analyzer lattices essentials domains config
-framework.domains = stateless iter nonrel leaf functor stacked reduced_product empty
+framework.domains = stateless iter nonrel leaf functor stacked reduced_product empty router
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
@@ -20,14 +20,16 @@ lang.universal.numeric.reductions = channels intervals_congruences implicit_assu
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 
+lang.c = zone ast pp visitor frontend alarms desugar libs iterators memory
+lang.c.iterators = program switch goto interproc
+lang.c.desugar = for
+lang.c.memory = base init_visitor cells
+lang.c.memory.cells = cell pointer smashing expand router cell2num
 lang.c.libs = c_stdlib
-lang.c.flows = switch goto
-lang.c.desugar = for aggregate
-lang.c.memory = base init_visitor cell
-lang.c.memory.cell = typ pointer expand cell2num
 
 lang.python = ast addr pp frontend zone libs desugar program types
 lang.python.types = typingdomain typing t_string t_int
+
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

@@ -1,0 +1,19 @@
+{
+    "iter": [
+	// Iterators
+	"c.iterators.program",
+	"c.iterators.interproc",
+	"universal.iterators.intraproc",
+	"universal.iterators.loops",
+
+        // Memory model
+        "c.memory.cells.smashing",
+        "c.memory.cells.pointer",
+
+        // Routers
+        "c.memory.cells.router",
+
+	// Numeric abstraction
+        "universal.numeric.values.intervals"
+    ]
+}

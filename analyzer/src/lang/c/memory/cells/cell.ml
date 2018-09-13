@@ -20,15 +20,26 @@ open Base
    *)
 type cell = ..
 
-
 (* Extraction of base and offset *)
 (* ============================= *)
 
-let cell_extract_chain : (cell -> base * expr * typ) ref = ref (
-    fun _ -> Debug.fail "cell.extract: unknown cell"
+let cell_extract_chain : (cell-> base * (range -> expr) * typ) ref = ref (
+    fun _ -> fail "cell.extract: unknown cell"
   )
 let register_cell_extract ex = cell_extract_chain := ex !cell_extract_chain
 let extract_cell_info c = !cell_extract_chain c
+
+let cell_type c =
+  let _, _, typ = extract_cell_info c in
+  typ
+
+
+(* Transformation to variables *)
+(* =========================== *)
+
+let cell_var_chain : (cell-> var) ref = ref (fun _ -> fail "cell.to_var: unknown cell")
+let register_cell_var f = cell_var_chain := f !cell_var_chain
+let cell_to_var c = !cell_var_chain c
 
 
 (* Comparison order *)
@@ -53,13 +64,15 @@ let pp_cell fmt c = !cell_pp_chain fmt c
 (* ========================== *)
 
 type cell_info = {
-  extract : (cell -> base * expr * typ) -> cell -> base * expr * typ;
+  extract : (cell -> base * (range -> expr) * typ) -> cell -> base * (range -> expr) * typ;
+  to_var  : (cell -> var) -> cell -> var;
   compare : (cell -> cell -> int) -> cell -> cell -> int;
   print   : (Format.formatter -> cell -> unit) -> Format.formatter -> cell -> unit;
 }
 
 let register_cell info =
   register_cell_extract info.extract;
+  register_cell_var info.to_var;
   register_cell_compare info.compare;
   register_cell_pp info.print;
   ()

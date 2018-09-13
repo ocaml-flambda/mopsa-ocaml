@@ -12,7 +12,7 @@ open Universal.Ast
 open Ast
 open Base
 open Pointer
-open Typ
+open Cell
 
 let name = "c.memory.cell.expand"
 let debug fmt = Debug.debug ~channel:name fmt
@@ -51,9 +51,22 @@ let () =
     {
       extract = (fun f c ->
           match c with
-          (* FIXME: range_fresh != 0 *)
-          | OffsetCell o -> (o.b, mk_z o.o (Framework.Location.Range_fresh 0), o.t)
+          | OffsetCell o -> (o.b, mk_z o.o, o.t)
           | _ -> f c
+        );
+      to_var = (fun next c ->
+          match c with
+          | OffsetCell o ->
+            let vname =
+              let () = Format.fprintf Format.str_formatter "%a" pp_ocell o in
+              Format.flush_str_formatter ()
+            in
+            {
+              vname;
+              vuid = base_uid o.b;
+              vtyp = o.t;
+            }
+          | _ -> next c
         );
       compare = (fun f a b ->
           match a, b with
@@ -291,7 +304,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
         let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add_cell c u) man |>
-        man.exec ~zone:(Typ.Z_c_cell) stmt
+        man.exec ~zone:(Z_c_cell) stmt
       | Nexp None ->
         Flow.set_domain_cur (add_cell c u) man f
       | Pexp Invalid -> assert false
@@ -347,14 +360,14 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
   let exec_interface = {
     export = [Zone.Z_c];
-    import = [Typ.Z_c_cell];
+    import = [Z_c_cell];
   }
   let eval_interface = {
-    export = [Zone.Z_c_scalar, Typ.Z_c_cell];
+    export = [Zone.Z_c_scalar, Z_c_cell];
     import = [
       (Zone.Z_c, Zone.Z_c_lval);
       (Zone.Z_c, Zone.Z_c_lval);
-      (Zone.Z_c, Typ.Z_c_points_to)
+      (Zone.Z_c, Z_c_points_to)
     ];
   }
 
@@ -389,7 +402,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 if Z.gt o u then x
                 else
                   let c = {b = base; o; t = typ} in
-                  let flow = man.exec ~zone:(Typ.Z_c_cell)
+                  let flow = man.exec ~zone:(Z_c_cell)
                       (mk_assume
                          (mk_binop offset O_eq
                             (mk_z o range)
@@ -493,7 +506,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let rmin, rmax = rangeof c.t in
     let cond = range_cond lval rmin rmax (erange lval) in
     let stmt' = (mk_assume cond (tag_range range "assume range")) in
-    let flow'' = man.exec ~zone:Typ.Z_c_cell (mk_block (to_remove @ [stmt; stmt']) range) flow' in
+    let flow'' = man.exec ~zone:Z_c_cell (mk_block (to_remove @ [stmt; stmt']) range) flow' in
     (Post.add_mergers to_remove (Post.of_flow flow''))
 
   let rec exec zone stmt man flow =
@@ -514,14 +527,14 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       let mergers = List.map (fun c -> mk_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in
       let flow = Flow.set_domain_cur u' man flow in
-      man.exec ~zone:Typ.Z_c_cell (mk_block to_exec_in_sub range) flow |>
+      man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub range) flow |>
       Post.of_flow |>
       Post.add_mergers mergers |>
       Option.return
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
       begin
-        man.eval ~zone:(Zone.Z_c, Typ.Z_c_cell) rval flow
+        man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
         |> Post.bind man @@ fun rval flow ->
         man.eval ~zone:(Zone.Z_c, Zone.Z_c_lval) lval flow
         |> Post.bind man @@ fun lval flow ->
@@ -549,7 +562,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | E_c_deref(p) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Typ.Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
+        man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton {exp with ekind = E_c_function fundec} flow
