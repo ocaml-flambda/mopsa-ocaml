@@ -22,9 +22,9 @@ lang.c = zone ast alarms frontend libs desugar flows memory
 
 lang.c.libs = c_stdlib
 lang.c.flows = switch goto
-lang.c.desugar = for
+lang.c.desugar = for aggregate
 lang.c.memory = base init_visitor cell
-lang.c.memory.cell = typ pointer expand
+lang.c.memory.cell = typ pointer expand cell2num
 
 lang.python = ast addr pp frontend zone libs desugar program types
 lang.python.types = typingdomain typing t_string t_int
