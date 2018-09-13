@@ -12,6 +12,7 @@
 *)
 
 open Framework.Essentials
+open Framework.Visitor
 open Base
 
 (* To support different cell-based memory models, an extensible type
@@ -136,13 +137,15 @@ type expr_kind +=
   | E_c_points_to of points_to
   (* Reply to a points-to evaluation *)
 
+type stmt_kind +=
+  | S_c_remove_cell of cell
+  (* Ask for the removing of a cell *)
 
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
 
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
-
 
 let () =
   register_expr {
@@ -166,8 +169,22 @@ let () =
         | E_c_cell c -> leaf e
         | E_c_points_to p -> leaf e (* FIXME: do we need to visit the offset expression? *)
         | _ -> next e
-      );
+      )
   };
+  register_stmt_visitor (fun next stmt ->
+      match skind stmt with
+      | S_c_remove_cell c ->
+        (* no expr? *)
+        {exprs = []; stmts = []},
+        (fun _ -> stmt)
+      | _ -> next stmt
+    );
+  register_pp_stmt (fun next fmt stmt ->
+      match skind stmt with
+      | S_c_remove_cell c ->
+        Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
+      | _ -> next fmt stmt
+    );
   register_pp_constant (fun next fmt c ->
       match c with
       | C_c_invalid -> Format.fprintf fmt "Invalid"
@@ -184,6 +201,7 @@ open Framework.Zone
 type zone +=
   | Z_c_cell
   | Z_c_points_to
+  | Z_c_deref_free
 
 let () =
   register_zone {
@@ -192,6 +210,7 @@ let () =
           match z with
           | Z_c_cell -> Format.fprintf fmt "c/cell"
           | Z_c_points_to -> Format.fprintf fmt "c/points-to"
+          | Z_c_deref_free -> Format.fprintf fmt "c/deref-free"
           | _ -> next fmt z
         );
     }

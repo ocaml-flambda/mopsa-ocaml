@@ -1,0 +1,17 @@
+{
+    "iter": [
+        "python.program",
+
+        "python.desugar.import",
+
+        "universal.iterators.intraproc",
+        "universal.iterators.interproc",
+        "universal.iterators.loops",
+
+        // "python.libs.mopsa",
+
+        "python.types.t_string",
+        "python.types.t_int",
+        "python.types.typing"
+    ]
+}

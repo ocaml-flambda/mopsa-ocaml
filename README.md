@@ -9,7 +9,7 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 
 ## Dependencies
 
-* ocaml (version >= 4.04.0)
+* ocaml (version >= 4.05.0)
 * apron
 * clang (version >= 4.x)
 * zarith
