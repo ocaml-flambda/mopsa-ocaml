@@ -49,7 +49,7 @@ let fix_va_list = true
 
 
 (** {2 Conversion & linking} *)
-                    
+                
     
 type context = {
     ctx_name: string;
@@ -77,6 +77,9 @@ type context = {
     ctx_funcs: (string,func) Hashtbl.t;
 
     ctx_simplify: C_simplify.context;
+
+    (* comments are stored in a map so that we can remove duplicates *)
+    mutable ctx_comments: comment list RangeMap.t;
   }
 (** Structure used internally during project parsing & linking. *)
 
@@ -99,7 +102,8 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context (); 
+    ctx_simplify = C_simplify.create_context ();
+    ctx_comments = RangeMap.empty;
   }
 
 let new_uid ctx =
@@ -109,7 +113,7 @@ let new_uid ctx =
 
 
     
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) =
 
   (* utilities *)
   (* ********* *)
@@ -1016,6 +1020,21 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) =
   | _ -> error decl.C.decl_range "expected TranslationUnitDecl" (C.decl_kind_name decl.C.decl_kind)
   );
 
+  (* add comments, merging dupplicates *)
+  let c =
+    List.fold_left
+      (fun ctx c ->
+        let r = c.Clang_AST.com_range in
+        if RangeMap.mem r ctx then
+          let old = RangeMap.find r ctx in
+          if List.exists (fun c' -> c = c') old then ctx
+          else RangeMap.add r (c::old) ctx
+        else RangeMap.add r [c] ctx
+      )
+      ctx.ctx_comments coms
+  in
+  ctx.ctx_comments <- c;
+  
   (match out with Some o -> close_out o | None -> ())
    
     
@@ -1035,5 +1054,6 @@ let link_project ctx =
     proj_records = cvt ctx.ctx_records (fun t -> t.record_unique_name);
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
+    proj_comments = ctx.ctx_comments;
   }
 

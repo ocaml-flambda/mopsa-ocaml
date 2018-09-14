@@ -77,7 +77,8 @@ and parse_file (opts: string list) (file: string) ctx =
     (@) opts |>
     filter_out_opts
   in
-  let x, diag = Clang_parser.parse (target_options) file (Array.of_list opts) in
+  let opts = "-fparse-all-comments"::opts in (* needed to get all comments *)
+  let x, diag, coms = Clang_parser.parse (target_options) file (Array.of_list opts) in
   let () =
     match diag with
     | [] -> ()
@@ -91,7 +92,7 @@ and parse_file (opts: string list) (file: string) ctx =
           ) (List.map (Clang_dump.string_of_diagnostic) diag)
 
   in
-  Clang_to_C.add_translation_unit ctx (Filename.basename file) x
+  Clang_to_C.add_translation_unit ctx (Filename.basename file) x coms
 
 
 and from_project prj =

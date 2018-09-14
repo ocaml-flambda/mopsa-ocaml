@@ -33,6 +33,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/RecordLayout.h"
+#include "clang/AST/RawCommentList.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/ParseAST.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
@@ -139,7 +140,7 @@ CAML_EXPORT value mlclang_dump_block(value recursive, value v) {
 
 /* void* / unsigned -> value cache
 
-   We aggresively cache every Clang object that is translated to OCaml to:
+   We aggressively cache every Clang object that is translated into OCaml to:
    - keep sharing of the AST at the OCaml level
    - handle cyclic structures
 
@@ -251,7 +252,7 @@ public:
 
 /*
   NOTE ON MACROS:
-  the preprocessor onyl balance ( ) in macro arguments, not { }
+  the preprocessor only balances ( ) in macro arguments, not { }
   => beware of commas in macros arguments
   MACRO( { int x,y; } ) will not work
   you have to do
@@ -520,6 +521,82 @@ CAMLprim value MLLocationTranslator::TranslateSourceRange(SourceRange a) {
 
 
 
+/* Comments */
+/********** */
+
+
+class MLCommentTranslator {
+
+ private:
+  SourceManager& src;
+  ASTContext& Context;
+  MLLocationTranslator& loc;
+
+public:
+  CAMLprim value TranslateCommentKind(RawComment::CommentKind c);
+  CAMLprim value TranslateRawComment(const RawComment *x);
+  CAMLprim value getRawCommentList();
+
+  MLCommentTranslator(SourceManager& src, ASTContext& Context, MLLocationTranslator& loc)
+    : src(src), Context(Context), loc(loc)
+  {}
+};
+
+
+/* comment_kind */
+enum {
+  MLTAG_RCK_Invalid,
+  MLTAG_RCK_OrdinaryBCPL,
+  MLTAG_RCK_OrdinaryC,
+  MLTAG_RCK_BCPLSlash,
+  MLTAG_RCK_BCPLExcl,
+  MLTAG_RCK_JavaDoc,
+  MLTAG_RCK_Qt,
+  MLTAG_RCK_Merged,
+};
+
+/* CommentKind -> comment_kind */
+CAMLprim value MLCommentTranslator::TranslateCommentKind(RawComment::CommentKind c) {
+  int i = 0;
+  switch (c) {
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_Invalid);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_OrdinaryBCPL);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_OrdinaryC);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_BCPLSlash);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_BCPLExcl);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_JavaDoc);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_Qt);
+    GENERATE_CASE_PREFIX(i, RawComment::,, RCK_Merged);
+  default:
+    if (verbose_exn) std::cout << "unknown comment kind " << c << std::endl;
+    caml_failwith("mlClangAST: unknown comment kind");
+  }
+  return Val_int(i);
+}
+
+/* RawComment -> comment */
+CAMLprim value MLCommentTranslator::TranslateRawComment(const RawComment *x) {
+  CAMLparam0();
+  CAMLlocal1(ret);
+
+  check_null(x, "RawComment");
+  ret = caml_alloc_tuple(3);
+  Store_field(ret, 0, caml_copy_string(x->getRawText(src).str().c_str()));
+  Store_field(ret, 1, TranslateCommentKind(x->getKind()));
+  Store_field(ret, 2, loc.TranslateSourceRange(x->getSourceRange()));
+
+  CAMLreturn(ret);
+}
+
+CAMLprim value MLCommentTranslator::getRawCommentList() {
+  CAMLparam0();
+  CAMLlocal1(ret);
+  GENERATE_LIST(ret, Context.getRawCommentList().getComments(), TranslateRawComment(child));
+  CAMLreturn(ret);
+}
+
+
+
 /* AST classes */
 /************* */
 
@@ -534,6 +611,7 @@ class MLTreeBuilderVisitor
   : public RecursiveASTVisitor<MLTreeBuilderVisitor> {
 
 private:
+  SourceManager& src;
   ASTContext *Context;
   MLLocationTranslator& loc;
   Cache cacheType;
@@ -622,8 +700,8 @@ public:
   CAMLprim value TranslateTemplateTypeParmDecl(const TemplateTypeParmDecl* x);
   CAMLprim value TranslateNamedDecl(const NamedDecl *x);
 
-  explicit MLTreeBuilderVisitor(MLLocationTranslator& loc, ASTContext *Context):
-    Context(Context), loc(loc),
+  explicit MLTreeBuilderVisitor(MLLocationTranslator& loc, ASTContext *Context, SourceManager& src) :
+    Context(Context), loc(loc), src(src),
     cacheType("type"), cacheTypeQual("type_qual"), cacheDecl("decl"), cacheStmt("stmt"),
     cacheExpr("expr"), cacheMisc("misc"), cacheMisc2("misc2"), cacheMisc3("misc3"),
     uid(0)
@@ -4111,7 +4189,7 @@ class MLDiagnostics : public DiagnosticConsumer {
 private:
 
   typedef std::tuple<DiagnosticsEngine::Level, SourceLocation, std::string> diag;
-  // Diagnostics are accumualted in this vector
+  // Diagnostics are accumulated in this vector
 
   std::vector<diag> diags;
   MLLocationTranslator& loc;
@@ -4298,7 +4376,7 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
   ret = caml_alloc_tuple(44);
   Store_field(ret, 0, TargetOptionsToML(t.getTargetOpts()));
 
-  // we only explose pointer info for address space 0
+  // we only expose pointer info for address space 0
   Store_field(ret,  1, GENERATE_TARGET_INFO_INT_TYPE(t.getSizeType()));
   Store_field(ret,  2, GENERATE_TARGET_INFO_INT_TYPE(t.getIntMaxType()));
   Store_field(ret,  3, GENERATE_TARGET_INFO_INT_TYPE(t.getPtrDiffType(0)));
@@ -4375,6 +4453,7 @@ CAML_EXPORT value mlclang_get_target_info(value target) {
 
 
 
+
 /* Parsing */
 /* ******* */
 
@@ -4385,14 +4464,15 @@ private:
 
   value* ret;
   MLLocationTranslator& loc;
+  SourceManager& src;
 
 public:
-  explicit MLTreeBuilderConsumer(MLLocationTranslator& loc, value* ret)
-    : ret(ret), loc(loc)
+  explicit MLTreeBuilderConsumer(MLLocationTranslator& loc, value* ret, SourceManager& src)
+    : ret(ret), loc(loc), src(src)
   {}
 
   virtual void HandleTranslationUnit(ASTContext &Context) {
-    MLTreeBuilderVisitor Visitor(loc, &Context);
+    MLTreeBuilderVisitor Visitor(loc, &Context, src);
     Decl* decl = Context.getTranslationUnitDecl();
     *ret = Visitor.TranslateDecl(decl);
   }
@@ -4438,10 +4518,11 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   ci.createSourceManager(ci.getFileManager());
   const FileEntry *pFile = ci.getFileManager().getFile(String_val(name));
   if (!pFile) caml_failwith("mlClangAST: cannot get FileEntry");
-  ci.getSourceManager().setMainFileID(ci.getSourceManager().createFileID(pFile,SourceLocation(),SrcMgr::C_User));
+  SourceManager& src = ci.getSourceManager();
+  src.setMainFileID(src.createFileID(pFile,SourceLocation(),SrcMgr::C_User));
 
   // custom diagnostics
-  MLLocationTranslator loc(ci.getSourceManager());
+  MLLocationTranslator loc(src);
   MLDiagnostics* diag = new MLDiagnostics(loc);
   ci.getDiagnostics().setClient(diag);
 
@@ -4460,15 +4541,19 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
                                          pp.getLangOpts());
 
   // parsing
-  ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp));
+  ci.setASTConsumer(llvm::make_unique<MLTreeBuilderConsumer>(loc, &tmp, src));
   ci.createASTContext();
   ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &pp);
-  ParseAST(pp, &ci.getASTConsumer(), ci.getASTContext());
+  ASTContext& Context = ci.getASTContext();
+  ParseAST(pp, &ci.getASTConsumer(), Context);
   ci.getDiagnosticClient().EndSourceFile();
 
-  ret = caml_alloc_tuple(2);
+  MLCommentTranslator com(src, Context, loc);
+  
+  ret = caml_alloc_tuple(3);
   Store_field(ret, 0, tmp);
   Store_field(ret, 1, diag->getDiagnostics());
+  Store_field(ret, 2, com.getRawCommentList());
 
   CAMLreturn(ret);
 }

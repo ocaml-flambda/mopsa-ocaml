@@ -24,8 +24,12 @@ module UidMap = Map.Make(struct type t=uid let compare=compare end)
 module StringMap = Map.Make(String)
 
 type range = Clang_AST.range
+module RangeMap = MapExt.Make(struct type t = range let compare = Pervasives.compare end)
 (** Source locations. *)
 
+type comment = Clang_AST.comment
+(** Comments in file. *)
+                
 type character_kind = Clang_AST.character_kind
 
 type target_info = Clang_AST.target_info
@@ -378,6 +382,8 @@ type typ =
      proj_records: record_type StringMap.t; (** records, by unique name *)
      proj_vars: variable StringMap.t; (** variables with global lifetime, by unique name *)
      proj_funcs: func StringMap.t; (** functions, by unique name *)
+
+     proj_comments: comment list RangeMap.t; (** all comments *)
    }
 (** A project is a set of translation units linked together. *)
 
