@@ -22,11 +22,13 @@ struct
   type _ domain += D_iter : t domain
 
   let id = D_iter
-  let name = "framework.domains.iter"
+  let name = Head.name ^ ", " ^ Tail.name
   let identify : type b. b domain -> (t, b) eq option =
     function
     | D_iter -> Some Eq
     | _ -> None
+
+  let debug fmt = Debug.debug ~channel:"framework.domains.iter" fmt
 
   let bottom =
     Head.bottom, Tail.bottom
@@ -80,6 +82,7 @@ struct
   }
 
   let exec zone =
+    debug "exec %a on %s" Zone.print zone name;
     match List.find_all (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export,
           List.find_all (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export
     with
@@ -94,6 +97,7 @@ struct
       (fun stmt man flow -> f stmt (tail_man man) flow)
 
     | l1, l2 ->
+      debug "both";
       let f1 = Analyzer.mk_exec_of_zone_list l1 Head.exec in
       let f2 = Analyzer.mk_exec_of_zone_list l2 Tail.exec in
       (fun stmt man flow ->
@@ -109,20 +113,24 @@ struct
   }
 
   let eval zpath =
+    debug "eval %a on %s" Zone.print2 zpath name;
     match List.find_all (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export,
           List.find_all (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export
     with
     | [], [] -> raise Not_found
 
     | l, [] ->
+      debug "head only";
       let f = Analyzer.mk_eval_of_zone_list l Head.eval in
       (fun exp man flow -> f exp (head_man man) flow)
 
     | [], l ->
+      debug "tail only";
       let f = Analyzer.mk_eval_of_zone_list l Tail.eval in
       (fun exp man flow -> f exp (tail_man man) flow)
 
     | l1, l2 ->
+      debug "both";
       let f1 = Analyzer.mk_eval_of_zone_list l1 Head.eval in
       let f2 = Analyzer.mk_eval_of_zone_list l2 Tail.eval in
       (fun exp man flow ->

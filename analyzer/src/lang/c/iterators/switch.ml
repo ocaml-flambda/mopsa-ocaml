@@ -11,10 +11,6 @@
 open Framework.Essentials
 open Ast
 
-let name = "c.flows.switch"
-let debug fmt = Debug.debug ~channel:name fmt
-
-
 (*==========================================================================*)
 (**                            {2 Flow tokens}                              *)
 (*==========================================================================*)
@@ -200,5 +196,5 @@ struct
 
   end
 
-let setup () =
+let () =
     Framework.Domains.Stateless.register_domain (module Domain)

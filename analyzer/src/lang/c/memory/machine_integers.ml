@@ -138,7 +138,7 @@ struct
   let exec_interface =
     {
       import = [Universal.Zone.Z_universal_num];
-      export = [Framework.Zone.top]
+      export = []
     }
 
   let eval_num man = man.eval ~zone:(Universal.Zone.Z_universal_num, Universal.Zone.Z_universal_num)

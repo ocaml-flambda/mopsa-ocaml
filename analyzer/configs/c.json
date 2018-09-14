@@ -1,11 +1,20 @@
 {
     "iter": [
-	// Iterators
+	// C iterators
 	"c.iterators.program",
 	"c.iterators.interproc",
-	"universal.iterators.intraproc",
+        "c.iterators.goto",
+        "c.iterators.switch",
+
+	// Universal iterators
+        "universal.iterators.intraproc",
 	"universal.iterators.loops",
 	"universal.iterators.interproc.inlining",
+
+        // C desugar
+        "c.desugar.loops",
+        "c.desugar.aggregate",
+        "c.desugar.andor",
 
         // Memory model
         "c.memory.cells.smashing",

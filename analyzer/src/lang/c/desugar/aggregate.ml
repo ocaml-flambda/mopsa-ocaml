@@ -21,12 +21,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_array_struct : unit domain
-  let id = D_c_desugar_array_struct
-  let name = "c.desugar_array_struct"
+  type _ domain += D_c_desugar_aggregate : unit domain
+  let id = D_c_desugar_aggregate
+  let name = "c.desugar.aggregate"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_desugar_array_struct -> Some Eq
+    | D_c_desugar_aggregate -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
