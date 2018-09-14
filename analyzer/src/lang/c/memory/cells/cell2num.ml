@@ -37,6 +37,19 @@ let get_cell flow v =
                 annot: (*FIXME print annot*)"
       pp_var v
 
+let get_num_and_remove flow c =
+  let annot = Flow.get_annot flow in
+  let cne = Annotation.find KCellNumEquiv annot in
+  try
+    let v = CellNumEquiv.find_l c cne in
+    let cne = CellNumEquiv.remove_l c cne in
+    let flow = Flow.set_annot (Annotation.add KCellNumEquiv cne annot) flow in
+    (v, flow)
+  with
+  | Not_found ->
+    let v = Cell.cell_to_var c in
+    (v, flow)
+
 (** {2 Domain definition} *)
 (** ===================== *)
 
@@ -60,7 +73,7 @@ struct
   (** ================= *)
 
   let zone = Zone.Z_c
-  let import_exec = [Universal.Zone.Z_universal]
+  let import_exec = [Framework.Zone.Z_top]
   let import_eval = []
 
   (** Initialization *)
@@ -69,7 +82,15 @@ struct
   let init _ _ _ =
     None
 
-  let exec _ _ _ = None
+  let exec stmt man flow =
+    match skind stmt with
+    | Cell.S_c_remove_cell c ->
+      let v, flow = get_num_and_remove flow c in
+      man.exec ({stmt with skind = S_remove_var v}) flow
+      |> Post.of_flow
+      |> Option.return
+
+    | _ -> None
 
   let eval exp man flow =
     match ekind exp with
