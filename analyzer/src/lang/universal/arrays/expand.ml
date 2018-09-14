@@ -21,7 +21,7 @@ open Ast
 
 module Cell =
 struct
-  
+
   type t = {
     array : var; (* base array variable *)
     index : Z.t list; (* index path *)
@@ -90,7 +90,7 @@ let () =
       print = (fun next fmt z ->
           match z with
           | Z_expand_cell_lval -> Format.fprintf fmt "universal/expand-cell-lval"
-          | _ -> next fmt z                                  
+          | _ -> next fmt z
         );
     })
 
@@ -193,7 +193,7 @@ struct
 
   let mk_cell (v:var) (i:Z.t list): Cell.t =
     Cell.{array = v; index = i}
-  
+
   let mk_cell_var (c:Cell.t) typ : var =
     let name =
       let () = Cell.print Format.str_formatter c in
@@ -249,7 +249,7 @@ struct
           )
         ~threshold:(fun (acc, cells) (min,max) ->
             ignore_old_cells a (Some (i0, min, max)) e range man acc, cells
-          ) (Flow.bottom (Flow.get_annot flow), []) man flow
+          ) (Flow.bottom (Flow.get_all_annot flow), []) man flow
     in
     Post.of_flow flow' |>
     Post.add_mergers (List.map (fun c -> mk_remove_var c range) cells)
@@ -279,7 +279,7 @@ struct
 
         | _ -> panic_at (srange stmt) "Array evaluated to a non-lval expression"
       )
-        
+
     | _ -> None
 
 
@@ -288,7 +288,7 @@ struct
 
   let mk_cell_lval a i typ range =
     mk_expr (E_cell_lval (a, i)) ~etyp:typ range
-  
+
   let eval_array_lval_cell a i0 i typ range man flow =
     man.eval i flow |> Eval.bind @@ fun i flow ->
     let l = fold_cells i

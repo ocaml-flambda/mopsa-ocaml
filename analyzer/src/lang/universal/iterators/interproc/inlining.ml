@@ -79,7 +79,7 @@ struct
   let init prog man (flow: 'a flow) =
     Some (
       (* Register call stack annotation *)
-      let annot = Flow.get_annot flow in
+      let annot = Flow.get_all_annot flow in
       let annot' = Annotation.(register_annot {
           eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
                   function
@@ -89,7 +89,7 @@ struct
                 f);
         }) annot
       in
-      Flow.set_annot annot' flow
+      Flow.set_all_annot annot' flow
     )
 
 
@@ -132,7 +132,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Add f to call stack *)
-      let flow1 = Flow.map_annot (fun annot ->
+      let flow1 = Flow.map_all_annot (fun annot ->
           let cs = try Annotation.find A_call_stack annot with Not_found -> [] in
           let cs' = f :: cs in
           Annotation.add A_call_stack cs' annot

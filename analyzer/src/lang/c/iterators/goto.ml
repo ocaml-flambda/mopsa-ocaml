@@ -77,7 +77,7 @@ struct
     | S_c_goto_stab stmt' ->
       (* Stabilization statement for backward gotos *)
       begin
-        let annot = Flow.get_annot flow in
+        let annot = Flow.get_all_annot flow in
         let nogotos, gotos = Flow.fold (fun (nogotos, gotos) k v ->
             match k with
             | T_goto s -> (nogotos, Flow.add k v man gotos)
