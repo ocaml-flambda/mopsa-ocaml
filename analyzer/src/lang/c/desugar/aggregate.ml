@@ -34,9 +34,15 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = [Universal.Zone.Z_universal]
-  let import_eval = []
+  let exec_interface = {
+    export = [];
+    import = []
+  }
+
+  let eval_interface = {
+    export = [Zone.Z_c, Zone.Z_c_scalar];
+    import = []
+  }
 
   (** Initialization *)
   (** ============== *)

@@ -72,9 +72,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = [Framework.Zone.Z_top]
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let eval_interface = {export = [Cell.Z_c_cell, Zone.Z_c_num]; import = []}
 
   (** Initialization *)
   (** ============== *)

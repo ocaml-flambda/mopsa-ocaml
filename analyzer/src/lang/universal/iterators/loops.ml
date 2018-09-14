@@ -74,9 +74,8 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  let zone = Zone.Z_universal
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let eval_interface = {export = []; import = []}
 
   let init prog man flow = None
 

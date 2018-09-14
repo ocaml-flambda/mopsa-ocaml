@@ -17,9 +17,8 @@ sig
   val name     : string
   val id       : unit domain
   val identify : 'b domain -> (unit, 'b) eq option
-  val zone : Zone.zone
-  val import_exec : Zone.zone list
-  val import_eval : (Zone.zone * Zone.zone) list
+  val exec_interface : Zone.zone interface
+  val eval_interface : (Zone.zone * Zone.zone) interface
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
   val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
@@ -47,16 +46,9 @@ struct
 
   let init = D.init
 
-  let exec_interface = {
-    export = [D.zone];
-    import = D.import_exec;
-  }
+  let exec_interface = D.exec_interface
+  let eval_interface = D.eval_interface
 
-  let eval_interface = {
-    export = [Zone.top, D.zone];
-    import = D.import_eval;
-  }
-  
   let exec zone = D.exec
   let eval zone = D.eval
   let ask = D.ask

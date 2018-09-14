@@ -70,9 +70,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_universal
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let eval_interface = {export = []; import = []}
 
   (** Initialization *)
   (** ============== *)
