@@ -16,38 +16,8 @@ open Domain
 open Eval
 open Post
 open Zone
-    
+
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
-
-let mk_exec_of_zone_list (l: Zone.zone list) exec =
-  let l = List.sort_uniq Pervasives.compare l in
-  let exec_list = List.map exec l in
-  (fun (stmt: Ast.stmt) (man: ('a, 't) man) (flow: 'a flow) : 'a Post.post option ->
-     let rec aux =
-       function
-       | [] -> None
-       | f :: tl ->
-         match f stmt man flow with
-         | None -> aux tl
-         | Some ret -> Some ret
-     in
-     aux exec_list
-  )
-
-let mk_eval_of_zone_list (l: (Zone.zone * Zone.zone) list) eval =
-  let l = List.sort_uniq Pervasives.compare l in
-  let eval_list = List.map eval l in
-  (fun (exp: Ast.expr) (man: ('a, 't) man) (flow: 'a flow) : ('a, Ast.expr) evl option ->
-     let rec aux =
-       function
-       | [] -> None
-       | f :: tl ->
-         match f exp man flow with
-         | None -> aux tl
-         | Some ret -> Some ret
-     in
-     aux eval_list
-  )
 
 
 (**
@@ -93,15 +63,13 @@ struct
         else
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
-            | [] ->
+            if List.exists (fun z -> Zone.subset z zone) Domain.exec_interface.export then
+              begin
+                debug "exec for %a found" Zone.print zone;
+                ExecMap.add zone (Domain.exec zone) acc
+              end
+            else
               Exceptions.panic "exec for %a not found" Zone.print zone
-
-            | l ->
-              let f = mk_exec_of_zone_list l Domain.exec in
-
-              debug "exec for %a found" Zone.print zone;
-              ExecMap.add zone f acc
           end
       ) ExecMap.empty (List.sort_uniq Pervasives.compare (Zone.top :: Domain.exec_interface.import))
 
@@ -154,15 +122,13 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
-            | [] ->
+            if List.exists (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export then
+              begin
+                debug "eval for %a found" Zone.print2 zpath;
+                EvalMap.add zpath (Domain.eval zpath) acc
+              end
+            else
               Exceptions.panic "eval for %a not found" Zone.print2 zpath
-
-            | l ->
-              let f = mk_eval_of_zone_list l Domain.eval in
-              debug "eval for %a found" Zone.print2 zpath;
-              EvalMap.add zpath f acc
-
           end
       ) EvalMap.empty (List.sort_uniq Pervasives.compare ((Zone.top, Zone.top)  :: Domain.eval_interface.import))
 
