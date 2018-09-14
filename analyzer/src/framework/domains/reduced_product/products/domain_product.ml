@@ -499,7 +499,7 @@ struct
                        | Some Eq -> flow'
                        | None ->
                          (* Apply mergers of D on the post-condition [post] *)
-                         let mflow' = List.fold_left (fun flow stmt -> man.exec stmt flow) flow' mergers in
+                         let mflow' = List.fold_left (fun flow (zone, stmt) -> man.exec ~zone:zone stmt flow) flow' mergers in
                          (* Restore the abstract element of D *)
                          Flow.merge (fun tk a1 a2 ->
                              match a1, a2 with

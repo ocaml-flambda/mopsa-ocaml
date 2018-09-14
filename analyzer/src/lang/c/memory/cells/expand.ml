@@ -507,7 +507,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let cond = range_cond lval rmin rmax (erange lval) in
     let stmt' = (mk_assume cond (tag_range range "assume range")) in
     let flow'' = man.exec ~zone:Z_c_cell (mk_block (to_remove @ [stmt; stmt']) range) flow' in
-    (Post.add_mergers to_remove (Post.of_flow flow''))
+    (Post.add_mergers_to_top to_remove (Post.of_flow flow''))
 
   let rec exec zone stmt man flow =
     let range = stmt.srange in
@@ -529,7 +529,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       let flow = Flow.set_domain_cur u' man flow in
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub range) flow |>
       Post.of_flow |>
-      Post.add_mergers mergers |>
+      Post.add_mergers_to_top mergers |>
       Option.return
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
