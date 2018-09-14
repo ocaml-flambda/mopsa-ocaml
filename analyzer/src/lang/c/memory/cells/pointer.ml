@@ -27,6 +27,14 @@ struct
   (* An abstract element is a map from pointer cells to a set of pointed bases *)
   include Framework.Lattices.Total_map.Make(Cell)(PointerBaseSet)
 
+  let is_bottom _ = false
+
+  let widening = join
+
+  let print fmt a =
+    Format.fprintf fmt "ptr: @[%a@]@\n"
+      print a
+
 
   (** Utility functions *)
   (** ================= *)
@@ -36,10 +44,6 @@ struct
     match mode with
     | STRONG | EXPAND -> a'
     | WEAK -> join annot a a'
-
-  let print fmt a =
-    Format.fprintf fmt "ptr: @[%a@]@\n"
-      print a
 
   let points_to_fun annot p f ?(mode=STRONG) a =
     add annot p (PointerBaseSet.singleton (PB_fun f)) mode a
@@ -72,6 +76,24 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
+  (** Zoning interface *)
+  (** ================ *)
+
+  let exec_interface = {
+    export = [Z_c_cell];
+    import = [Universal.Zone.Z_universal_num];
+  }
+
+
+  let eval_interface = {
+    export = [
+      Z_c, Z_c_points_to;
+      Z_c, Z_c_num
+    ];
+    import = [Z_c, Z_c_cell]
+  }
+
+
   (** Initialization *)
   (** ============== *)
 
@@ -82,14 +104,6 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
-
-  let eval_interface = {
-    export = [
-      Z_c, Z_c_points_to;
-      Z_c, Z_c_num
-    ];
-    import = [Z_c, Z_c_cell]
-  }
 
   let rec points_to exp man flow : ('a, points_to) evl =
     let range = erange exp in
@@ -150,11 +164,6 @@ struct
 
   (** Computation of post-conditions *)
   (** ============================== *)
-
-  let exec_interface = {
-    export = [Z_c_cell];
-    import = [Universal.Zone.Z_universal_num];
-  }
 
   let exec zone stmt man flow =
     let range = srange stmt in

@@ -13,6 +13,7 @@ open Universal.Ast
 open Ast
 open Base
 open Cell
+open Zone
 
 module Domain =
 struct
@@ -101,6 +102,25 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
+  (** Zoning interface *)
+  (** ================ *)
+
+  let exec_interface = {
+    export = [Z_c];
+    import = [Z_c_cell];
+  }
+
+  let eval_interface = {
+    export = [Z_c_scalar, Z_c_cell];
+    import = [
+      Z_c, Z_c_cell;
+      Z_c, Z_c_points_to;
+    ];
+  }
+
+
+
+
   (** Initialization *)
   (** ============== *)
 
@@ -136,11 +156,6 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec_interface = {
-    export = [Zone.Z_c_scalar];
-    import = [Z_c_cell];
-  }
-
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_local_declaration(v, init) ->
@@ -160,14 +175,6 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
-
-  let eval_interface = {
-    export = [Zone.Z_c_scalar, Z_c_cell];
-    import = [
-      Zone.Z_c, Z_c_cell;
-      Z_c_cell, Z_c_points_to;
-    ];
-  }
 
   let eval zone exp man flow =
     match ekind exp with

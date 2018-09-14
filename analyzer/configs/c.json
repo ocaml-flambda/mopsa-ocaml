@@ -5,6 +5,7 @@
 	"c.iterators.interproc",
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
+	"universal.iterators.interproc.inlining",
 
         // Memory model
         "c.memory.cells.smashing",
