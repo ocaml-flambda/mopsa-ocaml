@@ -17,18 +17,16 @@ type ('a, _) Annotation.key +=
   | KCellNumEquiv: ('a, CellNumEquiv.t) Annotation.key
 
 let get_num flow c =
-  let annot = Flow.get_annot flow in
-  let cne = Annotation.find KCellNumEquiv annot in
+  let cne = Flow.get_annot KCellNumEquiv flow in
   try
     (CellNumEquiv.find_l c cne, flow)
   with
   | Not_found ->
     let v = Cell.cell_to_var c in
-    (v, Flow.set_annot (Annotation.add KCellNumEquiv (CellNumEquiv.add (c, v) cne) annot) flow)
+    (v, Flow.set_annot KCellNumEquiv (CellNumEquiv.add (c, v) cne) flow)
 
 let get_cell flow v =
-  let annot = Flow.get_annot flow in
-  let cne = Annotation.find KCellNumEquiv annot in
+  let cne = Flow.get_annot KCellNumEquiv flow in
   try
     (CellNumEquiv.find_r v cne, flow)
   with
@@ -38,13 +36,9 @@ let get_cell flow v =
       pp_var v
 
 let get_num_and_remove flow c =
-  let annot = Flow.get_annot flow in
-  let cne = Annotation.find KCellNumEquiv annot in
+  let cne = Flow.get_annot KCellNumEquiv flow in
   try
-    let v = CellNumEquiv.find_l c cne in
-    let cne = CellNumEquiv.remove_l c cne in
-    let flow = Flow.set_annot (Annotation.add KCellNumEquiv cne annot) flow in
-    (v, flow)
+    (CellNumEquiv.find_l c cne, Flow.set_annot KCellNumEquiv (CellNumEquiv.remove_l c cne) flow)
   with
   | Not_found ->
     let v = Cell.cell_to_var c in

@@ -462,13 +462,13 @@ struct
                  match exec stmt (head_man man) flow with
                  | None -> None :: (aux tl ztl (tail_man man) annot)
                  | Some post ->
-                   let annot' = Flow.get_annot post.Post.flow in
+                   let annot' = Flow.get_all_annot post.Post.flow in
                    (Some post) :: (aux tl ztl (tail_man man) annot')
                end
              | _ -> assert false
 
          in
-         aux Config.pool zl man (Flow.get_annot flow)
+         aux Config.pool zl man (Flow.get_all_annot flow)
        in
 
        (* Merge post conditions.

@@ -163,7 +163,7 @@ struct
     let rec doit (e:expr) (r:bool) (a:t) : t with_channel =
       match ekind e with
 
-      | E_unop (O_log_not, e) -> 
+      | E_unop (O_log_not, e) ->
         doit e (not r) a
 
       | E_binop (O_log_and, e1, e2) ->
@@ -172,7 +172,7 @@ struct
         (if r then meet else join) annot a1 a2 |>
         Channel.return
 
-      | E_binop (O_log_or, e1, e2) -> 
+      | E_binop (O_log_or, e1, e2) ->
         doit e1 r a |> Channel.bind @@ fun a1 ->
         doit e2 r a |> Channel.bind @@ fun a2 ->
         (if r then join else meet) annot a1 a2 |>
@@ -278,7 +278,7 @@ struct
             let a' = VarMap.add var v a in
             let a'' = match mode with
               | STRONG | EXPAND -> a'
-              | WEAK -> join (Flow.get_annot flow) a a'
+              | WEAK -> join (Flow.get_all_annot flow) a a'
             in
             Channel.return a''
           ) man flow
@@ -291,12 +291,12 @@ struct
       Some (
         man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
-            filter (Flow.get_annot flow) e true a
+            filter (Flow.get_all_annot flow) e true a
           ) man flow
         in
         Post.of_flow flow' |>
         Post.add_channels channels
-      ) 
+      )
 
     | _ -> None
 

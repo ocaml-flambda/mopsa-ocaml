@@ -73,7 +73,7 @@ let fold
    by propagating annotations in a flow-insensitive manner. *)
 let choose_annot evl =
   match Dnf.choose evl with
-  | Some case -> get_annot case.flow
+  | Some case -> get_all_annot case.flow
   | None -> Annotation.empty
 
 let bind
@@ -82,7 +82,7 @@ let bind
   : ('a, 'f) evl =
   let evl, _ = Dnf.fold2
     (fun annot case ->
-      let flow' = set_annot annot case.flow in
+      let flow' = set_all_annot annot case.flow in
       let evl' =
         match case.expr with
         | None -> empty_singleton flow'
@@ -100,7 +100,7 @@ let bind
 let bind_opt f evl =
   let evl, _ = Dnf.fold2
       (fun annot case ->
-         let flow' = set_annot annot case.flow in
+         let flow' = set_all_annot annot case.flow in
          let evl' =
            match case.expr with
            | None -> Some (empty_singleton flow')

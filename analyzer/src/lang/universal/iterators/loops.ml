@@ -165,7 +165,7 @@ struct
   and unroll cond body man flow =
     let rec loop i flow =
       debug "unrolling iteration %d" i;
-      if i = 0 then (flow, Flow.bottom (Flow.get_annot flow))
+      if i = 0 then (flow, Flow.bottom (Flow.get_all_annot flow))
       else
         let flow1 =
           man.exec {skind = S_assume cond; srange = cond.erange} flow |>
@@ -181,7 +181,7 @@ struct
     loop !opt_loop_unrolling flow
 
   and merge_cur_and_continue man flow =
-    let annot = Flow.get_annot flow in
+    let annot = Flow.get_all_annot flow in
     Flow.map (fun tk eabs ->
         match tk with
         | T_cur ->
