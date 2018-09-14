@@ -22,7 +22,7 @@ lang.c = zone ast alarms frontend libs desugar flows memory
 
 lang.c = zone ast pp visitor frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = for
+lang.c.desugar = for andor aggregate
 lang.c.memory = base init_visitor cells
 lang.c.memory.cells = cell pointer smashing expand router cell2num machine_integers
 lang.c.libs = c_stdlib
