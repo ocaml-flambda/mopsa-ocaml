@@ -13,6 +13,7 @@ open Universal.Ast
 open Ast
 open Base
 open Cell
+open Zone
 
 
 module Domain =
@@ -84,13 +85,13 @@ struct
 
   let eval_interface = {
     export = [
-      Zone.Z_c, Z_c_points_to;
-      Zone.Z_c, Zone.Z_c_num
+      Z_c, Z_c_points_to;
+      Z_c, Z_c_num
     ];
-    import = [Zone.Z_c, Z_c_cell]
+    import = [Z_c, Z_c_cell]
   }
 
-  let rec points_to exp man flow =
+  let rec points_to exp man flow : ('a, points_to) evl =
     let range = erange exp in
     match ekind exp with
     | E_constant (C_int n) when Z.equal n Z.zero ->
@@ -103,13 +104,30 @@ struct
       let pt' = P_var (A addr, mk_int 0 range, T_c_void) in
       Eval.singleton pt' flow
 
+    | E_c_address_of e ->
+      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
+
+    | E_c_cast(e, _) ->
+      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
+
+    | E_binop(O_plus, p, n) ->
+      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
+
+    | E_c_function f ->
+      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
+
     | _ -> panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
 
   let eval zone exp man flow =
     let range = exp.erange in
     match snd zone, ekind exp with
     | Z_c_points_to, _ ->
-      panic_at range "pointer.eval: %a not yet supported" pp_expr exp
+      begin
+        points_to exp man flow |> Eval.bind @@ fun p flow ->
+        Eval.singleton (mk_expr (E_c_points_to p) range) flow
+      end
+      |>
+      Option.return
 
     | Zone.Z_c_num, E_binop(O_eq, p, q)
       when is_c_pointer_type p.etyp
@@ -147,7 +165,7 @@ struct
     | S_assign({ekind = E_c_cell p}, q, mode) when cell_type p |> is_c_pointer_type ->
       panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
 
-    | S_remove_var(p) when is_c_pointer_type p.vtyp ->
+    | S_c_remove_cell(p) when cell_type p |> is_c_pointer_type ->
       panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
 
     | _ -> None

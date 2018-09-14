@@ -19,9 +19,8 @@ include Stateless.Make(
       function
       | D_empty -> Some Eq
       | _ -> None
-    let zone = Zone.top
-    let import_exec = []
-    let import_eval = []
+    let exec_interface = {export = []; import = []}
+    let eval_interface = {export = []; import = []}
     let init prog man flow = None
     let exec stmt man flow = None
     let eval exp man flow = None
