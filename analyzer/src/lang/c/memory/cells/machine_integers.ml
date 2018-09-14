@@ -102,7 +102,7 @@ let to_universal_type t =
     match t with
     | T_int | T_float | T_bool | T_any | T_c_void -> t
     | _ -> Debug.fail "[to_universal_type] in machine_integers called \
-                      on non scalar type ; %a" pp_typ t
+                       on non scalar type ; %a" pp_typ t
 
 let var_machine_integers v =
   {v with vtyp = to_universal_type v.vtyp}
@@ -209,6 +209,18 @@ struct
         |> Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped"))
         |> Option.return
 
+    | E_binop(op, e, e') ->
+      let () = debug "memory.machine_integers: I do not think we should be there"
+      in
+      Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
+      |> Option.return
+
+    | E_unop(op, e) ->
+      let () = debug "memory.machine_integers: I do not think we should be there"
+      in
+      Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
+      |> Option.return
+
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       let () = debug "case 5" in
       let t  = etyp exp in
@@ -259,7 +271,7 @@ struct
         {exp with
          ekind = E_var({v with vtyp = to_universal_type v.vtyp});
          etyp = to_universal_type (etyp exp)}
-         flow
+        flow
       |> Option.return
 
     | _ ->
