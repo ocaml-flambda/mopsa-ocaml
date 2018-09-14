@@ -67,7 +67,7 @@ struct
     | Singleton -> Format.fprintf fmt  "𝟙"
     | Multi -> Format.fprintf fmt "⊤"
 end
-      
+
 
 
 (** Abstract domain definition *)
@@ -100,7 +100,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  
+
   (** Initialization *)
   (** ************** *)
 
@@ -111,7 +111,7 @@ struct
       flow'
     )
 
-  
+
   (** Transfer functions interface *)
   (** **************************** *)
 
@@ -132,7 +132,7 @@ struct
     ];
   }
 
-  
+
   (** Post-conditions *)
   (** *************** *)
 
@@ -167,7 +167,7 @@ struct
     let stmt' = mk_assign (mk_var lval' range) e ~mode:mode' range in
     man.exec stmt' flow' |>
     Post.of_flow |>
-    Post.add_mergers [mk_remove_var lval' range]
+    Post.add_mergers_to_top [mk_remove_var lval' range]
 
 
   let exec zone stmt man flow =
@@ -210,7 +210,7 @@ struct
       let stmt = mk_assign (mk_var tmp range) smash ~mode:EXPAND range in
       let flow' = man.exec stmt flow in
       Eval.singleton (mk_var tmp range) flow' ~cleaners:[mk_remove_var tmp range]
-    
+
   let eval zone exp man flow =
     match ekind exp with
     | E_subscript(a, i) ->
@@ -235,7 +235,7 @@ struct
   (** ******* *)
 
   let ask query man flow = None
-  
+
 end
 
 let () =

@@ -13,9 +13,12 @@ open Manager
 type channel = ..
 (** Reduction channels *)
 
+type z_stmt = Zone.zone * Ast.stmt
+(** zoned statement *)
+
 type 'a post = {
   flow : 'a flow;
-  mergers : Ast.stmt list;
+  mergers : z_stmt list;
   channels : channel list;
 }
 (** Post-conditions *)
@@ -28,7 +31,12 @@ val return : 'a flow -> 'a post option
 (** [of_flow flow] returns a post-condition option from a flow,
    without mergers and channels *)
 
-val add_mergers : Ast.stmt list -> 'a post -> 'a post
+val add_mergers_to_top : Ast.stmt list -> 'a post -> 'a post
+(** [add_mergers m p] adds meet mergers (here a list of statement) [m]
+   to post-condition [p], this statements will be executed on zone
+   Z_top *)
+
+val add_mergers : z_stmt list -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
 
 val add_channels : channel list -> 'a post -> 'a post
