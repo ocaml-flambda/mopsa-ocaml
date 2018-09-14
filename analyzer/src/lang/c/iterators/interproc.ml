@@ -38,7 +38,10 @@ struct
 
   let eval_interface = {
     export = [Zone.Z_c, Zone.Z_c_scalar];
-    import = [Universal.Zone.Z_universal, Framework.Zone.Z_top]
+    import = [
+      Zone.Z_c, Zone.Z_c_scalar;
+      Universal.Zone.Z_universal, Framework.Zone.Z_top
+    ]
   }
 
 
@@ -59,12 +62,33 @@ struct
   let eval exp man flow =
     match ekind exp with
     | E_c_call(f, args) ->
-      panic_at exp.erange "c.iterators.interproc: call %a not supported" pp_expr exp
+      begin
+        man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) f flow |> Eval.bind @@ fun f flow ->
+        match ekind f with
+        | E_c_builtin_function(name) ->
+          let () = debug "builtin : %a" pp_expr f in
+          let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
+          man.eval exp' flow
 
-    | E_c_cast(e, _)
-      when (exp |> etyp |> is_c_pointer_type)
-        && (exp |> etyp |> under_pointer_type |> is_c_function_type) ->
-      panic_at exp.erange "c.iterators.interproc: cast %a not supported" pp_expr exp
+        | E_c_function fundec ->
+          let body = get_c_fun_body_panic fundec in
+          debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
+          let open Universal.Ast in
+          let fundec' = {
+            fun_name = get_var_uniq_name fundec.c_func_var;
+            fun_parameters = fundec.c_func_parameters;
+            fun_locvars = List.map fst fundec.c_func_local_vars;
+            fun_body = {skind = S_c_goto_stab (body); srange = srange body};
+            fun_return_type = fundec.c_func_return;
+          }
+          in
+          let exp' = mk_call fundec' args exp.erange in
+          (* Universal will evaluate the call into a temporary variable containing the returned value *)
+          man.eval ~zone:(Universal.Zone.Z_universal, Framework.Zone.Z_top) exp' flow
+
+        | _ -> assert false
+      end |>
+      Option.return
 
     | _ -> None
 

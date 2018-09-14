@@ -73,6 +73,12 @@ let () =
           | _ -> assert false
         )
 
+      | E_c_builtin_call(f, args) ->
+        {exprs = args; stmts = []},
+        (function
+          | {exprs = args} -> {exp with ekind = E_c_builtin_call(f, args)}
+        )
+
       | E_c_arrow_access(p, idx, fld) ->
         {exprs = [p]; stmts = []},
         (function

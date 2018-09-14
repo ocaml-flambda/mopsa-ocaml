@@ -212,6 +212,8 @@ type expr_kind +=
 
   | E_c_call of expr (** target *) * expr list (** arguments *)
 
+  | E_c_builtin_call of string * expr list
+
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
 

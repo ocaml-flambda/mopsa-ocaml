@@ -84,6 +84,7 @@ let () =
       | E_c_function(f) -> pp_var fmt f.c_func_var
       | E_c_builtin_function(f) -> pp_print_string fmt f
       | E_c_call(f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
+      | E_c_builtin_call(f, args) -> fprintf fmt "%s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
       | E_c_assign(lval, rval) -> fprintf fmt "%a = %a" pp_expr lval pp_expr rval
       | E_c_compound_assign _ -> assert false

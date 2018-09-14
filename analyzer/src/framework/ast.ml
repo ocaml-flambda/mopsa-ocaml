@@ -63,7 +63,8 @@ let mk_tmp ?(vtyp = T_any) () =
   let vname = "$tmp" ^ (string_of_int !tmp_counter) in
   {vname; vuid = !tmp_counter; vtyp}
 
-
+let get_var_uniq_name v : string =
+  v.vname ^ ":" ^ (string_of_int v.vuid)
 
 (*==========================================================================*)
 (**                            {2 Operators}                                *)
