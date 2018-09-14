@@ -20,7 +20,14 @@ struct
       src = Zone.Z_c;
       dst = Cell.Z_c_cell;
       path = [Zone.Z_c_scalar]
+    };
+
+    {
+      src = Zone.Z_c;
+      dst = Universal.Zone.Z_universal_num;
+      path = [Cell.Z_c_cell; Zone.Z_c_num]
     }
+
   ]
 end
 

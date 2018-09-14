@@ -67,19 +67,19 @@ let fold
   Dnf.fold f join meet init evl
 
 
+(* [choose_annot evl] returns any annotation from evaluation flows
+   of [evl].
+   Should be applied only if [evl] has been correctly constructed
+   by propagating annotations in a flow-insensitive manner. *)
+let choose_annot evl =
+  match Dnf.choose evl with
+  | Some case -> get_annot case.flow
+  | None -> Annotation.empty
+
 let bind
     (f: 'e -> 'a flow -> ('a, 'f) evl)
     (evl: ('a, 'e) evl)
   : ('a, 'f) evl =
-  (* [choose_annot evl] returns any annotation from evaluation flows
-     of [evl].
-     Should be applied only if [evl] has been correctly constructed
-     by propagating annotations in a flow-insensitive manner. *)
-  let choose_annot evl =
-    match Dnf.choose evl with
-    | Some case -> get_annot case.flow
-    | None -> Annotation.empty
-  in
   let evl, _ = Dnf.fold2
     (fun annot case ->
       let flow' = set_annot annot case.flow in
@@ -97,6 +97,24 @@ let bind
   in
   evl
 
+let bind_opt f evl =
+  let evl, _ = Dnf.fold2
+      (fun annot case ->
+         let flow' = set_annot annot case.flow in
+         let evl' =
+           match case.expr with
+           | None -> Some (empty_singleton flow')
+           | Some expr -> f expr flow' |>
+                          Option.option_lift1 (add_cleaners case.cleaners)
+         in
+         let annot = Option.option_dfl1 annot choose_annot evl' in
+         (evl', annot)
+      )
+      (Option.option_neutral2 join)
+      (Option.option_neutral2 meet)
+      (choose_annot evl) evl
+  in
+  evl
 
 let assume
     cond ?(zone = Zone.top)

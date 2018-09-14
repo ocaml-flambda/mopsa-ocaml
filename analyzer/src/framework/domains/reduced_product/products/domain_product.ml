@@ -171,6 +171,7 @@ struct
         | Some evl -> evl
         | None -> Debug.fail "product: sub-domain can not evaluate %a" pp_expr exp;
       );
+    eval_opt = (fun ?(zone=(Zone.top, Zone.top)) exp flow -> Over.eval zone exp over_local_man flow);
     ask = (fun query flow ->
         match Over.ask query over_local_man flow with
         | Some repl -> repl

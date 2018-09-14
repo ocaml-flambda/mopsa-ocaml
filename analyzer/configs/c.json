@@ -10,6 +10,8 @@
         // Memory model
         "c.memory.cells.smashing",
         "c.memory.cells.pointer",
+        "c.machine_integers",
+        "c.cell_2_num",
 
         // Routers
         "c.memory.cells.router",

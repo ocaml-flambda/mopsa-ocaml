@@ -19,6 +19,12 @@ type entry = {
   path : zone list;
 }
 
+let pp_entry fmt e =
+  Format.fprintf fmt "src: %a, dst: %a, path: %a"
+    Zone.print e.src
+    Zone.print e.dst
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " -> ") Zone.print) e.path
+
 module type S =
 sig
   val name : string
@@ -37,7 +43,7 @@ struct
         next, (pred, next) :: hops
       ) (e.src, []) e.path
     in
-    (last, e.dst) :: hops
+    List.rev ((last, e.dst) :: hops)
 
   let eval_interface =
     let export, import =
@@ -51,12 +57,19 @@ struct
     let entries = List.find_all (function {src; dst} -> src = z1 && dst = z2) Router.table in
     let rec aux = function
       | [] -> None
-      | [e] ->
-        List.fold_left (fun evl zone ->
-            Eval.bind (man.eval ~zone) evl
-          ) (Eval.singleton exp flow) (get_hops e) |>
-        Option.return
-      | _ -> Exceptions.panic "domains.router: more than one route defined for %a" Zone.print2 (z1, z2)
+      | entry :: tl ->
+        let ret = List.fold_left (fun oevl zone ->
+            let evl =
+              match oevl with
+              | None -> Eval.singleton exp flow
+              | Some evl -> evl
+            in
+            Eval.bind_opt (man.eval_opt ~zone) evl
+          ) None (get_hops entry)
+        in
+        match ret with
+        | None -> aux tl
+        | Some _ -> ret
     in
     aux entries
 

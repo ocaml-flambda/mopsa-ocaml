@@ -125,7 +125,7 @@ struct
             pp_stmt stmt
 
         | Some post -> post.flow
-      ) stmt flow
+      ) zone stmt flow
     in
 
     let t = Timing.stop timer in
@@ -168,7 +168,7 @@ struct
 
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval_opt ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
       "eval expr on zone %a in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Zone.print2 zone
@@ -179,10 +179,8 @@ struct
     let path_eval = EvalMap.find zone eval_map in
 
     let evl = Cache.eval (fun exp flow ->
-        match path_eval exp man flow with
-        | Some evl -> evl
-        | None -> Eval.singleton exp flow
-      ) exp flow
+        path_eval exp man flow
+      ) zone exp flow
     in
 
     let t = Timing.stop timer in
@@ -195,9 +193,15 @@ struct
       "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       (Flow.print man) flow
-      (Eval.print ~pp:pp_expr) evl
+      (Option.print (Eval.print ~pp:pp_expr)) evl
     ;
     evl
+
+  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+    match eval_opt ~zone exp flow with
+    | Some evl -> evl
+    | None -> Eval.singleton exp flow
+
 
   (** Query handler. *)
   and ask : type r. r Query.query -> _ -> r =
@@ -222,6 +226,7 @@ struct
     set = (fun flow _ -> flow);
     exec = exec;
     eval = eval;
+    eval_opt = eval_opt;
     ask = ask;
   }
 

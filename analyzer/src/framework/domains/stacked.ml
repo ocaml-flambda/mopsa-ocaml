@@ -74,6 +74,7 @@ struct
         | Some evl -> evl
         | None -> Debug.fail "stacked: sub-domain can not evaluate %a" pp_expr exp;
       );
+    eval_opt = (fun ?(zone=(Zone.top, Zone.top)) exp flow -> D2.eval zone exp man2_local flow);
     ask = (fun query flow ->
         match D2.ask query man2_local flow with
         | Some repl -> repl
