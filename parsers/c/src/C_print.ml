@@ -22,6 +22,9 @@ let ignore_implicit_casts = true
 let print_loc = true
 (** Prints location information in comment for global declarations. *)
 
+let print_comments = true
+(** Prints comments attached to declarations. *)
+                  
 
 (** {2 Internal printing utilities} *)
 
@@ -486,6 +489,10 @@ and c_buf_statement indent buf ((s,_):statement) =
 
   | S_target (S_default) -> bp buf "%sdefault:;\n" indent
 
+and c_buf_com indent buf v =
+  if print_comments
+  then List.iter (fun c -> bp buf "%s%s\n" indent c.Clang_AST.com_text) v
+                          
 and c_buf_var_decl_inner indent buf v =
   let indent2 = inc_indent indent in
   bp buf "%s%a"
@@ -499,11 +506,13 @@ and c_buf_var_decl_inner indent buf v =
 and c_buf_var_decl indent buf v =
   if variable_is_global v.var_kind
   then bp_loc indent buf v.var_range;
+  c_buf_com indent buf v.var_com;
   bp buf "%s%a;\n" indent (c_buf_var_decl_inner indent) v
 
 and c_buf_var_advance_decl indent buf v =
   if variable_is_global v.var_kind
   then bp_loc indent buf v.var_range;
+  c_buf_com indent buf v.var_com;
   bp buf "%s%s%a;\n" indent
      (if v.var_kind = Variable_extern then "extern " else "")
      (c_buf_var_decl_inner indent) { v with var_init = None; }
@@ -511,6 +520,8 @@ and c_buf_var_advance_decl indent buf v =
 and c_buf_func_decl indent buf f =
   let indent2 = inc_indent indent in
   bp_loc indent buf f.func_range;
+  (* include comments only when printing prototypes *)
+  if f.func_body = None then c_buf_com indent buf f.func_com;
   let variadic = if f.func_variadic then if f.func_parameters= [||] then "..." else ", ..." else ""
   and param buf v = c_buf_type_qual indent v.var_unique_name buf v.var_type in
   let inner buf var = bp buf "%a(%a%s)" bp_str var (bp_array param ", ") f.func_parameters variadic
@@ -530,9 +541,11 @@ and c_buf_func_proto indent buf f =
 let c_buf_enum_decl indent buf e =
   let indent2 = inc_indent indent in
   let f buf v =
+    c_buf_com indent buf v.enum_val_com;
     bp buf "%s%s = %a,\n" indent2 v.enum_val_unique_name Z.bprint v.enum_val_value
   in
   bp_loc indent buf e.enum_range;
+  c_buf_com indent buf e.enum_com;
   if e.enum_defined then
     bp buf "%senum %s { /* type: %s */\n%a%s};\n" indent
        e.enum_unique_name
@@ -545,10 +558,12 @@ let c_buf_enum_decl indent buf e =
 let c_buf_record_decl indent buf r =
   let indent2 = inc_indent indent in
   let f buf v =
+    c_buf_com indent buf v.field_com;
     bp buf "%s%a;\n" indent2
        (c_buf_type_qual indent2 v.field_name) v.field_type
   in
   bp_loc indent buf r.record_range;
+  c_buf_com indent buf r.record_com;
   if r.record_defined then
     bp buf "%s%s %s { /* sizeof: %a, alignof: %a */\n%a%s};\n" indent
        (string_of_record_kind r.record_kind)
@@ -565,6 +580,7 @@ let c_buf_record_decl indent buf r =
 let c_buf_typedef indent buf t =
   let indent2 = inc_indent indent in
   bp_loc indent buf t.typedef_range;
+  c_buf_com indent buf t.typedef_com;
   bp buf "%stypedef %a;\n" indent
      (c_buf_type_qual indent2 t.typedef_unique_name) t.typedef_def
 

@@ -112,7 +112,7 @@ type name = {
      enum_cst: enum_cst_decl list;
      enum_typedef: typedef_decl option; (** for anonymous enum, gets the typedef it is declared in, if any  *)
      enum_range: range;
-     enum_com: comment option;
+     enum_com: comment list;
    }
  (** enum declaration. *)
 
@@ -121,7 +121,7 @@ type name = {
      enum_cst_name: name;
      enum_cst_val: Z.t;
      enum_cst_range: range;
-     enum_cst_com: comment option;
+     enum_cst_com: comment list;
    }
  (** enum constant declaration in an enum. *)
 
@@ -136,7 +136,7 @@ type name = {
      field_offset: Int64.t; (** offset of the given field, in bits. *)
      field_variable_length_array: expr option; (** whether this field captures the variable length array type, and the corresponding size expression *)
      field_range: range;
-     field_com: comment option;
+     field_com: comment list;
    }
  (** field declaration in a struct or union. *)
 
@@ -155,7 +155,7 @@ type name = {
      record_fields: field_decl list;
      record_typedef: typedef_decl option; (** for anonymous records, gets the typedef it is declared in, if any  *)
      record_range: range;
-     record_com: comment option;
+     record_com: comment list;
 
      (* C++ specific *)
      record_template: class_template_specialization option; (** (C++) template origin *)
@@ -184,7 +184,7 @@ type name = {
      typedef_name: name;
      typedef_underlying_type: type_qual;
      typedef_range: range;
-     typedef_com: comment option;
+     typedef_com: comment list;
    }
  (** typedef declaration *)
 
@@ -199,7 +199,7 @@ type name = {
      function_return_type: type_qual;
      function_params: param_var_decl array;
      function_range: range;
-     function_com: comment option;
+     function_com: comment list;
 
      (* C++ *)
      function_template: function_template_specialization option; (** (C++) template origin *)
@@ -248,7 +248,7 @@ type name = {
      var_is_file_scoped: bool; (** File scoped variable declaration *)
      var_is_local: bool; (** Whether the variable is local (incl. parameter) *)
      var_range: range;
-     var_com: comment option;
+     var_com: comment list;
 
      (* C++ *)
      var_template: var_template_specialization option; (** (C++) template origin *)
@@ -637,7 +637,7 @@ and type_qual = typ * qual
      decl_kind: decl_kind;
      decl_access: access_specifier; (** (C++) access specifier *)
      decl_range: range;
-     decl_comment: comment option; (** comment associated to the declaration *)
+     decl_comment: comment list; (** comment associated to the declaration *)
    }
  (** Represents one declaration (or definition), e.g. a variable, typedef, function, struct, etc. *)
 
@@ -1295,7 +1295,7 @@ and atomic_expr = {
      friend_is_unsupported: bool; (** wheter this friend kind is unsupported *)
      friend_template: template_parameter_list array;
      friend_range: range;
-     friend_com: comment option;
+     friend_com: comment list;
    }
  (** (C++) Represents the declaration of a friend entity, which can be a function, a type, or a templated function or type. *)
 

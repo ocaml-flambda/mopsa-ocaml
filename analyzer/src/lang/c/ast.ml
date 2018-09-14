@@ -66,6 +66,7 @@ and c_enum_value = {
   c_enum_val_org_name: string; (** name as in source *)
   c_enum_val_unique_name: string; (** unique name *)
   c_enum_val_value: Z.t;
+  c_enum_val_range: range;
 }
 (** A possible value in an enumerated type. *)
 
@@ -368,6 +369,7 @@ and to_clang_typedef : c_typedef -> C_AST.typedef = fun typedef ->
     typedef_unique_name = typedef.c_typedef_unique_name;
     typedef_def = to_clang_type typedef.c_typedef_def;
     typedef_range = to_clang_range typedef.c_typedef_range;
+    typedef_com = [];
   }
 
 and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
@@ -381,6 +383,7 @@ and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
     record_alignof = record.c_record_alignof;
     record_fields = [||];
     record_range = to_clang_range record.c_record_range;
+    record_com = [];
   } in
   c_record.C_AST.record_fields <- Array.map (fun field ->
       to_clang_record_field c_record field
@@ -402,6 +405,7 @@ and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_
     field_range = to_clang_range field.c_field_range;
     field_record = record;
     field_index = field.c_field_index;
+    field_com = [];
   }
 
 and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
@@ -413,6 +417,7 @@ and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
     enum_values = [];
     enum_integer_type = to_clang_int_type enum.c_enum_integer_type;
     enum_range = to_clang_range enum.c_enum_range;
+    enum_com = [];
   }
   in
   c_enum.C_AST.enum_values <- List.map (fun v ->
@@ -427,6 +432,8 @@ and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = 
     enum_val_unique_name = enum_val.c_enum_val_unique_name;
     enum_val_value = enum_val.c_enum_val_value;
     enum_val_enum = enum;
+    enum_val_range = to_clang_range enum_val.c_enum_val_range;
+    enum_val_com = [];
   }
 
 

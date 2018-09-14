@@ -659,7 +659,7 @@ module P = struct
   let rec decl indent ch d =
     sync ch;
     p ch "%s%s\n" indent (string_of_range d.decl_range);
-    (match d.decl_comment with None -> () | Some c -> p ch "%s\n" c.com_text);
+    List.iter (fun c -> p ch "%s\n" c.com_text) d.decl_comment;
     let indent2 = indent^"  " in
     match d.decl_kind with
     | TranslationUnitDecl l -> p ch "%sTranslationUnitDecl\n%a" indent (decl_list indent2) l

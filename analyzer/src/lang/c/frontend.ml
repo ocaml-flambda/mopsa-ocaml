@@ -218,6 +218,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
               c_enum_val_org_name = v.enum_val_org_name;
               c_enum_val_unique_name = v.enum_val_unique_name;
               c_enum_val_value = v.enum_val_value;
+              c_enum_val_range = from_range v.enum_val_range;
             }) e.enum_values;
         c_enum_integer_type = from_integer_type e.enum_integer_type;
         c_enum_range = from_range e.enum_range;

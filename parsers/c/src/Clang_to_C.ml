@@ -285,6 +285,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
           enum_values = [];
           enum_integer_type = itype;
           enum_defined = e.C.enum_cst <> [];
+          enum_com = e.C.enum_com;
         }
       in
       (* fill in enumerator constants *)
@@ -298,6 +299,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
                 enum_val_unique_name = make_unique_name false ctx.ctx_enum_vals org_name;
                 enum_val_value = e.C.enum_cst_val;
                 enum_val_enum = enum;
+                enum_val_range = e.C.enum_cst_range;
+                enum_val_com = e.C.enum_cst_com;
               }
             in
             Hashtbl.add ctx.ctx_enum_vals org_name v;
@@ -365,6 +368,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
           record_fields = [||];
           record_kind = kind;
           record_defined = false;
+          record_com = e.C.record_com;
         }
       in
       (* add empty record to context to handle recursive types *)
@@ -392,6 +396,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
               field_record = record;
               field_range = f.C.field_range;
               field_type = typ;
+              field_com = f.C.field_com;
             }
           ) (Array.of_list e.C.record_fields);      
       record.record_defined <- record.record_fields <> [||];
@@ -441,6 +446,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
           typedef_unique_name = make_unique_name false ctx.ctx_typedefs org_name;
           typedef_def = (T_void, no_qual);
           typedef_range = range;
+          typedef_com = t.C.typedef_com;
         }
       in
       (* define *)
@@ -497,14 +503,17 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         else find_extern (Hashtbl.find_all ctx.ctx_vars org_name)
       in
       (* merge types *)
+      let c = ref v.C.var_com in
       (match prev with
        | None -> 
           if !log_merge then Printf.printf "no previous declaration found for variable %s\n" org_name
        | Some prev ->
           if !log_merge then Printf.printf "found previous declaration for variable %s (%s)\n" org_name prev.var_unique_name;
           try
+            c := comment_unify !c prev.var_com;
             let t = type_unify_qual ctx.ctx_target prev.var_type typ in
-            prev.var_type <- t
+            prev.var_type <- t;
+            prev.var_com <- !c
           with Invalid_argument msg ->
             error range "incompatible variable types" (Printf.sprintf "variable %s, type1 %s, type2 %s, %s" org_name (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
       );
@@ -522,6 +531,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
             var_kind = kind;
             var_init = None;
             var_range = range;
+            var_com = !c;
           }
       in
       if variable_is_global kind && prev = None then Hashtbl.add ctx.ctx_vars org_name var;
@@ -584,6 +594,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
              func_local_vars = [];
              func_range = range;
              func_variadic = f.C.function_is_variadic;
+             func_com = [];
            }
       in
       if prev = None then Hashtbl.add ctx.ctx_funcs org_name func;
@@ -602,6 +613,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
                 var_kind = Variable_parameter func;
                 var_init = None;
                 var_range = p.C.var_range;
+                var_com = p.C.var_com;
               }
             in
             Hashtbl.add ctx.ctx_tu_vars p.C.var_uid var;
@@ -616,7 +628,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
           try
             let t = type_unify_qual ctx.ctx_target params.(i).var_type func.func_parameters.(i).var_type in
             params.(i).var_type <- t;
-            func.func_parameters.(i).var_type <- t
+            func.func_parameters.(i).var_type <- t;
+            let c = comment_unify params.(i).var_com func.func_parameters.(i).var_com in
+            params.(i).var_com <- c;
+            func.func_parameters.(i).var_com <- c;
           with Invalid_argument msg ->
             warning range "multiple declaration of a function have incompatible argument type" msg
         done
@@ -635,6 +650,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic        
       );
+      func.func_com <- comment_unify func.func_com f.C.function_com;
       (* fill in body *)
       if func.func_body <> None && f.C.function_body <> None
       then warning range "function is defined twice with a body" org_name;

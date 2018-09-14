@@ -193,6 +193,18 @@ let int64_type target  = target_int target.C.target_int64_type
 (** Base integer type of a derived integer type. *)
 
 
+                       
+(** {2 Comments} *)
+
+(** Ensure that comments are not duplicated. *)
+let comment_unify (c1:comment list) (c2:comment list) : comment list =  
+  match c1,c2 with
+  | [], x | x, [] -> x
+  | [a], [b] -> if a=b then [a] else [a;b]
+  | _ ->
+     (* could be improved, but we expect the lists to have length 1 at most *)
+     List.sort_uniq compare (c1@c2)
+  
 
 (** {2 Type compatibility} *)
 
@@ -446,7 +458,10 @@ and typedef_unify gray target d1 d2 =
   let t = type_qual_unify gray target d1.typedef_def d2.typedef_def in
   d1.typedef_def <- t;
   d2.typedef_def <- t;
-  d2.typedef_unique_name <- d1.typedef_unique_name
+  d2.typedef_unique_name <- d1.typedef_unique_name;
+  let c = comment_unify d1.typedef_com d2.typedef_com in 
+  d1.typedef_com <- c;
+  d2.typedef_com <- c
 
 and record_unify gray target r1 r2 =
   if !log_type_unify then Printf.printf "record_unify: %s and %s\n" (string_of_type (T_record r1)) (string_of_type (T_record r2));
@@ -491,10 +506,16 @@ and record_unify gray target r1 r2 =
           then invalid_arg "record_unify: incompatible record layout";
           let t = type_qual_unify gray target f1.field_type f2.field_type in
           f1.field_type <- t;
-          f2.field_type <- t
+          f2.field_type <- t;
+          let c = comment_unify f1.field_com f2.field_com in 
+          f1.field_com <- c;
+          f2.field_com <- c
         done
      | false, false -> ()
-    )
+    );
+    let c = comment_unify r1.record_com r2.record_com in 
+    r1.record_com <- c;
+    r2.record_com <- c
   )
 
 and enum_unify gray target e1 e2 =
@@ -526,8 +547,18 @@ and enum_unify gray target e1 e2 =
                 ) e1.enum_values e2.enum_values
            )
       then invalid_arg "enum_unify: incompatible enum values";
+      List.iter2
+        (fun v1 v2 ->
+          let c = comment_unify v1.enum_val_com v2.enum_val_com in 
+          v1.enum_val_com <- c;
+          v2.enum_val_com <- c
+        ) e1.enum_values e2.enum_values
    | false, false -> ()
-  )
+  );
+  let c = comment_unify e1.enum_com e2.enum_com in 
+  e1.enum_com <- c;
+  e2.enum_com <- c
+
 
 let type_unify = type_unify (Hashtbl.create 16)
 let type_unify_qual = type_qual_unify (Hashtbl.create 16)

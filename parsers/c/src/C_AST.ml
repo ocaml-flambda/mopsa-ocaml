@@ -154,6 +154,7 @@ type typ =
      mutable typedef_unique_name: string; (** unique name *)
      mutable typedef_def: type_qual; (** declaration *)
      mutable typedef_range: range; (** declaration location *)
+     mutable typedef_com: comment list; (** comments associated to the declaration *)
    }
 
  and record_type = {
@@ -166,6 +167,7 @@ type typ =
      mutable record_alignof: Z.t; (** alignment, in bytes *)
      mutable record_fields: record_field array;
      mutable record_range: range; (** declaration location *)
+     mutable record_com: comment list; (** comments associated to the declaration *)
    }
  (** Struct or union type. *)
 
@@ -179,6 +181,7 @@ type typ =
      field_range: range; (** declaration location *)
      field_record: record_type;
      field_index: int;
+     mutable field_com: comment list; (** comments associated to the declaration *)
    }
  (** Struct or union field. *)
 
@@ -190,6 +193,7 @@ type typ =
      mutable enum_values: enum_value list;
      mutable enum_integer_type: integer_type;
      mutable enum_range: range; (** declaration location *)
+     mutable enum_com: comment list; (** comments associated to the declaration *)
    }
  (** Enumerated type. *)
 
@@ -199,6 +203,8 @@ type typ =
      enum_val_unique_name: string; (** unique name *)
      enum_val_value: Z.t;
      enum_val_enum: enum_type;
+     enum_val_range: range;
+     mutable enum_val_com: comment list; (** comments associated to the declaration *)
    }
  (** A possible value in an enumerated type. *)
 
@@ -226,6 +232,7 @@ type typ =
      mutable var_type: type_qual;
      mutable var_init: init option;
      mutable var_range: range;
+     mutable var_com: comment list; (** comments associated to the declaration *)
    }
 
  and variable_kind =
@@ -248,6 +255,7 @@ type typ =
      mutable func_local_vars: variable list; (** local variables declared in the function (exclusing parameters) *)
      mutable func_variadic: bool; (** whether the has a variable number of arguments *)
      mutable func_range: range;
+     mutable func_com: comment list; (** comments associated to the declaration *)
    }
 
 
