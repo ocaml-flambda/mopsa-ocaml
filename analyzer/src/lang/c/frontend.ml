@@ -237,9 +237,10 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
              c_typedef_range = from_range t.typedef_range;
            }
          in
-         Hashtbl.add fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) (Ast.T_c_typedef x);
+         let y = Ast.T_c_typedef x in
+         Hashtbl.add fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) y;
          x.c_typedef_def <-  from_typ fun_ctx t.typedef_def;
-         Ast.T_c_typedef x
+         y
     | C_AST.T_record r ->
        if Hashtbl.mem fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
        then Hashtbl.find fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
@@ -256,7 +257,8 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
              c_record_range = from_range r.record_range;
            }
          in
-         Hashtbl.add fun_ctx.ctx_type (TS_RECORD,r.record_unique_name) (Ast.T_c_record x);
+         let y = Ast.T_c_record x in
+         Hashtbl.add fun_ctx.ctx_type (TS_RECORD,r.record_unique_name) y;
          x.c_record_fields <-
            List.map
              (fun f -> {
@@ -269,7 +271,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
                   c_field_index = f.field_index;
              })
              (Array.to_list r.record_fields);
-         Ast.T_c_record x
+         y
     | C_AST.T_enum e ->
        if Hashtbl.mem fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
        then Hashtbl.find fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
