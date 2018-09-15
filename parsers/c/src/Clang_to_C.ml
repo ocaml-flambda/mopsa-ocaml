@@ -231,6 +231,12 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         | _ -> error range "unhandled builtin type" (C.string_of_type t)
        )
 
+    | C.ComplexType (tt,qq) ->
+       (match type_qual range (tt,qq) with
+        | T_float f, q -> T_complex f, q
+        | _ -> error range "unhandled complex type" (C.string_of_type t)
+       )
+      
     | C.FunctionProtoType f ->
        let ftype_return = fix_va_list (type_qual range f.C.proto_return_type)
        and ftype_params = List.map (fun x -> fix_va_list (type_qual range x)) (Array.to_list f.C.proto_params)

@@ -209,6 +209,7 @@ and raw_buf_type buf = function
     | T_typedef t -> bp buf "typedef %s" t.typedef_unique_name
     | T_enum e -> bp buf "enum %s" e.enum_unique_name
     | T_record r -> bp buf "%s %s" (string_of_record_kind r.record_kind) r.record_unique_name
+    | T_complex f -> bp buf "%s _Complex" (string_of_float_type f)
 (* raw (non-C) representation of a type, somewhat more clear than C sytnax *)
 
 
@@ -237,10 +238,11 @@ and c_buf_type_base buf (t,q) = match t with
   | T_record r ->
      bp buf "%s%s %s"
         (string_of_qualifier q) (string_of_record_kind r.record_kind) r.record_unique_name
+  | T_complex f -> bp buf "%s%s _Complex" (string_of_qualifier q) (string_of_float_type f)
 
 (* prints the rest of the type; inner prints the innermost part of the type *)
 and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
-    | T_void | T_bool  | T_integer _ | T_float _ | T_builtin_fn ->
+    | T_void | T_bool  | T_integer _ | T_float _ | T_builtin_fn | T_complex _ ->
        inner buf var
 
     | T_pointer tq ->
@@ -627,7 +629,7 @@ let print_types_ordered
   let rec typedef t =
     let rec explore t = match t with
       | T_typedef t -> typedef t
-      | T_void | T_bool | T_integer _ | T_float _ -> ()
+      | T_void | T_bool | T_integer _ | T_float _ | T_complex _ -> ()
       | T_pointer (t,_) -> explore t 
       | T_array ((t,_),_) ->
          (* array elements must have a complete type even in typedefs *)
@@ -660,7 +662,7 @@ let print_types_ordered
   and record mustdef r =
     let rec explore mustdef t = match t with
       | T_typedef t -> explore mustdef (fst t.typedef_def)
-      | T_void | T_bool | T_integer _ | T_float _ -> ()
+      | T_void | T_bool | T_integer _ | T_float _ | T_complex _ -> ()
       | T_pointer (t,_) -> explore false t 
       | T_array ((t,_),_) -> explore mustdef t
       | T_bitfield (t,_) -> explore mustdef t 

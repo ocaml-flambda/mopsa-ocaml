@@ -91,6 +91,7 @@ let rec sizeof_type target t : Z.t =
   | T_bool -> Z.of_int (target.C.target_bool_width / 8)
   | T_integer i -> Z.of_int (sizeof_int target i)
   | T_float f -> Z.of_int (sizeof_float target f)
+  | T_complex f -> Z.of_int (2 * (sizeof_float target f))
   | T_pointer _ -> Z.of_int (target.C.target_pointer_width / 8)
   | T_array ((t,_),Length_cst len) -> Z.mul len (sizeof_type target t)
   | T_array _ -> invalid_arg "sizeof_type: size of array with unknown size"
@@ -110,7 +111,7 @@ let sizeof_expr target (range:C.range) (result_type:type_qual) (t:typ) : expr =
   let rec doit t =
     match t with
     | T_void -> invalid_arg "sizeof_expr: size of void"
-    | T_bool | T_integer _ | T_float _ | T_pointer _ | T_record _ | T_enum _ ->
+    | T_bool | T_integer _ | T_float _ | T_pointer _ | T_record _ | T_enum _ | T_complex _ ->
        E_integer_literal (sizeof_type target t), result_type, range
     | T_array ((t,_),l) ->
        let len = match l with
@@ -135,7 +136,7 @@ let rec alignof_type target t : Z.t =
   | T_void -> invalid_arg "alignof_type: align of void"
   | T_bool -> Z.of_int (target.C.target_bool_align / 8)
   | T_integer i -> Z.of_int (alignof_int target i)
-  | T_float f -> Z.of_int (alignof_float target f)
+  | T_float f | T_complex f -> Z.of_int (alignof_float target f)
   | T_pointer _ -> Z.of_int (target.C.target_pointer_align / 8)
   | T_array ((t,_),_) -> alignof_type target t
   | T_bitfield (t,_) -> invalid_arg "alignof_type: align of bitfield"
@@ -152,7 +153,7 @@ let rec alignof_type target t : Z.t =
 
 let rec type_declarable = function
   | T_void -> false
-  | T_bool | T_integer _ | T_float _  -> true
+  | T_bool | T_integer _ | T_float _  | T_complex _ -> true
   | T_pointer _ -> true
   | T_array (t,len) -> len <> No_length && type_qual_declarable t
   | T_bitfield (t,_) -> type_declarable t
@@ -587,6 +588,9 @@ let expr_integer_cst range (t:integer_type) (cst:Z.t) : expr =
 let expr_float_cst range (t:float_type) (cst:float) : expr =
   E_float_literal (string_of_float cst), (T_float t, no_qual), range
 
+let expr_complex_cst range (t:float_type) (cst:float) : expr =
+  E_float_literal (string_of_float cst), (T_complex t, no_qual), range
+
 let expr_int_zero range : expr = expr_integer_cst range SIGNED_INT Z.zero
 let expr_int_one range : expr = expr_integer_cst range SIGNED_INT Z.one
 
@@ -613,6 +617,7 @@ let rec zero_init range (t:typ) : init =
   | T_bool -> I_init_expr (expr_bool_false range)
   | T_integer i -> I_init_expr (expr_integer_cst range i Z.zero)
   | T_float f -> I_init_expr (expr_float_cst range f 0.)
+  | T_complex f -> I_init_expr (expr_complex_cst range f 0.)
   | T_pointer tq -> I_init_expr (expr_null range)
   | T_array ((t,_),_) -> I_init_list ([], Some (zero_init range t))
   | T_bitfield (t,_) -> zero_init range t

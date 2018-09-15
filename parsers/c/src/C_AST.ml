@@ -120,6 +120,7 @@ type typ =
   | T_bool
   | T_integer of integer_type
   | T_float of float_type
+  | T_complex of float_type
   | T_pointer of type_qual
   (** Scalar types. *)
 
@@ -446,6 +447,7 @@ let rec type_is_scalar (t:typ) =
   | T_typedef t -> type_is_scalar (fst t.typedef_def)
   | T_enum _ -> true
   | T_record _ -> false
+  | T_complex _ -> false
 (** Whether a type yields a scalar value. *)
 
 
