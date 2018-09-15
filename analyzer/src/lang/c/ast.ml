@@ -21,7 +21,7 @@ open Framework.Essentials
 type c_typedef = {
   c_typedef_org_name: string; (** name as in source *)
   c_typedef_unique_name: string; (** unique name *)
-  c_typedef_def: typ; (** declaration *)
+  mutable c_typedef_def: typ; (** declaration *)
   c_typedef_range: Location.range; (** declaration location *)
 }
 (** Type definition. *)
@@ -36,7 +36,7 @@ and c_record_type = {
   c_record_defined: bool; (** false if only declared *)
   c_record_sizeof: Z.t;  (** size of record, in bytes *)
   c_record_alignof: Z.t; (** alignment, in bytes *)
-  c_record_fields: c_record_field list;
+  mutable c_record_fields: c_record_field list;
   c_record_range: Location.range; (** declaration location *)
 }
 (** Struct or union type. *)

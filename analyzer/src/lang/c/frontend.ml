@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 open C_AST
-open Framework.Ast
+open Framework.Essentials
 open Universal.Ast
 open Ast
 
@@ -15,8 +15,41 @@ let debug fmt =
   Debug.debug ~channel:"c.frontend" fmt
 
 
+
+(** {2 Command-line options} *)
+
+let c_opts = ref []
+(** Extra options to pass to clang when parsing  *)
+           
+let () =
+  register_option (
+      "-I",
+      Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]),
+      " add the directory to the search path for include files in C analysis"
+    );
+  register_option (
+      "-ccopt",
+      Arg.String (fun l -> c_opts := !c_opts @ [l]),
+      " pass the option to the Clang frontend"
+    )
+  
+
+  
+  
 (** {2 Entry points} *)
 
+type type_space = TS_TYPEDEF | TS_RECORD | TS_ENUM
+  
+type ctx = {
+    ctx_fun: Ast.c_fundec list;
+
+    ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
+    (* cache the translation of all named types;
+       this is required for records defining recursive data-types
+     *)
+  }
+
+  
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
@@ -25,7 +58,7 @@ let rec parse_program (files: string list) =
   List.iter
     (fun file ->
        match Filename.extension file with
-       | ".c" -> parse_file [] file ctx
+       | ".c" | ".h" -> parse_file !c_opts file ctx
        | ".db" -> parse_db file ctx
        | x -> Debug.fail "Unknown C extension %s" x
     ) files;
@@ -78,7 +111,11 @@ and parse_file (opts: string list) (file: string) ctx =
     filter_out_opts
   in
   let opts = "-fparse-all-comments"::opts in (* needed to get all comments *)
-  let x, diag, coms = Clang_parser.parse (target_options) file (Array.of_list opts) in
+  debug
+    "clang %s %s %a"
+    target_options.target_triple file
+    (ListExt.fprint ListExt.printer_plain Format.pp_print_string) opts;
+  let x, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
   let () =
     match diag with
     | [] -> ()
@@ -104,25 +141,30 @@ and from_project prj =
     List.map from_function
   in
   let funcs = List.map fst funcs_and_origins in
+  let ctx = {
+      ctx_fun = funcs;
+      ctx_type = Hashtbl.create 16;
+    }
+  in
   List.iter (fun (f, o) ->
       let typ = T_c_function (Some {
-          c_ftype_return = from_typ funcs o.func_return;
+          c_ftype_return = from_typ ctx o.func_return;
           c_ftype_params = Array.to_list o.func_parameters |>
-                           List.map (fun p -> from_typ funcs p.var_type);
+                           List.map (fun p -> from_typ ctx p.var_type);
           c_ftype_variadic = o.func_variadic;
         })
       in
       f.c_func_var <- from_var_name o.func_org_name o.func_uid typ;
-      f.c_func_return <- from_typ funcs o.func_return;
-      f.c_func_parameters <- Array.to_list o.func_parameters |> List.map (from_var funcs);
-      f.c_func_static_vars <- List.map (from_var_with_init funcs) o.func_static_vars;
-      f.c_func_local_vars <- List.map (from_var_with_init funcs) o.func_local_vars;
-      f.c_func_body <- from_body_option funcs (from_range o.func_range) o.func_body;
+      f.c_func_return <- from_typ ctx o.func_return;
+      f.c_func_parameters <- Array.to_list o.func_parameters |> List.map (from_var ctx);
+      f.c_func_static_vars <- List.map (from_var_with_init ctx) o.func_static_vars;
+      f.c_func_local_vars <- List.map (from_var_with_init ctx) o.func_local_vars;
+      f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
     ) funcs_and_origins;
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
-                List.map (from_var_with_init funcs)
+                List.map (from_var_with_init ctx)
   in
 
 
@@ -184,47 +226,75 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
     | C_AST.T_function None -> Ast.T_c_function None
     | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type fun_ctx t))
     | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
-    | C_AST.T_typedef t -> Ast.T_c_typedef {
-        c_typedef_org_name = t.typedef_org_name;
-        c_typedef_unique_name = t.typedef_unique_name;
-        c_typedef_def =  from_typ fun_ctx t.typedef_def;
-        c_typedef_range = from_range t.typedef_range;
-      }
-    | C_AST.T_record r -> Ast.T_c_record {
-        c_record_kind = (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
-        c_record_org_name = r.record_org_name;
-        c_record_unique_name = r.record_unique_name;
-        c_record_defined = r.record_defined;
-        c_record_sizeof = r.record_sizeof;
-        c_record_alignof = r.record_alignof;
-        c_record_fields =
-          List.map (fun f -> {
-                c_field_org_name = f.field_org_name;
-                c_field_name = f.field_name;
-                c_field_offset = f.field_offset;
-                c_field_bit_offset = f.field_bit_offset;
-                c_field_type = from_typ fun_ctx f.field_type;
-                c_field_range = from_range f.field_range;
-                c_field_index = f.field_index;
-              })
-            (Array.to_list r.record_fields);
-        c_record_range = from_range r.record_range;
-      }
-    | C_AST.T_enum e -> Ast.T_c_enum {
-        c_enum_org_name = e.enum_org_name;
-        c_enum_unique_name = e.enum_unique_name;
-        c_enum_defined = e.enum_defined;
-        c_enum_values = List.map (fun v -> {
-              c_enum_val_org_name = v.enum_val_org_name;
-              c_enum_val_unique_name = v.enum_val_unique_name;
-              c_enum_val_value = v.enum_val_value;
-              c_enum_val_range = from_range v.enum_val_range;
-            }) e.enum_values;
-        c_enum_integer_type = from_integer_type e.enum_integer_type;
-        c_enum_range = from_range e.enum_range;
-      }
-
+    | C_AST.T_typedef t ->
+       if Hashtbl.mem fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+       then Hashtbl.find fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+       else 
+         let x = {
+             c_typedef_org_name = t.typedef_org_name;
+             c_typedef_unique_name = t.typedef_unique_name;
+             c_typedef_def =  Ast.T_c_void;
+             c_typedef_range = from_range t.typedef_range;
+           }
+         in
+         Hashtbl.add fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) (Ast.T_c_typedef x);
+         x.c_typedef_def <-  from_typ fun_ctx t.typedef_def;
+         Ast.T_c_typedef x
+    | C_AST.T_record r ->
+       if Hashtbl.mem fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
+       then Hashtbl.find fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
+       else 
+         let x = {
+             c_record_kind =
+               (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
+             c_record_org_name = r.record_org_name;
+             c_record_unique_name = r.record_unique_name;
+             c_record_defined = r.record_defined;
+             c_record_sizeof = r.record_sizeof;
+             c_record_alignof = r.record_alignof;
+             c_record_fields = [];
+             c_record_range = from_range r.record_range;
+           }
+         in
+         Hashtbl.add fun_ctx.ctx_type (TS_RECORD,r.record_unique_name) (Ast.T_c_record x);
+         x.c_record_fields <-
+           List.map
+             (fun f -> {
+                  c_field_org_name = f.field_org_name;
+                  c_field_name = f.field_name;
+                  c_field_offset = f.field_offset;
+                  c_field_bit_offset = f.field_bit_offset;
+                  c_field_type = from_typ fun_ctx f.field_type;
+                  c_field_range = from_range f.field_range;
+                  c_field_index = f.field_index;
+             })
+             (Array.to_list r.record_fields);
+         Ast.T_c_record x
+    | C_AST.T_enum e ->
+       if Hashtbl.mem fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+       then Hashtbl.find fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+       else 
+         let x = 
+           Ast.T_c_enum {
+               c_enum_org_name = e.enum_org_name;
+               c_enum_unique_name = e.enum_unique_name;
+               c_enum_defined = e.enum_defined;
+               c_enum_values =
+                 List.map
+                   (fun v -> {
+                        c_enum_val_org_name = v.enum_val_org_name;
+                        c_enum_val_unique_name = v.enum_val_unique_name;
+                        c_enum_val_value = v.enum_val_value;
+                        c_enum_val_range = from_range v.enum_val_range;
+                   }) e.enum_values;
+               c_enum_integer_type = from_integer_type e.enum_integer_type;
+               c_enum_range = from_range e.enum_range;
+             }
+         in
+         Hashtbl.add fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name) x;
+         x
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
+    | C_AST.T_complex _ -> failwith "C_AST.T_complex not supported"
   in
   if qual.C_AST.qual_is_const then
     T_c_qualified({c_qual_is_const = true; c_qual_is_restrict = false; c_qual_is_volatile = false}, typ')
@@ -268,7 +338,7 @@ and from_function_in_context fun_ctx (f: C_AST.func) =
   try
     List.find (fun c_fun ->
         c_fun.c_func_var.vuid = f.func_uid
-      ) fun_ctx
+      ) fun_ctx.ctx_fun
   with
   | Not_found -> Debug.fail "Could not find function in function context"
 
