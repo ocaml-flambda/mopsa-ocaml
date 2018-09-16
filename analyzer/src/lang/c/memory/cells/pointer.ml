@@ -134,8 +134,9 @@ struct
 
   let eval zone exp man flow =
     let range = exp.erange in
-    match snd zone, ekind exp with
-    | Z_c_points_to, _ ->
+    match ekind exp with
+    | _
+      when Framework.Zone.subset2 zone (Framework.Zone.Z_top, Z_c_points_to) ->
       begin
         points_to exp man flow |> Eval.bind @@ fun p flow ->
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
@@ -143,19 +144,25 @@ struct
       |>
       Option.return
 
-    | Zone.Z_c_num, E_binop(O_eq, p, q)
+    | E_binop(O_eq, p, q)
       when is_c_pointer_type p.etyp
-        && is_c_pointer_type q.etyp ->
+        && is_c_pointer_type q.etyp
+        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+      ->
       panic_at range "pointer.eval: %a not yet supported" pp_expr exp
 
-    | Zone.Z_c_num, E_binop(O_ne, p, q)
+    | E_binop(O_ne, p, q)
       when is_c_pointer_type p.etyp
-        && is_c_pointer_type q.etyp ->
+        && is_c_pointer_type q.etyp
+        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+      ->
       panic_at range "pointer.eval: %a not yet supported" pp_expr exp
 
-    | Zone.Z_c_num, E_binop(O_minus, p, q)
+    | E_binop(O_minus, p, q)
       when is_c_pointer_type p.etyp
-        && is_c_pointer_type q.etyp ->
+        && is_c_pointer_type q.etyp
+        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+      ->
       panic_at range "pointer.eval: %a not yet supported" pp_expr exp
 
     | _ -> None

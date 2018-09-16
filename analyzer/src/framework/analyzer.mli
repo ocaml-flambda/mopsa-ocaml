@@ -24,14 +24,3 @@ sig
   val man : (Domain.t, Domain.t) man
 
 end
-
-val mk_exec_of_zone_list :
-  Zone.zone list ->
-  (Zone.zone -> Ast.stmt -> ('a, 't) man -> 'a flow -> 'a Post.post option) ->
-  (Ast.stmt -> ('a, 't) man -> 'a flow -> 'a Post.post option)
-
-
-val mk_eval_of_zone_list :
-  (Zone.zone * Zone.zone) list ->
-  ((Zone.zone * Zone.zone) -> Ast.expr -> ('a, 't) man -> 'a flow -> ('a, Ast.expr) evl option) ->
-  (Ast.expr -> ('a, 't) man -> 'a flow -> ('a, Ast.expr) evl option)
