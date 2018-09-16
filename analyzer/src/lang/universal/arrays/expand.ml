@@ -252,7 +252,7 @@ struct
           ) (Flow.bottom (Flow.get_all_annot flow), []) man flow
     in
     Post.of_flow flow' |>
-    Post.add_mergers_to_top (List.map (fun c -> mk_remove_var c range) cells)
+    Post.add_mergers (List.map (fun c -> mk_remove_var c range) cells)
 
   (* Post-condition transfer function *)
   let exec zone stmt man flow =

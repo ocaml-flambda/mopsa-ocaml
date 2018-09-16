@@ -116,6 +116,11 @@ let bind_opt f evl =
   in
   evl
 
+let default exp flow evl =
+  match evl with
+  | None -> singleton exp flow
+  | Some evl -> evl
+
 let assume
     cond ?(zone = Zone.top)
     ~fthen ~felse

@@ -167,7 +167,7 @@ struct
     let stmt' = mk_assign (mk_var lval' range) e ~mode:mode' range in
     man.exec stmt' flow' |>
     Post.of_flow |>
-    Post.add_mergers_to_top [mk_remove_var lval' range]
+    Post.add_merger (mk_remove_var lval' range)
 
 
   let exec zone stmt man flow =

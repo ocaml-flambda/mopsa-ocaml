@@ -69,6 +69,8 @@ struct
         );
     }
 
+  let var_to_cell v = C_smash (V v, v.vtyp)
+
 
   (** Lattice definition *)
   (** ================== *)
@@ -106,15 +108,15 @@ struct
   (** ================ *)
 
   let exec_interface = {
-    export = [Z_c];
-    import = [Z_c_cell];
+    export = [Z_c]; (* We handle C assignments *)
+    import = [Z_c_cell]; (* To forward simplified assignments to numeric/pointer domains *)
   }
 
   let eval_interface = {
-    export = [Z_c_scalar, Z_c_cell];
+    export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cell expressions *)
     import = [
-      Z_c, Z_c_cell;
-      Z_c, Z_c_points_to;
+      Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
+      Z_c, Z_c_points_to; (* To dereference pointer expressions *)
     ];
   }
 
@@ -129,7 +131,13 @@ struct
     {
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
-          assert false
+          match ekind v with
+          | E_var v ->
+            let c = var_to_cell v in
+            let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+            let stmt = mk_assign (mk_cell c range) e range in
+            man.exec ~zone:(Z_c_cell) stmt flow1
+          | _ -> assert false
         );
 
       (* Initialization of arrays *)
@@ -146,9 +154,9 @@ struct
   let init prog man flow =
     match prog.prog_kind with
     | C_program(globals, _) ->
-      let flow = Flow.set_domain_env T_cur empty man flow in
-      let flow' = Init_visitor.init_globals (init_visitor man) globals flow in
-      Some flow'
+      Flow.set_domain_env T_cur empty man flow |>
+      Init_visitor.init_globals (init_visitor man) globals |>
+      Option.return
 
     | _ -> None
 
@@ -156,10 +164,13 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow =
+  let rec exec zone stmt man flow =
+    let range = srange stmt in
     match skind stmt with
     | S_c_local_declaration(v, init) ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
+      Init_visitor.init_local (init_visitor man) v init range flow |>
+      Post.of_flow |>
+      Option.return
 
     | S_rename_var(v, v') ->
       panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
@@ -168,15 +179,30 @@ struct
       panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
 
     | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
+      begin
+        man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow ->
+        man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
+        eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default lval flow |> Post.bind man @@ fun lval flow ->
+        match ekind lval with
+        | E_c_cell c ->
+          assign_cell c rval mode man flow |>
+          remove_overlappings c man |>
+          Post.of_flow |>
+          Post.add_merger (mk_remove_cell c range)
+        | _ -> assert false
+      end |>
+      Option.return
 
     | _ -> None
 
+  and assign_cell c e mode man flow = assert false
 
+  and remove_overlappings c man flow = assert false
+  
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval zone exp man flow =
+  and eval zone exp man flow =
     match ekind exp with
     | E_var _ ->
       panic_at exp.erange "smashing.eval: expression %a not supported" pp_expr exp

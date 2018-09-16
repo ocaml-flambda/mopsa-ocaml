@@ -140,6 +140,12 @@ type stmt_kind +=
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
 
+let mk_cell c range =
+  mk_expr (E_c_cell c) ~etyp:(cell_type c) range
+
+let mk_remove_cell c range =
+  mk_stmt (S_c_remove_cell c) range
+
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
 

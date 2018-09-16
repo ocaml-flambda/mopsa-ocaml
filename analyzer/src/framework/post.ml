@@ -15,19 +15,17 @@ open Zone
 
 type channel = ..
 
-type z_stmt = Zone.zone * Ast.stmt
-
 type 'a post = {
   flow : 'a flow;
-  mergers : z_stmt list;
+  mergers : (stmt * zone) list;
   channels : channel list;
 }
 
-let add_mergers_to_top mergers post =
-  {post with mergers = post.mergers @ List.map (fun x -> (Zone.top, x)) mergers}
+let add_mergers mergers ?(zone = Zone.Z_top) post =
+  {post with mergers = post.mergers @ (List.map (fun s -> (s, zone)) mergers)}
 
-let add_mergers zmergers post =
-  {post with mergers = post.mergers @ zmergers}
+let add_merger merger ?(zone = Zone.Z_top) post =
+  {post with mergers = post.mergers @ [(merger, zone)]}
 
 let add_channels channels post =
   {post with channels = post.channels @ channels}

@@ -66,7 +66,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let exec_interface = {export = [Cell.Z_c_cell]; import = []}
   let eval_interface = {export = [Cell.Z_c_cell, Zone.Z_c_num]; import = []}
 
   (** Initialization *)
@@ -82,6 +82,10 @@ struct
       man.exec ({stmt with skind = S_remove_var v}) flow
       |> Post.of_flow
       |> Option.return
+
+    | S_assign({ekind = Cell.E_c_cell c}, rval, mode) ->
+      panic_at stmt.srange "assign to cell not yet supported"
+      
 
     | _ -> None
 
