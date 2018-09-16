@@ -82,24 +82,22 @@ struct
   }
 
   let exec zone =
-    debug "exec %a on %s" Zone.print zone name;
-    match List.find_all (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export,
-          List.find_all (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export
+    match List.exists (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export,
+          List.exists (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export
     with
-    | [], [] -> raise Not_found
+    | false, false -> raise Not_found
 
-    | l, [] ->
-      let f = Analyzer.mk_exec_of_zone_list l Head.exec in
+    | true, false ->
+      let f = Head.exec zone in
       (fun stmt man flow -> f stmt (head_man man) flow)
 
-    | [], l ->
-      let f = Analyzer.mk_exec_of_zone_list l Tail.exec in
+    | false, true ->
+      let f = Tail.exec zone in
       (fun stmt man flow -> f stmt (tail_man man) flow)
 
-    | l1, l2 ->
-      debug "both";
-      let f1 = Analyzer.mk_exec_of_zone_list l1 Head.exec in
-      let f2 = Analyzer.mk_exec_of_zone_list l2 Tail.exec in
+    | true, true ->
+      let f1 = Head.exec zone in
+      let f2 = Tail.exec zone in
       (fun stmt man flow ->
          match f1 stmt (head_man man) flow with
          | Some post -> Some post
@@ -113,26 +111,22 @@ struct
   }
 
   let eval zpath =
-    debug "eval %a on %s" Zone.print2 zpath name;
-    match List.find_all (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export,
-          List.find_all (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export
+    match List.exists (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export,
+          List.exists (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export
     with
-    | [], [] -> raise Not_found
+    | false, false -> raise Not_found
 
-    | l, [] ->
-      debug "head only";
-      let f = Analyzer.mk_eval_of_zone_list l Head.eval in
+    | true, false ->
+      let f = Head.eval zpath in
       (fun exp man flow -> f exp (head_man man) flow)
 
-    | [], l ->
-      debug "tail only";
-      let f = Analyzer.mk_eval_of_zone_list l Tail.eval in
+    | false, true ->
+      let f = Tail.eval zpath in
       (fun exp man flow -> f exp (tail_man man) flow)
 
-    | l1, l2 ->
-      debug "both";
-      let f1 = Analyzer.mk_eval_of_zone_list l1 Head.eval in
-      let f2 = Analyzer.mk_eval_of_zone_list l2 Tail.eval in
+    | true, true ->
+      let f1 = Head.eval zpath in
+      let f2 = Tail.eval zpath in
       (fun exp man flow ->
          match f1 exp (head_man man)  flow with
          | Some evl -> Some evl

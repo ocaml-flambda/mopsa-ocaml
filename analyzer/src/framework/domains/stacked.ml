@@ -154,22 +154,22 @@ struct
   }
 
   let exec zone =
-    match List.find_all (fun z -> Zone.subset z zone) D1.exec_interface.Domain.export,
-          List.find_all (fun z -> Zone.subset z zone) D2.exec_interface.Domain.export
+    match List.exists (fun z -> Zone.subset z zone) D1.exec_interface.Domain.export,
+          List.exists (fun z -> Zone.subset z zone) D2.exec_interface.Domain.export
     with
-    | [], [] -> raise Not_found
+    | false, false -> raise Not_found
 
-    | l, [] ->
-      let f = Analyzer.mk_exec_of_zone_list l D1.exec in
+    | true, false ->
+      let f = D1.exec zone in
       (fun stmt man flow -> f stmt (man1 man) flow)
 
-    | [], l ->
-      let f = Analyzer.mk_exec_of_zone_list l D2.exec in
+    | false, true ->
+      let f = D2.exec zone in
       (fun stmt man flow -> f stmt (man2 man) flow)
 
-    | l1, l2 ->
-      let f1 = Analyzer.mk_exec_of_zone_list l1 D1.exec in
-      let f2 = Analyzer.mk_exec_of_zone_list l2 D2.exec in
+    | true, true ->
+      let f1 = D1.exec zone in
+      let f2= D2.exec zone in
       (fun stmt man flow ->
          match f1 stmt (man1 man) flow with
          | Some post -> Some post
@@ -186,22 +186,22 @@ struct
     }
 
   let eval zpath =
-    match List.find_all (fun p -> Zone.subset2 p zpath) D1.eval_interface.Domain.export,
-          List.find_all (fun p -> Zone.subset2 p zpath) D2.eval_interface.Domain.export
+    match List.exists (fun p -> Zone.subset2 p zpath) D1.eval_interface.Domain.export,
+          List.exists (fun p -> Zone.subset2 p zpath) D2.eval_interface.Domain.export
     with
-    | [], [] -> raise Not_found
+    | false, false -> raise Not_found
 
-    | l, [] ->
-      let f = Analyzer.mk_eval_of_zone_list l D1.eval in
+    | true, false ->
+      let f = D1.eval zpath in
       (fun exp man flow -> f exp (man1 man) flow)
 
-    | [], l ->
-      let f = Analyzer.mk_eval_of_zone_list l D2.eval in
+    | false, true ->
+      let f = D2.eval zpath in
       (fun exp man flow -> f exp (man2 man) flow)
 
-    | l1, l2 ->
-      let f1 = Analyzer.mk_eval_of_zone_list l1 D1.eval in
-      let f2 = Analyzer.mk_eval_of_zone_list l2 D2.eval in
+    | true, true ->
+      let f1 = D1.eval zpath in
+      let f2 = D2.eval zpath in
       (fun exp man flow ->
          match f1 exp (man1 man)  flow with
          | Some evl -> Some evl

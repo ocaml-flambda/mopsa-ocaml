@@ -435,40 +435,39 @@ struct
     lfp flow
 
   let exec zone =
-    (* Get covering zones for domains in the pool *)
-    let zl =
-      let rec aux: type t. t domain_pool -> Zone.zone list list =
+    (* Check coverage of exported zones in the pool *)
+    let coverage =
+      let rec aux: type t. t domain_pool -> bool list =
         function
         | Nil -> []
         | Cons(hd, tl) ->
           let module D = (val hd) in
-          let zl = List.find_all (fun z -> Zone.subset z zone) D.exec_interface.Domain.export in
-          zl :: aux tl
+          let b = List.exists (fun z -> Zone.subset z zone) D.exec_interface.Domain.export in
+          b :: aux tl
       in
       aux Config.pool
     in
     (fun stmt man flow ->
        (* Point-wise exec *)
        let posts =
-         let rec aux: type b. b domain_pool -> Zone.zone list list -> ('a, b * Over.t) man -> 'a annot -> 'a post option list =
-           fun pool zl man annot ->
-             match pool, zl with
+         let rec aux: type b. b domain_pool -> bool list -> ('a, b * Over.t) man -> 'a annot -> 'a post option list =
+           fun pool coverage man annot ->
+             match pool, coverage with
              | Nil, _ -> []
-             | Cons(hd, tl), [] :: ztl -> None :: (aux tl ztl (tail_man man) annot)
-             | Cons(hd, tl), zhd :: ztl ->
+             | Cons(hd, tl), false :: ctl -> None :: (aux tl ctl (tail_man man) annot)
+             | Cons(hd, tl), true :: ctl ->
                begin
                  let module D = (val hd) in
-                 let exec = Analyzer.mk_exec_of_zone_list zhd D.exec in
-                 match exec stmt (head_man man) flow with
-                 | None -> None :: (aux tl ztl (tail_man man) annot)
+                 match D.exec zone stmt (head_man man) flow with
+                 | None -> None :: (aux tl ctl (tail_man man) annot)
                  | Some post ->
                    let annot' = Flow.get_all_annot post.Post.flow in
-                   (Some post) :: (aux tl ztl (tail_man man) annot')
+                   (Some post) :: (aux tl ctl (tail_man man) annot')
                end
              | _ -> assert false
 
          in
-         aux Config.pool zl man (Flow.get_all_annot flow)
+         aux Config.pool coverage man (Flow.get_all_annot flow)
        in
 
        (* Merge post conditions.
@@ -568,38 +567,37 @@ struct
 
 
   let eval zone =
-    (* Computing covering zones of the given zone *)
-    let zl =
-      let rec aux: type b. b domain_pool -> (Zone.zone * Zone.zone) list list =
+    (* Computing zoning coverage of the pool *)
+    let coverage =
+      let rec aux: type b. b domain_pool -> bool list =
         function
         | Nil -> []
         | Cons(hd, tl) ->
           let module D = (val hd) in
-          let zl = List.find_all (fun z -> Zone.subset2 z zone) D.eval_interface.Domain.export in
-          zl :: aux tl
+          let b = List.exists (fun z -> Zone.subset2 z zone) D.eval_interface.Domain.export in
+          b :: aux tl
       in
       aux Config.pool
     in
     (fun exp man flow ->
        (* Point-wise evaluation *)
        let evls =
-         let rec aux: type b. b domain_pool -> (Zone.zone * Zone.zone) list list -> ('a, b * Over.t) man -> ('a, Ast.expr) evl option list =
-           fun pool zl man ->
-             match pool, zl with
+         let rec aux: type b. b domain_pool -> bool list -> ('a, b * Over.t) man -> ('a, Ast.expr) evl option list =
+           fun pool coverage man ->
+             match pool, coverage with
              | Nil, _ -> []
-             | Cons(hd, tl), [] :: ztl -> None :: aux tl ztl (tail_man man)
-             | Cons(hd, tl), zhd :: ztl ->
+             | Cons(hd, tl), false :: ctl -> None :: aux tl ctl (tail_man man)
+             | Cons(hd, tl), true :: ctl ->
                begin
                  let module D = (val hd) in
-                 let eval = Analyzer.mk_eval_of_zone_list zhd D.eval in
-                 match eval exp (head_man man) flow with
-                 | None -> None :: aux tl ztl (tail_man man)
-                 | Some evl -> (Some evl) :: aux tl ztl (tail_man man)
+                 match D.eval zone exp (head_man man) flow with
+                 | None -> None :: aux tl ctl (tail_man man)
+                 | Some evl -> (Some evl) :: aux tl ctl (tail_man man)
                end
              | _ -> assert false
 
          in
-         aux Config.pool zl man
+         aux Config.pool coverage man
        in
        (* Transform list of evaluations into list of conjunctions *)
        let lconj =
