@@ -127,19 +127,15 @@ let compare_points_to p1 p2 =
   | _, _ -> Pervasives.compare p1 p2
 
 
-(* Cell expression *)
-(* =============== *)
+(* Cell expressions and statements *)
+(* =============================== *)
 
 type expr_kind +=
-  | E_c_cell of cell
-  (* Expression representing a cell *)
-
-  | E_c_points_to of points_to
-  (* Reply to a points-to evaluation *)
+  | E_c_cell of cell (* Expression representing a cell *)
+  | E_c_points_to of points_to (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
-  | S_c_remove_cell of cell
-  (* Ask for the removing of a cell *)
+  | S_c_remove_cell of cell (* Ask for the removing of a cell *)
 
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
@@ -171,20 +167,27 @@ let () =
         | _ -> next e
       )
   };
-  register_stmt_visitor (fun next stmt ->
-      match skind stmt with
-      | S_c_remove_cell c ->
-        (* no expr? *)
-        {exprs = []; stmts = []},
-        (fun _ -> stmt)
-      | _ -> next stmt
-    );
-  register_pp_stmt (fun next fmt stmt ->
-      match skind stmt with
-      | S_c_remove_cell c ->
-        Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
-      | _ -> next fmt stmt
-    );
+  register_stmt {
+    compare = (fun next stmt1 stmt2 ->
+        match skind stmt1, skind stmt2 with
+        | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
+        | _ -> next stmt1 stmt2
+      );
+    print = (fun next fmt stmt ->
+        match skind stmt with
+        | S_c_remove_cell c ->
+          Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
+        | _ -> next fmt stmt
+      );
+    visit = (fun next stmt ->
+        match skind stmt with
+        | S_c_remove_cell c ->
+          (* no expr? *)
+          {exprs = []; stmts = []},
+          (fun _ -> stmt)
+        | _ -> next stmt
+      );
+  };
   register_pp_constant (fun next fmt c ->
       match c with
       | C_c_invalid -> Format.fprintf fmt "Invalid"

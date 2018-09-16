@@ -51,8 +51,21 @@ type expr_info = {
   visit : (Ast.expr -> Ast.expr Visitor.structure) -> Ast.expr -> Ast.expr Visitor.structure;
 }
 
-let register_expr info =
+type stmt_info = {
+  compare : (Ast.stmt -> Ast.stmt -> int) -> Ast.stmt -> Ast.stmt -> int;
+  print : (Format.formatter -> Ast.stmt -> unit) -> Format.formatter -> Ast.stmt -> unit;
+  visit : (Ast.stmt -> Ast.stmt Visitor.structure) -> Ast.stmt -> Ast.stmt Visitor.structure;
+}
+
+
+let register_expr (info: expr_info) : unit =
   Ast.register_expr_compare info.compare;
   Ast.register_pp_expr info.print;
   Visitor.register_expr_visitor info.visit;
+  ()
+
+let register_stmt (info: stmt_info) : unit =
+  Ast.register_stmt_compare info.compare;
+  Ast.register_pp_stmt info.print;
+  Visitor.register_stmt_visitor info.visit;
   ()
