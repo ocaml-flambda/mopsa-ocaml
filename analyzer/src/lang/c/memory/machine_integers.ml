@@ -138,7 +138,7 @@ struct
   let exec_interface =
     {
       import = [Universal.Zone.Z_universal_num];
-      export = []
+      export = [Zone.Z_c_num]
     }
 
   let eval_num man = man.eval ~zone:(Universal.Zone.Z_universal_num, Universal.Zone.Z_universal_num)
@@ -277,8 +277,15 @@ struct
     | _ ->
       None
 
-  let exec zone stmt man zone =
-    None
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_assign({ekind = E_var v} as lval, rval, mode) when etyp lval |> is_c_int_type ->
+      let lval' = {lval with ekind = E_var {v with vtyp = to_universal_type v.vtyp}} in
+      man.exec ~zone:Universal.Zone.Z_universal_num (mk_assign lval' rval ~mode stmt.srange) flow |>
+      Post.of_flow |>
+      Option.return
+
+    | _ -> None
 
   let ask _ _ _ =
     None

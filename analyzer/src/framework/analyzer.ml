@@ -76,9 +76,10 @@ struct
 
   and exec ?(zone = Zone.top) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     debug
-      "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
+      "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
       Location.pp_range_verbose stmt.srange
       pp_stmt stmt (Flow.print man) flow
+      Zone.print zone
     ;
     let timer = Timing.start () in
 
