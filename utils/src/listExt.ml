@@ -55,6 +55,9 @@ type list_printer = {
   }
 (** Tells how to print a list. *)
 
+let printer_plain = { print_empty=""; print_begin=""; print_sep=" "; print_end=""; }
+(** Print as a space-sparated list, no delimiters. *)
+                     
 let printer_list = { print_empty="[]"; print_begin="["; print_sep=";"; print_end="]"; }
 (** Print as OCaml list: [a;b;c]. *)
                      

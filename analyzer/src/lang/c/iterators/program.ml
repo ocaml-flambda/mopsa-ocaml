@@ -41,7 +41,7 @@ struct
   type _ domain += D_c_program : unit domain
 
   let id = D_c_program
-  let name = "c.program"
+  let name = "c.iterators.program"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_program -> Some Eq
@@ -53,9 +53,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let eval_interface = {export = []; import = []}
 
 
   (** Initialization of environments *)

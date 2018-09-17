@@ -38,7 +38,7 @@ let subset_chain : (zone -> zone -> bool) ref = ref (
     fun z1 z2 ->
       match z1, z2 with
       | _, Z_top -> true
-      | Z_top, _ -> false
+      | Z_top, _ -> true
       | _ -> z1 = z2
   )
 
@@ -49,7 +49,7 @@ let pp_chain : (Format.formatter -> zone -> unit) ref = ref (fun fmt zone ->
   )
 
 let register_zone info =
-  subset_chain := info.subset !subset_chain;
+  (* subset_chain := info.subset !subset_chain; *)
   pp_chain := info.print !pp_chain;
   ()
 

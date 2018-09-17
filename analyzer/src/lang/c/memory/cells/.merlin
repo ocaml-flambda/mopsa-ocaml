@@ -1,5 +1,5 @@
 S ../../../../../src/** 
- B ../../../../../_build/lang/c/memory/cell
+ B ../../../../../_build/lang/c/memory/cells
  B ../../../../../_build/lang/c/memory
  B ../../../../../_build/lang/c
  B ../../../../../_build/lang

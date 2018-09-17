@@ -11,10 +11,6 @@
 open Framework.Essentials
 open Ast
 
-let name = "c.flows.switch"
-let debug fmt = Debug.debug ~channel:name fmt
-
-
 (*==========================================================================*)
 (**                            {2 Flow tokens}                              *)
 (*==========================================================================*)
@@ -45,12 +41,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_flows_switch : unit domain
-  let id = D_c_flows_switch
-  let name = "c.flows.switch"
+  type _ domain += D_c_switch : unit domain
+  let id = D_c_switch
+  let name = "c.iterators.switch"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_flows_switch -> Some Eq
+    | D_c_switch -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -59,16 +55,15 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let eval_interface = {export = []; import = []}
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man (flow: 'a flow) =
     Some (
-      flow |> Flow.map_annot (fun annot ->
+      flow |> Flow.map_all_annot (fun annot ->
           Annotation.(register_annot {
               eq = (let f: type b. ('a, b) key -> (expr, b) eq option =
                       function
@@ -90,9 +85,8 @@ struct
       (* Save current switch expression to be stored back in flow at
          the end of body of switch *)
       let cur_switch_expr =
-        let annot = Flow.get_annot flow in
         try
-          Some (Annotation.find KSwitchExpr annot)
+          Flow.get_annot KSwitchExpr flow |> Option.return
         with
         | Not_found -> None
       in
@@ -105,7 +99,7 @@ struct
       in
 
       (* Store e in the annotations and execute body. *)
-      let flow0' = Flow.set_annot_2 KSwitchExpr e flow0 in
+      let flow0' = Flow.set_annot KSwitchExpr e flow0 in
 
       (* let ctx = set_annot KSwitchExpr e ctx in *)
       let flow1 = man.exec body flow0' in
@@ -114,11 +108,11 @@ struct
 
       let cur =
         man.join
-          (Flow.get_annot flow1)
+          (Flow.get_all_annot flow1)
           (Flow.get T_cur man flow1)
           (Flow.get Universal.Iterators.Loops.T_break man flow1) |>
         man.join
-          (Flow.get_annot flow1)
+          (Flow.get_all_annot flow1)
           (Flow.get TSwitch man flow1)
 
       in
@@ -132,8 +126,8 @@ struct
 
       (* Puts back switch expression *)
       let flow3 = match cur_switch_expr with
-        | None -> Flow.rm_annot_2 KSwitchExpr flow2
-        | Some e -> Flow.set_annot_2 KSwitchExpr e flow2
+        | None -> Flow.rm_annot KSwitchExpr flow2
+        | Some e -> Flow.set_annot KSwitchExpr e flow2
       in
 
       Some (Post.of_flow flow3)
@@ -142,7 +136,7 @@ struct
       (* Look up expression in switch *)
       let e0 =
         try
-          Flow.get_annot_2 KSwitchExpr flow
+          Flow.get_annot KSwitchExpr flow
         with
         | Not_found -> Debug.fail "Could not find KSwitchExpr token in \
                                    annotations at %a" pp_range (srange stmt)
@@ -179,7 +173,7 @@ struct
 
     | S_c_switch_default ->
       let cur = man.join
-          (Flow.get_annot flow)
+          (Flow.get_all_annot flow)
           (Flow.get TSwitch man flow)
           (Flow.get T_cur man flow)
       in
@@ -202,5 +196,5 @@ struct
 
   end
 
-let setup () =
+let () =
     Framework.Domains.Stateless.register_domain (module Domain)

@@ -88,3 +88,8 @@ let print pp fmt x =
   | Some a -> pp fmt a
 
 let return x = Some x
+
+let bind f x =
+  match x with
+  | None -> None
+  | Some x -> f x

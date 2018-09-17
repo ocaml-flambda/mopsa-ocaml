@@ -29,7 +29,7 @@ let new_uid ctx =
   ctx.uid
 
 
-let make_temp ctx range (f:func) (t:type_qual) : variable =
+let make_temp ctx range ?(com:comment list=[]) (f:func) (t:type_qual) : variable =
   let u = new_uid ctx in
   let v = {
       var_uid = u;
@@ -39,6 +39,7 @@ let make_temp ctx range (f:func) (t:type_qual) : variable =
       var_type = t;
       var_init = None;
       var_range = range;
+      var_com = com;
     }
   in
   f.func_local_vars <- v::f.func_local_vars;

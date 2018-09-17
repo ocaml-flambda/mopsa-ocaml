@@ -21,7 +21,7 @@ open Framework.Essentials
 type c_typedef = {
   c_typedef_org_name: string; (** name as in source *)
   c_typedef_unique_name: string; (** unique name *)
-  c_typedef_def: typ; (** declaration *)
+  mutable c_typedef_def: typ; (** declaration *)
   c_typedef_range: Location.range; (** declaration location *)
 }
 (** Type definition. *)
@@ -36,7 +36,7 @@ and c_record_type = {
   c_record_defined: bool; (** false if only declared *)
   c_record_sizeof: Z.t;  (** size of record, in bytes *)
   c_record_alignof: Z.t; (** alignment, in bytes *)
-  c_record_fields: c_record_field list;
+  mutable c_record_fields: c_record_field list;
   c_record_range: Location.range; (** declaration location *)
 }
 (** Struct or union type. *)
@@ -66,6 +66,7 @@ and c_enum_value = {
   c_enum_val_org_name: string; (** name as in source *)
   c_enum_val_unique_name: string; (** unique name *)
   c_enum_val_value: Z.t;
+  c_enum_val_range: range;
 }
 (** A possible value in an enumerated type. *)
 
@@ -212,6 +213,8 @@ type expr_kind +=
 
   | E_c_call of expr (** target *) * expr list (** arguments *)
 
+  | E_c_builtin_call of string * expr list
+
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
 
@@ -297,6 +300,28 @@ type program_kind +=
                   (** {2 Conversion to Clang parser types} *)
 (*==========================================================================*)
 
+let to_clang_int_type : c_integer_type -> C_AST.integer_type = function
+  | C_signed_char -> C_AST.SIGNED_CHAR
+  | C_unsigned_char -> C_AST.UNSIGNED_CHAR
+  | C_signed_short -> C_AST.SIGNED_SHORT
+  | C_unsigned_short -> C_AST.UNSIGNED_SHORT
+  | C_signed_int -> C_AST.SIGNED_INT
+  | C_unsigned_int -> C_AST.UNSIGNED_INT
+  | C_signed_long -> C_AST.SIGNED_LONG
+  | C_unsigned_long -> C_AST.UNSIGNED_LONG
+  | C_signed_long_long -> C_AST.SIGNED_LONG_LONG
+  | C_unsigned_long_long -> C_AST.UNSIGNED_LONG_LONG
+  | C_signed_int128 -> C_AST.SIGNED_INT128
+  | C_unsigned_int128 -> C_AST.UNSIGNED_INT128
+
+let to_clang_float_type : c_float_type -> C_AST.float_type = function
+  | C_float -> C_AST.FLOAT
+  | C_double -> C_AST.DOUBLE
+  | C_long_double -> C_AST.LONG_DOUBLE
+
+                   
+    (* NOTE: this may cause issue with recutsive types
+
 let rec to_clang_type : typ -> C_AST.type_qual = function
   | T_c_void -> C_AST.T_void, C_AST.no_qual
   | T_c_integer(i) -> C_AST.T_integer (to_clang_int_type i), C_AST.no_qual
@@ -334,26 +359,6 @@ and to_clang_function_type_option = function
   | None -> None
   | Some t -> Some (to_clang_function_type t)
 
-
-and to_clang_int_type : c_integer_type -> C_AST.integer_type = function
-  | C_signed_char -> C_AST.SIGNED_CHAR
-  | C_unsigned_char -> C_AST.UNSIGNED_CHAR
-  | C_signed_short -> C_AST.SIGNED_SHORT
-  | C_unsigned_short -> C_AST.UNSIGNED_SHORT
-  | C_signed_int -> C_AST.SIGNED_INT
-  | C_unsigned_int -> C_AST.UNSIGNED_INT
-  | C_signed_long -> C_AST.SIGNED_LONG
-  | C_unsigned_long -> C_AST.UNSIGNED_LONG
-  | C_signed_long_long -> C_AST.SIGNED_LONG_LONG
-  | C_unsigned_long_long -> C_AST.UNSIGNED_LONG_LONG
-  | C_signed_int128 -> C_AST.SIGNED_INT128
-  | C_unsigned_int128 -> C_AST.UNSIGNED_INT128
-
-and to_clang_float_type : c_float_type -> C_AST.float_type = function
-  | C_float -> C_AST.FLOAT
-  | C_double -> C_AST.DOUBLE
-  | C_long_double -> C_AST.LONG_DOUBLE
-
 and to_clang_array_length : c_array_length -> C_AST.array_length = function
   | C_array_no_length -> C_AST.No_length
   | C_array_length_cst(n) -> C_AST.Length_cst n
@@ -366,6 +371,7 @@ and to_clang_typedef : c_typedef -> C_AST.typedef = fun typedef ->
     typedef_unique_name = typedef.c_typedef_unique_name;
     typedef_def = to_clang_type typedef.c_typedef_def;
     typedef_range = to_clang_range typedef.c_typedef_range;
+    typedef_com = [];
   }
 
 and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
@@ -379,6 +385,7 @@ and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
     record_alignof = record.c_record_alignof;
     record_fields = [||];
     record_range = to_clang_range record.c_record_range;
+    record_com = [];
   } in
   c_record.C_AST.record_fields <- Array.map (fun field ->
       to_clang_record_field c_record field
@@ -400,6 +407,7 @@ and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_
     field_range = to_clang_range field.c_field_range;
     field_record = record;
     field_index = field.c_field_index;
+    field_com = [];
   }
 
 and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
@@ -411,6 +419,7 @@ and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
     enum_values = [];
     enum_integer_type = to_clang_int_type enum.c_enum_integer_type;
     enum_range = to_clang_range enum.c_enum_range;
+    enum_com = [];
   }
   in
   c_enum.C_AST.enum_values <- List.map (fun v ->
@@ -425,6 +434,8 @@ and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = 
     enum_val_unique_name = enum_val.c_enum_val_unique_name;
     enum_val_value = enum_val.c_enum_val_value;
     enum_val_enum = enum;
+    enum_val_range = to_clang_range enum_val.c_enum_val_range;
+    enum_val_com = [];
   }
 
 
@@ -443,7 +454,7 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
     };
   }
 
-
+  *)
 
 
 (*==========================================================================*)
@@ -451,11 +462,33 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
 (*==========================================================================*)
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
-let sizeof_type (t : typ) : Z.t =
-  let target_options = Clang_parser.get_default_target_options () in
-  let target_info = Clang_parser.get_target_info target_options in
-  let t, _ = to_clang_type t in
-  C_utils.sizeof_type target_info t
+let rec sizeof_type (t : typ) : Z.t =
+  let get_target () = 
+    Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
+  in
+  match t with
+  | T_c_void -> Z.zero
+  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int (get_target()) |> Z.of_int
+  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float (get_target()) |> Z.of_int
+  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type (get_target())
+  | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
+  | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
+     Debug.fail "sizeof_type: %a has no length information" pp_typ t
+  | T_c_bitfield(t, size) ->
+     Debug.fail "sizeof_type: %a is a bitfield" pp_typ t
+  | T_c_function _ | T_c_builtin_fn ->
+     Debug.fail "sizeof_type: %a is a function" pp_typ t
+  | T_c_typedef td -> sizeof_type td.c_typedef_def
+  | T_c_record r ->
+     if not r.c_record_defined then
+       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+     r.c_record_sizeof
+  | T_c_enum e ->
+     if not e.c_enum_defined then
+       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+     sizeof_type (T_c_integer e.c_enum_integer_type)
+  | T_c_qualified (_,t) -> sizeof_type t
+  | t -> Debug.fail "to_clang_type: %a not a C type" pp_typ t
 
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =

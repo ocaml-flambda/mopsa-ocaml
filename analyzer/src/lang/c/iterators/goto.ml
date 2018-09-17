@@ -34,12 +34,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_flows_goto : unit domain
-  let id = D_c_flows_goto
-  let name = "c.flows.goto"
+  type _ domain += D_c_goto : unit domain
+  let id = D_c_goto
+  let name = "c.iterators.goto"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_flows_goto -> Some Eq
+    | D_c_goto -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -47,9 +47,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let eval_interface = {export = []; import = []}
 
   (** Initialization *)
   (** ============== *)
@@ -78,7 +77,7 @@ struct
     | S_c_goto_stab stmt' ->
       (* Stabilization statement for backward gotos *)
       begin
-        let annot = Flow.get_annot flow in
+        let annot = Flow.get_all_annot flow in
         let nogotos, gotos = Flow.fold (fun (nogotos, gotos) k v ->
             match k with
             | T_goto s -> (nogotos, Flow.add k v man gotos)

@@ -56,12 +56,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_universal_intraproc : unit domain
-  let id = D_universal_intraproc
-  let name = "universal.iterators.interproc"
+  type _ domain += D_universal_intraproc_inlining : unit domain
+  let id = D_universal_intraproc_inlining
+  let name = "universal.iterators.interproc.inlining"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_universal_intraproc -> Some Eq
+    | D_universal_intraproc_inlining -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -70,9 +70,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_universal
-  let import_exec = []
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let eval_interface = {export = [Zone.Z_universal, Framework.Zone.Z_top]; import = []}
 
   (** Initialization *)
   (** ============== *)
@@ -80,7 +79,7 @@ struct
   let init prog man (flow: 'a flow) =
     Some (
       (* Register call stack annotation *)
-      let annot = Flow.get_annot flow in
+      let annot = Flow.get_all_annot flow in
       let annot' = Annotation.(register_annot {
           eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
                   function
@@ -90,7 +89,7 @@ struct
                 f);
         }) annot
       in
-      Flow.set_annot annot' flow
+      Flow.set_all_annot annot' flow
     )
 
 
@@ -133,7 +132,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Add f to call stack *)
-      let flow1 = Flow.map_annot (fun annot ->
+      let flow1 = Flow.map_all_annot (fun annot ->
           let cs = try Annotation.find A_call_stack annot with Not_found -> [] in
           let cs' = f :: cs in
           Annotation.add A_call_stack cs' annot
@@ -176,12 +175,8 @@ struct
 
       let flow4 = man.exec ignore_block flow3 in
 
-      (* Re-evaluate the expression [tmp] from the top-level *)
-      Some (
-        man.eval (mk_var tmp range) flow4 |>
-        Eval.bind @@ fun e' flow ->
-        Eval.singleton e' flow ~cleaners:[mk_remove_var tmp range]
-      )
+      Eval.singleton (mk_var tmp range) flow4 ~cleaners:[mk_remove_var tmp range] |>
+      Option.return
 
     | _ -> None
 

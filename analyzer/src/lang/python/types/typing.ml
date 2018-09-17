@@ -27,7 +27,7 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = { export = [Framework.Zone.Z_top]; import = []; }
+    let exec_interface = { export = [Zone.Z_py]; import = []; }
     let eval_interface = { export = []; import = []; }
 
     let join _ = Typingdomain.join

@@ -195,21 +195,19 @@ let map_domain_cur (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
 let is_cur_bottom (man : ('a, 't) man) (flow :'a flow) : bool =
   man.is_bottom (get T_cur man flow)
 
-let get_annot flow = flow.annot
-let set_annot annot flow = {flow with annot}
-let map_annot f flow = set_annot (f @@ get_annot flow) flow
+let get_all_annot flow = flow.annot
+let set_all_annot annot flow = {flow with annot}
+let map_all_annot f flow = set_all_annot (f @@ get_all_annot flow) flow
 
-(* I think the following ought to be renamed get_annot ... so as to fit set_domain_env *)
-let get_annot_2 k flow =
-  let annot = get_annot flow in
-  Annotation.find k annot
+let get_annot k flow =
+  get_all_annot flow |> Annotation.find k
 
-let set_annot_2 k v flow =
-  let annot = get_annot flow in
-  let annot' = Annotation.add k v annot in
-  set_annot annot' flow
+let set_annot k v flow =
+  get_all_annot flow
+  |> Annotation.add k v
+  |> fun annot -> set_all_annot annot flow
 
-let rm_annot_2 k flow =
-  let annot = get_annot flow in
-  let annot' = Annotation.remove k annot in
-  set_annot annot' flow
+let rm_annot k flow =
+  get_all_annot flow
+  |> Annotation.remove k
+  |> fun annot -> set_all_annot annot flow

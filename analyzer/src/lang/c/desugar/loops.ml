@@ -22,7 +22,7 @@ struct
 
   type _ domain += D_c_desugar_loops : unit domain
   let id = D_c_desugar_loops
-  let name = "c.desugar_loops"
+  let name = "c.desugar.loops"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_desugar_loops -> Some Eq
@@ -33,9 +33,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let zone = Zone.Z_c
-  let import_exec = [Universal.Zone.Z_universal]
-  let import_eval = []
+  let exec_interface = {export = [Zone.Z_c]; import = [Universal.Zone.Z_universal]}
+  let eval_interface = {export = []; import = []}
 
   (** Initialization *)
   (** ============== *)

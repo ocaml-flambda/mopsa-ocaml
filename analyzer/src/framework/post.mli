@@ -9,13 +9,14 @@
 (** Post-conditions of a domain's [exec] transfer function *)
 
 open Manager
+open Ast
 
 type channel = ..
 (** Reduction channels *)
 
 type 'a post = {
   flow : 'a flow;
-  mergers : Ast.stmt list;
+  mergers : (stmt * Zone.zone) list;
   channels : channel list;
 }
 (** Post-conditions *)
@@ -28,7 +29,10 @@ val return : 'a flow -> 'a post option
 (** [of_flow flow] returns a post-condition option from a flow,
    without mergers and channels *)
 
-val add_mergers : Ast.stmt list -> 'a post -> 'a post
+val add_merger : stmt -> ?zone:Zone.zone -> 'a post -> 'a post
+(** [add_merger m p] adds meet merger [m] to post-condition [p] *)
+
+val add_mergers : stmt list -> ?zone:Zone.zone -> 'a post -> 'a post
 (** [add_mergers m p] adds meet mergers [m] to post-condition [p] *)
 
 val add_channels : channel list -> 'a post -> 'a post

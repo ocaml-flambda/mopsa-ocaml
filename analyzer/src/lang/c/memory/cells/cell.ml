@@ -20,15 +20,26 @@ open Base
    *)
 type cell = ..
 
-
 (* Extraction of base and offset *)
 (* ============================= *)
 
-let cell_extract_chain : (cell -> base * expr * typ) ref = ref (
-    fun _ -> Debug.fail "cell.extract: unknown cell"
+let cell_extract_chain : (cell-> base * (range -> expr) * typ) ref = ref (
+    fun _ -> fail "cell.extract: unknown cell"
   )
 let register_cell_extract ex = cell_extract_chain := ex !cell_extract_chain
 let extract_cell_info c = !cell_extract_chain c
+
+let cell_type c =
+  let _, _, typ = extract_cell_info c in
+  typ
+
+
+(* Transformation to variables *)
+(* =========================== *)
+
+let cell_var_chain : (cell-> var) ref = ref (fun _ -> fail "cell.to_var: unknown cell")
+let register_cell_var f = cell_var_chain := f !cell_var_chain
+let cell_to_var c = !cell_var_chain c
 
 
 (* Comparison order *)
@@ -53,13 +64,15 @@ let pp_cell fmt c = !cell_pp_chain fmt c
 (* ========================== *)
 
 type cell_info = {
-  extract : (cell -> base * expr * typ) -> cell -> base * expr * typ;
+  extract : (cell -> base * (range -> expr) * typ) -> cell -> base * (range -> expr) * typ;
+  to_var  : (cell -> var) -> cell -> var;
   compare : (cell -> cell -> int) -> cell -> cell -> int;
   print   : (Format.formatter -> cell -> unit) -> Format.formatter -> cell -> unit;
 }
 
 let register_cell info =
   register_cell_extract info.extract;
+  register_cell_var info.to_var;
   register_cell_compare info.compare;
   register_cell_pp info.print;
   ()
@@ -114,22 +127,24 @@ let compare_points_to p1 p2 =
   | _, _ -> Pervasives.compare p1 p2
 
 
-(* Cell expression *)
-(* =============== *)
+(* Cell expressions and statements *)
+(* =============================== *)
 
 type expr_kind +=
-  | E_c_cell of cell
-  (* Expression representing a cell *)
-
-  | E_c_points_to of points_to
-  (* Reply to a points-to evaluation *)
+  | E_c_cell of cell (* Expression representing a cell *)
+  | E_c_points_to of points_to (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
-  | S_c_remove_cell of cell
-  (* Ask for the removing of a cell *)
+  | S_c_remove_cell of cell (* Ask for the removing of a cell *)
 
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
+
+let mk_cell c range =
+  mk_expr (E_c_cell c) ~etyp:(cell_type c) range
+
+let mk_remove_cell c range =
+  mk_stmt (S_c_remove_cell c) range
 
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
@@ -158,20 +173,27 @@ let () =
         | _ -> next e
       )
   };
-  register_stmt_visitor (fun next stmt ->
-      match skind stmt with
-      | S_c_remove_cell c ->
-        (* no expr? *)
-        {exprs = []; stmts = []},
-        (fun _ -> stmt)
-      | _ -> next stmt
-    );
-  register_pp_stmt (fun next fmt stmt ->
-      match skind stmt with
-      | S_c_remove_cell c ->
-        Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
-      | _ -> next fmt stmt
-    );
+  register_stmt {
+    compare = (fun next stmt1 stmt2 ->
+        match skind stmt1, skind stmt2 with
+        | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
+        | _ -> next stmt1 stmt2
+      );
+    print = (fun next fmt stmt ->
+        match skind stmt with
+        | S_c_remove_cell c ->
+          Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
+        | _ -> next fmt stmt
+      );
+    visit = (fun next stmt ->
+        match skind stmt with
+        | S_c_remove_cell c ->
+          (* no expr? *)
+          {exprs = []; stmts = []},
+          (fun _ -> stmt)
+        | _ -> next stmt
+      );
+  };
   register_pp_constant (fun next fmt c ->
       match c with
       | C_c_invalid -> Format.fprintf fmt "Invalid"

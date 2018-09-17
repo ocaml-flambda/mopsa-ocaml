@@ -16,38 +16,8 @@ open Domain
 open Eval
 open Post
 open Zone
-    
+
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
-
-let mk_exec_of_zone_list (l: Zone.zone list) exec =
-  let l = List.sort_uniq Pervasives.compare l in
-  let exec_list = List.map exec l in
-  (fun (stmt: Ast.stmt) (man: ('a, 't) man) (flow: 'a flow) : 'a Post.post option ->
-     let rec aux =
-       function
-       | [] -> None
-       | f :: tl ->
-         match f stmt man flow with
-         | None -> aux tl
-         | Some ret -> Some ret
-     in
-     aux exec_list
-  )
-
-let mk_eval_of_zone_list (l: (Zone.zone * Zone.zone) list) eval =
-  let l = List.sort_uniq Pervasives.compare l in
-  let eval_list = List.map eval l in
-  (fun (exp: Ast.expr) (man: ('a, 't) man) (flow: 'a flow) : ('a, Ast.expr) evl option ->
-     let rec aux =
-       function
-       | [] -> None
-       | f :: tl ->
-         match f exp man flow with
-         | None -> aux tl
-         | Some ret -> Some ret
-     in
-     aux eval_list
-  )
 
 
 (**
@@ -93,16 +63,13 @@ struct
         else
           begin
             debug "Searching for an exec function for the zone %a" Zone.print zone;
-            match List.find_all (fun z -> Zone.subset z zone) Domain.exec_interface.export with
-            | [] ->
-              Debug.warn "exec for %a not found" Zone.print zone;
-              acc
-
-            | l ->
-              let f = mk_exec_of_zone_list l Domain.exec in
-
-              debug "exec for %a found" Zone.print zone;
-              ExecMap.add zone f acc
+            if List.exists (fun z -> Zone.subset z zone) Domain.exec_interface.export then
+              begin
+                debug "exec for %a found" Zone.print zone;
+                ExecMap.add zone (Domain.exec zone) acc
+              end
+            else
+              Exceptions.panic "exec for %a not found" Zone.print zone
           end
       ) ExecMap.empty (List.sort_uniq Pervasives.compare (Zone.top :: Domain.exec_interface.import))
 
@@ -126,7 +93,7 @@ struct
             pp_stmt stmt
 
         | Some post -> post.flow
-      ) stmt flow
+      ) zone stmt flow
     in
 
     let t = Timing.stop timer in
@@ -155,22 +122,19 @@ struct
         else
           begin
             debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            match List.find_all (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export with
-            | [] ->
-              Debug.warn "eval for %a not found" Zone.print2 zpath;
-              acc
-
-            | l ->
-              let f = mk_eval_of_zone_list l Domain.eval in
-              debug "eval for %a found" Zone.print2 zpath;
-              EvalMap.add zpath f acc
-
+            if List.exists (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export then
+              begin
+                debug "eval for %a found" Zone.print2 zpath;
+                EvalMap.add zpath (Domain.eval zpath) acc
+              end
+            else
+              Exceptions.panic "eval for %a not found" Zone.print2 zpath
           end
       ) EvalMap.empty (List.sort_uniq Pervasives.compare ((Zone.top, Zone.top)  :: Domain.eval_interface.import))
 
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval_opt ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
       "eval expr on zone %a in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
       Zone.print2 zone
@@ -181,10 +145,8 @@ struct
     let path_eval = EvalMap.find zone eval_map in
 
     let evl = Cache.eval (fun exp flow ->
-        match path_eval exp man flow with
-        | Some evl -> evl
-        | None -> Eval.singleton exp flow
-      ) exp flow
+        path_eval exp man flow
+      ) zone exp flow
     in
 
     let t = Timing.stop timer in
@@ -197,9 +159,15 @@ struct
       "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       (Flow.print man) flow
-      (Eval.print ~pp:pp_expr) evl
+      (Option.print (Eval.print ~pp:pp_expr)) evl
     ;
     evl
+
+  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+    match eval_opt ~zone exp flow with
+    | Some evl -> evl
+    | None -> Eval.singleton exp flow
+
 
   (** Query handler. *)
   and ask : type r. r Query.query -> _ -> r =
@@ -224,6 +192,7 @@ struct
     set = (fun flow _ -> flow);
     exec = exec;
     eval = eval;
+    eval_opt = eval_opt;
     ask = ask;
   }
 

@@ -104,10 +104,28 @@ val map_domain_cur : ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
 (** [map_domain_cur f man flow] is equivalent to [set_domain_cur (f
    (get_domain_cur tk man flow)) man flow] *)
 
-val get_annot : 'a flow -> 'a annot
-val set_annot : 'a annot -> 'a flow -> 'a flow
-val map_annot : ('a annot -> 'a annot) -> 'a flow -> 'a flow
+val get_all_annot : 'a flow -> 'a annot
+(** [get_all_annot flow] retrieves the annotation pool from [flow] *)
 
-val get_annot_2 : ('a, 'b) Annotation.key -> 'a flow -> 'b
-val set_annot_2 : ('a, 'b) Annotation.key -> 'b -> 'a flow -> 'a flow
-val rm_annot_2  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
+val set_all_annot : 'a annot -> 'a flow -> 'a flow
+(** [set_all_annot annot flow] set the annotation pool of [flow] to
+   [annot] *)
+
+val map_all_annot : ('a annot -> 'a annot) -> 'a flow -> 'a flow
+(** [map_all_annot f flow] set the annotation of [flow] to be the
+   image of the initial annotation of [flow] by [f] *)
+
+val get_annot : ('a, 'b) Annotation.key -> 'a flow -> 'b
+(** [get_annot key flow] retrieves to value associated to key [key] in
+   the annotations attached to flow [flow], returns [Not_found] if not
+   present *)
+
+val set_annot : ('a, 'b) Annotation.key -> 'b -> 'a flow -> 'a flow
+(** [set_annot key value flow] sets the value associated to key [key]
+   to be [value] in the annotations attached to flow [flow],
+   overrights if already present *)
+
+val rm_annot  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
+(** [rm annot key flow] removes the key binding with key [key] in the
+   annotations attached to flow [flow], does not fail if [key] was not
+   present *)

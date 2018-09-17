@@ -6,10 +6,10 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** 
+(**
    Reduction operator for refining the interval of a variable x when
    another variable y is filtered and a relation exists between the
-   two variables x and y. 
+   two variables x and y.
 *)
 
 open Framework.Essentials
@@ -80,7 +80,7 @@ struct
               (* Refine the interval of the variable [v] in relation with [v'] *)
               let itv = nrman.get_var_value I.id v' cur in
               let itv' = get_rel_interval v' dman cur in
-              nrman.set_var_value I.id v' (I.meet (Flow.get_annot flow) itv itv') acc
+              nrman.set_var_value I.id v' (I.meet (Flow.get_all_annot flow) itv itv') acc
             ) acc
         ) cur vars
       in
