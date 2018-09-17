@@ -310,7 +310,7 @@ type stmt_kind +=
 
   | S_continue (** Loop continue *)
 
-  | S_rebase_addr of addr (** old *) * addr (** new *) * strength
+  | S_rebase_addr of addr (** old *) * addr (** new *) * mode
   (** Change the address of a previously allocated object *)
 
   | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)

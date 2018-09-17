@@ -130,19 +130,19 @@ type expr = {
 and expr_kind = ..
 
 
-(** Strength of a variable*)
-type strength =
+(** Mode of a variable*)
+type mode =
   | STRONG
   | WEAK
-let compare_strength = compare
-let pp_strength fmt strength =
-  match strength with
+let compare_mode = compare
+let pp_mode fmt mode =
+  match mode with
   | STRONG -> Format.fprintf fmt "STRONG"
   | WEAK   -> Format.fprintf fmt "WEAK"
 
 (** Some basic expressions *)
 type expr_kind +=
-  | E_var of var * strength
+  | E_var of var * mode
   (** variables *)
 
   | E_constant of constant
@@ -165,7 +165,7 @@ let rec expr_compare_chain : (expr -> expr -> int) ref =
       | E_var(v1, s1), E_var(v2, s2) ->
         Compare.compose [
           (fun () -> compare_var v1 v2);
-          (fun () -> compare_strength s1 s2)
+          (fun () -> compare_mode s1 s2)
         ]
       | E_constant c1, E_constant c2 -> compare_constant c1 c2
       | E_unop(op1, e1), E_unop(op2, e2) ->
@@ -194,8 +194,8 @@ let mk_expr
   =
   {ekind; etyp; erange}
 
-let mk_var v ?(vstrength = STRONG) erange =
-  mk_expr ~etyp:v.vtyp (E_var(v, vstrength)) erange
+let mk_var v ?(mode = STRONG) erange =
+  mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
 
 let mk_binop left op right ?(etyp = T_any) erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange

@@ -164,7 +164,7 @@ struct
     let flow' = Flow.set_domain_env T_cur m' man flow in
 
     let lval' = mk_smash_var a in
-    let stmt' = mk_assign (mk_var lval' ~vstrength:mode' range) e range in
+    let stmt' = mk_assign (mk_var lval' ~mode:mode' range) e range in
     man.exec stmt' flow' |>
     Post.of_flow |>
     Post.add_merger (mk_remove_var lval' range)
@@ -203,9 +203,9 @@ struct
     in
     match card with
     | Cardinality.Empty | Cardinality.Singleton ->
-      Eval.singleton (mk_var v ~vstrength:STRONG (tag_range range "strong")) flow
+      Eval.singleton (mk_var v ~mode:STRONG (tag_range range "strong")) flow
     | Cardinality.Multi ->
-      Eval.singleton (mk_var v ~vstrength:WEAK (tag_range range "weak")) flow
+      Eval.singleton (mk_var v ~mode:WEAK (tag_range range "weak")) flow
 
   let eval zone exp man flow =
     match ekind exp with

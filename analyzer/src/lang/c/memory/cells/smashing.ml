@@ -139,15 +139,15 @@ struct
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
           match ekind v with
-          | E_var(v, strength) ->
+          | E_var(v, mode) ->
             let c = var_to_cell v in
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-            let stmt = mk_assign (mk_cell c ~strength:strength range) e range in
+            let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
-          | E_c_cell(c, strength) ->
+          | E_c_cell(c, mode) ->
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-            let stmt = mk_assign (mk_cell c ~strength:strength range) e range in
+            let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
           | _ -> assert false
@@ -197,8 +197,8 @@ struct
         man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
         eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
         match ekind lval with
-        | E_c_cell(c, strength) ->
-          assign_cell c rval strength range man flow |>
+        | E_c_cell(c, mode) ->
+          assign_cell c rval mode range man flow |>
           remove_overlappings c range man |>
           Post.add_merger (mk_remove_cell c range)
         | _ -> assert false
@@ -217,7 +217,7 @@ struct
         if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then STRONG
         else WEAK
     in
-    let lval = mk_cell c ~strength:mode range in
+    let lval = mk_cell c ~mode:mode range in
     let stmt = mk_assign lval e range in
     man.exec ~zone:(Z_c_cell) stmt flow
 
@@ -243,10 +243,10 @@ struct
 
   and eval zone exp man flow =
     match ekind exp with
-    | E_var(v, strength) when is_c_type v.vtyp ->
+    | E_var(v, mode) when is_c_type v.vtyp ->
       let c = var_to_cell v in
       let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-      Eval.singleton (mk_cell c ~strength:strength (erange exp)) flow1 |>
+      Eval.singleton (mk_cell c ~mode:mode (erange exp)) flow1 |>
       Option.return
 
     | E_c_deref p ->

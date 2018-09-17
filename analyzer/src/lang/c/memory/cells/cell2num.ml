@@ -97,9 +97,9 @@ struct
       |> Post.of_flow
       |> Option.return
 
-    | S_assign({ekind = Cell.E_c_cell(c, strength)} as lval, rval) ->
+    | S_assign({ekind = Cell.E_c_cell(c, mode)} as lval, rval) ->
       let v, flow = get_num flow c in
-      man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v ~vstrength:strength lval.erange) rval stmt.srange) flow
+      man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
       |> Post.of_flow
       |> Option.return
 
@@ -107,7 +107,7 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    | Cell.E_c_cell(c, strength) ->
+    | Cell.E_c_cell(c, mode) ->
       let range = erange exp in
       let v, flow = get_num flow c in
       let exp = mk_var v (tag_range range "cell2num") in

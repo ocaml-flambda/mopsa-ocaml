@@ -135,7 +135,7 @@ let compare_points_to p1 p2 =
 (* =============================== *)
 
 type expr_kind +=
-  | E_c_cell of cell * strength (* Expression representing a cell *)
+  | E_c_cell of cell * mode (* Expression representing a cell *)
   | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
@@ -144,8 +144,8 @@ type stmt_kind +=
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
 
-let mk_cell c ?(strength = STRONG) range =
-  mk_expr (E_c_cell(c, strength)) ~etyp:(cell_type c) range
+let mk_cell c ?(mode = STRONG) range =
+  mk_expr (E_c_cell(c, mode)) ~etyp:(cell_type c) range
 
 let mk_remove_cell c range =
   mk_stmt (S_c_remove_cell c) range
@@ -161,7 +161,7 @@ let () =
           Compare.compose
             [
               (fun () -> compare c1 c2);
-              (fun () -> compare_strength s1 s2 )
+              (fun () -> compare_mode s1 s2 )
             ]
 
         | E_c_points_to p1, E_c_points_to p2 -> compare_points_to p1 p2
