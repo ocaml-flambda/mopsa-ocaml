@@ -538,7 +538,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
         man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow
         |> Post.bind man @@ fun lval flow ->
         eval (Zone.Z_c_scalar, Z_c_cell) lval man flow
-        |> Eval.default lval flow
+        |> Eval.default_opt lval flow
         |> Post.bind man @@ fun lval flow ->
         match ekind lval with
         | E_c_cell OffsetCell c ->

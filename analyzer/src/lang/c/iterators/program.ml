@@ -69,19 +69,18 @@ struct
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
-      begin
+      let entry =
         try
-          let entry = List.find (function
+          List.find (function
                 {c_func_var} -> c_func_var.vname = !opt_entry_function
             ) functions
-          in
-          let range = mk_file_range prog_file in
-          let stmt = mk_c_call_stmt entry [] range in
-          man.exec stmt flow |>
-          Post.return
         with Not_found ->
           Framework.Exceptions.panic "entry function %s not found" !opt_entry_function
-      end
+      in
+      let range = mk_file_range prog_file in
+      let stmt = mk_c_call_stmt entry [] range in
+      man.exec stmt flow |>
+      Post.return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when Framework.Options.(common_options.unit_test_mode) ->

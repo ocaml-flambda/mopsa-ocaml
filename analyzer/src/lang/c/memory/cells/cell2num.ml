@@ -55,7 +55,7 @@ struct
 
   type _ domain += D_c_cell_2_num : unit domain
   let id = D_c_cell_2_num
-  let name = "c.cell_2_num"
+  let name = "c.memory.cells.cell_2_num"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_cell_2_num -> Some Eq
@@ -66,26 +66,42 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Cell.Z_c_cell]; import = []}
+  let exec_interface = {export = [Cell.Z_c_cell]; import = [Zone.Z_c_num]}
   let eval_interface = {export = [Cell.Z_c_cell, Zone.Z_c_num]; import = []}
 
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ _ =
-    None
+  let init prog man flow =
+    Some (
+      (* Register cell-var equivalence as an annotation *)
+      let annot = Flow.get_all_annot flow in
+      let annot' = Annotation.(register_annot {
+          eq = (let f: type b. ('a, b) key -> (CellNumEquiv.t, b) eq option =
+                  function
+                  | KCellNumEquiv -> Some Eq
+                  | _ -> None
+                in
+                f);
+        }) annot
+      in
+      Flow.set_all_annot annot' flow |>
+      Flow.set_annot KCellNumEquiv CellNumEquiv.empty
+    )
 
   let exec stmt man flow =
     match skind stmt with
     | Cell.S_c_remove_cell c ->
       let v, flow = get_num_and_remove flow c in
-      man.exec ({stmt with skind = S_remove_var v}) flow
+      man.exec ~zone:Zone.Z_c_num ({stmt with skind = S_remove_var v}) flow
       |> Post.of_flow
       |> Option.return
 
-    | S_assign({ekind = Cell.E_c_cell c}, rval, mode) ->
-      panic_at stmt.srange "assign to cell not yet supported"
-      
+    | S_assign({ekind = Cell.E_c_cell c} as lval, rval, mode) ->
+      let v, flow = get_num flow c in
+      man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v lval.erange) rval ~mode stmt.srange) flow
+      |> Post.of_flow
+      |> Option.return
 
     | _ -> None
 

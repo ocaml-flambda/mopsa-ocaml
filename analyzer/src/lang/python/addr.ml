@@ -8,9 +8,7 @@
 
 (** Heap addresses of Python objects. *)
 
-open Framework.Ast
-open Framework.Manager
-open Framework.Eval
+open Framework.Essentials
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
@@ -52,6 +50,16 @@ type Universal.Ast.addr_kind +=
   | A_py_method of py_object (** address of the function to bind *) * py_object (** method instance *)
   | A_py_module of module_address
 
+
+(** Allocate an object on the heap and return its address as an evaluation *)
+let eval_alloc man kind range flow =
+  let exp = Universal.Ast.mk_alloc_addr kind range in
+  man.eval exp flow |>
+  Eval.bind (fun exp flow ->
+      match ekind exp with
+      | Universal.Ast.E_addr addr -> Eval.singleton addr flow
+      | _ -> Framework.Exceptions.panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
+    )
 
 (*==========================================================================*)
 (**                           {2 Built-ins}                                 *)
@@ -424,20 +432,23 @@ let mk_py_float_interval l u range =
  *   | C_py_imag j -> mk_py_imag j range
  *   | _ -> Framework.Exceptions.panic_at range "mk_py_constant: unknown constant %a" Framework.Pp.pp_constant c *)
 
-(* let () =
- *   Universal.Pp.(
- *     Format.(
- *       register_pp_addr (fun default fmt a ->
- *           match a.addr_kind, Universal.Heap.Recency.is_weak a with
- *           | A_py_class(C_user c, _), _ -> fprintf fmt "u{%a}" pp_var c.py_cls_var
- *           | A_py_class((C_builtin c | C_unsupported c), _), _ -> fprintf fmt "{%s}" c
- *           | A_py_function(F_user f), _ -> fprintf fmt "function %a" pp_var f.py_func_var
- *           | A_py_function((F_builtin f | F_unsupported f)), _ -> fprintf fmt "function %s" f
- *           | A_py_instance(c, _), false -> fprintf fmt "<%a object @@ %a>" pp_addr (addr_of_object c) pp_range a.addr_range
- *           | A_py_instance(c, _), true -> fprintf fmt "<%a object w@@ %a>" pp_addr (addr_of_object c) pp_range a.addr_range
- *           | A_py_method(f, obj), _ -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
- *           | A_py_module(M_user(m, _) | M_builtin(m)), _ -> fprintf fmt "module %s" m
- *           | _ -> default fmt a
- *        )
- *     )
- *   ) *)
+let () =
+  Universal.Ast.(
+    Format.(
+      let info = {print =
+                    (fun default fmt a ->
+                      match a.addr_kind with
+                      | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
+                      | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "{%s}" c
+                      | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
+                      | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "function %s" f
+                      | A_py_method(f, obj) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
+                      | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
+                      | _ -> default fmt a
+                    );
+                  compare =
+                    (fun default a1 a2 ->
+                      debug "PP of addr, to fix in python/addr"; 1) } in
+      register_addr info
+    )
+  )

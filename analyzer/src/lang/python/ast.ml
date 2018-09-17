@@ -9,7 +9,7 @@
 (** Python AST *)
 
 open Framework.Essentials
-
+open Universal.Ast
 
 (*==========================================================================*)
                            (** {2 Constants} *)
@@ -285,6 +285,12 @@ let mk_py_object_attr obj attr ?(etyp=T_any) range =
 
 let mk_py_empty range =
   mk_constant C_py_empty ~etyp:T_py_empty range
+
+let mk_py_true range =
+  mk_constant (C_bool true) ~etyp:T_bool range
+
+let mk_py_false range =
+  mk_constant (C_bool false) ~etyp:T_bool range
 
 let object_of_expr e =
   match ekind e with

@@ -33,6 +33,10 @@ let cell_type c =
   let _, _, typ = extract_cell_info c in
   typ
 
+let cell_base c =
+  let b, _, _ = extract_cell_info c in
+  b
+
 
 (* Transformation to variables *)
 (* =========================== *)
