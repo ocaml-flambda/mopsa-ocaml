@@ -26,35 +26,35 @@ let check man cond range flow =
 (*==========================================================================*)
 
 
-(* module Domain =
- *   struct
- *     type _ domain += D_python_libs_mopsa : unit domain
- *
- *     let id = D_python_libs_mopsa
- *     let name = "python.libs.mopsa"
- *     let identify : type a. a domain -> (unit, a) eq option =
- *       function
- *       | D_python_libs_mopsa -> Some Eq
- *       | _ -> None
- *
- *     let debug fmt = Debug.debug ~channel:name fmt
- *
- *     let zone = Framework.Zone.Z_top
- *     let import_exec = []
- *     let import_eval = []
- *
- *
- *     (\*==========================================================================*\)
- *     (\**                       {2 Transfer functions }                           *\)
- *     (\*==========================================================================*\)
- *     let exec stmt man flow = None
- *
- *     let init prog man flow = Some flow
- *
- *     let eval exp man flow =
- *       let range = erange exp in
- *       match ekind exp with
- *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
+module Domain =
+  struct
+    type _ domain += D_python_libs_mopsa : unit domain
+
+    let id = D_python_libs_mopsa
+    let name = "python.libs.mopsa"
+    let identify : type a. a domain -> (unit, a) eq option =
+      function
+      | D_python_libs_mopsa -> Some Eq
+      | _ -> None
+
+    let debug fmt = Debug.debug ~channel:name fmt
+
+    let zone = Framework.Zone.Z_top
+    let import_exec = []
+    let import_eval = []
+
+
+    (*==========================================================================*)
+    (**                       {2 Transfer functions }                           *)
+    (*==========================================================================*)
+    let exec stmt man flow = None
+
+    let init prog man flow = Some flow
+
+    let eval exp man flow =
+      (* let range = erange exp in *)
+      match ekind exp with
+(*       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
  *                      {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
  *                    ], []) ->
  *          Eval.singleton (Some (mk_py_z_interval l u range), flow, [])
@@ -84,11 +84,11 @@ let check man cond range flow =
  *            | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) u range), flow, [])
  *            | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) (Z.to_float u) range), flow, [])
  *            | _ ->
- *               let tmp = mktmp () in
+ *               let tmp = mk_tmp () in
  *               let l = Utils.mk_builtin_call "float" [l] range in
  *               let u = Utils.mk_builtin_call "float" [u] range in
- *               let flow = man.exec ctx (mk_assign (mk_var tmp range) (mk_top T_float range) range) flow |>
- *                            man.exec ctx (mk_assume (mk_in (mk_var tmp range) l u range) range)
+ *               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_float range) range) flow |>
+ *                            man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
  *               in
  *               Eval.singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
  *          end
@@ -235,15 +235,12 @@ let check man cond range flow =
  *                          man.flow.set TCur cur
  *            in
  *            Eval.singleton (Some (mk_py_int 0 exp.erange), flow', [])
- *          end
- *
- *
- *       | _ ->
- *          None
- *
- *     let ask _ _ _ _ = None
- *
- *   end *)
+ *          end *)
+      | _ ->
+         None
+
+    let ask _ _ _ = None
+  end
 
 
 
@@ -287,5 +284,5 @@ let builtin_clsdec_name = function
 (*==========================================================================*)
 
 
-(* let () =
- *   Framework.Domains.Stateless.register_domain (module Domain) *)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

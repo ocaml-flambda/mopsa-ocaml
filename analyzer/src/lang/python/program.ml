@@ -37,9 +37,9 @@ struct
   let import_exec = []
   let import_eval = []
 
-  let init progr man flow = None
+  let init _ _ flow = Some flow
 
-  let eval exp man flow = None
+  let eval _ _ _ = None
 
   let init_globals man filename globals flow =
     (* Initialize global variables with C_py_undefined constant *)
