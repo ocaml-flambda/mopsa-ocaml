@@ -38,7 +38,7 @@ val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 
 val bind_opt : ('e -> 'a flow -> ('a, 'f) evl option) -> ('a, 'e) evl -> ('a, 'f) evl option
 
-val default : 'e -> 'a flow -> ('a, 'e) evl option -> ('a, 'e) evl
+val default_opt : 'e -> 'a flow -> ('a, 'e) evl option -> ('a, 'e) evl
 
 val eval_list : 'e list -> ('e -> 'a flow -> ('a, 'c) evl) -> ?empty:('a flow -> ('a, 'e) evl) -> 'a flow ->  ('a, 'c list) evl
 
