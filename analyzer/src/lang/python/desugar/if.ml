@@ -25,9 +25,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let zone = Framework.Zone.Z_top
-    let import_exec = []
-    let import_eval = []
+    let exec_interface = {export = []; import = []}
+    let eval_interface = {export = [Framework.Zone.Z_top, Framework.Zone.Z_top]; import = []}
 
     let init _ _ flow = Some flow
 

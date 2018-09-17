@@ -11,7 +11,7 @@
         "python.desugar.loops",
 
         "universal.iterators.intraproc",
-        "universal.iterators.interproc",
+        "universal.iterators.interproc.inlining",
         "universal.iterators.loops",
 
         "python.libs.mopsa",

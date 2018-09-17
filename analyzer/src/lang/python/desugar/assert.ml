@@ -26,9 +26,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let zone = Framework.Zone.Z_top
-    let import_exec = []
-    let import_eval = []
+    let exec_interface = {export = [Framework.Zone.Z_top]; import = []}
+    let eval_interface = {export = []; import = []}
 
     let init _ _ flow = Option.return flow
 
@@ -47,7 +46,7 @@ module Domain =
                  let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
                  if Flow.is_bottom man flow then
                    let _ = debug "no fail" in
-                   Flow.bottom (Flow.get_annot flow)
+                   Flow.bottom (Flow.get_all_annot flow)
                  else
                    man.exec (
                        Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
