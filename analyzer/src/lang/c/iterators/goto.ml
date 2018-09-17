@@ -82,7 +82,7 @@ struct
             match k with
             | T_goto s -> (nogotos, Flow.add k v man gotos)
             | _       -> (Flow.add k v man nogotos, gotos)
-          ) (Flow.bottom annot, Flow.top annot) man flow in
+          ) (Flow.bottom annot, Flow.bottom annot) man flow in
         let next f f' i wid_limit =
           let get_gotos f = Flow.filter
               (fun t e -> match t with | T_goto s -> true | _ -> false) man f

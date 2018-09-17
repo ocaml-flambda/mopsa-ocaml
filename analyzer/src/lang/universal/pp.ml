@@ -80,9 +80,9 @@ let () =
       | S_rename_var(v, v') -> fprintf fmt "rename(%a, %a)" pp_var v pp_var v'
       | S_rebase_addr(a, a', STRONG) -> fprintf fmt "rebase %a = %a" pp_addr a pp_addr a'
       | S_rebase_addr(a, a', WEAK) -> fprintf fmt "rebase %a ≈ %a" pp_addr a pp_addr a'
-      | S_assign(v, e, STRONG) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
-      | S_assign(v, e, WEAK) -> fprintf fmt "%a ≈ %a;" pp_expr v pp_expr e
-      | S_assign(v, e, EXPAND) -> fprintf fmt "%a ≋ %a;" pp_expr v pp_expr e
+      | S_assign(v, e) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
+      (* FIXME: improve pretty printer by checking whether this is a
+         Strong or a Weak assign*)
       | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
       | S_expression(e) -> fprintf fmt "%a;" pp_expr e
       | S_if(e, s1, s2) ->

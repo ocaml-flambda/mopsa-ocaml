@@ -121,7 +121,7 @@ struct
 
   end
 
-let setup () =
+let () =
   Framework.Domains.Stateless.register_domain (module Domain);
   Universal.Ast.register_addr (
     {compare = (fun next ak1 ak2 ->

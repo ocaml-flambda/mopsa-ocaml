@@ -164,7 +164,7 @@ struct
     let flow' = Flow.set_domain_env T_cur m' man flow in
 
     let lval' = mk_smash_var a in
-    let stmt' = mk_assign (mk_var lval' range) e ~mode:mode' range in
+    let stmt' = mk_assign (mk_var lval' ~vstrength:mode' range) e range in
     man.exec stmt' flow' |>
     Post.of_flow |>
     Post.add_merger (mk_remove_var lval' range)
@@ -173,7 +173,7 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_assign({ekind = E_subscript(a, i)}, e, mode) ->
+    | S_assign({ekind = E_subscript(a, i)}, e) ->
       Some (
         (* Evaluate the array expression *)
         man.eval a ~zone:(Framework.Zone.top, Z_smashing) flow |>
@@ -185,7 +185,7 @@ struct
 
         (* Compute assignment *)
         match ekind a with
-        | E_var a' -> assign_array a' e mode range man flow
+        | E_var(a', mode) -> assign_array a' e mode range man flow
         | _ -> assert false
       )
 
@@ -197,19 +197,15 @@ struct
 
   let eval_array a range man flow =
     let v = mk_smash_var a in
-    let smash = mk_var v range in
     (* Get cardinality of array a *)
     let card = Flow.get_domain_env T_cur man flow |>
                find a
     in
-    (* Expand a temporary in case when a contains more than one element *)
     match card with
-    | Cardinality.Empty | Cardinality.Singleton -> Eval.singleton smash flow
+    | Cardinality.Empty | Cardinality.Singleton ->
+      Eval.singleton (mk_var v ~vstrength:STRONG (tag_range range "strong")) flow
     | Cardinality.Multi ->
-      let tmp = mk_tmp ~vtyp:v.vtyp () in
-      let stmt = mk_assign (mk_var tmp range) smash ~mode:EXPAND range in
-      let flow' = man.exec stmt flow in
-      Eval.singleton (mk_var tmp range) flow' ~cleaners:[mk_remove_var tmp range]
+      Eval.singleton (mk_var v ~vstrength:WEAK (tag_range range "weak")) flow
 
   let eval zone exp man flow =
     match ekind exp with
@@ -224,7 +220,7 @@ struct
         Eval.bind @@ fun i flow ->
 
         match ekind a with
-        | E_var a' -> eval_array a' (erange exp) man flow
+        | E_var(a', _) -> eval_array a' (erange exp) man flow
         | _ -> assert false
       )
 

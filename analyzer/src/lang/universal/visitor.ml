@@ -45,9 +45,9 @@ let () =
       | S_project_vars _
       | S_rebase_addr _ -> leaf stmt
 
-      | S_assign(x, e, kind) ->
+      | S_assign(x, e) ->
         {exprs = [e; x]; stmts = []},
-        (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e, kind)} | _ -> assert false)
+        (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e)} | _ -> assert false)
 
       | S_assume(e) ->
         {exprs = [e]; stmts = []},
