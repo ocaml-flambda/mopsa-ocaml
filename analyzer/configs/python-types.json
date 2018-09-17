@@ -16,6 +16,8 @@
 
         "python.libs.mopsa",
 
+        "python.objects.class",
+
         "python.types.t_string",
         "python.types.t_int",
         "python.types.typing"
