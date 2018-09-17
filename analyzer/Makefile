@@ -12,7 +12,8 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal c python
 
-lang.universal = ast pp visitor frontend utils zone iterators numeric arrays
+lang.universal = ast pp visitor frontend utils zone heap iterators numeric arrays
+lang.universal.heap = pool # recency
 lang.universal.iterators = program intraproc loops interproc
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
