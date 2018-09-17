@@ -26,7 +26,7 @@ lang.c.desugar = for
 lang.c.memory = base init_visitor cell
 lang.c.memory.cell = typ pointer expand
 
-lang.python = ast addr pp frontend zone libs desugar program types
+lang.python = ast addr utils pp frontend zone libs desugar program types
 lang.python.types = typingdomain typing t_string t_int
 
 #Packages
