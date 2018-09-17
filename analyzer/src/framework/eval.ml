@@ -116,7 +116,7 @@ let bind_opt f evl =
   in
   evl
 
-let default exp flow evl =
+let default_opt exp flow evl =
   match evl with
   | None -> singleton exp flow
   | Some evl -> evl

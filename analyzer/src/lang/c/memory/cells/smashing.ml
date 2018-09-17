@@ -80,6 +80,13 @@ struct
 
   let is_bottom _ = false
 
+  let add c a =
+    (* Do not add non-scalar cells *)
+    if cell_type c |> is_c_scalar_type then
+      add c a
+    else
+      a
+
   let widening = join
 
   let print fmt a =
@@ -137,6 +144,12 @@ struct
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
             let stmt = mk_assign (mk_cell c range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
+
+          | E_c_cell c ->
+            let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+            let stmt = mk_assign (mk_cell c range) e range in
+            man.exec ~zone:(Z_c_cell) stmt flow1
+
           | _ -> assert false
         );
 
@@ -182,12 +195,11 @@ struct
       begin
         man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow ->
         man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
-        eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default lval flow |> Post.bind man @@ fun lval flow ->
+        eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
         match ekind lval with
         | E_c_cell c ->
-          assign_cell c rval mode man flow |>
-          remove_overlappings c man |>
-          Post.of_flow |>
+          assign_cell c rval mode range man flow |>
+          remove_overlappings c range man |>
           Post.add_merger (mk_remove_cell c range)
         | _ -> assert false
       end |>
@@ -195,22 +207,156 @@ struct
 
     | _ -> None
 
-  and assign_cell c e mode man flow = assert false
+  and assign_cell c e mode range man flow =
+    let lval = mk_cell c range in
+    (* Infer the mode of assignment *)
+    let mode = match cell_base c with
+      | A a -> WEAK (* TODO: process the case of heap addresses *)
+      | V v ->
+        (* In case of a base variable, we check that we are writing to the whole memory block *)
+        if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then STRONG
+        else WEAK
+    in
 
-  and remove_overlappings c man flow = assert false
-  
+    let stmt = mk_assign lval e ~mode range in
+    man.exec ~zone:(Z_c_cell) stmt flow
+
+
+  and remove_overlappings c range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let flow'', mergers = fold (fun c' (flow, mergers) ->
+        if compare_base (cell_base c) (cell_base c') = 0 && compare_typ (cell_type c) (cell_type c') <> 0 then
+          let flow' = Flow.map_domain_env T_cur (remove c') man flow |>
+                      man.exec ~zone:Z_c_cell (mk_remove_cell c' range)
+          in
+          flow', (mk_remove_cell c' range) :: mergers
+        else
+          flow, mergers
+      ) a (flow, [])
+    in
+    Post.of_flow flow'' |>
+    Post.add_mergers mergers ~zone:Z_c_cell
+
+
   (** Evaluation of expressions *)
   (** ========================= *)
 
   and eval zone exp man flow =
     match ekind exp with
-    | E_var _ ->
-      panic_at exp.erange "smashing.eval: expression %a not supported" pp_expr exp
+    | E_var v when is_c_type v.vtyp ->
+      let c = var_to_cell v in
+      let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+      Eval.singleton (mk_cell c (erange exp)) flow1 |>
+      Option.return
 
-    | E_c_deref _ ->
-      panic_at exp.erange "smashing.eval: expression %a not supported" pp_expr exp
+    | E_c_deref p ->
+      begin
+        man.eval ~zone:(Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pt flow ->
+        match ekind pt with
+        | E_c_points_to(P_fun fundec) ->
+          Eval.singleton ({exp with ekind = E_c_function fundec}) flow
+
+        | E_c_points_to(P_var (base, offset, t)) ->
+          eval_base_offset
+            ~safe:(fun c flow ->
+                let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+                let exp' = mk_cell c exp.erange in
+                Eval.singleton exp' flow1
+            )
+            ~outbound:(fun flow ->
+                let flow1 = Flow.add (Alarms.TOutOfBound exp.erange) (Flow.get T_cur man flow) man flow |>
+                            Flow.set T_cur man.bottom man
+                in
+                Eval.empty_singleton flow1
+              )
+            base offset t exp.erange man flow
+
+        | E_c_points_to(P_null) ->
+          (* FIXME: replace ranges by call stacks *)
+          let flow1 = Flow.add (Alarms.TNullDeref exp.erange) (Flow.get T_cur man flow) man flow |>
+                     Flow.set T_cur man.bottom man
+          in
+          Eval.empty_singleton flow1
+
+        | E_c_points_to(P_invalid) ->
+          (* FIXME: replace ranges by call stacks *)
+          let flow1 = Flow.add (Alarms.TInvalidDeref exp.erange) (Flow.get T_cur man flow) man flow |>
+                     Flow.set T_cur man.bottom man
+          in
+          Eval.empty_singleton flow1
+
+        | _ -> assert false
+
+      end (* case of E_c_deref *) |>
+      Option.return
 
     | _ -> None
+
+
+  and eval_base_offset ~safe ~outbound base offset typ range man flow =
+    let c = C_smash (base, typ) in
+    let cell_size = sizeof_type typ in
+
+    let rec doit () =
+      match base with
+      | V v -> static_offset_case (sizeof_type v.vtyp)
+      (* | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_offset_case s *)
+      | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
+
+    and static_offset_case base_size =
+      debug "static base case";
+      match Universal.Utils.expr_to_z offset with
+      | Some z when Z.geq z Z.zero && Z.leq (Z.add z cell_size) base_size  ->
+        safe c flow
+
+      | Some z ->
+        debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
+        outbound flow
+
+      | None ->
+        dynamic_offset_case base_size
+
+    and dynamic_offset_case base_size =
+      debug "non-constant cell offset";
+
+      let rec doit2 () = fast_check ()
+
+      (* Fast bound check with intervals *)
+      and fast_check () =
+        debug "trying fast check";
+        let open Universal.Numeric.Values.Intervals.Value in
+        let itv = man.ask (Q_interval offset) flow in
+        if is_bounded itv then
+          let l, u = bounds itv in
+          if Z.geq l Z.zero && Z.leq (Z.add u cell_size) base_size then
+            safe c flow
+          else if Z.lt u Z.zero || Z.gt (Z.add l cell_size) base_size then
+            outbound flow
+          else
+            full_check ()
+        else
+          full_check ()
+
+
+      (* Full bound check *)
+      and full_check () =
+        let safety_cond =
+          mk_binop
+            (mk_binop offset O_ge (mk_zero range) range)
+            O_log_and
+            (mk_binop (mk_binop offset O_plus (mk_z (sizeof_type typ) range) range) O_le (mk_z base_size range) range)
+            range
+        in
+        Eval.assume
+          safety_cond
+          ~fthen:(fun flow -> safe c flow)
+          ~felse:(fun flow -> outbound flow)
+          man flow
+      in
+      doit2 ()
+    in
+    doit ()
+
 
 
   (** Evaluation of expressions *)
