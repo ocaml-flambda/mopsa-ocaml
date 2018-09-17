@@ -61,6 +61,13 @@ struct
   let points_to_invalid annot p ?(mode=STRONG) a =
     add annot p (PointerBaseSet.singleton PB_invalid) mode a
 
+  let points_to_base =
+    function
+    | P_fun f -> PB_fun f
+    | P_var (b, _, _) -> PB_var b
+    | P_null -> PB_null
+    | P_invalid -> PB_invalid
+
 
   (** Domain identification *)
   (** ===================== *)
@@ -105,40 +112,21 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let rec points_to exp man flow : ('a, points_to) evl =
-    let range = erange exp in
-    match ekind exp with
-    | E_constant (C_int n) when Z.equal n Z.zero ->
-      Eval.singleton P_null flow
+  let mk_offset_var p =
+    let v = cell_to_var p in
+    {
+      vname = v.vname ^ "_offset";
+      vuid = v.vuid;
+      vtyp = T_int
+    }
 
-    | E_constant C_c_invalid ->
-      Eval.singleton P_invalid flow
-
-    | E_addr addr ->
-      let pt' = P_var (A addr, mk_int 0 range, T_c_void) in
-      Eval.singleton pt' flow
-
-    | E_c_address_of e ->
-      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
-
-    | E_c_cast(e, _) ->
-      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
-
-    | E_binop(O_plus, p, n) ->
-      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
-
-    | E_c_function f ->
-      panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
-
-    | _ -> panic_at range "pointer.points_to: %a not yet supported" pp_expr exp
-
-  let eval zone exp man flow =
+  let rec eval zone exp man flow =
     let range = exp.erange in
     match ekind exp with
     | _
-      when Framework.Zone.subset2 zone (Framework.Zone.Z_top, Z_c_points_to) ->
+      when Framework.Zone.subset2 zone (Z_c, Z_c_points_to) ->
       begin
-        points_to exp man flow |> Eval.bind @@ fun p flow ->
+        eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
       end
       |>
@@ -149,14 +137,60 @@ struct
         && is_c_pointer_type q.etyp
         && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
       ->
-      panic_at range "pointer.eval: %a not yet supported" pp_expr exp
+      begin
+        eval_points_to p man flow |> Eval.bind @@ fun p flow ->
+        eval_points_to q man flow |> Eval.bind @@ fun q flow ->
+        match p, q with
+        | P_var (base1, offset1, t1), P_var (base2, offset2, t2) ->
+          if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+            Eval.singleton (mk_zero range) flow
+          else
+            Eval.assume
+              (mk_binop offset1 O_eq offset2 range ~etyp:T_int)
+              ~fthen:(fun true_flow -> Eval.singleton (mk_one range) true_flow)
+              ~felse:(fun false_flow -> Eval.singleton (mk_zero range) false_flow)
+              ~fboth:(fun _ _ -> Eval.singleton (mk_int_interval 0 1 range) flow)
+              man flow
+
+        | P_null, P_null -> Eval.singleton (mk_one range) flow
+
+        | P_invalid, _ | _, P_invalid ->
+          Eval.singleton (mk_int_interval 0 1 range) flow (* FIXME: maybe detect an error here? *)
+
+        | _ ->
+          Eval.singleton (mk_zero range) flow
+      end
+      |> Option.return
 
     | E_binop(O_ne, p, q)
       when is_c_pointer_type p.etyp
         && is_c_pointer_type q.etyp
         && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
       ->
-      panic_at range "pointer.eval: %a not yet supported" pp_expr exp
+      begin
+        eval_points_to p man flow |> Eval.bind @@ fun p flow ->
+        eval_points_to q man flow |> Eval.bind @@ fun q flow ->
+        match p, q with
+        | P_var (base1, offset1, t1), P_var (base2, offset2, t2) ->
+          if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+            Eval.singleton (mk_one range) flow
+          else
+            Eval.assume
+              (mk_binop offset1 O_ne offset2 range ~etyp:T_int)
+              ~fthen:(fun true_flow -> Eval.singleton (mk_one range) true_flow)
+              ~felse:(fun false_flow -> Eval.singleton (mk_zero range) false_flow)
+              ~fboth:(fun _ _ -> Eval.singleton (mk_int_interval 0 1 range) flow)
+              man flow
+
+        | P_null, P_null -> Eval.singleton (mk_zero range) flow
+
+        | P_invalid, _ | _, P_invalid ->
+          Eval.singleton (mk_int_interval 0 1 range) flow (* FIXME: maybe detect an error here? *)
+
+        | _ -> Eval.singleton (mk_one range) flow
+      end
+      |>
+      Option.return
 
     | E_binop(O_minus, p, q)
       when is_c_pointer_type p.etyp
@@ -168,6 +202,96 @@ struct
     | _ -> None
 
 
+  and eval_points_to exp man flow : ('a, points_to) evl =
+    let range = erange exp in
+    match ekind exp with
+    | E_constant (C_int n) when Z.equal n Z.zero ->
+      Eval.singleton P_null flow
+
+    | E_constant C_c_invalid ->
+      Eval.singleton P_invalid flow
+
+    | E_addr addr ->
+      Eval.singleton (P_var (A addr, mk_int 0 range, T_c_void)) flow
+
+    | E_c_address_of e ->
+      begin
+        man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+        Eval.bind @@ fun e flow ->
+        match ekind e with
+        | E_c_cell c ->
+          let b, o, t = extract_cell_info c in
+          Eval.singleton (P_var (b, o range, t)) flow
+
+        | E_c_function f ->
+          Eval.singleton (P_fun f) flow
+
+        | _ -> assert false
+      end
+
+    | E_c_function f ->
+      Eval.singleton (P_fun f) flow
+
+    | E_binop(O_plus, e1, e2) ->
+      begin
+        let p, n =
+          if is_c_pointer_type e1.etyp || is_c_array_type e1.etyp then e1, e2
+          else e2, e1
+        in
+        eval_points_to p man flow |>
+        Eval.bind @@ fun pt flow ->
+        match pt with
+        | P_var (b, o, t) ->
+          let size = sizeof_type t in
+          let pt = P_var (b, (mk_binop o O_plus (mk_binop n O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int), t) in
+          Eval.singleton pt flow
+
+        | P_null ->
+          Eval.singleton P_null flow
+
+        | P_invalid ->
+          Eval.singleton P_invalid flow
+
+        | P_fun f ->
+          assert false
+      end
+
+    | E_c_cast(e, _) ->
+      begin
+        eval_points_to e man flow |>
+        Eval.bind @@ fun pt flow ->
+        match pt with
+        | P_var (b, o, _) -> Eval.singleton (P_var(b, o, under_pointer_type exp.etyp)) flow
+        | _ -> Eval.singleton pt flow
+      end
+
+    | _ ->
+      man.eval ~zone:(Z_c, Z_c_cell) exp flow |>
+      Eval.bind @@ fun e flow ->
+      let c =
+        match ekind e with
+        | E_c_cell c -> c
+        | _ -> assert false
+      in
+      if cell_type c |> is_c_pointer_type then
+        let a = Flow.get_domain_env T_cur man flow in
+        let bases = find c a in
+        PointerBaseSet.fold (fun pb acc ->
+            let evl =
+              match pb with
+              | PB_var b -> Eval.singleton (P_var (b, mk_var (mk_offset_var c) exp.erange, under_pointer_type (cell_type c))) flow
+              | PB_fun f -> Eval.singleton (P_fun f) flow
+              | PB_invalid -> Eval.singleton P_invalid flow
+              | PB_null -> Eval.singleton P_null flow
+            in
+            Eval.join acc evl
+          ) bases Eval.empty
+      else if cell_type c |> is_c_array_type then
+        let b, o, t = extract_cell_info c in
+        Eval.singleton (P_var (b, o exp.erange, under_array_type t)) flow
+      else
+        assert false
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -176,10 +300,38 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
-      panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
+      begin
+        man.eval ~zone:(Z_c, Z_c_cell) (mk_var p stmt.srange) flow |>
+        Post.bind man @@ fun p flow ->
+        match ekind p with
+        | E_c_cell c ->
+          Flow.map_domain_env T_cur (points_to_null (Flow.get_all_annot flow) c) man flow |>
+          Post.of_flow
+
+        | _ -> assert false
+      end
+      |>
+      Option.return
 
     | S_assign({ekind = E_c_cell p}, q, mode) when cell_type p |> is_c_pointer_type ->
-      panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
+      begin
+        eval_points_to q man flow |>
+        Post.bind man @@ fun pt flow ->
+        let b = points_to_base pt |>
+                PointerBaseSet.singleton
+        in
+        let flow1 = Flow.map_domain_env T_cur (add (Flow.get_all_annot flow) p b mode) man flow in
+        let flow2 =
+          match pt with
+          | P_var (_, offset, _) ->
+            let o = mk_offset_var p in
+            man.exec ~zone:(Universal.Zone.Z_universal_num) (mk_assign (mk_var o range) offset range) flow1
+          | _ -> flow1
+        in
+        Post.of_flow flow2
+      end
+      |>
+      Option.return
 
     | S_c_remove_cell(p) when cell_type p |> is_c_pointer_type ->
       panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
