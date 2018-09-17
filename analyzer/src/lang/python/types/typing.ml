@@ -43,8 +43,6 @@ module Domain =
     let init progr man flow =
       Some ( Flow.set_domain_env T_cur Typingdomain.top man flow )
 
-
-
     let exec zone stmt man flow =
       debug "exec %a@\n" pp_stmt stmt;
       match skind stmt with
@@ -61,7 +59,7 @@ module Domain =
                 begin match ekind e with
                 | E_get_type_partition ptype ->
                    (*let pos, cur' = Typingdomain.get_type cur ptype in*)
-                   let cur' = Typingdomain.set_var cur v {lundef=false; gundef=false; def=Some ptype} in
+                   let cur' = Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some ptype} in
                    let flow = Flow.set_domain_cur cur' man flow in
                    debug "\t%a@\n" print (Flow.get_domain_cur man flow);
                    Post.of_flow flow
