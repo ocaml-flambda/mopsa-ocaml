@@ -277,7 +277,9 @@ struct
                 Eval.singleton exp' flow1
             )
             ~outbound:(fun flow ->
-                let flow1 = Flow.add (Alarms.TOutOfBound exp.erange) (Flow.get T_cur man flow) man flow |>
+                let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+                let alarm = mk_alarm Alarms.AOutOfBound exp.erange ~cs in
+                let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                             Flow.set T_cur man.bottom man
                 in
                 Eval.empty_singleton flow1
@@ -285,16 +287,18 @@ struct
             base offset t exp.erange man flow
 
         | E_c_points_to(P_null) ->
-          (* FIXME: replace ranges by call stacks *)
-          let flow1 = Flow.add (Alarms.TNullDeref exp.erange) (Flow.get T_cur man flow) man flow |>
-                     Flow.set T_cur man.bottom man
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let alarm = mk_alarm Alarms.ANullDeref exp.erange ~cs in
+          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
           in
           Eval.empty_singleton flow1
 
         | E_c_points_to(P_invalid) ->
-          (* FIXME: replace ranges by call stacks *)
-          let flow1 = Flow.add (Alarms.TInvalidDeref exp.erange) (Flow.get T_cur man flow) man flow |>
-                     Flow.set T_cur man.bottom man
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let alarm = mk_alarm Alarms.AInvalidDeref exp.erange ~cs in
+          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
           in
           Eval.empty_singleton flow1
 

@@ -20,6 +20,9 @@ extern unsigned long _mopsa_range_unsigned_long_long();
 // Raise Framework.Manager.Panic exception with a given message
 extern void _mopsa_panic(const char*);
 
+// Printing
+extern void _mopsa_print();
+
 // Errors
 #define OUT_OF_BOUND 1
 #define NULL_DEREF 2
