@@ -26,8 +26,8 @@ let get_fresh () =
 module AddrInfo = struct
   open Iterators.Interproc.Inlining
   type t = call_stack * range * int
-  (** The following compare function can be modified so as to modify
-      the granularity of the recency abstraction. *)
+  (** The following compare function can be modified in order to
+     change the granularity of the recency abstraction. *)
   let compare (cs, r, i) (cs', r', i') = Compare.compose
       [
         (fun () -> compare_call_stack cs cs');
@@ -60,6 +60,17 @@ let get_id_equiv (info: AddrInfo.t) (e: Equiv.t) =
 
 type ('a, _) Annotation.key +=
   | KAddr : ('a, Equiv.t) Annotation.key
+
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
+              function
+              | KAddr -> Some Eq
+              | _ -> None
+            in
+            f);
+    }) ();
+  ()
 
 let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
   let e = Flow.get_annot KAddr f in
