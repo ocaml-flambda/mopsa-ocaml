@@ -48,13 +48,13 @@ module Domain =
     let exec zone stmt man flow =
       debug "exec %a@\n" pp_stmt stmt;
       match skind stmt with
-      | S_assign({ekind = E_var v}, {ekind = E_py_undefined t}, mode) ->
+      | S_assign({ekind = E_var (v, STRONG)}, {ekind = E_py_undefined t}) ->
          let cur = Flow.get_domain_cur man flow in
          let t_with_undefs = Typingdomain.{lundef = not t; gundef = t; def = None} in
          Flow.set_domain_cur (Typingdomain.set_var cur v t_with_undefs) man flow |> Post.return
-      | S_assign({ekind = E_var v}, {ekind = E_var w}, mode) ->
+      | S_assign({ekind = E_var (v, STRONG)}, {ekind = E_var (w, STRONG)}) ->
          Framework.Exceptions.panic "var/var assignment todo"
-      | S_assign({ekind = E_var v}, e, mode) ->
+      | S_assign({ekind = E_var (v, STRONG)}, e) ->
          Option.return
            (man.eval e flow |>
               Post.bind man @@
@@ -79,9 +79,6 @@ module Domain =
                      let flow = Flow.set_domain_cur (Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some ty}) man flow in
                      Post.of_flow flow
                    end
-                | E_var _ ->
-                   let exp = man.eval e flow in
-                   debug "stmt = %a, e is now %a, cur is %a@\n" pp_stmt stmt pp_expr e Typingdomain.print (Flow.get_domain_cur man flow); failwith "ici"
                 | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
       | S_remove_var v ->
@@ -98,7 +95,7 @@ module Domain =
       | E_alloc_addr akind ->
          let addr = {addr_kind = akind; addr_uid=(-1)} in
          Eval.singleton (mk_addr addr range) flow |> Option.return
-      | E_var v ->
+      | E_var (v, _) ->
          debug "lala@\n";
          let cur = Flow.get_domain_cur man flow in
          let polytype = Typingdomain.get_polytype cur v in

@@ -28,7 +28,7 @@ module Domain =
     let exec_interface = {export = [Zone.Z_py]; import = []}
     let eval_interface = {export = []; import = []}
 
-    let rec exec stmt man flow =
+    let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_py_import(modul, _, _) when String.contains modul '.'->
@@ -114,7 +114,7 @@ module Domain =
               let name = mk_dot_name base cls.py_cls_var.vname in
               let bases = List.map (fun base ->
                               match ekind base with
-                              | E_var v -> Addr.find_builtin v.vname
+                              | E_var (v, _) -> Addr.find_builtin v.vname
                               | _ -> assert false
                             ) cls.py_cls_bases
               in
@@ -169,7 +169,7 @@ module Domain =
       import_builtin_module None "stdlib";
       Option.return flow
 
-    let eval exp man flow = None
+    let eval _ _ _ _ = None
     let ask _ _ _ = None
   end
 

@@ -10,7 +10,7 @@ framework.domains = stateless stateless_zoned iter nonrel leaf functor stacked r
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal c # python
+lang = universal c python
 
 lang.universal = ast pp visitor frontend utils zone iterators heap numeric # arrays
 lang.universal.iterators = program intraproc loops interproc

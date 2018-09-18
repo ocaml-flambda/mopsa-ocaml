@@ -32,9 +32,9 @@ module Domain =
 
     let init _ _ flow = Some flow
 
-    let exec _ _ _ = None
+    let exec _ _ _ _ = None
 
-    let eval exp man flow =
+    let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
       (* FIXME *)
