@@ -41,17 +41,34 @@ let () =
 (** {2 Call stack annotation} *)
 (** ========================= *)
 
-type call_stack = fundec list
+(* type call_stack = (fundec * range) list
+ * 
+ * let pp_call_stack =
+ *   Format.pp_print_list
+ *     ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+ *     (fun fmt (f, range) -> Format.fprintf fmt "%s:%a" f.fun_name pp_range range)
+ * 
+ * let compare_call_stack cs cs' =
+ *   Compare.list_compare (fun (f1, r1) (f2, r2) ->
+ *       Compare.compose [
+ *         (fun () -> compare f1.fun_name f2.fun_name);
+ *         (fun () -> compare_range r1 r2)
+ *       ]
+ *     ) cs cs' *)
+
+
+type call_stack = range list
+
 let pp_call_stack =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-    (fun fmt f -> Format.fprintf fmt "%s" f.fun_name)
+    pp_range
+
 let compare_call_stack cs cs' =
-  let c = fun x x' -> compare x.fun_name x'.fun_name in
-  Compare.list_compare c cs cs'
+  Compare.list_compare compare_range cs cs'
 
 type ('a, _) Annotation.key +=
-  | A_call_stack: ('a, call_stack) Annotation.key (** List of previously called functions *)
+  | A_call_stack: ('a, call_stack) Annotation.key
 
 let () =
   Annotation.(register_stateless_annot {
@@ -94,7 +111,10 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) = None
+  let init prog man (flow: 'a flow) =
+    Some (
+      Flow.set_annot A_call_stack [] flow
+    )
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -134,13 +154,10 @@ struct
 
       let init_block = mk_block parameters_assign range in
 
-      (* Add f to call stack *)
-      let flow1 = Flow.map_all_annot (fun annot ->
-          let cs = try Annotation.find A_call_stack annot with Not_found -> [] in
-          let cs' = f :: cs in
-          Annotation.add A_call_stack cs' annot
-        ) flow0
-      in
+      (* Update call stack *)
+      let cs = Flow.get_annot A_call_stack flow0 in
+      let cs' = range :: cs in
+      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>

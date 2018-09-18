@@ -68,7 +68,7 @@ struct
         | E_c_builtin_function(name) ->
           let () = debug "builtin : %a" pp_expr f in
           let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
-          man.eval exp' flow
+          man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
 
         | E_c_function fundec ->
           let body = get_c_fun_body_panic fundec in

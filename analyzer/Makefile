@@ -5,7 +5,7 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang main
 
-framework = location ast visitor options query annotation alarm lattice zone manager flow exceptions eval post channel value domain cache analyzer lattices essentials domains config
+framework = location ast visitor options query annotation lattice zone manager flow alarm exceptions eval post channel value domain cache analyzer lattices essentials domains config
 framework.domains = stateless stateless_zoned iter nonrel leaf functor stacked reduced_product empty router
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
