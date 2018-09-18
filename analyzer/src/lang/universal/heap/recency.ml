@@ -63,8 +63,14 @@ struct
   let init prog man flow =
     Some (Flow.set_domain_cur empty man flow)
 
+  (** Post-conditions *)
+  (** *************** *)
+
   let exec zone stmt man flow =
     None
+
+  (** Evaluations *)
+  (** *********** *)
 
   let eval zone expr man flow =
     match ekind expr with
@@ -104,7 +110,11 @@ struct
       end
     | _ -> None
 
+  (** Queries *)
+  (** ******* *)
+
   let ask _ _ _ = None
+
 end
 
 let () =
