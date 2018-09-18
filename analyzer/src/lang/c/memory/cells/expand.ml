@@ -679,7 +679,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 end
 
 
-let setup () =
+let () =
   Framework.Domains.Stacked.register_domain (module Domain);
   (* register_domain name (module Domain); *)
   Framework.Options.register_option (
