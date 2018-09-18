@@ -35,6 +35,8 @@ include Options
 
 include Exceptions
 
+include Alarm
+
 module Var =
 struct
   type t = var

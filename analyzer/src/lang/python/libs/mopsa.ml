@@ -45,11 +45,11 @@ module Domain =
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)
     (*==========================================================================*)
-    let exec stmt man flow = None
+    let exec _ _ _ _ = None
 
     let init prog man flow = Some flow
 
-    let eval exp man flow =
+    let eval zs exp man flow =
       (* let range = erange exp in *)
       match ekind exp with
 (*       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [

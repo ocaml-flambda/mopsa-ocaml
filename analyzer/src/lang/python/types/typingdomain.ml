@@ -850,6 +850,13 @@ let class_of (d:domain) (t:typeid) : class_address * py_object list =
   | Class _ -> C_builtin "type", [Addr.find_builtin "object"]
   | _ -> failwith "class_of: ni"
 
+let get_polytype (d:domain) (v:pyVar) : polytype =
+  let i = (VarMap.find v d.d1).def in
+  let tid = match i with
+    | Some i -> typeindex_of_var d.d1 v
+    | _ -> failwith "get_polytype"
+  in
+  TypeIdMap.find tid d.d2
 
 let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
   (* quand v pointe vers une classe/fonction, ressortir l'addresse *)

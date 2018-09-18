@@ -22,7 +22,7 @@ module Domain =
 
     let init _ _ _ = None
 
-    let eval exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
+    let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
@@ -30,7 +30,7 @@ module Domain =
          Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "str")) range) flow |> Option.return
       | _ -> None
 
-    let exec stmt man flow = None
+    let exec _ _ _ _ = None
     let ask _ _ _ = None
   end
 

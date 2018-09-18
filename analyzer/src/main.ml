@@ -45,7 +45,11 @@ let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
   Debug.debug ~channel:"result" "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
 
   Debug.info "Collecting alarms ...";
-  let alarms = try Analyzer.ask Alarm.Q_alarms res with Not_found -> [] in
+  let alarms = Flow.fold (fun acc tk env ->
+      match tk with
+      | Alarm.T_alarm a -> a :: acc
+      | _ -> acc
+    ) [] Analyzer.man res in
   t, alarms
 
 type analysis_results =
@@ -67,7 +71,7 @@ let print_results analysis_res =
       Debug.plurial_list alarms
       (Format.pp_print_list
          ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
-         Framework.Alarm.print
+         Framework.Alarm.pp_report
       ) alarms
   | ExcPanic s
   | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)
@@ -98,7 +102,7 @@ let parse_program files =
   match Options.(common_options.lang) with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
-  (* | "python" -> Lang.Python.Frontend.parse_program files *)
+  | "python" -> Lang.Python.Frontend.parse_program files
   | _ -> Framework.Exceptions.panic "Unknown language"
 
 

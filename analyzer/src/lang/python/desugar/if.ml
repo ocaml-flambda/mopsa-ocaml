@@ -30,7 +30,7 @@ module Domain =
 
     let init _ _ flow = Some flow
 
-    let eval exp man flow =
+    let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_if(test, body, orelse) ->
@@ -43,14 +43,15 @@ module Domain =
                          range
                       ) flow
          in
-         let exp' = {exp with ekind = E_var tmp} in
-         Eval.singleton exp' flow ~cleaners:[mk_remove_var tmp (tag_range range "cleaner")]
-         |> Option.return
+         let exp' = {exp with ekind = E_var (tmp, STRONG)} in
+         man.eval exp' flow |>
+           Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
+           Option.return
 
       | _ -> None
 
 
-    let exec _ _ _ = None
+    let exec _ _ _ _ = None
 
     let ask _ _ _ = None
 

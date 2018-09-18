@@ -391,7 +391,9 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           f x0 c flow
         | Some z ->
           debug "error, z = %a, cell_size = %a, base_size = %a" Z.pp_print z Z.pp_print cell_size Z.pp_print base_size;
-          Flow.add (Alarms.TOutOfBound range) (Flow.get T_cur man flow) man flow |>
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
+          Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
           Flow.set T_cur man.bottom man |>
           err x0
 
@@ -444,7 +446,9 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 if Z.geq l Z.zero && Z.leq (Z.add u cell_size) base_size then
                   fold_interval l u step x0 flow
                 else if Z.lt u Z.zero || Z.gt (Z.add l cell_size) base_size then
-                  Flow.add (Alarms.TOutOfBound range) (Flow.get T_cur man flow) man flow |>
+                  let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+                  let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
+                  Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                   Flow.set T_cur man.bottom man |>
                   err x0
                 else
@@ -474,11 +478,13 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 assert false
             in
             let error_case acc flow =
-              Flow.add (Alarms.TOutOfBound range) (Flow.get T_cur man flow) man flow |>
+              let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+              let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
+              Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
               Flow.set T_cur man.bottom man |>
               err acc
             in
-	          Eval.assume
+	    Eval.assume
               safety_cond man
               ~fthen:(safe_case x0)
               ~felse:(error_case x0)
@@ -608,17 +614,20 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
             Eval.empty base offset t exp.erange man flow
 
         | E_c_points_to(P_null) ->
-          let flow = Flow.add (Alarms.TNullDeref exp.erange) (Flow.get T_cur man flow) man flow |>
-                     Flow.set T_cur man.bottom man
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let alarm = mk_alarm Alarms.ANullDeref exp.erange ~cs in
+          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
           in
-          Eval.empty_singleton flow
-
+          Eval.empty_singleton flow1
 
         | E_c_points_to(P_invalid) ->
-          let flow = Flow.add (Alarms.TInvalidDeref exp.erange) (Flow.get T_cur man flow) man flow |>
-                     Flow.set T_cur man.bottom man
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let alarm = mk_alarm Alarms.AInvalidDeref exp.erange ~cs in
+          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
           in
-          Eval.empty_singleton flow
+          Eval.empty_singleton flow1
 
         | _ -> assert false
       end |> Option.return

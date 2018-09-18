@@ -152,10 +152,12 @@ struct
         check_division man range
           (fun e' tflow -> Eval.singleton e' tflow)
           (fun e' fflow ->
-             let cur = Flow.get T_cur man fflow in
-             Flow.add (Alarms.TDivideByZero range) cur man fflow
-             |> Flow.set T_cur man.bottom man
-             |> Eval.empty_singleton
+             let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
+             let alarm = mk_alarm Alarms.ADivideByZero exp.erange ~cs in
+             let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
+                         Flow.set T_cur man.bottom man
+             in
+             Eval.empty_singleton flow1
           )
       end |> Option.return
 
@@ -168,13 +170,15 @@ struct
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
-             let cur = Flow.get T_cur man fflow in
-             let () = debug "Adding alarm flow : %a" man.print cur in
-             Flow.add (Alarms.TIntegerOverflow range) cur man fflow
-             |> Eval.singleton
+             let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
+             let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+             let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
+                         Flow.set T_cur man.bottom man
+             in
+             Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
                 etyp   = typ;
-                erange = tag_range range "wrap"}
+                erange = tag_range range "wrap"} flow1
           )
       end |> Option.return
 
@@ -187,13 +191,15 @@ struct
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
-             let cur = Flow.get T_cur man fflow in
-             let () = debug "Adding alarm flow : %a" man.print cur in
-             Flow.add (Alarms.TIntegerOverflow range) cur man fflow
-             |> Eval.singleton
+             let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
+             let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+             let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
+                         Flow.set T_cur man.bottom man
+             in
+             Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
                 etyp   = typ;
-                erange = tag_range range "wrap"}
+                erange = tag_range range "wrap"} flow1
           )
       end |> Option.return
 
@@ -204,9 +210,12 @@ struct
         Eval.singleton (mk_z z range) flow
         |> Option.return
       else
-        let cur = Flow.get T_cur man flow in
-        Flow.add (Alarms.TIntegerOverflow range) cur man flow
-        |> Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped"))
+        let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+        let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+        let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                    Flow.set T_cur man.bottom man
+        in
+        Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
         |> Option.return
 
     | E_binop(op, e, e') ->
@@ -248,14 +257,17 @@ struct
                end
              else
                begin
-                 debug "false flow : %a" (Flow.print man) fflow ;
-                 let cur = Flow.get T_cur man fflow in
-                 Flow.add (Alarms.TIntegerOverflow range) cur man fflow
-                 |> Eval.singleton
+                 let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
+                 let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+                 let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
+                             Flow.set T_cur man.bottom man
+                 in
+                 Eval.singleton
                    {ekind  = E_unop(O_wrap(rmin, rmax), e);
                     etyp   = t;
                     erange = tag_range range "wrap"
                    }
+                   flow1
                end
           )
         |> Option.return

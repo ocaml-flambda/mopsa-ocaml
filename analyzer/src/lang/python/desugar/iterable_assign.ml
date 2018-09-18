@@ -30,26 +30,26 @@ module Domain =
 
     let init _ _ flow = Some flow
 
-    let rec exec stmt man flow =
+    let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
-      | S_assign({ekind = E_py_tuple(el)}, exp, kind)
-        | S_assign({ekind = E_py_list(el)}, exp, kind) ->
+      | S_assign({ekind = E_py_tuple(el)}, exp)
+        | S_assign({ekind = E_py_list(el)}, exp) ->
          man.eval (Utils.mk_builtin_call "iter" [exp] range) flow |>
            Post.bind man
              (fun iter flow ->
-               assign_iter man el iter kind range flow
+               assign_iter man el iter range flow
                |> Post.of_flow
              )
          |> Option.return
 
       | _ -> None
 
-    and assign_iter man el iter mode range flow =
+    and assign_iter man el iter range flow =
       let stmtl =
         List.fold_left (fun acc e ->
             mk_assign
-              e ~mode
+              e
               (Utils.mk_builtin_call "next" [iter] range)
               (tag_range range "next assign")
             :: acc
@@ -72,7 +72,7 @@ module Domain =
       man.exec stmt flow
 
 
-    let eval _ _ _ = None
+    let eval _ _ _ _ = None
     let ask _ _ _ = None
 
   end

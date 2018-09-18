@@ -33,7 +33,7 @@ module Domain =
 
     let init _ _ flow = Option.return flow
 
-    let eval exp (man:('a, unit) man) (flow:'a flow) : ('a, Framework.Ast.expr) evl option =
+    let eval zs exp (man:('a, unit) man) (flow:'a flow) : ('a, Framework.Ast.expr) evl option =
       let range = erange exp in
       match ekind exp with
       (* E⟦ e1 and e2 ⟧ *)
@@ -111,7 +111,7 @@ module Domain =
           *                            )) range
           *               in
           *               let flow = man.exec stmt true_flow in
-          *               man.eval (mk_var v range) flow
+          *               man.eval (mk_var v range) flow |> Eval.add_cleaners [mk_remove_var v range]
           *             )
           *             ~felse:(fun false_flow ->
           *               Eval.assume
@@ -189,7 +189,7 @@ module Domain =
       | _ -> None
 
 
-    let rec exec (stmt:Framework.Ast.stmt) (man:('a, unit) man) (flow:'a flow) : 'a post option =
+    let rec exec zone (stmt:Framework.Ast.stmt) (man:('a, unit) man) (flow:'a flow) : 'a post option =
       (* let range = srange stmt in *)
       match skind stmt with
       (* S⟦ ?e ⟧ *)

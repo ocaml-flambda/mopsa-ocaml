@@ -41,7 +41,7 @@ module Domain =
       Addr.add_builtin_class (addr, mk_py_empty range) ()
 
 
-    let rec eval exp man flow =
+    let rec eval zones exp man flow =
       let range = erange exp in
       match ekind exp with
       (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
@@ -76,7 +76,7 @@ module Domain =
 
       | _ -> None
 
-    let rec exec stmt (man:('a, unit) man) (flow:'a flow) : 'a post option =
+    let rec exec zone stmt (man:('a, unit) man) (flow:'a flow) : 'a post option =
       let range = srange stmt in
       match skind stmt with
       (* 𝕊⟦ class cls: body ⟧ *)

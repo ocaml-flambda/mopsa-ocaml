@@ -38,7 +38,7 @@ struct
 
   let init _ _ flow = Some flow
 
-  let eval _ _ _ = None
+  let eval _ _ _ _ = None
 
   let init_globals man filename globals flow =
     (* Initialize global variables with C_py_undefined constant *)
@@ -122,7 +122,7 @@ struct
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
 
-  let exec stmt man flow  =
+  let exec zone stmt man flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
