@@ -26,13 +26,23 @@ type 'a annot
 type (_, _) eq = Eq : ('a, 'a) eq
 (** Equality witness *)
 
-type ('a, 'b) w = {
+type ('a, 'b) sfw = {
   eq : 'c. ('a, 'c) key -> ('b, 'c) eq option;
 }
-(** [('a, 'b) w] defines an equality witness checker for a key [('a, 'b) key] *)
+(** [('a, 'b) w] defines an equality witness checker for a stateful key [('a, 'b) key] *)
 
-val register_annot : ('a, 'b) w -> 'a annot -> 'a annot
-(** [register_annot w a] registers a new kind of annotations to an
+val register_stateful_annot : ('a, 'b) sfw -> 'a annot -> 'a annot
+(** [register_stateful_annot w a] registers a new kind of stateful annotations to an
+   annotation map [a], defined with a witness checker [w] *)
+
+
+type 'b slw = {
+  eq : 'a 'c. ('a, 'c) key -> ('b, 'c) eq option;
+}
+(** [('a, 'b) w] defines an equality witness checker for a stateless key [('a, 'b) key] *)
+
+val register_stateless_annot : 'b slw -> unit -> unit
+(** [register_stateless_annot w ()] registers a new kind of stateless annotations to an
    annotation map [a], defined with a witness checker [w] *)
 
 

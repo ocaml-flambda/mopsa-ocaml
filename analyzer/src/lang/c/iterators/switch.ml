@@ -29,6 +29,16 @@ type ('a, _) Annotation.key +=
   | KSwitchExpr: ('a, expr) Annotation.key
   (** Condition expression of the most enclosing switch statement. *)
 
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) key -> (expr, b) eq option =
+              function
+              | KSwitchExpr -> Some Eq
+              | _ -> None
+            in
+            f);
+    }) ();
+  ()
 
 
 (*==========================================================================*)
@@ -61,24 +71,13 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) =
-    Some (
-      flow |> Flow.map_all_annot (fun annot ->
-          Annotation.(register_annot {
-              eq = (let f: type b. ('a, b) key -> (expr, b) eq option =
-                      function
-                      | KSwitchExpr -> Some Eq
-                      | _ -> None
-                    in
-                    f);
-            }) annot
-        )
-    )
+  let init prog man (flow: 'a flow) = None
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
 
@@ -187,7 +186,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval exp man flow = None
+  let eval zone exp man flow = None
 
   (** Answer to queries *)
   (** ================= *)
