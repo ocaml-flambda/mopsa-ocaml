@@ -18,6 +18,7 @@
 
         "python.objects.class",
         "python.objects.function",
+        "python.objects.nones",
 
         "python.data_model.callable",
 
