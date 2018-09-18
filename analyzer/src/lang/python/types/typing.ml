@@ -29,7 +29,7 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = { export = [Zone.Z_py]; import = []; }
+    let exec_interface = { export = [Zone.Z_py]; import = [Framework.Zone.Z_top]; }
     let eval_interface = { export = [Framework.Zone.Z_top, Framework.Zone.Z_top]; import = []; }
 
     let join _ = Typingdomain.join
@@ -52,6 +52,8 @@ module Domain =
          let cur = Flow.get_domain_cur man flow in
          let t_with_undefs = Typingdomain.{lundef = not t; gundef = t; def = None} in
          Flow.set_domain_cur (Typingdomain.set_var cur v t_with_undefs) man flow |> Post.return
+      | S_assign({ekind = E_var v}, {ekind = E_var w}, mode) ->
+         Framework.Exceptions.panic "var/var assignment todo"
       | S_assign({ekind = E_var v}, e, mode) ->
          Option.return
            (man.eval e flow |>
@@ -67,25 +69,53 @@ module Domain =
                    Post.of_flow flow
                 | E_py_object (addr, _) ->
                    begin
-                     match addr.addr_kind with
-                     | A_py_class (c, bases) ->
-                        let flow = Flow.set_domain_cur (Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some (Class (c, bases))}) man flow in
-                        Post.of_flow flow
-                     | _ -> debug "typing/exec/assign/E_py_object: %a@\n" Universal.Ast.pp_addr addr;
-                            failwith "ni"
+                     let ty = match addr.addr_kind with
+                       | A_py_class (c, bases) -> Typingdomain.Class (c, bases)
+                       | A_py_module m ->         Typingdomain.Module m
+                       | A_py_function f ->       Typingdomain.Function (f, [])
+                       | _ -> debug "typing/exec/assign/E_py_object: %a@\n" Universal.Ast.pp_addr addr;
+                              failwith "ni"
+                     in
+                     let flow = Flow.set_domain_cur (Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some ty}) man flow in
+                     Post.of_flow flow
                    end
-                | _ -> failwith "typing/eval/S_assign: ni"
+                | E_var _ ->
+                   let exp = man.eval e flow in
+                   debug "stmt = %a, e is now %a, cur is %a@\n" pp_stmt stmt pp_expr e Typingdomain.print (Flow.get_domain_cur man flow); failwith "ici"
+                | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
+      | S_remove_var v ->
+         debug "Removing var %a@\n" pp_var v;
+         let cur = Flow.get_domain_cur man flow in
+         let flow = Flow.set_domain_cur (Typingdomain.rm_var cur v) man flow in
+         Post.return flow
       | _ -> None
 
     let eval zs exp man flow =
+      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       | E_alloc_addr akind ->
          let addr = {addr_kind = akind; addr_uid=(-1)} in
          Eval.singleton (mk_addr addr range) flow |> Option.return
-      | _ -> debug "Warning: no eval for %a" pp_expr exp;
-             None
+      | E_var v ->
+         debug "lala@\n";
+         let cur = Flow.get_domain_cur man flow in
+         let polytype = Typingdomain.get_polytype cur v in
+         let expr = match polytype with
+           | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
+           | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+           | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+           | _ -> mk_expr (E_get_type_partition polytype) range in
+         Eval.singleton expr flow
+         (* FIXME: properly handle every case *)
+         (* let ak = Typingdomain.get_addr_kind cur v in
+          * let a = {addr_kind=ak; addr_uid=(-1)} in
+          * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
+         |> Option.return
+      | _ ->
+         debug "Warning: no eval for %a" pp_expr exp;
+         None
 
     let ask query man flow = None
   end

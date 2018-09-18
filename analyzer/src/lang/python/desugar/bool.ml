@@ -111,7 +111,7 @@ module Domain =
           *                            )) range
           *               in
           *               let flow = man.exec stmt true_flow in
-          *               man.eval (mk_var v range) flow
+          *               man.eval (mk_var v range) flow |> Eval.add_cleaners [mk_remove_var v range]
           *             )
           *             ~felse:(fun false_flow ->
           *               Eval.assume

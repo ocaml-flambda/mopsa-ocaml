@@ -27,7 +27,7 @@ lang.c.memory = base init_visitor cells machine_integers
 lang.c.memory.cells = cell pointer smashing expand router cell2num
 lang.c.libs = c_stdlib
 
-lang.python = ast addr utils pp frontend zone libs desugar objects program types
+lang.python = ast addr utils pp frontend zone libs desugar objects data_model program types
 lang.python.types = typingdomain typing t_string t_int
 
 

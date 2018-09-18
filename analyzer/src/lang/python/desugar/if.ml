@@ -44,8 +44,9 @@ module Domain =
                       ) flow
          in
          let exp' = {exp with ekind = E_var tmp} in
-         Eval.singleton exp' flow ~cleaners:[mk_remove_var tmp (tag_range range "cleaner")]
-         |> Option.return
+         man.eval exp' flow |>
+           Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
+           Option.return
 
       | _ -> None
 
