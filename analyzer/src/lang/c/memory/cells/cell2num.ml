@@ -91,6 +91,9 @@ struct
       Flow.set_annot KCellNumEquiv CellNumEquiv.empty flow
     )
 
+  (** Post-conditions *)
+  (** *************** *)
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_remove_cell c when cell_type c |> is_c_int_type ->
@@ -107,6 +110,9 @@ struct
 
     | _ -> None
 
+  (** Evaluations *)
+  (** *********** *)
+
   let eval zone exp man flow =
     match ekind exp with
     | E_c_cell(c, mode) when cell_type c |> is_c_int_type ->
@@ -116,6 +122,9 @@ struct
       Eval.singleton exp flow
       |> Option.return
     | _ -> None
+
+  (** Queries *)
+  (** ******* *)
 
   let ask _ _ _  = None
 
