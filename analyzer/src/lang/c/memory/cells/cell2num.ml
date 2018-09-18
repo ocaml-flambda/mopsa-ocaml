@@ -89,6 +89,9 @@ struct
       Flow.set_annot KCellNumEquiv CellNumEquiv.empty
     )
 
+  (** Post-conditions *)
+  (** *************** *)
+
   let exec stmt man flow =
     match skind stmt with
     | Cell.S_c_remove_cell c ->
@@ -105,6 +108,9 @@ struct
 
     | _ -> None
 
+  (** Evaluations *)
+  (** *********** *)
+
   let eval exp man flow =
     match ekind exp with
     | Cell.E_c_cell(c, mode) ->
@@ -114,6 +120,9 @@ struct
       Eval.singleton exp flow
       |> Option.return
     | _ -> None
+
+  (** Queries *)
+  (** ******* *)
 
   let ask _ _ _  = None
 
