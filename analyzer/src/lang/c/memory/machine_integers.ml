@@ -171,7 +171,7 @@ struct
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
              let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
-             let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+             let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
              let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
                          Flow.set T_cur man.bottom man
              in
@@ -192,7 +192,7 @@ struct
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
              let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
-             let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+             let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
              let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
                          Flow.set T_cur man.bottom man
              in
@@ -211,7 +211,7 @@ struct
         |> Option.return
       else
         let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
-        let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+        let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
         let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                     Flow.set T_cur man.bottom man
         in
@@ -258,7 +258,7 @@ struct
              else
                begin
                  let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack fflow in
-                 let alarm = mk_alarm Alarms.ATIntegerOverflow exp.erange ~cs in
+                 let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
                  let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
                              Flow.set T_cur man.bottom man
                  in

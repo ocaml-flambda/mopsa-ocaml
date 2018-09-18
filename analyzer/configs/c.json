@@ -16,6 +16,9 @@
         "c.desugar.aggregate",
         "c.desugar.andor",
 
+        // C libraries
+        "c.libs.mopsa",
+
         // Memory model
         "c.memory.cells.smashing",
         "c.memory.cells.pointer",
