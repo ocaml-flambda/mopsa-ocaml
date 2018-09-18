@@ -92,7 +92,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_return e ->
       Some (
@@ -108,7 +108,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval exp man flow =
+  let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function f}, args) ->

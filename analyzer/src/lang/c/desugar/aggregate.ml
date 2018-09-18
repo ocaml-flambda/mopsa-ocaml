@@ -50,9 +50,9 @@ struct
   let init _ _ _ =
     None
 
-  let exec _ _ _ = None
+  let exec _ _ _ _ = None
 
-  let eval exp man flow =
+  let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_c_array_subscript(e1, e2) ->

@@ -285,6 +285,12 @@ struct
       Post.of_flow |>
       Option.return
 
+    | S_remove_var v when is_c_int_type v.vtyp ->
+      let v' = {v with vtyp = to_universal_type v.vtyp} in
+      man.exec ~zone:Universal.Zone.Z_universal_num (mk_remove_var v' stmt.srange) flow |>
+      Post.of_flow |>
+      Option.return
+
     | _ -> None
 
   let ask _ _ _ =

@@ -185,11 +185,16 @@ struct
       Post.of_flow |>
       Option.return
 
-    | S_rename_var(v, v') ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
-
     | S_remove_var v ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
+      let cl = cells_of_base (V v) man flow in
+      let flow1 = Flow.map_domain_env T_cur (fun a ->
+          List.fold_left (fun acc c -> remove c acc) a cl
+        ) man flow
+      in
+      let block = List.map (fun c -> mk_remove_cell c stmt.srange) cl in
+      man.exec ~zone:Z_c_cell (mk_block block stmt.srange) flow1 |>
+      Post.of_flow |>
+      Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       begin
@@ -236,6 +241,14 @@ struct
     in
     Post.of_flow flow'' |>
     Post.add_mergers mergers ~zone:Z_c_cell
+
+  and cells_of_base b man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    fold (fun c acc ->
+        let b' = cell_base c in
+        if compare_base b b' = 0 then c :: acc
+        else acc
+      ) a []
 
 
   (** Evaluation of expressions *)

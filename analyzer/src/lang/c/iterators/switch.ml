@@ -77,7 +77,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
 
@@ -186,7 +186,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval exp man flow = None
+  let eval zone exp man flow = None
 
   (** Answer to queries *)
   (** ================= *)

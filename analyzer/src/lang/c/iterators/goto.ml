@@ -56,7 +56,7 @@ struct
   let init prog man (flow: 'a flow) =
     None
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_goto s ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
@@ -109,7 +109,7 @@ struct
 
     | _ -> None
 
-  let eval man exp flow = None
+  let eval zone man exp flow = None
 
   let ask _ _ _  = None
 

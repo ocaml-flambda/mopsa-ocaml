@@ -65,7 +65,7 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec stmt man flow  =
+  let exec zone stmt man flow  =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not Framework.Options.(common_options.unit_test_mode) ->
@@ -123,7 +123,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval exp man flow = None
+  let eval zone exp man flow = None
 
 
   (** Handler of queries *)

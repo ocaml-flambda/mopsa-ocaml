@@ -20,8 +20,8 @@ sig
   val exec_interface : Zone.zone interface
   val eval_interface : (Zone.zone * Zone.zone) interface
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
+  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
+  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
   val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
 
 end
@@ -49,8 +49,8 @@ struct
   let exec_interface = D.exec_interface
   let eval_interface = D.eval_interface
 
-  let exec zone = D.exec
-  let eval zone = D.eval
+  let exec = D.exec
+  let eval = D.eval
   let ask = D.ask
 
 end
