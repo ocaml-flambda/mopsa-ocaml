@@ -42,6 +42,13 @@ let () =
 (** ========================= *)
 
 type call_stack = fundec list
+let pp_call_stack =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+    (fun fmt f -> Format.fprintf fmt "%s" f.fun_name)
+let compare_call_stack cs cs' =
+  let c = fun x x' -> compare x.fun_name x'.fun_name in
+  Compare.list_compare c cs cs'
 
 type ('a, _) Annotation.key +=
   | A_call_stack: ('a, call_stack) Annotation.key (** List of previously called functions *)
