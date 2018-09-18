@@ -54,7 +54,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {export = []; import = [Framework.Zone.Z_top]}
   let eval_interface = {export = [Zone.Z_universal, Zone.Z_universal]; import = []}
 
   (** Initialization *)
@@ -88,12 +88,12 @@ struct
         | true, false ->
           (* Only a previous strong address exists =>
              Rebase the previous strong address with strong updates. *)
-          man.exec (mk_rebase_addr old_addr recent_addr STRONG range) flow
+          man.exec ~zone:Framework.Zone.Z_top (mk_rebase_addr old_addr recent_addr STRONG range) flow
 
         | true, true ->
           (* Both strong and weak addresses exist =>
              Rebase the previous strong address with weak updates. *)
-          man.exec (mk_rebase_addr old_addr recent_addr WEAK range) flow
+          man.exec ~zone:Framework.Zone.Z_top (mk_rebase_addr old_addr recent_addr WEAK range) flow
 
 
         | false, true ->
