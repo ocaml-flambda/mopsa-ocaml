@@ -30,6 +30,9 @@ type ocell = {
   t: typ;
 }
 
+let ch_addr_of_ocell o addr =
+  {o with b = Base.A addr}
+
 type cell +=
   | OffsetCell of ocell
 
@@ -519,6 +522,28 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | S_rename_var(v, v') ->
       assert false
+
+    | S_rebase_addr(adr, adr', mode) ->
+      begin
+        let u = Flow.get_domain_cur man flow in
+        let l = exist_and_find_cells (fun c -> compare_base (base_of_ocell c) (Base.A adr) = 0) u in
+        let u = List.fold_left (fun acc c -> rm_cell c acc) u l in
+        let assigns = List.map
+            (fun c -> let c' = ch_addr_of_ocell c adr' in
+              mk_assign
+                (mk_ocell c' ~mode:mode (tag_range range "lval"))
+                (mk_ocell c  (tag_range range "rval"))
+                (tag_range range "assign")
+            ) l
+        in
+        let mergers = List.map (fun c -> mk_remove_cell c (srange stmt)) l in
+        Flow.set_domain_cur u man flow
+        |> man.exec ~zone:Z_c_cell (mk_block assigns (tag_range range "block"))
+        |> man.exec ~zone:Z_c_cell (mk_block mergers (tag_range range "mergers"))
+        |> Post.of_flow
+        |> Post.add_mergers mergers
+        |> Option.return
+      end
 
     | S_remove_var (v) when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
