@@ -42,7 +42,7 @@ struct
   let add annot p pb mode a =
     let a' = add p pb a in
     match mode with
-    | STRONG | EXPAND -> a'
+    | STRONG (* | EXPAND *) -> a'
     | WEAK -> join annot a a'
 
   let points_to_fun annot p f ?(mode=STRONG) a =
@@ -219,7 +219,7 @@ struct
         man.eval ~zone:(Z_c, Z_c_cell) e flow |>
         Eval.bind @@ fun e flow ->
         match ekind e with
-        | E_c_cell c ->
+        | E_c_cell(c, _) ->
           let b, o, t = extract_cell_info c in
           Eval.singleton (P_var (b, o range, t)) flow
 
@@ -270,7 +270,7 @@ struct
       Eval.bind @@ fun e flow ->
       let c =
         match ekind e with
-        | E_c_cell c -> c
+        | E_c_cell(c, _) -> c
         | _ -> assert false
       in
       if cell_type c |> is_c_pointer_type then
@@ -304,7 +304,7 @@ struct
         man.eval ~zone:(Z_c, Z_c_cell) (mk_var p stmt.srange) flow |>
         Post.bind man @@ fun p flow ->
         match ekind p with
-        | E_c_cell c ->
+        | E_c_cell(c, mode) ->
           Flow.map_domain_env T_cur (points_to_null (Flow.get_all_annot flow) c) man flow |>
           Post.of_flow
 
@@ -313,7 +313,7 @@ struct
       |>
       Option.return
 
-    | S_assign({ekind = E_c_cell p}, q, mode) when cell_type p |> is_c_pointer_type ->
+    | S_assign({ekind = E_c_cell(p, mode)}, q) when cell_type p |> is_c_pointer_type ->
       begin
         eval_points_to q man flow |>
         Post.bind man @@ fun pt flow ->

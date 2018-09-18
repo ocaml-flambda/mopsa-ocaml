@@ -110,8 +110,8 @@ type addr_kind = ..
 
 (** Heap addresses. *)
 type addr = {
-  addr_kind : addr_kind; (** Kind of a heap address. *)
-  addr_uid : int; (** Unique identifier. *)
+  addr_uid  : int;       (** Unique identifier. *)
+  addr_kind : addr_kind; (** Kind de l'adresse. *)
 }
 
 type addr_info = {
@@ -125,13 +125,9 @@ let addr_compare_chain : (addr -> addr -> int) ref =
 let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
   ref (fun fmt a -> failwith "Pp: Unknown address")
 
-let compare_addr a1 a2 =
-  Compare.compose [
-    (fun () -> compare a1.addr_uid a2.addr_uid);
-    (fun () -> !addr_compare_chain a1 a2);
-  ]
-
 let pp_addr fmt a = !addr_pp_chain fmt a
+
+let compare_addr a b = !addr_compare_chain a b
 
 let register_addr info =
   addr_compare_chain := info.compare !addr_compare_chain;
@@ -153,12 +149,9 @@ type fundec = {
   fun_return_type: typ; (** return type *)
 }
 
-
-
 (*==========================================================================*)
                            (** {2 Programs} *)
 (*==========================================================================*)
-
 
 type program_kind +=
   | P_universal of {
@@ -167,11 +160,9 @@ type program_kind +=
       universal_main    : stmt;
     }
 
-
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
-
 
 type expr_kind +=
   (** Function expression *)
@@ -217,7 +208,7 @@ let () =
         ]
 
       | E_alloc_addr(a1), E_alloc_addr(a2) ->
-        compare_addr {addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
+        compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
 
       | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
 
@@ -319,7 +310,7 @@ type stmt_kind +=
 
   | S_continue (** Loop continue *)
 
-  | S_rebase_addr of addr (** old *) * addr (** new *) * assign_mode
+  | S_rebase_addr of addr (** old *) * addr (** new *) * mode
   (** Change the address of a previously allocated object *)
 
   | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)

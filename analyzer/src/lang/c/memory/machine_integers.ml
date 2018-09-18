@@ -265,11 +265,11 @@ struct
       Eval.singleton {exp with ekind = E_constant (C_int c)} flow
       |> Option.return
 
-    | E_var v ->
+    | E_var(v, mode) ->
       let () = debug "case 8" in
       Eval.singleton
         {exp with
-         ekind = E_var({v with vtyp = to_universal_type v.vtyp});
+         ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode);
          etyp = to_universal_type (etyp exp)}
         flow
       |> Option.return
@@ -279,9 +279,9 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign({ekind = E_var v} as lval, rval, mode) when etyp lval |> is_c_int_type ->
-      let lval' = {lval with ekind = E_var {v with vtyp = to_universal_type v.vtyp}} in
-      man.exec ~zone:Universal.Zone.Z_universal_num (mk_assign lval' rval ~mode stmt.srange) flow |>
+    | S_assign({ekind = E_var(v, mode)} as lval, rval) when etyp lval |> is_c_int_type ->
+      let lval' = {lval with ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode)} in
+      man.exec ~zone:Universal.Zone.Z_universal_num (mk_assign lval' rval stmt.srange) flow |>
       Post.of_flow |>
       Option.return
 

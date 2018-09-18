@@ -80,8 +80,9 @@ let () =
         )
     }
 
-let mk_cell (c: ocell) range =
-  mk_expr ~etyp:(c.t) (E_c_cell (OffsetCell c)) range
+let mk_ocell (c: ocell) ?(mode = STRONG) range =
+  mk_cell (OffsetCell c) ~mode:mode range
+  (* mk_expr ~etyp:(c.t) (E_c_cell (OffsetCell c)) range *)
 
 let mk_remove_cell (c: ocell) range =
   mk_stmt
@@ -95,11 +96,11 @@ let mk_ocell_of_var v t =
 let base_of_ocell (c: ocell) =
   c.b
 
-let var_of_new_ocell c =
-  { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_ocell c in Format.flush_str_formatter ());
-    vuid = 0;
-    vtyp = c.t;
-  }
+(* let var_of_new_ocell c =
+ *   { vname = (let () = Format.fprintf Format.str_formatter "%a" pp_ocell c in Format.flush_str_formatter ());
+ *     vuid = 0;
+ *     vtyp = c.t;
+ *   } *)
 
 
 (*==========================================================================*)
@@ -212,11 +213,11 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let open Universal.Ast in
     let cs = u in
     match exist_and_find_cell (fun c' -> compare_ocell c c' = 0) cs  with
-    | Some c -> Nexp (Some (mk_cell c range))
+    | Some c -> Nexp (Some (mk_ocell c range))
     | None ->
       begin
         match exist_and_find_cell (fun c' -> is_c_int_type @@ c'.t && Z.equal (sizeof_type c'.t) (sizeof_type c.t) && compare_base c.b c'.b = 0 && Z.equal c.o c'.o) cs with
-        | Some (c') -> Nexp (Some (wrap_expr (mk_cell c' range) (int_rangeof c.t) range))
+        | Some (c') -> Nexp (Some (wrap_expr (mk_ocell c' range) (int_rangeof c.t) range))
         | None ->
           begin
             match exist_and_find_cell ( fun c' ->
@@ -226,7 +227,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
             | Some (c') ->
               let b = Z.sub c.o c'.o in
               let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-              Nexp (Some (mk_binop (mk_binop (mk_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range))
+              Nexp (Some (mk_binop (mk_binop (mk_ocell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range))
             | None ->
               begin
                 let exception NotPossible in
@@ -250,7 +251,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                       in
                       let ll = aux 0 [] in
                       let _,e = List.fold_left (fun (time, res) x ->
-                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_cell x range) range) O_plus res range in
+                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_ocell x range) range) O_plus res range in
                           let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -285,7 +286,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     else
       match phi c u range with
       | Nexp (Some e) ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_ocell c range) O_eq e ~etyp:T_int range) range) in
         add_cell c u, subman.exec stmt s
       | Nexp None ->
         add_cell c u, s
@@ -301,7 +302,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     else
       match phi c u range with
       | Nexp (Some e) ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_ocell c range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add_cell c u) man |>
         man.exec ~zone:(Z_c_cell) stmt
@@ -498,8 +499,8 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (*==========================================================================*)
 
   let assign_cell man c rval mode range flow =
-    let lval = mk_cell c range in
-    let stmt = mk_assign lval rval ~mode range in
+    let lval = mk_ocell c ~mode:mode range in
+    let stmt = mk_assign lval rval range in
     let () = debug "giving back stmt %a" pp_stmt stmt in
     let flow', to_remove = remove_overlapping_cells c stmt.srange man flow in
     let rmin, rmax = rangeof c.t in
@@ -531,7 +532,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       Post.add_mergers mergers |>
       Option.return
 
-    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       begin
         man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
         |> Post.bind man @@ fun rval flow ->
@@ -541,7 +542,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
         |> Eval.default_opt lval flow
         |> Post.bind man @@ fun lval flow ->
         match ekind lval with
-        | E_c_cell OffsetCell c ->
+        | E_c_cell(OffsetCell c, mode) ->
           assign_cell man c rval mode stmt.srange flow
         | _ -> assert false
       end |> Option.return
@@ -550,16 +551,16 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   and eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_c_cell c ->
+    | E_c_cell(OffsetCell c, _) ->
       Eval.singleton exp flow |> Option.return
 
-    | E_var (v) when is_c_type v.vtyp ->
+    | E_var (v, mode) when is_c_type v.vtyp ->
       begin
         debug "evaluating a scalar variable %a" pp_var v;
         let c = mk_ocell_of_var v v.vtyp  in
         let flow = add_cons_cell man range c flow in
         debug "new variable %a in %a" pp_var v (Flow.print man) flow;
-        Eval.singleton {exp with ekind = E_c_cell (OffsetCell c)} flow
+        Eval.singleton {exp with ekind = E_c_cell (OffsetCell c, mode)} flow
       end |> Option.return
 
     | E_c_deref(p) ->
@@ -574,7 +575,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           fold_cells
             (fun acc c flow ->
                (** FIXME: filter flow with (p == &v) *)
-               Eval.singleton (mk_cell c range) flow |>
+               Eval.singleton (mk_ocell c range) flow |>
                Eval.join acc
             )
             (fun acc eflow -> Eval.empty_singleton eflow |> Eval.join acc)
@@ -609,10 +610,10 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
           match ekind v with
-          | E_var v ->
+          | E_var(v, mode) ->
             let c = mk_ocell_of_var v v.vtyp in
             let flow = add_cons_cell man range c flow in
-            let stmt = mk_assign (mk_var v range) e range in
+            let stmt = mk_assign (mk_var v ~mode:mode range) e range in
             man.exec stmt flow
           | _ -> assert false
         );
@@ -620,7 +621,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       (* Initialization of arrays *)
       array =  (fun a is_global init_list range flow ->
           match ekind a with
-          | E_var a ->
+          | E_var(a, mode) ->
             let rec aux i l flow =
               if i = !opt_max_expand then flow
               else
@@ -629,8 +630,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 | init :: tl ->
                   let t' = under_array_type a.vtyp in
                   let ci = {b = Base.V a; o = Z.(zero + (Z.of_int i) * (sizeof_type t')); t = t'} in
-                  let ai = var_of_new_ocell ci in
-                  let flow' = init_expr (init_manager man) (mk_var ai range) is_global init range flow in
+                  let flow' = init_expr (init_manager man) (mk_ocell ci ~mode:mode range) is_global init range flow in
                   aux (i + 1) tl flow'
             in
             aux 0 init_list flow
@@ -639,7 +639,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
       (* Initialization of structs *)
       record =  (fun s is_global init_list range flow ->
-          let s = match ekind s with E_var s -> s | _ -> assert false in
+          let s = match ekind s with E_var(s, mode) -> s | _ -> assert false in
           let c = mk_ocell_of_var s s.vtyp in
           let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
           match init_list with
@@ -651,8 +651,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-                let ef = var_of_new_ocell cf in
-                let flow' = init_expr (init_manager man) (mk_var ef range) is_global init range flow in
+                let flow' = init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -661,9 +660,8 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
             record.c_record_fields |> List.fold_left (fun acc field ->
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-                let ef = var_of_new_ocell cf in
                 let init = C_init_expr (mk_c_member_access e field range) in
-                init_expr (init_manager man) (mk_var ef range) is_global (Some init) range acc
+                init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
               ) flow
         );
     }

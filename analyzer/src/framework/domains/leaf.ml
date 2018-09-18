@@ -12,7 +12,7 @@
 
 open Essentials
 include Channel
-    
+
 module type S =
 sig
 
@@ -52,14 +52,14 @@ struct
     export = [Zone.top, D.zone];
     import = [Zone.top, D.zone];
   }
-  
+
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(v, e, mode) ->
+    | S_assign(v, e) ->
       Some (
         man.eval ~zone:(Zone.top, D.zone) e flow |>
         Post.bind man @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assign(v, e', mode)} in
+        let stmt' = {stmt with skind = S_assign(v, e')} in
         let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
         Post.of_flow flow' |>
         Post.add_channels channels
