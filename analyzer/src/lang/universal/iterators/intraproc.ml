@@ -26,12 +26,12 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let exec_interface = {export = [Framework.Zone.Z_top]; import = []}
   let eval_interface = {export = []; import = []}
 
   let init prog man flow = None
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_expression(e) ->
       Some (
@@ -42,7 +42,7 @@ struct
 
     | S_block(block) ->
       Some (
-        List.fold_left (fun acc stmt -> man.exec stmt acc) flow block |>
+        List.fold_left (fun acc stmt -> man.exec ~zone stmt acc) flow block |>
         Post.of_flow
       )
 
@@ -67,7 +67,7 @@ struct
 
     | _ -> None
 
-  let eval exp man flow = None
+  let eval zone exp man flow = None
 
   let ask query man flow = None
 

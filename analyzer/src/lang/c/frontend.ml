@@ -20,7 +20,7 @@ let debug fmt =
 
 let c_opts = ref []
 (** Extra options to pass to clang when parsing  *)
-           
+
 let () =
   register_option (
       "-I",
@@ -32,14 +32,14 @@ let () =
       Arg.String (fun l -> c_opts := !c_opts @ [l]),
       " pass the option to the Clang frontend"
     )
-  
 
-  
-  
+
+
+
 (** {2 Entry points} *)
 
 type type_space = TS_TYPEDEF | TS_RECORD | TS_ENUM
-  
+
 type ctx = {
     ctx_fun: Ast.c_fundec list;
 
@@ -49,7 +49,7 @@ type ctx = {
      *)
   }
 
-  
+
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
@@ -229,7 +229,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
     | C_AST.T_typedef t ->
        if Hashtbl.mem fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
        then Hashtbl.find fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
-       else 
+       else
          let x = {
              c_typedef_org_name = t.typedef_org_name;
              c_typedef_unique_name = t.typedef_unique_name;
@@ -244,7 +244,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
     | C_AST.T_record r ->
        if Hashtbl.mem fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
        then Hashtbl.find fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
-       else 
+       else
          let x = {
              c_record_kind =
                (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
@@ -275,8 +275,8 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
     | C_AST.T_enum e ->
        if Hashtbl.mem fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
        then Hashtbl.find fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
-       else 
-         let x = 
+       else
+         let x =
            Ast.T_c_enum {
                c_enum_org_name = e.enum_org_name;
                c_enum_unique_name = e.enum_unique_name;
@@ -356,7 +356,7 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
     | C_AST.E_string_literal (s, k) ->
       Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
-    | C_AST.E_variable v -> E_var (from_var fun_ctx v)
+    | C_AST.E_variable v -> E_var (from_var fun_ctx v, STRONG)
     | C_AST.E_function f -> Ast.E_c_function (from_function_in_context fun_ctx f)
     | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
     | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr fun_ctx e)
@@ -498,7 +498,7 @@ and construct_string_table globals funcs =
           incr counter;
           v, StringTable.add s v table
       in
-      table, {ekind = E_var v; etyp = type_of_string s; erange = e.erange}
+      table, {ekind = E_var(v, STRONG); etyp = type_of_string s; erange = e.erange}
     | _ -> table, e
 
 

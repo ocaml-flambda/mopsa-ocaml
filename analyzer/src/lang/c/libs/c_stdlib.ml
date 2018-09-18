@@ -61,12 +61,9 @@ struct
                         (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init man prog flow =
-    None
+  let exec zone stmt man flow = None
 
-  let exec stmt man flow = None
-
-  let eval exp man flow =
+  let eval zone exp man flow =
     match ekind exp with
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
       debug "builtin function";
@@ -121,7 +118,7 @@ struct
 
   end
 
-let setup () =
+let () =
   Framework.Domains.Stateless.register_domain (module Domain);
   Universal.Ast.register_addr (
     {compare = (fun next ak1 ak2 ->

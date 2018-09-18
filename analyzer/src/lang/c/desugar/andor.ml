@@ -39,9 +39,9 @@ struct
     export = [Framework.Zone.Z_top, Framework.Zone.Z_top]
   }
 
-  let exec _ _ _ = None
+  let exec _ _ _ _ = None
 
-  let eval exp man flow =
+  let eval zone exp man flow =
     match ekind exp with
     | E_binop(O_c_and, e1, e2) ->
       begin

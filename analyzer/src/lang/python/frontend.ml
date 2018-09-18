@@ -86,7 +86,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
   let skind' =
     match stmt.skind with
     | S_assign (x, e) ->
-      Framework.Ast.S_assign (from_exp x, from_exp e, Framework.Ast.STRONG)
+      Framework.Ast.S_assign (from_exp x, from_exp e)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
@@ -248,7 +248,7 @@ and from_exp exp =
       T_any
 
     | E_id v ->
-      E_var (from_var v),
+      E_var (from_var v, STRONG),
       T_any
 
     | E_binop (left, op, right) ->

@@ -138,7 +138,7 @@ struct
   let exec_interface =
     {
       import = [Universal.Zone.Z_universal_num];
-      export = []
+      export = [Zone.Z_c_num]
     }
 
   let eval_num man = man.eval ~zone:(Universal.Zone.Z_universal_num, Universal.Zone.Z_universal_num)
@@ -265,11 +265,11 @@ struct
       Eval.singleton {exp with ekind = E_constant (C_int c)} flow
       |> Option.return
 
-    | E_var v ->
+    | E_var(v, mode) ->
       let () = debug "case 8" in
       Eval.singleton
         {exp with
-         ekind = E_var({v with vtyp = to_universal_type v.vtyp});
+         ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode);
          etyp = to_universal_type (etyp exp)}
         flow
       |> Option.return
@@ -277,8 +277,21 @@ struct
     | _ ->
       None
 
-  let exec zone stmt man zone =
-    None
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_assign({ekind = E_var(v, mode)} as lval, rval) when etyp lval |> is_c_int_type ->
+      let lval' = {lval with ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode)} in
+      man.exec ~zone:Universal.Zone.Z_universal_num (mk_assign lval' rval stmt.srange) flow |>
+      Post.of_flow |>
+      Option.return
+
+    | S_remove_var v when is_c_int_type v.vtyp ->
+      let v' = {v with vtyp = to_universal_type v.vtyp} in
+      man.exec ~zone:Universal.Zone.Z_universal_num (mk_remove_var v' stmt.srange) flow |>
+      Post.of_flow |>
+      Option.return
+
+    | _ -> None
 
   let ask _ _ _ =
     None

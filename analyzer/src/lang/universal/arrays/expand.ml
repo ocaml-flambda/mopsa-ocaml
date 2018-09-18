@@ -44,7 +44,7 @@ end
 (** ******************** *)
 
 type expr_kind +=
-  | E_cell_lval of var * Z.t list option
+  | E_cell_lval of var * mode * Z.t list option
 
 let () =
   register_expr {
@@ -228,7 +228,7 @@ struct
           index_in_interval c.Cell.index i
         then
           let v = mk_cell_var c e.etyp in
-          man.exec (mk_assign (mk_var v range) e ~mode:WEAK range) flow |>
+          man.exec (mk_assign (mk_var v ~mode:WEAK range) e range) flow |>
           Flow.join man acc
         else
           acc
@@ -242,7 +242,7 @@ struct
         ~expand:(fun (acc, cells) i ->
             let c = mk_cell a (i0 @ [i]) in
             let v = mk_cell_var c e.etyp in
-            let flow' = man.exec (mk_assign (mk_var v range) e ~mode range) flow |>
+            let flow' = man.exec (mk_assign (mk_var v ~mode:(mode) range) e range) flow |>
                         Flow.map_domain_env T_cur (add c) man
             in
             Flow.join man acc flow', v :: cells
@@ -258,13 +258,13 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_assign({ekind = E_subscript(a, i)}, e, mode) ->
+    | S_assign({ekind = E_subscript(a, i)}, e) ->
       Some (
         man.eval e flow |> Post.bind man @@ fun e flow ->
         (* Evaluate a as an lval *)
         man.eval a flow ~zone:(Framework.Zone.top, Z_expand_cell_lval) |> Post.bind man @@ fun a flow ->
         match ekind a with
-        | E_var a ->
+        | E_var(a, mode) ->
           (* a evaluated into a *)
           assign_array_cell a [] i e range mode man flow
 

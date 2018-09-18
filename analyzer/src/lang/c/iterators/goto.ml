@@ -56,7 +56,7 @@ struct
   let init prog man (flow: 'a flow) =
     None
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_goto s ->
       (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
@@ -82,7 +82,7 @@ struct
             match k with
             | T_goto s -> (nogotos, Flow.add k v man gotos)
             | _       -> (Flow.add k v man nogotos, gotos)
-          ) (Flow.bottom annot, Flow.top annot) man flow in
+          ) (Flow.bottom annot, Flow.bottom annot) man flow in
         let next f f' i wid_limit =
           let get_gotos f = Flow.filter
               (fun t e -> match t with | T_goto s -> true | _ -> false) man f
@@ -109,7 +109,7 @@ struct
 
     | _ -> None
 
-  let eval man exp flow = None
+  let eval zone man exp flow = None
 
   let ask _ _ _  = None
 

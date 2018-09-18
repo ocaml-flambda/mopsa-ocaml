@@ -101,6 +101,10 @@ struct
     let env = Apron.Abstract1.env abs in
     Apron.Environment.mem_var env (var_to_apron v)
 
+  let is_env_var_apron v abs =
+    let env = Apron.Abstract1.env abs in
+    Apron.Environment.mem_var env v
+
   let add_missing_vars  abs lv =
     let env = Apron.Abstract1.env abs in
     let lv = List.sort_uniq compare lv in
@@ -158,7 +162,7 @@ struct
   (** ******************************** *)
 
   exception UnsupportedExpression
-  
+
   let rec binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
     | O_minus  -> Apron.Texpr1.Sub
@@ -166,6 +170,76 @@ struct
     | O_div  -> Apron.Texpr1.Div
     | O_mod  -> Apron.Texpr1.Mod
     | _ -> raise UnsupportedExpression
+
+  and strongify_rhs exp abs l =
+    match ekind exp with
+    | E_constant(C_int_interval (a,b)) ->
+      Apron.Texpr1.Cst(
+        Apron.Coeff.i_of_scalar
+          (Apron.Scalar.of_float @@ Z.to_float a)
+          (Apron.Scalar.of_float @@ Z.to_float b)
+      ), abs, l
+
+    | E_constant(C_float_interval (a,b)) ->
+      Apron.Texpr1.Cst(
+        Apron.Coeff.i_of_scalar
+          (Apron.Scalar.of_float a)
+          (Apron.Scalar.of_float b)
+      ), abs, l
+
+    | E_constant(C_int n) ->
+      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float @@ Z.to_float n)),
+      abs, l
+
+    | E_constant(C_float f) -> Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)), abs, l
+
+    | E_var(x, STRONG) ->
+      Apron.Texpr1.Var(var_to_apron x), abs, l
+    | E_var(x, WEAK) ->
+      let x' = mk_tmp ~vtyp:(x.vtyp) () in
+      let x_apr = var_to_apron x in
+      let x_apr' = var_to_apron x' in
+      let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
+      (Apron.Texpr1.Var x_apr, abs, x_apr' :: l)
+
+    | E_binop(binop, e1, e2) ->
+      let binop' = binop_to_apron binop in
+      let e1', abs, l = strongify_rhs e1 abs l in
+      let e2', abs, l = strongify_rhs e2 abs l in
+      let typ' = typ_to_apron exp.etyp in
+      Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, l
+
+    | E_unop(O_minus , e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron e.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, l
+
+    | E_unop(O_sqrt, e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron T_float in
+      Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, l
+
+    | E_unop(O_wrap(g, d), e) ->
+      let r = erange e in
+      mk_binop (mk_z g r) O_plus (mk_binop
+                                    (mk_binop e O_minus (mk_z g r) r)
+                                    O_mod
+                                    (mk_z (Z.(d-g+one)) r)
+                                    r
+                                 ) r
+      |> fun x -> strongify_rhs x abs l
+
+    | _ ->
+      warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      raise UnsupportedExpression
+
+  and remove_tmp tmpl abs =
+    let env = Apron.Abstract1.env abs in
+    let vars =
+      List.filter (fun v -> is_env_var_apron v abs) tmpl
+    in
+    let env = Apron.Environment.remove env (Array.of_list vars) in
+    Apron.Abstract1.change_environment ApronManager.man abs env true
 
   and exp_to_apron exp =
     match ekind exp with
@@ -187,7 +261,7 @@ struct
 
     | E_constant(C_float f) -> Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f))
 
-    | E_var (x) -> Apron.Texpr1.Var(var_to_apron x)
+    | E_var (x, _) -> Apron.Texpr1.Var(var_to_apron x)
 
     | E_binop(binop, e1, e2) ->
        let binop' = binop_to_apron binop in
@@ -291,13 +365,13 @@ struct
       Apron.Tcons1.array_set cond_array i c;
     ) l in
     cond_array
-  
+
 
   (** {2 Transfer functions} *)
   (** ********************** *)
 
   let zone = Zone.Z_universal_num
-  
+
   let init prog = top
 
   let rec exec stmt a =
@@ -313,10 +387,10 @@ struct
       return
 
     | S_rename_var( v, v') ->
-        Apron.Abstract1.rename_array ApronManager.man a
-          [| var_to_apron v  |]
-          [| var_to_apron v' |] |>
-        return
+      Apron.Abstract1.rename_array ApronManager.man a
+        [| var_to_apron v  |]
+        [| var_to_apron v' |] |>
+      return
 
     | S_project_vars vars ->
       let env = Apron.Abstract1.env a in
@@ -328,28 +402,22 @@ struct
       Apron.Abstract1.change_environment ApronManager.man a new_env true |>
       return
 
-    | S_assign({ekind = E_var v}, e, STRONG) ->
+    | S_assign({ekind = E_var(v, STRONG)}, e) ->
       let a = add_missing_vars a (v :: (Framework.Visitor.expr_vars e)) in
+      let e, a, l = strongify_rhs e a [] in
       begin try
           let aenv = Apron.Abstract1.env a in
-          let texp = Apron.Texpr1.of_expr aenv (exp_to_apron e) in
+          let texp = Apron.Texpr1.of_expr aenv e in
           Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron v) texp None |>
+          remove_tmp l |>
           return
         with UnsupportedExpression ->
           exec {stmt with skind = S_remove_var v} a
       end
 
-    | S_assign({ekind = E_var v} as lval, e, WEAK) ->
-      exec {stmt with skind = S_assign(lval, e, STRONG)} a |> bind @@ fun a' ->
+    | S_assign({ekind = E_var(v, WEAK)} as lval, e) ->
+      exec {stmt with skind = S_assign(lval, e)} a |> bind @@ fun a' ->
       join_ a a' |>
-      return
-
-    | S_assign(({ekind = E_var x}), {ekind = E_var y}, EXPAND) ->
-      return @@ add_missing_vars a [y] |>
-      bind @@ exec (mk_stmt (S_remove_var x) stmt.srange) |>
-      bind @@ fun a' ->
-      let x = {x with vtyp = y.vtyp} in
-      Apron.Abstract1.expand ApronManager.man a' (var_to_apron y) [| var_to_apron x |] |>
       return
 
     | S_assume(e) -> begin
@@ -358,24 +426,24 @@ struct
 
         let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
         let meet_list l = tcons_array_of_tcons_list env l |>
-                        Apron.Abstract1.meet_tcons_array ApronManager.man a
+                          Apron.Abstract1.meet_tcons_array ApronManager.man a
         in
 
         try
           bexp_to_apron e |>
           Dnf.apply
             (fun (op,e1,typ1,e2,typ2) ->
-                let typ =
-                  match typ1, typ2 with
-                  | T_int, T_int -> Apron.Texpr1.Int
-                  | T_float, T_int
-                  | T_int, T_float
-                  | T_float, T_float -> Apron.Texpr1.Real
-                  | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
-                in
-                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
-                let diff_texpr = Apron.Texpr1.of_expr env diff in
-                Apron.Tcons1.make diff_texpr op
+               let typ =
+                 match typ1, typ2 with
+                 | T_int, T_int -> Apron.Texpr1.Int
+                 | T_float, T_int
+                 | T_int, T_float
+                 | T_float, T_float -> Apron.Texpr1.Real
+                 | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+               in
+               let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+               let diff_texpr = Apron.Texpr1.of_expr env diff in
+               Apron.Tcons1.make diff_texpr op
             )
             meet_list join_list |>
           return
@@ -386,7 +454,7 @@ struct
     | _ -> return top
 
   and ask query a = None
- 
+
   let var_relations v a =
     (* Get the linear constraints *)
     let lincons_list =
@@ -400,7 +468,7 @@ struct
 
     let rel1 = List.fold_left (fun acc lincons ->
         let t_involved = ref false in
-        Apron.Lincons1.iter (fun c v' -> 
+        Apron.Lincons1.iter (fun c v' ->
             t_involved := !t_involved || ((compare_var v (apron_to_var v') = 0) && not (Apron.Coeff.is_zero c))
           ) lincons;
         (* If lincons is involved in the constraint, we keep all other variables with non null coefficients *)
@@ -437,7 +505,7 @@ struct
           acc
       ) [] lincons_list
     in
-    
+
     List.sort_uniq compare_var (rel1 @ rel2)
 
 

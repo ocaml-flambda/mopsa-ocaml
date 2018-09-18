@@ -41,9 +41,9 @@ let compare_typ t1 t2 = !typ_compare_chain t1 t2
 (*==========================================================================*)
 
 type var = {
-  vname : string;  (** original name of the variable. *)
-  vuid  : int;     (** unique identifier. *)
-  vtyp  : typ;     (** type of the variable. *)
+  vname : string;      (** original name of the variable. *)
+  vuid  : int;         (** unique identifier. *)
+  vtyp  : typ;         (** type of the variable. *)
 }
 (** variables *)
 
@@ -119,6 +119,7 @@ let compare_constant op1 op2 = !constant_compare_chain op1 op2
 (*==========================================================================*)
 
 
+
 type expr = {
   ekind: expr_kind;
   etyp: typ;
@@ -128,9 +129,20 @@ type expr = {
 (** Extensible type of expressions. *)
 and expr_kind = ..
 
+
+(** Mode of a variable*)
+type mode =
+  | STRONG
+  | WEAK
+let compare_mode = compare
+let pp_mode fmt mode =
+  match mode with
+  | STRONG -> Format.fprintf fmt "STRONG"
+  | WEAK   -> Format.fprintf fmt "WEAK"
+
 (** Some basic expressions *)
 type expr_kind +=
-  | E_var of var
+  | E_var of var * mode
   (** variables *)
 
   | E_constant of constant
@@ -150,21 +162,26 @@ let erange (e: expr) = e.erange
 let rec expr_compare_chain : (expr -> expr -> int) ref =
   ref (fun e1 e2 ->
       match ekind e1, ekind e2 with
-        | E_var v1, E_var v2 -> compare_var v1 v2
-        | E_constant c1, E_constant c2 -> compare_constant c1 c2
-        | E_unop(op1, e1), E_unop(op2, e2) ->
-          Compare.compose [
-            (fun () -> compare_operator op1 op2);
-            (fun () -> compare_expr e1 e2);
-          ]
-        | E_binop(op1, e1, e1'), E_binop(op2, e2, e2') ->
-          Compare.compose [
-            (fun () -> compare_operator op1 op2);
-            (fun () -> compare_expr e1 e2);
-            (fun () -> compare_expr e1' e2');
-          ]
-        | _ -> Pervasives.compare e1 e2
+      | E_var(v1, s1), E_var(v2, s2) ->
+        Compare.compose [
+          (fun () -> compare_var v1 v2);
+          (fun () -> compare_mode s1 s2)
+        ]
+      | E_constant c1, E_constant c2 -> compare_constant c1 c2
+      | E_unop(op1, e1), E_unop(op2, e2) ->
+        Compare.compose [
+          (fun () -> compare_operator op1 op2);
+          (fun () -> compare_expr e1 e2);
+        ]
+      | E_binop(op1, e1, e1'), E_binop(op2, e2, e2') ->
+        Compare.compose [
+          (fun () -> compare_operator op1 op2);
+          (fun () -> compare_expr e1 e2);
+          (fun () -> compare_expr e1' e2');
+        ]
+      | _ -> Pervasives.compare e1 e2
     )
+
 and register_expr_compare cmp = expr_compare_chain := cmp !expr_compare_chain
 and compare_expr e1 e2 =
   if e1 == e2 then 0 else !expr_compare_chain e1 e2
@@ -177,8 +194,8 @@ let mk_expr
   =
   {ekind; etyp; erange}
 
-let mk_var v erange =
-  mk_expr ~etyp:v.vtyp (E_var v) erange
+let mk_var v ?(mode = STRONG) erange =
+  mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
 
 let mk_binop left op right ?(etyp = T_any) erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange
@@ -210,20 +227,12 @@ type program = {
 type stmt_kind = ..
 (** Extensible statements kinds. *)
 
-
-(** Mode of an assignment *)
-type assign_mode =
-  | STRONG
-  | WEAK
-  | EXPAND
-
-
 (** Basic statements *)
 type stmt_kind +=
   | S_program of program
   (** Program to be analyzed *)
 
-  | S_assign of expr (** lhs *) * expr (** rhs *) * assign_mode (** assignment mode *)
+  | S_assign of expr (** lhs *) * expr (** rhs *)
   (** Assignments *)
 
   | S_assume of expr (** condition *)
@@ -250,11 +259,10 @@ let srange (stmt: stmt) = stmt.srange
 let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
   ref (fun s1 s2 ->
       match skind s1, skind s2 with
-      | S_assign(x1, e1, m1), S_assign(x2, e2, m2) ->
+      | S_assign(x1, e1), S_assign(x2, e2) ->
         Compare.compose [
           (fun () -> compare_expr x1 x2);
           (fun () -> compare_expr e1 e2);
-          (fun () -> Pervasives.compare m1 m2);
         ]
 
       | S_assume(e1), S_assume(e2) -> compare_expr e1 e2
@@ -287,8 +295,8 @@ let mk_stmt skind srange = {skind; srange}
 let mk_rename v v' =
   mk_stmt (S_rename_var (v, v'))
 
-let mk_assign ?(mode = STRONG)v e =
-  mk_stmt (S_assign (v, e, mode))
+let mk_assign v e =
+  mk_stmt (S_assign (v, e))
 
 let mk_assume e =
   mk_stmt (S_assume e)
@@ -311,7 +319,8 @@ let rec pp_expr_chain : (Format.formatter -> expr -> unit) ref =
   ref (fun fmt expr ->
       match ekind expr with
       | E_constant c -> pp_constant fmt c
-      | E_var(v) -> pp_var fmt v
+      | E_var(v, STRONG) -> pp_var fmt v
+      | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
       | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
       | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
       | _ -> failwith "Pp: Unknown expression"

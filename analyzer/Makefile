@@ -10,10 +10,11 @@ framework.domains = stateless stateless_zoned iter nonrel leaf functor stacked r
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal c python
+lang = universal c # python
 
-lang.universal = ast pp visitor frontend utils zone iterators numeric arrays
+lang.universal = ast pp visitor frontend utils zone iterators heap numeric # arrays
 lang.universal.iterators = program intraproc loops interproc
+lang.universal.heap = pool recency
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
@@ -29,7 +30,6 @@ lang.c.libs = c_stdlib
 
 lang.python = ast addr utils pp frontend zone libs desugar objects data_model program types
 lang.python.types = typingdomain typing t_string t_int
-
 
 #Packages
 PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

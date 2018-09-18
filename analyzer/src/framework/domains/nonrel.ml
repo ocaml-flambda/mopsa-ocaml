@@ -64,7 +64,7 @@ struct
   let rec eval (e:expr) (a:t) : (aexpr * Value.t) with_channel =
     match ekind e with
 
-    | E_var var ->
+    | E_var(var, _) ->
       let v = VarMap.find var a in
       (A_var (var, v), v) |>
       Channel.return
@@ -94,7 +94,7 @@ struct
   let rec fwd_compare (e:expr) (a:t) : (aexpr * Value.t) with_channel =
     match ekind e with
 
-    | E_var var ->
+    | E_var(var, _) ->
       let v = VarMap.find var a in
       Channel.return (A_var (var, v), v)
 
@@ -184,7 +184,7 @@ struct
         (if Value.is_bottom w then bottom else a) |>
         Channel.return
 
-      | E_var var ->
+      | E_var(var, _) ->
         let v = find var a in
         Value.filter v r |> Channel.bind @@ fun w ->
         (if Value.is_bottom w then bottom else add var w a) |>
@@ -270,14 +270,15 @@ struct
         Post.of_flow flow'
       )
 
-    | S_assign({ekind = E_var var}, e, mode) ->
+    (* FIXME: No check on weak variables in rhs *)
+    | S_assign({ekind = E_var(var, mode)}, e) ->
       Some (
         man.eval ~zone:(Zone.top, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
             eval e a |> Channel.bind @@ fun (_,v) ->
             let a' = VarMap.add var v a in
             let a'' = match mode with
-              | STRONG | EXPAND -> a'
+              | STRONG -> a'
               | WEAK -> join (Flow.get_all_annot flow) a a'
             in
             Channel.return a''

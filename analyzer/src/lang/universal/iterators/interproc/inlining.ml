@@ -42,9 +42,27 @@ let () =
 (** ========================= *)
 
 type call_stack = fundec list
+let pp_call_stack =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+    (fun fmt f -> Format.fprintf fmt "%s" f.fun_name)
+let compare_call_stack cs cs' =
+  let c = fun x x' -> compare x.fun_name x'.fun_name in
+  Compare.list_compare c cs cs'
 
 type ('a, _) Annotation.key +=
   | A_call_stack: ('a, call_stack) Annotation.key (** List of previously called functions *)
+
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) key -> (call_stack, b) eq option =
+              function
+              | A_call_stack -> Some Eq
+              | _ -> None
+            in
+            f);
+    }) ();
+  ()
 
 
 (** {2 Domain definition} *)
@@ -76,27 +94,12 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) =
-    Some (
-      (* Register call stack annotation *)
-      let annot = Flow.get_all_annot flow in
-      let annot' = Annotation.(register_annot {
-          eq = (let f: type b. ('a, b) key -> (call_stack, b) eq option =
-                  function
-                  | A_call_stack -> Some Eq
-                  | _ -> None
-                in
-                f);
-        }) annot
-      in
-      Flow.set_all_annot annot' flow
-    )
-
+  let init prog man (flow: 'a flow) = None
 
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_return e ->
       Some (
@@ -112,7 +115,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval exp man flow =
+  let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function f}, args) ->

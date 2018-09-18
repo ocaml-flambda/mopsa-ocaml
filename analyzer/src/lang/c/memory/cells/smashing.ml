@@ -139,15 +139,15 @@ struct
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
           match ekind v with
-          | E_var v ->
+          | E_var(v, mode) ->
             let c = var_to_cell v in
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-            let stmt = mk_assign (mk_cell c range) e range in
+            let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
-          | E_c_cell c ->
+          | E_c_cell(c, mode) ->
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-            let stmt = mk_assign (mk_cell c range) e range in
+            let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
           | _ -> assert false
@@ -185,19 +185,24 @@ struct
       Post.of_flow |>
       Option.return
 
-    | S_rename_var(v, v') ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
-
     | S_remove_var v ->
-      panic_at stmt.srange "smashing.exec: statement %a not supported" pp_stmt stmt
+      let cl = cells_of_base (V v) man flow in
+      let flow1 = Flow.map_domain_env T_cur (fun a ->
+          List.fold_left (fun acc c -> remove c acc) a cl
+        ) man flow
+      in
+      let block = List.map (fun c -> mk_remove_cell c stmt.srange) cl in
+      man.exec ~zone:Z_c_cell (mk_block block stmt.srange) flow1 |>
+      Post.of_flow |>
+      Option.return
 
-    | S_assign(lval, rval, mode) when is_c_scalar_type lval.etyp ->
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       begin
         man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow ->
         man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
         eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
         match ekind lval with
-        | E_c_cell c ->
+        | E_c_cell(c, mode) ->
           assign_cell c rval mode range man flow |>
           remove_overlappings c range man |>
           Post.add_merger (mk_remove_cell c range)
@@ -207,18 +212,18 @@ struct
 
     | _ -> None
 
+  (* FIXME: pourquoi y a t'il un mode non utilisé en argument ?? *)
   and assign_cell c e mode range man flow =
-    let lval = mk_cell c range in
     (* Infer the mode of assignment *)
     let mode = match cell_base c with
       | A a -> WEAK (* TODO: process the case of heap addresses *)
       | V v ->
         (* In case of a base variable, we check that we are writing to the whole memory block *)
-        if Z.equal (sizeof_type v.vtyp) (sizeof_type lval.etyp) then STRONG
+        if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then STRONG
         else WEAK
     in
-
-    let stmt = mk_assign lval e ~mode range in
+    let lval = mk_cell c ~mode:mode range in
+    let stmt = mk_assign lval e range in
     man.exec ~zone:(Z_c_cell) stmt flow
 
 
@@ -237,16 +242,24 @@ struct
     Post.of_flow flow'' |>
     Post.add_mergers mergers ~zone:Z_c_cell
 
+  and cells_of_base b man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    fold (fun c acc ->
+        let b' = cell_base c in
+        if compare_base b b' = 0 then c :: acc
+        else acc
+      ) a []
+
 
   (** Evaluation of expressions *)
   (** ========================= *)
 
   and eval zone exp man flow =
     match ekind exp with
-    | E_var v when is_c_type v.vtyp ->
+    | E_var(v, mode) when is_c_type v.vtyp ->
       let c = var_to_cell v in
       let flow1 = Flow.map_domain_env T_cur (add c) man flow in
-      Eval.singleton (mk_cell c (erange exp)) flow1 |>
+      Eval.singleton (mk_cell c ~mode:mode (erange exp)) flow1 |>
       Option.return
 
     | E_c_deref p ->

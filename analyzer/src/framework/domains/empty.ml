@@ -22,8 +22,8 @@ include Stateless.Make(
     let exec_interface = {export = []; import = []}
     let eval_interface = {export = []; import = []}
     let init prog man flow = None
-    let exec stmt man flow = None
-    let eval exp man flow = None
+    let exec zone stmt man flow = None
+    let eval zone exp man flow = None
     let ask query man flow = None
   end
   )

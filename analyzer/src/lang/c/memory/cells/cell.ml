@@ -135,8 +135,8 @@ let compare_points_to p1 p2 =
 (* =============================== *)
 
 type expr_kind +=
-  | E_c_cell of cell (* Expression representing a cell *)
-  | E_c_points_to of points_to (* Reply to a points-to evaluation *)
+  | E_c_cell of cell * mode (* Expression representing a cell *)
+  | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
@@ -144,8 +144,8 @@ type stmt_kind +=
 type constant +=
   | C_c_invalid (** invalid pointer constant *)
 
-let mk_cell c range =
-  mk_expr (E_c_cell c) ~etyp:(cell_type c) range
+let mk_cell c ?(mode = STRONG) range =
+  mk_expr (E_c_cell(c, mode)) ~etyp:(cell_type c) range
 
 let mk_remove_cell c range =
   mk_stmt (S_c_remove_cell c) range
@@ -157,7 +157,12 @@ let () =
   register_expr {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
-        | E_c_cell c1, E_c_cell c2 -> compare c1 c2
+        | E_c_cell(c1, s1), E_c_cell(c2, s2) ->
+          Compare.compose
+            [
+              (fun () -> compare c1 c2);
+              (fun () -> compare_mode s1 s2 )
+            ]
 
         | E_c_points_to p1, E_c_points_to p2 -> compare_points_to p1 p2
 
@@ -165,14 +170,15 @@ let () =
       );
     print = (fun next fmt e ->
         match ekind e with
-        | E_c_cell c -> pp_cell fmt c
+        | E_c_cell(c, STRONG) -> pp_cell fmt c
+        | E_c_cell(c, WEAK) -> Format.fprintf fmt "_w_%a" pp_cell c
         | E_c_points_to p -> Format.fprintf fmt "⇝ %a" pp_points_to p
         | _ -> next fmt e
       );
     visit = (fun next e ->
         let open Framework.Visitor in
         match ekind e with
-        | E_c_cell c -> leaf e
+        | E_c_cell(c, s) -> leaf e
         | E_c_points_to p -> leaf e (* FIXME: do we need to visit the offset expression? *)
         | _ -> next e
       )
