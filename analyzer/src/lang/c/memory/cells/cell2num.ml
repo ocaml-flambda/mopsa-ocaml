@@ -16,6 +16,19 @@ module CellNumEquiv = Equiv.Make(Cell.Cell)(Var)
 type ('a, _) Annotation.key +=
   | KCellNumEquiv: ('a, CellNumEquiv.t) Annotation.key
 
+
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) key -> (CellNumEquiv.t, b) eq option =
+              function
+              | KCellNumEquiv -> Some Eq
+              | _ -> None
+            in
+            f);
+    }) ();
+  ()
+
+
 let get_num flow c =
   let cne = Flow.get_annot KCellNumEquiv flow in
   try
@@ -74,19 +87,7 @@ struct
 
   let init prog man flow =
     Some (
-      (* Register cell-var equivalence as an annotation *)
-      let annot = Flow.get_all_annot flow in
-      let annot' = Annotation.(register_annot {
-          eq = (let f: type b. ('a, b) key -> (CellNumEquiv.t, b) eq option =
-                  function
-                  | KCellNumEquiv -> Some Eq
-                  | _ -> None
-                in
-                f);
-        }) annot
-      in
-      Flow.set_all_annot annot' flow |>
-      Flow.set_annot KCellNumEquiv CellNumEquiv.empty
+      Flow.set_annot KCellNumEquiv CellNumEquiv.empty flow
     )
 
   let exec stmt man flow =
