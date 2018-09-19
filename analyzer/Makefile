@@ -30,6 +30,7 @@ lang.c.memory.cells = cell pointer smashing expand router cell2num
 lang.c.libs = c_stdlib mopsa
 
 lang.python = ast addr operators utils pp frontend zone libs desugar objects data_model program types
+lang.python.data_model = callable arith_ops aug_assign # compare_ops
 lang.python.types = typingdomain typing t_string t_int
 
 #Packages
