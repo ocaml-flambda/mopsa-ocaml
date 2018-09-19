@@ -20,6 +20,7 @@
         "python.objects.function",
         "python.objects.nones",
 
+        "python.data_model.arith_ops",
         "python.data_model.callable",
 
         "python.types.t_string",
