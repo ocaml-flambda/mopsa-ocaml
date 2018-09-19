@@ -104,8 +104,11 @@ struct
     ;
 
     debug
-      "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-      pp_stmt stmt (Flow.print man) flow (Flow.print man) flow'
+      "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
+      pp_stmt stmt
+      (Flow.print man) flow
+      Zone.print zone
+      (Flow.print man) flow'
     ;
     flow'
 
@@ -137,10 +140,10 @@ struct
   (** Evaluation of expressions. *)
   and eval_opt ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
-      "eval expr on zone %a in %a:@\n @[%a@]@\n input:@\n  @[%a@]"
-      Zone.print2 zone
+      "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
       Location.pp_range_verbose exp.erange
       pp_expr exp (Flow.print man) flow
+      Zone.print2 zone
     ;
     let timer = Timing.start () in
     let path_eval = EvalMap.find zone eval_map in
@@ -157,9 +160,10 @@ struct
       t pp_expr exp
     ;
     debug
-      "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+      "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
       pp_expr exp
       (Flow.print man) flow
+      Zone.print2 zone
       (Option.print (Eval.print ~pp:pp_expr)) evl
     ;
     evl

@@ -56,7 +56,7 @@ struct
       begin
         man.eval rval ~zone:(Zone.Z_c, Zone.Z_c_scalar) flow |>
         Eval.bind @@ fun rval flow ->
-        let flow = man.exec (mk_assign lval rval exp.erange) flow in
+        let flow = man.exec ~zone:Zone.Z_c (mk_assign lval rval exp.erange) flow in
         Eval.singleton rval flow
       end
       |> Option.return
@@ -67,7 +67,7 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (tag_range (erange exp) "block'") in
-          let flow' = man.exec stmt' flow in
+          let flow' = man.exec ~zone:Zone.Z_c stmt' flow in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) e flow' |>
           Option.return
 

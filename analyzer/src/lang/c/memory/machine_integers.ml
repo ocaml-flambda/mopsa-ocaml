@@ -13,6 +13,7 @@ open Ast
 open Universal.Ast
 
 module Itv_Value = Universal.Numeric.Values.Intervals.Value
+
 let name = "c.machine_integers"
 let debug fmt = Debug.debug ~channel:name fmt
 
@@ -143,7 +144,7 @@ struct
 
   let eval_num man = man.eval ~zone:(Universal.Zone.Z_universal_num, Universal.Zone.Z_universal_num)
 
-  let eval zone exp man flow =
+  let rec eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div && exp |> etyp |> is_c_type ->
@@ -218,17 +219,17 @@ struct
         Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
         |> Option.return
 
-    | E_binop(op, e, e') ->
-      let () = debug "memory.machine_integers: I do not think we should be there"
-      in
-      Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
-      |> Option.return
-
-    | E_unop(op, e) ->
-      let () = debug "memory.machine_integers: I do not think we should be there"
-      in
-      Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
-      |> Option.return
+    (* | E_binop(op, e, e') ->
+     *   let () = debug "memory.machine_integers: I do not think we should be there"
+     *   in
+     *   Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
+     *   |> Option.return
+     * 
+     * | E_unop(op, e) ->
+     *   let () = debug "memory.machine_integers: I do not think we should be there"
+     *   in
+     *   Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
+     *   |> Option.return *)
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       let () = debug "case 5" in
@@ -237,8 +238,7 @@ struct
       let r = rangeof t in
       let r' = rangeof t' in
       if range_leq r' r then
-        Eval.singleton e flow
-        |> Option.return
+        eval zone e man flow
       else
         let rmin, rmax = rangeof t in
         eval_num man exp flow  |> Eval.bind @@

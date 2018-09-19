@@ -40,7 +40,7 @@ struct
           match c with
           | C_smash(b,t) ->
             let vname =
-              let () = Format.fprintf Format.str_formatter "%a" pp_cell c in
+              let () = Format.fprintf Format.str_formatter "{%a:⋆:%a}" pp_base b Pp.pp_c_type_short t in
               Format.flush_str_formatter ()
             in
             {
@@ -54,7 +54,7 @@ struct
 
       print = (fun next fmt c ->
           match c with
-          | C_smash(b,t) -> Format.fprintf fmt "⟪%a,%a⟫" pp_base b pp_typ t
+          | C_smash(b,t) -> Format.fprintf fmt "⟪%a:⋆:%a⟫" pp_base b pp_typ t
           | _ -> next fmt c
         );
 
@@ -199,7 +199,7 @@ struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       begin
-        man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow ->
+        (* man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow -> *)
         man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
         eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
         match ekind lval with
@@ -307,6 +307,16 @@ struct
 
       end (* case of E_c_deref *) |>
       Option.return
+
+    | E_c_cast(e, explicit) when is_c_scalar_type e.etyp ->
+      begin
+        eval zone e man flow |>
+        Option.none_to_exn |>
+        Eval.bind @@ fun e flow ->
+        let exp' = {exp with ekind = E_c_cast(e, explicit)} in
+        Eval.singleton exp' flow
+      end
+      |> Option.return
 
     | _ -> None
 

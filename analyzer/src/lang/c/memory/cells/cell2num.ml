@@ -104,7 +104,6 @@ struct
       |> Option.return
 
     | S_assign({ekind = E_c_cell(c, mode)} as lval, rval) when cell_type c |> is_c_int_type ->
-      debug "annotations: @[%a@]" Annotation.print (Flow.get_all_annot flow);
       let v, flow = get_num flow c in
       man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
       |> Post.of_flow
@@ -115,7 +114,7 @@ struct
   (** Evaluations *)
   (** *********** *)
 
-  let eval zone exp man flow =
+  let rec eval zone exp man flow =
     match ekind exp with
     | E_c_cell(c, mode) when cell_type c |> is_c_int_type ->
       let range = erange exp in
@@ -123,6 +122,17 @@ struct
       let exp = mk_var v (tag_range range "cell2num") in
       Eval.singleton exp flow
       |> Option.return
+
+    | E_c_cast(e, explicit) when is_c_int_type e.etyp ->
+      begin
+        eval zone e man flow |>
+        Option.none_to_exn |>
+        Eval.bind @@ fun e flow ->
+        let exp' = {exp with ekind = E_c_cast(e, explicit)} in
+        Eval.singleton exp' flow
+      end
+      |> Option.return
+      
     | _ -> None
 
   (** Queries *)

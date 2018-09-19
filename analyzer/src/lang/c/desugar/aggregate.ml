@@ -52,7 +52,7 @@ struct
 
   let exec _ _ _ _ = None
 
-  let eval zone exp man flow =
+  let rec eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_c_array_subscript(e1, e2) ->
@@ -96,6 +96,16 @@ struct
         |> Option.return
       else
         Debug.fail "[c.desugar.aggregate] member_access on non record type"
+
+    | E_c_cast(e, explicit) ->
+      begin
+        eval zone e man flow |>
+        Eval.default_opt e flow |>
+        Eval.bind @@ fun e flow ->
+        Eval.singleton {exp with ekind = E_c_cast(e, explicit)} flow
+      end
+      |> Option.return
+
     | _ -> None
 
   let ask _ _ _  = None
