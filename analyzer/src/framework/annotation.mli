@@ -26,22 +26,26 @@ type 'a annot
 type (_, _) eq = Eq : ('a, 'a) eq
 (** Equality witness *)
 
-type ('a, 'b) sfw = {
+type ('a, 'b) sf = {
   eq : 'c. ('a, 'c) key -> ('b, 'c) eq option;
+  print : Format.formatter -> 'b -> unit;
 }
-(** [('a, 'b) w] defines an equality witness checker for a stateful key [('a, 'b) key] *)
+(** [('a, 'b) sf] defines a stateful annotation with an equality
+   witness checker and a pretty printer *)
 
-val register_stateful_annot : ('a, 'b) sfw -> 'a annot -> 'a annot
+val register_stateful_annot : ('a, 'b) sf -> 'a annot -> 'a annot
 (** [register_stateful_annot w a] registers a new kind of stateful annotations to an
    annotation map [a], defined with a witness checker [w] *)
 
 
-type 'b slw = {
+type 'b sl = {
   eq : 'a 'c. ('a, 'c) key -> ('b, 'c) eq option;
+  print : Format.formatter -> 'b -> unit;
 }
-(** [('a, 'b) w] defines an equality witness checker for a stateless key [('a, 'b) key] *)
+(** [('a, 'b) sl] defines a stateless annotation with an equality
+   witness checker and a pretty printer *)
 
-val register_stateless_annot : 'b slw -> unit -> unit
+val register_stateless_annot : 'b sl -> unit -> unit
 (** [register_stateless_annot w ()] registers a new kind of stateless annotations to an
    annotation map [a], defined with a witness checker [w] *)
 
@@ -71,3 +75,6 @@ val remove : ('a, 'b) key -> 'a annot -> 'a annot
 
 val cardinal : 'a annot -> int
 (** Number of values in a map *)
+
+val print : Format.formatter -> 'a annot -> unit
+(** Pretty print an annotation *)

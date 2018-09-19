@@ -32,5 +32,6 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt cs -> Format.fprintf fmt "Call stack: %a" pp_call_stack cs);
     }) ();
   ()

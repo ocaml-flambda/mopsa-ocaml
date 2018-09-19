@@ -29,6 +29,7 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt f -> Format.fprintf fmt "Current test: %s" f);
     }) ();
   ()
 

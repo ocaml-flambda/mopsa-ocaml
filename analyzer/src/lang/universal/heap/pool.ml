@@ -69,6 +69,7 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt m -> Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m);
     }) ();
   ()
 
