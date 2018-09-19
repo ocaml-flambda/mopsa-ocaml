@@ -123,13 +123,9 @@ and init_expr visitor e is_global (init: c_init option) (range: range) flow =
     Framework.Exceptions.panic "Unsupported initialization of %a" pp_expr e
 
 
-let init_globals visitor globals flow =
-  (* Initialize global variables *)
-  List.fold_left (fun flow (v, init) ->
-      let range = mk_fresh_range () in
-      let v = mk_var v range in
-      init_expr visitor v true init range flow
-    ) flow globals
+let init_global visitor v init range flow =
+  let v = mk_var v range in
+  init_expr visitor v true init range flow
 
 let init_local visitor v init range flow =
   let v = mk_var v range in

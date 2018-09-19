@@ -521,8 +521,13 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   let rec exec zone stmt man flow =
     let range = stmt.srange in
     match skind stmt with
+    | S_c_global_declaration(v, init) ->
+      Init_visitor.init_global (init_visitor man) v init range flow |>
+      Post.of_flow |>
+      Option.return
+
     | S_c_local_declaration(v, init) ->
-      Init_visitor.init_local (init_manager man) v init range flow
+      Init_visitor.init_local (init_visitor man) v init range flow
       |> Post.of_flow
       |> Option.return
 
@@ -639,7 +644,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (**                    {2 Cells Initialization}                             *)
   (*==========================================================================*)
 
-  and init_manager man =
+  and init_visitor man =
     Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
@@ -664,7 +669,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 | init :: tl ->
                   let t' = under_array_type a.vtyp in
                   let ci = {b = Base.V a; o = Z.(zero + (Z.of_int i) * (sizeof_type t')); t = t'} in
-                  let flow' = init_expr (init_manager man) (mk_ocell ci ~mode:mode range) is_global init range flow in
+                  let flow' = init_expr (init_visitor man) (mk_ocell ci ~mode:mode range) is_global init range flow in
                   aux (i + 1) tl flow'
             in
             aux 0 init_list flow
@@ -685,7 +690,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-                let flow' = init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
+                let flow' = init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -695,18 +700,15 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
                 let init = C_init_expr (mk_c_member_access e field range) in
-                init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
+                init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
               ) flow
         );
     }
 
   and init prog man flow =
-    let flow = Flow.set_domain_cur top man flow in
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      Some (Init_visitor.init_globals (init_manager man) globals flow)
-    | _ ->
-      None
+    Some (
+      Flow.set_domain_cur top man flow
+    )
 
   let ask _ _ _ = None
 

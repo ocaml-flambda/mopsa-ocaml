@@ -165,13 +165,9 @@ struct
     }
 
   let init prog man flow =
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      Flow.set_domain_env T_cur empty man flow |>
-      Init_visitor.init_globals (init_visitor man) globals |>
-      Option.return
-
-    | _ -> None
+    Some (
+      Flow.set_domain_env T_cur empty man flow
+    )
 
 
   (** Computation of post-conditions *)
@@ -180,6 +176,11 @@ struct
   let rec exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_c_global_declaration(v, init) ->
+      Init_visitor.init_global (init_visitor man) v init range flow |>
+      Post.of_flow |>
+      Option.return
+
     | S_c_local_declaration(v, init) ->
       Init_visitor.init_local (init_visitor man) v init range flow |>
       Post.of_flow |>

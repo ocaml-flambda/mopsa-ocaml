@@ -191,8 +191,8 @@ type c_fundec = {
   mutable c_func_return: typ; (** type of returned value *)
   mutable c_func_parameters: var list; (** function parameters *)
   mutable c_func_body: stmt option; (** function body *)
-  mutable c_func_static_vars: (var * c_init option) list; (** static variables declared in the function and their initialization *)
-  mutable c_func_local_vars: (var * c_init option) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
+  mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
+  mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
 }
 (** Function descriptor. *)
@@ -257,6 +257,9 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
+  | S_c_global_declaration of var * c_init option
+  (** declaration of a global variable with optional initialization *)
+
   | S_c_local_declaration of var * c_init option
   (** declaration of a local variable with optional initialization *)
 
@@ -291,7 +294,7 @@ type stmt_kind +=
 
 type program_kind +=
   | C_program of
-      (var * c_init option) list (** global variables *) *
+      (var * c_init option * range) list (** global variables *) *
       c_fundec list (** functions *)
 (** A complete C program. *)
 

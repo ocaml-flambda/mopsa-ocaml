@@ -101,7 +101,9 @@ let () =
     );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
+      | S_c_global_declaration (v, None)
       | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+      | S_c_global_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"

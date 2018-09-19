@@ -26,6 +26,7 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt m -> Format.fprintf fmt "Cells vars: @[%a@]" CellNumEquiv.print m);
     }) ();
   ()
 
@@ -103,6 +104,7 @@ struct
       |> Option.return
 
     | S_assign({ekind = E_c_cell(c, mode)} as lval, rval) when cell_type c |> is_c_int_type ->
+      debug "annotations: @[%a@]" Annotation.print (Flow.get_all_annot flow);
       let v, flow = get_num flow c in
       man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
       |> Post.of_flow

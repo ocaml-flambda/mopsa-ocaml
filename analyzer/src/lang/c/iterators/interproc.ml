@@ -77,7 +77,7 @@ struct
           let fundec' = {
             fun_name = get_var_uniq_name fundec.c_func_var;
             fun_parameters = fundec.c_func_parameters;
-            fun_locvars = List.map fst fundec.c_func_local_vars;
+            fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
             fun_return_type = fundec.c_func_return;
           }

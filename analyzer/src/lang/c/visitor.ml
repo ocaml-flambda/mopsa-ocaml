@@ -167,7 +167,7 @@ let () =
         (* Get initialization expressions from a list of variable declarations *)
         let rec exprs_in_vars = function
           | [] -> []
-          | (v, init) :: tl -> (exprs_in_init_option init) @ (exprs_in_vars tl)
+          | (v, init, range) :: tl -> (exprs_in_init_option init) @ (exprs_in_vars tl)
         in
 
         (* Get initialization expressions of local variables *)
@@ -179,10 +179,10 @@ let () =
         (* Re-construct a list variable declarations from a list of initialization expressions *)
         let rec vars_in_exprs exprs vars =
           match vars with
-          | (v, init) :: tl ->
+          | (v, init, range) :: tl ->
             let init, exprs = init_option_from_exprs exprs init in
             let vars, exprs = vars_in_exprs exprs tl in
-            (v, init) :: vars, exprs
+            (v, init, range) :: vars, exprs
           | [] -> [], exprs
         in
 
@@ -217,6 +217,14 @@ let () =
            {stmt with skind = S_program({prog with prog_kind = C_program(globals, funcs)})}
         ))
 
+      | S_c_global_declaration(v, init) ->
+        let exprs = exprs_in_init_option init in
+        {exprs; stmts = []},
+        (function {exprs} ->
+           let init, _ = init_option_from_exprs exprs init in
+           {stmt with skind = S_c_global_declaration(v, init)}
+        )
+
       | S_c_local_declaration(v, init) ->
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},
@@ -224,6 +232,7 @@ let () =
            let init, _ = init_option_from_exprs exprs init in
            {stmt with skind = S_c_local_declaration(v, init)}
         )
+
 
       | S_c_do_while(body, cond) ->
         {exprs = [cond]; stmts = [body]},

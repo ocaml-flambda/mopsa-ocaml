@@ -10,6 +10,7 @@
         "universal.iterators.intraproc",
 	"universal.iterators.loops",
 	"universal.iterators.interproc.inlining",
+        "universal.iterators.unittest",
 
         // C desugar
         "c.desugar.loops",
