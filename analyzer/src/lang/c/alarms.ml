@@ -5,7 +5,7 @@ type alarm_kind +=
   | ANullDeref
   | AInvalidDeref
   | ADivideByZero
-  | ATIntegerOverflow
+  | AIntegerOverflow
 
 let () =
   register_alarm
@@ -17,7 +17,7 @@ let () =
           | ANullDeref -> Format.fprintf fmt "null-deref"
           | AInvalidDeref -> Format.fprintf fmt "invalid-deref"
           | ADivideByZero -> Format.fprintf fmt "div-zero"
-          | ATIntegerOverflow -> Format.fprintf fmt "int-overflow"
+          | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
           | _ -> default fmt a
         );
       report = (fun default fmt a ->
@@ -26,7 +26,7 @@ let () =
           | ANullDeref -> Format.fprintf fmt "Null pointer dereference"
           | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
           | ADivideByZero -> Format.fprintf fmt "Division by zero"
-          | ATIntegerOverflow -> Format.fprintf fmt "Integer overflow"
+          | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | _ -> default fmt a
         )
     };

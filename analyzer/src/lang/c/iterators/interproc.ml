@@ -90,6 +90,11 @@ struct
       end |>
       Option.return
 
+    | E_c_cast(e, _) when (exp |> etyp |> is_c_pointer_type) && (exp |> etyp |> under_pointer_type |> is_c_function_type) ->
+      let t' = exp |> etyp |> under_pointer_type in
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) {e with etyp = t'} flow |>
+      Option.return
+
     | _ -> None
 
 

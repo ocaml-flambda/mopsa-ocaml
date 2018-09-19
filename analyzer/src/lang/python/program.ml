@@ -125,7 +125,7 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when not Framework.Options.(common_options.unit_test_mode) ->
+      when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       init_globals man prog_file globals flow |>
       (* Execute the body *)
@@ -133,7 +133,7 @@ struct
       Post.return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when Framework.Options.(common_options.unit_test_mode) ->
+      when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals man prog_file globals flow in
 

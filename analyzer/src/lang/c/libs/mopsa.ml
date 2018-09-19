@@ -61,12 +61,13 @@ struct
     | "_mopsa_assert_error_at_line" -> true
     | _ -> false
 
-  let error_token_to_code = function
-    | Alarms.TOutOfBound _ -> 1
-    | Alarms.TNullDeref _ -> 2
-    | Alarms.TInvalidDeref _ -> 3
-    | Alarms.TIntegerOverflow _ -> 4
-    | Alarms.TDivideByZero _ -> 5
+  let alarm_to_code a =
+    match a.alarm_kind with
+    | Alarms.AOutOfBound -> 1
+    | Alarms.ANullDeref -> 2
+    | Alarms.AInvalidDeref -> 3
+    | Alarms.AIntegerOverflow -> 4
+    | Alarms.ADivideByZero -> 5
     | _ -> assert false
 
   let rand_int t range man flow =
@@ -86,7 +87,6 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
-      debug "builtin function";
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       Eval.singleton exp' flow |>
       Option.return
@@ -105,43 +105,43 @@ struct
       rand_int Ast.C_signed_char exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_unsigned_char", []) ->
+    | E_c_builtin_call("_mopsa_range_unsigned_char", []) ->
       rand_int Ast.C_unsigned_char exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_int", []) ->
+    | E_c_builtin_call("_mopsa_range_int", []) ->
       rand_int Ast.C_signed_int exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_unsigned_int", []) ->
+    | E_c_builtin_call("_mopsa_range_unsigned_int", []) ->
       rand_int Ast.C_unsigned_int exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_short", []) ->
+    | E_c_builtin_call("_mopsa_range_short", []) ->
       rand_int Ast.C_signed_short exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_unsigned_short", []) ->
+    | E_c_builtin_call("_mopsa_range_unsigned_short", []) ->
       rand_int Ast.C_unsigned_short exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_long", []) ->
+    | E_c_builtin_call("_mopsa_range_long", []) ->
       rand_int Ast.C_signed_long exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_unsigned_long", []) ->
+    | E_c_builtin_call("_mopsa_range_unsigned_long", []) ->
       rand_int Ast.C_unsigned_long exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_long_long", []) ->
+    | E_c_builtin_call("_mopsa_range_long_long", []) ->
       rand_int Ast.C_signed_long_long exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_range_unsigned_long_long", []) ->
+    | E_c_builtin_call("_mopsa_range_unsigned_long_long", []) ->
       rand_int Ast.C_unsigned_long_long exp.erange man flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_rand_int", [a; b]) ->
+    | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_signed_long) in
       let tmp = mk_tmp ~vtyp:typ () in
@@ -157,7 +157,7 @@ struct
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_rand_unsigned_long", [a; b]) ->
+    | E_c_builtin_call("_mopsa_rand_unsigned_long", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_unsigned_long) in
       let tmp = mk_tmp ~vtyp:typ () in
@@ -172,7 +172,7 @@ struct
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_panic", [msg]) ->
+    | E_c_builtin_call("_mopsa_panic", [msg]) ->
       let rec remove_cast e =
         match ekind e with
         | E_c_cast(e', _) -> remove_cast e'
@@ -184,153 +184,185 @@ struct
       in
       Framework.Exceptions.panic "%s" s
 
-    | E_c_builtin_call( "_mopsa_assert_true", [cond]) ->
+    | E_c_builtin_call("_mopsa_print", []) ->
+        Debug.debug ~channel:"print" "%a@\n  @[%a@]"
+        pp_range_verbose (erange exp)
+        (Flow.print man) flow
+      ;
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      Option.return
+
+
+    | E_c_builtin_call("_mopsa_assert_true", [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 exp.erange) flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_assert_exists", [cond]) ->
+    | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
       let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 exp.erange) flow |>
       Option.return
 
-    | E_c_builtin_call( "_mopsa_assert_false", [cond]) ->
+    | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
 
-    | E_c_builtin_call( "_mopsa_assert_safe", []) ->
+    | E_c_builtin_call("_mopsa_assert_safe", []) ->
       begin
         let annot = Flow.get_all_annot flow in
         let error_env = Flow.fold (fun acc tk env ->
-            if Alarms.is_error_token tk then man.join annot acc env
-            else acc
+            match tk with
+            | T_alarm _ -> man.join annot acc env
+            | _ -> acc
           ) man.bottom man flow in
         let exception BottomFound in
         try
           let cond =
-            match man.flow.is_cur_bottom flow, man.env.is_bottom error_env with
+            match Flow.get T_cur man flow |> man.is_bottom,
+                  man.is_bottom error_env
+            with
             | false, true -> mk_one
             | true, false -> mk_zero
             | false, false -> mk_int_interval 0 1
             | true, true -> raise BottomFound
           in
           let stmt = mk_assert (cond exp.erange) exp.erange in
-          let cur = man.flow.get TCur flow in
-          let flow = man.flow.set TCur man.env.top flow |>
-                     man.exec ctx stmt |>
-                     man.flow.set TCur cur
+          let cur = Flow.get T_cur man flow in
+          let flow = Flow.set T_cur man.top man flow |>
+                     man.exec stmt |>
+                     Flow.set T_cur cur man
           in
-          oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+          Eval.singleton (mk_int 0 exp.erange) flow |>
+          Option.return
         with BottomFound ->
-          oeval_singleton (None, flow, [])
+          Eval.empty_singleton flow |>
+          Option.return
       end
 
-    | E_c_builtin_call( "_mopsa_assert_unsafe"}, []) ->
+     | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
       begin
-        let error_env = man.flow.fold (fun acc env -> function
-            | tk when Alarms.is_error_token tk -> man.env.join acc env
+        let annot = Flow.get_all_annot flow in
+        let error_env = Flow.fold (fun acc tk env ->
+            match tk with
+            | T_alarm _ -> man.join annot acc env
             | _ -> acc
-          ) man.env.bottom flow in
+          ) man.bottom man flow in
         let cond =
-          match man.flow.is_cur_bottom flow, man.env.is_bottom error_env with
+          match Flow.get T_cur man flow |> man.is_bottom,
+                man.is_bottom error_env
+          with
           | false, true -> mk_zero
           | true, false -> mk_one
           | false, false -> mk_int_interval 0 1
           | true, true -> mk_zero
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
-        let cur = man.flow.get TCur flow in
-        let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec ctx stmt flow |>
-                   man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk -> false | _ -> true) |>
-                   man.flow.set TCur cur
+        let cur = Flow.get T_cur man flow in
+        let flow = Flow.set T_cur man.top man flow in
+        let flow = man.exec stmt flow |>
+                   Flow.filter (fun tk _ -> match tk with T_alarm _ -> false | _ -> true) man |>
+                   Flow.set T_cur cur man
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Option.return
       end
 
-    | E_c_builtin_call( "_mopsa_assert_error"}, [{ekind = E_constant(C_int code)}]) ->
+    | E_c_builtin_call("_mopsa_assert_error", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
-        let this_error_env = man.flow.fold (fun acc env -> function
-            | tk when Alarms.is_error_token tk && code = error_token_to_code tk -> man.env.join acc env
+        let annot = Flow.get_all_annot flow in
+        let this_error_env = Flow.fold (fun acc tk env ->
+            match tk with
+            | T_alarm a when code = alarm_to_code a -> man.join annot acc env
             | _ -> acc
-          ) man.env.bottom flow in
+          ) man.bottom man flow in
         let cond =
-          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env with
+          match Flow.get T_cur man flow |> man.is_bottom,
+                man.is_bottom this_error_env
+          with
           | true, false -> mk_one
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
-        let cur = man.flow.get TCur flow in
-        let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec ctx stmt flow |>
-                   man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk && code = error_token_to_code tk -> false | _ -> true) |>
-                   man.flow.set TCur cur
+        let cur = Flow.get T_cur man flow in
+        let flow = Flow.set T_cur man.top man flow in
+        let flow = man.exec stmt flow |>
+                   Flow.filter (fun tk _ -> match tk with T_alarm a when code = alarm_to_code a -> false | _ -> true) man |>
+                   Flow.set T_cur cur man
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Option.return
       end
 
-    | E_c_builtin_call( "_mopsa_assert_error_at_line"}, [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
+    | E_c_builtin_call("_mopsa_assert_error_at_line", [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
       begin
-        let () = debug "toto" in
         let code = Z.to_int code and line = Z.to_int line in
-        let this_error_env = man.flow.fold (fun acc env -> function
-            | tk when Alarms.is_error_token tk &&
-                      code = error_token_to_code tk &&
-                      line = (let r = Alarms.error_token_range tk |> get_origin_range in r.range_begin.loc_line) ->
-              man.env.join acc env
+        let annot = Flow.get_all_annot flow in
+        let this_error_env = Flow.fold (fun acc tk env ->
+            match tk with
+            | T_alarm a
+              when code = alarm_to_code a
+                && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
+              ->
+              man.join annot acc env
             | _ -> acc
-          ) man.env.bottom flow in
+          ) man.bottom man flow in
         let cond =
-          match man.flow.is_cur_bottom flow, man.env.is_bottom this_error_env with
+          match Flow.get T_cur man flow |> man.is_bottom,
+                man.is_bottom this_error_env
+          with
           | true, false -> mk_one
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond exp.erange) exp.erange in
-        let cur = man.flow.get TCur flow in
-        let flow = man.flow.set TCur man.env.top flow in
-        let flow = man.exec ctx stmt flow |>
-                   man.flow.filter (fun _ -> function
-                       | tk when Alarms.is_error_token tk &&
-                                 code = error_token_to_code tk &&
-                                 line = (let r = Alarms.error_token_range tk |> get_origin_range in r.range_begin.loc_line) -> false
-                       | _ -> true) |>
-                   man.flow.set TCur cur
+        let cur = Flow.get T_cur man flow in
+        let flow = Flow.set T_cur man.top man flow in
+        let flow = man.exec stmt flow |>
+                   Flow.filter (fun tk _ ->
+                       match tk with
+                       | T_alarm a
+                         when code = alarm_to_code a
+                           && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
+                         -> false
+                       | _ -> true) man |>
+                   Flow.set T_cur cur man
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow, [])
+        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Option.return
       end
 
-
-    | E_c_builtin_call( "_mopsa_assert_error_exists"}, [{ekind = E_constant(C_int code)}]) ->
+    | E_c_builtin_call("_mopsa_assert_error_exists", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
-        let error_env = man.flow.fold (fun acc env -> function
-            | tk when Alarms.is_error_token tk && code = error_token_to_code tk -> man.env.join acc env
+        let annot = Flow.get_all_annot flow in
+        let error_env = Flow.fold (fun acc tk env ->
+            match tk with
+            | T_alarm a
+              when code = alarm_to_code a
+              -> man.join annot acc env
             | _ -> acc
-          ) man.env.bottom flow in
-        let cur = man.flow.get TCur flow in
-        let cur' = if man.env.is_bottom cur then man.env.top else cur in
-        let cond = if man.env.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
+          ) man.bottom man flow in
+        let cur = Flow.get T_cur man flow in
+        let cur' = if man.is_bottom cur then man.top else cur in
+        let cond = if man.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
         let stmt = mk_assert cond exp.erange in
-        let flow' = man.flow.set TCur cur' flow |>
-                   man.exec ctx stmt |>
-                   man.flow.filter (fun _ -> function tk when Alarms.is_error_token tk && code = error_token_to_code tk -> false | _ -> true) |>
-                   man.flow.set TCur cur
+        let flow' = Flow.set T_cur cur' man flow |>
+                    man.exec stmt |>
+                    Flow.filter (fun tk _ -> match tk with T_alarm a when code = alarm_to_code a -> false | _ -> true) man |>
+                    Flow.set T_cur cur man
         in
-        oeval_singleton (Some (mk_int 0 exp.erange), flow', [])
+        Eval.singleton (mk_int 0 exp.erange) flow' |>
+        Option.return
       end
 
-
-    | E_c_call(_) ->
-      let () = debug "E_c_call did not go in on %a" Framework.Pp.pp_expr exp in None
     | _ -> None
 
-  let ask _ _ _ _  = None
+  let ask _ _ _  = None
 
 end
 
 let () =
-  Stateless.register_domain name (module Domain)
+  Framework.Domains.Stateless.register_domain (module Domain)

@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 open Ast
+open Callstack
 
 
 (** {2 Return flow token} *)
@@ -35,51 +36,6 @@ let () =
         | tk -> next fmt tk
       );
   }
-
-
-
-(** {2 Call stack annotation} *)
-(** ========================= *)
-
-(* type call_stack = (fundec * range) list
- * 
- * let pp_call_stack =
- *   Format.pp_print_list
- *     ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
- *     (fun fmt (f, range) -> Format.fprintf fmt "%s:%a" f.fun_name pp_range range)
- * 
- * let compare_call_stack cs cs' =
- *   Compare.list_compare (fun (f1, r1) (f2, r2) ->
- *       Compare.compose [
- *         (fun () -> compare f1.fun_name f2.fun_name);
- *         (fun () -> compare_range r1 r2)
- *       ]
- *     ) cs cs' *)
-
-
-type call_stack = range list
-
-let pp_call_stack =
-  Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-    pp_range
-
-let compare_call_stack cs cs' =
-  Compare.list_compare compare_range cs cs'
-
-type ('a, _) Annotation.key +=
-  | A_call_stack: ('a, call_stack) Annotation.key
-
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (call_stack, b) eq option =
-              function
-              | A_call_stack -> Some Eq
-              | _ -> None
-            in
-            f);
-    }) ();
-  ()
 
 
 (** {2 Domain definition} *)

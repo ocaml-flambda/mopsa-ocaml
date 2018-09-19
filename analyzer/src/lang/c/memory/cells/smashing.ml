@@ -277,7 +277,7 @@ struct
                 Eval.singleton exp' flow1
             )
             ~outbound:(fun flow ->
-                let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+                let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
                 let alarm = mk_alarm Alarms.AOutOfBound exp.erange ~cs in
                 let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                             Flow.set T_cur man.bottom man
@@ -287,7 +287,7 @@ struct
             base offset t exp.erange man flow
 
         | E_c_points_to(P_null) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
           let alarm = mk_alarm Alarms.ANullDeref exp.erange ~cs in
           let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                       Flow.set T_cur man.bottom man
@@ -295,7 +295,7 @@ struct
           Eval.empty_singleton flow1
 
         | E_c_points_to(P_invalid) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Inlining.A_call_stack flow in
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
           let alarm = mk_alarm Alarms.AInvalidDeref exp.erange ~cs in
           let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                       Flow.set T_cur man.bottom man

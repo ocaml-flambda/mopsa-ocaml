@@ -68,7 +68,7 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
-      when not Framework.Options.(common_options.unit_test_mode) ->
+      when not !Universal.Iterators.Unittest.unittest_flag ->
       let entry =
         try
           List.find (function
@@ -83,7 +83,7 @@ struct
       Post.return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
-      when Framework.Options.(common_options.unit_test_mode) ->
+      when !Universal.Iterators.Unittest.unittest_flag ->
 
       let get_function_name fundec =
         fundec.c_func_var.vname
