@@ -16,6 +16,7 @@
         "c.desugar.loops",
         "c.desugar.aggregate",
         "c.desugar.andor",
+        "c.desugar.stmt_expr",
 
         // C libraries
         "c.libs.mopsa",
