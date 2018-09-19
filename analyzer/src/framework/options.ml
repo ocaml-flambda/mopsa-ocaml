@@ -19,7 +19,6 @@ let register_option (opt) =
 type common_options = {
   mutable lang : string;
   mutable config : string;
-  mutable unit_test_mode : bool;
   mutable stubs : string list;
   mutable cache : int;
 }
@@ -27,7 +26,6 @@ type common_options = {
 let common_options = {
   lang = "";
   config = "";
-  unit_test_mode = false;
   stubs = [];
   cache = 20;
 }
@@ -42,11 +40,6 @@ let () =
     "-config",
     Arg.String(fun f -> common_options.config <- f),
     " path to the domain configuration file"
-  );
-  register_option (
-    "-test",
-    Arg.Bool (fun m -> common_options.unit_test_mode <- m),
-    " unit test mode (default: false)"
   );
   register_option (
     "-debug",

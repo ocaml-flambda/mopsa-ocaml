@@ -24,8 +24,8 @@ let get_fresh () =
   rep
 
 module AddrInfo = struct
-  open Iterators.Interproc.Inlining
-  type t = call_stack * range * int
+  open Iterators.Interproc.Callstack
+  type t = cs * range * int
   (** The following compare function can be modified in order to
      change the granularity of the recency abstraction. *)
   let compare (cs, r, i) (cs', r', i') = Compare.compose

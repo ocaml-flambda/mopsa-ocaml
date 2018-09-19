@@ -78,7 +78,7 @@ struct
       begin
         let pool = Flow.get_domain_cur man flow in
 
-        let cs = Flow.get_annot Iterators.Interproc.Inlining.A_call_stack flow in
+        let cs = Flow.get_annot Iterators.Interproc.Callstack.A_call_stack flow in
         let range = erange expr in
         let recent_uid, flow = get_id_flow (cs, range, 0) flow in
         let old_uid, flow = get_id_flow (cs, range, 1) flow in
