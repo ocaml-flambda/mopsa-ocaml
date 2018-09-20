@@ -7,6 +7,7 @@
 (****************************************************************************)
 
 (** Expansion-based abstraction of C memory cells. *)
+
 open Framework.Essentials
 open Universal.Ast
 open Ast
@@ -14,10 +15,15 @@ open Base
 open Pointer
 open Cell
 
-let name = "c.memory.cell.expand"
-let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_max_expand = ref 2
+let opt_expand = ref 1
+
+let () =
+  Framework.Options.register_option (
+    "-cell-expand",
+    Arg.Set_int opt_expand,
+    " maximal number of expanded cells (default: 1)"
+  )
 
 (*==========================================================================*)
 (**                              {2 Cells}                                  *)
@@ -61,7 +67,7 @@ let () =
           match c with
           | OffsetCell o ->
             let vname =
-              let () = Format.fprintf Format.str_formatter "%a" pp_ocell o in
+              let () = Format.fprintf Format.str_formatter "{%a:%a:%a}" pp_base o.b Z.pp_print o.o Pp.pp_c_type_short o.t in
               Format.flush_str_formatter ()
             in
             {
@@ -142,9 +148,11 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (** Domain identification *)
   (** ===================== *)
 
+  let name = "c.memory.cells.expand"
+
   type _ domain += D_c_cell_expand : t domain
   let id = D_c_cell_expand
-  let name = "c.cell.expand"
+
   let identify : type a. a domain -> (t, a) eq option =
     function
     | D_c_cell_expand -> Some Eq
@@ -360,8 +368,6 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let (_, s), (_, s') = unify subman (u, s) (u', s') in
     (true, s, s')
 
-  let print = Bot.bot_fprint pp_cellset
-
   let exec_interface = {
     export = [Zone.Z_c];
     import = [Z_c_cell];
@@ -402,7 +408,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           (* Create variables with offsets {min(l + k * step, u) | k >= 0} *)
           let fold_interval l u step acc flow =
             debug "fold interval  [%a, %a]:%a (%a)" Z.pp_print l Z.pp_print u Z.pp_print step Z.pp_print Z.((u - l + one) / step);
-            if Z.(leq ((u - l + one) / step) (of_int !opt_max_expand)) then
+            if Z.(leq ((u - l + one) / step) (of_int !opt_expand)) then
               let rec iter x o =
                 if Z.gt o u then x
                 else
@@ -662,7 +668,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           match ekind a with
           | E_var(a, mode) ->
             let rec aux i l flow =
-              if i = !opt_max_expand then flow
+              if i = !opt_expand then flow
               else
                 match l with
                 | [] -> flow
@@ -717,9 +723,3 @@ end
 
 let () =
   Framework.Domains.Stacked.register_domain (module Domain);
-  (* register_domain name (module Domain); *)
-  Framework.Options.register_option (
-    "-cell-max-expand",
-    Arg.Set_int opt_max_expand,
-    " maximal number of expanded cells (default: 1)"
-  )

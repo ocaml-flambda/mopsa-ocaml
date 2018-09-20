@@ -35,15 +35,15 @@ void test_global_init_with_zero() {
   _mopsa_assert_true(glob == 0);
 }
 
-void test_interval_congruence_reduction() {
-  int i = 1;
-  while (i <= 10) {
-    i = i + 2;
-  }
-  _mopsa_assert_true(i == 11);
-}
-
 void test_rand_int() {
   int a = _mopsa_rand_int(0, 10);
   _mopsa_assert_true(a >= 0 && a <= 10);
 }
+
+/* void test_interval_congruence_reduction() { */
+/*   int i = 1; */
+/*   while (i <= 10) { */
+/*     i = i + 2; */
+/*   } */
+/*   _mopsa_assert_true(i == 11); */
+/* } */

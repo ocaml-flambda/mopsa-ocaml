@@ -213,14 +213,13 @@ struct
 
     | _ -> None
 
-  (* FIXME: pourquoi y a t'il un mode non utilisé en argument ?? *)
   and assign_cell c e mode range man flow =
     (* Infer the mode of assignment *)
     let mode = match cell_base c with
       | A a -> WEAK (* TODO: process the case of heap addresses *)
       | V v ->
         (* In case of a base variable, we check that we are writing to the whole memory block *)
-        if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then STRONG
+        if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then mode
         else WEAK
     in
     let lval = mk_cell c ~mode:mode range in

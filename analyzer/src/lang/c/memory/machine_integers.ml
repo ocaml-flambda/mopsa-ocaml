@@ -309,6 +309,12 @@ struct
       Post.of_flow |>
       Option.return
 
+    | S_assume(e) ->
+      man.exec ~zone:Universal.Zone.Z_universal_num stmt flow |>
+      Post.of_flow |>
+      Option.return
+
+
     | _ -> None
 
   let ask _ _ _ =

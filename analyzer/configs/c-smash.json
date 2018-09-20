@@ -1,0 +1,35 @@
+{
+    "iter": [
+	// C iterators
+	"c.iterators.program",
+	"c.iterators.interproc",
+        "c.iterators.goto",
+        "c.iterators.switch",
+
+	// Universal iterators
+        "universal.iterators.intraproc",
+	"universal.iterators.loops",
+	"universal.iterators.interproc.inlining",
+        "universal.iterators.unittest",
+
+        // C desugar
+        "c.desugar.loops",
+        "c.desugar.aggregate",
+        "c.desugar.andor",
+        "c.desugar.stmt_expr",
+
+        // C libraries
+        "c.libs.mopsa",
+
+        // Memory model
+        "c.memory.cells.router",
+        "c.memory.cells.smashing",
+        "c.memory.cells.pointer",
+        "c.memory.cells.cell_2_num",
+
+        "c.machine_integers",
+
+	// Numeric abstraction
+        "universal.numeric.values.intervals"
+    ]
+}

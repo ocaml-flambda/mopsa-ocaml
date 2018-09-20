@@ -109,6 +109,11 @@ struct
       |> Post.of_flow
       |> Option.return
 
+    | S_assume(e) ->
+      man.exec ~zone:Zone.Z_c_num stmt flow |>
+      Post.of_flow |>
+      Option.return
+
     | _ -> None
 
   (** Evaluations *)
