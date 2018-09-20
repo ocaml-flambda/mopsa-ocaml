@@ -27,23 +27,28 @@ type alarm = {
 
 type alarm_info = {
   compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  print   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  report : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_token   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_title : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_report : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
 }
 
 let compare_chain : (alarm -> alarm -> int) ref =
   ref (fun a1 a2 -> Pervasives.compare a1.alarm_kind a2.alarm_kind)
 
-let print_chain : (Format.formatter -> alarm -> unit) ref =
+let pp_token_chain : (Format.formatter -> alarm -> unit) ref =
   ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
 
-let report_chain : (Format.formatter -> alarm -> unit) ref =
+let pp_title_chain : (Format.formatter -> alarm -> unit) ref =
+  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+
+let pp_report_chain : (Format.formatter -> alarm -> unit) ref =
   ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
 
 let register_alarm info =
   compare_chain := info.compare !compare_chain;
-  print_chain := info.print !print_chain;
-  report_chain := info.report !report_chain;
+  pp_token_chain := info.pp_token !pp_token_chain;
+  pp_title_chain := info.pp_title !pp_title_chain;
+  pp_report_chain := info.pp_report !pp_report_chain;
   ()
 
 let compare_alarm a1 a2 =
@@ -53,9 +58,9 @@ let compare_alarm a1 a2 =
         (fun () -> !compare_chain a1 a2)
       ]
 
-let pp_alarm fmt alarm =
+let pp_alarm_token fmt alarm =
   Format.fprintf fmt "%a:%a"
-    !print_chain alarm
+    !pp_token_chain alarm
     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ":") Location.pp_range) alarm.alarm_trace
 
 let pp_level fmt = function
@@ -63,10 +68,12 @@ let pp_level fmt = function
   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
   | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
 
-let pp_report fmt alarm =
-  Format.fprintf fmt "Description: @[%a@]@\nLevel: %a@\nTrace: @[%a@]"
-    !report_chain alarm
+let pp_alarm fmt alarm =
+  Format.fprintf fmt "%a  %a in %a@\nDescription: @[%a@]@\nTrace: @[%a@]"
     pp_level alarm.alarm_level
+    !pp_title_chain alarm
+    Location.pp_location_verbose (alarm.alarm_trace |> List.hd |> Location.get_origin_range |> Location.range_begin)
+    !pp_report_chain alarm
     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Location.pp_range_verbose) alarm.alarm_trace
 
 type token += T_alarm of alarm
@@ -90,7 +97,7 @@ let () =
       );
     print = (fun next fmt tk ->
         match tk with
-        | T_alarm a -> pp_alarm fmt a
+        | T_alarm a -> pp_alarm_token fmt a
         | _ -> next fmt tk
       );
   }

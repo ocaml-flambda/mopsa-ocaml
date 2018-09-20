@@ -80,6 +80,7 @@ let rec get_origin_range = function
   | Range_tagged(_, range) -> get_origin_range range
   | Range_fresh _ -> failwith "get_origin_range: call on non-original range"
 
+let range_begin r = r.range_begin
 
 (** Comparison function of ranges. *)
 let rec compare_range (r1: range) (r2: range) =
@@ -108,7 +109,7 @@ let rec pp_location fmt loc =
   Format.fprintf fmt "%d:%d" loc.loc_line loc.loc_column
 
 and pp_location_verbose fmt loc =
-  Format.fprintf fmt "File %s:%d"
+  Format.fprintf fmt "file %s:%d"
     loc.loc_file loc.loc_line
 
 and pp_range fmt range =

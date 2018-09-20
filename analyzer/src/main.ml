@@ -70,8 +70,8 @@ let print_results analysis_res =
       (List.length alarms)
       Debug.plurial_list alarms
       (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
-         Framework.Alarm.pp_report
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n@\n--------------------------------------@\n@\n")
+         Framework.Alarm.pp_alarm
       ) alarms
   | ExcPanic s
   | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)

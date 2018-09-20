@@ -115,14 +115,21 @@ let () =
           ]
         | _ -> next a1 a2
       );
-    print = (fun next fmt a ->
+    pp_token = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert (c, f) -> Format.fprintf fmt "fail@%s" f
         | A_may_assert  (c, f) -> Format.fprintf fmt "may@%s" f
         | A_panic_test (msg, f) -> Format.fprintf fmt "panic@%s" f
         | _ -> next fmt a
       );
-    report = (fun next fmt a ->
+    pp_title = (fun next fmt a ->
+        match a.alarm_kind with
+        | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion fail"
+        | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion unproven"
+        | A_panic_test(msg, f) -> Format.fprintf fmt "Panic"
+        | _ -> next fmt a
+      );
+    pp_report = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s fails" pp_expr cond f
         | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s may fail" pp_expr cond f
@@ -149,7 +156,7 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
-  let summary fmt = Debug.debug ~channel:(name ^ ".summary") fmt
+  let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 
   (* Zoning interface *)
