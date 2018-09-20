@@ -97,15 +97,6 @@ struct
       else
         Debug.fail "[c.desugar.aggregate] member_access on non record type"
 
-    | E_c_cast(e, explicit) ->
-      begin
-        eval zone e man flow |>
-        Eval.default_opt e flow |>
-        Eval.bind @@ fun e flow ->
-        Eval.singleton {exp with ekind = E_c_cast(e, explicit)} flow
-      end
-      |> Option.return
-
     | _ -> None
 
   let ask _ _ _  = None

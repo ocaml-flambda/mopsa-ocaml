@@ -123,16 +123,6 @@ struct
       Eval.singleton exp flow
       |> Option.return
 
-    | E_c_cast(e, explicit) when is_c_int_type e.etyp ->
-      begin
-        eval zone e man flow |>
-        Option.none_to_exn |>
-        Eval.bind @@ fun e flow ->
-        let exp' = {exp with ekind = E_c_cast(e, explicit)} in
-        Eval.singleton exp' flow
-      end
-      |> Option.return
-      
     | _ -> None
 
   (** Queries *)

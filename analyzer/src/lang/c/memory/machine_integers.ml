@@ -133,7 +133,10 @@ struct
 
   let eval_interface =
     {
-      import = [(Universal.Zone.Z_universal_num,Universal.Zone.Z_universal_num)];
+      import = [
+        Zone.Z_c, Universal.Zone.Z_universal_num;
+        Universal.Zone.Z_universal_num,Universal.Zone.Z_universal_num
+      ];
       export = [(Zone.Z_c_num, Universal.Zone.Z_universal_num)]
     }
   let exec_interface =
@@ -232,25 +235,27 @@ struct
      *   |> Option.return *)
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
-      let () = debug "case 5" in
+      begin
+        let () = debug "case 5" in
+        man.eval ~zone:(Zone.Z_c, Universal.Zone.Z_universal_num) e flow |>
+        Eval.bind @@ fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
       let r = rangeof t in
       let r' = rangeof t' in
       if range_leq r' r then
-        eval zone e man flow
+        Eval.singleton e' flow
       else
         let rmin, rmax = rangeof t in
-        eval_num man exp flow  |> Eval.bind @@
         check_overflow t man range
-          (fun e tflow -> Eval.singleton {e with etyp = t} tflow)
+          (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
           (fun e fflow ->
              if b && not (!cast_alarm) then
                begin
                  debug "false flow : %a" (Flow.print man) fflow ;
                  Eval.singleton
                    ({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                     etyp   = t;
+                     etyp   = to_universal_type t;
                      erange = tag_range range "wrap"
                     }) fflow
 
@@ -264,13 +269,14 @@ struct
                  in
                  Eval.singleton
                    {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                    etyp   = t;
+                    etyp   = to_universal_type t;
                     erange = tag_range range "wrap"
                    }
                    flow1
                end
-          )
-        |> Option.return
+          ) e' flow
+      end
+      |> Option.return
 
     | E_constant(C_c_character (c, _)) ->
       let () = debug "case 6" in
