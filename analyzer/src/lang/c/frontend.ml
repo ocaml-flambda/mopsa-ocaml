@@ -431,9 +431,9 @@ and from_range : Clang_AST.range -> Framework.Location.range =
         loc_column = range.range_begin.loc_column;
       };
       range_end = {
-        loc_file = range.range_begin.loc_file;
-        loc_line = range.range_begin.loc_line;
-        loc_column = range.range_begin.loc_column;
+        loc_file = range.range_end.loc_file;
+        loc_line = range.range_end.loc_line;
+        loc_column = range.range_end.loc_column;
       }
     }
 
