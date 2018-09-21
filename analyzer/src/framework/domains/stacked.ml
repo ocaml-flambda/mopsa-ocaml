@@ -64,17 +64,17 @@ struct
     print = D2.print;
     get = (fun a -> a);
     set = (fun a _ -> a);
-    exec = (fun ?(zone=Zone.top) stmt flow ->
+    exec = (fun ?(zone=Zone.any_zone) stmt flow ->
         match D2.exec zone stmt man2_local flow with
         | Some post -> post.Post.flow
         | None -> Debug.fail "stacked: sub-domain can not compute post-condition of %a" pp_stmt stmt;
       );
-    eval = (fun ?(zone=(Zone.top, Zone.top)) exp flow ->
+    eval = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow ->
         match D2.eval zone exp man2_local flow with
         | Some evl -> evl
         | None -> Debug.fail "stacked: sub-domain can not evaluate %a" pp_expr exp;
       );
-    eval_opt = (fun ?(zone=(Zone.top, Zone.top)) exp flow -> D2.eval zone exp man2_local flow);
+    eval_opt = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow -> D2.eval zone exp man2_local flow);
     ask = (fun query flow ->
         match D2.ask query man2_local flow with
         | Some repl -> repl
@@ -154,8 +154,8 @@ struct
   }
 
   let exec zone =
-    match List.exists (fun z -> Zone.subset z zone) D1.exec_interface.Domain.export,
-          List.exists (fun z -> Zone.subset z zone) D2.exec_interface.Domain.export
+    match List.exists (fun z -> Zone.sat_zone z zone) D1.exec_interface.Domain.export,
+          List.exists (fun z -> Zone.sat_zone z zone) D2.exec_interface.Domain.export
     with
     | false, false -> raise Not_found
 
@@ -186,8 +186,8 @@ struct
     }
 
   let eval zpath =
-    match List.exists (fun p -> Zone.subset2 p zpath) D1.eval_interface.Domain.export,
-          List.exists (fun p -> Zone.subset2 p zpath) D2.eval_interface.Domain.export
+    match List.exists (fun p -> Zone.sat_zone2 p zpath) D1.eval_interface.Domain.export,
+          List.exists (fun p -> Zone.sat_zone2 p zpath) D2.eval_interface.Domain.export
     with
     | false, false -> raise Not_found
 

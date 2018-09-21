@@ -30,11 +30,11 @@ struct
 
 
   (** Map giving the [exec] transfer function of a zone *)
-  module ExecMap = MapExt.Make(struct type t = Zone.zone let compare = compare end)
+  module ExecMap = MapExt.Make(struct type t = Zone.zone let compare = compare_zone end)
 
 
   (** Map giving the [eval] evaluation function of a zone path *)
-  module EvalMap = MapExt.Make(struct type t = Zone.zone * Zone.zone let compare = Zone.compare2 end)
+  module EvalMap = MapExt.Make(struct type t = Zone.zone * Zone.zone let compare = Compare.pair_compare compare_zone compare_zone end)
 
 
   (*==========================================================================*)
@@ -62,24 +62,24 @@ struct
         if ExecMap.mem zone acc then acc
         else
           begin
-            debug "Searching for an exec function for the zone %a" Zone.print zone;
-            if List.exists (fun z -> Zone.subset z zone) Domain.exec_interface.export then
+            debug "Searching for an exec function for the zone %a" pp_zone zone;
+            if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.export then
               begin
-                debug "exec for %a found" Zone.print zone;
+                debug "exec for %a found" pp_zone zone;
                 ExecMap.add zone (Domain.exec zone) acc
               end
             else
-              Exceptions.panic "exec for %a not found" Zone.print zone
+              Exceptions.panic "exec for %a not found" pp_zone zone
           end
-      ) ExecMap.empty (List.sort_uniq Pervasives.compare (Zone.top :: Domain.exec_interface.import))
+      ) ExecMap.empty (List.sort_uniq Pervasives.compare (any_zone :: Domain.exec_interface.import))
 
 
-  and exec ?(zone = Zone.top) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
+  and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     debug
       "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
       Location.pp_range_verbose stmt.srange
       pp_stmt stmt (Flow.print man) flow
-      Zone.print zone
+      pp_zone zone
     ;
     let timer = Timing.start () in
 
@@ -107,7 +107,7 @@ struct
       "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
       pp_stmt stmt
       (Flow.print man) flow
-      Zone.print zone
+      pp_zone zone
       (Flow.print man) flow'
     ;
     flow'
@@ -125,25 +125,25 @@ struct
         if EvalMap.mem zpath acc then acc
         else
           begin
-            debug "Searching for eval function for the zone path %a" Zone.print2 zpath;
-            if List.exists (fun p -> Zone.subset2 p zpath) Domain.eval_interface.export then
+            debug "Searching for eval function for the zone path %a" pp_zone2 zpath;
+            if List.exists (fun p -> sat_zone2 p zpath) Domain.eval_interface.export then
               begin
-                debug "eval for %a found" Zone.print2 zpath;
+                debug "eval for %a found" pp_zone2 zpath;
                 EvalMap.add zpath (Domain.eval zpath) acc
               end
             else
-              Exceptions.panic "eval for %a not found" Zone.print2 zpath
+              Exceptions.panic "eval for %a not found" pp_zone2 zpath
           end
-      ) EvalMap.empty (List.sort_uniq Pervasives.compare ((Zone.top, Zone.top)  :: Domain.eval_interface.import))
+      ) EvalMap.empty (List.sort_uniq Pervasives.compare ((any_zone, any_zone)  :: Domain.eval_interface.import))
 
 
   (** Evaluation of expressions. *)
-  and eval_opt ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
+  and eval_opt ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
       "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
       Location.pp_range_verbose exp.erange
       pp_expr exp (Flow.print man) flow
-      Zone.print2 zone
+      pp_zone2 zone
     ;
     let timer = Timing.start () in
     let path_eval = EvalMap.find zone eval_map in
@@ -163,12 +163,12 @@ struct
       "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
       pp_expr exp
       (Flow.print man) flow
-      Zone.print2 zone
+      pp_zone2 zone
       (Option.print (Eval.print ~pp:pp_expr)) evl
     ;
     evl
 
-  and eval ?(zone = (Zone.top, Zone.top)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     match eval_opt ~zone exp flow with
     | Some evl -> evl
     | None -> Eval.singleton exp flow

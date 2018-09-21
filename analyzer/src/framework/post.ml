@@ -21,10 +21,10 @@ type 'a post = {
   channels : channel list;
 }
 
-let add_mergers mergers ?(zone = Zone.Z_top) post =
+let add_mergers mergers ?(zone = any_zone) post =
   {post with mergers = post.mergers @ (List.map (fun s -> (s, zone)) mergers)}
 
-let add_merger merger ?(zone = Zone.Z_top) post =
+let add_merger merger ?(zone = any_zone) post =
   {post with mergers = post.mergers @ [(merger, zone)]}
 
 let add_channels channels post =
@@ -63,7 +63,7 @@ let meet (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
   }
 
 let bind
-    ?(zone = Zone.top) (man: ('a, _) man)
+    ?(zone = any_zone) (man: ('a, _) man)
     (f: 'e -> 'a flow -> 'a post)
     (evl: ('a, 'e) evl)
   : 'a post =
@@ -90,7 +90,7 @@ let bind
 
 
 let assume
-    cond ?(zone = Zone.top) man
+    cond ?(zone = any_zone) man
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join man (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> of_flow flow))
@@ -106,7 +106,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> 'a post )) list)
-    ?(zone = Zone.top)
+    ?(zone = any_zone)
     man flow
   : 'a post  =
   match cases with

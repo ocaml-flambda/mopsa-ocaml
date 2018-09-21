@@ -82,8 +82,8 @@ struct
   }
 
   let exec zone =
-    match List.exists (fun z -> Zone.subset z zone) Head.exec_interface.Domain.export,
-          List.exists (fun z -> Zone.subset z zone) Tail.exec_interface.Domain.export
+    match List.exists (fun z -> Zone.sat_zone z zone) Head.exec_interface.Domain.export,
+          List.exists (fun z -> Zone.sat_zone z zone) Tail.exec_interface.Domain.export
     with
     | false, false -> raise Not_found
 
@@ -111,8 +111,8 @@ struct
   }
 
   let eval zpath =
-    match List.exists (fun p -> Zone.subset2 p zpath) Head.eval_interface.Domain.export,
-          List.exists (fun p -> Zone.subset2 p zpath) Tail.eval_interface.Domain.export
+    match List.exists (fun p -> Zone.sat_zone2 p zpath) Head.eval_interface.Domain.export,
+          List.exists (fun p -> Zone.sat_zone2 p zpath) Tail.eval_interface.Domain.export
     with
     | false, false -> raise Not_found
 

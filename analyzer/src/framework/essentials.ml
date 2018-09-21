@@ -12,6 +12,8 @@ include Ast
 
 module Visitor = Visitor
 
+include Zone
+
 include Manager
 
 module Flow = Flow

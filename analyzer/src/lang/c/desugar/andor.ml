@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 open Ast
+open Zone
 
 module Domain : Framework.Domains.Stateless.S =
 struct
@@ -35,8 +36,8 @@ struct
   }
 
   let eval_interface = {
-    import = [Framework.Zone.Z_top, Framework.Zone.Z_top];
-    export = [Framework.Zone.Z_top, Framework.Zone.Z_top]
+    import = [Z_c, under_zone Z_c];
+    export = [Z_c, under_zone Z_c]
   }
 
   let exec _ _ _ _ = None
@@ -45,21 +46,21 @@ struct
     match ekind exp with
     | E_binop(O_c_and, e1, e2) ->
       begin
-        man.eval e1 flow |> Eval.bind @@ fun e1 flow ->
+        man.eval ~zone e1 flow |> Eval.bind @@ fun e1 flow ->
         Eval.assume
           e1
-          ~fthen:(fun true_flow -> man.eval e2 true_flow)
+          ~fthen:(fun true_flow -> man.eval ~zone e2 true_flow)
           ~felse:(fun false_flow -> Eval.singleton (Universal.Ast.mk_z Z.zero exp.erange) false_flow)
           man flow
       end |> Option.return
 
     | E_binop(O_c_or, e1, e2) ->
       begin
-        man.eval e1 flow |> Eval.bind @@ fun e1 flow ->
+        man.eval ~zone e1 flow |> Eval.bind @@ fun e1 flow ->
         Eval.assume
           e1
           ~fthen:(fun true_flow -> Eval.singleton (Universal.Ast.mk_z Z.one exp.erange) true_flow)
-          ~felse:(fun false_flow -> man.eval e2 false_flow)
+          ~felse:(fun false_flow -> man.eval ~zone e2 false_flow)
           man flow
       end |> Option.return
 

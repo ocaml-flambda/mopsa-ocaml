@@ -122,7 +122,7 @@ let default_opt exp flow evl =
   | Some evl -> evl
 
 let assume
-    cond ?(zone = Zone.top)
+    cond ?(zone = any_zone)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> empty_singleton flow))
@@ -138,7 +138,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> ('a, 'e) evl )) list)
-    ?(zone = Zone.top)
+    ?(zone = any_zone)
     man flow
   : ('a, 'e) evl  =
   match cases with

@@ -9,9 +9,8 @@
 (** Main handler of Universal programs. *)
 
 open Framework.Essentials
-open Framework.Domains.Stateless
 open Ast
-
+open Zone
 
 module Domain =
 struct
@@ -27,7 +26,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let exec_interface = {export = [Z_u]; import = []}
   let eval_interface = {export = []; import = []}
 
   let init prog man flow = None
@@ -49,4 +48,4 @@ struct
 end
 
 let () =
-  register_domain (module Domain)
+  Framework.Domains.Stateless.register_domain (module Domain)

@@ -11,20 +11,24 @@
 open Framework.Zone
 
 type zone +=
-  | Z_universal
-  | Z_universal_num
+  | Z_u
+  | Z_u_num
 
 let () =
   register_zone {
-      subset = (fun next z1 z2 ->
-          match z1, z2 with
-            | Z_universal_num, Z_universal -> true
-            | _ -> next z1 z2
-        );
-      print = (fun next fmt z ->
-          match z with
-          | Z_universal -> Format.fprintf fmt "universal"
-          | Z_universal_num -> Format.fprintf fmt "universal/num"
-          | _ -> next fmt z
-        );
-    }
+    zone = Z_u;
+    subset = None;
+    name = "u";
+    exec_template = (fun stmt -> Process);
+    eval_template = (fun exp -> Process);
+  };
+
+  register_zone {
+    zone = Z_u_num;
+    subset = Some Z_u;
+    name = "u/num";
+    exec_template = (fun stmt -> Process);
+    eval_template = (fun exp -> Process);
+  };
+
+  ()

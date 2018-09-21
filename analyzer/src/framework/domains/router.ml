@@ -21,9 +21,9 @@ type entry = {
 
 let pp_entry fmt e =
   Format.fprintf fmt "src: %a, dst: %a, path: %a"
-    Zone.print e.src
-    Zone.print e.dst
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " -> ") Zone.print) e.path
+    pp_zone e.src
+    pp_zone e.dst
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " -> ") pp_zone) e.path
 
 module type S =
 sig
@@ -54,7 +54,7 @@ struct
     {export; import}
 
   let eval (z1, z2) exp man flow =
-    let entries = List.find_all (function {src; dst} -> Zone.subset2 (src, dst) (z1, z2)) Router.table in
+    let entries = List.find_all (function {src; dst} -> sat_zone2 (src, dst) (z1, z2)) Router.table in
     let rec aux = function
       | [] -> None
       | entry :: tl ->

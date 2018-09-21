@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 open Ast
+open Zone
 open Callstack
 
 
@@ -61,8 +62,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
-  let eval_interface = {export = [Zone.Z_universal, Framework.Zone.Z_top]; import = []}
+  let exec_interface = {export = [Z_u]; import = []}
+  let eval_interface = {export = [Z_u, Z_any]; import = []}
 
   (** Initialization *)
   (** ============== *)

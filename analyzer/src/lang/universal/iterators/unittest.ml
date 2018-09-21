@@ -10,7 +10,7 @@
 
 open Framework.Essentials
 open Ast
-
+open Zone
 
 (** Stateless annotations
     =====================
@@ -53,12 +53,12 @@ let () =
   ()
 
 
-(* Flow tokens 
+(* Flow tokens
    ===========
 
    Safe assertions are saved in the flow so that we can compute
    statistics at the end of the analysis. Note that failed assertions
-   are kept in the T_alarm token.  
+   are kept in the T_alarm token.
 *)
 
 type token +=
@@ -162,7 +162,7 @@ struct
   (* Zoning interface *)
   (* ================ *)
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let exec_interface = {export = [Z_u]; import = []}
   let eval_interface = {export = []; import = []}
 
 

@@ -161,17 +161,17 @@ struct
     print = Over.print;
     get = (fun o -> o);
     set = (fun o _ -> o);
-    exec = (fun ?(zone=Zone.top) stmt flow ->
+    exec = (fun ?(zone=Zone.any_zone) stmt flow ->
         match Over.exec zone stmt over_local_man flow with
         | Some post -> post.Post.flow
         | None -> Debug.fail "product: sub-domain can not compute post-condition of %a" pp_stmt stmt;
       );
-    eval = (fun ?(zone=(Zone.top, Zone.top)) exp flow ->
+    eval = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow ->
         match Over.eval zone exp over_local_man flow with
         | Some evl -> evl
         | None -> Debug.fail "product: sub-domain can not evaluate %a" pp_expr exp;
       );
-    eval_opt = (fun ?(zone=(Zone.top, Zone.top)) exp flow -> Over.eval zone exp over_local_man flow);
+    eval_opt = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow -> Over.eval zone exp over_local_man flow);
     ask = (fun query flow ->
         match Over.ask query over_local_man flow with
         | Some repl -> repl
@@ -442,7 +442,7 @@ struct
         | Nil -> []
         | Cons(hd, tl) ->
           let module D = (val hd) in
-          let b = List.exists (fun z -> Zone.subset z zone) D.exec_interface.Domain.export in
+          let b = List.exists (fun z -> Zone.sat_zone z zone) D.exec_interface.Domain.export in
           b :: aux tl
       in
       aux Config.pool
@@ -574,7 +574,7 @@ struct
         | Nil -> []
         | Cons(hd, tl) ->
           let module D = (val hd) in
-          let b = List.exists (fun z -> Zone.subset2 z zone) D.eval_interface.Domain.export in
+          let b = List.exists (fun z -> Zone.sat_zone2 z zone) D.eval_interface.Domain.export in
           b :: aux tl
       in
       aux Config.pool
