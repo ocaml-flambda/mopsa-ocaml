@@ -37,18 +37,29 @@ let () =
 (* Command line options
    ====================
 
-   The flag -unittest activates the mode of unit testing. In this
+   - The flag -unittest activates the mode of unit testing. In this
    mode, every function starting with test_* is called. At the end,
    statistics about failed/safe assertions are collected.
+
+   - The option -unittest-filter = f1,f2,... selects the functions
+   to be tested.
 *)
 
 let unittest_flag = ref false
+let unittest_filter = ref []
 
 let () =
   register_option (
     "-unittest",
     Arg.Set unittest_flag,
     " activate unittest mode"
+  );
+  register_option (
+    "-unittest-filter",
+    Arg.String(fun s ->
+        unittest_filter := Str.split (Str.regexp "[ ]*,[ ]*") s
+      ),
+    " selection of test functions (separated by comma) to analyze (default: all)"
   );
   ()
 
@@ -260,7 +271,13 @@ struct
 
   and execute_test_functions tests man flow =
     let annot = Flow.get_all_annot flow in
-    tests |>
+    (
+      match !unittest_filter with
+      | []
+      | ["all"] -> tests
+      | _ -> List.filter (fun (t, _) -> List.mem t !unittest_filter) tests
+    )
+    |>
     List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
         let flow = Flow.set_annot A_cur_test name flow in
