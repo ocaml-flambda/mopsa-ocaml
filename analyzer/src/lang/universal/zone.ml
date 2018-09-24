@@ -8,7 +8,8 @@
 
 (** Zones for the Universal language. *)
 
-open Framework.Zone
+open Framework.Essentials
+open Ast
 
 type zone +=
   | Z_u
@@ -18,17 +19,38 @@ let () =
   register_zone {
     zone = Z_u;
     subset = None;
-    name = "u";
-    exec_template = (fun stmt -> Process);
-    eval_template = (fun exp -> Process);
+    name = "U";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_function _
+        | E_array _
+        | E_subscript _
+        | E_addr _
+        | E_len _                            -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
   };
 
   register_zone {
     zone = Z_u_num;
     subset = Some Z_u;
-    name = "u/num";
-    exec_template = (fun stmt -> Process);
-    eval_template = (fun exp -> Process);
+    name = "U/Num";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _                       -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
   };
 
   ()

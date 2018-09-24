@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 open Ast
+open Zone
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -34,8 +35,8 @@ struct
   (** ================= *)
 
   let exec_interface = {
-    export = [Framework.Zone.Z_top];
-    import = [Framework.Zone.Z_top]
+    export = [Z_c];
+    import = [Z_c]
   }
 
   let eval_interface = {
@@ -81,7 +82,7 @@ struct
                   let lval = mk_c_member_access lval field range in
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
-                  man.exec ~zone:(Framework.Zone.Z_top) stmt flow
+                  man.exec ~zone:Z_c stmt flow
                 ) flow
               |> Post.of_flow
               |> Option.return
@@ -99,7 +100,7 @@ struct
                   let lval = mk_c_member_access lval field range in
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
-                  man.exec ~zone:(Framework.Zone.Z_top) stmt flow
+                  man.exec ~zone:Z_c stmt flow
                   |> Post.of_flow
                   |> Option.return
                 | None -> Debug.fail "[%s] all fields have size 0" name

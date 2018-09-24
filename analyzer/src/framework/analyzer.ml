@@ -34,7 +34,7 @@ struct
 
 
   (** Map giving the [eval] evaluation function of a zone path *)
-  module EvalMap = MapExt.Make(struct type t = Zone.zone * Zone.zone let compare = Compare.pair_compare compare_zone compare_zone end)
+  module EvalMap = MapExt.Make(struct type t = Zone.zone * Zone.zone let compare = Compare.pair compare_zone compare_zone end)
 
 
   (*==========================================================================*)
@@ -57,9 +57,12 @@ struct
 
   (** Build the map of exec functions *)
   and exec_map =
+    let required = List.sort_uniq compare_zone (any_zone :: Domain.exec_interface.import) in
+    let map = ExecMap.empty in
     (* Iterate over the required zones of domain D *)
-    List.fold_left (fun acc zone ->
-        if ExecMap.mem zone acc then acc
+    let ret = List.fold_left (fun acc zone ->
+        if ExecMap.mem zone acc then
+          acc
         else
           begin
             debug "Searching for an exec function for the zone %a" pp_zone zone;
@@ -71,15 +74,17 @@ struct
             else
               Exceptions.panic "exec for %a not found" pp_zone zone
           end
-      ) ExecMap.empty (List.sort_uniq Pervasives.compare (any_zone :: Domain.exec_interface.import))
-
+      ) map required
+    in
+    ret
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     debug
-      "exec stmt in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
+      "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose stmt.srange
-      pp_stmt stmt (Flow.print man) flow
+      pp_stmt stmt
       pp_zone zone
+      (Flow.print man) flow
     ;
     let timer = Timing.start () in
 
@@ -104,10 +109,10 @@ struct
     ;
 
     debug
-      "exec stmt done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
+      "exec stmt done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_stmt stmt
-      (Flow.print man) flow
       pp_zone zone
+      (Flow.print man) flow
       (Flow.print man) flow'
     ;
     flow'
@@ -134,23 +139,54 @@ struct
             else
               Exceptions.panic "eval for %a not found" pp_zone2 zpath
           end
-      ) EvalMap.empty (List.sort_uniq Pervasives.compare ((any_zone, any_zone)  :: Domain.eval_interface.import))
+      ) EvalMap.empty (List.sort_uniq (Compare.pair compare_zone compare_zone) ((any_zone, any_zone)  :: Domain.eval_interface.import))
 
 
   (** Evaluation of expressions. *)
   and eval_opt ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
-      "eval expr in %a:@\n @[%a@]@\n input:@\n  @[%a@]@\n zone: %a"
+      "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
-      pp_expr exp (Flow.print man) flow
+      pp_expr exp
       pp_zone2 zone
+      (Flow.print man) flow
     ;
     let timer = Timing.start () in
-    let path_eval = EvalMap.find zone eval_map in
 
-    let evl = Cache.eval (fun exp flow ->
-        path_eval exp man flow
-      ) zone exp flow
+    let ret =
+      (* Try static evaluation using the template of the destination zone *)
+      match Zone.eval exp (snd zone) with
+      | Keep ->
+        debug "Already in zone";
+        Some (Eval.singleton exp flow)
+
+      | _ as action ->
+        let feval = EvalMap.find zone eval_map in
+        let evl = Cache.eval (fun exp flow ->
+            feval exp man flow
+          ) zone exp flow
+        in
+
+        match evl with
+        | Some _ -> evl
+        | None ->
+          match action with
+          | Keep -> assert false (* case already processed *)
+          | Process -> None
+          | Visit ->
+            debug "Visiting expression";
+            let open Visitor in
+            let parts, builder = split_expr exp in
+            match parts with
+            | {exprs = []; stmts = []} -> None
+            | {exprs; stmts = []} ->
+              Eval.eval_list_opt exprs (eval_opt ~zone) flow |>
+              Option.option_lift1 @@
+              Eval.bind @@ fun exprs flow ->
+              let exp = builder {exprs; stmts = []} in
+              Eval.singleton exp flow
+
+            | _ -> None
     in
 
     let t = Timing.stop timer in
@@ -160,13 +196,13 @@ struct
       t pp_expr exp
     ;
     debug
-      "eval expr done:@\n @[%a@]@\n input:@\n@[  %a@]@\n zone: %a@\n output@\n@[  %a@]"
+      "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
-      (Flow.print man) flow
       pp_zone2 zone
-      (Option.print (Eval.print ~pp:pp_expr)) evl
+      (Flow.print man) flow
+      (Option.print (Eval.print ~pp:pp_expr)) ret
     ;
-    evl
+    ret
 
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     match eval_opt ~zone exp flow with

@@ -9,8 +9,9 @@
 (** Machine representation of C integers *)
 
 open Framework.Essentials
-open Ast
 open Universal.Ast
+open Ast
+open Zone
 
 module Itv_Value = Universal.Numeric.Values.Intervals.Value
 
@@ -51,7 +52,7 @@ let check_overflow typ man range f1 f2 exp flow =
   and full_check e flow =
     let cond = range_cond e rmin rmax (erange e) in
     Eval.assume
-      ~zone:(Universal.Zone.Z_universal_num)
+      ~zone:(Universal.Zone.Z_u_num)
       cond
       ~fthen:(fun tflow -> f1 e flow)
       ~felse:(fun fflow -> f2 e flow)
@@ -81,7 +82,7 @@ let check_division man range f1 f2 exp flow =
                }
     in
     Eval.assume
-      ~zone:(Universal.Zone.Z_universal_num)
+      ~zone:(Universal.Zone.Z_u_num)
       cond
       ~fthen:(fun tflow -> f2 e' flow)
       ~felse:(fun fflow -> f1 e' flow)
@@ -133,26 +134,47 @@ struct
 
   let eval_interface =
     {
-      import = [
-        Zone.Z_c, Universal.Zone.Z_universal_num;
-        Universal.Zone.Z_universal_num,Universal.Zone.Z_universal_num
-      ];
-      export = [(Zone.Z_c_num, Universal.Zone.Z_universal_num)]
+      export = [Z_c_scalar_num, Universal.Zone.Z_u_num];
+      import = [Z_c, Universal.Zone.Z_u_num];
     }
   let exec_interface =
     {
-      import = [Universal.Zone.Z_universal_num];
-      export = [Zone.Z_c_num]
+      import = [Universal.Zone.Z_u_num];
+      export = [Zone.Z_c_scalar_num]
     }
 
-  let eval_num man = man.eval ~zone:(Universal.Zone.Z_universal_num, Universal.Zone.Z_universal_num)
+  let eval_binop op e e' exp man flow =
+    man.eval e ~zone:(Z_c, Universal.Zone.Z_u_num) flow |>
+    Eval.bind @@ fun e flow ->
+
+    man.eval e' ~zone:(Z_c, Universal.Zone.Z_u_num) flow |>
+    Eval.bind @@ fun e' flow ->
+
+    let exp' = {exp with
+                ekind = E_binop(op, e, e');
+                etyp = to_universal_type exp.etyp
+               }
+    in
+    Eval.singleton exp' flow
+
+
+  let eval_unop op e exp man flow =
+    man.eval e ~zone:(Z_c, Universal.Zone.Z_u_num) flow |>
+    Eval.bind @@ fun e flow ->
+
+    let exp' = {exp with
+                ekind = E_unop(op, e);
+                etyp = to_universal_type exp.etyp
+               }
+    in
+    Eval.singleton exp' flow
 
   let rec eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div && exp |> etyp |> is_c_type ->
       begin
-        eval_num man exp flow |> Eval.bind @@
+        eval_binop op e e' exp man flow |> Eval.bind @@
         check_division man range
           (fun e' tflow -> Eval.singleton e' tflow)
           (fun e' fflow ->
@@ -170,7 +192,7 @@ struct
         let () = debug "case 1" in
         let typ = etyp exp in
         let rmin, rmax = rangeof typ in
-        eval_num man exp flow  |> Eval.bind @@
+        eval_unop op e exp man flow  |> Eval.bind @@
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
@@ -191,7 +213,7 @@ struct
         let () = debug "case 2" in
         let typ = etyp exp in
         let rmin, rmax = rangeof typ in
-        eval_num man exp flow  |> Eval.bind @@
+        eval_binop op e e' exp man flow |> Eval.bind @@
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
@@ -222,59 +244,47 @@ struct
         Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
         |> Option.return
 
-    (* | E_binop(op, e, e') ->
-     *   let () = debug "memory.machine_integers: I do not think we should be there"
-     *   in
-     *   Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
-     *   |> Option.return
-     * 
-     * | E_unop(op, e) ->
-     *   let () = debug "memory.machine_integers: I do not think we should be there"
-     *   in
-     *   Eval.singleton {exp with etyp = to_universal_type (etyp exp)} flow
-     *   |> Option.return *)
-
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       begin
         let () = debug "case 5" in
-        man.eval ~zone:(Zone.Z_c, Universal.Zone.Z_universal_num) e flow |>
+        man.eval ~zone:(Zone.Z_c, Universal.Zone.Z_u_num) e flow |>
         Eval.bind @@ fun e' flow ->
-      let t  = etyp exp in
-      let t' = etyp e in
-      let r = rangeof t in
-      let r' = rangeof t' in
-      if range_leq r' r then
-        Eval.singleton e' flow
-      else
-        let rmin, rmax = rangeof t in
-        check_overflow t man range
-          (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
-          (fun e fflow ->
-             if b && not (!cast_alarm) then
-               begin
-                 debug "false flow : %a" (Flow.print man) fflow ;
-                 Eval.singleton
-                   ({ekind  = E_unop(O_wrap(rmin, rmax), e);
-                     etyp   = to_universal_type t;
-                     erange = tag_range range "wrap"
-                    }) fflow
+        let t  = etyp exp in
+        let t' = etyp e in
+        let r = rangeof t in
+        let r' = rangeof t' in
+        if range_leq r' r then
+          Eval.singleton e' flow
+        else
+          let rmin, rmax = rangeof t in
+          check_overflow t man range
+            (fun e tflow -> Eval.singleton {e with etyp = to_universal_type t} tflow)
+            (fun e fflow ->
+               if b && not (!cast_alarm) then
+                 begin
+                   debug "false flow : %a" (Flow.print man) fflow ;
+                   Eval.singleton
+                     ({ekind  = E_unop(O_wrap(rmin, rmax), e);
+                       etyp   = to_universal_type t;
+                       erange = tag_range range "wrap"
+                      }) fflow
 
-               end
-             else
-               begin
-                 let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
-                 let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
-                 let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
-                             Flow.set T_cur man.bottom man
-                 in
-                 Eval.singleton
-                   {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                    etyp   = to_universal_type t;
-                    erange = tag_range range "wrap"
-                   }
-                   flow1
-               end
-          ) e' flow
+                 end
+               else
+                 begin
+                   let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
+                   let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
+                   let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
+                               Flow.set T_cur man.bottom man
+                   in
+                   Eval.singleton
+                     {ekind  = E_unop(O_wrap(rmin, rmax), e);
+                      etyp   = to_universal_type t;
+                      erange = tag_range range "wrap"
+                     }
+                     flow1
+                 end
+            ) e' flow
       end
       |> Option.return
 
@@ -299,21 +309,25 @@ struct
     match skind stmt with
     | S_assign({ekind = E_var(v, mode)} as lval, rval) when etyp lval |> is_c_int_type ->
       let lval' = {lval with ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode)} in
-      man.exec ~zone:Universal.Zone.Z_universal_num (mk_assign lval' rval stmt.srange) flow |>
+      man.exec ~zone:Universal.Zone.Z_u_num (mk_assign lval' rval stmt.srange) flow |>
       Post.of_flow |>
       Option.return
 
     | S_remove_var v when is_c_int_type v.vtyp ->
       let v' = {v with vtyp = to_universal_type v.vtyp} in
-      man.exec ~zone:Universal.Zone.Z_universal_num (mk_remove_var v' stmt.srange) flow |>
+      man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v' stmt.srange) flow |>
       Post.of_flow |>
       Option.return
 
     | S_assume(e) ->
-      man.exec ~zone:Universal.Zone.Z_universal_num stmt flow |>
-      Post.of_flow |>
+      begin
+        man.eval ~zone:(Z_c_scalar_num, Universal.Zone.Z_u_num) e flow |>
+        Post.bind man @@ fun e' flow ->
+        let stmt' = {stmt with skind = S_assume e'} in
+        man.exec ~zone:Universal.Zone.Z_u_num stmt' flow |>
+        Post.of_flow
+      end |>
       Option.return
-
 
     | _ -> None
 

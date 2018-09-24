@@ -376,7 +376,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     export = [Zone.Z_c_scalar, Z_c_cell];
     import = [
       (Zone.Z_c, Zone.Z_c_scalar);
-      (Zone.Z_c, Z_c_points_to)
+      (Zone.Z_c, Z_c_cell_points_to)
     ];
   }
 
@@ -576,8 +576,8 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       begin
-        man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
-        |> Post.bind man @@ fun rval flow ->
+        (* man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
+         * |> Post.bind man @@ fun rval flow -> *)
         man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow
         |> Post.bind man @@ fun lval flow ->
         eval (Zone.Z_c_scalar, Z_c_cell) lval man flow
@@ -588,6 +588,18 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           assign_cell man c rval mode stmt.srange flow
         | _ -> assert false
       end |> Option.return
+
+
+    | S_assume(e) ->
+      begin
+        man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+        Post.bind man @@ fun e' flow ->
+        let stmt' = {stmt with skind = S_assume e'} in
+        man.exec ~zone:Z_c_cell stmt' flow |>
+        Post.of_flow
+      end |>
+      Option.return
+
     | _ -> None
 
   and eval zone exp man flow =
@@ -607,7 +619,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | E_c_deref(p) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
+        man.eval ~zone:(Zone.Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton {exp with ekind = E_c_function fundec} flow

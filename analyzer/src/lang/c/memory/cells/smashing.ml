@@ -123,7 +123,7 @@ struct
     export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cell expressions *)
     import = [
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
-      Z_c, Z_c_points_to; (* To dereference pointer expressions *)
+      Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
     ];
   }
 
@@ -211,6 +211,17 @@ struct
       end |>
       Option.return
 
+    | S_assume(e) ->
+      begin
+        man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+        Post.bind man @@ fun e' flow ->
+        let stmt' = {stmt with skind = S_assume e'} in
+        man.exec ~zone:Z_c_cell stmt' flow |>
+        Post.of_flow
+      end |>
+      Option.return
+
+
     | _ -> None
 
   and assign_cell c e mode range man flow =
@@ -264,7 +275,7 @@ struct
 
     | E_c_deref p ->
       begin
-        man.eval ~zone:(Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pt flow ->
+        man.eval ~zone:(Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pt flow ->
         match ekind pt with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton ({exp with ekind = E_c_function fundec}) flow

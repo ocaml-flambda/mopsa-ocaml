@@ -53,7 +53,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let exec_interface = {export = [Zone.Z_c]; import = [Zone.Z_c]}
   let eval_interface = {export = []; import = []}
 
 
@@ -62,10 +62,11 @@ struct
 
   let init prog man flow = None
 
+
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let rec exec zone stmt man flow  =
+  let rec exec zone stmt man flow =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not !Universal.Iterators.Unittest.unittest_flag ->
@@ -83,7 +84,7 @@ struct
       in
       (* Execute body of entry function *)
       let stmt = mk_c_call_stmt entry [] range in
-      man.exec stmt flow1 |>
+      man.exec ~zone:Zone.Z_c stmt flow1 |>
       Post.return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})

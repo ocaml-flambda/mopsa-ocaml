@@ -410,8 +410,8 @@ struct
         let module D = (val hd) in
         let after = aux tl in
         {
-          import = List.sort_uniq compare (D.exec_interface.import @ after.import);
-          export = List.sort_uniq compare (D.exec_interface.export @ after.export);
+          import = List.sort_uniq compare_zone (D.exec_interface.import @ after.import);
+          export = List.sort_uniq compare_zone (D.exec_interface.export @ after.export);
         }
     in
     aux Config.pool
@@ -548,8 +548,8 @@ struct
         let module D = (val hd) in
         let after = aux tl in
         {
-          import = List.sort_uniq compare (D.eval_interface.import @ after.import);
-          export = List.sort_uniq compare (D.eval_interface.export @ after.export);
+          import = List.sort_uniq (Compare.pair compare_zone compare_zone) (D.eval_interface.import @ after.import);
+          export = List.sort_uniq (Compare.pair compare_zone compare_zone) (D.eval_interface.export @ after.export);
         }
     in
     aux Config.pool

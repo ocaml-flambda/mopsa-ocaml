@@ -19,7 +19,7 @@ let pp_call_stack =
     pp_range
 
 let compare_call_stack cs cs' =
-  Compare.list_compare compare_range cs cs'
+  Compare.list compare_range cs cs'
 
 type ('a, _) Annotation.key +=
   | A_call_stack: ('a, cs) Annotation.key

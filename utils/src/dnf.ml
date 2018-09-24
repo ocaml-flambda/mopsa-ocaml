@@ -27,7 +27,7 @@ let rec mk_and ?(fand=(@)) ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : '
 
 and mk_or ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
   a @ b |>
-  List.sort_uniq (Compare.list_compare compare)
+  List.sort_uniq (Compare.list compare)
 
 and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
   a |> List.fold_left (fun acc conj ->

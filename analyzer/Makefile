@@ -22,7 +22,7 @@ lang.universal.numeric.reductions = channels intervals_congruences implicit_assu
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 
-lang.c = zone ast pp visitor frontend alarms desugar libs iterators memory
+lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = loops andor aggregate records stmt_expr
 lang.c.memory = base init_visitor cells machine_integers

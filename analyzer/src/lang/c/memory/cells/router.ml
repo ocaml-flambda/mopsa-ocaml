@@ -24,8 +24,8 @@ struct
 
     {
       src = Zone.Z_c;
-      dst = Universal.Zone.Z_universal_num;
-      path = [Cell.Z_c_cell; Zone.Z_c_num]
+      dst = Universal.Zone.Z_u_num;
+      path = [Cell.Z_c_cell; Zone.Z_c_scalar_num]
     }
 
   ]

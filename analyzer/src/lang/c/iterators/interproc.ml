@@ -40,7 +40,7 @@ struct
     export = [Zone.Z_c, Zone.Z_c_scalar];
     import = [
       Zone.Z_c, Zone.Z_c_scalar;
-      Universal.Zone.Z_universal, Framework.Zone.Z_top
+      Universal.Zone.Z_u, any_zone
     ]
   }
 
@@ -84,13 +84,17 @@ struct
           in
           let exp' = mk_call fundec' args exp.erange in
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
-          man.eval ~zone:(Universal.Zone.Z_universal, Framework.Zone.Z_top) exp' flow
+          man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
         | _ -> assert false
       end |>
       Option.return
 
-    | E_c_cast(e, _) when (exp |> etyp |> is_c_pointer_type) && (exp |> etyp |> under_pointer_type |> is_c_function_type) ->
+    | E_c_cast(e, _)
+      when (exp |> etyp |> is_c_pointer_type)
+        && (exp |> etyp |> under_pointer_type |> is_c_function_type)
+      ->
+      debug "cast";
       let t' = exp |> etyp |> under_pointer_type in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) {e with etyp = t'} flow |>
       Option.return

@@ -12,6 +12,7 @@ open Framework.Essentials
 open Framework.Ast
 open Universal.Ast
 open Ast
+open Zone
 
 module Domain =
   struct
@@ -26,7 +27,7 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Framework.Zone.Z_top]; import = []}
+    let exec_interface = {export = [Z_py]; import = []}
     let eval_interface = {export = []; import = []}
 
     let init _ _ flow = Option.return flow

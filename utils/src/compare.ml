@@ -16,8 +16,8 @@ let rec compose = function
     let r = cmp () in
     if r <> 0 then r else compose tl
 
-(** [list_compare p] lifts the 'a compare function [p] to 'a list *)
-let list_compare p =
+(** [list p] lifts the 'a compare function [p] to 'a list *)
+let list p =
   fun l l' ->
     let rec aux a b = match a,b with
       | t::r , t'::r' -> let x = p t t' in if x = 0 then aux r r' else x
@@ -27,16 +27,16 @@ let list_compare p =
     in
     aux l l'
 
-(** [pair_compare p] lifts the 'a compare function [p], 'b compare
+(** [pair p] lifts the 'a compare function [p], 'b compare
    function [q] to 'a * 'b *)
-let pair_compare p q =
+let pair p q =
   fun (a,b) (c,d) ->
     let x = p a c in
     if x = 0 then q b d else x
 
-(** [triple_compare p] lifts the 'a compare function [p], 'b compare
+(** [triple p] lifts the 'a compare function [p], 'b compare
    function [q], 'c compare function [r] to 'a * 'b * 'c *)
-let triple_compare p q r =
+let triple p q r =
   fun (a,b,c) (d,e,f) ->
     let x = p a d in
     if x = 0 then
@@ -48,8 +48,8 @@ let triple_compare p q r =
     else
       x
 
-(** [option_compare p] lifts [p: 'a -> 'a -> int] to ['a option -> 'a option -> int] *)
-let option_compare p q r =
+(** [option p] lifts [p: 'a -> 'a -> int] to ['a option -> 'a option -> int] *)
+let option p q r =
   match q, r with
   | Some x, Some y -> p x y
   | _ -> Pervasives.compare q r

@@ -15,14 +15,15 @@
    - its builder that can reconstitute the statement/expression from its parts.
 *)
 
+open Ast
 
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
 
 type parts = {
-  exprs : Ast.expr list; (** child expressions *)
-  stmts : Ast.stmt list; (** child statements *)
+  exprs : expr list; (** child expressions *)
+  stmts : stmt list; (** child statements *)
 }
 (** Parts are the direct sub-elements of an AST node *)
 
@@ -30,6 +31,9 @@ type 'a structure = parts * (parts -> 'a)
 (** A structure of an extensible type ['a] is a tuple composed of two elements:
     the parts and a builder function.
 *)
+
+val split_stmt : stmt -> stmt structure
+val split_expr : expr -> expr structure
 
 (*==========================================================================*)
                         (** {2 Visitors chains} *)
@@ -51,10 +55,10 @@ val leaf : 'a -> 'a structure
        - the expression to visit
 *)
 val register_expr_visitor :
-  ((Ast.expr -> Ast.expr structure) -> Ast.expr -> Ast.expr structure) -> unit
+  ((expr -> expr structure) -> expr -> expr structure) -> unit
 
 val register_stmt_visitor :
-    ((Ast.stmt -> Ast.stmt structure) -> Ast.stmt -> Ast.stmt structure) -> unit
+    ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
 
 
 (*==========================================================================*)
@@ -63,9 +67,9 @@ val register_stmt_visitor :
 
 
 val map_expr :
-    (Ast.expr -> Ast.expr) ->
-    (Ast.stmt -> Ast.stmt) ->
-    Ast.expr -> Ast.expr
+    (expr -> expr) ->
+    (stmt -> stmt) ->
+    expr -> expr
 (** [map_expr fe fs e] transforms the exprression [e] into a new one,
     by splitting [fe e] into its sub-parts, applying [map_expr fe fs] and
     [map_stmt fe fs] on them, and finally gathering the results with
@@ -74,38 +78,38 @@ val map_expr :
 
 
 val map_stmt :
-  (Ast.expr -> Ast.expr) ->
-  (Ast.stmt -> Ast.stmt) ->
-  Ast.stmt -> Ast.stmt
+  (expr -> expr) ->
+  (stmt -> stmt) ->
+  stmt -> stmt
 (** [map_stmt fe fs s] same as [map_expr] but on statements. *)
 
 val fold_expr :
-  ('a -> Ast.expr -> 'a) ->
-  ('a -> Ast.stmt -> 'a) ->
-  'a -> Ast.expr -> 'a
+  ('a -> expr -> 'a) ->
+  ('a -> stmt -> 'a) ->
+  'a -> expr -> 'a
 (** Folding function for expressions  *)
 
 
 val fold_stmt :
-  ('a -> Ast.expr -> 'a) ->
-  ('a -> Ast.stmt -> 'a) ->
-  'a -> Ast.stmt -> 'a
+  ('a -> expr -> 'a) ->
+  ('a -> stmt -> 'a) ->
+  'a -> stmt -> 'a
 (** Folding function for statements *)
 
 val fold_map_expr :
-  ('a -> Ast.expr -> 'a * Ast.expr) ->
-  ('a -> Ast.stmt -> 'a * Ast.stmt) ->
-  'a -> Ast.expr -> 'a * Ast.expr
+  ('a -> expr -> 'a * expr) ->
+  ('a -> stmt -> 'a * stmt) ->
+  'a -> expr -> 'a * expr
 (** Combination of map and fold for expressions *)
 
 val fold_map_stmt :
-  ('a -> Ast.expr -> 'a * Ast.expr) ->
-  ('a -> Ast.stmt -> 'a * Ast.stmt) ->
-  'a -> Ast.stmt -> 'a * Ast.stmt
+  ('a -> expr -> 'a * expr) ->
+  ('a -> stmt -> 'a * stmt) ->
+  'a -> stmt -> 'a * stmt
 (** Combination of map and fold for statements *)
 
-val expr_vars : Ast.expr -> Ast.var list
+val expr_vars : expr -> var list
 (** Extract variables from an expression *)
 
-val stmt_vars : Ast.stmt -> Ast.var list
+val stmt_vars : stmt -> var list
 (** Extract variables from a statement *)

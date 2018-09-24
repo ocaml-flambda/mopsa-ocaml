@@ -88,14 +88,14 @@ struct
 
   let exec_interface = {
     export = [Z_c_cell];
-    import = [Universal.Zone.Z_universal_num];
+    import = [Universal.Zone.Z_u_num];
   }
 
 
   let eval_interface = {
     export = [
-      Z_c, Z_c_points_to;
-      Z_c, Z_c_num
+      Z_c, Z_c_cell_points_to;
+      Z_c, Z_c_scalar_num
     ];
     import = [Z_c, Z_c_cell]
   }
@@ -124,7 +124,7 @@ struct
     let range = exp.erange in
     match ekind exp with
     | _
-      when Framework.Zone.subset2 zone (Z_c, Z_c_points_to) ->
+      when sat_zone2 zone (Z_c, Z_c_cell_points_to) ->
       begin
         eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
@@ -135,7 +135,7 @@ struct
     | E_binop(O_eq, p, q)
       when is_c_pointer_type p.etyp
         && is_c_pointer_type q.etyp
-        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+        && sat_zone2 zone (any_zone, Z_c_scalar_num)
       ->
       begin
         eval_points_to p man flow |> Eval.bind @@ fun p flow ->
@@ -165,7 +165,7 @@ struct
     | E_binop(O_ne, p, q)
       when is_c_pointer_type p.etyp
         && is_c_pointer_type q.etyp
-        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+        && sat_zone2 zone (any_zone, Z_c_scalar_num)
       ->
       begin
         eval_points_to p man flow |> Eval.bind @@ fun p flow ->
@@ -195,7 +195,7 @@ struct
     | E_binop(O_minus, p, q)
       when is_c_pointer_type p.etyp
         && is_c_pointer_type q.etyp
-        && Framework.Zone.subset2 zone (Framework.Zone.Z_top, Zone.Z_c_num)
+        && sat_zone2 zone (any_zone, Z_c_scalar_num)
       ->
       panic_at range "pointer.eval: %a not yet supported" pp_expr exp
 
@@ -325,7 +325,7 @@ struct
           match pt with
           | P_var (_, offset, _) ->
             let o = mk_offset_var p in
-            man.exec ~zone:(Universal.Zone.Z_universal_num) (mk_assign (mk_var o range) offset range) flow1
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign (mk_var o range) offset range) flow1
           | _ -> flow1
         in
         Post.of_flow flow2

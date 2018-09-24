@@ -21,9 +21,8 @@ let () =
   register_zone {
     zone = Z_c;
     subset = None;
-    name = "c";
-    exec_template = (fun stmt -> Process);
-    eval_template = (fun exp ->
+    name = "C";
+    eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _                       -> Keep
@@ -61,9 +60,8 @@ let () =
   register_zone {
     zone = Z_c_scalar;
     subset = Some Z_c;
-    name = "c/scalar";
-    exec_template = (fun stmt -> Process);
-    eval_template = (fun exp ->
+    name = "C/Scalar";
+    eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _                       -> Keep
@@ -73,8 +71,9 @@ let () =
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
         | E_c_address_of _
-        | E_c_deref _
-        | E_c_cast _                         -> Keep
+        | E_c_deref _                        -> Keep
+        (* ------------------------------------------- *)
+        | E_c_cast _                         -> Process
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
@@ -85,9 +84,8 @@ let () =
   register_zone {
     zone = Z_c_scalar_num;
     subset = Some Z_c_scalar;
-    name = "c/scalar/num";
-    exec_template = (fun stmt -> Process);
-    eval_template = (fun exp ->
+    name = "C/Scalar/Num";
+    eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _                       -> Keep
@@ -96,7 +94,7 @@ let () =
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
-        | E_c_cast _                         -> Keep
+        | E_c_cast _                         -> Process
         (* ------------------------------------------- *)
         | _                                  -> Process
       );

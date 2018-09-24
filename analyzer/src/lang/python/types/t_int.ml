@@ -17,7 +17,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Framework.Zone.Z_top]; import = []}
+    let eval_interface = {export = [Zone.Z_py, any_zone]; import = []}
 
     let init _ _ _ = None
 

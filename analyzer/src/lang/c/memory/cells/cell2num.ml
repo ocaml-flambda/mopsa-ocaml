@@ -81,8 +81,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c_cell]; import = [Zone.Z_c_num]}
-  let eval_interface = {export = [Z_c_cell, Zone.Z_c_num]; import = []}
+  let exec_interface = {export = [Z_c_cell]; import = [Zone.Z_c_scalar_num]}
+  let eval_interface = {export = [Z_c_cell, Zone.Z_c_scalar_num]; import = [Z_c_cell, Zone.Z_c_scalar_num]}
 
   (** Initialization *)
   (** ============== *)
@@ -99,19 +99,24 @@ struct
     match skind stmt with
     | S_c_remove_cell c when cell_type c |> is_c_int_type ->
       let v, flow = get_num_and_remove flow c in
-      man.exec ~zone:Zone.Z_c_num ({stmt with skind = S_remove_var v}) flow
+      man.exec ~zone:Zone.Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
       |> Post.of_flow
       |> Option.return
 
     | S_assign({ekind = E_c_cell(c, mode)} as lval, rval) when cell_type c |> is_c_int_type ->
       let v, flow = get_num flow c in
-      man.exec ~zone:Zone.Z_c_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
+      man.exec ~zone:Zone.Z_c_scalar_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
       |> Post.of_flow
       |> Option.return
 
     | S_assume(e) ->
-      man.exec ~zone:Zone.Z_c_num stmt flow |>
-      Post.of_flow |>
+      begin
+        man.eval ~zone:(Z_c_cell, Zone.Z_c_scalar_num) e flow |>
+        Post.bind man @@ fun e' flow ->
+        let stmt' = {stmt with skind = S_assume e'} in
+        man.exec ~zone:Zone.Z_c_scalar_num stmt' flow |>
+        Post.of_flow
+      end |>
       Option.return
 
     | _ -> None

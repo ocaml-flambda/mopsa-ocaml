@@ -29,8 +29,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = { export = [Zone.Z_py]; import = [Framework.Zone.Z_top]; }
-    let eval_interface = { export = [Framework.Zone.Z_top, Framework.Zone.Z_top]; import = []; }
+    let exec_interface = { export = [Zone.Z_py]; import = [any_zone]; }
+    let eval_interface = { export = [any_zone, any_zone]; import = []; }
 
     let join _ = Typingdomain.join
     let subset = Typingdomain.leq

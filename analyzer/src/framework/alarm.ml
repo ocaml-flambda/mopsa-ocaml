@@ -53,7 +53,7 @@ let register_alarm info =
 
 let compare_alarm a1 a2 =
   Compare.compose [
-        (fun () -> Compare.list_compare Location.compare_range a1.alarm_trace a2.alarm_trace);
+        (fun () -> Compare.list Location.compare_range a1.alarm_trace a2.alarm_trace);
         (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
         (fun () -> !compare_chain a1 a2)
       ]
