@@ -111,6 +111,7 @@ struct
 
     | S_assume(e) ->
       begin
+        debug "assume";
         man.eval ~zone:(Z_c_cell, Zone.Z_c_scalar_num) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume e'} in

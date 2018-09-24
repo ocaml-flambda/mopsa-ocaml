@@ -228,6 +228,7 @@ let () =
     subset = None;
     eval = (fun exp ->
         match ekind exp with
+        | E_constant _
         | E_c_cell _ -> Keep
 
         | E_c_deref _ -> Process
@@ -250,6 +251,7 @@ let () =
     subset = Some Z_c_cell;
     eval = (fun exp ->
         match ekind exp with
+        | E_constant _
         | E_c_cell _ -> Keep
 
         | E_c_cast _

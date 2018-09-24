@@ -198,27 +198,29 @@ struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      (* man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow -> *)
+      man.eval lval flow ~zone:(Z_c, Z_c_scalar) |>
+      Post.bind_opt man @@ fun lval flow ->
+
+      eval (Z_c_scalar, Z_c_cell) lval man flow |>
+      Option.lift @@ Post.bind man @@ fun lval flow ->
+
       begin
-        (* man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow -> *)
-        man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
-        eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
         match ekind lval with
         | E_c_cell(c, mode) ->
           assign_cell c rval mode range man flow |>
           remove_overlappings c range man |>
           Post.add_merger (mk_remove_cell c range)
         | _ -> assert false
-      end |>
-      Option.return
+      end
+
 
     | S_assume(e) ->
-      begin
-        man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
-        Post.bind man @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assume e'} in
-        man.exec ~zone:Z_c_cell stmt' flow |>
-        Post.of_flow
-      end |>
+      man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+      let stmt' = {stmt with skind = S_assume e'} in
+      man.exec ~zone:Z_c_cell stmt' flow |>
+      Post.of_flow |>
       Option.return
 
 

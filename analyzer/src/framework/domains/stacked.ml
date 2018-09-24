@@ -25,6 +25,7 @@ sig
 end
 
 let create_flow_cur_only (b: 'b) (man: ('b, 'b) man): 'b flow =
+  (* FIXME: this empty annotation may lead to unsuccessful lookups of flow-insensitive information *)
   Flow.bottom Annotation.empty
   |> Flow.add T_cur b man
 
@@ -41,6 +42,8 @@ let lift_to_flow man f =
 module Make(D1: S)(D2: Domain.DOMAIN) : Domain.DOMAIN =
 struct
 
+  module LocalAnalyzer = Analyzer.Make(D2)
+
   (* Lattice operators *)
   (* ================= *)
 
@@ -52,51 +55,20 @@ struct
 
   let is_bottom (a,b) = D1.is_bottom a || D2.is_bottom b
 
-  (* Local manager of D2, used in binary operators *)
-  let rec man2_local : (D2.t, D2.t) man = {
-    bottom = D2.bottom;
-    top = D2.top;
-    is_bottom = D2.is_bottom;
-    subset = D2.subset;
-    join = D2.join;
-    meet = D2.meet;
-    widen = D2.widen;
-    print = D2.print;
-    get = (fun a -> a);
-    set = (fun a _ -> a);
-    exec = (fun ?(zone=Zone.any_zone) stmt flow ->
-        match D2.exec zone stmt man2_local flow with
-        | Some post -> post.Post.flow
-        | None -> Debug.fail "stacked: sub-domain can not compute post-condition of %a" pp_stmt stmt;
-      );
-    eval = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow ->
-        match D2.eval zone exp man2_local flow with
-        | Some evl -> evl
-        | None -> Debug.fail "stacked: sub-domain can not evaluate %a" pp_expr exp;
-      );
-    eval_opt = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow -> D2.eval zone exp man2_local flow);
-    ask = (fun query flow ->
-        match D2.ask query man2_local flow with
-        | Some repl -> repl
-        | None -> Debug.fail "stacked: sub-domain can not answer query";
-      );
-  }
-
-
   let join annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.join annot man2_local (a1, b1) (a2, b2)) b1 b2 in
+    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.join annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2 in
     a, D2.join annot b1' b2'
 
   let meet annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.meet annot man2_local (a1, b1) (a2, b2)) b1 b2  in
+    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.meet annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
     a, D2.meet annot b1' b2'
 
   let widen annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.widen annot man2_local (a1, b1) (a2, b2)) b1 b2  in
+    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.widen annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
     a, D2.widen annot b1' b2'
 
   let subset (a1, b1) (a2, b2) =
-    let b, b1', b2' = lift_to_flow man2_local (fun b1 b2 -> D1.subset man2_local (a1, b1) (a2, b2)) b1 b2  in
+    let b, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.subset LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
     b && (D2.subset b1' b2')
 
   let print fmt (a, b) =
@@ -149,8 +121,8 @@ struct
   (* ============================== *)
 
   let exec_interface = Domain.{
-    import = List.sort_uniq compare (D1.exec_interface.import @ D2.exec_interface.import);
-    export = List.sort_uniq compare (D1.exec_interface.export @ D2.exec_interface.export);
+    import = List.sort_uniq compare_zone (D1.exec_interface.import @ D2.exec_interface.import);
+    export = List.sort_uniq compare_zone (D1.exec_interface.export @ D2.exec_interface.export);
   }
 
   let exec zone =
@@ -169,7 +141,7 @@ struct
 
     | true, true ->
       let f1 = D1.exec zone in
-      let f2= D2.exec zone in
+      let f2 = D2.exec zone in
       (fun stmt man flow ->
          match f1 stmt (man1 man) flow with
          | Some post -> Some post
@@ -181,8 +153,8 @@ struct
   (* ========================= *)
 
   let eval_interface = Domain.{
-      import = List.sort_uniq compare (D1.eval_interface.import @ D2.eval_interface.import);
-      export = List.sort_uniq compare (D1.eval_interface.export @ D2.eval_interface.export);
+      import = List.sort_uniq (Compare.pair compare_zone compare_zone) (D1.eval_interface.import @ D2.eval_interface.import);
+      export = List.sort_uniq (Compare.pair compare_zone compare_zone) (D1.eval_interface.export @ D2.eval_interface.export);
     }
 
   let eval zpath =

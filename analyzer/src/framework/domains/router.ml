@@ -58,18 +58,18 @@ struct
     let rec aux = function
       | [] -> None
       | entry :: tl ->
-        let ret = List.fold_left (fun oevl zone ->
-            let evl =
-              match oevl with
-              | None -> Eval.singleton exp flow
-              | Some evl -> evl
-            in
-            Eval.bind_opt (man.eval_opt ~zone) evl
-          ) None (get_hops entry)
+        let hops = get_hops entry in
+        let rec aux2 hops exp flow =
+          match hops with
+          | [] -> Some (Eval.singleton exp flow)
+          | zone :: tl ->
+            man.eval_opt ~zone exp flow |>
+            Option.bind @@
+            Eval.bind_opt @@ aux2 tl
         in
-        match ret with
+        match aux2 hops exp flow with
         | None -> aux tl
-        | Some _ -> ret
+        | Some ret -> Some ret
     in
     aux entries
 

@@ -93,3 +93,6 @@ let bind f x =
   match x with
   | None -> None
   | Some x -> f x
+
+let lift (f:'a -> 'b) (a:'a option) : 'b option =
+  match a with None -> None | Some x -> Some (f x)

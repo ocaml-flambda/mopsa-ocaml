@@ -116,11 +116,6 @@ let bind_opt f evl =
   in
   evl
 
-let default_opt exp flow evl =
-  match evl with
-  | None -> singleton exp flow
-  | Some evl -> evl
-
 let assume
     cond ?(zone = any_zone)
     ~fthen ~felse

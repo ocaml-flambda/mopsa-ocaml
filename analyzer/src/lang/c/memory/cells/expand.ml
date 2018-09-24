@@ -575,29 +575,29 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      (* man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
+       * |> Post.bind man @@ fun rval flow -> *)
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow |>
+      Post.bind_opt man @@ fun lval flow ->
+
+      eval (Zone.Z_c_scalar, Z_c_cell) lval man flow |>
+      Option.lift @@ Post.bind man @@ fun lval flow ->
+
       begin
-        (* man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
-         * |> Post.bind man @@ fun rval flow -> *)
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow
-        |> Post.bind man @@ fun lval flow ->
-        eval (Zone.Z_c_scalar, Z_c_cell) lval man flow
-        |> Eval.default_opt lval flow
-        |> Post.bind man @@ fun lval flow ->
         match ekind lval with
         | E_c_cell(OffsetCell c, mode) ->
           assign_cell man c rval mode stmt.srange flow
         | _ -> assert false
-      end |> Option.return
-
+      end
 
     | S_assume(e) ->
-      begin
-        man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
-        Post.bind man @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assume e'} in
-        man.exec ~zone:Z_c_cell stmt' flow |>
-        Post.of_flow
-      end |>
+      debug "assume1";
+      man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+      debug "eval expand done %a" pp_expr e';
+      let stmt' = {stmt with skind = S_assume e'} in
+      man.exec ~zone:Z_c_cell stmt' flow |>
+      Post.of_flow |>
       Option.return
 
     | _ -> None

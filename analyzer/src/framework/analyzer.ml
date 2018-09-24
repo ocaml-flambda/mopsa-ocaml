@@ -145,7 +145,7 @@ struct
   (** Evaluation of expressions. *)
   and eval_opt ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
     debug
-      "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
+      "eval_opt expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
       pp_expr exp
       pp_zone2 zone
@@ -196,7 +196,7 @@ struct
       t pp_expr exp
     ;
     debug
-      "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+      "eval_opt expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       pp_zone2 zone
       (Flow.print man) flow
@@ -205,10 +205,19 @@ struct
     ret
 
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
-    match eval_opt ~zone exp flow with
-    | Some evl -> evl
-    | None -> Eval.singleton exp flow
-
+    let ret =
+      match eval_opt ~zone exp flow with
+      | Some evl -> evl
+      | None -> Eval.singleton exp flow
+    in
+    debug
+      "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+      pp_expr exp
+      pp_zone2 zone
+      (Flow.print man) flow
+      (Eval.print ~pp:pp_expr) ret
+    ;
+    ret
 
   (** Query handler. *)
   and ask : type r. r Query.query -> _ -> r =
