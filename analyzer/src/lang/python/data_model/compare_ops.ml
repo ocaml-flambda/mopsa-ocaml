@@ -29,7 +29,7 @@ module Domain = struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Framework.Zone.Z_top, Framework.Zone.Z_top]; import = []}
+  let eval_interface = {export = [Framework.Zone.Z_any, Framework.Zone.Z_any]; import = []}
 
   let init _ _ flow = Some flow
 
