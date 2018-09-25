@@ -154,6 +154,11 @@ let mk_remove_cell c range =
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
 
+let cell_of_expr e =
+  match ekind e with
+  | E_c_cell (c, mode) -> c, mode
+  | _ -> assert false
+
 let () =
   register_expr {
     compare = (fun next e1 e2 ->

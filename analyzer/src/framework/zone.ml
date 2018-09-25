@@ -89,7 +89,7 @@ let sat_zone export z =
   | Z_any -> true
   | Z_under z' -> subset export z
   | Z_above z' -> subset z export
-  | _ -> export = Z_any || subset export z
+  | _ -> compare_zone export Z_any = 0 || compare_zone export z = 0
 
 let sat_zone2 export zz =
   sat_zone (fst export) (fst zz) && sat_zone (snd export) (snd zz)

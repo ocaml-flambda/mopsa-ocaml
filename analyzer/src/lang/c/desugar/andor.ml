@@ -36,8 +36,8 @@ struct
   }
 
   let eval_interface = {
-    import = [Z_c, under_zone Z_c];
-    export = [Z_c, under_zone Z_c]
+    import = [Z_c, Z_c_scalar];
+    export = [Z_c, Z_c_scalar]
   }
 
   let exec _ _ _ _ = None
@@ -45,6 +45,7 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     | E_binop(O_c_and, e1, e2) ->
+      debug "and";
       begin
         man.eval ~zone e1 flow |> Eval.bind @@ fun e1 flow ->
         Eval.assume

@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Ast
 open Cell
+open Zone
 
 module CellNumEquiv = Equiv.Make(Cell)(Var)
 
@@ -30,9 +31,12 @@ let () =
     }) ();
   ()
 
+let get_annot flow =
+  try Flow.get_annot KCellNumEquiv flow
+  with _ -> CellNumEquiv.empty
 
 let get_num flow c =
-  let cne = Flow.get_annot KCellNumEquiv flow in
+  let cne = get_annot flow in
   try
     (CellNumEquiv.find_l c cne, flow)
   with
@@ -41,7 +45,7 @@ let get_num flow c =
     (v, Flow.set_annot KCellNumEquiv (CellNumEquiv.add (c, v) cne) flow)
 
 let get_cell flow v =
-  let cne = Flow.get_annot KCellNumEquiv flow in
+  let cne = get_annot flow in
   try
     (CellNumEquiv.find_r v cne, flow)
   with
@@ -51,7 +55,7 @@ let get_cell flow v =
       pp_var v
 
 let get_num_and_remove flow c =
-  let cne = Flow.get_annot KCellNumEquiv flow in
+  let cne = get_annot flow in
   try
     (CellNumEquiv.find_l c cne, Flow.set_annot KCellNumEquiv (CellNumEquiv.remove_l c cne) flow)
   with
@@ -81,8 +85,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c_cell]; import = [Zone.Z_c_scalar_num]}
-  let eval_interface = {export = [Z_c_cell, Zone.Z_c_scalar_num]; import = [Z_c_cell, Zone.Z_c_scalar_num]}
+  let exec_interface = {export = [Z_c_cell]; import = [Z_c_scalar_num]}
+  let eval_interface = {export = [Z_c_cell, Z_c_scalar_num]; import = [Z_c_cell, Z_c_scalar_num]}
 
   (** Initialization *)
   (** ============== *)
@@ -99,20 +103,26 @@ struct
     match skind stmt with
     | S_c_remove_cell c when cell_type c |> is_c_int_type ->
       let v, flow = get_num_and_remove flow c in
-      man.exec ~zone:Zone.Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
+      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
       |> Post.of_flow
       |> Option.return
 
-    | S_assign({ekind = E_c_cell(c, mode)} as lval, rval) when cell_type c |> is_c_int_type ->
-      let v, flow = get_num flow c in
-      man.exec ~zone:Zone.Z_c_scalar_num (mk_assign (mk_var v ~mode:mode lval.erange) rval stmt.srange) flow
-      |> Post.of_flow
-      |> Option.return
+    | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
+      debug "aaaaa";
+      man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
+      Post.bind_opt man @@ fun lval' flow ->
+
+      man.eval ~zone:(Z_c_cell, Z_c_scalar_num) rval flow |>
+      Post.bind_opt man @@ fun rval' flow ->
+
+      man.exec ~zone:Z_c_scalar_num (mk_assign lval' rval' stmt.srange) flow |>
+      Post.of_flow |>
+      Option.return
 
     | S_assume(e) ->
       begin
         debug "assume";
-        man.eval ~zone:(Z_c_cell, Zone.Z_c_scalar_num) e flow |>
+        man.eval ~zone:(Z_c_cell, Z_c_scalar_num) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume e'} in
         man.exec ~zone:Zone.Z_c_scalar_num stmt' flow |>

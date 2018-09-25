@@ -159,7 +159,7 @@ let eval_list
   : ('c, 'b list) evl =
   let rec aux expl flow clean = function
     | [] ->
-      singleton (List.rev expl) flow
+      singleton (List.rev expl) flow ~cleaners:clean
     | exp :: tl ->
       eval exp flow |>
       Dnf.substitute2
@@ -182,7 +182,7 @@ let eval_list_opt
   : ('c, 'b list) evl option =
   let rec aux expl flow clean = function
     | [] ->
-      singleton (List.rev expl) flow
+      singleton (List.rev expl) flow ~cleaners:clean
     | exp :: tl ->
       eval exp flow |>
       Option.none_to_exn |>

@@ -120,7 +120,7 @@ struct
   }
 
   let eval_interface = {
-    export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cell expressions *)
+    export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cells *)
     import = [
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
       Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
@@ -138,15 +138,20 @@ struct
     {
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
+          man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+          Post.bind_flow man @@ fun e flow ->
+
           match ekind v with
           | E_var(v, mode) ->
             let c = var_to_cell v in
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+
             let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
           | E_c_cell(c, mode) ->
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+
             let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
@@ -198,28 +203,27 @@ struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      (* man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow -> *)
-      man.eval lval flow ~zone:(Z_c, Z_c_scalar) |>
-      Post.bind_opt man @@ fun lval flow ->
+      debug "aaaaaaaaaaaa";
+      man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
+      Post.bind_opt man @@ fun rval flow ->
 
-      eval (Z_c_scalar, Z_c_cell) lval man flow |>
+      eval (Z_c, Z_c_cell) lval man flow |>
       Option.lift @@ Post.bind man @@ fun lval flow ->
 
-      begin
-        match ekind lval with
-        | E_c_cell(c, mode) ->
-          assign_cell c rval mode range man flow |>
-          remove_overlappings c range man |>
-          Post.add_merger (mk_remove_cell c range)
-        | _ -> assert false
-      end
+      let c, mode = cell_of_expr lval in
+      assign_cell c rval mode range man flow |>
+
+      remove_overlappings c range man |>
+      Post.add_merger (mk_remove_cell c range)
 
 
     | S_assume(e) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+      man.eval ~zone:(Z_c, Z_c_cell) e flow |>
       Post.bind_opt man @@ fun e' flow ->
+
       let stmt' = {stmt with skind = S_assume e'} in
       man.exec ~zone:Z_c_cell stmt' flow |>
+
       Post.of_flow |>
       Option.return
 

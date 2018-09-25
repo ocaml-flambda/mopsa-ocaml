@@ -89,6 +89,32 @@ let bind
     ) (join man) (meet man) (bottom annot) evl
 
 
+let bind_flow
+    ?(zone = any_zone) (man: ('a, 't) man)
+    (f: 'e -> 'a flow -> 'a flow)
+    (evl: ('a, 'e) evl)
+  : 'a flow =
+  let annot = Eval.choose evl |>
+              Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
+  in
+  Eval.fold (fun acc case ->
+      let annot = Flow.get_all_annot acc in
+      let flow' = Flow.set_all_annot annot case.flow in
+      match case.expr with
+      | None -> Flow.join man acc flow'
+
+      | Some e ->
+        let flow'' = f e flow' in
+        let flow3 = List.fold_left (fun acc stmt ->
+            man.exec ~zone stmt acc
+          ) flow'' case.cleaners
+        in
+        let annot' = Flow.get_all_annot flow3 in
+        let acc' = Flow.set_all_annot annot' acc in
+        Flow.join man acc' flow3
+    ) (Flow.join man) (Flow.meet man) (Flow.bottom annot) evl
+
+
 let bind_opt
     ?(zone = any_zone) (man: ('a, _) man)
     (f: 'e -> 'a flow -> 'a post option)
@@ -97,7 +123,7 @@ let bind_opt
   let annot = Eval.choose evl |>
               Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
   in
-  let ojoin = Option.option_lift2 (join man) in
+  let ojoin = Option.option_neutral2 (join man) in
   Eval.fold (fun acc case ->
       let annot = match acc with None -> annot | Some acc -> Flow.get_all_annot acc.flow in
       let flow' = Flow.set_all_annot annot case.flow in
@@ -123,8 +149,8 @@ let bind_opt
           in
           ojoin acc' post'
     )
-    (Option.option_lift2 (join man))
-    (Option.option_lift2 (meet man))
+    (Option.option_neutral2 (join man))
+    (Option.option_neutral2 (meet man))
     None
     evl
 

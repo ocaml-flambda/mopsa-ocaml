@@ -157,10 +157,11 @@ struct
       (* Try static evaluation using the template of the destination zone *)
       match Zone.eval exp (snd zone) with
       | Keep ->
-        debug "Already in zone";
+        debug "%a already in zone %a" pp_expr exp pp_zone (snd zone);
         Some (Eval.singleton exp flow)
 
       | _ as action ->
+        debug "%a not in zone %a" pp_expr exp pp_zone (snd zone);
         let feval = EvalMap.find zone eval_map in
         let evl = Cache.eval (fun exp flow ->
             feval exp man flow
@@ -168,13 +169,14 @@ struct
         in
 
         match evl with
-        | Some _ -> evl
+        | Some _ -> debug "domains evaluated %a in %a" pp_expr exp pp_zone2 zone; evl
         | None ->
+          debug "domains did not evaluate %a in %a" pp_expr exp pp_zone2 zone;
           match action with
           | Keep -> assert false (* case already processed *)
           | Process -> None
           | Visit ->
-            debug "Visiting expression";
+            debug "Visiting sub-expressions of %a" pp_expr exp;
             let open Visitor in
             let parts, builder = split_expr exp in
             match parts with

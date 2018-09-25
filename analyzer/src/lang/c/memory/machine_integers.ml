@@ -12,6 +12,7 @@ open Framework.Essentials
 open Universal.Ast
 open Ast
 open Zone
+open Universal.Zone
 
 module Itv_Value = Universal.Numeric.Values.Intervals.Value
 
@@ -52,7 +53,7 @@ let check_overflow typ man range f1 f2 exp flow =
   and full_check e flow =
     let cond = range_cond e rmin rmax (erange e) in
     Eval.assume
-      ~zone:(Universal.Zone.Z_u_num)
+      ~zone:Z_u_num
       cond
       ~fthen:(fun tflow -> f1 e flow)
       ~felse:(fun fflow -> f2 e flow)
@@ -82,7 +83,7 @@ let check_division man range f1 f2 exp flow =
                }
     in
     Eval.assume
-      ~zone:(Universal.Zone.Z_u_num)
+      ~zone:Z_u_num
       cond
       ~fthen:(fun tflow -> f2 e' flow)
       ~felse:(fun fflow -> f1 e' flow)
@@ -134,13 +135,13 @@ struct
 
   let eval_interface =
     {
-      export = [Z_c_scalar_num, Universal.Zone.Z_u_num];
-      import = [Z_c, Universal.Zone.Z_u_num];
+      export = [Z_c_scalar_num, Z_u_num];
+      import = [Z_c_scalar_num, Z_u_num];
     }
   let exec_interface =
     {
-      import = [Universal.Zone.Z_u_num];
-      export = [Zone.Z_c_scalar_num]
+      import = [Z_u_num];
+      export = [Z_c_scalar_num]
     }
 
   let rec eval zone exp man flow =
@@ -220,7 +221,7 @@ struct
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       let () = debug "case 5" in
-      eval (Z_c_scalar_num, Universal.Zone.Z_u_num) e man flow |>
+      eval (Z_c_scalar_num, Z_u_num) e man flow |>
       Option.lift @@ Eval.bind @@ fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
@@ -277,11 +278,11 @@ struct
       None
 
   and eval_binop op e e' exp man flow =
-    eval (Z_c_scalar_num, Universal.Zone.Z_u_num) e man flow |>
+    eval (Z_c_scalar_num, Z_u_num) e man flow |>
     Option.bind @@
     Eval.bind_opt @@ fun e flow ->
 
-    eval (Z_c_scalar_num, Universal.Zone.Z_u_num) e' man flow |>
+    eval (Z_c_scalar_num, Z_u_num) e' man flow |>
     Option.lift @@
     Eval.bind @@ fun e' flow ->
 
@@ -294,7 +295,7 @@ struct
 
 
   and eval_unop op e exp man flow =
-    eval (Z_c_scalar_num, Universal.Zone.Z_u_num) e man flow |>
+    eval (Z_c_scalar_num, Z_u_num) e man flow |>
     Option.lift @@
     Eval.bind @@ fun e flow ->
 
@@ -308,26 +309,29 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign({ekind = E_var(v, mode)} as lval, rval) when etyp lval |> is_c_int_type ->
-      let lval' = {lval with ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode)} in
-      man.exec ~zone:Universal.Zone.Z_u_num (mk_assign lval' rval stmt.srange) flow |>
+    | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
+      man.eval ~zone:(Z_c_scalar_num, Z_u_num) lval flow |>
+      Post.bind_opt man @@ fun lval' flow ->
+
+      man.eval ~zone:(Z_c_scalar_num, Z_u_num) rval flow |>
+      Post.bind_opt man @@ fun rval' flow ->
+
+      man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
       Post.of_flow |>
       Option.return
 
     | S_remove_var v when is_c_int_type v.vtyp ->
       let v' = {v with vtyp = to_universal_type v.vtyp} in
-      man.exec ~zone:Universal.Zone.Z_u_num (mk_remove_var v' stmt.srange) flow |>
+      man.exec ~zone:Z_u_num (mk_remove_var v' stmt.srange) flow |>
       Post.of_flow |>
       Option.return
 
     | S_assume(e) ->
-      begin
-        man.eval ~zone:(Z_c_scalar_num, Universal.Zone.Z_u_num) e flow |>
-        Post.bind man @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assume e'} in
-        man.exec ~zone:Universal.Zone.Z_u_num stmt' flow |>
-        Post.of_flow
-      end |>
+      man.eval ~zone:(Z_c_scalar_num, Z_u_num) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+
+      man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>
+      Post.of_flow |>
       Option.return
 
     | _ -> None

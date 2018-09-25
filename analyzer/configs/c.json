@@ -22,7 +22,6 @@
         "c.libs.mopsa",
 
         // Memory model
-        "c.memory.cells.router",
         "c.memory.cells.smashing",
         "c.memory.cells.pointer",
         "c.memory.cells.cell_2_num",
