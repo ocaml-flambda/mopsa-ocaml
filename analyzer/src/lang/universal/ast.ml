@@ -195,11 +195,11 @@ let () =
       | E_call(f1, args1), E_call(f2, args2) ->
         Compare.compose [
           (fun () -> compare_expr f1 f2);
-          (fun () -> Compare.list_compare compare_expr args1 args2)
+          (fun () -> Compare.list compare_expr args1 args2)
         ]
 
       | E_array(el1), E_array(el2) ->
-        Compare.list_compare compare_expr el1 el2
+        Compare.list compare_expr el1 el2
 
       | E_subscript(a1, i1), E_subscript(a2, i2) ->
         Compare.compose [
@@ -339,9 +339,9 @@ let () =
           (fun () -> compare_stmt else1 else2);
         ]
 
-      | S_block(sl1), S_block(sl2) -> Compare.list_compare compare_stmt sl1 sl2
+      | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
 
-      | S_return(e1), S_return(e2) -> Compare.option_compare compare_expr e1 e2
+      | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
 
       | S_while(c1, body1), S_while(c2, body2) ->
         Compare.compose [

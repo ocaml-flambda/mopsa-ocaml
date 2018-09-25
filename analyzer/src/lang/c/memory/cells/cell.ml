@@ -14,6 +14,7 @@
 open Framework.Essentials
 open Framework.Visitor
 open Base
+open Ast
 
 (* To support different cell-based memory models, an extensible type
    is used and domains can define their own representation of cells.
@@ -153,6 +154,11 @@ let mk_remove_cell c range =
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
 
+let cell_of_expr e =
+  match ekind e with
+  | E_c_cell (c, mode) -> c, mode
+  | _ -> assert false
+
 let () =
   register_expr {
     compare = (fun next e1 e2 ->
@@ -219,20 +225,64 @@ open Framework.Zone
 
 type zone +=
   | Z_c_cell
-  | Z_c_points_to
-  | Z_c_deref_free
 
 let () =
   register_zone {
-      subset = (fun next z1 z2 -> next z1 z2);
-      print = (fun next fmt z ->
-          match z with
-          | Z_c_cell -> Format.fprintf fmt "c/cell"
-          | Z_c_points_to -> Format.fprintf fmt "c/points-to"
-          | Z_c_deref_free -> Format.fprintf fmt "c/deref-free"
-          | _ -> next fmt z
-        );
-    }
+    zone = Z_c_cell;
+    name = "C/Cell";
+    subset = None;
+    eval = (fun exp ->
+        match ekind exp with
+        | E_constant _
+        | E_c_cell _ -> Keep
+
+        | E_c_deref _ -> Process
+
+        | E_c_cast _
+        | E_unop _
+        | E_binop _ -> Visit
+
+        | _ -> Process
+      );
+  }
+
+type zone +=
+  | Z_c_cell_no_deref
+
+let () =
+  register_zone {
+    zone = Z_c_cell_no_deref;
+    name = "C/Cell/NoDeref";
+    subset = Some Z_c_cell;
+    eval = (fun exp ->
+        match ekind exp with
+        | E_constant _
+        | E_c_cell _ -> Keep
+
+        | E_c_cast _
+        | E_unop _
+        | E_binop _ -> Visit
+
+        | _ -> Process
+      );
+  }
+
+
+type zone +=
+  | Z_c_cell_points_to
+
+let () =
+  register_zone {
+    zone = Z_c_cell_points_to;
+    name = "C/Cell/Points-To";
+    subset = Some Z_c_cell;
+    eval = (fun exp ->
+        match ekind exp with
+        | E_c_points_to _ -> Keep
+
+        | _ -> Process
+      );
+  }
 
 
 (* Utility modules *)

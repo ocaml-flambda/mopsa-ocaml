@@ -52,7 +52,7 @@ struct
 
   let exec _ _ _ _ = None
 
-  let eval zone exp man flow =
+  let rec eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_c_array_subscript(e1, e2) ->
@@ -96,6 +96,7 @@ struct
         |> Option.return
       else
         Debug.fail "[c.desugar.aggregate] member_access on non record type"
+
     | _ -> None
 
   let ask _ _ _  = None

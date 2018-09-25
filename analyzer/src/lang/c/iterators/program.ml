@@ -53,7 +53,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = []}
+  let exec_interface = {export = [Zone.Z_c]; import = [Zone.Z_c]}
   let eval_interface = {export = []; import = []}
 
 
@@ -62,13 +62,18 @@ struct
 
   let init prog man flow = None
 
+
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow  =
+  let rec exec zone stmt man flow =
     match skind stmt with
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when not !Universal.Iterators.Unittest.unittest_flag ->
+      let range = mk_file_range prog_file in
+      (* Initialize global variables *)
+      let flow1 = init_globals globals man flow in
+      (* Find entry function *)
       let entry =
         try
           List.find (function
@@ -77,13 +82,15 @@ struct
         with Not_found ->
           Framework.Exceptions.panic "entry function %s not found" !opt_entry_function
       in
-      let range = mk_file_range prog_file in
+      (* Execute body of entry function *)
       let stmt = mk_c_call_stmt entry [] range in
-      man.exec stmt flow |>
+      man.exec ~zone:Zone.Z_c stmt flow1 |>
       Post.return
 
     | S_program({prog_kind = C_program(globals, functions); prog_file})
       when !Universal.Iterators.Unittest.unittest_flag ->
+      (* Initialize global variables *)
+      let flow1 = init_globals globals man flow in
 
       let get_function_name fundec =
         fundec.c_func_var.vname
@@ -114,11 +121,17 @@ struct
 
       let tests = get_test_functions functions in
       let stmt = mk_c_unit_tests prog_file tests in
-      man.exec stmt flow |>
+      man.exec stmt flow1 |>
       Post.return
 
     | _ -> None
 
+  and init_globals globals man flow =
+    globals |>
+    List.fold_left (fun flow (v, init, range) ->
+        let stmt = mk_stmt (S_c_global_declaration (v, init)) range in
+        man.exec stmt flow
+      ) flow
 
   (** Evaluation of expressions *)
   (** ========================= *)

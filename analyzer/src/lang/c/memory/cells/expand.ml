@@ -7,6 +7,7 @@
 (****************************************************************************)
 
 (** Expansion-based abstraction of C memory cells. *)
+
 open Framework.Essentials
 open Universal.Ast
 open Ast
@@ -14,10 +15,15 @@ open Base
 open Pointer
 open Cell
 
-let name = "c.memory.cell.expand"
-let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_max_expand = ref 2
+let opt_expand = ref 1
+
+let () =
+  Framework.Options.register_option (
+    "-cell-expand",
+    Arg.Set_int opt_expand,
+    " maximal number of expanded cells (default: 1)"
+  )
 
 (*==========================================================================*)
 (**                              {2 Cells}                                  *)
@@ -61,7 +67,7 @@ let () =
           match c with
           | OffsetCell o ->
             let vname =
-              let () = Format.fprintf Format.str_formatter "%a" pp_ocell o in
+              let () = Format.fprintf Format.str_formatter "{%a:%a:%a}" pp_base o.b Z.pp_print o.o Pp.pp_c_type_short o.t in
               Format.flush_str_formatter ()
             in
             {
@@ -142,9 +148,11 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (** Domain identification *)
   (** ===================== *)
 
+  let name = "c.memory.cells.expand"
+
   type _ domain += D_c_cell_expand : t domain
   let id = D_c_cell_expand
-  let name = "c.cell.expand"
+
   let identify : type a. a domain -> (t, a) eq option =
     function
     | D_c_cell_expand -> Some Eq
@@ -360,8 +368,6 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     let (_, s), (_, s') = unify subman (u, s) (u', s') in
     (true, s, s')
 
-  let print = Bot.bot_fprint pp_cellset
-
   let exec_interface = {
     export = [Zone.Z_c];
     import = [Z_c_cell];
@@ -370,7 +376,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
     export = [Zone.Z_c_scalar, Z_c_cell];
     import = [
       (Zone.Z_c, Zone.Z_c_scalar);
-      (Zone.Z_c, Z_c_points_to)
+      (Zone.Z_c, Z_c_cell_points_to)
     ];
   }
 
@@ -402,7 +408,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           (* Create variables with offsets {min(l + k * step, u) | k >= 0} *)
           let fold_interval l u step acc flow =
             debug "fold interval  [%a, %a]:%a (%a)" Z.pp_print l Z.pp_print u Z.pp_print step Z.pp_print Z.((u - l + one) / step);
-            if Z.(leq ((u - l + one) / step) (of_int !opt_max_expand)) then
+            if Z.(leq ((u - l + one) / step) (of_int !opt_expand)) then
               let rec iter x o =
                 if Z.gt o u then x
                 else
@@ -521,8 +527,13 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   let rec exec zone stmt man flow =
     let range = stmt.srange in
     match skind stmt with
+    | S_c_global_declaration(v, init) ->
+      Init_visitor.init_global (init_visitor man) v init range flow |>
+      Post.of_flow |>
+      Option.return
+
     | S_c_local_declaration(v, init) ->
-      Init_visitor.init_local (init_manager man) v init range flow
+      Init_visitor.init_local (init_visitor man) v init range flow
       |> Post.of_flow
       |> Option.return
 
@@ -564,19 +575,31 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      (* man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
+       * |> Post.bind man @@ fun rval flow -> *)
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow |>
+      Post.bind_opt man @@ fun lval flow ->
+
+      eval (Zone.Z_c_scalar, Z_c_cell) lval man flow |>
+      Option.lift @@ Post.bind man @@ fun lval flow ->
+
       begin
-        man.eval ~zone:(Zone.Z_c, Z_c_cell) rval flow
-        |> Post.bind man @@ fun rval flow ->
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow
-        |> Post.bind man @@ fun lval flow ->
-        eval (Zone.Z_c_scalar, Z_c_cell) lval man flow
-        |> Eval.default_opt lval flow
-        |> Post.bind man @@ fun lval flow ->
         match ekind lval with
         | E_c_cell(OffsetCell c, mode) ->
           assign_cell man c rval mode stmt.srange flow
         | _ -> assert false
-      end |> Option.return
+      end
+
+    | S_assume(e) ->
+      debug "assume1";
+      man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+      debug "eval expand done %a" pp_expr e';
+      let stmt' = {stmt with skind = S_assume e'} in
+      man.exec ~zone:Z_c_cell stmt' flow |>
+      Post.of_flow |>
+      Option.return
+
     | _ -> None
 
   and eval zone exp man flow =
@@ -596,7 +619,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
 
     | E_c_deref(p) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pe flow ->
+        man.eval ~zone:(Zone.Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton {exp with ekind = E_c_function fundec} flow
@@ -639,7 +662,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
   (**                    {2 Cells Initialization}                             *)
   (*==========================================================================*)
 
-  and init_manager man =
+  and init_visitor man =
     Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
@@ -657,14 +680,14 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
           match ekind a with
           | E_var(a, mode) ->
             let rec aux i l flow =
-              if i = !opt_max_expand then flow
+              if i = !opt_expand then flow
               else
                 match l with
                 | [] -> flow
                 | init :: tl ->
                   let t' = under_array_type a.vtyp in
                   let ci = {b = Base.V a; o = Z.(zero + (Z.of_int i) * (sizeof_type t')); t = t'} in
-                  let flow' = init_expr (init_manager man) (mk_ocell ci ~mode:mode range) is_global init range flow in
+                  let flow' = init_expr (init_visitor man) (mk_ocell ci ~mode:mode range) is_global init range flow in
                   aux (i + 1) tl flow'
             in
             aux 0 init_list flow
@@ -685,7 +708,7 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-                let flow' = init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
+                let flow' = init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -695,18 +718,15 @@ module Domain (* : Framework.Domains.Stacked.S *) = struct
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
                 let init = C_init_expr (mk_c_member_access e field range) in
-                init_expr (init_manager man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
+                init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
               ) flow
         );
     }
 
   and init prog man flow =
-    let flow = Flow.set_domain_cur top man flow in
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      Some (Init_visitor.init_globals (init_manager man) globals flow)
-    | _ ->
-      None
+    Some (
+      Flow.set_domain_cur top man flow
+    )
 
   let ask _ _ _ = None
 
@@ -715,9 +735,3 @@ end
 
 let () =
   Framework.Domains.Stacked.register_domain (module Domain);
-  (* register_domain name (module Domain); *)
-  Framework.Options.register_option (
-    "-cell-max-expand",
-    Arg.Set_int opt_max_expand,
-    " maximal number of expanded cells (default: 1)"
-  )

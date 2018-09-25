@@ -61,6 +61,15 @@ struct
     | "_mopsa_assert_error_at_line" -> true
     | _ -> false
 
+  let is_c_alarm a =
+    match a.alarm_kind with
+    | Alarms.AOutOfBound
+    | Alarms.ANullDeref
+    | Alarms.AInvalidDeref
+    | Alarms.AIntegerOverflow
+    | Alarms.ADivideByZero -> true
+    | _ -> false
+
   let alarm_to_code a =
     match a.alarm_kind with
     | Alarms.AOutOfBound -> 1
@@ -274,7 +283,7 @@ struct
         let annot = Flow.get_all_annot flow in
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm a when code = alarm_to_code a -> man.join annot acc env
+            | T_alarm a when is_c_alarm a && code = alarm_to_code a -> man.join annot acc env
             | _ -> acc
           ) man.bottom man flow in
         let cond =
@@ -289,7 +298,7 @@ struct
         let cur = Flow.get T_cur man flow in
         let flow = Flow.set T_cur man.top man flow in
         let flow = man.exec stmt flow |>
-                   Flow.filter (fun tk _ -> match tk with T_alarm a when code = alarm_to_code a -> false | _ -> true) man |>
+                   Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
                    Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow |>
@@ -303,7 +312,8 @@ struct
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
-              when code = alarm_to_code a
+              when is_c_alarm a
+                && code = alarm_to_code a
                 && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
               ->
               man.join annot acc env
@@ -324,7 +334,8 @@ struct
                    Flow.filter (fun tk _ ->
                        match tk with
                        | T_alarm a
-                         when code = alarm_to_code a
+                         when is_c_alarm a
+                           && code = alarm_to_code a
                            && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
                          -> false
                        | _ -> true) man |>
@@ -341,7 +352,8 @@ struct
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
-              when code = alarm_to_code a
+              when is_c_alarm a
+                && code = alarm_to_code a
               -> man.join annot acc env
             | _ -> acc
           ) man.bottom man flow in
@@ -351,7 +363,7 @@ struct
         let stmt = mk_assert cond exp.erange in
         let flow' = Flow.set T_cur cur' man flow |>
                     man.exec stmt |>
-                    Flow.filter (fun tk _ -> match tk with T_alarm a when code = alarm_to_code a -> false | _ -> true) man |>
+                    Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
                     Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow' |>

@@ -21,9 +21,9 @@ type entry = {
 
 let pp_entry fmt e =
   Format.fprintf fmt "src: %a, dst: %a, path: %a"
-    Zone.print e.src
-    Zone.print e.dst
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " -> ") Zone.print) e.path
+    pp_zone e.src
+    pp_zone e.dst
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " -> ") pp_zone) e.path
 
 module type S =
 sig
@@ -54,22 +54,22 @@ struct
     {export; import}
 
   let eval (z1, z2) exp man flow =
-    let entries = List.find_all (function {src; dst} -> src = z1 && dst = z2) Router.table in
+    let entries = List.find_all (function {src; dst} -> sat_zone2 (src, dst) (z1, z2)) Router.table in
     let rec aux = function
       | [] -> None
       | entry :: tl ->
-        let ret = List.fold_left (fun oevl zone ->
-            let evl =
-              match oevl with
-              | None -> Eval.singleton exp flow
-              | Some evl -> evl
-            in
-            Eval.bind_opt (man.eval_opt ~zone) evl
-          ) None (get_hops entry)
+        let hops = get_hops entry in
+        let rec aux2 hops exp flow =
+          match hops with
+          | [] -> Some (Eval.singleton exp flow)
+          | zone :: tl ->
+            man.eval_opt ~zone exp flow |>
+            Option.bind @@
+            Eval.bind_opt @@ aux2 tl
         in
-        match ret with
+        match aux2 hops exp flow with
         | None -> aux tl
-        | Some _ -> ret
+        | Some ret -> Some ret
     in
     aux entries
 

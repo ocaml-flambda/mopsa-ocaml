@@ -1,11 +1,11 @@
 #include "mopsa.h"
 
 void test_add() {
-  int i, j, k;
-  i = 10;
-  j = 20;
+  char i, j, k;
+  i = 27;
+  j = 100;
   k = i + j;
-  _mopsa_assert_true(k == 30);
+  _mopsa_assert_true(k == 127);
 }
 
 void test_mult() {
@@ -23,7 +23,7 @@ void test_div() {
 }
 
 void test_mod() {
-  int i, j;
+  char i, j;
   i = 10;
   j = 3;
   _mopsa_assert_true(i % j == 1);
@@ -40,13 +40,10 @@ void test_rand_int() {
   _mopsa_assert_true(a >= 0 && a <= 10);
 }
 
-void test_interval_congruence_reduction() {
-  int i = 1;
-  while (i <= 10) {
-    i = i + 2;
-  }
-  if (i >= 12) {
-    i = 0;
-  }
-  _mopsa_assert_true(i > 0);
-}
+/* void test_interval_congruence_reduction() { */
+/*   int i = 1; */
+/*   while (i <= 10) { */
+/*     i = i + 2; */
+/*   } */
+/*   _mopsa_assert_true(i == 11); */
+/* } */

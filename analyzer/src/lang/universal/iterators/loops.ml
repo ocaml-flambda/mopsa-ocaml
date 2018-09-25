@@ -12,7 +12,7 @@
 open Framework.Essentials
 open Framework.Domains.Stateless
 open Ast
-
+open Zone
 
 (*==========================================================================*)
 (**                         {2 Loops flow token}                            *)
@@ -74,7 +74,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let exec_interface = {export = [Z_u]; import = []}
   let eval_interface = {export = []; import = []}
 
   let init prog man flow = None

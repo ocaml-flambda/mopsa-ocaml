@@ -37,6 +37,7 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt e -> Format.fprintf fmt "Switch expr: %a" pp_expr e);
     }) ();
   ()
 

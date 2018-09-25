@@ -22,13 +22,17 @@
         "c.libs.mopsa",
 
         // Memory model
-        "c.memory.cells.smashing",
-        "c.memory.cells.pointer",
-        "c.memory.cells.cell_2_num",
-
-        "c.machine_integers",
-
-	// Numeric abstraction
-        "universal.numeric.values.intervals"
+        "c.memory.cells.router",
+        {
+            "stack": "c.memory.cells.expand",
+            "over" : {
+                "iter" : [
+                    "c.memory.cells.cell_2_num",
+                    "c.machine_integers",
+                    "universal.numeric.values.intervals"
+                ]
+            }
+        },
+        "c.memory.cells.pointer"
     ]
 }

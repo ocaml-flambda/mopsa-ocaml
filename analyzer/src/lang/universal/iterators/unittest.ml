@@ -10,7 +10,7 @@
 
 open Framework.Essentials
 open Ast
-
+open Zone
 
 (** Stateless annotations
     =====================
@@ -29,6 +29,7 @@ let () =
               | _ -> None
             in
             f);
+      print = (fun fmt f -> Format.fprintf fmt "Current test: %s" f);
     }) ();
   ()
 
@@ -36,12 +37,16 @@ let () =
 (* Command line options
    ====================
 
-   The flag -unittest activates the mode of unit testing. In this
+   - The flag -unittest activates the mode of unit testing. In this
    mode, every function starting with test_* is called. At the end,
    statistics about failed/safe assertions are collected.
+
+   - The option -unittest-filter = f1,f2,... selects the functions
+   to be tested.
 *)
 
 let unittest_flag = ref false
+let unittest_filter = ref []
 
 let () =
   register_option (
@@ -49,15 +54,22 @@ let () =
     Arg.Set unittest_flag,
     " activate unittest mode"
   );
+  register_option (
+    "-unittest-filter",
+    Arg.String(fun s ->
+        unittest_filter := Str.split (Str.regexp "[ ]*,[ ]*") s
+      ),
+    " selection of test functions (separated by comma) to analyze (default: all)"
+  );
   ()
 
 
-(* Flow tokens 
+(* Flow tokens
    ===========
 
    Safe assertions are saved in the flow so that we can compute
    statistics at the end of the analysis. Note that failed assertions
-   are kept in the T_alarm token.  
+   are kept in the T_alarm token.
 *)
 
 type token +=
@@ -114,14 +126,21 @@ let () =
           ]
         | _ -> next a1 a2
       );
-    print = (fun next fmt a ->
+    pp_token = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert (c, f) -> Format.fprintf fmt "fail@%s" f
         | A_may_assert  (c, f) -> Format.fprintf fmt "may@%s" f
         | A_panic_test (msg, f) -> Format.fprintf fmt "panic@%s" f
         | _ -> next fmt a
       );
-    report = (fun next fmt a ->
+    pp_title = (fun next fmt a ->
+        match a.alarm_kind with
+        | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion fail"
+        | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion unproven"
+        | A_panic_test(msg, f) -> Format.fprintf fmt "Panic"
+        | _ -> next fmt a
+      );
+    pp_report = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s fails" pp_expr cond f
         | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s may fail" pp_expr cond f
@@ -148,13 +167,13 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
-  let summary fmt = Debug.debug ~channel:(name ^ ".summary") fmt
+  let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 
   (* Zoning interface *)
   (* ================ *)
 
-  let exec_interface = {export = [Zone.Z_universal]; import = []}
+  let exec_interface = {export = [Z_u]; import = []}
   let eval_interface = {export = []; import = []}
 
 
@@ -252,7 +271,13 @@ struct
 
   and execute_test_functions tests man flow =
     let annot = Flow.get_all_annot flow in
-    tests |>
+    (
+      match !unittest_filter with
+      | []
+      | ["all"] -> tests
+      | _ -> List.filter (fun (t, _) -> List.mem t !unittest_filter) tests
+    )
+    |>
     List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
         let flow = Flow.set_annot A_cur_test name flow in

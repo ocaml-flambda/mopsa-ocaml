@@ -40,7 +40,7 @@ struct
           match c with
           | C_smash(b,t) ->
             let vname =
-              let () = Format.fprintf Format.str_formatter "%a" pp_cell c in
+              let () = Format.fprintf Format.str_formatter "{%a:⋆:%a}" pp_base b Pp.pp_c_type_short t in
               Format.flush_str_formatter ()
             in
             {
@@ -54,7 +54,7 @@ struct
 
       print = (fun next fmt c ->
           match c with
-          | C_smash(b,t) -> Format.fprintf fmt "⟪%a,%a⟫" pp_base b pp_typ t
+          | C_smash(b,t) -> Format.fprintf fmt "⟪%a:⋆:%a⟫" pp_base b pp_typ t
           | _ -> next fmt c
         );
 
@@ -120,10 +120,10 @@ struct
   }
 
   let eval_interface = {
-    export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cell expressions *)
+    export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cells *)
     import = [
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
-      Z_c, Z_c_points_to; (* To dereference pointer expressions *)
+      Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
     ];
   }
 
@@ -138,15 +138,20 @@ struct
     {
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
+          man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+          Post.bind_flow man @@ fun e flow ->
+
           match ekind v with
           | E_var(v, mode) ->
             let c = var_to_cell v in
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+
             let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
           | E_c_cell(c, mode) ->
             let flow1 = Flow.map_domain_env T_cur (add c) man flow in
+
             let stmt = mk_assign (mk_cell c ~mode:mode range) e range in
             man.exec ~zone:(Z_c_cell) stmt flow1
 
@@ -165,13 +170,9 @@ struct
     }
 
   let init prog man flow =
-    match prog.prog_kind with
-    | C_program(globals, _) ->
-      Flow.set_domain_env T_cur empty man flow |>
-      Init_visitor.init_globals (init_visitor man) globals |>
-      Option.return
-
-    | _ -> None
+    Some (
+      Flow.set_domain_env T_cur empty man flow
+    )
 
 
   (** Computation of post-conditions *)
@@ -180,6 +181,11 @@ struct
   let rec exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_c_global_declaration(v, init) ->
+      Init_visitor.init_global (init_visitor man) v init range flow |>
+      Post.of_flow |>
+      Option.return
+
     | S_c_local_declaration(v, init) ->
       Init_visitor.init_local (init_visitor man) v init range flow |>
       Post.of_flow |>
@@ -197,29 +203,40 @@ struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      begin
-        man.eval rval flow ~zone:(Z_c, Z_c_cell) |> Post.bind man @@ fun rval flow ->
-        man.eval lval flow ~zone:(Z_c, Z_c_scalar) |> Post.bind man @@ fun lval flow ->
-        eval (Z_c_scalar, Z_c_cell) lval man flow |> Eval.default_opt lval flow |> Post.bind man @@ fun lval flow ->
-        match ekind lval with
-        | E_c_cell(c, mode) ->
-          assign_cell c rval mode range man flow |>
-          remove_overlappings c range man |>
-          Post.add_merger (mk_remove_cell c range)
-        | _ -> assert false
-      end |>
+      debug "aaaaaaaaaaaa";
+      man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
+      Post.bind_opt man @@ fun rval flow ->
+
+      eval (Z_c, Z_c_cell) lval man flow |>
+      Option.lift @@ Post.bind man @@ fun lval flow ->
+
+      let c, mode = cell_of_expr lval in
+      assign_cell c rval mode range man flow |>
+
+      remove_overlappings c range man |>
+      Post.add_merger (mk_remove_cell c range)
+
+
+    | S_assume(e) ->
+      man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+
+      let stmt' = {stmt with skind = S_assume e'} in
+      man.exec ~zone:Z_c_cell stmt' flow |>
+
+      Post.of_flow |>
       Option.return
+
 
     | _ -> None
 
-  (* FIXME: pourquoi y a t'il un mode non utilisé en argument ?? *)
   and assign_cell c e mode range man flow =
     (* Infer the mode of assignment *)
     let mode = match cell_base c with
       | A a -> WEAK (* TODO: process the case of heap addresses *)
       | V v ->
         (* In case of a base variable, we check that we are writing to the whole memory block *)
-        if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then STRONG
+        if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then mode
         else WEAK
     in
     let lval = mk_cell c ~mode:mode range in
@@ -264,7 +281,7 @@ struct
 
     | E_c_deref p ->
       begin
-        man.eval ~zone:(Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pt flow ->
+        man.eval ~zone:(Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pt flow ->
         match ekind pt with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton ({exp with ekind = E_c_function fundec}) flow

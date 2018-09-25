@@ -33,7 +33,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
 
-  let zone = Zone.Z_universal_num
+  let zone = Zone.Z_u_num
 
   let bottom = BOT
 

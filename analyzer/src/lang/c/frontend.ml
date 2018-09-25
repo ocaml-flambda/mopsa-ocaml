@@ -113,7 +113,7 @@ and parse_file (opts: string list) (file: string) ctx =
   let opts = "-fparse-all-comments"::opts in (* needed to get all comments *)
   debug
     "clang %s %s %a"
-    target_options.target_triple file
+    target_options.Clang_AST.target_triple file
     (ListExt.fprint ListExt.printer_plain Format.pp_print_string) opts;
   let x, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
   let () =
@@ -175,8 +175,8 @@ and from_project prj =
 
 (** {2 Variables} *)
 
-and from_var_with_init (fun_ctx) (v: C_AST.variable) : var * Ast.c_init option =
-  from_var fun_ctx v, from_init_option fun_ctx v.var_init
+and from_var_with_init (fun_ctx) (v: C_AST.variable) : var * Ast.c_init option * range =
+  from_var fun_ctx v, from_init_option fun_ctx v.var_init, from_range v.var_range
 
 and from_var fun_ctx (v: C_AST.variable) : var =
   from_var_name v.var_org_name v.var_uid (from_typ fun_ctx v.var_type)
@@ -431,9 +431,9 @@ and from_range : Clang_AST.range -> Framework.Location.range =
         loc_column = range.range_begin.loc_column;
       };
       range_end = {
-        loc_file = range.range_begin.loc_file;
-        loc_line = range.range_begin.loc_line;
-        loc_column = range.range_begin.loc_column;
+        loc_file = range.range_end.loc_file;
+        loc_line = range.range_end.loc_line;
+        loc_column = range.range_end.loc_column;
       }
     }
 
@@ -444,7 +444,7 @@ and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
     | C_AST.S_local_declaration v ->
-      let v, init = from_var_with_init fun_ctx v in
+      let v, init, range = from_var_with_init fun_ctx v in
       Ast.S_c_local_declaration (v, init)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr fun_ctx e)
     | C_AST.S_block block -> from_block fun_ctx srange block |> Framework.Ast.skind
@@ -538,9 +538,9 @@ and construct_string_table globals funcs =
             table body_init
         in
         (* Visit and change the locals *)
-        let table, locals' = List.fold_left (fun (table, locals) (v, init) ->
+        let table, locals' = List.fold_left (fun (table, locals) (v, init, range) ->
             let table, init' = visit_init_option table init in
-            table, (v, init') :: locals
+            table, (v, init', range) :: locals
           ) (table, []) f.c_func_local_vars
         in
         debug "fun: %a@\nbody = @[%a@]@\nbody' = @[%a@]" pp_var f.c_func_var pp_stmt body_init pp_stmt body';

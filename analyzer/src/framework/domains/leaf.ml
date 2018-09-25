@@ -49,15 +49,15 @@ struct
   }
 
   let eval_interface = {
-    export = [Zone.top, D.zone];
-    import = [Zone.top, D.zone];
+    export = [Zone.any_zone, D.zone];
+    import = [Zone.any_zone, D.zone];
   }
 
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign(v, e) ->
       Some (
-        man.eval ~zone:(Zone.top, D.zone) e flow |>
+        man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e')} in
         let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
@@ -67,7 +67,7 @@ struct
 
     | S_assume(e) ->
       Some (
-        man.eval ~zone:(Zone.top, D.zone) e flow |>
+        man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
         let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
@@ -89,15 +89,15 @@ struct
     match ekind exp with
     | E_unop(op, e) ->
       Some (
-        man.eval ~zone:(Zone.top, D.zone) e flow |> Eval.bind @@ fun e' flow ->
+        man.eval ~zone:(Zone.any_zone, D.zone) e flow |> Eval.bind @@ fun e' flow ->
         let exp' = {exp with ekind = E_unop(op, e')} in
         Eval.singleton exp' flow
       )
 
     | E_binop(op, e1, e2) ->
       Some (
-        man.eval ~zone:(Zone.top, D.zone) e1 flow |> Eval.bind @@ fun e1' flow ->
-        man.eval ~zone:(Zone.top, D.zone) e2 flow |> Eval.bind @@ fun e2' flow ->
+        man.eval ~zone:(Zone.any_zone, D.zone) e1 flow |> Eval.bind @@ fun e1' flow ->
+        man.eval ~zone:(Zone.any_zone, D.zone) e2 flow |> Eval.bind @@ fun e2' flow ->
         let exp' = {exp with ekind = E_binop(op, e1', e2')} in
         Eval.singleton exp' flow
       )

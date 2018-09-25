@@ -12,6 +12,45 @@ let rec pp_c_init fmt = function
     fprintf fmt "{%a ...}" pp_c_init filler
   | _ -> assert false
 
+let rec pp_c_type_short fmt =
+  function
+  | T_c_void -> pp_print_string fmt "void" 
+  | T_c_integer(C_signed_char) -> pp_print_string fmt "s8"
+  | T_c_integer(C_unsigned_char) -> pp_print_string fmt "u8"
+  | T_c_integer(C_signed_short) -> pp_print_string fmt "s16"
+  | T_c_integer(C_unsigned_short) -> pp_print_string fmt "u16"
+  | T_c_integer(C_signed_int) -> pp_print_string fmt "s32"
+  | T_c_integer(C_unsigned_int) -> pp_print_string fmt "u32"
+  | T_c_integer(C_signed_long) -> pp_print_string fmt "sl"
+  | T_c_integer(C_unsigned_long) -> pp_print_string fmt "ul"
+  | T_c_integer(C_signed_long_long) -> pp_print_string fmt "sll"
+  | T_c_integer(C_unsigned_long_long) -> pp_print_string fmt "ull"
+  | T_c_integer(C_signed_int128) -> pp_print_string fmt "s128"
+  | T_c_integer(C_unsigned_int128) -> pp_print_string fmt "u128"
+  | T_c_float(C_float) -> pp_print_string fmt "f"
+  | T_c_float(C_double) -> pp_print_string fmt "d"
+  | T_c_float(C_long_double) -> pp_print_string fmt "ld"
+  | T_c_pointer(t) -> fprintf fmt "%a*" pp_c_type_short t
+  | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_c_type_short t
+  | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_c_type_short t (Z.to_string n)
+  | T_c_array(t, C_array_length_expr e) -> fprintf fmt "%a[%a]" pp_c_type_short t pp_expr e
+  | T_c_function None -> ()
+  | T_c_function (Some f) -> fprintf fmt "(%a)" pp_c_type_short f.c_ftype_return
+  | T_c_typedef(typedef) -> pp_c_type_short fmt typedef.c_typedef_def
+  | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "s %s" record.c_record_org_name
+  | T_c_record({c_record_kind = C_union} as record) -> fprintf fmt "u %s" record.c_record_org_name
+  | T_c_qualified(qual, t) ->
+    let l =
+      (if qual.c_qual_is_const then ["c"] else []) @
+      (if qual.c_qual_is_volatile then ["v"] else []) @
+      (if qual.c_qual_is_restrict then ["r"] else [])
+    in
+    let qual = String.concat " " l in
+    fprintf fmt "%s %a" qual pp_c_type_short t
+  | T_c_enum(enum) -> fprintf fmt "e %s" enum.c_enum_org_name
+  | _ -> assert false
+
+
 let () =
   register_pp_typ (fun default fmt typ ->
       match typ with
@@ -101,7 +140,9 @@ let () =
     );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
+      | S_c_global_declaration (v, None)
       | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+      | S_c_global_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"

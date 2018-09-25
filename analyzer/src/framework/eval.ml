@@ -116,13 +116,8 @@ let bind_opt f evl =
   in
   evl
 
-let default_opt exp flow evl =
-  match evl with
-  | None -> singleton exp flow
-  | Some evl -> evl
-
 let assume
-    cond ?(zone = Zone.top)
+    cond ?(zone = any_zone)
     ~fthen ~felse
     ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
     ?(fnone = (fun flow -> empty_singleton flow))
@@ -138,7 +133,7 @@ let assume
 
 let switch
     (cases : (((expr * bool) list) * ('a Flow.flow -> ('a, 'e) evl )) list)
-    ?(zone = Zone.top)
+    ?(zone = any_zone)
     man flow
   : ('a, 'e) evl  =
   match cases with
@@ -160,12 +155,11 @@ let switch
 let eval_list
     (l: 'e list)
     (eval: 'e -> 'c flow -> ('c, 'b) evl)
-    ?(empty = (fun flow -> empty_singleton flow))
     (flow: 'c flow)
   : ('c, 'b list) evl =
   let rec aux expl flow clean = function
     | [] ->
-      singleton (List.rev expl) flow
+      singleton (List.rev expl) flow ~cleaners:clean
     | exp :: tl ->
       eval exp flow |>
       Dnf.substitute2
@@ -179,6 +173,32 @@ let eval_list
         )
   in
   aux [] flow [] l
+
+
+let eval_list_opt
+    (l: 'e list)
+    (eval: 'e -> 'c flow -> ('c, 'b) evl option)
+    (flow: 'c flow)
+  : ('c, 'b list) evl option =
+  let rec aux expl flow clean = function
+    | [] ->
+      singleton (List.rev expl) flow ~cleaners:clean
+    | exp :: tl ->
+      eval exp flow |>
+      Option.none_to_exn |>
+      Dnf.substitute2
+        (fun case ->
+           let exp' = case.expr in
+           let flow = case.flow in
+           let clean' = case.cleaners in
+           match exp' with
+           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
+           | None -> empty_singleton flow
+        )
+  in
+  try Some (aux [] flow [] l)
+  with Option.Found_None -> None
+
 
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list

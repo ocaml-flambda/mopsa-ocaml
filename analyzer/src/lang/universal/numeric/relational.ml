@@ -370,7 +370,7 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let zone = Zone.Z_universal_num
+  let zone = Zone.Z_u_num
 
   let init prog = top
 

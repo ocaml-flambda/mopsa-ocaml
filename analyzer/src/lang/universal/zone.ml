@@ -8,23 +8,49 @@
 
 (** Zones for the Universal language. *)
 
-open Framework.Zone
+open Framework.Essentials
+open Ast
 
 type zone +=
-  | Z_universal
-  | Z_universal_num
+  | Z_u
+  | Z_u_num
 
 let () =
   register_zone {
-      subset = (fun next z1 z2 ->
-          match z1, z2 with
-            | Z_universal_num, Z_universal -> true
-            | _ -> next z1 z2
-        );
-      print = (fun next fmt z ->
-          match z with
-          | Z_universal -> Format.fprintf fmt "universal"
-          | Z_universal_num -> Format.fprintf fmt "universal/num"
-          | _ -> next fmt z
-        );
-    }
+    zone = Z_u;
+    subset = None;
+    name = "U";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_function _
+        | E_array _
+        | E_subscript _
+        | E_addr _
+        | E_len _                            -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
+  register_zone {
+    zone = Z_u_num;
+    subset = Some Z_u;
+    name = "U/Num";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _                       -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
+  ()

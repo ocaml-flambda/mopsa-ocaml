@@ -25,15 +25,16 @@ type alarm = {
 
 
 type alarm_info = {
-  compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  print   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
-  report : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  compare    : (alarm -> alarm -> int) -> alarm -> alarm -> int;
+  pp_token   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_title : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_report  : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
 }
 
 val register_alarm: alarm_info -> unit
 (** Register a new alarm *)
 
-val pp_report : Format.formatter -> alarm -> unit
+val pp_alarm : Format.formatter -> alarm -> unit
 (** Pretty print the report of an alarm *)
 
 type Manager.token += T_alarm of alarm

@@ -15,13 +15,8 @@ type zone +=
 
 let () =
   register_zone {
-      subset = (fun next z1 z2 ->
-        match z1, z2 with
-        | _ -> next z1 z2
-        );
-      print = (fun next fmt z ->
-          match z with
-          | Z_py -> Format.fprintf fmt "py"
-          | _ -> next fmt z
-        );
-    }
+    zone = Z_py;
+    name = "Z_py";
+    subset = None;
+    eval = (fun exp -> Process);
+  }
