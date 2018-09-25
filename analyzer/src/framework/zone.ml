@@ -6,15 +6,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Zones define boundaries of sub-languages in an analysis. They are
-   used as arguments of the transfer functions [exec] and [eval] in
-   order to filter appropriate domains to use.
+(** Zones define sub-languages in an analysis. They are used as
+   arguments of the transfer functions [exec] and [eval] in order to
+   filter appropriate domains to be activated.
 
    To simplify the processing of expressions/statements within a zone,
-   generic templates for [eval] and [exec] can be defined. These
-   templates are overrided by domains when necessary, and therefore
-   they are used as fallback when no domain return an answer.
-
+   generic eval templates can be defined. These templates are
+   overrided by domains when necessary, and therefore they are used as
+   fallbacks when no domain returns an answer.
 *)
 
 open Ast
@@ -91,11 +90,12 @@ let sat_zone export z =
   | Z_any -> true
   | Z_under z' -> subset export z
   | Z_above z' -> subset z export
-  | _ -> compare_zone export Z_any = 0 || compare_zone export z = 0
+  | _ -> compare_zone export Z_any = 0 ||
+         compare_zone export z = 0
 
 let sat_zone2 export zz =
-  sat_zone (fst export) (fst zz) && sat_zone (snd export) (snd zz)
-
+  sat_zone (fst export) (fst zz) &&
+  sat_zone (snd export) (snd zz)
 
 
 (** {2 Pretty printers} *)
@@ -103,7 +103,7 @@ let sat_zone2 export zz =
 
 let rec pp_zone fmt (z: zone) =
   match z with
-  | Z_any -> Format.fprintf fmt "∗ "
+  | Z_any -> Format.fprintf fmt "*"
   | Z_under z -> Format.fprintf fmt "↓ %a" pp_zone z
   | Z_above z -> Format.fprintf fmt "↑ %a" pp_zone z
   | _ ->
@@ -115,6 +115,10 @@ let rec pp_zone fmt (z: zone) =
 
 let pp_zone2 fmt (z1, z2) = Format.fprintf fmt "[%a ↠ %a]" pp_zone z1 pp_zone z2
 
+let pp_zone_path fmt zp =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt " ↠ ")
+    pp_zone fmt zp
 
 (** {2 Static evaluation of expressions} *)
 (** ==================================== *)
@@ -168,15 +172,45 @@ module ZoneSet = Set.Make(struct
     let compare = compare_zone
   end)
 
-type graph = ZoneSet.t AdjencyMap.t
+type graph = {
+  adjency: ZoneSet.t AdjencyMap.t;
+  vertices: ZoneSet.t;
+}
 
 let build_zoning_graph (edges: (zone * zone) list) : graph =
-  let g = AdjencyMap.empty in
+  let g = {
+    adjency = AdjencyMap.empty;
+    vertices = ZoneSet.empty;
+  }
+  in
   edges |>
   List.fold_left (fun g (z1, z2) ->
-      let succ = try AdjencyMap.find z1 g with Not_found -> ZoneSet.empty in
-      AdjencyMap.add z1 (ZoneSet.add z2 succ) g
+      let succ = try AdjencyMap.find z1 g.adjency with Not_found -> ZoneSet.empty in
+      {
+        adjency  = AdjencyMap.add z1 (ZoneSet.add z2 succ) g.adjency;
+        vertices = ZoneSet.(g.vertices |> add z1 |> add z2);
+      }
     ) g
 
 let find_all_paths (src:zone) (dst:zone) (g:graph) : zone list list =
-  []
+  let rec bfs z before =
+    let next =
+      try
+        AdjencyMap.find z g.adjency
+      with Not_found ->
+        let sat = ZoneSet.filter (fun z' -> sat_zone z' z) g.vertices in
+        ZoneSet.fold (fun z' acc ->
+            try AdjencyMap.find z' g.adjency |> ZoneSet.union acc
+            with Not_found -> acc
+          ) ZoneSet.empty sat
+    in
+    ZoneSet.fold (fun z' acc ->
+        if List.exists (fun z'' -> compare_zone z' z'' = 0) before then acc
+        else if sat_zone z' dst then (before @ [z']) :: acc
+        else (bfs z' (before @ [z'])) @ acc
+      ) next []
+  in
+  match src with
+  | Z_any -> [[src; dst]]
+  | _ -> bfs src [src]
+

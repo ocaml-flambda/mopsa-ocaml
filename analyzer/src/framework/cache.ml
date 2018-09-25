@@ -18,7 +18,7 @@ module Make(Domain: sig type t end) =
 struct
   let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t flow) list ref = ref []
 
-  let eval_cache : (((zone * zone) * expr * Domain.t flow) * (Domain.t, expr) evl option) list ref = ref []
+  let eval_cache : (((zone * zone) * expr * Domain.t flow) * (Domain.t, expr) evl) list ref = ref []
 
   let add_to_cache : type a. a list ref -> a -> unit =
     fun cache x ->
@@ -50,26 +50,28 @@ struct
         add_to_cache exec_cache ((zone, stmt, flow), flow');
         flow'
 
-  let eval f zone exp man flow =
+  let eval f zone man exp flow =
+    let ff () =
+      match f exp man flow with
+      | None -> Eval.singleton exp flow
+      | Some evl -> evl
+    in
     if Options.(common_options.cache) == 0 then
-      f exp man flow
+      ff ()
     else
       try
         let ret = List.assoc (zone, exp, flow) !eval_cache in
         debug "eval from cache";
         ret
       with Not_found ->
-        let evals = f exp man flow in
+        let evals = ff () in
         add_to_cache eval_cache ((zone, exp, flow), evals);
         (
-          match evals with
-          | Some evals ->
-            Eval.iter (fun case ->
-                match case.expr with
-                | Some e -> add_to_cache eval_cache ((zone, e, flow), Some (Eval.singleton e flow));
-                | None -> ()
-              ) evals
-          | None -> ()
+          Eval.iter (fun case ->
+              match case.expr with
+              | Some e -> add_to_cache eval_cache ((zone, e, flow), Eval.singleton e flow);
+              | None -> ()
+            ) evals
         );
         evals
 

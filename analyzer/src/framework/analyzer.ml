@@ -44,12 +44,11 @@ struct
     end)
 
 
-  let rec fold_eval path man exp flow =
-    match path with
-    | [] -> None
-    | [z1; z2] -> Domain.eval (z1, z2) exp man flow
-    | z1 :: z2 :: tl ->
-      Domain.eval (z1, z2) exp man flow |>
+  let rec fold_eval fhops man exp flow =
+    match fhops with
+    | [f] -> f exp man flow
+    | f :: tl ->
+      f exp man flow |>
       Option.bind @@
       Eval.bind_opt @@
       fold_eval tl man
@@ -148,29 +147,44 @@ struct
             if List.length paths = 0 then
               Exceptions.panic "eval for %a not found" pp_zone2 (src, dst)
             else
+              debug "eval for %a found@\npaths: @[%a@]"
+                pp_zone2 (src, dst)
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_zone_path) paths
+              ;
+              (* Map each hop to an eval function *)
+              let fhops = List.map (fun path ->
+                  let rec aux =
+                    function
+                    | [z1; z2] -> [Domain.eval (z1, z2)]
+                    | z1 :: z2 :: tl ->
+                      Domain.eval (z1, z2) :: aux (z2 :: tl)
+                    | _ -> assert false
+                  in
+                  aux path
+                ) paths
+              in
               (* Build an eval function that iterates over paths until getting an answer *)
               let fevl = (fun exp man flow ->
                   let rec aux =
                     function
                     | [] -> None
-                    | path :: tl ->
-                      match fold_eval path man exp flow with
+                    | fl :: tl ->
+                      match fold_eval fl man exp flow with
                       | None -> aux tl
                       | x -> x
                   in
-                  aux paths
+                  aux fhops
                 )
               in
-              debug "eval for %a found" pp_zone2 (src, dst);
               EvalMap.add (src, dst) fevl acc
           end
       ) EvalMap.empty (List.sort_uniq (Compare.pair compare_zone compare_zone) ((any_zone, any_zone)  :: Domain.eval_interface.import))
 
 
   (** Evaluation of expressions. *)
-  and eval_opt ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl option =
+  and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     debug
-      "eval_opt expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
+      "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
       pp_expr exp
       pp_zone2 zone
@@ -182,36 +196,26 @@ struct
       (* Try static evaluation using the template of the destination zone *)
       match Zone.eval exp (snd zone) with
       | Keep ->
-        debug "%a already in zone %a" pp_expr exp pp_zone (snd zone);
-        Some (Eval.singleton exp flow)
+        Eval.singleton exp flow
 
       | Process ->
         let feval = EvalMap.find zone eval_map in
-        Cache.eval feval zone exp man flow
+        Cache.eval feval zone man exp flow
 
       | Visit ->
-        debug "Visiting sub-expressions of %a" pp_expr exp;
         let open Visitor in
         let parts, builder = split_expr exp in
-        assert false
-        (* match parts with
-         * | {exprs; stmts = []} ->
-         *   let feval = EvalMap.find zone eval_map in
-         *   let rec aux =
-         *     function
-         *     | [] -> None
-         *     | [e] ->
-         *       let evl = Cache.eval feval zone e man flow in
-         *       
-         *     | e :: tl ->
-         *       Cache.eval feval zone e man flow
-         *   Eval.eval_list_opt exprs (eval_opt ~zone) flow |>
-         *       Option.option_lift1 @@
-         *       Eval.bind @@ fun exprs flow ->
-         *       let exp = builder {exprs; stmts = []} in
-         *       Eval.singleton exp flow
-         * 
-         *     | _ -> None *)
+        match parts with
+        | {exprs; stmts = []} ->
+          let feval = EvalMap.find zone eval_map in
+          Eval.eval_list exprs (Cache.eval feval zone man) flow |>
+          Eval.bind @@ fun exprs flow ->
+          let exp = builder {exprs; stmts = []} in
+          Eval.singleton exp flow
+        
+        | _ ->
+          let feval = EvalMap.find zone eval_map in
+          Cache.eval feval zone man exp flow
     in
 
     let t = Timing.stop timer in
@@ -220,21 +224,6 @@ struct
       "eval done in %.6fs of @[%a@]"
       t pp_expr exp
     ;
-    debug
-      "eval_opt expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
-      pp_expr exp
-      pp_zone2 zone
-      (Flow.print man) flow
-      (Option.print (Eval.print ~pp:pp_expr)) ret
-    ;
-    ret
-
-  and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
-    let ret =
-      match eval_opt ~zone exp flow with
-      | Some evl -> evl
-      | None -> Eval.singleton exp flow
-    in
     debug
       "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp

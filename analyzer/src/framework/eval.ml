@@ -174,32 +174,6 @@ let eval_list
   in
   aux [] flow [] l
 
-
-let eval_list_opt
-    (l: 'e list)
-    (eval: 'e -> 'c flow -> ('c, 'b) evl option)
-    (flow: 'c flow)
-  : ('c, 'b list) evl option =
-  let rec aux expl flow clean = function
-    | [] ->
-      singleton (List.rev expl) flow ~cleaners:clean
-    | exp :: tl ->
-      eval exp flow |>
-      Option.none_to_exn |>
-      Dnf.substitute2
-        (fun case ->
-           let exp' = case.expr in
-           let flow = case.flow in
-           let clean' = case.cleaners in
-           match exp' with
-           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
-           | None -> empty_singleton flow
-        )
-  in
-  try Some (aux [] flow [] l)
-  with Option.Found_None -> None
-
-
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")
