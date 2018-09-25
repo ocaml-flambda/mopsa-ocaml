@@ -114,7 +114,7 @@ let var_machine_integers v =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless_zoned.S =
+module Domain : Framework.Domains.Stateless.S =
 struct
 
   (** Domain identification *)
@@ -345,4 +345,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless_zoned.register_domain (module Domain)
+  Framework.Domains.Stateless.register_domain (module Domain)

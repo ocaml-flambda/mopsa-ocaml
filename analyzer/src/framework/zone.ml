@@ -55,7 +55,9 @@ let rec compare_zone (z1: zone) (z2: zone) : int =
   | Z_above z1, Z_above z2 -> compare_zone z1 z2
   | _ -> Pervasives.compare z1 z2
 
+let compare_zone2 = Compare.pair compare_zone compare_zone
 
+(* Map pairing zones with their definitions *)
 module ZoneMap = Map.Make(struct type t = zone let compare = compare_zone end)
 
 let zones : zone_info ZoneMap.t ref = ref ZoneMap.empty
@@ -151,3 +153,30 @@ let eval exp z =
   in
 
   aux exp
+
+
+(** {2 Zoning graph} *)
+(** ================ *)
+
+module AdjencyMap = Map.Make(struct
+    type t = zone
+    let compare = compare_zone
+  end)
+
+module ZoneSet = Set.Make(struct
+    type t = zone
+    let compare = compare_zone
+  end)
+
+type graph = ZoneSet.t AdjencyMap.t
+
+let build_zoning_graph (edges: (zone * zone) list) : graph =
+  let g = AdjencyMap.empty in
+  edges |>
+  List.fold_left (fun g (z1, z2) ->
+      let succ = try AdjencyMap.find z1 g with Not_found -> ZoneSet.empty in
+      AdjencyMap.add z1 (ZoneSet.add z2 succ) g
+    ) g
+
+let find_all_paths (src:zone) (dst:zone) (g:graph) : zone list list =
+  []

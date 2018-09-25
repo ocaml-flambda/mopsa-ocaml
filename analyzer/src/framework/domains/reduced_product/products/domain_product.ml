@@ -149,36 +149,7 @@ struct
       );
   }
 
-
-  let rec over_local_man : (Over.t, Over.t) man = {
-    bottom = Over.bottom;
-    top = Over.top;
-    is_bottom = Over.is_bottom;
-    subset = Over.subset;
-    join = Over.join;
-    meet = Over.meet;
-    widen = Over.widen;
-    print = Over.print;
-    get = (fun o -> o);
-    set = (fun o _ -> o);
-    exec = (fun ?(zone=Zone.any_zone) stmt flow ->
-        match Over.exec zone stmt over_local_man flow with
-        | Some post -> post.Post.flow
-        | None -> Debug.fail "product: sub-domain can not compute post-condition of %a" pp_stmt stmt;
-      );
-    eval = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow ->
-        match Over.eval zone exp over_local_man flow with
-        | Some evl -> evl
-        | None -> Debug.fail "product: sub-domain can not evaluate %a" pp_expr exp;
-      );
-    eval_opt = (fun ?(zone=(Zone.any_zone, Zone.any_zone)) exp flow -> Over.eval zone exp over_local_man flow);
-    ask = (fun query flow ->
-        match Over.ask query over_local_man flow with
-        | Some repl -> repl
-        | None -> Debug.fail "product: sub-domain can not answer query";
-      );
-  }
-
+  module LocalAnalyzer = Analyzer.Make(Over)
 
   let join annot ((a1,o1):t) ((a2,o2):t) : t =
     let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
@@ -187,8 +158,8 @@ struct
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
         let hd', o1', o2' =
-          Stacked.lift_to_flow over_local_man
-            (fun o1 o2 -> V.join annot over_local_man (vhd1, o1) (vhd2, o2))
+          Stacked.lift_to_flow LocalAnalyzer.man
+            (fun o1 o2 -> V.join annot LocalAnalyzer.man (vhd1, o1) (vhd2, o2))
             o1 o2
         in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
@@ -205,8 +176,8 @@ struct
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
         let hd', o1', o2' =
-          Stacked.lift_to_flow over_local_man
-            (fun o1 o2 -> V.meet annot over_local_man (vhd1, o1) (vhd2, o2))
+          Stacked.lift_to_flow LocalAnalyzer.man
+            (fun o1 o2 -> V.meet annot LocalAnalyzer.man (vhd1, o1) (vhd2, o2))
             o1 o2
         in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
@@ -222,8 +193,8 @@ struct
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
         let hd', o1', o2' =
-          Stacked.lift_to_flow over_local_man
-            (fun o1 o2 -> V.widen annot over_local_man (vhd1, o1) (vhd2, o2))
+          Stacked.lift_to_flow LocalAnalyzer.man
+            (fun o1 o2 -> V.widen annot LocalAnalyzer.man (vhd1, o1) (vhd2, o2))
             o1 o2
         in
         let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
@@ -239,8 +210,8 @@ struct
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
         let (b, o1' ,o2') =
-          Stacked.lift_to_flow over_local_man
-            (fun o1 o2 -> V.subset over_local_man (vhd1, o1) (vhd2, o2))
+          Stacked.lift_to_flow LocalAnalyzer.man
+            (fun o1 o2 -> V.subset LocalAnalyzer.man (vhd1, o1) (vhd2, o2))
             o1 o2
         in
         let (b', o1'' ,o2'') = aux tl (vtl1, o1') (vtl2, o2') in

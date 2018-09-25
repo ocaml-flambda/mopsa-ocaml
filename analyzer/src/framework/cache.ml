@@ -27,28 +27,39 @@ struct
           else List.rev @@ List.tl @@ List.rev !cache
         )
 
-  let exec (f: stmt -> Domain.t flow -> Domain.t flow) zone stmt (flow: Domain.t flow) : Domain.t flow =
+  let exec f zone stmt man flow =
+    let ff () =
+      match f stmt man flow with
+      | None ->
+        Exceptions.panic
+          "Unable to analyze statement in %a:@\n @[%a@]"
+          Location.pp_range_verbose stmt.srange
+          pp_stmt stmt
+
+      | Some post -> post.Post.flow
+    in
     if Options.(common_options.cache) == 0 then
-      f stmt flow
+      ff ()
     else
       try
         let ret = List.assoc (zone, stmt, flow) !exec_cache in
         debug "exec from cache";
         ret
       with Not_found ->
-        let flow' = f stmt flow in
+        let flow' = ff () in
         add_to_cache exec_cache ((zone, stmt, flow), flow');
         flow'
 
-  let eval (f: expr -> Domain.t flow -> (Domain.t, expr) evl option) zone exp (flow:Domain.t flow) : (Domain.t, expr) evl option =
-    if Options.(common_options.cache) == 0 then f exp flow
+  let eval f zone exp man flow =
+    if Options.(common_options.cache) == 0 then
+      f exp man flow
     else
       try
         let ret = List.assoc (zone, exp, flow) !eval_cache in
         debug "eval from cache";
         ret
       with Not_found ->
-        let evals = f exp flow in
+        let evals = f exp man flow in
         add_to_cache eval_cache ((zone, exp, flow), evals);
         (
           match evals with
