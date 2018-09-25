@@ -2,7 +2,7 @@
     "iter": [
         "python.program",
 
-        // "python.desugar.bool",
+        "python.desugar.bool",
         "python.desugar.import",
         "python.desugar.assert",
         "python.desugar.if",
@@ -21,6 +21,8 @@
         "python.objects.nones",
 
         "python.data_model.arith_ops",
+        "python.data_model.compare_ops",
+        "python.data_model.aug_assign",
         "python.data_model.callable",
 
         "python.types.t_string",

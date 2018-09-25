@@ -74,6 +74,7 @@ let is_arith_op = function
 
   | _ -> false
 
+
 let is_comp_op = function
   | Framework.Ast.O_eq
   | Framework.Ast.O_ne
@@ -81,6 +82,15 @@ let is_comp_op = function
   | Framework.Ast.O_le
   | Framework.Ast.O_gt
   | Framework.Ast.O_ge -> true
+  | _ -> false
+
+let is_compare_op_fun = function
+  | "int.__eq__"
+    | "int.__ne__"
+    | "int.__lt__"
+    | "int.__le__"
+    | "int.__gt__"
+    | "int.__ge__" -> true
   | _ -> false
 
 
@@ -291,6 +301,9 @@ let mk_py_true range =
 
 let mk_py_false range =
   mk_constant (C_bool false) ~etyp:T_bool range
+
+let mk_py_top t range =
+  mk_constant (C_top t) ~etyp:t range
 
 let object_of_expr e =
   match ekind e with
