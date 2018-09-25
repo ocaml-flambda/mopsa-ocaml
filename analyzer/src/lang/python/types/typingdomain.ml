@@ -473,7 +473,8 @@ let join (d:domain) (d':domain) : domain =
   res
 
 let class_le (c, b:class_address * py_object list) (d, b':class_address * py_object list) : bool =
-  failwith "todo"
+  Debug.warn "class_le not correctly implemented@\n";
+  c = d && b = b'
   (* let cname = match c with
    *   | C_builtin s | C_unsupported s -> s
    *   | C_user c -> c.py_cls_var.vname in
@@ -937,6 +938,9 @@ let filter_inst (d:domain) (t:typeid) (inst:monotype) : domain * domain =
            {d with d2=d2f; d3=d3f} in
   dt, df
 
+let filter_ty_inst (d:domain) (ty:polytype) (inst:monotype) : domain * domain =
+  let t, d = get_type d ty in
+  filter_inst d t inst
 
 
 

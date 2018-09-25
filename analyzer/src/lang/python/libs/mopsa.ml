@@ -40,7 +40,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}
-    let eval_interface = {export = []; import = []}
+    let eval_interface = {export = [Framework.Zone.Z_top, Framework.Zone.Z_top]; import = []}
 
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)
@@ -50,8 +50,21 @@ module Domain =
     let init prog man flow = Some flow
 
     let eval zs exp man flow =
-      (* let range = erange exp in *)
+      debug "%a@\n" pp_expr exp;
+      let range = erange exp in
       match ekind exp with
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
+         Eval.singleton (mk_py_top T_bool range) flow |> Option.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
+         Eval.singleton (mk_py_top T_float range) flow |> Option.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
+         Eval.singleton (mk_py_top T_string range) flow |> Option.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
+         Eval.singleton (mk_py_top T_int range) flow |> Option.return
+
 (*       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
  *                      {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
  *                    ], []) ->
@@ -71,9 +84,6 @@ module Domain =
  *               Eval.singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
  *          end
  *
- *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
- *          Eval.singleton (Some (mk_py_top T_int range), flow, [])
- *
  *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
  *          begin
  *            match ekind l, ekind u with
@@ -90,15 +100,6 @@ module Domain =
  *               in
  *               Eval.singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
  *          end
- *
- *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
- *          Eval.singleton (Some (mk_py_top T_float range), flow, [])
- *
- *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
- *          Eval.singleton (Some (mk_py_top T_bool range), flow, [])
- *
- *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
- *          Eval.singleton (Some (mk_py_top T_string range), flow, [])
  *
  *       (\* Calls to mopsa.assert_equal function *\)
  *       | E_py_call(
