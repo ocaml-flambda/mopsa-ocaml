@@ -162,7 +162,7 @@ let eval exp z =
 (** {2 Zoning graph} *)
 (** ================ *)
 
-module AdjencyMap = Map.Make(struct
+module AdjencyMap = MapExt.Make(struct
     type t = zone
     let compare = compare_zone
   end)
@@ -177,14 +177,33 @@ type graph = {
   vertices: ZoneSet.t;
 }
 
+let pp_graph fmt g =
+  let pp_set fmt s =
+    Format.fprintf fmt "{ %a }"
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+       pp_zone
+    ) (ZoneSet.elements s)
+  in
+  let pp_edges fmt adjency =
+    Format.pp_print_list
+      ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+      (fun fmt (z, next) -> Format.fprintf fmt "%a -> %a" pp_zone z pp_set next)
+      fmt (AdjencyMap.bindings adjency)
+  in
+  Format.fprintf fmt "vertices : @[%a@]@\nedges    : @[%a@]"
+    pp_set g.vertices
+    pp_edges g.adjency
+
 let build_zoning_graph (edges: (zone * zone) list) : graph =
   let g = {
-    adjency = AdjencyMap.empty;
+    adjency  = AdjencyMap.empty;
     vertices = ZoneSet.empty;
   }
   in
   edges |>
   List.fold_left (fun g (z1, z2) ->
+      debug "adding edge %a" pp_zone2 (z1, z2);
       let succ = try AdjencyMap.find z1 g.adjency with Not_found -> ZoneSet.empty in
       {
         adjency  = AdjencyMap.add z1 (ZoneSet.add z2 succ) g.adjency;
@@ -194,23 +213,16 @@ let build_zoning_graph (edges: (zone * zone) list) : graph =
 
 let find_all_paths (src:zone) (dst:zone) (g:graph) : zone list list =
   let rec bfs z before =
-    let next =
-      try
-        AdjencyMap.find z g.adjency
-      with Not_found ->
-        let sat = ZoneSet.filter (fun z' -> sat_zone z' z) g.vertices in
-        ZoneSet.fold (fun z' acc ->
-            try AdjencyMap.find z' g.adjency |> ZoneSet.union acc
-            with Not_found -> acc
-          ) ZoneSet.empty sat
-    in
+    let next = try AdjencyMap.find z g.adjency with Not_found -> ZoneSet.empty in
     ZoneSet.fold (fun z' acc ->
         if List.exists (fun z'' -> compare_zone z' z'' = 0) before then acc
         else if sat_zone z' dst then (before @ [z']) :: acc
         else (bfs z' (before @ [z'])) @ acc
       ) next []
   in
-  match src with
-  | Z_any -> [[src; dst]]
-  | _ -> bfs src [src]
+  ZoneSet.fold (fun z acc ->
+      if sat_zone z src
+      then bfs z [z] @ acc
+      else acc
+    ) g.vertices []
 

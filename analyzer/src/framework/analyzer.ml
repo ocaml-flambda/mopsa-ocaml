@@ -19,6 +19,7 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
+let profiler fmt = Debug.debug ~channel:"framework.analyzer.profiler" fmt
 
 (**
    Functor to create an [Analyzer] module from an top-level abstract domain.
@@ -42,18 +43,6 @@ struct
       type t = zone * zone
       let compare = compare_zone2
     end)
-
-
-  let rec fold_eval fhops man exp flow =
-    match fhops with
-    | [f] -> f exp man flow
-    | f :: tl ->
-      f exp man flow |>
-      Option.bind @@
-      Eval.bind_opt @@
-      fold_eval tl man
-
-    | _ -> assert false
 
   let eval_graph = Zone.build_zoning_graph Domain.eval_interface.export
 
@@ -79,31 +68,23 @@ struct
   (** Build the map of exec functions *)
   and exec_map =
     let required = List.sort_uniq compare_zone (any_zone :: Domain.exec_interface.import) in
-    let map = ExecMap.empty in
     (* Iterate over the required zones of domain D *)
-    let ret =
-      required |>
-      List.fold_left (fun map zone ->
-        if ExecMap.mem zone map then
-          map
+    required |>
+    List.fold_left (fun map zone ->
+        if ExecMap.mem zone map
+        then map
         else
-          begin
-            debug "Searching for an exec function for the zone %a" pp_zone zone;
-            if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.export then
-              begin
-                debug "exec for %a found" pp_zone zone;
-                ExecMap.add zone (Domain.exec zone) map
-              end
-            else
+          let () = debug "Searching for an exec function for the zone %a" pp_zone zone in
+          if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.export
+          then
+            let () = debug "exec for %a found" pp_zone zone in
+            ExecMap.add zone (Domain.exec zone) map
+          else
               Exceptions.panic "exec for %a not found" pp_zone zone
-          end
-      ) map
-    in
-    ret
+      ) ExecMap.empty
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
-    debug
-      "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
+    debug "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose stmt.srange
       pp_stmt stmt
       pp_zone zone
@@ -115,13 +96,9 @@ struct
     let flow' = Cache.exec fexec zone stmt man flow in
 
     let t = Timing.stop timer in
-    Debug.debug ~channel:"framework.analyzer.profiler"
-      "exec done in %.6fs of:@\n@[<v>  %a@]"
-      t pp_stmt stmt
-    ;
+    profiler "exec done in %.3fs of:@\n@[<v>  %a@]" t pp_stmt stmt;
 
-    debug
-      "exec stmt done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+    debug "exec stmt done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_stmt stmt
       pp_zone zone
       (Flow.print man) flow
@@ -137,54 +114,50 @@ struct
 
   (** Build the map of [eval] functions *)
   and eval_map =
+    debug "Eval graph: @[%a@]" Zone.pp_graph eval_graph;
+
+    (* Add the implicit [* -> *] eval path that uses all domains *)
+    let map = EvalMap.singleton
+        (any_zone, any_zone)
+        [[(any_zone, any_zone, Domain.eval (any_zone, any_zone))]]
+    in
+
     (* Iterate over the required zone paths of domain Domain *)
+    let required = List.sort_uniq (Compare.pair compare_zone compare_zone) (Domain.eval_interface.import) in
+    required |>
     List.fold_left (fun acc (src, dst) ->
         if EvalMap.mem (src, dst) acc then acc
         else
           begin
-            debug "Searching for eval function for the zone path %a" pp_zone2 (src, dst);
+            debug "Searching for an eval function for the zone %a" pp_zone2 (src, dst);
             let paths = Zone.find_all_paths src dst eval_graph in
-            if List.length paths = 0 then
-              Exceptions.panic "eval for %a not found" pp_zone2 (src, dst)
+            if List.length paths = 0
+            then Exceptions.panic "eval for %a not found" pp_zone2 (src, dst)
             else
               debug "eval for %a found@\npaths: @[%a@]"
                 pp_zone2 (src, dst)
                 (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_zone_path) paths
               ;
               (* Map each hop to an eval function *)
-              let fhops = List.map (fun path ->
+              let eval_paths = List.map (fun path ->
                   let rec aux =
                     function
-                    | [z1; z2] -> [Domain.eval (z1, z2)]
-                    | z1 :: z2 :: tl ->
-                      Domain.eval (z1, z2) :: aux (z2 :: tl)
+                    | [] -> []
+                    | [z1; z2] -> [(z1, z2, Domain.eval (z1, z2))]
+                    | z1 :: z2 :: tl -> (z1, z2, Domain.eval (z1, z2)) :: aux (z2 :: tl)
                     | _ -> assert false
                   in
                   aux path
                 ) paths
               in
-              (* Build an eval function that iterates over paths until getting an answer *)
-              let fevl = (fun exp man flow ->
-                  let rec aux =
-                    function
-                    | [] -> None
-                    | fl :: tl ->
-                      match fold_eval fl man exp flow with
-                      | None -> aux tl
-                      | x -> x
-                  in
-                  aux fhops
-                )
-              in
-              EvalMap.add (src, dst) fevl acc
+              EvalMap.add (src, dst) eval_paths acc
           end
-      ) EvalMap.empty (List.sort_uniq (Compare.pair compare_zone compare_zone) ((any_zone, any_zone)  :: Domain.eval_interface.import))
-
+      )
+      map
 
   (** Evaluation of expressions. *)
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
-    debug
-      "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
+    debug "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
       pp_expr exp
       pp_zone2 zone
@@ -192,40 +165,36 @@ struct
     ;
     let timer = Timing.start () in
 
-    let ret =
-      (* Try static evaluation using the template of the destination zone *)
-      match Zone.eval exp (snd zone) with
-      | Keep ->
-        Eval.singleton exp flow
-
-      | Process ->
-        let feval = EvalMap.find zone eval_map in
-        Cache.eval feval zone man exp flow
-
-      | Visit ->
-        let open Visitor in
-        let parts, builder = split_expr exp in
-        match parts with
-        | {exprs; stmts = []} ->
-          let feval = EvalMap.find zone eval_map in
-          Eval.eval_list exprs (Cache.eval feval zone man) flow |>
-          Eval.bind @@ fun exprs flow ->
-          let exp = builder {exprs; stmts = []} in
-          Eval.singleton exp flow
-        
-        | _ ->
-          let feval = EvalMap.find zone eval_map in
-          Cache.eval feval zone man exp flow
+    let ret = assert false
+      (* (\* Try static evaluation using the template of the destination zone *\)
+       * match Zone.eval exp (snd zone) with
+       * | Keep ->
+       *   Eval.singleton exp flow
+       * 
+       * | Process ->
+       *   let feval = EvalMap.find zone eval_map in
+       *   Cache.eval feval zone man exp flow
+       * 
+       * | Visit ->
+       *   let open Visitor in
+       *   let parts, builder = split_expr exp in
+       *   match parts with
+       *   | {exprs; stmts = []} ->
+       *     let feval = EvalMap.find zone eval_map in
+       *     Eval.eval_list exprs (Cache.eval feval zone man) flow |>
+       *     Eval.bind @@ fun exprs flow ->
+       *     let exp = builder {exprs; stmts = []} in
+       *     Eval.singleton exp flow
+       *   
+       *   | _ ->
+       *     let feval = EvalMap.find zone eval_map in
+       *     Cache.eval feval zone man exp flow *)
     in
 
     let t = Timing.stop timer in
-    Debug.debug
-      ~channel:"framework.analyzer.profiler"
-      "eval done in %.6fs of @[%a@]"
-      t pp_expr exp
-    ;
-    debug
-      "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+    profiler "eval done in %.3fs of @[%a@]" t pp_expr exp;
+
+    debug "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       pp_zone2 zone
       (Flow.print man) flow
