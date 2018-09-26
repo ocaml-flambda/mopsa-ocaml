@@ -44,7 +44,7 @@ struct
       let compare = compare_zone2
     end)
 
-  let eval_graph = Zone.build_zoning_graph Domain.eval_interface.export
+  let eval_graph = Zone.build_eval_graph Domain.eval_interface.export
 
 
   (*==========================================================================*)
@@ -67,7 +67,7 @@ struct
 
   (** Build the map of exec functions *)
   and exec_map =
-    let required = List.sort_uniq compare_zone (any_zone :: Domain.exec_interface.import) in
+    let required = any_zone :: Domain.exec_interface.import in
     (* Iterate over the required zones of domain D *)
     required |>
     List.fold_left (fun map zone ->
@@ -123,29 +123,27 @@ struct
     in
 
     (* Iterate over the required zone paths of domain Domain *)
-    let required = List.sort_uniq (Compare.pair compare_zone compare_zone) (Domain.eval_interface.import) in
+    let required = Domain.eval_interface.import in
     required |>
     List.fold_left (fun acc (src, dst) ->
         if EvalMap.mem (src, dst) acc then acc
         else
           begin
             debug "Searching for an eval function for the zone %a" pp_zone2 (src, dst);
-            let paths = Zone.find_all_paths src dst eval_graph in
+            let paths = Zone.find_all_eval_paths src dst eval_graph in
             if List.length paths = 0
             then Exceptions.panic "eval for %a not found" pp_zone2 (src, dst)
             else
               debug "eval for %a found@\npaths: @[%a@]"
                 pp_zone2 (src, dst)
-                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_zone_path) paths
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_eval_path) paths
               ;
               (* Map each hop to an eval function *)
               let eval_paths = List.map (fun path ->
                   let rec aux =
                     function
                     | [] -> []
-                    | [z1; z2] -> [(z1, z2, Domain.eval (z1, z2))]
-                    | z1 :: z2 :: tl -> (z1, z2, Domain.eval (z1, z2)) :: aux (z2 :: tl)
-                    | _ -> assert false
+                    | (z1, z2) :: tl -> (z1, z2, Domain.eval (z1, z2)) :: aux tl
                   in
                   aux path
                 ) paths

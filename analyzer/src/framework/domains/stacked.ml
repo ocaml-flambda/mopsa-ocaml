@@ -121,8 +121,8 @@ struct
   (* ============================== *)
 
   let exec_interface = Domain.{
-    import = List.sort_uniq compare_zone (D1.exec_interface.import @ D2.exec_interface.import);
-    export = List.sort_uniq compare_zone (D1.exec_interface.export @ D2.exec_interface.export);
+    import = D1.exec_interface.import @ D2.exec_interface.import;
+    export = D1.exec_interface.export @ D2.exec_interface.export;
   }
 
   let exec zone =
@@ -153,8 +153,8 @@ struct
   (* ========================= *)
 
   let eval_interface = Domain.{
-      import = List.sort_uniq (Compare.pair compare_zone compare_zone) (D1.eval_interface.import @ D2.eval_interface.import);
-      export = List.sort_uniq (Compare.pair compare_zone compare_zone) (D1.eval_interface.export @ D2.eval_interface.export);
+      import = D1.eval_interface.import @ D2.eval_interface.import;
+      export = D1.eval_interface.export @ D2.eval_interface.export;
     }
 
   let eval zpath =
