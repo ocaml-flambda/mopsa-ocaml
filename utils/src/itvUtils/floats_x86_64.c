@@ -40,7 +40,7 @@
   We check some C99 macros at compile time to ensure this.
 */
 
-#if !defined(FLT_EVAL_METHOD) || (FLT_EVVAL_METHOD != 0)
+#if !defined(FLT_EVAL_METHOD) || (FLT_EVAL_METHOD != 0)
 #error "C99's FLT_EVAL_METHOD should be 0 to ensure that float is really float and double is really double"
 #endif
 
