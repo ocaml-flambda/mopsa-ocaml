@@ -65,6 +65,14 @@ void test_divide_by_range() {
   _mopsa_assert_error_exists(DIVISION_BY_ZERO);
 }
 
+int test_overflow() {
+  unsigned char c = 25;
+  unsigned char d = 6;
+  unsigned char e = 10 * c + d;
+  _mopsa_assert_error_exists(INTEGER_OVERFLOW);
+}
+
+
 /* void test_interval_congruence_reduction() { */
 /*   int i = 1; */
 /*   while (i <= 10) { */

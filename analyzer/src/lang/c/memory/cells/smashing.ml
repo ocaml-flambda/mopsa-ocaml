@@ -30,8 +30,11 @@ struct
       extract = (fun next c ->
           match c with
           | C_smash (base, typ) ->
-            let o1, o2 = Ast.rangeof typ in
-            let offset = mk_z_interval o1 o2 in
+            let offset =
+              match base with
+              | V v -> mk_z_interval Z.zero (Z.sub (sizeof_type v.vtyp) (sizeof_type typ))
+              | A a -> mk_top T_int (* FIXME: get size of the allocated memory block *)
+            in
             base, offset, typ
           | _ -> next c
         );
@@ -161,13 +164,59 @@ struct
 
       (* Initialization of arrays *)
       array =  (fun a is_global init_list range flow ->
-          assert false
+          let b, t, mode =
+            match ekind a with
+            | E_var (v, mode) -> V v, v.vtyp, mode
+            | E_c_cell (C_smash (b, t), mode) -> b, t, mode
+            | _ -> assert false
+          in
+          let a' = mk_cell (C_smash (b, under_array_type a.etyp)) ~mode range in
+          let rec aux acc l =
+            match l with
+            | [] -> acc
+            | init :: tl ->
+              let flow = init_expr (init_visitor man) a' is_global init range flow in
+              aux (Flow.join man acc flow) tl
+          in
+          aux (Flow.bottom (Flow.get_all_annot flow)) init_list
         );
 
       (* Initialization of structs *)
       record =  (fun s is_global init_list range flow ->
-          assert false
+          let b, t, mode =
+            match ekind s with
+            | E_var (v, mode) -> V v, v.vtyp, mode
+            | E_c_cell (C_smash (b, t), mode) -> b, t, mode
+            | _ -> assert false
+          in
+          let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+          match init_list with
+          | Parts parts ->
+            let rec aux i l acc =
+              match l with
+              | [] -> acc
+              | init :: tl ->
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = C_smash (b, t') in
+                let ef = mk_cell cf range in
+                let flow' = init_expr (init_visitor man) ef is_global init range flow in
+                let flow'' = Flow.join man acc flow' in
+                aux (i + 1) tl flow''
+            in
+            aux 0 parts (Flow.bottom (Flow.get_all_annot flow))
+
+          | Expr e ->
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = C_smash (b, t') in
+                let ef = mk_cell cf range in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                let flow' = init_expr (init_visitor man) ef is_global (Some init) range flow in
+                Flow.join man acc flow'
+              ) (Flow.bottom (Flow.get_all_annot flow))
         );
+
     }
 
   let init prog man flow =
