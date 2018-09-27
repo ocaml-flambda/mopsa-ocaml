@@ -269,11 +269,11 @@ let () =
 
 
 type zone +=
-  | Z_c_cell_points_to
+  | Z_c_points_to_cell
 
 let () =
   register_zone {
-    zone = Z_c_cell_points_to;
+    zone = Z_c_points_to_cell;
     name = "C/Cell/Points-To";
     subset = Some Z_c_cell;
     eval = (fun exp ->

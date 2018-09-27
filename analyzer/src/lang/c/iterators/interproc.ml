@@ -39,7 +39,7 @@ struct
   let eval_interface = {
     export = [Zone.Z_c, Zone.Z_c_scalar];
     import = [
-      Zone.Z_c, Zone.Z_c_scalar;
+      Zone.Z_c, Zone.Z_c_points_to_fun;
       Universal.Zone.Z_u, any_zone
     ]
   }
@@ -63,7 +63,7 @@ struct
     match ekind exp with
     | E_c_call(f, args) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) f flow |> Eval.bind @@ fun f flow ->
+        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |> Eval.bind @@ fun f flow ->
         match ekind f with
         | E_c_builtin_function(name) ->
           let () = debug "builtin : %a" pp_expr f in

@@ -32,7 +32,11 @@ struct
   (** ================= *)
 
   let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Zone.Z_c, Zone.Z_c_scalar]; import = []}
+  let eval_interface = {
+    export = [
+      Zone.Z_c, Zone.Z_c_scalar;
+      Zone.Z_c_scalar, Zone.Z_c_points_to_fun;
+    ]; import = []}
 
   let is_builtin_function = function
     | "_mopsa_range_char"
@@ -95,7 +99,10 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
+    | E_c_function(f)
+      when is_builtin_function f.c_func_var.vname
+        && sat_zone Zone.Z_c_points_to_fun (snd zone)
+      ->
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       Eval.singleton exp' flow |>
       Option.return

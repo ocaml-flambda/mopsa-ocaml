@@ -337,7 +337,7 @@ module Domain = struct
     import = [
       (Zone.Z_c, Zone.Z_c_scalar);
       (Zone.Z_c, Z_c_cell);
-      (Zone.Z_c, Z_c_cell_points_to)
+      (Zone.Z_c, Z_c_points_to_cell)
     ];
   }
 
@@ -579,7 +579,7 @@ module Domain = struct
 
     | E_c_deref(p) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pe flow ->
+        man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |> Eval.bind @@ fun pe flow ->
         match ekind pe with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton {exp with ekind = E_c_function fundec} flow

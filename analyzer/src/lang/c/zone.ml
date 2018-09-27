@@ -16,6 +16,7 @@ type zone +=
   | Z_c
   | Z_c_scalar
   | Z_c_scalar_num
+  | Z_c_points_to_fun
 
 let () =
   register_zone {
@@ -97,3 +98,16 @@ let () =
         | _                                  -> Process
       );
     }
+
+let () =
+  register_zone {
+    zone = Z_c_points_to_fun;
+    subset = None;
+    name = "C/PointsToFun";
+    eval = (fun exp ->
+        match ekind exp with
+        | E_c_function f                      -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  }

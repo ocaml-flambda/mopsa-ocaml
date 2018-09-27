@@ -127,7 +127,7 @@ struct
     import = [
       Z_c, Z_c_scalar; (* To simplify lvals *)
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
-      Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
+      Z_c, Z_c_points_to_cell; (* To dereference pointer expressions *)
     ];
   }
 
@@ -333,7 +333,7 @@ struct
 
     | E_c_deref p ->
       begin
-        man.eval ~zone:(Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pt flow ->
+        man.eval ~zone:(Z_c, Z_c_points_to_cell) p flow |> Eval.bind @@ fun pt flow ->
         match ekind pt with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton ({exp with ekind = E_c_function fundec}) flow

@@ -94,7 +94,8 @@ struct
 
   let eval_interface = {
     export = [
-      Z_c, Z_c_cell_points_to;
+      Z_c, Z_c_points_to_cell;
+      Z_c, Z_c_points_to_fun;
       Z_c, Z_c_scalar_num
     ];
     import = [Z_c, Z_c_cell]
@@ -124,10 +125,23 @@ struct
     let range = exp.erange in
     match ekind exp with
     | _
-      when sat_zone2 zone (Z_c, Z_c_cell_points_to) ->
+      when sat_zone2 zone (Z_c, Z_c_points_to_cell) ->
       begin
         eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
+      end
+      |>
+      Option.return
+
+    | _
+      when sat_zone2 zone (Z_c, Z_c_points_to_fun) ->
+      begin
+        eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
+        match p with
+        | P_fun f ->
+          let exp' = mk_expr (E_c_function f) ~etyp:(T_c_function None) range in
+          Eval.singleton exp' flow
+        | _ -> assert false
       end
       |>
       Option.return
@@ -268,12 +282,8 @@ struct
     | _ ->
       man.eval ~zone:(Z_c, Z_c_cell) exp flow |>
       Eval.bind @@ fun e flow ->
-      let c =
-        match ekind e with
-        | E_c_cell(c, _) -> c
-        | _ -> assert false
-      in
-      if cell_type c |> is_c_pointer_type then
+      match ekind e with
+      | E_c_cell(c, _) when cell_type c |> is_c_pointer_type ->
         let a = Flow.get_domain_env T_cur man flow in
         let bases = find c a in
         PointerBaseSet.fold (fun pb acc ->
@@ -286,11 +296,15 @@ struct
             in
             Eval.join acc evl
           ) bases Eval.empty
-      else if cell_type c |> is_c_array_type then
+
+      | E_c_cell(c, _) when cell_type c |> is_c_array_type ->
         let b, o, t = extract_cell_info c in
         Eval.singleton (P_var (b, o exp.erange, under_array_type t)) flow
-      else
-        assert false
+
+      | E_c_function f ->
+        Eval.singleton (P_fun f) flow
+
+      | _ -> assert false
 
 
   (** Computation of post-conditions *)
