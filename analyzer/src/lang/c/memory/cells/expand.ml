@@ -632,16 +632,18 @@ module Domain = struct
     Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
-          match ekind v with
-          | E_var(v, mode) ->
-            man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
-            Post.bind_flow man @@ fun e flow ->
+          let c =
+            match ekind v with
+            | E_var(v, mode) -> {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell (OffsetCell c, mode) -> c
+            | _ -> assert false
+          in
+          man.eval ~zone:(Zone.Z_c, Z_c_cell) e flow |>
+          Post.bind_flow man @@ fun e flow ->
 
-            let c = {b = V v; o = Z.zero; t = v.vtyp} in
-            let flow = add_cons_cell man range c flow in
-            let stmt = mk_assign (mk_ocell c ~mode:mode range) e range in
-            man.exec ~zone:Z_c_cell stmt flow
-          | _ -> assert false
+          let flow = add_cons_cell man range c flow in
+          let stmt = mk_assign (mk_ocell c range) e range in
+          man.exec ~zone:Z_c_cell stmt flow
         );
 
       (* Initialization of arrays *)
