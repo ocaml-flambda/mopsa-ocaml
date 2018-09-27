@@ -312,7 +312,7 @@ let mk_project_vars vars = mk_stmt (S_project_vars vars)
 
 open Format
 
-let rec pp_var fmt v = fprintf fmt "%s:%a" v.vname pp_typ v.vtyp
+let rec pp_var fmt v = fprintf fmt "%s" v.vname
 
 (* Processing chain for the extensible type [Ast.expr] *)
 and pp_expr_chain : (Format.formatter -> expr -> unit) ref =
