@@ -283,13 +283,16 @@ module Domain = struct
     else
       let diff' = diff u u' in
       let diff = diff u' u in
-      fold (fun c (u, s) ->
-          add_cons_cell_subman subman range c u  s
-        ) diff (u, s)
-      ,
-      fold (fun c (u', s') ->
-          add_cons_cell_subman subman range c u' s'
-        ) diff' (u', s')
+      try
+        fold (fun c (u, s) ->
+            add_cons_cell_subman subman range c u  s
+          ) diff (u, s)
+        ,
+        fold (fun c (u', s') ->
+            add_cons_cell_subman subman range c u' s'
+          ) diff' (u', s')
+      with Top.Found_TOP ->
+        (top, Flow.top (Flow.get_all_annot s)), (top, Flow.top (Flow.get_all_annot s'))
 
   let remove_overlapping_cells c range man flow =
     let u = Flow.get_domain_cur man flow in
