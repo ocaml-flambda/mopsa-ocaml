@@ -107,6 +107,7 @@ let () =
       match c with
       | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
       | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
+      | C_c_invalid -> fprintf fmt "Invalid"
       | _ -> next fmt c
     );
   register_pp_operator (fun next fmt op ->

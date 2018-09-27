@@ -142,9 +142,6 @@ type expr_kind +=
 type stmt_kind +=
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
 
-type constant +=
-  | C_c_invalid (** invalid pointer constant *)
-
 let mk_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:(cell_type c) range
 
@@ -210,11 +207,6 @@ let () =
         | _ -> next stmt
       );
   };
-  register_pp_constant (fun next fmt c ->
-      match c with
-      | C_c_invalid -> Format.fprintf fmt "Invalid"
-      | _ -> next fmt c
-    );
   ()
 
 

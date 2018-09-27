@@ -97,6 +97,33 @@ struct
       else
         Debug.fail "[c.desugar.aggregate] member_access on non record type"
 
+    | E_c_arrow_access(p, i, f) ->
+      let t = etyp p |> under_pointer_type in
+      let x = align_byte t i in
+      let exp =
+        {exp with ekind =
+                    E_c_deref (
+                      mk_expr
+                        ~etyp:(t |> Ast.pointer_type)
+                        (E_binop(
+                            Universal.Ast.O_plus,
+                            (
+                              (mk_c_cast
+                                 p
+                                 (T_c_integer C_signed_char |> Ast.pointer_type)
+                                 (tag_range range "pointer_arithmetic cast")
+                              )
+                            ),
+                            (Universal.Ast.mk_int x (tag_range range "pointer_arithmetic int"))
+                          )
+                        )
+                        (tag_range range "pointer_arithmetic+")
+                    )
+        }
+      in
+      Eval.singleton exp flow |>
+      Option.return
+
     | _ -> None
 
   let ask _ _ _  = None
