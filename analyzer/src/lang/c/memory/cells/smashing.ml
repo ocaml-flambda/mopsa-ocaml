@@ -122,6 +122,7 @@ struct
   let eval_interface = {
     export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cells *)
     import = [
+      Z_c, Z_c_scalar; (* To simplify lvals *)
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
       Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
     ];
@@ -205,6 +206,9 @@ struct
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
       Post.bind_opt man @@ fun rval flow ->
+
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow |>
+      Post.bind_opt man @@ fun lval flow ->
 
       eval (Z_c, Z_c_cell) lval man flow |>
       Option.lift @@ Post.bind man @@ fun lval flow ->

@@ -22,7 +22,6 @@
         "c.libs.mopsa",
 
         // Memory model
-        "c.memory.cells.router",
         {
             "stack": "c.memory.cells.expand",
             "over" : {

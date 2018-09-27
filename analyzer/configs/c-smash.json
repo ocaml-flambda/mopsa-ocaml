@@ -29,13 +29,6 @@
         "c.machine_integers",
 
 	// Numeric abstraction
-        {
-	    "product": [
-		"universal.numeric.values.intervals",
-		"universal.numeric.relational.octagon"
-	    ],
-	    "reductions": [
-	    ]
-	}
+	"universal.numeric.values.intervals"
     ]
 }

@@ -35,8 +35,8 @@ let top_absorb2 (f:'a  -> 'b -> 'c with_top) (a:'a with_top) (b:'b with_top) : '
 let top_neutral2 (f:'a -> 'a -> 'a) (a:'a with_top) (b:'a with_top) : 'a with_top =
   match a,b with TOP,_ -> b | _,TOP -> a | Nt x, Nt y -> Nt (f x y)
 
-let top_apply (f:'a->'b->'a) (a:'a) (b:'b with_top) : 'a =
-  match b with TOP -> a | Nt x -> f a x
+let top_apply (f:'b->'a) (a:'a) (b:'b with_top) : 'a =
+  match b with TOP -> a | Nt x -> f x
 
 let top_apply2 (a1:'a) (a2:'a) (f:'b ->'b -> 'a) (b1:'b with_top) (b2:'b with_top) : 'a =
   match b1, b2 with
