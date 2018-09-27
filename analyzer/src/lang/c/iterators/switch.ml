@@ -19,7 +19,16 @@ type token +=
   | TSwitch
   (** Switch environments uncaught by previous cases. *)
 
-
+let () =
+  register_token {
+    compare = (fun next tk -> next tk);
+    print   = (fun next fmt tk ->
+        match tk with
+        | TSwitch -> Format.fprintf fmt "switch"
+        | _ -> next fmt tk
+      );
+  };
+  ()
 
 (*==========================================================================*)
 (**                             {2 Annotation}                              *)
