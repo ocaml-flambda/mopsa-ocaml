@@ -138,7 +138,7 @@ struct
     | E_c_cell(c, mode) when cell_type c |> is_c_int_type ->
       let range = erange exp in
       let v, flow = get_num flow c in
-      let exp = mk_var v (tag_range range "cell2num") in
+      let exp = mk_var v (tag_range range "cell2num") ~mode in
       Eval.singleton exp flow
       |> Option.return
 

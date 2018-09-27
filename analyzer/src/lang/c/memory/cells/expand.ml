@@ -480,10 +480,16 @@ module Domain = struct
     let stmt = mk_assign lval rval range in
     let () = debug "giving back stmt %a" pp_stmt stmt in
     let flow', to_remove = remove_overlapping_cells c stmt.srange man flow in
-    let rmin, rmax = rangeof c.t in
-    let cond = range_cond lval rmin rmax (erange lval) in
-    let stmt' = (mk_assume cond (tag_range range "assume range")) in
-    let flow'' = man.exec ~zone:Z_c_cell (mk_block (to_remove @ [stmt; stmt']) range) flow' in
+    let block =
+      if is_c_int_type c.t then
+        let rmin, rmax = rangeof c.t in
+        let cond = range_cond lval rmin rmax (erange lval) in
+        let stmt' = (mk_assume cond (tag_range range "assume range")) in
+        [stmt; stmt']
+      else
+        [stmt]
+    in
+    let flow'' = man.exec ~zone:Z_c_cell (mk_block (to_remove @ block) range) flow' in
     (Post.add_mergers to_remove (Post.of_flow flow''))
 
   let rec exec zone stmt man flow =
@@ -640,27 +646,34 @@ module Domain = struct
 
       (* Initialization of arrays *)
       array =  (fun a is_global init_list range flow ->
-          match ekind a with
-          | E_var(a, mode) ->
-            let rec aux i l flow =
-              if i = !opt_expand then flow
-              else
-                match l with
-                | [] -> flow
-                | init :: tl ->
-                  let t' = under_array_type a.vtyp in
-                  let ci = {b = Base.V a; o = Z.(zero + (Z.of_int i) * (sizeof_type t')); t = t'} in
-                  let flow' = init_expr (init_visitor man) (mk_ocell ci ~mode:mode range) is_global init range flow in
-                  aux (i + 1) tl flow'
-            in
-            aux 0 init_list flow
-          | _ -> assert false
+          let c =
+            match ekind a with
+            | E_var(v, mode) -> {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell (OffsetCell c, mode) -> c
+            | _ -> assert false
+          in
+          let rec aux i l flow =
+            if i = !opt_expand then flow
+            else
+              match l with
+              | [] -> flow
+              | init :: tl ->
+                let t' = under_array_type c.t in
+                let ci = {b = c.b; o = Z.(c.o + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                let flow' = init_expr (init_visitor man) (mk_ocell ci range) is_global init range flow in
+                aux (i + 1) tl flow'
+          in
+          aux 0 init_list flow
         );
 
       (* Initialization of structs *)
       record =  (fun s is_global init_list range flow ->
-          let s = match ekind s with E_var(s, mode) -> s | _ -> assert false in
-          let c = {b = V s; o = Z.zero; t = s.vtyp} in
+          let c =
+            match ekind s with
+            | E_var (v, _) -> {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell(OffsetCell c, _) -> c
+            | _ -> assert false
+          in
           let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
           match init_list with
           | Parts l ->
