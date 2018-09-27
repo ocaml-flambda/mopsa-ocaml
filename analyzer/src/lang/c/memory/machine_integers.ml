@@ -262,7 +262,12 @@ struct
 
     | E_constant(C_c_character (c, _)) ->
       let () = debug "case 6" in
-      Eval.singleton {exp with ekind = E_constant (C_int c)} flow
+      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_universal_type exp.etyp} flow
+      |> Option.return
+
+    | E_constant(C_int i) ->
+      let () = debug "case 7" in
+      Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> Option.return
 
     | E_var(v, mode) ->

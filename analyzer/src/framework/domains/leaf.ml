@@ -85,24 +85,7 @@ struct
     | _ ->
       None
 
-  let eval zone exp man flow =
-    match ekind exp with
-    | E_unop(op, e) ->
-      Some (
-        man.eval ~zone:(Zone.any_zone, D.zone) e flow |> Eval.bind @@ fun e' flow ->
-        let exp' = {exp with ekind = E_unop(op, e')} in
-        Eval.singleton exp' flow
-      )
-
-    | E_binop(op, e1, e2) ->
-      Some (
-        man.eval ~zone:(Zone.any_zone, D.zone) e1 flow |> Eval.bind @@ fun e1' flow ->
-        man.eval ~zone:(Zone.any_zone, D.zone) e2 flow |> Eval.bind @@ fun e2' flow ->
-        let exp' = {exp with ekind = E_binop(op, e1', e2')} in
-        Eval.singleton exp' flow
-      )
-
-    | _ -> None
+  let eval zone exp man flow = None
 
   let ask query man flow =
     D.ask query (Flow.get_domain_env T_cur man flow)

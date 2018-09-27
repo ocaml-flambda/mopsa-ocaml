@@ -203,7 +203,6 @@ struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      debug "aaaaaaaaaaaa";
       man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
       Post.bind_opt man @@ fun rval flow ->
 

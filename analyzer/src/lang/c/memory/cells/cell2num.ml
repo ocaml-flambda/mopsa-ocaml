@@ -108,7 +108,6 @@ struct
       |> Option.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
-      debug "aaaaa";
       man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->
 
@@ -121,7 +120,6 @@ struct
 
     | S_assume(e) ->
       begin
-        debug "assume";
         man.eval ~zone:(Z_c_cell, Z_c_scalar_num) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume e'} in
