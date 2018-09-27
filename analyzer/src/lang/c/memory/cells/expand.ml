@@ -226,15 +226,19 @@ module Domain = struct
                     raise NotPossible
                 with
                 | NotPossible ->
-                  begin
-                    if is_c_scalar_type c.t then
-                      let a,b = rangeof c.t in
-                      Nexp (Some ( mk_z_interval a b range))
-                    else if is_c_pointer_type c.t then
-                      PInvalid
-                    else
-                      Nexp None
-                  end
+                  match c.b with
+                  | S s ->
+                    Nexp (Some (mk_int (String.get s (Z.to_int c.o) |> int_of_char) range))
+                  | _ ->
+                    begin
+                      if is_c_scalar_type c.t then
+                        let a,b = rangeof c.t in
+                        Nexp (Some ( mk_z_interval a b range))
+                      else if is_c_pointer_type c.t then
+                        PInvalid
+                      else
+                        Nexp None
+                    end
               end
           end
       end

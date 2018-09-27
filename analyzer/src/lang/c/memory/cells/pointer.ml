@@ -225,6 +225,9 @@ struct
     | E_constant C_c_invalid ->
       Eval.singleton P_invalid flow
 
+    | E_constant (C_c_string (s, _)) ->
+      Eval.singleton (P_var (S s, mk_zero range, s8)) flow
+
     | E_addr addr ->
       Eval.singleton (P_var (A addr, mk_int 0 range, T_c_void)) flow
 

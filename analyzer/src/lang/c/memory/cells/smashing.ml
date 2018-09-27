@@ -34,6 +34,7 @@ struct
               match base with
               | V v -> mk_z_interval Z.zero (Z.sub (sizeof_type v.vtyp) (sizeof_type typ))
               | A a -> mk_top T_int (* FIXME: get size of the allocated memory block *)
+              | S s -> mk_z_interval Z.zero (Z.of_int @@ String.length s)
             in
             base, offset, typ
           | _ -> next c
@@ -290,6 +291,7 @@ struct
         (* In case of a base variable, we check that we are writing to the whole memory block *)
         if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then mode
         else WEAK
+      | S s -> mode
     in
     let lval = mk_cell c ~mode:mode range in
     let stmt = mk_assign lval e range in

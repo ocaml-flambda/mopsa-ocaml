@@ -18,16 +18,20 @@ open Framework.Essentials
 type base =
   | V of var
   | A of Universal.Ast.addr
+  | S of string
 
 let pp_base fmt = function
   | V v -> pp_var fmt v
   | A a -> pp_addr fmt a
+  | S s -> Format.fprintf fmt "\"%s\"" s
 
 let compare_base b b' = match b, b' with
   | V v, V v' -> compare_var v v'
   | A a, A a' -> Universal.Ast.compare_addr a a'
+  | S s, S s' -> compare s s'
   | _ -> compare b b'
 
 let base_uid = function
   | V v -> v.vuid
   | A a -> a.addr_uid
+  | S _ -> 0 (* FIXME: generate unique identifiers for strings *)
