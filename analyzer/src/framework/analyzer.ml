@@ -67,7 +67,9 @@ struct
 
   (** Build the map of exec functions *)
   and exec_map =
-    let required = any_zone :: Domain.exec_interface.import in
+    let required = Domain.exec_interface.import in
+    (* Add implicit import of Z_any *)
+    let map = ExecMap.singleton any_zone (Domain.exec any_zone) in
     (* Iterate over the required zones of domain D *)
     required |>
     List.fold_left (fun map zone ->
@@ -81,7 +83,7 @@ struct
             ExecMap.add zone (Domain.exec zone) map
           else
               Exceptions.panic "exec for %a not found" pp_zone zone
-      ) ExecMap.empty
+      ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     debug "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
@@ -119,7 +121,7 @@ struct
     (* Add the implicit [* -> *] eval path that uses all domains *)
     let map = EvalMap.singleton
         (any_zone, any_zone)
-        [[(any_zone, any_zone, Domain.eval (any_zone, any_zone))]]
+        [[(any_zone, any_zone, [any_zone, any_zone], Domain.eval (any_zone, any_zone))]]
     in
 
     (* Iterate over the required zone paths of domain Domain *)
@@ -143,7 +145,7 @@ struct
                   let rec aux =
                     function
                     | [] -> []
-                    | (z1, z2) :: tl -> (z1, z2, Domain.eval (z1, z2)) :: aux tl
+                    | (z1, z2) :: tl -> (z1, z2, path, Domain.eval (z1, z2)) :: aux tl
                   in
                   aux path
                 ) paths
@@ -163,30 +165,37 @@ struct
     ;
     let timer = Timing.start () in
 
-    let ret = assert false
-      (* (\* Try static evaluation using the template of the destination zone *\)
-       * match Zone.eval exp (snd zone) with
-       * | Keep ->
-       *   Eval.singleton exp flow
-       * 
-       * | Process ->
-       *   let feval = EvalMap.find zone eval_map in
-       *   Cache.eval feval zone man exp flow
-       * 
-       * | Visit ->
-       *   let open Visitor in
-       *   let parts, builder = split_expr exp in
-       *   match parts with
-       *   | {exprs; stmts = []} ->
-       *     let feval = EvalMap.find zone eval_map in
-       *     Eval.eval_list exprs (Cache.eval feval zone man) flow |>
-       *     Eval.bind @@ fun exprs flow ->
-       *     let exp = builder {exprs; stmts = []} in
-       *     Eval.singleton exp flow
-       *   
-       *   | _ ->
-       *     let feval = EvalMap.find zone eval_map in
-       *     Cache.eval feval zone man exp flow *)
+    let ret =
+      (* Check whether exp is already in the desired zone *)
+      match Zone.eval exp (snd zone) with
+      | Keep ->
+        debug "already in zone";
+        Eval.singleton exp flow
+      | other_action ->
+        (* Try available eval paths in sequence *)
+        let paths = EvalMap.find zone eval_map in
+        match eval_over_paths paths exp man flow with
+        | Some evl -> evl
+        | None ->
+          match other_action with
+          | Keep -> assert false (* already done *)
+          | Process -> Eval.singleton exp flow
+          | Visit ->
+            debug "visiting sub-expressions";
+            let open Visitor in
+            let parts, builder = split_expr exp in
+            match parts with
+            | {exprs; stmts = []} ->
+              Eval.eval_list exprs (fun exp flow ->
+                  match eval_over_paths paths exp man flow with
+                  | None -> Eval.singleton exp flow
+                  | Some evl -> evl
+                ) flow |>
+              Eval.bind @@ fun exprs flow ->
+              let exp = builder {exprs; stmts = []} in
+              Eval.singleton exp flow
+
+            | _ -> Eval.singleton exp flow
     in
 
     let t = Timing.stop timer in
@@ -200,6 +209,57 @@ struct
     ;
     ret
 
+  and eval_over_paths paths exp man flow =
+    match paths with
+    | [] -> None
+    | path :: tl ->
+      match eval_over_path path man exp flow with
+      | None -> eval_over_paths tl exp man flow
+      | ret -> ret
+
+  and eval_over_path path man exp flow =
+    match path with
+    | [] -> None
+    | [(z1, z2, path, feval)] ->
+      debug "trying path %a" pp_eval_path path;
+      eval_hop z1 z2 feval man exp  flow
+    | (z1, z2, path, feval) :: tl ->
+      debug "trying path %a" pp_eval_path path;
+      eval_hop z1 z2 feval man exp flow |>
+      Option.bind @@
+      Eval.bind_opt @@
+      eval_over_path tl man
+
+  and eval_hop z1 z2 feval man exp flow =
+    debug "eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
+    match Zone.eval exp z2 with
+    | Keep ->
+      debug "already in zone";
+      Eval.singleton exp flow |>
+      Option.return
+    | other_action ->
+      match Cache.eval feval (z1, z2) exp man flow with
+      | Some evl -> Some evl
+      | None ->
+        match other_action with
+        | Keep -> assert false
+        | Process ->
+          debug "no answer";
+          None
+        | Visit ->
+          debug "visiting sub-expressions";
+          let open Visitor in
+          let parts, builder = split_expr exp in
+          match parts with
+          | {exprs; stmts = []} ->
+            Eval.eval_list_opt exprs (eval_hop z1 z2 feval man) flow |>
+            Option.lift @@ Eval.bind @@ fun exprs flow ->
+            let exp = builder {exprs; stmts = []} in
+            Eval.singleton exp flow
+
+          | _ -> None
+
+    
   (** Query handler. *)
   and ask : type r. r Query.query -> _ -> r =
     fun query flow ->

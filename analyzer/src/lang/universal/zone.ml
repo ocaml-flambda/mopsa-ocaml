@@ -44,7 +44,12 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
+        | E_constant _
+          when etyp exp = T_int || etyp exp = T_float
+                                             -> Keep
+        | E_var _
+          when etyp exp = T_int || etyp exp = T_float
+                                             -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _                          -> Visit

@@ -96,3 +96,14 @@ let bind f x =
 
 let lift (f:'a -> 'b) (a:'a option) : 'b option =
   match a with None -> None | Some x -> Some (f x)
+
+let lift_list (l: 'a option list) : 'a list option =
+  let rec aux =
+    function
+    | [] -> Some []
+    | None :: _ -> None
+    | Some x :: tl ->
+      aux tl |>
+      lift (fun tl -> x :: tl)
+  in
+  aux l
