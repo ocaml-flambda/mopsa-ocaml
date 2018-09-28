@@ -289,7 +289,7 @@ struct
       | E_c_cell(c, _) when cell_type c |> is_c_pointer_type ->
         let a = Flow.get_domain_env T_cur man flow in
         let bases = find c a in
-        PointerBaseSet.fold (fun pb acc ->
+        let evls = PointerBaseSet.fold (fun pb acc ->
             let evl =
               match pb with
               | PB_var b -> Eval.singleton (P_var (b, mk_var (mk_offset_var c) exp.erange, under_pointer_type (cell_type c))) flow
@@ -297,8 +297,12 @@ struct
               | PB_invalid -> Eval.singleton P_invalid flow
               | PB_null -> Eval.singleton P_null flow
             in
-            Eval.join acc evl
-          ) bases Eval.empty
+            evl :: acc
+          ) bases []
+        in
+        if List.length evls = 0
+        then Eval.empty_singleton flow
+        else Eval.join_list evls
 
       | E_c_cell(c, _) when cell_type c |> is_c_array_type ->
         let b, o, t = extract_cell_info c in

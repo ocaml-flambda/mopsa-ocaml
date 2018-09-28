@@ -42,7 +42,7 @@ struct
 
 
   let print fmt a =
-    Format.fprintf fmt "%s:@\n  @[%a@]@\n" (snd @@ Value.name) VarMap.print a
+    Format.fprintf fmt "%s: @[%a@]@\n" (snd @@ Value.name) VarMap.print a
 
   let debug fmt = Debug.debug ~channel:name fmt
 

@@ -38,6 +38,9 @@ let cell_base c =
   let b, _, _ = extract_cell_info c in
   b
 
+let cell_offset c =
+  let _, o, _ = extract_cell_info c in
+  o
 
 (* Transformation to variables *)
 (* =========================== *)
@@ -228,6 +231,8 @@ let () =
         | E_constant _
         | E_c_cell _ -> Keep
 
+        | E_var(v, _) when Universal.Ast.is_math_type v.vtyp -> Keep
+
         | E_c_deref _ -> Process
 
         | E_c_cast _
@@ -237,28 +242,6 @@ let () =
         | _ -> Process
       );
   }
-
-type zone +=
-  | Z_c_cell_no_deref
-
-let () =
-  register_zone {
-    zone = Z_c_cell_no_deref;
-    name = "C/Cell/NoDeref";
-    subset = Some Z_c_cell;
-    eval = (fun exp ->
-        match ekind exp with
-        | E_constant _
-        | E_c_cell _ -> Keep
-
-        | E_c_cast _
-        | E_unop _
-        | E_binop _ -> Visit
-
-        | _ -> Process
-      );
-  }
-
 
 type zone +=
   | Z_c_points_to_cell
