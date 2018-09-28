@@ -234,7 +234,13 @@ struct
         | I.B.Finite a, I.B.Finite b -> (a, b)
         | _ -> panic "bounds called on a unbounded interval %a" print itv
       ) itv
-  
+
+  let mem (i: Z.t) (itv:t) : bool =
+    bot_dfl1 true (fun (a, b) ->
+        let open I.B in
+        let i = Finite i in
+        geq i a && leq i b
+      ) itv
 end
 
 

@@ -13,6 +13,7 @@
 open Framework.Ast
 open Universal.Ast
 open Framework.Essentials
+open Ast
 
 (** lv base *)
 type base =
@@ -35,3 +36,10 @@ let base_uid = function
   | V v -> v.vuid
   | A a -> a.addr_uid
   | S _ -> 0 (* FIXME: generate unique identifiers for strings *)
+
+let base_size =
+  function
+  | V v -> sizeof_type v.vtyp
+  | A {addr_kind = Libs.C_stdlib.A_c_static_malloc s} -> s
+  | S s -> Z.of_int @@ String.length s
+  | b -> Framework.Exceptions.panic "[base_size]: unknown base %a" pp_base b
