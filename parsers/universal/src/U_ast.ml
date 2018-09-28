@@ -35,7 +35,6 @@ type typ =
   | AST_REAL
   | AST_ARRAY of typ
   | AST_STRING
-  | AST_BOOL
   | AST_CHAR
 
 (* unary expression operators *)
@@ -135,6 +134,8 @@ type stat =
 
   (* assertion: exit if the boolean expression does not hold *)
   | AST_assert of expr ext
+
+  | AST_print
 
 type fundec =
   {

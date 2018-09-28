@@ -13,24 +13,89 @@
    recent and old allocations.
 *)
 
+open Framework.Essentials
 open Framework.Ast
 open Ast
 
-module AttrSet = Framework.Lattices.Top_set.Make(struct type t = string let compare = compare let print = Format.pp_print_string end)
+let uid_ref = ref 0
+let get_fresh () =
+  let rep = !uid_ref in
+  let () = incr uid_ref in
+  rep
 
-module AddrSet = Framework.Lattices.Top_set.Make
-    (struct type t = addr let compare = compare_addr let print = Pp.pp_addr end)
+module AddrInfo = struct
+  open Iterators.Interproc.Callstack
+  type t = cs * range * int
+  (** The following compare function can be modified in order to
+     change the granularity of the recency abstraction. *)
+  let compare (cs, r, i) (cs', r', i') = Compare.compose
+      [
+        (fun () -> compare_call_stack cs cs');
+        (fun () -> compare_range r r');
+        (fun () -> (-) i i')
+      ]
+  let print fmt (cs, r, i) =
+    Format.fprintf fmt "(%a, %a, %a)"
+      pp_call_stack cs
+      pp_range r
+      Format.pp_print_int i
+end
+
+module AddrUid =
+struct
+  type t = int
+  let compare = compare
+  let print = Format.pp_print_int
+end
+
+module Equiv = Equiv.Make(AddrInfo)(AddrUid)
+
+let get_id_equiv (info: AddrInfo.t) (e: Equiv.t) =
+  try
+    Equiv.find_l info e, e
+  with
+  | Not_found ->
+    let x = get_fresh () in
+    x, Equiv.add (info, x) e
+
+type ('a, _) Annotation.key +=
+  | KAddr : ('a, Equiv.t) Annotation.key
+
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
+              function
+              | KAddr -> Some Eq
+              | _ -> None
+            in
+            f);
+      print = (fun fmt m -> Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m);
+    }) ();
+  ()
+
+let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
+  let e = Flow.get_annot KAddr f in
+  let x, e = get_id_equiv info e in
+  (x, Flow.set_annot KAddr e f)
+
+
+module AddrSet = Framework.Lattices.Powerset.Make(
+  struct
+    type t = addr
+    let compare = compare_addr
+    let print = pp_addr
+  end
+  )
+
 
 type t = {
   recent : AddrSet.t;
   old : AddrSet.t;
 }
 
-(** For a given range and a given address kind, we distinguish the old and recent
-      addresses with a fixed encoding.
-*)
-let old_uid = 0
-let recent_uid = 1
+
+(** For a given range and a given address kind, we distinguish the old
+    and recent addresses with a fixed encoding.  *)
 
 let empty = {
   recent = AddrSet.empty;
@@ -51,9 +116,10 @@ let top = {
 
 let is_top abs = AddrSet.is_top abs.recent && AddrSet.is_top abs.old
 
-let leq abs1 abs2 =
-  AddrSet.leq abs1.recent abs2.recent &&
-  AddrSet.leq abs1.old abs2.old
+let subset abs1 abs2 =
+  AddrSet.subset abs1.recent abs2.recent &&
+   AddrSet.subset abs1.old abs2.old
+
 
 let mem_old addr abs = AddrSet.mem addr abs.old
 let mem_recent addr abs = AddrSet.mem addr abs.recent
@@ -62,17 +128,17 @@ let add_old (addr: addr) (abs: t) : t = {abs with old = AddrSet.add addr abs.old
 let add_recent (addr: addr) (abs: t) : t = {abs with recent =AddrSet.add addr abs.recent}
 
 
-let join abs1 abs2 = {
-  recent = AddrSet.join abs1.recent abs2.recent;
-  old = AddrSet.join abs1.old abs2.old;
+let join (annot: 'a annot) abs1 abs2 = {
+  recent = AddrSet.join annot abs1.recent abs2.recent;
+  old = AddrSet.join annot abs1.old abs2.old;
 }
 
-let meet abs1 abs2 = {
-  recent = AddrSet.meet abs1.recent abs2.recent;
-  old = AddrSet.meet abs1.old abs2.old;
+let meet (annot: 'a annot) abs1 abs2 = {
+  recent = AddrSet.meet annot abs1.recent abs2.recent;
+  old = AddrSet.meet annot abs1.old abs2.old;
 }
 
-let widening ctx = join
+let widen = join
 
 let print fmt abs =
   Format.fprintf fmt "recent: @[%a@]@\nold: @[%a@]@\n"

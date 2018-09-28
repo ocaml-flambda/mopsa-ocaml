@@ -10,6 +10,8 @@
    Universal frontend translates the parser's AST into Framework's AST.
 *)
 
+open Framework.Essentials
+
 module NameG =
 struct
   let compt = ref 0
@@ -33,27 +35,26 @@ module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
 type fun_context = (T.fundec) MS.t
 
-let from_position (pos: U.position) : Framework.Ast.loc =
-  {
+let from_position (pos: U.position) : Framework.Location.loc =
+  Framework.Location.{
     loc_file = pos.pos_fname;
     loc_line = pos.pos_lnum;
     loc_column = pos.pos_cnum;
   }
 
-let from_extent ((b, e): extent) =
-  Range_origin {
+let from_extent ((b, e): extent) : Framework.Location.range =
+  Framework.Location.(Range_origin {
     range_begin = from_position b;
     range_end = from_position e;
-  }
+  })
 
-let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var=
+let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
     let (id, typ) = MS.find v var_ctx in
     {
       vname = v;
       vuid = id;
       vtyp = typ;
-      vkind = FA.V_orig;
     }
   with
   | Not_found ->
@@ -61,55 +62,35 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var=
       v
       (U_ast_printer.string_of_extent ext)
 
-let rec from_typ (typ: U_ast.typ) : FA.typ = match typ with
-    | AST_INT -> T_int
-    | AST_REAL -> T_float
-    | AST_ARRAY t -> T_array (from_typ t)
-    | AST_STRING -> T_string
-    | AST_BOOL -> T_bool
-    | AST_CHAR -> T_char
+let rec from_typ (typ: U_ast.typ) : FA.typ =
+  match typ with
+  | AST_INT     -> T_int
+  | AST_REAL    -> T_float
+  | AST_ARRAY t -> T_array (from_typ t)
+  | AST_STRING  -> T_string
+  | AST_CHAR    -> T_char
 
-let translate_and_type_binop (b: U.binary_op) (t1: FA.typ) (t2: FA.typ) (ext: extent): FA.operator * FA.typ =
-  match b, t1, t2 with
-  | AST_PLUS, T_int, T_int -> O_plus T_int, T_int
-  | AST_MINUS, T_int, T_int -> O_minus T_int, T_int
-  | AST_MULTIPLY, T_int, T_int -> O_mult T_int, T_int
-  | AST_DIVIDE, T_int, T_int -> O_div T_int, T_int
-  | AST_PLUS, T_float, T_float -> O_plus T_float, T_float
-  | AST_MINUS, T_float, T_float -> O_minus T_float, T_float
-  | AST_MULTIPLY, T_float, T_float -> O_mult T_float, T_float
-  | AST_DIVIDE, T_float, T_float -> O_div T_float, T_float
-  | AST_EQUAL, _, _ when compare_typ t1 t2 = 0 -> O_eq, T_bool
-  | AST_NOT_EQUAL, _, _ when compare_typ t1 t2 = 0 -> O_ne, T_bool
-  | AST_LESS, T_int, T_int -> O_lt, T_bool
-  | AST_LESS_EQUAL, T_int, T_int -> O_le, T_bool
-  | AST_GREATER, T_int, T_int -> O_gt, T_bool
-  | AST_GREATER_EQUAL, T_int, T_int -> O_ge, T_bool
-  | AST_LESS, T_float, T_float -> O_lt, T_bool
-  | AST_LESS_EQUAL, T_float, T_float -> O_le, T_bool
-  | AST_GREATER, T_float, T_float -> O_gt, T_bool
-  | AST_GREATER_EQUAL, T_float, T_float -> O_ge, T_bool
-  | AST_AND, T_bool, T_bool -> O_log_and, T_bool
-  | AST_OR, T_bool, T_bool -> O_log_or, T_bool
-  | AST_CONCAT, T_string, T_string -> O_concat, T_string
-  | AST_CONCAT, T_array x, T_array y when compare_typ x y = 0 -> O_concat, T_array x
-  | _ -> Debug.fail "typing failed on %a(%a, %a) at %s"
-           U_ast_printer.print_binary_op b
-           Framework.Pp.pp_typ t1
-           Framework.Pp.pp_typ t2
-           (U_ast_printer.string_of_extent ext)
+let from_binop (b: U.binary_op) : FA.operator =
+  match b with
+  | AST_PLUS          -> O_plus
+  | AST_MINUS         -> O_minus
+  | AST_MULTIPLY      -> O_mult
+  | AST_DIVIDE        -> O_div
+  | AST_EQUAL         -> O_eq
+  | AST_NOT_EQUAL     -> O_ne
+  | AST_LESS          -> O_lt
+  | AST_LESS_EQUAL    -> O_le
+  | AST_GREATER       -> O_gt
+  | AST_GREATER_EQUAL -> O_ge
+  | AST_AND           -> O_log_and
+  | AST_OR            -> O_log_or
+  | AST_CONCAT        -> O_concat
 
-let translate_and_type_unop (b: U.unary_op) (t1: FA.typ) (ext: extent): FA.operator * FA.typ =
-  match b, t1 with
-  | AST_UNARY_PLUS, T_int -> O_plus T_int, T_int
-  | AST_UNARY_MINUS, T_int -> O_plus T_int, T_int
-  | AST_UNARY_PLUS, T_float -> O_plus T_float, T_float
-  | AST_UNARY_MINUS, T_float -> O_plus T_float, T_float
-  | AST_NOT, T_bool -> O_log_not, T_bool
-  | _ -> Debug.fail "typing failed on %a(%a) at %s"
-           U_ast_printer.print_unary_op b
-           Framework.Pp.pp_typ t1
-           (U_ast_printer.string_of_extent ext)
+let from_unop (b: U.unary_op) : FA.operator =
+  match b with
+  | AST_UNARY_PLUS    -> O_plus
+  | AST_UNARY_MINUS   -> O_minus
+  | AST_NOT           -> O_log_not
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
@@ -152,8 +133,8 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     begin
       let e = from_expr e ext var_ctx fun_ctx in
       let typ = etyp e in
-      let op, typ' = translate_and_type_unop op typ ext in
-      mk_unop op e ~etyp:typ' range
+      let op = from_unop op in
+      mk_unop op e ~etyp:typ range
     end
 
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
@@ -162,18 +143,23 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let typ1 = etyp e1 in
       let e2 = from_expr e2 ext var_ctx fun_ctx in
       let typ2 = etyp e2 in
-      let op, typ' = translate_and_type_binop op typ1 typ2 ext in
-      mk_binop e1 op e2 ~etyp:typ' range
+      let op = from_binop op in
+      if compare_typ typ1 typ2 <> 0 then
+        Debug.fail "%a at %s type error"
+          U_ast_printer.print_expr e
+          (U_ast_printer.string_of_extent ext)
+      else
+        mk_binop e1 op e2 ~etyp:typ1 range
     end
 
   | AST_identifier (v, ext) ->
     mk_var (from_var v ext var_ctx) range
 
   | AST_int_const (s, _) ->
-    mk_constant T_int (C_int (Z.of_string s)) range
+    mk_z (Z.of_string s) range
 
   | AST_bool_const (b, _) ->
-    mk_bool b range
+    mk_int (if b then 1 else 0) range
 
   | AST_real_const (s, _) ->
     (* TODO: this looks like a very bad idea: *)
@@ -212,7 +198,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       | _ -> Debug.fail "%a at %s is of type %a and can not be subscripted"
                U_ast_printer.print_expr e1o
                (U_ast_printer.string_of_extent ext)
-               (Framework.Pp.pp_typ) (etyp e1)
+               (pp_typ) (etyp e1)
     end
 
   | AST_len (e, ext) ->
@@ -229,7 +215,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       | _ -> Debug.fail "%a at %s is of type %a and can not be lengthed"
                U_ast_printer.print_expr e
                (U_ast_printer.string_of_extent ext)
-               (Framework.Pp.pp_typ) (etyp e1)
+               (pp_typ) (etyp e1)
     end
 
 let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.stmt =
@@ -253,10 +239,10 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
                        %a, could not translate assignement"
             U_ast_printer.print_expr e1o
             (U_ast_printer.string_of_extent ext1)
-            Framework.Pp.pp_typ (etyp e1)
+            pp_typ (etyp e1)
             U_ast_printer.print_expr e2o
             (U_ast_printer.string_of_extent ext2)
-            Framework.Pp.pp_typ (etyp e2)
+            pp_typ (etyp e2)
       | _ ->
         Debug.fail "%a at %s not considered a left-value for now "
           U_ast_printer.print_expr e1o
@@ -295,7 +281,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
              (mk_var v (tag_range range "var_comp_for"))
              O_le
              e2
-             ~etyp:(T_bool)
+             ~etyp:(T_int)
              (tag_range range "comp_for")
           )
           (mk_block (
@@ -305,7 +291,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
                   (mk_var v (tag_range range "var_incr_for"))
                   (mk_binop
                      (mk_var v (tag_range range "var_incr_for"))
-                     (O_plus T_int)
+                     O_plus
                      (mk_z Z.one (tag_range range "one_for"))
                      ~etyp:(T_int)
                      (tag_range range "incr_for")
@@ -327,6 +313,9 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
   | AST_assert (e, ext) ->
     let e = from_expr e ext var_ctx fun_ctx in
     mk_assert e range
+
+  | AST_print ->
+    mk_stmt S_print range
 
 
 let rec check_declaration_list (dl : U_ast.declaration ext list) =
@@ -455,7 +444,7 @@ let from_prog (p: U_ast.prog) : FA.program_kind =
     ) p.funs;
   let total = from_stmt (fst p.main) (snd p.main) var_ctx (Some fun_ctx) in
   let with_init = mk_block (init @ [total]) (from_extent ext) in
-  U_program
+  P_universal
     {
       universal_gvars   = gvars;
       universal_fundecs = (MS.bindings fun_ctx) |> List.map (snd);

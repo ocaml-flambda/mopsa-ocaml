@@ -73,6 +73,12 @@ let () =
           | _ -> assert false
         )
 
+      | E_c_builtin_call(f, args) ->
+        {exprs = args; stmts = []},
+        (function
+          | {exprs = args} -> {exp with ekind = E_c_builtin_call(f, args)}
+        )
+
       | E_c_arrow_access(p, idx, fld) ->
         {exprs = [p]; stmts = []},
         (function
@@ -161,7 +167,7 @@ let () =
         (* Get initialization expressions from a list of variable declarations *)
         let rec exprs_in_vars = function
           | [] -> []
-          | (v, init) :: tl -> (exprs_in_init_option init) @ (exprs_in_vars tl)
+          | (v, init, range) :: tl -> (exprs_in_init_option init) @ (exprs_in_vars tl)
         in
 
         (* Get initialization expressions of local variables *)
@@ -173,10 +179,10 @@ let () =
         (* Re-construct a list variable declarations from a list of initialization expressions *)
         let rec vars_in_exprs exprs vars =
           match vars with
-          | (v, init) :: tl ->
+          | (v, init, range) :: tl ->
             let init, exprs = init_option_from_exprs exprs init in
             let vars, exprs = vars_in_exprs exprs tl in
-            (v, init) :: vars, exprs
+            (v, init, range) :: vars, exprs
           | [] -> [], exprs
         in
 
@@ -218,6 +224,7 @@ let () =
            let init, _ = init_option_from_exprs exprs init in
            {stmt with skind = S_c_local_declaration(v, init)}
         )
+
 
       | S_c_do_while(body, cond) ->
         {exprs = [cond]; stmts = [body]},

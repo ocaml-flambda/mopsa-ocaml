@@ -8,7 +8,8 @@
 
 (** Abstract Syntax Tree extension for the simple Universal language. *)
 
-open Framework.Ast
+open Framework.Essentials
+
 
 (*==========================================================================*)
                            (** {2 Types} *)
@@ -16,25 +17,17 @@ open Framework.Ast
 
 
 type typ +=
+  | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float (** Floating-point real numbers. *)
   | T_string (** Strings. *)
-  | T_bool (** Booleans. *)
   | T_addr (** Heap addresses. *)
-  | T_empty (** Value type of empty arrays *)
   | T_array of typ (** Array of [typ] *)
   | T_char
 
 let () =
-  Framework.Ast.register_typ_compare (fun next t1 t2 ->
+  register_typ_compare (fun next t1 t2 ->
       match t1, t2 with
-      | T_int, T_int
-      | T_float, T_float
-      | T_string, T_string
-      | T_bool, T_bool
-      | T_addr, T_addr
-      | T_char, T_char
-      | T_empty, T_empty -> 0
       | T_array t1, T_array t2 -> compare_typ t1 t2
       | _ -> next t1 t2
     )
@@ -45,16 +38,32 @@ let () =
 
 
 type constant +=
+  | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)
   | C_int_interval of Z.t * Z.t (** Integer ranges. *)
   | C_float_interval of float * float (** Float ranges. *)
-  | C_true (** Boolean true value. *)
-  | C_false (** Boolean false value. *)
-  | C_empty (** Empty value, useful for empty arrays abstraction. *)
 (** Constants. *)
 
+let () =
+  register_constant_compare (fun next c1 c2 ->
+      match c1, c2 with
+      | C_int z1, C_int z2 -> Z.compare z1 z2
+      | C_float f1, C_float f2 -> Pervasives.compare f1 f2
+      | C_string s1, C_string s2 -> Pervasives.compare s1 s2
+      | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
+        Compare.compose [
+          (fun () -> Z.compare z1 z2);
+          (fun () -> Z.compare z1' z2')
+        ]
+      | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
+        Compare.compose [
+          (fun () -> Pervasives.compare f1 f2);
+          (fun () -> Pervasives.compare f1' f2')
+        ]
+      | _ -> next c1 c2
+    )
 
 (*==========================================================================*)
                            (** {2 Operators} *)
@@ -62,57 +71,38 @@ type constant +=
 
 
 type operator +=
-  (** Unary operators *)
-  | O_log_not (** Logical negation *)
-  | O_sqrt (** Square root *)
-  | O_bit_invert (** bitwise ~ *)
-
-  (** Binary operators *)
-  | O_plus of typ (** + *)
-  | O_minus of typ (** - *)
-  | O_mult of typ (** * *)
-  | O_div of typ (** / *)
-  | O_mod of typ (** % *)
-  | O_pow (** power *)
-
-  | O_eq (** == *)
-  | O_ne (** != *)
-  | O_lt (** < *)
-  | O_le (** <= *)
-  | O_gt (** > *)
-  | O_ge (** >= *)
-
-  | O_log_or (** || *)
-  | O_log_and (** && *)
-
-  | O_bit_and (** & *)
-  | O_bit_or (** | *)
-  | O_bit_xor (** ^ *)
-  | O_bit_rshift (** >> *)
-  | O_bit_lshift (** << *)
-
-  | O_concat (** @ *)
+  (* Unary operators *)
+  | O_sqrt         (** Square root *)
+  | O_bit_invert   (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
 
-let math_plus = O_plus T_int
-let math_minus = O_minus T_int
-let math_div = O_div T_int
-let math_mult = O_mult T_int
-let math_mod = O_mod T_int
+  (* Binary operators *)
+  | O_plus       (** + *)
+  | O_minus      (** - *)
+  | O_mult       (** * *)
+  | O_div        (** / *)
+  | O_mod        (** % *)
+  | O_pow        (** power *)
+  | O_bit_and    (** & *)
+  | O_bit_or     (** | *)
+  | O_bit_xor    (** ^ *)
+  | O_bit_rshift (** >> *)
+  | O_bit_lshift (** << *)
+  | O_concat     (** concatenation of arrays and strings *)
 
-let to_math_op op = match op with
-  | O_plus t -> O_plus T_int
-  | O_minus t -> O_minus T_int
-  | O_mult t -> O_mult T_int
-  | O_div t -> O_div T_int
-  | O_mod t -> O_mod T_int
-  | _ -> op
+let () =
+  register_operator_compare (fun next op1 op2 ->
+      match op1, op2 with
+      | O_wrap(l1, u1), O_wrap(l2, u2) ->
+        Compare.compose [
+          (fun () -> Z.compare l1 l2);
+          (fun () -> Z.compare u1 u2)
+        ]
+      | _ -> next op1 op2
+    )
 
-let is_int_type = function
-  | T_int -> true
-  | _ -> false
 (*==========================================================================*)
-                           (** {2 Heap addresses} *)
+                         (** {2 Heap addresses} *)
 (*==========================================================================*)
 
 (** Kind of heap addresses, may be used to store extra information. *)
@@ -120,26 +110,29 @@ type addr_kind = ..
 
 (** Heap addresses. *)
 type addr = {
-  addr_kind : addr_kind; (** Kind of a heap address. *)
-  addr_range : Framework.Ast.range; (** Range of the allocation site. *)
-  addr_uid : int; (** Unique identifier. *)
+  addr_uid  : int;       (** Unique identifier. *)
+  addr_kind : addr_kind; (** Kind de l'adresse. *)
 }
 
-let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref = ref (fun ak1 ak2 ->
-    compare ak1 ak2
-  )
+type addr_info = {
+  compare : (addr -> addr -> int) -> addr -> addr -> int;
+  print   : (Format.formatter -> addr -> unit) -> Format.formatter -> addr -> unit;
+}
 
-let register_addr_kind_compare cmp =
-  addr_kind_compare_chain := cmp !addr_kind_compare_chain
+let addr_compare_chain : (addr -> addr -> int) ref =
+  ref (fun a1 a2 -> compare a1 a2)
 
-let compare_addr a1 a2 =
-  Framework.Ast.compare_composer [
-    (fun () -> compare_range a1.addr_range a2.addr_range);
-    (fun () -> compare a1.addr_uid a2.addr_uid);
-    (fun () -> !addr_kind_compare_chain a1.addr_kind a2.addr_kind);
-  ]
+let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
+  ref (fun fmt a -> failwith "Pp: Unknown address")
 
+let pp_addr fmt a = !addr_pp_chain fmt a
 
+let compare_addr a b = !addr_compare_chain a b
+
+let register_addr info =
+  addr_compare_chain := info.compare !addr_compare_chain;
+  addr_pp_chain := info.print !addr_pp_chain;
+  ()
 
 (*==========================================================================*)
                            (** {2 Functions} *)
@@ -155,25 +148,20 @@ type fundec = {
   fun_return_type: typ; (** return type *)
 }
 
-
 (*==========================================================================*)
                            (** {2 Programs} *)
 (*==========================================================================*)
 
-
-type universal_program =
-  {
-    universal_gvars   : var list;
-    universal_fundecs : fundec list;
-    universal_main    : stmt;
-  }
 type program_kind +=
-  | U_program of universal_program
+  | P_universal of {
+      universal_gvars   : var list;
+      universal_fundecs : fundec list;
+      universal_main    : stmt;
+    }
 
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
-
 
 type expr_kind +=
   (** Function expression *)
@@ -189,7 +177,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind * range
+  | E_alloc_addr of addr_kind
 
   (** Head address. *)
   | E_addr of addr
@@ -197,7 +185,41 @@ type expr_kind +=
   (** Length of array or string *)
   | E_len of expr
 
-let mk_not e = mk_unop O_log_not e ~etyp:T_bool
+let () =
+  register_expr_compare (fun next e1 e2 ->
+      match ekind e1, ekind e2 with
+      | E_function(f1), E_function(f2) -> Pervasives.compare f1.fun_name f2.fun_name
+
+      | E_call(f1, args1), E_call(f2, args2) ->
+        Compare.compose [
+          (fun () -> compare_expr f1 f2);
+          (fun () -> Compare.list compare_expr args1 args2)
+        ]
+
+      | E_array(el1), E_array(el2) ->
+        Compare.list compare_expr el1 el2
+
+      | E_subscript(a1, i1), E_subscript(a2, i2) ->
+        Compare.compose [
+          (fun () -> compare_expr a1 a2);
+          (fun () -> compare_expr i1 i2);
+        ]
+
+      | E_alloc_addr(a1), E_alloc_addr(a2) ->
+        compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
+
+      | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
+
+      | E_len(a1), E_len(a2) -> compare_expr a1 a2
+
+      | _ -> next e1 e2
+    )
+
+(*==========================================================================*)
+                           (** {2 Utility functions} *)
+(*==========================================================================*)
+
+let mk_not e = mk_unop O_log_not e
 
 let mk_int i erange =
   mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
@@ -220,72 +242,55 @@ let mk_float_interval a b range =
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
 
-let mk_empty range =
-  mk_constant ~etyp:T_empty C_empty range
-
 let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
   match strict, left_strict, right_strict with
   | true, _, _
   | false, true, true ->
     mk_binop
-      (mk_binop e1 O_lt v (tag_range erange "in1"))
+      (mk_binop e1 O_lt v erange)
       O_log_and
-      (mk_binop v O_lt e2 (tag_range erange "in2"))
+      (mk_binop v O_lt e2 erange)
       erange
 
   | false, true, false ->
     mk_binop
-      (mk_binop e1 O_lt v (tag_range erange "in1"))
+      (mk_binop e1 O_lt v erange)
       O_log_and
-      (mk_binop v O_le e2 (tag_range erange "in2"))
+      (mk_binop v O_le e2 erange)
       erange
 
   | false, false, true ->
     mk_binop
-      (mk_binop e1 O_le v (tag_range erange "in1"))
+      (mk_binop e1 O_le v erange)
       O_log_and
-      (mk_binop v O_lt e2 (tag_range erange "in2"))
+      (mk_binop v O_lt e2 erange)
       erange
 
   | false, false, false ->
     mk_binop
-      (mk_binop e1 O_le v (tag_range erange "in1"))
+      (mk_binop e1 O_le v erange)
       O_log_and
-      (mk_binop v O_le e2 (tag_range erange "in2"))
+      (mk_binop v O_le e2 erange)
       erange
 
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 
-let mk_bool b = mk_constant ~etyp:T_bool (if b then C_true else C_false)
-let mk_true = mk_bool true
-let mk_false = mk_bool false
-
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
-let mk_alloc_addr addr_kind addr_range range =
-  mk_expr (E_alloc_addr (addr_kind, addr_range)) ~etyp:T_addr range
+let mk_alloc_addr addr_kind range =
+  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
 
-
+let is_int_type = function
+  | T_int -> true
+  | _ -> false
 
 (*==========================================================================*)
                            (** {2 Statements} *)
 (*==========================================================================*)
 
-
-type assign_mode =
-  | STRONG
-  | WEAK
-  | EXPAND
-
 type stmt_kind +=
-  | S_assign of expr (** lvalue *) * expr (** rvalue *) * assign_mode
-  (** Assignments. *)
-
-  | S_assume of expr
-  (** Filter statements, with condition expressions *)
-
   | S_expression of expr
   (** Expression statement, useful for calling functions without a return value *)
 
@@ -304,16 +309,7 @@ type stmt_kind +=
 
   | S_continue (** Loop continue *)
 
-  | S_rename_var of var * var
-  (** Rename a variable into another*)
-
-  | S_remove_var of var
-  (** Remove a variable from the abstract environments. *)
-
-  | S_project_vars of var list
-  (** Project the abstract environments on the given list of variables. *)
-
-  | S_rebase_addr of addr (** old *) * addr (** new *) * assign_mode
+  | S_rebase_addr of addr (** old *) * addr (** new *) * mode
   (** Change the address of a previously allocated object *)
 
   | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)
@@ -327,14 +323,51 @@ type stmt_kind +=
   | S_assert of expr
   (** Unit tests assertions *)
 
-let mk_rename v v' =
-  mk_stmt (S_rename_var (v, v'))
+  | S_print
+  (** Print the abstract flow map at current location *)
 
-let mk_assign ?(mode = STRONG)v e =
-  mk_stmt (S_assign (v, e, mode))
+let () =
+  register_stmt_compare (fun next s1 s2 ->
+      match skind s1, skind s2 with
+      | S_expression(e1), S_expression(e2) -> compare_expr e1 e2
 
-let mk_assume e =
-  mk_stmt (S_assume e)
+      | S_if(c1,then1,else1), S_if(c2,then2,else2) ->
+        Compare.compose [
+          (fun () -> compare_expr c1 c2);
+          (fun () -> compare_stmt then1 then2);
+          (fun () -> compare_stmt else1 else2);
+        ]
+
+      | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
+
+      | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
+
+      | S_while(c1, body1), S_while(c2, body2) ->
+        Compare.compose [
+          (fun () -> compare_expr c1 c2);
+          (fun () -> compare_stmt body1 body2)
+        ]
+
+      | S_rebase_addr(a1,a1',m1), S_rebase_addr(a2,a2',m2) ->
+        Compare.compose [
+          (fun () -> compare_addr a1 a2);
+          (fun () -> compare_addr a1' a2');
+          (fun () -> Pervasives.compare m1 m2);
+        ]
+
+      | S_unit_tests(f1, _), S_unit_tests(f2, _) -> Pervasives.compare f1 f2
+
+      | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
+        Compare.compose [
+          (fun () -> compare_expr e1 e2);
+          (fun () -> Pervasives.compare b1 b2);
+          (fun () -> Pervasives.compare b1' b2');
+        ]
+
+      | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+
+      | _ -> next s1 s2
+    )
 
 let mk_assert e range =
   mk_stmt (S_assert e) range
@@ -343,18 +376,14 @@ let mk_simple_assert e b1 b2 range =
   mk_stmt (S_simple_assert (e, b1, b2)) range
 
 let mk_assert_reachable range =
-  mk_simple_assert (mk_true range) true false range
+  mk_simple_assert (mk_one range) true false range
 
 let mk_assert_unreachable range =
-  mk_simple_assert (mk_true range) true true range
+  mk_simple_assert (mk_one range) true true range
 
 let mk_block block = mk_stmt (S_block block)
 
-let mk_nop = mk_block []
-
-let mk_remove_var v = mk_stmt (S_remove_var v)
-
-let mk_project_vars vars = mk_stmt (S_project_vars vars)
+let mk_nop range = mk_block [] range
 
 let mk_if cond body orelse range =
   mk_stmt (S_if (cond, body, orelse)) range
@@ -367,6 +396,6 @@ let mk_rebase_addr old recent mode range =
 
 let mk_call fundec args range =
   mk_expr (E_call (
-      mk_expr (E_function fundec) (tag_range range "fun"),
+      mk_expr (E_function fundec) range,
       args
     )) range

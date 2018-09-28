@@ -8,9 +8,10 @@
 
 (** General iterator on Control Flow Graphs. *)
 
+open Framework.Location
 open Framework.Ast
 open Framework.Flow
-open Framework.Pp
+open Framework.Manager
 open Universal.Ast
 open Ast
 

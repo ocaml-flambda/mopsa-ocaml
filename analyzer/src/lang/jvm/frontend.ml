@@ -16,7 +16,8 @@ open JBasics
 open JCode
 open Framework.Ast
 open Framework.Flow
-open Framework.Pp
+open Framework.Manager
+open Framework.Location
 open Universal.Ast
 open Cfg.Ast
 open Ast
@@ -106,15 +107,15 @@ let opcode_succ (code:jopcode array) (i:op_loc) : (token * op_loc) list =
   | OpArrayLength | OpArrayLoad _ | OpArrayStore _
   | OpMonitorEnter | OpMonitorExit | OpNop | OpBreakpoint ->
      (* flow directly to next instruction *)
-     [TCur, succ]
+     [T_cur, succ]
      
   | OpIf (_,dst) | OpIfCmp (_,dst) ->
      (* flow to next instruction if false, jump of true *)
-     [(TCur, succ); (F_java_if_true, i+dst)]
+     [(T_cur, succ); (F_java_if_true, i+dst)]
 
   | OpGoto dst ->
      (* flow unconditionally to goto target *)
-     [TCur, i+dst]
+     [T_cur, i+dst]
 
   | OpJsr dst ->
      (* jump to subroutine, indirect return to next instruction *)
@@ -213,7 +214,7 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
   ignore (CFG.add_node g endloc ());
 
   (* set entry *)
-  CFG.node_set_entry g (CFG.get_node g (mk_jvm_loc meth_uid 0)) (Some TCur);
+  CFG.node_set_entry g (CFG.get_node g (mk_jvm_loc meth_uid 0)) (Some T_cur);
 
   (* utility to get possible exception targets *)
   let exn i =
@@ -235,7 +236,7 @@ let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
         let lend = opcode_end code i in
         let range = mk_jvm_range meth_uid i lend in
         let src_node = CFG.get_node g (mk_jvm_loc meth_uid i) in
-        let src = [TCur, src_node] in
+        let src = [T_cur, src_node] in
 
         (* get successors *)
         let dst =
@@ -263,7 +264,7 @@ let coalesce_cfg g =
   CFG.iter_nodes
     (fun _ n ->
       match CFG.node_in n, CFG.node_out n with
-      | [TCur, e1], [TCur, e2]
+      | [T_cur, e1], [T_cur, e2]
            when CFG.edge_dst_size e1 = 1 && CFG.edge_src_size e2 = 1
         ->
          (match CFG.edge_data e1, CFG.edge_data e2 with

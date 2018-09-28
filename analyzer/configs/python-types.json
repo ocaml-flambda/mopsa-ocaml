@@ -1,0 +1,32 @@
+{
+    "iter": [
+        "python.program",
+
+        "python.desugar.bool",
+        "python.desugar.import",
+        "python.desugar.assert",
+        "python.desugar.if",
+        "python.desugar.iterable_assign",
+        "python.desugar.with",
+        "python.desugar.loops",
+
+        "universal.iterators.intraproc",
+        "universal.iterators.interproc.inlining",
+        "universal.iterators.loops",
+
+        "python.libs.mopsa",
+
+        "python.objects.class",
+        "python.objects.function",
+        "python.objects.nones",
+
+        "python.data_model.arith_ops",
+        "python.data_model.compare_ops",
+        "python.data_model.aug_assign",
+        "python.data_model.callable",
+
+        "python.types.t_string",
+        "python.types.t_int",
+        "python.types.typing"
+    ]
+}

@@ -88,7 +88,6 @@ let rec print_typ fmt t =
   | AST_REAL -> Format.pp_print_string fmt "real"
   | AST_ARRAY t -> Format.printf "[%a]" print_typ t
   | AST_STRING -> Format.pp_print_string fmt "string"
-  | AST_BOOL -> Format.pp_print_string fmt "bool"
   | AST_CHAR -> Format.pp_print_string fmt "char"
 
 and print_typed_var fmt ((t, v), _) =
@@ -201,6 +200,9 @@ and print_stat fmt = function
   | AST_assert e ->
     Format.fprintf fmt "assert (%a)"
       print_expr_ext e
+
+  | AST_print ->
+    Format.fprintf fmt "print ()"
 
   | AST_return e ->
     Format.fprintf fmt "return (%a)"

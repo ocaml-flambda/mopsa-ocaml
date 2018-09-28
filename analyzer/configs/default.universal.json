@@ -1,0 +1,33 @@
+{
+    "iter": [
+	// Iterators
+	"universal.iterators.program",
+	"universal.iterators.intraproc",
+	"universal.iterators.loops",
+
+	// Array abstraction
+	{
+	    "product": [
+		"universal.arrays.expand",
+		"universal.arrays.smash"
+	    ],
+	    "reductions": [
+		"universal.arrays.reductions.expand_smash"
+	    ]
+	},
+
+	// Numeric abstraction
+	{
+	    "product": [
+		"universal.numeric.values.intervals",
+		"universal.numeric.values.congruences",
+		"universal.numeric.relational.polyhedra"
+	    ],
+	    "reductions" : [
+		"universal.numeric.reductions.intervals_congruences",
+		"universal.numeric.reductions.intervals_broadcast",
+		"universal.numeric.reductions.implicit_assume_relation"
+	    ]
+	}
+    ]
+}

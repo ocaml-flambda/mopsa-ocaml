@@ -9,7 +9,7 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 
 ## Dependencies
 
-* ocaml (version >= 4.04.0)
+* ocaml (version >= 4.05.0)
 * apron
 * clang (version >= 4.x)
 * zarith
@@ -54,5 +54,5 @@ make
 ```bash
 ./scripts/mopsa-c foo.c
 ./scripts/mopsa-python -debug=python.flows._ foo.py
-./scripts/mopsa-c -test=true -debug=_unit_test_summary analyzer/tests/c/int_tests.c
+./scripts/mopsa-c -unittest -debug=_unittest_summary analyzer/tests/c/int_tests.c
 ```

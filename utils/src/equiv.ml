@@ -1,6 +1,6 @@
 (** Relation with printing builder *)
 
-module Make(L : Sig.VALUE)(R : Sig.VALUE) =
+module Make(L : ValueSig.S)(R : ValueSig.S) =
 struct
   exception Already_Paired
   module LR = Map.Make(L)
@@ -40,6 +40,9 @@ struct
   let fold (f : L.t * R.t -> 'a -> 'a) (e : t) (a : 'a) =
     LR.fold (fun k v acc -> f (k,v) acc) e.lr a
 
+  let iter (f : L.t * R.t -> unit) (e: t) : unit =
+    fold (fun p acc -> f p) e ()
+
   let remove_l (l : L.t) (e : t) =
     try
       let b = LR.find l e.lr in
@@ -72,6 +75,12 @@ struct
     with
     | Not_found -> false
 
+  let mem_l (l : L.t) (e: t) =
+    LR.mem l e.lr
+
+  let mem_r (r : R.t) (e: t) =
+    RL.mem r e.rl
+
   let find_l l e =
     LR.find l e.lr
 
@@ -92,4 +101,25 @@ struct
 
   let map (f : (L.t * R.t) -> (L.t * R.t)) (e : t) : t =
     fold (fun p acc -> add (f p) acc) e empty
+
+  let filter (f: (L.t * R.t) -> bool) (e: t) : t =
+    fold (fun p acc -> if f p then add p acc else acc) e empty
+
+  let exists (f: (L.t * R.t) -> bool) (e: t) : bool =
+    let exception FoundOne in
+    try
+      iter (fun p -> if f p then raise FoundOne) e;
+      false
+    with
+    | FoundOne -> true
+
+  let forall (f: (L.t * R.t) -> bool) (e: t) : bool =
+    let exception FoundNot in
+    try
+      iter (fun p -> if not (f p) then raise FoundNot) e;
+      true
+    with
+    | FoundNot -> false
+
+
 end

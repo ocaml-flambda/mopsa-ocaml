@@ -8,9 +8,11 @@
 
 (** AST of the C language. *)
 
+open Framework
 open Framework.Ast
 open Framework.Visitor
 open Universal.Ast
+open Framework.Essentials
 
 (*==========================================================================*)
                            (** {2 Types} *)
@@ -19,8 +21,8 @@ open Universal.Ast
 type c_typedef = {
   c_typedef_org_name: string; (** name as in source *)
   c_typedef_unique_name: string; (** unique name *)
-  c_typedef_def: typ; (** declaration *)
-  c_typedef_range: range; (** declaration location *)
+  mutable c_typedef_def: typ; (** declaration *)
+  c_typedef_range: Location.range; (** declaration location *)
 }
 (** Type definition. *)
 
@@ -34,8 +36,8 @@ and c_record_type = {
   c_record_defined: bool; (** false if only declared *)
   c_record_sizeof: Z.t;  (** size of record, in bytes *)
   c_record_alignof: Z.t; (** alignment, in bytes *)
-  c_record_fields: c_record_field list;
-  c_record_range: range; (** declaration location *)
+  mutable c_record_fields: c_record_field list;
+  c_record_range: Location.range; (** declaration location *)
 }
 (** Struct or union type. *)
 
@@ -45,7 +47,7 @@ and c_record_field = {
   c_field_offset: int;
   c_field_bit_offset: int;
   c_field_type: typ;
-  c_field_range: range; (** declaration location *)
+  c_field_range: Location.range; (** declaration location *)
   c_field_index: int;
 }
 (** Struct or union field. *)
@@ -56,7 +58,7 @@ and c_enum_type = {
   c_enum_defined: bool; (** false if only declared *)
   c_enum_values: c_enum_value list;
   c_enum_integer_type: c_integer_type;
-  c_enum_range: range; (** declaration location *)
+  c_enum_range: Location.range; (** declaration location *)
 }
 (** Enumerated type. *)
 
@@ -64,6 +66,7 @@ and c_enum_value = {
   c_enum_val_org_name: string; (** name as in source *)
   c_enum_val_unique_name: string; (** unique name *)
   c_enum_val_value: Z.t;
+  c_enum_val_range: range;
 }
 (** A possible value in an enumerated type. *)
 
@@ -175,6 +178,9 @@ type constant +=
   | C_c_string of string * c_character_kind
   (** Constant string literal *)
 
+  | C_c_invalid
+  (** Invalid pointer value *)
+
 
 type c_init =
   | C_init_expr of expr
@@ -188,8 +194,8 @@ type c_fundec = {
   mutable c_func_return: typ; (** type of returned value *)
   mutable c_func_parameters: var list; (** function parameters *)
   mutable c_func_body: stmt option; (** function body *)
-  mutable c_func_static_vars: (var * c_init option) list; (** static variables declared in the function and their initialization *)
-  mutable c_func_local_vars: (var * c_init option) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
+  mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
+  mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
 }
 (** Function descriptor. *)
@@ -209,6 +215,8 @@ type expr_kind +=
   | E_c_builtin_function of string
 
   | E_c_call of expr (** target *) * expr list (** arguments *)
+
+  | E_c_builtin_call of string * expr list
 
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
   (** pointer->field access *)
@@ -252,6 +260,9 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
+  | S_c_global_declaration of var * c_init option
+  (** declaration of a global variable with optional initialization *)
+
   | S_c_local_declaration of var * c_init option
   (** declaration of a local variable with optional initialization *)
 
@@ -286,7 +297,7 @@ type stmt_kind +=
 
 type program_kind +=
   | C_program of
-      (var * c_init option) list (** global variables *) *
+      (var * c_init option * range) list (** global variables *) *
       c_fundec list (** functions *)
 (** A complete C program. *)
 
@@ -295,9 +306,30 @@ type program_kind +=
                   (** {2 Conversion to Clang parser types} *)
 (*==========================================================================*)
 
+let to_clang_int_type : c_integer_type -> C_AST.integer_type = function
+  | C_signed_char -> C_AST.SIGNED_CHAR
+  | C_unsigned_char -> C_AST.UNSIGNED_CHAR
+  | C_signed_short -> C_AST.SIGNED_SHORT
+  | C_unsigned_short -> C_AST.UNSIGNED_SHORT
+  | C_signed_int -> C_AST.SIGNED_INT
+  | C_unsigned_int -> C_AST.UNSIGNED_INT
+  | C_signed_long -> C_AST.SIGNED_LONG
+  | C_unsigned_long -> C_AST.UNSIGNED_LONG
+  | C_signed_long_long -> C_AST.SIGNED_LONG_LONG
+  | C_unsigned_long_long -> C_AST.UNSIGNED_LONG_LONG
+  | C_signed_int128 -> C_AST.SIGNED_INT128
+  | C_unsigned_int128 -> C_AST.UNSIGNED_INT128
+
+let to_clang_float_type : c_float_type -> C_AST.float_type = function
+  | C_float -> C_AST.FLOAT
+  | C_double -> C_AST.DOUBLE
+  | C_long_double -> C_AST.LONG_DOUBLE
+
+                   
+    (* NOTE: this may cause issue with recutsive types
+
 let rec to_clang_type : typ -> C_AST.type_qual = function
   | T_c_void -> C_AST.T_void, C_AST.no_qual
-  | Universal.Ast.T_bool -> C_AST.T_bool, C_AST.no_qual
   | T_c_integer(i) -> C_AST.T_integer (to_clang_int_type i), C_AST.no_qual
   | T_c_float(f) -> C_AST.T_float (to_clang_float_type f), C_AST.no_qual
   | T_c_pointer(t) -> C_AST.T_pointer (to_clang_type t), C_AST.no_qual
@@ -314,7 +346,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
   | t ->
-    Debug.fail "to_clang_type: %a not a C type" Framework.Pp.pp_typ t
+    Debug.fail "to_clang_type: %a not a C type" pp_typ t
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
@@ -333,26 +365,6 @@ and to_clang_function_type_option = function
   | None -> None
   | Some t -> Some (to_clang_function_type t)
 
-
-and to_clang_int_type : c_integer_type -> C_AST.integer_type = function
-  | C_signed_char -> C_AST.SIGNED_CHAR
-  | C_unsigned_char -> C_AST.UNSIGNED_CHAR
-  | C_signed_short -> C_AST.SIGNED_SHORT
-  | C_unsigned_short -> C_AST.UNSIGNED_SHORT
-  | C_signed_int -> C_AST.SIGNED_INT
-  | C_unsigned_int -> C_AST.UNSIGNED_INT
-  | C_signed_long -> C_AST.SIGNED_LONG
-  | C_unsigned_long -> C_AST.UNSIGNED_LONG
-  | C_signed_long_long -> C_AST.SIGNED_LONG_LONG
-  | C_unsigned_long_long -> C_AST.UNSIGNED_LONG_LONG
-  | C_signed_int128 -> C_AST.SIGNED_INT128
-  | C_unsigned_int128 -> C_AST.UNSIGNED_INT128
-
-and to_clang_float_type : c_float_type -> C_AST.float_type = function
-  | C_float -> C_AST.FLOAT
-  | C_double -> C_AST.DOUBLE
-  | C_long_double -> C_AST.LONG_DOUBLE
-
 and to_clang_array_length : c_array_length -> C_AST.array_length = function
   | C_array_no_length -> C_AST.No_length
   | C_array_length_cst(n) -> C_AST.Length_cst n
@@ -365,6 +377,7 @@ and to_clang_typedef : c_typedef -> C_AST.typedef = fun typedef ->
     typedef_unique_name = typedef.c_typedef_unique_name;
     typedef_def = to_clang_type typedef.c_typedef_def;
     typedef_range = to_clang_range typedef.c_typedef_range;
+    typedef_com = [];
   }
 
 and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
@@ -378,6 +391,7 @@ and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
     record_alignof = record.c_record_alignof;
     record_fields = [||];
     record_range = to_clang_range record.c_record_range;
+    record_com = [];
   } in
   c_record.C_AST.record_fields <- Array.map (fun field ->
       to_clang_record_field c_record field
@@ -399,6 +413,7 @@ and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_
     field_range = to_clang_range field.c_field_range;
     field_record = record;
     field_index = field.c_field_index;
+    field_com = [];
   }
 
 and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
@@ -410,6 +425,7 @@ and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
     enum_values = [];
     enum_integer_type = to_clang_int_type enum.c_enum_integer_type;
     enum_range = to_clang_range enum.c_enum_range;
+    enum_com = [];
   }
   in
   c_enum.C_AST.enum_values <- List.map (fun v ->
@@ -424,11 +440,13 @@ and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = 
     enum_val_unique_name = enum_val.c_enum_val_unique_name;
     enum_val_value = enum_val.c_enum_val_value;
     enum_val_enum = enum;
+    enum_val_range = to_clang_range enum_val.c_enum_val_range;
+    enum_val_com = [];
   }
 
 
-and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
-  let origin_range = Framework.Ast.get_origin_range range in
+and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
+  let origin_range = Framework.Location.get_origin_range range in
   {
     Clang_AST.range_begin = {
       Clang_AST.loc_file = origin_range.range_begin.loc_file;
@@ -442,7 +460,7 @@ and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
     };
   }
 
-
+  *)
 
 
 (*==========================================================================*)
@@ -450,17 +468,39 @@ and to_clang_range (range: Framework.Ast.range) : Clang_AST.range =
 (*==========================================================================*)
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
-let sizeof_type (t : typ) : Z.t =
-  let target_options = Clang_parser.get_default_target_options () in
-  let target_info = Clang_parser.get_target_info target_options in
-  let t, _ = to_clang_type t in
-  C_utils.sizeof_type target_info t
+let rec sizeof_type (t : typ) : Z.t =
+  let get_target () = 
+    Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
+  in
+  match t with
+  | T_c_void -> Z.zero
+  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int (get_target()) |> Z.of_int
+  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float (get_target()) |> Z.of_int
+  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type (get_target())
+  | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
+  | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
+     Debug.fail "sizeof_type: %a has no length information" pp_typ t
+  | T_c_bitfield(t, size) ->
+     Debug.fail "sizeof_type: %a is a bitfield" pp_typ t
+  | T_c_function _ | T_c_builtin_fn ->
+     Debug.fail "sizeof_type: %a is a function" pp_typ t
+  | T_c_typedef td -> sizeof_type td.c_typedef_def
+  | T_c_record r ->
+     if not r.c_record_defined then
+       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+     r.c_record_sizeof
+  | T_c_enum e ->
+     if not e.c_enum_defined then
+       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+     sizeof_type (T_c_integer e.c_enum_integer_type)
+  | T_c_qualified (_,t) -> sizeof_type t
+  | t -> Debug.fail "to_clang_type: %a not a C type" pp_typ t
 
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
     match t with
     | T_c_void -> invalid_arg "sizeof_expr: size of void"
-    | Universal.Ast.T_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
+    | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
        mk_z (sizeof_type t) range
     | T_c_array (t,l) ->
        let len = match l with
@@ -471,7 +511,7 @@ let sizeof_expr (t:typ) range : expr =
             (* error range "sizeof" "array with no size"*)
             mk_zero range
        in
-       mk_binop (doit t) (O_mult T_int) len range
+       mk_binop (doit t) (O_mult) len range
     | T_c_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
     | T_c_function _ | T_c_builtin_fn -> invalid_arg "sizeof_expr: size of function"
     | T_c_typedef t -> doit (t.c_typedef_def)
@@ -500,8 +540,9 @@ let rec is_signed (t : typ) : bool=
        | C_signed_long | C_signed_long_long | C_signed_int128 -> true
        | _ -> false
      end
+
   | T_c_enum e -> is_signed (T_c_integer e.c_enum_integer_type)
-  | _ -> Framework.Exceptions.panic "[is_signed] not an integer type %a" Framework.Pp.pp_typ t
+  | _ -> Framework.Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
 let rangeof (t : typ) =
@@ -518,34 +559,40 @@ let int_rangeof t =
   let a,b = rangeof t in
   (Z.to_int a, Z.to_int b)
 
-(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
-  let open Universal.Ast in
+(** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
+let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
+    let open Universal.Ast in
   mk_binop
     (mk_int l (tag_range range "l"))
-    math_plus
+    O_plus
     (mk_binop
        (mk_binop
-          (mk_var v (tag_range range "v"))
-          math_minus
+          e
+          O_minus
           (mk_int l (tag_range range "l"))
           (tag_range range "?")
        )
-       math_mod
+       O_mod
        (mk_binop
           (mk_binop
              (mk_int h (tag_range range "v"))
-             (O_minus T_int)
+             (O_minus)
              (mk_int l (tag_range range "l"))
              (tag_range range "?")
           )
-          math_plus
+          O_plus
           (mk_one (tag_range range "1"))
           (tag_range range "+1")
        )
        (tag_range range "h-l+1")
     )
     range
+
+(** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
+let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
+  wrap_expr (mk_var v (tag_range range "v")) (l,h) range
+
+
 
 (** [is_c_int_type t] wheter [t] is an integer type *)
 let rec is_c_int_type ( t : typ) =
@@ -626,7 +673,6 @@ let align_byte t i =
 
 let is_c_type = function
   | T_c_void
-  | Universal.Ast.T_bool
   | T_c_integer _
   | T_c_float _
   | T_c_pointer _
@@ -688,7 +734,7 @@ let () =
       | T_c_float f1, T_c_float f2 -> compare f1 f2
       | T_c_pointer t1, T_c_pointer t2 -> compare_typ t1 t2
       | T_c_array(t1, l1), T_c_array(t2, l2) ->
-        compare_composer [
+        Compare.compose [
           (fun () -> compare_typ t1 t2);
           (fun () -> match l1, l2 with
              | C_array_length_cst n1, C_array_length_cst n2 -> Z.compare n1 n2
@@ -698,7 +744,7 @@ let () =
           )
         ]
       | T_c_bitfield(t1, n1), T_c_bitfield(t2, n2) ->
-        compare_composer [
+        Compare.compose [
           (fun () -> compare_typ t1 t2);
           (fun () -> compare n1 n2)
         ]
@@ -712,7 +758,7 @@ let () =
                 (fun () -> compare ff1.c_ftype_variadic ff2.c_ftype_variadic)
               ] @ (List.map2 (fun t t' -> fun () -> compare_typ t t') ff1.c_ftype_params ff2.c_ftype_params)
               in
-              compare_composer l
+              Compare.compose l
             else 1
           | None, None -> 0
           | _ -> 1
@@ -720,7 +766,7 @@ let () =
       | T_c_builtin_fn, T_c_builtin_fn -> 0
       | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
       | T_c_record r1, T_c_record r2 ->
-        compare_composer ([
+        Compare.compose ([
           (fun () -> compare r1.c_record_kind r2.c_record_kind);
           (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
           (fun () -> compare (List.length r1.c_record_fields) (List.length r2.c_record_fields);
@@ -732,7 +778,7 @@ let () =
         ))
       | T_c_enum e1, T_c_enum e2 -> compare e1.c_enum_unique_name e2.c_enum_unique_name
       | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
-        compare_composer [
+        Compare.compose [
           (fun () -> compare q1.c_qual_is_const q2.c_qual_is_const);
           (fun () -> compare q1.c_qual_is_volatile q2.c_qual_is_volatile);
           (fun () -> compare q1.c_qual_is_restrict q2.c_qual_is_restrict);
@@ -759,7 +805,7 @@ let get_c_fun_body f =
   match f.c_func_body with
   | Some stmt -> stmt
   | None ->
-    mk_block [] (Framework.Ast.mk_fresh_range ())
+    mk_block [] (Location.mk_fresh_range ())
 
 
 let format_to_string prt x =
@@ -774,12 +820,12 @@ let get_c_fun_body_panic f =
   | None ->
     let f = fun fmt () ->
       Format.fprintf fmt "empty function %a : %a -> %a"
-        Framework.Pp.pp_var f.c_func_var
+        pp_var f.c_func_var
         (Format.pp_print_list
            ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-           (fun fmt x -> Format.fprintf fmt "%a" Framework.Pp.pp_typ (x.vtyp))
+           (fun fmt x -> Format.fprintf fmt "%a" pp_typ (x.vtyp))
         ) f.c_func_parameters
-        Framework.Pp.pp_typ (f.c_func_return)
+        pp_typ (f.c_func_return)
     in
     let s = format_to_string f () in
     raise (Framework.Exceptions.Panic (s))

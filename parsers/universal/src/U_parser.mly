@@ -15,7 +15,6 @@
 
 %token TOK_INT
 %token TOK_REAL
-%token TOK_BOOL
 %token TOK_CHAR
 %token TOK_STRING
 %token TOK_ARRAY
@@ -203,7 +202,6 @@ typ:
 | TOK_REAL { AST_REAL }
 | TOK_LBRACKET t=typ TOK_RBRACKET { AST_ARRAY t }
 | TOK_STRING { AST_STRING }
-| TOK_BOOL { AST_BOOL }
 | TOK_CHAR { AST_CHAR }
 
 separated_ended_list(X, Y):
@@ -233,6 +231,9 @@ stat:
 | TOK_ASSERT TOK_LPAREN e=ext(expr) TOK_RPAREN TOK_SEMICOLON
   { AST_assert e }
 
+| TOK_PRINT TOK_LPAREN TOK_RPAREN TOK_SEMICOLON
+  { AST_print }
+
 | TOK_RETURN e=ext(expr) TOK_SEMICOLON
    { AST_return e }
 
@@ -247,8 +248,6 @@ fundec:
 {{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
 
 prog:
-| st=ext(stat)
-       {{gvars = []; funs = [] ; main = st}}
 | st=ext(block_no_curly)
        {{gvars = []; funs = [] ; main = st}}
 | d=ext(declaration) prg=prog {add_declaration d prg}

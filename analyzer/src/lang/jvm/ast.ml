@@ -16,7 +16,8 @@ open JBasics
 open JCode
 open Framework.Ast
 open Framework.Flow
-open Framework.Pp
+open Framework.Manager
+open Framework.Location
 open Universal.Ast
 open Cfg.Ast
 
@@ -158,28 +159,31 @@ let () =
       | T_java t -> Format.pp_print_string fmt (JPrint.value_type t)
       | _ -> next fmt typ
     );
-  register_token_compare (fun next t1 t2 ->
-      match t1, t2 with
-      | F_java_if_true, F_java_if_true
-      | F_java_jsr, F_java_jsr
-      | F_java_ret_site, F_java_ret_site
-      | F_java_return_site, F_java_return_site
-      | F_java_exn, F_java_exn -> 0
-      | F_java_ret a, F_java_ret b -> compare_location a b
-      | F_java_switch i1, F_java_switch i2 -> compare i1 i2
-      | _ -> next t1 t2                                            
-    );
-  register_pp_token (fun next fmt token ->
-      match token with
-      | F_java_if_true -> Format.pp_print_string fmt "true"
-      | F_java_jsr -> Format.pp_print_string fmt "jsr"
-      | F_java_ret i -> Format.fprintf fmt "ret %a" pp_location i
-      | F_java_ret_site -> Format.pp_print_string fmt "ret-site"
-      | F_java_return_site -> Format.pp_print_string fmt "return-site"
-      | F_java_exn -> Format.pp_print_string fmt "exn"
-      | F_java_switch None -> Format.pp_print_string fmt "default"
-      | F_java_switch (Some i) -> Format.fprintf fmt "case %li" i
-      | _ -> next fmt token
-    )
+  register_token
+    { compare = (fun next t1 t2 ->
+        match t1, t2 with
+        | F_java_if_true, F_java_if_true
+          | F_java_jsr, F_java_jsr
+          | F_java_ret_site, F_java_ret_site
+          | F_java_return_site, F_java_return_site
+          | F_java_exn, F_java_exn -> 0
+        | F_java_ret a, F_java_ret b -> compare_location a b
+        | F_java_switch i1, F_java_switch i2 -> compare i1 i2
+        | _ -> next t1 t2                                            
+      );
+      print = (fun next fmt token ->
+        match token with
+        | F_java_if_true -> Format.pp_print_string fmt "true"
+        | F_java_jsr -> Format.pp_print_string fmt "jsr"
+        | F_java_ret i -> Format.fprintf fmt "ret %a" pp_location i
+        | F_java_ret_site -> Format.pp_print_string fmt "ret-site"
+        | F_java_return_site -> Format.pp_print_string fmt "return-site"
+        | F_java_exn -> Format.pp_print_string fmt "exn"
+        | F_java_switch None -> Format.pp_print_string fmt "default"
+        | F_java_switch (Some i) -> Format.fprintf fmt "case %li" i
+        | _ -> next fmt token
+      );
+    }
+  
 
            

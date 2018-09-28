@@ -6,21 +6,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Common exceptions raised by domains and processed by the
-   analyzer. *)
+(** Common exceptions raised by domains. *)
 
-(*==========================================================================*)
-(**                              {2 Panic}                                  *)
-(*==========================================================================*)
-
-
-(** Panic exception is raised by domains when they encounter an unsupported
+(** Panic exceptions are raised by domains when they encounter an unsupported
     language construct.
 *)
 exception Panic of string
 
-exception PanicAt of Ast.range * string
+(** Panic exception with location information *)
+exception PanicAt of Location.range * string
 
+
+(** Raise a panic exception using a formatted string *)
 let panic fmt =
   Format.kasprintf (fun str ->
       raise (Panic str)
@@ -31,5 +28,8 @@ let panic_at range fmt =
       raise (PanicAt (range, str))
     ) fmt
 
+(** Warning message *)
+let warn = Debug.warn
 
+(** Failure exception *)
 let fail fmt = Debug.fail fmt

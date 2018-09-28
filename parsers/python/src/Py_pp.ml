@@ -179,7 +179,6 @@ and print_exp fmt exp =
       print_exp orelse
   | E_yield(e) ->
     fprintf fmt "yield %a" print_exp e
-  | E_undefined -> str fmt "undef"
   | E_binop(e1, op, e2) ->
     fprintf fmt "( %a ) %a ( %a )"
       print_exp e1

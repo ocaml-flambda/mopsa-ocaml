@@ -8,58 +8,64 @@
 
 (** Handling of assert statements. *)
 
-open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
-open Framework.Exec
+open Framework.Essentials
 open Framework.Ast
 open Universal.Ast
 open Ast
-
-let name = "python.desugar.assert"
-let debug fmt = Debug.debug ~channel:name fmt
+open Zone
 
 module Domain =
-struct
+  struct
 
-  let init _ ctx _ flow = ctx, flow
+    type _ domain += D_python_desugar_assert : unit domain
 
-  let exec man ctx stmt flow =
-    let range = srange stmt in
-    match skind stmt with
-    | S_py_assert (e, msg)->
-      man.eval ctx e flow |>
-      eval_to_exec
-        (fun e flow ->
-          let ok_case = man.exec ctx (mk_assume e (tag_range range "safe case assume")) flow in
+    let id = D_python_desugar_assert
+    let name = "python.desugar.assert"
+    let identify : type a. a domain -> (unit, a) eq option = function
+      | D_python_desugar_assert -> Some Eq
+      | _ -> None
 
-          let fail_case =
-            debug "checking fail";
-            let flow = man.exec ctx (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
-            if man.flow.is_bottom flow then
-              let _ = debug "no fail" in
-              man.flow.bottom
-            else
-              man.exec ctx (
-                Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
-              ) flow
-          in
+    let debug fmt = Debug.debug ~channel:name fmt
 
-          man.flow.join ok_case fail_case
+    let exec_interface = {export = [Z_py]; import = []}
+    let eval_interface = {export = []; import = []}
 
-        )
-        (man.exec ctx) man.flow  |>
-      return
+    let init _ _ flow = OptionExt.return flow
 
-    | _ -> None
+    let exec zone stmt man flow =
+      let range = srange stmt in
+      match skind stmt with
+      (* S⟦ assert(e, msg) ⟧ *)
+      | S_py_assert (e, msg)->
+         man.eval e flow |>
+           Post.bind man @@
+             (fun e flow ->
+               let ok_case = man.exec (mk_assume e (tag_range range "safe case assume")) flow in
 
-  let eval _ _ _ _  = None
+               let fail_case =
+                 debug "checking fail";
+                 let flow = man.exec (mk_assume (mk_not e e.erange) (tag_range range "fail case assume")) flow in
+                 if Flow.is_bottom man flow then
+                   let _ = debug "no fail" in
+                   Flow.bottom (Flow.get_all_annot flow)
+                 else
+                   man.exec (
+                       Utils.mk_builtin_raise "AssertionError" (tag_range range "fail case raise")
+                     ) flow
+               in
+               Flow.join man ok_case fail_case
+               |> Post.of_flow
+             )
+         |> OptionExt.return
+
+      | _ -> None
+
+    let eval _ _ _ _ = None
 
 
-  let ask _ _ _ _ = None
+    let ask _ _ _ = None
 
 end
 
-let setup () =
-  Stateless.register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

@@ -8,74 +8,82 @@
 
 (** Python data model for callables. *)
 
-open Framework.Domains
-open Framework.Ast
-open Framework.Manager
-open Framework.Pp
-open Framework.Eval
+open Framework.Essentials
 open Universal.Ast
-open Framework.Domains.Stateless
 open Universal.Ast
 open Ast
 open Addr
 
-let name = "python.data_model.callable"
-let debug fmt = Debug.debug ~channel:name fmt
-
 module Domain =
-struct
+  struct
 
-  let init _ ctx _ flow = ctx, flow
+    type  _ domain += D_python_data_model_callable : unit domain
 
-  let exec man ctx stmt flow = None
+    let id = D_python_data_model_callable
+    let name = "python.data_model.callable"
+    let identify : type a. a domain -> (unit, a) eq option = function
+      | D_python_data_model_callable -> Some Eq
+      | _ -> None
 
-  let eval man ctx exp flow =
-    let range = erange exp in
-    match ekind exp with
-    | E_py_call({ekind = E_addr _}, _, _) ->
-      (* Calls to addresses should be captured by other domains. If we
-         are here, then we are missing an implementation of the
-         function *)
-      Framework.Exceptions.panic_at range "call %a can not be resolved" pp_expr exp
+    let debug fmt = Debug.debug ~channel:name fmt
 
-    | E_py_call(f, args, []) ->
-      debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
-      man.eval ctx f flow |>
-      eval_compose
-        (fun f flow ->
-           match ekind f with
-           (* Calls on non-object variables and constants is not allowed *)
-           | E_var _ | E_constant _ ->
-             let stmt = Utils.mk_builtin_raise "TypeError" range in
-             let flow = man.exec ctx stmt flow in
-             oeval_singleton (None, flow, [])
+    let exec_interface = {export = []; import = []}
+    let eval_interface = {export = [any_zone, any_zone]; import = []}
 
-           (* Calls on instances is OK if __call__ is defined *)
-           | E_addr {addr_kind = A_py_instance(cls, None)} ->
-             assert false
+    let init _ _ flow = Some flow
 
-           (* Calls on other kinds of addresses is handled by other domains *)
-           | E_addr _ ->
-             eval_list args (man.eval ctx) flow |>
-             eval_compose (fun args flow ->
-                 let exp = {exp with ekind = E_py_call(f, args, [])} in
-                 re_eval_singleton (man.eval ctx) (Some exp, flow, [])
-               )
+    let exec _ _ _ _ = None
 
-           | _ -> assert false
-        )
+    let eval zs exp man flow =
+      let range = erange exp in
+      match ekind exp with
+      (* FIXME *)
+      | E_py_call({ekind = E_py_object _}, _, _) -> None
+      (*   (\* Calls to addresses should be captured by other domains. If we
+       *      are here, then we are missing an implementation of the
+       *      function *\)
+       *   Framework.Exceptions.panic_at range "call %a can not be resolved" pp_expr exp *)
 
-    | E_py_call(f, args, _) ->
-      Framework.Exceptions.panic_at range "calls with keyword arguments not supported"
+      | E_py_call(f, args, []) ->
+         debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
+         man.eval f flow |>
+           Eval.bind
+             (fun f flow ->
+               debug "f is now %a" pp_expr f;
+               match ekind f with
+               (* Calls on non-object variables and constants is not allowed *)
+               | E_var _ | E_constant _ ->
+                  let stmt = Utils.mk_builtin_raise "TypeError" range in
+                  let flow = man.exec stmt flow in
+                  Eval.empty_singleton flow
 
-    | _ -> None
+               (* (\* Calls on instances is OK if __call__ is defined *\)
+                * | E_py_object ({addr_kind = A_py_instance(cls, None)}, _) ->
+                *    assert false *)
+
+               (* Calls on other kinds of addresses is handled by other domains *)
+               | E_py_object _ ->
+                  Eval.eval_list args man.eval flow |>
+                    (* FIXME FIXME FIXME/danger: args'/arg *)
+                    Eval.bind (fun args' flow ->
+                        let exp = {exp with ekind = E_py_call(f, args, [])} in
+                        man.eval exp flow
+                      (*                        Eval.singleton exp flow *)
+                      )
+
+               | _ -> debug "callable/E_py_call@\n"; assert false
+             )
+         |> OptionExt.return
+
+      | E_py_call(f, args, _) ->
+         Framework.Exceptions.panic_at range "calls with keyword arguments not supported"
+
+      | _ -> None
 
 
-  let ask _ _ _ _ = None
+    let ask _ _ _ = None
 
+  end
 
-
-end
-
-let setup () =
-  register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

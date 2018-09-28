@@ -1,7 +1,7 @@
 (** Set with printing builder *)
 
 (** Builder *)
-module Make(K : Sig.VALUE) =
+module Make(K : ValueSig.S) =
 struct
   include Set.Make(K)
   let print fmt (s : t) =

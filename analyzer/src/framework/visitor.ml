@@ -6,14 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   Unified method to visit, fold or modify an AST.
-
-   To allow visiting the extensible types of statements and expressions,
-   the developper should define its structure giving:
-   - its parts consisting of sub-expressions and sub-statements,
-   - its builder that can reconstitute the statement/expression from its parts.
-*)
+(** Visitor of statements and expressions. *)
 
 
 open Ast
@@ -34,8 +27,7 @@ type parts = {
 (** A structure of an extensible type ['a] is a tuple composed of two elements:
     the parts and a builder function.
 *)
-type 'a structure =
-  parts * (parts -> 'a)
+type 'a structure = parts * (parts -> 'a)
 
 (*==========================================================================*)
                         (** {2 Visitors chains} *)
@@ -60,12 +52,12 @@ let expr_chain : Ast.expr chain = ref (fun exp ->
     | E_constant _ -> leaf exp
     | E_unop(unop, e) ->
       {exprs = [e]; stmts = []},
-      (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})  
+      (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})
     | E_binop(binop, e1, e2) ->
         {exprs = [e1; e2]; stmts = []},
         (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
     | _ ->
-      Debug.fail "Unknown expression %a" Pp.pp_expr exp
+      Debug.fail "Unknown expression %a" pp_expr exp
   )
 
 let stmt_chain : Ast.stmt chain = ref (fun stmt ->
@@ -201,7 +193,7 @@ let expr_vars (e: Ast.expr) : Ast.var list =
   fold_expr
     (fun acc e ->
        match Ast.ekind e with
-       | Ast.E_var(v) -> v :: acc
+       | Ast.E_var(v, m) -> v :: acc
        | _ -> acc
     )
     (fun acc s -> acc)
@@ -212,8 +204,8 @@ let stmt_vars (s: stmt) : var list =
   fold_stmt
     (fun acc e ->
        match Ast.ekind e with
-       | Ast.E_var(v) -> v :: acc
+       | Ast.E_var(v, m) -> v :: acc
        | _ -> acc
-    )    
+    )
     (fun acc s -> acc)
     [] s

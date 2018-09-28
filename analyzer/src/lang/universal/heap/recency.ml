@@ -6,76 +6,92 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Recency abstraction of heap allocations. *)
+(** array access and structure member access transformation to pointer
+   arithmetic*)
 
-open Framework.Ast
-open Framework.Domains
-open Framework.Domains.Unify.Domain
-open Framework.Flow
-open Framework.Manager
-open Framework.Eval
+open Framework.Essentials
 open Ast
+open Zone
+
+
+(** {2 Domain definition} *)
+(** ===================== *)
 
 let name = "universal.heap.recency"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let is_weak addr =
-  if addr.addr_uid = Pool.recent_uid then false else true
-
-let assign_mode_of_addr addr =
-  if is_weak addr then WEAK else STRONG
-
-module Make(Sub: Framework.Domains.Stateful.DOMAIN) =
+module Domain : Framework.Domains.Stacked.S =
 struct
 
+  (** Lattice definition *)
+  (** ================== *)
 
   include Pool
 
-  (*==========================================================================*)
-  (**                        {2 Lattice definition}                           *)
-  (*==========================================================================*)
+  let join annot subman (abs1, sub1) (abs2, sub2) =
+    join annot abs1 abs2, sub1, sub2
 
+  let meet annot subman (abs1, sub1) (abs2, sub2) =
+    meet annot abs1 abs2, sub1, sub2
 
+  let widen annot subman (abs1, sub1) (abs2, sub2) =
+    widen annot abs1 abs2, sub1, sub2
 
-  let unify ctx (pool1, sub1) (pool2, sub2) =
-    (** FIXME: this unification is imprecise. It may destroy information about weak addresses
-        present in only one environments. It needs to take into consideration optional
-        dimensions.
-    *)
-    (pool1, sub1), (pool2, sub2)
+  let subset subman (abs1, sub1) (abs2, sub2) =
+    subset abs1 abs2, sub1, sub2
 
+  (** Domain identification *)
+  (** ===================== *)
 
-  (*==========================================================================*)
-  (**                        {2 Transfer functions}                           *)
-  (*==========================================================================*)
+  type _ domain += D_u_heap_recency : t domain
+  let id = D_u_heap_recency
+  let name = "universal.heap.recency"
+  let identify : type a. a domain -> (t, a) eq option =
+    function
+    | D_u_heap_recency -> Some Eq
+    | _ -> None
 
-  let init man ctx prog flow =
-    ctx, set_domain_cur empty man flow
+  let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec man subman ctx stmt flow = None
+  (** Zoning definition *)
+  (** ================= *)
 
-  let eval (man: ('a, t) manager) subman ctx  exp (flow: 'a flow) =
-    let range = erange exp in
-    match ekind exp with
-    (* Allocation of a head address *)
-    | E_alloc_addr(addr_kind, addr_range) ->
-      let pool = get_domain_cur man flow in
+  let exec_interface = {export = []; import = []}
+  let eval_interface = {export = [Z_u, Z_u]; import = []}
 
-      let recent_addr = {
-        addr_kind;
-        addr_range;
-        addr_uid = Pool.recent_uid;
-      }
+  (** Initialization *)
+  (** ============== *)
 
-      and old_addr = {
-        addr_kind;
-        addr_range;
-        addr_uid = Pool.old_uid;
-      }
+  let init prog man flow =
+    Some (
+      Flow.set_domain_cur empty man flow |>
+      Flow.set_annot KAddr Equiv.empty
+    )
 
-      in
+  (** Post-conditions *)
+  (** *************** *)
 
-      let flow1 = match Pool.mem_recent recent_addr pool, Pool.mem_old old_addr pool with
+  let exec zone stmt man flow =
+    None
+
+  (** Evaluations *)
+  (** *********** *)
+
+  let eval zone expr man flow =
+    match ekind expr with
+    | E_alloc_addr(addr_kind) ->
+      begin
+        let pool = Flow.get_domain_cur man flow in
+
+        let cs = Flow.get_annot Iterators.Interproc.Callstack.A_call_stack flow in
+        let range = erange expr in
+        let recent_uid, flow = get_id_flow (cs, range, 0) flow in
+        let old_uid, flow = get_id_flow (cs, range, 1) flow in
+
+        let recent_addr = {addr_kind; addr_uid = recent_uid} in
+        let old_addr = {addr_kind; addr_uid = old_uid} in
+
+        (match Pool.mem_recent recent_addr pool, Pool.mem_old old_addr pool with
         | false, false ->
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
@@ -83,39 +99,28 @@ struct
         | true, false ->
           (* Only a previous strong address exists =>
              Rebase the previous strong address with strong updates. *)
-          man.exec ctx (mk_rebase_addr old_addr recent_addr STRONG range) flow
+          man.exec (mk_rebase_addr old_addr recent_addr STRONG range) flow
 
         | true, true ->
           (* Both strong and weak addresses exist =>
              Rebase the previous strong address with weak updates. *)
-          man.exec ctx (mk_rebase_addr old_addr recent_addr WEAK range) flow
+          man.exec (mk_rebase_addr old_addr recent_addr WEAK range) flow
 
 
         | false, true ->
-          debug "? case";
-          assert false
-      in
-
-      let flow2 = set_domain_cur (add_recent recent_addr pool) man flow1 in
-
-      oeval_singleton (Some (mk_addr recent_addr range), flow2, [])
-
-
+          Debug.fail "? case")
+        |> Flow.set_domain_cur (add_recent recent_addr pool) man
+        |> Eval.singleton (mk_addr recent_addr (tag_range range "mk_recent_addr"))
+        |> OptionExt.return
+      end
     | _ -> None
 
-  let ask : type r. ('a, t) manager -> ('a, Sub.t) manager -> Framework.Context.context -> r Framework.Query.query -> 'a flow -> r option =
-    fun man subman ctx query flow ->
-      match query with
-      | Query.QAllocatedAddresses ->
-        let pool = get_domain_cur man flow in
-        let addrs = Pool.AddrSet.elements pool.recent @ Pool.AddrSet.elements pool.old in
-        Some addrs
+  (** Queries *)
+  (** ******* *)
 
-      | _ -> None
-
+  let ask _ _ _ = None
 
 end
 
-
-let setup () =
-  register_domain name (module Make)
+let () =
+  Framework.Domains.Stacked.register_domain (module Domain)

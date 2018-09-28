@@ -19,7 +19,6 @@ let _ =
      "int",    TOK_INT;
      "real",   TOK_REAL;
      "string", TOK_STRING;
-     "bool",   TOK_BOOL;
      "char",   TOK_CHAR;
 
      (* constants *)

@@ -34,10 +34,6 @@ let () =
         (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
 
       | _ -> default exp
-
-      | E_len(e) ->
-        {exprs = [e]; stmts = []},
-        (fun parts -> {exp with ekind = (E_len(List.hd parts.exprs))})
     );
 
   register_stmt_visitor (fun default stmt ->
@@ -49,9 +45,9 @@ let () =
       | S_project_vars _
       | S_rebase_addr _ -> leaf stmt
 
-      | S_assign(x, e, kind) ->
+      | S_assign(x, e) ->
         {exprs = [e; x]; stmts = []},
-        (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e, kind)} | _ -> assert false)
+        (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e)} | _ -> assert false)
 
       | S_assume(e) ->
         {exprs = [e]; stmts = []},
@@ -95,6 +91,8 @@ let () =
            let tests = List.combine tests_names tests_bodies in
            {stmt with skind = S_unit_tests(file, tests)}
         )
+
+      | S_print -> leaf stmt
 
       | _ -> default stmt
     );

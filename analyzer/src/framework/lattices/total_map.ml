@@ -46,44 +46,39 @@ struct
         Map.exists (fun _ v -> Value.is_bottom v) m
       ) abs
 
-  let is_top abs =
-    bot_dfl1 false (fun m ->
-        Map.for_all (fun _ v -> Value.is_top v) m
-      ) abs
-
-  let leq (a1:t) (a2:t) : bool =
+  let subset (a1:t) (a2:t) : bool =
     bot_included
       (Map.for_all2zo
          (fun _ v1 -> true) (* non-⊤ ⊆ ⊤ *)
-         (fun _ v2 -> Value.is_top v2)  (* ⊤ ⊈ non-⊤ *)
-         (fun _ v1 v2 -> Value.leq v1 v2)
+         (fun _ v2 -> Value.subset Value.top v2)  (* ⊤ ⊈ non-⊤ *)
+         (fun _ v1 v2 -> Value.subset v1 v2)
       )
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊤. *)
 
-  let join  (a1:t) (a2:t) : t =
+  let join annot (a1:t) (a2:t) : t =
     bot_neutral2
       (Map.map2zo
          (fun _ v1 -> Value.top) (* ⊤ *)
          (fun _ v2 -> Value.top) (* ⊤ *)
-         (fun _ v1 v2 -> Value.join  v1 v2)
+         (fun _ v1 v2 -> Value.join annot v1 v2)
       )
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊤. *)
 
 
-  let widening ctx (a1:t) (a2:t) : t =
+  let widen annot (a1:t) (a2:t) : t =
     bot_neutral2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.widening ctx v1 v2)
+         (fun _ v1 v2 -> Value.widen annot v1 v2)
       )
       a1 a2
   (** Widening (naive). *)
 
 
-  let meet  (a1:t) (a2:t) : t =
+  let meet annot (a1:t) (a2:t) : t =
     bot_absorb2
       (fun b1 b2 ->
         exn_to_bot
@@ -91,8 +86,8 @@ struct
              (fun _ v1 -> v1)
              (fun _ v2 -> v2)
              (fun _ v1 v2 ->
-                let v = Value.meet  v1 v2 in
-                if Value.leq v Value.bottom then
+                let v = Value.meet annot v1 v2 in
+                if Value.is_bottom v then
                   raise Found_BOT
                 else
                   v
@@ -112,22 +107,12 @@ struct
             (pp_print_list
                ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
                (fun fmt (k, v) ->
-                  fprintf fmt "%a → @[<h2>  %a@]" Key.print k Value.print v
+                  fprintf fmt "%a  → @[<h2> %a@]" Key.print k Value.print v
                )
             ) (Map.bindings m)
       ) fmt a
   (** Printing. *)
 
-
-  let debug_bin name op printres a1 a2 =
-    let r = op a1 a2 in
-    debug "@[%a@] %s@ @[%a@] ->@ @[@ %a@]" print a1 name print a2 printres r;
-    r
-
-  let leq = debug_bin "⊆" leq Format.pp_print_bool
-  let join = debug_bin "∪" join print
-  let meet = debug_bin "∩" meet print
-  let widening ctx = debug_bin "∇" (widening ctx) print
 
   let find (k: Key.t) (a: t) =
     try begin

@@ -1,16 +1,53 @@
 open Format
-open Framework.Pp
+open Framework.Essentials
 open Framework.Ast
 open Ast
 
 let rec pp_c_init fmt = function
   | C_init_expr(e) -> pp_expr fmt e
-  | C_init_list(l, None) ->
-    fprintf fmt "{%a}"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
-  | C_init_list([], Some filler) ->
-    fprintf fmt "{%a ...}" pp_c_init filler
+  | C_init_list([], Some filler) -> fprintf fmt "{%a ...}" pp_c_init filler
+  | C_init_list(l, _) -> fprintf fmt "{%a}"
+                           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+  | C_init_implicit t -> assert false
+
+let rec pp_c_type_short fmt =
+  function
+  | T_c_void -> pp_print_string fmt "void" 
+  | T_c_integer(C_signed_char) -> pp_print_string fmt "s8"
+  | T_c_integer(C_unsigned_char) -> pp_print_string fmt "u8"
+  | T_c_integer(C_signed_short) -> pp_print_string fmt "s16"
+  | T_c_integer(C_unsigned_short) -> pp_print_string fmt "u16"
+  | T_c_integer(C_signed_int) -> pp_print_string fmt "s32"
+  | T_c_integer(C_unsigned_int) -> pp_print_string fmt "u32"
+  | T_c_integer(C_signed_long) -> pp_print_string fmt "sl"
+  | T_c_integer(C_unsigned_long) -> pp_print_string fmt "ul"
+  | T_c_integer(C_signed_long_long) -> pp_print_string fmt "sll"
+  | T_c_integer(C_unsigned_long_long) -> pp_print_string fmt "ull"
+  | T_c_integer(C_signed_int128) -> pp_print_string fmt "s128"
+  | T_c_integer(C_unsigned_int128) -> pp_print_string fmt "u128"
+  | T_c_float(C_float) -> pp_print_string fmt "f"
+  | T_c_float(C_double) -> pp_print_string fmt "d"
+  | T_c_float(C_long_double) -> pp_print_string fmt "ld"
+  | T_c_pointer(t) -> fprintf fmt "%a*" pp_c_type_short t
+  | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_c_type_short t
+  | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_c_type_short t (Z.to_string n)
+  | T_c_array(t, C_array_length_expr e) -> fprintf fmt "%a[%a]" pp_c_type_short t pp_expr e
+  | T_c_function None -> ()
+  | T_c_function (Some f) -> fprintf fmt "(%a)" pp_c_type_short f.c_ftype_return
+  | T_c_typedef(typedef) -> pp_c_type_short fmt typedef.c_typedef_def
+  | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "s %s" record.c_record_org_name
+  | T_c_record({c_record_kind = C_union} as record) -> fprintf fmt "u %s" record.c_record_org_name
+  | T_c_qualified(qual, t) ->
+    let l =
+      (if qual.c_qual_is_const then ["c"] else []) @
+      (if qual.c_qual_is_volatile then ["v"] else []) @
+      (if qual.c_qual_is_restrict then ["r"] else [])
+    in
+    let qual = String.concat " " l in
+    fprintf fmt "%s %a" qual pp_c_type_short t
+  | T_c_enum(enum) -> fprintf fmt "e %s" enum.c_enum_org_name
   | _ -> assert false
+
 
 let () =
   register_pp_typ (fun default fmt typ ->
@@ -34,7 +71,7 @@ let () =
       | T_c_float(C_double) -> pp_print_string fmt "double"
       | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
-      | T_c_pointer(t) -> fprintf fmt "(ptr %a *)" pp_typ t
+      | T_c_pointer(t) -> fprintf fmt "%a *" pp_typ t
 
       | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
       | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)
@@ -68,6 +105,7 @@ let () =
       match c with
       | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
       | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
+      | C_c_invalid -> fprintf fmt "Invalid"
       | _ -> next fmt c
     );
   register_pp_operator (fun next fmt op ->
@@ -82,8 +120,9 @@ let () =
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
       | E_c_function(f) -> pp_var fmt f.c_func_var
-      | E_c_builtin_function(f) -> pp_print_string fmt f
+      | E_c_builtin_function(f) -> fprintf fmt "builtin %s" f
       | E_c_call(f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
+      | E_c_builtin_call(f, args) -> fprintf fmt "builtin %s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
       | E_c_assign(lval, rval) -> fprintf fmt "%a = %a" pp_expr lval pp_expr rval
       | E_c_compound_assign _ -> assert false
@@ -100,18 +139,20 @@ let () =
     );
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
+      | S_c_global_declaration (v, None)
       | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+      | S_c_global_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
-          Framework.Pp.pp_stmt init
-          (Printers.print_option Framework.Pp.pp_expr) cond
-          (Printers.print_option Framework.Pp.pp_expr) it
-          Framework.Pp.pp_stmt stmts
+          pp_stmt init
+          (Printers.print_option pp_expr) cond
+          (Printers.print_option pp_expr) it
+          pp_stmt stmts
       | S_c_do_while (body,cond) ->
         fprintf fmt "do {@\n  @[%a]@\n} while (%a);"
-          Framework.Pp.pp_stmt body
-          Framework.Pp.pp_expr cond
+          pp_stmt body
+          pp_expr cond
       | S_c_switch(cond, body) ->
         fprintf fmt "switch (%a) {@\n  @[%a@]@\n}"
           pp_expr cond

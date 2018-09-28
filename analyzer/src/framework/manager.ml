@@ -6,122 +6,109 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Lattice
-open Flow
-open Eval
-    
-(**
-   A manager provides to a domain:
-   - the operators of global flow abstraction and its the underlying environment
-   abstraction,
-   - the accessor structure to its own abstraction
-   - and the transfer functions of the top-level analyzer.
-*)
-
-
-let debug fmt = Debug.debug ~channel:"framework.manager" fmt
-
+open Annotation
 
 (*==========================================================================*)
-(**                            {2 Accessors}                                *)
+(**                            {2 Flows}                                    *)
 (*==========================================================================*)
 
+type token = ..
+(** Flow tokens are used to tag abstract elements when encountered in a
+    relevant control point *)
 
-(**
-   An accessor of type [('a, 'b) accessor] allows retrieving/updating a domain
-    abstraction of type ['b] within the global analyzer abstraction ['a]
-*)
-type ('a, 'b) accessor = {
-  get : 'a -> 'b; (** Returns the domain's abstract element. *)
-  set : 'b -> 'a -> 'a; (** Modifies the domain's abstract element and returns
-                            the updated global abstraction . *)
+type token += T_cur
+(** Token of current (active) execution flow *)
+
+type token_info = {
+  compare : (token -> token -> int) -> token -> token -> int;
+  print   : (Format.formatter -> token -> unit) -> Format.formatter -> token -> unit;
 }
 
+let token_compare_chain : (token -> token -> int) ref = ref (fun tk1 tk2 ->
+    match tk1, tk2 with
+    | T_cur, T_cur -> 0
+    | _ -> compare tk1 tk2
+  )
+
+let print_token_chain : (Format.formatter -> token -> unit) ref = ref (fun fmt ->
+    function
+    | T_cur -> Format.pp_print_string fmt "cur"
+    | _ -> failwith "Pp: Unknown flow token"
+)
 
 
-(*==========================================================================*)
-(**                            {2 Manager}                                  *)
-(*==========================================================================*)
+let register_token info =
+  token_compare_chain := info.compare !token_compare_chain;
+  print_token_chain := info.print !print_token_chain;
+  ()
 
+let compare_token tk = !token_compare_chain tk
 
-(** An instance of type [('a, 'b) manager] encapsulates the lattice operators
-    of the global environment abstraction ['a] and its flow abstraction
-    ['a Flow.t], the top-level transfer functions [exec], [eval] and [ask],
-    and the accessor to the domain abstraction ['b] within ['a].
-*)
-type ('a, 'b) manager = {
-  (** Environment abstraction. *)
-  env : 'a lattice_manager;
+let pp_token fmt ft = !print_token_chain fmt ft
 
-  (** Flow abstraction. *)
-  flow : 'a flow_manager;
+module FlowMap =
+struct
+  include MapExt.Make(
+    struct
+      type t = token
+      let compare = compare_token
+      let print = pp_token
+    end
+    )
 
-  (** Statement transfer function. *)
-  exec :
-    Context.context -> Ast.stmt -> 'a flow ->
-    'a flow;
+  let print pp_value fmt m =
+    if is_empty m then Format.pp_print_string fmt "⊥"
+    else
+      Format.fprintf fmt "@[<v>%a@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt (k, v) -> Format.fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k pp_value v)
+        ) (bindings m)
+end
 
-  (** Expression transfer function. *)
-  eval :
-    Context.context -> Ast.expr -> 'a flow ->
-    (Ast.expr, 'a) Eval.evals;
+type 'a fmap = 'a FlowMap.t Top.with_top
 
-  (** Query transfer function. *)
-  ask : 'r. Context.context -> 'r Query.query -> 'a flow -> 'r option;
-
-  (** Domain accessor. *)
-  ax : ('a, 'b) accessor;
+type 'a flow = {
+  map   : 'a fmap;
+  annot : 'a annot;
 }
 
-(** Update the domain abstraction of the TCur flow *)
-let map_domain_cur f man flow =
-  let cur = man.flow.get TCur flow in
-  let a = man.ax.get cur in
-  let a' = f a in
-  let cur' = man.ax.set a' cur in
-  man.flow.set TCur cur' flow
-
-let set_domain_cur a man flow =
-  let cur = man.flow.get TCur flow in
-  let cur' = man.ax.set a cur in
-  man.flow.set TCur cur' flow
+(*==========================================================================*)
+(**                          {2 Evaluations}                                *)
+(*==========================================================================*)
 
 
-(** Retrieve the domain abstraction of the TCur flow *)
-let get_domain_cur man flow =
-    man.flow.get TCur flow |>
-    man.ax.get
+type ('a, 'e) evl_case = {
+  expr    : 'e option;
+  flow    : 'a flow;
+  cleaners: Ast.stmt list;
+}
+
+type ('a, 'e) evl = ('a, 'e) evl_case Dnf.t
 
 
 (*==========================================================================*)
-(**                         {2 Utility functions}                           *)
+                           (** {2 Analysis manager} *)
 (*==========================================================================*)
 
-let if_flow
-    (true_cond: 'a flow -> 'a flow)
-    (false_cond: 'a flow -> 'a flow)
-    (true_branch: 'a flow -> 'b)
-    (false_branch: 'a flow -> 'b)
-    (bottom_branch: unit -> 'b)
-    (merge: 'a flow -> 'a flow -> 'b)
-    man flow
-  : 'b =
-  let true_flow = true_cond flow
-  and false_flow = false_cond flow in
-  debug "true cond:@\n  @[%a@]@\nfalse cond:@\n  @[%a@]"
-    man.flow.print true_flow
-    man.flow.print false_flow
-  ;
-  match man.flow.is_cur_bottom true_flow, man.flow.is_cur_bottom false_flow with
-  | false, true -> debug "true branch"; true_branch true_flow
-  | true, false -> debug "true branch"; false_branch false_flow
-  | false, false -> debug "merge branch"; merge true_flow false_flow
-  | true, true -> debug "bottom branch"; bottom_branch ()
 
-let if_flow_eval
-    true_flow false_flow
-    true_case false_case man flow
-    ?(bottom_case=(fun () -> oeval_singleton (None, flow, [])))
-    ?(merge_case=(fun flow1 flow2 -> oeval_join (true_case flow1) (false_case flow2)))
-    () =
-  if_flow true_flow false_flow true_case false_case bottom_case merge_case man flow
+type ('a, 't) man = {
+  (* Functions on the global abstract element *)
+  bottom    : 'a;
+  top       : 'a;
+  is_bottom : 'a -> bool;
+  subset    : 'a -> 'a -> bool;
+  join      : 'a annot -> 'a -> 'a -> 'a;
+  meet      : 'a annot -> 'a -> 'a -> 'a;
+  widen     : 'a annot -> 'a -> 'a -> 'a;
+  print     : Format.formatter -> 'a -> unit;
+
+  (* Accessors to the domain's abstract element *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (** Transfer functions *)
+  exec : ?zone:Zone.zone -> Ast.stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(Zone.zone * Zone.zone) -> Ast.expr -> 'a flow -> ('a, Ast.expr) evl;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+}

@@ -8,8 +8,8 @@
 
 (** Python AST *)
 
-open Framework.Ast
-
+open Framework.Essentials
+open Universal.Ast
 
 (*==========================================================================*)
                            (** {2 Constants} *)
@@ -17,9 +17,9 @@ open Framework.Ast
 
 type constant +=
   | C_py_none
-  | C_py_undefined
   | C_py_not_implemented
   | C_py_imag of float
+  | C_py_empty (** empty value of heap objects inheriting from object *)
 
 
 (*==========================================================================*)
@@ -28,20 +28,26 @@ type constant +=
 
 (** Python-specific types *)
 type typ +=
-  | T_py_undefined
   | T_py_not_implemented
   | T_py_complex
   | T_py_none
+  | T_py_empty
 
 
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
 
+(** Python objects *)
+type py_object = Universal.Ast.addr (** uid + type *) * expr (** value representation *)
+
+let compare_py_object (obj1: py_object) (obj2: py_object) : int =
+  let addr1 = fst obj1 and addr2 = fst obj2 in
+  Universal.Ast.compare_addr addr1 addr2
+
 type operator +=
   | O_py_and (** and *)
   | O_py_or (** or *)
-  | O_py_not (** not *)
   | O_py_floor_div (** // *)
   | O_py_is (** is *)
   | O_py_is_not (** is not *)
@@ -51,13 +57,13 @@ type operator +=
 
 
 let is_arith_op = function
-  | Universal.Ast.O_plus T_any
-  | Universal.Ast.O_minus T_any
-  | Universal.Ast.O_mult T_any
+  | Universal.Ast.O_plus
+  | Universal.Ast.O_minus
+  | Universal.Ast.O_mult
   | O_py_mat_mult
-  | Universal.Ast.O_div T_any
+  | Universal.Ast.O_div
   | O_py_floor_div
-  | Universal.Ast.O_mod T_any
+  | Universal.Ast.O_mod
   | Universal.Ast.O_pow
   | Universal.Ast.O_bit_lshift
   | Universal.Ast.O_bit_rshift
@@ -68,13 +74,23 @@ let is_arith_op = function
 
   | _ -> false
 
+
 let is_comp_op = function
-  | Universal.Ast.O_eq
-  | Universal.Ast.O_ne
-  | Universal.Ast.O_lt
-  | Universal.Ast.O_le
-  | Universal.Ast.O_gt
-  | Universal.Ast.O_ge -> true
+  | Framework.Ast.O_eq
+  | Framework.Ast.O_ne
+  | Framework.Ast.O_lt
+  | Framework.Ast.O_le
+  | Framework.Ast.O_gt
+  | Framework.Ast.O_ge -> true
+  | _ -> false
+
+let is_compare_op_fun = function
+  | "int.__eq__"
+    | "int.__ne__"
+    | "int.__lt__"
+    | "int.__le__"
+    | "int.__gt__"
+    | "int.__ge__" -> true
   | _ -> false
 
 
@@ -86,6 +102,8 @@ type py_lambda = {
 }
 
 type expr_kind +=
+  | E_py_undefined of bool (* is it global? *)
+  | E_py_object of py_object
   | E_py_list of expr list
   | E_py_index_subscript of expr (** object *) * expr (** index *)
   | E_py_slice_subscript of expr (** object *) * expr (** start *) * expr (** end *) * expr (** step *)
@@ -269,11 +287,61 @@ let mk_py_call func args range =
 let mk_py_attr obj attr ?(etyp=T_any) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
-let mk_py_addr_attr addr attr ?(etyp=T_any) range =
-  mk_py_attr (Universal.Ast.mk_addr addr (tag_range range "addr")) attr ~etyp range
+let mk_py_object (addr, e) range =
+  mk_expr (E_py_object (addr, e)) range
+
+let mk_py_object_attr obj attr ?(etyp=T_any) range =
+  mk_py_attr (mk_py_object obj range) attr ~etyp range
+
+let mk_py_empty range =
+  mk_constant C_py_empty ~etyp:T_py_empty range
+
+let mk_py_true range =
+  mk_constant (C_bool true) ~etyp:T_bool range
+
+let mk_py_false range =
+  mk_constant (C_bool false) ~etyp:T_bool range
+
+let mk_py_top t range =
+  mk_constant (C_top t) ~etyp:t range
+
+let object_of_expr e =
+  match ekind e with
+  | E_py_object o -> o
+  | _ -> assert false
+
+let addr_of_object (obj:py_object) : Universal.Ast.addr =
+  fst obj
+
+let value_of_object (obj:py_object) : expr =
+  snd obj
+
+let rec is_py_expr e =
+  match ekind e with
+  | E_py_undefined _
+  | E_py_object _
+  | E_py_list _
+  | E_py_index_subscript _
+  | E_py_slice_subscript _
+  | E_py_attribute _
+  | E_py_dict _
+  | E_py_set _
+  | E_py_generator_comprehension _
+  | E_py_list_comprehension _
+  | E_py_set_comprehension _
+  | E_py_dict_comprehension _
+  | E_py_call _
+  | E_py_yield _
+  | E_py_if _
+  | E_py_tuple _
+  | E_py_bytes _
+  | E_py_lambda _
+  | E_py_multi_compare _
+  | E_constant _ -> true
+  | E_var _ (*FIXME {vkind = V_orig}*) -> true
+  | E_unop(_, e) -> is_py_expr e
+  | E_binop(_, e1, e2) -> is_py_expr e1 && is_py_expr e2
+  | _ -> false
 
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range
-
-let mk_py_not_implemented range =
-  mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range

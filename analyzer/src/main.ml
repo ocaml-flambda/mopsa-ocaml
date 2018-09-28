@@ -9,29 +9,22 @@
 (** Entry point of the analyzer. *)
 
 open Framework
-open Framework.Flow
 
 
-(** Initialize analyzer using environment variables. *)
+(** Initialize options from environment variables *)
 let init_from_env () =
-  try
-    let debug = Unix.getenv "MOPSADEBUG" in
-    Debug.parse debug
-  with Not_found ->
-    ()
+  (* Initialize debug channels from the environment variable MOPSADEBUG. *)
+  (try Debug.parse (Unix.getenv "MOPSADEBUG")
+   with Not_found -> ());
 
-
-(** Initialize analyzer components and domains. *)
-let init () =
-  Options.setup ();
-  init_from_env ();
-  Lang.Universal.Setup.init ();
-  Lang.C.Setup.init ();
-  Lang.Python.Setup.init ();
+  (* Get the path of configuration file from variable MOPSACONFIG *)
+  (try Options.(common_options.config <- Unix.getenv "MOPSACONFIG")
+   with Not_found ->());
   ()
 
+
 (** Start the analysis of [prog] using [domain] as the global abstraction. *)
-let perform_analysis (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
+let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
   (* Top layer analyzer *)
   let module Domain = (val domain) in
   let module Analyzer = Analyzer.Make(Domain) in
@@ -39,57 +32,45 @@ let perform_analysis (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.prog
   let t = Timing.start () in
 
   Debug.info "Computing initial environments ...";
-  let ctx, abs = Analyzer.init prog in
-  Debug.info "Result:@\n%a" Analyzer.flow_manager.print abs;
+  let flow = Analyzer.init prog in
+  Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
   let stmt =
-    Ast.mk_stmt (Ast.S_program prog) Framework.Ast.(mk_file_range prog.prog_file)
+    Ast.mk_stmt (Ast.S_program prog) Framework.Location.(mk_file_range prog.Framework.Ast.prog_file)
   in
 
   Debug.info "Starting the analysis ...";
 
-  let res = Analyzer.exec ctx stmt abs in
+  let res = Analyzer.exec stmt flow in
   let t = Timing.stop t in
-  Debug.info "Result:@\n@[<h 2>  %a@]" Analyzer.flow_manager.print res;
+  Debug.debug ~channel:"result" "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
 
   Debug.info "Collecting alarms ...";
-  let alarms = Analyzer.ask ctx Alarm.QGetAlarms res in
+  let alarms = Flow.fold (fun acc tk env ->
+      match tk with
+      | Alarm.T_alarm a -> a :: acc
+      | _ -> acc
+    ) [] Analyzer.man res in
   t, alarms
 
 type analysis_results =
   | ExcPanic of string
-  | ExcPanicAt of Ast.range * string
+  | ExcPanicAt of Location.range * string
   | ExcUncaught of string * string
-  | Success of float * Framework.Alarm.alarm list option
+  | Success of float * Framework.Alarm.alarm list
 
-let bench_printing analysis_res =
-  match analysis_res with
-  | Success(t, None) | Success(t, Some []) ->
-    Format.printf "{\"time\": %.6f, \"alarms\": []}" t
-  | Success(t, Some alarms) ->
-    Format.printf "{\"time\": %.6f, \"alarms\": [%a]}"
-      t
-      (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-         Framework.Alarm.pp_alarm_bench
-      ) alarms
-  | ExcPanic s
-  | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)
-    Format.printf "{\"exc\": {\"etype\": \"Panic\", \"info\" : \"%s\"}}" s
-  | ExcUncaught(s,s') ->
-    Format.printf "{\"exc\": {\"etype\": \"Uncaught\", \"info\" : \"%s in %s\"}}" s s'
 
-let verbose_printing analysis_res =
+let print_results analysis_res =
   match analysis_res with
-  | Success(t, None) | Success(t, Some []) ->
-    Format.printf "Analysis terminated in %.6fs@\n%a No alarm@\n" t
+  | Success(t, []) ->
+    Format.printf "Analysis terminated in %.3fs@\n%a No alarm@\n" t
       ((Debug.color "green") Format.pp_print_string) "✔"
-  | Success(t, Some alarms) ->
-    Format.printf "Analysis terminated in %.6fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
+  | Success(t, alarms) ->
+    Format.printf "Analysis terminated in %.3fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
       t
       (List.length alarms)
       Debug.plurial_list alarms
       (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n-------------@\n")
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n@\n--------------------------------------@\n@\n")
          Framework.Alarm.pp_alarm
       ) alarms
   | ExcPanic s
@@ -100,22 +81,11 @@ let verbose_printing analysis_res =
       name
       backtrace
 
-(** Start the analysis of [prog] using [domain] as the global abstraction. *)
-let start (domain: (module Domains.Stateful.DOMAIN)) (prog : Ast.program) =
-  (* Top layer analyzer *)
 
-  let t, alarms = perform_analysis domain prog in
-  Success(t, alarms)
 
-(** Return the path of the configuration file.
-    First, check the existence of environment variable MOPSACONFIG.
-    Otherwise, use the provided command line option -config.
-*)
+(** Return the path of the configuration file *)
 let get_config_path () =
-  let config =
-    try Unix.getenv "MOPSACONFIG"
-    with Not_found -> Options.(common_options.config)
-  in
+  let config = Framework.Options.(common_options.config) in
   if Sys.file_exists config then config
   else
     let config' = "configs/" ^ config in
@@ -125,42 +95,50 @@ let get_config_path () =
       if Sys.file_exists config'' then config''
       else Framework.Exceptions.fail "Unable to find configuration file %s" config
 
-let error_msg_printer s =
-  if Options.common_options.Options.escape_string_error_message then
-    String.escaped s
-  else s
 
-let () =
-  init ();
+
+(** Call the appropriate frontend to parse the input sources *)
+let parse_program files =
+  match Options.(common_options.lang) with
+  | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "c" -> Lang.C.Frontend.parse_program files
+  | "python" -> Lang.Python.Frontend.parse_program files
+  | _ -> Framework.Exceptions.panic "Unknown language"
+
+
+
+(** Parse command line arguments and apply [f] on the list of target
+   source files *)
+let iter_sources f () =
+  init_from_env ();
   let files = ref [] in
   let n = Array.length Sys.argv in
   Arg.parse !Options.spec (fun filename ->
+      if not (Sys.file_exists filename) then
+        Debug.fail "File %s does not exist" filename;
       files := filename :: !files;
       if !Arg.current = n - 1 then
-        let result =
-          try
-            let prog =
-              match Options.(common_options.lang) with
-              | "c" -> Lang.C.Frontend.parse_program !files
-              | "python" -> Lang.Python.Frontend.parse_program !files
-              | "universal" -> Lang.Universal.Frontend.parse_program !files
-              | _ -> Framework.Exceptions.panic "Unknown language"
-            in
-            Debug.info "Parsing configuration file ...";
-            let config = get_config_path () in
-            let domain = Config.parse config in
-            (* Start the analysis *)
-            let () = Debug.debug ~channel:("main") "%a" Framework.Pp.pp_program prog in
-            let t, alarms = perform_analysis domain prog in
-            Success(t, alarms)
-          with
-          | Framework.Exceptions.Panic msg -> ExcPanic (error_msg_printer msg)
-          | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range, error_msg_printer msg)
-          | e -> ExcUncaught(error_msg_printer (Printexc.to_string e), Printexc.get_backtrace ())
-        in
-        match Options.(common_options.output_mode) with
-        | "bench" ->
-          bench_printing result
-        | _ ->
-          verbose_printing result
+        f !files
     ) "Modular Open Platform for Static Analysis"
+
+
+
+(** Main entry point *)
+let () =
+  iter_sources (fun files ->
+      let result = try
+          let prog = parse_program files in
+          let config = get_config_path () in
+          let domain = Config.parse config in
+
+          (* Start the analysis *)
+          let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
+          let t, alarms = perform_analysis domain prog in
+          Success(t, alarms)
+        with
+        | Framework.Exceptions.Panic msg -> ExcPanic  msg
+        | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range,  msg)
+        | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
+      in
+      print_results result
+    ) ()

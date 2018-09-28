@@ -8,9 +8,10 @@
 
 (** Extends the simple Universal language with Control Flow Graphs. *)
 
-open Framework.Ast
 open Framework.Flow
-open Framework.Pp
+open Framework.Location
+open Framework.Manager
+open Framework.Ast
 open Universal.Ast
 
    
@@ -134,16 +135,18 @@ let cfg_printer = {
                 
            
 let () =
-  register_token_compare (fun next t1 t2 ->
-      match t1, t2 with
-      | TLoc l1, TLoc l2 -> compare_location l1 l2
-      | _ -> next t1 t2
-    );
-  register_pp_token (fun next fmt t ->
-      match t with
-      | TLoc l -> pp_location fmt l
-      | _ -> next fmt t
-    );
+  register_token
+    { compare = (fun next t1 t2 ->
+        match t1, t2 with
+        | TLoc l1, TLoc l2 -> compare_location l1 l2
+        | _ -> next t1 t2
+      );
+      print = (fun next fmt t ->
+        match t with
+        | TLoc l -> pp_location fmt l
+        | _ -> next fmt t
+      );
+    };
   register_pp_stmt (fun next fmt s ->
       match s.skind with
       | S_CFG g -> Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g

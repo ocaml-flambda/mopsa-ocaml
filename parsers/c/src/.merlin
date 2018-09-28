@@ -1,4 +1,5 @@
-B ../../utils/lib
-B ../_build
-B ../_build/src
-PKG unix str zarith
+S ../src/** 
+ B ../_build
+ B ../../../utils/lib/**
+
+PKG str unix zarith

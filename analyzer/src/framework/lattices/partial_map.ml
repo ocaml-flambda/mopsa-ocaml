@@ -46,48 +46,47 @@ struct
         Map.for_all (fun _ v -> Value.is_bottom v) m
       ) abs
 
-  let is_top abs =
-    top_dfl1 true (fun _ -> false) abs
-
   let empty = bottom
 
   let init = empty
-  let leq  (a1:t) (a2:t) : bool =
+
+  let subset  (a1:t) (a2:t) : bool =
     top_included
       (Map.for_all2zo
          (fun _ v1 -> Value.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
          (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-         (fun _ v1 v2 -> Value.leq v1 v2)
+         (fun _ v1 v2 -> Value.subset v1 v2)
       )
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊥. *)
 
-  let join  (a1:t) (a2:t) : t =
+  let join annot (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.join v1 v2)
+         (fun _ v1 v2 -> Value.join annot v1 v2)
       )
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊥. *)
 
-  let widening ctx (a1:t) (a2:t) : t =
+  let widen annot (a1:t) (a2:t) : t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.widening ctx v1 v2)
+         (fun _ v1 v2 -> Value.widen annot v1 v2)
       )
       a1 a2
   (** Widening (naive). *)
-  let meet  (a1:t) (a2:t) : t =
+
+  let meet annot (a1:t) (a2:t) : t =
     top_neutral2
       (fun b1 b2 ->
           (Map.map2zo
              (fun _ v1 -> Value.bottom)
              (fun _ v2 -> Value.bottom)
-             (fun _ v1 v2 -> Value.meet  v1 v2)
+             (fun _ v1 v2 -> Value.meet annot v1 v2)
              b1) b2
       )
       a1 a2

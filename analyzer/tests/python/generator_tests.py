@@ -28,6 +28,19 @@ def test_argument():
     x = next(g)
     mopsa.assert_equal(x, 12)
 
+def test_access_outside_scope():
+    a = 1
+    def gen(x):
+        x = x + a
+        yield x
+        x = x + a
+        yield x
+    g = gen(0)
+    x = next(g)
+    a = a + 1
+    x = next(g)
+    mopsa.assert_equal(x, 3)
+
 def test_stop_iteration_when_terminated():
     def gen():
         yield 1

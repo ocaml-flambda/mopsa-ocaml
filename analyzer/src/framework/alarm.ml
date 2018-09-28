@@ -7,95 +7,97 @@
 (****************************************************************************)
 
 
-(** Reporting of potential errors inferred by abstract domains. *)
+(** Alarms reporting potential errors inferred by abstract domains. *)
 
 open Ast
+open Manager
 
-(*==========================================================================*)
-                           (** {2 Type} *)
-(*==========================================================================*)
-
-(** Extensible type of alarm kinds, defined by domains. *)
 type alarm_kind = ..
 
 type alarm_level =
   | ERROR
   | WARNING
   | PANIC
-  
-(** An alarm *)
+
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
-  alarm_range : range;       (** the range of the program where the alarm was detected *)
   alarm_level : alarm_level;
+  alarm_trace : Location.range list;
 }
 
-let alarm_compare_chain : (alarm -> alarm -> int) ref = ref (fun a1 a2 -> compare a1.alarm_kind a2.alarm_kind)
+type alarm_info = {
+  compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
+  pp_token   : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_title : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+  pp_report : (Format.formatter -> alarm -> unit) -> Format.formatter -> alarm -> unit;
+}
 
-let register_alarm_compare cmp =
-  alarm_compare_chain := cmp !alarm_compare_chain
+let compare_chain : (alarm -> alarm -> int) ref =
+  ref (fun a1 a2 -> Pervasives.compare a1.alarm_kind a2.alarm_kind)
+
+let pp_token_chain : (Format.formatter -> alarm -> unit) ref =
+  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+
+let pp_title_chain : (Format.formatter -> alarm -> unit) ref =
+  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+
+let pp_report_chain : (Format.formatter -> alarm -> unit) ref =
+  ref (fun fmt alarm -> failwith "Pp: Unknown alarm")
+
+let register_alarm info =
+  compare_chain := info.compare !compare_chain;
+  pp_token_chain := info.pp_token !pp_token_chain;
+  pp_title_chain := info.pp_title !pp_title_chain;
+  pp_report_chain := info.pp_report !pp_report_chain;
+  ()
 
 let compare_alarm a1 a2 =
-  compare_composer [
-    (fun () -> compare_range a1.alarm_range a2.alarm_range);
-    (fun () -> !alarm_compare_chain a1 a2);
-  ]
+  Compare.compose [
+        (fun () -> Compare.list Location.compare_range a1.alarm_trace a2.alarm_trace);
+        (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
+        (fun () -> !compare_chain a1 a2)
+      ]
 
+let pp_alarm_token fmt alarm =
+  Format.fprintf fmt "%a:%a"
+    !pp_token_chain alarm
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ":") Location.pp_range) alarm.alarm_trace
 
-
-(*==========================================================================*)
-                           (** {2 Query} *)
-(*==========================================================================*)
-
-
-(**
-   Query used by {!Main} to extract all alarms from used domains.
-*)
-type _ Query.query +=
-  | QGetAlarms: (alarm list) Query.query
-
-let () =
-  Query.(
-    register_reply_manager {
-      domatch = (let check : type a. a query -> (a, alarm list) eq option =
-                   function
-                   | QGetAlarms -> Some Eq
-                   | _ -> None
-                 in
-                 check
-                );
-      join = (fun al1 al2 ->
-          al1 @ al2
-        );
-
-      meet = (fun al1 al2 ->
-          List.filter (fun a -> List.mem a al2) al1
-        );
-    }
-  )
-
-(*==========================================================================*)
-                           (** {2 Printing} *)
-(*==========================================================================*)
-
-let pp_alarm_chain : (Format.formatter -> alarm -> unit) ref = ref (fun fmt alarm ->
-  failwith "Pp: Unknown alarm"
-  )
-
-let register_pp_alarm pp = pp_alarm_chain := pp !pp_alarm_chain
-
-let pp_alarm_level fmt = function
+let pp_level fmt = function
   | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
   | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
 
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "%a  @[%a@]@\nIn %a"
-    pp_alarm_level alarm.alarm_level
-    !pp_alarm_chain alarm
-    Pp.pp_range_verbose alarm.alarm_range
+  Format.fprintf fmt "%a  %a in %a@\nDescription: @[%a@]@\nTrace: @[%a@]"
+    pp_level alarm.alarm_level
+    !pp_title_chain alarm
+    Location.pp_location_verbose (alarm.alarm_trace |> List.hd |> Location.get_origin_range |> Location.range_begin)
+    !pp_report_chain alarm
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Location.pp_range_verbose) alarm.alarm_trace
 
-let pp_alarm_bench fmt alarm =
-  Format.fprintf fmt "{\"type\": \"%a\",\"range\": \"%a\"}"
-    !pp_alarm_chain alarm
-    Pp.pp_range_verbose alarm.alarm_range
+type token += T_alarm of alarm
+
+let alarm_token a = T_alarm a
+
+let mk_alarm ?(cs = []) ?(level = WARNING) kind range =
+  {
+    alarm_kind = kind;
+    alarm_level = level;
+    alarm_trace = range :: cs;
+  }
+
+
+let () =
+  register_token {
+    compare = (fun next tk1 tk2 ->
+        match tk1, tk2 with
+        | T_alarm a1, T_alarm a2 -> compare a1 a2
+        | _ -> next tk1 tk2
+      );
+    print = (fun next fmt tk ->
+        match tk with
+        | T_alarm a -> pp_alarm_token fmt a
+        | _ -> next fmt tk
+      );
+  }

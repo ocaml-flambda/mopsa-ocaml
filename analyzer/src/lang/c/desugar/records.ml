@@ -6,67 +6,115 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugarisation of some records expr/stmt. *)
+(** Removal of syntaxic sugar in record assignment *)
 
-open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
-open Framework.Eval
-open Framework.Ast
-open Framework.Pp
-open Universal.Ast
+open Framework.Essentials
 open Ast
+open Zone
 
-let name = "c.desugar.records"
-let debug fmt = Debug.debug ~channel:name fmt
+(** {2 Domain definition} *)
+(** ===================== *)
 
-
-(** Abstract domain. *)
-module Domain =
+module Domain : Framework.Domains.Stateless.S =
 struct
 
-  (*==========================================================================*)
-  (**                        {2 Transfer functions}                           *)
-  (*==========================================================================*)
+  (** Domain identification *)
+  (** ===================== *)
 
-  let init man ctx prog flow = ctx, flow
-
-  let eval man ctx exp flow =
-    match ekind exp with
-    | E_c_cast(e, _) when (exp |> etyp |> is_c_record_type) ->
-      let t' = etyp exp in
-      re_eval_singleton (man.eval ctx) (Some ({e with etyp = t'}), flow, [])
+  type _ domain += Dc_desugar_records : unit domain
+  let id = Dc_desugar_records
+  let name = "c.desugar.records"
+  let identify : type a. a domain -> (unit, a) eq option =
+    function
+    | Dc_desugar_records -> Some Eq
     | _ -> None
 
-  let exec man ctx stmt flow =
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  (** Zoning definition *)
+  (** ================= *)
+
+  let exec_interface = {
+    export = [Z_c];
+    import = [Z_c]
+  }
+
+  let eval_interface = {
+    export = [];
+    import = []
+  }
+
+  (** Initialization *)
+  (** ============== *)
+
+  let init _ _ _ =
+    None
+
+  (** Evaluations *)
+  (** *********** *)
+
+  let eval _ _ _ _ = None
+
+  (** Post-conditions *)
+  (** *************** *)
+
+  let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(lval, rval, smode) when is_c_record_type lval.etyp && is_c_record_type rval.etyp ->
-      let range = srange stmt in
-      let t1 = remove_typedef lval.etyp |> remove_qual and t2 = remove_typedef rval.etyp |> remove_qual in
-      assert (compare t1 t2 = 0);
-      let fields = match t1 with
-        | T_c_record{c_record_fields} -> c_record_fields
-        | _ -> assert false
-      in
-      fields |> List.fold_left (fun flow field ->
-          let lval = mk_c_member_access lval field range in
-          let rval = mk_c_member_access rval field range in
-          let stmt = {stmt with skind = S_assign(lval, rval, smode)} in
-          man.exec ctx stmt flow
-        ) flow |>
-      return
-
+    | S_assign(lval, rval)
+      when lval |> etyp |> is_c_record_type &&
+           rval |> etyp |> is_c_record_type ->
+      begin
+        let range = srange stmt in
+        let t1 = lval |> etyp |> remove_typedef |> remove_qual
+        and t2 = lval |> etyp |> remove_typedef |> remove_qual in
+        if compare t1 t2 != 0 then
+          Debug.fail "[%s] assignment of records with uncompatible \
+                      types: %a %a" name pp_typ t1 pp_typ t2
+        else
+          begin
+            let fields, record_kind = match t1 with
+              | T_c_record{c_record_fields; c_record_kind} -> c_record_fields, c_record_kind
+              | _ -> assert false
+            in
+            match record_kind with
+            | C_struct ->
+              fields |> List.fold_left (fun flow field ->
+                  let lval = mk_c_member_access lval field range in
+                  let rval = mk_c_member_access rval field range in
+                  let stmt = {stmt with skind = S_assign(lval, rval)} in
+                  man.exec ~zone:Z_c stmt flow
+                ) flow
+              |> Post.of_flow
+              |> OptionExt.return
+            | C_union ->
+              begin
+                let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
+                    let size = field.c_field_type |> sizeof_type in
+                    if Z.geq size accsize then
+                      (Some field, size)
+                    else (accfield, accsize)
+                  ) (None, Z.zero) fields
+                in
+                match fieldopt with
+                | Some field ->
+                  let lval = mk_c_member_access lval field range in
+                  let rval = mk_c_member_access rval field range in
+                  let stmt = {stmt with skind = S_assign(lval, rval)} in
+                  man.exec ~zone:Z_c stmt flow
+                  |> Post.of_flow
+                  |> OptionExt.return
+                | None -> Debug.fail "[%s] all fields have size 0" name
+              end
+          end
+      end
     | _ -> None
 
-  let ask _ _ _ _ = None
+  (** Queries *)
+  (** ******* *)
+
+  let ask _ _ _  = None
 
 end
 
-
-(*==========================================================================*)
-(**                            {2 Setup}                                    *)
-(*==========================================================================*)
-
-let setup () =
-  register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

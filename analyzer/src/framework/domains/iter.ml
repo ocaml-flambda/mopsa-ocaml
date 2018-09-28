@@ -6,77 +6,137 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Compose domains in sequence.
+(** Iterator composer combines domains in sequence. Lattice operations
+   ([bottom], [top], [leq], etc.) are defined pointwise. For transfer
+   functions ([exec], [eval] and [ask]), the iterator returns the
+   result of the first domain giving an non-empty answer.  The order
+   of domains follows the order given in the configuration file.  *)
 
-    Lattice operations ([bottom], [top], [leq], etc.) are defined pointwise.
-    For [exec], [eval] and [ask], we return the result of the first domain
-    giving an non-empty answer.
-    The order of domains follow the order given in the configuration file.
-*)
+open Essentials
 
-open Manager
-open Stateful
-
-module Make(Head: DOMAIN)(Tail: DOMAIN) =
+module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
 struct
 
   type t = Head.t * Tail.t
 
-  let bottom = Head.bottom, Tail.bottom
+  type _ domain += D_iter : t domain
 
-  let is_bottom (hd, tl) = Head.is_bottom hd || Tail.is_bottom tl
+  let id = D_iter
+  let name = Head.name ^ ", " ^ Tail.name
+  let identify : type b. b domain -> (t, b) eq option =
+    function
+    | D_iter -> Some Eq
+    | _ -> None
 
-  let top = Head.top, Tail.top
+  let debug fmt = Debug.debug ~channel:"framework.domains.iter" fmt
 
-  let is_top (hd, tl) = Head.is_top hd && Tail.is_top tl
+  let bottom =
+    Head.bottom, Tail.bottom
 
-  let leq ((hd1, tl1): t) ((hd2, tl2): t) : bool = Head.leq hd1 hd2 && Tail.leq tl1 tl2
+  let top =
+    Head.top, Tail.top
 
-  let join ((hd1, tl1): t) ((hd2, tl2): t) : t = (Head.join hd1 hd2), (Tail.join tl1 tl2)
+  let is_bottom (hd, tl) =
+    Head.is_bottom hd || Tail.is_bottom tl
 
-  let meet ((hd1, tl1): t) ((hd2, tl2): t) : t = (Head.meet hd1 hd2), (Tail.meet tl1 tl2)
+  let subset ((hd1, tl1): t) ((hd2, tl2): t) : bool =
+    Head.subset hd1 hd2 && Tail.subset tl1 tl2
 
-  let widening (ctx: Context.context) ((hd1, tl1): t) ((hd2, tl2): t) : t =
-    (Head.widening ctx hd1 hd2), (Tail.widening ctx tl1 tl2)
+  let join annot ((hd1, tl1): t) ((hd2, tl2): t) : t =
+    (Head.join annot hd1 hd2), (Tail.join annot tl1 tl2)
+
+  let meet annot ((hd1, tl1): t) ((hd2, tl2): t) : t =
+    (Head.meet annot hd1 hd2), (Tail.meet annot tl1 tl2)
+
+  let widen annot ((hd1, tl1): t) ((hd2, tl2): t) : t =
+    (Head.widen annot hd1 hd2), (Tail.widen annot tl1 tl2)
 
   let print fmt (hd, tl) =
     Format.fprintf fmt "%a%a" Head.print hd Tail.print tl
 
   let head_man man = {
-    man with ax = {
-      get = (fun gabs -> fst @@ man.ax.get gabs);
-      set = (fun hd gabs -> man.ax.set (hd, snd @@ man.ax.get gabs) gabs);
-    }
+    man with
+    get = (fun flow -> fst @@ man.get flow);
+    set = (fun hd flow -> man.set (hd, snd @@ man.get flow) flow);
   }
 
   let tail_man man = {
-    man with ax = {
-      get = (fun gabs -> snd @@ man.ax.get gabs);
-      set = (fun tl gabs -> man.ax.set (fst @@ man.ax.get gabs, tl) gabs);
-    }
+    man with
+    get = (fun flow -> snd @@ man.get flow);
+    set = (fun tl flow -> man.set (fst @@ man.get flow, tl) flow);
   }
 
-  let init man ctx prog fa =
-    let ctx, fa = Head.init (head_man man) ctx prog fa in
-    Tail.init (tail_man man) ctx prog fa
+  let init prog man flow =
+    let flow', b = match Head.init prog (head_man man) flow with
+      | None -> flow, false
+      | Some flow' -> flow', true
+    in
+    match Tail.init prog (tail_man man) flow', b with
+    | None, false -> None
+    | None, true -> Some flow'
+    | x, _ -> x
 
-  let exec man ctx stmt gabs =
-    let gabs' = Head.exec (head_man man) ctx stmt gabs in
-    match gabs' with
-    | None -> Tail.exec (tail_man man) ctx stmt gabs
-    | _ -> gabs'
+  let exec_interface = Domain.{
+    import = Head.exec_interface.import @ Tail.exec_interface.import;
+    export = Head.exec_interface.export @ Tail.exec_interface.export;
+  }
+
+  let exec zone =
+    match List.exists (fun z -> Zone.sat_zone z zone) Head.exec_interface.Domain.export,
+          List.exists (fun z -> Zone.sat_zone z zone) Tail.exec_interface.Domain.export
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      let f = Head.exec zone in
+      (fun stmt man flow -> f stmt (head_man man) flow)
+
+    | false, true ->
+      let f = Tail.exec zone in
+      (fun stmt man flow -> f stmt (tail_man man) flow)
+
+    | true, true ->
+      let f1 = Head.exec zone in
+      let f2 = Tail.exec zone in
+      (fun stmt man flow ->
+         match f1 stmt (head_man man) flow with
+         | Some post -> Some post
+         | None -> f2 stmt (tail_man man) flow
+      )
 
 
-  let eval man ctx exp gabs =
-    let head_ev = Head.eval (head_man man) ctx exp gabs in
-    match head_ev with
-    | None -> Tail.eval (tail_man man) ctx exp gabs
-    | _ -> head_ev
+  let eval_interface = Domain.{
+    import = Head.eval_interface.import @ Tail.eval_interface.import;
+    export = Head.eval_interface.export @ Tail.eval_interface.export;
+  }
+
+  let eval zpath =
+    match List.exists (fun p -> Zone.sat_zone2 p zpath) Head.eval_interface.Domain.export,
+          List.exists (fun p -> Zone.sat_zone2 p zpath) Tail.eval_interface.Domain.export
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      let f = Head.eval zpath in
+      (fun exp man flow -> f exp (head_man man) flow)
+
+    | false, true ->
+      let f = Tail.eval zpath in
+      (fun exp man flow -> f exp (tail_man man) flow)
+
+    | true, true ->
+      let f1 = Head.eval zpath in
+      let f2 = Tail.eval zpath in
+      (fun exp man flow ->
+         match f1 exp (head_man man)  flow with
+         | Some evl -> Some evl
+         | None -> f2 exp (tail_man man) flow
+      )
 
 
-  let ask man ctx query gabs =
-    let head_reply = Head.ask (head_man man) ctx query gabs in
-    let tail_reply = Tail.ask (tail_man man) ctx query gabs in
-    Query.join query head_reply tail_reply
+  let ask query man flow =
+    let head_reply = Head.ask query (head_man man) flow in
+    let tail_reply = Tail.ask query (tail_man man) flow in
+    OptionExt.option_neutral2 (Query.join query) head_reply tail_reply
 
 end

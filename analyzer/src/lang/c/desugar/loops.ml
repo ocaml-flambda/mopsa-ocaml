@@ -8,26 +8,43 @@
 
 (** Interpreter of for and do-while loops. *)
 
-open Framework.Flow
-open Framework.Domains
-open Framework.Manager
-open Framework.Domains.Stateless
-open Framework.Ast
+open Framework.Essentials
 open Ast
+open Zone
 
-let name = "c.desugar.loops"
-let debug fmt = Debug.debug ~channel:name fmt
+(** {2 Domain definition} *)
+(** ===================== *)
 
-module Domain =
+module Domain : Framework.Domains.Stateless.S =
 struct
 
-  (*==========================================================================*)
-                        (** {2 Transfer functions} *)
-  (*==========================================================================*)
+  (** Domain identification *)
+  (** ===================== *)
 
-  let init man ctx prog flow = ctx, flow
+  type _ domain += D_c_desugar_loops : unit domain
+  let id = D_c_desugar_loops
+  let name = "c.desugar.loops"
+  let identify : type a. a domain -> (unit, a) eq option =
+    function
+    | D_c_desugar_loops -> Some Eq
+    | _ -> None
 
-  let exec man ctx stmt flow =
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  (** Zoning definition *)
+  (** ================= *)
+
+  let exec_interface = {export = [Z_c]; import = [Universal.Zone.Z_u]}
+  let eval_interface = {export = []; import = []}
+
+  (** Initialization *)
+  (** ============== *)
+
+  let init _ _ _ =
+    None
+
+
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_for(init, cond, incr, body) ->
       let range = stmt.srange in
@@ -41,8 +58,7 @@ struct
           ] range
         )
       in
-      man.exec ctx stmt flow |>
-      return
+      man.exec ~zone:(Universal.Zone.Z_u) stmt flow |> Post.return
 
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
@@ -53,16 +69,15 @@ struct
           ] range
         )
       in
-      man.exec ctx stmt flow |>
-      return
+      man.exec ~zone:(Universal.Zone.Z_u) stmt flow |> Post.return
 
     | _ -> None
 
-  let eval man ctx exp flow = None
+  let eval _ _ _ _  = None
 
-  let ask _ _ _ _  = None
+  let ask _ _ _  = None
 
-  end
+end
 
-let setup () =
-  register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

@@ -8,73 +8,54 @@
 
 (** Transformation of conditional expressions. *)
 
-open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
-open Framework.Ast
-open Framework.Eval
-open Framework.Exec
+open Framework.Essentials
 open Universal.Ast
 open Ast
 
-let name = "python.desugar.if"
-let debug fmt = Debug.debug ~channel:name fmt
-
 module Domain =
-struct
+  struct
 
-  let eval man ctx exp flow =
-    let range = erange exp in
-    match ekind exp with
-    | E_py_if(test, body, orelse) ->
-      let tmp = mktmp () in
-      let flow = man.exec ctx
-          (mk_if
-             test
-             (mk_assign (mk_var tmp (tag_range range "true branch lval")) body (tag_range range "true branch assign"))
-             (mk_assign (mk_var tmp (tag_range range "false branch lval")) orelse (tag_range range "false branch assign"))
-             range
-          ) flow
-      in
-      let exp' = {exp with ekind = E_var tmp} in
-      re_eval_singleton (man.eval ctx) (Some exp', flow, [mk_remove_var tmp (tag_range range "cleaner")])
+    type _ domain += D_python_desugar_if : unit domain
 
-    | _ -> None
+    let id = D_python_desugar_if
+    let name = "python.desugar.if"
+    let identify : type a. a domain -> (unit, a) eq option = function
+      | D_python_desugar_if -> Some Eq
+      | _ -> None
 
-  let is_bool_function f =
-    match ekind f with
-    | E_var v -> v.vname = "bool"
-    | E_addr a -> compare_addr a (Addr.find_builtin "bool") = 0
-    | _ -> false
+    let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec man ctx stmt flow =
-    (* Transform if(e) into if(bool(e)) *)
-    match skind stmt with
-    | S_if(({etyp = T_any} as e), body, orelse) ->
-      man.eval ctx e flow |>
-      eval_to_exec (fun e' flow ->
-          match etyp e' with
-          | T_bool ->
-            let stmt' = {stmt with skind = S_if(e', body, orelse)} in
-            man.exec ctx stmt' flow
+    let exec_interface = {export = []; import = []}
+    let eval_interface = {export = [any_zone, any_zone]; import = []}
 
-          | _ ->
-            debug "decorating %a with bool" Framework.Pp.pp_expr e;
-            let e' = Utils.mk_builtin_call "bool" [e] e.erange in
-            let stmt' = {stmt with skind = S_if(e', body, orelse)} in
-            man.exec ctx stmt' flow
-        ) (man.exec ctx) man.flow |>
-      return
+    let init _ _ flow = Some flow
 
-    | _ -> None
+    let eval zs exp man flow =
+      let range = erange exp in
+      match ekind exp with
+      | E_py_if(test, body, orelse) ->
+         let tmp = mk_tmp () in
+         let flow = man.exec
+                      (mk_if
+                         test
+                         (mk_assign (mk_var tmp (tag_range range "true branch lval")) body (tag_range range "true branch assign"))
+                         (mk_assign (mk_var tmp (tag_range range "false branch lval")) orelse (tag_range range "false branch assign"))
+                         range
+                      ) flow
+         in
+         let exp' = {exp with ekind = E_var (tmp, STRONG)} in
+         man.eval exp' flow |>
+           Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
+           OptionExt.return
+
+      | _ -> None
 
 
-  let init _ ctx _ flow = ctx, flow
+    let exec _ _ _ _ = None
 
-  let ask _ _ _ _ = None
+    let ask _ _ _ = None
 
-end
+  end
 
-let setup () =
-  Stateless.register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

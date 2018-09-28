@@ -9,7 +9,7 @@
 (**
    Python frontend translates the parser's AST into Framework's AST.
 *)
-open Framework.Ast
+open Framework.Essentials
 open Lexing
 open Py_CST
 open Py_AST
@@ -70,7 +70,7 @@ and from_var v =
     vname = v.name;
     vuid = v.uid;
     vtyp = T_any;
-    vkind = V_orig;
+    (* FIXME: vkind = V_orig;*)
   }
 
 (** Translate a Python program into a Framework.Ast.stmt *)
@@ -86,7 +86,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
   let skind' =
     match stmt.skind with
     | S_assign (x, e) ->
-      Universal.Ast.S_assign (from_exp x, from_exp e, Universal.Ast.STRONG)
+      Framework.Ast.S_assign (from_exp x, from_exp e)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
@@ -194,7 +194,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
   {skind = skind'; srange = srange'}
 
 (** Translate an optional statement into en eventual empty one *)
-and from_stmt_option : Framework.Ast.range -> Py_AST.stmt option -> Framework.Ast.stmt
+and from_stmt_option : Framework.Location.range -> Py_AST.stmt option -> Framework.Ast.stmt
   = fun none_case_range -> function
     | None -> {skind = Universal.Ast.S_block []; srange = none_case_range}
     | Some s -> from_stmt s
@@ -209,11 +209,11 @@ and from_exp_option : Py_AST.expr option -> Framework.Ast.expr option
 and from_exp exp =
   let ekind, etyp = match exp.ekind with
     | E_true ->
-      E_constant (Universal.Ast.C_true),
+      E_constant (Universal.Ast.C_bool true),
       Universal.Ast.T_bool
 
     | E_false ->
-      E_constant (Universal.Ast.C_false),
+      E_constant (Universal.Ast.C_bool false),
       Universal.Ast.T_bool
 
     | E_none ->
@@ -248,7 +248,7 @@ and from_exp exp =
       T_any
 
     | E_id v ->
-      E_var (from_var v),
+      E_var (from_var v, STRONG),
       T_any
 
     | E_binop (left, op, right) ->
@@ -370,14 +370,12 @@ and from_exp exp =
       ),
       T_any
 
-    | E_undefined -> assert false
-
 
   in
   {ekind; etyp; erange = from_range exp.erange}
 
 
-and from_location loc : Framework.Ast.loc =
+and from_location loc : Framework.Location.loc =
   {
     loc_file = loc.file;
     loc_line = loc.line;
@@ -396,12 +394,12 @@ and from_binop : Py_AST.binop -> Framework.Ast.operator = function
   | O_bool op -> from_bool_op op
 
 and from_arithmetic_op = function
-  | Add -> Universal.Ast.O_plus T_any
-  | Sub -> Universal.Ast.O_minus T_any
-  | Mult -> Universal.Ast.O_mult T_any
-  | Div -> Universal.Ast.O_div T_any
+  | Add -> Universal.Ast.O_plus
+  | Sub -> Universal.Ast.O_minus
+  | Mult -> Universal.Ast.O_mult
+  | Div -> Universal.Ast.O_div
   | FloorDiv -> O_py_floor_div
-  | Mod -> Universal.Ast.O_mod T_any
+  | Mod -> Universal.Ast.O_mod
   | Pow -> Universal.Ast.O_pow
   | BitOr -> Universal.Ast.O_bit_or
   | BitXor -> Universal.Ast.O_bit_xor
@@ -411,66 +409,23 @@ and from_arithmetic_op = function
   | LShift -> Universal.Ast.O_bit_lshift
 
 and from_bool_op = function
-  | And -> Universal.Ast.O_log_and
-  | Or -> Universal.Ast.O_log_or
+  | And -> O_py_and
+  | Or -> O_py_or
 
 and from_comparison_op : Py_CST.cmpop -> Framework.Ast.operator = function
-  | Eq -> Universal.Ast.O_eq
-  | NotEq -> Universal.Ast.O_ne
-  | Lt -> Universal.Ast.O_lt
-  | LtE -> Universal.Ast.O_le
-  | Gt -> Universal.Ast.O_gt
-  | GtE -> Universal.Ast.O_ge
+  | Eq -> Framework.Ast.O_eq
+  | NotEq -> Framework.Ast.O_ne
+  | Lt -> Framework.Ast.O_lt
+  | LtE -> Framework.Ast.O_le
+  | Gt -> Framework.Ast.O_gt
+  | GtE -> Framework.Ast.O_ge
   | Is -> O_py_is
   | IsNot -> O_py_is_not
   | In -> O_py_in
   | NotIn -> O_py_not_in
 
 and from_unop = function
-  | Not -> Ast.O_py_not
-  | USub -> Universal.Ast.O_minus T_any
-  | UAdd -> Universal.Ast.O_plus T_any
+  | Not -> Framework.Ast.O_log_not
+  | USub -> Universal.Ast.O_minus
+  | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
-
-
-(* (\** Add a sequence of initializations before a body to assign undefined values to a list of variables *\)
- * and add_undefined_init_values vars body =
- *   let stmtl =  List.fold_right (fun v acc ->
- *         let stmt = Universal.Ast.S_assign (
- *             {ekind = Universal.Ast.E_var (from_var v); etyp = T_any; erange = unknown_range},
- *             {ekind = Universal.Ast.E_constant C_py_undefined; etyp = T_py_undefined; erange = unknown_range}
- *           )
- *         in
- *         {Framework.Ast.skind = stmt; srange = unknown_range} :: acc
- *     ) vars []
- *   in
- *   match body.skind with
- *   | Universal.Ast.S_block sl ->
- *     {body with skind = Universal.Ast.S_block (stmtl @ sl)}
- *   | _ ->
- *     {body with skind = Universal.Ast.S_block (stmtl @ [body])}
- *
- * and initialize_special_vars filepath body =
- *   let stmt1 = {
- *     Framework.Ast.skind = Universal.Ast.S_assign(
- *         {ekind = Universal.Ast.E_var (from_var {name = "__name__"; uid = -1}); etyp = T_any; erange = unknown_range},
- *         {ekind = Universal.Ast.E_constant (Universal.Ast.C_string "__main__"); etyp = Universal.Ast.T_string; erange = unknown_range}
- *       );
- *     srange = unknown_range
- *   }
- *   in
- *   let stmt2 = {
- *     Framework.Ast.skind = Universal.Ast.S_assign(
- *         {ekind = Universal.Ast.E_var (from_var {name = "__file__"; uid = -1}); etyp = T_any; erange = unknown_range},
- *         {ekind = Universal.Ast.E_constant (Universal.Ast.C_string filepath); etyp = Universal.Ast.T_string; erange = unknown_range}
- *       );
- *     srange = unknown_range
- *   }
- *   in
- *   match body.skind with
- *   | Universal.Ast.S_block sl ->
- *     {body with skind = Universal.Ast.S_block (stmt1 :: stmt2 :: sl)}
- *   | _ ->
- *     {body with skind = Universal.Ast.S_block ([stmt1; stmt2; body])}
- *
- * (\** Initialize __name__ and __file__ variables *\) *)

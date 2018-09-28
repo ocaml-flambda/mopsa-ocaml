@@ -1,55 +1,66 @@
-#Get 1-depth sub-directories
-subdirs = $(filter-out $(1),\
-		$(patsubst $(1)/%,%,\
-			$(shell find $(1) -maxdepth 1 -type d)\
-		)\
-	)
+# OCaml sources (except temporary files starting and ending with '#')
+ML = $(shell find $(SRC) -name "*.ml" | grep -v "\#*\#")
+MLI = $(shell find $(SRC) -name "*.mli")
 
-## Packs
-PACKS = $(subst /,., \
-		$(patsubst $(SRC)/%,%, \
-			$(shell find $(SRC)/* -type d) \
-		) \
-	)
-TOP_PACKS = $(call subdirs,$(SRC))
+MLL = $(shell find $(SRC) -name "*.mll")
+ML_OF_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml)
+
+MLY = $(shell find $(SRC) -name "*.mly")
+ML_OF_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml)
+MLI_OF_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli)
+
+PACKS = $(patsubst $(SRC)/%,%,$(shell find $(SRC)/* -type d))
+ML_OF_PACKS = $(PACKS:%=$(BUILD)/%.ml)
+
+TOPML = $(shell $(OCAMLFIND) ocamldep -sort $(SRC)/*.ml)
+TOPPACKS = $(patsubst $(SRC)/%,%,$(shell find $(SRC)/* -maxdepth 0 -type d))
+
+# Dependencies
+DEPS_ML = $(ML:$(SRC)/%.ml=$(BUILD)/%.dep)
+DEPS_MLI = $(MLI:$(SRC)/%.mli=$(BUILD)/%.idep)
+DEPS_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.dep)
+DEPS_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.dep)
+
+# Objects
+CMI = $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmi)
+CMO = $(filter-out $(CMO_FROM_CMI), $(ML:$(SRC)/%.ml=$(BUILD)/%.cmo))
+CMX = $(CMO:%.cmo=%.cmx)
+
+CMO_FROM_CMI = $(CMI:%.cmi=%.cmo)
+CMX_FROM_CMI = $(CMI:%.cmi=%.cmx)
+
+CMO_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmo)
+CMX_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmx)
+
+CMX_FROM_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx)
+CMX_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx)
+CMI_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi)
 
 
-## ML Sources
-SML= $(shell find $(SRC) -name "*.ml")
-SMLI= $(shell find $(SRC) -name "*.mli")
-BML = $(SML:$(SRC)/%=$(BSRC)/%)
-BMLI= $(SMLI:$(SRC)/%=$(BSRC)/%)
-PACKS_ML = $(foreach pack, $(PACKS),$(subst .,/,$(BSRC)/$(pack)).ml)
-ALL_ML = $(BML) $(PACKS_ML) $(BMLI)
+TOPCMX = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmx) $(TOPPACKS:%=$(BUILD)/%.cmx)
 
-## Lex/Yacc sources
-SMLL = $(shell find $(SRC) -name "*.mll")
-SMLY = $(shell find $(SRC) -name "*.mly")
-BMLL = $(SMLL:$(SRC)/%=$(BSRC)/%)
-BMLY = $(SMLY:$(SRC)/%=$(BSRC)/%)
-BSMLL = $(BMLL:%.mll=%.ml)
-BSMLY = $(BMLY:%.mly=%.ml)
-BYCMX = $(BMLY:%.mly=%.cmx)
-
-
-## Top-level ml/cmx files
-TOP_SML = $(wildcard $(SRC)/*.ml)
-TOP_CMX =  $(TOP_SML:%.ml=$(BUILD)/%.cmx) $(TOP_PACKS:%=$(BSRC)/%.cmx)
-
-## Unit tests
-TESTS_ML = $(wildcard $(TESTS)/*.ml)
-TESTS_BML = $(TESTS_ML:$(TESTS)/%=$(BTESTS)/%)
-TESTS_CMX = $(TESTS_BML:%.ml=%.cmx)
-TESTS_EXE = $(TESTS_BML:%.ml=%)
-TESTS_DEP = $(TESTS_BML:%.ml=%.dep)
+## Merlin
+MERLIN = $(SRC)/.merlin $(PACKS:%=$(SRC)/%/.merlin)
 
 ## C/C++ stubs
-C_OBJ = $(C_SRC:%.c=$(BSRC)/%.o)
-CC_OBJ = $(CC_SRC:%.cc=$(BSRC)/%.o)
+C_OBJ = $(C_SRC:%.c=$(BUILD)/%.o)
+CC_OBJ = $(CC_SRC:%.cc=$(BUILD)/%.o)
 
-# This function generates the include directives recursively towards the build directory
-includes = \
+## Utility function
+lineage = \
 	$(if $(filter $(1), $(SRC)), \
-		-I $(SRC), \
-		-I $(1) $(call includes,$(shell realpath --relative-to=. $(1)/..))\
+		$(1), \
+		$(1) $(call lineage,$(shell realpath --relative-to=. $(1)/..))\
 	)
+
+include_lineage = $(foreach p,$(call lineage,$(1)),-I $(p))
+
+is_directory = $(shell test -d $(basename $(1)) && echo 1 || echo 0)
+
+pack_dir_of_ml = $(shell dirname $(patsubst $(SRC)/%,%,$(1)))
+
+pack_name = $(subst /,.,$(shell $(SED) -e "s/\b\(.\)/\u\1/g" <<< $(1)))
+
+merlin_root_path = $(shell $(SED) -e "s/[^\/]\+\//\.\.\//g" -e "s/\/[^\/]\+$$//g" <<< $(1))
+
+merlin_lineage = $(patsubst $(SRC)%,$(call merlin_root_path,$(1))/_build%,$(call lineage,$(shell dirname $(1))))

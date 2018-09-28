@@ -7,76 +7,88 @@
 (****************************************************************************)
 
 (** Main handler of Python programs. *)
+(** This domain initializes global variables, creates special
+   variables __name__, __main__, __file__, and collects unit-testing
+   functions if required *)
 
-
+open Framework.Essentials
 open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Framework.Ast
 open Universal.Ast
 open Ast
-
-let name = "python.program"
-let debug fmt = Debug.debug ~channel:name fmt
 
 
 module Domain =
 struct
 
-  let init _ ctx _ flow = ctx, flow
+  type _ domain += D_python_program : unit domain
 
-  let eval man ctx exp flow = None
+  let id = D_python_program
+  let name = "python.program"
+  let identify : type a. a domain -> (unit, a) eq option = function
+    | D_python_program -> Some Eq
+    | _ -> None
 
-  let init_globals man ctx filename globals flow =
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  let exec_interface = {export = [Zone.Z_py]; import = []}
+  let eval_interface = {export = []; import = []}
+
+  let init _ _ flow = Some flow
+
+  let eval _ _ _ _ = None
+
+  let init_globals man filename globals flow =
     (* Initialize global variables with C_py_undefined constant *)
-    let range = mk_fresh_range () in
+    let range = mk_file_range filename in
     let stmt =
       mk_block
         (List.mapi (fun i v ->
-             mk_assign
-               (mk_var v (tag_range range "lval %d" i))
-               (mk_constant C_py_undefined ~etyp:T_py_undefined (tag_range range "undef %d" i))
-               (tag_range range "undef assign %d" i)
+             let e =
+               (* Initialize globals with the same name of a builtin with its address *)
+               if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+               else mk_expr (E_py_undefined true) range
+             in
+             mk_assign (mk_var v range) e range
            ) globals
         )
         range
     in
-    let flow1 = man.exec ctx stmt flow in
+    let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let range = mk_fresh_range () in
     let v = {
       vname = "__name__";
       vuid = 0;
       vtyp = T_any;
-      vkind = V_orig;
+      (* vkind = V_orig; *)
     }
     in
     let stmt =
       mk_assign
-        (mk_var v (tag_range range "__name__ lval"))
-        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string (tag_range range "__name__"))
+        (mk_var v range)
+        (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
         range
     in
-    let flow2 = man.exec ctx stmt flow1 in
+    let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let range = mk_fresh_range () in
     let v = {
       vname = "__file__";
       vuid = 0;
       vtyp = T_any;
-      vkind = V_orig;
+      (* vkind = V_orig; *)
     }
     in
     let stmt =
         mk_assign
-          (mk_var v (tag_range range "__file__ lval"))
-          (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string (tag_range range "__file__"))
+          (mk_var v range)
+          (mk_constant (Universal.Ast.C_string filename) ~etyp:Universal.Ast.T_string range)
           range
     in
-    let flow3 = man.exec ctx stmt flow2 in
+    let flow3 = man.exec stmt flow2 in
 
     flow3
 
@@ -104,41 +116,41 @@ struct
     let range = mk_file_range file in
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.vname, test.py_func_body)
+          (test.py_func_var.vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
 
 
-  let exec man ctx stmt flow  =
+  let exec zone stmt man flow  =
     match skind stmt with
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when not Framework.Options.(common_options.unit_test_mode) ->
+      when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      init_globals man ctx prog_file globals flow |>
+      init_globals man prog_file globals flow |>
       (* Execute the body *)
-      man.exec ctx body |>
-      return
+      man.exec body |>
+      Post.return
 
     | S_program({prog_kind = Py_program(globals, body); prog_file})
-      when Framework.Options.(common_options.unit_test_mode) ->
+      when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals man ctx prog_file globals flow in
+      let flow1 = init_globals man prog_file globals flow in
 
       (* Execute the body *)
-      let flow2 = man.exec ctx body flow1 in
+      let flow2 = man.exec body flow1 in
 
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests prog_file tests in
-      return (man.exec ctx stmt flow2)
+      Post.return (man.exec stmt flow2)
 
 
     | _ -> None
 
-  let ask _ _ _ _ = None
+  let ask _ _ _ = None
 
 end
 
-let setup () =
-  Stateless.register_domain name (module Domain)
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

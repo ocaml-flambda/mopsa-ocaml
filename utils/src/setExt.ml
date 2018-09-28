@@ -697,7 +697,7 @@ module Make(Ord: OrderedType) =
       print_gen
         (fun fmt s -> Format.fprintf fmt "%s@," s)
         printer key ch l
-                                             
+
     let to_string printer key l =
       let b = Buffer.create 10 in
       print_gen (fun () s -> Buffer.add_string b s) printer

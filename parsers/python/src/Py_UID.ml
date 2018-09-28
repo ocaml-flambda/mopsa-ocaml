@@ -195,8 +195,6 @@ and translate_expr scope expr =
         );
     }
 
-  | E_undefined -> assert false
-
   | E_binop (left, op, right) ->
     {expr with ekind = E_binop (translate_expr scope left, op, translate_expr scope right)}
 

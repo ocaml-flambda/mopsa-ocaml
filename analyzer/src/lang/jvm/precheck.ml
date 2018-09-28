@@ -21,7 +21,8 @@ open JBasics
 open JCode
 open Framework.Ast
 open Framework.Flow
-open Framework.Pp
+open Framework.Location
+open Framework.Manager
 open Cfg.Ast
 open Ast
 open Bot
@@ -75,7 +76,7 @@ type substack = loc list
 module SubStack =
 struct
   type t = substack
-  let compare = compare_list compare_location
+  let compare = ListExt.compare compare_location
 end
 
 (** Maps indexed with subroutinr call stacks. *)
@@ -764,7 +765,7 @@ module Domain = struct
          List.fold_left
            (fun acc (t,n) ->
              match t with
-             | TCur | F_java_if_true
+             | T_cur | F_java_if_true
              | F_java_jsr | F_java_return_site | F_java_switch _
                ->
                 (* direct propagation *)

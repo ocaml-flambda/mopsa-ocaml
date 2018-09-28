@@ -6,73 +6,58 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Domains without lattice data structure. *)
+(** Stateless domains are domains without a lattice structure. Only
+   transfer functions are defined. *)
 
-open Flow
-open Lattice
-open Manager
-open Eval
+open Essentials
 
-
-(*==========================================================================*)
-                  (** {2 Domain signature} *)
-(*==========================================================================*)
-
-
-module type DOMAIN =
+module type S =
 sig
 
-  val init :
-    ('a, unit) manager -> Context.context -> Ast.program -> 'a flow ->
-    Context.context * 'a flow
-
-  (** Abstract transfer function of statements. *)
-  val exec:
-    ('a, unit) manager -> Context.context -> Ast.stmt -> 'a flow ->
-    'a flow option
-
-  (** Abstract (symbolic) evaluation of expressions. *)
-  val eval:
-    ('a, unit) manager -> Context.context -> Ast.expr -> 'a flow ->
-    (Ast.expr, 'a) evals option
-
-  (** Handler of generic queries. *)
-  val ask:
-    ('a, unit) manager -> Context.context -> 'r Query.query -> 'a flow ->
-    'r option
+  val name     : string
+  val id       : unit domain
+  val identify : 'b domain -> (unit, 'b) eq option
+  val exec_interface : Zone.zone interface
+  val eval_interface : (Zone.zone * Zone.zone) interface
+  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
+  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
+  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
+  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
 
 end
 
 (** Create a stateful domain from a stateless one. *)
-module MakeStatefulDomain(Domain: DOMAIN) : Stateful.DOMAIN =
+module Make(D: S) : Domain.DOMAIN =
 struct
 
   type t = unit
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let is_top _ = true
-  let leq _ _ = true
-  let unify _ a1 a2 = (a1, a2)
-  let join _ _ = top
-  let meet _ _ = top
-  let widening _ _ _ = top
+  let subset _ _ = true
+  let join _ _ _ = top
+  let meet _ _ _ = top
+  let widen _ _ _ = top
   let print _ _ = ()
 
+  let name = D.name
+  let id = D.id
+  let identify = D.identify
 
-  let init = Domain.init
-  let exec  = Domain.exec
-  let eval = Domain.eval
-  let ask = Domain.ask
+  let init = D.init
+
+  let exec_interface = D.exec_interface
+  let eval_interface = D.eval_interface
+
+  let exec = D.exec
+  let eval = D.eval
+  let ask = D.ask
 
 end
 
 
 
-let register_domain name modl =
-  let module D = (val modl : DOMAIN) in
-  let module GD = MakeStatefulDomain(D) in
-  Stateful.register_domain name (module GD)
-
-let return x = Some x
-let fail = None
+let register_domain modl =
+  let module M = (val modl : S) in
+  let module D = Make(M) in
+  Domain.register_domain (module D)

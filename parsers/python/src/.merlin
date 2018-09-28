@@ -1,4 +1,5 @@
-B ../../utils/lib
-B ../_build
-B ../_build/src
+S ../src/** 
+ B ../_build
+ B ../../../utils/lib/**
+
 PKG zarith

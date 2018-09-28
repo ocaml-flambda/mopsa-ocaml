@@ -1,10 +1,11 @@
-B ../../../../../utils/lib
-B ../../../../../parsers/c/lib
-B ../../../../../parsers/python/lib
-B ../../../../_build
-B ../../../../_build/src
-B ../../../../_build/src/lang/python/data_model
-B ../../../../_build/src/lang/python
-B ../../../../_build/src/lang
-B ../../../../_build/src
-PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+S ../../../../src/** 
+ B ../../../../_build/lang/python/data_model
+ B ../../../../_build/lang/python
+ B ../../../../_build/lang
+ B ../../../../_build
+ B ../../../../../utils/lib/**
+ B ../../../../../parsers/c/lib/**
+ B ../../../../../parsers/python/lib/**
+ B ../../../../../parsers/universal/lib/**
+
+PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib

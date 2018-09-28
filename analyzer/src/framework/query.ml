@@ -12,28 +12,20 @@
     manager on this type providing reply merging functions.
 
     Here is an example. Let us define a new interval query:
-    {[type _ query +=
-      | QInterval : var -> (int * int) query
-      ;;
-    ]}
+    {[type _ query += QInterval : var -> (int * int) query]}
 
     Next, an interval manager is registered as follows:
-    {[register_reply_manager {
-        domatch = (let check : type a. a query -> (a, (int * int)) eq option =
-                     fun q ->
-                       match q with
-                       | QInterval _ -> Some Eq
-                       | _ -> None
-                   in
-                   check
-                  );
-        join = (fun (a1, a2) (b1, b2) ->
-            (min a1 b1, max a2 b2)
-          );
-
-        meet = (fun (a1, a2) (b1, b2) ->
-            (max a1 b1, min a2 b2)
-          );
+    {[register_query {
+        eq = (let check : type a. a query -> (a, (int * int)) eq option =
+                fun q ->
+                  match q with
+                  | QInterval _ -> Some Eq
+                  | _ -> None
+              in
+              check
+             );
+        join = (fun (a1, a2) (b1, b2) -> (min a1 b1, max a2 b2));
+        meet = (fun (a1, a2) (b1, b2) -> (max a1 b1, min a2 b2));
       };;]}
 
     For instance, the join of two intervals of a query [q] can be obtained simply by:
@@ -54,53 +46,46 @@ type (_, _) eq = Eq : ('a, 'a) eq
 (** {2 Managers} *)
 
 (** Query manager defines merge operators on replies. *)
-type 'r reply_manager = {
-  domatch : 'a. 'a query -> ('a, 'r) eq option;
+type 'r info = {
+  eq : 'a. 'a query -> ('a, 'r) eq option;
   join: 'r -> 'r -> 'r;
   meet: 'r -> 'r -> 'r;
 }
 
-type xreply_manager = Manager : 'a reply_manager -> xreply_manager
+type pool =
+  | [] : pool
+  | (::) : 'r info * pool -> pool
 
-let reply_managers : xreply_manager list ref = ref []
+let pool : pool ref = ref []
 
-let register_reply_manager man =
-  reply_managers := (Manager man) :: !reply_managers
+let register_query info =
+  pool := info :: !pool
 
-let is_query_manager: type a b. a query -> b reply_manager -> a reply_manager option =
-  fun q man ->
-    match man.domatch q with
-    | None -> None
-    | Some Eq -> Some man
-
-
-let find_manager query () =
-  let rec aux : type a b. a query -> xreply_manager list -> a reply_manager =
+let find query =
+  let rec aux : type a b. a query -> pool -> a info =
     fun query -> function
       | [] -> raise Not_found
       | hd :: tl ->
-        let Manager man = hd in
-        match  is_query_manager query man with
+        match hd.eq query with
+        | Some Eq -> hd
         | None -> aux query tl
-        | Some man -> man
   in
-  aux query !reply_managers
+  aux query !pool
 
 
 (** {2 Operators} *)
 
-let join : type a. a query -> a option -> a option -> a option =
+let join : type a. a query -> a -> a -> a =
   fun q r1 r2 ->
-    match r1, r2 with
-    | None, r | r, None -> r
-    | Some r1, Some r2 ->
-      let man = find_manager q () in
-      Some (man.join r1 r2)
+    let info = find q in
+    info.join r1 r2
 
-let meet : type a. a query -> a option -> a option -> a option =
+let meet : type a. a query -> a -> a  -> a =
   fun q r1 r2 ->
-    match r1, r2 with
-    | None, r | r, None -> r
-    | Some r1, Some r2 ->
-      let man = find_manager q () in
-      Some (man.meet r1 r2)
+    let info = find q in
+    info.meet r1 r2
+
+let eq : type a b. a query -> b query -> (a, b) eq option =
+  fun q1 q2 ->
+    let info2 = find q2 in
+    info2.eq q1

@@ -6,14 +6,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Pretty printer of the Python AST extension *)
+(** Pretty printer of the Python extension to the AST. *)
 
-
-open Framework.Ast
-open Framework.Pp
+open Framework.Essentials
 open Ast
 open Format
-open Addr
+
+
+let rec pp_list pp fmt = function
+  | [] -> Format.fprintf fmt ""
+  | [x] -> Format.fprintf fmt "%a" pp x
+  | x :: xs -> Format.fprintf fmt "%a; %a" pp x (pp_list pp) xs
 
 let pp_except fmt e =
   fprintf fmt "except %a%a:@\n@[<h 2>  %a@]"
@@ -27,6 +30,10 @@ let pp_except fmt e =
     ) e.py_excpt_name
     pp_stmt e.py_excpt_body
 
+let pp_py_object fmt (obj: py_object) =
+  match obj with
+  | (addr, {ekind = E_constant (C_py_empty)}) -> fprintf fmt "%a" Universal.Ast.pp_addr addr
+  | (addr, e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Ast.pp_addr addr pp_expr e
 
 let () =
   register_pp_program (fun default fmt prog ->
@@ -36,23 +43,22 @@ let () =
     );
   register_pp_typ (fun default fmt typ ->
     match typ with
-    | T_py_undefined -> pp_print_string fmt "undef"
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
+    | T_py_empty -> pp_print_string fmt "empty"
     | _ -> default fmt typ
     );
   register_pp_constant (fun default fmt -> function
-      | C_py_undefined -> pp_print_string fmt "undefined"
       | C_py_none -> pp_print_string fmt "None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
+      | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
   register_pp_operator (fun default fmt -> function
       | O_py_and -> pp_print_string fmt "and"
       | O_py_or -> pp_print_string fmt "or"
-      | O_py_not -> pp_print_string fmt "not"
       | O_py_floor_div -> pp_print_string fmt "//"
       | O_py_is -> pp_print_string fmt "is"
       | O_py_is_not -> pp_print_string fmt "is not"
@@ -63,6 +69,9 @@ let () =
     );
   register_pp_expr (fun default fmt exp ->
       match ekind exp with
+      | E_py_undefined true -> fprintf fmt "global undef"
+      | E_py_undefined false -> fprintf fmt "local undef"
+      | E_py_object obj -> pp_py_object fmt obj
       | E_py_attribute(obj, attr) ->
         fprintf fmt "pyattr %a.%s" pp_expr obj attr
       | E_py_list(elts) ->
