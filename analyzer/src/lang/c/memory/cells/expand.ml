@@ -39,17 +39,19 @@ module Domain = struct
     t: typ;
   }
 
-  let compare_ocell c c' = Compare.compose [
-      (fun () -> compare_base c.b c'.b);
-      (fun () -> Z.compare c.o c'.o);
-      (fun () -> compare_typ c.t c'.t);
-    ]
-
   let pp_ocell fmt c =
     Format.fprintf fmt "⟨%a,%a,%a⟩"
       pp_base c.b
       Z.pp_print c.o
       pp_typ c.t
+
+  let compare_ocell c c' =
+    Debug.debug "compare %a and %a" pp_ocell c pp_ocell c';
+    Compare.compose [
+      (fun () -> Debug.debug "base"; compare_base c.b c'.b);
+      (fun () -> Debug.debug "offset"; Z.compare c.o c'.o);
+      (fun () -> Debug.debug "typ"; compare_typ c.t c'.t);
+    ]
 
   type cell +=
     | OffsetCell of ocell

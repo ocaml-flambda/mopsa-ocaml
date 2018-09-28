@@ -26,8 +26,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _                          -> Visit
@@ -65,8 +65,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
@@ -88,8 +88,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
