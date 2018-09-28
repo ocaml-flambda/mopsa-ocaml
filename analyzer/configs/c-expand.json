@@ -1,15 +1,15 @@
 {
     "iter": [
-	// C iterators
-	"c.iterators.program",
-	"c.iterators.interproc",
+        // C iterators
+        "c.iterators.program",
+        "c.iterators.interproc",
         "c.iterators.goto",
         "c.iterators.switch",
 
-	// Universal iterators
+        // Universal iterators
         "universal.iterators.intraproc",
-	"universal.iterators.loops",
-	"universal.iterators.interproc.inlining",
+        "universal.iterators.loops",
+        "universal.iterators.interproc.inlining",
         "universal.iterators.unittest",
 
         // C desugar
@@ -20,26 +20,26 @@
 
         // C libraries
         "c.libs.mopsa",
-	"c.libs.c_stdlib",
+        "c.libs.c_stdlib",
 
         // Memory model
         {
-	    "stack": "universal.heap.recency",
-	    "over": {
-		"iter": [
-		    {
-			"stack": "c.memory.cells.expand",
-			"over" : {
-			    "iter" : [
-				"c.memory.cells.cell_2_num",
-				"c.machine_integers",
-				"universal.numeric.values.intervals"
-			    ]
-			}
-		    },
-		    "c.memory.cells.pointer"
-		]
+            "stack": "universal.heap.recency",
+            "over": {
+                "iter": [
+                    {
+                        "stack": "c.memory.cells.expand",
+                        "over" : {
+                            "iter" : [
+                                "c.memory.cells.cell_2_num",
+                                "c.machine_integers",
+                                "universal.numeric.values.intervals"
+                            ]
+                        }
+                    },
+                    "c.memory.cells.pointer"
+                ]
             }
-	}
+        }
     ]
 }

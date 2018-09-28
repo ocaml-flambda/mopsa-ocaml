@@ -82,7 +82,8 @@ struct
             let () = debug "exec for %a found" pp_zone zone in
             ExecMap.add zone (Domain.exec zone) map
           else
-              Exceptions.panic "exec for %a not found" pp_zone zone
+            let () = Exceptions.warn "exec for %a not found" pp_zone zone in
+            map
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
@@ -94,7 +95,10 @@ struct
     ;
     let timer = Timing.start () in
 
-    let fexec = ExecMap.find zone exec_map in
+    let fexec =
+      try ExecMap.find zone exec_map
+      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
+    in
     let flow' = Cache.exec fexec zone stmt man flow in
 
     let t = Timing.stop timer in
@@ -134,12 +138,14 @@ struct
             debug "Searching for an eval function for the zone %a" pp_zone2 (src, dst);
             let paths = Zone.find_all_eval_paths src dst eval_graph in
             if List.length paths = 0
-            then Exceptions.panic "eval for %a not found" pp_zone2 (src, dst)
+            then
+              let () = Exceptions.warn "eval for %a not found" pp_zone2 (src, dst) in
+              acc
             else
-              debug "eval for %a found@\npaths: @[%a@]"
-                pp_zone2 (src, dst)
-                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_eval_path) paths
-              ;
+              let () = debug "eval for %a found@\npaths: @[%a@]"
+                  pp_zone2 (src, dst)
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_eval_path) paths
+              in
               (* Map each hop to an eval function *)
               let eval_paths = List.map (fun path ->
                   let rec aux =
@@ -173,7 +179,10 @@ struct
         Eval.singleton exp flow
       | other_action ->
         (* Try available eval paths in sequence *)
-        let paths = EvalMap.find zone eval_map in
+        let paths =
+          try EvalMap.find zone eval_map
+          with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
+        in
         match eval_over_paths paths exp man flow with
         | Some evl -> evl
         | None ->
