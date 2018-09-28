@@ -19,6 +19,8 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 * gmp
 * mpfr
 * camlidl
+# zlib
+# javaliv
 
 ## Installation 
 
@@ -27,15 +29,17 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 Tested on Ubuntu 16.04:
 
 ```bash
-sudo apt install build-essential m4 opam llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev
+sudo apt install build-essential m4 opam llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 opam init
 eval `opam config env`
-opam install apron ocp-pack-split zarith menhir yojson
+opam install apron ocp-pack-split zarith menhir yojson javalib
 make
 
 ```
 
 ### RPM-based distributions
+
+TODO: add zlib & javalib
 
 Tested on Fedora 27:
 

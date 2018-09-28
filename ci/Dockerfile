@@ -9,9 +9,9 @@ FROM ubuntu:latest
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential m4 opam llvm-6.0-dev libclang-6.0-dev libgmp-dev libmpfr-dev
+ENV APT_DEPS build-essential m4 opam llvm-6.0-dev libclang-6.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 ENV OPAM_SWITCH 4.07.0
-ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson
+ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
 
 
 # install system packages as root

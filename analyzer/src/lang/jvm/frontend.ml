@@ -404,7 +404,7 @@ let class_path =
 
 let nb_jar = ref 0
 
-let _ =
+let test () =
   Format.printf "JVM test@\n";
   List.iter
     (fun x ->
@@ -439,4 +439,5 @@ let _ =
     !nb_jar !nb_loaded_classes !nb_loaded_methods !Precheck.nb_errors
   
 
- 
+let _ = test ()
+      

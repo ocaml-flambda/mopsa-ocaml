@@ -171,7 +171,7 @@ struct
           let exp = mk_var v (tag_range range "cell2num") ~mode in
           Eval.singleton exp flow
       end
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 
