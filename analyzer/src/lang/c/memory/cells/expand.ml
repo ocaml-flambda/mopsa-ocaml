@@ -552,7 +552,9 @@ module Domain = struct
     eval_cell exp man flow |>
     Option.lift @@ Eval.bind @@ fun c flow ->
     match c with
-    | C_cell(c, mode) -> Eval.singleton (mk_ocell c ~mode exp.erange) flow
+    | C_cell(c, mode) ->
+      add_cons_cell man exp.erange c flow |>
+      Eval.singleton (mk_ocell c ~mode exp.erange)
 
     | C_range(b, pred) ->
       let a, b = rangeof exp.etyp in
