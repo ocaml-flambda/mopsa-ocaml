@@ -36,7 +36,9 @@ struct
     export = [
       Zone.Z_c, Zone.Z_c_scalar;
       Zone.Z_c_scalar, Zone.Z_c_points_to_fun;
-    ]; import = []}
+    ];
+    import = []
+  }
 
   let is_builtin_function = function
     | "_mopsa_range_char"

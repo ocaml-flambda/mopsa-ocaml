@@ -12,13 +12,24 @@ open Framework.Essentials
 open Universal.Ast
 open Ast
 
-let name = "c.libs.stdlib"
-let debug fmt = Debug.debug ~channel:name fmt
-
 (** Kinds of heap allocated addresses. *)
 type Universal.Ast.addr_kind +=
   | A_c_static_malloc of Z.t (** static size *)
   | A_c_dynamic_malloc (** dynamic size *)
+
+let () =
+  Universal.Ast.register_addr (
+    {compare = (fun next ak1 ak2 ->
+         match ak1.addr_kind, ak2.addr_kind with
+         | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
+         | _ -> next ak1 ak2);
+     print = fun next fmt addr ->
+       (* Fixme improve printing to account for weak or strong recency abstraction *)
+       match addr.addr_kind with
+       | A_c_static_malloc s-> Format.fprintf fmt "@@{static(%a), %a}" Z.pp_print s Format.pp_print_int addr.addr_uid
+       | A_c_dynamic_malloc -> Format.fprintf fmt "@@{dynamic, %a}" Format.pp_print_int addr.addr_uid
+       | _ -> next fmt addr
+    })
 
 let range_exp_of_c_type t range =
   let rmin, rmax = rangeof t in
@@ -37,7 +48,7 @@ struct
 
   type _ domain += D_c_libs_stdlib : unit domain
   let id = D_c_libs_stdlib
-  let name = "c.libs.stdlib"
+  let name = "c.libs.c_stdlib"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_libs_stdlib -> Some Eq
@@ -48,8 +59,14 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = []}
-  let eval_interface = {export = []; import = []}
+  let exec_interface = {export = []; import = []}
+  let eval_interface = {
+    export = [
+      Zone.Z_c, Zone.Z_c_scalar;
+      Zone.Z_c_scalar, Zone.Z_c_points_to_fun;
+    ];
+    import = []
+  }
 
   (** Initialization *)
   (** ============== *)
@@ -65,12 +82,14 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_function(f) when is_builtin_function f.c_func_var.vname ->
+    | E_c_function(f) when is_builtin_function f.c_func_var.vname
+                        && sat_zone Zone.Z_c_points_to_fun (snd zone)
+      ->
       debug "builtin function";
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       (Eval.singleton exp' flow) |> Option.return
 
-    | E_c_call({ekind = E_c_builtin_function "malloc"}, [size]) ->
+    | E_c_builtin_call("malloc", [size]) ->
       begin
         man.eval size flow |> Eval.bind @@ fun size flow ->
 
@@ -86,9 +105,11 @@ struct
         | None ->
           let exp' = Universal.Ast.mk_alloc_addr A_c_dynamic_malloc exp.erange in
           man.eval exp' flow
-      end |> Option.return
+      end
+      |>
+      Option.return
 
-    | E_c_call({ekind = E_c_builtin_function "fscanf"}, l) ->
+    | E_c_builtin_call("fscanf", l) ->
       begin
         let () = debug "fscanf called" in
         let range_exp = erange exp in
@@ -119,16 +140,4 @@ struct
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain);
-  Universal.Ast.register_addr (
-    {compare = (fun next ak1 ak2 ->
-        match ak1.addr_kind, ak2.addr_kind with
-          | A_c_static_malloc s1, A_c_static_malloc s2 -> Z.compare s1 s2
-          | _ -> next ak1 ak2);
-     print = fun next fmt addr ->
-       (* Fixme improve printing to account for weak or strong recency abstraction *)
-       match addr.addr_kind with
-       | A_c_static_malloc s-> Format.fprintf fmt "@@{static(%a), %a}" Z.pp_print s Format.pp_print_int addr.addr_uid
-       | A_c_dynamic_malloc -> Format.fprintf fmt "@@{dynamic, %a}" Format.pp_print_int addr.addr_uid
-       | _ -> next fmt addr
-    })
+  Framework.Domains.Stateless.register_domain (module Domain)
