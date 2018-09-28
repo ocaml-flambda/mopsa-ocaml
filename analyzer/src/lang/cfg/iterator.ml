@@ -47,6 +47,9 @@ module type DOMAIN = sig
       The function is allowed to modify the list of destination nodes
       of the edge being computed. 
       All other modifications to the CFG are forbidden (for now).
+
+      TODO: adding edges may require an update in the strategy
+      (especially the widening points).
    *)
 
 
@@ -86,7 +89,7 @@ module type STRATEGY = sig
   (** Marks a node as dirty. *)
     
   val get: t -> loc
-  (** Gets the next dirty node to update.
+  (** Gets the next dirty node to update (and undirty it).
       Raises [Not_found] if [is_empty] is true.
    *)
 

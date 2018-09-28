@@ -14,15 +14,15 @@ Equivalently, this can be seen as a bipartite graph where nodes and
 edges correspond to the two node partitions.
 
 Nodes model program locations, where an invariant can be stored.
-Edges model transfer functions for basic blocs.
+Edges model transfer functions for basic blocks.
 An edge can have several source nodes, to model control-flow joins
-at the entry of basic blocks. It is also possible to mode joins by
+at the entry of basic blocks. It is also possible to model joins by
 having several edges incoming into the same node.
 An edge can have several destination nodes, to model conditionals with 
 several outputs from a basic block. Alternatively, several edges outgoing
 from the same node can be used to model conditionals.
 We use "ports" to distinguish and classify between the different
-source and destination nodes of an edge, and ports carry tags.
+source and destination nodes of an edge. Ports carry tags.
 It is possible to have a node connected to the same edge several times,
 either on equal or different ports.
 
@@ -43,7 +43,7 @@ unmodified (except maybe for the data fields).
 (*==========================================================================*)
 
 
-(** Data-type that can be used both in sets and maps, and hash-tables. *)
+(** Data-type that can be used both in sets, maps, and hash-tables. *)
 module type ID_TYPE = sig
   type t
   val compare: t -> t -> int
@@ -643,7 +643,7 @@ module type S = sig
   (*========================================================================*)
 
 
-  (** Print in dot graph format. *)
+  (** Print in plain text. *)
 
   type ('n,'e) printer = {
       print_node: Format.formatter -> ('n,'e) node -> unit;

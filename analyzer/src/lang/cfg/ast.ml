@@ -68,7 +68,7 @@ end
 module CFG = Graph.Make(CFG_Param)
 
 (** Edges are labelled with a statement.
-    Node have no information in the graph structure.
+    Nodes have no information in the graph structure.
     Abstract invariant information will be kept in maps separately
     from the CFG. 
     This way, CFG can be kept immutable.
@@ -78,7 +78,7 @@ type node = (unit, stmt) CFG.node
 type edge = (unit, stmt) CFG.edge
 
           
-(** Adds CFG to statement. *)
+(** Add CFG to statement. *)
 type stmt_kind +=
    | S_CFG of cfg
               
