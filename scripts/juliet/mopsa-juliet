@@ -19,8 +19,8 @@ juliet=$1/C/testcases
 #    CWE562_Return_of_Stack_Variable_Address"
 
 # CWE476_NULL_Pointer_Dereference \
-cwes="CWE190_Integer_Overflow"
-subdirs="s01 s02"
+cwes="CWE476_NULL_Pointer_Dereference"
+subdirs="."
 
 for cwe in ${cwes}; do
     for subd in ${subdirs}; do
