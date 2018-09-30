@@ -232,9 +232,9 @@ struct
       Eval.singleton (P_var (A addr, mk_int 0 range, T_c_void)) flow
 
     | E_c_address_of e ->
-      begin
-        man.eval ~zone:(Z_c, Z_c_cell) e flow |>
-        Eval.bind @@ fun e flow ->
+      man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+      Eval.bind @@ fun e flow ->
+      let rec aux e =
         match ekind e with
         | E_c_cell(c, _) ->
           let b, o, t = extract_cell_info c in
@@ -243,8 +243,17 @@ struct
         | E_c_function f ->
           Eval.singleton (P_fun f) flow
 
+        | E_c_cast(e', _) ->
+          begin
+            aux e' |> Eval.bind @@ fun e' flow ->
+            match e' with
+            | P_var(b, o, _) -> Eval.singleton (P_var(b, o, e.etyp)) flow
+            | _ -> Eval.singleton e' flow
+          end
+
         | _ -> assert false
-      end
+      in
+      aux e
 
     | E_c_function f ->
       Eval.singleton (P_fun f) flow

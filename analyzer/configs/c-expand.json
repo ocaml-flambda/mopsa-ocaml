@@ -17,6 +17,7 @@
         "c.desugar.aggregate",
         "c.desugar.andor",
         "c.desugar.stmt_expr",
+        "c.desugar.record_copy",
 
         // C libraries
         "c.libs.mopsa",
