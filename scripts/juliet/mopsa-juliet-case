@@ -12,8 +12,7 @@ bad="${casename}_bad"
 MOPSA="${MOPSADIR}/scripts/mopsa-c -I ${MOPSADIR}/analyzer/stubs/c -I ${MOPSADIR}/analyzer/stubs/c/juliet ${MOPSADIR}/analyzer/stubs/c/mopsa_libc.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase.c ${MOPSADIR}/analyzer/stubs/c/juliet/std_testcase_io.c"
 
 echo "Analyzing ${casename}"
-echo "Good case: ${good}"
-echo "${MOPSA} -c-entry ${good} ${files}"
+echo "Good case"
 ${MOPSA} -c-entry ${good} ${files}
 echo "Bad case"
 ${MOPSA} -c-entry "${bad}" ${files}
