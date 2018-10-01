@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Ast
 
+
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
 
 (*==========================================================================*)
@@ -199,21 +200,64 @@ let class_of_object (obj: py_object) : py_object =
 let rec mro (obj: py_object) : py_object list =
   match kind_of_object obj with
   | A_py_class(_, bases) ->
-     c3_lin obj
+     let res = c3_lin obj in
+
+     let stupid_range = Range_fresh (-1) in
+     debug "MRO of %a: %a@\n" pp_expr (mk_py_object obj stupid_range)
+       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x stupid_range)))
+       res;
+
+     res
      (* obj :: (List.map mro bases |> List.flatten) *)
   | _ -> assert false
 
 and c3_lin (obj: py_object) : py_object list =
-  match kind_of_object obj with
-  | A_py_class (c, [])  -> [obj]
-  | A_py_class (c, bases) -> obj :: merge ((List.map c3_lin bases) @ [bases])
-  | _ -> assert false
+  debug "starting c3_lin(%a)@\n" pp_expr (mk_py_object obj (Range_fresh (-1)));
+  let res =
+    match kind_of_object obj with
+    | A_py_class (C_builtin "object", b) -> [obj]
+    | A_py_class (c, [])  -> [obj]
+    | A_py_class (c, bases) ->
+       let l_bases = List.map c3_lin bases in
+       let bases = List.map (fun x -> [x]) bases in
+       obj :: merge (l_bases @ bases)
+    | _ -> assert false
+  in
+  debug "c3_lin(%a) = %a@\n" pp_expr (mk_py_object obj (Range_fresh (-1)))
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+    (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+    res;
+  res
 
 and merge (l: py_object list list) : py_object list =
-  List.iter (List.iter (fun x -> debug "In the merge: %a" Universal.Ast.pp_addr (fst x))) l;
+  (* debug "In the merge: %a@\n"
+   *   (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+   *      (fun fmt li ->
+   *        Format.fprintf fmt "[%a]"
+   *          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+   *             (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1))))) li
+   *   )) l; *)
+  (* List.iter (List.iter (fun x -> debug "In the merge: %a" Universal.Ast.pp_addr (fst x))) l; *)
   match search_c l with
   | Some c ->
-     let l' = List.filter (fun x -> x <> []) (List.map (fun li -> if List.hd li = c then List.tl li else li) l) in
+     let l' = List.filter (fun x -> x <> [])
+                (List.map (fun li -> List.filter (fun x -> Universal.Ast.compare_addr (fst c) (fst x) <> 0) li)
+                   l) in
+     debug "c = %a@\nl = %a@\nl' = %a@\n"
+       pp_expr (mk_py_object c (Range_fresh (-1)))
+       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+          (fun fmt li ->
+            Format.fprintf fmt "[%a]"
+              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                 (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1))))) li
+       )) l
+       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+          (fun fmt li ->
+            Format.fprintf fmt "[%a]"
+              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                 (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1))))) li
+       )) l';
      begin match l' with
      | [] -> [c]
      | _ -> c :: merge l'
@@ -225,22 +269,24 @@ and search_c (l: py_object list list) : py_object option =
   let res =
     List.fold_left
       (fun acc (i, li) ->
-        List.iter (fun x -> debug "(%d, %a)" i Universal.Ast.pp_addr (fst x)) li;
-        if acc <> None || li = [] then (debug "pass %b@\n" (acc = None); acc)
+        (* List.iter (fun x -> debug "(%d, %a)" i Universal.Ast.pp_addr (fst x)) li; *)
+        if acc <> None || li = [] then ((*debug "pass %b@\n" (acc = None);*) acc)
         else
           let c = List.hd li in
-          debug "c = %a@\n" Universal.Ast.pp_addr (fst c);
+          (* debug "c = %a@\n" Universal.Ast.pp_addr (fst c); *)
           let a = List.for_all (fun (k, lk) ->
                       (* List.iter (fun x -> debug "l%d = %a" k Universal.Pp.pp_addr (fst x)) lk;
                        * debug "cond: %b@\n" (i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))); *)
-                      i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))) indexed_l
+                      i = k || lk = [] || not (List.exists (fun x -> Universal.Ast.compare_addr (fst c) (fst x) = 0) (List.tl lk))) indexed_l
           in
-          debug "a = %b@\n" a; if a then Some c else acc
+          (* debug "a = %b@\n" a; *)
+          if a then Some c else acc
       )
       None indexed_l
   in
-  if res = None then debug "bla@\n"
-  else debug "ok!@\n";
+  let _ = match res with
+  | None -> debug "bla@\n"
+  | Some c -> debug "search result = %a@\n" pp_expr (mk_py_object c (Range_fresh (-1))) in
   res
 
 
@@ -322,6 +368,21 @@ let mk_py_z_interval l u range =
 
 let mk_py_float_interval l u range =
   Universal.Ast.mk_float_interval l u range
+
+let mk_attribute_var obj attr range =
+  let addr = addr_of_object obj in
+  let v = {
+      vname = (
+        let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Ast.pp_addr addr attr in
+        let name = Format.flush_str_formatter () in
+        name
+      );
+      vuid = 0;
+      vtyp = T_any;
+    }
+  in
+  mk_var v range
+
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =
@@ -448,7 +509,30 @@ let () =
                     );
                   compare =
                     (fun default a1 a2 ->
-                      debug "PP of addr, to fix in python/addr"; 1) } in
+                      match a1.addr_kind, a2.addr_kind with
+                      | A_py_class (c1, _), A_py_class (c2, _) ->
+                         begin match c1, c2 with
+                         | C_builtin s1, C_builtin s2
+                           | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+                         | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      | A_py_function f1, A_py_function f2 ->
+                         begin match f1, f2 with
+                         | F_builtin s1, F_builtin s2
+                           | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+                         | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      (* | A_py_method (func1, inst2), A_py_method (func2, inst2) ->
+                       *    _ *)
+                      | A_py_module m1, A_py_module m2 ->
+                         begin match m1, m2 with
+                         | M_user (s1, _), M_user (s2, _)
+                           | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      | _ -> default a1 a2) } in
       register_addr info
     )
   )
