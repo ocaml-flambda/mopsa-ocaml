@@ -3,6 +3,7 @@ open Framework.Essentials
 open Ast
 open Universal.Ast
 open Addr
+open Data_model.Attribute
 
 type expr_kind +=
    | E_get_type_partition of Typingdomain.polytype
@@ -137,20 +138,79 @@ module Domain =
           * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
          |> Option.return
 
-      | E_py_attribute (e, attr) ->
-         man.eval e flow |>
-         Eval.bind (fun exp flow ->
-             match ekind exp with
-             | E_py_object ({addr_kind = A_py_module _}, _) ->
-                Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr exp) attr) range) flow
-             | E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
-                let r = find_builtin_attribute (object_of_expr exp) attr in
-                Eval.singleton (mk_py_object r range) flow
-
-             | _ ->
-                debug "%a@\n" pp_expr exp; assert false
-           )
+      | E_py_ll_hasattr(e, attr) ->
+      (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
+         begin match ekind e with
+         | E_py_object ({addr_kind = A_py_module _}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
+            Eval.singleton (mk_py_true range) flow
+         | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
+            Eval.singleton (mk_py_true range) flow
+         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
+            Eval.singleton (mk_py_true range) flow
+         | _ ->
+            Debug.warn "%a: unknown case, returning false@\n" pp_expr exp;
+            Eval.singleton (mk_py_false range) flow
+         end
          |> Option.return
+
+      | E_py_ll_getattr(e, attr) ->
+         (* FIXME? as this is not a builtin constructor, but only used by the analysis, we assume that e has attribute attr *)
+         begin match ekind e with
+         | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
+            Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+         | _ -> Debug.fail "E_py_ll_getattr: todo"
+         end
+         |> Option.return
+
+      (* | E_py_attribute(obj, "__new__") ->
+       *    Debug.fail "bla@\n"
+       *
+       * | E_py_attribute (e, attr) ->
+       *    (\* FIXME: is it more modular? Can it be written in the data model? *\)
+       *    man.eval e flow |>
+       *    Eval.bind (fun exp flow ->
+       *        match ekind exp with
+       *        | E_py_object ({addr_kind = A_py_module _}, _) ->
+       *           Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr exp) attr) range) flow
+       *        | E_py_object ({addr_kind = A_py_class _}, _) ->
+       *           let rec search_mro (mro:Ast.py_object list) = match mro with
+       *             | [] ->
+       *                let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
+       *                Eval.empty_singleton flow
+       *             | cls::tl ->
+       *                match kind_of_object cls with
+       *                | A_py_class (C_user c, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
+       *                   let attr_var = List.find (fun v -> v.vname = attr) c.py_cls_static_attributes in
+       *                   man.eval (mk_var attr_var range) flow |>
+       *                     Eval.bind (fun aattr flow ->
+       *                         Debug.fail "ni@\n"
+       *                       )
+       *                | A_py_class (C_builtin c, _) when is_builtin_attribute cls attr ->
+       *                   let r = find_builtin_attribute cls attr in
+       *                   Eval.assume
+       *                     (Utils.mk_builtin_call "isinstance" [exp; mk_py_object (Addr.find_builtin "function") range] range)
+       *                     ~fthen:(fun flow ->
+       *                     (\* Attribute is a function of the class: we need to bind the method to the class(?) *\)
+       *                       Debug.fail "ni@\n"
+       *                     )
+       *                     ~felse:(
+       *                       Debug.fail "ni@\n"
+       *                     )
+       *                     man flow
+       *                   (\* Eval.singleton (mk_py_object r range) flow *\)
+       *                | _ ->
+       *                   search_mro tl
+       *           in
+       *           let mro = Addr.mro (object_of_expr exp) in
+       *           debug "MRO of %a:" pp_expr exp;
+       *           List.iter (fun x -> let e = mk_py_object x range in debug "%a, " pp_expr e) mro;
+       *           debug "@\n";
+       *           search_mro mro
+       *        (\* FIXME: semantics *\)
+       *        | _ ->
+       *           debug "%a@\n" pp_expr exp; assert false
+       *      )
+       *    |> Option.return *)
 
       | E_unop(Framework.Ast.O_log_not, e') ->
          man.eval e' flow |>
@@ -208,7 +268,13 @@ module Domain =
                         (Eval.singleton (mk_py_true range) flowt)
                         (Eval.singleton (mk_py_false range) flowf)
                    end
-                | _ -> Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
+                | E_py_object ({addr_kind = A_py_function _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
+                   if c = "function" then
+                     Eval.singleton (mk_py_true range) flow
+                   else
+                     Eval.singleton (mk_py_false range) flow
+                | _ ->
+                   Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
          )
          |> Option.return
