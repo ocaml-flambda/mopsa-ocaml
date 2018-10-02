@@ -28,7 +28,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [any_zone]; import = []}
-    let eval_interface = {export = []; import = []}
+    let eval_interface = {export = [any_zone, any_zone]; import = []}
 
     let init _ _ flow = Some flow
 
@@ -105,6 +105,7 @@ module Domain =
                        (fun addr flow ->
                          let obj = (addr, mk_py_empty range) in
                          let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
+                         debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
                          man.exec cls.py_cls_body flow |>
                            Post.of_flow
                        )

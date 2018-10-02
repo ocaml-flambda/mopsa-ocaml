@@ -20,6 +20,7 @@
         "python.objects.function",
         "python.objects.nones",
 
+        "python.data_model.attribute",
         "python.data_model.arith_ops",
         "python.data_model.compare_ops",
         "python.data_model.aug_assign",
