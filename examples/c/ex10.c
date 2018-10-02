@@ -1,6 +1,7 @@
 #include "mopsa.h"
 
 void main () {
-  int a = 0;
+  char a = 0;
+  int x = 2/a;
   _mopsa_print();
 }
