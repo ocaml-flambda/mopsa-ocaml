@@ -94,7 +94,8 @@ struct
 
   let eval_interface = {
     export = [
-      Z_c, Z_c_cell_points_to;
+      Z_c, Z_c_points_to_cell;
+      Z_c, Z_c_points_to_fun;
       Z_c, Z_c_scalar_num
     ];
     import = [Z_c, Z_c_cell]
@@ -105,7 +106,7 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    Flow.set_domain_env T_cur empty man flow |>
+    Flow.set_domain_env T_cur top man flow |>
     Option.return
 
 
@@ -124,10 +125,23 @@ struct
     let range = exp.erange in
     match ekind exp with
     | _
-      when sat_zone2 zone (Z_c, Z_c_cell_points_to) ->
+      when sat_zone2 zone (Z_c, Z_c_points_to_cell) ->
       begin
         eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
+      end
+      |>
+      Option.return
+
+    | _
+      when sat_zone2 zone (Z_c, Z_c_points_to_fun) ->
+      begin
+        eval_points_to exp man flow |> Eval.bind @@ fun p flow ->
+        match p with
+        | P_fun f ->
+          let exp' = mk_expr (E_c_function f) ~etyp:(T_c_function None) range in
+          Eval.singleton exp' flow
+        | _ -> assert false
       end
       |>
       Option.return
@@ -211,13 +225,16 @@ struct
     | E_constant C_c_invalid ->
       Eval.singleton P_invalid flow
 
+    | E_constant (C_c_string (s, _)) ->
+      Eval.singleton (P_var (S s, mk_zero range, s8)) flow
+
     | E_addr addr ->
       Eval.singleton (P_var (A addr, mk_int 0 range, T_c_void)) flow
 
     | E_c_address_of e ->
-      begin
-        man.eval ~zone:(Z_c, Z_c_cell) e flow |>
-        Eval.bind @@ fun e flow ->
+      man.eval ~zone:(Z_c, Z_c_cell) e flow |>
+      Eval.bind @@ fun e flow ->
+      let rec aux e =
         match ekind e with
         | E_c_cell(c, _) ->
           let b, o, t = extract_cell_info c in
@@ -226,8 +243,17 @@ struct
         | E_c_function f ->
           Eval.singleton (P_fun f) flow
 
+        | E_c_cast(e', _) ->
+          begin
+            aux e' |> Eval.bind @@ fun e' flow ->
+            match e' with
+            | P_var(b, o, _) -> Eval.singleton (P_var(b, o, e.etyp)) flow
+            | _ -> Eval.singleton e' flow
+          end
+
         | _ -> assert false
-      end
+      in
+      aux e
 
     | E_c_function f ->
       Eval.singleton (P_fun f) flow
@@ -268,15 +294,11 @@ struct
     | _ ->
       man.eval ~zone:(Z_c, Z_c_cell) exp flow |>
       Eval.bind @@ fun e flow ->
-      let c =
-        match ekind e with
-        | E_c_cell(c, _) -> c
-        | _ -> assert false
-      in
-      if cell_type c |> is_c_pointer_type then
+      match ekind e with
+      | E_c_cell(c, _) when cell_type c |> is_c_pointer_type ->
         let a = Flow.get_domain_env T_cur man flow in
         let bases = find c a in
-        PointerBaseSet.fold (fun pb acc ->
+        let evls = PointerBaseSet.fold (fun pb acc ->
             let evl =
               match pb with
               | PB_var b -> Eval.singleton (P_var (b, mk_var (mk_offset_var c) exp.erange, under_pointer_type (cell_type c))) flow
@@ -284,13 +306,21 @@ struct
               | PB_invalid -> Eval.singleton P_invalid flow
               | PB_null -> Eval.singleton P_null flow
             in
-            Eval.join acc evl
-          ) bases Eval.empty
-      else if cell_type c |> is_c_array_type then
+            evl :: acc
+          ) bases []
+        in
+        if List.length evls = 0
+        then Eval.empty_singleton flow
+        else Eval.join_list evls
+
+      | E_c_cell(c, _) when cell_type c |> is_c_array_type ->
         let b, o, t = extract_cell_info c in
         Eval.singleton (P_var (b, o exp.erange, under_array_type t)) flow
-      else
-        assert false
+
+      | E_c_function f ->
+        Eval.singleton (P_fun f) flow
+
+      | _ -> assert false
 
 
   (** Computation of post-conditions *)
@@ -334,7 +364,11 @@ struct
       Option.return
 
     | S_c_remove_cell(p) when cell_type p |> is_c_pointer_type ->
-      panic_at range "pointer.exec: %a not yet supported" pp_stmt stmt
+      let flow1 = Flow.map_domain_env T_cur (remove p) man flow in
+      let o = mk_offset_var p in
+      let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove_var o range) flow1 in
+      Post.of_flow flow2 |>
+      Option.return
 
     | _ -> None
 

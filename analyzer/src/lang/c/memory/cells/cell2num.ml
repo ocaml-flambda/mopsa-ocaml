@@ -108,7 +108,6 @@ struct
       |> Option.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
-      debug "aaaaa";
       man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->
 
@@ -121,7 +120,6 @@ struct
 
     | S_assume(e) ->
       begin
-        debug "assume";
         man.eval ~zone:(Z_c_cell, Z_c_scalar_num) e flow |>
         Post.bind man @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume e'} in
@@ -138,10 +136,41 @@ struct
   let rec eval zone exp man flow =
     match ekind exp with
     | E_c_cell(c, mode) when cell_type c |> is_c_int_type ->
-      let range = erange exp in
-      let v, flow = get_num flow c in
-      let exp = mk_var v (tag_range range "cell2num") in
-      Eval.singleton exp flow
+      begin
+        match cell_base c with
+        (* Case of a static string literal *)
+        | Base.S s ->
+          begin
+            let offset = cell_offset c exp.erange in
+            match Universal.Utils.expr_to_z offset with
+            (* Case of constant offset => return the num value of the character *)
+            | Some z ->
+              let ch = String.get s (Z.to_int z) in
+              Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow
+
+            (* Otherwise, return the interval covering all characters of the string *)
+            | None ->
+              let len = String.length s in
+              let at i = String.get s i |> int_of_char in
+              let rec aux i a b =
+                if i = 0
+                then aux (i + 1) (at 0) (at 0)
+                else if i = len
+                then a, b
+                else
+                  let a', b' = aux (i + 1) a b in
+                  min a a', max b b'
+              in
+              let min, max = aux 0 0 0 in
+              Eval.singleton (Universal.Ast.mk_int_interval min max exp.erange) flow
+          end
+
+        | _ ->
+          let range = erange exp in
+          let v, flow = get_num flow c in
+          let exp = mk_var v (tag_range range "cell2num") ~mode in
+          Eval.singleton exp flow
+      end
       |> Option.return
 
     | _ -> None

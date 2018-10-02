@@ -6,7 +6,7 @@ MOPSAROOT = ..
 mopsa = framework lang main
 
 framework = location ast visitor options query annotation lattice zone manager flow alarm exceptions eval post channel value domain cache analyzer lattices essentials domains config
-framework.domains = stateless stateless_zoned iter nonrel leaf functor stacked reduced_product empty router
+framework.domains = stateless iter nonrel leaf functor stacked reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
@@ -24,9 +24,9 @@ lang.c = zone ast alarms frontend libs desugar flows memory
 
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = loops andor aggregate records stmt_expr
+lang.c.desugar = loops andor aggregate record_copy stmt_expr
 lang.c.memory = base init_visitor cells machine_integers
-lang.c.memory.cells = cell pointer smashing expand router cell2num
+lang.c.memory.cells = cell pointer smashing expand cell2num
 lang.c.libs = c_stdlib mopsa
 
 lang.python = ast addr operators utils pp frontend zone libs desugar objects data_model program types
@@ -55,21 +55,21 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa -lang=python -test true -config configs/default.py.json -stub stubs/python $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/scripts/mopsa-python -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/bin/mopsa -lang=c -test true -config configs/default.c.json -stub stubs/c $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/scripts/mopsa-c -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-universal -test=true $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/scripts/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
 	)
 
 

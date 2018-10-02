@@ -38,6 +38,9 @@ let cell_base c =
   let b, _, _ = extract_cell_info c in
   b
 
+let cell_offset c =
+  let _, o, _ = extract_cell_info c in
+  o
 
 (* Transformation to variables *)
 (* =========================== *)
@@ -142,9 +145,6 @@ type expr_kind +=
 type stmt_kind +=
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
 
-type constant +=
-  | C_c_invalid (** invalid pointer constant *)
-
 let mk_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:(cell_type c) range
 
@@ -210,11 +210,6 @@ let () =
         | _ -> next stmt
       );
   };
-  register_pp_constant (fun next fmt c ->
-      match c with
-      | C_c_invalid -> Format.fprintf fmt "Invalid"
-      | _ -> next fmt c
-    );
   ()
 
 
@@ -236,6 +231,8 @@ let () =
         | E_constant _
         | E_c_cell _ -> Keep
 
+        | E_var(v, _) when Universal.Ast.is_math_type v.vtyp -> Keep
+
         | E_c_deref _ -> Process
 
         | E_c_cast _
@@ -247,33 +244,11 @@ let () =
   }
 
 type zone +=
-  | Z_c_cell_no_deref
+  | Z_c_points_to_cell
 
 let () =
   register_zone {
-    zone = Z_c_cell_no_deref;
-    name = "C/Cell/NoDeref";
-    subset = Some Z_c_cell;
-    eval = (fun exp ->
-        match ekind exp with
-        | E_constant _
-        | E_c_cell _ -> Keep
-
-        | E_c_cast _
-        | E_unop _
-        | E_binop _ -> Visit
-
-        | _ -> Process
-      );
-  }
-
-
-type zone +=
-  | Z_c_cell_points_to
-
-let () =
-  register_zone {
-    zone = Z_c_cell_points_to;
+    zone = Z_c_points_to_cell;
     name = "C/Cell/Points-To";
     subset = Some Z_c_cell;
     eval = (fun exp ->

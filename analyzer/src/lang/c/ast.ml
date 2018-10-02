@@ -178,6 +178,9 @@ type constant +=
   | C_c_string of string * c_character_kind
   (** Constant string literal *)
 
+  | C_c_invalid
+  (** Invalid pointer value *)
+
 
 type c_init =
   | C_init_expr of expr

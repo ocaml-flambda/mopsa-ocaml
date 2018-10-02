@@ -199,7 +199,6 @@ let eval_list_opt
   try Some (aux [] flow [] l)
   with Option.Found_None -> None
 
-
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")

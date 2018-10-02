@@ -5,12 +5,10 @@ open Ast
 
 let rec pp_c_init fmt = function
   | C_init_expr(e) -> pp_expr fmt e
-  | C_init_list(l, None) ->
-    fprintf fmt "{%a}"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
-  | C_init_list([], Some filler) ->
-    fprintf fmt "{%a ...}" pp_c_init filler
-  | _ -> assert false
+  | C_init_list([], Some filler) -> fprintf fmt "{%a ...}" pp_c_init filler
+  | C_init_list(l, _) -> fprintf fmt "{%a}"
+                           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+  | C_init_implicit t -> assert false
 
 let rec pp_c_type_short fmt =
   function
@@ -73,7 +71,7 @@ let () =
       | T_c_float(C_double) -> pp_print_string fmt "double"
       | T_c_float(C_long_double) -> pp_print_string fmt "long double"
 
-      | T_c_pointer(t) -> fprintf fmt "(ptr %a *)" pp_typ t
+      | T_c_pointer(t) -> fprintf fmt "%a *" pp_typ t
 
       | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_typ t
       | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_typ t (Z.to_string n)
@@ -107,6 +105,7 @@ let () =
       match c with
       | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
       | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
+      | C_c_invalid -> fprintf fmt "Invalid"
       | _ -> next fmt c
     );
   register_pp_operator (fun next fmt op ->

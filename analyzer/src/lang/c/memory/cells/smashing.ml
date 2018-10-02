@@ -30,8 +30,12 @@ struct
       extract = (fun next c ->
           match c with
           | C_smash (base, typ) ->
-            let o1, o2 = Ast.rangeof typ in
-            let offset = mk_z_interval o1 o2 in
+            let offset =
+              match base with
+              | V v -> mk_z_interval Z.zero (Z.sub (sizeof_type v.vtyp) (sizeof_type typ))
+              | A a -> mk_top T_int (* FIXME: get size of the allocated memory block *)
+              | S s -> mk_z_interval Z.zero (Z.of_int @@ String.length s)
+            in
             base, offset, typ
           | _ -> next c
         );
@@ -122,8 +126,9 @@ struct
   let eval_interface = {
     export = [Z_c_scalar, Z_c_cell]; (* We evaluate scalar C expressions into cells *)
     import = [
+      Z_c, Z_c_scalar; (* To simplify lvals *)
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
-      Z_c, Z_c_cell_points_to; (* To dereference pointer expressions *)
+      Z_c, Z_c_points_to_cell; (* To dereference pointer expressions *)
     ];
   }
 
@@ -160,13 +165,59 @@ struct
 
       (* Initialization of arrays *)
       array =  (fun a is_global init_list range flow ->
-          assert false
+          let b, t, mode =
+            match ekind a with
+            | E_var (v, mode) -> V v, v.vtyp, mode
+            | E_c_cell (C_smash (b, t), mode) -> b, t, mode
+            | _ -> assert false
+          in
+          let a' = mk_cell (C_smash (b, under_array_type a.etyp)) ~mode range in
+          let rec aux acc l =
+            match l with
+            | [] -> acc
+            | init :: tl ->
+              let flow = init_expr (init_visitor man) a' is_global init range flow in
+              aux (Flow.join man acc flow) tl
+          in
+          aux (Flow.bottom (Flow.get_all_annot flow)) init_list
         );
 
       (* Initialization of structs *)
       record =  (fun s is_global init_list range flow ->
-          assert false
+          let b, t, mode =
+            match ekind s with
+            | E_var (v, mode) -> V v, v.vtyp, mode
+            | E_c_cell (C_smash (b, t), mode) -> b, t, mode
+            | _ -> assert false
+          in
+          let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+          match init_list with
+          | Parts parts ->
+            let rec aux i l acc =
+              match l with
+              | [] -> acc
+              | init :: tl ->
+                let field = List.nth record.c_record_fields i in
+                let t' = field.c_field_type in
+                let cf = C_smash (b, t') in
+                let ef = mk_cell cf range in
+                let flow' = init_expr (init_visitor man) ef is_global init range flow in
+                let flow'' = Flow.join man acc flow' in
+                aux (i + 1) tl flow''
+            in
+            aux 0 parts (Flow.bottom (Flow.get_all_annot flow))
+
+          | Expr e ->
+            record.c_record_fields |> List.fold_left (fun acc field ->
+                let t' = field.c_field_type in
+                let cf = C_smash (b, t') in
+                let ef = mk_cell cf range in
+                let init = C_init_expr (mk_c_member_access e field range) in
+                let flow' = init_expr (init_visitor man) ef is_global (Some init) range flow in
+                Flow.join man acc flow'
+              ) (Flow.bottom (Flow.get_all_annot flow))
         );
+
     }
 
   let init prog man flow =
@@ -203,9 +254,11 @@ struct
       Option.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      debug "aaaaaaaaaaaa";
       man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
       Post.bind_opt man @@ fun rval flow ->
+
+      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) lval flow |>
+      Post.bind_opt man @@ fun lval flow ->
 
       eval (Z_c, Z_c_cell) lval man flow |>
       Option.lift @@ Post.bind man @@ fun lval flow ->
@@ -238,6 +291,7 @@ struct
         (* In case of a base variable, we check that we are writing to the whole memory block *)
         if Z.equal (sizeof_type v.vtyp) (sizeof_type (cell_type c)) then mode
         else WEAK
+      | S s -> mode
     in
     let lval = mk_cell c ~mode:mode range in
     let stmt = mk_assign lval e range in
@@ -281,7 +335,7 @@ struct
 
     | E_c_deref p ->
       begin
-        man.eval ~zone:(Z_c, Z_c_cell_points_to) p flow |> Eval.bind @@ fun pt flow ->
+        man.eval ~zone:(Z_c, Z_c_points_to_cell) p flow |> Eval.bind @@ fun pt flow ->
         match ekind pt with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton ({exp with ekind = E_c_function fundec}) flow

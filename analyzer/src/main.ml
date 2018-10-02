@@ -62,10 +62,10 @@ type analysis_results =
 let print_results analysis_res =
   match analysis_res with
   | Success(t, []) ->
-    Format.printf "Analysis terminated in %.6fs@\n%a No alarm@\n" t
+    Format.printf "Analysis terminated in %.3fs@\n%a No alarm@\n" t
       ((Debug.color "green") Format.pp_print_string) "✔"
   | Success(t, alarms) ->
-    Format.printf "Analysis terminated in %.6fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
+    Format.printf "Analysis terminated in %.3fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
       t
       (List.length alarms)
       Debug.plurial_list alarms

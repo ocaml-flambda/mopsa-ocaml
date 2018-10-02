@@ -28,7 +28,11 @@ type 'a visitor = {
 (** Initialization of scalar expressions *)
 let rec init_scalar visitor v is_global init range flow =
   match init with
-  (* Local uninitialized variables are kept ⟙ *)
+  (* Local uninitialized pointers are invalidated *)
+  | None when not is_global && is_c_pointer_type v.etyp ->
+    visitor.scalar v (mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range) range flow
+
+  (* Other local uninitialized variables are kept ⟙ *)
   | None when not is_global ->
     flow
 

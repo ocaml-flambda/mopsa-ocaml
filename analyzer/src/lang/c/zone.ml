@@ -16,6 +16,7 @@ type zone +=
   | Z_c
   | Z_c_scalar
   | Z_c_scalar_num
+  | Z_c_points_to_fun
 
 let () =
   register_zone {
@@ -25,8 +26,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _                          -> Visit
@@ -64,8 +65,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
@@ -87,8 +88,8 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
-        | E_constant _                       -> Keep
-        | E_var (v, _) when is_c_type v.vtyp -> Keep
+        | E_constant _
+        | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
@@ -97,3 +98,16 @@ let () =
         | _                                  -> Process
       );
     }
+
+let () =
+  register_zone {
+    zone = Z_c_points_to_fun;
+    subset = None;
+    name = "C/PointsToFun";
+    eval = (fun exp ->
+        match ekind exp with
+        | E_c_function f                      -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  }

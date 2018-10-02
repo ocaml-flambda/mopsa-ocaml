@@ -40,7 +40,7 @@ let color c fx fmt x =
   else
     Format.fprintf fmt "%a" fx x
 
-let print_ channel fmt =
+let debug ?(channel = "debug") fmt =
   if can_print channel then
     Format.kasprintf (fun str ->
         if !print_color then
@@ -51,38 +51,27 @@ let print_ channel fmt =
   else
     Format.ifprintf Format.std_formatter fmt
 
-let debug ?(channel = "debug") fmt = print_ channel fmt
 
 let warn fmt =
   if can_print "warning" then
     Format.kasprintf (fun str ->
-        if !print_color then
-          Format.eprintf "\027[1;45m[WARN %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
-      else
-        Format.eprintf "[WARN %.6f] @.@[%s@]@.@." (Sys.time ()) str
+        if !print_color
+        then Format.printf "\027[1;45m[WARN %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
+        else Format.printf "[WARN %.6f] @.@[%s@]@.@." (Sys.time ()) str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt
 
 
-let eprint ~channel fmt =
-  if can_print channel then
-    Format.kasprintf (fun str ->
-        Format.eprintf "%s%!" str
-      ) fmt
-  else
-    Format.ifprintf Format.std_formatter fmt
 
-
-let info fmt = print_ "info" fmt
+let info fmt = debug ~channel:"info" fmt
 
 let fail fmt =
   Format.kasprintf (fun str ->
-      if !print_color then
-        Format.eprintf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
-      else
-        Format.eprintf "[FAIL %.6f] @.@[%s@]@.@." (Sys.time ()) str;
-      exit (-1)
+      if !print_color
+      then Format.printf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
+      else Format.printf "[FAIL %.6f] @.@[%s@]@.@." (Sys.time ()) str;
+      raise Exit
     ) fmt
 
 let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"

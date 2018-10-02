@@ -29,6 +29,6 @@
         "c.machine_integers",
 
 	// Numeric abstraction
-        "universal.numeric.values.intervals"
+	"universal.numeric.values.intervals"
     ]
 }

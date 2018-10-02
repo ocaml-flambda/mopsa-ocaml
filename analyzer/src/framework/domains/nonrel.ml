@@ -42,7 +42,7 @@ struct
 
 
   let print fmt a =
-    Format.fprintf fmt "%s:@\n  @[%a@]@\n" (snd @@ Value.name) VarMap.print a
+    Format.fprintf fmt "%s: @[%a@]@\n" (snd @@ Value.name) VarMap.print a
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -126,25 +126,25 @@ struct
      a target value, refine the environment using the variables in the
      expression *)
   let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t with_channel =
-    let v' = Value.meet Annotation.empty v r in
+    let r' = Value.meet Annotation.empty v r in
     debug "refine_expr:@ a = @[%a@]@ r = @[%a@]@ rr = @[%a@]" print a Value.print r Value.print v;
     match ae with
     | A_var (var, _) ->
-      if Value.is_bottom v'
+      if Value.is_bottom r'
       then Channel.return bottom
-      else Channel.return (VarMap.add var v' a)
+      else Channel.return (VarMap.add var r' a)
 
     | A_cst(_) ->
-      if Value.is_bottom v'
+      if Value.is_bottom r'
       then Channel.return bottom
       else Channel.return a
 
     | A_unop (op, ae1, v1) ->
-      Value.bwd_unop op v' r |> Channel.bind @@ fun w ->
+      Value.bwd_unop op v1 r' |> Channel.bind @@ fun w ->
       refine ae1 v1 w a
 
     | A_binop (op, ae1, v1, ae2, v2) ->
-      Value.bwd_binop op v1 v2 r |> Channel.bind @@ fun (w1, w2) ->
+      Value.bwd_binop op v1 v2 r' |> Channel.bind @@ fun (w1, w2) ->
       refine ae1 v1 w1 a |> Channel.bind @@ fun a1 ->
       refine ae2 v2 w2 a1
 
@@ -308,24 +308,7 @@ struct
       Value.ask query (fun exp -> let v = eval exp a in snd v.value)
 
 
-  let eval zone exp man flow =
-    match ekind exp with
-    | E_binop(op, e1, e2) ->
-      Some (
-        man.eval ~zone:(fst zone, Value.zone) e1 flow |> Eval.bind @@ fun e1 flow ->
-        man.eval ~zone:(fst zone, Value.zone) e2 flow |> Eval.bind @@ fun e2 flow ->
-        let exp' = {exp with ekind = E_binop(op, e1, e2)} in
-        Eval.singleton exp' flow
-      )
-
-    | E_unop(op, e) ->
-      Some (
-        man.eval ~zone:(fst zone, Value.zone) e flow |> Eval.bind @@ fun e flow ->
-        let exp' = {exp with ekind = E_unop(op, e)} in
-        Eval.singleton exp' flow
-      )
-
-    | _ -> None
+  let eval zone exp man flow = None
 
 
 end
