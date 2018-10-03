@@ -17,6 +17,7 @@
         "universal.iterators.loops",
 
         "python.libs.mopsa",
+        "python.libs.stdlib",
 
         "python.objects.class",
         "python.objects.function",
