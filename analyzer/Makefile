@@ -29,7 +29,7 @@ lang.c.memory = base init_visitor cells machine_integers
 lang.c.memory.cells = cell pointer smashing expand cell2num
 lang.c.libs = c_stdlib mopsa
 
-lang.python = ast addr operators utils pp frontend zone libs desugar objects data_model program types
+lang.python = ast addr operators utils pp frontend zone flows libs desugar objects data_model program types
 lang.python.data_model = callable arith_ops compare_ops aug_assign attribute
 lang.python.types = typingdomain typing t_string t_int
 

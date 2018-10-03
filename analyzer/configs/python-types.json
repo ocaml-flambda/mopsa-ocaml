@@ -10,6 +10,8 @@
         "python.desugar.with",
         "python.desugar.loops",
 
+        "python.flows.exceptions",
+
         "universal.iterators.intraproc",
         "universal.iterators.interproc.inlining",
         "universal.iterators.loops",
