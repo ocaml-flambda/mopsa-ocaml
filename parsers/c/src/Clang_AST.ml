@@ -4,7 +4,8 @@
   The definition of the AST types returned by Clang_parser.
 
   Initially based on Clang 4.0.0, with some extensions to from 5.0.0svn.
-  Updated to compile with Clang 6.0.0.
+  Updated to compile with Clang 7.0.0.
+  Features added in Clang 5 or later may be missing.
 
   Copyright (C) 2017-2018 The MOPSA Project
 
@@ -455,7 +456,7 @@ type name = {
      proto_params: type_qual array; (** parameter types *)
      proto_variadic: bool; (** is the function variadic? *)
      proto_exception_spec: exception_specification_type; (** (C++) exception specification *)
-     proto_noexcept_result: noexcept_result; (** (C++) interpretation of noexpect spec *)
+     proto_noexcept_result: noexcept_result; (** (C++) interpretation of noexpect spec (Clang < 7) *)
      proto_exceptions: type_qual array; (** (C++) exception list in specification *)
      proto_has_trailing_return: bool; (** (C++) *)
      proto_ref_qualifier: ref_qualifier; (** (C++) ref-qualifier associated with this function type *)
@@ -468,10 +469,13 @@ type name = {
    | EST_Dynamic (** throw(T1, T2) *)
    | EST_MSAny (** Microsoft throw(...) extension *)
    | EST_BasicNoexcept (** noexcept *)
-   | EST_ComputedNoexcept (** noexcept(expression) *)
+   | EST_ComputedNoexcept (** noexcept(expression) (Clang < 7) *)
    | EST_Unevaluated (** not evaluated yet, for special member function *)
    | EST_Uninstantiated (** not instantiated yet *)
    | EST_Unparsed (** not parsed yet *)
+   | EST_DependentNoexcept (** noexcept(expression) (Clang >= 7) *)
+   | EST_NoexceptFalse (** noexcept(false) (clang >= 7) *)
+   | EST_NoexceptTrue (** noexcept(true) (clang >= 7) *)
 
 and noexcept_result =
   | NR_NoNoexcept (** There is no noexcept specifier. *)
