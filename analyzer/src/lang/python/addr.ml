@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Ast
 
+
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
 
 (*==========================================================================*)
@@ -195,54 +196,90 @@ let class_of_object (obj: py_object) : py_object =
 
 (** Method resolution order of an object *)
 
-(* TODO: test C3 lin *)
 let rec mro (obj: py_object) : py_object list =
   match kind_of_object obj with
   | A_py_class(_, bases) ->
-     c3_lin obj
-     (* obj :: (List.map mro bases |> List.flatten) *)
+     let res = c3_lin obj in
+
+     let stupid_range = Range_fresh (-1) in
+     debug "MRO of %a: %a@\n" pp_expr (mk_py_object obj stupid_range)
+       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x stupid_range)))
+       res;
+
+     res
   | _ -> assert false
 
 and c3_lin (obj: py_object) : py_object list =
+  (* Spec of c3_lin : (C(B1, ..., BN) meaning class C inherits directly from B1, ..., BN
+   *    c3_lin(C(B1, ..., BN)) = C::merge(c3_lin(B1), ..., c3_lin(BN), [B1], ..., [BN])
+   *    c3_lin(object) = [object]
+   *
+   *    and merge(L1, ..., Ln) =
+   *          let k = min_{1 <= i <= n} { k | hd(L_k) \not \in tail(L_j) \forall j \neq k } in
+   *          let c = hd(L_k) in
+   *          c :: merge(L1 \ {c}, ..., Ln \ {c})
+   * ** Examples
+   *      Due to wikipedia:
+   *          class O: pass
+   *          class A(O): pass
+   *          class B(O): pass
+   *          class C(O): pass
+   *          class D(O): pass
+   *          class E(O): pass
+   *          class K1(A, B, C): pass
+   *          class K2(D, B, E): pass
+   *          class K3(D, A): pass
+   *          class Z(K1, K2, K3): pass
+   *
+   *          a = Z()
+   *      Then, the MRO is Z, K1, K2, K3, D, A, B, C, E, O
+   *
+   *      Found in "Linearization in Multiple Inheritance", by Michael Petter, Winter term 2016:
+   *          class G: pass
+   *          class F: pass
+   *          class E(F): pass
+   *          class D(G): pass
+   *          class C(D, E): pass
+   *          class B(F, G): pass
+   *          class A(B, C): pass
+   *
+   *          a = A() *)
   match kind_of_object obj with
+  | A_py_class (C_builtin "object", b) -> [obj]
   | A_py_class (c, [])  -> [obj]
-  | A_py_class (c, bases) -> obj :: merge ((List.map c3_lin bases) @ [bases])
+  | A_py_class (c, bases) ->
+     let l_bases = List.map c3_lin bases in
+     let bases = List.map (fun x -> [x]) bases in
+     obj :: merge (l_bases @ bases)
   | _ -> assert false
 
 and merge (l: py_object list list) : py_object list =
-  List.iter (List.iter (fun x -> debug "In the merge: %a" Universal.Ast.pp_addr (fst x))) l;
   match search_c l with
   | Some c ->
-     let l' = List.filter (fun x -> x <> []) (List.map (fun li -> if List.hd li = c then List.tl li else li) l) in
+     let l' = List.filter (fun x -> x <> [])
+                (List.map (fun li -> List.filter (fun x -> Universal.Ast.compare_addr (fst c) (fst x) <> 0) li)
+                   l) in
+     (* l' is l with all c removed *)
      begin match l' with
      | [] -> [c]
      | _ -> c :: merge l'
      end
-  | None -> failwith "no c3 linearization (FIXME: better error handling)"
+  | None -> Debug.fail "no c3 linearization (FIXME: this should be TypeError)@\n"
 
 and search_c (l: py_object list list) : py_object option =
   let indexed_l = List.mapi (fun i ll -> (i, ll)) l in
-  let res =
     List.fold_left
       (fun acc (i, li) ->
-        List.iter (fun x -> debug "(%d, %a)" i Universal.Ast.pp_addr (fst x)) li;
-        if acc <> None || li = [] then (debug "pass %b@\n" (acc = None); acc)
+        if acc <> None || li = [] then acc
         else
           let c = List.hd li in
-          debug "c = %a@\n" Universal.Ast.pp_addr (fst c);
           let a = List.for_all (fun (k, lk) ->
-                      (* List.iter (fun x -> debug "l%d = %a" k Universal.Pp.pp_addr (fst x)) lk;
-                       * debug "cond: %b@\n" (i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))); *)
-                      i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))) indexed_l
+                      i = k || lk = [] || not (List.exists (fun x -> Universal.Ast.compare_addr (fst c) (fst x) = 0) (List.tl lk))) indexed_l
           in
-          debug "a = %b@\n" a; if a then Some c else acc
+          if a then Some c else acc
       )
       None indexed_l
-  in
-  if res = None then debug "bla@\n"
-  else debug "ok!@\n";
-  res
-
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
 let most_derive_builtin_base (obj: py_object) : py_object =
@@ -322,6 +359,21 @@ let mk_py_z_interval l u range =
 
 let mk_py_float_interval l u range =
   Universal.Ast.mk_float_interval l u range
+
+let mk_attribute_var obj attr range =
+  let addr = addr_of_object obj in
+  let v = {
+      vname = (
+        let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Ast.pp_addr addr attr in
+        let name = Format.flush_str_formatter () in
+        name
+      );
+      vuid = 0;
+      vtyp = T_any;
+    }
+  in
+  mk_var v range
+
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =
@@ -448,7 +500,30 @@ let () =
                     );
                   compare =
                     (fun default a1 a2 ->
-                      debug "PP of addr, to fix in python/addr"; 1) } in
+                      match a1.addr_kind, a2.addr_kind with
+                      | A_py_class (c1, _), A_py_class (c2, _) ->
+                         begin match c1, c2 with
+                         | C_builtin s1, C_builtin s2
+                           | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+                         | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      | A_py_function f1, A_py_function f2 ->
+                         begin match f1, f2 with
+                         | F_builtin s1, F_builtin s2
+                           | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+                         | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      (* | A_py_method (func1, inst2), A_py_method (func2, inst2) ->
+                       *    _ *)
+                      | A_py_module m1, A_py_module m2 ->
+                         begin match m1, m2 with
+                         | M_user (s1, _), M_user (s2, _)
+                           | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+                         | _ -> Debug.warn "FIXME, compare py addr@\n"; 1
+                         end
+                      | _ -> default a1 a2) } in
       register_addr info
     )
   )
