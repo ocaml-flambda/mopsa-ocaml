@@ -56,21 +56,21 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-python -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-python -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-c -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-c -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
 	)
 
 
