@@ -37,6 +37,8 @@ val register_alarm: alarm_info -> unit
 val pp_alarm : Format.formatter -> alarm -> unit
 (** Pretty print the report of an alarm *)
 
+val pp_alarm_title : Format.formatter -> alarm -> unit
+
 type Manager.token += T_alarm of alarm
 
 val alarm_token : alarm -> Manager.token

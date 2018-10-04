@@ -76,6 +76,9 @@ let pp_alarm fmt alarm =
     !pp_report_chain alarm
     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Location.pp_range_verbose) alarm.alarm_trace
 
+
+let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm
+
 type token += T_alarm of alarm
 
 let alarm_token a = T_alarm a

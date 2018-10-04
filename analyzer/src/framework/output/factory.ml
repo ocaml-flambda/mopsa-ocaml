@@ -22,7 +22,7 @@ let opt_file = ref None
 
 let () =
   Options.register_option (
-    "-output",
+    "-format",
     Arg.String (fun s ->
         match s with
         | "text" -> opt_format := F_text
@@ -33,7 +33,7 @@ let () =
   );
 
   Options.register_option (
-    "-output-file",
+    "-output",
     Arg.String (fun s -> opt_file := Some s),
     " path where results are stored."
   )
