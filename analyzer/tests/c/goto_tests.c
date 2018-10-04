@@ -2,11 +2,13 @@
 
 void test_backward_goto() {
   int a = 0;
-l:
+
+ entry:
+  if (a >= 10) goto exit;
   a++;
-  if (a < 10) {
-    goto l;
-  };
+  goto entry;
+
+ exit:
   _mopsa_assert_exists(a==10);
 }
 
