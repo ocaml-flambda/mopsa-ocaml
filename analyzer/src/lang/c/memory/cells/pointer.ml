@@ -39,27 +39,27 @@ struct
   (** Utility functions *)
   (** ================= *)
 
-  let add annot p pb mode a =
+  let add_with_mode annot p pb mode a =
     let a' = add p pb a in
     match mode with
     | STRONG (* | EXPAND *) -> a'
     | WEAK -> join annot a a'
 
   let points_to_fun annot p f ?(mode=STRONG) a =
-    add annot p (PointerBaseSet.singleton (PB_fun f)) mode a
+    add_with_mode annot p (PointerBaseSet.singleton (PB_fun f)) mode a
 
   let points_to_base annot p b ?(mode=STRONG) a =
-    add annot p (PointerBaseSet.singleton (PB_var b)) mode a
+    add_with_mode annot p (PointerBaseSet.singleton (PB_var b)) mode a
 
   let points_to_var annot p v ?(mode=STRONG) a =
     (* (match v.vkind with V_orig -> () | _ -> assert false); *)
-    add annot p (PointerBaseSet.singleton (PB_var (V v))) mode a
+    add_with_mode annot p (PointerBaseSet.singleton (PB_var (V v))) mode a
 
   let points_to_null annot p ?(mode=STRONG) a =
-    add annot p (PointerBaseSet.singleton PB_null) mode a
+    add_with_mode annot p (PointerBaseSet.singleton PB_null) mode a
 
   let points_to_invalid annot p ?(mode=STRONG) a =
-    add annot p (PointerBaseSet.singleton PB_invalid) mode a
+    add_with_mode annot p (PointerBaseSet.singleton PB_invalid) mode a
 
   let points_to_base =
     function
@@ -299,14 +299,15 @@ struct
         let a = Flow.get_domain_env T_cur man flow in
         let bases = find c a in
         let evls = PointerBaseSet.fold (fun pb acc ->
-            let evl =
+            let pt =
               match pb with
-              | PB_var b -> Eval.singleton (P_var (b, mk_var (mk_offset_var c) exp.erange, under_pointer_type (cell_type c))) flow
-              | PB_fun f -> Eval.singleton (P_fun f) flow
-              | PB_invalid -> Eval.singleton P_invalid flow
-              | PB_null -> Eval.singleton P_null flow
+              | PB_var b -> P_var (b, mk_var (mk_offset_var c) exp.erange, under_pointer_type (cell_type c))
+              | PB_fun f -> P_fun f
+              | PB_invalid -> P_invalid
+              | PB_null -> P_null
             in
-            evl :: acc
+            let flow' = Flow.map_domain_env T_cur (add c (PointerBaseSet.singleton pb)) man flow in
+            (Eval.singleton pt flow') :: acc
           ) bases []
         in
         if List.length evls = 0
@@ -350,12 +351,18 @@ struct
         let b = points_to_base pt |>
                 PointerBaseSet.singleton
         in
-        let flow1 = Flow.map_domain_env T_cur (add (Flow.get_all_annot flow) p b mode) man flow in
+        let flow1 = Flow.map_domain_env T_cur (add_with_mode (Flow.get_all_annot flow) p b mode) man flow in
         let flow2 =
           match pt with
           | P_var (_, offset, _) ->
             let o = mk_offset_var p in
             man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign (mk_var o range) offset range) flow1
+
+          (* FIXME: This case is ugly: assigning a zero offset to a
+             null pointer avoids loosing information about offsets after joins. *)
+          | P_null ->
+            let o = mk_offset_var p in
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign (mk_var o range) (mk_zero range) range) flow1
           | _ -> flow1
         in
         Post.of_flow flow2

@@ -14,6 +14,8 @@ MOPSA="${MOPSADIR}/scripts/mopsa-c -I ${MOPSADIR}/analyzer/stubs/c -I ${MOPSADIR
 echo "Analyzing ${casename}"
 echo "Good case"
 ${MOPSA} -c-entry ${good} ${files}
+
+echo
 echo "Bad case"
 ${MOPSA} -c-entry "${bad}" ${files}
 echo
