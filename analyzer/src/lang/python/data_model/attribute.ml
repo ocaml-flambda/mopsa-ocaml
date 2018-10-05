@@ -86,7 +86,8 @@ module Domain =
                                   Eval.assume
                                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
                                     ~fthen:(fun flow ->
-                                      let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', object_of_expr exp))) range in
+                                      Debug.fail "todo@\n";
+                                      (* let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', object_of_expr exp))) range in *)
                                       Eval.singleton exp flow)
                                     ~felse:(fun flow ->
                                       (* FIXME? *)
