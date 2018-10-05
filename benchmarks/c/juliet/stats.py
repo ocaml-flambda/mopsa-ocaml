@@ -38,7 +38,8 @@ with open(args.json, "rt") as fp:
 
         cwe = get_cwe(r["case"])
 
-        correct = 0
+        safe = 0
+        unsafe = 0
         fail = 0
         false_positives = 0
         false_negatives = 0
@@ -49,7 +50,7 @@ with open(args.json, "rt") as fp:
         if r["good"]["success"]:
             time.append(r["good"]["time"])
             if len(r["good"]["alarms"]) == 0:
-                correct += 1
+                safe += 1
             else:
                 false_positives = len(r["good"]["alarms"])
         else:
@@ -61,7 +62,7 @@ with open(args.json, "rt") as fp:
             time.append(r["bad"]["time"])
             for a in r["bad"]["alarms"]:
                 if is_cwe_alarm(a, cwe):
-                    correct += 1
+                    unsafe += 1
                     found = True
                 else:
                     false_positives += 1
@@ -77,7 +78,8 @@ with open(args.json, "rt") as fp:
             old = {
                 "time": [],
                 "total": 0,
-                "correct": 0,
+                "safe": 0,
+                "unsafe": 0,
                 "fail": 0,
                 "false_positives": 0,
                 "false_negatives": 0
@@ -86,7 +88,8 @@ with open(args.json, "rt") as fp:
         results[cwe] = {
             "time": old["time"] + time if fail == 0 else old["time"],
             "total": old["total"] + 1,
-            "correct": old["correct"] + correct,
+            "safe": old["safe"] + safe,
+            "unsafe": old["unsafe"] + unsafe,
             "fail": old["fail"] + fail,
             "false_positives": old["false_positives"] + false_positives,
             "false_negatives": old["false_negatives"] + false_negatives
@@ -95,11 +98,13 @@ with open(args.json, "rt") as fp:
 #Print results
 for cwe in results:
     print("[CWE%d] %s:"%(cwe, cwe_alarm[cwe]))
-    print("\tTotal: %d"%(results[cwe]["total"] * 2))
-    print("\tCorrect: %d"%(results[cwe]["correct"]))
-    print("\tFalse postivies: %d"%(results[cwe]["false_positives"]))
-    print("\tFalse negatives: %d"%(results[cwe]["false_negatives"]))
-    print("\tCoverage: %d%%"%(int(100 * len(results[cwe]["time"])/results[cwe]["total"])))
+    print("    Total: %d"%(results[cwe]["total"] * 2))
+    print("    Safe: %d"%(results[cwe]["safe"]))
+    print("    Unsafe: %d"%(results[cwe]["unsafe"]))
+    print("    False postives: %d"%(results[cwe]["false_positives"]))
+    print("    False negatives: %d"%(results[cwe]["false_negatives"]))
+    print("    Failures: %d"%(results[cwe]["fail"]))
+    print("    Coverage: %d%%"%(int(100 * len(results[cwe]["time"])/(results[cwe]["total"] * 2))))
     t = results[cwe]["time"]
     avg = sum(t)/results[cwe]["total"]
-    print("\tAnalysis time (min, avg, max, sum): %.3fs/%.3fs/%.3fs/%.3fs"%(min(t), avg, max(t), sum(t)))
+    print("    Analysis time (min, avg, max, sum): %.3fs, %.3fs, %.3fs, %.3fs"%(min(t), avg, max(t), sum(t)))
