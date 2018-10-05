@@ -145,7 +145,9 @@ let to_string (fmt:print_format) (x:t) : string =
   else if x = infinity then "+∞"
   else if x = neg_infinity then "-∞"
   else string_of_float (x+.0.)
-(* Note: don't remove the "+.0."; it is here to ensure we never print "-0." *)
+(* Note: don't remove the "+.0."; it is here to ensure we never print "-0." 
+   TODO: printing a guaranteed under/over-approximation.
+ *)
                        
 let print fmt ch (x:t) = output_string ch (to_string fmt x)
 let fprint fmt ch (x:t) = Format.pp_print_string ch (to_string fmt x)
@@ -338,12 +340,10 @@ module Single = struct
   let pred_zero (a:t) : t = if a == 0. then a else pred a
   (** As succ and pred, but does not cross zero. *)
 
-  let of_string_near (s:t) : string = string_of_float s
-  let of_string_up   (s:t) : string = string_of_float s
-  let of_string_down (s:t) : string = string_of_float s
-  let of_string_zero (s:t) : string = string_of_float s
-  (* TODO *)
-                                                
+  external of_string_up:   string -> t = "ml_of_string_sgl_up"
+  external of_string_down: string -> t = "ml_of_string_sgl_down"
+  (** Conversion from string. *)
+                                       
 end
 (** Single precision operations. *)
                   
@@ -478,11 +478,9 @@ module Double = struct
   let pred_zero (a:t) : t = if a == 0. then a else pred a
   (** As succ and pred, but does not cross zero. *)
 
-  let of_string_near (s:t) : string = string_of_float s
-  let of_string_up   (s:t) : string = string_of_float s
-  let of_string_down (s:t) : string = string_of_float s
-  let of_string_zero (s:t) : string = string_of_float s
-  (* TODO *)                                                
+  external of_string_up:   string -> t = "ml_of_string_dbl_up"
+  external of_string_down: string -> t = "ml_of_string_dbl_down"
+  (** Conversion from string. *)
 
 end
 (** Double precision operations. *)
@@ -663,21 +661,14 @@ let of_z (prec:prec) (round:round) x =
   | `DOUBLE, `ZERO -> Double.of_z_zero x
 (** Conversion from Z.t *)
 
-let of_string (prec:prec) (round:round) x =
-  match prec,round with
-  | `SINGLE, `NEAR -> Single.of_string_near x
+let of_string (prec:prec) (round:[`UP | `DOWN]) x =
+    match prec,round with
   | `SINGLE, `UP   -> Single.of_string_up   x
   | `SINGLE, `DOWN -> Single.of_string_down x
-  | `SINGLE, `ZERO -> Single.of_string_zero x
-  | `DOUBLE, `NEAR -> Double.of_string_near x
   | `DOUBLE, `UP   -> Double.of_string_up   x
   | `DOUBLE, `DOWN -> Double.of_string_down x
-  | `DOUBLE, `ZERO -> Double.of_string_zero x
-(** Conversion from string.
-    NOTE: precision and rounding directions are not yet taken into account.
- *)                 
+(** Conversion from string, with safe rounding. *)
 
-                  
 let succ (prec:prec) x =
   match prec with
   | `SINGLE -> Single.succ x
