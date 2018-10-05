@@ -2,7 +2,7 @@ TARGET_CLIBS = utils
 MOPSAROOT = ..
 
 utils = bot compare debug dnf equiv setExt setExtSig setP invRelation invRelationSig listExt mapExtSig mapExt mapPolyHet mapP option printers relation relationSig valueSig timing top itvUtils congUtils bitfields
-itvUtils = float intBound floatItv intItv
+itvUtils = float intBound intItv floatItv floatItvNan
 
 #C files
 C_SRC = itvUtils/floats_x86_64.c

@@ -5,7 +5,8 @@ MOPSAROOT = ..
 #Packs
 mopsa = framework lang main
 
-framework = location ast visitor options query annotation lattice zone manager flow alarm exceptions eval post channel value domain cache analyzer lattices essentials domains config
+framework = location ast visitor options query annotation lattice zone manager flow exceptions eval post channel value domain cache output analyzer lattices essentials domains config
+framework.output = alarm text json factory
 framework.domains = stateless iter nonrel leaf functor stacked reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
@@ -55,21 +56,21 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-python -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-python -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-c -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-c -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
 	)
 
 

@@ -41,9 +41,8 @@ type t_with_bot = t with_bot
 let is_valid (a:t) : bool =
   a.lo <= a.up && not (F.is_nan a.lo || F.is_nan a.up)
 
-      
 
-                    
+
 (** {2 Constructors} *)
 
                     
@@ -63,7 +62,7 @@ let minf_zero : t = mk neg_infinity 0.
 let minf_inf : t  = mk neg_infinity infinity
 (** Useful intervals *)
 
-                  
+
 let of_float (lo:float) (up:float) : t =
   let lo = if F.is_nan lo then neg_infinity else lo
   and up = if F.is_nan up then infinity else up in
@@ -72,7 +71,7 @@ let of_float (lo:float) (up:float) : t =
 (** Constructs a non-empty interval. We must have lo ≤ up, or an exception is raised. 
     NaN bounds are transformed into infinities.
  *)
-    
+  
 let of_float_bot (lo:float) (up:float) : t_with_bot =
   let lo = if F.is_nan lo then neg_infinity else lo
   and up = if F.is_nan up then infinity else up in
@@ -82,6 +81,7 @@ let of_float_bot (lo:float) (up:float) : t_with_bot =
     NaN bounds are transformed into infinities.    
  *)
 
+  
 let hull (a:float) (b:float) : t =
   if F.is_nan a || F.is_nan b then minf_inf
   else mk (min a b) (max a b)
@@ -136,11 +136,6 @@ let compare_bot (x:t with_bot) (y:t with_bot) : int =
   Bot.bot_compare compare x y
 (** Total ordering on possibly empty intervals. *)
 
-let contains_zero (a:t) : bool =
-  a.lo <= 0. && a.up >= 0.
-
-let contains_nonzero (a:t) : bool =
-  a.lo <> 0. || a.up <> 0.
                                
 let is_zero (a:t) : bool = equal a zero
 let is_positive (a:t) : bool = a.lo >= 0.
@@ -150,6 +145,14 @@ let is_negative_strict (a:t) : bool = a.up < 0.
 let is_nonzero (a:t) : bool = a.lo > 0. || a.up < 0.
 (** Interval sign. *)
 
+let contains_positive (a:t) : bool = a.up >= 0.
+let contains_negative (a:t) : bool = a.lo <= 0.
+let contains_positive_strict (a:t) : bool = a.up > 0.
+let contains_negative_strict (a:t) : bool = a.lo < 0.
+let contains_zero (a:t) : bool = a.lo <= 0. && a.up >= 0.
+let contains_nonzero (a:t) : bool = a.lo <> 0. || a.up <> 0.
+(** Whether the interval contains an element of the specified sign. *)
+                            
 let is_singleton (a:t) : bool =
   a.lo = a.up
 (** Whether the interval contains a single element. *)
@@ -161,12 +164,20 @@ let is_bounded (a:t) : bool =
 let is_in_range (a:t) (lo:float) (up:float) =
   included a { lo; up; }
 (** Whether the interval is included in the range [lo,up]. *)
-
+  
+let is_log_eq (ab:t) (ab':t) : bool = intersect ab ab'
+let is_log_leq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.leq a b'
+let is_log_geq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.geq b a'
+let is_log_lt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.lt a b'
+let is_log_gt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.gt b a'
+let is_log_neq (ab:t) (ab':t) : bool = not (equal ab ab' && is_singleton ab)
+(** C comparison tests. Returns true if the test may succeed, false if it cannot. *)
                             
                                                    
                                                   
 (** {2 Printing} *)
 
+                                     
 type print_format = F.print_format
 let dfl_fmt = F.dfl_fmt
   
@@ -220,6 +231,11 @@ let fmod (x:t) (y:t) : t_with_bot =
       Nb (of_float (-.y.up) y.up)
 (** Remainder (fmod). *)
 
+let to_z (r:t) : Z.t * Z.t =
+  if not (F.is_finite r.lo && F.is_finite r.up)
+  then invalid_arg "Inifnites or NaN in FloatItv.to_z";
+  Z.of_float r.lo, Z.of_float r.up
+(** Conversion to integer (using truncation). *)  
   
 let join (a:t) (b:t) : t =
   of_float (min a.lo b.lo) (max a.up b.up)
@@ -281,7 +297,7 @@ let bwd_neg (a:t) (r:t) : t_with_bot =
 
 let bwd_abs (a:t) (r:t) : t_with_bot =
   join_bot (meet a r) (meet a (neg r))  
-(** Backward absolute value. *)
+(** Backward absolute value. *)  
   
 let bwd_fmod (x:t) (y:t) (r:t) : (t*t) with_bot =
   let yy = abs y in
@@ -293,7 +309,8 @@ let bwd_fmod (x:t) (y:t) (r:t) : (t*t) with_bot =
     Nb (x,y)
 (** Backward remainder (fmod). *)
   
-                              
+
+
 (** {2 Rounding-dependent functions} *)
 
                       
@@ -604,7 +621,7 @@ module Double = struct
   let bwd_add_up    a b r = bwd_add a b (unround_up   r)
   let bwd_add_down  a b r = bwd_add a b (unround_down r)
   let bwd_add_zero  a b r = bwd_add a b (unround_zero r)
-  let bwd_add_outer a b r = bwd_add a b (unround_any r)
+  let bwd_add_any   a b r = bwd_add a b (unround_any r)
   let bwd_add_noround a b r = bwd_add a b r
   (** Backward addition. *)
 
@@ -617,7 +634,7 @@ module Double = struct
   let bwd_sub_up    a b r = bwd_sub a b (unround_up   r)
   let bwd_sub_down  a b r = bwd_sub a b (unround_down r)
   let bwd_sub_zero  a b r = bwd_sub a b (unround_zero r)
-  let bwd_sub_outer a b r = bwd_sub a b (unround_any r)
+  let bwd_sub_any   a b r = bwd_sub a b (unround_any r)
   let bwd_sub_noround a b r = bwd_sub a b r
   (** Backward subtraction. *)
 
@@ -638,7 +655,7 @@ module Double = struct
   let bwd_mul_up    a b r = bwd_mul a b (unround_up   r)
   let bwd_mul_down  a b r = bwd_mul a b (unround_down r)
   let bwd_mul_zero  a b r = bwd_mul a b (unround_zero r)
-  let bwd_mul_outer a b r = bwd_mul a b (unround_any r)
+  let bwd_mul_any   a b r = bwd_mul a b (unround_any r)
   let bwd_mul_noround a b r = bwd_mul a b r
   (** Backward multiplication. *)
 
@@ -658,7 +675,7 @@ module Double = struct
   let bwd_div_up    a b r = bwd_div a b (unround_up   r)
   let bwd_div_down  a b r = bwd_div a b (unround_down r)
   let bwd_div_zero  a b r = bwd_div a b (unround_zero r)
-  let bwd_div_outer a b r = bwd_div a b (unround_any r)
+  let bwd_div_any   a b r = bwd_div a b (unround_any r)
   let bwd_div_noround a b r = bwd_div a b r
   (** Backward division. *)
 
@@ -667,9 +684,17 @@ module Double = struct
   let bwd_round_int_up    a r = meet a (unround_int_up   r)
   let bwd_round_int_down  a r = meet a (unround_int_down r)
   let bwd_round_int_zero  a r = meet a (unround_int_zero r)
-  let bwd_round_int_outer a r = meet a (unround_int_any r)
+  let bwd_round_int_any   a r = meet a (unround_int_any r)
   let bwd_round_int_noround a r = meet a r
   (** Backward rounding to int. *)
+
+  let bwd_round_near  a r = meet a (unround_near r)
+  let bwd_round_up    a r = meet a (unround_up   r)
+  let bwd_round_down  a r = meet a (unround_down r)
+  let bwd_round_zero  a r = meet a (unround_zero r)
+  let bwd_round_any   a r = meet a (unround_any r)
+  let bwd_round_noround a r = meet a r
+  (** Backward rounding from real. *)
 
 
   let bwd_square (a:t) (r:t) : t_with_bot =
@@ -680,7 +705,7 @@ module Double = struct
   let bwd_square_up    a r = bwd_square a (unround_up   r)
   let bwd_square_down  a r = bwd_square a (unround_down r)
   let bwd_square_zero  a r = bwd_square a (unround_zero r)
-  let bwd_square_outer a r = bwd_square a (unround_any r)
+  let bwd_square_any   a r = bwd_square a (unround_any r)
   let bwd_square_noround a r = bwd_square a r
   (** Backward square. *)
 
@@ -692,11 +717,35 @@ module Double = struct
   let bwd_sqrt_up    a r = bwd_sqrt a (unround_up   r)
   let bwd_sqrt_down  a r = bwd_sqrt a (unround_down r)
   let bwd_sqrt_zero  a r = bwd_sqrt a (unround_zero r)
-  let bwd_sqrt_outer a r = bwd_sqrt a (unround_any r)
+  let bwd_sqrt_any   a r = bwd_sqrt a (unround_any r)
   let bwd_sqrt_noround a r = bwd_sqrt a r
   (** Backward square root. *)
 
                            
+  let bwd_of_z unround lo up r =
+    let r = unround r in
+    if F.is_finite r.lo && F.is_finite r.up then
+      let lo = Z.max lo (Z.of_float r.lo)
+      and up = Z.min up (Z.of_float r.up)
+      in
+      if Z.leq lo up then Nb (lo,up)
+      else BOT
+    else Nb (lo,up)
+                           
+  let bwd_of_z_near    lo up r = bwd_of_z unround_int_near lo up r
+  let bwd_of_z_up      lo up r = bwd_of_z unround_int_up   lo up r
+  let bwd_of_z_down    lo up r = bwd_of_z unround_int_down lo up r
+  let bwd_of_z_zero    lo up r = bwd_of_z unround_int_zero lo up r
+  let bwd_of_z_any     lo up r = bwd_of_z unround_int_any  lo up r
+  let bwd_of_z_noround lo up r = bwd_of_z (fun x -> x) lo up r
+  (** Backward conversion from int. *)
+
+                               
+  let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+  (** Backward conversion to int. *)
+    
+                               
   let meet_nonzero (a:t) : t_with_bot =
     let lo = if a.lo = 0. then FF.min_denormal else a.lo
     and up = if a.up = 0. then -. FF.min_denormal else a.up
@@ -891,7 +940,7 @@ module Single = struct
   let bwd_add_up    a b r = bwd_add a b (unround_up   r)
   let bwd_add_down  a b r = bwd_add a b (unround_down r)
   let bwd_add_zero  a b r = bwd_add a b (unround_zero r)
-  let bwd_add_outer a b r = bwd_add a b (unround_any r)
+  let bwd_add_any   a b r = bwd_add a b (unround_any r)
   let bwd_add_noround a b r = bwd_add a b r
   (** Backward addition. *)
 
@@ -904,7 +953,7 @@ module Single = struct
   let bwd_sub_up    a b r = bwd_sub a b (unround_up   r)
   let bwd_sub_down  a b r = bwd_sub a b (unround_down r)
   let bwd_sub_zero  a b r = bwd_sub a b (unround_zero r)
-  let bwd_sub_outer a b r = bwd_sub a b (unround_any r)
+  let bwd_sub_any   a b r = bwd_sub a b (unround_any r)
   let bwd_sub_noround a b r = bwd_sub a b r
   (** Backward subtraction. *)
 
@@ -925,7 +974,7 @@ module Single = struct
   let bwd_mul_up    a b r = bwd_mul a b (unround_up   r)
   let bwd_mul_down  a b r = bwd_mul a b (unround_down r)
   let bwd_mul_zero  a b r = bwd_mul a b (unround_zero r)
-  let bwd_mul_outer a b r = bwd_mul a b (unround_any r)
+  let bwd_mul_any   a b r = bwd_mul a b (unround_any r)
   let bwd_mul_noround a b r = bwd_mul a b r
   (** Backward multiplication. *)
 
@@ -944,7 +993,7 @@ module Single = struct
   let bwd_div_up    a b r = bwd_div a b (unround_up   r)
   let bwd_div_down  a b r = bwd_div a b (unround_down r)
   let bwd_div_zero  a b r = bwd_div a b (unround_zero r)
-  let bwd_div_outer a b r = bwd_div a b (unround_any r)
+  let bwd_div_any   a b r = bwd_div a b (unround_any r)
   let bwd_div_noround a b r = bwd_div a b r
   (** Backward division. *)
          
@@ -952,10 +1001,17 @@ module Single = struct
   let bwd_round_int_up    a r = meet a (unround_int_up   r)
   let bwd_round_int_down  a r = meet a (unround_int_down r)
   let bwd_round_int_zero  a r = meet a (unround_int_zero r)
-  let bwd_round_int_outer a r = meet a (unround_int_any r)
+  let bwd_round_int_any   a r = meet a (unround_int_any r)
   let bwd_round_int_noround a r = meet a r
   (** Backward rounding to int. *)
 
+  let bwd_round_near  a r = meet a (unround_near r)
+  let bwd_round_up    a r = meet a (unround_up   r)
+  let bwd_round_down  a r = meet a (unround_down r)
+  let bwd_round_zero  a r = meet a (unround_zero r)
+  let bwd_round_any   a r = meet a (unround_any r)
+  let bwd_round_noround a r = meet a r
+  (** Backward rounding from double or real. *)
                               
   let bwd_square (a:t) (r:t) : t_with_bot =
     let rr = sqrt_outer r in
@@ -965,7 +1021,7 @@ module Single = struct
   let bwd_square_up    a r = bwd_square a (unround_up   r)
   let bwd_square_down  a r = bwd_square a (unround_down r)
   let bwd_square_zero  a r = bwd_square a (unround_zero r)
-  let bwd_square_outer a r = bwd_square a (unround_any r)
+  let bwd_square_any   a r = bwd_square a (unround_any r)
   let bwd_square_noround a r = bwd_square a r
   (** Backward square. *)
 
@@ -977,11 +1033,35 @@ module Single = struct
   let bwd_sqrt_up    a r = bwd_sqrt a (unround_up   r)
   let bwd_sqrt_down  a r = bwd_sqrt a (unround_down r)
   let bwd_sqrt_zero  a r = bwd_sqrt a (unround_zero r)
-  let bwd_sqrt_outer a r = bwd_sqrt a (unround_any r)
+  let bwd_sqrt_any   a r = bwd_sqrt a (unround_any r)
   let bwd_sqrt_noround a r = bwd_sqrt a r
   (** Backward square root. *)
 
-                           
+
+  let bwd_of_z unround lo up r =
+    let r = unround r in
+    if F.is_finite r.lo && F.is_finite r.up then
+      let lo = Z.max lo (Z.of_float r.lo)
+      and up = Z.min up (Z.of_float r.up)
+      in
+      if Z.leq lo up then Nb (lo,up)
+      else BOT
+    else Nb (lo,up)
+
+  let bwd_of_z_near    lo up r = bwd_of_z unround_int_near lo up r
+  let bwd_of_z_up      lo up r = bwd_of_z unround_int_up   lo up r
+  let bwd_of_z_down    lo up r = bwd_of_z unround_int_down lo up r
+  let bwd_of_z_zero    lo up r = bwd_of_z unround_int_zero lo up r
+  let bwd_of_z_any     lo up r = bwd_of_z unround_int_any  lo up r
+  let bwd_of_z_noround lo up r = bwd_of_z (fun x -> x) lo up r
+  (** Backward conversion from int. *)
+
+                               
+  let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+  (** Backward conversion to int. *)
+    
+
   let meet_nonzero (a:t) : t_with_bot =
     let lo = if a.lo = 0. then FF.min_denormal else a.lo
     and up = if a.up = 0. then -. FF.min_denormal else a.up
@@ -993,99 +1073,412 @@ end
 (** Intervals with rounding to float. *)
 
 
-let to_bool (can_be_zero:bool) (can_be_one:bool) : t =
-  match can_be_zero, can_be_one with
-  | true, false -> zero
-  | false, true -> one
-  | true, true -> zero_one
-  | _ -> failwith "unreachable case encountered in IntItv.to_bool"
-(* helper function for operators returning a boolean that can be zero and/or one *)
 
-                
-let log_not (a: t) : t =
-  to_bool (contains_nonzero a) (contains_zero a)
+(** {2 Operations with rounding mode as argument} *)
 
-let add (a1:t) (a2:t) : t = Double.add_near a1 a2
-
-let sub (a1:t) (a2:t) : t = Double.sub_near a1 a2
-    
-let mul (a1:t) (a2:t) : t = Double.mul_near a1 a2
-    
-let div (a1:t) (a2:t) : t_with_bot = Double.div_near a1 a2
-
-let round (a:t) : t = Double.round_int_near a
-
-let sqrt (a:t) : t_with_bot = Double.sqrt_near a
-
-let pow (a:t) (b:t) : t = assert false
-
-let log_or a1 a2 = assert false
-
-let log_and a1 a2 = assert false
-
-let is_log_eq (ab:t) (ab':t) : bool = intersect ab ab'
-let is_log_leq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.leq a b'
-let is_log_geq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.geq b a'
-let is_log_lt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.lt a b'
-let is_log_gt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : bool = F.gt b a'
-let is_log_neq (ab:t) (ab':t) : bool = not (equal ab ab' && is_singleton ab)
-(** C comparison tests. Returns a boolean if the test may succeed *)
-
-
-let meet_nonzero {lo=a;up=b} =
-  match F.is_zero a, F.is_zero b with
-  | true,  true  -> BOT
-  | true,  false -> Nb {lo=F.Double.succ a;up=b}
-  | false, true  -> Nb {lo=a; up=F.Double.pred b}
-  | false, false -> Nb {lo=a;up=b}
-(** Keeps only non-zero elements. *)
-
-
-let meet_zero (a:t) : t_with_bot =
-  meet a zero
-(** Intersects with {0}. *)
-
-
-let bwd_add a1 a2 r = Double.bwd_add a1 a2 r
-
-let bwd_sub a1 a2 r = Double.bwd_sub a1 a2 r
-
-let bwd_mul a1 a2 r = Double.bwd_mul a1 a2 r
-
-let bwd_div a1 a2 r = Double.bwd_div a1 a2 r
-
-let bwd_rem a1 a2 r = assert false
-
-
-let of_bound_bot (a:F.t) (b:F.t) : t_with_bot =
-  if F.gt a b || a = infinity || b = neg_infinity then BOT
-  else Nb {lo=a; up= b}
-
-
-(** Given two interval aruments, return the arguments assuming that the predicate holds.
+type prec =
+  [ `SINGLE (** 32-bit single precision *)
+  | `DOUBLE (** 64-bit double precision *)
+  | `REAL   (** real arithmetic (sound rounding to double is used) *)
+  ]
+(** Precision. *)
+                   
+type round =
+  [ `NEAR  (** To nearest *)
+  | `UP    (** Upwards *)
+  | `DOWN  (** Downwards *)
+  | `ZERO  (** Towards 0 *)
+  | `ANY   (** Any rounding mode *)
+  ]
+(** Rounding direction.
+    This is ignored for real arithmetic.
  *)
-           
-           
-let filter_leq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  bot_merge2 (of_bound_bot a (F.min b b')) (of_bound_bot (F.max a a') b')
-         
-let filter_geq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  bot_merge2 (of_bound_bot (F.max a a') b) (of_bound_bot a' (F.min b b'))
-         
-let filter_lt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  bot_merge2 (of_bound_bot a (F.min b (F.Double.pred b'))) (of_bound_bot (F.max (F.Double.succ a) a') b')
-         
-let filter_gt ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  bot_merge2 (of_bound_bot (F.max a (F.Double.succ a')) b) (of_bound_bot a' (F.min (F.Double.pred b) b'))
-         
-let filter_eq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  match meet {lo=a;up=b} {lo=a';up=b'} with BOT -> BOT | Nb x -> Nb (x,x)
-                                              
-let filter_neq ({lo=a;up=b}:t) ({lo=a';up=b'}:t) : (t*t) with_bot =
-  match F.equal a b, F.equal  a' b' with
-  | true, true  when F.equal a a' -> BOT
-  | true, false when F.equal a a' -> bot_merge2 (Nb {lo=a;up=b}) (of_bound_bot (F.Double.succ a') b')
-  | true, false when F.equal b b' -> bot_merge2 (Nb {lo=a;up=b}) (of_bound_bot a' (F.Double.pred b'))
-  | false, true when F.equal a a' -> bot_merge2 (of_bound_bot (F.Double.succ a) b) (Nb {lo=a';up=b'})
-  | false, true when F.equal b b' -> bot_merge2 (of_bound_bot a (F.Double.pred b)) (Nb {lo=a';up=b'})
-  | _ -> Nb ({lo=a;up=b},{lo=a';up=b'})
+  
+let add (prec:prec) (round:round) (x:t) (y:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.add_near x y
+  | `SINGLE, `UP    -> Single.add_up   x y
+  | `SINGLE, `DOWN  -> Single.add_down x y
+  | `SINGLE, `ZERO  -> Single.add_zero x y
+  | `SINGLE, `ANY   -> Single.add_outer x y
+  | `DOUBLE, `NEAR  -> Double.add_near x y
+  | `DOUBLE, `UP    -> Double.add_up   x y
+  | `DOUBLE, `DOWN  -> Double.add_down x y
+  | `DOUBLE, `ZERO  -> Double.add_zero x y
+  | `DOUBLE, `ANY   -> Double.add_outer x y
+  | `REAL, _        -> Double.add_outer x y
+(** Addition. *)
+
+let sub (prec:prec) (round:round) (x:t) (y:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.sub_near x y
+  | `SINGLE, `UP    -> Single.sub_up   x y
+  | `SINGLE, `DOWN  -> Single.sub_down x y
+  | `SINGLE, `ZERO  -> Single.sub_zero x y
+  | `SINGLE, `ANY   -> Single.sub_outer x y
+  | `DOUBLE, `NEAR  -> Double.sub_near x y
+  | `DOUBLE, `UP    -> Double.sub_up   x y
+  | `DOUBLE, `DOWN  -> Double.sub_down x y
+  | `DOUBLE, `ZERO  -> Double.sub_zero x y
+  | `DOUBLE, `ANY   -> Double.sub_outer x y
+  | `REAL, _        -> Double.sub_outer x y
+(** Subtraction. *)
+  
+let mul (prec:prec) (round:round) (x:t) (y:t) :t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.mul_near x y
+  | `SINGLE, `UP    -> Single.mul_up   x y
+  | `SINGLE, `DOWN  -> Single.mul_down x y
+  | `SINGLE, `ZERO  -> Single.mul_zero x y
+  | `SINGLE, `ANY   -> Single.mul_outer x y
+  | `DOUBLE, `NEAR  -> Double.mul_near x y
+  | `DOUBLE, `UP    -> Double.mul_up   x y
+  | `DOUBLE, `DOWN  -> Double.mul_down x y
+  | `DOUBLE, `ZERO  -> Double.mul_zero x y
+  | `DOUBLE, `ANY   -> Double.mul_outer x y
+  | `REAL, _        -> Double.mul_outer x y
+(** Multiplication. *)
+                  
+let div (prec:prec) (round:round) (x:t) (y:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.div_near x y
+  | `SINGLE, `UP    -> Single.div_up   x y
+  | `SINGLE, `DOWN  -> Single.div_down x y
+  | `SINGLE, `ZERO  -> Single.div_zero x y
+  | `SINGLE, `ANY   -> Single.div_outer x y
+  | `DOUBLE, `NEAR  -> Double.div_near x y
+  | `DOUBLE, `UP    -> Double.div_up   x y
+  | `DOUBLE, `DOWN  -> Double.div_down x y
+  | `DOUBLE, `ZERO  -> Double.div_zero x y
+  | `DOUBLE, `ANY   -> Double.div_outer x y
+  | `REAL, _        -> Double.div_outer x y
+(** Division. *)
+                  
+let div_unmerged (prec:prec) (round:round) (x:t) (y:t) : t list =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.div_unmerged_near x y
+  | `SINGLE, `UP    -> Single.div_unmerged_up   x y
+  | `SINGLE, `DOWN  -> Single.div_unmerged_down x y
+  | `SINGLE, `ZERO  -> Single.div_unmerged_zero x y
+  | `SINGLE, `ANY   -> Single.div_unmerged_outer x y
+  | `DOUBLE, `NEAR  -> Double.div_unmerged_near x y
+  | `DOUBLE, `UP    -> Double.div_unmerged_up   x y
+  | `DOUBLE, `DOWN  -> Double.div_unmerged_down x y
+  | `DOUBLE, `ZERO  -> Double.div_unmerged_zero x y
+  | `DOUBLE, `ANY   -> Double.div_unmerged_outer x y
+  | `REAL, _        -> Double.div_unmerged_outer x y
+(** Division. Returns a list of intervals to remain precise. *)
+                  
+let square (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.square_near x
+  | `SINGLE, `UP    -> Single.square_up   x
+  | `SINGLE, `DOWN  -> Single.square_down x
+  | `SINGLE, `ZERO  -> Single.square_zero x
+  | `SINGLE, `ANY   -> Single.square_outer x
+  | `DOUBLE, `NEAR  -> Double.square_near x
+  | `DOUBLE, `UP    -> Double.square_up   x
+  | `DOUBLE, `DOWN  -> Double.square_down x
+  | `DOUBLE, `ZERO  -> Double.square_zero x
+  | `DOUBLE, `ANY   -> Double.square_outer x
+  | `REAL, _        -> Double.square_outer x
+(** Square. *)
+                  
+let sqrt (prec:prec) (round:round) (x:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.sqrt_near x
+  | `SINGLE, `UP    -> Single.sqrt_up   x
+  | `SINGLE, `DOWN  -> Single.sqrt_down x
+  | `SINGLE, `ZERO  -> Single.sqrt_zero x
+  | `SINGLE, `ANY   -> Single.sqrt_outer x
+  | `DOUBLE, `NEAR  -> Double.sqrt_near x
+  | `DOUBLE, `UP    -> Double.sqrt_up   x
+  | `DOUBLE, `DOWN  -> Double.sqrt_down x
+  | `DOUBLE, `ZERO  -> Double.sqrt_zero x
+  | `DOUBLE, `ANY   -> Double.sqrt_outer x
+  | `REAL, _        -> Double.sqrt_outer x
+(** Square root. *)
+
+let round_int (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.round_int_near x
+  | `SINGLE, `UP    -> Single.round_int_up   x
+  | `SINGLE, `DOWN  -> Single.round_int_down x
+  | `SINGLE, `ZERO  -> Single.round_int_zero x
+  | `SINGLE, `ANY   -> Single.round_int_outer x
+  | `DOUBLE, `NEAR  -> Double.round_int_near x
+  | `DOUBLE, `UP    -> Double.round_int_up   x
+  | `DOUBLE, `DOWN  -> Double.round_int_down x
+  | `DOUBLE, `ZERO  -> Double.round_int_zero x
+  | `DOUBLE, `ANY   -> Double.round_int_outer x
+  | `REAL, _        -> Double.round_int_outer x
+(** Round to integer. *)
+
+let unround_int (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.unround_int_near x
+  | `SINGLE, `UP    -> Single.unround_int_up   x
+  | `SINGLE, `DOWN  -> Single.unround_int_down x
+  | `SINGLE, `ZERO  -> Single.unround_int_zero x
+  | `SINGLE, `ANY   -> Single.unround_int_any x
+  | `DOUBLE, `NEAR  -> Double.unround_int_near x
+  | `DOUBLE, `UP    -> Double.unround_int_up   x
+  | `DOUBLE, `DOWN  -> Double.unround_int_down x
+  | `DOUBLE, `ZERO  -> Double.unround_int_zero x
+  | `DOUBLE, `ANY   -> Double.unround_int_any x
+  | `REAL, _        -> x
+(** Backward round to integer. *)
+
+let round (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.of_double_near  x.lo x.up
+  | `SINGLE, `UP    -> Single.of_double_up    x.lo x.up
+  | `SINGLE, `DOWN  -> Single.of_double_down  x.lo x.up
+  | `SINGLE, `ZERO  -> Single.of_double_zero  x.lo x.up
+  | `SINGLE, `ANY   -> Single.of_double_outer x.lo x.up
+  | `DOUBLE, _      -> x
+  | `REAL, _        -> x
+(** Round to float. *)
+
+let unround (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.unround_near x
+  | `SINGLE, `UP    -> Single.unround_up   x
+  | `SINGLE, `DOWN  -> Single.unround_down x
+  | `SINGLE, `ZERO  -> Single.unround_zero x
+  | `SINGLE, `ANY   -> Single.unround_any x
+  | `DOUBLE, `NEAR  -> Double.unround_near x
+  | `DOUBLE, `UP    -> Double.unround_up   x
+  | `DOUBLE, `DOWN  -> Double.unround_down x
+  | `DOUBLE, `ZERO  -> Double.unround_zero x
+  | `DOUBLE, `ANY   -> Double.unround_any x
+  | `REAL, _        -> x
+(** Backward round to float. *)
+
+
+let of_int (prec:prec) (round:round) (x:int) (y:int) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.of_int_near x y
+  | `SINGLE, `UP    -> Single.of_int_up   x y
+  | `SINGLE, `DOWN  -> Single.of_int_down x y
+  | `SINGLE, `ZERO  -> Single.of_int_zero x y
+  | `SINGLE, `ANY   -> Single.of_int_outer x y
+  | `DOUBLE, `NEAR  -> Double.of_int_near x y
+  | `DOUBLE, `UP    -> Double.of_int_up   x y
+  | `DOUBLE, `DOWN  -> Double.of_int_down x y
+  | `DOUBLE, `ZERO  -> Double.of_int_zero x y
+  | `DOUBLE, `ANY   -> Double.of_int_outer x y
+  | `REAL, _        -> Double.of_int_outer x y
+(** Conversion from integer range. *)
+
+let of_int64 (prec:prec) (round:round) (x:int64) (y:int64) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.of_int64_near x y
+  | `SINGLE, `UP    -> Single.of_int64_up   x y
+  | `SINGLE, `DOWN  -> Single.of_int64_down x y
+  | `SINGLE, `ZERO  -> Single.of_int64_zero x y
+  | `SINGLE, `ANY   -> Single.of_int64_outer x y
+  | `DOUBLE, `NEAR  -> Double.of_int64_near x y
+  | `DOUBLE, `UP    -> Double.of_int64_up   x y
+  | `DOUBLE, `DOWN  -> Double.of_int64_down x y
+  | `DOUBLE, `ZERO  -> Double.of_int64_zero x y
+  | `DOUBLE, `ANY   -> Double.of_int64_outer x y
+  | `REAL, _        -> Double.of_int64_outer x y
+(** Conversion from int64 range. *)
+
+let of_z (prec:prec) (round:round) (x:Z.t) (y:Z.t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.of_z_near x y
+  | `SINGLE, `UP    -> Single.of_z_up   x y
+  | `SINGLE, `DOWN  -> Single.of_z_down x y
+  | `SINGLE, `ZERO  -> Single.of_z_zero x y
+  | `SINGLE, `ANY   -> Single.of_z_outer x y
+  | `DOUBLE, `NEAR  -> Double.of_z_near x y
+  | `DOUBLE, `UP    -> Double.of_z_up   x y
+  | `DOUBLE, `DOWN  -> Double.of_z_down x y
+  | `DOUBLE, `ZERO  -> Double.of_z_zero x y
+  | `DOUBLE, `ANY   -> Double.of_z_outer x y
+  | `REAL, _        -> Double.of_z_outer x y
+(** Conversion from integer range. *)
+
+
+let filter_leq (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE | `REAL -> Double.filter_leq x y
+  | `SINGLE -> Single.filter_leq x y
+(** <= filtering. *)
+
+let filter_geq (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE | `REAL -> Double.filter_geq x y
+  | `SINGLE -> Single.filter_geq x y
+(** >= filtering. *)
+
+let filter_lt (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE -> Double.filter_lt x y
+  | `SINGLE -> Single.filter_lt x y
+  | `REAL   -> Double.filter_leq x y
+(** < filtering. *)
+
+let filter_gt (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE -> Double.filter_gt x y
+  | `SINGLE -> Single.filter_gt x y
+  | `REAL   -> Double.filter_geq x y
+(** > filtering. *)
+
+let filter_eq (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE | `REAL -> Double.filter_eq x y
+  | `SINGLE -> Single.filter_eq x y
+(** == filtering. *)
+
+let filter_neq (prec:prec) (x:t) (y:t) : (t*t) with_bot =
+  match prec with
+  | `DOUBLE -> Double.filter_neq x y
+  | `SINGLE -> Single.filter_neq x y
+  | `REAL   -> Nb (x,y)
+(** != filtering. *)
+
+let bwd_add (prec:prec) (round:round) (x:t) (y:t) (r:t) : (t*t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_add_near x y r
+  | `SINGLE, `UP    -> Single.bwd_add_up   x y r
+  | `SINGLE, `DOWN  -> Single.bwd_add_down x y r
+  | `SINGLE, `ZERO  -> Single.bwd_add_zero x y r
+  | `SINGLE, `ANY   -> Single.bwd_add_any  x y r
+  | `DOUBLE, `NEAR  -> Double.bwd_add_near x y r
+  | `DOUBLE, `UP    -> Double.bwd_add_up   x y r
+  | `DOUBLE, `DOWN  -> Double.bwd_add_down x y r
+  | `DOUBLE, `ZERO  -> Double.bwd_add_zero x y r
+  | `DOUBLE, `ANY   -> Double.bwd_add_any  x y r
+  | `REAL, _        -> Double.bwd_add_noround x y r
+(** Backward addition. *)
+
+let bwd_sub (prec:prec) (round:round) (x:t) (y:t) (r:t) : (t*t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_sub_near x y r
+  | `SINGLE, `UP    -> Single.bwd_sub_up   x y r
+  | `SINGLE, `DOWN  -> Single.bwd_sub_down x y r
+  | `SINGLE, `ZERO  -> Single.bwd_sub_zero x y r
+  | `SINGLE, `ANY   -> Single.bwd_sub_any  x y r
+  | `DOUBLE, `NEAR  -> Double.bwd_sub_near x y r
+  | `DOUBLE, `UP    -> Double.bwd_sub_up   x y r
+  | `DOUBLE, `DOWN  -> Double.bwd_sub_down x y r
+  | `DOUBLE, `ZERO  -> Double.bwd_sub_zero x y r
+  | `DOUBLE, `ANY   -> Double.bwd_sub_any  x y r
+  | `REAL, _        -> Double.bwd_sub_noround x y r
+(** Backward subtraction. *)
+
+let bwd_mul (prec:prec) (round:round) (x:t) (y:t) (r:t) : (t*t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_mul_near x y r
+  | `SINGLE, `UP    -> Single.bwd_mul_up   x y r
+  | `SINGLE, `DOWN  -> Single.bwd_mul_down x y r
+  | `SINGLE, `ZERO  -> Single.bwd_mul_zero x y r
+  | `SINGLE, `ANY   -> Single.bwd_mul_any  x y r
+  | `DOUBLE, `NEAR  -> Double.bwd_mul_near x y r
+  | `DOUBLE, `UP    -> Double.bwd_mul_up   x y r
+  | `DOUBLE, `DOWN  -> Double.bwd_mul_down x y r
+  | `DOUBLE, `ZERO  -> Double.bwd_mul_zero x y r
+  | `DOUBLE, `ANY   -> Double.bwd_mul_any  x y r
+  | `REAL, _        -> Double.bwd_mul_noround x y r
+(** Backward multiplication. *)
+
+let bwd_div (prec:prec) (round:round) (x:t) (y:t) (r:t) : (t*t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_div_near x y r
+  | `SINGLE, `UP    -> Single.bwd_div_up   x y r
+  | `SINGLE, `DOWN  -> Single.bwd_div_down x y r
+  | `SINGLE, `ZERO  -> Single.bwd_div_zero x y r
+  | `SINGLE, `ANY   -> Single.bwd_div_any  x y r
+  | `DOUBLE, `NEAR  -> Double.bwd_div_near x y r
+  | `DOUBLE, `UP    -> Double.bwd_div_up   x y r
+  | `DOUBLE, `DOWN  -> Double.bwd_div_down x y r
+  | `DOUBLE, `ZERO  -> Double.bwd_div_zero x y r
+  | `DOUBLE, `ANY   -> Double.bwd_div_any  x y r
+  | `REAL, _        -> Double.bwd_div_noround x y r
+(** Backward division. *)
+
+let bwd_round_int (prec:prec) (round:round) (x:t) (r:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_round_int_near x r
+  | `SINGLE, `UP    -> Single.bwd_round_int_up   x r
+  | `SINGLE, `DOWN  -> Single.bwd_round_int_down x r
+  | `SINGLE, `ZERO  -> Single.bwd_round_int_zero x r
+  | `SINGLE, `ANY   -> Single.bwd_round_int_any  x r
+  | `DOUBLE, `NEAR  -> Double.bwd_round_int_near x r
+  | `DOUBLE, `UP    -> Double.bwd_round_int_up   x r
+  | `DOUBLE, `DOWN  -> Double.bwd_round_int_down x r
+  | `DOUBLE, `ZERO  -> Double.bwd_round_int_zero x r
+  | `DOUBLE, `ANY   -> Double.bwd_round_int_any  x r
+  | `REAL, _        -> Double.bwd_round_int_noround x r
+(** Backward rounding to integer. *)
+
+let bwd_round (prec:prec) (round:round) (x:t) (r:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_round_near x r
+  | `SINGLE, `UP    -> Single.bwd_round_up   x r
+  | `SINGLE, `DOWN  -> Single.bwd_round_down x r
+  | `SINGLE, `ZERO  -> Single.bwd_round_zero x r
+  | `SINGLE, `ANY   -> Single.bwd_round_any  x r
+  | `DOUBLE, `NEAR  -> Double.bwd_round_near x r
+  | `DOUBLE, `UP    -> Double.bwd_round_up   x r
+  | `DOUBLE, `DOWN  -> Double.bwd_round_down x r
+  | `DOUBLE, `ZERO  -> Double.bwd_round_zero x r
+  | `DOUBLE, `ANY   -> Double.bwd_round_any  x r
+  | `REAL, _        -> Double.bwd_round_noround x r
+(** Backward rounding to float. *)
+
+let bwd_square (prec:prec) (round:round) (x:t) (r:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_square_near x r
+  | `SINGLE, `UP    -> Single.bwd_square_up   x r
+  | `SINGLE, `DOWN  -> Single.bwd_square_down x r
+  | `SINGLE, `ZERO  -> Single.bwd_square_zero x r
+  | `SINGLE, `ANY   -> Single.bwd_square_any  x r
+  | `DOUBLE, `NEAR  -> Double.bwd_square_near x r
+  | `DOUBLE, `UP    -> Double.bwd_square_up   x r
+  | `DOUBLE, `DOWN  -> Double.bwd_square_down x r
+  | `DOUBLE, `ZERO  -> Double.bwd_square_zero x r
+  | `DOUBLE, `ANY   -> Double.bwd_square_any  x r
+  | `REAL, _        -> Double.bwd_square_noround x r
+(** Backward square. *)
+
+let bwd_sqrt (prec:prec) (round:round) (x:t) (r:t) : t_with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_sqrt_near x r
+  | `SINGLE, `UP    -> Single.bwd_sqrt_up   x r
+  | `SINGLE, `DOWN  -> Single.bwd_sqrt_down x r
+  | `SINGLE, `ZERO  -> Single.bwd_sqrt_zero x r
+  | `SINGLE, `ANY   -> Single.bwd_sqrt_any  x r
+  | `DOUBLE, `NEAR  -> Double.bwd_sqrt_near x r
+  | `DOUBLE, `UP    -> Double.bwd_sqrt_up   x r
+  | `DOUBLE, `DOWN  -> Double.bwd_sqrt_down x r
+  | `DOUBLE, `ZERO  -> Double.bwd_sqrt_zero x r
+  | `DOUBLE, `ANY   -> Double.bwd_sqrt_any  x r
+  | `REAL, _        -> Double.bwd_sqrt_noround x r
+(** Backward square root. *)
+
+let bwd_of_z (prec:prec) (round:round) (lo:Z.t) (up:Z.t) (r:t) : (Z.t*Z.t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_of_z_near lo up r
+  | `SINGLE, `UP    -> Single.bwd_of_z_up   lo up r
+  | `SINGLE, `DOWN  -> Single.bwd_of_z_down lo up r
+  | `SINGLE, `ZERO  -> Single.bwd_of_z_zero lo up r
+  | `SINGLE, `ANY   -> Single.bwd_of_z_any  lo up r
+  | `DOUBLE, `NEAR  -> Double.bwd_of_z_near lo up r
+  | `DOUBLE, `UP    -> Double.bwd_of_z_up   lo up r
+  | `DOUBLE, `DOWN  -> Double.bwd_of_z_down lo up r
+  | `DOUBLE, `ZERO  -> Double.bwd_of_z_zero lo up r
+  | `DOUBLE, `ANY   -> Double.bwd_of_z_any  lo up r
+  | `REAL, _        -> Double.bwd_of_z_noround lo up r
+(** Backward conversion from int. *)
+
+let bwd_to_z (prec:prec) (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+  match prec with
+  | `DOUBLE | `REAL -> Double.bwd_to_z lo up r
+  | `SINGLE -> Single.bwd_to_z lo up r
+(** Backward conversion to integer. *)
+             

@@ -472,7 +472,7 @@ module Double = struct
                                    
   let succ (a:t) : t = if a = neg_infinity then -.max_normal else add_up a min_denormal
   let pred (a:t) : t = if a = infinity then max_normal else sub_down a min_denormal
-  (** Returns the float immediately follownig or preceeding the argument. *)
+  (** Returns the float immediately following or preceeding the argument. *)
                         
   let succ_zero (a:t) : t = if a == 0. then a else succ a
   let pred_zero (a:t) : t = if a == 0. then a else pred a
@@ -487,3 +487,290 @@ module Double = struct
 end
 (** Double precision operations. *)
                   
+
+
+(** {2 Operations with rounding mode as argument} *)
+
+
+type prec =
+  [ `SINGLE (** 32-bit single precision *)
+  | `DOUBLE (** 64-bit double precision *)
+  ]
+(** Precision. *)
+                   
+type round =
+  [ `NEAR (** To nearest *)
+  | `UP   (** Upwards *)
+  | `DOWN (** Downwards *)
+  | `ZERO (** Towards 0 *)
+  ]
+(** Rounding direction. *)
+
+  
+let add (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.add_near x y
+  | `SINGLE, `UP   -> Single.add_up   x y
+  | `SINGLE, `DOWN -> Single.add_down x y
+  | `SINGLE, `ZERO -> Single.add_zero x y
+  | `DOUBLE, `NEAR -> Double.add_near x y
+  | `DOUBLE, `UP   -> Double.add_up   x y
+  | `DOUBLE, `DOWN -> Double.add_down x y
+  | `DOUBLE, `ZERO -> Double.add_zero x y
+(** Addition. *)
+                  
+let sub (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.sub_near x y
+  | `SINGLE, `UP   -> Single.sub_up   x y
+  | `SINGLE, `DOWN -> Single.sub_down x y
+  | `SINGLE, `ZERO -> Single.sub_zero x y
+  | `DOUBLE, `NEAR -> Double.sub_near x y
+  | `DOUBLE, `UP   -> Double.sub_up   x y
+  | `DOUBLE, `DOWN -> Double.sub_down x y
+  | `DOUBLE, `ZERO -> Double.sub_zero x y
+(** Subtraction. *)
+                  
+let mul (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.mul_near x y
+  | `SINGLE, `UP   -> Single.mul_up   x y
+  | `SINGLE, `DOWN -> Single.mul_down x y
+  | `SINGLE, `ZERO -> Single.mul_zero x y
+  | `DOUBLE, `NEAR -> Double.mul_near x y
+  | `DOUBLE, `UP   -> Double.mul_up   x y
+  | `DOUBLE, `DOWN -> Double.mul_down x y
+  | `DOUBLE, `ZERO -> Double.mul_zero x y
+(** Multiplication. *)
+                  
+let mulz (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.mulz_near x y
+  | `SINGLE, `UP   -> Single.mulz_up   x y
+  | `SINGLE, `DOWN -> Single.mulz_down x y
+  | `SINGLE, `ZERO -> Single.mulz_zero x y
+  | `DOUBLE, `NEAR -> Double.mulz_near x y
+  | `DOUBLE, `UP   -> Double.mulz_up   x y
+  | `DOUBLE, `DOWN -> Double.mulz_down x y
+  | `DOUBLE, `ZERO -> Double.mulz_zero x y
+(** Multiplication, where 0 * infinity is 0, not Nan. *)
+
+let div (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.div_near x y
+  | `SINGLE, `UP   -> Single.div_up   x y
+  | `SINGLE, `DOWN -> Single.div_down x y
+  | `SINGLE, `ZERO -> Single.div_zero x y
+  | `DOUBLE, `NEAR -> Double.div_near x y
+  | `DOUBLE, `UP   -> Double.div_up   x y
+  | `DOUBLE, `DOWN -> Double.div_down x y
+  | `DOUBLE, `ZERO -> Double.div_zero x y
+(** Division. *)
+
+let divz (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.divz_near x y
+  | `SINGLE, `UP   -> Single.divz_up   x y
+  | `SINGLE, `DOWN -> Single.divz_down x y
+  | `SINGLE, `ZERO -> Single.divz_zero x y
+  | `DOUBLE, `NEAR -> Double.divz_near x y
+  | `DOUBLE, `UP   -> Double.divz_up   x y
+  | `DOUBLE, `DOWN -> Double.divz_down x y
+  | `DOUBLE, `ZERO -> Double.divz_zero x y
+(** Division, where 0 / 0 is 0, not Nan. *)
+
+let rem (prec:prec) (round:round) x y =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.mod_near x y
+  | `SINGLE, `UP   -> Single.mod_up   x y
+  | `SINGLE, `DOWN -> Single.mod_down x y
+  | `SINGLE, `ZERO -> Single.mod_zero x y
+  | `DOUBLE, `NEAR -> Double.mod_near x y
+  | `DOUBLE, `UP   -> Double.mod_up   x y
+  | `DOUBLE, `DOWN -> Double.mod_down x y
+  | `DOUBLE, `ZERO -> Double.mod_zero x y
+(** Modulo. *)
+                  
+let square (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.square_near x
+  | `SINGLE, `UP   -> Single.square_up   x
+  | `SINGLE, `DOWN -> Single.square_down x
+  | `SINGLE, `ZERO -> Single.square_zero x
+  | `DOUBLE, `NEAR -> Double.square_near x
+  | `DOUBLE, `UP   -> Double.square_up   x
+  | `DOUBLE, `DOWN -> Double.square_down x
+  | `DOUBLE, `ZERO -> Double.square_zero x
+(** Square. *)
+
+let sqrt (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.sqrt_near x
+  | `SINGLE, `UP   -> Single.sqrt_up   x
+  | `SINGLE, `DOWN -> Single.sqrt_down x
+  | `SINGLE, `ZERO -> Single.sqrt_zero x
+  | `DOUBLE, `NEAR -> Double.sqrt_near x
+  | `DOUBLE, `UP   -> Double.sqrt_up   x
+  | `DOUBLE, `DOWN -> Double.sqrt_down x
+  | `DOUBLE, `ZERO -> Double.sqrt_zero x
+(** Square root. *)
+                  
+let round_int (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.round_int_near x
+  | `SINGLE, `UP   -> Single.round_int_up   x
+  | `SINGLE, `DOWN -> Single.round_int_down x
+  | `SINGLE, `ZERO -> Single.round_int_zero x
+  | `DOUBLE, `NEAR -> Double.round_int_near x
+  | `DOUBLE, `UP   -> Double.round_int_up   x
+  | `DOUBLE, `DOWN -> Double.round_int_down x
+  | `DOUBLE, `ZERO -> Double.round_int_zero x
+(** Rounds to integer (the result remains a float). *)
+                  
+let of_int (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.of_int_near x
+  | `SINGLE, `UP   -> Single.of_int_up   x
+  | `SINGLE, `DOWN -> Single.of_int_down x
+  | `SINGLE, `ZERO -> Single.of_int_zero x
+  | `DOUBLE, `NEAR -> Double.of_int_near x
+  | `DOUBLE, `UP   -> Double.of_int_up   x
+  | `DOUBLE, `DOWN -> Double.of_int_down x
+  | `DOUBLE, `ZERO -> Double.of_int_zero x
+(** Conversion from int. *)
+
+let of_int64 (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.of_int64_near x
+  | `SINGLE, `UP   -> Single.of_int64_up   x
+  | `SINGLE, `DOWN -> Single.of_int64_down x
+  | `SINGLE, `ZERO -> Single.of_int64_zero x
+  | `DOUBLE, `NEAR -> Double.of_int64_near x
+  | `DOUBLE, `UP   -> Double.of_int64_up   x
+  | `DOUBLE, `DOWN -> Double.of_int64_down x
+  | `DOUBLE, `ZERO -> Double.of_int64_zero x
+(** Conversion from int64. *)
+
+let of_z (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.of_z_near x
+  | `SINGLE, `UP   -> Single.of_z_up   x
+  | `SINGLE, `DOWN -> Single.of_z_down x
+  | `SINGLE, `ZERO -> Single.of_z_zero x
+  | `DOUBLE, `NEAR -> Double.of_z_near x
+  | `DOUBLE, `UP   -> Double.of_z_up   x
+  | `DOUBLE, `DOWN -> Double.of_z_down x
+  | `DOUBLE, `ZERO -> Double.of_z_zero x
+(** Conversion from Z.t *)
+
+let of_string (prec:prec) (round:round) x =
+  match prec,round with
+  | `SINGLE, `NEAR -> Single.of_string_near x
+  | `SINGLE, `UP   -> Single.of_string_up   x
+  | `SINGLE, `DOWN -> Single.of_string_down x
+  | `SINGLE, `ZERO -> Single.of_string_zero x
+  | `DOUBLE, `NEAR -> Double.of_string_near x
+  | `DOUBLE, `UP   -> Double.of_string_up   x
+  | `DOUBLE, `DOWN -> Double.of_string_down x
+  | `DOUBLE, `ZERO -> Double.of_string_zero x
+(** Conversion from string.
+    NOTE: precision and rounding directions are not yet taken into account.
+ *)                 
+
+                  
+let succ (prec:prec) x =
+  match prec with
+  | `SINGLE -> Single.succ x
+  | `DOUBLE -> Double.succ x
+(** Number immediately after. *)
+
+let pred (prec:prec) x =
+  match prec with
+  | `SINGLE -> Single.pred x
+  | `DOUBLE -> Double.pred x
+(** Number immediately before. *)            
+
+let succ_zero (prec:prec) x =
+  match prec with
+  | `SINGLE -> Single.succ_zero x
+  | `DOUBLE -> Double.succ_zero x
+(** Number immediately after. Does not cross zero. *)
+
+let pred_zero (prec:prec) x =
+  match prec with
+  | `SINGLE -> Single.pred_zero x
+  | `DOUBLE -> Double.pred_zero x
+(** Number immediately before. Does not cross zero. *)            
+
+            
+let mantissa_bits (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.mantissa_bits
+  | `DOUBLE -> Double.mantissa_bits
+
+let exponent_bits (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.exponent_bits
+  | `DOUBLE -> Double.exponent_bits
+
+let exponent_bias (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.exponent_bias
+  | `DOUBLE -> Double.exponent_bias
+
+let min_exponent (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.min_exponent
+  | `DOUBLE -> Double.min_exponent
+
+let max_exponent (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.max_exponent
+  | `DOUBLE -> Double.max_exponent
+
+let nan_infinity_exponent (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.nan_infinity_exponent
+  | `DOUBLE -> Double.nan_infinity_exponent
+
+let min_denormal (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.min_denormal
+  | `DOUBLE -> Double.min_denormal
+
+let min_normal (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.min_normal
+  | `DOUBLE -> Double.min_normal
+
+let max_normal (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.max_normal
+  | `DOUBLE -> Double.max_normal
+
+let max_exact (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.max_exact
+  | `DOUBLE -> Double.max_exact
+
+let ulp (prec:prec) =
+  match prec with
+  | `SINGLE -> Single.ulp
+  | `DOUBLE -> Double.ulp
+
+(** Useful constants. *)
+
+            
+let to_bits (prec:prec) (x:float) : bit_float =
+  match prec with
+  | `SINGLE -> x |> Single.to_bits |> Single.rep_of_bits
+  | `DOUBLE -> x |> Double.to_bits |> Double.rep_of_bits
+
+let of_bits (prec:prec) (x:bit_float) : float =
+  match prec with
+  | `SINGLE -> x |> Single.bits_of_rep |> Single.of_bits
+  | `DOUBLE -> x |> Double.bits_of_rep |> Double.of_bits
+
+(** Bit-level extraction. *)
+            
+

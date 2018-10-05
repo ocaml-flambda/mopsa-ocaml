@@ -19,6 +19,8 @@ fi
 # Test (TODO)
 ##
 
-./scripts/mopsa-universal analyzer/tests/universal/int_tests.u
+#make -C analyzer universal-tests
+make -C analyzer c-tests
+#make -C analyzer python-tests
 
 echo "Success"
