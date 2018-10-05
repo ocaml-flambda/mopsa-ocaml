@@ -63,9 +63,15 @@ type round =
 (** {2 Constructors} *)
 
 
-let bot =
-  { itv = BOT; nan = false; pinf = false; minf = false; }
+let bot = { itv = BOT; nan = false; pinf = false; minf = false; }
 (** Empty float set. *)
+
+let pinf : t = { bot with pinf = true; }
+let minf : t = { bot with minf = true; }
+let nan : t = { bot with nan = true; }
+let infinities : t = { itv = BOT; nan = false; pinf = true; minf = true; }
+let specials : t = { itv = BOT; nan = true; pinf = true; minf = true; }
+(** Special values. *)
 
 let of_float (lo:float) (up:float) : t =
   if lo > up then bot
@@ -86,11 +92,13 @@ let hull (a:float) (b:float) : t =
   of_float (min a b) (max a b)
 (** Constructs the smallest interval containing a and b. *)
 
-let cst (c:float) : t =
-  of_float c c
-(** Singleton (non-infinity, non-NaN) interval. *)
+let cst (x:float) : t =
+  match classify_float x with
+  | FP_nan -> nan
+  | FP_infinite -> if x > 0. then pinf else minf
+  | _ -> { bot with itv = Nb { FI.lo = x; FI.up = x; }; }
+(** Singleton (possibly infinity or NaN). *)
 
-  
 let zero : t = cst 0.
 let one : t = cst 1.
 let two : t = cst 2.
@@ -99,13 +107,9 @@ let zero_one : t  = of_float 0. 1.
 let mone_zero : t = of_float (-1.) 0.
 let mone_one : t  = of_float (-1.) 1.
 let mhalf_half : t = of_float (-0.5) 0.5
-let pinf : t = { bot with pinf = true; }
-let minf : t = { bot with minf = true; }
-let nan : t = { bot with nan = true; }
-let infinities : t = { itv = BOT; nan = false; pinf = true; minf = true; }
-let specials : t = { itv = BOT; nan = true; pinf = true; minf = true; }
 (** Useful intervals. *)
 
+                 
 let add_special (x:t) : t =
   { x with nan = true; pinf = true; minf = true; }
 (** Adds NaN and infinities to a set. *)  

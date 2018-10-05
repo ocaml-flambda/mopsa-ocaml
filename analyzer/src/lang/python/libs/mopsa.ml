@@ -57,7 +57,7 @@ module Domain =
          Eval.singleton (mk_py_top T_bool range) flow |> Option.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_float range) flow |> Option.return
+         Eval.singleton (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
          Eval.singleton (mk_py_top T_string range) flow |> Option.return

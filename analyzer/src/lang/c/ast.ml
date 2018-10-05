@@ -595,22 +595,27 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
 
 
 (** [is_c_int_type t] wheter [t] is an integer type *)
-let rec is_c_int_type ( t : typ) =
+let is_c_int_type ( t : typ) =
   match remove_typedef t |> remove_qual with
   | T_c_integer _ -> true
   | _ -> false
 
-let rec is_c_record_type ( t : typ) =
+let is_c_float_type ( t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_float _ -> true
+  | _ -> false
+
+let is_c_record_type ( t : typ) =
   match remove_typedef t |> remove_qual with
   | T_c_record _ -> true
   | _ -> false
 
-let rec is_c_struct_type (t : typ) =
+let is_c_struct_type (t : typ) =
   match remove_typedef t |> remove_qual with
   | T_c_record({c_record_kind = C_struct}) -> true
   | _ -> false
 
-let rec is_c_union_type (t : typ) =
+let is_c_union_type (t : typ) =
   match remove_typedef t |> remove_qual with
   | T_c_record({c_record_kind = C_union}) -> true
   | _ -> false
@@ -660,7 +665,11 @@ let under_type (t: typ) : typ =
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
-
+let get_c_float_type ( t : typ) =
+  match remove_typedef t |> remove_qual with
+  | T_c_float t -> t
+  | _ -> failwith "[get_c_float_type] called with a non-float type"
+       
 let get_array_constant_length t =
   match remove_typedef t |> remove_qual with
   | T_c_array(_, C_array_length_cst n) -> Z.to_int n

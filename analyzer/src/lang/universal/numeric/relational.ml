@@ -78,7 +78,7 @@ struct
   let var_to_apron v =
     (match v.vtyp with
     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-    | T_float -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
+    | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
@@ -94,7 +94,8 @@ struct
     if Str.string_match (Str.regexp "\\([^@]+\\)@\\([0-9]+\\)") v 0 then
       let vname = Str.matched_group 1 v in
       let vuid = Str.matched_group 2 v |> int_of_string in
-      {vname; vuid; vtyp = T_float}
+      (* TODO: replace F_REAL with real type *)
+      {vname; vuid; vtyp = T_float F_REAL}
     else raise (Invalid_argument v)
 
   let is_env_var v abs =
@@ -118,7 +119,7 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (function {vtyp = T_float} -> true | _ -> false) lv
+          List.filter (function {vtyp = T_float _} -> true | _ -> false) lv
         )
     in
     Apron.Abstract1.change_environment ApronManager.man abs env' false
@@ -216,7 +217,7 @@ struct
 
     | E_unop(O_sqrt, e) ->
       let e', abs, l = strongify_rhs e abs l in
-      let typ' = typ_to_apron T_float in
+      let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, l
 
     | E_unop(O_wrap(g, d), e) ->
@@ -276,7 +277,7 @@ struct
 
     | E_unop(O_sqrt, e) ->
       let e' = exp_to_apron e in
-      let typ' = typ_to_apron T_float in
+      let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding)
 
     | E_unop(O_wrap(g, d), e) ->
@@ -295,7 +296,10 @@ struct
 
   and typ_to_apron = function
     | T_int -> Apron.Texpr1.Int
-    | T_float -> Apron.Texpr1.Real
+    | T_float F_SINGLE -> Apron.Texpr1.Single
+    | T_float F_DOUBLE -> Apron.Texpr1.Double
+    | T_float F_LONG_DOUBLE -> Apron.Texpr1.Extended
+    | T_float F_REAL -> Apron.Texpr1.Real
     | _ -> assert false
 
   and bexp_to_apron exp =
@@ -436,9 +440,9 @@ struct
                let typ =
                  match typ1, typ2 with
                  | T_int, T_int -> Apron.Texpr1.Int
-                 | T_float, T_int
-                 | T_int, T_float
-                 | T_float, T_float -> Apron.Texpr1.Real
+                 | T_float _, T_int
+                 | T_int, T_float _
+                 | T_float _, T_float _ -> Apron.Texpr1.Real
                  | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
                in
                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in

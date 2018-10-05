@@ -65,7 +65,7 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
 let rec from_typ (typ: U_ast.typ) : FA.typ =
   match typ with
   | AST_INT     -> T_int
-  | AST_REAL    -> T_float
+  | AST_REAL    -> T_float F_DOUBLE
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char

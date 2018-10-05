@@ -39,7 +39,7 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
-         let exp' = mk_unop O_sqrt e ~etyp:T_float range in
+         let exp' = mk_unop O_sqrt e ~etyp:(T_float F_DOUBLE) range in
          Eval.singleton exp' flow
          |> Option.return
 
