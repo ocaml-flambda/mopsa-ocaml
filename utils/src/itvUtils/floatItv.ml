@@ -231,6 +231,11 @@ let fmod (x:t) (y:t) : t_with_bot =
       Nb (of_float (-.y.up) y.up)
 (** Remainder (fmod). *)
 
+let to_z (r:t) : Z.t * Z.t =
+  if not (F.is_finite r.lo && F.is_finite r.up)
+  then invalid_arg "Inifnites or NaN in FloatItv.to_z";
+  Z.of_float r.lo, Z.of_float r.up
+(** Conversion to integer (using truncation). *)  
   
 let join (a:t) (b:t) : t =
   of_float (min a.lo b.lo) (max a.up b.up)
@@ -292,7 +297,7 @@ let bwd_neg (a:t) (r:t) : t_with_bot =
 
 let bwd_abs (a:t) (r:t) : t_with_bot =
   join_bot (meet a r) (meet a (neg r))  
-(** Backward absolute value. *)
+(** Backward absolute value. *)  
   
 let bwd_fmod (x:t) (y:t) (r:t) : (t*t) with_bot =
   let yy = abs y in
@@ -717,6 +722,30 @@ module Double = struct
   (** Backward square root. *)
 
                            
+  let bwd_of_z unround lo up r =
+    let r = unround r in
+    if F.is_finite r.lo && F.is_finite r.up then
+      let lo = Z.max lo (Z.of_float r.lo)
+      and up = Z.min up (Z.of_float r.up)
+      in
+      if Z.leq lo up then Nb (lo,up)
+      else BOT
+    else Nb (lo,up)
+                           
+  let bwd_of_z_near    lo up r = bwd_of_z unround_int_near lo up r
+  let bwd_of_z_up      lo up r = bwd_of_z unround_int_up   lo up r
+  let bwd_of_z_down    lo up r = bwd_of_z unround_int_down lo up r
+  let bwd_of_z_zero    lo up r = bwd_of_z unround_int_zero lo up r
+  let bwd_of_z_any     lo up r = bwd_of_z unround_int_any  lo up r
+  let bwd_of_z_noround lo up r = bwd_of_z (fun x -> x) lo up r
+  (** Backward conversion from int. *)
+
+                               
+  let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+  (** Backward conversion to int. *)
+    
+                               
   let meet_nonzero (a:t) : t_with_bot =
     let lo = if a.lo = 0. then FF.min_denormal else a.lo
     and up = if a.up = 0. then -. FF.min_denormal else a.up
@@ -1008,7 +1037,31 @@ module Single = struct
   let bwd_sqrt_noround a r = bwd_sqrt a r
   (** Backward square root. *)
 
-                           
+
+  let bwd_of_z unround lo up r =
+    let r = unround r in
+    if F.is_finite r.lo && F.is_finite r.up then
+      let lo = Z.max lo (Z.of_float r.lo)
+      and up = Z.min up (Z.of_float r.up)
+      in
+      if Z.leq lo up then Nb (lo,up)
+      else BOT
+    else Nb (lo,up)
+
+  let bwd_of_z_near    lo up r = bwd_of_z unround_int_near lo up r
+  let bwd_of_z_up      lo up r = bwd_of_z unround_int_up   lo up r
+  let bwd_of_z_down    lo up r = bwd_of_z unround_int_down lo up r
+  let bwd_of_z_zero    lo up r = bwd_of_z unround_int_zero lo up r
+  let bwd_of_z_any     lo up r = bwd_of_z unround_int_any  lo up r
+  let bwd_of_z_noround lo up r = bwd_of_z (fun x -> x) lo up r
+  (** Backward conversion from int. *)
+
+                               
+  let bwd_to_z (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+    meet r (mk (FF.of_z_down lo) (FF.of_z_up up))
+  (** Backward conversion to int. *)
+    
+
   let meet_nonzero (a:t) : t_with_bot =
     let lo = if a.lo = 0. then FF.min_denormal else a.lo
     and up = if a.up = 0. then -. FF.min_denormal else a.up
@@ -1161,6 +1214,21 @@ let round_int (prec:prec) (round:round) (x:t) : t =
   | `REAL, _        -> Double.round_int_outer x
 (** Round to integer. *)
 
+let unround_int (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.unround_int_near x
+  | `SINGLE, `UP    -> Single.unround_int_up   x
+  | `SINGLE, `DOWN  -> Single.unround_int_down x
+  | `SINGLE, `ZERO  -> Single.unround_int_zero x
+  | `SINGLE, `ANY   -> Single.unround_int_any x
+  | `DOUBLE, `NEAR  -> Double.unround_int_near x
+  | `DOUBLE, `UP    -> Double.unround_int_up   x
+  | `DOUBLE, `DOWN  -> Double.unround_int_down x
+  | `DOUBLE, `ZERO  -> Double.unround_int_zero x
+  | `DOUBLE, `ANY   -> Double.unround_int_any x
+  | `REAL, _        -> x
+(** Backward round to integer. *)
+
 let round (prec:prec) (round:round) (x:t) : t =
   match prec,round with
   | `SINGLE, `NEAR  -> Single.of_double_near  x.lo x.up
@@ -1171,6 +1239,22 @@ let round (prec:prec) (round:round) (x:t) : t =
   | `DOUBLE, _      -> x
   | `REAL, _        -> x
 (** Round to float. *)
+
+let unround (prec:prec) (round:round) (x:t) : t =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.unround_near x
+  | `SINGLE, `UP    -> Single.unround_up   x
+  | `SINGLE, `DOWN  -> Single.unround_down x
+  | `SINGLE, `ZERO  -> Single.unround_zero x
+  | `SINGLE, `ANY   -> Single.unround_any x
+  | `DOUBLE, `NEAR  -> Double.unround_near x
+  | `DOUBLE, `UP    -> Double.unround_up   x
+  | `DOUBLE, `DOWN  -> Double.unround_down x
+  | `DOUBLE, `ZERO  -> Double.unround_zero x
+  | `DOUBLE, `ANY   -> Double.unround_any x
+  | `REAL, _        -> x
+(** Backward round to float. *)
+
 
 let of_int (prec:prec) (round:round) (x:int) (y:int) : t =
   match prec,round with
@@ -1377,3 +1461,24 @@ let bwd_sqrt (prec:prec) (round:round) (x:t) (r:t) : t_with_bot =
   | `REAL, _        -> Double.bwd_sqrt_noround x r
 (** Backward square root. *)
 
+let bwd_of_z (prec:prec) (round:round) (lo:Z.t) (up:Z.t) (r:t) : (Z.t*Z.t) with_bot =
+  match prec,round with
+  | `SINGLE, `NEAR  -> Single.bwd_of_z_near lo up r
+  | `SINGLE, `UP    -> Single.bwd_of_z_up   lo up r
+  | `SINGLE, `DOWN  -> Single.bwd_of_z_down lo up r
+  | `SINGLE, `ZERO  -> Single.bwd_of_z_zero lo up r
+  | `SINGLE, `ANY   -> Single.bwd_of_z_any  lo up r
+  | `DOUBLE, `NEAR  -> Double.bwd_of_z_near lo up r
+  | `DOUBLE, `UP    -> Double.bwd_of_z_up   lo up r
+  | `DOUBLE, `DOWN  -> Double.bwd_of_z_down lo up r
+  | `DOUBLE, `ZERO  -> Double.bwd_of_z_zero lo up r
+  | `DOUBLE, `ANY   -> Double.bwd_of_z_any  lo up r
+  | `REAL, _        -> Double.bwd_of_z_noround lo up r
+(** Backward conversion from int. *)
+
+let bwd_to_z (prec:prec) (lo:Z.t) (up:Z.t) (r:t) : t_with_bot =
+  match prec with
+  | `DOUBLE | `REAL -> Double.bwd_to_z lo up r
+  | `SINGLE -> Single.bwd_to_z lo up r
+(** Backward conversion to integer. *)
+             

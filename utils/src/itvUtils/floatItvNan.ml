@@ -16,7 +16,8 @@
 open Bot
 module F = Float
 module FI = FloatItv
-
+module B = IntBound
+module II = IntItv
 
 
 (** {2 Types} *)
@@ -569,8 +570,40 @@ let of_z (prec:prec) (round:round) (x:Z.t) (y:Z.t) : t =
   fix_itv prec { bot with itv = Nb (FI.of_z (prec:>FI.prec) round x y); }
 (** Conversion from integer range. *)
 
+let to_z (x:t) : (Z.t * Z.t) with_bot =
+  bot_lift1 FI.to_z x.itv
+(** Conversion to integer range with truncation. NaN and infinities are discarded. *)
 
+let of_int_itv (prec:prec) (round:round) ((lo,up):II.t) : t =
+  let lo = match lo, round with
+    | B.Finite l, `NEAR -> F.of_z prec `NEAR l
+    | B.Finite l, (`DOWN | `ANY) -> F.of_z prec `DOWN l
+    | B.Finite l, `UP   -> F.of_z prec `UP l
+    | B.Finite l, `ZERO -> F.of_z prec `ZERO l
+    | _ -> neg_infinity
+  and up = match up, round with
+    | B.Finite l, `NEAR -> F.of_z prec `NEAR l
+    | B.Finite l, `DOWN -> F.of_z prec `DOWN l
+    | B.Finite l, (`ANY | `UP)  -> F.of_z prec `UP l
+    | B.Finite l, `ZERO -> F.of_z prec `ZERO l
+    | _ -> infinity
+  in
+  if lo > up then bot
+  else fix_itv prec { bot with itv = Nb { lo; up; }; }
+(** Conversion from integer interval (handling overflows to infinities). *)   
 
+let to_int_itv (r:t) : II.t with_bot =
+  match r.itv with
+  | BOT -> if is_bot r then BOT else Nb II.minf_inf
+  | Nb i ->
+     II.of_bound_bot
+       (if r.minf then B.MINF else B.Finite (Z.of_float i.lo))
+       (if r.pinf then B.PINF else B.Finite (Z.of_float i.up))
+(** Conversion to integer interval with truncation. Handles infinities. *)
+
+  
+
+       
 (** {2 Filters} *)
 
   
@@ -737,3 +770,42 @@ let bwd_square (prec:prec) (round:round) (x:t) (r:t) : t =
 let bwd_sqrt (prec:prec) (round:round) (x:t) (r:t) : t =
   bwd_generic1 prec round FI.bwd_sqrt x r
 (** Backward square root. *)
+
+let bwd_of_int_itv (prec:prec) (round:round) ((lo,up):II.t) (r:t)
+    : II.t_with_bot =
+  match r.itv with
+  | Nb i ->
+     let i = FI.unround_int (prec:>FI.prec) round i in
+     let l =
+       if F.is_finite i.lo && not r.minf
+       then B.Finite (Z.of_float i.lo)
+       else B.MINF
+     and u =
+       if F.is_finite i.up && not r.pinf
+       then B.Finite (Z.of_float i.up)
+       else B.PINF
+     in
+     II.meet (lo,up) (l,u)
+  | BOT ->
+     if is_bot r then BOT else Nb II.minf_inf
+(** Backward conversion from integer interval. *)
+    
+let bwd_to_int_itv (a:t) ((lo,up):II.t) : t =
+  let l = match lo with
+    | B.Finite x -> F.of_z `DOUBLE `DOWN x
+    | _ -> neg_infinity
+  and u = match up with
+    | B.Finite x -> F.of_z `DOUBLE `UP x
+    | _ -> infinity
+  in
+  let itv =
+    bot_absorb1
+      (fun i -> FI.of_float_bot (max l i.FI.lo) (min u i.FI.up)) a.itv
+  in
+  { itv;
+    nan = a.nan;
+    minf = a.pinf && (l == neg_infinity);
+    pinf = a.minf && (u == infinity);
+  }
+(** Backward conversion to integer interval (with truncation). *)
+  
