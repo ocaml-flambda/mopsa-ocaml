@@ -18,7 +18,7 @@ open Addr
 
 let check man cond range flow =
   let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) flow in
-  Eval.singleton (Some (mk_py_none range), flow, [])
+  Eval.singleton (mk_py_none range) flow
 
 
 (*==========================================================================*)
