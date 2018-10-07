@@ -21,6 +21,7 @@ OCAMLC = ocamlc -g -cc "$(CXX)"
 OCAMLOPT = ocamlopt -cc "$(CXX)"
 INCLUDES   := -I $(MOPSAROOT)/utils/lib
 LIBCMXA := utils.cmxa
+LIBCMA := $(LIBCMXA:%.cmxa=%.cma)
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config-*))))
 CLANGRESOURCE := $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --version)

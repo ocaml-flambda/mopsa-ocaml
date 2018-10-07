@@ -11,6 +11,7 @@ PKGS = zarith
 # Flags
 INCLUDES	:= -I $(MOPSAROOT)/utils/lib
 LIBCMXA		:= utils.cmxa
+LIBCMA          := $(LIBCMXA:%.cmxa=%.cma)
 
 
 include $(MOPSAROOT)/make/main.mk
