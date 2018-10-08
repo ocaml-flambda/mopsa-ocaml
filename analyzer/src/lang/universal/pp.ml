@@ -63,7 +63,7 @@ let () =
         fprintf fmt "%a(%a);"
           pp_expr f
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
-      | E_alloc_addr(akind) -> fprintf fmt "alloc()"
+      | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr {addr_uid=(-1); addr_kind=akind}
       | E_addr addr -> pp_addr fmt addr
       | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
       | _ -> default fmt exp
