@@ -33,11 +33,15 @@ CMO_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmo)
 CMX_FROM_PACK = $(PACKS:%=$(BUILD)/%.cmx)
 
 CMX_FROM_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx)
+CMO_FROM_MLL = $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmo)
+
 CMX_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx)
+CMO_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmo)
 CMI_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi)
 
 
 TOPCMX = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmx) $(TOPPACKS:%=$(BUILD)/%.cmx)
+TOPCMO = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmo) $(TOPPACKS:%=$(BUILD)/%.cmo)
 
 ## Merlin
 MERLIN = $(SRC)/.merlin $(PACKS:%=$(SRC)/%/.merlin)

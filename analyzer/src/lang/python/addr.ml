@@ -170,7 +170,7 @@ let atomic_type_to_class_name (t: Framework.Ast.typ) : string=
   let open Universal.Ast in
   match t with
   | T_int -> "int"
-  | T_float -> "float"
+  | T_float F_DOUBLE -> "float"
   | T_bool -> "bool"
   | T_string -> "str"
   | T_py_none -> "NoneType"

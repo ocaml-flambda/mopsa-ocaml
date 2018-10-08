@@ -30,6 +30,8 @@ module T = Ast
 module U = U_ast
 module FA = Framework.Ast
 
+module Float = ItvUtils.Float
+
 (* vars to their unique identifier and declared types *)
 module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
@@ -65,7 +67,7 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
 let rec from_typ (typ: U_ast.typ) : FA.typ =
   match typ with
   | AST_INT     -> T_int
-  | AST_REAL    -> T_float
+  | AST_REAL    -> T_float F_DOUBLE
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
@@ -162,8 +164,11 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_int (if b then 1 else 0) range
 
   | AST_real_const (s, _) ->
-    (* TODO: this looks like a very bad idea: *)
-    mk_float (float_of_string s) range
+     (* double interval enclosing the real value *)
+     let lo = Float.of_string `DOUBLE `DOWN s
+     and up = Float.of_string `DOUBLE `UP s
+     in
+     mk_float_interval ~prec:F_DOUBLE lo up range
 
   | AST_string_const (s, _) ->
     mk_string s range

@@ -56,7 +56,7 @@ let render man flow time files =
   | F_json -> Json.render man alarms time files !opt_file
 
 
-let panic exn files =
+let panic ?btrace exn files =
   match !opt_format with
-  | F_text -> Text.panic exn files !opt_file
-  | F_json -> Json.panic exn files !opt_file
+  | F_text -> Text.panic ?btrace exn files !opt_file
+  | F_json -> Json.panic ?btrace exn files !opt_file

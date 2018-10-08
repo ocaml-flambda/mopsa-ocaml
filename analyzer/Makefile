@@ -35,14 +35,19 @@ lang.python.data_model = callable arith_ops compare_ops aug_assign attribute sub
 lang.python.types = typingdomain typing t_string t_int
 
 #Packages
-PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
 INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
 LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
+LIBCMA = $(LIBCMXA:%.cmxa=%.cma)
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
+
+# this is needed for ocamlrun to find our dll*.so when running the bytecode bynary
+# TODO: find a better way
+DLLPATHS := -dllpath `pwd`/$(MOPSAROOT)/utils/lib -dllpath `pwd`/$(MOPSAROOT)/parsers/c/lib
 
 
 include $(MOPSAROOT)/make/main.mk

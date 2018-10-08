@@ -12,6 +12,18 @@ open Framework.Essentials
 open Ast
 open Format
 
+let pp_float_prec fmt = function
+  | F_SINGLE      -> pp_print_string fmt "float"
+  | F_DOUBLE      -> pp_print_string fmt "double"
+  | F_LONG_DOUBLE -> pp_print_string fmt "long double"
+  | F_REAL        -> pp_print_string fmt "real"
+   
+let pp_float_op opreal opfloat fmt = function
+  | F_SINGLE      -> Format.fprintf fmt "%sf" opfloat
+  | F_DOUBLE      -> Format.fprintf fmt "%sd" opfloat
+  | F_LONG_DOUBLE -> Format.fprintf fmt "%sl" opreal
+  | F_REAL        -> pp_print_string fmt opreal
+   
 let () =
   register_pp_operator (fun default fmt -> function
       | O_plus -> pp_print_string fmt "+"
@@ -29,6 +41,14 @@ let () =
       | O_bit_xor -> pp_print_string fmt "^"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
+      | O_float_sqrt p -> pp_float_op "sqrt" "sqrt" fmt p
+      | O_float_plus p -> pp_float_op "+" "⊕" fmt p
+      | O_float_minus p -> pp_float_op "-" "⊖" fmt p
+      | O_float_mult p -> pp_float_op "*" "⊗" fmt p
+      | O_float_div p -> pp_float_op "/" "⊘" fmt p
+      | O_float_mod p -> pp_float_op "%" "%" fmt p
+      | O_int_of_float -> pp_print_string fmt "cast<int>"
+      | O_float_of_int p -> Format.fprintf fmt "cast<%a>" pp_float_prec p
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function
@@ -45,7 +65,7 @@ let () =
       match typ with
       | T_bool -> pp_print_string fmt "bool"
       | T_int -> pp_print_string fmt "int"
-      | T_float -> pp_print_string fmt "float"
+      | T_float p -> pp_float_prec fmt p
       | T_string -> pp_print_string fmt "string"
       | T_addr -> pp_print_string fmt "addr"
       | T_char -> pp_print_string fmt "char"

@@ -820,3 +820,94 @@ CAMLprim value ml_divpos_sgl_itv_inner(value a, value b, value r) {
   return Val_unit;
 }
 
+
+
+/* conversion with string */
+/* ---------------------- */
+
+
+#define SKIP_SPACE(s)                           \
+  while (*(s) == ' ') (s)++
+
+static double parse_string(int up, char* s)
+{
+  int neg = 0;
+  int exponent = 0;
+  double mantissa = 0;
+  SKIP_SPACE(s);
+  /* sign */
+  if (*s == '+') s++;
+  if (*s == '-') { neg = 1; s++; }
+  /* setup rounding */
+  if ((up && !neg) || (!up && neg)) {
+    ROUND_UP;
+  }
+  else {
+    ROUND_DOWN;
+  }
+  /* integer mantissa */
+  SKIP_SPACE(s);
+  while (*s >= '0' && *s <= '9') {
+    mantissa = mantissa * 10 + (*s - '0');
+    s++;
+  }
+  /* fractional mantissa */
+  SKIP_SPACE(s);
+  if (*s == '.') {
+    s++;
+    SKIP_SPACE(s);
+    while (*s >= '0' && *s <= '9') {    
+      mantissa = mantissa * 10 + (*s - '0');
+      exponent--;
+      s++;
+    }
+  }
+  /* exponent */
+  SKIP_SPACE(s);
+  if (*s == 'e' || *s == 'E') {
+    int exp = 0;
+    int expsign = 1;
+    s++;
+    SKIP_SPACE(s);
+    if (*s == '-') { expsign = -1; s++; }
+    SKIP_SPACE(s);
+    while (*s >= '0' && *s <= '9') {    
+      exp = exp * 10 + (*s - '0');
+      s++;
+    }
+    exponent += expsign * exp;
+  }
+  /* NOTE: not sure whether pow obeys ROUND_UP / ROUND_DOWN */
+  mantissa *= pow(10., exponent);
+  if (neg) mantissa = -mantissa;
+  return mantissa;
+}
+
+CAMLprim value ml_of_string_dbl_up(value s) {
+  CAMLparam1(s);
+  double f = parse_string(1, String_val(s));
+  CAMLreturn(caml_copy_double(f));
+}
+
+CAMLprim value ml_of_string_dbl_down(value s) {
+  CAMLparam1(s);
+  double f = parse_string(0, String_val(s));
+  CAMLreturn(caml_copy_double(f));
+}
+
+CAMLprim value ml_of_string_sgl_up(value s) {
+  CAMLparam1(s);
+  double f = parse_string(1, String_val(s));
+  ROUND_UP;
+  float r = f;
+  CAMLreturn(caml_copy_double(r));
+}
+
+CAMLprim value ml_of_string_sgl_down(value s) {
+  CAMLparam1(s);
+  double f = parse_string(1, String_val(s));
+  ROUND_DOWN;
+  float r = f;
+  CAMLreturn(caml_copy_double(r));
+}
+

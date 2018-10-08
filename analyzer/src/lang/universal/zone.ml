@@ -45,10 +45,10 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
-          when etyp exp = T_int || etyp exp = T_float
+          when is_numeric_type (etyp exp)
                                              -> Keep
         | E_var _
-          when etyp exp = T_int || etyp exp = T_float
+          when is_numeric_type (etyp exp)
                                              -> Keep
         (* ------------------------------------------- *)
         | E_unop _
