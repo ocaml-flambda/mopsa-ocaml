@@ -199,25 +199,25 @@ let mro (obj: py_object) : py_object list =
   | A_py_class (c, b) -> b
   | _ -> assert false
 
-(** Return the closest non-heap (i.e. non-user defined) base class *)
-let most_derive_builtin_base (obj: py_object) : py_object =
-  let rec aux =
-    function
-    | [o] when is_builtin o -> o
-    | o :: tl when is_builtin o -> o
-    | o :: tl -> aux tl
-    | [] -> assert false
-  in
-  aux (mro obj)
-
-(** Check class inheritance  *)
-let issubclass (cls1: py_object) (cls2: py_object) : bool =
-  match kind_of_object cls1, kind_of_object cls2 with
-  | A_py_class _, A_py_class (C_builtin "type", _)-> true
-  | A_py_class _, A_py_class _ ->
-     List.exists (fun base -> compare_py_object base cls2 = 0) (mro cls1)
-
-  | _ -> false
+(* (\** Return the closest non-heap (i.e. non-user defined) base class *\)
+ * let most_derive_builtin_base (obj: py_object) : py_object =
+ *   let rec aux =
+ *     function
+ *     | [o] when is_builtin o -> o
+ *     | o :: tl when is_builtin o -> o
+ *     | o :: tl -> aux tl
+ *     | [] -> assert false
+ *   in
+ *   aux (mro obj)
+ *
+ * (\** Check class inheritance  *\)
+ * let issubclass (cls1: py_object) (cls2: py_object) : bool =
+ *   match kind_of_object cls1, kind_of_object cls2 with
+ *   | A_py_class _, A_py_class (C_builtin "type", _)-> true
+ *   | A_py_class _, A_py_class _ ->
+ *      List.exists (fun base -> compare_py_object base cls2 = 0) (mro cls1)
+ *
+ *   | _ -> false *)
 
 (** Check class membership of an instance *)
 let isinstance obj cls =
