@@ -39,8 +39,7 @@ PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 #Flags
 INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
-LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
-LIBCMA = $(LIBCMXA:%.cmxa=%.cma)
+LIBS := utils mlClangParser mlPythonParser mlUniversalParser
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)

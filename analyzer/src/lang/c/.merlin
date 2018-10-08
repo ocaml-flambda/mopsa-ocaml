@@ -7,4 +7,4 @@ S ../../../src/**
  B ../../../../parsers/python/lib/**
  B ../../../../parsers/universal/lib/**
 
-PKG str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+PKG str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

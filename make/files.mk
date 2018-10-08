@@ -43,6 +43,11 @@ CMI_FROM_MLY = $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmi)
 TOPCMX = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmx) $(TOPPACKS:%=$(BUILD)/%.cmx)
 TOPCMO = $(TOPML:$(SRC)/%.ml=$(BUILD)/%.cmo) $(TOPPACKS:%=$(BUILD)/%.cmo)
 
+## Libraries
+LIBCMXA := $(LIBS:%=%.cmxa)
+LIBCMA := $(LIBS:%=%.cma)
+
+
 ## Merlin
 MERLIN = $(SRC)/.merlin $(PACKS:%=$(SRC)/%/.merlin)
 
