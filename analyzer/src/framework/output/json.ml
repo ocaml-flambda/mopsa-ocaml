@@ -46,11 +46,12 @@ let render man alarms time files out =
   print json out
   
 
-let panic exn files out =
+let panic ?(btrace="<none>") exn files out =
   let json : json = `Assoc [
       "success", `Bool false;
       "files", `List (List.map (fun f -> `String f) files);
-      "exception", `String (Printexc.to_string exn)
+      "exception", `String (Printexc.to_string exn);
+      "backtrace", `String btrace;
     ]
   in
   print json out

@@ -92,5 +92,5 @@ let () =
         Output.Factory.render Analyzer.man res t files
 
       with
-        e -> Output.Factory.panic e files
+        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files
     ) ()

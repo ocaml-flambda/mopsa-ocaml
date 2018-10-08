@@ -45,12 +45,12 @@ let render man alarms time files out =
   ()
 
 
-let panic exn files out =
+let panic ?btrace exn files out =
   let print fmt = get_printer out fmt in
   print "Analysis aborted@.";
   print "File%a: @[%a@]@."
     Debug.plurial_list files
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_print_string) files
   ;
-  print "Uncaught exception: %s@." (Printexc.to_string exn);
-  ()
+    print "Uncaught exception: %s@." (Printexc.to_string exn);
+  (match btrace with Some x -> print "backtrace:@.%s" x | None -> ())
