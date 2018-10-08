@@ -65,42 +65,45 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
          Eval.singleton (mk_py_top T_int range) flow |> Option.return
 
-      (*       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
-       *                      {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
-       *                    ], []) ->
-       *          Eval.singleton (Some (mk_py_z_interval l u range), flow, [])
-       *
-       *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
-       *          begin
-       *            match ekind l, ekind u with
-       *            | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_z_interval l u range), flow, [])
-       *            | _ ->
-       *               let tmp = mk_tmp () in
-       *               let l = Utils.mk_builtin_call "int" [l] range in
-       *               let u = Utils.mk_builtin_call "int" [u] range in
-       *               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
-       *                            man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
-       *               in
-       *               Eval.singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
-       *          end
-       *
-       *       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
-       *          begin
-       *            match ekind l, ekind u with
-       *            | E_constant (C_float l), E_constant (C_float u) -> Eval.singleton (Some (mk_py_float_interval l u range), flow, [])
-       *            | E_constant (C_float l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_float_interval l (Z.to_float u) range), flow, [])
-       *            | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) u range), flow, [])
-       *            | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (Some (mk_py_float_interval (Z.to_float l) (Z.to_float u) range), flow, [])
-       *            | _ ->
-       *               let tmp = mk_tmp () in
-       *               let l = Utils.mk_builtin_call "float" [l] range in
-       *               let u = Utils.mk_builtin_call "float" [u] range in
-       *               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_float range) range) flow |>
-       *                            man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
-       *               in
-       *               Eval.singleton (Some (mk_var tmp range), flow, [mk_remove_var tmp range])
-       *          end
-       *)
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
+                     {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
+                   ], []) ->
+         Eval.singleton (mk_py_z_interval l u range) flow |> Option.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
+         begin
+           match ekind l, ekind u with
+           | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_z_interval l u range) flow
+           | _ ->
+              let tmp = mk_tmp () in
+              let l = Utils.mk_builtin_call "int" [l] range in
+              let u = Utils.mk_builtin_call "int" [u] range in
+              let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
+                           man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
+              in
+              Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
+         end
+         |> Option.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
+         begin
+           match ekind l, ekind u with
+           | E_constant (C_float l), E_constant (C_float u) -> Eval.singleton (mk_py_float_interval l u range) flow
+           | E_constant (C_float l), E_constant (C_int u) -> Eval.singleton (mk_py_float_interval l (Z.to_float u) range) flow
+           | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) u range) flow
+           | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) (Z.to_float u) range) flow
+           | _ ->
+              let tmp = mk_tmp () in
+              let l = Utils.mk_builtin_call "float" [l] range in
+              let u = Utils.mk_builtin_call "float" [u] range in
+              (* FIXME: T_float *)
+              let flow = man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow |>
+                           man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
+              in
+              Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
+         end
+         |> Option.return
+
       (* Calls to mopsa.assert_equal function *)
       | E_py_call(
 {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)},
