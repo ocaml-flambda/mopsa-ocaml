@@ -74,7 +74,7 @@ module Domain =
                 | E_py_object (addr, _) ->
                    begin
                      let ty = match addr.addr_kind with
-                       | A_py_class (c, bases) -> Typingdomain.Class (c, bases)
+                       | A_py_class (c, mro) -> Typingdomain.Class (c, mro)
                        | A_py_module m ->         Typingdomain.Module m
                        | A_py_function f ->       Typingdomain.Function (f, [])
                        | _ -> debug "typing/exec/assign/E_py_object: %a@\n" Universal.Ast.pp_addr addr;
