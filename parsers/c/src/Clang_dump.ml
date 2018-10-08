@@ -430,6 +430,7 @@ let type_kind_name t =
   | ElaboratedType _ -> "ElaboratedType" 
   | UnaryTransformType _ -> "UnaryTransformType" 
   | TypeOfExprType _ -> "TypeOfExprType" 
+  | TypeOfType _ -> "TypeOfType" 
   | DecltypeType _ -> "DecltypeType" 
   | AutoType _ -> "AutoType" 
   | DeducedTemplateSpecializationType _ -> "DeducedTemplateSpecializationType" 
@@ -982,6 +983,7 @@ module P = struct
     | ElaboratedType t -> p ch "elaborated(%a)" type_qual t
     | UnaryTransformType t -> p ch "unary(%a) -> (%a)" type_qual t.unary_base_type type_qual t.unary_underlying_type
     | TypeOfExprType e -> p ch "typeof(%a)" expr e
+    | TypeOfType t -> p ch "typeof(%a)" type_qual t
     | DecltypeType (e,o) -> p ch "decltype(%a,%a)" expr e (bp_option "<none>" type_qual) o
     | AutoType b -> p ch "auto(%B)" b
     | DeducedTemplateSpecializationType t -> p ch "deduced(%a)" template_name t

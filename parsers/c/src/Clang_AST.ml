@@ -323,7 +323,10 @@ type name = {
    (** A unary type transform, which is a type constructed from another. *)
 
    | TypeOfExprType of expr
-   (** Represents a typeof (or typeof) expression (a GCC extension). *)
+   (** Represents a typeof expression (a GCC extension). *)
+
+   | TypeOfType of type_qual
+   (** Represents a typeof(type), a gcc extension. *)
 
 
    (* C++ TYPES *)
