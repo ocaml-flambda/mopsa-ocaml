@@ -19,12 +19,14 @@
         "python.libs.mopsa",
         "python.libs.stdlib",
         "python.libs.math",
+        "python.libs.unittest",
 
         "python.objects.class",
         "python.objects.function",
         "python.objects.nones",
 
         "python.data_model.attribute",
+        "python.data_model.subscript",
         "python.data_model.arith_ops",
         "python.data_model.compare_ops",
         "python.data_model.aug_assign",
