@@ -1,8 +1,6 @@
 TARGET_NATIVES = mopsa
 
-MOPSAROOT = ..
-
-#Packs
+# Packs
 mopsa = framework lang main
 
 framework = location ast visitor options query annotation lattice zone manager flow exceptions eval post channel value domain cache output analyzer lattices essentials domains config
@@ -34,14 +32,15 @@ lang.python = ast addr operators utils pp frontend zone flows libs desugar objec
 lang.python.data_model = callable arith_ops compare_ops aug_assign attribute subscript
 lang.python.types = typingdomain typing t_string t_int
 
-#Packages
+
+# Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
-#Flags
-INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
-LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
-LIBCMA = $(LIBCMXA:%.cmxa=%.cma)
+# MOPSA
+MOPSAROOT = ..
+MOPSALIBS := utils:utils parsers/c:mlClangParser parsers/python:mlPythonParser parsers/universal:mlUniversalParser
 
+# Flags
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
 
@@ -49,10 +48,9 @@ LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
 # TODO: find a better way
 DLLPATHS := -dllpath `pwd`/$(MOPSAROOT)/utils/lib -dllpath `pwd`/$(MOPSAROOT)/parsers/c/lib
 
-
 include $(MOPSAROOT)/make/main.mk
 
-#tests
+# Tests
 TESTS = tests
 
 .PHONY: python-tests c-tests universal-tests

@@ -3730,6 +3730,7 @@ enum {
   MLTAG_ElaboratedType,
   MLTAG_UnaryTransformType,
   MLTAG_TypeOfExprType,
+  MLTAG_TypeOfType,
 
   // C++
   MLTAG_DecltypeType,
@@ -3833,6 +3834,10 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
 
   GENERATE_NODE_CACHED(cacheType,TypeOfExprType, ret, node, 1, {
       Store_field(ret, 0, TranslateExpr(x->getUnderlyingExpr()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType,TypeOfType, ret, node, 1, {
+      Store_field(ret, 0, TranslateQualType(x->getUnderlyingType()));
     });
 
   GENERATE_NODE_CACHED(cacheType, DecltypeType, ret, node, 2, {

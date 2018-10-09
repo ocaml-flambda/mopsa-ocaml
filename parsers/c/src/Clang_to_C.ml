@@ -252,6 +252,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
     | C.ElaboratedType t -> type_qual range t
     | C.UnaryTransformType t -> type_qual range t.C.unary_underlying_type
     | C.TypeOfExprType { C.expr_type = Some t; } -> type_qual range t
+    | C.TypeOfType t -> type_qual range t
     | _ -> error range "unhandled type" (C.string_of_type t)
 
                  
