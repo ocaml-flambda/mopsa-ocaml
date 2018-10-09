@@ -3,7 +3,7 @@
 all: $(MERLIN) $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
 clean:
-	-rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
+	@rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
 
 
 $(TARGET_NATIVES): %: $(BUILD)/%.native
@@ -18,7 +18,7 @@ $(TARGET_CLIBS): %: $(BUILD)/lib%.a
 
 
 define NATIVE_template =
- TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
+ TOP_CMX_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
  TARGET_$(1) = $$(BUILD)/$(1).native
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
@@ -28,7 +28,7 @@ endef
 
 
 define LIB_template =
- TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
+ TOP_CMX_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
  TARGET_$(1) = $$(BUILD)/$(1).cmxa
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
@@ -40,7 +40,7 @@ endef
 
 
 define CLIB_template =
- TOP_CMX_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
+ TOP_CMX_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmx), $$(TOPML:%.ml=$$(BUILD)/%.cmx) $$(TOPPACKS:%=$$(BUILD)/%.cmx))
  TARGET_$(1) = $$(BUILD)/lib$(1).a
  TARGET_BASE_$(1) = $$(BUILD)/$(1)
 
@@ -55,7 +55,7 @@ endef
 
 
 define BYTE_template =
- TOP_CMO_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
+ TOP_CMO_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
  TARGET_$(1) = $$(BUILD)/$(1).byte
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
@@ -65,7 +65,7 @@ endef
 
 
 define BYTELIB_template =
- TOP_CMO_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
+ TOP_CMO_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
  TARGET_$(1) = $$(BUILD)/$(1).cma
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
@@ -77,7 +77,7 @@ endef
 
 
 define BYTECLIB_template =
- TOP_CMO_$(1) := $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
+ TOP_CMO_$(1) = $$(if $$($(1)), $$($(1):%=$$(BUILD)/%.cmo), $$(TOPML:%.ml=$$(BUILD)/%.cmo) $$(TOPPACKS:%=$$(BUILD)/%.cmo))
  CTARGET_$(1) = $$(BUILD)/lib$(1).a
  TARGET_$(1) = $$(BUILD)/$(1).cma
  TARGET_BASE_$(1) = $$(BUILD)/$(1)
