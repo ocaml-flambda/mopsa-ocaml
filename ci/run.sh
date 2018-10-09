@@ -9,7 +9,7 @@
 ##
 
 eval `opam config env`
-make
+make -j
 if [ ! -x bin/mopsa ]
 then
     echo "*** BUILD FAILED ***"
