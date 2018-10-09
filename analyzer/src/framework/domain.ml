@@ -9,7 +9,7 @@
 (** Unified signature of abstract domains.
 
     This is the low-level domain signature that gives full access to
-    the flow abstraction and global analysis manager.  
+    the flow abstraction and global analysis manager.
 *)
 
 open Manager

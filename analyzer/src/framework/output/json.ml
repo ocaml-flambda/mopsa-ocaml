@@ -44,7 +44,7 @@ let render man alarms time files out =
     ]
   in
   print json out
-  
+
 
 let panic ?(btrace="<none>") exn files out =
   let json : json = `Assoc [
