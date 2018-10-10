@@ -26,13 +26,13 @@ let init_from_env () =
 (** Return the path of the configuration file *)
 let get_config_path () =
   let config = Framework.Options.(common_options.config) in
-  if Sys.file_exists config then config
+  if Sys.file_exists config && not (Sys.is_directory config) then config
   else
     let config' = "configs/" ^ config in
-    if Sys.file_exists config' then config'
+    if Sys.file_exists config' && not (Sys.is_directory config') then config'
     else
       let config'' = "analyzer/" ^ config' in
-      if Sys.file_exists config'' then config''
+      if Sys.file_exists config'' && not (Sys.is_directory config'') then config''
       else Framework.Exceptions.fail "Unable to find configuration file %s" config
 
 
@@ -43,6 +43,7 @@ let parse_program files =
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
+  | "java" -> Lang.Jvm.Frontend.parse_program files
   | _ -> Framework.Exceptions.panic "Unknown language"
 
 
@@ -54,8 +55,11 @@ let iter_sources f () =
   let files = ref [] in
   let n = Array.length Sys.argv in
   Arg.parse !Options.spec (fun filename ->
+      (* NOTE: filename could be a class name, not a file... *)
+      (*
       if not (Sys.file_exists filename) then
         Debug.fail "File %s does not exist" filename;
+        *)
       files := filename :: !files;
       if !Arg.current = n - 1 then
         f !files

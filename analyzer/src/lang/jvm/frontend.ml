@@ -14,10 +14,7 @@ open Javalib_pack
 open Javalib
 open JBasics
 open JCode
-open Framework.Ast
-open Framework.Flow
-open Framework.Manager
-open Framework.Location
+open Framework.Essentials
 open Universal.Ast
 open Cfg.Ast
 open Ast
@@ -381,63 +378,44 @@ let load_class jclass : j_class =
   cls
   
 
+(*========================================================================*)
+                       (** {2 Entry-point} *)
+(*========================================================================*)
+
+
+(* class-path *)
+let cp = ref ""
   
-(*========================================================================*)
-                       (** {2 Test} *)
-(*========================================================================*)
-
-
-let jdk_path = "/opt/oracle-jdk-bin-1.8.0.181/"
-let jdk_lib_path = jdk_path ^ "jre/lib/"
-             
-let class_path =
-  class_path
-    (String.concat
-       ":"
-       [jdk_lib_path ^ "resources.jar";
-        jdk_lib_path ^ "rt.jar";
-        jdk_lib_path ^ "jsse.jar";
-        jdk_lib_path ^ "jce.jar";
-        jdk_lib_path ^ "charsets.jar"
-       ]
+let () =
+  register_option (
+      "-cp",
+      Arg.String (fun l -> cp := l),
+      " sets the class-path for Java bytecode analysis"
     )
 
-let nb_jar = ref 0
-
-let test () =
-  Format.printf "JVM test@\n";
-  List.iter
-    (fun x ->
-      incr nb_jar;
-      Format.printf "loading %s@\n" x;
-      iter (fun c -> ignore (load_class c)) x
-    )
-    [jdk_lib_path ^ "charsets.jar";
-     jdk_lib_path ^ "deploy.jar";
-     jdk_lib_path ^ "javaws.jar";
-     jdk_lib_path ^ "jce.jar";
-     jdk_lib_path ^ "jfxswt.jar";
-     jdk_lib_path ^ "jsse.jar";
-     jdk_lib_path ^ "plugin.jar";
-     jdk_lib_path ^ "rt.jar";
-     jdk_lib_path ^ "ext/cldrdata.jar";
-     jdk_lib_path ^ "ext/dnsns.jar";
-     jdk_lib_path ^ "ext/jaccess.jar";
-     jdk_lib_path ^ "ext/jfxrt.jar";
-     jdk_lib_path ^ "ext/localedata.jar";
-     jdk_lib_path ^ "ext/nashorn.jar";
-     jdk_lib_path ^ "ext/sunec.jar";
-     jdk_lib_path ^ "ext/sunjce_provider.jar";
-     jdk_lib_path ^ "ext/sunpkcs11.jar";
-     jdk_lib_path ^ "ext/zipfs.jar";     
-    ];
-
-    (*load_class (get_class class_path (make_cn "org.omg.stub.javax.management.remote.rmi._RMIConnection_Stub"))*)
-
-  Format.printf
-    "%i jar(s) loaded@\n%i class(es) loaded@\n%i method(s) loaded@\n%i error(s) found@\n"
-    !nb_jar !nb_loaded_classes !nb_loaded_methods !Precheck.nb_errors
+let parse_program files =
+  let name = match files with
+    | [] -> "_project"
+    | a::_ -> a
+  in
+  let m = ref MapExt.StringMap.empty in
+  let parse_file f =
+    if Sys.file_exists f then
+      (* load a .zip or .class file, or a whole directory *)
+      iter
+        (fun c ->
+          let cls = load_class c in
+          m := MapExt.StringMap.add cls.c_uid cls !m
+        ) f
+    else
+      (* assume we have a class name, to search in the class-path *)
+      let c = get_class (class_path !cp) (make_cn f) in
+      let cls = load_class c in
+      m := MapExt.StringMap.add cls.c_uid cls !m
+  in
+  List.iter parse_file files;
+  {
+    prog_kind = Java_program { p_classes = !m; };
+    prog_file = name;
+  }
   
-(*
-let _ = test ()
- *)    
