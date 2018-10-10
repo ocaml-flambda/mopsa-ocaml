@@ -177,6 +177,7 @@ struct
       | Keep ->
         debug "already in zone";
         Eval.singleton exp flow
+
       | other_action ->
         (* Try available eval paths in sequence *)
         let paths =
@@ -210,7 +211,7 @@ struct
     let t = Timing.stop timer in
     profiler "eval done in %.3fs of @[%a@]" t pp_expr exp;
 
-    debug "eval expr done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+    debug "eval expr done:@\n expr: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       pp_zone2 zone
       (Flow.print man) flow
@@ -268,7 +269,7 @@ struct
 
           | _ -> None
 
-    
+
   (** Query handler. *)
   and ask : type r. r Query.query -> _ -> r =
     fun query flow ->

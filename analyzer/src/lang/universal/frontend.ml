@@ -30,6 +30,8 @@ module T = Ast
 module U = U_ast
 module FA = Framework.Ast
 
+module Float = ItvUtils.Float
+
 (* vars to their unique identifier and declared types *)
 module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
@@ -65,32 +67,70 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
 let rec from_typ (typ: U_ast.typ) : FA.typ =
   match typ with
   | AST_INT     -> T_int
-  | AST_REAL    -> T_float
+  | AST_REAL    -> T_float F_DOUBLE
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
 
-let from_binop (b: U.binary_op) : FA.operator =
-  match b with
-  | AST_PLUS          -> O_plus
-  | AST_MINUS         -> O_minus
-  | AST_MULTIPLY      -> O_mult
-  | AST_DIVIDE        -> O_div
-  | AST_EQUAL         -> O_eq
-  | AST_NOT_EQUAL     -> O_ne
-  | AST_LESS          -> O_lt
-  | AST_LESS_EQUAL    -> O_le
-  | AST_GREATER       -> O_gt
-  | AST_GREATER_EQUAL -> O_ge
-  | AST_AND           -> O_log_and
-  | AST_OR            -> O_log_or
-  | AST_CONCAT        -> O_concat
+(* find a common type for the arguments of binary operations *)
+let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
+  match x,y with
+  | T_int, T_float _ -> y
+  | T_float _, T_int -> x
+  | _ ->
+     if compare_typ x y = 0 then x
+     else Debug.fail "cannot unify types %a and %a" pp_typ x pp_typ y 
 
-let from_unop (b: U.unary_op) : FA.operator =
-  match b with
-  | AST_UNARY_PLUS    -> O_plus
-  | AST_UNARY_MINUS   -> O_minus
-  | AST_NOT           -> O_log_not
+(* cast expression to the given type (if needed) *)    
+let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
+  let range = erange e in
+  match etyp e, t with
+  | T_int, T_float f ->
+     mk_unop (O_float_of_int f) e ~etyp:t range
+  | T_float _, T_int ->
+     mk_unop O_int_of_float e ~etyp:t range
+  | T_float F_DOUBLE, T_float (F_SINGLE as p) ->
+     mk_unop (O_float_cast p) e ~etyp:t range     
+  | t1, t2 ->
+     if compare_typ t1 t2 = 0 then e
+     else Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ t1 pp_typ t2  
+
+    
+let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
+  match t, b with
+  | T_int, AST_PLUS          -> O_plus
+  | T_int, AST_MINUS         -> O_minus
+  | T_int, AST_MULTIPLY      -> O_mult
+  | T_int, AST_DIVIDE        -> O_div
+  | T_int, AST_EQUAL         -> O_eq
+  | T_int, AST_NOT_EQUAL     -> O_ne
+  | T_int, AST_LESS          -> O_lt
+  | T_int, AST_LESS_EQUAL    -> O_le
+  | T_int, AST_GREATER       -> O_gt
+  | T_int, AST_GREATER_EQUAL -> O_ge
+  | T_int, AST_AND           -> O_log_and
+  | T_int, AST_OR            -> O_log_or
+  | T_string, AST_CONCAT        -> O_concat
+  | T_float f, AST_PLUS          -> O_float_plus f
+  | T_float f, AST_MINUS         -> O_float_minus f
+  | T_float f, AST_MULTIPLY      -> O_float_mult f
+  | T_float f, AST_DIVIDE        -> O_float_div f
+  | T_float f, AST_EQUAL         -> O_float_eq f
+  | T_float f, AST_NOT_EQUAL     -> O_float_ne f
+  | T_float f, AST_LESS          -> O_float_lt f
+  | T_float f, AST_LESS_EQUAL    -> O_float_le f
+  | T_float f, AST_GREATER       -> O_float_gt f
+  | T_float f, AST_GREATER_EQUAL -> O_float_ge f
+  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
+
+let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
+  match t, b with
+  | T_int, AST_UNARY_PLUS    -> O_plus
+  | T_int, AST_UNARY_MINUS   -> O_minus
+  | T_int, AST_NOT           -> O_log_not
+  | T_float f, AST_UNARY_PLUS  -> O_float_plus f
+  | T_float f, AST_UNARY_MINUS -> O_float_minus f
+  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
@@ -133,7 +173,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     begin
       let e = from_expr e ext var_ctx fun_ctx in
       let typ = etyp e in
-      let op = from_unop op in
+      let op = from_unop typ op in
       mk_unop op e ~etyp:typ range
     end
 
@@ -143,13 +183,10 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let typ1 = etyp e1 in
       let e2 = from_expr e2 ext var_ctx fun_ctx in
       let typ2 = etyp e2 in
-      let op = from_binop op in
-      if compare_typ typ1 typ2 <> 0 then
-        Debug.fail "%a at %s type error"
-          U_ast_printer.print_expr e
-          (U_ast_printer.string_of_extent ext)
-      else
-        mk_binop e1 op e2 ~etyp:typ1 range
+      let typ = unify_typ typ1 typ2 in
+      let e1,e2 = to_typ typ e1, to_typ typ e2 in
+      let op = from_binop typ op in
+      mk_binop e1 op e2 ~etyp:typ range
     end
 
   | AST_identifier (v, ext) ->
@@ -162,8 +199,11 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_int (if b then 1 else 0) range
 
   | AST_real_const (s, _) ->
-    (* TODO: this looks like a very bad idea: *)
-    mk_float (float_of_string s) range
+     (* double interval enclosing the real value *)
+     let lo = Float.of_string `DOUBLE `DOWN s
+     and up = Float.of_string `DOUBLE `UP s
+     in
+     mk_float_interval ~prec:F_DOUBLE lo up range
 
   | AST_string_const (s, _) ->
     mk_string s range
@@ -182,6 +222,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let e1o = e1 in
       let e1 = from_expr e1 ext1 var_ctx fun_ctx in
       let e2 = from_expr e2 ext2 var_ctx fun_ctx in
+      let e2 = to_typ T_int e2 in
       match etyp e1 with
       | T_string ->
         {
@@ -232,17 +273,8 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
       | AST_identifier _ ->
         let e1 = from_expr e1 ext1 var_ctx fun_ctx in
         let e2 = from_expr e2 ext2 var_ctx fun_ctx in
-        if (compare_typ (etyp e1) (etyp e2) = 0) then
-          mk_assign e1 e2 range
-        else
-          Debug.fail "%a (at %s) has type %a and %a (at %s) has type \
-                       %a, could not translate assignement"
-            U_ast_printer.print_expr e1o
-            (U_ast_printer.string_of_extent ext1)
-            pp_typ (etyp e1)
-            U_ast_printer.print_expr e2o
-            (U_ast_printer.string_of_extent ext2)
-            pp_typ (etyp e2)
+        let e2 = to_typ (etyp e1) e2 in
+        mk_assign e1 e2 range
       | _ ->
         Debug.fail "%a at %s not considered a left-value for now "
           U_ast_printer.print_expr e1o

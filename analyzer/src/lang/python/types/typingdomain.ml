@@ -26,21 +26,22 @@ let debug fmt = Debug.debug ~channel:name fmt
  *                          end) *)
 (* question: possible dans 'a pytype inst de declarer un module stringrange qui aurait pour type t stirng * 'a pytype ? il y a de la récursivité mutuelle un peu poussée là *)
 
-
+type typeid = int
 type 'a pytype =
   | Bot | Top
   | List of 'a pytype
   (* standard library containers are defined locally *)
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
-  | Class of class_address * py_object list (* class * bases *)
+  | Class of class_address * py_object list (* class * mro *)
   (* we use the classes defined in MOPSA *)
   | Function of function_address * 'a summary
   (* same for functions *)
   | Module of module_address
   (* and for modules *)
   | Typevar of 'a
-  (* polymorphic variables, to use later *)
+(* polymorphic variables, to use later *)
+  | Method of function_address * typeid
 and 'a pytypeinst =
   {classn:'a pytype; uattrs: 'a pytype StringMap.t; oattrs: 'a pytype StringMap.t }
 and 'a summary = (('a pytype list) * ('a pytype list)) list
@@ -81,6 +82,8 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Function (F_builtin f, _) | Function (F_unsupported f, _) -> Format.fprintf fmt "Function[%s]" f
   | Module (M_user (m, _) | M_builtin(m)) -> Format.fprintf fmt "Module[%s]" m
   | Typevar t -> print_vars fmt t
+  | Method (F_user f, i) -> Format.fprintf fmt "Method[{%a}, id=%d]" pp_var f.py_func_var i
+  | Method (F_builtin f, i) | Method (F_unsupported f, i) -> Format.fprintf fmt "Method[{%s}, id=%d]" f i
 
 let pp_typevar fmt (i:typevar) = Format.fprintf fmt "α(%d)" i
 
@@ -89,7 +92,6 @@ let pp_monotype = pp_pytype (fun fmt (s:unit) -> Format.fprintf fmt "???")
 
 
 
-type typeid = int
 type pyVarOrTy = Var of pyVar | Ty of typeid
 type Universal.Ast.addr_kind += Type of pyVarOrTy
 type 'a with_undefs = {lundef: bool; gundef: bool; def: 'a option}
@@ -205,7 +207,7 @@ let is_bottom {d1;d2;d3} =
 let top = {d1=VarMap.top; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_top {d1;d2;d3} =
   (* vérifier que dans d2 tout est à top plutôt... *)
-  failwith "ni"
+  Debug.fail "ni"
 
 let pp_d2 fmt (d2:d2) =
   TypeIdMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "%d" k)
@@ -237,6 +239,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Class (c, b) -> Class (c, b)
   | Function (func, summary) -> Function (func, List.map (fun (i, o) -> List.map (unsafe_cast f) i, List.map (unsafe_cast f) o) summary)
   | Module m -> Module m
+  | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
   | Typevar v -> Typevar (f v)
   | Instance {classn;uattrs;oattrs} ->
@@ -398,7 +401,7 @@ let search_d2 (t:polytype) (d2:d2) : typeid option =
 
 let get_type ?local_use:(local_use=false) (d:domain) (t:polytype) : typeid * domain =
   if not local_use && not (Typevarset.is_empty (collect_vars t)) then
-    failwith "get_type: not monomorphic, bad idea"
+    Debug.fail "get_type: not monomorphic, bad idea"
   else
     let opos = search_d2 t d.d2 in
     match opos with
@@ -483,7 +486,7 @@ let class_le (c, b:class_address * py_object list) (d, b':class_address * py_obj
    *   | C_user s -> s.py_cls_var.vname in
    * let oc = if Addr.is_builtin_name cname then Addr.find_builtin cname
    *          else
-   *            (\* TODO: FIXME: bases *\)
+   *            (\* TODO: FIXME: mro *\)
    *            {addr_kind=A_py_class (c, b); addr_range=Range_fresh (-1); addr_uid=(-1)}, {ekind=E_py_undefined true; etyp=T_any; erange=Range_fresh (-1)}
    * in
    * let od = if Addr.is_builtin_name dname then Addr.find_builtin dname
@@ -500,7 +503,7 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   | Bot, _ | _, Top -> true
   | List u, List v -> polytype_leq (u, d3) (v, d3')
   | Class (c, b), Class (c', b') -> class_le (c, b) (c', b')
-  | Function (f, sum), Function (f', sum') -> f = f' && failwith "ni"
+  | Function (f, sum), Function (f', sum') -> f = f' && Debug.fail "ni"
   | Module m, Module m' -> m = m'
   | Instance {classn=c; uattrs=u; oattrs=o},
     Instance {classn=c'; uattrs=u'; oattrs=o'} ->
@@ -534,7 +537,7 @@ let leq d d' =
             ty2 = TypeIdMap.find tid2 d'.d2 in
         acc && (polytype_leq (ty1, d.d3) (ty2, d'.d3)) && (ov1 = None || ov1 = ov2)) d.d1 true
 
-let meet d1 d2 = failwith "ni"
+let meet d1 d2 = Debug.fail "ni"
 
 let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (pos_d3:int) : polytype * d3 * int =
   (* FIXME: except for the last case, this is like the join. So maybe we should just give a flag to join_poly enforcing the widening *)
@@ -554,7 +557,7 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
   | Function (f, sum), Function (f', sum') when f = f' ->
-     Function (f, failwith "ni"), d3_acc, pos_d3
+     Function (f, Debug.fail "ni"), d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
      Module m, d3_acc, pos_d3
   | Class (c, b), Class (c', b') when join_classes (c, b) (c', b') <> None ->
@@ -653,7 +656,7 @@ let widening ctx d d' =
       res
     )
   else
-    failwith "unstable widening not implemented. Recommended widening delay: at least 1"
+    Debug.fail "unstable widening not implemented. Recommended widening delay: at least 1"
 
 
 let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
@@ -815,7 +818,7 @@ let get_types (d:domain) (ts:Polytypeset.t) : typevar * domain =
   (* FIXME: perform the join of polytypes only, and everything should work by itself? *)
   (* folding on join_poly would work, but would create |ts|-1 type variables and only the last one would be used afterwards  *)
   if Polytypeset.exists (fun t -> not (Typevarset.is_empty (collect_vars t))) ts then
-    failwith "get_types: not monomorphic, bad idea"
+    Debug.fail "get_types: not monomorphic, bad idea"
   else
     let mts = mono_set_cast ts in
     let d3 = d.d3 and pos_d3 = d.pos_d3 in
@@ -849,13 +852,13 @@ let class_of (d:domain) (t:typeid) : class_address * py_object list =
   match TypeIdMap.find t d.d2 with
   | Instance {classn=Class (c, b)} -> (c, b)
   | Class _ -> C_builtin "type", [Addr.find_builtin "object"]
-  | _ -> failwith "class_of: ni"
+  | _ -> Debug.fail "class_of: ni"
 
 let get_polytype (d:domain) (v:pyVar) : polytype =
   let i = (VarMap.find v d.d1).def in
   let tid = match i with
     | Some i -> typeindex_of_var d.d1 v
-    | _ -> failwith "get_polytype"
+    | _ -> Debug.fail "get_polytype"
   in
   TypeIdMap.find tid d.d2
 
@@ -863,7 +866,7 @@ let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
   (* quand v pointe vers une classe/fonction, ressortir l'addresse *)
   let i = (VarMap.find v d.d1).def in
   let tid, i = match i with
-    | None -> failwith "get_tvid"
+    | None -> Debug.fail "get_tvid"
     | Some i -> typeindex_of_var d.d1 v, i in
   let ty = TypeIdMap.find tid d.d2 in
   match ty with
@@ -896,15 +899,16 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (func, funcb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
+  | Method _ -> Debug.fail "ni"
   | Class (c, b) ->
-     debug "p=%a@\ninst=%a@\n" pp_polytype p pp_monotype inst; failwith "Cni"
+     debug "p=%a@\ninst=%a@\n" pp_polytype p pp_monotype inst; Debug.fail "Cni"
   | Instance {classn=Class (c, b)} ->
      begin match inst with
      | Class (d, b') ->
         if class_le (c, b) (d, b') then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
-  | Instance {classn} -> failwith "ni"
+  | Instance {classn} -> Debug.fail "ni"
   | Typevar var ->
      let m = concretize_poly p d3 in
      let t, f = Monotypeset.fold (fun el (acct, accf) ->
@@ -953,16 +957,17 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
-  | Module (M_builtin _) -> failwith "ni, need to check if attr in module?"
-  | List t -> failwith "ni"
-  | Function (f, _) -> failwith "ni"
+  | Module (M_builtin _) -> Debug.fail "ni, need to check if attr in module?"
+  | List t -> Debug.fail "ni"
+  | Function (f, _) -> Debug.fail "ni"
+  | Method _ -> Debug.fail "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
-  | Class _ -> failwith "filter_polyattr on unsupported or builtin class"
+  | Class _ -> Debug.fail "filter_polyattr on unsupported or builtin class"
   | Instance {classn=Class (C_user c, _); uattrs; oattrs} ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then
@@ -983,7 +988,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        cp p d3
      else
        (Bot, d3), (p, d3)
-  | Instance _ -> failwith "filter_polyattr on unsupported instance"
+  | Instance _ -> Debug.fail "filter_polyattr on unsupported instance"
   | Typevar var ->
      let ms = concretize_poly p d3 in
      let t, f = Monotypeset.fold (fun el (acct, accf) ->

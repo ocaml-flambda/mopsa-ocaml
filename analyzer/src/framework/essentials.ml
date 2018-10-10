@@ -37,7 +37,7 @@ include Options
 
 include Exceptions
 
-include Alarm
+include Output.Alarm
 
 module Var =
 struct

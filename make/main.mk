@@ -19,6 +19,9 @@
 # Root directory of MOPSA
 MAKEROOT=$(MOPSAROOT)/make
 
+# Definition of utility functions
+-include $(MAKEROOT)/functions.mk
+
 # Definitions of compilation flags, executables, etc.
 -include $(MAKEROOT)/constants.mk
 

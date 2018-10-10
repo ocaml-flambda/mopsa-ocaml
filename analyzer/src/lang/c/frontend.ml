@@ -202,7 +202,7 @@ and from_init fun_ctx init = match init with
 and from_function =
   fun func ->
     {
-      c_func_var = {vname = ""; vuid = 0; vtyp = T_any};
+      c_func_var = from_var_name func.func_org_name func.func_uid T_any;
       c_func_is_static = func.func_is_static;
       c_func_return = T_any;
       c_func_parameters = [];
@@ -342,7 +342,7 @@ and from_function_in_context fun_ctx (f: C_AST.func) =
         c_fun.c_func_var.vuid = f.func_uid
       ) fun_ctx.ctx_fun
   with
-  | Not_found -> Debug.fail "Could not find function in function context"
+  | Not_found -> Debug.fail "Could not find function %s in function context" f.func_unique_name
 
 (** {2 Expressions} *)
 

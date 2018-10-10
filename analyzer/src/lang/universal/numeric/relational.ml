@@ -78,7 +78,7 @@ struct
   let var_to_apron v =
     (match v.vtyp with
     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-    | T_float -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
+    | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
     let name = Format.flush_str_formatter () in
     Apron.Var.of_string name
@@ -94,7 +94,8 @@ struct
     if Str.string_match (Str.regexp "\\([^@]+\\)@\\([0-9]+\\)") v 0 then
       let vname = Str.matched_group 1 v in
       let vuid = Str.matched_group 2 v |> int_of_string in
-      {vname; vuid; vtyp = T_float}
+      (* TODO: replace F_REAL with real type *)
+      {vname; vuid; vtyp = T_float F_REAL}
     else raise (Invalid_argument v)
 
   let is_env_var v abs =
@@ -118,7 +119,7 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (function {vtyp = T_float} -> true | _ -> false) lv
+          List.filter (function {vtyp = T_float _} -> true | _ -> false) lv
         )
     in
     Apron.Abstract1.change_environment ApronManager.man abs env' false
@@ -164,11 +165,11 @@ struct
   exception UnsupportedExpression
 
   let rec binop_to_apron = function
-    | O_plus  -> Apron.Texpr1.Add
-    | O_minus  -> Apron.Texpr1.Sub
-    | O_mult  -> Apron.Texpr1.Mul
-    | O_div  -> Apron.Texpr1.Div
-    | O_mod  -> Apron.Texpr1.Mod
+    | O_plus | O_float_plus _ -> Apron.Texpr1.Add
+    | O_minus | O_float_minus _ -> Apron.Texpr1.Sub
+    | O_mult | O_float_mult _  -> Apron.Texpr1.Mul
+    | O_div | O_float_div _ -> Apron.Texpr1.Div
+    | O_mod | O_float_mod _ -> Apron.Texpr1.Mod
     | _ -> raise UnsupportedExpression
 
   and strongify_rhs exp abs l =
@@ -209,14 +210,27 @@ struct
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, l
 
-    | E_unop(O_minus , e) ->
+    | E_unop ((O_plus | O_float_plus _), e) ->
+       strongify_rhs e abs l
+      
+    | E_unop(O_float_cast _, e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron e.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
+
+    | E_unop((O_minus | O_float_minus _), e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, l
 
-    | E_unop(O_sqrt, e) ->
+    | E_unop((O_int_of_float | O_float_of_int _), e) ->
       let e', abs, l = strongify_rhs e abs l in
-      let typ' = typ_to_apron T_float in
+      let typ' = typ_to_apron exp.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
+
+    | E_unop((O_sqrt | O_float_sqrt _), e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, l
 
     | E_unop(O_wrap(g, d), e) ->
@@ -276,7 +290,7 @@ struct
 
     | E_unop(O_sqrt, e) ->
       let e' = exp_to_apron e in
-      let typ' = typ_to_apron T_float in
+      let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding)
 
     | E_unop(O_wrap(g, d), e) ->
@@ -295,7 +309,10 @@ struct
 
   and typ_to_apron = function
     | T_int -> Apron.Texpr1.Int
-    | T_float -> Apron.Texpr1.Real
+    | T_float F_SINGLE -> Apron.Texpr1.Single
+    | T_float F_DOUBLE -> Apron.Texpr1.Double
+    | T_float F_LONG_DOUBLE -> Apron.Texpr1.Extended
+    | T_float F_REAL -> Apron.Texpr1.Real
     | _ -> assert false
 
   and bexp_to_apron exp =
@@ -304,27 +321,27 @@ struct
 
     | E_constant(C_int _) -> Dnf.mk_true
 
-    | E_binop(O_gt, e0 , e1) ->
+    | E_binop((O_gt | O_float_gt _ | O_float_neg_le _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_ge, e0 , e1) ->
+    | E_binop((O_ge | O_float_ge _ | O_float_neg_lt _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_lt, e0 , e1) ->
+    | E_binop((O_lt | O_float_lt _ | O_float_neg_ge _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop(O_le, e0 , e1) ->
+    | E_binop((O_le | O_float_le _ | O_float_neg_gt _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop(O_eq, e0 , e1) ->
+    | E_binop((O_eq | O_float_eq _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_ne, e0, e1) ->
+    | E_binop((O_ne | O_float_ne _), e0, e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.mk_or
          (Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp))
@@ -436,9 +453,9 @@ struct
                let typ =
                  match typ1, typ2 with
                  | T_int, T_int -> Apron.Texpr1.Int
-                 | T_float, T_int
-                 | T_int, T_float
-                 | T_float, T_float -> Apron.Texpr1.Real
+                 | T_float _, T_int
+                 | T_int, T_float _
+                 | T_float _, T_float _ -> Apron.Texpr1.Real
                  | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
                in
                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in

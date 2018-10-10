@@ -34,7 +34,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c]; import = [Universal.Zone.Z_u]}
+  let exec_interface = {export = [Z_c]; import = []}
   let eval_interface = {export = []; import = []}
 
   (** Initialization *)
@@ -58,7 +58,7 @@ struct
           ] range
         )
       in
-      man.exec ~zone:(Universal.Zone.Z_u) stmt flow |> Post.return
+      man.exec stmt flow |> Post.return
 
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
@@ -69,7 +69,7 @@ struct
           ] range
         )
       in
-      man.exec ~zone:(Universal.Zone.Z_u) stmt flow |> Post.return
+      man.exec stmt flow |> Post.return
 
     | _ -> None
 

@@ -1,11 +1,10 @@
 TARGET_NATIVES = mopsa
 
-MOPSAROOT = ..
-
-#Packs
+# Packs
 mopsa = framework lang main
 
-framework = location ast visitor options query annotation lattice zone manager flow alarm exceptions eval post channel value domain cache analyzer lattices essentials domains config
+framework = location exceptions ast visitor options query annotation lattice zone manager flow eval post channel value domain cache output analyzer lattices essentials domains config
+framework.output = alarm text json factory
 framework.domains = stateless iter nonrel leaf functor stacked reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
@@ -17,40 +16,44 @@ lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = values relational reductions
-lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.values = intervals congruences float_intervals integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = loops andor aggregate records stmt_expr
+lang.c.desugar = loops andor aggregate record_copy stmt_expr
 lang.c.memory = base init_visitor cells machine_integers
 lang.c.memory.cells = cell pointer smashing expand cell2num
 lang.c.libs = c_stdlib mopsa
 
-lang.python = ast addr operators utils pp frontend zone libs desugar objects data_model program types
-lang.python.data_model = callable arith_ops compare_ops aug_assign
+lang.python = ast addr operators utils pp frontend zone flows libs desugar objects data_model program types memory
+lang.python.data_model = callable arith_ops compare_ops aug_assign attribute subscript
 lang.python.types = typingdomain typing t_string t_int
 
 lang.cfg = ast iterator
 
 lang.jvm = ast precheck frontend 
 
-#Packages
-PKGS = str yojson apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib
+# Packages
+PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib
 
-#Flags
-INCLUDES = -I $(MOPSAROOT)/utils/lib -I $(MOPSAROOT)/parsers/c/lib -I $(MOPSAROOT)/parsers/python/lib -I $(MOPSAROOT)/parsers/universal/lib
-LIBCMXA = utils.cmxa mlClangParser.cmxa mlPythonParser.cmxa mlUniversalParser.cmxa
+# MOPSA
+MOPSAROOT = ..
+MOPSALIBS := utils:utils parsers/c:mlClangParser parsers/python:mlPythonParser parsers/universal:mlUniversalParser
 
+# Flags
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))
 LDFLAGS  :=$(shell $(LLVMCONFIG) --ldflags) $(LDFLAGS)
 
+# this is needed for ocamlrun to find our dll*.so when running the bytecode bynary
+# TODO: find a better way
+DLLPATHS := -dllpath `pwd`/$(MOPSAROOT)/utils/lib -dllpath `pwd`/$(MOPSAROOT)/parsers/c/lib
 
 include $(MOPSAROOT)/make/main.mk
 
-#tests
+# Tests
 TESTS = tests
 
 .PHONY: python-tests c-tests universal-tests
@@ -59,21 +62,21 @@ python-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.py"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-python -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-python -unittest $(MOPSAPARAM) $(test); \
 	)
 
 c-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.c"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-c -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-c -unittest $(MOPSAPARAM) $(test); \
 	)
 
 universal-tests: mopsa
 	@ - $(foreach test, $(shell find $(TESTS) -name "*tests.u"), \
 		echo ""; \
 		echo "Running test $(test)"; \
-		$(MOPSAROOT)/scripts/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
+		$(MOPSAROOT)/bin/mopsa-universal -unittest $(MOPSAPARAM) $(test); \
 	)
 
 

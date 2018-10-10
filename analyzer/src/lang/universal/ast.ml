@@ -15,11 +15,16 @@ open Framework.Essentials
                            (** {2 Types} *)
 (*==========================================================================*)
 
-
+type float_prec =
+  | F_SINGLE      (** IEEE single-precision 32-bit *)
+  | F_DOUBLE      (** IEEE double-precision 64-bit *)
+  | F_LONG_DOUBLE (** extended precision, abstracted as double *)
+  | F_REAL        (** no rounding, abstracted as double *)
+  
 type typ +=
   | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
-  | T_float (** Floating-point real numbers. *)
+  | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
   | T_addr (** Heap addresses. *)
   | T_array of typ (** Array of [typ] *)
@@ -71,7 +76,7 @@ let () =
 
 
 type operator +=
-  (* Unary operators *)
+   (* Unary operators *)
   | O_sqrt         (** Square root *)
   | O_bit_invert   (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
@@ -90,6 +95,31 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
+  (* Float operators *)
+  | O_float_sqrt of float_prec   (** Float square root *)
+  | O_float_plus of float_prec   (** Float + *)
+  | O_float_minus of float_prec  (** Float - *)
+  | O_float_mult of float_prec   (** Float * *)
+  | O_float_div of float_prec    (** Float / *)
+  | O_float_mod of float_prec    (** Float remainder (fmod) *)
+  | O_float_eq of float_prec (** Float == *)
+  | O_float_ne of float_prec (** Float != *)
+  | O_float_lt of float_prec (** Float < *)
+  | O_float_le of float_prec (** Float <= *)
+  | O_float_gt of float_prec (** Float > *)
+  | O_float_ge of float_prec (** Float >= *)
+  (* the negation of < (<=) is not >= (>) in floats due to NaNs... *)
+  | O_float_neg_lt of float_prec (** Float negation of < *)
+  | O_float_neg_le of float_prec (** Float negation of <= *)
+  | O_float_neg_gt of float_prec (** Float negation of > *)
+  | O_float_neg_ge of float_prec (** Float negation of >= *)
+
+  (* float/int conversions *)
+  | O_int_of_float               (** Cast to int (truncation) *)
+  | O_float_of_int of float_prec (** Cast to float *)
+  | O_float_cast of float_prec   (** Conversion between float precision *)
+  
+  
 let () =
   register_operator_compare (fun next op1 op2 ->
       match op1, op2 with
@@ -101,6 +131,20 @@ let () =
       | _ -> next op1 op2
     )
 
+let negate_comparison = function
+  | O_float_eq p -> O_float_ne p
+  | O_float_ne p -> O_float_eq p
+  | O_float_lt p -> O_float_neg_lt p
+  | O_float_le p -> O_float_neg_le p
+  | O_float_gt p -> O_float_neg_gt p
+  | O_float_ge p -> O_float_neg_ge p
+  | O_float_neg_lt p -> O_float_lt p
+  | O_float_neg_le p -> O_float_le p
+  | O_float_neg_gt p -> O_float_gt p
+  | O_float_neg_ge p -> O_float_ge p
+  | op -> Framework.Ast.negate_comparison op
+
+  
 (*==========================================================================*)
                          (** {2 Heap addresses} *)
 (*==========================================================================*)
@@ -227,8 +271,8 @@ let mk_int i erange =
 let mk_z i erange =
   mk_constant ~etyp:T_int (C_int i) erange
 
-let mk_float f erange =
-  mk_constant ~etyp:T_float (C_float f) erange
+let mk_float ?(prec=F_DOUBLE) f erange =
+  mk_constant ~etyp:(T_float prec) (C_float f) erange
 
 let mk_int_interval a b range =
   mk_constant ~etyp:T_int (C_int_interval (Z.of_int a, Z.of_int b)) range
@@ -236,8 +280,8 @@ let mk_int_interval a b range =
 let mk_z_interval a b range =
   mk_constant ~etyp:T_int (C_int_interval (a, b)) range
 
-let mk_float_interval a b range =
-  mk_constant ~etyp:T_float (C_float_interval (a, b)) range
+let mk_float_interval ?(prec=F_DOUBLE) a b range =
+  mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
 
 let mk_string s =
   mk_constant ~etyp:T_string (C_string s)
@@ -286,8 +330,12 @@ let is_int_type = function
   | T_int -> true
   | _ -> false
 
+let is_numeric_type = function
+  | T_int | T_float _ -> true
+  | _ -> false
+
 let is_math_type = function
-  | T_int | T_float | T_bool -> true
+  | T_int | T_float _ | T_bool -> true
   | _ -> false
 
 (*==========================================================================*)

@@ -23,66 +23,6 @@ let init_from_env () =
   ()
 
 
-(** Start the analysis of [prog] using [domain] as the global abstraction. *)
-let perform_analysis (domain: (module Domain.DOMAIN)) (prog : Ast.program) =
-  (* Top layer analyzer *)
-  let module Domain = (val domain) in
-  let module Analyzer = Analyzer.Make(Domain) in
-
-  let t = Timing.start () in
-
-  Debug.info "Computing initial environments ...";
-  let flow = Analyzer.init prog in
-  Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
-  let stmt =
-    Ast.mk_stmt (Ast.S_program prog) Framework.Location.(mk_file_range prog.Framework.Ast.prog_file)
-  in
-
-  Debug.info "Starting the analysis ...";
-
-  let res = Analyzer.exec stmt flow in
-  let t = Timing.stop t in
-  Debug.debug ~channel:"result" "Result:@\n@[<h 2>  %a@]" (Flow.print Analyzer.man) res;
-
-  Debug.info "Collecting alarms ...";
-  let alarms = Flow.fold (fun acc tk env ->
-      match tk with
-      | Alarm.T_alarm a -> a :: acc
-      | _ -> acc
-    ) [] Analyzer.man res in
-  t, alarms
-
-type analysis_results =
-  | ExcPanic of string
-  | ExcPanicAt of Location.range * string
-  | ExcUncaught of string * string
-  | Success of float * Framework.Alarm.alarm list
-
-
-let print_results analysis_res =
-  match analysis_res with
-  | Success(t, []) ->
-    Format.printf "Analysis terminated in %.3fs@\n%a No alarm@\n" t
-      ((Debug.color "green") Format.pp_print_string) "✔"
-  | Success(t, alarms) ->
-    Format.printf "Analysis terminated in %.3fs@\n%d alarm%a detected:@\n@[<hov4>    %a@]@\n"
-      t
-      (List.length alarms)
-      Debug.plurial_list alarms
-      (Format.pp_print_list
-         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n@\n--------------------------------------@\n@\n")
-         Framework.Alarm.pp_alarm
-      ) alarms
-  | ExcPanic s
-  | ExcPanicAt(_, s) -> (* FIXME: process this case separately *)
-    Debug.fail "Panic: %s" s
-  | ExcUncaught(name, backtrace)  ->
-    Debug.fail "Uncaught analyzer exception in %s@\n%s"
-      name
-      backtrace
-
-
-
 (** Return the path of the configuration file *)
 let get_config_path () =
   let config = Framework.Options.(common_options.config) in
@@ -122,23 +62,35 @@ let iter_sources f () =
     ) "Modular Open Platform for Static Analysis"
 
 
-
 (** Main entry point *)
 let () =
   iter_sources (fun files ->
-      let result = try
-          let prog = parse_program files in
-          let config = get_config_path () in
-          let domain = Config.parse config in
+      try
+        let prog = parse_program files in
+        let config = get_config_path () in
 
-          (* Start the analysis *)
-          let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
-          let t, alarms = perform_analysis domain prog in
-          Success(t, alarms)
-        with
-        | Framework.Exceptions.Panic msg -> ExcPanic  msg
-        | Framework.Exceptions.PanicAt (range, msg) -> ExcPanicAt (range,  msg)
-        | e -> ExcUncaught(Printexc.to_string e, Printexc.get_backtrace ())
-      in
-      print_results result
+        let domain = Config.parse config in
+
+        (* Top layer analyzer *)
+        let module Domain = (val domain) in
+        let module Analyzer = Analyzer.Make(Domain) in
+
+        let t = Timing.start () in
+
+        Debug.info "Computing initial environments ...";
+        let flow = Analyzer.init prog in
+        Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
+        let stmt =
+          Ast.mk_stmt (Ast.S_program prog) Framework.Location.(mk_file_range prog.Framework.Ast.prog_file)
+        in
+
+        Debug.info "Starting the analysis ...";
+
+        let res = Analyzer.exec stmt flow in
+        let t = Timing.stop t in
+
+        Output.Factory.render Analyzer.man res t files
+
+      with
+        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files
     ) ()

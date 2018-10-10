@@ -46,11 +46,10 @@ module Domain = struct
       pp_typ c.t
 
   let compare_ocell c c' =
-    Debug.debug "compare %a and %a" pp_ocell c pp_ocell c';
     Compare.compose [
-      (fun () -> Debug.debug "base"; compare_base c.b c'.b);
-      (fun () -> Debug.debug "offset"; Z.compare c.o c'.o);
-      (fun () -> Debug.debug "typ"; compare_typ c.t c'.t);
+      (fun () -> compare_base c.b c'.b);
+      (fun () -> Z.compare c.o c'.o);
+      (fun () -> compare_typ c.t c'.t);
     ]
 
   type cell +=
@@ -485,7 +484,7 @@ module Domain = struct
     | C_range of base * (Z.t -> bool)
     | C_fun of c_fundec
 
-  let eval_cell exp man flow =
+  let rec eval_cell exp man flow =
     match ekind exp with
     | E_var (v, mode) when is_c_type v.vtyp ->
       let c = {b = V v; o = Z.zero; t = v.vtyp}  in
@@ -544,7 +543,7 @@ module Domain = struct
         | _ -> assert false
       end
 
-      | _ -> None
+    | _ -> None
 
 
   (** Evaluation of C expressions *)
@@ -620,7 +619,7 @@ module Domain = struct
 
       man.eval ~zone:(Z_c, Z_c_scalar) lval flow |>
       Post.bind_opt man @@ fun lval flow ->
-
+      debug "lval done %a" pp_expr lval;
       eval_cell lval man flow |>
       OptionExt.lift @@ Post.bind man @@ fun c flow ->
       begin
@@ -682,7 +681,6 @@ module Domain = struct
     man.exec ~zone:Z_c_cell (mk_block block range) flow |>
     Post.of_flow |>
     Post.add_mergers block ~zone:Z_c_cell
-
 
   let ask _ _ _ = None
 

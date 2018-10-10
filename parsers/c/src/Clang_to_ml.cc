@@ -6,8 +6,8 @@
   See Clang_AST.ml
 
   Based initially on Clang 4.0.0, with some extensions from 5.0.0svn.
-  Updated to compile with Clang 6.0.1.
-  Features added in Clang 5 and later may be missing.
+  Updated to compile with Clang 7.0.0.
+  Features added in Clang 5 or later may be missing.
 
   Copyright (C) 2017-2018 The MOPSA Project
 
@@ -3547,6 +3547,10 @@ enum {
   MLTAG_EST_Unevaluated,
   MLTAG_EST_Uninstantiated,
   MLTAG_EST_Unparsed,
+  // version >= 7
+  MLTAG_EST_DependentNoexcept,
+  MLTAG_EST_NoexceptFalse,
+  MLTAG_EST_NoexceptTrue,
 };
 
 /* noexcept_result */
@@ -3587,7 +3591,13 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionProtoType(const FunctionPr
         GENERATE_CASE(r, EST_Dynamic);
         GENERATE_CASE(r, EST_MSAny);
         GENERATE_CASE(r, EST_BasicNoexcept);
+#if CLANG_VERSION_MAJOR >= 7
+        GENERATE_CASE(r, EST_DependentNoexcept);
+        GENERATE_CASE(r, EST_NoexceptFalse);
+        GENERATE_CASE(r, EST_NoexceptTrue);
+#else
         GENERATE_CASE(r, EST_ComputedNoexcept);
+#endif
         GENERATE_CASE(r, EST_Unevaluated);
         GENERATE_CASE(r, EST_Uninstantiated);
         GENERATE_CASE(r, EST_Unparsed);
@@ -3597,6 +3607,10 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionProtoType(const FunctionPr
       }
       Store_field(ret, 5, Val_int(r));
 
+#if CLANG_VERSION_MAJOR >= 7
+      // no getNoexceptSpec method
+      r = MLTAG_NR_NoNoexcept;
+#else
       switch (node->getNoexceptSpec(*Context)) {
         GENERATE_CASE_PREFIX(r, FunctionProtoType::, , NR_NoNoexcept);
         GENERATE_CASE_PREFIX(r, FunctionProtoType::, , NR_BadNoexcept);
@@ -3607,6 +3621,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionProtoType(const FunctionPr
         if (verbose_exn) { node->dump(); std::cout << "unknown noexcept spec: " << node->getNoexceptSpec(*Context) << std::endl; }
         caml_failwith("mlClangAST: unknown noexcept spec");
       }
+#endif
       Store_field(ret, 6, Val_int(r));
 
       Store_field_array(ret, 7, node->getNumExceptions(), TranslateQualType(node->getExceptionType(i)));
@@ -3715,6 +3730,7 @@ enum {
   MLTAG_ElaboratedType,
   MLTAG_UnaryTransformType,
   MLTAG_TypeOfExprType,
+  MLTAG_TypeOfType,
 
   // C++
   MLTAG_DecltypeType,
@@ -3818,6 +3834,10 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
 
   GENERATE_NODE_CACHED(cacheType,TypeOfExprType, ret, node, 1, {
       Store_field(ret, 0, TranslateExpr(x->getUnderlyingExpr()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType,TypeOfType, ret, node, 1, {
+      Store_field(ret, 0, TranslateQualType(x->getUnderlyingType()));
     });
 
   GENERATE_NODE_CACHED(cacheType, DecltypeType, ret, node, 2, {

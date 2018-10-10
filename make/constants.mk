@@ -29,9 +29,9 @@ LIB = lib
 
 
 #PKGS += unix str
-INCLUDES += -I $(BUILD)
+INCLUDES := $(INCLUDES) -I $(BUILD) $(LIBS:%=-I %) $(foreach lib,$(MOPSALIBS),-I $(call lib_src_dir,$(lib)) -I $(call lib_dir,$(lib)))
 
-OCAMLFLAGS :=  -bin-annot -safe-string $(INCLUDES) $(OCAMLFLAGS) -g
+OCAMLFLAGS :=  -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g
 CFLAGS := $(CFLAGS) $(INCLUDES)
 CXXFLAGS := $(CXXFLAGS) $(INCLUDES)
 LDFLAGS := $(LDFLAGS) -L$(BUILD)

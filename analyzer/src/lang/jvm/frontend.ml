@@ -438,6 +438,6 @@ let test () =
     "%i jar(s) loaded@\n%i class(es) loaded@\n%i method(s) loaded@\n%i error(s) found@\n"
     !nb_jar !nb_loaded_classes !nb_loaded_methods !Precheck.nb_errors
   
-
+(*
 let _ = test ()
-      
+ *)    

@@ -2,19 +2,14 @@
 
 void test_backward_goto() {
   int a = 0;
-  int b = 0;
-  int c = 0;
- l3 : c = 0;
- l2 : a++;
-  c = b;
- l1 : b++;
-  if (b - c < 10) {
-    goto l1;
-  };
-  if (a < 10) {
-    goto l2;
-  };
-  _mopsa_assert_exists(a==10 && b == 100);
+
+ entry:
+  if (a >= 10) goto exit;
+  a++;
+  goto entry;
+
+ exit:
+  _mopsa_assert_exists(a==10);
 }
 
 int f0(int x) {

@@ -10,6 +10,7 @@
    arithmetic*)
 
 open Framework.Essentials
+open Universal.Ast
 open Ast
 
 (** {2 Domain definition} *)
@@ -55,74 +56,59 @@ struct
   let rec eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_c_array_subscript(e1, e2) ->
+    (* 𝔼⟦ a[i] ⟧ = *(a + i) *)
+    | E_c_array_subscript(a, i) ->
       let t = exp |> etyp |> Ast.pointer_type in
-      Eval.singleton (
-        {exp with
-         ekind = E_c_deref (
-             mk_expr
-               ~etyp:t
-               (E_binop(Universal.Ast.O_plus , e1, e2))
-               (tag_range range "pointer_arithmetic")
-           )
-        }) flow
-      |> OptionExt.return
-    | E_c_member_access (e, i, f) ->
-      let t = etyp e in
-      if is_c_record_type t then
-        let x = align_byte t i in
-        let exp =
-          {exp with ekind =
-                      E_c_deref (
-                        mk_expr
-                          ~etyp:(t |> Ast.pointer_type)
-                          (E_binop(
-                              Universal.Ast.O_plus,
-                              (
-                                (mk_c_cast
-                                   (mk_c_address_of e (tag_range range "pointer_arithmetic &"))
-                                   (T_c_integer C_signed_char |> Ast.pointer_type)
-                                   (tag_range range "pointer_arithmetic cast")
-                                )
-                              ),
-                              (Universal.Ast.mk_int x (tag_range range "pointer_arithmetic int"))
-                            )
-                          )
-                          (tag_range range "pointer_arithmetic+")
-                      )
-          }
-        in
-        Eval.singleton exp flow
-        |> OptionExt.return
-      else
-        Debug.fail "[c.desugar.aggregate] member_access on non record type"
-
-    | E_c_arrow_access(p, i, f) ->
-      let t = etyp p |> under_pointer_type in
-      let x = align_byte t i in
-      let exp =
-        {exp with ekind =
-                    E_c_deref (
-                      mk_expr
-                        ~etyp:(t |> Ast.pointer_type)
-                        (E_binop(
-                            Universal.Ast.O_plus,
-                            (
-                              (mk_c_cast
-                                 p
-                                 (T_c_integer C_signed_char |> Ast.pointer_type)
-                                 (tag_range range "pointer_arithmetic cast")
-                              )
-                            ),
-                            (Universal.Ast.mk_int x (tag_range range "pointer_arithmetic int"))
-                          )
-                        )
-                        (tag_range range "pointer_arithmetic+")
-                    )
-        }
-      in
-      Eval.singleton exp flow |>
+      let exp' = mk_c_deref (mk_binop a O_plus i ~etyp:t range) range in
+      Eval.singleton exp' flow |>
       OptionExt.return
+
+    (* 𝔼⟦ s.f ⟧ = *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
+    | E_c_member_access (s, i, f) ->
+      let st = etyp s in
+      let t = etyp exp in
+      let align = mk_int (align_byte st i) range in
+
+      let exp' =
+        mk_c_deref
+          (mk_c_cast
+             (mk_binop
+                (mk_c_cast (mk_c_address_of s range) (pointer_type s8) range)
+                O_plus
+                align
+                range
+             )
+             (pointer_type t)
+             range
+          )
+          range
+      in
+      Eval.singleton exp' flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ p->f ⟧ = *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
+    | E_c_arrow_access(p, i, f) ->
+      let st = under_pointer_type p.etyp in
+      let t = etyp exp in
+      let align = mk_int (align_byte st i) range in
+
+      let exp' =
+        mk_c_deref
+          (mk_c_cast
+             (mk_binop
+                (mk_c_cast p (pointer_type s8) range)
+                O_plus
+                align
+                range
+             )
+             (pointer_type t)
+             range
+          )
+          range
+      in
+      Eval.singleton exp' flow |>
+      OptionExt.return
+
 
     | _ -> None
 

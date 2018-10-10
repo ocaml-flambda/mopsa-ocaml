@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Ast
 
+
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
 
 (*==========================================================================*)
@@ -45,9 +46,9 @@ type module_address =
 (** Kinds of Python addresses *)
 (** These addresses refer only to static objects *)
 type Universal.Ast.addr_kind +=
-  | A_py_class of class_address (** class *) * py_object list (** bases *)
+  | A_py_class of class_address (** class *) * py_object list (** mro *)
   | A_py_function of function_address (** function *)
-  | A_py_method of py_object (** address of the function to bind *) * py_object (** method instance *)
+  (* | A_py_method of py_object (\** address of the function to bind *\) * py_object (\** method instance *\) *)
   | A_py_module of module_address
 
 
@@ -169,7 +170,7 @@ let atomic_type_to_class_name (t: Framework.Ast.typ) : string=
   let open Universal.Ast in
   match t with
   | T_int -> "int"
-  | T_float -> "float"
+  | T_float F_DOUBLE -> "float"
   | T_bool -> "bool"
   | T_string -> "str"
   | T_py_none -> "NoneType"
@@ -189,60 +190,14 @@ let class_of_object (obj: py_object) : py_object =
   match kind_of_object obj with
   | A_py_class _ -> find_builtin "type"
   | A_py_function _ -> find_builtin "function"
-  | A_py_method _ -> find_builtin "method"
+  (* | A_py_method _ -> find_builtin "method" *)
   | A_py_module _ -> find_builtin "module"
   | _ -> assert false
 
-(** Method resolution order of an object *)
-
-(* TODO: test C3 lin *)
-let rec mro (obj: py_object) : py_object list =
+let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class(_, bases) ->
-     c3_lin obj
-     (* obj :: (List.map mro bases |> List.flatten) *)
+  | A_py_class (c, b) -> b
   | _ -> assert false
-
-and c3_lin (obj: py_object) : py_object list =
-  match kind_of_object obj with
-  | A_py_class (c, [])  -> [obj]
-  | A_py_class (c, bases) -> obj :: merge ((List.map c3_lin bases) @ [bases])
-  | _ -> assert false
-
-and merge (l: py_object list list) : py_object list =
-  List.iter (List.iter (fun x -> debug "In the merge: %a" Universal.Ast.pp_addr (fst x))) l;
-  match search_c l with
-  | Some c ->
-     let l' = List.filter (fun x -> x <> []) (List.map (fun li -> if List.hd li = c then List.tl li else li) l) in
-     begin match l' with
-     | [] -> [c]
-     | _ -> c :: merge l'
-     end
-  | None -> failwith "no c3 linearization (FIXME: better error handling)"
-
-and search_c (l: py_object list list) : py_object option =
-  let indexed_l = List.mapi (fun i ll -> (i, ll)) l in
-  let res =
-    List.fold_left
-      (fun acc (i, li) ->
-        List.iter (fun x -> debug "(%d, %a)" i Universal.Ast.pp_addr (fst x)) li;
-        if acc <> None || li = [] then (debug "pass %b@\n" (acc = None); acc)
-        else
-          let c = List.hd li in
-          debug "c = %a@\n" Universal.Ast.pp_addr (fst c);
-          let a = List.for_all (fun (k, lk) ->
-                      (* List.iter (fun x -> debug "l%d = %a" k Universal.Pp.pp_addr (fst x)) lk;
-                       * debug "cond: %b@\n" (i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))); *)
-                      i = k || lk = [] || not (List.exists (fun x -> compare_py_object c x = 0) (List.tl lk))) indexed_l
-          in
-          debug "a = %b@\n" a; if a then Some c else acc
-      )
-      None indexed_l
-  in
-  if res = None then debug "bla@\n"
-  else debug "ok!@\n";
-  res
-
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
 let most_derive_builtin_base (obj: py_object) : py_object =
@@ -255,14 +210,25 @@ let most_derive_builtin_base (obj: py_object) : py_object =
   in
   aux (mro obj)
 
-(** Check class inheritance  *)
-let issubclass (cls1: py_object) (cls2: py_object) : bool =
-  match kind_of_object cls1, kind_of_object cls2 with
-  | A_py_class _, A_py_class (C_builtin "type", _)-> true
-  | A_py_class _, A_py_class _ ->
-     List.exists (fun base -> compare_py_object base cls2 = 0) (mro cls1)
-
-  | _ -> false
+(* (\** Return the closest non-heap (i.e. non-user defined) base class *\)
+ * let most_derive_builtin_base (obj: py_object) : py_object =
+ *   let rec aux =
+ *     function
+ *     | [o] when is_builtin o -> o
+ *     | o :: tl when is_builtin o -> o
+ *     | o :: tl -> aux tl
+ *     | [] -> assert false
+ *   in
+ *   aux (mro obj)
+ *
+ * (\** Check class inheritance  *\)
+ * let issubclass (cls1: py_object) (cls2: py_object) : bool =
+ *   match kind_of_object cls1, kind_of_object cls2 with
+ *   | A_py_class _, A_py_class (C_builtin "type", _)-> true
+ *   | A_py_class _, A_py_class _ ->
+ *      List.exists (fun base -> compare_py_object base cls2 = 0) (mro cls1)
+ *
+ *   | _ -> false *)
 
 (** Check class membership of an instance *)
 let isinstance obj cls =
@@ -277,33 +243,33 @@ let isclass obj =
   | _ -> false
 
 (** Atomic type of an address *)
-let is_atomic_object obj =
-  let cls = class_of_object obj in
-  let builtin_base = most_derive_builtin_base cls in
-  let open Universal.Ast in
-  match kind_of_object builtin_base with
-  | A_py_class (C_builtin "int", _)
-  | A_py_class (C_builtin "float", _)
-  | A_py_class (C_builtin "bool", _)
-  | A_py_class (C_builtin "complex", _)
-  | A_py_class (C_builtin "str", _)
-  | A_py_class (C_builtin "NoneType", _)
-  | A_py_class (C_builtin "NotImplementedType", _) -> true
-  | _ -> false
-
-let type_of_object obj =
-  let cls = class_of_object obj in
-  let builtin_base = most_derive_builtin_base cls in
-  let open Universal.Ast in
-  match kind_of_object builtin_base with
-  | A_py_class (C_builtin "int", _) -> T_int
-  | A_py_class (C_builtin "float", _) -> T_float
-  | A_py_class (C_builtin "bool", _) -> T_bool
-  | A_py_class (C_builtin "complex", _) -> T_py_complex
-  | A_py_class (C_builtin "str", _) -> T_string
-  | A_py_class (C_builtin "NoneType", _) -> T_py_none
-  | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
-  | _ -> T_py_empty
+(* let is_atomic_object obj =
+ *   let cls = class_of_object obj in
+ *   let builtin_base = most_derive_builtin_base cls in
+ *   let open Universal.Ast in
+ *   match kind_of_object builtin_base with
+ *   | A_py_class (C_builtin "int", _)
+ *   | A_py_class (C_builtin "float", _)
+ *   | A_py_class (C_builtin "bool", _)
+ *   | A_py_class (C_builtin "complex", _)
+ *   | A_py_class (C_builtin "str", _)
+ *   | A_py_class (C_builtin "NoneType", _)
+ *   | A_py_class (C_builtin "NotImplementedType", _) -> true
+ *   | _ -> false
+ *
+ * let type_of_object obj =
+ *   let cls = class_of_object obj in
+ *   let builtin_base = most_derive_builtin_base cls in
+ *   let open Universal.Ast in
+ *   match kind_of_object builtin_base with
+ *   | A_py_class (C_builtin "int", _) -> T_int
+ *   | A_py_class (C_builtin "float", _) -> T_float
+ *   | A_py_class (C_builtin "bool", _) -> T_bool
+ *   | A_py_class (C_builtin "complex", _) -> T_py_complex
+ *   | A_py_class (C_builtin "str", _) -> T_string
+ *   | A_py_class (C_builtin "NoneType", _) -> T_py_none
+ *   | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
+ *   | _ -> T_py_empty *)
 
 (* let is_weak obj =
  *   let addr = addr_of_object obj in
@@ -322,6 +288,21 @@ let mk_py_z_interval l u range =
 
 let mk_py_float_interval l u range =
   Universal.Ast.mk_float_interval l u range
+
+let mk_attribute_var obj attr range =
+  let addr = addr_of_object obj in
+  let v = {
+      vname = (
+        let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Ast.pp_addr addr attr in
+        let name = Format.flush_str_formatter () in
+        name
+      );
+      vuid = 0;
+      vtyp = T_any;
+    }
+  in
+  mk_var v range
+
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =
@@ -442,13 +423,34 @@ let () =
                       | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "{%s}" c
                       | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
                       | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "function %s" f
-                      | A_py_method(f, obj) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
+                      (* | A_py_method(f, obj) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj) *)
                       | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
                       | _ -> default fmt a
                     );
                   compare =
                     (fun default a1 a2 ->
-                      debug "PP of addr, to fix in python/addr"; 1) } in
+                      match a1.addr_kind, a2.addr_kind with
+                      | A_py_class (c1, _), A_py_class (c2, _) ->
+                         begin match c1, c2 with
+                         | C_builtin s1, C_builtin s2
+                           | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+                         | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+                         | _, _ -> default a1 a2
+                         end
+                      | A_py_function f1, A_py_function f2 ->
+                         begin match f1, f2 with
+                         | F_builtin s1, F_builtin s2
+                           | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+                         | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+                         | _, _ -> default a1 a2
+                         end
+                      | A_py_module m1, A_py_module m2 ->
+                         begin match m1, m2 with
+                         | M_user (s1, _), M_user (s2, _)
+                           | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+                         | _, _ -> default a1 a2
+                         end
+                      | _ -> default a1 a2) } in
       register_addr info
     )
   )

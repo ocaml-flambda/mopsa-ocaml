@@ -17,6 +17,8 @@ open Addr
 module Domain =
   struct
 
+    exception C3_lin_failure
+
     type _ domain += D_python_objects_class : unit domain
 
     let id = D_python_objects_class
@@ -28,7 +30,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [any_zone]; import = []}
-    let eval_interface = {export = []; import = []}
+    let eval_interface = {export = [any_zone, any_zone]; import = []}
 
     let init _ _ flow = Some flow
 
@@ -40,6 +42,94 @@ module Domain =
       in
       Addr.add_builtin_class (addr, mk_py_empty range) ()
 
+    (** Method resolution order of an object *)
+    (* let rec mro (obj: py_object) : py_object list =
+     *   match kind_of_object obj with
+     *   | A_py_class(_, bases) ->
+     *      let res = c3_lin obj in
+     *
+     *      let stupid_range = Range_fresh (-1) in
+     *      debug "MRO of %a: %a@\n" pp_expr (mk_py_object obj stupid_range)
+     *        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+     *           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x stupid_range)))
+     *        res;
+     *
+     *      res
+     *   | _ -> assert false *)
+
+    let rec c3_lin (obj: py_object) : py_object list =
+      (* Spec of c3_lin : (C(B1, ..., BN) meaning class C inherits directly from B1, ..., BN
+       *    c3_lin(C(B1, ..., BN)) = C::merge(c3_lin(B1), ..., c3_lin(BN), [B1], ..., [BN])
+       *    c3_lin(object) = [object]
+       *
+       *    and merge(L1, ..., Ln) =
+       *          let k = min_{1 <= i <= n} { k | hd(L_k) \not \in tail(L_j) \forall j \neq k } in
+       *          let c = hd(L_k) in
+       *          c :: merge(L1 \ {c}, ..., Ln \ {c})
+       * ** Examples
+       *      Due to wikipedia:
+       *          class O: pass
+       *          class A(O): pass
+       *          class B(O): pass
+       *          class C(O): pass
+       *          class D(O): pass
+       *          class E(O): pass
+       *          class K1(A, B, C): pass
+       *          class K2(D, B, E): pass
+       *          class K3(D, A): pass
+       *          class Z(K1, K2, K3): pass
+       *
+       *          a = Z()
+       *      Then, the MRO is Z, K1, K2, K3, D, A, B, C, E, O
+       *
+       *      Found in "Linearization in Multiple Inheritance", by Michael Petter, Winter term 2016:
+       *          class G: pass
+       *          class F: pass
+       *          class E(F): pass
+       *          class D(G): pass
+       *          class C(D, E): pass
+       *          class B(F, G): pass
+       *          class A(B, C): pass
+       *
+       *          a = A()
+       *
+       *      No MRO in this case
+       *)
+      match kind_of_object obj with
+      | A_py_class (C_builtin "object", b) -> [obj]
+      | A_py_class (c, [])  -> [obj]
+      | A_py_class (c, bases) ->
+         let l_bases = List.map c3_lin bases in
+         let bases = List.map (fun x -> [x]) bases in
+         obj :: merge (l_bases @ bases)
+      | _ -> assert false
+
+    and merge (l: py_object list list) : py_object list =
+      match search_c l with
+      | Some c ->
+         let l' = List.filter (fun x -> x <> [])
+                    (List.map (fun li -> List.filter (fun x -> Universal.Ast.compare_addr (fst c) (fst x) <> 0) li)
+                       l) in
+         (* l' is l with all c removed *)
+         begin match l' with
+         | [] -> [c]
+         | _ -> c :: merge l'
+         end
+      | None -> raise C3_lin_failure
+
+    and search_c (l: py_object list list) : py_object option =
+      let indexed_l = List.mapi (fun i ll -> (i, ll)) l in
+      List.fold_left
+        (fun acc (i, li) ->
+          if acc <> None || li = [] then acc
+          else
+            let c = List.hd li in
+            let a = List.for_all (fun (k, lk) ->
+                        i = k || lk = [] || not (List.exists (fun x -> Universal.Ast.compare_addr (fst c) (fst x) = 0) (List.tl lk))) indexed_l
+            in
+            if a then Some c else acc
+        )
+        None indexed_l
 
     let rec eval zones exp man flow =
       let range = erange exp in
@@ -100,14 +190,26 @@ module Domain =
                    create_builtin_class (C_unsupported name) name cls bases' range;
                    Post.of_flow flow
                  else
-                   Addr.eval_alloc man (A_py_class (C_user cls, bases')) stmt.srange flow |>
-                     Post.bind man
-                       (fun addr flow ->
-                         let obj = (addr, mk_py_empty range) in
-                         let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
-                         man.exec cls.py_cls_body flow |>
-                           Post.of_flow
-                       )
+                   try
+                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1)}, mk_py_empty range) in
+                     debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
+                       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       mro;
+
+                     Addr.eval_alloc man (A_py_class (C_user cls, bases')) stmt.srange flow |>
+                       Post.bind man
+                         (fun addr flow ->
+                           let obj = (addr, mk_py_empty range) in
+                           let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
+                           debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
+                           man.exec cls.py_cls_body flow |>
+                             Post.of_flow
+                         )
+                   with C3_lin_failure ->
+                     Debug.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
+                     man.exec (Utils.mk_builtin_raise "TypeError" range) flow
+                     |> Post.of_flow
              )
          |> OptionExt.return
 

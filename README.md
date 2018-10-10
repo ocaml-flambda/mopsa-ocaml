@@ -19,8 +19,8 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 * gmp
 * mpfr
 * camlidl
-# zlib
-# javaliv
+* zlib
+* javaliv
 
 ## Installation 
 

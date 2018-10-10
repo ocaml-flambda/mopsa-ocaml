@@ -230,7 +230,7 @@ and from_exp exp =
 
     | E_num (Py_CST.Float f) ->
       E_constant (Universal.Ast.C_float f),
-      Universal.Ast.T_float
+      Universal.Ast.T_float Universal.Ast.F_DOUBLE
 
     | E_num (Py_CST.Imag j) ->
       ignore (Str.string_match (Str.regexp "\\(.*\\)j") j 0);

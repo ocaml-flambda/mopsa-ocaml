@@ -1,6 +1,4 @@
-(**
-   Debug - Conditional debugging with channel filtering.
-*)
+(** Debug - Conditional debugging with channel filtering. *)
 
 let channels = ref []
 let print_color = ref true
@@ -18,6 +16,7 @@ let add_channel ch =
     let re = Str.regexp ch' in
     channels := re :: !channels
 
+(* Parse a list of channels separated by ',' *)
 let parse opt =
   Str.split (Str.regexp ",") opt |>
   List.iter add_channel
@@ -44,33 +43,23 @@ let debug ?(channel = "debug") fmt =
   if can_print channel then
     Format.kasprintf (fun str ->
         if !print_color then
-          Format.printf "\027[1;38;5;%dm[%s %.6f]\027[0m@\n@[%s@]@.@." (random_color channel) channel (Sys.time ()) str
+          Format.printf "\027[1;38;5;%dm[%s %.3f]\027[0m @[%s@]@." (random_color channel) channel (Sys.time ()) str
         else
-          Format.printf "[%s %.6f]@\n@[%s@]@.@." channel (Sys.time ()) str
+          Format.printf "[%s %.3f] @[%s@]@." channel (Sys.time ()) str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt
 
 
-let warn fmt =
-  if can_print "warning" then
-    Format.kasprintf (fun str ->
-        if !print_color
-        then Format.printf "\027[1;45m[WARN %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
-        else Format.printf "[WARN %.6f] @.@[%s@]@.@." (Sys.time ()) str
-      ) fmt
-  else
-    Format.ifprintf Format.std_formatter fmt
-
-
+let warn fmt = debug ~channel:"warning" fmt
 
 let info fmt = debug ~channel:"info" fmt
 
 let fail fmt =
   Format.kasprintf (fun str ->
       if !print_color
-      then Format.printf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@.@." (Sys.time ()) str
-      else Format.printf "[FAIL %.6f] @.@[%s@]@.@." (Sys.time ()) str;
+      then Format.printf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@." (Sys.time ()) str
+      else Format.printf "[FAIL %.6f] @.@[%s@]@." (Sys.time ()) str;
       raise Exit
     ) fmt
 
