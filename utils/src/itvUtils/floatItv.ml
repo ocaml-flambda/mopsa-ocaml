@@ -1079,7 +1079,7 @@ end
 type prec =
   [ `SINGLE (** 32-bit single precision *)
   | `DOUBLE (** 64-bit double precision *)
-  | `REAL   (** real arithmetic (sound rounding to double is used) *)
+  | `REAL   (** real arithmetic (outward double rounding is used) *)
   ]
 (** Precision. *)
                    
@@ -1341,6 +1341,12 @@ let filter_neq (prec:prec) (x:t) (y:t) : (t*t) with_bot =
   | `REAL   -> Nb (x,y)
 (** != filtering. *)
 
+let meet_nonzero (prec:prec) (x:t) : t with_bot =
+  match prec with
+  | `DOUBLE -> Double.meet_nonzero x
+  | `SINGLE -> Single.meet_nonzero x
+  | `REAL -> Nb x
+             
 let bwd_add (prec:prec) (round:round) (x:t) (y:t) (r:t) : (t*t) with_bot =
   match prec,round with
   | `SINGLE, `NEAR  -> Single.bwd_add_near x y r

@@ -165,11 +165,11 @@ struct
   exception UnsupportedExpression
 
   let rec binop_to_apron = function
-    | O_plus  -> Apron.Texpr1.Add
-    | O_minus  -> Apron.Texpr1.Sub
-    | O_mult  -> Apron.Texpr1.Mul
-    | O_div  -> Apron.Texpr1.Div
-    | O_mod  -> Apron.Texpr1.Mod
+    | O_plus | O_float_plus _ -> Apron.Texpr1.Add
+    | O_minus | O_float_minus _ -> Apron.Texpr1.Sub
+    | O_mult | O_float_mult _  -> Apron.Texpr1.Mul
+    | O_div | O_float_div _ -> Apron.Texpr1.Div
+    | O_mod | O_float_mod _ -> Apron.Texpr1.Mod
     | _ -> raise UnsupportedExpression
 
   and strongify_rhs exp abs l =
@@ -210,12 +210,20 @@ struct
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, l
 
-    | E_unop(O_minus , e) ->
+    | E_unop ((O_plus | O_float_plus _), e) ->
+       strongify_rhs e abs l
+      
+    | E_unop((O_minus | O_float_minus _), e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, l
 
-    | E_unop(O_sqrt, e) ->
+    | E_unop((O_int_of_float | O_float_of_int _), e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron exp.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
+
+    | E_unop((O_sqrt | O_float_sqrt _), e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, l

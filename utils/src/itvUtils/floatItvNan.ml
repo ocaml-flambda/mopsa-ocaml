@@ -594,9 +594,15 @@ let of_int_itv (prec:prec) (round:round) ((lo,up):II.t) : t =
   in
   if lo > up then bot
   else fix_itv prec { bot with itv = Nb { lo; up; }; }
-(** Conversion from integer interval (handling overflows to infinities). *)   
+(** Conversion from integer intervals (handling overflows to infinities). *)   
 
-let to_int_itv (r:t) : II.t with_bot =
+let of_int_itv_bot (prec:prec) (round:round) (i:II.t with_bot) : t =
+  match i with
+  | BOT -> bot
+  | Nb (lo,up) -> of_int_itv prec round (lo,up)
+(** Conversion from integer intervals (handling overflows to infinities). *)   
+
+  let to_int_itv (r:t) : II.t with_bot =
   match r.itv with
   | BOT -> if is_bot r then BOT else Nb II.minf_inf
   | Nb i ->
