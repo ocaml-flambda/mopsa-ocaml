@@ -125,8 +125,9 @@ struct
       | _ -> a1,a2
     )
 
-  let compare op a1 a2 =
+  let compare op a1 a2 r =
     return (       
+      let op = if r then op else negate_comparison op in
       match op with
       | O_float_eq p -> I.filter_eq  (prec p) a1 a2
       | O_float_ne p -> I.filter_neq (prec p) a1 a2

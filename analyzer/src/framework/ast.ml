@@ -394,3 +394,17 @@ and pp_program fmt prg = !pp_program_chain fmt prg
 and pp_typ fmt typ = !pp_typ_chain fmt typ
 and pp_operator fmt op = !pp_operator_chain fmt op
 and pp_constant fmt c = !pp_constant_chain fmt c
+
+
+(* Utility to negate the comparisons in framework *)                      
+let negate_comparison = function
+  | O_eq -> O_ne
+  | O_ne -> O_eq
+  | O_lt -> O_ge
+  | O_le -> O_gt
+  | O_gt -> O_le
+  | O_ge -> O_lt
+  | op -> Exceptions.panic "don't know how to negate operator %a" pp_operator op
+        
+
+             
