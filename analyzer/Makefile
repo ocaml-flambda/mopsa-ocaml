@@ -16,7 +16,7 @@ lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = values relational reductions
-lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.values = intervals congruences float_intervals integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 
 lang.c = zone ast alarms frontend libs desugar flows memory

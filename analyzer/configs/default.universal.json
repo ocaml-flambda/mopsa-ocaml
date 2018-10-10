@@ -6,17 +6,19 @@
 	"universal.iterators.loops",
 
 	// Array abstraction
-	{
-	    "product": [
-		"universal.arrays.expand",
-		"universal.arrays.smash"
-	    ],
-	    "reductions": [
-		"universal.arrays.reductions.expand_smash"
-	    ]
-	},
+	// {
+	//     "product": [
+	// 	"universal.arrays.expand",
+	// 	"universal.arrays.smash"
+	//     ],
+	//     "reductions": [
+	// 	"universal.arrays.reductions.expand_smash"
+	//     ]
+	// },
 
 	// Numeric abstraction
+        "universal.numeric.values.integer_float_mix"
+        /*
 	{
 	    "product": [
 		"universal.numeric.values.intervals",
@@ -29,5 +31,7 @@
 		"universal.numeric.reductions.implicit_assume_relation"
 	    ]
 	}
+*/
+        
     ]
 }
