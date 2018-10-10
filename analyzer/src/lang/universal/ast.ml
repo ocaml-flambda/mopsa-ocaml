@@ -117,6 +117,7 @@ type operator +=
   (* float/int conversions *)
   | O_int_of_float               (** Cast to int (truncation) *)
   | O_float_of_int of float_prec (** Cast to float *)
+  | O_float_cast of float_prec   (** Conversion between float precision *)
   
   
 let () =

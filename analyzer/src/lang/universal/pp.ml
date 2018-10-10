@@ -49,6 +49,7 @@ let () =
       | O_float_mod p -> pp_float_op "%" "%" fmt p
       | O_int_of_float -> pp_print_string fmt "cast<int>"
       | O_float_of_int p -> Format.fprintf fmt "cast<%a>" pp_float_prec p
+      | O_float_cast p -> Format.fprintf fmt "cast<%a>" pp_float_prec p
       | O_float_eq p -> pp_float_op "==" "==" fmt p
       | O_float_ne p -> pp_float_op "!=" "!=" fmt p
       | O_float_lt p -> pp_float_op "<" "<" fmt p

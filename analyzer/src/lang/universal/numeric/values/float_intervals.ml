@@ -88,6 +88,7 @@ struct
       | O_float_minus _ -> I.neg a
       | O_float_plus _ -> a
       | O_float_sqrt p -> I.sqrt (prec p) (round ()) a
+      | O_float_cast p -> I.round (prec p) (round ()) a
       | _ -> top
     )    
 

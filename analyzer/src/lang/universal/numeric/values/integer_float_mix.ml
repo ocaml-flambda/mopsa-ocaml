@@ -145,6 +145,7 @@ struct
       -> false
 
   let is_float_op = function
+    | O_float_cast _
     | O_float_minus _
     | O_float_plus _ 
     | O_float_sqrt _
