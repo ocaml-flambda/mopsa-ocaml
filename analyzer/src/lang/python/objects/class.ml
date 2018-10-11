@@ -139,13 +139,13 @@ module Domain =
          (* handled in myytypes *)
          (* FIXME: what about the value analysis? *)
          None
-      | E_py_call({ekind = E_py_object cls}, args, []) when Addr.isclass cls ->
+      | E_py_call({ekind = E_py_object cls} as ecls, args, []) when Addr.isclass cls ->
          (* Call __new__ *)
          man.eval (mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range) flow |>
            Eval.bind
              (fun eobj flow ->
                Eval.assume
-                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [eobj; exp] range)
+                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [eobj; ecls] range)
                  ~fthen:(fun flow ->
                    debug "init!@\n";
                    man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>

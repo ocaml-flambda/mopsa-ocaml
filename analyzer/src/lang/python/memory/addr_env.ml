@@ -64,8 +64,8 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py]; import = []}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py]; import = []}
+  let exec_interface = {export = [any_zone]; import = []}
+  let eval_interface = {export = [any_zone, any_zone]; import = []}
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m

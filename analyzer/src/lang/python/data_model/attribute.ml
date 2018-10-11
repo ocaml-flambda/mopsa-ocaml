@@ -71,36 +71,60 @@ module Domain =
                    man.eval (mk_expr (E_py_ll_getattr(exp, attr)) range) flow
                  )
                  ~felse:(fun flow ->
-                   (* now we need to search the attribute in the MRO *)
-                   let rec search_mro flow (mro:Ast.py_object list) = match mro with
-                     | [] ->
-                        let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-                        Eval.empty_singleton flow
-                     | cls :: tl ->
-                        Eval.assume
-                          (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
-                          ~fthen:(fun flow ->
-                            (* FIXME: disjunction between instances an non-instances *)
-                            man.eval (mk_py_object_attr cls attr range) flow |>
-                              Eval.bind (fun obj' flow ->
+                   (* if exp is a class, we just call the attribute
+                      (after searching in the mro). if exp is an
+                      instance, we take its class, search in the mro
+                      and create a method *)
+                   (* to test if an object o is a class, we call isinstance(o, type) *)
+                   Eval.assume
+                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "type") range] range)
+                     ~fthen:(fun flow ->
+                       let mro = Addr.mro (object_of_expr exp) in
+                       let rec search_mro flow mro = match mro with
+                         | [] ->
+                            let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
+                            Eval.empty_singleton flow
+                         | cls::tl ->
+                            Eval.assume
+                              (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
+                              ~fthen:(fun flow ->
+                                man.eval (mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range) flow)
+                              ~felse:(fun flow -> search_mro flow tl)
+                              man flow
+                       in search_mro flow mro
+                     )
+                     ~felse:(fun flow ->
+                       man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [exp] range) flow |>
+                         Eval.bind (fun class_of_exp flow ->
+                             let mro = Addr.mro (object_of_expr class_of_exp) in
+                             let rec search_mro flow mro = match mro with
+                               | [] ->
+                                  let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
+                                  Eval.empty_singleton flow
+                               | cls::tl ->
                                   Eval.assume
-                                    (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
+                                    (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                                     ~fthen:(fun flow ->
-                                      Debug.fail "todo@\n";
-                                      (* let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', object_of_expr exp))) range in *)
-                                      Eval.singleton exp flow)
-                                    ~felse:(fun flow ->
-                                      (* FIXME? *)
-                                      let exp = mk_attribute_var cls attr range in
-                                      Eval.singleton exp flow)
+                                      (* FIXME: disjunction between instances an non-instances *)
+                                      man.eval (mk_py_object_attr cls attr range) flow |>
+                                        Eval.bind (fun obj' flow ->
+                                            Eval.assume
+                                              (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
+                                              ~fthen:(fun flow ->
+                                                (* Debug.fail "todo@\n"; *)
+                                                let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', object_of_expr exp))) range in
+                                                man.eval exp flow)
+                                              ~felse:(fun flow ->
+                                                let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, attr)) range in
+                                                Eval.singleton exp flow)
+                                              man flow
+                                          )
+                                    )
+                                    ~felse:(fun flow -> search_mro flow tl)
                                     man flow
-                                )
-                          )
-                          ~felse:(fun flow -> search_mro flow tl)
-                          man flow
-                   in
-                   let mro = Addr.mro (object_of_expr exp) in
-                   search_mro flow mro
+                             in search_mro flow mro)
+                     )
+                     man flow
                  )
                  man flow
              )

@@ -27,7 +27,7 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Z_py]; import = []}
+    let exec_interface = {export = [any_zone]; import = []}
     let eval_interface = {export = []; import = []}
 
     let init _ _ flow = Option.return flow
