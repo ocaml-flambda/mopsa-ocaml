@@ -288,13 +288,13 @@ struct
     reduce v2' |> bind @@ fun r2 ->
     return (r1, r2)
 
-  let compare op v1 v2 =
+  let compare op v1 v2 r =
     let rec aux : type a. a value_pool -> a -> a -> (a * a) with_channel = fun pool v1 v2 ->
       match pool, v1, v2 with
       | Nil, (), () -> return ((), ())
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        V.compare op vhd1 vhd2 |> bind @@ fun (vhd1', vhd2') ->
+        V.compare op vhd1 vhd2 r |> bind @@ fun (vhd1', vhd2') ->
         aux tl vtl1 vtl2 |> bind @@ fun (vtl1', vtl2') ->
         return ((vhd1', vtl1'), (vhd2', vtl2'))
     in

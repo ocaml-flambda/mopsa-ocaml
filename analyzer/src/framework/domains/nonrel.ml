@@ -192,22 +192,11 @@ struct
 
       (* arithmetic comparison part, handled by Value *)
       | E_binop (op, e1, e2) ->
-        (* utility function to negate the comparison, when r=false *)
-        let inv = function
-          | O_eq -> O_ne
-          | O_ne -> O_eq
-          | O_lt -> O_ge
-          | O_le -> O_gt
-          | O_gt -> O_le
-          | O_ge -> O_lt
-          | _ -> assert false
-        in
-        let op = if r then op else inv op in
         (* evaluate forward each argument expression *)
         eval e1 a |> Channel.bind @@ fun (ae1,v1) ->
         eval e2 a |> Channel.bind @@ fun (ae2,v2) ->
         (* apply comparison *)
-        Value.compare op v1 v2 |> Channel.bind @@ fun (r1, r2) ->
+        Value.compare op v1 v2 r |> Channel.bind @@ fun (r1, r2) ->
         (* propagate backward on both argument expressions *)
         refine ae1 v1 r1 a |> Channel.bind @@ fun a1 ->
         refine ae2 v2 r2 a1

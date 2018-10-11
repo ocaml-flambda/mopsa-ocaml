@@ -145,6 +145,7 @@ struct
       -> false
 
   let is_float_op = function
+    | O_float_cast _
     | O_float_minus _
     | O_float_plus _ 
     | O_float_sqrt _
@@ -252,11 +253,11 @@ struct
     else
       panic "unhandled operator" pp_operator op
            
-  let compare op a1 a2 =
+  let compare op a1 a2 r =
     if is_int_op op then
-      IV.compare op (to_int a1) (to_int a2) |> return_int_pair
+      IV.compare op (to_int a1) (to_int a2) r |> return_int_pair
     else if is_float_op op then
-      FV.compare op (to_float a1) (to_float a2) |> return_float_pair
+      FV.compare op (to_float a1) (to_float a2) r |> return_float_pair
     else
       panic "unhandled operator" pp_operator op
 

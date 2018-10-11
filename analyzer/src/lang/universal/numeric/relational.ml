@@ -213,6 +213,11 @@ struct
     | E_unop ((O_plus | O_float_plus _), e) ->
        strongify_rhs e abs l
       
+    | E_unop(O_float_cast _, e) ->
+      let e', abs, l = strongify_rhs e abs l in
+      let typ' = typ_to_apron e.etyp in
+      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
+
     | E_unop((O_minus | O_float_minus _), e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
@@ -316,27 +321,27 @@ struct
 
     | E_constant(C_int _) -> Dnf.mk_true
 
-    | E_binop(O_gt, e0 , e1) ->
+    | E_binop((O_gt | O_float_gt _ | O_float_neg_le _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_ge, e0 , e1) ->
+    | E_binop((O_ge | O_float_ge _ | O_float_neg_lt _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_lt, e0 , e1) ->
+    | E_binop((O_lt | O_float_lt _ | O_float_neg_ge _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop(O_le, e0 , e1) ->
+    | E_binop((O_le | O_float_le _ | O_float_neg_gt _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop(O_eq, e0 , e1) ->
+    | E_binop((O_eq | O_float_eq _), e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop(O_ne, e0, e1) ->
+    | E_binop((O_ne | O_float_ne _), e0, e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.mk_or
          (Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp))

@@ -89,6 +89,8 @@ let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
      mk_unop (O_float_of_int f) e ~etyp:t range
   | T_float _, T_int ->
      mk_unop O_int_of_float e ~etyp:t range
+  | T_float F_DOUBLE, T_float (F_SINGLE as p) ->
+     mk_unop (O_float_cast p) e ~etyp:t range     
   | t1, t2 ->
      if compare_typ t1 t2 = 0 then e
      else Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ t1 pp_typ t2  

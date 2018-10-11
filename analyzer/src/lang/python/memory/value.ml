@@ -295,9 +295,9 @@ module Value =
       return ~channels:(c.channels @ cf.channels) ({bottom with int = fst c.value; float = fst cf.value}, {bottom with int = snd c.value; float = snd cf.value})
 
     (** Backward filters of comparison operators *)
-    let compare op abs1 abs2 =
-      let c = I.compare op abs1.int abs2.int in
-      let cf = F.compare op abs1.float abs2.float in
+    let compare op abs1 abs2 r =
+      let c = I.compare op abs1.int abs2.int r in
+      let cf = F.compare op abs1.float abs2.float r in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) ({bottom with int = fst c.value; float = fst cf.value}, {bottom with int = snd c.value; float = snd cf.value})
 

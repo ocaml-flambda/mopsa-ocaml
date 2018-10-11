@@ -117,6 +117,7 @@ type operator +=
   (* float/int conversions *)
   | O_int_of_float               (** Cast to int (truncation) *)
   | O_float_of_int of float_prec (** Cast to float *)
+  | O_float_cast of float_prec   (** Conversion between float precision *)
   
   
 let () =
@@ -130,6 +131,20 @@ let () =
       | _ -> next op1 op2
     )
 
+let negate_comparison = function
+  | O_float_eq p -> O_float_ne p
+  | O_float_ne p -> O_float_eq p
+  | O_float_lt p -> O_float_neg_lt p
+  | O_float_le p -> O_float_neg_le p
+  | O_float_gt p -> O_float_neg_gt p
+  | O_float_ge p -> O_float_neg_ge p
+  | O_float_neg_lt p -> O_float_lt p
+  | O_float_neg_le p -> O_float_le p
+  | O_float_neg_gt p -> O_float_gt p
+  | O_float_neg_ge p -> O_float_ge p
+  | op -> Framework.Ast.negate_comparison op
+
+  
 (*==========================================================================*)
                          (** {2 Heap addresses} *)
 (*==========================================================================*)

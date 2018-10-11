@@ -74,14 +74,16 @@ sig
   *)
 
 
-  val compare : Ast.operator -> t -> t -> (t * t) with_channel
-  (** Backward evaluation of boolean comparisons. [compare op x y] returns (x',y') where:
+  val compare : Ast.operator -> t -> t -> bool -> (t * t) with_channel
+  (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
        i.e., we filter the abstract values x and y knowing that the test is true
 
+       [compare op x y false] is similar, but assumes that the test is false
+
        a safe, but not precise implementation, would be:
-       compare _ x y = (x,y)
+       compare _ _ x y = (x,y)
   *)
 
 
