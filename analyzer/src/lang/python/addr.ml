@@ -48,7 +48,7 @@ type module_address =
 type Universal.Ast.addr_kind +=
   | A_py_class of class_address (** class *) * py_object list (** mro *)
   | A_py_function of function_address (** function *)
-  (* | A_py_method of py_object (\** address of the function to bind *\) * py_object (\** method instance *\) *)
+  | A_py_method of py_object (** address of the function to bind *) * py_object (** method instance *)
   | A_py_module of module_address
 
 
@@ -420,10 +420,10 @@ let () =
                     (fun default fmt a ->
                       match a.addr_kind with
                       | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
-                      | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "{%s}" c
+                      | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
                       | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
                       | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "function %s" f
-                      (* | A_py_method(f, obj) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj) *)
+                      | A_py_method(f, obj) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_addr (addr_of_object obj)
                       | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
                       | _ -> default fmt a
                     );

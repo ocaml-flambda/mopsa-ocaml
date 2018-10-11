@@ -23,7 +23,7 @@
 
         "python.objects.class",
         "python.objects.function",
-        "python.objects.nones",
+        // "python.objects.nones",
 
         "python.data_model.attribute",
         "python.data_model.subscript",

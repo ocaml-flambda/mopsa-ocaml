@@ -24,14 +24,7 @@ void *memset(void *s, int c, size_t n) {
     ((char*) s)[i] = _mopsa_range_char();
   };
   return s;
-}
 
-void *memcpy(void *str1, const void *str2, size_t n) {
-  size_t i;
-  for (i = 0 ; i < n ; i++) {
-    ((char*) str1)[i] = ((char*) str2)[i];
-  };
-  return str1;
 }
 
 int socket(int domain, int type, int protocol) {

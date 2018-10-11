@@ -31,7 +31,7 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = { export = [Zone.Z_py]; import = [any_zone]; }
+    let exec_interface = { export = [any_zone]; import = [any_zone]; }
     let eval_interface = { export = [any_zone, any_zone]; import = []; }
 
     let join _ = Typingdomain.join
@@ -119,9 +119,25 @@ module Domain =
          let expr = mk_expr (E_get_type_partition builtin_notimpl) range in
          Eval.singleton expr flow |> OptionExt.return
 
+      | E_constant C_py_none ->
+         let builtin_none = Typingdomain.builtin_inst "NoneType" in
+         let expr = mk_expr (E_get_type_partition builtin_none) range in
+         Eval.singleton expr flow |> OptionExt.return
+
       | E_alloc_addr akind ->
-         let addr = {addr_kind = akind; addr_uid=(-1)} in
-         Eval.singleton (mk_addr addr range) flow |> OptionExt.return
+         begin match akind with
+         | A_py_method (f, obj) ->
+            let f = match (fst f).addr_kind with
+              | A_py_function f -> f
+              | _ -> assert false in
+            let expr = mk_expr (E_get_type_partition (Typingdomain.Method (f, 0))) range in
+            Eval.singleton expr flow
+            (* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *)
+         | _ ->
+            let addr = {addr_kind = akind; addr_uid=(-1)} in
+            Eval.singleton (mk_addr addr range) flow
+         end
+         |> OptionExt.return
 
       | E_var (v, _) ->
          let cur = Flow.get_domain_cur man flow in
@@ -253,6 +269,7 @@ module Domain =
          (Eval.eval_list [obj; attr] man.eval flow |>
             Eval.bind (fun evals flow ->
                 let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+                debug "eobj = %a, eattr = %a@\n" pp_expr eobj pp_expr eattr;
                 match ekind eobj, ekind eattr with
                 | E_get_type_partition ty, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
                    let cur = Flow.get_domain_cur man flow in
@@ -273,15 +290,38 @@ module Domain =
                      Eval.singleton (mk_py_true range) flow
                    else
                      Eval.singleton (mk_py_false range) flow
+                | E_py_object ({addr_kind = A_py_class _}, _), E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _) ->
+                   Eval.singleton (mk_py_true range) flow
                 | _ ->
                    Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
          )
          |> OptionExt.return
 
-      (* | E_py_object ({addr_kind = A_py_class (c, b)}, _) ->
-       *    debug "blai@\n";
-       *    None *)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
+         Eval.eval_list args man.eval flow |>
+           Eval.bind
+             (fun args flow ->
+               match args with
+               | [] ->
+                  debug "Error in creating a new instance";
+                  man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                    Eval.empty_singleton
+               | cls::tl ->
+                  let open Typingdomain in
+                  let open MapExt in
+                  let cls, mro = match (fst (object_of_expr cls)).addr_kind with
+                    | A_py_class (c, mro) -> c, mro
+                    | _ -> assert false in
+                  let inst = Instance {classn=Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty} in
+                  Eval.singleton (mk_expr (E_get_type_partition inst) range) flow
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
+         Eval.singleton (mk_py_none range) flow |> OptionExt.return
+
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;
          None

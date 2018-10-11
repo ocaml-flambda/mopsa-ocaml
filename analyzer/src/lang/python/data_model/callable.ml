@@ -68,10 +68,18 @@ module Domain =
                     Eval.bind (fun args' flow ->
                         let exp = {exp with ekind = E_py_call(f, args, [])} in
                         man.eval exp flow
-                      (*                        Eval.singleton exp flow *)
                       )
 
-               | _ -> debug "callable/E_py_call@\n"; assert false
+               (* | E_get_type_partition _ ->
+                *    Eval.eval_list args man.eval flow |>
+                *      (\* FIXME FIXME FIXME/danger: args'/arg *\)
+                *      Eval.bind (fun args' flow ->
+                *          let exp = {exp with ekind = E_py_call(f, args, [])} in
+                *          man.eval exp flow
+                *        (\*                        Eval.singleton exp flow *\)
+                *        ) *)
+
+               | _ -> debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
              )
          |> OptionExt.return
 

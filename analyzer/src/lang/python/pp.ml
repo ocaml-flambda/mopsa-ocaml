@@ -45,7 +45,7 @@ let () =
     | _ -> default fmt typ
     );
   register_pp_constant (fun default fmt -> function
-      | C_py_none -> pp_print_string fmt "None"
+      | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
       | C_py_empty -> pp_print_string fmt "empty"
