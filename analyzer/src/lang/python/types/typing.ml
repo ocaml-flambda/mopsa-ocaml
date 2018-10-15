@@ -56,7 +56,9 @@ module Domain =
          Flow.set_domain_cur (Typingdomain.set_var cur v t_with_undefs) man flow |> Post.return
 
       | S_assign({ekind = E_var (v, STRONG)}, {ekind = E_var (w, STRONG)}) ->
-         Framework.Exceptions.panic "var/var assignment todo"
+         let cur = Flow.get_domain_cur man flow in
+         Flow.set_domain_cur (Typingdomain.set_var_eq cur v w) man flow |> Post.return
+
 
       | S_assign({ekind = E_var (v, STRONG)} as l, e) ->
          Option.return
@@ -87,6 +89,19 @@ module Domain =
                    Post.of_flow @@ man.exec {stmt with skind=(S_assign(l, e))} flow
                 | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
+
+      | S_assign({ekind = E_py_attribute({ekind = E_var (v, mode)}, attr)}, rval) ->
+         man.eval rval flow |>
+           Post.bind man
+             (fun reval flow ->
+               let cur = Flow.get_domain_cur man flow in
+               match ekind reval with
+               | E_get_type_partition polytype ->
+                  Flow.set_domain_cur (Typingdomain.set_var_attr cur v attr polytype) man flow |> Post.of_flow
+               | _ -> Debug.fail "%a" pp_expr reval
+             )
+         |> Option.return
+
 
       | S_remove_var v ->
          debug "Removing var %a@\n" pp_var v;
@@ -320,7 +335,7 @@ module Domain =
          |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-         Eval.singleton (mk_py_none range) flow |> Option.return
+         man.eval (mk_py_none range) flow |> Option.return
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;
