@@ -197,7 +197,7 @@ module Domain =
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
                        mro;
 
-                     Addr.eval_alloc man (A_py_class (C_user cls, bases')) stmt.srange flow |>
+                     Addr.eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
                        Post.bind man
                          (fun addr flow ->
                            let obj = (addr, mk_py_empty range) in
