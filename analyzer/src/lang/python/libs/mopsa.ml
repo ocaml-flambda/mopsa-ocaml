@@ -50,7 +50,7 @@ module Domain =
     let init prog man flow = Some flow
 
     let eval zs exp man flow =
-      debug "%a@\n" pp_expr exp;
+      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
@@ -220,9 +220,11 @@ module Domain =
                    *   ~fthen:(fun flow -> man.join annot acc flow)
                    *   ~felse:(fun _ -> man.bottom)
                    *   man env *)
-                      when Addr.isinstance exn cls -> man.join annot acc env
-                                    | _ -> acc
-                                  ) man.bottom man flow in
+                 -> Debug.fail "todo@\n"
+               (* when Debug.fail "todo" Addr.isinstance exn cls -> man.join annot acc env *)
+                                      | _ -> acc
+                                  ) man.bottom man flow
+                                           in
            let cond =
              match Flow.get T_cur man flow |> man.is_bottom,
                    man.is_bottom this_error_env with
@@ -235,7 +237,7 @@ module Domain =
            let flow = Flow.set T_cur man.top man flow in
            let flow = man.exec stmt flow |>
                                                              (* FIXME: addr.isinstance *)
-                        Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn when Addr.isinstance exn cls -> false | _ -> true) man |>
+                        Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
                         Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
@@ -252,7 +254,7 @@ module Domain =
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
                                                              (* FIXME: addr.isinstance *)
-                               | Flows.Exceptions.T_exn exn when Addr.isinstance exn cls -> man.join annot acc env
+                                                        | Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; man.join annot acc env
                                | _ -> acc
                              ) man.bottom man flow in
            let cur = Flow.get T_cur man flow in
@@ -262,7 +264,7 @@ module Domain =
            let flow' = Flow.set T_cur cur' man flow |>
                          man.exec stmt |>
                                                              (* FIXME: addr.isinstance *)
-                         Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn when Addr.isinstance exn cls -> false | _ -> true) man |>
+                         Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
                          Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)

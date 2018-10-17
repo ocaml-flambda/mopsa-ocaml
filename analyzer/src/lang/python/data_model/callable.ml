@@ -44,7 +44,7 @@ module Domain =
        *      function *\)
        *   Framework.Exceptions.panic_at range "call %a can not be resolved" pp_expr exp *)
 
-      | E_py_call(f, args, []) ->
+      | E_py_call(f, args, _) ->
          debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
          man.eval f flow |>
            Eval.bind

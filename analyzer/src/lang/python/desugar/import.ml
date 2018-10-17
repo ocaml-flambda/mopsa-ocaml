@@ -122,12 +122,7 @@ module Domain =
                 if Libs.Mopsa.is_unsupported_clsdec cls then C_unsupported name
                 else C_builtin name
               in
-              let addr = {
-                  addr_kind = A_py_class (kind, bases);
-                  addr_uid = 0;
-                }
-              in
-              Addr.add_builtin_class (addr, mk_py_empty range) ();
+              Addr.create_builtin_class kind name cls bases range;
               parse (Some name) cls.py_cls_body
 
            | S_py_function(fundec) ->

@@ -14,7 +14,19 @@ open Ast
 open Addr
 
 type token +=
-   | T_exn of py_object
+   | T_exn of expr
+
+let () =
+  register_token {
+      compare = (fun next tk1 tk2 -> match tk1, tk2 with
+                                     | T_exn e1, T_exn e2 -> compare_expr e1 e2
+                                     | _ -> next tk1 tk2);
+      print = (fun next fmt tk ->
+        match tk with
+        | T_exn e -> Format.fprintf fmt "exn(%a)" pp_expr e
+        | _ -> next fmt tk);
+    }
+
 
 module Domain =
   struct
@@ -78,8 +90,8 @@ module Domain =
          debug "Raising %a@\n" pp_expr exp;
          (man.eval exp flow |>
             Post.bind man (fun exp flow ->
-                match ekind exp with
-                | E_py_object obj ->
+                (* match ekind exp with
+                 * | E_py_object obj -> *)
                    Post.assume
                      (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "BaseException") range] range)
                      man
@@ -87,7 +99,7 @@ module Domain =
                        debug "True flow, exp is %a@\n" pp_expr exp;
                        (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
                        let cur = Flow.get T_cur man true_flow in
-                       let flow' = Flow.add (T_exn obj) cur man true_flow |>
+                       let flow' = Flow.add (T_exn exp) cur man true_flow |>
                                      Flow.set T_cur man.bottom man
                        in
                        Post.of_flow flow')
@@ -105,7 +117,7 @@ module Domain =
                          false_flow
                      )
                      flow
-                | _ -> assert false
+                (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
               )
          )
          |> Option.return
@@ -153,12 +165,12 @@ module Domain =
                                man
                                ~fthen:(fun true_flow ->
                                  Post.assume
-                                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [mk_py_object exn range; e] range)
+                                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
                                    man
                                    ~fthen:(fun true_flow ->
                                      match excpt.py_excpt_name with
                                      | None -> Post.of_flow true_flow
-                                     | Some v -> man.exec (mk_assign (mk_var v range) (mk_py_object exn range) range) true_flow |> Post.of_flow)
+                                     | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow |> Post.of_flow)
                                    ~felse:(fun false_flow ->
                                      (*if not (Addr.isinstance exn obj) then*)
                                      Flow.set T_cur man.bottom man false_flow |> Post.of_flow
@@ -211,7 +223,7 @@ module Domain =
                               *   man.flow.add (TExn exn) env flow *)
                              ~fthen:(fun true_flow ->
                                Post.assume
-                                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [mk_py_object exn range; e] range)
+                                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
                                  man
                                  ~fthen:(fun true_flow -> Post.of_flow true_flow)
                                  ~felse:(fun false_flow -> Flow.add (T_exn exn) env man false_flow |> Post.of_flow)

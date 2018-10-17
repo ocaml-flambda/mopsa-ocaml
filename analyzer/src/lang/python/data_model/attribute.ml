@@ -46,9 +46,9 @@ module Domain =
 
     let init _ _ flow = Some flow
 
-    let eval zs exp man flow =
-      let range = erange exp in
-      match ekind exp with
+    let eval zs expr man flow =
+      let range = erange expr in
+      match ekind expr with
       (* Special attributes *)
       | E_py_attribute(obj, ("__dict__" as attr))
         | E_py_attribute(obj, ("__class__" as attr))
@@ -62,7 +62,7 @@ module Domain =
 
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
-         debug "%a@\n" pp_expr exp;
+         debug "%a@\n" pp_expr expr;
          man.eval e flow |>
            Eval.bind (fun exp flow ->
                Eval.assume (mk_expr (E_py_ll_hasattr (exp, attr)) range)
@@ -82,6 +82,7 @@ module Domain =
                        let mro = Addr.mro (object_of_expr exp) in
                        let rec search_mro flow mro = match mro with
                          | [] ->
+                            debug "No attribute found for %a@\n" pp_expr expr;
                             let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
                             Eval.empty_singleton flow
                          | cls::tl ->
@@ -99,6 +100,7 @@ module Domain =
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              let rec search_mro flow mro = match mro with
                                | [] ->
+                                  debug "No attribute found for %a@\n" pp_expr expr;
                                   let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
                                   Eval.empty_singleton flow
                                | cls::tl ->

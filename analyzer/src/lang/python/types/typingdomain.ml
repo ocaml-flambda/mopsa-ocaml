@@ -477,7 +477,9 @@ let join (d:domain) (d':domain) : domain =
 
 let class_le (c, b:class_address * py_object list) (d, b':class_address * py_object list) : bool =
   Debug.warn "class_le not correctly implemented@\n";
-  c = d && b = b'
+  List.exists (fun x -> match (fst x).addr_kind with
+                        | A_py_class (x, _) -> x = d
+                        | _ -> false) b (* = d && b = b' *)
   (* let cname = match c with
    *   | C_builtin s | C_unsupported s -> s
    *   | C_user c -> c.py_cls_var.vname in
@@ -660,6 +662,7 @@ let widening ctx d d' =
 
 
 let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
+  if is_bottom d then bottom else
   (* before mapping v to t in d, we need to check that v is not the root for some aliasing tree *)
   let d = match (VarMap.find v d.d1).def with
   | None -> d
@@ -702,6 +705,7 @@ let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
 
 
 let set_var_eq (d:domain) (x:pyVar) (y:pyVar) (* x := y *) =
+  if is_bottom d then bottom else
   let tid, ov = typeindex_aliasing_of_var d.d1 y in
   match ov with
   (* in both cases, the root for the aliasing will be the var with the minimal id *)
@@ -724,6 +728,7 @@ let set_var_eq (d:domain) (x:pyVar) (y:pyVar) (* x := y *) =
 
 (* TODO: change t:polytype into t:pyVarOrTy, and handle what was add_var_underattr_eq and add_var_underattr in the proof of concept *)
 let set_var_attr (d:domain) (v:pyVar) (attr:string) (t:polytype) : domain =
+  if is_bottom d then bottom else
   (* this is v.attr := t *)
   let tid, ov = typeindex_aliasing_of_var d.d1 v in
   (* if there are other types using d.d2.(tid), we cannot modify the instance in d.d2.(tid) and must be careful *)

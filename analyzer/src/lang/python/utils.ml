@@ -15,7 +15,7 @@ let rec partition_list_by_length n l =
     | _ -> assert false
 
 let mk_builtin_raise exn range =
-  mk_stmt (S_py_raise (Some (mk_addr (fst @@ Addr.find_builtin exn) range))) range
+  mk_stmt (S_py_raise (Some (mk_py_object (Addr.find_builtin exn) range))) range
 
 let mk_builtin_call f params range =
   mk_py_call (mk_addr (fst @@ Addr.find_builtin f) range) params range
