@@ -15,6 +15,7 @@ open Framework.Ast
 open Universal.Ast
 open Ast
 open Addr
+open Alarms
 
 let check man cond range flow =
   let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) flow in
@@ -149,7 +150,7 @@ module Domain =
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env ->
                                match tk with
-                               | Flows.Exceptions.T_exn _ -> man.join annot acc env
+                               | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
                                | _ -> acc
                              ) man.bottom man flow in
            let exception BottomFound in
@@ -183,7 +184,7 @@ module Domain =
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
-                                                        | Flows.Exceptions.T_exn _ -> man.join annot acc env
+                                                        | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
                                                         | _ -> acc
                              ) man.bottom man flow in
            let cond =
@@ -198,7 +199,7 @@ module Domain =
            let cur = Flow.get T_cur man flow in
            let flow = Flow.set T_cur man.top man flow in
            let flow = man.exec stmt flow |>
-                        Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn _ -> false | _ -> true) man |>
+                        Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException _} -> false | _ -> true) man |>
                         Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
@@ -214,7 +215,7 @@ module Domain =
            let annot = Flow.get_all_annot flow in
            let this_error_env = Flow.fold (fun acc tk env -> match tk with
                                                              (* FIXME: addr.isinstance *)
-               | Flows.Exceptions.T_exn exn
+               | T_alarm {alarm_kind = APyException exn}
                   (* Eval.assume
                    *   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; cls])
                    *   ~fthen:(fun flow -> man.join annot acc flow)
@@ -237,7 +238,7 @@ module Domain =
            let flow = Flow.set T_cur man.top man flow in
            let flow = man.exec stmt flow |>
                                                              (* FIXME: addr.isinstance *)
-                        Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
+                        Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
                         Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
@@ -254,7 +255,7 @@ module Domain =
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
                                                              (* FIXME: addr.isinstance *)
-                                                        | Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; man.join annot acc env
+                                                        | T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; man.join annot acc env
                                | _ -> acc
                              ) man.bottom man flow in
            let cur = Flow.get T_cur man flow in
@@ -264,7 +265,7 @@ module Domain =
            let flow' = Flow.set T_cur cur' man flow |>
                          man.exec stmt |>
                                                              (* FIXME: addr.isinstance *)
-                         Flow.filter (fun tk _ -> match tk with Flows.Exceptions.T_exn exn (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
+                         Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
                          Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
