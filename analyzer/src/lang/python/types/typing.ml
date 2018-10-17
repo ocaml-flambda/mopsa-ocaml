@@ -122,10 +122,13 @@ module Domain =
              (fun expr flow ->
                debug "Assuming %a@\n" pp_expr expr;
                match ekind expr with
-               | E_constant (C_top T_bool) -> Post.of_flow flow
+               | E_constant (C_top T_bool)
+                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) ->
+                  Post.of_flow flow
                | E_constant (C_bool true) -> Post.of_flow flow
                | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
-               | _ -> failwith "bla"
+
+               | _ -> Debug.fail "%a" pp_expr e
              )
          |> Option.return
 
@@ -203,6 +206,10 @@ module Domain =
          begin match ekind e with
          | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
             Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
+            let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
+            man.eval (mk_var f range) flow
+
          | _ -> Debug.fail "E_py_ll_getattr: todo"
          end
          |> Option.return
@@ -263,7 +270,8 @@ module Domain =
              (fun exp flow ->
              (* FIXME: test if instance of bool and proceed accordingly *)
                match ekind exp with
-               | E_constant (C_top T_bool) -> Eval.singleton exp flow
+               | E_constant (C_top T_bool)
+                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) -> Eval.singleton exp flow
                | E_constant (C_bool true) ->  Eval.singleton (mk_py_false range) flow
                | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
                | _ -> failwith "not: ni"
