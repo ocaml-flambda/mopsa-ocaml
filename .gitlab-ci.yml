@@ -35,6 +35,7 @@ build_job:
     - $MOPSA_C analyzer/tests/universal/$U_FILE
 
 .test-py:
+  allow_failure: true
   stage: test
   dependencies: [build_job]
   script:
