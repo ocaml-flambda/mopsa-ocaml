@@ -109,12 +109,12 @@ struct
   (*========================================================================*)
 
 
-  let node_eq  n1 n2 = (P.NodeId.compare n1.n_id n2.n_id == 0)
-  let node_neq n1 n2 = (P.NodeId.compare n1.n_id n2.n_id != 0)
-  let edge_eq  e1 e2 = (P.EdgeId.compare e1.e_id e2.e_id == 0)
-  let edge_neq e1 e2 = (P.EdgeId.compare e1.e_id e2.e_id != 0)
-  let port_eq  t1 t2  = P.Port.compare t1 t2 == 0
-  let port_neq t1 t2  = P.Port.compare t1 t2 != 0
+  let node_eq  n1 n2 = P.NodeId.equal n1.n_id n2.n_id
+  let node_neq n1 n2 = not (P.NodeId.equal n1.n_id n2.n_id)
+  let edge_eq  e1 e2 = P.EdgeId.equal e1.e_id e2.e_id
+  let edge_neq e1 e2 = not (P.EdgeId.equal e1.e_id e2.e_id)
+  let port_eq  t1 t2  = P.Port.equal t1 t2
+  let port_neq t1 t2  = not ( P.Port.equal t1 t2)
   let port_node_eq  (t1,n1) (t2,n2) = node_eq  n1 n2 && port_eq  t1 t2
   let port_node_neq (t1,n1) (t2,n2) = node_neq n1 n2 || port_neq t1 t2
   let port_edge_eq  (t1,e1) (t2,e2) = edge_eq  e1 e2 && port_eq  t1 t2
@@ -125,10 +125,10 @@ struct
   let port_compare t1 t2 = P.Port.compare t1 t2
 
   let port_node_compare (t1,n1) (t2,n2) =
-    if port_neq t1 t2 then port_compare t1 t2 else node_compare n1 n2
+    match port_compare t1 t2 with 0 -> node_compare n1 n2 | x -> x
 
   let port_edge_compare (t1,e1) (t2,e2) =
-    if port_neq t1 t2 then port_compare t1 t2 else edge_compare e1 e2
+    match port_compare t1 t2 with 0 -> edge_compare e1 e2 | x -> x
 
   let filter_port port l =
     List.map snd (List.filter (fun (port',_) -> port_eq port port') l)

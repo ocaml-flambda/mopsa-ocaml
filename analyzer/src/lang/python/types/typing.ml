@@ -4,6 +4,7 @@ open Ast
 open Universal.Ast
 open Addr
 open Data_model.Attribute
+open MapExt
 
 type expr_kind +=
    | E_get_type_partition of Typingdomain.polytype
@@ -14,7 +15,12 @@ let () =
       match ekind exp with
       | E_get_type_partition ptype -> Format.fprintf fmt "E_get_tp %a" Typingdomain.pp_polytype ptype
       | E_type_partition tid -> Format.fprintf fmt "TypeId %d" tid
-      | _ -> default fmt exp)
+      | _ -> default fmt exp);
+  register_expr_compare (fun next e1 e2 ->
+      match ekind e1, ekind e2 with
+      | E_get_type_partition p1, E_get_type_partition p2 -> Debug.fail "fixme"
+      | E_type_partition i1, E_type_partition i2 -> Pervasives.compare i1 i2
+      | _ -> next e1 e2);
 
 
 module Domain =
@@ -56,7 +62,9 @@ module Domain =
          Flow.set_domain_cur (Typingdomain.set_var cur v t_with_undefs) man flow |> Post.return
 
       | S_assign({ekind = E_var (v, STRONG)}, {ekind = E_var (w, STRONG)}) ->
-         Framework.Exceptions.panic "var/var assignment todo"
+         let cur = Flow.get_domain_cur man flow in
+         Flow.set_domain_cur (Typingdomain.set_var_eq cur v w) man flow |> Post.return
+
 
       | S_assign({ekind = E_var (v, STRONG)} as l, e) ->
          OptionExt.return
@@ -88,6 +96,19 @@ module Domain =
                 | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
 
+      | S_assign({ekind = E_py_attribute({ekind = E_var (v, mode)}, attr)}, rval) ->
+         man.eval rval flow |>
+           Post.bind man
+             (fun reval flow ->
+               let cur = Flow.get_domain_cur man flow in
+               match ekind reval with
+               | E_get_type_partition polytype ->
+                  Flow.set_domain_cur (Typingdomain.set_var_attr cur v attr polytype) man flow |> Post.of_flow
+               | _ -> Debug.fail "%a" pp_expr reval
+             )
+         |> OptionExt.return
+
+
       | S_remove_var v ->
          debug "Removing var %a@\n" pp_var v;
          let cur = Flow.get_domain_cur man flow in
@@ -101,10 +122,13 @@ module Domain =
              (fun expr flow ->
                debug "Assuming %a@\n" pp_expr expr;
                match ekind expr with
-               | E_constant (C_top T_bool) -> Post.of_flow flow
+               | E_constant (C_top T_bool)
+                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) ->
+                  Post.of_flow flow
                | E_constant (C_bool true) -> Post.of_flow flow
                | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
-               | _ -> failwith "bla"
+
+               | _ -> Debug.fail "%a" pp_expr e
              )
          |> OptionExt.return
 
@@ -141,19 +165,24 @@ module Domain =
 
       | E_var (v, _) ->
          let cur = Flow.get_domain_cur man flow in
-         let polytype = Typingdomain.get_polytype cur v in
-         let expr = match polytype with
-           | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
-           | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-           | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-           | _ -> mk_expr (E_get_type_partition polytype) range in
-         Eval.singleton expr flow
-         (* FIXME: properly handle every case *)
-         (* let ak = Typingdomain.get_addr_kind cur v in
-          * let a = {addr_kind=ak; addr_uid=(-1)} in
-          * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
-         |> OptionExt.return
-
+         begin try
+           let polytype = Typingdomain.get_polytype cur v in
+           let expr = match polytype with
+             | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
+             | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+             | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+             | _ -> mk_expr (E_get_type_partition polytype) range in
+           Eval.singleton expr flow
+           (* FIXME: properly handle every case *)
+           (* let ak = Typingdomain.get_addr_kind cur v in
+            * let a = {addr_kind=ak; addr_uid=(-1)} in
+            * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
+           |> OptionExt.return
+         with Not_found ->
+               debug "builtin variable@\n";
+               let a = Addr.find_builtin v.vname in
+               Eval.singleton (mk_py_object a range) flow |> OptionExt.return
+         end
       | E_py_ll_hasattr(e, attr) ->
       (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
          begin match ekind e with
@@ -163,7 +192,10 @@ module Domain =
             Eval.singleton (mk_py_true range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
             Eval.singleton (mk_py_true range) flow
+         | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn; uattrs; oattrs}) when StringMap.exists (fun k _ -> k = attr) uattrs ->
+            Eval.singleton (mk_py_true range) flow
          | _ ->
+            (* FIXME *)
             Debug.warn "%a: unknown case, returning false@\n" pp_expr exp;
             Eval.singleton (mk_py_false range) flow
          end
@@ -174,6 +206,10 @@ module Domain =
          begin match ekind e with
          | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
             Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
+            let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
+            man.eval (mk_var f range) flow
+
          | _ -> Debug.fail "E_py_ll_getattr: todo"
          end
          |> OptionExt.return
@@ -234,7 +270,8 @@ module Domain =
              (fun exp flow ->
              (* FIXME: test if instance of bool and proceed accordingly *)
                match ekind exp with
-               | E_constant (C_top T_bool) -> Eval.singleton exp flow
+               | E_constant (C_top T_bool)
+                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) -> Eval.singleton exp flow
                | E_constant (C_bool true) ->  Eval.singleton (mk_py_false range) flow
                | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
                | _ -> failwith "not: ni"
@@ -290,8 +327,19 @@ module Domain =
                      Eval.singleton (mk_py_true range) flow
                    else
                      Eval.singleton (mk_py_false range) flow
-                | E_py_object ({addr_kind = A_py_class _}, _), E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _) ->
-                   Eval.singleton (mk_py_true range) flow
+                | E_py_object ({addr_kind = A_py_class _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
+                   if c = "type" then
+                     Eval.singleton (mk_py_true range) flow
+                   else
+                     Eval.singleton (mk_py_false range) flow
+                | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
+                   Debug.fail "Left MRO %a@\nRight MRO %a@\n"
+                       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       mro
+                       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       mro'
                 | _ ->
                    Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
@@ -310,7 +358,6 @@ module Domain =
                     Eval.empty_singleton
                | cls::tl ->
                   let open Typingdomain in
-                  let open MapExt in
                   let cls, mro = match (fst (object_of_expr cls)).addr_kind with
                     | A_py_class (c, mro) -> c, mro
                     | _ -> assert false in
@@ -320,7 +367,7 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-         Eval.singleton (mk_py_none range) flow |> OptionExt.return
+         man.eval (mk_py_none range) flow |> OptionExt.return
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;

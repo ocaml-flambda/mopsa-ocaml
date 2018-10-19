@@ -12,9 +12,22 @@ open Framework.Essentials
 open Universal.Ast
 open Ast
 open Addr
+open Alarms
 
-type token +=
-   | T_exn of py_object
+(* type token +=
+ *    | T_exn of expr
+ *
+ * let () =
+ *   register_token {
+ *       compare = (fun next tk1 tk2 -> match tk1, tk2 with
+ *                                      | T_exn e1, T_exn e2 -> compare_expr e1 e2
+ *                                      | _ -> next tk1 tk2);
+ *       print = (fun next fmt tk ->
+ *         match tk with
+ *         | T_exn e -> Format.fprintf fmt "exn(%a)" pp_expr e
+ *         | _ -> next fmt tk);
+ *     } *)
+
 
 module Domain =
   struct
@@ -42,7 +55,7 @@ module Domain =
       | S_py_try(body, excepts, orelse, finally) ->
          let old_flow = flow in
          (* Remove all previous exception flows *)
-         let flow0 = Flow.filter (function T_exn _ -> fun _ -> false | _ -> fun _ -> true) man flow in
+         let flow0 = Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man flow in
 
          (* Execute try body *)
          let try_flow = man.exec body flow0 in
@@ -55,7 +68,7 @@ module Domain =
                                             ) (Flow.bottom (Flow.get_all_annot try_flow), try_flow)  excepts in
 
          (* Execute else body after removing all exceptions *)
-         let orelse_flow = Flow.filter (function T_exn _ -> fun _ -> false | _ -> fun _ -> true) man try_flow |>
+         let orelse_flow = Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man try_flow |>
                              man.exec orelse
          in
 
@@ -69,7 +82,7 @@ module Domain =
          (* Restore old exceptions *)
          Flow.fold (fun acc tk env ->
              match tk with
-             | T_exn _ -> Flow.add tk env man acc
+             | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man acc
              | _ -> acc
            ) flow man old_flow |>
            Post.return
@@ -78,8 +91,8 @@ module Domain =
          debug "Raising %a@\n" pp_expr exp;
          (man.eval exp flow |>
             Post.bind man (fun exp flow ->
-                match ekind exp with
-                | E_py_object obj ->
+                (* match ekind exp with
+                 * | E_py_object obj -> *)
                    Post.assume
                      (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "BaseException") range] range)
                      man
@@ -87,7 +100,9 @@ module Domain =
                        debug "True flow, exp is %a@\n" pp_expr exp;
                        (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
                        let cur = Flow.get T_cur man true_flow in
-                       let flow' = Flow.add (T_exn obj) cur man true_flow |>
+                       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
+                       let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
+                       let flow' = Flow.add (T_alarm a) cur man true_flow |>
                                      Flow.set T_cur man.bottom man
                        in
                        Post.of_flow flow')
@@ -105,7 +120,7 @@ module Domain =
                          false_flow
                      )
                      flow
-                | _ -> assert false
+                (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
               )
          )
          |> OptionExt.return
@@ -120,7 +135,7 @@ module Domain =
     and exec_except (man:('a, unit) man) excpt range (flow:'a flow) : 'a flow =
       debug "exec except on@ @[%a@]" (Flow.print man) flow;
       let flow0 = Flow.set T_cur man.bottom man flow |>
-                    Flow.filter (function T_exn _ -> fun _ -> false | _ -> fun _ -> true) man in
+                    Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man in
       debug "exec except flow0@ @[%a@]" (Flow.print man) flow0;
       let flow1 =
         match excpt.py_excpt_type with
@@ -129,7 +144,7 @@ module Domain =
            (* Add all remaining exceptions env to cur *)
            Flow.fold (fun acc tk env ->
                match tk with
-               | T_exn _ -> Flow.add T_cur env man acc
+               | T_alarm {alarm_kind = APyException _} -> Flow.add T_cur env man acc
                | _ -> acc)
              flow0 man flow
 
@@ -138,7 +153,7 @@ module Domain =
            (* Add exception that match expression e *)
            Flow.fold (fun acc tk env ->
                match tk with
-               | T_exn exn ->
+               | T_alarm {alarm_kind = APyException exn} ->
                   (* Evaluate e in env to check if it corresponds to eaddr *)
                   let flow = Flow.set T_cur env man flow0 in
                   let flow' =
@@ -153,12 +168,12 @@ module Domain =
                                man
                                ~fthen:(fun true_flow ->
                                  Post.assume
-                                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [mk_py_object exn range; e] range)
+                                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
                                    man
                                    ~fthen:(fun true_flow ->
                                      match excpt.py_excpt_name with
                                      | None -> Post.of_flow true_flow
-                                     | Some v -> man.exec (mk_assign (mk_var v range) (mk_py_object exn range) range) true_flow |> Post.of_flow)
+                                     | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow |> Post.of_flow)
                                    ~felse:(fun false_flow ->
                                      (*if not (Addr.isinstance exn obj) then*)
                                      Flow.set T_cur man.bottom man false_flow |> Post.of_flow
@@ -175,7 +190,7 @@ module Domain =
                   let flow' = flow'.Framework.Post.flow in
                   Flow.fold (fun acc tk env ->
                       match tk with
-                      | T_cur | T_exn _ -> Flow.add tk env man acc
+                      | T_cur | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man acc
                       | _ -> acc
                     ) acc man flow'
                | _ -> acc
@@ -189,14 +204,14 @@ module Domain =
     and escape_except man excpt range flow =
       debug "escape except";
       let flow0 = Flow.set T_cur man.bottom man flow |>
-                    Flow.filter (function T_exn _ -> fun _ -> false | _ -> fun _ -> true) man in
+                    Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man in
       match excpt.py_excpt_type with
       | None -> flow0
 
       | Some e ->
          Flow.fold (fun acc tk env ->
              match tk with
-             | T_exn exn ->
+             | T_alarm {alarm_kind = APyException exn} ->
                 (* Evaluate e in env to check if it corresponds to exn *)
                 let flow = Flow.set T_cur env man flow0 in
                 let flow' =
@@ -211,10 +226,13 @@ module Domain =
                               *   man.flow.add (TExn exn) env flow *)
                              ~fthen:(fun true_flow ->
                                Post.assume
-                                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [mk_py_object exn range; e] range)
+                                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
                                  man
                                  ~fthen:(fun true_flow -> Post.of_flow true_flow)
-                                 ~felse:(fun false_flow -> Flow.add (T_exn exn) env man false_flow |> Post.of_flow)
+                                 ~felse:(fun false_flow ->
+                                   let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack false_flow in
+                                   let a = mk_alarm (APyException exn) range ~cs ~level:ERROR in
+                                   Flow.add (T_alarm a) env man false_flow |> Post.of_flow)
                                  true_flow)
                              ~felse:(fun false_flow -> Post.of_flow false_flow)
                              flow
@@ -224,7 +242,7 @@ module Domain =
                 let flow' = flow'.Framework.Post.flow in
                 Flow.fold (fun acc tk env ->
                     match tk with
-                    | T_exn _ -> Flow.add tk env man acc
+                    | T_alarm {alarm_kind = APyException _} -> Flow.add tk env man acc
                     | _ -> acc
                   ) flow0 man flow'
              | _ -> acc

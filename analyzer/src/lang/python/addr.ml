@@ -10,7 +10,7 @@
 
 open Framework.Essentials
 open Ast
-
+open Universal.Ast
 
 let debug fmt = Debug.debug ~channel:"python.addr" fmt
 
@@ -45,7 +45,7 @@ type module_address =
 
 (** Kinds of Python addresses *)
 (** These addresses refer only to static objects *)
-type Universal.Ast.addr_kind +=
+type addr_kind +=
   | A_py_class of class_address (** class *) * py_object list (** mro *)
   | A_py_function of function_address (** function *)
   | A_py_method of py_object (** address of the function to bind *) * py_object (** method instance *)
@@ -54,11 +54,11 @@ type Universal.Ast.addr_kind +=
 
 (** Allocate an object on the heap and return its address as an evaluation *)
 let eval_alloc man kind range flow =
-  let exp = Universal.Ast.mk_alloc_addr kind range in
+  let exp = mk_alloc_addr kind range in
   man.eval exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | Universal.Ast.E_addr addr -> Eval.singleton addr flow
+      | E_addr addr -> Eval.singleton addr flow
       | _ -> Framework.Exceptions.panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
     )
 
@@ -89,11 +89,11 @@ let split_dot_name x =
   | _ -> None
 
 (** Address of an object *)
-let addr_of_object (obj: py_object) : Universal.Ast.addr = fst obj
+let addr_of_object (obj: py_object) : addr = fst obj
 
-let kind_of_object (obj: py_object) : Universal.Ast.addr_kind =
+let kind_of_object (obj: py_object) : addr_kind =
   let addr = addr_of_object obj in
-  addr.Universal.Ast.addr_kind
+  addr.addr_kind
 
 (** Name of an object *)
 let object_name obj =
@@ -104,7 +104,7 @@ let object_name obj =
     -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | A_py_class(C_user c, _) -> c.py_cls_var.vname
-  | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" Universal.Ast.pp_addr (addr_of_object obj)
+  | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
   classes := obj :: !classes
@@ -284,16 +284,16 @@ let is_none r =
   isinstance o (find_builtin "NoneType")
 
 let mk_py_z_interval l u range =
-  Universal.Ast.mk_z_interval l u range
+  mk_z_interval l u range
 
 let mk_py_float_interval l u range =
-  Universal.Ast.mk_float_interval l u range
+  mk_float_interval l u range
 
 let mk_attribute_var obj attr range =
   let addr = addr_of_object obj in
   let v = {
       vname = (
-        let () = Format.fprintf Format.str_formatter "%a.%s" Universal.Ast.pp_addr addr attr in
+        let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
         let name = Format.flush_str_formatter () in
         name
       );
@@ -306,7 +306,7 @@ let mk_attribute_var obj attr range =
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "NoneType", None);
  *       addr_uid = Universal.Heap.Pool.recent_uid;
  *     }
@@ -317,7 +317,7 @@ let mk_attribute_var obj attr range =
 
 (* let not_implemented_range = mk_fresh_range ()
  * let mk_py_not_implemented range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "NotImplementedType", None);
  *       addr_range = not_implemented_range;
  *       addr_uid = Universal.Heap.Pool.recent_uid;
@@ -328,7 +328,7 @@ let mk_attribute_var obj attr range =
  *
  * let int_range = mk_fresh_range ()
  * let mk_py_int_expr e range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "int", None);
  *       addr_range = int_range;
  *       addr_uid = Universal.Heap.Pool.old_uid;
@@ -336,15 +336,15 @@ let mk_attribute_var obj attr range =
  *   in
  *   mk_py_object (addr, e) range
  *
- * let mk_py_z z range = mk_py_int_expr (Universal.Ast.mk_z z range) range
- * let mk_py_z_interval z1 z2 range = mk_py_int_expr (Universal.Ast.mk_z_interval z1 z2 range) range
+ * let mk_py_z z range = mk_py_int_expr (mk_z z range) range
+ * let mk_py_z_interval z1 z2 range = mk_py_int_expr (mk_z_interval z1 z2 range) range
  * let mk_py_int n range = mk_py_z (Z.of_int n) range
  * let mk_py_zero range = mk_py_z Z.zero range
  * let mk_py_one range = mk_py_z Z.one range
  *
  * let float_range = mk_fresh_range ()
  * let mk_py_float_expr e range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "float", None);
  *       addr_range = float_range;
  *       addr_uid = Universal.Heap.Pool.old_uid;
@@ -352,12 +352,12 @@ let mk_attribute_var obj attr range =
  *   in
  *   mk_py_object (addr, e) range
  *
- * let mk_py_float f range = mk_py_float_expr (Universal.Ast.mk_float f range) range
- * let mk_py_float_interval f1 f2 range = mk_py_int_expr (Universal.Ast.mk_float_interval f1 f2 range) range
+ * let mk_py_float f range = mk_py_float_expr (mk_float f range) range
+ * let mk_py_float_interval f1 f2 range = mk_py_int_expr (mk_float_interval f1 f2 range) range
  *
  * let bool_range = mk_fresh_range ()
  * let mk_py_bool_expr e range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "bool", None);
  *       addr_range = bool_range;
  *       addr_uid = Universal.Heap.Pool.old_uid;
@@ -365,12 +365,12 @@ let mk_attribute_var obj attr range =
  *   in
  *   mk_py_object (addr, e) range
  *
- * let mk_py_true range = mk_py_bool_expr (Universal.Ast.mk_true range) range
- * let mk_py_false range = mk_py_bool_expr (Universal.Ast.mk_false range) range
+ * let mk_py_true range = mk_py_bool_expr (mk_true range) range
+ * let mk_py_false range = mk_py_bool_expr (mk_false range) range
  *
  * let string_range = mk_fresh_range ()
  * let mk_py_string_expr e range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "str", None);
  *       addr_range = string_range;
  *       addr_uid = Universal.Heap.Pool.old_uid;
@@ -378,11 +378,11 @@ let mk_attribute_var obj attr range =
  *   in
  *   mk_py_object (addr, e) range
  *
- * let mk_py_string s range = mk_py_string_expr (Universal.Ast.mk_string s range) range
+ * let mk_py_string s range = mk_py_string_expr (mk_string s range) range
  *
  * let complex_range = mk_fresh_range ()
  * let mk_py_imag j range =
- *   let addr = Universal.Ast.{
+ *   let addr = {
  *       addr_kind = A_py_instance (find_builtin "complex", None);
  *       addr_range = complex_range;
  *       addr_uid = Universal.Heap.Pool.old_uid;
@@ -413,8 +413,97 @@ let mk_attribute_var obj attr range =
  *   | C_py_imag j -> mk_py_imag j range
  *   | _ -> Framework.Exceptions.panic_at range "mk_py_constant: unknown constant %a" Framework.Pp.pp_constant c *)
 
+
+
+exception C3_lin_failure
+
+(** Computes the c3 linearization of an object. This is Python's
+       approach to deal with redundant parents in the inheritance *)
+let rec c3_lin (obj: py_object) : py_object list =
+  (* Spec of c3_lin : (C(B1, ..., BN) meaning class C inherits directly from B1, ..., BN
+   *    c3_lin(C(B1, ..., BN)) = C::merge(c3_lin(B1), ..., c3_lin(BN), [B1], ..., [BN])
+   *    c3_lin(object) = [object]
+   *
+   *    and merge(L1, ..., Ln) =
+   *          let k = min_{1 <= i <= n} { k | hd(L_k) \not \in tail(L_j) \forall j \neq k } in
+   *          let c = hd(L_k) in
+   *          c :: merge(L1 \ {c}, ..., Ln \ {c})
+   * ** Examples
+   *      Due to wikipedia:
+   *          class O: pass
+   *          class A(O): pass
+   *          class B(O): pass
+   *          class C(O): pass
+   *          class D(O): pass
+   *          class E(O): pass
+   *          class K1(A, B, C): pass
+   *          class K2(D, B, E): pass
+   *          class K3(D, A): pass
+   *          class Z(K1, K2, K3): pass
+   *
+   *          a = Z()
+   *      Then, the MRO is Z, K1, K2, K3, D, A, B, C, E, O
+   *
+   *      Found in "Linearization in Multiple Inheritance", by Michael Petter, Winter term 2016:
+   *          class G: pass
+   *          class F: pass
+   *          class E(F): pass
+   *          class D(G): pass
+   *          class C(D, E): pass
+   *          class B(F, G): pass
+   *          class A(B, C): pass
+   *
+   *          a = A()
+   *
+   *      No MRO in this case
+   *)
+  match kind_of_object obj with
+  | A_py_class (C_builtin "object", b) -> [obj]
+  | A_py_class (c, [])  -> [obj]
+  | A_py_class (c, bases) ->
+     let l_bases = List.map c3_lin bases in
+     let bases = List.map (fun x -> [x]) bases in
+     obj :: merge (l_bases @ bases)
+  | _ -> assert false
+
+and merge (l: py_object list list) : py_object list =
+  match search_c l with
+  | Some c ->
+     let l' = List.filter (fun x -> x <> [])
+                (List.map (fun li -> List.filter (fun x -> compare_addr (fst c) (fst x) <> 0) li)
+                   l) in
+     (* l' is l with all c removed *)
+     begin match l' with
+     | [] -> [c]
+     | _ -> c :: merge l'
+     end
+  | None -> raise C3_lin_failure
+
+and search_c (l: py_object list list) : py_object option =
+  let indexed_l = List.mapi (fun i ll -> (i, ll)) l in
+  List.fold_left
+    (fun acc (i, li) ->
+      if acc <> None || li = [] then acc
+      else
+        let c = List.hd li in
+        let a = List.for_all (fun (k, lk) ->
+                    i = k || lk = [] || not (List.exists (fun x -> compare_addr (fst c) (fst x) = 0) (List.tl lk))) indexed_l
+        in
+        if a then Some c else acc
+    )
+    None indexed_l
+
+let create_builtin_class kind name cls bases range =
+  let mro = c3_lin ({addr_kind= (A_py_class (kind, bases)); addr_uid=(-1)}, mk_py_empty range) in
+  let addr = {
+      addr_kind = A_py_class(kind, mro);
+      addr_uid = 0;
+    }
+  in
+  add_builtin_class (addr, mk_py_empty range) ()
+
+
 let () =
-  Universal.Ast.(
     Format.(
       let info = {print =
                     (fun default fmt a ->
@@ -453,4 +542,3 @@ let () =
                       | _ -> default a1 a2) } in
       register_addr info
     )
-  )

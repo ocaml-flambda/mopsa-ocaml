@@ -520,7 +520,7 @@ module type S = sig
       [node_in_nodes_port node port1 port2] returns a list of
       [(node',edge)] elements, where [port1] connects the predecessor 
       [node'] to an edge [edge] and [port2] connects the edge [edge] to a
-      the argument node [node.
+      the argument node [node].
    *)
 
   val node_has_node_out: ('n,'e) node -> ('n,'e) node -> bool
