@@ -20,7 +20,7 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 * mpfr
 * camlidl
 * zlib
-* javaliv
+* javalib
 
 ## Installation 
 
@@ -39,15 +39,13 @@ make
 
 ### RPM-based distributions
 
-TODO: add zlib & javalib
-
 Tested on Fedora 27:
 
 ```bash
-sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel
+sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel zlib-devel make which
 opam init
 eval $(opam config env)
-opam install apron ocp-pack-split zarith menhir yojson
+opam install apron ocp-pack-split zarith menhir yojson javalib
 make
 
 ```

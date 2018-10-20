@@ -1,16 +1,16 @@
-# Docker image to test Mospa on Ubuntu
-# Build with: docker build -t mopsa-build .
+# Docker image to test Mospa on Fedora
+# Build with: docker build -t mopsa-build-fedora -f Dockerfile.fedora .
 #
 ###############################################
 
-FROM ubuntu:latest
+FROM fedora:27
 
 
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential lsb-release m4 opam llvm-6.0-dev libclang-6.0-dev libgmp-dev libmpfr-dev zlib1g-dev
-ENV OPAM_SWITCH 4.07.0
+ENV DNF_DEPS git redhat-lsb m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel zlib-devel make which
+ENV OPAM_SWITCH default
 ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
 
 
@@ -21,9 +21,8 @@ ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
 ENV TERM xterm-256color
 
 RUN \
-    apt-get update && \
-    apt-get install -y $APT_DEPS && \
-    adduser --disabled-password --gecos 'Mopsa' mopsa
+    dnf install -y $DNF_DEPS && \
+    adduser mopsa
 
 
 # log in as mopsa
@@ -49,7 +48,6 @@ RUN \
     echo && \
     echo "All done!" && \
     uname -a && \
-    cat /etc/debian_version && \    
-    lsb_release -d && \
+    cat /etc/fedora-release && \
     echo opam `opam --version` && \
     ocamlc -v
