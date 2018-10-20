@@ -13,27 +13,17 @@ open Framework.Value
 open Ast
 
 
-module type CAST =
-sig
-  type float_t
-  type int_t
-  val float_of_int : float_prec -> int_t -> float_t with_channel
-  val int_of_float : float_t -> int_t with_channel
-end
-(** Signature of functions to convert between float and integer
-    abstract values, implementing cast.
- *)
-  
-
 (** General functor for arbitrary integer/float abstractions. *)
   
-module Make(IV:VALUE)
-           (FV:VALUE)
-           (C:CAST with type float_t = FV.t and type int_t = IV.t) =
+module Make(IV:VALUE)(FV:VALUE) =
 struct
   
   (** Types *)
-  
+
+  module B = ItvUtils.IntBound
+  module FItv = ItvUtils.FloatItv
+  module FItvNan = ItvUtils.FloatItvNan
+
   type t =
     | I of IV.t
     | F of FV.t
@@ -146,22 +136,35 @@ struct
   (** Arithmetic operators *)
     
   let of_constant t x =
-    match x with
-    | C_float _ | C_float_interval _ ->
-       F (FV.of_constant t x)
-
-    | C_int _ | C_int_interval _ ->
+     if is_int_type t then
        I (IV.of_constant t x)
+     else if is_float_type t then
+       F (FV.of_constant t x)
+     else
+       panic "unhandled constant" pp_constant x
 
-    | _ -> TOP
-
+    
+  let null_expr = mk_zero (mk_fresh_range ())
+         
   let unop t op a =
-    (* conversions *)
     match op, t, a with
     | O_cast, T_float p, I v ->
-       return_float (C.float_of_int p v)
+       (* float of int *)
+       (match IV.ask (Intervals.Value.Q_interval null_expr) (fun _ -> v) with
+        | Some (Nb (B.Finite lo, B.Finite up)) ->
+           FV.of_constant t (C_int_interval (lo,up)) |> return |> return_float
+        | Some BOT -> return BOT
+        | _ -> return TOP
+       )
     | O_cast, T_int, F v ->
-       return_int (C.int_of_float v)
+       (* int of float *)
+       (* TODO: in case of Nan, infinities, signal an error *)
+       (match FV.ask (Float_intervals.Value.Q_float_interval null_expr) (fun _ -> v) with
+        | Some { FItvNan.itv = Nb { FItv.lo = lo; FItv.up = up; }; } ->
+           IV.of_constant t (C_float_interval (lo,up)) |> return |> return_int
+        | Some { FItvNan.itv = BOT; } -> return BOT
+        | _ -> return TOP
+       )
     | O_cast, _, TOP -> return TOP
     | O_cast, _, BOT -> return BOT
     | _ ->
@@ -173,7 +176,7 @@ struct
          FV.unop t op (to_float a) |> return_float
        else
          panic "unhandled operator" pp_operator op
-
+      
   let binop t op a1 a2 =
     if is_int_type t then
       IV.binop t op (to_int a1) (to_int a2) |> return_int
@@ -216,9 +219,7 @@ struct
       panic "unhandled operator" pp_operator op
 
 
-
   (** Queries *)
-
 
   let is_int_query : type r . r Framework.Query.query -> bool =
     function
@@ -244,9 +245,7 @@ end
 
 (** Application to interval integer/float abstractions *)
 
-module Value = Make(Intervals.Value)
-                   (Float_intervals.Value)
-                   (Float_intervals.Value (* casts implemented also here *))
+module Value = Make(Intervals.Value)(Float_intervals.Value)
   
 let () =
   register_value (module Value)

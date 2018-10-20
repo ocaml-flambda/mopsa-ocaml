@@ -16,6 +16,8 @@
 
 open Bot
 module F = Float
+module B = IntBound
+module II = IntItv
        
 
 (** {2 Types} *)
@@ -236,6 +238,14 @@ let to_z (r:t) : Z.t * Z.t =
   then invalid_arg "Inifnites or NaN in FloatItv.to_z";
   Z.of_float r.lo, Z.of_float r.up
 (** Conversion to integer (using truncation). *)  
+
+let to_int_itv (r:t) : II.t with_bot =
+  if F.is_nan r.lo || F.is_nan r.up then Nb II.minf_inf
+  else if r.lo = infinity || r.up = neg_infinity then BOT
+  else
+    let x = if r.lo = neg_infinity then B.MINF else B.Finite (Z.of_float r.lo)
+    and y = if r.up = infinity then B.PINF else B.Finite (Z.of_float r.up) in
+    Nb (x,y)
   
 let join (a:t) (b:t) : t =
   of_float (min a.lo b.lo) (max a.up b.up)

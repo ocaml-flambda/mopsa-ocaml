@@ -18,6 +18,7 @@ module Value =
 struct
 
   module I = ItvUtils.IntItv
+  module FI = ItvUtils.FloatItv
 
   type v = I.t
   type t = v with_bot
@@ -58,11 +59,17 @@ struct
 
   let of_constant _ = function
     | C_int i ->
-      Nb (I.of_z i i)
-
+       Nb (I.of_z i i)
+      
     | C_int_interval (i1,i2) ->
-      Nb (I.of_z i1 i2)
-
+       Nb (I.of_z i1 i2)
+      
+    | C_float_interval (lo,up) ->
+       (bot_absorb1 FI.to_int_itv) (FI.of_float_bot lo up)
+      
+    | C_float f ->
+       (bot_absorb1 FI.to_int_itv) (FI.of_float_bot f f)
+      
     | _ -> top
 
   let unop _ op a =
@@ -167,8 +174,7 @@ struct
   let ask : type r. r Framework.Query.query -> (expr -> t) -> r option =
     fun query eval ->
       match query with
-      | Q_interval e ->
-        Some (eval e)
+      | Q_interval e -> Some (eval e)
       | _ -> None
 
   let z_of_z2 z z' round =

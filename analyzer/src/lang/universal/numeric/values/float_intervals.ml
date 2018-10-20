@@ -23,7 +23,7 @@ struct
   module I = ItvUtils.FloatItvNan
   module FI = ItvUtils.FloatItv
   module II = ItvUtils.IntItv
-           
+
   type t = I.t
 
   type _ Framework.Query.query +=
@@ -80,12 +80,25 @@ struct
     | Apron.Texpr1.Down -> `DOWN
     | Apron.Texpr1.Rnd -> `ANY
                       
-  let of_constant _ = function
-    | C_float i ->
-       I.cst i
+  let of_constant t c =
+    match t, c with
+    | T_float p, C_float i ->
+       I.of_float_prec (prec p) (round ()) i i
 
-    | C_float_interval (lo,up) ->
-       I.of_float lo up
+    | T_float p, C_float_interval (lo,up) ->
+       I.of_float_prec (prec p) (round ()) lo up
+
+    | T_float p, C_int_interval (lo,up) ->
+       I.of_z (prec p) (round ()) lo up      
+
+    | T_float p, C_int i ->
+       I.of_z (prec p) (round ()) i i
+
+    | T_float _, C_bool false ->
+       I.zero
+
+    | T_float _, C_bool true ->
+       I.one
 
     | _ -> top
 

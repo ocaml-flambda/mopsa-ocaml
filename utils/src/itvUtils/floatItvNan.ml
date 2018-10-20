@@ -578,6 +578,11 @@ let to_z (x:t) : (Z.t * Z.t) with_bot =
   bot_lift1 FI.to_z x.itv
 (** Conversion to integer range with truncation. NaN and infinities are discarded. *)
 
+let of_float_prec (prec:prec) (round:round) (lo:float) (up:float) : t =
+  let r = FI.of_float_bot lo up in  
+  fix_itv prec { bot with itv = bot_lift1 (FI.round (prec:>FI.prec) round) r; }
+(** From bounds, with rounding, precision and handling of specials. *)  
+     
 let of_int_itv (prec:prec) (round:round) ((lo,up):II.t) : t =
   let lo = match lo, round with
     | B.Finite l, `NEAR -> F.of_z prec `NEAR l
@@ -602,7 +607,7 @@ let of_int_itv_bot (prec:prec) (round:round) (i:II.t with_bot) : t =
   | Nb (lo,up) -> of_int_itv prec round (lo,up)
 (** Conversion from integer intervals (handling overflows to infinities). *)   
 
-  let to_int_itv (r:t) : II.t with_bot =
+let to_int_itv (r:t) : II.t with_bot =
   match r.itv with
   | BOT -> if is_bot r then BOT else Nb II.minf_inf
   | Nb i ->
