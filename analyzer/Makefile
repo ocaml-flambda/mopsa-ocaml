@@ -15,7 +15,7 @@ lang.universal = ast pp visitor frontend utils zone iterators heap numeric # arr
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
-lang.universal.numeric = values relational reductions
+lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences float_intervals integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
 

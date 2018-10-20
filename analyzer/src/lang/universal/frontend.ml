@@ -84,17 +84,14 @@ let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
 (* cast expression to the given type (if needed) *)    
 let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
   let range = erange e in
-  match etyp e, t with
-  | T_int, T_float f ->
-     mk_unop (O_float_of_int f) e ~etyp:t range
-  | T_float _, T_int ->
-     mk_unop O_int_of_float e ~etyp:t range
-  | T_float F_DOUBLE, T_float (F_SINGLE as p) ->
-     mk_unop (O_float_cast p) e ~etyp:t range     
-  | t1, t2 ->
-     if compare_typ t1 t2 = 0 then e
-     else Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ t1 pp_typ t2  
-
+  let orgt = etyp e in
+  if compare_typ orgt t = 0 then e
+  else
+    match orgt, t with
+    | (T_int | T_float _), (T_int | T_float _) ->
+       mk_unop O_cast e ~etyp:t range
+    | _ ->
+       Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
     
 let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   match t, b with
@@ -111,16 +108,16 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
-  | T_float f, AST_PLUS          -> O_float_plus f
-  | T_float f, AST_MINUS         -> O_float_minus f
-  | T_float f, AST_MULTIPLY      -> O_float_mult f
-  | T_float f, AST_DIVIDE        -> O_float_div f
-  | T_float f, AST_EQUAL         -> O_float_eq f
-  | T_float f, AST_NOT_EQUAL     -> O_float_ne f
-  | T_float f, AST_LESS          -> O_float_lt f
-  | T_float f, AST_LESS_EQUAL    -> O_float_le f
-  | T_float f, AST_GREATER       -> O_float_gt f
-  | T_float f, AST_GREATER_EQUAL -> O_float_ge f
+  | T_float _, AST_PLUS          -> O_plus
+  | T_float _, AST_MINUS         -> O_minus
+  | T_float _, AST_MULTIPLY      -> O_mult
+  | T_float _, AST_DIVIDE        -> O_div
+  | T_float _, AST_EQUAL         -> O_eq
+  | T_float _, AST_NOT_EQUAL     -> O_ne
+  | T_float _, AST_LESS          -> O_lt
+  | T_float _, AST_LESS_EQUAL    -> O_le
+  | T_float _, AST_GREATER       -> O_gt
+  | T_float _, AST_GREATER_EQUAL -> O_ge
   | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
@@ -128,8 +125,8 @@ let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   | T_int, AST_UNARY_PLUS    -> O_plus
   | T_int, AST_UNARY_MINUS   -> O_minus
   | T_int, AST_NOT           -> O_log_not
-  | T_float f, AST_UNARY_PLUS  -> O_float_plus f
-  | T_float f, AST_UNARY_MINUS -> O_float_minus f
+  | T_float f, AST_UNARY_PLUS  -> O_plus
+  | T_float f, AST_UNARY_MINUS -> O_minus
   | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =

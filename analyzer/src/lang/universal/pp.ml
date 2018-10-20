@@ -41,25 +41,7 @@ let () =
       | O_bit_xor -> pp_print_string fmt "^"
       | O_bit_rshift -> pp_print_string fmt ">>"
       | O_bit_lshift -> pp_print_string fmt "<<"
-      | O_float_sqrt p -> pp_float_op "sqrt" "sqrt" fmt p
-      | O_float_plus p -> pp_float_op "+" "⊕" fmt p
-      | O_float_minus p -> pp_float_op "-" "⊖" fmt p
-      | O_float_mult p -> pp_float_op "*" "⊗" fmt p
-      | O_float_div p -> pp_float_op "/" "⊘" fmt p
-      | O_float_mod p -> pp_float_op "%" "%" fmt p
-      | O_int_of_float -> pp_print_string fmt "cast<int>"
-      | O_float_of_int p -> Format.fprintf fmt "cast<%a>" pp_float_prec p
-      | O_float_cast p -> Format.fprintf fmt "cast<%a>" pp_float_prec p
-      | O_float_eq p -> pp_float_op "==" "==" fmt p
-      | O_float_ne p -> pp_float_op "!=" "!=" fmt p
-      | O_float_lt p -> pp_float_op "<" "<" fmt p
-      | O_float_le p -> pp_float_op "<=" "<=" fmt p
-      | O_float_gt p -> pp_float_op ">" ">" fmt p
-      | O_float_ge p -> pp_float_op ">=" ">=" fmt p
-      | O_float_neg_lt p -> pp_float_op "!<" "!<" fmt p
-      | O_float_neg_le p -> pp_float_op "!<=" "!<=" fmt p
-      | O_float_neg_gt p -> pp_float_op "!>" "!>" fmt p
-      | O_float_neg_ge p -> pp_float_op "!>=" "!>=" fmt p
+      | O_cast -> Format.fprintf fmt "cast"
       | op -> default fmt op
     );
   register_pp_constant (fun default fmt -> function

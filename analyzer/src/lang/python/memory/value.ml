@@ -232,20 +232,20 @@ module Value =
       }
 
     (** Creation of a value from a program constant *)
-    let of_constant c =
+    let of_constant t c =
       match c with
-      | C_bool true -> integer (I.of_constant (C_int Z.one))
-      | C_bool false -> integer (I.of_constant (C_int Z.zero))
-      | C_top T_bool -> integer (I.of_constant (C_int_interval (Z.zero, Z.one)))
+      | C_bool true -> integer (I.of_constant t (C_int Z.one))
+      | C_bool false -> integer (I.of_constant t (C_int Z.zero))
+      | C_top T_bool -> integer (I.of_constant t (C_int_interval (Z.zero, Z.one)))
 
       | C_py_none | C_top T_py_none -> none  (N.singleton c)
 
-      | C_int n -> integer (I.of_constant c)
-      | C_int_interval _ -> integer (I.of_constant c)
+      | C_int n -> integer (I.of_constant t c)
+      | C_int_interval _ -> integer (I.of_constant t c)
       | C_top T_int -> integer I.top
 
-      | C_float n -> float (F.of_constant c)
-      | C_float_interval _ -> float (F.of_constant c)
+      | C_float n -> float (F.of_constant t c)
+      | C_float_interval _ -> float (F.of_constant t c)
       | C_top (T_float _) (* FIXME *) -> float F.top
 
       | C_py_not_implemented | C_top T_py_not_implemented -> notimplem  (NI.singleton c)
@@ -259,45 +259,45 @@ module Value =
 
 
     (** Forward evaluation of unary operators *)
-    let unop op (abs:t) =
-      let c = I.unop op abs.int in
-      let cf = F.unop op abs.float in
+    let unop t op (abs:t) =
+      let c = I.unop t op abs.int in
+      let cf = F.unop t op abs.float in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) {abs with int = c.value; float = cf.value}
 
     (** Forward evaluation of binary operators *)
-    let binop op abs1 abs2 =
-      let c = I.binop op abs1.int abs2.int in
-      let cf = F.binop op abs1.float abs2.float in
+    let binop t op abs1 abs2 =
+      let c = I.binop t op abs1.int abs2.int in
+      let cf = F.binop t op abs1.float abs2.float in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) {bottom with int = c.value; float = cf.value }
 
-    let mk_true = integer (I.of_constant (C_int Z.one))
-    let mk_false = integer (I.of_constant (C_int Z.zero))
+    let mk_true = integer (I.of_constant T_int (C_int Z.one))
+    let mk_false = integer (I.of_constant T_int (C_int Z.zero))
 
-    let filter a b =
-      let c = I.filter a.int b in
-      let cf = F.filter a.float b in
+    let filter t a b =
+      let c = I.filter t a.int b in
+      let cf = F.filter t a.float b in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) {bottom with int = c.value; float = cf.value }
 
-    let bwd_unop op abs rabs =
-      let c = I.bwd_unop op abs.int rabs.int in
-      let cf = F.bwd_unop op abs.float rabs.float in
+    let bwd_unop t op abs rabs =
+      let c = I.bwd_unop t op abs.int rabs.int in
+      let cf = F.bwd_unop t op abs.float rabs.float in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) {bottom with int = c.value; float = cf.value }
 
     (** Backward evaluation of binary operators *)
-    let bwd_binop op abs1 abs2 rabs =
-      let c = I.bwd_binop op abs1.int abs2.int rabs.int in
-      let cf = F.bwd_binop op abs1.float abs2.float rabs.float in
+    let bwd_binop t op abs1 abs2 rabs =
+      let c = I.bwd_binop t op abs1.int abs2.int rabs.int in
+      let cf = F.bwd_binop t op abs1.float abs2.float rabs.float in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) ({bottom with int = fst c.value; float = fst cf.value}, {bottom with int = snd c.value; float = snd cf.value})
 
     (** Backward filters of comparison operators *)
-    let compare op abs1 abs2 r =
-      let c = I.compare op abs1.int abs2.int r in
-      let cf = F.compare op abs1.float abs2.float r in
+    let compare t op abs1 abs2 r =
+      let c = I.compare t op abs1.int abs2.int r in
+      let cf = F.compare t op abs1.float abs2.float r in
       let open Framework.Channel in
       return ~channels:(c.channels @ cf.channels) ({bottom with int = fst c.value; float = fst cf.value}, {bottom with int = snd c.value; float = snd cf.value})
 

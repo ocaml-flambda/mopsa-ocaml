@@ -80,6 +80,7 @@ type operator +=
   | O_sqrt         (** Square root *)
   | O_bit_invert   (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
+  | O_cast         (** Cast *)
 
   (* Binary operators *)
   | O_plus       (** + *)
@@ -95,30 +96,6 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
-  (* Float operators *)
-  | O_float_sqrt of float_prec   (** Float square root *)
-  | O_float_plus of float_prec   (** Float + *)
-  | O_float_minus of float_prec  (** Float - *)
-  | O_float_mult of float_prec   (** Float * *)
-  | O_float_div of float_prec    (** Float / *)
-  | O_float_mod of float_prec    (** Float remainder (fmod) *)
-  | O_float_eq of float_prec (** Float == *)
-  | O_float_ne of float_prec (** Float != *)
-  | O_float_lt of float_prec (** Float < *)
-  | O_float_le of float_prec (** Float <= *)
-  | O_float_gt of float_prec (** Float > *)
-  | O_float_ge of float_prec (** Float >= *)
-  (* the negation of < (<=) is not >= (>) in floats due to NaNs... *)
-  | O_float_neg_lt of float_prec (** Float negation of < *)
-  | O_float_neg_le of float_prec (** Float negation of <= *)
-  | O_float_neg_gt of float_prec (** Float negation of > *)
-  | O_float_neg_ge of float_prec (** Float negation of >= *)
-
-  (* float/int conversions *)
-  | O_int_of_float               (** Cast to int (truncation) *)
-  | O_float_of_int of float_prec (** Cast to float *)
-  | O_float_cast of float_prec   (** Conversion between float precision *)
-  
   
 let () =
   register_operator_compare (fun next op1 op2 ->
@@ -131,18 +108,6 @@ let () =
       | _ -> next op1 op2
     )
 
-let negate_comparison = function
-  | O_float_eq p -> O_float_ne p
-  | O_float_ne p -> O_float_eq p
-  | O_float_lt p -> O_float_neg_lt p
-  | O_float_le p -> O_float_neg_le p
-  | O_float_gt p -> O_float_neg_gt p
-  | O_float_ge p -> O_float_neg_ge p
-  | O_float_neg_lt p -> O_float_lt p
-  | O_float_neg_le p -> O_float_le p
-  | O_float_neg_gt p -> O_float_gt p
-  | O_float_neg_ge p -> O_float_ge p
-  | op -> Framework.Ast.negate_comparison op
 
   
 (*==========================================================================*)
@@ -330,6 +295,10 @@ let is_int_type = function
   | T_int -> true
   | _ -> false
 
+let is_float_type = function
+  | T_float _ -> true
+  | _ -> false
+       
 let is_numeric_type = function
   | T_int | T_float _ -> true
   | _ -> false

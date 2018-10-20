@@ -30,27 +30,27 @@ sig
   val name : string * string
   val identify : 'a value -> (t, 'a) eq option
 
-  val of_constant : Ast.constant -> t
+  val of_constant : Ast.typ -> Ast.constant -> t
   (** Create a singleton abstract value from a constant. *)
 
   (*==========================================================================*)
                           (** {2 Forward semantics} *)
   (*==========================================================================*)
 
-  val unop : Ast.operator -> t -> t with_channel
+  val unop : Ast.typ -> Ast.operator -> t -> t with_channel
   (** Forward evaluation of unary operators. *)
 
-  val binop : Ast.operator -> t -> t -> t with_channel
+  val binop : Ast.typ -> Ast.operator -> t -> t -> t with_channel
   (** Forward evaluation of binary operators. *)
 
-  val filter : t -> bool -> t with_channel
+  val filter : Ast.typ -> t -> bool -> t with_channel
   (** Keep values that may represent the argument truth value *)
 
   (*==========================================================================*)
                           (** {2 Backward operators} *)
   (*==========================================================================*)
 
-  val bwd_unop : Ast.operator -> t -> t -> t with_channel
+  val bwd_unop : Ast.typ -> Ast.operator -> t -> t -> t with_channel
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -61,7 +61,7 @@ sig
        let bwd_unop _ x _ = x
      *)
 
-  val bwd_binop : Ast.operator -> t -> t -> t -> (t * t) with_channel
+  val bwd_binop : Ast.typ -> Ast.operator -> t -> t -> t -> (t * t) with_channel
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -74,7 +74,7 @@ sig
   *)
 
 
-  val compare : Ast.operator -> t -> t -> bool -> (t * t) with_channel
+  val compare : Ast.typ -> Ast.operator -> t -> t -> bool -> (t * t) with_channel
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x

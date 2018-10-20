@@ -118,54 +118,6 @@ struct
 
   (** Utilities *)
          
-  let is_int_op = function
-    | O_log_not
-    | O_minus
-    | O_plus 
-    | O_wrap _
-    | O_mult
-    | O_div
-    | O_pow
-    | O_log_or
-    | O_log_and
-    | O_mod
-    | O_bit_and
-    | O_bit_or
-    | O_bit_xor
-    | O_bit_rshift
-    | O_bit_lshift
-    | O_eq
-    | O_ne
-    | O_lt
-    | O_gt
-    | O_le
-    | O_ge
-      -> true
-    | _
-      -> false
-
-  let is_float_op = function
-    | O_float_cast _
-    | O_float_minus _
-    | O_float_plus _ 
-    | O_float_sqrt _
-    | O_float_mult _
-    | O_float_div _
-    | O_float_mod _
-    | O_float_eq _
-    | O_float_ne _
-    | O_float_lt _
-    | O_float_le _
-    | O_float_gt _
-    | O_float_ge _
-    | O_float_neg_lt _
-    | O_float_neg_le _
-    | O_float_neg_gt _
-    | O_float_neg_ge _
-      -> true
-    | _
-      -> false
-
   let to_int : t -> IV.t = function
     | I x -> x
     | BOT -> IV.bottom
@@ -193,71 +145,73 @@ struct
 
   (** Arithmetic operators *)
     
-  let of_constant x =
+  let of_constant t x =
     match x with
     | C_float _ | C_float_interval _ ->
-       F (FV.of_constant x)
+       F (FV.of_constant t x)
 
     | C_int _ | C_int_interval _ ->
-       I (IV.of_constant x)
+       I (IV.of_constant t x)
 
     | _ -> TOP
 
-  let unop op a =
-    if is_int_op op then
-      (* pure integer operators *)
-      IV.unop op (to_int a) |> return_int
-    else if is_float_op op then
-      (* pure float operators *)
-      FV.unop op (to_float a) |> return_float
-    else
-      (* conversions *)
-      match op with
-      | O_int_of_float ->
-         return_int (C.int_of_float (to_float a))
-      | O_float_of_int p ->
-         return_float (C.float_of_int p (to_int a))
-      | _ ->
+  let unop t op a =
+    (* conversions *)
+    match op, t, a with
+    | O_cast, T_float p, I v ->
+       return_float (C.float_of_int p v)
+    | O_cast, T_int, F v ->
+       return_int (C.int_of_float v)
+    | O_cast, _, TOP -> return TOP
+    | O_cast, _, BOT -> return BOT
+    | _ ->
+       if is_int_type t then
+         (* pure integer operators *)
+         IV.unop t op (to_int a) |> return_int
+       else if is_float_type t then
+         (* pure float operators *)
+         FV.unop t op (to_float a) |> return_float
+       else
          panic "unhandled operator" pp_operator op
 
-  let binop op a1 a2 =
-    if is_int_op op then
-      IV.binop op (to_int a1) (to_int a2) |> return_int
-    else if is_float_op op then
-      FV.binop op (to_float a1) (to_float a2) |> return_float
+  let binop t op a1 a2 =
+    if is_int_type t then
+      IV.binop t op (to_int a1) (to_int a2) |> return_int
+    else if is_float_type t then
+      FV.binop t op (to_float a1) (to_float a2) |> return_float
     else
       panic "unhandled operator" pp_operator op
 
-  let filter a b =
+  let filter t a b =
     match a with
-    | I x -> return_int (IV.filter x b)
-    | F x -> return_float (FV.filter x b)
+    | I x -> return_int (IV.filter t x b)
+    | F x -> return_float (FV.filter t x b)
     | BOT -> return BOT
     | TOP -> return TOP
 
-  let bwd_unop op a r =
-    if is_int_op op then
-      IV.bwd_unop op (to_int a) (to_int r) |> return_int
-    else if is_float_op op then
-      FV.bwd_unop op (to_float a) (to_float r) |> return_float
+  let bwd_unop t op a r =
+    if is_int_type t then
+      IV.bwd_unop t op (to_int a) (to_int r) |> return_int
+    else if is_float_type t then
+      FV.bwd_unop t op (to_float a) (to_float r) |> return_float
     else
       panic "unhandled operator" pp_operator op
 
-  let bwd_binop op a1 a2 r =
-    if is_int_op op then
-      IV.bwd_binop op (to_int a1) (to_int a2) (to_int r)
+  let bwd_binop t op a1 a2 r =
+    if is_int_type t then
+      IV.bwd_binop t op (to_int a1) (to_int a2) (to_int r)
       |> return_int_pair
-    else if is_float_op op then
-      FV.bwd_binop op (to_float a1) (to_float a2) (to_float r)
+    else if is_float_type t then
+      FV.bwd_binop t op (to_float a1) (to_float a2) (to_float r)
       |> return_float_pair
     else
       panic "unhandled operator" pp_operator op
            
-  let compare op a1 a2 r =
-    if is_int_op op then
-      IV.compare op (to_int a1) (to_int a2) r |> return_int_pair
-    else if is_float_op op then
-      FV.compare op (to_float a1) (to_float a2) r |> return_float_pair
+  let compare t op a1 a2 r =
+    if is_int_type t then
+      IV.compare t op (to_int a1) (to_int a2) r |> return_int_pair
+    else if is_float_type t then
+      FV.compare t op (to_float a1) (to_float a2) r |> return_float_pair
     else
       panic "unhandled operator" pp_operator op
 

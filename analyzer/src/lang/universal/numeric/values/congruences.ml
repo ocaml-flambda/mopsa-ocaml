@@ -54,14 +54,14 @@ struct
 
   let display = "int congruence"
 
-  let of_constant = function
+  let of_constant _ = function
     | C_int i -> Nb (C.cst i)
 
     | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
 
     | _ -> top
 
-  let unop op a =
+  let unop _ op a =
     return (
       match op with
       | O_log_not -> bot_lift1 C.log_not a
@@ -70,7 +70,7 @@ struct
       | _ -> top
     )
 
-  let binop op a1 a2 =
+  let binop _ op a1 a2 =
     return (
       match op with
       | O_plus   -> bot_lift2 C.add a1 a2
@@ -85,13 +85,13 @@ struct
       | _     -> top
     )
 
-  let filter a b =
+  let filter _ a b =
     return (
       if b then bot_absorb1 C.meet_nonzero a
       else bot_absorb1 C.meet_zero a
     )
 
-  let bwd_unop op abs rabs =
+  let bwd_unop _ op abs rabs =
     return (
       try
         let a, r = bot_to_exn abs, bot_to_exn rabs in
@@ -105,7 +105,7 @@ struct
         bottom
     )
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop _ op a1 a2 r =
     return (
       try
         let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
@@ -125,7 +125,7 @@ struct
         bottom, bottom
     )
 
-  let compare op a1 a2 r =
+  let compare _ op a1 a2 r =
     return (
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
