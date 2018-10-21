@@ -243,7 +243,7 @@ stat:
 fundec:
 | t=typ f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
    ldec=list(ext(declaration))
-   st=ext(stat)
+   st=ext(block_no_curly)
    TOK_RCURLY
 {{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
 
