@@ -23,7 +23,11 @@ let pp_float_op opreal opfloat fmt = function
   | F_DOUBLE      -> Format.fprintf fmt "%sd" opfloat
   | F_LONG_DOUBLE -> Format.fprintf fmt "%sl" opreal
   | F_REAL        -> pp_print_string fmt opreal
-   
+
+let pp_typ_opt fmt = function
+  | None -> pp_print_string fmt "void"
+  | Some x -> pp_typ fmt x
+                   
 let () =
   register_pp_operator (fun default fmt -> function
       | O_plus -> pp_print_string fmt "+"
@@ -135,7 +139,7 @@ let () =
             pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
               (fun fmt f ->
                  fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
-                   pp_typ f.fun_return_type
+                   pp_typ_opt f.fun_return_type
                    Format.pp_print_string f.fun_name
                    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
                       (fun fmt v -> Format.fprintf fmt "%a %a"

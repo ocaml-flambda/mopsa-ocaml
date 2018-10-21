@@ -1,6 +1,6 @@
 variables:
   MOPSA_C: "./bin/mopsa -lang=c -config=./analyzer/configs/c.json -stub=./analyzer/stubs/c -unittest"
-  MOPSA_U: "./bin/mopsa -lang=universal -config=./analyzer/configs/default.universal.json"
+  MOPSA_U: "./bin/mopsa -lang=universal -config=./analyzer/configs/default.universal.json -unittest"
   MOPSA_PY: "./bin/mopsa -lang=python -config=./analyzer/configs/py.json -stub=./analyzer/stubs/python -unittest"
 
 image: mopsa-build
@@ -32,7 +32,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
-    - $MOPSA_C analyzer/tests/universal/$U_FILE
+    - $MOPSA_U analyzer/tests/universal/$U_FILE
 
 .test-py:
   allow_failure: true

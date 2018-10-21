@@ -16,6 +16,7 @@ let _ =
   List.iter (fun (a,b) -> Hashtbl.add kwd_table a b)
     [
      (* types *)
+     "void",   TOK_VOID;
      "int",    TOK_INT;
      "real",   TOK_REAL;
      "string", TOK_STRING;

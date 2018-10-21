@@ -96,14 +96,14 @@ $(CMI_FROM_MLY): %.cmi: %.mli | %.dep
 $(DEPS_ML): $(BUILD)/%.dep: $(SRC)/%.ml | $(ML_OF_PACKS) $(ML_OF_MLL) $(ML_OF_MLY)
 	@mkdir -p $(@D)
 	@echo "Generating dependencies for $<"
-	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) $< > $@
+	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) -absname  $< > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
 
 
 $(DEPS_MLI): $(BUILD)/%.idep: $(SRC)/%.mli | $(ML_OF_PACKS) $(ML_OF_MLL) $(ML_OF_MLY)
 	@mkdir -p $(@D)
 	@echo "Generating dependencies for $<"
-	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) $< > $@
+	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) -absname $< > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
 
 $(DEPS_MLL): $(BUILD)/%.dep: $(BUILD)/%.ml | $(ML_OF_PACKS) $(ML_OF_MLY)

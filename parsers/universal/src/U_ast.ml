@@ -135,6 +135,9 @@ type stat =
   (* assertion: exit if the boolean expression does not hold *)
   | AST_assert of expr ext
 
+  (* evaluates expression (useful for function calls) *)
+  | AST_expr of expr ext
+                
   | AST_print
 
 type fundec =
@@ -143,7 +146,7 @@ type fundec =
     parameters : typed_var list;
     body : stat ext;
     locvars : declaration ext list;
-    return_type : typ;
+    return_type : typ option;
   }
 
 (* a program is a list of statements preceded by function declaration *)

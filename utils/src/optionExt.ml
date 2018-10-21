@@ -54,6 +54,9 @@ let option_equal (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
 let option_included (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
   match a,b with None, _ -> true | Some x, Some y -> f x y | _ -> false
 
+let option_dfl (dfl:'a) (v:'a option) : 'a =
+  match v with None -> dfl | Some x -> x
+                                                                
 let option_dfl1 (dfl:'b) (f:'a->'b) (a:'a option) : 'b =
   match a with None -> dfl | Some x -> f x
 

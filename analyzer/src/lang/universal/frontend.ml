@@ -150,7 +150,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                       U_ast_printer.print_expr e
                       (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
-              (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function fundec) range, el)) range)
+              (* void function return an (unitialized) int *)
+              let rettyp = OptionExt.option_dfl T_int fundec.T.fun_return_type in
+              (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function fundec) range, el)) range)
             else
               Debug.fail "%s number of arguments incompatible with call at %s"
                 f
@@ -346,6 +348,10 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
   | AST_print ->
     mk_stmt S_print range
 
+  | AST_expr(e, ext) ->
+     let e' = from_expr e ext var_ctx fun_ctx in
+     mk_expr_stmt e' range
+
 
 let rec check_declaration_list (dl : U_ast.declaration ext list) =
   match dl with
@@ -445,7 +451,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_parameters = List.map (fun ((_, v), ext) -> from_var v ext var_ctx) f.parameters;
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
-    fun_return_type = from_typ (f.return_type)
+    fun_return_type = (OptionExt.option_lift1 from_typ) (f.return_type)
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec ext list) (var_ctx: var_context) =

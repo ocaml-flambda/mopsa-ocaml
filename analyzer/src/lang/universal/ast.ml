@@ -154,7 +154,7 @@ type fundec = {
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
-  fun_return_type: typ; (** return type *)
+  fun_return_type: typ option; (** return type *)
 }
 
 (*==========================================================================*)
@@ -420,3 +420,7 @@ let mk_call fundec args range =
       mk_expr (E_function fundec) range,
       args
     )) range
+
+let mk_expr_stmt e =
+  mk_stmt (S_expression e)
+

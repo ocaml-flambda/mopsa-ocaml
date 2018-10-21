@@ -115,7 +115,7 @@ module Domain =
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
-                         fun_return_type = T_any;
+                         fun_return_type = Some T_any;
                        } in
 
                      man.eval (mk_call fundec args exp.erange) flow |>

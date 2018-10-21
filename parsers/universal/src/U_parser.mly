@@ -13,6 +13,7 @@
 /* tokens */
 /**********/
 
+%token TOK_VOID
 %token TOK_INT
 %token TOK_REAL
 %token TOK_CHAR
@@ -204,6 +205,10 @@ typ:
 | TOK_STRING { AST_STRING }
 | TOK_CHAR { AST_CHAR }
 
+typ_opt:
+| TOK_VOID { None }
+| t=typ { Some t }
+
 separated_ended_list(X, Y):
 | l=separated_list(X, Y) X {l}
 block_no_curly:
@@ -240,8 +245,11 @@ stat:
 | TOK_FOR TOK_LPAREN v=ext(var) TOK_COMMA e1=ext(expr) TOK_COMMA e2=ext(expr) st=ext(stat) TOK_SEMICOLON?
    { AST_for(v, e1, e2, st) }
 
+| e=ext(expr) TOK_SEMICOLON
+  { AST_expr e }
+
 fundec:
-| t=typ f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
+| t=typ_opt f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
    ldec=list(ext(declaration))
    st=ext(block_no_curly)
    TOK_RCURLY

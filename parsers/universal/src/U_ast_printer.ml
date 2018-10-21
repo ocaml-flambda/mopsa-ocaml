@@ -90,6 +90,10 @@ let rec print_typ fmt t =
   | AST_STRING -> Format.pp_print_string fmt "string"
   | AST_CHAR -> Format.pp_print_string fmt "char"
 
+and print_typ_opt fmt = function
+  | None -> Format.pp_print_string fmt "void"
+  | Some x -> print_typ fmt x
+              
 and print_typed_var fmt ((t, v), _) =
   Format.fprintf fmt "%a %a"
     print_typ t
@@ -208,6 +212,11 @@ and print_stat fmt = function
     Format.fprintf fmt "return (%a)"
       print_expr_ext e
 
+  | AST_expr (e,_) ->
+    Format.fprintf fmt "%a"
+      print_expr e
+
+
 and print_stat_ext fmt (s, _) =
   print_stat fmt s
 
@@ -223,7 +232,7 @@ and print_declaration_ext fmt x =
 
 and print_fundec fmt (f: fundec) =
   Format.fprintf fmt "@[<v>@[<v 2>%a %a(%a) {@,%a;@,%a;@]@,}@]"
-    print_typ f.return_type
+    print_typ_opt f.return_type
     print_var f.funname
     (Format.pp_print_list
        ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
