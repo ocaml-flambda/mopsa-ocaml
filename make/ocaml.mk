@@ -1,119 +1,70 @@
-#################
-## Ocaml rules ##
-#################
+##################
+## Dependencies ##
+##################
 
-$(CMX): $(BUILD)/%.cmx: $(SRC)/%.ml | $(BUILD)/%.dep
+$(MLI:$(SRC)/%.mli=$(BUILD)/%.cmi): $(BUILD)/%.cmi: $(SRC)/%.mli
+$(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
+
+$(ML:$(SRC)/%.ml=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(SRC)/%.ml
+$(MLI:$(SRC)/%.mli=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(SRC)/%.cmi
+$(ML:$(SRC)/%.ml=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.ml
+$(MLI:$(SRC)/%.mli=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.cmi
+$(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
+
+$(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml
+$(MLY:$(SRC)/%.mll=$(BUILD)/%.dep): $(BUILD)/%.dep: $(BUILD)/%.ml
+
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.ydep): $(BUILD)/%.ydep: $(SRC)/%.mly
+
+######################
+## OCamlLex recipes ##
+######################
+
+
+$(MLL:$(SRC)/%.mll=$(BUILD)/%.ml):
 	@mkdir -p $(@D)
-	@echo "Compiling [cmx] $<"
-	@$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMXA) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
-
-$(CMO): $(BUILD)/%.cmo: $(SRC)/%.ml | $(BUILD)/%.dep
-	@mkdir -p $(@D)
-	@echo "Compiling [cmo] $<"
-	@$(OCAMLFIND) $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMA) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
-
-$(CMI): $(BUILD)/%.cmi: $(SRC)/%.mli   | $(BUILD)/%.idep
-	@mkdir -p $(@D)
-	@echo "Compiling [cmi] $<"
-	@$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
-
-$(CMX_FROM_CMI): $(BUILD)/%.cmx: $(SRC)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.dep
-	@mkdir -p $(@D)
-	@echo "Compiling [cmx] $<"
-	@$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMXA) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
-
-$(CMO_FROM_CMI): $(BUILD)/%.cmo: $(SRC)/%.ml $(BUILD)/%.cmi  | $(BUILD)/%.dep
-	@mkdir -p $(@D)
-	@echo "Compiling [cmo] $<"
-	@$(OCAMLFIND) $(OCAMLC) $(OCAMLFLAGS) -package "$(PKGS)" $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
-
-
-.SECONDEXPANSION:
-$(CMX_FROM_PACK): $(BUILD)/%.cmx: $$(PACK_DEP_$$@) | $(BUILD)/%.ml
-	@mkdir -p $(@D)
-	@echo "Packing [cmx] $*"
-	@$(OCAMLFIND)  $(OCAMLOPT) $(OCAMLFLAGS) $(INCLUDE_FLAG_$@) $(PACK_FLAG_$@) -pack $+ -o $@
-
-$(CMO_FROM_PACK): $(BUILD)/%.cmo: $$(PACK_DEP_$$@) | $(BUILD)/%.ml
-	@mkdir -p $(@D)
-	@echo "Packing [cmo] $*"
-	@$(OCAMLFIND)  $(OCAMLC) $(OCAMLFLAGS) $(INCLUDE_FLAG_$@) $(PACK_FLAG_$@) -pack $+ -o $@
-
-$(ML_OF_PACKS): $(BUILD)/%.ml : $(SRC)/%
-	@mkdir -p $(@D)
-	@touch $@
-
-
-####################
-## Lex/Yacc rules ##
-####################
-
-
-$(ML_OF_MLL): $(BUILD)/%.ml: $(SRC)/%.mll
-	@mkdir -p $(@D)
-	@echo "Compiling [ml] $<"
+	@echo "[MLL] $<"
 	$(OCAMLLEX) -q $< -o $@
 
-$(ML_OF_MLY): $(BUILD)/%.ml: $(SRC)/%.mly | $(BUILD)/%.dep
+
+####################
+## Menhir recipes ##
+####################
+
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.ml) $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli):
 	@mkdir -p $(@D)
-	@echo "Compiling [ml] $<"
-	$(MENHIR)  --explain  $< --base $(BUILD)/$*
+	@echo "[MLY] $<"
+	$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
 
-$(MLI_OF_MLY): $(BUILD)/%.mli: $(SRC)/%.mly | $(BUILD)/%.dep
-	@echo "Compiling [mli] $<"
-	$(MENHIR)  --explain  $< --base $(BUILD)/$*
 
-$(CMX_FROM_MLL): %.cmx: %.ml | %.dep
+###################
+## Ocaml recipes ##
+###################
+
+%.cmx:
 	@mkdir -p $(@D)
-	@echo "Compiling [cmx] $<"
-	@$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMXA) -c $< -o $@
+	@echo "[CMX] $<"
+	@$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMXA) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
 
-$(CMO_FROM_MLL): %.cmo: %.ml | %.dep
+%.cmo:
 	@mkdir -p $(@D)
-	@echo "Compiling [cmo] $<"
-	@$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMA) -c $< -o $@
+	@echo "[CMO] $<"
+	@$(OCAMLFIND) $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMA) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
 
-$(CMX_FROM_MLY): %.cmx: %.ml %.cmi | %.dep
+%.cmi:
 	@mkdir -p $(@D)
-	@echo "Compiling [cmx] $<"
-	@$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMXA) -I $(BUILD) -c $< -o $@
+	@echo "[CMI] $<"
+	@$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(INCLUDE_FLAG_$<) $(PACK_FLAG_$<) -c $< -o $@
 
-$(CMO_FROM_MLY): %.cmo: %.ml %.cmi | %.dep
+%.dep:
 	@mkdir -p $(@D)
-	@echo "Compiling [cmo] $<"
-	@$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(LIBCMA) -I $(BUILD) -c $< -o $@
-
-$(CMI_FROM_MLY): %.cmi: %.mli | %.dep
-	@mkdir -p $(@D)
-	@echo "Compiling [cmi] $<"
-	@$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) -I $(BUILD) -c $< -o $@
-
-
-########################
-## Dependencies rules ##
-########################
-
-$(DEPS_ML): $(BUILD)/%.dep: $(SRC)/%.ml | $(ML_OF_PACKS) $(ML_OF_MLL) $(ML_OF_MLY)
-	@mkdir -p $(@D)
-	@echo "Generating dependencies for $<"
+	@echo "[DEP] $<"
 	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) -absname  $< > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
 
-
-$(DEPS_MLI): $(BUILD)/%.idep: $(SRC)/%.mli | $(ML_OF_PACKS) $(ML_OF_MLL) $(ML_OF_MLY)
+%.ydep:
 	@mkdir -p $(@D)
-	@echo "Generating dependencies for $<"
-	@$(OCAMLFIND) $(OCAMLDEP) $(INCLUDE_FLAG_$<) $(INCLUDE_FLAG_$<:$(BUILD)%=$(SRC)%) $(INCLUDES) -absname $< > $@
-	@$(SED) -i 's/\bsrc\b/_build/g' $@
-
-$(DEPS_MLL): $(BUILD)/%.dep: $(BUILD)/%.ml | $(ML_OF_PACKS) $(ML_OF_MLY)
-	@mkdir -p $(@D)
-	@echo "Generating dependencies for $<"
-	@$(OCAMLFIND) $(OCAMLDEP) -I $(SRC) -I $(BUILD) $(INCLUDES) $< > $@
-	@$(SED) -i 's/\bsrc\b/_build/g' $@
-
-$(DEPS_MLY): $(BUILD)/%.dep: $(SRC)/%.mly | $(ML_OF_PACKS)
-	@mkdir -p $(@D)
-	@echo "Generating dependencies for $<"
+	@echo "[DEP] $<"
 	@$(MENHIR) --raw-depend --ocamldep '$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES) -I $(SRC)' $< > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@

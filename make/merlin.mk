@@ -15,6 +15,6 @@ clean-merlin:
 	-rm $(MERLIN)
 
 $(MERLIN):
-	$(info Generating merlin file $@)
+	$(info [MRL] $(shell dirname $@))
 	$(shell echo -e "$(MERLIN_PATHS_$@)" >> $@)
 	$(file >>$@,PKG $(PKGS))

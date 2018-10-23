@@ -18,11 +18,13 @@ define generate_pack_flags =
  PACK_DEP_$$(PACK_CMO_$(1)) = $$(patsubst %,$$(BUILD)/$(1)/%.cmo,$$(PACK_CONTENT_$(1)))
  PARENT_PACK_$(1) = $$(patsubst /%,%,$$(patsubst $$(SRC)%,%,$$(shell realpath --relative-to=. $$(SRC)/$(1)/..)))
  PACK_FLAG_$$(PACK_CMX_$(1)) = \
+	-pack $$(PACK_NAME_$(1)) \
 	$$(if $$(PARENT_PACK_$(1)),\
 		-for-pack $$(call pack_name,$$(PARENT_PACK_$(1))),\
 		\
 	)
  PACK_FLAG_$$(PACK_CMO_$(1)) = \
+	-pack $$(PACK_NAME_$(1)) \
 	$$(if $$(PARENT_PACK_$(1)),\
 		-for-pack $$(call pack_name,$$(PARENT_PACK_$(1))),\
 		\
@@ -31,6 +33,11 @@ endef
 
 $(foreach pack,$(PACKS),$(eval $(call generate_pack_flags,$(pack))))
 
+$(PACKS:$(SRC)/%=$(BUILD)/%.ml): $(BUILD)/%.ml : $(SRC)/%
+	@mkdir -p $(@D)
+	@touch $@
+
+
 #####################################
 ## Generate flags for each ml file ##
 #####################################
@@ -38,7 +45,7 @@ $(foreach pack,$(PACKS),$(eval $(call generate_pack_flags,$(pack))))
 define generate_ml_flags =
  INCLUDE_FLAG_$(1) = $$(patsubst $$(SRC)%,$$(BUILD)%,$$(call include_lineage,$$(shell dirname $(1))))
  PACK_NAME_$(1) = $$(call pack_name,$$(call pack_dir_of_ml,$(1)))
- PACK_FLAG_$(1) = $$(if $$(filter $$(PACK_NAME_$(1)),.), ,-for-pack $$(PACK_NAME_$(1)))
+ PACK_FLAG_$(1) = $$(if $$(filter $$(PACK_NAME_$(1)),.), ,-for-pack $$(PACK_NAME_$(1)) -c)
 endef
 
 $(foreach ml,$(ML),$(eval $(call generate_ml_flags,$(ml))))
