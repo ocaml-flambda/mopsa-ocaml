@@ -63,6 +63,8 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+  type _ Framework.Query.query +=
+    | Q_sat : Framework.Ast.expr -> bool Framework.Query.query
 
   (** {2 Environment utility functions} *)
   (** ********************************* *)
@@ -421,7 +423,7 @@ struct
       return
 
     | S_assume(e) -> begin
-        let a = add_missing_vars  a (Framework.Visitor.expr_vars e) in
+        let a = add_missing_vars a (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
         let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
@@ -453,7 +455,32 @@ struct
 
     | _ -> return top
 
-  and ask query a = None
+  and satisfy (abs: t) (e: expr): bool =
+    let a = add_missing_vars abs (Framework.Visitor.expr_vars e) in
+    let env = Apron.Abstract1.env a in
+    bexp_to_apron e
+    |> Dnf.substitute
+      (fun (op, e1, t1, e2, t2) ->
+         let typ =
+           match t1, t2 with
+           | T_int, T_int -> Apron.Texpr1.Int
+           | T_float, T_int
+           | T_int, T_float
+           | T_float, T_float -> Apron.Texpr1.Real
+           | _ -> fail "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
+         in
+         let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+         let diff_texpr = Apron.Texpr1.of_expr env diff in
+         let tcons = Apron.Tcons1.make diff_texpr op in
+         Apron.Abstract1.sat_tcons ApronManager.man a tcons
+      ) (||) (&&)
+
+  and ask : type r. r Framework.Query.query -> t -> r option =
+    fun query abs ->
+      match query with
+      | Q_sat e ->
+        Some (satisfy abs e)
+      | _ -> None
 
   let var_relations v a =
     (* Get the linear constraints *)
