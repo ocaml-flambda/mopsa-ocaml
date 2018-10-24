@@ -112,6 +112,19 @@ let () =
           | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
         end
       | S_print -> fprintf fmt "print();"
+      | S_expand(v, vl) ->
+        fprintf fmt "fold(%a, %a)"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+      | S_fold(v, vl) ->
+        fprintf fmt "fold(%a, %a)"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->

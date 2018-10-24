@@ -1,8 +1,18 @@
+open Framework.Essentials
 open Numerical
+
+module Uid =
+struct
+  let i = ref 0
+  let fresh () =
+    let j = !i in
+    incr i;
+    j
+end
 
 let debug fmt = ToolBox.debug "dom" fmt
 
-module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) =
+module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stacked.S *) =
 struct
   let hole_tree = A.witness
 
@@ -17,11 +27,11 @@ struct
   module TA = AbstractTreeAutomaton.Make(S)(A)
   type t =
     {
-      shape : TA.dfta;
-      support: RegExp.t;
-      classes: RegexpPartition.t;
-      env: RegexpPartition.t;
-      numeric: Numerical.t;
+      shape   : TA.dfta;
+      support : RegExp.t;
+      classes : RegexpPartition.t;
+      env     : RegexpPartition.t;
+      varbind : StrVarBind.t
     }
 
   let holify_sigma_algebra (sa: TA.sigma_algebra) =
@@ -53,7 +63,7 @@ struct
       RegExp.pp_print_u (RegExp.regexp_of_automata u.support)
       RegexpPartition.print_left u.classes
       RegexpPartition.print u.env
-      Numerical.print u.numeric
+      (* Numerical.print u.numeric *)
 
   let automata_algebra_on_n (sa: TA.sigma_algebra) =
     let n = SA.max_arity sa in
@@ -143,13 +153,18 @@ struct
     in
     let r_support = TA.find_position hole_tree r_shape state_pos in
     let r_env_automata = List.map (fun (x, a) -> RegExp.automata_of_regexp ra x, a) r_classes in
+    let r_strvarbind = ToolBox.fold (fun (re, rn) strvarbind ->
+        StrVarBind.get_var rn strvarbind |> snd
+      ) r_env_automata StrVarBind.empty
+    in
     let r_classes_automata = List.filter (fun (x, a) -> not (RegExp.is_cardinality_one x)) r_env_automata in
     {
       shape = r_shape_dfta;
       support = r_support |> RegExp.automata_of_regexp ra ;
       classes = r_classes_automata;
       env = r_env_automata;
-      numeric = Numerical.top (Environmentext.empty)
+      varbind = r_strvarbind
+      (* numeric = Numerical.top (Environmentext.empty) *)
     }, vari_numvar_eq
 
   let hole_position (reg_algebra) (u: TA.dfta) =
@@ -157,15 +172,15 @@ struct
     let nsupport_u = TA.find_position_dfta hole_tree u state_pos in
     RegExp.automata_of_regexp reg_algebra nsupport_u
 
-  let from_tree_and_num (st: input_tree) (num: Numerical.t): t =
-    let u, renaming = from_tree st in
-    (* let () = debug "renaming: %a" print_injection renaming in *)
-    let env = List.map fst renaming in
-    let num' = Numerical.change_environment num (Environmentext.int_env_of_list env) in
-    {
-      u with
-      numeric = Numerical.renaming_list renaming num'
-    }
+  (* let from_tree_and_num (st: input_tree) (num: Numerical.t): t =
+   *   let u, renaming = from_tree st in
+   *   (\* let () = debug "renaming: %a" print_injection renaming in *\)
+   *   let env = List.map fst renaming in
+   *   let num' = Numerical.change_environment num (Environmentext.int_env_of_list env) in
+   *   {
+   *     u with
+   *     numeric = Numerical.renaming_list renaming num'
+   *   } *)
 
   let merge_splitter (a : RegexpPartition.t ToolBox.StringM.t) (b : RegexpPartition.t ToolBox.StringM.t) : RegexpPartition.t ToolBox.StringM.t =
     ToolBox.StringM.union (fun k a b -> Some (ToolBox.fusion_mem (fun (_,a) (_,b) -> compare a b) a b)) a b
@@ -173,10 +188,7 @@ struct
   let print_splitter (* fmt (x : ((RegExp.t * string) list) ToolBox.StringM.t) *) =
     ToolBox.print_map (Format.pp_print_string) (RegexpPartition.print) (ToolBox.StringM.bindings)
 
-  let unify (u: t) (v: t)  =
-    (* let () = debug "@[<v>unify called on:@,u:%a@,v:%a@,@]" print u print v in *)
-    (* let sa = holify_sigma_algebra sa in
-     * let auto_algebra = automata_algebra_on_n sa in *)
+  let unify annot man (u: t) u_num (v: t) v_num =
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
     let splitu, splitv = List.fold_left (fun (splitu, splitv) (ue, un) ->
@@ -242,14 +254,22 @@ struct
     in
     let n_common_env, n_u_env, u_var_extension = apply_splitter u.env splitu v.support in
     let _           , n_v_env, v_var_extension = apply_splitter v.env splitv u.support in
-    let apply_var_extension num ve =
-      ToolBox.StringM.fold (fun un l num ->
-          Numerical.extend num un l
-        ) ve num
+    let n_full_env = ToolBox.fold (fun ((_, rn) as n) acc ->
+        if not (List.exists (fun (_, rn') -> rn = rn') n_v_env) then
+          (n :: acc)
+        else
+          acc
+      ) n_u_env n_v_env
     in
-    let n_u_num = apply_var_extension u.numeric u_var_extension in
-    let n_v_num = apply_var_extension v.numeric v_var_extension in
-    (n_u_env, n_u_num, n_v_env, n_v_num, n_common_env)
+    let apply_var_extension num ve vb =
+      ToolBox.StringM.fold (fun un l (num, vb) ->
+          Numerical.extend (mk_fresh_range ()) man vb un l num
+        ) ve (num, vb)
+    in
+    let n_u_num, n_u_vb = apply_var_extension u_num u_var_extension u.varbind in
+    let n_v_num, n_v_vb = apply_var_extension v_num v_var_extension v.varbind in
+
+    (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, n_full_env)
 
   module BPart =
   struct
@@ -360,15 +380,24 @@ struct
      *     (RegexpPartition.replace (wr, wrn) u_env, RegExp.diff auto_algebra available wr, abs)
      *   ) (u_env, widening_position) to_extend *)
 
-  let merge_classes (sa: TA.sigma_algebra) (u: t) (nclass: RegexpPartition.t) =
-    (* let sa = holify_sigma_algebra sa in *)
-    (* let re_algebra = automata_algebra_on_n sa in *)
+  let vb_sanitize (u: t) =
+    let s = ToolBox.fold (fun (_, rn) ->
+        SetExt.StringSet.add rn
+      ) u.env SetExt.StringSet.empty
+    in
+    let filter (x, _) = SetExt.StringSet.mem x s in
+    {
+      u with
+      varbind = StrVarBind.filter filter u.varbind
+    }
+
+  let merge_classes (u: t) (nclass: RegexpPartition.t) =
     let n_part, n_part_name =
       match nclass with
       | (p, _)::q ->
         let n_part =
           List.fold_left (fun acc (e, n) ->
-              RegExp.join (*re_algebra*) acc e
+              RegExp.join acc e
             ) p q
         in
         let n_part_name =
@@ -381,20 +410,19 @@ struct
       classes = (n_part, n_part_name) :: (List.filter (fun (_, un) ->
           not (List.exists (fun (_, vn) -> un = vn) nclass)
         ) u.classes);
-      numeric = Numerical.wrap_eq_variables
-          (List.map snd nclass)
-          n_part_name u.numeric
     }
 
-  let merge_env (sa: TA.sigma_algebra) (u: t) (nenv: RegexpPartition.t) =
-    (* let sa = holify_sigma_algebra sa in *)
-    (* let re_algebra = automata_algebra_on_n sa in *)
+  let merge_env
+      (man: ('b, 'b) man) (u: t)
+      (u_num: 'b flow) (nenv: RegexpPartition.t)
+    : (t * 'b flow)
+    =
     let n_part, n_part_name =
       match nenv with
       | (p, _)::q ->
         let n_part =
           List.fold_left (fun acc (e, n) ->
-              RegExp.join (*re_algebra*) acc e
+              RegExp.join acc e
             ) p q
         in
         let n_part_name =
@@ -403,50 +431,62 @@ struct
         n_part, n_part_name
       | [] -> failwith "[merge_classes] should be called with a non empty partition"
     in
+    let u_num, vb = Numerical.fold
+        (mk_fresh_range ())
+        man u.varbind
+        (List.map snd nenv) n_part_name u_num
+    in
     { u with
       env = (n_part, n_part_name) :: (List.filter (fun (_, un) ->
           not (List.exists (fun (_, vn) -> un = vn) nenv)
         ) u.env);
-      numeric = Numerical.wrap_variables
-          (List.map snd nenv)
-          n_part_name u.numeric
-    }
+      varbind = vb;
+    }, u_num
 
-  let normalize (u: t): t =
-    let sa = TA.get_sigma_algebra u.shape in
-    let rec cross l to_merge = match l with
+  let normalize
+      (man: ('b, 'b) man)
+      (u: t)
+      (u_num: 'b flow)
+    : (t * 'b flow)
+    =
+    let rec cross l to_merge vb = match l with
       | (ue, un) :: q ->
-        let eq, neq = find (ue, un) q [] [] in
-        if eq <> [] then cross neq (((ue, un)::eq) :: to_merge)
-        else cross neq to_merge
-      | [] -> to_merge
-    and find (ue, un) q eq neq = match q with
+        let eq, neq = find (ue, un) q [] [] u.varbind in
+        if eq <> [] then cross neq (((ue, un)::eq) :: to_merge) vb
+        else cross neq to_merge vb
+      | [] -> (to_merge, vb)
+    and find (ue, un) q eq neq vb = match q with
       | (ve, vn) :: r ->
-        if Numerical.eq un vn u.numeric then
-          find (ue, un) r ((ve, vn) :: eq) neq
+        let b, vb = Numerical.eq (mk_fresh_range ()) man un vn u.varbind u_num in
+        if b then
+          find (ue, un) r ((ve, vn) :: eq) neq vb
         else
-          find (ue, un) r eq ((ve, vn) :: neq)
+          find (ue, un) r eq ((ve, vn) :: neq) vb
       | [] -> eq, neq
     in
-    let new_eq_classes = cross u.classes [] in
-    let u' =
+    let new_eq_classes, vb = cross u.classes [] u.varbind in
+    let u = {u with varbind = vb} in
+    let u', u_num =
       List.fold_left (fun acc x ->
-          merge_classes sa acc x
+          merge_classes acc x
         ) u new_eq_classes
-      |> fun u -> List.fold_left (fun acc x ->
-          merge_env sa acc x
-        ) u new_eq_classes
+      |> fun u -> List.fold_left (fun (u, u_num) x ->
+          merge_env man u u_num x
+        ) (u, u_num) new_eq_classes
     in
-    let foldable_env = Numerical.find_foldable_variables u'.numeric in
+    let foldable_env = Numerical.find_foldable_variables u_num in
     let foldable_env_with_regexp = List.map (fun cl ->
         List.map (fun x ->
             List.find (fun (ue, un) -> x = un) u'.env
           ) cl
       ) foldable_env
     in
-    List.fold_left (fun acc cl ->
-        merge_env sa acc cl
-      ) u' foldable_env_with_regexp
+    let u, u_num =
+      ToolBox.fold (fun cl (u, u_num) ->
+          merge_env man u u_num cl
+        ) foldable_env_with_regexp (u, u_num)
+    in
+    (u, u_num)
 
   let join_eq_classes u v b =
     let bb = match b with
@@ -529,60 +569,74 @@ struct
     let nclasses = merge_classes [] cv [] cu in
     nclasses
 
-  let meet (u: t) (v: t): t =
+  let meet annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+    : (t * 'b flow * 'b flow) =
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
     let nshape = TA.meet_dfta u.shape v.shape in
     let nsupport = RegExp.meet u.support v.support in
     let nclasses = meet_eq_classes auto_algebra u v in
-    let (n_u_env, n_u_num, n_v_env, n_v_num, n_common_env) =
-      unify u v
+    let (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, _) =
+      (* TODO: ceci perd de l'info gratuite *)
+      unify annot man u u_num v v_num
     in
-    let nnum = Numerical.meet_different_support n_u_num n_v_num (List.map snd n_common_env) in
+    let diffu = List.filter (fun (re, rn) ->
+        not (List.exists (fun (_, rn') -> rn = rn') n_common_env)
+      ) n_u_env |> List.map snd
+    in
+    let diffv = List.filter (fun (re, rn) ->
+        not (List.exists (fun (_, rn') -> rn = rn') n_common_env)
+      ) n_v_env |> List.map snd
+    in
+    let u_num, v_num, vb_u, vb_v =
+      Numerical.meet_different_support man
+        u_num v_num
+        diffu diffv
+        (List.map snd n_common_env)
+        u.varbind v.varbind
+    in
     let prep =
       {
         shape = nshape;
         support = nsupport;
         classes = nclasses;
         env = n_common_env;
-        numeric = nnum
+        varbind = vb_u
       }
     in
-    prep |> normalize
+    (* TODO: on aimerait normaliser prep après, mais on n'a pas le
+       résultat du meet*)
+    (prep, u_num, v_num)
 
-  let join (u: t) (v: t): t =
-    (* let sa = holify_sigma_algebra sa in
-     * let auto_algebra = automata_algebra_on_n sa in *)
+  let join  annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+    : (t * 'b flow * 'b flow) =
     let nshape = TA.join_dfta u.shape v.shape in
-    let () =
-      debug "%a" TA.print_dfta u.shape;
-      debug "%a" TA.print_dfta v.shape
-    in
-    let () =
-      debug "%a%!" TA.print_dfta nshape in
     let nsupport = RegExp.join (*auto_algebra*) u.support v.support in
     let nclasses = join_eq_classes u v None in
-
-    let (n_u_env, n_u_num, n_v_env, n_v_num, n_common_env) =
-      unify u v
+    let (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, _ , n_full_env) =
+      unify annot man u u_num v v_num
     in
-    let () = debug "u_env: %a" RegexpPartition.print n_u_env in
-    let () = debug "v_env: %a" RegexpPartition.print n_v_env in
-    let () = debug "c_env: %a" RegexpPartition.print n_common_env in
-    let nnum = Numerical.join_different_support n_u_num n_v_num (List.map snd n_common_env) in
-
+    let u_num, v_num, vb_u, vb_v = Numerical.join_different_support
+        man
+        u_num v_num
+        (n_u_env |> List.map snd) (n_v_env |> List.map snd)
+        (n_full_env |> List.map snd)
+        u.varbind v.varbind
+    in
     let prep = {
       shape = nshape;
       support = nsupport;
       classes = nclasses;
-      env = n_u_env @ n_v_env @ n_common_env;
-      numeric = nnum
+      env = n_full_env;
+      varbind = vb_u
     } in
-    let () = debug "prep : %a" print prep in
-    prep |> normalize
+    (* We would like to normalize *)
+    (prep, u_num, v_num)
 
-  let leq (u: t) (v: t) =
-    let u, v = normalize u, normalize v in
+  let leq annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+    : (t * 'b flow * 'b flow) =
+    let u, unum = normalize man u u_num in
+    let v, vnum = normalize man v v_num in
     let find_v_to_u_class_injection u_classes v_classes u_support =
       try
         List.iter (fun (ve, vn) ->
@@ -609,16 +663,13 @@ struct
       with
       | Not_found -> false
     in
+    let (_, n_u_num, _, n_v_num, n_common_env) =
+      unify u v
+    in
+    (* Numerical.env_leq n_u_num n_v_num (List.map snd n_common_env) *)
     RegExp.leq (*re_algebra*) u.support v.support &&
     TA.leq_dfta u.shape v.shape &&
-    find_v_to_u_class_injection u.classes v.classes u.support &&
-    (
-      let (_, n_u_num, _, n_v_num, n_common_env) =
-        unify u v
-      in
-      (* let () = debug "unify done" in *)
-      Numerical.env_leq n_u_num n_v_num (List.map snd n_common_env)
-    )
+    find_v_to_u_class_injection u.classes v.classes u.support
 
     module Linker =
   struct

@@ -17,6 +17,10 @@ open Ast
 (**                      {2 Command line options}                           *)
 (****************************************************************************)
 
+
+type _ Framework.Query.query +=
+  | Q_sat : Framework.Ast.expr -> bool Framework.Query.query
+
 let opt_float_rounding = ref Apron.Texpr1.Near
 
 let () =
@@ -62,9 +66,6 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
-
-  type _ Framework.Query.query +=
-    | Q_sat : Framework.Ast.expr -> bool Framework.Query.query
 
   (** {2 Environment utility functions} *)
   (** ********************************* *)
