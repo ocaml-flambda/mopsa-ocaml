@@ -37,14 +37,13 @@ MAKEROOT=$(MOPSAROOT)/make
 
 -include $(MAKEROOT)/target.mk
 -include $(MAKEROOT)/ocaml.mk
--include $(MAKEROOT)/pack.mk
 -include $(MAKEROOT)/merlin.mk
 -include $(MAKEROOT)/c.mk
 
 
 ifneq ($(MAKECMDGOALS),clean)
--include $(DEPS_ML)
--include $(DEPS_MLI)
--include $(DEPS_MLL)
--include $(DEPS_MLY)
+-include $(ML:$(SRC)/%=$(BUILD)/%.dep)
+-include $(MLI:$(SRC)/%=$(BUILD)/%.dep)
+-include $(MLL:$(SRC)/%=$(BUILD)/%.dep)
+-include $(MLY:$(SRC)/%=$(BUILD)/%.dep)
 endif

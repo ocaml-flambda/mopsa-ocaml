@@ -3,9 +3,9 @@
 #################
 
 $(C_OBJ): $(BUILD)/%.o: $(SRC)/%.c
-	@echo "[CC ]  $<"
-	@$(CC) $(CFLAGS) -fPIC -I $(shell ocamlc -where) -c $< -o $@
+	@echo "[CC]  $<"
+	$(QUIET)$(CC) $(CFLAGS) -fPIC -I $(shell ocamlc -where) -c $< -o $@
 
 $(CC_OBJ): $(BUILD)/%.o: $(SRC)/%.cc
-	@echo "[CPP] $<"
-	@$(CXX) $(CXXFLAGS) -fPIC -I $(shell ocamlc -where) -c $< -o $@
+	@echo "[CXX] $<"
+	$(QUIET)$(CXX) $(CXXFLAGS) -fPIC -I $(shell ocamlc -where) -c $< -o $@

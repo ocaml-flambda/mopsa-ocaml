@@ -27,6 +27,11 @@ BIN = bin
 DOC = doc
 LIB = lib
 
+ifeq ($(VERBOSE),1)
+  QUIET =
+else
+  QUIET = @
+endif
 
 #PKGS += unix str
 INCLUDES := $(INCLUDES) -I $(BUILD) $(LIBS:%=-I %) $(foreach lib,$(MOPSALIBS),-I $(call lib_src_dir,$(lib)) -I $(call lib_dir,$(lib)))

@@ -3,7 +3,7 @@
 all: $(MERLIN) $(TARGET_NATIVES) $(TARGET_LIBS) $(TARGET_CLIBS)
 
 clean:
-	@rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
+	$(QUIET)rm -rf $(BUILD)/* $(LIB)/* $(MERLIN)
 
 
 $(TARGET_NATIVES): %: $(BUILD)/%.native
@@ -22,8 +22,8 @@ define NATIVE_template =
  TARGET_$(1) = $$(BUILD)/$(1).native
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
-	@echo "Linking native binary $(1)"
-	@$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
 endef
 
 
@@ -32,8 +32,8 @@ define LIB_template =
  TARGET_$(1) = $$(BUILD)/$(1).cmxa
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
-	@echo "Linking native library $(1)"
-	@$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
@@ -45,9 +45,9 @@ define CLIB_template =
  TARGET_BASE_$(1) = $$(BUILD)/$(1)
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1)) $$(C_OBJ) $$(CC_OBJ)
-	@echo "Linking native/C library $(1)"
-	@$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMX_$(1))
-	@$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(C_OBJ) $$(CC_OBJ)
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMX_$(1))
+	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(C_OBJ) $$(CC_OBJ)
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 
@@ -59,8 +59,8 @@ define BYTE_template =
  TARGET_$(1) = $$(BUILD)/$(1).byte
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
-	@echo "Linking bytecode binary $(1)"
-	@$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
 endef
 
 
@@ -69,8 +69,8 @@ define BYTELIB_template =
  TARGET_$(1) = $$(BUILD)/$(1).cma
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
-	@echo "Linking bytecode library $(1)"
-	@$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 endef
@@ -87,8 +87,8 @@ define BYTECLIB_template =
  $$(CTARGET_$(1)): $$(TARGET_$(1))
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1)) $$(C_OBJ) $$(CC_OBJ)
-	@echo "Linking bytecode/C library $(1)"
-	@$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMO_$(1))
+	@echo "[LD]  $$@"
+	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMO_$(1))
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
 

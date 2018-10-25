@@ -1,9 +1,25 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
 (** Debug - Conditional debugging with channel filtering. *)
 
 let channels = ref []
 let print_color = ref true
 let print_all = ref false
-let colors = [("red", 160); ("green", 0x28); ("yellow", 0xbe); ("blue", 4); ("magenta", 0x5c); ("fushia", 13); ("orange", 0xd0)]
+let colors = [
+  ("red", 160);
+  ("green", 0x28);
+  ("yellow", 0xbe);
+  ("blue", 4);
+  ("magenta", 0x5c);
+  ("fushia", 13);
+  ("orange", 0xd0)
+]
 
 let add_channel ch =
   if ch = "all" then
