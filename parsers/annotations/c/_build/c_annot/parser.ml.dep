@@ -1,0 +1,2 @@
+_build/c_annot/parser.cmo : _build/c_annot/ast.cmo _build/c_annot/parser.cmi
+_build/c_annot/parser.cmx : _build/c_annot/ast.cmx _build/c_annot/parser.cmi

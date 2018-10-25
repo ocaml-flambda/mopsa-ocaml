@@ -2,7 +2,7 @@ TARGET_LIBS = mlCAnnotationParser
 
 # Packs
 mlCAnnotationParser = c_annot
-c_annot = tokens ast lexer parser printer
+c_annot = ast parser lexer printer
 
 # Packages
 PKGS = zarith

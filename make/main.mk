@@ -36,6 +36,7 @@ MAKEROOT=$(MOPSAROOT)/make
 .PHONY: native lib-native lib-native-c clean deps merlin doc
 
 -include $(MAKEROOT)/target.mk
+-include $(MAKEROOT)/flags.mk
 -include $(MAKEROOT)/ocaml.mk
 -include $(MAKEROOT)/merlin.mk
 -include $(MAKEROOT)/c.mk
@@ -44,6 +45,7 @@ MAKEROOT=$(MOPSAROOT)/make
 ifneq ($(MAKECMDGOALS),clean)
 -include $(ML:$(SRC)/%=$(BUILD)/%.dep)
 -include $(MLI:$(SRC)/%=$(BUILD)/%.dep)
--include $(MLL:$(SRC)/%=$(BUILD)/%.dep)
--include $(MLY:$(SRC)/%=$(BUILD)/%.dep)
+-include $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml.dep)
+-include $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli.dep)
+-include $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml.dep)
 endif

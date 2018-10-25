@@ -10,6 +10,9 @@ MLY = $(filter %.mly,$(FILES))
 # OCaml packs are all directories within $(SRC) hierarchy.
 PACKS = $(patsubst $(SRC)/%,%,$(shell find $(SRC)/* -type d))
 
+ML_AUTOGEN = $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml) $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml) $(PACKS:%=$(BUILD)/%.ml)
+MLI_AUTOGEN = $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli)
+
 ## Libraries
 LIBCMXA = $(LIBS:%=%.cmxa) $(foreach lib,$(MOPSALIBS),$(call lib_file,$(lib)).cmxa)
 LIBCMA  = $(LIBS:%=%.cma) $(foreach lib,$(MOPSALIBS),$(call lib_file,$(lib)).cma)

@@ -15,5 +15,6 @@ parsers/universal/lib/**
 bench/**
 *.native
 *.byte
+*.merlin
 *~
 *#

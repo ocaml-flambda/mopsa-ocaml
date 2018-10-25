@@ -1,0 +1,2 @@
+_build/c_annot/lexer.cmo : _build/c_annot/parser.cmi
+_build/c_annot/lexer.cmx : _build/c_annot/parser.cmx
