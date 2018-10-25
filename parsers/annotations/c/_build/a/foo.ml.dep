@@ -1,2 +1,0 @@
-_build/a/foo.cmo : _build/c_annot.cmo
-_build/a/foo.cmx : _build/c_annot.cmx
