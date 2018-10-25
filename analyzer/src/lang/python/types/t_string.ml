@@ -28,6 +28,8 @@ module Domain =
       match ekind exp with
       | E_constant (C_string _) ->
          Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "str")) range) flow |> Option.return
+      | E_py_bytes _ ->
+         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bytes")) range) flow |> Option.return
       | _ -> None
 
     let exec _ _ _ _ = None
