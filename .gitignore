@@ -12,9 +12,9 @@ parsers/python/lib/**
 parsers/universal/_build/**
 parsers/universal/doc/**
 parsers/universal/lib/**
-parsers/annotations/c/_build/**
-parsers/annotations/c/doc/**
-parsers/annotations/c/lib/**
+parsers/stubs/_build/**
+parsers/stubs/doc/**
+parsers/stubs/lib/**
 bench/**
 *.native
 *.byte
