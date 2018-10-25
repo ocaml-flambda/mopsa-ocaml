@@ -22,7 +22,7 @@ define NATIVE_template =
  TARGET_$(1) = $$(BUILD)/$(1).native
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg  $$(LIBCMXA) $$+ -o $$@
 endef
 
@@ -32,7 +32,7 @@ define LIB_template =
  TARGET_$(1) = $$(BUILD)/$(1).cmxa
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1))
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLFIND) $$(OCAMLOPT) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
@@ -45,7 +45,7 @@ define CLIB_template =
  TARGET_BASE_$(1) = $$(BUILD)/$(1)
 
  $$(TARGET_$(1)): $$(TOP_CMX_$(1)) $$(C_OBJ) $$(CC_OBJ)
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMX_$(1))
 	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(C_OBJ) $$(CC_OBJ)
 	@mkdir -p $$(LIB)
@@ -59,7 +59,7 @@ define BYTE_template =
  TARGET_$(1) = $$(BUILD)/$(1).byte
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -package "$$(PKGS)" -linkpkg $$(LIBCMA) $$(DLLPATHS) $$+ -o $$@
 endef
 
@@ -69,7 +69,7 @@ define BYTELIB_template =
  TARGET_$(1) = $$(BUILD)/$(1).cma
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1))
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLFIND) $$(OCAMLC) $$(OCAMLFLAGS) -cclib "$$(LDFLAGS)" -a -o $$@ -package "$$(PKGS)" $$+
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)
@@ -87,7 +87,7 @@ define BYTECLIB_template =
  $$(CTARGET_$(1)): $$(TARGET_$(1))
 
  $$(TARGET_$(1)): $$(TOP_CMO_$(1)) $$(C_OBJ) $$(CC_OBJ)
-	@echo "[LD]  $$@"
+	@echo "[LD]	$$@"
 	$$(QUIET)$$(OCAMLMKLIB) -o $$(TARGET_BASE_$(1)) -ocamlc "$$(OCAMLC)" -ocamlopt "$$(OCAMLOPT)" $$(LDFLAGS) $$(CCLIBS) $$(TOP_CMO_$(1))
 	@mkdir -p $$(LIB)
 	@cp $$(BUILD)/*.*  $$(LIB)

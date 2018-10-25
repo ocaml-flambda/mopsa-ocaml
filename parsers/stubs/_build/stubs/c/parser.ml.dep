@@ -1,0 +1,2 @@
+_build/stubs/c/parser.cmo : _build/stubs/c/ast.cmo _build/stubs/c/parser.cmi
+_build/stubs/c/parser.cmx : _build/stubs/c/ast.cmx _build/stubs/c/parser.cmi

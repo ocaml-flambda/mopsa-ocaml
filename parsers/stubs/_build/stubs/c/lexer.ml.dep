@@ -1,0 +1,2 @@
+_build/stubs/c/lexer.cmo : _build/stubs/c/parser.cmi
+_build/stubs/c/lexer.cmx : _build/stubs/c/parser.cmx

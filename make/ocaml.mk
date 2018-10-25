@@ -28,7 +28,6 @@ $(PACKS:%=$(BUILD)/%.cmo): $(BUILD)/%.cmo : $$(PACK_DEPS_$$@)
 
 $(PACKS:%=$(BUILD)/%.ml): $(BUILD)/%.ml : $(SRC)/%
 	@mkdir -p $(@D)
-	@echo "[GEN] $@"
 	$(QUIET)touch $@
 
 
@@ -39,7 +38,7 @@ $(PACKS:%=$(BUILD)/%.ml): $(BUILD)/%.ml : $(SRC)/%
 
 $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mll
 	@mkdir -p $(@D)
-	@echo "[GEN] $@"
+	@echo "[MLL]	$@"
 	$(QUIET)$(OCAMLLEX) -q $< -o $@
 
 
@@ -49,13 +48,13 @@ $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mll
 
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(SRC)/%.mly
 	@mkdir -p $(@D)
-	@echo "[GEN] $@"
+	@echo "[MLY]	$@"
 	$(QUIET)$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
 
 
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@mkdir -p $(@D)
-	@echo "[GEN] $@"
+	@echo "[MLY]	$@"
 	$(QUIET)$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
 
 
@@ -66,21 +65,21 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 
 %.cmx:
 	@mkdir -p $(@D)
-	@echo "[CMX] $(ML_$@)"
+	@echo "[CMX]	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND)  $(OCAMLOPT) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.cmo:
 	@mkdir -p $(@D)
-	@echo "[CMO] $(ML_$@)"
+	@echo "[CMO]	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND) $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
 %.cmi:
 	@mkdir -p $(@D)
-	@echo "[CMI] $(MLI_$@)"
+	@echo "[CMI]	$(MLI_$@)"
 	$(QUIET)$(OCAMLFIND)  $(OCAMLC) -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
-%dep: | $(ML_AUTOGEN) $(MLI_AUTOGEN)
+%.dep: | $(ML_AUTOGEN) $(MLI_AUTOGEN)
 	@mkdir -p $(@D)
-	@echo "[GEN] $@"
+	@echo "[DEP]	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND) $(OCAMLDEP) $(INCLUDES) -absname $(DEPFLAGS_$@) > $@
 	@$(SED) -i 's/\bsrc\b/_build/g' $@
