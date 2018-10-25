@@ -12,6 +12,7 @@
 
 open Framework.Essentials
 open Framework.Visitor
+open Universal.Ast
 open Bot
 
 module V = Value.Make(State)(StrSigmaAlgebra)
@@ -171,8 +172,10 @@ module Domain : Framework.Domains.Stacked.S = struct
   let exec zone stmt man flow =
     None
 
-  let eval zone exp man flow =
-    None
+  let eval zone exp man flow = match ekind exp with
+    | E_tree (TC_int exp) ->
+      None
+    | _ -> None
 
   let init prog man flow =
     None

@@ -129,8 +129,10 @@ let () =
       let result = try
           let prog = parse_program files in
           let config = get_config_path () in
+          Debug.info "Configuration used: %s" config;
           let domain = Config.parse config in
 
+          Debug.info "Domain built ...";
           (* Start the analysis *)
           let () = Debug.debug ~channel:("main") "%a" Framework.Ast.pp_program prog in
           let t, alarms = perform_analysis domain prog in

@@ -11,7 +11,6 @@
 open Yojson.Basic
 open Yojson.Basic.Util
 
-let debug fmt = Debug.debug ~channel:"framework.config" fmt
 
 let rec build_domain = function
   | `String(name) -> build_leaf name

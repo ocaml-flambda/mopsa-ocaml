@@ -69,6 +69,7 @@ let rec from_typ (typ: U_ast.typ) : FA.typ =
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
+  | AST_TREE    -> T_tree
 
 let from_binop (b: U.binary_op) : FA.operator =
   match b with
@@ -217,6 +218,22 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
+  | AST_tree tc ->
+    from_tree_constructor tc ext var_ctx fun_ctx
+
+and from_tree_constructor (tc: U.tree_constructor) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option) =
+  let range = from_extent ext in
+  match tc with
+  | Int(e, ext) ->
+    {ekind = E_tree (TC_int (from_expr e ext var_ctx fun_ctx));
+     etyp  = T_tree;
+     erange =range;
+    }
+  | Symbol(s, l) ->
+    {ekind = E_tree (TC_symbol(s, List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) l));
+     etyp  = T_tree;
+     erange =range;
+    }
 
 let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.stmt =
   let range = from_extent ext in

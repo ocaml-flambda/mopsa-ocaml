@@ -18,6 +18,7 @@
 %token TOK_CHAR
 %token TOK_STRING
 %token TOK_ARRAY
+%token TOK_TREE
 
 %token TOK_TRUE
 %token TOK_FALSE
@@ -56,6 +57,7 @@
 %token TOK_COMMA
 %token TOK_EQUAL
 %token TOK_CONCAT
+%token TOK_TREE_CONST
 
 %token <string> TOK_id
 %token <string> TOK_int
@@ -177,6 +179,11 @@ expr:
 | va=ext(var) TOK_LPAREN args=separated_list(TOK_COMMA, ext(expr)) TOK_RPAREN
    { AST_fun_call(va, args)}
 
+| TOK_TREE_CONST TOK_LPAREN e=ext(expr) TOK_RPAREN {AST_tree (Int e)}
+
+| TOK_TREE_CONST TOK_LPAREN s=var TOK_COMMA TOK_LCURLY l=separated_list(TOK_COMMA, ext(expr)) TOK_RCURLY TOK_RPAREN
+                      {AST_tree (Symbol(s, l))}
+
 sign_int_literal:
 | i=TOK_int            { i }
 | TOK_PLUS i=TOK_int   { i }
@@ -203,6 +210,7 @@ typ:
 | TOK_LBRACKET t=typ TOK_RBRACKET { AST_ARRAY t }
 | TOK_STRING { AST_STRING }
 | TOK_CHAR { AST_CHAR }
+| TOK_TREE { AST_TREE }
 
 separated_ended_list(X, Y):
 | l=separated_list(X, Y) X {l}

@@ -49,6 +49,7 @@ let () =
       | T_string -> pp_print_string fmt "string"
       | T_addr -> pp_print_string fmt "addr"
       | T_char -> pp_print_string fmt "char"
+      | T_tree -> pp_print_string fmt "tree"
       | T_array t -> Format.fprintf fmt "[%a]" pp_typ t
       | _ -> default fmt typ
   );
@@ -66,6 +67,14 @@ let () =
       | E_alloc_addr(akind) -> fprintf fmt "alloc()"
       | E_addr addr -> pp_addr fmt addr
       | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
+      | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
+      | E_tree (TC_symbol(s, l)) ->
+        Format.fprintf fmt "Tree(%a,{%a})"
+          pp_print_string s
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+             pp_expr
+          ) l
       | _ -> default fmt exp
     );
 

@@ -22,6 +22,7 @@ type typ +=
   | T_float (** Floating-point real numbers. *)
   | T_string (** Strings. *)
   | T_addr (** Heap addresses. *)
+  | T_tree (** Tree type *)
   | T_array of typ (** Array of [typ] *)
   | T_char
 
@@ -163,6 +164,9 @@ type program_kind +=
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
+type tc =
+  | TC_int of expr
+  | TC_symbol of string * expr list
 
 type expr_kind +=
   (** Function expression *)
@@ -186,6 +190,9 @@ type expr_kind +=
 
   (** Length of array or string *)
   | E_len of expr
+
+  (** Tree construction *)
+  | E_tree of tc
 
 let () =
   register_expr_compare (fun next e1 e2 ->

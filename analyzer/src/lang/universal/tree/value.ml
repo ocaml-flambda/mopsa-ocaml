@@ -1139,37 +1139,31 @@ struct
    *     numeric = nnum;
    *   } *)
 
-  (* let build_tree_from_int (i: int): t =
-   *   let one = S.fresh () in
-   *   let hole = S.fresh () in
-   *   let epsilon = RegExp.from_word (RegExp.Algebra.of_list [0]) [] in
-   *   let epsilon_name = var_of_automata epsilon in
-   *   {
-   *     shape =
-   *       {
-   *         TA.dfta_q  = TA.SS.of_list [one; hole];
-   *         TA.dfta_f  = TA.SS.of_list [one];
-   *         TA.dfta_d  = TA.DetTrans.add_transition (hole_tree, [], one) TA.DetTrans.empty;
-   *         TA.dfta_h  = hole;
-   *         TA.dfta_hc = false;
-   *         TA.dfta_a  = SA.of_list [hole_tree, 0]
-   *       };
-   *     support = epsilon;
-   *     classes = [];
-   *     env = [(epsilon, epsilon_name)];
-   *     numeric =
-   *       let e = Environmentext.int_env_of_list [epsilon_name] in
-   *       let lc =
-   *         let le = Apron.Linexpr1.make e in
-   *         Apron.Linexpr1.set_coeff le
-   *           (Apron.Var.of_string epsilon_name) (Apron.Coeff.s_of_int 1);
-   *         Apron.Linexpr1.set_cst le (Apron.Coeff.s_of_int i);
-   *         Apron.Lincons1.make le Apron.Lincons1.EQ
-   *       in
-   *       Numerical.of_lincons_list e [lc]
-   *   }
-   *
-   * let change_sigma_algebra (sa: TA.SA.t) (u: t) =
+  let build_tree_from_expr range (man: ('b, 'b) man) (e: expr) (num: 'b flow):
+    t * 'b flow =
+    let one = S.fresh () in
+    let hole = S.fresh () in
+    let epsilon = RegExp.from_word (RegExp.Algebra.of_list [0]) [] in
+    let epsilon_name = var_of_automata epsilon in
+    let v, vb = StrVarBind.get_var epsilon_name StrVarBind.empty in
+    {
+      shape =
+        {
+          TA.dfta_q  = TA.SS.of_list [one; hole];
+          TA.dfta_f  = TA.SS.of_list [one];
+          TA.dfta_d  = TA.DetTrans.add_transition (hole_tree, [], one) TA.DetTrans.empty;
+          TA.dfta_h  = hole;
+          TA.dfta_hc = false;
+          TA.dfta_a  = SA.of_list [hole_tree, 0]
+        };
+      support = epsilon;
+      classes = [];
+      env = [(epsilon, epsilon_name)];
+      varbind = vb
+    },
+    man.exec (mk_assign (mk_var v ~mode:STRONG (tag_range range "var")) e (tag_range range "sub_var assign")) num
+
+  (* let change_sigma_algebra (sa: TA.SA.t) (u: t) =
    *   let reg_algebra = automata_algebra_on_n sa in
    *   let nshape = u.shape |> TA.change_sigma_algebra sa in
    *   let nsupport = hole_position reg_algebra nshape in

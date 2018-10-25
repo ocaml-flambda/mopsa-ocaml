@@ -28,6 +28,8 @@ type 'a ext = 'a * extent
  *)
 type var = string
 
+(* symbol used to define trees *)
+type symbol = string
 
 (* types: only integers (mathematical integers, in Z) *)
 type typ =
@@ -36,6 +38,7 @@ type typ =
   | AST_ARRAY of typ
   | AST_STRING
   | AST_CHAR
+  | AST_TREE
 
 (* unary expression operators *)
 type unary_op =
@@ -59,8 +62,13 @@ type binary_op =
   | AST_OR            (* e || e *)
   | AST_CONCAT        (* e @ e *)
 
+(* tree constructor *)
+type tree_constructor =
+  | Symbol of symbol * expr ext list
+  | Int of expr ext
+
 (* expressions *)
-type expr =
+and expr =
   (* unary operation *)
   | AST_unary of unary_op * (expr ext)
 
@@ -101,7 +109,8 @@ type expr =
   (* function call *)
   | AST_fun_call of var ext * expr ext list
 
-
+  (* tree constructor *)
+  | AST_tree of tree_constructor
 
 
 type typed_var =
