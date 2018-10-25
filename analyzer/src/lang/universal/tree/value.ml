@@ -58,11 +58,12 @@ struct
   let print fmt (u: t) =
     Format.fprintf fmt "@[<v>⯈ shape: @[<v 2>@,%a@]@,⯈ support: @[<v \
                         2>@,%a@]@,⯈ classes: @[<v 2>@,%a@]@,⯈ env: \
-                        @[<v 2>@,%a@]@,⯈ numeric: @[<v 2>@,%a@]@,@]"
+                        @[<v 2>@,%a@]@,⯈ varbind: @[<v 2>@,%a@]@,@]"
       TA.print_dfta u.shape
       RegExp.pp_print_u (RegExp.regexp_of_automata u.support)
       RegexpPartition.print_left u.classes
       RegexpPartition.print u.env
+      StrVarBind.print u.varbind
       (* Numerical.print u.numeric *)
 
   let automata_algebra_on_n (sa: TA.sigma_algebra) =
@@ -188,7 +189,7 @@ struct
   let print_splitter (* fmt (x : ((RegExp.t * string) list) ToolBox.StringM.t) *) =
     ToolBox.print_map (Format.pp_print_string) (RegexpPartition.print) (ToolBox.StringM.bindings)
 
-  let unify annot man (u: t) u_num (v: t) v_num =
+  let unify man (u: t) u_num (v: t) v_num =
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
     let splitu, splitv = List.fold_left (fun (splitu, splitv) (ue, un) ->
@@ -569,7 +570,7 @@ struct
     let nclasses = merge_classes [] cv [] cu in
     nclasses
 
-  let meet annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+  let meet (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
     : (t * 'b flow * 'b flow) =
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
@@ -578,7 +579,7 @@ struct
     let nclasses = meet_eq_classes auto_algebra u v in
     let (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, _) =
       (* TODO: ceci perd de l'info gratuite *)
-      unify annot man u u_num v v_num
+      unify man u u_num v v_num
     in
     (* let diffu = List.filter (fun (re, rn) ->
      *     not (List.exists (fun (_, rn') -> rn = rn') n_common_env)
@@ -608,13 +609,13 @@ struct
        résultat du meet*)
     (prep, u_num, v_num)
 
-  let join  annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+  let join (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
     : (t * 'b flow * 'b flow) =
     let nshape = TA.join_dfta u.shape v.shape in
     let nsupport = RegExp.join (*auto_algebra*) u.support v.support in
     let nclasses = join_eq_classes u v None in
     let (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, _ , n_full_env) =
-      unify annot man u u_num v v_num
+      unify man u u_num v v_num
     in
     let u_num, v_num, vb_u, vb_v = Numerical.join_different_support
         man
@@ -633,7 +634,7 @@ struct
     (* We would like to normalize *)
     (prep, u_num, v_num)
 
-  let subset annot (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
+  let subset (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
     : (bool * 'b flow * 'b flow) =
     let u, unum = normalize man u u_num in
     let v, vnum = normalize man v v_num in
@@ -670,7 +671,7 @@ struct
     then
       let (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, _) =
         (* let unify annot man (u: t) u_num (v: t) v_num = *)
-        unify annot man u u_num v v_num
+        unify man u u_num v v_num
       in
       let (n_u_num, n_v_num, _, _) =
         Numerical.env_leq man n_u_num n_v_num
@@ -723,7 +724,7 @@ struct
 
   end
 
-  let widen annot (man: ('b, 'b) man)
+  let widen (man: ('b, 'b) man)
       (u: t) (u_num: 'b flow)
       (v: t) (v_num: 'b flow) =
 
