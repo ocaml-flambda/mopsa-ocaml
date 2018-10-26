@@ -15,6 +15,6 @@ clean-merlin:
 	-rm $(MERLIN)
 
 $(MERLIN):
-	@echo "[GEN]	$@"
+	@echo -e "$(GENMSG)	$@"
 	$(shell echo -e "$(MERLIN_PATHS_$@)" >> $@)
 	$(file >>$@,PKG $(PKGS))

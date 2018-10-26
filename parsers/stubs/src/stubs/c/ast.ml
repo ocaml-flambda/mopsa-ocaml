@@ -8,14 +8,20 @@ type range = loc * loc
 type 'a with_range = 'a * range
 
 type stub = {
-    stub_requires : formula with_range list;
-    stub_local    : local with_range list;
-    stub_assigns  : assigns with_range list;
-    stub_case     : case with_range list;
-    stub_ensures  : formula with_range list;
+    stub_requires : formula list;
+    stub_local    : local list;
+    stub_assigns  : assigns list;
+    stub_case     : case list;
+    stub_ensures  : formula list;
   }
 
-and local = {
+and formula = formula_kind with_range
+and local = local_kind with_range
+and assigns = assigns_kind with_range
+and case = case_kind with_range
+and expr = expr_kind with_range
+    
+and local_kind = {
     local_var : var;
     local_value : local_value;
   }
@@ -24,31 +30,31 @@ and local_value =
   | LV_call    of var (** function *) * expr list (* arguments *)
   | LV_new     of resource
 
-and assigns = {
-    assign_target : expr with_range;
-    assign_range  : (expr with_range * expr with_range) option;
+and assigns_kind = {
+    assign_target : expr;
+    assign_range  : (expr * expr) option;
   }
 
-and case = {
+and case_kind = {
     case_label: string;
-    case_assumes: formula with_range list;
-    case_requires : formula with_range list;
-    case_local    : local with_range list;
-    case_assigns  : assigns with_range list;
-    case_ensures  : formula with_range list;
+    case_assumes: formula list;
+    case_requires : formula list;
+    case_local    : local list;
+    case_assigns  : assigns list;
+    case_ensures  : formula list;
   }
 
-and formula =
-  | F_expr   of expr with_range
+and formula_kind =
+  | F_expr   of expr
   | F_bool   of bool
-  | F_binop  of log_binop * formula with_range * formula with_range
-  | F_not    of formula with_range
-  | F_forall of var * set * formula with_range
-  | F_exists of var * set * formula with_range
+  | F_binop  of log_binop * formula * formula
+  | F_not    of formula
+  | F_forall of var * set * formula
+  | F_exists of var * set * formula
   | F_in     of var * set
-  | F_del    of expr with_range
+  | F_free   of expr
 
-and expr =
+and expr_kind =
   | E_int of Z.t
 
 and log_binop =
