@@ -19,10 +19,10 @@ lang.universal.heap = pool recency
 lang.universal.numeric = values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
-lang.universal.tree = toolBox strVarBind SIG mapper mRelation rewrite	\
-enumerator enumeratorOneFixed unionFind state regularAlgebra					\
-treeAlgebra abstractRegularAutomaton regExp regexpPartition						\
-abstractTreeAutomaton numerical value strSigmaAlgebra treeAbs
+lang.universal.tree = toolBox tools strVarBind SIG mapper mRelation	\
+rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
+treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
+abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 

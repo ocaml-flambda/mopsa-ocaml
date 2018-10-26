@@ -32,8 +32,8 @@ open Framework.Essentials
 *)
 
 let meet_different_support
-    (man: ('b, 'b) man)
-    (u: 'b flow) (v: 'b flow)
+    (man: ('a, 'b) man)
+    (u: 'a flow) (v: 'a flow)
     (rmu: string list) (rmv: string list)
     (common_env: string list)
     (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
@@ -67,8 +67,8 @@ let meet_different_support
   u, v, vb_u, vb_v
 
 let join_different_support
-    (man: ('b, 'b) man)
-    (u: 'b flow) (v: 'b flow)
+    (man: ('a, 'b) man)
+    (u: 'a flow) (v: 'a flow)
     (envu: string list) (envv: string list)
     (full_env: string list)
     (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
@@ -92,6 +92,33 @@ let join_different_support
   in
   (* Gros problème : on ne peut rajouter les contraintes post join*)
   u, v, vb_u, vb_v
+
+
+(* let join_different_support2
+ *     (man: ('a, 'b) man)
+ *     (u: 'a flow) (v: 'a flow)
+ *     (envu: string list) (envv: string list)
+ *     (full_env: string list)
+ *     (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
+ *   =
+ *   let vb_u, vb_v, renaming = ToolBox.fold (fun s (vb_u, vb_v, renaming) ->
+ *       let var_u, vb_u = StrVarBind.get_var s vb_u in
+ *       let var_v, vb_v = StrVarBind.get_var s vb_v in
+ *       if List.mem s envv then
+ *         (vb_u, vb_v, (var_v, var_u) :: renaming)
+ *       else
+ *         (vb_u, vb_v, renaming)
+ *     ) full_env (vb_u, vb_v, [])
+ *   in
+ *   let v = ToolBox.fold (fun (var, var') abs ->
+ *       man.exec
+ *         (mk_stmt (S_rename_var(var, var')) (mk_fresh_range ()))
+ *         abs
+ *     ) renaming v
+ *   in
+ *   (\* Gros problème : on ne peut rajouter les contraintes post join*\)
+ *   u, v, vb_u, vb_v *)
+
 
 (* let join_different_support u v common =
  *   let u_common, u_sup = split_list u common in
@@ -221,7 +248,7 @@ let find_foldable_variables abs =
 let fold range man (vb: StrVarBind.t) (l : string list) (n : string) abs =
   let v, vb = StrVarBind.get_var n vb in
   let vl, vb = StrVarBind.get_var_list l vb in
-  let abs' = man.exec (mk_stmt (Ast.S_expand(v, vl)) (tag_range range "expand")) abs in
+  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "expand")) abs in
   abs', vb
 
 (* let merge rannge (abs: 'b flow) s list vb =
@@ -302,15 +329,37 @@ let env_leq (man: ('b, 'b) man) (u: 'b flow) (v: 'b flow)
    * let abs' = change_environment abs' env in
    * is_leq abs abs' *)
 
-let extend range (man: ('b, 'b) man) vb (s: string) (list: string list) (abs: 'b flow) =
+(* let extend range (man: ('b, 'b) man) vb (s: string) (list: string list) (abs: 'b flow) =
+ *   let v, vb = StrVarBind.get_var s vb in
+ *   let vl, vb = ToolBox.fold (fun s (vl, vb) ->
+ *       let v, vb = StrVarBind.get_var s vb in
+ *       (v :: vl, vb)
+ *     ) list ([], vb)
+ *   in
+ *   let abs = man.exec (mk_stmt (Ast.S_expand(v, vl)) (tag_range range "expand")) abs in
+ *   (abs, vb) *)
+
+let extend range (man: ('a, 'b) man) vb (s: string) (sl: string list) (abs: 'a flow) =
   let v, vb = StrVarBind.get_var s vb in
   let vl, vb = ToolBox.fold (fun s (vl, vb) ->
       let v, vb = StrVarBind.get_var s vb in
       (v :: vl, vb)
-    ) list ([], vb)
+    ) sl ([], vb)
   in
-  let abs = man.exec (mk_stmt (Ast.S_expand(v, vl)) (tag_range range "expand")) abs in
+  let abs = man.exec (mk_stmt (S_expand(v, vl)) (tag_range range "expand")) abs in
   (abs, vb)
+
+let extend_var range (man: ('a, 'b) man) (v: var) (vl: var list) (abs: 'a flow) =
+  man.exec (mk_stmt (S_expand(v, vl)) (tag_range range "expand")) abs
+
+(* let extend_stmtl range vb (s: string) (list: string list) =
+ *   let v, vb = StrVarBind.get_var s vb in
+ *   let vl, vb = ToolBox.fold (fun s (vl, vb) ->
+ *       let v, vb = StrVarBind.get_var s vb in
+ *       (v :: vl, vb)
+ *     ) list ([], vb)
+ *   in
+ *   ([mk_stmt (Ast.S_expand(v, vl)) (tag_range range "expand")], vb) *)
 
 let renaming_list range (man: ('b, 'b) man) (vb: StrVarBind.t) (renamer: (string * string) list) (abs: 'b flow) =
   let renamer, vb = ToolBox.fold (fun (s, s') (renamer, vb) ->

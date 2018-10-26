@@ -337,13 +337,6 @@ type stmt_kind +=
   | S_forget of var
   (** Forgets variable *)
 
-  | S_expand of var * var list
-  (** Expands the first variable into the list of variables, the first
-      variable is removed from the environment *)
-
-  | S_fold of var * var list
-  (** Folds the the list of variables into the first variable, the
-      list of variable is then removed from the environment *)
 
 let () =
   register_stmt_compare (fun next s1 s2 ->
@@ -384,18 +377,6 @@ let () =
         ]
 
       | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
-
-      | S_expand(v, vl), S_expand(v', vl') ->
-        Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list_compare compare_var vl vl')
-        ]
-
-      | S_fold(v, vl), S_fold(v', vl') ->
-        Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list_compare compare_var vl vl')
-        ]
       | _ -> next s1 s2
     )
 

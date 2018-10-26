@@ -1,0 +1,13 @@
+{
+    "iter": [
+	      // Iterators
+	      "universal.iterators.program",
+	      "universal.iterators.intraproc",
+	      "universal.iterators.loops",
+
+        {
+            "stack" : "universal.tree.treeabs",
+            "over" : "universal.numeric.relational.polyhedra"
+        }
+    ]
+}

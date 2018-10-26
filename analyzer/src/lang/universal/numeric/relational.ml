@@ -378,6 +378,7 @@ struct
   let init prog = top
 
   let rec exec stmt a =
+    let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
     | S_remove_var var ->
       let env = Apron.Abstract1.env a in
@@ -416,6 +417,29 @@ struct
           return
         with UnsupportedExpression ->
           exec {stmt with skind = S_remove_var v} a
+      end
+
+    | S_fold(v, vl) ->
+      begin
+        debug "Starting fold";
+        match vl with
+        | [] -> Debug.fail "Can not fold list of size 0"
+        | p::q ->
+          let abs = Apron.Abstract1.fold ApronManager.man a
+              (List.map var_to_apron vl |> Array.of_list) in
+          let abs = Apron.Abstract1.rename_array ApronManager.man abs
+              [|var_to_apron p|] [|var_to_apron v|] in
+          abs |> return
+      end
+
+    | S_expand(v, vl) ->
+      begin
+        debug "Starting expand";
+        let abs = Apron.Abstract1.expand ApronManager.man a
+            (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
+        let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
+        let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
+        abs |> return
       end
 
     | S_assign({ekind = E_var(v, WEAK)} as lval, e) ->

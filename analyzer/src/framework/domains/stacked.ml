@@ -17,7 +17,7 @@ sig
   include Domain.DOMAIN
 
   (* Binary lattice operators can unify the state of the underneath domain *)
-  val join: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow)-> t * ('b flow) * ('b flow)
+  val join: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
   val meet: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
   val widen: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
   val subset: ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> bool * ('b flow) * ('b flow)
@@ -169,7 +169,7 @@ struct
 
     | true, true ->
       let f1 = D1.exec zone in
-      let f2= D2.exec zone in
+      let f2 = D2.exec zone in
       (fun stmt man flow ->
          match f1 stmt (man1 man) flow with
          | Some post -> Some post
@@ -221,7 +221,7 @@ end
 
 
 (* Create a stacked domain from a non-stacked one *)
-module MakeStacked(D: DOMAIN) =
+module MakeStacked(D: DOMAIN)=
 struct
   (* Most values are similar *)
   include D

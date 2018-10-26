@@ -1,6 +1,6 @@
 open Framework.Essentials
 
-module StrVarBind = Equiv.Make(
+module Aux = Equiv.Make(
   struct
     type t = string
     let compare (u: t) (v: t) = compare u v
@@ -14,17 +14,17 @@ module StrVarBind = Equiv.Make(
   end
   )
 
-include StrVarBind
+include Aux
 
-let get_var (s: string) (vb: StrVarBind.t) =
+let get_var (s: string) (vb: Aux.t) =
   try
-    (StrVarBind.find_l s vb, vb)
+    (Aux.find_l s vb, vb)
   with
   | Not_found ->
     let v = mk_tmp ~vtyp:(Ast.T_int) () in
-    (v, StrVarBind.add (s, v) vb)
+    (v, Aux.add (s, v) vb)
 
-let get_var_list (s: string list) (vb: StrVarBind.t) =
+let get_var_list (s: string list) (vb: Aux.t) =
   let l, vb =
     ToolBox.fold (fun s (l, vb) ->
         let s', vb = get_var s vb in

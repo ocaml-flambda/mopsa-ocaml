@@ -1,6 +1,6 @@
 include
   AbstractRegularAutomaton.Make
-    (State)
+    (Tools.State)
     (struct
       type t = int
       let compare = compare

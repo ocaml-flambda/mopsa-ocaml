@@ -12,10 +12,10 @@
 
 open Framework.Essentials
 open Framework.Visitor
-open Universal.Ast
+open Ast
 open Bot
 
-module V = Value.Make(State)(StrSigmaAlgebra)
+module V = Value.VString
 
 (*==========================================================================*)
 (**                       {2 Abstract domain}                               *)
@@ -67,13 +67,13 @@ module Domain : Framework.Domains.Stacked.S = struct
   (*==========================================================================*)
 
   let exec_interface = {
-    export = [Zone.Z_universal];
-    import = [Zone.Z_universal]
+    export = [Framework.Zone.Z_top];
+    import = [Framework.Zone.Z_top]
   }
 
   let eval_interface = {
-    export = [Zone.Z_universal, Zone.Z_universal];
-    import = [Zone.Z_universal, Zone.Z_universal]
+    export = [Framework.Zone.Z_top, Framework.Zone.Z_top];
+    import = [Framework.Zone.Z_top, Framework.Zone.Z_top]
   }
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -166,15 +166,87 @@ module Domain : Framework.Domains.Stacked.S = struct
         ) u v
 
   (*==========================================================================*)
-  (**                           {2 Transformers }                             *)
+  (**                           {2 Transformers}                              *)
   (*==========================================================================*)
 
-  let exec zone stmt man flow =
-    None
+  let assign (man: ('a, t) man) x t mode (flow: 'a flow) : 'a flow =
+    let u = Flow.get_domain_cur man flow in
+    let u, flow =
+      match u with
+      | BOT -> BOT, flow
+      | Nb abs ->
+        begin
+          match mode with
+          | STRONG -> Nb (VMap.add x t abs), flow
+          | WEAK ->
+            begin
+              match VMap.find_opt x abs with
+              | None -> Nb abs, flow
+              | Some t' ->
+                let t'', flow = V.join_same_num man t t' flow in
+                Nb (VMap.add x t'' abs), flow
+            end
+        end
+    in
+    Flow.set_domain_cur u man flow
 
-  let eval zone exp man flow = match ekind exp with
-    | E_tree (TC_int exp) ->
-      None
+  let exec
+      (zone: Framework.Zone.zone)
+      (stmt: stmt)
+      (man: ('a, t) man)
+      (flow: 'a flow)
+    : 'a post option
+    =
+    let () = debug "I am asked" in
+    match skind stmt with
+    | S_assign({ekind = E_var(v, mode); etyp = T_tree}, e2) ->
+      man.eval e2 flow
+      |> (Post.bind man (fun expr flow ->
+          match ekind expr with
+          | TreeAst.E_tree_set t ->
+            begin
+              assign man v t mode flow
+              |> Post.of_flow
+            end
+          | _ -> Debug.fail "tree not evaluated correctly"))
+      |> Option.return
+    | _ -> None
+
+  let eval zone exp (man: ('a, t) man) (flow: 'a flow) =
+    match ekind exp, etyp exp with
+    | E_tree (TC_int exp), _ ->
+      let range = erange exp in
+      let t, flow = V.build_tree_from_expr range man exp flow in
+      Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set t) range) flow
+      |> Option.return
+    | E_var(v, _), T_tree ->
+      let range = erange exp in
+      let cur = Flow.get_domain_cur man flow in
+      begin
+        match cur with
+        | BOT ->
+          Eval.singleton
+            (mk_expr ~etyp:(etyp exp)
+               (TreeAst.E_tree_set (V.bottom V.SA.empty)) range)
+            flow
+        | Nb u ->
+          begin
+            match VMap.find_opt v u with
+            | None ->
+              Eval.singleton
+                (mk_expr ~etyp:(etyp exp)
+                   (TreeAst.E_tree_set (V.top V.SA.empty)) range)
+                flow
+            | Some x ->
+              let x, y, flow' = V.copy range man x flow in
+              let u = VMap.add v x u in
+              Eval.singleton
+                (mk_expr ~etyp:(etyp exp)
+                   (TreeAst.E_tree_set y) range)
+                (Flow.set_domain_cur (Nb u) man flow')
+          end
+      end
+      |> Option.return
     | _ -> None
 
   let init prog man flow =
@@ -183,3 +255,6 @@ module Domain : Framework.Domains.Stacked.S = struct
   let ask _ _ _ =
     None
 end
+
+let () =
+  Framework.Domains.Stacked.register_domain (module Domain);

@@ -1,2 +1,4 @@
 tree x;
+tree y;
 x= Tree(0);
+y= x;

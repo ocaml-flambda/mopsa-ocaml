@@ -246,6 +246,14 @@ type stmt_kind +=
   | S_project_vars of var list
   (** Project the abstract environments on the given list of variables. *)
 
+  | S_expand of var * var list
+  (** Expands the first variable into the list of variables, the first
+      variable is removed from the environment *)
+
+  | S_fold of var * var list
+  (** Folds the the list of variables into the first variable, the
+      list of variable is then removed from the environment *)
+
 
 type stmt = {
   skind : stmt_kind; (** Kind of the statement. *)
@@ -281,6 +289,18 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
           ::
           (List.map (fun (v1, v2) -> (fun () -> compare_var v1 v2)) @@ List.combine vl1 vl2)
         )
+      | S_expand(v, vl), S_expand(v', vl') ->
+        Compare.compose [
+          (fun () -> compare_var v v');
+          (fun () -> Compare.list_compare compare_var vl vl')
+        ]
+
+      | S_fold(v, vl), S_fold(v', vl') ->
+        Compare.compose [
+          (fun () -> compare_var v v');
+          (fun () -> Compare.list_compare compare_var vl vl')
+        ]
+
       | _ -> Pervasives.compare s1 s2
     )
 
@@ -331,6 +351,19 @@ and pp_stmt_chain : (Format.formatter -> stmt -> unit) ref =
   ref (fun fmt stmt ->
       match skind stmt with
       | S_program prog -> pp_program fmt prog
+      | S_expand(v, vl) ->
+        fprintf fmt "expand(%a,{%a})"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+      | S_fold(v, vl) ->
+        fprintf fmt "fold(%a,{%a})"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+
       | _ -> failwith "Pp: Unknown statement"
     )
 

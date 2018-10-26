@@ -7,7 +7,7 @@ let debug fmt = ToolBox.debug "tree automata" fmt
 module Make(S : SIG.STATE)(A : SIG.COMPARABLE) =
 struct
 
-  let var_of_state x=
+  let var_of_state x =
     Printf.sprintf "v_%s" (ToolBox.format_to_string S.print x)
 
   (** {2 Types and printers} *)
