@@ -15,6 +15,7 @@ $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml | $(BUILD)/%.m
 
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep $(BUILD)/%.mli.dep
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep $(BUILD)/%.mli.dep
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(BUILD)/%.ml
 
 $(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
 $(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
@@ -38,7 +39,7 @@ $(PACKS:%=$(BUILD)/%.ml): $(BUILD)/%.ml : $(SRC)/%
 
 $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mll
 	@mkdir -p $(@D)
-	@echo -e "$(MLLMSG)	$@"
+	@echo -e "$(MLLMSG)	$^"
 	$(QUIET)$(OCAMLLEX) -q $< -o $@
 
 
@@ -46,15 +47,9 @@ $(MLL:$(SRC)/%.mll=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mll
 ## Menhir recipes ##
 ####################
 
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(SRC)/%.mly
-	@mkdir -p $(@D)
-	@echo -e "$(MLYMSG)	$@"
-	$(QUIET)$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
-
-
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@mkdir -p $(@D)
-	@echo -e "$(MLYMSG)	$@"
+	@echo -e "$(MLYMSG)	$^"
 	$(QUIET)$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
 
 

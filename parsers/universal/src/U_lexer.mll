@@ -39,7 +39,6 @@ let _ =
      (* special statements *)
      "assert", TOK_ASSERT;
      "print",  TOK_PRINT;
-     "print_all",  TOK_PRINT_ALL;
    ]
 
 }

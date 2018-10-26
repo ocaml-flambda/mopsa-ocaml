@@ -18,7 +18,6 @@
 %token TOK_REAL
 %token TOK_CHAR
 %token TOK_STRING
-%token TOK_ARRAY
 
 %token TOK_TRUE
 %token TOK_FALSE
@@ -30,7 +29,6 @@
 %token TOK_RAND
 %token TOK_ASSERT
 %token TOK_PRINT
-%token TOK_PRINT_ALL
 
 %token TOK_LPAREN
 %token TOK_RPAREN
@@ -52,7 +50,6 @@
 %token TOK_AND_AND
 %token TOK_BAR_BAR
 %token TOK_BAR
-%token TOK_CIRC
 %token TOK_SEMICOLON
 %token TOK_COMMA
 %token TOK_EQUAL
@@ -72,7 +69,7 @@
 %left TOK_AND_AND
 %left TOK_EXCLAIM
 %left TOK_PLUS TOK_MINUS
-%left TOK_STAR TOK_DIVIDE TOK_PERCENT
+%left TOK_STAR TOK_DIVIDE
 
 
 /* entry-point */

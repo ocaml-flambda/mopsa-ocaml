@@ -1,3 +1,11 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
 {
 open Lexing
 open Parser
@@ -10,6 +18,42 @@ let next_line lexbuf =
     { pos with pos_bol = lexbuf.lex_curr_pos;
                pos_lnum = pos.pos_lnum + 1
     }
+
+(* keyword table *)
+let keywords = Hashtbl.create 10
+let _ =
+  List.iter (fun (a,b) -> Hashtbl.add keywords a b)
+    [
+     (* Constants *)
+     "true",     TRUE;
+     "false",    FALSE;
+
+     (* Sections *)
+     "requires", REQUIRES;
+     "local", LOCAL;
+     "assumes", ASSUMES;
+     "assigns", ASSIGNS;
+     "case", CASE;
+     "ensures", ENSURES;
+
+     (* Operators *)
+     "and",  AND;
+     "or",  OR;
+     "implies", IMPLIES;
+     "forall",  FORALL;
+     "exists",  EXISTS;
+     "in",    IN;
+
+     (* Built-ins *)
+     "old",     OLD;
+     "size",   SIZE;
+     "offset", OFFSET;
+     "base", BASE;
+     "new", NEW;
+     "free", FREE;
+     "return", RETURN;
+   ]
+
 }
 
 let int = '-'? ['0'-'9'] ['0'-'9']*
@@ -27,17 +71,48 @@ rule read =
   parse
   | white    { read lexbuf }
   | newline  { next_line lexbuf; read lexbuf }
+  
   | int      { INT (Z.of_string (Lexing.lexeme lexbuf)) }
   | float    { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
-  | "true"   { TRUE }
-  | "false"  { FALSE }
   | '"'      { read_string (Buffer.create 17) lexbuf }
+
+  | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
+
   | '{'      { LBRACE }
   | '}'      { RBRACE }
   | '['      { LBRACK }
   | ']'      { RBRACK }
+  | "("      { LPAR }
+  | ")"      { RPAR }
   | ':'      { COLON }
-  | ','      { COMMA }
+  | ';'      { SEMICOL }
+
+  | "."      { DOT }
+  | "->"     { ARROW }
+  | "&"      { ADDROF }
+
+  | "+"    { PLUS }
+  | "-"    { MINUS }
+  | "*"    { STAR }
+  | "/"    { DIV }
+  | "<"    { LT }
+  | ">"    { GT }
+  | "<="   { LE }
+  | ">="   { GE }
+  | "=="   { EQ }
+  | "!="   { NEQ }
+  | "&&"   { LAND }
+  | "||"   { LOR }
+  | "|"    { BOR }
+  | "&"    { BAND }
+  | "^"    { BXOR }
+  | ">>"   { RSHIFT }
+  | "<<"   { LSHIFT }
+  | "!"    { LNOT }
+  | "~"    { BNOT }
+
+  | "="    { ASSIGN }
+
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof      { EOF }
 

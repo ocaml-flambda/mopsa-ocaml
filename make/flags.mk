@@ -80,7 +80,7 @@ define generate_mll_flags =
  OCAMLFLAGS_$$(CMO_$(1)) = $$(OCAMLFLAGS_$(1))
  OCAMLFLAGS_$$(CMX_$(1)) = $$(OCAMLFLAGS_$(1))
 
- ML_$$(BASE_$(1)).ml.dep = $(1)
+ ML_$$(BASE_$(1)).ml.dep = $$(BASE_$(1)).ml
  DEPFLAGS_$$(BASE_$(1)).ml.dep = \
 	$$(INCLUDES_$(1)) \
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \
@@ -121,13 +121,13 @@ define generate_mly_flags =
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \
 	$$(INCLUDES_$(1)) $$(if $$(filter $$(PACK_$(1)),.), -c $$(BASE_$(1)).mli ,-for-pack $$(PACK_$(1)) -c $$(BASE_$(1)).mli)
 
- ML_$$(BASE_$(1)).ml.dep = $(1)
+ ML_$$(BASE_$(1)).ml.dep = $$(BASE_$(1)).ml
  DEPFLAGS_$$(BASE_$(1)).ml.dep = \
 	$$(INCLUDES_$(1)) \
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \
 	$$(BASE_$(1)).ml
 
- ML_$$(BASE_$(1)).mli.dep = $(1)
+ ML_$$(BASE_$(1)).mli.dep = $$(BASE_$(1)).mli
  DEPFLAGS_$$(BASE_$(1)).mli.dep = \
 	$$(INCLUDES_$(1)) \
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \

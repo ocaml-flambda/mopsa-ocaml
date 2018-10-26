@@ -1,3 +1,11 @@
+(****************************************************************************)
+(*                   Copyright (C) 2017 The MOPSA Project                   *)
+(*                                                                          *)
+(*   This program is free software: you can redistribute it and/or modify   *)
+(*   it under the terms of the CeCILL license V2.1.                         *)
+(*                                                                          *)
+(****************************************************************************)
+
 type loc = {
     file: string;
     line: int;
@@ -20,7 +28,7 @@ and local = local_kind with_range
 and assigns = assigns_kind with_range
 and case = case_kind with_range
 and expr = expr_kind with_range
-    
+
 and local_kind = {
     local_var : var;
     local_value : local_value;
@@ -55,12 +63,57 @@ and formula_kind =
   | F_free   of expr
 
 and expr_kind =
-  | E_int of Z.t
+  | E_int       of Z.t
+  | E_float     of float
+  | E_string    of string
+  | E_char      of char
+
+  | E_var       of var
+
+  | E_unop      of unop  * expr
+  | E_binop     of binop * expr * expr
+
+  | E_addr_of   of expr
+  | E_deref     of expr
+
+  | E_subscript of expr * expr
+  | E_member    of expr * expr
+  | E_arrow     of expr * expr
+
+  | E_builtin_call  of builtin * expr
+
+  | E_return
 
 and log_binop =
   | AND
   | OR
   | IMPLIES
+
+and binop =
+  | ADD     (* + *)
+  | SUB     (* - *)
+  | MUL     (* * *)
+  | DIV     (* / *)
+  | MOD     (* % *)
+  | RSHIFT  (* >> *)
+  | LSHIFT  (* << *)
+  | LOR     (* || *)
+  | LAND    (* && *)
+  | LT      (* < *)
+  | LE      (* <= *)
+  | GT      (* > *)
+  | GE      (* >= *)
+  | EQ      (* == *)
+  | NEQ     (* != *)
+  | BOR     (* | *)
+  | BAND    (* & *)
+  | BXOR    (* ^ *)
+
+and unop =
+  | PLUS    (* + *)
+  | MINUS   (* - *)
+  | LNOT    (* ! *)
+  | BNOT    (* ~ *)
 
 and set =
   | S_interval of expr * expr
@@ -69,3 +122,9 @@ and set =
 and resource = string
 
 and var = string
+
+and builtin =
+  | OLD
+  | SIZE
+  | OFFSET
+  | BASE
