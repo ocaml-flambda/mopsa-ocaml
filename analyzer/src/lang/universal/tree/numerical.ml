@@ -361,7 +361,7 @@ let extend_var range (man: ('a, 'b) man) (v: var) (vl: var list) (abs: 'a flow) 
  *   in
  *   ([mk_stmt (Ast.S_expand(v, vl)) (tag_range range "expand")], vb) *)
 
-let renaming_list range (man: ('b, 'b) man) (vb: StrVarBind.t) (renamer: (string * string) list) (abs: 'b flow) =
+let renaming_list range (man: ('a, 'b) man) (vb: StrVarBind.t) (renamer: (string * string) list) (abs: 'a flow) =
   let renamer, vb = ToolBox.fold (fun (s, s') (renamer, vb) ->
       let v , vb = StrVarBind.get_var s  vb in
       let v', vb = StrVarBind.get_var s' vb in
@@ -372,7 +372,24 @@ let renaming_list range (man: ('b, 'b) man) (vb: StrVarBind.t) (renamer: (string
       man.exec (mk_stmt (S_rename_var(v, v')) range) abs
     ) renamer abs, vb)
 
-let forget range (man: ('b, 'b) man) (vb: StrVarBind.t) (s: string) (abs: 'b flow) =
+
+let renaming_list_diff_vb range (man: ('a, 'b) man) (vb: StrVarBind.t) (vb': StrVarBind.t) (renamer: (string * string) list) (abs: 'a flow) =
+  let renamer, vb, vb' = ToolBox.fold (fun (s, s') (renamer, vb, vb') ->
+      let v , vb = StrVarBind.get_var s  vb in
+      let v', vb' = StrVarBind.get_var s' vb' in
+      ((v, v')::renamer, vb, vb')
+    ) renamer ([], vb, vb')
+  in
+  (ToolBox.fold (fun (v, v') abs ->
+      man.exec (mk_stmt (S_rename_var(v, v')) range) abs
+    ) renamer abs, vb, vb')
+
+let renaming_list_var range (man: ('a, 'b) man) (renamer: (var * var) list) (abs: 'a flow) =
+  (ToolBox.fold (fun (v, v') abs ->
+      man.exec (mk_stmt (S_rename_var(v, v')) range) abs
+     ) renamer abs)
+
+let forget range (man: ('a, 'b) man) (vb: StrVarBind.t) (s: string) (abs: 'a flow) =
   let v, vb = StrVarBind.get_var s vb in
   (man.exec (mk_stmt (S_remove_var v) range) abs, vb)
 

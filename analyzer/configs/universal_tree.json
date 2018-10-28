@@ -4,10 +4,11 @@
 	      "universal.iterators.program",
 	      "universal.iterators.intraproc",
 	      "universal.iterators.loops",
-
+        "universal.router",
         {
             "stack" : "universal.tree.treeabs",
             "over" : "universal.numeric.relational.polyhedra"
-        }
+        },
+        "universal.strings.value"
     ]
 }

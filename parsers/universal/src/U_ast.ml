@@ -28,9 +28,6 @@ type 'a ext = 'a * extent
  *)
 type var = string
 
-(* symbol used to define trees *)
-type symbol = string
-
 (* types: only integers (mathematical integers, in Z) *)
 type typ =
     AST_INT
@@ -64,7 +61,7 @@ type binary_op =
 
 (* tree constructor *)
 type tree_constructor =
-  | Symbol of symbol * expr ext list
+  | Symbol of expr ext * expr ext list
   | Int of expr ext
 
 (* expressions *)

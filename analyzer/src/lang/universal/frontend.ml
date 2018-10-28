@@ -34,6 +34,13 @@ module FA = Framework.Ast
 module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
 type fun_context = (T.fundec) MS.t
+let builtin_functions =
+  [
+    {name = "subtree"; args = [T_tree; T_int]; output = T_tree};
+    {name = "is_int"; args = [T_tree]; output = T_bool};
+    {name = "read_int"; args = [T_tree]; output = T_int};
+    {name = "read_symbol"; args = [T_tree]; output = T_string};
+  ]
 
 let from_position (pos: U.position) : Framework.Location.loc =
   Framework.Location.{
@@ -44,9 +51,9 @@ let from_position (pos: U.position) : Framework.Location.loc =
 
 let from_extent ((b, e): extent) : Framework.Location.range =
   Framework.Location.(Range_origin {
-    range_begin = from_position b;
-    range_end = from_position e;
-  })
+      range_begin = from_position b;
+      range_end = from_position e;
+    })
 
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
@@ -98,7 +105,35 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
   match e with
   | AST_fun_call((f, f_ext), args) ->
     begin
+      let look_in_builtins (fun_ctx) =
+        let exception Match of (FA.expr list * fun_builtin) in
+        try
+          List.iter (fun bi ->
+              if bi.name = f && List.length bi.args = List.length args then
+                let exception NoMatch in
+                try
+                  let el = List.map2 (fun (e, ext) x ->
+                      let e' = from_expr e ext var_ctx (fun_ctx) in
+                      let typ = etyp e' in
+                      if compare_typ typ x = 0 then
+                        e'
+                      else
+                        raise NoMatch
+                    ) args bi.args
+                  in
+                  raise (Match (el, bi))
+                with
+                | NoMatch -> ()
+            ) builtin_functions;
+          Debug.fail "%s at %s was not found in naming context nor in builtin functions"
+            f
+            (U_ast_printer.string_of_extent ext)
+        with
+        | Match(el, bi) ->
+          (mk_expr ~etyp:(bi.output) (E_call(mk_expr (E_function (Builtin bi)) range, el)) range)
+      in
       match fun_ctx with
+      | None -> look_in_builtins (None)
       | Some fun_ctx ->
         begin
           try
@@ -114,21 +149,17 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                       U_ast_printer.print_expr e
                       (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
-              (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function fundec) range, el)) range)
+              (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range)
             else
               Debug.fail "%s number of arguments incompatible with call at %s"
                 f
                 (U_ast_printer.string_of_extent ext)
           with
           | Not_found ->
-            Debug.fail "%s at %s was not found in typing/naming context"
-              f
-              (U_ast_printer.string_of_extent ext)
+            begin
+              look_in_builtins (Some fun_ctx)
+            end
         end
-      | None ->
-        Debug.fail "%a at %s function call in global variable declaration"
-          U_ast_printer.print_expr e
-          (U_ast_printer.string_of_extent ext)
     end
   | AST_unary (op, (e, ext)) ->
     begin
@@ -137,7 +168,6 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let op = from_unop op in
       mk_unop op e ~etyp:typ range
     end
-
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
       let e1 = from_expr e1 ext var_ctx fun_ctx in
@@ -229,8 +259,8 @@ and from_tree_constructor (tc: U.tree_constructor) (ext: extent) (var_ctx: var_c
      etyp  = T_tree;
      erange =range;
     }
-  | Symbol(s, l) ->
-    {ekind = E_tree (TC_symbol(s, List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) l));
+  | Symbol((e, ext'), l) ->
+    {ekind = E_tree (TC_symbol(from_expr e ext' var_ctx fun_ctx, List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) l));
      etyp  = T_tree;
      erange =range;
     }
@@ -253,7 +283,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
           mk_assign e1 e2 range
         else
           Debug.fail "%a (at %s) has type %a and %a (at %s) has type \
-                       %a, could not translate assignement"
+                      %a, could not translate assignement"
             U_ast_printer.print_expr e1o
             (U_ast_printer.string_of_extent ext1)
             pp_typ (etyp e1)

@@ -400,7 +400,7 @@ struct
     let u_algebra = get_algebra u in
     let to_remove = Algebra.diff u_algebra a in
     if Algebra.is_empty to_remove then
-      u
+      {u with algebra = a}
     else
       {
         u with
@@ -575,7 +575,8 @@ struct
       | [] -> true
     in
     try
-      reach [u.start] (SS.singleton u.start)
+      if SS.mem u.start u.final then raise NB
+      else reach [u.start] (SS.singleton u.start)
     with
     | NB -> false
 
@@ -843,6 +844,14 @@ struct
   type systemvm = (var * (u option * (u VMap.t))) list
   type lr = Left | Right
 
+  let print_systemvm x =
+    ToolBox.print_list
+      (fun fmt (v, (uo, m)) ->
+         match uo with
+         | Some u -> Format.fprintf fmt "(%s -> (%a + %a))" v print_u u (ToolBox.print_map_inline Format.pp_print_string print_u VMap.bindings) m
+         | None -> Format.fprintf fmt "(%s -> %a)" v (ToolBox.print_map_inline Format.pp_print_string print_u VMap.bindings) m
+      ) x
+
   let print_system fmt (s : system) : unit =
     Format.fprintf fmt "@[<v>%a@]"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
@@ -962,6 +971,7 @@ struct
         VMap.fold (fun v k acc -> A(C(k,V v),acc)) vm (C(k,V v))
       with
       | Not_found -> N
+
 
 
   let print_systemm lr fmt l =
@@ -1104,7 +1114,9 @@ struct
     | Some x when x <> 1 -> false
     | _ -> true
 
-  let rec automata_of_regexp_no_mini (sa: Algebra.t) (r : u) = match r with
+  let rec automata_of_regexp_no_mini (sa: Algebra.t) (r : u) =
+    (* let () = debug "automata_of_regexp_no_mini: %a" print_u r in *)
+    match r with
     | L a ->
       from_word sa [a]
     | S (r') ->

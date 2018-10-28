@@ -63,6 +63,7 @@ struct
       RegExp.pp_print_u (RegExp.regexp_of_automata u.support)
       RegexpPartition.print_left u.classes
       RegexpPartition.print u.env
+
       (* Numerical.print u.numeric *)
 
   let automata_algebra_on_n (sa: TA.sigma_algebra) =

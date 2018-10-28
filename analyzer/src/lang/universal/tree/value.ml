@@ -55,6 +55,12 @@ struct
 
   let print_input_tree = print_tree A.print
 
+  let print2 fmt (u: t) =
+    Format.fprintf fmt "@[<v>⯈ shape: @[<v 2>%a@]@,⯈ varbind: @[<v 2>%a@]@,@]"
+      TA.print_dfta2 u.shape
+      StrVarBind.print u.varbind
+  (* Numerical.print u.numeric *)
+
   let print fmt (u: t) =
     Format.fprintf fmt "@[<v>⯈ shape: @[<v 2>@,%a@]@,⯈ support: @[<v \
                         2>@,%a@]@,⯈ classes: @[<v 2>@,%a@]@,⯈ env: \
@@ -64,7 +70,7 @@ struct
       RegexpPartition.print_left u.classes
       RegexpPartition.print u.env
       StrVarBind.print u.varbind
-      (* Numerical.print u.numeric *)
+  (* Numerical.print u.numeric *)
 
   let automata_algebra_on_n (sa: TA.sigma_algebra) =
     let n = SA.max_arity sa in
@@ -171,6 +177,7 @@ struct
   let hole_position (reg_algebra) (u: TA.dfta) =
     let state_pos = TA.state_position_dfta u in
     let nsupport_u = TA.find_position_dfta hole_tree u state_pos in
+    (* let () = debug "nsupport_u: %a" RegExp.print_u nsupport_u in *)
     RegExp.automata_of_regexp reg_algebra nsupport_u
 
   (* let from_tree_and_num (st: input_tree) (num: Numerical.t): t =
@@ -272,7 +279,7 @@ struct
    *
    *   (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, n_full_env) *)
 
-    let unify (man: ('a, 'b) man) (u: t) u_num (v: t) v_num =
+  let unify (man: ('a, 'b) man) (u: t) u_num (v: t) v_num =
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
     let splitu, splitv = List.fold_left (fun (splitu, splitv) (ue, un) ->
@@ -383,86 +390,86 @@ struct
   end
 
 
-    (* let rec aux build_partition_u2v (un, ue) absu envu absv envv = *)
+  (* let rec aux build_partition_u2v (un, ue) absu envu absv envv = *)
 
 
-    (* let u_part, to_extend, alone =
-     *   List.fold_left (fun (u_part, to_extend, alone) (ve, vn) ->
-     *       let reminder, met, u_untouched =
-     *         List.fold_left (fun (reminder, met, u_env) (ue, un) ->
-     *             let ue_meet_ve = RegExp.meet ue reminder in
-     *             if not (RegExp.is_bottom auto_algebra ue_meet_ve) then
-     *               let reminder = RegExp.diff auto_algebra ve ue_meet_ve in
-     *               (reminder, (ue, un, ue_meet_ve) :: met, u_env)
-     *             else
-     *               (reminder, met, (ue, un) :: u_env)
-     *           ) (ve, [], []) u.env
-     *       in
-     *       match met with
-     *       | [] ->
-     *         u_part,
-     *         to_extend,
-     *         (ve, vn) :: alone
-     *       | (pe, pn, _)::q  ->
-     *         let part' = List.fold_left (fun u_part (qe, qn, _) ->
-     *             BPart.mk_equiv (pe, pn) (qe, qn) u_part) u_part q
-     *         in
-     *         if RegExp.is_bottom auto_algebra reminder then
-     *           (part', (pe, pn, reminder) :: to_extend, alone)
-     *         else
-     *           (part', to_extend, alone)
-     *     ) (BPart.mk_part u.env, [], []) v.env
-     * in
-     *
-     * let (abs, env, renaming) = List.fold_left (fun (abs, env, renaming) l ->
-     *     match l with
-     *     | (pu, pn)::q::r ->
-     *       let joined =
-     *         List.fold_left (fun joined (ue, un) ->
-     *             RegExp.join auto_algebra joined ue
-     *           ) pu (q::r)
-     *       in
-     *       let joinedn = var_of_automata joined in
-     *       let renaming = List.fold_left (fun renaming (pu, pn) -> ToolBox.StringM.add pn joinedn renaming) renaming l in
-     *       (Numerical.merge abs joinedn (List.map snd l), (joined, joinedn) :: env, renaming)
-     *     | ((pu, pn) as p):: [] ->
-     *       let renaming = ToolBox.StringM.add pn pn renaming in
-     *       (abs, p::env, renaming)
-     *
-     *     | _ -> (abs, env, renaming)
-     *   ) (u.numeric, [], ToolBox.StringM.empty) u_part
-     * in
-     *
-     * let widening_position = RegExp.compl auto_algebra v.support in
-     *
-     * let to_extend = List.fold_left (fun acc (ue, un, ext) ->
-     *     let rpzn = ToolBox.StringM.find un renaming in
-     *     try
-     *       let cur_ext = ToolBox.StringM.find rpzn acc in
-     *       acc
-     *       |> ToolBox.StringM.remove rpzn
-     *       |> ToolBox.StringM.add rpzn (RegExp.join auto_algebra cur_ext ext)
-     *     with
-     *     | Not_found -> ToolBox.StringM.add rpzn ext acc
-     *   ) ToolBox.StringM.empty to_extend
-     * in
-     *
-     *
-     * let (common, abs, env, _) = ToolBox.StringM.fold (fun un ext (common, absu, absv, env, room_left) ->
-     *     let (ue, un) = RegexpPartition.find_by_name un env in
-     *     let w = RegExp.widening auto_algebra ue ext 5 |> RegExp.meet room_left in
-     *     let wn = var_of_automata w in
-     *     let room_left = RegExp.diff auto_algebra room_left w in
-     *     (\* Numerical.renaming_list *\)
-     *   ) to_extend ([], abs, env, widening_position)
-     * in
-     * List.fold_left (fun (u_env, available, abs) (ue, un, r) ->
-     *     let w = RegExp.widening auto_algebra ue r 6 in
-     *     let wr = RegExp.meet w available in
-     *     let wrn = var_of_automata wr in
-     *     let abs = Numerical.renaming_list [un,wrn] abs in
-     *     (RegexpPartition.replace (wr, wrn) u_env, RegExp.diff auto_algebra available wr, abs)
-     *   ) (u_env, widening_position) to_extend *)
+  (* let u_part, to_extend, alone =
+   *   List.fold_left (fun (u_part, to_extend, alone) (ve, vn) ->
+   *       let reminder, met, u_untouched =
+   *         List.fold_left (fun (reminder, met, u_env) (ue, un) ->
+   *             let ue_meet_ve = RegExp.meet ue reminder in
+   *             if not (RegExp.is_bottom auto_algebra ue_meet_ve) then
+   *               let reminder = RegExp.diff auto_algebra ve ue_meet_ve in
+   *               (reminder, (ue, un, ue_meet_ve) :: met, u_env)
+   *             else
+   *               (reminder, met, (ue, un) :: u_env)
+   *           ) (ve, [], []) u.env
+   *       in
+   *       match met with
+   *       | [] ->
+   *         u_part,
+   *         to_extend,
+   *         (ve, vn) :: alone
+   *       | (pe, pn, _)::q  ->
+   *         let part' = List.fold_left (fun u_part (qe, qn, _) ->
+   *             BPart.mk_equiv (pe, pn) (qe, qn) u_part) u_part q
+   *         in
+   *         if RegExp.is_bottom auto_algebra reminder then
+   *           (part', (pe, pn, reminder) :: to_extend, alone)
+   *         else
+   *           (part', to_extend, alone)
+   *     ) (BPart.mk_part u.env, [], []) v.env
+   * in
+   *
+   * let (abs, env, renaming) = List.fold_left (fun (abs, env, renaming) l ->
+   *     match l with
+   *     | (pu, pn)::q::r ->
+   *       let joined =
+   *         List.fold_left (fun joined (ue, un) ->
+   *             RegExp.join auto_algebra joined ue
+   *           ) pu (q::r)
+   *       in
+   *       let joinedn = var_of_automata joined in
+   *       let renaming = List.fold_left (fun renaming (pu, pn) -> ToolBox.StringM.add pn joinedn renaming) renaming l in
+   *       (Numerical.merge abs joinedn (List.map snd l), (joined, joinedn) :: env, renaming)
+   *     | ((pu, pn) as p):: [] ->
+   *       let renaming = ToolBox.StringM.add pn pn renaming in
+   *       (abs, p::env, renaming)
+   *
+   *     | _ -> (abs, env, renaming)
+   *   ) (u.numeric, [], ToolBox.StringM.empty) u_part
+   * in
+   *
+   * let widening_position = RegExp.compl auto_algebra v.support in
+   *
+   * let to_extend = List.fold_left (fun acc (ue, un, ext) ->
+   *     let rpzn = ToolBox.StringM.find un renaming in
+   *     try
+   *       let cur_ext = ToolBox.StringM.find rpzn acc in
+   *       acc
+   *       |> ToolBox.StringM.remove rpzn
+   *       |> ToolBox.StringM.add rpzn (RegExp.join auto_algebra cur_ext ext)
+   *     with
+   *     | Not_found -> ToolBox.StringM.add rpzn ext acc
+   *   ) ToolBox.StringM.empty to_extend
+   * in
+   *
+   *
+   * let (common, abs, env, _) = ToolBox.StringM.fold (fun un ext (common, absu, absv, env, room_left) ->
+   *     let (ue, un) = RegexpPartition.find_by_name un env in
+   *     let w = RegExp.widening auto_algebra ue ext 5 |> RegExp.meet room_left in
+   *     let wn = var_of_automata w in
+   *     let room_left = RegExp.diff auto_algebra room_left w in
+   *     (\* Numerical.renaming_list *\)
+   *   ) to_extend ([], abs, env, widening_position)
+   * in
+   * List.fold_left (fun (u_env, available, abs) (ue, un, r) ->
+   *     let w = RegExp.widening auto_algebra ue r 6 in
+   *     let wr = RegExp.meet w available in
+   *     let wrn = var_of_automata wr in
+   *     let abs = Numerical.renaming_list [un,wrn] abs in
+   *     (RegexpPartition.replace (wr, wrn) u_env, RegExp.diff auto_algebra available wr, abs)
+   *   ) (u_env, widening_position) to_extend *)
 
   let vb_sanitize (u: t) =
     let s = ToolBox.fold (fun (_, rn) ->
@@ -1141,117 +1148,161 @@ struct
    *   let sa = TA.get_sigma_algebra u.shape in
    *   (meet (helper1 sa) u, meet (helper2 sa)) *)
 
+  (* let filter_symbol (u: t) = *)
+
 
   let underlying_regular_algebra (u: t) =
     u.support.RegExp.algebra
   let underlying_tree_algebra (u: t) =
     u.shape.TA.dfta_a
 
-  (* let sons (u: t) =
-   *   let head_shape = TA.head u.shape in
-   *   let auto_algebra = u.support.RegExp.algebra in
-   *   List.map (fun (k, v) ->
-   *       (k,
-   *        List.mapi (fun i nshape ->
-   *          let nsupport = hole_position auto_algebra nshape in
-   *          let nclasses = RegexpPartition.fold (fun (re, ne) acc ->
-   *              let re' = RegExp.derivative re i in
-   *              if RegExp.is_bottom re' then
-   *                acc
-   *              else
-   *                let ne' = var_of_automata re' in
-   *                (re', ne') :: acc
-   *            ) u.classes []
-   *          in
-   *          let nenv, renaming = RegexpPartition.fold (fun (re, ne) (nenv, renaming) ->
-   *              let re' = RegExp.derivative re i in
-   *              if RegExp.is_bottom re' then
-   *                nenv, renaming
-   *              else
-   *                let ne' = var_of_automata re' in
-   *                (re', ne') :: nenv, (ne, ne') :: renaming
-   *            ) u.env ([], [])
-   *          in
-   *          let nnum =
-   *            Apol.change_environment_l u.numeric (List.map fst renaming) []
-   *            |> Apol.renaming_list renaming
-   *          in
-   *          {
-   *            shape = nshape;
-   *            support = nsupport;
-   *            classes = nclasses;
-   *            env = nenv;
-   *            numeric = nnum
-   *          }
-   *          ) v
-   *       )
-   *     ) head_shape *)
+  let sons range man (u: t) flow =
+    let head_shape = TA.head u.shape in
 
-  (* let read_i (u: t) (i: int) =
-   *   let l = sons u in
-   *   List.fold_left (fun acc (_, ll) ->
-   *       match List.nth_opt ll i, acc with
-   *       | None, _ -> acc
-   *       | Some v, None -> Some v
-   *       | Some v, Some acc -> Some (join v acc)
-   *     ) None l
-   *   |> function
-   *   | None -> bottom (u.shape.TA.dfta_a)
-   *   | Some x -> x *)
+    let auto_algebra = u.support.RegExp.algebra in
+    let abs, res, _ =
+      List.fold_left (fun (abs, res0, vb_old) (k, v) ->
+          let _, abs, res, _ =
+            List.fold_left (fun (i, abs, res, vb_old) nshape ->
+                (* let () = debug "mark1" in *)
+                let nsupport = hole_position auto_algebra nshape in
+                (* let () = debug "mark2" in *)
+                let nclasses = RegexpPartition.fold (fun (re, ne) acc ->
+                    let re' = RegExp.derivative re i in
+                    if RegExp.is_bottom re' then
+                      acc
+                    else
+                      let ne' = var_of_automata re' in
+                      (re', ne') :: acc
+                  ) u.classes []
+                in
+                (* let () = debug "mark3" in *)
+                let nenv, renaming = RegexpPartition.fold (fun (re, ne) (nenv, renaming) ->
+                    let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re) in
+                    let re' = RegExp.derivative re i in
+                    let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re') in
+                    if RegExp.is_bottom re' then
+                      let () = debug "is bottom %a" (RegExp.print) (re') in
+                      nenv, renaming
+                    else
+                      let ne' = var_of_automata re' in
+                      (re', ne') :: nenv, (ne, ne') :: renaming
+                  ) u.env ([], [])
+                in
+                (* let () = debug "mark4" in *)
+                let abs, vbold, vb = Numerical.renaming_list_diff_vb range man vb_old StrVarBind.empty renaming abs in
+                (i+1, abs,{
+                    shape = nshape;
+                    support = nsupport;
+                    classes = nclasses;
+                    env = nenv;
+                    varbind = vb
+                  }::res, vbold)
+              ) (0, abs, [], vb_old) v
+          in
+          (abs, (k, List.rev res) :: res0, vb_old)
+        ) (flow, [], u.varbind) head_shape
+    in
+    abs, res
 
-  (* let build_tree_from_symbol (s: TA.algebra) (ul: t list): t =
-   *   let nshape = TA.build_tree s (List.map (fun x -> x.shape) ul) in
-   *   let auto_algebra = automata_algebra_on_n (nshape.TA.dfta_a) in
-   *   let nsupport = hole_position auto_algebra nshape in
-   *   let nenv, renamingl, _ = ToolBox.fold (fun u (nenv, renamingl, i) ->
-   *       let nenv', renaming =
-   *         RegexpPartition.fold (fun (xe, xn) (nenv, renaming) ->
-   *             let re = RegExp.integrate xe i |> fun x -> RegExp.change_algebra x auto_algebra in
-   *             let rn = var_of_automata re in
-   *             ((re, rn):: nenv, (xn, rn) :: renaming)
-   *           ) u.env ([], [])
-   *       in
-   *       (nenv' @ nenv, renaming :: renamingl, i+1)
-   *     ) ul ([], [], 0)
-   *   in
-   *   let nclasses, _ = ToolBox.fold (fun u (nclasses, i) ->
-   *       let nclasses' =
-   *         RegexpPartition.fold (fun (xe, xn) (nclasses) ->
-   *             let re = RegExp.integrate xe i |> fun x -> RegExp.change_algebra x auto_algebra in
-   *             let rn = var_of_automata re in
-   *             ((re, rn):: nclasses)
-   *           ) u.classes []
-   *       in
-   *       (nclasses' @ nclasses, i+1)
-   *     ) ul ([], 0)
-   *   in
-   *   let nnum =
-   *     let numl = List.map2
-   *         (fun r x -> Numerical.renaming_list r x.numeric)
-   *         (List.rev renamingl)
-   *         ul
-   *     in
-   *     ToolBox.fold (fun x -> function
-   *         | None -> Some x
-   *         | Some y -> Some (Numerical.cartesian_product y x)
-   *       ) numl None
-   *     |> function
-   *     | None -> Numerical.top Environmentext.empty
-   *     | Some y -> y
-   *   in
-   *   {
-   *     shape = nshape;
-   *     support = nsupport;
-   *     env = nenv;
-   *     classes = nclasses;
-   *     numeric = nnum;
-   *   } *)
+  let read_i range man (u: t) (i: int) flow =
+    let flow, l = sons range man u flow in
+    List.fold_left (fun ((curjoin, flow) as acc) (_, ll) ->
+        match List.nth_opt ll i, curjoin with
+        | None, _ -> acc
+        | Some v, None -> (Some v, flow)
+        | Some v, Some curjoin ->
+          let u, flow = (join_same_num man v curjoin flow) in
+          (Some u, flow)
+      ) (None, flow) l
+    |> function
+    | None, flow -> bottom (u.shape.TA.dfta_a), flow
+    | Some x, flow -> x, flow
+
+  let filter_symbol range (man: ('a, 'b) man)
+      (u: t)
+      (abs: 'a flow) =
+    let nshape = TA.not_final_constant hole_tree u.shape in
+    let auto_algebra = automata_algebra_on_n (nshape.TA.dfta_a) in
+    let nsupport = hole_position auto_algebra nshape in
+    let nclasses = RegexpPartition.fold (fun (re, rn) acc ->
+        let re = RegExp.diff (re) (RegExp.from_word auto_algebra []) in
+        let rn = var_of_automata re in
+        if not (RegExp.is_bottom re) then
+          (re, rn) :: acc
+        else acc
+      ) u.classes []
+    in
+    let nenv, renaming, removal = RegexpPartition.fold (fun (re, rn) (nenv, renaming, removal) ->
+        let re' = RegExp.diff (re) (RegExp.from_word auto_algebra []) in
+        let rn' = var_of_automata re in
+        if not (RegExp.is_bottom re) then
+          ((re', rn') :: nenv, (if rn <> rn' then (rn, rn') :: renaming else renaming), removal)
+        else (nenv, renaming, rn :: removal)
+      ) u.classes ([], [], [])
+    in
+    let num, vb = Numerical.renaming_list range man u.varbind renaming abs in
+    let num, vb = ToolBox.fold (fun s (abs, vb) -> Numerical.forget range man vb s abs) removal (num, vb) in
+    {shape = nshape;
+     support = nsupport;
+     classes = nclasses;
+     env = nenv;
+     varbind = vb
+    } |> vb_sanitize, num
+
+
+  let build_tree_from_symbol
+      range (man: ('a, 'b) man)
+      (s: TA.algebra) (ul: t list)
+      (abs: 'a flow)
+    : t * 'a flow=
+    let nshape = TA.build_tree s (List.map (fun x -> x.shape) ul) in
+    let auto_algebra = automata_algebra_on_n (nshape.TA.dfta_a) in
+    let () = debug "auto_algebra: %a" RegExp.Algebra.print auto_algebra in
+    let nsupport = hole_position auto_algebra nshape in
+    let nenv, renamingl, _, vb = ToolBox.fold (fun u (nenv, renamingl, i, vb) ->
+        let nenv', renaming, vb, _ =
+          RegexpPartition.fold (fun (xe, xn) (nenv, renaming, vb, vbu) ->
+              let () = debug "xe: %a" RegExp.print xe in
+              let re = RegExp.integrate xe i |> fun x -> RegExp.change_algebra x auto_algebra in
+              let () = debug "re: %a" RegExp.print re in
+              let rn = var_of_automata re in
+              let rnn, vb = StrVarBind.get_var rn vb in
+              let xnn, vbu = StrVarBind.get_var xn vbu in
+              ((re, rn):: nenv, (xnn, rnn) :: renaming, vb, vbu)
+            ) u.env ([], [], vb, u.varbind)
+        in
+        (nenv' @ nenv, renaming :: renamingl, i+1, vb)
+      ) ul ([], [], 0, StrVarBind.empty)
+    in
+    let nclasses, _ = ToolBox.fold (fun u (nclasses, i) ->
+        let nclasses' =
+          RegexpPartition.fold (fun (xe, xn) (nclasses) ->
+              let re = RegExp.integrate xe i |> fun x -> RegExp.change_algebra x auto_algebra in
+              let rn = var_of_automata re in
+              ((re, rn):: nclasses)
+            ) u.classes []
+        in
+        (nclasses' @ nclasses, i+1)
+      ) ul ([], 0)
+    in
+    let abs = List.fold_left (fun abs renamer ->
+        Numerical.renaming_list_var range man renamer abs
+      ) abs renamingl
+    in
+    {
+      shape = nshape;
+      support = nsupport;
+      env = nenv;
+      classes = nclasses;
+      varbind = vb
+    }, abs
 
   let build_tree_from_expr range (man: ('a, 'b) man) (e: expr) (num: 'a flow):
     t * 'a flow =
     let one = S.fresh () in
     let hole = S.fresh () in
-    let epsilon = RegExp.from_word (RegExp.Algebra.of_list [0]) [] in
+    let epsilon = RegExp.from_word (RegExp.Algebra.of_list []) [] in
     let epsilon_name = var_of_automata epsilon in
     let v, vb = StrVarBind.get_var epsilon_name StrVarBind.empty in
     {
@@ -1281,30 +1332,30 @@ struct
         ) u.varbind (StrVarBind.empty, StrVarBind.empty, abs)
     in
     {u with varbind = vb1}, {u with varbind = vb2}, abs
-  (* let change_sigma_algebra (sa: TA.SA.t) (u: t) =
-   *   let reg_algebra = automata_algebra_on_n sa in
-   *   let nshape = u.shape |> TA.change_sigma_algebra sa in
-   *   let nsupport = hole_position reg_algebra nshape in
-   *   let nenv, renaming = ToolBox.fold (fun (re, rn) (nenv, renaming) ->
-   *       let re' = RegExp.change_algebra re reg_algebra in
-   *       let rn' = var_of_automata re' in
-   *       ((re', rn'):: nenv, (rn, rn') :: renaming)
-   *     ) u.env ([], [])
-   *   in
-   *   let nclasses = ToolBox.fold (fun (re, rn) nclasses ->
-   *       let re' = RegExp.change_algebra re reg_algebra in
-   *       let rn' = var_of_automata re' in
-   *       ((re', rn'):: nenv)
-   *     ) u.classes ([])
-   *   in
-   *   let num = Numerical.renaming_list renaming u.numeric in
-   *   {
-   *     shape = nshape;
-   *     support = nsupport;
-   *     env = nenv;
-   *     classes = nclasses;
-   *     numeric = num
-   *   } *)
+    (* let change_sigma_algebra (sa: TA.SA.t) (u: t) =
+     *   let reg_algebra = automata_algebra_on_n sa in
+     *   let nshape = u.shape |> TA.change_sigma_algebra sa in
+     *   let nsupport = hole_position reg_algebra nshape in
+     *   let nenv, renaming = ToolBox.fold (fun (re, rn) (nenv, renaming) ->
+     *       let re' = RegExp.change_algebra re reg_algebra in
+     *       let rn' = var_of_automata re' in
+     *       ((re', rn'):: nenv, (rn, rn') :: renaming)
+     *     ) u.env ([], [])
+     *   in
+     *   let nclasses = ToolBox.fold (fun (re, rn) nclasses ->
+     *       let re' = RegExp.change_algebra re reg_algebra in
+     *       let rn' = var_of_automata re' in
+     *       ((re', rn'):: nenv)
+     *     ) u.classes ([])
+     *   in
+     *   let num = Numerical.renaming_list renaming u.numeric in
+     *   {
+     *     shape = nshape;
+     *     support = nsupport;
+     *     env = nenv;
+     *     classes = nclasses;
+     *     numeric = num
+     *   } *)
 end
 
 module VString = Make(Tools.State)(Tools.StrSigmaAlgebra)

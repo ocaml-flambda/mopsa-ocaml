@@ -59,7 +59,7 @@ let () =
         fprintf fmt "[@[<h>%a@]]"
           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
       | E_subscript(v, e) -> fprintf fmt "%a[%a]" pp_expr v pp_expr e
-      | E_function(f) -> fprintf fmt "fun %s" f.fun_name
+      | E_function(f) -> fprintf fmt "fun %s" (match f with | User_defined f -> f.fun_name | Builtin f -> f.name)
       | E_call(f, args) ->
         fprintf fmt "%a(%a);"
           pp_expr f
@@ -68,9 +68,9 @@ let () =
       | E_addr addr -> pp_addr fmt addr
       | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
       | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
-      | E_tree (TC_symbol(s, l)) ->
+      | E_tree (TC_symbol(e, l)) ->
         Format.fprintf fmt "Tree(%a,{%a})"
-          pp_print_string s
+          pp_expr e
           (Format.pp_print_list
              ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
              pp_expr

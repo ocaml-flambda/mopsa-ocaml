@@ -505,6 +505,13 @@ struct
       match query with
       | Q_sat e ->
         Some (satisfy abs e)
+      | Values.Intervals.Value.Q_interval e ->
+        let e = exp_to_apron e in
+        let env = Apron.Abstract1.env abs in
+        let e = Apron.Texpr1.of_expr env e in
+        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+        Values.Intervals.Value.of_apron |>
+        Option.return
       | _ -> None
 
   let var_relations v a =

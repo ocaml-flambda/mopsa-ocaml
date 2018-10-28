@@ -108,7 +108,99 @@ struct
       dfta_a  : sigma_algebra;
     }
 
-  let get_sigma_algebra (u: dfta) : sigma_algebra =
+  type ext_tree =
+    | Sta of S.t
+    | Sym of S.t * (A.t * ext_tree list) list
+  let transform (u: dfta) =
+    let init =
+      DetTrans.fold (fun (sym, ql, q) (xt_tree_map: ext_tree MS.t) ->
+          try
+            let t = MS.find q xt_tree_map in
+            match t with
+            | Sta _ -> failwith "should not be here"
+            | Sym(q, l) ->
+              let n = Sym(q, (sym, List.map (fun q -> Sta q) ql) :: l) in
+              MS.add q n xt_tree_map
+          with
+          | Not_found ->
+            let n = Sym(q, (sym, List.map (fun q -> Sta q) ql) :: []) in
+            MS.add q n xt_tree_map
+        ) u.dfta_d MS.empty
+    in
+    let rec go xtree init (seen: SS.t) = match xtree with
+      | Sta q ->
+        begin
+          if SS.mem q seen then
+            Some (Sta q, SS.singleton q)
+          else
+            try
+              let xt = MS.find q init in
+              go xt init (SS.add q seen)
+            with
+            | Not_found -> None
+        end
+      | Sym(q, l) ->
+        let l, loops =
+          ToolBox.fold (fun (sym, xlist) (accl, loops) ->
+              let exception BadPath in
+              try
+                let l, loops' =
+                  ToolBox.fold (fun (xtree) (l, loops) ->
+                      match go xtree init (SS.add q seen) with
+                      | Some (xt, loops') -> (xt :: l, SS.union loops loops')
+                      | None -> raise BadPath
+                    ) xlist ([], SS.empty)
+                in
+                ((sym, List.rev l) :: accl, SS.union loops' loops)
+              with
+              | BadPath -> accl, loops
+            ) (l) ([], SS.empty)
+        in Some (Sym(q, l), loops)
+    in
+    let l = SS.fold (fun q acc ->
+        match MS.find_opt q init with
+        | Some xt ->
+          begin
+            match go xt init (SS.singleton q) with
+            | Some (x, s) -> (x, s) :: acc
+            | None -> acc
+          end
+        | None -> acc
+      ) u.dfta_f []
+    in
+    l
+
+  let print_transform fmt l =
+    let rec print fmt (xt, ss) = match xt with
+      | Sta q -> S.print fmt q
+      | Sym (q, l) ->
+        let print_l fmt (l: (A.t * ext_tree list) list) =
+          Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " || ") (
+            fun fmt (sym, xl) ->
+              if List.length xl = 0 then
+                Format.fprintf fmt "%a" A.print sym
+              else
+                Format.fprintf fmt "%a(%a)" A.print sym
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+                     (fun fmt x -> print fmt (x, ss))
+                  ) xl
+          ) fmt l
+        in
+        if SS.mem q ss then
+          Format.fprintf fmt "%a-%a" S.print q print_l l
+        else
+          print_l fmt l
+    in
+    ToolBox.print_list_inline_no_border
+      ( fun fmt (xt, ss) ->
+          print fmt (xt, ss)
+      ) fmt l
+
+  let print_dfta2 fmt d =
+    let l = transform d in
+    Format.fprintf fmt "%a" print_transform l
+
+    let get_sigma_algebra (u: dfta) : sigma_algebra =
     u.dfta_a
 
   let delta (u : t) (ql : S.t list) (a : algebra) =
@@ -1657,15 +1749,25 @@ struct
         ss
         SVar.empty
     in
+    (* let () = debug "just before: %a" print u in *)
     let system =
       ST.fold (fun (f, ql, q) acc ->
+          (* let () = debug "trans: %a" print_transition (f, ql, q) in *)
           List.fold_left (fun (acc, i) q' -> (add_rule q' q i acc, i+1)) (acc, 0) ql
           |> fst
         ) u.d [] |>
       SS.fold add_epsilon u.f
       |> RegExp.system_simplify
     in
-    (* let () = Format.printf "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in *)
+    (* let () = debug "system: %a" RegExp.print_systemvm system in *)
+    (* let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in *)
+    let system = SS.fold (fun q system ->
+        let vq = var_of_state q in
+        if List.mem_assoc vq system then
+          system
+        else (vq, (None, RegExp.VMap.empty)) :: system
+      ) u.q system in
+    (* let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in *)
     let sol = RegExp.arden_solve RegExp.Right system in
     let sol = RegExp.system_simplify sol in
     let state_of_string v = SVar.findr v rel in
@@ -1676,6 +1778,7 @@ struct
   let state_position_dfta (u: dfta): RegExp.u MS.t =
     (* let sa = u.dfta_a in *)
     let u' = t_of_dfta u in
+    let () = debug "u': %a" print u' in
     state_position u'
 
   let find_position (a: A.t) (u : t) (ms : RegExp.u MS.t) =
@@ -1811,6 +1914,37 @@ struct
       dfta_d = new_dfta_d;
       dfta_h = new_dfta_h;
     }
+
+  let not_final_constant (s: A.t) (u: dfta): dfta =
+    let sa = u.dfta_a in
+    let () = S.restart () in
+    let u = rename_all_states u S.fresh in
+    let from_s = DetTrans.fold (fun (s', l, q) ss ->
+        if A.compare s s' = 0 then SS.add q ss
+        else ss
+      ) u.dfta_d SS.empty in
+    let final_from_s = SS.inter u.dfta_f from_s in
+    let renaming, newstates, renamingopp = SS.fold (fun q (renaming, newstates, renamingopp) ->
+        let q' = S.fresh () in
+        (MS.add q q'  renaming, SS.add q' newstates, MS.add q' q renamingopp)
+      ) final_from_s (MS.empty, SS.empty, MS.empty)
+    in
+    let u = t_of_dfta u in
+    let r = apply_map renaming u in
+    let r = { r with
+      f = SS.union final_from_s r.f;
+      q = SS.union final_from_s r.q
+            } in
+    let trans =
+      ST.fold (fun (s, ql, q) trans ->
+          if SS.mem q newstates then
+            trans
+            |> ST.add (s, ql, q)
+            |> ST.add (s, ql, MS.find q renamingopp)
+          else trans |> ST.add (s, ql, q)
+        ) r.d ST.empty
+    in
+    {r with d = trans} |> dfta_of_t (sa)
 
   let remove_state_dfta (s: SS.t) (u: dfta) =
     {u with

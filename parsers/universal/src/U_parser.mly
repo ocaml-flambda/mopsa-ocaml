@@ -181,8 +181,8 @@ expr:
 
 | TOK_TREE_CONST TOK_LPAREN e=ext(expr) TOK_RPAREN {AST_tree (Int e)}
 
-| TOK_TREE_CONST TOK_LPAREN s=var TOK_COMMA TOK_LCURLY l=separated_list(TOK_COMMA, ext(expr)) TOK_RCURLY TOK_RPAREN
-                      {AST_tree (Symbol(s, l))}
+| TOK_TREE_CONST TOK_LPAREN e=ext(expr) TOK_COMMA TOK_LCURLY l=separated_list(TOK_COMMA, ext(expr)) TOK_RCURLY TOK_RPAREN
+                      {AST_tree (Symbol(e, l))}
 
 sign_int_literal:
 | i=TOK_int            { i }

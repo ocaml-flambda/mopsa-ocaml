@@ -150,6 +150,21 @@ type fundec = {
   fun_return_type: typ; (** return type *)
 }
 
+type fun_builtin =
+  { name: string;
+    args: typ list;
+    output: typ
+  }
+
+type fun_expr =
+  | User_defined of fundec
+  | Builtin of fun_builtin
+
+let compare_fun_expr x y = match x, y with
+  | User_defined a, User_defined b -> Pervasives.compare a.fun_name b.fun_name
+  | Builtin a, Builtin b -> Pervasives.compare a b
+  | _ -> 1
+
 (*==========================================================================*)
                            (** {2 Programs} *)
 (*==========================================================================*)
@@ -166,11 +181,11 @@ type program_kind +=
 (*==========================================================================*)
 type tc =
   | TC_int of expr
-  | TC_symbol of string * expr list
+  | TC_symbol of expr * expr list
 
 type expr_kind +=
   (** Function expression *)
-  | E_function of fundec
+  | E_function of fun_expr
 
   (** Function calls *)
   | E_call of expr (** Function expression *) * expr list (** List of arguments *)
@@ -197,7 +212,7 @@ type expr_kind +=
 let () =
   register_expr_compare (fun next e1 e2 ->
       match ekind e1, ekind e2 with
-      | E_function(f1), E_function(f2) -> Pervasives.compare f1.fun_name f2.fun_name
+      | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
 
       | E_call(f1, args1), E_call(f2, args2) ->
         Compare.compose [
@@ -407,6 +422,6 @@ let mk_rebase_addr old recent mode range =
 
 let mk_call fundec args range =
   mk_expr (E_call (
-      mk_expr (E_function fundec) range,
+      mk_expr (E_function (User_defined fundec)) range,
       args
     )) range

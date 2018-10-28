@@ -10,6 +10,7 @@ let print =
   ToolBox.print_list_inline
     (fun fmt (x, y) -> Format.fprintf fmt "(%a <~> %a)"
         RegExp.pp_print_u (RegExp.regexp_of_automata x)
+        (* RegExp.print x *)
         Format.pp_print_string y)
 
 let print_left =

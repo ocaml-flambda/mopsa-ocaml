@@ -52,12 +52,12 @@ module Domain : Framework.Domains.Stacked.S = struct
 
   let name = "universal.tree.treeabs"
 
-  type _ domain += D_c_cell_expand : t domain
-  let id = D_c_cell_expand
+  type _ domain += D_universal_tree : t domain
+  let id = D_universal_tree
 
   let identify : type a. a domain -> (t, a) eq option =
     function
-    | D_c_cell_expand -> Some Eq
+    | D_universal_tree -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -67,13 +67,15 @@ module Domain : Framework.Domains.Stacked.S = struct
   (*==========================================================================*)
 
   let exec_interface = {
-    export = [Framework.Zone.Z_top];
-    import = [Framework.Zone.Z_top]
+    export = [Zone.Z_universal_tree];
+    import = [Zone.Z_universal_num]
   }
 
   let eval_interface = {
-    export = [Framework.Zone.Z_top, Framework.Zone.Z_top];
-    import = [Framework.Zone.Z_top, Framework.Zone.Z_top]
+    export = [Zone.Z_universal, Zone.Z_universal_tree];
+    import = [Zone.Z_universal_num, Zone.Z_universal_num;
+              Zone.Z_universal, Zone.Z_universal_tree
+             ]
   }
   (*==========================================================================*)
   (**                       {2 Lattice structure}                             *)
@@ -212,13 +214,70 @@ module Domain : Framework.Domains.Stacked.S = struct
       |> Option.return
     | _ -> None
 
+  let rec z_fold f a b acc =
+    let open Z in
+    if a > b then
+      acc
+    else
+      z_fold f (a + one) b (f a acc)
+
   let eval zone exp (man: ('a, t) man) (flow: 'a flow) =
+    let () = debug "asked: %a" pp_expr exp in
     match ekind exp, etyp exp with
+    | E_call ({ekind = E_function (Builtin {name = "subtree"})}, [t; i]), _ ->
+      begin
+        let exception Nt in
+        let range = erange exp in
+        try
+          let evl = man.eval ~zone:(Zone.Z_universal, Zone.Z_universal_tree) t flow in
+          Eval.bind (fun t flow -> match ekind t with
+              | TreeAst.E_tree_set t ->
+                let q = man.ask (Numeric.Values.Intervals.Value.Q_interval i) flow in
+                let (l, r) = Numeric.Values.Intervals.Value.bounds q in
+                z_fold (fun z acc ->
+                    let i = Z.to_int z in
+                    Eval.join acc (let a, flow = V.read_i range man t i flow in
+                                   Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set a) range) flow)
+                  ) l r (Eval.empty)
+              | _ -> raise Nt
+            ) evl |> Option.return
+        with
+        | Nt -> None
+      end
     | E_tree (TC_int exp), _ ->
       let range = erange exp in
       let t, flow = V.build_tree_from_expr range man exp flow in
       Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set t) range) flow
       |> Option.return
+    | E_tree (TC_symbol(s, l)), _ ->
+      begin
+        let range = erange exp in
+        let exception NotAllTS in
+        try
+          let el = Eval.eval_list l
+              (fun expr flow ->
+                 man.eval expr flow |>
+                 Eval.bind (fun expr flow ->
+                     match ekind expr with
+                     | TreeAst.E_tree_set expr -> Eval.singleton expr flow
+                     | _ -> (raise NotAllTS)
+                   )
+              ) flow
+          in
+          Eval.bind (fun el flow ->
+              let open Strings.Value.Value in
+              let s = man.ask (Q_string s) flow in
+              let s = match s with
+                | B | T -> raise NotAllTS
+                | V s -> s
+              in
+              let v, flow = V.build_tree_from_symbol range man s el flow in
+              Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set v) range) flow
+            ) el
+          |> Option.return
+        with
+        | NotAllTS -> None
+      end
     | E_var(v, _), T_tree ->
       let range = erange exp in
       let cur = Flow.get_domain_cur man flow in

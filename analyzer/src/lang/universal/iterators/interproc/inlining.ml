@@ -94,7 +94,7 @@ struct
   let eval zone exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_call({ekind = E_function f}, args) ->
+    | E_call({ekind = E_function (User_defined f)}, args) ->
       (* Clear all return flows *)
       let flow0 = Flow.filter (fun tk env ->
           match tk with
