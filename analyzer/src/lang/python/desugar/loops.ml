@@ -55,7 +55,7 @@ module Domain =
               range
            ) flow
          |> Post.of_flow
-         |> Option.return
+         |> OptionExt.return
 
       | S_py_for(target, iterable, body, orelse) ->
          man.eval (Utils.mk_builtin_call "iter" [iterable] range) flow |>
@@ -83,7 +83,7 @@ module Domain =
                man.exec stmt flow
                |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

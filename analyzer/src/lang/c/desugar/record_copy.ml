@@ -85,7 +85,7 @@ struct
                   man.exec ~zone:Z_c stmt flow
                 ) flow
               |> Post.of_flow
-              |> Option.return
+              |> OptionExt.return
             | C_union ->
               begin
                 let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
@@ -102,7 +102,7 @@ struct
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
                   man.exec ~zone:Z_c stmt flow
                   |> Post.of_flow
-                  |> Option.return
+                  |> OptionExt.return
                 | None -> Debug.fail "[%s] all fields have size 0" name
               end
           end

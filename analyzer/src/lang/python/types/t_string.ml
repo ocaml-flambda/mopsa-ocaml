@@ -27,9 +27,9 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_constant (C_string _) ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "str")) range) flow |> Option.return
+         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "str")) range) flow |> OptionExt.return
       | E_py_bytes _ ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bytes")) range) flow |> Option.return
+         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bytes")) range) flow |> OptionExt.return
       | _ -> None
 
     let exec _ _ _ _ = None

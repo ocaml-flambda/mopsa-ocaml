@@ -33,7 +33,7 @@
     	rbegin = pos_to_loc pos1;
 	rend = pos_to_loc pos2;
     }
-    
+
 %}
 
 %token <string> IDENT
@@ -101,7 +101,7 @@ decorator:
     | AT decor_name LPAR RPAR NEWLINE { {erange = pos_to_range $startpos($2) $endpos($4); ekind = Call ($2, [], [])} }
     | AT decor_name LPAR arglist RPAR NEWLINE
         { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
-    | AT decor_name LPAR arglist COMMARPAR NEWLINE 
+    | AT decor_name LPAR arglist COMMARPAR NEWLINE
         { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
 ;
 
@@ -115,22 +115,22 @@ decorators:
 ;
 
 decorated:
-    | decorators classdef  
+    | decorators classdef
          { let (name, bases, keywords, body, _) = breakClassdef $2 in ClassDef(name, bases, keywords, body, $1) }
-    | decorators funcdef   
+    | decorators funcdef
          { let (name, bases, body, _, ret) = breakFunctiondef $2 in FunctionDef(name, bases, body, $1, ret) }
-    | decorators async_funcdef 
+    | decorators async_funcdef
          { let (name, bases, body, _, ret) = breakAsyncFundef $2 in AsyncFunctionDef(name, bases, body, $1, ret) }
  ;
-        
+
 async_funcdef:
     ASYNC funcdef   { let (names, bases, body, dec_l, ret) = breakFunctiondef $2 in AsyncFunctionDef(names, bases, body, dec_l, ret) }
 ;
 
 funcdef:
-    | DEF name parameters COLON suite 
+    | DEF name parameters COLON suite
         { FunctionDef($2, $3, $5, [], None) }
-    | DEF name parameters ARROW test COLON suite 
+    | DEF name parameters ARROW test COLON suite
         { FunctionDef($2, $3, $7, [], Some $5) }
 ;
 
@@ -146,7 +146,7 @@ typedargslist:
    | tfpdef COMMA typedargslist {
        match $3 with (a, va, kwon, kwdef, kwa, def) ->
        ($1 :: a, va, kwon, kwdef, kwa, {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} :: def)
-       }   
+       }
    | tfpdef EQ test COMMA typedargslist {
        match $5 with (a, va, kwon, kwdef, kwa, def) ->
        ($1 :: a, va, kwon, kwdef, kwa, $3 :: def)
@@ -162,7 +162,7 @@ tfpdef:
 ;
 
 tfpvarargs:
-    | tfpdef tfpkwonly_args { 
+    | tfpdef tfpkwonly_args {
         match $2 with (kwonly, kwdef, kwargs) ->
         (Some $1, kwonly, kwdef, kwargs) }
     | COMMA tfpdef tfpkwonly_args {
@@ -173,7 +173,7 @@ tfpvarargs:
         match $5 with (kwonly, kwdef, kwarg) ->
             ((None : arg option), $2 :: kwonly, $4 :: kwdef, kwarg)
         }
-;        
+;
 
 tfpkwonly_args:
     | COMMA tfpdef tfpkwonly_args { match $3 with
@@ -206,7 +206,7 @@ varargslist:
        kwa,
        {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} ::
        def)
-       }   
+       }
    | vfpdef EQ test COMMA varargslist {
        match $5 with (a, va, kwon, kwdef, kwa, def) ->
        ($1 :: a, va, kwon, kwdef, kwa, $3 :: def)
@@ -221,7 +221,7 @@ vfpdef:
 ;
 
 vfpvarargs:
-    | MUL vfpdef vfpkwonly_args { 
+    | MUL vfpdef vfpkwonly_args {
         match $3 with (kwonly, kwdef, kwargs) ->
         (Some $2, kwonly, kwdef, kwargs) }
     | MUL COMMA vfpdef vfpkwonly_args {
@@ -233,7 +233,7 @@ vfpvarargs:
 	    kwdef,
 	    kwarg)
         }
-;        
+;
 
 vfpkwonly_args:
     | COMMA vfpdef vfpkwonly_args { match $3 with
@@ -253,7 +253,7 @@ vfpkwargs:
 ;
 
 stmt:
-    | simple_stmt { $1 : stmt list } 
+    | simple_stmt { $1 : stmt list }
     | compound_stmt { List.cons $1 [] }
 ;
 
@@ -275,7 +275,7 @@ small_stmt_kind:
     | global_stmt  { $1 }
     | nonlocal_stmt { $1 }
     | assert_stmt  { $1 }
-;    
+;
 
 expr_stmt:
     | testlist_star_expr    { Expr $1 }
@@ -293,7 +293,7 @@ expr_stmt_rh_lst:
 expr_stmt_rh:
     | yield_expr    { $1 }
     | testlist_star_expr { $1 }
-;    
+;
 
 annassign:
     | COLON test    { $2, None }
@@ -307,7 +307,7 @@ test_starexpr:
 
 testlist_star_expr:
     | nonempty_list(terminated(test_starexpr, COMMA))    { {erange = pos_to_range $startpos $endpos; ekind = Tuple ($1, Load)} }
-    | separated_nonempty_list(COMMA, test_starexpr)         { match $1 with 
+    | separated_nonempty_list(COMMA, test_starexpr)         { match $1 with
         | [s] -> s
         | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple (l, Load)} }
 ;
@@ -333,7 +333,7 @@ del_stmt:
 ;
 
 pass_stmt:
-    PASS        { Pass } 
+    PASS        { Pass }
 ;
 
 flow_stmt:
@@ -377,11 +377,11 @@ import_name:
 ;
 
 import_from:
-    | FROM importfrom_module IMPORT MUL    
+    | FROM importfrom_module IMPORT MUL
          { ImportFrom (fst $2, ["*", None], snd $2) }
-    | FROM importfrom_module IMPORT LPAR import_as_names RPAR 
+    | FROM importfrom_module IMPORT LPAR import_as_names RPAR
         { ImportFrom (fst $2, $5, snd $2) }
-    | FROM importfrom_module IMPORT import_as_names  
+    | FROM importfrom_module IMPORT import_as_names
         { ImportFrom (fst $2, $4, snd $2) }
 ;
 
@@ -389,8 +389,8 @@ importfrom_module:
     | dotted_name   { Some $1, Some 0 }
     | dot_level dotted_name { Some $2, Some $1 }
     | DOT dot_level     { (None : identifier option), Some (1 + $2) }
-;    
-     
+;
+
 dot_level:
     | DOT dot_or_zero { 1 + $2 }
 ;
@@ -422,13 +422,13 @@ dotted_as_names:
 
 dotted_name:
     | name                  { $1 }
-    | name DOT dotted_name  { $1 ^ "." ^ $3 }  
+    | name DOT dotted_name  { $1 ^ "." ^ $3 }
 ;
 
 global_stmt:
     GLOBAL separated_nonempty_list(COMMA, name)     { Global $2 }
 ;
-    
+
 nonlocal_stmt:
     NONLOCAL separated_nonempty_list(COMMA, name)   { Nonlocal $2 }
 ;
@@ -436,7 +436,7 @@ nonlocal_stmt:
 assert_stmt:
     | ASSERT test            { Assert ($2, None) }
     | ASSERT test COMMA test { Assert ($2, Some $4) }
-;    
+;
 
 compound_stmt:
     compound_stmt_kind { {skind = $1; srange = pos_to_range $startpos $endpos} }
@@ -456,7 +456,7 @@ compound_stmt_kind:
 
 async_stmt:
     | async_funcdef        { $1 }
-    | ASYNC with_stmt     { 
+    | ASYNC with_stmt     {
         let (it, b) = breakWith $2 in AsyncWith (it, b)
         }
     | ASYNC for_stmt      {
@@ -472,12 +472,12 @@ elif_else:
     | { [] }
     | ELIF test COLON suite elif_else { [ {skind = If ($2, $4, $5); srange = pos_to_range $startpos $endpos} ] }
     | ELSE COLON suite      { $3 }
-;        
-    
+;
+
 while_stmt:
     | WHILE test COLON suite            { While ($2, $4, [] ) }
     | WHILE test COLON suite ELSE COLON suite { While ($2, $4, $7) }
-;    
+;
 
 for_stmt:
     | FOR exprlist IN testlist COLON suite  { match $2 with
@@ -507,7 +507,7 @@ except_handler:
 except_clause:
     | EXCEPT                { (None : expr option), (None : identifier option) }
     | EXCEPT test           { Some $2, (None : identifier option) }
-    | EXCEPT test AS name   { Some $2, Some $4 }     
+    | EXCEPT test AS name   { Some $2, Some $4 }
 ;
 
 with_stmt:
@@ -521,19 +521,19 @@ with_item:
 
 suite:
     | simple_stmt                   { $1 }
-    | NEWLINE INDENT stmt+ DEDENT   { List.concat $3 }   
+    | NEWLINE INDENT stmt+ DEDENT   { List.concat $3 }
 ;
 
 test:
-    | or_test                       { $1 }         
+    | or_test                       { $1 }
     | or_test IF or_test ELSE test  { {erange = pos_to_range $startpos $endpos; ekind = IfExp($3, $1, $5)} }
     | lambdef                     { $1 }
 ;
 
 test_nocond:
     | or_test           { $1 }
-    | lambdef_nocond    { $1 }    
-;    
+    | lambdef_nocond    { $1 }
+;
 
 lambdef:
     | LAMBDA varargslist COLON test { {erange = pos_to_range $startpos $endpos; ekind = Lambda ($2, $4)} }
@@ -553,7 +553,7 @@ and_test:
     | separated_nonempty_list(AND, not_test)    { match $1 with
         | [s] -> s
         | l -> {erange = pos_to_range $startpos $endpos; ekind = BoolOp(And, l)} }
-;        
+;
 
 not_test:
     | NOT not_test      { {erange = pos_to_range $startpos $endpos; ekind = UnaryOp(Not, $2)} }
@@ -567,7 +567,7 @@ comparison:
 
 comp_list:
     | comp_op expr comp_list_empty    { $1 :: (fst $3), $2 :: (snd $3) }
-;            
+;
 
 comp_list_empty:
     | { [], [] }
@@ -589,7 +589,7 @@ comp_op:
 
 star_expr:
     MUL expr       { {erange = pos_to_range $startpos $endpos; ekind = Starred ($2, Load)} }
-;     
+;
 
 expr:
     | xor_expr      { $1 }
@@ -614,8 +614,8 @@ shift_expr:
 
 arith_expr:
     | term                         { $1 }
-    | arith_expr ADD term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Add, $3)} }    
-    | arith_expr SUB term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Sub, $3)} }    
+    | arith_expr ADD term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Add, $3)} }
+    | arith_expr SUB term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Sub, $3)} }
 ;
 
 term:
@@ -624,12 +624,12 @@ term:
 ;
 
 term_op:
-    | MUL   { Mult }      
+    | MUL   { Mult }
     | AT    { MatMult }
     | DIV   { Div }
     | MOD   { Mod }
     | TDIV  { FloorDiv }
-;    
+;
 
 factor:
     | power             { $1 }
@@ -641,9 +641,9 @@ factor_op:
     | SUB       { USub }
     | BITNOT    { Invert }
 ;
-            
+
 power:
-    | atom_expr             { $1 }            
+    | atom_expr             { $1 }
     | atom_expr POW factor  { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Pow, $3)} }
 ;
 
@@ -678,12 +678,12 @@ atom:
     | NOTIMPLEMENTED    { {erange = pos_to_range $startpos $endpos; ekind = NameConstant SNotImplemented} }
     | TRUE              { {erange = pos_to_range $startpos $endpos; ekind = NameConstant True} }
     | FALSE             { {erange = pos_to_range $startpos $endpos; ekind = NameConstant False} }
-;     
- 
+;
+
 /* Iterable cannot be used in comprehension : Star_expr forbidden */
 atom_tuple:
     | LPAR RPAR                 { {erange = pos_to_range $startpos $endpos; ekind = Tuple ([], Load)} }
-    | LPAR yield_expr RPAR      { $2 }                
+    | LPAR yield_expr RPAR      { $2 }
     | LPAR separated_nonempty_list(COMMA, test_starexpr) RPAR   { match $2 with
         | [s] -> s
         | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Load)} }
@@ -706,8 +706,8 @@ atom_dict:
     | LBRACE dict_elts  RBRACE      { {erange = pos_to_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
     | LBRACE dict_elts  COMMARBRA   { {erange = pos_to_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
     | LBRACE test comp_for RBRACE   { {erange = pos_to_range $startpos $endpos; ekind = SetComp($2, $3)} }
-    | LBRACE separated_nonempty_list(COMMA, test_starexpr) RBRACE  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} } 
-    | LBRACE separated_nonempty_list(COMMA, test_starexpr) COMMARBRA  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} } 
+    | LBRACE separated_nonempty_list(COMMA, test_starexpr) RBRACE  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} }
+    | LBRACE separated_nonempty_list(COMMA, test_starexpr) COMMARBRA  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} }
 ;
 
 number:
@@ -724,7 +724,7 @@ strings:
 bytes:
     | BYTES         { $1 }
     | BYTES bytes   { ($1) ^ ($2) }
-;    
+;
 
 subscriptlist:
     separated_nonempty_list(COMMA, subscript) { $1 }
@@ -745,9 +745,9 @@ exprlist:
    | nonempty_list(terminated(expr_star, COMMA))  { $1 }
    | separated_nonempty_list(COMMA, expr_star)    { $1 }
 ;
-    
+
 testlist:
-   | nonempty_list(terminated(test, COMMA)) { {erange = pos_to_range $startpos $endpos; ekind = Tuple($1, Load)} } 
+   | nonempty_list(terminated(test, COMMA)) { {erange = pos_to_range $startpos $endpos; ekind = Tuple($1, Load)} }
    | separated_nonempty_list(COMMA, test)  { match $1 with
         | [s] -> s
         | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple (l, Load)} }
@@ -761,42 +761,42 @@ dict_elts:
 ;
 
 classdef:
-    | CLASS name COLON suite        { ClassDef ($2, [], [], $4, []) } 
+    | CLASS name COLON suite        { ClassDef ($2, [], [], $4, []) }
     | CLASS name LPAR RPAR COLON suite { ClassDef ($2, [], [], $6, []) }
-    | CLASS name LPAR arglist RPAR COLON suite { ClassDef ($2, fst $4, snd $4, $7, []) } 
-    | CLASS name LPAR arglist COMMARPAR COLON suite { ClassDef ($2, fst $4, snd $4, $7, []) } 
+    | CLASS name LPAR arglist RPAR COLON suite { ClassDef ($2, fst $4, snd $4, $7, []) }
+    | CLASS name LPAR arglist COMMARPAR COLON suite { ClassDef ($2, fst $4, snd $4, $7, []) }
 ;
 
 arglist:
-    separated_nonempty_list(COMMA, argument)  { 
+    separated_nonempty_list(COMMA, argument)  {
         let rec result = function
             | [(a, b)] -> a, b
             | (a, b) :: l -> let (c, d) = result l in a @ c, b @ d
-            | _ -> assert false 
-        in result $1            
+            | _ -> assert false
+        in result $1
         }
 ;
 
 argument:
-    | test          { ([$1], [] ) } 
+    | test          { ([$1], [] ) }
     | test comp_for { ([{erange = pos_to_range $startpos $endpos; ekind = GeneratorExp($1, $2)}], []) }
     | name EQ test  { ([], [(Some $1, $3)]) }
     | POW test      { ([], [((None : identifier option), $2)]) }
     | MUL test      { ([$2], []) }
-;    
+;
 
 comp_for:
-    | nonempty_list(comp_for1)    { $1 }  
+    | nonempty_list(comp_for1)    { $1 }
 ;
 
 comp_for1:
     | FOR exprlist IN or_test list(comp_if) { match $2 with
         | [s] -> (s, $4, $5, false)
         | l -> ({erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Store)}, $4, $5, false) }
-    | ASYNC FOR exprlist IN or_test list(comp_if) { match $3 with  
+    | ASYNC FOR exprlist IN or_test list(comp_if) { match $3 with
         | [s] -> (s, $5, $6, true)
         | l -> ({erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Store)}, $5, $6, true) }
-;          
+;
 
 comp_if:
     IF test_nocond  { $2 }

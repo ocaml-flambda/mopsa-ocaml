@@ -187,7 +187,7 @@ struct
   let ask query man flow =
     let reply1 = D1.ask query (man1 man) flow in
     let reply2 = D2.ask query (man2 man) flow in
-    Option.option_neutral2 (Query.join query) reply1 reply2
+    OptionExt.option_neutral2 (Query.join query) reply1 reply2
 
 end
 

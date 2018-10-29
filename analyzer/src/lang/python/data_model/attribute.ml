@@ -136,7 +136,7 @@ module Domain =
                  )
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
          man.eval obj flow |>
@@ -170,7 +170,7 @@ module Domain =
                  )
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

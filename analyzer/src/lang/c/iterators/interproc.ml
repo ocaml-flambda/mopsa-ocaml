@@ -79,7 +79,7 @@ struct
             fun_parameters = fundec.c_func_parameters;
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-            fun_return_type = fundec.c_func_return;
+            fun_return_type = Some fundec.c_func_return;
           }
           in
           let exp' = mk_call fundec' args exp.erange in
@@ -88,7 +88,7 @@ struct
 
         | _ -> assert false
       end |>
-      Option.return
+      OptionExt.return
 
     | E_c_cast(e, _)
       when (exp |> etyp |> is_c_pointer_type)
@@ -96,7 +96,7 @@ struct
       ->
       let t' = exp |> etyp |> under_pointer_type in
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) {e with etyp = t'} flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

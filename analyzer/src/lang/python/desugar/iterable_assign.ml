@@ -41,7 +41,7 @@ module Domain =
                assign_iter man el iter range flow
                |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

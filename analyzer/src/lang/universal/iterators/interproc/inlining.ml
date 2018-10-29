@@ -122,7 +122,8 @@ struct
       in
 
       (* Create a temporary variable to store return expressions *)
-      let tmp = mk_tmp ~vtyp:f.fun_return_type () in
+      let typ = OptionExt.option_dfl T_int f.fun_return_type in
+      let tmp = mk_tmp ~vtyp:typ () in
 
       (* Iterate over return flows and assign the returned value to tmp *)
       let flow3 =
@@ -153,7 +154,7 @@ struct
       let flow4 = man.exec ignore_block flow3 in
 
       Eval.singleton (mk_var tmp range) flow4 ~cleaners:[mk_remove_var tmp range] |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

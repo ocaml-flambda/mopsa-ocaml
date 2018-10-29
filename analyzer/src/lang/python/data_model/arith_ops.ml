@@ -129,7 +129,7 @@ module Domain =
                              )
                            man flow
              )))
-         |> Option.return
+         |> OptionExt.return
       | E_unop(op, e) when is_arith_op op && is_py_expr e ->
          debug "Resolving unary operator %a" Framework.Ast.pp_operator op;
          man.eval e flow |>
@@ -149,7 +149,7 @@ module Domain =
                  )
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
       | _ -> None
 
     let exec _ _ _ _ = None

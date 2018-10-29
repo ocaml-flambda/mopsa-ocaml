@@ -59,7 +59,7 @@ struct
         let flow = man.exec ~zone:Zone.Z_c (mk_assign lval rval exp.erange) flow in
         Eval.singleton rval flow
       end
-      |> Option.return
+      |> OptionExt.return
 
     | E_c_statement {skind = S_block l} ->
       begin
@@ -69,7 +69,7 @@ struct
           let stmt' = mk_block q' (tag_range (erange exp) "block'") in
           let flow' = man.exec ~zone:Zone.Z_c stmt' flow in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) e flow' |>
-          Option.return
+          OptionExt.return
 
         | _ ->
           Debug.fail "E_c_statement %a" pp_expr exp
@@ -77,7 +77,7 @@ struct
 
     | E_c_statement {skind = S_expression e} ->
       man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) e flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

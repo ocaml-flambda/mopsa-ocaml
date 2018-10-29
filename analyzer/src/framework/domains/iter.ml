@@ -137,6 +137,6 @@ struct
   let ask query man flow =
     let head_reply = Head.ask query (head_man man) flow in
     let tail_reply = Tail.ask query (tail_man man) flow in
-    Option.option_neutral2 (Query.join query) head_reply tail_reply
+    OptionExt.option_neutral2 (Query.join query) head_reply tail_reply
 
 end

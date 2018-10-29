@@ -105,7 +105,7 @@ struct
                    )
             | _ -> debug "%a@\n" pp_expr e; assert false
           )
-      |> Option.return
+      |> OptionExt.return
 
     | S_remove_var v ->
       let flow = Flow.map_domain_cur (remove v) man flow in
@@ -170,7 +170,7 @@ struct
              * let vv = mk_py_value_var v t in
              * Eval.singleton (mk_py_object (addr, mk_var vv range) range) flow |> Eval.join acc *)
         ) aset (*FIXME?*) (Eval.empty_singleton flow)
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

@@ -4,7 +4,8 @@
 	"universal.iterators.program",
 	"universal.iterators.intraproc",
 	"universal.iterators.loops",
-
+        "universal.iterators.interproc.inlining",
+        
 	// Array abstraction
 	// {
 	//     "product": [

@@ -217,14 +217,6 @@ let () =
            {stmt with skind = S_program({prog with prog_kind = C_program(globals, funcs)})}
         ))
 
-      | S_c_global_declaration(v, init) ->
-        let exprs = exprs_in_init_option init in
-        {exprs; stmts = []},
-        (function {exprs} ->
-           let init, _ = init_option_from_exprs exprs init in
-           {stmt with skind = S_c_global_declaration(v, init)}
-        )
-
       | S_c_local_declaration(v, init) ->
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},

@@ -18,6 +18,7 @@ module Value =
 struct
 
   module I = ItvUtils.IntItv
+  module FI = ItvUtils.FloatItv
 
   type v = I.t
   type t = v with_bot
@@ -56,16 +57,22 @@ struct
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
-  let of_constant = function
+  let of_constant _ = function
     | C_int i ->
-      Nb (I.of_z i i)
-
+       Nb (I.of_z i i)
+      
     | C_int_interval (i1,i2) ->
-      Nb (I.of_z i1 i2)
-
+       Nb (I.of_z i1 i2)
+      
+    | C_float_interval (lo,up) ->
+       (bot_absorb1 FI.to_int_itv) (FI.of_float_bot lo up)
+      
+    | C_float f ->
+       (bot_absorb1 FI.to_int_itv) (FI.of_float_bot f f)
+      
     | _ -> top
 
-  let unop op a =
+  let unop _ op a =
     return (
       match op with
       | O_log_not -> bot_lift1 I.log_not a
@@ -78,7 +85,7 @@ struct
       | _ -> top
     )
 
-  let binop op a1 a2 =
+  let binop _ op a1 a2 =
     return (
       match op with
       | O_plus   -> bot_lift2 I.add a1 a2
@@ -97,13 +104,13 @@ struct
       | _     -> top
     )
 
-  let filter a b =
+  let filter _ a b =
     return (
       if b then bot_absorb1 I.meet_nonzero a
       else bot_absorb1 I.meet_zero a
     )
 
-  let bwd_unop op a r =
+  let bwd_unop _ op a r =
     return (
       try
         let a, r = bot_to_exn a, bot_to_exn r in
@@ -120,7 +127,7 @@ struct
         bottom
     )
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop _ op a1 a2 r =
     return (
       try
         let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
@@ -144,7 +151,7 @@ struct
         bottom, bottom
     )
 
-  let compare op a1 a2 r =
+  let compare _ op a1 a2 r =
     return (
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
@@ -167,8 +174,7 @@ struct
   let ask : type r. r Framework.Query.query -> (expr -> t) -> r option =
     fun query eval ->
       match query with
-      | Q_interval e ->
-        Some (eval e)
+      | Q_interval e -> Some (eval e)
       | _ -> None
 
   let z_of_z2 z z' round =

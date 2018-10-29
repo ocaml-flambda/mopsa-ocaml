@@ -107,7 +107,7 @@ struct
       ->
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
       Eval.singleton exp' flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_set_debug_channels", [e']) ->
       let channels = match ekind e' with
@@ -117,47 +117,47 @@ struct
       in
       let () = Debug.set_channels channels in
       Eval.singleton (mk_int 0 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_char", []) ->
       rand_int Ast.C_signed_char exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_char", []) ->
       rand_int Ast.C_unsigned_char exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_int", []) ->
       rand_int Ast.C_signed_int exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_int", []) ->
       rand_int Ast.C_unsigned_int exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_short", []) ->
       rand_int Ast.C_signed_short exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_short", []) ->
       rand_int Ast.C_unsigned_short exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_long", []) ->
       rand_int Ast.C_signed_long exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_long", []) ->
       rand_int Ast.C_unsigned_long exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_long_long", []) ->
       rand_int Ast.C_signed_long_long exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_long_long", []) ->
       rand_int Ast.C_unsigned_long_long exp.erange man flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
@@ -173,7 +173,7 @@ struct
         ) erange) flow
       in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_rand_unsigned_long", [a; b]) ->
       let erange = exp.erange in
@@ -188,7 +188,7 @@ struct
             erange
         ) erange) flow in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_panic", [msg]) ->
       let rec remove_cast e =
@@ -208,20 +208,20 @@ struct
         (Flow.print man) flow
       ;
       Eval.singleton (mk_int 0 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert_true", [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
       let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 exp.erange) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
@@ -252,10 +252,10 @@ struct
                      Flow.set T_cur cur man
           in
           Eval.singleton (mk_int 0 exp.erange) flow |>
-          Option.return
+          OptionExt.return
         with BottomFound ->
           Eval.empty_singleton flow |>
-          Option.return
+          OptionExt.return
       end
 
      | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
@@ -283,7 +283,7 @@ struct
                    Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow |>
-        Option.return
+        OptionExt.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error", [{ekind = E_constant(C_int code)}]) ->
@@ -311,7 +311,7 @@ struct
                    Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow |>
-        Option.return
+        OptionExt.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error_at_line", [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
@@ -351,7 +351,7 @@ struct
                    Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow |>
-        Option.return
+        OptionExt.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error_exists", [{ekind = E_constant(C_int code)}]) ->
@@ -376,7 +376,7 @@ struct
                     Flow.set T_cur cur man
         in
         Eval.singleton (mk_int 0 exp.erange) flow' |>
-        Option.return
+        OptionExt.return
       end
 
     | _ -> None

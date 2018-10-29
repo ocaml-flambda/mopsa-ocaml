@@ -485,7 +485,7 @@ struct
                ret'', channels @ channels'
              | _ -> assert false
          in
-         aux Config.pool man posts (List.map (Option.option_lift1 (fun post -> post.Post.flow)) posts)
+         aux Config.pool man posts (List.map (OptionExt.option_lift1 (fun post -> post.Post.flow)) posts)
        in
 
        (* Meet merged flows *)
@@ -600,7 +600,7 @@ struct
 
        (* Combine conjunctions into an evaluation *)
        let res = List.fold_left (fun acc c ->
-           Option.option_neutral2 Eval.join acc (conj_to_evl c)
+           OptionExt.option_neutral2 Eval.join acc (conj_to_evl c)
          ) None lconj'
        in
 
@@ -622,7 +622,7 @@ struct
           let module D = (val hd) in
           let r1 = D.ask query (head_man man') flow in
           let r2 = aux tl (tail_man man') query in
-          Option.option_neutral2 (Query.meet query) r1 r2
+          OptionExt.option_neutral2 (Query.meet query) r1 r2
     in
     aux Config.pool man query
 

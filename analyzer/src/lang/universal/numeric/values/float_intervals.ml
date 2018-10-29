@@ -10,6 +10,7 @@
 
 open Framework.Essentials
 open Framework.Value
+open Rounding
 open Ast
 open Bot
 
@@ -22,7 +23,7 @@ struct
   module I = ItvUtils.FloatItvNan
   module FI = ItvUtils.FloatItv
   module II = ItvUtils.IntItv
-           
+
   type t = I.t
 
   type _ Framework.Query.query +=
@@ -71,78 +72,106 @@ struct
     | F_LONG_DOUBLE -> panic "unhandled `DOUBLE intervals"
     | F_REAL -> panic "unhandled `REAL intervals"
 
-  let round () : I.round = `ANY (* TODO *)
+  let round () : I.round =
+    match !opt_float_rounding with
+    | Apron.Texpr1.Near -> `NEAR
+    | Apron.Texpr1.Zero -> `ZERO
+    | Apron.Texpr1.Up -> `UP
+    | Apron.Texpr1.Down -> `DOWN
+    | Apron.Texpr1.Rnd -> `ANY
                       
-  let of_constant = function
-    | C_float i ->
-       I.cst i
+  let of_constant t c =
+    match t, c with
+    | T_float p, C_float i ->
+       I.of_float_prec (prec p) (round ()) i i
 
-    | C_float_interval (lo,up) ->
-       I.of_float lo up
+    | T_float p, C_float_interval (lo,up) ->
+       I.of_float_prec (prec p) (round ()) lo up
+
+    | T_float p, C_int_interval (lo,up) ->
+       I.of_z (prec p) (round ()) lo up      
+
+    | T_float p, C_int i ->
+       I.of_z (prec p) (round ()) i i
+
+    | T_float _, C_bool false ->
+       I.zero
+
+    | T_float _, C_bool true ->
+       I.one
 
     | _ -> top
 
-  let unop op a =
+  let unop t op a =
     return (
-      match op with
-      | O_float_minus _ -> I.neg a
-      | O_float_plus _ -> a
-      | O_float_sqrt p -> I.sqrt (prec p) (round ()) a
-      | O_float_cast p -> I.round (prec p) (round ()) a
-      | _ -> top
-    )    
-
-  let binop op a1 a2 =
+        match t with
+        | T_float p ->
+           (match op with
+            | O_minus -> I.neg a
+            | O_plus  -> a
+            | O_sqrt  -> I.sqrt (prec p) (round ()) a
+            | O_cast  -> I.round (prec p) (round ()) a
+            | _ -> top)
+        | _ -> top)
+    
+  let binop t op a1 a2 =
     return (
-      match op with
-      | O_float_plus p -> I.add (prec p) (round ()) a1 a2
-      | O_float_minus p -> I.sub (prec p) (round ()) a1 a2
-      | O_float_mult p -> I.mul (prec p) (round ()) a1 a2
-      | O_float_div p -> I.div (prec p) (round ()) a1 a2
-      | O_float_mod p -> I.fmod (prec p) (round ()) a1 a2
-      | _ -> top
-    )
-
-  let filter a b =
+        match t with
+        | T_float p ->
+           (match op with
+            | O_plus  -> I.add (prec p) (round ()) a1 a2
+            | O_minus -> I.sub (prec p) (round ()) a1 a2
+            | O_mult  -> I.mul (prec p) (round ()) a1 a2
+            | O_div   -> I.div (prec p) (round ()) a1 a2
+            | O_mod   -> I.fmod (prec p) (round ()) a1 a2
+            | _ -> top)
+        | _ -> top)
+    
+  let filter _ a b =
     return a
 
-  let bwd_unop op a r =
+  let bwd_unop t op a r =
     return (
-      match op with
-      | O_float_minus _ -> I.bwd_neg a r
-      | O_float_plus _ -> I.meet a r
-      | O_float_sqrt p -> I.bwd_sqrt (prec p) (round ()) a r
-      | _ -> a
-    )    
+         match t with
+        | T_float p ->
+           (match op with
+            | O_minus -> I.bwd_neg a r
+            | O_plus  -> I.meet a r
+            | O_sqrt  -> I.bwd_sqrt (prec p) (round ()) a r
+            | _ -> a)
+        |_ -> a)
 
-  let bwd_binop op a1 a2 r =
+  let bwd_binop t op a1 a2 r =
     return (
-      match op with
-      | O_float_plus p -> I.bwd_add (prec p) (round ()) a1 a2 r
-      | O_float_minus p -> I.bwd_sub (prec p) (round ()) a1 a2 r
-      | O_float_mult p -> I.bwd_mul (prec p) (round ()) a1 a2 r
-      | O_float_div p -> I.bwd_div (prec p) (round ()) a1 a2 r
-      | O_float_mod p -> I.bwd_fmod (prec p) (round ()) a1 a2 r
-      | _ -> a1,a2
-    )
+        match t with
+        | T_float p ->
+           (match op with
+            | O_plus  -> I.bwd_add (prec p) (round ()) a1 a2 r
+            | O_minus -> I.bwd_sub (prec p) (round ()) a1 a2 r
+            | O_mult  -> I.bwd_mul (prec p) (round ()) a1 a2 r
+            | O_div   -> I.bwd_div (prec p) (round ()) a1 a2 r
+            | O_mod   -> I.bwd_fmod (prec p) (round ()) a1 a2 r
+            | _ -> a1,a2)
+        | _ -> a1,a2)
 
-  let compare op a1 a2 r =
+  let compare t op a1 a2 r =
     return (       
-      let op = if r then op else negate_comparison op in
-      match op with
-      | O_float_eq p -> I.filter_eq  (prec p) a1 a2
-      | O_float_ne p -> I.filter_neq (prec p) a1 a2
-      | O_float_lt p -> I.filter_lt  (prec p) a1 a2
-      | O_float_le p -> I.filter_leq (prec p) a1 a2
-      | O_float_gt p -> I.filter_gt  (prec p) a1 a2
-      | O_float_ge p -> I.filter_geq (prec p) a1 a2
-      | O_float_neg_lt p -> I.filter_lt_false  (prec p) a1 a2
-      | O_float_neg_le p -> I.filter_leq_false (prec p) a1 a2
-      | O_float_neg_gt p -> I.filter_gt_false  (prec p) a1 a2
-      | O_float_neg_ge p -> I.filter_geq_false (prec p) a1 a2
-      | _ -> a1,a2
-    )
-
+        match t with
+        | T_float p ->
+           (match r, op with
+            | true, O_eq | false, O_ne -> I.filter_eq  (prec p) a1 a2
+            | true, O_ne | false, O_eq -> I.filter_neq (prec p) a1 a2
+            | true, O_lt -> I.filter_lt  (prec p) a1 a2
+            | true, O_le -> I.filter_leq (prec p) a1 a2
+            | true, O_gt -> I.filter_gt  (prec p) a1 a2
+            | true, O_ge -> I.filter_geq (prec p) a1 a2
+            | false, O_lt -> I.filter_lt_false  (prec p) a1 a2
+            | false, O_le -> I.filter_leq_false (prec p) a1 a2
+            | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
+            | false, O_ge -> I.filter_geq_false (prec p) a1 a2
+            | _ -> a1,a2)
+        | _ -> a1,a2)
+    
   let ask : type r. r Framework.Query.query -> (expr -> t) -> r option =
     fun query eval ->
       match query with

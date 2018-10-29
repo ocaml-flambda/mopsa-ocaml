@@ -54,7 +54,7 @@ module Domain =
                        man flow
                    )
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_slice_subscript(obj, start, stop, step) ->
          Eval.eval_list [obj; start; stop; step] man.eval flow |>
@@ -78,7 +78,7 @@ module Domain =
                        man flow
                    )
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 
@@ -106,7 +106,7 @@ module Domain =
                        flow
                    )
              )
-         |> Option.return
+         |> OptionExt.return
 
       | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp) ->
          Eval.eval_list [exp; obj; start; stop; step] man.eval flow |>
@@ -130,7 +130,7 @@ module Domain =
                        flow
                    )
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

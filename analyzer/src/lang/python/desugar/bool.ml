@@ -31,7 +31,7 @@ module Domain =
     let exec_interface = {export = []; import = []}
     let eval_interface = {export = [any_zone, any_zone]; import = []}
 
-    let init _ _ flow = Option.return flow
+    let init _ _ flow = OptionExt.return flow
 
     let eval zs exp (man:('a, unit) man) (flow:'a flow) : ('a, Framework.Ast.expr) evl option =
       let range = erange exp in
@@ -78,7 +78,7 @@ module Domain =
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> Option.return
+         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
@@ -129,11 +129,11 @@ module Domain =
                        ) man flow
                    )
              )
-         |> Option.return
+         |> OptionExt.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> Option.return
+         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> OptionExt.return
 
       (* E⟦ e1 op e2 op e3 ... ⟧ *)
       | E_py_multi_compare(left, ops, rights) ->
@@ -158,7 +158,7 @@ module Domain =
                         )
                in
                aux left flow (List.combine ops rights)
-             ) |> Option.return
+             ) |> OptionExt.return
 
       | _ -> None
 

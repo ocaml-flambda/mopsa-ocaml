@@ -55,21 +55,21 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_bool range) flow |> Option.return
+         Eval.singleton (mk_py_top T_bool range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
+         Eval.singleton (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_string range) flow |> Option.return
+         Eval.singleton (mk_py_top T_string range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_int range) flow |> Option.return
+         Eval.singleton (mk_py_top T_int range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
                      {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
                    ], []) ->
-         Eval.singleton (mk_py_z_interval l u range) flow |> Option.return
+         Eval.singleton (mk_py_z_interval l u range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
          begin
@@ -84,7 +84,7 @@ module Domain =
               in
               Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
          end
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
          begin
@@ -103,7 +103,7 @@ module Domain =
               in
               Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
          end
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to mopsa.assert_equal function *)
       | E_py_call(
@@ -112,7 +112,7 @@ module Domain =
 ) ->
          let range = erange exp in
          check man (mk_binop x O_eq y (tag_range range "eq")) range flow
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to mopsa.assert_true function *)
       | E_py_call(
@@ -121,7 +121,7 @@ module Domain =
 ) ->
          let range = erange exp in
          check man x range  flow
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to mopsa.assert_false function *)
       | E_py_call(
@@ -130,7 +130,7 @@ module Domain =
 )  ->
          let range = erange exp in
          check man (mk_not x (tag_range range "not")) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call(
 {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)},
@@ -140,7 +140,7 @@ module Domain =
          let flow = man.exec stmt flow in
          (* FIXME:  mk_py_int ?*)
          Eval.singleton (mk_int 0 exp.erange) flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call(
 {ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
@@ -171,10 +171,10 @@ module Domain =
              in
              (* FIXME:  mk_py_int ?*)
              Eval.singleton (mk_int 0 exp.erange) flow
-             |> Option.return
+             |> OptionExt.return
            with BottomFound ->
              Eval.empty_singleton flow
-             |> Option.return
+             |> OptionExt.return
          end
 
       | E_py_call(
@@ -203,7 +203,7 @@ module Domain =
                         Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_int 0 exp.erange) flow |> Option.return
+           Eval.singleton (mk_int 0 exp.erange) flow |> OptionExt.return
          end
 
       | E_py_call(
@@ -243,7 +243,7 @@ module Domain =
            in
            (* FIXME:  mk_py_int ?*)
            Eval.singleton (mk_int 0 exp.erange) flow
-           |> Option.return
+           |> OptionExt.return
          end
 
 
@@ -270,7 +270,7 @@ module Domain =
            in
            (* FIXME:  mk_py_int ?*)
            Eval.singleton (mk_int 0 exp.erange) flow'
-           |> Option.return
+           |> OptionExt.return
          end
       | _ ->
          None

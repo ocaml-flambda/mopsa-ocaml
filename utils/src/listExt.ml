@@ -90,3 +90,11 @@ let to_string printer elem l =
   let b = Buffer.create 10 in
   print_gen (fun () s -> Buffer.add_string b s) printer (fun () e -> elem e) () l;
   Buffer.contents b
+
+let rec compare cmp a b = match a,b with
+  | [],[] -> 0
+  | [],_ -> 1
+  | _,[] -> -1
+  | x::s, y::t ->
+     let r =  cmp x y in
+     if r = 0 then compare cmp s t else r

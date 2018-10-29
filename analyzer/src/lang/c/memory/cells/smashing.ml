@@ -235,12 +235,12 @@ struct
     | S_c_global_declaration(v, init) ->
       Init_visitor.init_global (init_visitor man) v init range flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_c_local_declaration(v, init) ->
       Init_visitor.init_local (init_visitor man) v init range flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove_var v ->
       let cl = cells_of_base (V v) man flow in
@@ -251,7 +251,7 @@ struct
       let block = List.map (fun c -> mk_remove_cell c stmt.srange) cl in
       man.exec ~zone:Z_c_cell (mk_block block stmt.srange) flow1 |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
@@ -261,7 +261,7 @@ struct
       Post.bind_opt man @@ fun lval flow ->
 
       eval (Z_c, Z_c_cell) lval man flow |>
-      Option.lift @@ Post.bind man @@ fun lval flow ->
+      OptionExt.lift @@ Post.bind man @@ fun lval flow ->
 
       let c, mode = cell_of_expr lval in
       assign_cell c rval mode range man flow |>
@@ -278,7 +278,7 @@ struct
       man.exec ~zone:Z_c_cell stmt' flow |>
 
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None
@@ -331,7 +331,7 @@ struct
       let c = var_to_cell v in
       let flow1 = Flow.map_domain_env T_cur (add c) man flow in
       Eval.singleton (mk_cell c ~mode:mode (erange exp)) flow1 |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref p ->
       begin
@@ -376,7 +376,7 @@ struct
         | _ -> assert false
 
       end (* case of E_c_deref *) |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -109,7 +109,7 @@ module Domain = struct
                              end)
                            ~felse:(fun false_flow ->
                              Eval.singleton cmp flow)
-                           man flow))) |> Option.return
+                           man flow))) |> OptionExt.return
     | _ -> None
 
   let exec _ _ _ _ = None

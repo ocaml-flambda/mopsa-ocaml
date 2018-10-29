@@ -67,7 +67,7 @@ module Domain =
 
 
       | S_assign({ekind = E_var (v, STRONG)} as l, e) ->
-         Option.return
+         OptionExt.return
            (man.eval e flow |>
               Post.bind man @@
                 fun e flow ->
@@ -106,7 +106,7 @@ module Domain =
                   Flow.set_domain_cur (Typingdomain.set_var_attr cur v attr polytype) man flow |> Post.of_flow
                | _ -> Debug.fail "%a" pp_expr reval
              )
-         |> Option.return
+         |> OptionExt.return
 
 
       | S_remove_var v ->
@@ -130,7 +130,7 @@ module Domain =
 
                | _ -> Debug.fail "%a" pp_expr e
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 
@@ -141,12 +141,12 @@ module Domain =
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
          let expr = mk_expr (E_get_type_partition builtin_notimpl) range in
-         Eval.singleton expr flow |> Option.return
+         Eval.singleton expr flow |> OptionExt.return
 
       | E_constant C_py_none ->
          let builtin_none = Typingdomain.builtin_inst "NoneType" in
          let expr = mk_expr (E_get_type_partition builtin_none) range in
-         Eval.singleton expr flow |> Option.return
+         Eval.singleton expr flow |> OptionExt.return
 
       | E_alloc_addr akind ->
          begin match akind with
@@ -161,7 +161,7 @@ module Domain =
             let addr = {addr_kind = akind; addr_uid=(-1)} in
             Eval.singleton (mk_addr addr range) flow
          end
-         |> Option.return
+         |> OptionExt.return
 
       | E_var (v, _) ->
          let cur = Flow.get_domain_cur man flow in
@@ -178,11 +178,11 @@ module Domain =
            (* let ak = Typingdomain.get_addr_kind cur v in
             * let a = {addr_kind=ak; addr_uid=(-1)} in
             * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
-           |> Option.return
+           |> OptionExt.return
          with Not_found ->
                debug "builtin variable@\n";
                let a = Addr.find_builtin v.vname in
-               Eval.singleton (mk_py_object a range) flow |> Option.return
+               Eval.singleton (mk_py_object a range) flow |> OptionExt.return
          end
       | E_py_ll_hasattr(e, attr) ->
          let attr = match ekind attr with
@@ -214,7 +214,7 @@ module Domain =
             Debug.warn "%a: unknown case, returning false@\n" pp_expr exp;
             Eval.singleton (mk_py_false range) flow
          end
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_ll_getattr(e, attr) ->
          (* FIXME? as this is not a builtin constructor, but only used by the analysis, we assume that e has attribute attr *)
@@ -231,7 +231,7 @@ module Domain =
             Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
          | _ -> Debug.fail "E_py_ll_getattr: todo"
          end
-         |> Option.return
+         |> OptionExt.return
 
       | E_unop(Framework.Ast.O_log_not, e') ->
          man.eval e' flow |>
@@ -245,7 +245,7 @@ module Domain =
                | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
                | _ -> failwith "not: ni"
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
          man.eval arg flow |>
@@ -268,7 +268,7 @@ module Domain =
                let obj = ({addr_kind=A_py_class (fst cl, snd cl); addr_uid=(-1)}, mk_expr (ekind exp) range) in
                Eval.singleton (mk_py_object obj range) flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
          (* probablement évaluer dans la zone python des types ? *)
@@ -314,7 +314,7 @@ module Domain =
                    Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
          )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
          Eval.eval_list args man.eval flow |>
@@ -333,10 +333,10 @@ module Domain =
                   let inst = Instance {classn=Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty} in
                   Eval.singleton (mk_expr (E_get_type_partition inst) range) flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-         man.eval (mk_py_none range) flow |> Option.return
+         man.eval (mk_py_none range) flow |> OptionExt.return
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;

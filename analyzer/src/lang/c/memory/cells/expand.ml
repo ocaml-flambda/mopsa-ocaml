@@ -491,7 +491,7 @@ module Domain = struct
       let flow = add_cons_cell man exp.erange c flow in
       debug "new variable %a in %a" pp_var v (Flow.print man) flow;
       Eval.singleton (C_cell (c, mode)) flow |>
-      Option.return
+      OptionExt.return
 
     | E_c_deref(p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
@@ -515,11 +515,11 @@ module Domain = struct
                Eval.empty_singleton flow'
           end
           |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton (C_fun fundec) flow |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to(P_null) ->
           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -528,7 +528,7 @@ module Domain = struct
                       Flow.set T_cur man.bottom man
           in
           Eval.empty_singleton flow1 |>
-          Option.return
+          OptionExt.return
 
         | E_c_points_to(P_invalid) ->
           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -537,7 +537,7 @@ module Domain = struct
                       Flow.set T_cur man.bottom man
           in
           Eval.empty_singleton flow1 |>
-          Option.return
+          OptionExt.return
 
 
         | _ -> assert false
@@ -551,7 +551,7 @@ module Domain = struct
 
   let eval zone exp man flow =
     eval_cell exp man flow |>
-    Option.lift @@ Eval.bind @@ fun c flow ->
+    OptionExt.lift @@ Eval.bind @@ fun c flow ->
     match c with
     | C_cell(c, mode) ->
       add_cons_cell man exp.erange c flow |>
@@ -572,12 +572,12 @@ module Domain = struct
     | S_c_global_declaration(v, init) ->
       Init_visitor.init_global (init_visitor man) v init stmt.srange flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_c_local_declaration(v, init) ->
       Init_visitor.init_local (init_visitor man) v init stmt.srange flow
       |> Post.of_flow
-      |> Option.return
+      |> OptionExt.return
 
     | S_rebase_addr(adr, adr', mode) ->
       begin
@@ -598,7 +598,7 @@ module Domain = struct
         |> man.exec ~zone:Z_c_cell (mk_block mergers (tag_range stmt.srange "mergers"))
         |> Post.of_flow
         |> Post.add_mergers mergers
-        |> Option.return
+        |> OptionExt.return
       end
 
     | S_remove_var (v) when is_c_type v.vtyp ->
@@ -611,7 +611,7 @@ module Domain = struct
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub stmt.srange) flow |>
       Post.of_flow |>
       Post.add_mergers mergers |>
-      Option.return
+      OptionExt.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c, Z_c_cell) rval flow |>
@@ -621,7 +621,7 @@ module Domain = struct
       Post.bind_opt man @@ fun lval flow ->
       debug "lval done %a" pp_expr lval;
       eval_cell lval man flow |>
-      Option.lift @@ Post.bind man @@ fun c flow ->
+      OptionExt.lift @@ Post.bind man @@ fun c flow ->
       begin
         match c with
         | C_cell(c, mode) -> assign_cell c rval mode stmt.srange man flow
@@ -639,7 +639,7 @@ module Domain = struct
       man.exec ~zone:Z_c_cell stmt' flow |>
 
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

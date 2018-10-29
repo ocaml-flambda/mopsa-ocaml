@@ -53,7 +53,7 @@ struct
           ~fthen:(fun true_flow -> man.eval ~zone e2 true_flow)
           ~felse:(fun false_flow -> Eval.singleton (Universal.Ast.mk_z Z.zero exp.erange) false_flow)
           man flow
-      end |> Option.return
+      end |> OptionExt.return
 
     | E_binop(O_c_or, e1, e2) ->
       begin
@@ -63,7 +63,7 @@ struct
           ~fthen:(fun true_flow -> Eval.singleton (Universal.Ast.mk_z Z.one exp.erange) true_flow)
           ~felse:(fun false_flow -> man.eval ~zone e2 false_flow)
           man flow
-      end |> Option.return
+      end |> OptionExt.return
 
     | _ -> None
 

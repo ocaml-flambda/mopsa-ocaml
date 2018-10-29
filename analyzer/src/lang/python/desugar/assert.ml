@@ -30,7 +30,7 @@ module Domain =
     let exec_interface = {export = [any_zone]; import = []}
     let eval_interface = {export = []; import = []}
 
-    let init _ _ flow = Option.return flow
+    let init _ _ flow = OptionExt.return flow
 
     let exec zone stmt man flow =
       let range = srange stmt in
@@ -56,7 +56,7 @@ module Domain =
                Flow.join man ok_case fail_case
                |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

@@ -46,7 +46,7 @@ module Domain =
          let exp' = {exp with ekind = E_var (tmp, STRONG)} in
          man.eval exp' flow |>
            Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
-           Option.return
+           OptionExt.return
 
       | _ -> None
 

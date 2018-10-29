@@ -28,10 +28,10 @@ module Domain =
       match ekind exp with
       | E_constant (C_top T_bool)
       | E_constant (C_bool _) ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bool")) range) flow |> Option.return
+         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bool")) range) flow |> OptionExt.return
 
       | E_constant (C_int _) ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "int")) range) flow |> Option.return
+         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "int")) range) flow |> OptionExt.return
 
       (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
@@ -56,7 +56,7 @@ module Domain =
                    Eval.empty_singleton flow)
                  man flow
              )
-         |>  Option.return
+         |>  OptionExt.return
       | _ -> None
 
     let exec _ _ _ _ = None

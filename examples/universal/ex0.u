@@ -1,0 +1,24 @@
+int a = 1;
+int b = a;
+int c = a;
+
+int f(int x) {
+  int a = f(a);
+  int b = f(a);
+  return a;
+}
+
+string h(int x) {
+  int a = f(a);
+  int b = f(a);
+  return a;
+}
+
+int g(string x, string y) {
+  int a = f(a);
+  string c = "toto";
+  return x;
+}
+
+b = a;
+c = g("a", "c" @ "d");

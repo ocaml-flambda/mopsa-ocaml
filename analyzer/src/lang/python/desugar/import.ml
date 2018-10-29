@@ -162,7 +162,7 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
-      Option.return flow
+      OptionExt.return flow
 
     let eval _ _ _ _ = None
     let ask _ _ _ = None

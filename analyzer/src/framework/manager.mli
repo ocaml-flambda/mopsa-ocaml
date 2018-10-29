@@ -31,6 +31,10 @@ type token_info = {
 
 val register_token : token_info -> unit
 
+val compare_token : token -> token -> int
+
+val pp_token : Format.formatter -> token -> unit
+  
 module FlowMap : sig
   include MapExtSig.S with type key = token
   val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit

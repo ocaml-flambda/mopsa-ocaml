@@ -6,7 +6,6 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
 (** Alarms reporting potential errors inferred by abstract domains. *)
 
 open Ast

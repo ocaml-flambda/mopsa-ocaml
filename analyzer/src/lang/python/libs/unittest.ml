@@ -40,7 +40,7 @@ module Domain =
       (* | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.main")})}, [], []) ->
         * debug "Search for all classes that inherit from TestCase";
           * let test_cases = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-          *                    Option.none_to_exn |>
+          *                    OptionExt.none_to_exn |>
           *                    List.filter (fun addr ->
           *                        match addr.addr_kind with
           *                        | A_py_class(cls, ({addr_kind = A_py_class (C_builtin "unittest.TestCase", _)}, _) :: _) -> true
@@ -66,7 +66,7 @@ module Domain =
           * in
           *
           * let functions = man.ask ctx Universal.Heap.Query.QAllocatedAddresses flow |>
-          *                   Option.none_to_exn |>
+          *                   OptionExt.none_to_exn |>
           *                   List.filter (fun addr ->
           *                       match addr.addr_kind with
           *                       | A_py_function(F_user func) -> true
@@ -97,39 +97,39 @@ module Domain =
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertTrue")})}, [test; cond], []) ->
          Mopsa.check man cond range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")})}, [test; cond], []) ->
          Mopsa.check man (mk_not cond range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIs")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_binop arg1 O_py_is arg2 range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsNot")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_binop arg1 O_py_is_not arg2 range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIn")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_binop arg1 O_py_in arg2 range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIn")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_binop arg1 O_py_not_in arg2 range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsInstance")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIsInstance")})}, [test; arg1; arg2], []) ->
          Mopsa.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, test :: exn :: f :: args, []) ->
          let stmt = mk_try
@@ -153,12 +153,12 @@ module Domain =
          in
          let flow = man.exec stmt flow in
          Eval.singleton (mk_py_none range) flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")})}, [test; exn], []) ->
          (* Instantiate ExceptionContext with the given exception exn *)
          let exp' = Utils.mk_builtin_call "unittest.ExceptionContext" [exn] range in
-         man.eval exp' flow |> Option.return
+         man.eval exp' flow |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin "unittest.ExceptionContext.__exit__")})},[self; typ; exn; trace], []) ->
          Eval.assume
@@ -183,7 +183,7 @@ module Domain =
                man false_flow
            )
            man flow
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call({ekind = E_addr ({addr_kind = A_py_function (F_builtin f)})}, _, _)
            when Addr.is_builtin_class_function "unittest.TestCase" f ->

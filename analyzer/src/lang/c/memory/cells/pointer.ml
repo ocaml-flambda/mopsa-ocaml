@@ -107,7 +107,7 @@ struct
 
   let init prog man flow =
     Flow.set_domain_env T_cur top man flow |>
-    Option.return
+    OptionExt.return
 
 
   (** Evaluation of expressions *)
@@ -131,7 +131,7 @@ struct
         Eval.singleton (mk_expr (E_c_points_to p) range) flow
       end
       |>
-      Option.return
+      OptionExt.return
 
     | _
       when sat_zone2 zone (Z_c, Z_c_points_to_fun) ->
@@ -144,7 +144,7 @@ struct
         | _ -> assert false
       end
       |>
-      Option.return
+      OptionExt.return
 
     | E_binop(O_eq, p, q)
       when is_c_pointer_type p.etyp
@@ -174,7 +174,7 @@ struct
         | _ ->
           Eval.singleton (mk_zero range) flow
       end
-      |> Option.return
+      |> OptionExt.return
 
     | E_binop(O_ne, p, q)
       when is_c_pointer_type p.etyp
@@ -204,7 +204,7 @@ struct
         | _ -> Eval.singleton (mk_one range) flow
       end
       |>
-      Option.return
+      OptionExt.return
 
     | E_binop(O_minus, p, q)
       when is_c_pointer_type p.etyp
@@ -342,7 +342,7 @@ struct
         | _ -> assert false
       end
       |>
-      Option.return
+      OptionExt.return
 
     | S_assign({ekind = E_c_cell(p, mode)}, q) when cell_type p |> is_c_pointer_type ->
       begin
@@ -368,14 +368,14 @@ struct
         Post.of_flow flow2
       end
       |>
-      Option.return
+      OptionExt.return
 
     | S_c_remove_cell(p) when cell_type p |> is_c_pointer_type ->
       let flow1 = Flow.map_domain_env T_cur (remove p) man flow in
       let o = mk_offset_var p in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove_var o range) flow1 in
       Post.of_flow flow2 |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

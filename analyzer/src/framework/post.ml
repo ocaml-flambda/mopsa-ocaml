@@ -68,7 +68,7 @@ let bind
     (evl: ('a, 'e) evl)
   : 'a post =
   let annot = Eval.choose evl |>
-              Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
+              OptionExt.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
   in
   Eval.fold (fun acc case ->
       let annot = Flow.get_all_annot acc.flow in
@@ -95,7 +95,7 @@ let bind_flow
     (evl: ('a, 'e) evl)
   : 'a flow =
   let annot = Eval.choose evl |>
-              Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
+              OptionExt.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
   in
   Eval.fold (fun acc case ->
       let annot = Flow.get_all_annot acc in
@@ -121,9 +121,9 @@ let bind_opt
     (evl: ('a, 'e) evl)
   : 'a post option =
   let annot = Eval.choose evl |>
-              Option.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
+              OptionExt.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
   in
-  let ojoin = Option.option_neutral2 (join man) in
+  let ojoin = OptionExt.option_neutral2 (join man) in
   Eval.fold (fun acc case ->
       let annot = match acc with None -> annot | Some acc -> Flow.get_all_annot acc.flow in
       let flow' = Flow.set_all_annot annot case.flow in
@@ -149,8 +149,8 @@ let bind_opt
           in
           ojoin acc' post'
     )
-    (Option.option_neutral2 (join man))
-    (Option.option_neutral2 (meet man))
+    (OptionExt.option_neutral2 (join man))
+    (OptionExt.option_neutral2 (meet man))
     None
     evl
 

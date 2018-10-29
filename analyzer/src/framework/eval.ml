@@ -105,13 +105,13 @@ let bind_opt f evl =
            match case.expr with
            | None -> Some (empty_singleton flow')
            | Some expr -> f expr flow' |>
-                          Option.option_lift1 (add_cleaners case.cleaners)
+                          OptionExt.option_lift1 (add_cleaners case.cleaners)
          in
-         let annot = Option.option_dfl1 annot choose_annot evl' in
+         let annot = OptionExt.option_dfl1 annot choose_annot evl' in
          (evl', annot)
       )
-      (Option.option_neutral2 join)
-      (Option.option_neutral2 meet)
+      (OptionExt.option_neutral2 join)
+      (OptionExt.option_neutral2 meet)
       (choose_annot evl) evl
   in
   evl
@@ -185,7 +185,7 @@ let eval_list_opt
       singleton (List.rev expl) flow ~cleaners:clean
     | exp :: tl ->
       eval exp flow |>
-      Option.none_to_exn |>
+      OptionExt.none_to_exn |>
       Dnf.substitute2
         (fun case ->
            let exp' = case.expr in
@@ -197,7 +197,7 @@ let eval_list_opt
         )
   in
   try Some (aux [] flow [] l)
-  with Option.Found_None -> None
+  with OptionExt.Found_None -> None
 
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('a, 'e) evl) : unit =
   Format.pp_print_list

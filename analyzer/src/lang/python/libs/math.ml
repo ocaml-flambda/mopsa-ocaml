@@ -41,7 +41,7 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
          let exp' = mk_unop O_sqrt e ~etyp:(T_float F_DOUBLE) range in
          Eval.singleton exp' flow
-         |> Option.return
+         |> OptionExt.return
 
       | _ ->
          None

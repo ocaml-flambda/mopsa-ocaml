@@ -1,6 +1,6 @@
 TARGET_CLIBS = utils
 
-utils = bot compare debug dnf equiv setExt setExtSig setP invRelation invRelationSig listExt mapExtSig mapExt mapPolyHet mapP option printers relation relationSig valueSig timing top itvUtils congUtils bitfields
+utils = bot compare debug dnf equiv setExt setExtSig setP invRelation invRelationSig listExt mapExtSig mapExt mapPolyHet mapP optionExt printers relation relationSig valueSig timing top itvUtils congUtils bitfields graphSig graph
 itvUtils = float intBound intItv floatItv floatItvNan
 
 # C files

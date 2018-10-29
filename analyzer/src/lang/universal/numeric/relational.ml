@@ -10,28 +10,8 @@
 
 open Framework.Essentials
 open Framework.Domains.Leaf
+open Rounding
 open Ast
-
-
-(****************************************************************************)
-(**                      {2 Command line options}                           *)
-(****************************************************************************)
-
-let opt_float_rounding = ref Apron.Texpr1.Near
-
-let () =
-  register_option (
-    "-float-rounding-mode",
-    Arg.String (function
-        | "near" -> opt_float_rounding := Apron.Texpr1.Near
-        | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
-        | "up"   -> opt_float_rounding := Apron.Texpr1.Up
-        | "down" -> opt_float_rounding := Apron.Texpr1.Down
-        | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Debug.fail "Unknown rounding mode %s" x
-      ),
-    "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
-  )
 
 
 (****************************************************************************)
@@ -165,11 +145,11 @@ struct
   exception UnsupportedExpression
 
   let rec binop_to_apron = function
-    | O_plus | O_float_plus _ -> Apron.Texpr1.Add
-    | O_minus | O_float_minus _ -> Apron.Texpr1.Sub
-    | O_mult | O_float_mult _  -> Apron.Texpr1.Mul
-    | O_div | O_float_div _ -> Apron.Texpr1.Div
-    | O_mod | O_float_mod _ -> Apron.Texpr1.Mod
+    | O_plus  -> Apron.Texpr1.Add
+    | O_minus -> Apron.Texpr1.Sub
+    | O_mult  -> Apron.Texpr1.Mul
+    | O_div   -> Apron.Texpr1.Div
+    | O_mod   -> Apron.Texpr1.Mod
     | _ -> raise UnsupportedExpression
 
   and strongify_rhs exp abs l =
@@ -210,25 +190,20 @@ struct
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Binop(binop', e1', e2', typ', !opt_float_rounding), abs, l
 
-    | E_unop ((O_plus | O_float_plus _), e) ->
+    | E_unop (O_plus, e) ->
        strongify_rhs e abs l
       
-    | E_unop(O_float_cast _, e) ->
+    | E_unop(O_cast, e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
 
-    | E_unop((O_minus | O_float_minus _), e) ->
+    | E_unop(O_minus, e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', !opt_float_rounding), abs, l
 
-    | E_unop((O_int_of_float | O_float_of_int _), e) ->
-      let e', abs, l = strongify_rhs e abs l in
-      let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', !opt_float_rounding), abs, l
-
-    | E_unop((O_sqrt | O_float_sqrt _), e) ->
+    | E_unop(O_sqrt, e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, l
@@ -321,27 +296,27 @@ struct
 
     | E_constant(C_int _) -> Dnf.mk_true
 
-    | E_binop((O_gt | O_float_gt _ | O_float_neg_le _), e0 , e1) ->
+    | E_binop(O_gt, e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop((O_ge | O_float_ge _ | O_float_neg_lt _), e0 , e1) ->
+    | E_binop(O_ge, e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop((O_lt | O_float_lt _ | O_float_neg_ge _), e0 , e1) ->
+    | E_binop(O_lt, e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop((O_le | O_float_le _ | O_float_neg_gt _), e0 , e1) ->
+    | E_binop(O_le, e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp)
 
-    | E_binop((O_eq | O_float_eq _), e0 , e1) ->
+    | E_binop(O_eq, e0 , e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp)
 
-    | E_binop((O_ne | O_float_ne _), e0, e1) ->
+    | E_binop(O_ne, e0, e1) ->
        let e0' = exp_to_apron e0 and e1' = exp_to_apron e1 in
        Dnf.mk_or
          (Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp))

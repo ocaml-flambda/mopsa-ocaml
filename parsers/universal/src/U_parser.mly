@@ -13,11 +13,11 @@
 /* tokens */
 /**********/
 
+%token TOK_VOID
 %token TOK_INT
 %token TOK_REAL
 %token TOK_CHAR
 %token TOK_STRING
-%token TOK_ARRAY
 
 %token TOK_TRUE
 %token TOK_FALSE
@@ -29,7 +29,6 @@
 %token TOK_RAND
 %token TOK_ASSERT
 %token TOK_PRINT
-%token TOK_PRINT_ALL
 
 %token TOK_LPAREN
 %token TOK_RPAREN
@@ -51,7 +50,6 @@
 %token TOK_AND_AND
 %token TOK_BAR_BAR
 %token TOK_BAR
-%token TOK_CIRC
 %token TOK_SEMICOLON
 %token TOK_COMMA
 %token TOK_EQUAL
@@ -71,7 +69,7 @@
 %left TOK_AND_AND
 %left TOK_EXCLAIM
 %left TOK_PLUS TOK_MINUS
-%left TOK_STAR TOK_DIVIDE TOK_PERCENT
+%left TOK_STAR TOK_DIVIDE
 
 
 /* entry-point */
@@ -204,6 +202,10 @@ typ:
 | TOK_STRING { AST_STRING }
 | TOK_CHAR { AST_CHAR }
 
+typ_opt:
+| TOK_VOID { None }
+| t=typ { Some t }
+
 separated_ended_list(X, Y):
 | l=separated_list(X, Y) X {l}
 block_no_curly:
@@ -240,10 +242,13 @@ stat:
 | TOK_FOR TOK_LPAREN v=ext(var) TOK_COMMA e1=ext(expr) TOK_COMMA e2=ext(expr) st=ext(stat) TOK_SEMICOLON?
    { AST_for(v, e1, e2, st) }
 
+| e=ext(expr) TOK_SEMICOLON
+  { AST_expr e }
+
 fundec:
-| t=typ f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
+| t=typ_opt f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
    ldec=list(ext(declaration))
-   st=ext(stat)
+   st=ext(block_no_curly)
    TOK_RCURLY
 {{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
 

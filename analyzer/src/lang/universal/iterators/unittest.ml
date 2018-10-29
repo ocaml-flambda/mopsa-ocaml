@@ -200,7 +200,7 @@ struct
         ((Debug.color "fushia") Format.pp_print_string) "⎇" ((Debug.color "fushia") Format.pp_print_int) panic Debug.plurial_int panic
       ;
       Post.of_flow flow1 |>
-      Option.return
+      OptionExt.return
 
     | S_assert(cond) ->
       let range = srange stmt in
@@ -238,7 +238,7 @@ struct
             Post.of_flow
           )
         man flow
-      |> Option.return
+      |> OptionExt.return
 
     | S_simple_assert(cond, b1, b2) ->
       let range = srange stmt in
@@ -263,7 +263,7 @@ struct
           Flow.add (T_alarm a) cur man flow
       in
       Post.of_flow nflow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

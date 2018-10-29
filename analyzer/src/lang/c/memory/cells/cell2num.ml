@@ -105,7 +105,7 @@ struct
       let v, flow = get_num_and_remove flow c in
       man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
       |> Post.of_flow
-      |> Option.return
+      |> OptionExt.return
 
     | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
       man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
@@ -116,7 +116,7 @@ struct
 
       man.exec ~zone:Z_c_scalar_num (mk_assign lval' rval' stmt.srange) flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_assume(e) ->
       begin
@@ -126,7 +126,7 @@ struct
         man.exec ~zone:Zone.Z_c_scalar_num stmt' flow |>
         Post.of_flow
       end |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 
@@ -171,7 +171,7 @@ struct
           let exp = mk_var v (tag_range range "cell2num") ~mode in
           Eval.singleton exp flow
       end
-      |> Option.return
+      |> OptionExt.return
 
     | _ -> None
 

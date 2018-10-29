@@ -95,7 +95,7 @@ struct
          the end of body of switch *)
       let cur_switch_expr =
         try
-          Flow.get_annot KSwitchExpr flow |> Option.return
+          Flow.get_annot KSwitchExpr flow |> OptionExt.return
         with
         | Not_found -> None
       in

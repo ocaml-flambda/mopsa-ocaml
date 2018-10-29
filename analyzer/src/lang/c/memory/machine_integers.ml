@@ -150,11 +150,11 @@ struct
     | E_binop(op, e, e') when op |> is_c_div && exp |> etyp |> is_c_type ->
       let () = debug "case 1" in
       eval zone e man flow |>
-      Option.bind @@
+      OptionExt.bind @@
       Eval.bind_opt @@ fun e flow ->
 
       eval zone e' man flow |>
-      Option.bind @@
+      OptionExt.bind @@
       Eval.bind_opt @@ fun e' flow ->
 
       check_division man range
@@ -170,14 +170,14 @@ struct
            in
            Eval.empty_singleton flow1
         ) e e' flow |>
-      Option.return
+      OptionExt.return
 
     | E_unop(op, e) when is_c_int_op op && exp |> etyp |> is_c_type ->
       let () = debug "case 2" in
       let typ = etyp exp in
       let rmin, rmax = rangeof typ in
       eval_unop op e exp man flow  |>
-      Option.lift @@
+      OptionExt.lift @@
       Eval.bind @@
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
@@ -198,7 +198,7 @@ struct
         let typ = etyp exp in
         let rmin, rmax = rangeof typ in
         eval_binop op e e' exp man flow |>
-        Option.lift @@
+        OptionExt.lift @@
         Eval.bind @@
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
@@ -219,7 +219,7 @@ struct
       let r = exp |> etyp |> rangeof in
       if range_leq (z,z) r then
         Eval.singleton (mk_z z range) flow
-        |> Option.return
+        |> OptionExt.return
       else
         let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
         let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
@@ -227,12 +227,12 @@ struct
                     Flow.set T_cur man.bottom man
         in
         Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
-        |> Option.return
+        |> OptionExt.return
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       let () = debug "case 5" in
       eval (Z_c_scalar_num, Z_u_num) e man flow |>
-      Option.lift @@ Eval.bind @@ fun e' flow ->
+      OptionExt.lift @@ Eval.bind @@ fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
       let r = rangeof t in
@@ -273,12 +273,12 @@ struct
     | E_constant(C_c_character (c, _)) ->
       let () = debug "case 6" in
       Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_universal_type exp.etyp} flow
-      |> Option.return
+      |> OptionExt.return
 
     | E_constant(C_int i) ->
       let () = debug "case 7" in
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
-      |> Option.return
+      |> OptionExt.return
 
     | E_var(v, mode) ->
       let () = debug "case 8" in
@@ -287,18 +287,18 @@ struct
          ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode);
          etyp = to_universal_type (etyp exp)}
         flow
-      |> Option.return
+      |> OptionExt.return
 
     | _ ->
       None
 
   and eval_binop op e e' exp man flow =
     eval (Z_c_scalar_num, Z_u_num) e man flow |>
-    Option.bind @@
+    OptionExt.bind @@
     Eval.bind_opt @@ fun e flow ->
 
     eval (Z_c_scalar_num, Z_u_num) e' man flow |>
-    Option.lift @@
+    OptionExt.lift @@
     Eval.bind @@ fun e' flow ->
 
     let exp' = {exp with
@@ -311,7 +311,7 @@ struct
 
   and eval_unop op e exp man flow =
     eval (Z_c_scalar_num, Z_u_num) e man flow |>
-    Option.lift @@
+    OptionExt.lift @@
     Eval.bind @@ fun e flow ->
 
     let exp' = {exp with
@@ -333,13 +333,13 @@ struct
 
       man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_remove_var v when is_c_int_type v.vtyp ->
       let v' = {v with vtyp = to_universal_type v.vtyp} in
       man.exec ~zone:Z_u_num (mk_remove_var v' stmt.srange) flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar_num, Z_u_num) e flow |>
@@ -347,7 +347,7 @@ struct
 
       man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>
       Post.of_flow |>
-      Option.return
+      OptionExt.return
 
     | _ -> None
 

@@ -65,7 +65,7 @@ module Domain =
                    Eval.empty_singleton)
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to len built-in function *)
       | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "len")}},
@@ -93,7 +93,7 @@ module Domain =
                      Eval.empty_singleton)
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       (* Calls to built-in function next *)
       | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "next")}},
@@ -113,7 +113,7 @@ module Domain =
                      Eval.empty_singleton)
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ ->
          None

@@ -81,7 +81,7 @@ module Domain =
 
                | _ -> debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
              )
-         |> Option.return
+         |> OptionExt.return
 
       | E_py_call(f, args, _) ->
          Framework.Exceptions.panic_at range "calls with keyword arguments not supported"

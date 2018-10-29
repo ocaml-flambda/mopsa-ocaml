@@ -236,7 +236,7 @@ struct
     | (z1, z2, path, feval) :: tl ->
       debug "trying path %a" pp_eval_path path;
       eval_hop z1 z2 feval man exp flow |>
-      Option.bind @@
+      OptionExt.bind @@
       Eval.bind_opt @@
       eval_over_path tl man
 
@@ -246,7 +246,7 @@ struct
     | Keep ->
       debug "already in zone";
       Eval.singleton exp flow |>
-      Option.return
+      OptionExt.return
     | other_action ->
       match Cache.eval feval (z1, z2) exp man flow with
       | Some evl -> Some evl
@@ -263,7 +263,7 @@ struct
           match parts with
           | {exprs; stmts = []} ->
             Eval.eval_list_opt exprs (eval_hop z1 z2 feval man) flow |>
-            Option.lift @@ Eval.bind @@ fun exprs flow ->
+            OptionExt.lift @@ Eval.bind @@ fun exprs flow ->
             let exp = builder {exprs; stmts = []} in
             Eval.singleton exp flow
 

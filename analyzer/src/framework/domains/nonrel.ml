@@ -53,9 +53,9 @@ struct
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
     | A_var of var * Value.t
-    | A_cst of constant * Value.t
-    | A_unop of operator * aexpr * Value.t
-    | A_binop of operator * aexpr * Value.t * aexpr * Value.t
+    | A_cst of Ast.typ * constant * Value.t
+    | A_unop of Ast.typ * operator * aexpr * Value.t
+    | A_binop of Ast.typ * operator * aexpr * Value.t * aexpr * Value.t
     | A_unsupported
 
   (** Forward evaluation returns the abstract value of the expression,
@@ -70,20 +70,23 @@ struct
       Channel.return
 
     | E_constant(c) ->
-      let v = Value.of_constant c in
-      (A_cst (c, v), v) |>
+      let t = etyp e in
+      let v = Value.of_constant t c in
+      (A_cst (t, c, v), v) |>
       Channel.return
 
     | E_unop (op,e1) ->
+      let t = etyp e in
       eval e1 a |> Channel.bind @@ fun (ae1, v1) ->
-      Value.unop op v1 |> Channel.bind @@ fun v ->
-      Channel.return (A_unop (op, ae1, v1), v)
+      Value.unop t op v1 |> Channel.bind @@ fun v ->
+      Channel.return (A_unop (t, op, ae1, v1), v)
 
     | E_binop (op,e1,e2) ->
+      let t = etyp e in
       eval e1 a |> Channel.bind @@ fun (ae1, v1) ->
       eval e2 a |> Channel.bind @@ fun (ae2, v2) ->
-      Value.binop op v1 v2 |> Channel.bind @@ fun v ->
-      Channel.return (A_binop (op, ae1, v1, ae2, v2), v)
+      Value.binop t op v1 v2 |> Channel.bind @@ fun v ->
+      Channel.return (A_binop (t, op, ae1, v1, ae2, v2), v)
 
     | _ ->
       (* unsupported -> ⊤ *)
@@ -99,24 +102,27 @@ struct
       Channel.return (A_var (var, v), v)
 
     | E_constant(c) ->
-      let v = Value.of_constant c in
-      Channel.return (A_cst (c, v), v)
+      let t = etyp e in
+      let v = Value.of_constant t c in
+      Channel.return (A_cst (t, c, v), v)
 
     | E_unop (op,e1) ->
+      let t = etyp e in
       eval e1 a |>
       Channel.bind @@ fun (ae1, v1) ->
-      Value.unop op v1 |>
+      Value.unop t op v1 |>
       Channel.bind @@ fun v ->
-      Channel.return (A_unop (op, ae1, v1), v)
+      Channel.return (A_unop (t, op, ae1, v1), v)
 
     | E_binop (op,e1,e2) ->
+      let t = etyp e in
       eval e1 a |>
       Channel.bind @@ fun (ae1, v1) ->
       eval e2 a |>
       Channel.bind @@ fun (ae2, v2) ->
-      Value.binop op v1 v2 |>
+      Value.binop t op v1 v2 |>
       Channel.bind @@ fun v ->
-      Channel.return (A_binop (op, ae1, v1, ae2, v2), v)
+      Channel.return (A_binop (t, op, ae1, v1, ae2, v2), v)
 
     | _ ->
       (* unsupported -> ⊤ *)
@@ -139,12 +145,12 @@ struct
       then Channel.return bottom
       else Channel.return a
 
-    | A_unop (op, ae1, v1) ->
-      Value.bwd_unop op v1 r' |> Channel.bind @@ fun w ->
+    | A_unop (t, op, ae1, v1) ->
+      Value.bwd_unop t op v1 r' |> Channel.bind @@ fun w ->
       refine ae1 v1 w a
 
-    | A_binop (op, ae1, v1, ae2, v2) ->
-      Value.bwd_binop op v1 v2 r' |> Channel.bind @@ fun (w1, w2) ->
+    | A_binop (t, op, ae1, v1, ae2, v2) ->
+      Value.bwd_binop t op v1 v2 r' |> Channel.bind @@ fun (w1, w2) ->
       refine ae1 v1 w1 a |> Channel.bind @@ fun a1 ->
       refine ae2 v2 w2 a1
 
@@ -179,24 +185,26 @@ struct
         Channel.return
 
       | E_constant c ->
-        let v = Value.of_constant c in
-        Value.filter v r |> Channel.bind @@ fun w ->
+        let t = etyp e in
+        let v = Value.of_constant t c in
+        Value.filter t v r |> Channel.bind @@ fun w ->
         (if Value.is_bottom w then bottom else a) |>
         Channel.return
 
       | E_var(var, _) ->
         let v = find var a in
-        Value.filter v r |> Channel.bind @@ fun w ->
+        Value.filter (var.vtyp) v r |> Channel.bind @@ fun w ->
         (if Value.is_bottom w then bottom else add var w a) |>
         Channel.return
 
       (* arithmetic comparison part, handled by Value *)
       | E_binop (op, e1, e2) ->
+        let t = etyp e1 in
         (* evaluate forward each argument expression *)
         eval e1 a |> Channel.bind @@ fun (ae1,v1) ->
         eval e2 a |> Channel.bind @@ fun (ae2,v2) ->
         (* apply comparison *)
-        Value.compare op v1 v2 r |> Channel.bind @@ fun (r1, r2) ->
+        Value.compare t op v1 v2 r |> Channel.bind @@ fun (r1, r2) ->
         (* propagate backward on both argument expressions *)
         refine ae1 v1 r1 a |> Channel.bind @@ fun a1 ->
         refine ae2 v2 r2 a1

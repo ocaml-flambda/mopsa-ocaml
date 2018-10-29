@@ -1,0 +1,53 @@
+# Docker image to test Mospa on Fedora
+# Build with: docker build -t mopsa-build-fedora -f Dockerfile.fedora .
+#
+###############################################
+
+FROM fedora:27
+
+
+# configuration: required packages
+##
+
+ENV DNF_DEPS git redhat-lsb m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel zlib-devel make which
+ENV OPAM_SWITCH default
+ENV OPAM_DEPS apron ocp-pack-split zarith menhir yojson javalib
+
+
+# install system packages as root
+# create a mopsa user
+##
+
+ENV TERM xterm-256color
+
+RUN \
+    dnf install -y $DNF_DEPS && \
+    adduser mopsa
+
+
+# log in as mopsa
+#
+
+USER mopsa
+WORKDIR /home/mopsa
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+
+# install OCaml dependencies with opam as mopsa user
+##
+
+RUN \
+    opam init -y && \
+    opam config setup -a && \
+    eval `opam config -y env` && \
+    opam update -y && \
+    opam switch -y -j 8 $OPAM_SWITCH && \
+    eval `opam config -y env` && \
+    opam install -y -j 8 $OPAM_DEPS && \
+    echo && \
+    echo "All done!" && \
+    uname -a && \
+    cat /etc/fedora-release && \
+    echo opam `opam --version` && \
+    ocamlc -v

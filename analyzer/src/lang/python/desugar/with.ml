@@ -100,7 +100,7 @@ module Domain =
                  man.exec (mk_remove_var tmpexn srange) |>
                  man.exec (mk_remove_var tmpret srange) |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 

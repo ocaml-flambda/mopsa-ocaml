@@ -123,7 +123,7 @@ module Domain =
                 (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
               )
          )
-         |> Option.return
+         |> OptionExt.return
 
 
       | S_py_raise None ->

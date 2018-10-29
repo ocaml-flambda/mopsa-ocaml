@@ -40,7 +40,7 @@ module Domain =
          debug "user-defined function call@\n";
          (* First check the correct number of arguments *)
          let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
-         Option.return @@
+         OptionExt.return @@
            if List.length pyfundec.py_func_parameters < List.length nondefault_args then
              (
                debug "Too few arguments!@\n";
@@ -115,7 +115,7 @@ module Domain =
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
-                         fun_return_type = T_any;
+                         fun_return_type = Some T_any;
                        } in
 
                      man.eval (mk_call fundec args exp.erange) flow |>
@@ -125,7 +125,7 @@ module Domain =
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, obj)}, _)}, args, []) ->
        *    let exp' = mk_py_call (mk_py_object f range) ((mk_py_object obj range) :: args) range in
-       *    man.eval exp' flow |> Option.return *)
+       *    man.eval exp' flow |> OptionExt.return *)
 
       | _ -> None
 
@@ -155,7 +155,7 @@ module Domain =
                  ) flow
                |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
       | _ ->
          None
 

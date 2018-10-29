@@ -61,7 +61,7 @@ struct
       let t = exp |> etyp |> Ast.pointer_type in
       let exp' = mk_c_deref (mk_binop a O_plus i ~etyp:t range) range in
       Eval.singleton exp' flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ s.f ⟧ = *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
     | E_c_member_access (s, i, f) ->
@@ -84,7 +84,7 @@ struct
           range
       in
       Eval.singleton exp' flow |>
-      Option.return
+      OptionExt.return
 
     (* 𝔼⟦ p->f ⟧ = *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
     | E_c_arrow_access(p, i, f) ->
@@ -107,7 +107,7 @@ struct
           range
       in
       Eval.singleton exp' flow |>
-      Option.return
+      OptionExt.return
 
 
     | _ -> None

@@ -84,17 +84,14 @@ let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
 (* cast expression to the given type (if needed) *)    
 let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
   let range = erange e in
-  match etyp e, t with
-  | T_int, T_float f ->
-     mk_unop (O_float_of_int f) e ~etyp:t range
-  | T_float _, T_int ->
-     mk_unop O_int_of_float e ~etyp:t range
-  | T_float F_DOUBLE, T_float (F_SINGLE as p) ->
-     mk_unop (O_float_cast p) e ~etyp:t range     
-  | t1, t2 ->
-     if compare_typ t1 t2 = 0 then e
-     else Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ t1 pp_typ t2  
-
+  let orgt = etyp e in
+  if compare_typ orgt t = 0 then e
+  else
+    match orgt, t with
+    | (T_int | T_float _), (T_int | T_float _) ->
+       mk_unop O_cast e ~etyp:t range
+    | _ ->
+       Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
     
 let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   match t, b with
@@ -111,16 +108,16 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
-  | T_float f, AST_PLUS          -> O_float_plus f
-  | T_float f, AST_MINUS         -> O_float_minus f
-  | T_float f, AST_MULTIPLY      -> O_float_mult f
-  | T_float f, AST_DIVIDE        -> O_float_div f
-  | T_float f, AST_EQUAL         -> O_float_eq f
-  | T_float f, AST_NOT_EQUAL     -> O_float_ne f
-  | T_float f, AST_LESS          -> O_float_lt f
-  | T_float f, AST_LESS_EQUAL    -> O_float_le f
-  | T_float f, AST_GREATER       -> O_float_gt f
-  | T_float f, AST_GREATER_EQUAL -> O_float_ge f
+  | T_float _, AST_PLUS          -> O_plus
+  | T_float _, AST_MINUS         -> O_minus
+  | T_float _, AST_MULTIPLY      -> O_mult
+  | T_float _, AST_DIVIDE        -> O_div
+  | T_float _, AST_EQUAL         -> O_eq
+  | T_float _, AST_NOT_EQUAL     -> O_ne
+  | T_float _, AST_LESS          -> O_lt
+  | T_float _, AST_LESS_EQUAL    -> O_le
+  | T_float _, AST_GREATER       -> O_gt
+  | T_float _, AST_GREATER_EQUAL -> O_ge
   | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
@@ -128,8 +125,8 @@ let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   | T_int, AST_UNARY_PLUS    -> O_plus
   | T_int, AST_UNARY_MINUS   -> O_minus
   | T_int, AST_NOT           -> O_log_not
-  | T_float f, AST_UNARY_PLUS  -> O_float_plus f
-  | T_float f, AST_UNARY_MINUS -> O_float_minus f
+  | T_float f, AST_UNARY_PLUS  -> O_plus
+  | T_float f, AST_UNARY_MINUS -> O_minus
   | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
@@ -153,7 +150,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                       U_ast_printer.print_expr e
                       (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
-              (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function fundec) range, el)) range)
+              (* void function return an (unitialized) int *)
+              let rettyp = OptionExt.option_dfl T_int fundec.T.fun_return_type in
+              (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function fundec) range, el)) range)
             else
               Debug.fail "%s number of arguments incompatible with call at %s"
                 f
@@ -349,6 +348,10 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
   | AST_print ->
     mk_stmt S_print range
 
+  | AST_expr(e, ext) ->
+     let e' = from_expr e ext var_ctx fun_ctx in
+     mk_expr_stmt e' range
+
 
 let rec check_declaration_list (dl : U_ast.declaration ext list) =
   match dl with
@@ -448,7 +451,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_parameters = List.map (fun ((_, v), ext) -> from_var v ext var_ctx) f.parameters;
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
-    fun_return_type = from_typ (f.return_type)
+    fun_return_type = (OptionExt.option_lift1 from_typ) (f.return_type)
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec ext list) (var_ctx: var_context) =

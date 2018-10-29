@@ -87,7 +87,7 @@ struct
       ->
       debug "builtin function";
       let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
-      (Eval.singleton exp' flow) |> Option.return
+      (Eval.singleton exp' flow) |> OptionExt.return
 
     | E_c_builtin_call("malloc", [size]) ->
       begin
@@ -107,7 +107,7 @@ struct
           man.eval exp' flow
       end
       |>
-      Option.return
+      OptionExt.return
 
     | E_c_builtin_call("fscanf", l) ->
       begin
@@ -132,7 +132,7 @@ struct
         let s = mk_block stmts (tag_range range_exp "block") in
         let flow' = man.exec s flow in
         man.eval (range_exp_of_c_type (etyp exp) (tag_range range_exp "return")) flow'
-      end |> Option.return
+      end |> OptionExt.return
     | _ -> None
 
   let ask _ _ _  = None

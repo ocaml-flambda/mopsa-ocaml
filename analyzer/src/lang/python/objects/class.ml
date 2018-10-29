@@ -64,7 +64,7 @@ module Domain =
                  ~felse:(fun flow -> Eval.singleton eobj flow)
                  man flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 
@@ -113,7 +113,7 @@ module Domain =
                      man.exec (Utils.mk_builtin_raise "TypeError" range) flow
                      |> Post.of_flow
              )
-         |> Option.return
+         |> OptionExt.return
 
       | _ -> None
 
