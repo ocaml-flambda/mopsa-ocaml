@@ -16,11 +16,11 @@ build_job:
   script:
     - eval `opam config env`
     - make -j
-  cache:
-    key: build-cache
+  artifacts:
     paths:
     - ./bin/mopsa
     - ./analyzer/_build/mopsa.native
+    expire_in: 2h
 
 .test-c:
   stage: test
@@ -28,8 +28,6 @@ build_job:
   script:
     - eval `opam config env`
     - $MOPSA_C analyzer/tests/c/$C_FILE
-  cache:
-    key: build-cache
 
 .test-u:
   stage: test
