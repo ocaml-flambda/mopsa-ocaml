@@ -19,7 +19,7 @@ sig
   (* Binary lattice operators can unify the state of the underneath domain *)
   val join: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow)-> t * ('b flow) * ('b flow)
   val meet: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
-  val widen: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * ('b flow) * ('b flow)
+  val widen: 'a annot -> ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> t * bool * ('b flow) * ('b flow)
   val subset: ('b, 'b) man -> t * ('b flow) -> t * ('b flow) -> bool * ('b flow) * ('b flow)
 
 end
@@ -37,6 +37,15 @@ let lift_to_flow man f =
     let b1', b2' = create_flow_cur_only b1 man, create_flow_cur_only b2 man in
     let (a, b1'', b2'') = f b1' b2' in
     (a, get_env_from_flow_cur_only b1'' man, get_env_from_flow_cur_only b2'' man)
+
+let lift_widen_to_flow man f =
+  fun b1 b2 ->
+    let flow1 = create_flow_cur_only b1 man in
+    let flow2 = create_flow_cur_only b2 man in
+    let a, is_stable, flow1', flow2' = f flow1 flow2 in
+    let b1' = get_env_from_flow_cur_only flow1' man in
+    let b2' = get_env_from_flow_cur_only flow2' man in
+    a, is_stable, b1', b2'
 
 (** Combine two domains with a stack configuration. *)
 module Make(D1: S)(D2: Domain.DOMAIN) : Domain.DOMAIN =
@@ -64,8 +73,10 @@ struct
     a, D2.meet annot b1' b2'
 
   let widen annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.widen annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
-    a, D2.widen annot b1' b2'
+    let a, is_stable, b1', b2' =
+      lift_widen_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.widen annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2
+    in
+    a, if is_stable then D2.widen annot b1' b2' else D2.join annot b1' b2'
 
   let subset (a1, b1) (a2, b2) =
     let b, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.subset LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
@@ -201,7 +212,7 @@ struct
   (* Except binary operators *)
   let join annot man (a1, b1) (a2, b2) = D.join annot a1 a2, b1, b2
   let meet annot man (a1, b1) (a2, b2) = D.meet annot a1 a2, b1, b2
-  let widen annot man (a1, b1) (a2, b2) = D.widen annot a1 a2, b1, b2
+  let widen annot man (a1, b1) (a2, b2) = D.widen annot a1 a2, true, b1, b2
   let subset man (a1, b1) (a2, b2) = D.subset a1 a2, b1, b2
 end
 
