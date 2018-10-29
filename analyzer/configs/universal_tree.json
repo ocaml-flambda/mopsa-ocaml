@@ -5,6 +5,7 @@
 	      "universal.iterators.intraproc",
 	      "universal.iterators.loops",
         "universal.router",
+        "universal.stdlib.builtins",
         {
             "stack" : "universal.tree.treeabs",
             "over" : "universal.numeric.relational.polyhedra"

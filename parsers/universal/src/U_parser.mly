@@ -19,6 +19,7 @@
 %token TOK_STRING
 %token TOK_ARRAY
 %token TOK_TREE
+%token TOK_UNIT
 
 %token TOK_TRUE
 %token TOK_FALSE
@@ -143,6 +144,8 @@ var:
     {v}
 
 expr:
+| TOK_LPAREN TOK_RPAREN
+    { AST_unit_const }
 | TOK_LPAREN e=expr TOK_RPAREN
     { e }
 | ext(integer_constant)
@@ -211,6 +214,7 @@ typ:
 | TOK_STRING { AST_STRING }
 | TOK_CHAR { AST_CHAR }
 | TOK_TREE { AST_TREE }
+| TOK_UNIT { AST_UNIT }
 
 separated_ended_list(X, Y):
 | l=separated_list(X, Y) X {l}

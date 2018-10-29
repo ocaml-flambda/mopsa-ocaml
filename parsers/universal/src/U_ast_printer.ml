@@ -89,6 +89,8 @@ let rec print_typ fmt t =
   | AST_ARRAY t -> Format.printf "[%a]" print_typ t
   | AST_STRING -> Format.pp_print_string fmt "string"
   | AST_CHAR -> Format.pp_print_string fmt "char"
+  | AST_UNIT -> Format.pp_print_string fmt "unit"
+  | AST_TREE -> Format.pp_print_string fmt "tree"
 
 and print_typed_var fmt ((t, v), _) =
   Format.fprintf fmt "%a %a"
@@ -114,6 +116,17 @@ and print_expr fmt e =
          print_expr_ext
       ) args
 
+  | AST_unit_const ->
+    Format.fprintf fmt "()"
+  | AST_tree (Int (e, _)) ->
+    Format.fprintf fmt "Tree(e)"
+  | AST_tree (Symbol(e, l)) ->
+    Format.fprintf fmt "Tree(%a,{%a})"
+      print_expr_ext e
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+         print_expr_ext
+      ) l
   | AST_unary (op,(e1,_)) ->
     Format.pp_print_string fmt (string_of_unary_op op);
     if expr_precedence e1 <= expr_precedence e

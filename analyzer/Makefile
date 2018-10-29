@@ -12,8 +12,8 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal c python
 
-lang.universal = ast pp visitor frontend utils zone router iterators	\
-heap numeric strings tree # arrays
+lang.universal = ast pp visitor frontend utils zone stdlib router	\
+iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency

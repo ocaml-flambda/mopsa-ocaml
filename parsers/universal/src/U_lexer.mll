@@ -21,6 +21,7 @@ let _ =
      "string", TOK_STRING;
      "char",   TOK_CHAR;
      "tree",   TOK_TREE;
+     "unit",   TOK_UNIT;
 
      (* constants *)
      "true",   TOK_TRUE;

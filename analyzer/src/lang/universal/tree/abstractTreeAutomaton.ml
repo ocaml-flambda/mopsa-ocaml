@@ -1946,6 +1946,9 @@ struct
     in
     {r with d = trans} |> dfta_of_t (sa)
 
+  let final_constant (s: A.t) (u: dfta): dfta =
+    {u with dfta_d = DetTrans.filter_symbol s u.dfta_d}
+
   let remove_state_dfta (s: SS.t) (u: dfta) =
     {u with
      dfta_q = SS.diff u.dfta_q s;

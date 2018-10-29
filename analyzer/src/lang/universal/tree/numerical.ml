@@ -1,5 +1,6 @@
 open Framework.Essentials
 
+let debug fmt = ToolBox.debug "numerical" fmt
 (* let to_num_var uid v = *)
 
 (* include Apol
@@ -69,7 +70,7 @@ let meet_different_support
 let join_different_support
     (man: ('a, 'b) man)
     (u: 'a flow) (v: 'a flow)
-    (envu: string list) (envv: string list)
+    (envv: string list)
     (full_env: string list)
     (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
   =
@@ -82,6 +83,7 @@ let join_different_support
         (vb_u, vb_v, renaming)
     ) full_env (vb_u, vb_v, [])
   in
+  let () = debug "renaming: %a" (ToolBox.print_list (ToolBox.print_pair pp_var pp_var)) renaming in
   (* Ici on n'ajoute pas les variables car c'est la sémantique du join
      de mopsa *)
   let v = ToolBox.fold (fun (var, var') abs ->
@@ -323,6 +325,36 @@ let env_leq (man: ('b, 'b) man) (u: 'b flow) (v: 'b flow)
     ) renaming v
   in
   u, v, vb_u, vb_v
+
+let env_leq_same_num (man: ('a, 'b) man) (flow: 'a flow)
+    (envv: string list) (common: string list)
+    (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
+  : ('b flow * 'b flow * StrVarBind.t * StrVarBind.t)
+  =
+  let rmv, vb_v = StrVarBind.get_var_list envv vb_v in
+  let vb_u, vb_v, renaming = ToolBox.fold (fun s (vb_u, vb_v, renaming) ->
+      let var_u, vb_u = StrVarBind.get_var s vb_u in
+      let var_v, vb_v = StrVarBind.get_var s vb_v in
+      (vb_u, vb_v, (var_v, var_u) :: renaming)
+    ) common (vb_u, vb_v, [])
+  in
+  let flow = ToolBox.fold (fun var abs ->
+      man.exec
+        (mk_stmt (S_remove_var var) (mk_fresh_range ()))
+        abs
+    ) rmv flow
+  in
+  let flowu, flowv = ToolBox.fold (fun (var_v, var_u) (flowu, flowv) ->
+      let flowu = man.exec (mk_stmt (S_remove_var (var_v)) (mk_fresh_range ())) flowu in
+      let flowv = man.exec (mk_stmt (S_remove_var (var_u)) (mk_fresh_range ())) flowv in
+      let flowv = man.exec
+          (mk_stmt (S_rename_var(var_v, var_u)) (mk_fresh_range ()))
+          flowv
+      in
+      (flowu, flowv)
+    ) renaming (flow, flow)
+  in
+  flowu, flowv, vb_u, vb_v
 
   (* let env  = Environmentext.int_env_of_list env in
    * let abs  = change_environment abs  env in

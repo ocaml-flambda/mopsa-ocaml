@@ -84,6 +84,21 @@ module Domain : Framework.Domains.Stacked.S = struct
   let top = Nb VMap.empty
   let bottom = BOT
 
+  let go_to_bottom range man cur flow =
+    match cur with
+    | BOT -> flow
+    | Nb cur ->
+      VMap.fold (fun _ u flow -> V.remove_all_nums range man u flow) cur flow
+
+  let assign0 range man cur v x flow =
+    match cur with
+    | BOT -> (BOT, flow)
+    | Nb cur ->
+      begin
+        match VMap.find_opt v cur with
+        | Some x' -> let flow' = V.remove_all_nums range man x' flow in Nb (VMap.add v x cur), flow'
+        | None -> Nb (VMap.add v x cur), flow
+      end
   let is_top = bot_apply (fun _ -> VMap.is_empty) false
 
   let is_bottom = bot_apply (fun _ _ -> false) true
@@ -171,7 +186,7 @@ module Domain : Framework.Domains.Stacked.S = struct
   (**                           {2 Transformers}                              *)
   (*==========================================================================*)
 
-  let assign (man: ('a, t) man) x t mode (flow: 'a flow) : 'a flow =
+  let assign range (man: ('a, t) man) x t mode (flow: 'a flow) : 'a flow =
     let u = Flow.get_domain_cur man flow in
     let u, flow =
       match u with
@@ -179,14 +194,16 @@ module Domain : Framework.Domains.Stacked.S = struct
       | Nb abs ->
         begin
           match mode with
-          | STRONG -> Nb (VMap.add x t abs), flow
+          | STRONG -> (* Nb (VMap.add x t abs), flow *)
+            assign0 range man u x t flow
           | WEAK ->
             begin
               match VMap.find_opt x abs with
               | None -> Nb abs, flow
               | Some t' ->
                 let t'', flow = V.join_same_num man t t' flow in
-                Nb (VMap.add x t'' abs), flow
+                assign0 range man u x t flow
+                (* Nb (VMap.add x t'' abs), flow *)
             end
         end
     in
@@ -202,16 +219,117 @@ module Domain : Framework.Domains.Stacked.S = struct
     let () = debug "I am asked" in
     match skind stmt with
     | S_assign({ekind = E_var(v, mode); etyp = T_tree}, e2) ->
+      let range = srange stmt in
       man.eval e2 flow
       |> (Post.bind man (fun expr flow ->
           match ekind expr with
           | TreeAst.E_tree_set t ->
             begin
-              assign man v t mode flow
+              assign range man v t mode flow
               |> Post.of_flow
             end
           | _ -> Debug.fail "tree not evaluated correctly"))
       |> Option.return
+    | S_assume({ekind = E_call ({ekind = E_function (Builtin {name = "is_symbol"})}, [{ekind = E_var(v, _)}])}) ->
+      let range = srange stmt in
+      begin
+        let curdom = Flow.get_domain_cur man flow in
+        match curdom with
+        | BOT -> Flow.bottom (Flow.get_all_annot flow) |> Post.of_flow |> Option.return
+        | Nb cur ->
+          begin
+            let curstate = Flow.get_domain_cur man flow in
+            match VMap.find_opt v cur with
+            | Some tree_v ->
+              let u, flow = V.filter_symbol range man tree_v flow in
+              (if V.is_bottom range man u flow then
+                 let flow = go_to_bottom range man curstate flow in
+                 Flow.set_domain_cur (BOT) man flow
+               else
+                 let dom, flow = assign0 range man curdom v u flow in
+                 Flow.set_domain_cur dom man flow)
+              |> Post.of_flow |> Option.return
+            | None -> None
+          end
+      end
+    | S_assume({ekind = E_unop(O_log_not ,{ekind = E_call ({ekind = E_function (Builtin {name = "is_symbol"})}, [{ekind = E_var(v, _)}])})}) ->
+      let range = srange stmt in
+      begin
+        let curstate = Flow.get_domain_cur man flow in
+        match curstate with
+        | BOT -> Flow.bottom (Flow.get_all_annot flow) |> Post.of_flow |> Option.return
+        | Nb cur ->
+          begin
+            match VMap.find_opt v cur with
+            | Some tree_v ->
+              let u, flow = V.filter_not_symbol range man tree_v flow in
+              (if V.is_bottom range man u flow then
+                 let flow = go_to_bottom range man curstate flow in
+                 Flow.set_domain_cur (BOT) man flow
+               else
+                 let dom, flow = assign0 range man curstate v u flow in
+                 Flow.set_domain_cur dom man flow)
+              |> Post.of_flow |> Option.return
+            | None -> None
+          end
+      end
+    | S_assume({ekind = E_call ({ekind = E_function (Builtin {name = "is_symbol"})}, [t])}) ->
+      let range = srange stmt in
+      begin
+        match Flow.get_domain_cur man flow with
+        | BOT -> Flow.bottom (Flow.get_all_annot flow) |> Post.of_flow |> Option.return
+        | Nb cur ->
+          begin
+            let curstate = Flow.get_domain_cur man flow in
+            let exception NP in
+              try
+                man.eval t flow
+                |> Post.bind man (fun t flowin -> match ekind t with
+                    | TreeAst.E_tree_set t ->
+                      let u, flow = V.filter_symbol range man t flowin in
+                      let flowrep =
+                        if V.is_bottom range man u flow then
+                          let flow = go_to_bottom range man curstate flow in
+                          Flow.set_domain_cur (BOT) man flow
+                        else
+                          flowin
+                      in
+                      flowrep |> Post.of_flow
+                    | _ -> raise NP
+                  )  |> Option.return
+              with
+              | NP -> None
+          end
+      end
+
+    | S_assume({ekind = E_unop( O_log_not, {ekind = E_call ({ekind = E_function (Builtin {name = "is_symbol"})}, [t])})}) ->
+      let range = srange stmt in
+      begin
+        match Flow.get_domain_cur man flow with
+        | BOT -> Flow.bottom (Flow.get_all_annot flow) |> Post.of_flow |> Option.return
+        | Nb cur ->
+          begin
+            let curstate = Flow.get_domain_cur man flow in
+            let exception NP in
+              try
+                man.eval t flow
+                |> Post.bind man (fun t flowin -> match ekind t with
+                    | TreeAst.E_tree_set t ->
+                      let u, flow = V.filter_not_symbol range man t flowin in
+                      let flowrep =
+                        if V.is_bottom range man u flow then
+                          let flow = go_to_bottom range man curstate flow in
+                          Flow.set_domain_cur (BOT) man flow
+                        else
+                          flowin
+                      in
+                      flowrep |> Post.of_flow
+                    | _ -> raise NP
+                  )  |> Option.return
+              with
+              | NP -> None
+          end
+      end
     | _ -> None
 
   let rec z_fold f a b acc =

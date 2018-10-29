@@ -36,6 +36,7 @@ type typ =
   | AST_STRING
   | AST_CHAR
   | AST_TREE
+  | AST_UNIT
 
 (* unary expression operators *)
 type unary_op =
@@ -80,6 +81,9 @@ and expr =
 
   (* integer constants (integers are still in their string representation) *)
   | AST_int_const of string ext
+
+  (* unit constant *)
+  | AST_unit_const
 
   (* boolean constants *)
   | AST_bool_const of bool ext

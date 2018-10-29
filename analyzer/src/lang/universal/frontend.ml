@@ -34,12 +34,14 @@ module FA = Framework.Ast
 module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
 type fun_context = (T.fundec) MS.t
+
 let builtin_functions =
   [
-    {name = "subtree"; args = [T_tree; T_int]; output = T_tree};
-    {name = "is_int"; args = [T_tree]; output = T_bool};
-    {name = "read_int"; args = [T_tree]; output = T_int};
-    {name = "read_symbol"; args = [T_tree]; output = T_string};
+    {name = "subtree"; args = [Some T_tree; Some T_int]; output = T_tree};
+    {name = "is_symbol"; args = [Some T_tree]; output = T_bool};
+    {name = "read_int"; args = [Some T_tree]; output = T_int};
+    {name = "read_symbol"; args = [Some T_tree]; output = T_string};
+    {name = "mopsa_assume"; args = [None]; output = T_unit};
   ]
 
 let from_position (pos: U.position) : Framework.Location.loc =
@@ -77,6 +79,7 @@ let rec from_typ (typ: U_ast.typ) : FA.typ =
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
   | AST_TREE    -> T_tree
+  | AST_UNIT    -> T_unit
 
 let from_binop (b: U.binary_op) : FA.operator =
   match b with
@@ -103,22 +106,28 @@ let from_unop (b: U.unary_op) : FA.operator =
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
   match e with
+  | AST_unit_const -> mk_expr ~etyp:T_unit (E_constant (C_unit)) range
   | AST_fun_call((f, f_ext), args) ->
     begin
       let look_in_builtins (fun_ctx) =
         let exception Match of (FA.expr list * fun_builtin) in
         try
           List.iter (fun bi ->
+              let () = Debug.debug ~channel:("remove_me") "builtin: %s, fun: %s, b: %b" bi.name f (bi.name = f) in
               if bi.name = f && List.length bi.args = List.length args then
                 let exception NoMatch in
                 try
                   let el = List.map2 (fun (e, ext) x ->
-                      let e' = from_expr e ext var_ctx (fun_ctx) in
-                      let typ = etyp e' in
-                      if compare_typ typ x = 0 then
-                        e'
-                      else
-                        raise NoMatch
+                      match x with
+                      | Some x ->
+                        let e' = from_expr e ext var_ctx (fun_ctx) in
+                        let typ = etyp e' in
+                        let () = Debug.debug ~channel:("remove_me") "x: %a, typ: %a" pp_typ x pp_typ typ in
+                        if compare_typ typ x = 0 then
+                          e'
+                        else
+                          raise NoMatch
+                      | None -> from_expr e ext var_ctx (fun_ctx)
                     ) args bi.args
                   in
                   raise (Match (el, bi))

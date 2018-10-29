@@ -24,6 +24,7 @@ type typ +=
   | T_addr (** Heap addresses. *)
   | T_tree (** Tree type *)
   | T_array of typ (** Array of [typ] *)
+  | T_unit (** Unit type *)
   | T_char
 
 let () =
@@ -39,6 +40,7 @@ let () =
 
 
 type constant +=
+  | C_unit
   | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
@@ -152,7 +154,7 @@ type fundec = {
 
 type fun_builtin =
   { name: string;
-    args: typ list;
+    args: typ option list;
     output: typ
   }
 
