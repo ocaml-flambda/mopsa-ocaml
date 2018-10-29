@@ -122,7 +122,7 @@ let make_mixed_product
 
     let module NR = Nonrel.Make(V) in
     let module SNR = Stacked.MakeStacked(NR) in
-    
+
     let module D = Products.Domain_product.Make
         (Over)
         (struct
@@ -158,14 +158,20 @@ let make_mixed_product
   create_product dpool vpool
 
 
+let find_safe finder d =
+  try
+    finder d
+  with
+  | Not_found ->
+    Debug.fail "Domain %s not found" d
 
 
 let make (pool: string list) (rules: string list) (over: (module DOMAIN)) : (module DOMAIN) =
   let stack_domain_pool, tl = List.partition Stacked.mem_domain pool in
   let domain_pool, value_pool = List.partition Domain.mem_domain tl in
 
-  let stack_domain_pool = List.map Stacked.find_domain stack_domain_pool in
-  let domain_pool = List.map Domain.find_domain domain_pool |>
+  let stack_domain_pool = List.map (find_safe Stacked.find_domain) stack_domain_pool in
+  let domain_pool = List.map (find_safe Domain.find_domain) domain_pool |>
                     List.map (fun d ->
                         let module D = (val d : DOMAIN) in
                         let module D' = Stacked.MakeStacked(D) in
@@ -174,14 +180,14 @@ let make (pool: string list) (rules: string list) (over: (module DOMAIN)) : (mod
   in
   let domain_pool = stack_domain_pool @ domain_pool in
 
-  let value_pool = List.map Value.find_value value_pool in
+  let value_pool = List.map (find_safe Value.find_value) value_pool in
 
   let post_rules, other_rules = List.partition (fun rule -> List.mem_assoc rule !Reductions.Post_reduction.reductions) rules in
   let eval_rules, value_rules = List.partition (fun rule -> List.mem_assoc rule !Reductions.Eval_reduction.reductions) other_rules in
 
-  let post_rules = List.map Reductions.Post_reduction.find_reduction post_rules in
-  let eval_rules = List.map Reductions.Eval_reduction.find_reduction eval_rules in
-  let value_rules = List.map Reductions.Value_reduction.find_reduction value_rules in
+  let post_rules = List.map (find_safe Reductions.Post_reduction.find_reduction) post_rules in
+  let eval_rules = List.map (find_safe Reductions.Eval_reduction.find_reduction) eval_rules in
+  let value_rules = List.map (find_safe Reductions.Value_reduction.find_reduction) value_rules in
 
   match domain_pool, value_pool with
   | [], [] -> Debug.fail "reduced product: empty pool"

@@ -11,13 +11,18 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal c python cfg jvm
 
-lang.universal = ast pp visitor frontend utils zone iterators heap numeric # arrays
+lang.universal = ast pp visitor frontend utils zone u_stdlib router	\
+iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences float_intervals integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences implicit_assume_relation intervals_broadcast
+lang.universal.tree = toolBox tools strVarBind SIG mapper mRelation	\
+rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
+treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
+abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.c = zone ast alarms frontend libs desugar flows memory
 
@@ -34,7 +39,7 @@ lang.python.types = typingdomain typing t_string t_int
 
 lang.cfg = ast iterator
 
-lang.jvm = ast precheck frontend 
+lang.jvm = ast precheck frontend
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib

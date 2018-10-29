@@ -98,6 +98,7 @@ struct
       let res0 =
         lfp !opt_loop_widening_delay cond body man flow_init flow_init |>
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
+        (fun x -> debug "joining %a and %a" (Flow.print man) flow_out (Flow.print man) x ; x) |>
         Flow.join man flow_out
       in
 
