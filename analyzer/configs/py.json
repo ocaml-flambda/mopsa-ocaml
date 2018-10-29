@@ -1,0 +1,47 @@
+{
+    "iter": [
+        "python.program",
+
+        "python.desugar.bool",
+        "python.desugar.import",
+        "python.desugar.assert",
+        "python.desugar.if",
+        "python.desugar.iterable_assign",
+        "python.desugar.with",
+        "python.desugar.loops",
+
+        "python.flows.exceptions",
+
+        "universal.iterators.intraproc",
+        "universal.iterators.interproc.inlining",
+        "universal.iterators.loops",
+
+        "python.libs.mopsa",
+        "python.libs.stdlib",
+        "python.libs.math",
+        "python.libs.unittest",
+
+        "python.objects.class",
+        "python.objects.function",
+        "python.objects.nones",
+        // todo: numbers, etc
+        // todo: container, etc
+
+        "python.data_model.attribute",
+        "python.data_model.subscript",
+        "python.data_model.arith_ops",
+        "python.data_model.compare_ops",
+        "python.data_model.aug_assign",
+        "python.data_model.callable",
+
+        {
+            "stack": "universal.heap.recency",
+            "over": {
+		"iter": [
+		    "python.memory.addr_env",
+		    "python.memory.value"
+		]
+	    }
+        }
+    ]
+}

@@ -15,6 +15,7 @@
         "universal.iterators.intraproc",
         "universal.iterators.interproc.inlining",
         "universal.iterators.loops",
+        "universal.iterators.unittest",
 
         "python.libs.mopsa",
         "python.libs.stdlib",

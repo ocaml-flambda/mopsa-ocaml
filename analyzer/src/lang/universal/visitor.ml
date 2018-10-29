@@ -93,6 +93,8 @@ let () =
         )
 
       | S_print -> leaf stmt
+      | S_fold(_, _) -> leaf stmt
+      | S_expand(_, _) -> leaf stmt
 
       | _ -> default stmt
     );

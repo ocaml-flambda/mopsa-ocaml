@@ -419,27 +419,27 @@ let join (d:domain) (d':domain) : domain =
   let all_vars = VarMap.fold (fun k _ acc -> VarSet.add k acc) d'.d1 all_vars in
   let res = VarSet.fold
               (fun var dcur ->
+                (* debug "Var is %a@\n" pp_var var; *)
       let el1 = VarMap.find var d.d1 and el1' = VarMap.find var d'.d1 in
       match el1.def, el1'.def with
       | None, None ->
-         (* Format.printf "Double None@\n"; *)
          let el = {lundef=el1.lundef||el1'.lundef;
-                   gundef=el1.lundef||el1'.lundef;
+                   gundef=el1.gundef||el1'.gundef;
                    def=None} in
          let d1 = VarMap.add var el dcur.d1 in
          {dcur with d1}
       | None, Some e | Some e, None ->
-         (* Format.printf "None/Some@\n"; *)
          (* hum, il faut quand même transférer le type et les variables de types associées *)
          (* FIXME: aliasing *)
          let {d1;d2;d3} = if el1.def = None then d' else d in
          let tid, ov = typeindex_aliasing_of_var d1 var in
          let new_ty, d3, pos_d3 = join_poly (TypeIdMap.find tid d2, d3) (Bot, d3) dcur.d3 dcur.pos_d3 in
-         let tid, dcur = get_type ~local_use:true {d with d1;d2;d3;pos_d3} new_ty in
+         debug "Type is %a@\n" pp_polytype new_ty;
+         let tid, dcur = get_type ~local_use:true {dcur with d3;pos_d3} new_ty in
          let d1 = VarMap.add var (merge_undefs el1 el1' (Ty tid)) dcur.d1 in
+         debug "Tid is %d; Result is %a@\n" tid print {dcur with d1};
          {dcur with d1}
       | Some _, Some _ ->
-         (* Format.printf "Double Some@\n"; *)
          let tid1, ov1 = typeindex_aliasing_of_var d.d1 var and
              tid2, ov2 = typeindex_aliasing_of_var d'.d1 var in
          begin match Hashtbl.mem h (tid1, tid2) with
@@ -1026,3 +1026,7 @@ let filter_attr (d:domain) (t:typeid) (attr:string) : domain * domain =
     | _ -> let d2f = TypeIdMap.add t pf d.d2 in
            {d with d2=d2f; d3=d3f} in
   dt, df
+
+let filter_ty_attr (d:domain) (ty:polytype) (attr:string) : domain * domain =
+  let t, d = get_type d ty in
+  filter_attr d t attr

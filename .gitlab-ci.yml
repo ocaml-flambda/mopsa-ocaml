@@ -2,6 +2,8 @@ variables:
   MOPSA_C: "./bin/mopsa -lang=c -config=./analyzer/configs/c.json -stub=./analyzer/stubs/c -unittest"
   MOPSA_U: "./bin/mopsa -lang=universal -config=./analyzer/configs/default.universal.json -unittest"
   MOPSA_PY: "./bin/mopsa -lang=python -config=./analyzer/configs/py.json -stub=./analyzer/stubs/python -unittest"
+  DOCKER_DRIVER: overlay2
+  GIT_STRATEGY: fetch
 
 image: mopsa-build
 

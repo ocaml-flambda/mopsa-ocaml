@@ -37,6 +37,15 @@ module MS = MapExt.StringMap
 type var_context = (int * Framework.Ast.typ) MS.t
 type fun_context = (T.fundec) MS.t
 
+let builtin_functions =
+  [
+    {name = "subtree"; args = [Some T_tree; Some T_int]; output = T_tree};
+    {name = "is_symbol"; args = [Some T_tree]; output = T_bool};
+    {name = "read_int"; args = [Some T_tree]; output = T_int};
+    {name = "read_symbol"; args = [Some T_tree]; output = T_string};
+    {name = "mopsa_assume"; args = [None]; output = T_unit};
+  ]
+
 let from_position (pos: U.position) : Framework.Location.loc =
   Framework.Location.{
     loc_file = pos.pos_fname;
@@ -46,9 +55,9 @@ let from_position (pos: U.position) : Framework.Location.loc =
 
 let from_extent ((b, e): extent) : Framework.Location.range =
   Framework.Location.(Range_origin {
-    range_begin = from_position b;
-    range_end = from_position e;
-  })
+      range_begin = from_position b;
+      range_end = from_position e;
+    })
 
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
@@ -71,6 +80,8 @@ let rec from_typ (typ: U_ast.typ) : FA.typ =
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
+  | AST_TREE    -> T_tree
+  | AST_UNIT    -> T_unit
 
 (* find a common type for the arguments of binary operations *)
 let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
@@ -79,9 +90,9 @@ let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
   | T_float _, T_int -> x
   | _ ->
      if compare_typ x y = 0 then x
-     else Debug.fail "cannot unify types %a and %a" pp_typ x pp_typ y 
+     else Debug.fail "cannot unify types %a and %a" pp_typ x pp_typ y
 
-(* cast expression to the given type (if needed) *)    
+(* cast expression to the given type (if needed) *)
 let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
   let range = erange e in
   let orgt = etyp e in
@@ -92,7 +103,7 @@ let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
        mk_unop O_cast e ~etyp:t range
     | _ ->
        Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
-    
+
 let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   match t, b with
   | T_int, AST_PLUS          -> O_plus
@@ -132,9 +143,43 @@ let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
   match e with
+  | AST_unit_const -> mk_expr ~etyp:T_unit (E_constant (C_unit)) range
   | AST_fun_call((f, f_ext), args) ->
     begin
+      let look_in_builtins (fun_ctx) =
+        let exception Match of (FA.expr list * fun_builtin) in
+        try
+          List.iter (fun bi ->
+              let () = Debug.debug ~channel:("remove_me") "builtin: %s, fun: %s, b: %b" bi.name f (bi.name = f) in
+              if bi.name = f && List.length bi.args = List.length args then
+                let exception NoMatch in
+                try
+                  let el = List.map2 (fun (e, ext) x ->
+                      match x with
+                      | Some x ->
+                        let e' = from_expr e ext var_ctx (fun_ctx) in
+                        let typ = etyp e' in
+                        let () = Debug.debug ~channel:("remove_me") "x: %a, typ: %a" pp_typ x pp_typ typ in
+                        if compare_typ typ x = 0 then
+                          e'
+                        else
+                          raise NoMatch
+                      | None -> from_expr e ext var_ctx (fun_ctx)
+                    ) args bi.args
+                  in
+                  raise (Match (el, bi))
+                with
+                | NoMatch -> ()
+            ) builtin_functions;
+          Debug.fail "%s at %s was not found in naming context nor in builtin functions"
+            f
+            (U_ast_printer.string_of_extent ext)
+        with
+        | Match(el, bi) ->
+          (mk_expr ~etyp:(bi.output) (E_call(mk_expr (E_function (Builtin bi)) range, el)) range)
+      in
       match fun_ctx with
+      | None -> look_in_builtins (None)
       | Some fun_ctx ->
         begin
           try
@@ -150,23 +195,22 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                       U_ast_printer.print_expr e
                       (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
+              (* <<<<<<< HEAD *)
               (* void function return an (unitialized) int *)
               let rettyp = OptionExt.option_dfl T_int fundec.T.fun_return_type in
-              (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function fundec) range, el)) range)
+              (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range)
+              (* ======= *)
+              (* (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range) *)
             else
               Debug.fail "%s number of arguments incompatible with call at %s"
                 f
                 (U_ast_printer.string_of_extent ext)
           with
           | Not_found ->
-            Debug.fail "%s at %s was not found in typing/naming context"
-              f
-              (U_ast_printer.string_of_extent ext)
+            begin
+              look_in_builtins (Some fun_ctx)
+            end
         end
-      | None ->
-        Debug.fail "%a at %s function call in global variable declaration"
-          U_ast_printer.print_expr e
-          (U_ast_printer.string_of_extent ext)
     end
   | AST_unary (op, (e, ext)) ->
     begin
@@ -175,7 +219,6 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let op = from_unop typ op in
       mk_unop op e ~etyp:typ range
     end
-
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
       let e1 = from_expr e1 ext var_ctx fun_ctx in
@@ -257,6 +300,22 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
+  | AST_tree tc ->
+    from_tree_constructor tc ext var_ctx fun_ctx
+
+and from_tree_constructor (tc: U.tree_constructor) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option) =
+  let range = from_extent ext in
+  match tc with
+  | Int(e, ext) ->
+    {ekind = E_tree (TC_int (from_expr e ext var_ctx fun_ctx));
+     etyp  = T_tree;
+     erange =range;
+    }
+  | Symbol((e, ext'), l) ->
+    {ekind = E_tree (TC_symbol(from_expr e ext' var_ctx fun_ctx, List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) l));
+     etyp  = T_tree;
+     erange =range;
+    }
 
 let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.stmt =
   let range = from_extent ext in
@@ -272,8 +331,22 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
       | AST_identifier _ ->
         let e1 = from_expr e1 ext1 var_ctx fun_ctx in
         let e2 = from_expr e2 ext2 var_ctx fun_ctx in
+(* <<<<<<< HEAD *)
         let e2 = to_typ (etyp e1) e2 in
         mk_assign e1 e2 range
+(* =======
+ *         if (compare_typ (etyp e1) (etyp e2) = 0) then
+ *           mk_assign e1 e2 range
+ *         else
+ *           Debug.fail "%a (at %s) has type %a and %a (at %s) has type \
+ *                       %a, could not translate assignement"
+ *             U_ast_printer.print_expr e1o
+ *             (U_ast_printer.string_of_extent ext1)
+ *             pp_typ (etyp e1)
+ *             U_ast_printer.print_expr e2o
+ *             (U_ast_printer.string_of_extent ext2)
+ *             pp_typ (etyp e2)
+ * >>>>>>> mopsa-v2-universal-w-tree *)
       | _ ->
         Debug.fail "%a at %s not considered a left-value for now "
           U_ast_printer.print_expr e1o
