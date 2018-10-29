@@ -15,6 +15,31 @@ open Ast
 
 
 (****************************************************************************)
+(**                      {2 Command line options}                           *)
+(****************************************************************************)
+
+
+type _ Framework.Query.query +=
+  | Q_sat : Framework.Ast.expr -> bool Framework.Query.query
+
+let opt_float_rounding = ref Apron.Texpr1.Near
+
+let () =
+  register_option (
+    "-float-rounding-mode",
+    Arg.String (function
+        | "near" -> opt_float_rounding := Apron.Texpr1.Near
+        | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
+        | "up"   -> opt_float_rounding := Apron.Texpr1.Up
+        | "down" -> opt_float_rounding := Apron.Texpr1.Down
+        | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
+        | x -> Debug.fail "Unknown rounding mode %s" x
+      ),
+    "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
+  )
+
+
+(****************************************************************************)
 (**                         {2 Abstract domain}                             *)
 (****************************************************************************)
 
@@ -42,7 +67,6 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
-
 
   (** {2 Environment utility functions} *)
   (** ********************************* *)
@@ -192,7 +216,7 @@ struct
 
     | E_unop (O_plus, e) ->
        strongify_rhs e abs l
-      
+
     | E_unop(O_cast, e) ->
       let e', abs, l = strongify_rhs e abs l in
       let typ' = typ_to_apron e.etyp in
@@ -367,6 +391,7 @@ struct
   let init prog = top
 
   let rec exec stmt a =
+    let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
     | S_remove_var var ->
       let env = Apron.Abstract1.env a in
@@ -407,13 +432,36 @@ struct
           exec {stmt with skind = S_remove_var v} a
       end
 
+    | S_fold(v, vl) ->
+      begin
+        debug "Starting fold";
+        match vl with
+        | [] -> Debug.fail "Can not fold list of size 0"
+        | p::q ->
+          let abs = Apron.Abstract1.fold ApronManager.man a
+              (List.map var_to_apron vl |> Array.of_list) in
+          let abs = Apron.Abstract1.rename_array ApronManager.man abs
+              [|var_to_apron p|] [|var_to_apron v|] in
+          abs |> return
+      end
+
+    | S_expand(v, vl) ->
+      begin
+        debug "Starting expand";
+        let abs = Apron.Abstract1.expand ApronManager.man a
+            (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
+        let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
+        let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
+        abs |> return
+      end
+
     | S_assign({ekind = E_var(v, WEAK)} as lval, e) ->
       exec {stmt with skind = S_assign(lval, e)} a |> bind @@ fun a' ->
       join_ a a' |>
       return
 
     | S_assume(e) -> begin
-        let a = add_missing_vars  a (Framework.Visitor.expr_vars e) in
+        let a = add_missing_vars a (Framework.Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
         let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
@@ -445,7 +493,39 @@ struct
 
     | _ -> return top
 
-  and ask query a = None
+  and satisfy (abs: t) (e: expr): bool =
+    let a = add_missing_vars abs (Framework.Visitor.expr_vars e) in
+    let env = Apron.Abstract1.env a in
+    bexp_to_apron e
+    |> Dnf.substitute
+      (fun (op, e1, t1, e2, t2) ->
+         let typ =
+           match t1, t2 with
+           | T_int, T_int -> Apron.Texpr1.Int
+           | T_float _, T_int
+           | T_int, T_float _
+           | T_float _, T_float _ -> Apron.Texpr1.Real
+           | _ -> fail "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
+         in
+         let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+         let diff_texpr = Apron.Texpr1.of_expr env diff in
+         let tcons = Apron.Tcons1.make diff_texpr op in
+         Apron.Abstract1.sat_tcons ApronManager.man a tcons
+      ) (||) (&&)
+
+  and ask : type r. r Framework.Query.query -> t -> r option =
+    fun query abs ->
+      match query with
+      | Q_sat e ->
+        Some (satisfy abs e)
+      | Values.Intervals.Value.Q_interval e ->
+        let e = exp_to_apron e in
+        let env = Apron.Abstract1.env abs in
+        let e = Apron.Texpr1.of_expr env e in
+        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+        Values.Intervals.Value.of_apron |>
+        OptionExt.return
+      | _ -> None
 
   let var_relations v a =
     (* Get the linear constraints *)

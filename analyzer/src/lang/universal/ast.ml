@@ -20,14 +20,16 @@ type float_prec =
   | F_DOUBLE      (** IEEE double-precision 64-bit *)
   | F_LONG_DOUBLE (** extended precision, abstracted as double *)
   | F_REAL        (** no rounding, abstracted as double *)
-  
+
 type typ +=
   | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
   | T_addr (** Heap addresses. *)
+  | T_tree (** Tree type *)
   | T_array of typ (** Array of [typ] *)
+  | T_unit (** Unit type *)
   | T_char
 
 let () =
@@ -43,6 +45,7 @@ let () =
 
 
 type constant +=
+  | C_unit
   | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
@@ -96,7 +99,7 @@ type operator +=
   | O_bit_lshift (** << *)
   | O_concat     (** concatenation of arrays and strings *)
 
-  
+
 let () =
   register_operator_compare (fun next op1 op2 ->
       match op1, op2 with
@@ -109,7 +112,7 @@ let () =
     )
 
 
-  
+
 (*==========================================================================*)
                          (** {2 Heap addresses} *)
 (*==========================================================================*)
@@ -157,6 +160,21 @@ type fundec = {
   fun_return_type: typ option; (** return type *)
 }
 
+type fun_builtin =
+  { name: string;
+    args: typ option list;
+    output: typ
+  }
+
+type fun_expr =
+  | User_defined of fundec
+  | Builtin of fun_builtin
+
+let compare_fun_expr x y = match x, y with
+  | User_defined a, User_defined b -> Pervasives.compare a.fun_name b.fun_name
+  | Builtin a, Builtin b -> Pervasives.compare a b
+  | _ -> 1
+
 (*==========================================================================*)
                            (** {2 Programs} *)
 (*==========================================================================*)
@@ -171,10 +189,13 @@ type program_kind +=
 (*==========================================================================*)
                            (** {2 Expressions} *)
 (*==========================================================================*)
+type tc =
+  | TC_int of expr
+  | TC_symbol of expr * expr list
 
 type expr_kind +=
   (** Function expression *)
-  | E_function of fundec
+  | E_function of fun_expr
 
   (** Function calls *)
   | E_call of expr (** Function expression *) * expr list (** List of arguments *)
@@ -194,10 +215,13 @@ type expr_kind +=
   (** Length of array or string *)
   | E_len of expr
 
+  (** Tree construction *)
+  | E_tree of tc
+
 let () =
   register_expr_compare (fun next e1 e2 ->
       match ekind e1, ekind e2 with
-      | E_function(f1), E_function(f2) -> Pervasives.compare f1.fun_name f2.fun_name
+      | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
 
       | E_call(f1, args1), E_call(f2, args2) ->
         Compare.compose [
@@ -298,7 +322,7 @@ let is_int_type = function
 let is_float_type = function
   | T_float _ -> true
   | _ -> false
-       
+
 let is_numeric_type = function
   | T_int | T_float _ -> true
   | _ -> false
@@ -347,6 +371,10 @@ type stmt_kind +=
   | S_print
   (** Print the abstract flow map at current location *)
 
+  | S_forget of var
+  (** Forgets variable *)
+
+
 let () =
   register_stmt_compare (fun next s1 s2 ->
       match skind s1, skind s2 with
@@ -386,7 +414,6 @@ let () =
         ]
 
       | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
-
       | _ -> next s1 s2
     )
 
@@ -417,10 +444,9 @@ let mk_rebase_addr old recent mode range =
 
 let mk_call fundec args range =
   mk_expr (E_call (
-      mk_expr (E_function fundec) range,
+      mk_expr (E_function (User_defined fundec)) range,
       args
     )) range
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)
-

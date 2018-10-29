@@ -84,7 +84,7 @@ let () =
   Framework.Zone.(register_zone {
       subset = (fun next z1 z2 ->
           match z1, z2 with
-          | Z_expand_cell_lval, Zone.Z_universal -> true
+          | Z_expand_cell_lval, Zone.Z_u -> true
           | _ -> next z1 z2
         );
       print = (fun next fmt z ->
@@ -154,13 +154,13 @@ struct
   (** **************************** *)
 
   let exec_interface = {
-    export = [Zone.Z_universal];
+    export = [Zone.Z_u];
     import = [];
   }
 
   let eval_interface = {
     export = [
-      (Framework.Zone.top, Zone.Z_universal_num);
+      (Framework.Zone.top, Zone.Z_u_num);
       (Framework.Zone.top, Z_expand_cell_lval);
     ];
     import = [Framework.Zone.top, Z_expand_cell_lval];
@@ -342,7 +342,7 @@ struct
         | _ -> assert false
       )
 
-    | E_subscript(a, i), Zone.Z_universal_num ->
+    | E_subscript(a, i), Zone.Z_u_num ->
       Some (
         man.eval a flow ~zone:(Framework.Zone.top, Z_expand_cell_lval) |> Eval.bind @@ fun a flow ->
         match ekind a with
