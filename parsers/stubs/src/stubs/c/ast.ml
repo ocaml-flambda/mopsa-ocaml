@@ -11,6 +11,7 @@ type loc = {
     line: int;
     col: int;
   }
+
 type range = loc * loc
 
 type 'a with_range = 'a * range
@@ -21,7 +22,7 @@ type stub = {
     stub_predicates : predicate list;
     stub_assigns  : assigns list;
     stub_case     : case list;
-    stub_ensures  : formula list;
+    stub_ensures  : ensures list;
   }
 
 and formula = formula_kind with_range
@@ -30,6 +31,9 @@ and assigns = assigns_kind with_range
 and case = case_kind with_range
 and expr = expr_kind with_range
 and predicate = predicate_kind with_range
+and requires = formula_kind with_range
+and ensures = formula_kind with_range
+and assumes = formula_kind with_range
 
 and local_kind = {
     local_var : var;
@@ -37,8 +41,9 @@ and local_kind = {
   }
 
 and local_value =
-  | LV_call    of var (** function *) * expr list (* arguments *)
-  | LV_new     of resource
+  | Local_new           of resource
+  | Local_function_call of var (** function *) * expr list (* arguments *)
+  | Local_builtin_call  of builtin * expr list
 
 and assigns_kind = {
     assign_target : expr;
@@ -47,11 +52,11 @@ and assigns_kind = {
 
 and case_kind = {
     case_label: string;
-    case_assumes: formula list;
-    case_requires : formula list;
+    case_assumes: assumes list;
+    case_requires : requires list;
     case_local    : local list;
     case_assigns  : assigns list;
-    case_ensures  : formula list;
+    case_ensures  : ensures list;
   }
 
 and formula_kind =
@@ -79,8 +84,8 @@ and expr_kind =
   | E_deref     of expr
 
   | E_subscript of expr * expr
-  | E_member    of expr * expr
-  | E_arrow     of expr * expr
+  | E_member    of expr * string
+  | E_arrow     of expr * string
 
   | E_builtin_call  of builtin * expr
 
@@ -135,3 +140,8 @@ and builtin =
   | SIZE
   | OFFSET
   | BASE
+
+let map_kind (a: 'a with_range) (f: 'a -> 'b) : 'b =
+  f (fst a)
+
+let kind (a: 'a with_range) : 'a = fst a

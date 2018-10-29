@@ -72,8 +72,6 @@ rule read =
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
 
-  | '{'      { LBRACE }
-  | '}'      { RBRACE }
   | '['      { LBRACK }
   | ']'      { RBRACK }
   | "("      { LPAR }
