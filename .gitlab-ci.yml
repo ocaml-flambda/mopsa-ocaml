@@ -24,7 +24,7 @@ build_job:
   stage: test
   dependencies: [build_job]
   variables:
-    GIT_STRATEGY: none
+    GIT_STRATEGY: fetch
   script:
     - eval `opam config env`
     - $MOPSA_C analyzer/tests/c/$C_FILE
@@ -33,7 +33,7 @@ build_job:
   stage: test
   dependencies: [build_job]
   variables:
-    GIT_STRATEGY: none
+    GIT_STRATEGY: fetch
   script:
     - eval `opam config env`
     - $MOPSA_U analyzer/tests/universal/$U_FILE
@@ -43,7 +43,7 @@ build_job:
   stage: test
   dependencies: [build_job]
   variables:
-    GIT_STRATEGY: none
+    GIT_STRATEGY: fetch
   script:
     - eval `opam config env`
     - $MOPSA_PY analyzer/tests/universal/$PY_FILE
