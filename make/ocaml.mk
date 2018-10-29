@@ -3,25 +3,23 @@
 ##################
 
 $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmi): $(BUILD)/%.cmi: $(SRC)/%.mli | $(BUILD)/%.mli.dep
+$(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
 
 $(ML:$(SRC)/%.ml=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(SRC)/%.ml | $(BUILD)/%.ml.dep
-$(ML:$(SRC)/%.ml=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.ml | $(BUILD)/%.ml.dep
-
 $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.cmi
 $(MLI:$(SRC)/%.mli=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.cmi
+$(ML:$(SRC)/%.ml=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(SRC)/%.ml | $(BUILD)/%.ml.dep
+$(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
 
 $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
 $(MLL:$(SRC)/%.mll=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml | $(BUILD)/%.ml.dep
+$(MLL:$(SRC)/%.mll=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
 
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmx): $(BUILD)/%.cmx: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep $(BUILD)/%.mli.dep
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.cmo): $(BUILD)/%.cmo: $(BUILD)/%.ml $(BUILD)/%.cmi | $(BUILD)/%.ml.dep $(BUILD)/%.mli.dep
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(BUILD)/%.ml
-
-$(ML:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
-$(MLI:$(SRC)/%=$(BUILD)/%.dep): $(BUILD)/%.dep: $(SRC)/%
-$(MLL:$(SRC)/%.mll=$(BUILD)/%.ml.dep): $(BUILD)/%.dep: $(BUILD)/%
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.ml.dep): $(BUILD)/%.dep: $(BUILD)/%
-$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli.dep): $(BUILD)/%.dep: $(BUILD)/%
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
+$(MLY:$(SRC)/%.mly=$(BUILD)/%.mli.dep): $(BUILD)/%.mli.dep: $(BUILD)/%.mli
 
 .SECONDEXPANSION:
 $(PACKS:%=$(BUILD)/%.cmx): $(BUILD)/%.cmx : $$(PACK_DEPS_$$@)

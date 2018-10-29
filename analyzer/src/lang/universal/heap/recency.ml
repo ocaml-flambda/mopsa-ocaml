@@ -35,7 +35,7 @@ struct
     meet annot abs1 abs2, sub1, sub2
 
   let widen annot subman (abs1, sub1) (abs2, sub2) =
-    widen annot abs1 abs2, sub1, sub2
+    widen annot abs1 abs2, true, sub1, sub2
 
   let subset subman (abs1, sub1) (abs2, sub2) =
     subset abs1 abs2, sub1, sub2
