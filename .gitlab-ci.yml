@@ -21,7 +21,6 @@ build_job:
     paths:
     - ./bin/mopsa
     - ./analyzer/_build/mopsa.native
-    expire_in: 2h
 
 .test-c:
   stage: test
