@@ -18,6 +18,7 @@ type 'a with_range = 'a * range
 type stub = {
     stub_requires : formula list;
     stub_local    : local list;
+    stub_predicates : predicate list;
     stub_assigns  : assigns list;
     stub_case     : case list;
     stub_ensures  : formula list;
@@ -28,6 +29,7 @@ and local = local_kind with_range
 and assigns = assigns_kind with_range
 and case = case_kind with_range
 and expr = expr_kind with_range
+and predicate = predicate_kind with_range
 
 and local_kind = {
     local_var : var;
@@ -83,6 +85,11 @@ and expr_kind =
   | E_builtin_call  of builtin * expr
 
   | E_return
+
+and predicate_kind = {
+  predicate_var : var;
+  predicate_body: formula;
+}
 
 and log_binop =
   | AND

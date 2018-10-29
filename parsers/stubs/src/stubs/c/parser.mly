@@ -52,7 +52,7 @@
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE OLD RETURN SIZE OFFSET BASE
@@ -87,39 +87,42 @@
 %%
 
 stub:
-  | requires_list local_list assigns_list EOF
+  | local_list predicate_list requires_list assigns_list EOF
     {
       with_range {
-          stub_requires = $1;
-          stub_local    = $2;
-          stub_assigns  = $3;
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
           stub_case     = [];
           stub_ensures  = [];
         }
       $startpos $endpos
     }
 
-  | requires_list local_list assigns_list case_list EOF
+  | local_list predicate_list requires_list assigns_list case_list EOF
     {
       with_range {
-        stub_requires = $1;
-        stub_local    = $2;
-        stub_assigns  = $3;
-        stub_case     = $4;
-        stub_ensures  = [];
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
+          stub_case     = $5;
+          stub_ensures  = [];
         }
       $startpos $endpos
     }
 
-  | requires_list local_list assigns_list ensures_list EOF
+  | local_list predicate_list requires_list assigns_list ensures_list EOF
     {
       with_range {
-          stub_requires = $1;
-          stub_local    = $2;
-          stub_assigns  = $3;
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
           stub_case     = [];
-          stub_ensures  = $4;
-        }
+          stub_ensures  = $5;
+	}
       $startpos $endpos
     }
 
@@ -147,6 +150,20 @@ local:
 local_value:
   | NEW resource { LV_new $2 }
   | IDENT LPAR args RPAR { LV_call ($1, $3) }
+
+predicate_list:
+  | { [] }
+  | predicate predicate_list { $1 :: $2 }
+
+predicate:
+  | PREDICATE IDENT COLON formula SEMICOL
+    {
+      with_range {
+          predicate_var = $2;
+          predicate_body = $4;
+        }
+      $startpos $endpos
+    }
 
 assigns_list:
   | { [] }

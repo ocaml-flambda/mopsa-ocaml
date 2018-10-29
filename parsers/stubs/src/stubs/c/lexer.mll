@@ -12,13 +12,6 @@ open Parser
 
 exception SyntaxError of string
 
-let next_line lexbuf =
-  let pos = lexbuf.lex_curr_p in
-  lexbuf.lex_curr_p <-
-    { pos with pos_bol = lexbuf.lex_curr_pos;
-               pos_lnum = pos.pos_lnum + 1
-    }
-
 (* keyword table *)
 let keywords = Hashtbl.create 10
 let _ =
@@ -35,6 +28,7 @@ let _ =
      "assigns", ASSIGNS;
      "case", CASE;
      "ensures", ENSURES;
+     "predicate", PREDICATE;
 
      (* Operators *)
      "and",  AND;
@@ -70,7 +64,7 @@ let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 rule read =
   parse
   | white    { read lexbuf }
-  | newline  { next_line lexbuf; read lexbuf }
+  | newline  { new_line lexbuf; read lexbuf }
   
   | int      { INT (Z.of_string (Lexing.lexeme lexbuf)) }
   | float    { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
@@ -113,6 +107,8 @@ rule read =
 
   | "="    { ASSIGN }
 
+  | "(*" { read_comment lexbuf; read lexbuf }
+
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof      { EOF }
 
@@ -132,3 +128,8 @@ and read_string buf =
     }
   | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
+
+and read_comment = parse
+| "*)" { () }
+| [^ '\n' '\r'] { read_comment lexbuf }
+| newline { new_line lexbuf; read_comment lexbuf }
