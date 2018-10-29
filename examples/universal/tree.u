@@ -1,0 +1,10 @@
+int i;
+int n;
+tree y;
+unit toto;
+/* y = Tree("s", {Tree(x), Tree(x+1)}); */
+i = 0;
+toto = mopsa_assume(n >= 0);
+while (i < n) {
+  i = i+1;
+ };

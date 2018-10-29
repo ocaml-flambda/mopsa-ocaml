@@ -20,7 +20,7 @@ type Framework.Zone.zone +=
 let () = Framework.Zone.(register_zone {
     subset = (fun next z1 z2 ->
         match z1, z2 with
-        | Z_smashing, Zone.Z_universal -> true
+        | Z_smashing, Zone.Z_u -> true
         | _ -> next z1 z2
       );
     print = (fun next fmt z ->
@@ -116,19 +116,19 @@ struct
   (** **************************** *)
 
   let exec_interface = {
-    export = [Zone.Z_universal];
+    export = [Zone.Z_u];
     import = [];
   }
 
   let eval_interface = {
     export = [
       (Framework.Zone.top, Z_smashing);
-      (Framework.Zone.top, Zone.Z_universal);
-      (Framework.Zone.top, Zone.Z_universal_num)
+      (Framework.Zone.top, Zone.Z_u);
+      (Framework.Zone.top, Zone.Z_u_num)
     ];
     import = [
       (Framework.Zone.top, Z_smashing);
-      (Framework.Zone.top, Zone.Z_universal)
+      (Framework.Zone.top, Zone.Z_u)
     ];
   }
 

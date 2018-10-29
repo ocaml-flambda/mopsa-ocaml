@@ -136,18 +136,20 @@ module Domain =
            Eval.bind (fun e flow ->
                debug "Subexpression evaluated to %a(%a)" Framework.Ast.pp_expr e Framework.Ast.pp_typ e.etyp;
                let op_fun = unop_to_fun op in
-               let obj = object_of_expr e in
-               let cls = Addr.class_of_object obj in
-               Eval.assume
-                 (Utils.mk_object_hasattr cls op_fun range)
-                 ~fthen:(fun true_flow ->
-                   man.eval (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
-                 )
-                 ~felse:(fun false_flow ->
-                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
-                   Eval.empty_singleton flow
-                 )
-                 man flow
+               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e] range) flow |>
+                 Eval.bind (fun cls flow ->
+                     let cls = object_of_expr cls in
+                     Eval.assume
+                       (Utils.mk_object_hasattr cls op_fun range)
+                       ~fthen:(fun true_flow ->
+                         man.eval (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
+                       )
+                       ~felse:(fun false_flow ->
+                         let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                         Eval.empty_singleton flow
+                       )
+                       man flow
+                   )
              )
          |> OptionExt.return
       | _ -> None
