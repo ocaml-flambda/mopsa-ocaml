@@ -165,6 +165,7 @@ module Domain =
 
       | E_var (v, _) ->
          let cur = Flow.get_domain_cur man flow in
+         if Flow.is_cur_bottom man flow then None else
          begin try
            let polytype = Typingdomain.get_polytype cur v in
            let expr = match polytype with
@@ -184,6 +185,9 @@ module Domain =
                Eval.singleton (mk_py_object a range) flow |> Option.return
          end
       | E_py_ll_hasattr(e, attr) ->
+         let attr = match ekind attr with
+           | E_constant (C_string s) -> s
+           | _ -> assert false in
       (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
          begin match ekind e with
          | E_py_object ({addr_kind = A_py_module _}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
@@ -194,6 +198,17 @@ module Domain =
             Eval.singleton (mk_py_true range) flow
          | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn; uattrs; oattrs}) when StringMap.exists (fun k _ -> k = attr) uattrs ->
             Eval.singleton (mk_py_true range) flow
+         | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn; uattrs; oattrs} as ptype) when StringMap.exists (fun k _ -> k = attr) oattrs ->
+            (* let cur = Flow.get_domain_cur man flow in
+             * let dt, df = Typingdomain.filter_ty_attr cur ptype attr in
+             * debug "dt = %a@\n\ndf = %a@\n" print dt print df;
+             * let flowt = Flow.set_domain_cur dt man flow in
+             * let flowf = Flow.set_domain_cur df man flow in
+             * Eval.join
+             *   (Eval.singleton (mk_py_true range) flowt)
+             *   (Eval.singleton (mk_py_false range) flowf) *)
+         (* Ne marche pas puisqu'on ne refiltre pas sur l'instance en entrée *)
+            Eval.singleton (mk_py_top T_bool range) flow
          | _ ->
             (* FIXME *)
             Debug.warn "%a: unknown case, returning false@\n" pp_expr exp;
@@ -203,66 +218,20 @@ module Domain =
 
       | E_py_ll_getattr(e, attr) ->
          (* FIXME? as this is not a builtin constructor, but only used by the analysis, we assume that e has attribute attr *)
+         let attr = match ekind attr with
+           | E_constant (C_string s) -> s
+           | _ -> assert false in
          begin match ekind e with
          | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
             Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
             let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
             man.eval (mk_var f range) flow
-
+         | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
+            Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
          | _ -> Debug.fail "E_py_ll_getattr: todo"
          end
          |> Option.return
-
-      (* | E_py_attribute(obj, "__new__") ->
-       *    Debug.fail "bla@\n"
-       *
-       * | E_py_attribute (e, attr) ->
-       *    (\* FIXME: is it more modular? Can it be written in the data model? *\)
-       *    man.eval e flow |>
-       *    Eval.bind (fun exp flow ->
-       *        match ekind exp with
-       *        | E_py_object ({addr_kind = A_py_module _}, _) ->
-       *           Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr exp) attr) range) flow
-       *        | E_py_object ({addr_kind = A_py_class _}, _) ->
-       *           let rec search_mro (mro:Ast.py_object list) = match mro with
-       *             | [] ->
-       *                let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
-       *                Eval.empty_singleton flow
-       *             | cls::tl ->
-       *                match kind_of_object cls with
-       *                | A_py_class (C_user c, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
-       *                   let attr_var = List.find (fun v -> v.vname = attr) c.py_cls_static_attributes in
-       *                   man.eval (mk_var attr_var range) flow |>
-       *                     Eval.bind (fun aattr flow ->
-       *                         Debug.fail "ni@\n"
-       *                       )
-       *                | A_py_class (C_builtin c, _) when is_builtin_attribute cls attr ->
-       *                   let r = find_builtin_attribute cls attr in
-       *                   Eval.assume
-       *                     (Utils.mk_builtin_call "isinstance" [exp; mk_py_object (Addr.find_builtin "function") range] range)
-       *                     ~fthen:(fun flow ->
-       *                     (\* Attribute is a function of the class: we need to bind the method to the class(?) *\)
-       *                       Debug.fail "ni@\n"
-       *                     )
-       *                     ~felse:(
-       *                       Debug.fail "ni@\n"
-       *                     )
-       *                     man flow
-       *                   (\* Eval.singleton (mk_py_object r range) flow *\)
-       *                | _ ->
-       *                   search_mro tl
-       *           in
-       *           let mro = Addr.mro (object_of_expr exp) in
-       *           debug "MRO of %a:" pp_expr exp;
-       *           List.iter (fun x -> let e = mk_py_object x range in debug "%a, " pp_expr e) mro;
-       *           debug "@\n";
-       *           search_mro mro
-       *        (\* FIXME: semantics *\)
-       *        | _ ->
-       *           debug "%a@\n" pp_expr exp; assert false
-       *      )
-       *    |> Option.return *)
 
       | E_unop(Framework.Ast.O_log_not, e') ->
          man.eval e' flow |>
@@ -313,6 +282,7 @@ module Domain =
                    let dt, df = Typingdomain.filter_ty_inst cur ty (Typingdomain.Class (cls, b)) in
                    let flowt = Flow.set_domain_cur dt man flow and
                        flowf = Flow.set_domain_cur df man flow in
+                   (* FIXME: just join ? *)
                    begin match is_bottom dt, is_bottom df with
                    | true, true -> Eval.empty_singleton flowt
                    | true, false -> Eval.singleton (mk_py_false range) flowf
@@ -346,7 +316,6 @@ module Domain =
          )
          |> Option.return
 
-
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
          Eval.eval_list args man.eval flow |>
            Eval.bind
@@ -372,6 +341,7 @@ module Domain =
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;
          None
+
 
     let ask query man flow = None
   end

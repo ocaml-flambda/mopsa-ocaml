@@ -424,7 +424,7 @@ let join (d:domain) (d':domain) : domain =
       match el1.def, el1'.def with
       | None, None ->
          let el = {lundef=el1.lundef||el1'.lundef;
-                   gundef=el1.lundef||el1'.lundef;
+                   gundef=el1.gundef||el1'.gundef;
                    def=None} in
          let d1 = VarMap.add var el dcur.d1 in
          {dcur with d1}
