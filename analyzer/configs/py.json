@@ -15,7 +15,6 @@
         "universal.iterators.intraproc",
         "universal.iterators.interproc.inlining",
         "universal.iterators.loops",
-        "universal.iterators.unittest",
 
         "python.libs.mopsa",
         "python.libs.stdlib",
@@ -24,7 +23,9 @@
 
         "python.objects.class",
         "python.objects.function",
-        // "python.objects.nones",
+        "python.objects.nones",
+        // todo: numbers, etc
+        // todo: container, etc
 
         "python.data_model.attribute",
         "python.data_model.subscript",
@@ -33,8 +34,14 @@
         "python.data_model.aug_assign",
         "python.data_model.callable",
 
-        "python.types.t_string",
-        "python.types.t_int",
-        "python.types.typing"
+        {
+            "stack": "universal.heap.recency",
+            "over": {
+		"iter": [
+		    "python.memory.addr_env",
+		    "python.memory.value"
+		]
+	    }
+        }
     ]
 }
