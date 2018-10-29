@@ -16,7 +16,7 @@ build_job:
   script:
     - eval `opam config env`
     - make -j
-  artifacts:
+  cache:
     paths:
     - ./bin/mopsa
     - ./analyzer/_build/mopsa.native
