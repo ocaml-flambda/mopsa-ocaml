@@ -97,7 +97,7 @@ let fold_map_list (f : 'a -> 'b -> ('a * 'b)) (x0 : 'a) (l : 'b list)
   in
   (xe, List.rev l')
 
-(** [map_expr fe fs e] transforms the exprression [e] into a new one,
+(** [map_expr fe fs e] transforms the expression [e] into a new one,
     by splitting [fe e] into its sub-parts, applying [map_expr fe fs] and
     [map_stmt fe fs] on them, and finally gathering the results with
     the builder of [fe e].
@@ -209,3 +209,4 @@ let stmt_vars (s: stmt) : var list =
     )
     (fun acc s -> acc)
     [] s
+

@@ -6,18 +6,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
+
 (** Extends the simple Universal language with Control Flow Graphs. *)
 
-open Framework.Flow
-open Framework.Location
+open Framework.Essentials
 open Framework.Manager
-open Framework.Ast
-open Universal.Ast
 
    
    
 (*==========================================================================*)
-                           (** {2 Statements} *)
+                           (** {2 Graphs} *)
 (*==========================================================================*)
 
 
@@ -79,12 +77,6 @@ type node = (unit, stmt) CFG.node
 type edge = (unit, stmt) CFG.edge
 
           
-(** Add CFG to statement. *)
-type stmt_kind +=
-   | S_CFG of cfg
-              
-              
-
 (*==========================================================================*)
                            (** {2 Flows} *)
 (*==========================================================================*)
@@ -95,61 +87,30 @@ type stmt_kind +=
     single abstract state, using node flows.
  *)
 type token +=
-   | TLoc of Loc.t
+   | T_loc of Loc.t
 
-           
+(** Flow for true and false branch of tests. *)            
+type token +=
+   | T_true
+   | T_false
 
+   
 (*==========================================================================*)
-                       (** {2 Register new types} *)
+                           (** {2 Statements} *)
 (*==========================================================================*)
 
 
-let cfg_printer = {
-    CFG.print_node = (fun fmt n ->
-      Format.fprintf fmt "%a:@;" pp_location (CFG.node_id n)
-    );
-    CFG.print_edge = (fun fmt e ->
-      Format.fprintf fmt "  @[<v>%a@]@;" pp_stmt (CFG.edge_data e)
-    );
-    CFG.print_src = (fun fmt n port e -> 
-      Format.fprintf
-        fmt "  %a --[%a]-->@;"
-        pp_location (CFG.node_id n) pp_token port
-    );
-    CFG.print_dst = (fun fmt e port n -> 
-      Format.fprintf
-        fmt "  --[%a]--> %a@;"
-        pp_token port pp_location (CFG.node_id n)
-    );
-    CFG.print_entry = (fun fmt n port ->
-      Format.fprintf
-        fmt "  entry --[%a]--> %a@;"
-        pp_token port pp_location (CFG.node_id n)
-    );
-    CFG.print_exit = (fun fmt n port ->
-      Format.fprintf
-        fmt "  %a --[%a]--> exit@;"
-        pp_location (CFG.node_id n) pp_token port
-    );
-  }
-                
-           
-let () =
-  register_token
-    { compare = (fun next t1 t2 ->
-        match t1, t2 with
-        | TLoc l1, TLoc l2 -> compare_location l1 l2
-        | _ -> next t1 t2
-      );
-      print = (fun next fmt t ->
-        match t with
-        | TLoc l -> pp_location fmt l
-        | _ -> next fmt t
-      );
-    };
-  register_pp_stmt (fun next fmt s ->
-      match s.skind with
-      | S_CFG g -> Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g
-      | _ -> next fmt s
-    )
-  
+type stmt_kind +=
+   | S_cfg of cfg              
+   | S_test of expr (** test nodes, with a true and a false branch *)
+   | S_skip (** empty node *)
+
+   
+let mk_skip range =
+  mk_stmt S_skip range
+
+let mk_test e range =
+  mk_stmt (S_test e) range
+
+let mk_cfg cfg range =
+  mk_stmt (S_cfg cfg) range

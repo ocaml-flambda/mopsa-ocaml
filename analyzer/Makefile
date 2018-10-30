@@ -37,7 +37,7 @@ lang.python = ast addr utils visitor operators pp frontend zone alarms flows lib
 lang.python.data_model = callable arith_ops compare_ops aug_assign attribute subscript
 lang.python.types = typingdomain typing t_string t_int
 
-lang.cfg = ast iterator
+lang.cfg = ast pp visitor frontend iterator
 
 lang.jvm = ast precheck frontend
 
