@@ -46,7 +46,6 @@ build_job:
     - $MOPSA_PY analyzer/tests/python/$PY_FILE
 
 .test-pyty:
-  allow_failure: true
   stage: test
   dependencies: [build_job]
   script:

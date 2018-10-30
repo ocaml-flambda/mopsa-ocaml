@@ -40,7 +40,6 @@ def test_attr_pos():
     x = A()
     x.a = 3
     mopsa.massert(hasattr(x, 'a'))
-    mopsa.massert(False)
 
 # def test_attr_top():
 #     class A: pass
