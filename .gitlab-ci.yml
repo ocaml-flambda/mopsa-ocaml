@@ -2,6 +2,7 @@ variables:
   MOPSA_C: "./bin/mopsa -lang=c -config=./analyzer/configs/c.json -stub=./analyzer/stubs/c -unittest"
   MOPSA_U: "./bin/mopsa -lang=universal -config=./analyzer/configs/default.universal.json -unittest"
   MOPSA_PY: "./bin/mopsa -lang=python -config=./analyzer/configs/py.json -stub=./analyzer/stubs/python -unittest"
+  MOPSA_PYTY: "./bin/mopsa -lang=python -config=./analyzer/configs/python-types.json -stub=./analyzer/stubs/python -unittest"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
@@ -42,7 +43,15 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
-    - $MOPSA_PY analyzer/tests/universal/$PY_FILE
+    - $MOPSA_PY analyzer/tests/python/$PY_FILE
+
+.test-pyty:
+  allow_failure: true
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
 
 test-c 1/12:
   variables:
@@ -184,3 +193,13 @@ test-py 15/15:
   variables:
     PY_FILE: 'with_tests.py'
   extends: .test-py
+
+test-pyty 1/2:
+  variables:
+    PY_FILE: 'int_tests.py'
+  extends: .test-pyty
+
+test-pyty 2/2:
+  variables:
+    PY_FILE: 'misc_tests.py'
+  extends: .test-pyty
