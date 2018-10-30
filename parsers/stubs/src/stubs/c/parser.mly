@@ -46,13 +46,12 @@
 
 (* Delimiters *)
 %token LPAR RPAR
-%token LBRACE RBRACE
 %token LBRACK RBRACK
 %token COLON SEMICOL DOT
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE OLD RETURN SIZE OFFSET BASE
@@ -70,7 +69,6 @@
 %left STAR DIV MOD
 %nonassoc LBRACK
 %nonassoc UNARY
-%nonassoc POSTFIX
 %left DOT ARROW
 
 (* Priorities of logical operators *)
@@ -87,39 +85,42 @@
 %%
 
 stub:
-  | requires_list local_list assigns_list EOF
+  | local_list predicate_list requires_list assigns_list EOF
     {
       with_range {
-          stub_requires = $1;
-          stub_local    = $2;
-          stub_assigns  = $3;
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
           stub_case     = [];
           stub_ensures  = [];
         }
       $startpos $endpos
     }
 
-  | requires_list local_list assigns_list case_list EOF
+  | local_list predicate_list requires_list assigns_list case_list EOF
     {
       with_range {
-        stub_requires = $1;
-        stub_local    = $2;
-        stub_assigns  = $3;
-        stub_case     = $4;
-        stub_ensures  = [];
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
+          stub_case     = $5;
+          stub_ensures  = [];
         }
       $startpos $endpos
     }
 
-  | requires_list local_list assigns_list ensures_list EOF
+  | local_list predicate_list requires_list assigns_list ensures_list EOF
     {
       with_range {
-          stub_requires = $1;
-          stub_local    = $2;
-          stub_assigns  = $3;
+          stub_local    = $1;
+          stub_predicates = $2;
+          stub_requires = $3;
+          stub_assigns  = $4;
           stub_case     = [];
-          stub_ensures  = $4;
-        }
+          stub_ensures  = $5;
+	}
       $startpos $endpos
     }
 
@@ -128,7 +129,7 @@ requires_list:
   | requires requires_list { $1 :: $2 }
 
 requires:
-  | REQUIRES COLON formula SEMICOL { $3 }
+  | REQUIRES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
 
 local_list:
   | { [] }
@@ -145,8 +146,23 @@ local:
     }
 
 local_value:
-  | NEW resource { LV_new $2 }
-  | IDENT LPAR args RPAR { LV_call ($1, $3) }
+  | NEW resource { Local_new $2 }
+  | builtin LPAR args RPAR { Local_builtin_call ($1, $3) }
+  | IDENT LPAR args RPAR { Local_function_call ($1, $3) }
+
+predicate_list:
+  | { [] }
+  | predicate predicate_list { $1 :: $2 }
+
+predicate:
+  | PREDICATE IDENT COLON formula SEMICOL
+    {
+      with_range {
+          predicate_var = $2;
+          predicate_body = $4;
+        }
+      $startpos $endpos
+    }
 
 assigns_list:
   | { [] }
@@ -162,7 +178,7 @@ assigns:
       $startpos $endpos
     }
 
-  | ASSIGNS COLON expr LBRACE expr DOT DOT expr RBRACE
+  | ASSIGNS COLON expr LBRACK expr DOT DOT expr RBRACK
     {
       with_range {
 	  assign_target = $3;
@@ -194,14 +210,14 @@ assumes_list:
   | assumes assumes_list { $1 :: $2 }
 
 assumes:
-  | ASSUMES COLON formula SEMICOL { $3 }
+  | ASSUMES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
 
 ensures_list:
   | ensures { [ $1 ] }
   | ensures ensures_list { $1 :: $2 }
 
 ensures:
-  | ENSURES COLON formula SEMICOL { $3 }
+  | ENSURES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
 
 formula:
   | RPAR formula RPAR         { $2 }
@@ -234,8 +250,8 @@ expr_kind:
   | ADDROF expr             { E_addr_of $2 }          %prec UNARY
   | STAR expr               { E_deref $2 }            %prec UNARY
   | expr LBRACK expr RBRACK { E_subscript ($1, $3) }
-  | expr DOT expr           { E_member ($1, $3) }     %prec POSTFIX
-  | expr ARROW expr         { E_arrow ($1, $3) }      %prec POSTFIX
+  | expr DOT IDENT          { E_member ($1, $3) }
+  | expr ARROW IDENT        { E_arrow ($1, $3) }
   | RETURN                  { E_return }
   | builtin LPAR expr RPAR  { E_builtin_call ($1, $3) }
 
@@ -265,7 +281,7 @@ expr_kind:
   | BNOT { BNOT }
 
 set:
-  | LBRACE expr DOT DOT expr RBRACE { S_interval ($2, $5) }
+  | LBRACK expr DOT DOT expr RBRACK { S_interval ($2, $5) }
   | resource { S_resource $1 }
 
 %inline log_binop:

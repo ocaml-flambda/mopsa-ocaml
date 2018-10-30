@@ -295,7 +295,10 @@ module Domain = struct
     (u, s, s')
 
   let meet = join
-  let widen = join
+
+  let widen annot subman (u,s) (u', s') =
+    let (u, s, s') = join annot subman (u,s) (u',s') in
+    (u, true, s, s')
 
 
   (** Domain identification *)

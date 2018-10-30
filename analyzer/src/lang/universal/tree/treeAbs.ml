@@ -164,9 +164,9 @@ module Domain : Framework.Domains.Stacked.S = struct
       ) u v
 
   let widen (annot: 'a annot) (man: ('b, 'b) man) ((u, u_num): t * 'b flow) ((v, v_num): t * 'b flow)
-      : t * 'b flow * 'b flow
+      : t * bool * 'b flow * 'b flow
       =
-      bot_apply2 (v, u_num, v_num) (u, u_num, v_num)
+      let w, u_num, v_num = bot_apply2 (v, u_num, v_num) (u, u_num, v_num)
         (fun u' v' ->
            let res, u_num, v_num =
              fold2 (fun k a b (res, u_num, v_num) ->
@@ -181,6 +181,9 @@ module Domain : Framework.Domains.Stacked.S = struct
            in
            (Nb res, u_num, v_num)
         ) u v
+      in
+      (* FIXME: check stability flag *)
+      w, true, u_num, v_num
 
   (*==========================================================================*)
   (**                           {2 Transformers}                              *)

@@ -187,21 +187,21 @@ struct
     a', Over.meet annot o1' o2'
 
   let widen annot ((a1,o1):t) ((a2,o2):t) =
-    let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> a * Over.t * Over.t = fun pool (a1,o1) (a2,o2) ->
+    let rec aux : type a. a domain_pool -> bool -> a * Over.t -> a * Over.t -> a * bool * Over.t * Over.t = fun pool is_stable (a1,o1) (a2,o2) ->
       match pool, a1, a2 with
-      | Nil, (), () -> (), o1, o2
+      | Nil, (), () -> (), is_stable, o1, o2
       | Cons(hd, tl), (vhd1, vtl1), (vhd2, vtl2) ->
         let module V = (val hd) in
-        let hd', o1', o2' =
-          Stacked.lift_to_flow LocalAnalyzer.man
+        let hd', is_stable', o1', o2' =
+          Stacked.lift_widen_to_flow LocalAnalyzer.man
             (fun o1 o2 -> V.widen annot LocalAnalyzer.man (vhd1, o1) (vhd2, o2))
             o1 o2
         in
-        let tl', o1'', o2'' = aux tl (vtl1, o1') (vtl2, o2') in
-        (hd', tl'), o1'', o2''
+        let tl', is_stable, o1'', o2'' = aux tl (is_stable && is_stable') (vtl1, o1') (vtl2, o2') in
+        (hd', tl'), is_stable, o1'', o2''
     in
-    let a', o1', o2' = aux Config.pool (a1,o1) (a2,o2) in
-    a', Over.widen annot o1' o2'
+    let a', is_stable, o1', o2' = aux Config.pool true (a1,o1) (a2,o2) in
+    a', if is_stable then Over.widen annot o1' o2' else Over.join annot o1' o2'
 
   let subset ((a1,o1):t) ((a2,o2):t) : bool =
     let rec aux : type a. a domain_pool -> a * Over.t -> a * Over.t -> bool * Over.t * Over.t  = fun pool (a1, o1) (a2, o2) ->
