@@ -955,7 +955,7 @@ struct
       let c'  =
         match c' with
         | None -> None
-        | Some cc -> Some (C(cx,cc))
+        | Some cc -> Some (product_lr lr cx cc)
       in
       add_vm (c',vm') (c,VMap.remove x vm)
     with
@@ -968,7 +968,7 @@ struct
       try
         let v,k = VMap.choose vm in
         let vm  = VMap.remove v vm in
-        VMap.fold (fun v k acc -> A(C(k,V v),acc)) vm (C(k,V v))
+        VMap.fold (fun v k acc -> A(product_lr lr k (V v),acc)) vm (product_lr lr k (V v))
       with
       | Not_found -> N
 

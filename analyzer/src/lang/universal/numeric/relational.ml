@@ -51,11 +51,35 @@ sig
   val name : string
 end
 
+module OctMan = struct type t = Oct.t let name = "octagon" let man = Oct.manager_alloc () end
+module PolyMan = struct type t = Polka.strict Polka.t let name = "polyhedra" let man = Polka.manager_alloc_strict () end
+
 (** ToolBox module for Apron interfacing *)
 module ApronTransformer(ApronManager : APRONMANAGER) =
 struct
 
+  (* let tcons_vars (tc: Apron.Tcons1.t) =
+   *   let expr = tc |> Apron.Tcons1.get_texpr1 |> Apron.Texpr1.to_expr in
+   *   let open Apron.Texpr1 in
+   *   let module SVar = Set.Make(Apron.Var) in
+   *   let rec aux expr cont = match expr with
+   *     | Cst _ -> cont SVar.empty
+   *     | Var v -> cont (SVar.singleton v)
+   *     | Unop(_, e, _, _) -> aux e cont
+   *     | Binop(_ , e, e', _, _) -> aux e (fun r -> aux e' (fun r' -> cont (SVar.union r r')))
+   *   in
+   *   aux expr (fun x -> x) |> SVar.elements *)
+
+  let is_numerical_var (v: var): bool =
+    match v.vtyp with
+    | T_int | T_float _ -> true
+    | _ -> false
   let empty_env = Apron.Environment.make [| |] [| |]
+
+  let print_env = Apron.Environment.print
+      ~first:("[")
+      ~sep:(",")
+      ~last:("]")
 
   let filter_env int_filter real_filter env =
     let int_var, real_var = Apron.Environment.vars env in
@@ -481,7 +505,7 @@ struct
       Apron.Abstract1.change_environment ApronManager.man a env true |>
       return
 
-    | S_rename_var( v, v') ->
+    | S_rename_var(v, v') ->
       Apron.Abstract1.rename_array ApronManager.man a
         [| var_to_apron v  |]
         [| var_to_apron v' |] |>
@@ -666,9 +690,8 @@ struct
 
 end
 
-
-module Oct = Make(struct type t = Oct.t let name = "octagon" let man = Oct.manager_alloc () end)
-module Poly = Make(struct type t = Polka.strict Polka.t let name = "polyhedra" let man = Polka.manager_alloc_strict () end)
+module Oct = Make(OctMan)
+module Poly = Make(PolyMan)
 
 let () =
   register_domain (module Oct);

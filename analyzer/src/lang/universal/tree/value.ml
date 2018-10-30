@@ -280,6 +280,7 @@ struct
    *   (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, n_full_env) *)
 
   let unify (man: ('a, 'b) man) (u: t) u_num (v: t) v_num =
+    let () = debug "u: %a@, v:%a" print u print v in
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
     let splitu, splitv = List.fold_left (fun (splitu, splitv) (ue, un) ->
@@ -309,6 +310,14 @@ struct
         [], []
       else
         [(u, un)], [un]
+    in
+    let () = debug "splitu: %a"
+        (ToolBox.print_map (Format.pp_print_string) RegexpPartition.print (ToolBox.StringM.bindings))
+        splitu
+    in
+    let () = debug "splitv: %a"
+        (ToolBox.print_map (Format.pp_print_string) RegexpPartition.print (ToolBox.StringM.bindings))
+        splitu
     in
     let apply_splitter env splitter other_support =
       List.fold_left (fun (nenv_commun, nenv_n_commun, var_extension) (ue, un) ->
@@ -702,7 +711,7 @@ struct
     let (n_u_diff_env, n_u_num, n_u_vb, n_v_diff_env, n_v_num, n_v_vb, n_common_env , n_full_env) =
       unify man u u_num v v_num
     in
-    (* let () = debug "n_u_env:%a@, n_v_env: %a@, n_full_env: %a" RegexpPartition.print n_u_env RegexpPartition.print n_v_env RegexpPartition.print n_full_env in *)
+    let () = debug "n_u_env:%a@, n_v_env: %a@, n_full_env: %a" RegexpPartition.print n_u_diff_env RegexpPartition.print n_v_diff_env RegexpPartition.print n_full_env in
     let n_v_env = n_common_env @ n_v_diff_env in
     let u_num, v_num, vb_u, vb_v = Numerical.join_different_support
         man
@@ -1422,7 +1431,8 @@ struct
       env = [(epsilon, epsilon_name)];
       varbind = vb
     },
-    man.exec (mk_assign (mk_var v ~mode:STRONG (tag_range range "var")) e (tag_range range "sub_var assign")) num
+    man.exec (mk_add_var v (tag_range range "add_var")) num
+    |> man.exec (mk_assign (mk_var v ~mode:STRONG (tag_range range "var")) e (tag_range range "sub_var assign"))
 
   let copy range (man: ('a, 'b) man) (u: t) (abs: 'a flow):
     t * t * 'a flow =

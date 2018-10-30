@@ -17,7 +17,7 @@ let pp_float_prec fmt = function
   | F_DOUBLE      -> pp_print_string fmt "double"
   | F_LONG_DOUBLE -> pp_print_string fmt "long double"
   | F_REAL        -> pp_print_string fmt "real"
-   
+
 let pp_float_op opreal opfloat fmt = function
   | F_SINGLE      -> Format.fprintf fmt "%sf" opfloat
   | F_DOUBLE      -> Format.fprintf fmt "%sd" opfloat
@@ -27,7 +27,7 @@ let pp_float_op opreal opfloat fmt = function
 let pp_typ_opt fmt = function
   | None -> pp_print_string fmt "void"
   | Some x -> pp_typ fmt x
-                   
+
 let () =
   register_pp_operator (fun default fmt -> function
       | O_plus -> pp_print_string fmt "+"
@@ -101,6 +101,8 @@ let () =
       match skind stmt with
       | S_remove_var(v) ->
         fprintf fmt "remove(@[<h>%a@])" pp_var v
+      | S_add_var(v) ->
+        fprintf fmt "add(@[<h>%a@])" pp_var v
       | S_project_vars(vl) ->
         fprintf fmt "project(@[<h>%a@])"
           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) vl

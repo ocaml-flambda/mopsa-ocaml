@@ -246,6 +246,12 @@ struct
         Post.of_flow flow'
       )
 
+    | S_add_var v ->
+      Some (
+        let flow' = Flow.map_domain_env T_cur (VarMap.add v Value.top) man flow in
+        Post.of_flow flow'
+      )
+
     | S_project_vars vars ->
       Some (
         let flow' = Flow.map_domain_env T_cur (fun a ->

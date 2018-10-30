@@ -42,6 +42,7 @@ let () =
       | S_continue
       | S_rename_var _
       | S_remove_var _
+      | S_add_var _
       | S_project_vars _
       | S_rebase_addr _ -> leaf stmt
 

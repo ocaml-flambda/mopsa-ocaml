@@ -16,7 +16,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface =
-    { export = [Zone.Z_u] ;
+    { export = [Z_u] ;
       import = [Zone.Z_u_num; Zone.Z_u_tree; Zone.Z_u_string]
     }
   let eval_interface =
@@ -32,7 +32,9 @@ struct
     | T_int -> Some Z_u_num
     | T_tree -> Some Z_u_tree
     | _ -> None
+
   let exec (_: Framework.Zone.zone) (stmt: Framework.Ast.stmt) (man: ('a, unit) man) (flow: 'a flow) =
+    let () = debug "I was asked: %a" pp_stmt stmt in
     match skind stmt with
     | S_assign(e, e') ->
       begin
@@ -53,6 +55,18 @@ struct
         | None -> None
       end
     | S_forget v ->
+      begin
+        match v.vtyp  |> zone_of_type with
+        | Some z -> man.exec ~zone:z stmt flow |> Post.of_flow |> OptionExt.return
+        | None -> None
+      end
+    | S_add_var v ->
+      begin
+        match v.vtyp  |> zone_of_type with
+        | Some z -> man.exec ~zone:z stmt flow |> Post.of_flow |> OptionExt.return
+        | None -> None
+      end
+    | S_remove_var v ->
       begin
         match v.vtyp  |> zone_of_type with
         | Some z -> man.exec ~zone:z stmt flow |> Post.of_flow |> OptionExt.return

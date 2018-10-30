@@ -75,7 +75,7 @@ struct
         Post.add_channels channels
       )
 
-    | S_remove_var _ | S_rename_var _ | S_project_vars _ | S_fold(_) | S_expand (_)
+    | S_add_var _ | S_remove_var _ | S_rename_var _ | S_project_vars _ | S_fold _ | S_expand _
       ->
       Some (
         let flow', channels = Channel.map_domain_env T_cur (D.exec stmt) man flow in

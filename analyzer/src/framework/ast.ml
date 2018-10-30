@@ -240,6 +240,9 @@ type stmt_kind +=
   | S_rename_var of var (** old *) * var (** new *)
   (** Rename a variable into another*)
 
+  | S_add_var of var
+  (** Add a variable to the abstract environments. *)
+
   | S_remove_var of var
   (** Remove a variable from the abstract environments. *)
 
@@ -283,6 +286,8 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
 
       | S_remove_var(v1), S_remove_var(v2) -> compare_var v1 v2
 
+      | S_add_var(v1), S_add_var(v2) -> compare_var v1 v2
+
       | S_project_vars(vl1), S_project_vars(vl2) ->
         Compare.compose (
           (fun () -> Pervasives.compare (List.length vl1) (List.length vl2))
@@ -323,6 +328,8 @@ let mk_assume e =
   mk_stmt (S_assume e)
 
 let mk_remove_var v = mk_stmt (S_remove_var v)
+
+let mk_add_var v = mk_stmt (S_add_var v)
 
 let mk_project_vars vars = mk_stmt (S_project_vars vars)
 

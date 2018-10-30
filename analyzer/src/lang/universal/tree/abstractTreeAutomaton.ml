@@ -1760,7 +1760,7 @@ struct
       |> RegExp.system_simplify
     in
     (* let () = debug "system: %a" RegExp.print_systemvm system in *)
-    (* let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in *)
+    let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in
     let system = SS.fold (fun q system ->
         let vq = var_of_state q in
         if List.mem_assoc vq system then
@@ -1768,7 +1768,10 @@ struct
         else (vq, (None, RegExp.VMap.empty)) :: system
       ) u.q system in
     (* let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) system in *)
-    let sol = RegExp.arden_solve RegExp.Right system in
+    let sol  = RegExp.arden_solve RegExp.Right system in
+    let sol' = RegExp.arden_solve RegExp.Left system in
+    let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Right) sol in
+    let () = debug "@[<v>System : %a@,@]" (RegExp.print_systemm RegExp.Left) sol' in
     let sol = RegExp.system_simplify sol in
     let state_of_string v = SVar.findr v rel in
     List.fold_left

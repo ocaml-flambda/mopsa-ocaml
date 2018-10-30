@@ -74,6 +74,8 @@ let join_different_support
     (full_env: string list)
     (vb_u: StrVarBind.t) (vb_v: StrVarBind.t)
   =
+  let () = debug "full_env: %a" (ToolBox.print_list Format.pp_print_string) full_env in
+  let () = debug "envv: %a" (ToolBox.print_list Format.pp_print_string) envv in
   let vb_u, vb_v, renaming = ToolBox.fold (fun s (vb_u, vb_v, renaming) ->
       let var_u, vb_u = StrVarBind.get_var s vb_u in
       let var_v, vb_v = StrVarBind.get_var s vb_v in

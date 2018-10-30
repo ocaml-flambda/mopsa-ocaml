@@ -1,23 +1,16 @@
 int a = 1;
 int b = a;
-int c = a;
+string c;
 
-int f(int x) {
-  int a = f(a);
-  int b = f(a);
-  return a;
+string concat(string u, string v) {
+  return (u @ v);
 }
 
-string h(int x) {
-  int a = f(a);
-  int b = f(a);
-  return a;
-}
-
-int g(string x, string y) {
-  int a = f(a);
-  string c = "toto";
-  return x;
+string g(string x, string y) {
+  int b = 17;
+  string a = "tutu";
+  string c = concat(a, "toto");
+  return (x @ y @ c);
 }
 
 b = a;

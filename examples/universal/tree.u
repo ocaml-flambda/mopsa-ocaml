@@ -1,10 +1,19 @@
+int a;
 int i;
 int n;
 tree y;
+tree z;
 unit toto;
-/* y = Tree("s", {Tree(x), Tree(x+1)}); */
-i = 0;
 toto = mopsa_assume(n >= 0);
+i = 0;
+y = Tree("f",{Tree(a),Tree(a)});
+/* y = Tree("f",{y,Tree(a)}); */
 while (i < n) {
   i = i+1;
- };
+  y = Tree("f",{y,Tree(a)});
+ }
+/* i = 0; */
+
+/* while (i < n) { */
+/*   i = i+1; */
+/*  }; */

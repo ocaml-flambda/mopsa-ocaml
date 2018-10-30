@@ -63,7 +63,7 @@ struct
   (** ================= *)
 
   let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = [Z_u, Z_any]; import = []}
+  let eval_interface = {export = [Z_any, Z_any]; import = []}
 
   (** Initialization *)
   (** ============== *)
@@ -93,6 +93,7 @@ struct
   (** ========================= *)
 
   let eval zone exp man flow =
+    let () = debug "I was asked" in
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
@@ -104,6 +105,14 @@ struct
         ) man flow
       in
 
+      (* Add parameters and local variables to the environment *)
+      let new_vars = f.fun_parameters @ f.fun_locvars in
+      let new_vars_declaration_block = List.map (fun v ->
+          mk_add_var v (tag_range range "variable addition")
+        ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
+      in
+      let flow0' = man.exec new_vars_declaration_block flow0 in
+
       (* Assign arguments to parameters *)
       let parameters_assign = List.mapi (fun i (param, arg) ->
           mk_assign (mk_var param range) arg range
@@ -114,7 +123,7 @@ struct
       (* Update call stack *)
       let cs = Flow.get_annot A_call_stack flow0 in
       let cs' = range :: cs in
-      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
+      let flow1 = Flow.set_annot A_call_stack cs' flow0' in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>
@@ -133,6 +142,7 @@ struct
 
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
+              man.exec (mk_add_var tmp (tag_range range "adding tmp")) |>
               man.exec (mk_assign (mk_var tmp range) e range) |>
               Flow.join man acc
 
@@ -146,9 +156,8 @@ struct
       let ignore_stmt_list =
         List.mapi (fun i v ->
             mk_remove_var v range
-          ) (f.fun_parameters @ f.fun_locvars)
+          ) (new_vars)
       in
-
       let ignore_block = mk_block ignore_stmt_list range in
 
       let flow4 = man.exec ignore_block flow3 in
