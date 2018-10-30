@@ -1,6 +1,7 @@
 import mopsa
 
 def test_mro_pos():
+    # From the wikipedia page on C3 linearization
     class O: pass
     class A(O): pass
     class B(O): pass
