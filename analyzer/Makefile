@@ -30,21 +30,21 @@ rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
 treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
 abstractTreeAutomaton numerical value treeAst treeAbs
 
-lang.c = ast pp visitor zone frontend
-# lang.c = zone ast alarms frontend libs desugar flows memory
-# lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
-# lang.c.iterators = program switch goto interproc
-# lang.c.desugar = loops andor aggregate record_copy stmt_expr
-# lang.c.memory = base init_visitor cells machine_integers
-# lang.c.memory.cells = cell pointer smashing expand cell2num
-# lang.c.libs = c_stdlib mopsa
+# lang.c = ast pp visitor zone frontend
+lang.c = zone ast alarms frontend libs desugar flows memory
+lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
+lang.c.iterators = program switch goto interproc
+lang.c.desugar = loops andor aggregate record_copy stmt_expr
+lang.c.memory = base init_visitor cells machine_integers
+lang.c.memory.cells = cell pointer smashing expand cell2num
+lang.c.libs = c_stdlib mopsa
 
-lang.python = ast addr utils visitor operators pp frontend
-# lang.python = ast addr utils visitor operators pp frontend zone		\
-# alarms flows libs desugar objects data_model types program memory
-# lang.python.data_model = callable arith_ops compare_ops aug_assign	\
-# attribute subscript
-# lang.python.types = typingdomain typing t_string t_int
+# lang.python = ast addr utils visitor operators pp frontend
+lang.python = ast addr utils visitor operators pp frontend zone		\
+alarms flows libs desugar objects data_model types program memory
+lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+attribute subscript
+lang.python.types = typingdomain typing t_string t_int
 
 lang.cfg = ast iterator
 
