@@ -23,6 +23,6 @@ import mopsa
 
 def test_in():
     l1 = [1, 1, 1]
-    mopsa.assert_true(1 in l1)
+    mopsa.assert(1 in l1)
     l2 = [1, 2, 3]
     mopsa.assert_exists(2 in l2)

@@ -23,5 +23,4 @@ def test_bool_coercion():
 
 def test_in_condition():
     i = -10
-    mopsa.assert_true(i)
-    mopsa.assert_false(not i)
+    mopsa.assert(i)
