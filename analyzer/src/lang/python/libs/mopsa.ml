@@ -106,46 +106,25 @@ module Domain =
          |> OptionExt.return
 
       (* Calls to mopsa.assert_equal function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)},
-[x; y], []
-) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)}, [x; y], []) ->
          let range = erange exp in
          check man (mk_binop x O_eq y (tag_range range "eq")) range flow
          |> OptionExt.return
 
-      (* Calls to mopsa.assert_true function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_true")}, _)},
-[x], []
-) ->
+      (* Calls to mopsa.assert function *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert")}, _)}, [x], []) ->
          let range = erange exp in
          check man x range  flow
          |> OptionExt.return
 
-      (* Calls to mopsa.assert_false function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_false")}, _)},
-[x], []
-)  ->
-         let range = erange exp in
-         check man (mk_not x (tag_range range "not")) range flow
-         |> OptionExt.return
-
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)},
-[cond], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)}, [cond], [])  ->
          let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
          let flow = man.exec stmt flow in
          (* FIXME:  mk_py_int ?*)
          Eval.singleton (mk_int 0 exp.erange) flow
          |> OptionExt.return
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
-[], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)}, [], [])  ->
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env ->
@@ -177,10 +156,7 @@ module Domain =
              |> OptionExt.return
          end
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)},
-[], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)}, [], [])  ->
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
@@ -206,10 +182,7 @@ module Domain =
            Eval.singleton (mk_int 0 exp.erange) flow |> OptionExt.return
          end
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)},
-[{ekind = E_py_object cls}], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)}, [{ekind = E_py_object cls}], [])  ->
          begin
            debug "begin assert_exception";
            let annot = Flow.get_all_annot flow in
@@ -247,10 +220,7 @@ module Domain =
          end
 
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)},
-[{ekind = E_py_object cls}], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = E_py_object cls}], [])  ->
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with

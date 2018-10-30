@@ -9,5 +9,5 @@ def test_iter_assign_on_lists():
 def test_iter_assign_on_tuples():
     t = (1, 2)
     x, y = t
-    mopsa.assert_true(x == 1)
-    mopsa.assert_true(y == 2)
+    mopsa.assert(x == 1)
+    mopsa.assert(y == 2)
