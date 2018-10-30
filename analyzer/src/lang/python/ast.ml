@@ -74,6 +74,30 @@ let is_arith_op = function
 
   | _ -> false
 
+ let is_arith_binop_fun = function
+    | "int.__add__"
+    | "int.__radd__"
+    | "int.__and__"
+    | "int.__rand__"
+    | "int.__floordiv__"
+    | "int.__rfloordiv__"
+    | "int.__lshift__"
+    | "int.__rlshift__"
+    | "int.__mod__"
+    | "int.__rmod__"
+    | "int.__mul__"
+    | "int.__rmul__"
+    | "int.__or__"
+    | "int.__ror__"
+    | "int.__pow__"
+    | "int.__rpow__"
+    | "int.__truediv__"
+    | "int.__rtruediv__"
+    | "int.__sub__"
+    | "int.__rsub__"
+    | "int.__xor__"
+    | "int.__rxor__" -> true
+    | _ -> false
 
 let is_comp_op = function
   | Framework.Ast.O_eq
