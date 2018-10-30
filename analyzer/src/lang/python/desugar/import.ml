@@ -68,7 +68,7 @@ module Domain =
     (** Search for the module in the search path and parse its body *)
     and import_module man name range flow =
       if Addr.is_builtin_name name then
-        Addr.find_builtin name, flow
+          Addr.find_builtin name, flow
       else
         let dir =
           Framework.Options.(common_options.stubs) |> List.find_opt

@@ -54,6 +54,7 @@ let iter_sources f () =
   init_from_env ();
   let files = ref [] in
   let n = Array.length Sys.argv in
+  let return_value = ref 0 in
   Arg.parse !Options.spec (fun filename ->
       (* NOTE: filename could be a class name, not a file... *)
       (*
@@ -62,13 +63,13 @@ let iter_sources f () =
         *)
       files := filename :: !files;
       if !Arg.current = n - 1 then
-        f !files
-    ) "Modular Open Platform for Static Analysis"
-
+        return_value := !return_value * 10 + (f !files)
+    ) "Modular Open Platform for Static Analysis";
+  !return_value
 
 (** Main entry point *)
 let () =
-  iter_sources (fun files ->
+  exit @@ iter_sources (fun files ->
       try
         let prog = parse_program files in
         let config = get_config_path () in
@@ -96,5 +97,5 @@ let () =
         Output.Factory.render Analyzer.man res t files
 
       with
-        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files
+        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
     ) ()

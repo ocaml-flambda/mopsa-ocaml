@@ -9,6 +9,6 @@ def test_true():
     mopsa.assert_equal(-True, -1)
 
 def test_instanceof():
-    mopsa.assert_true(isinstance(True, bool))
-    mopsa.assert_true(isinstance(True, int))
-    mopsa.assert_false(isinstance(True, float))
+    mopsa.assert(isinstance(True, bool))
+    mopsa.assert(isinstance(True, int))
+    mopsa.assert(not(isinstance(True, float)))

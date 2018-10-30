@@ -206,6 +206,7 @@ struct
       let range = srange stmt in
       let name = Flow.get_annot A_cur_test flow in
       let cs = Flow.get_annot Interproc.Callstack.A_call_stack flow in
+      debug "Expression is %a@\n" pp_expr cond;
       Post.assume
         cond
         ~fthen:(fun safe_flow ->

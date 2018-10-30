@@ -165,24 +165,25 @@ module Domain =
 
       | E_var (v, _) ->
          let cur = Flow.get_domain_cur man flow in
-         if Flow.is_cur_bottom man flow then None else
-         begin try
-           let polytype = Typingdomain.get_polytype cur v in
-           let expr = match polytype with
-             | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
-             | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-             | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-             | _ -> mk_expr (E_get_type_partition polytype) range in
-           Eval.singleton expr flow
-           (* FIXME: properly handle every case *)
-           (* let ak = Typingdomain.get_addr_kind cur v in
-            * let a = {addr_kind=ak; addr_uid=(-1)} in
-            * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
-           |> OptionExt.return
-         with Not_found ->
-               debug "builtin variable@\n";
-               let a = Addr.find_builtin v.vname in
-               Eval.singleton (mk_py_object a range) flow |> OptionExt.return
+         begin
+           try
+             debug "%a@\n" print cur;
+             let polytype = Typingdomain.get_polytype cur v in
+             let expr = match polytype with
+               | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | _ -> mk_expr (E_get_type_partition polytype) range in
+             Eval.singleton expr flow
+             (* FIXME: properly handle every case *)
+             (* let ak = Typingdomain.get_addr_kind cur v in
+              * let a = {addr_kind=ak; addr_uid=(-1)} in
+              * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
+             |> OptionExt.return
+           with Not_found ->
+             debug "builtin variable@\n";
+             let a = Addr.find_builtin v.vname in
+             Eval.singleton (mk_py_object a range) flow |> OptionExt.return
          end
       | E_py_ll_hasattr(e, attr) ->
          let attr = match ekind attr with
@@ -190,8 +191,12 @@ module Domain =
            | _ -> assert false in
       (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
          begin match ekind e with
-         | E_py_object ({addr_kind = A_py_module _}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
-            Eval.singleton (mk_py_true range) flow
+         | E_py_object ({addr_kind = A_py_module _}, _) ->
+            debug "Module attr access: ok@\n";
+            if Addr.is_builtin_attribute (object_of_expr e) attr then
+              Eval.singleton (mk_py_true range) flow
+            else
+              Eval.singleton (mk_py_false range) flow
          | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
             Eval.singleton (mk_py_true range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
@@ -211,7 +216,7 @@ module Domain =
             Eval.singleton (mk_py_top T_bool range) flow
          | _ ->
             (* FIXME *)
-            Debug.warn "%a: unknown case, returning false@\n" pp_expr exp;
+            debug "%a: unknown case, returning false@\n" pp_expr exp;
             Eval.singleton (mk_py_false range) flow
          end
          |> OptionExt.return
@@ -264,6 +269,18 @@ module Domain =
                     | A_py_class (c, b) -> c, b
                     | _ -> assert false
                     end
+                 | E_py_object ({addr_kind = A_py_module _}, _) ->
+                    let tyo = Addr.kind_of_object (Addr.find_builtin "module") in
+                    begin match tyo with
+                    | A_py_class (c, b) -> c, b
+                    | _ -> assert false
+                    end
+                 | E_py_object ({addr_kind = A_py_function _}, _) ->
+                    let tyo = Addr.kind_of_object (Addr.find_builtin "function") in
+                    begin match tyo with
+                    | A_py_class (c, b) -> c, b
+                    | _ -> assert false
+                    end
                  | _ -> debug "type(%a)?@\n" pp_expr e_arg; assert false in
                let obj = ({addr_kind=A_py_class (fst cl, snd cl); addr_uid=(-1)}, mk_expr (ekind exp) range) in
                Eval.singleton (mk_py_object obj range) flow
@@ -310,6 +327,13 @@ module Domain =
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
                        mro'
+                | E_py_object ({addr_kind = A_py_module _}, _), _ ->
+                   begin match ekind eattr with
+                   | E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) when c = "object" || c = "module" ->
+                      Eval.singleton (mk_py_true range) flow
+                   | _ ->
+                      Eval.singleton (mk_py_false range) flow
+                   end
                 | _ ->
                    Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )

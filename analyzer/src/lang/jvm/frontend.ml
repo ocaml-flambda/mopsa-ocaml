@@ -340,7 +340,7 @@ let load_method
         close_out f
       );
       if dump_text then
-        Format.printf "    %a@\n" pp_stmt (mk_stmt (S_CFG g) (mk_fresh_range ()))
+        Format.printf "    %a@\n" pp_stmt (mk_cfg g (mk_fresh_range ()))
   );
   meth
 

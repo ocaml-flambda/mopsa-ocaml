@@ -18,7 +18,7 @@ open Addr
 open Alarms
 
 let check man cond range flow =
-  let flow = man.exec (mk_stmt (Universal.Ast.S_assert cond) range) flow in
+  let flow = man.exec (mk_assert cond range) flow in
   Eval.singleton (mk_py_none range) flow
 
 
@@ -106,46 +106,25 @@ module Domain =
          |> OptionExt.return
 
       (* Calls to mopsa.assert_equal function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)},
-[x; y], []
-) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_equal")}, _)}, [x; y], []) ->
          let range = erange exp in
          check man (mk_binop x O_eq y (tag_range range "eq")) range flow
          |> OptionExt.return
 
-      (* Calls to mopsa.assert_true function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_true")}, _)},
-[x], []
-) ->
+      (* Calls to mopsa assert function *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.massert")}, _)}, [x], []) ->
          let range = erange exp in
-         check man x range  flow
+         check man x range flow
          |> OptionExt.return
 
-      (* Calls to mopsa.assert_false function *)
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_false")}, _)},
-[x], []
-)  ->
-         let range = erange exp in
-         check man (mk_not x (tag_range range "not")) range flow
-         |> OptionExt.return
-
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)},
-[cond], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exists")}, _)}, [cond], [])  ->
          let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
          let flow = man.exec stmt flow in
          (* FIXME:  mk_py_int ?*)
-         Eval.singleton (mk_int 0 exp.erange) flow
+         Eval.singleton (mk_py_true exp.erange) flow
          |> OptionExt.return
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)},
-[], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_safe")}, _)}, [], [])  ->
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env ->
@@ -155,12 +134,13 @@ module Domain =
                              ) man.bottom man flow in
            let exception BottomFound in
            try
+             debug "cond = %b %b@\n" (Flow.get T_cur man flow |> man.is_bottom) (man.is_bottom error_env);
              let cond =
                match Flow.get T_cur man flow |> man.is_bottom,
                      man.is_bottom error_env with
-               | false, true -> mk_one
-               | true, false -> mk_zero
-               | false, false -> mk_int_interval 0 1
+               | false, true -> mk_py_true
+               | true, false -> mk_py_false
+               | false, false -> mk_top T_bool
                | true, true -> raise BottomFound
              in
              let stmt = mk_assert (cond exp.erange) exp.erange in
@@ -169,19 +149,18 @@ module Domain =
                           man.exec stmt |>
                           Flow.set T_cur cur man
              in
-             (* FIXME:  mk_py_int ?*)
-             Eval.singleton (mk_int 0 exp.erange) flow
+             debug "Flow is now %a@\n" (Flow.print man) flow;
+               (* FIXME:  mk_py_int ?*)
+             Eval.singleton (mk_py_true exp.erange) flow
              |> OptionExt.return
            with BottomFound ->
              Eval.empty_singleton flow
              |> OptionExt.return
          end
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)},
-[], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)}, [], [])  ->
          begin
+           Debug.fail "Unsure this is correclty implemented; FIXME: move to bools@\n";
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
                                                         | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
@@ -206,10 +185,8 @@ module Domain =
            Eval.singleton (mk_int 0 exp.erange) flow |> OptionExt.return
          end
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)},
-[{ekind = E_py_object cls}], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)}, [{ekind = cls}], [])  ->
+         Debug.fail "todo";
          begin
            debug "begin assert_exception";
            let annot = Flow.get_all_annot flow in
@@ -229,9 +206,9 @@ module Domain =
            let cond =
              match Flow.get T_cur man flow |> man.is_bottom,
                    man.is_bottom this_error_env with
-             | true, false -> mk_one
-             | _, true -> mk_zero
-             | false, false ->  mk_int_interval 0 1
+             | true, false -> mk_py_false
+             | _, true -> mk_py_true
+             | false, false ->  mk_top T_bool
            in
            let stmt = mk_assert (cond exp.erange) exp.erange in
            let cur = Flow.get T_cur man flow in
@@ -242,15 +219,12 @@ module Domain =
                         Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_int 0 exp.erange) flow
+           Eval.singleton (mk_py_true exp.erange) flow
            |> OptionExt.return
          end
 
 
-      | E_py_call(
-{ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)},
-[{ekind = E_py_object cls}], []
-)  ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = E_py_object cls}], [])  ->
          begin
            let annot = Flow.get_all_annot flow in
            let error_env = Flow.fold (fun acc tk env -> match tk with
@@ -269,7 +243,7 @@ module Domain =
                          Flow.set T_cur cur man
            in
            (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_int 0 exp.erange) flow'
+           Eval.singleton (mk_py_true exp.erange) flow'
            |> OptionExt.return
          end
       | _ ->

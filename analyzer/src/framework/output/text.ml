@@ -34,15 +34,15 @@ let render man alarms time files out =
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_print_string) files
   ;
   match alarms with
-  | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
+  | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"; 0
   | _ ->
     print "%d alarm%a detected:@." (List.length alarms) Debug.plurial_list alarms;
     print "  @[%a@]@."
       (pp_print_list
          ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
          Alarm.pp_alarm
-      ) alarms;
-  ()
+      ) alarms; 1
+
 
 
 let panic ?btrace exn files out =
