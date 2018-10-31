@@ -60,7 +60,6 @@ struct
 
 
   (** Zoning definition *)
-  (** ================= *)
 
   let exec_interface = {export = [Z_u]; import = []}
   let eval_interface = {export = [Z_u, Z_any]; import = []}
@@ -81,8 +80,8 @@ struct
     | S_return e ->
       Some (
         let cur = Flow.get T_cur man flow in
-        (* Flow.add (T_return (stmt.srange, e)) cur man flow |> *)
-        Flow.remove T_cur man flow |>
+        Flow.add (T_return (stmt.srange, e)) cur man flow |>
+        Flow.remove T_cur man |>
         Post.of_flow
       )
 
@@ -142,7 +141,7 @@ struct
 
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
-              man.exec (mk_add_var tmp (tag_range range "adding tmp")) |>
+              (* man.exec (mk_add_var tmp (tag_range range "adding tmp")) |> *)
               man.exec (mk_assign (mk_var tmp range) e range) |>
               Flow.join man acc
 
