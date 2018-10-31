@@ -1,2 +1,8 @@
-int x;
-x = 1;
+int x = 1;
+int y;
+
+int f(int a) {
+  return (a+1);
+}
+
+y = f(x);

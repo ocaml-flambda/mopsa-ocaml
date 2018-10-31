@@ -1,0 +1,12 @@
+int u;
+int v;
+
+int f(int y) {
+  int x;
+  x = y;
+  return(x);
+}
+
+v = 1;
+u = 3 + f(v);
+u = v + u;

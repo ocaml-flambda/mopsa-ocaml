@@ -21,6 +21,7 @@ type common_options = {
   mutable config : string;
   mutable stubs : string list;
   mutable cache : int;
+  mutable html_output_path : string;
 }
 
 let common_options = {
@@ -28,6 +29,7 @@ let common_options = {
   config = "";
   stubs = [];
   cache = 20;
+  html_output_path = ""
 }
 
 let () =
@@ -62,5 +64,10 @@ let () =
     "-cache",
     Arg.Int (fun i -> common_options.cache <- i),
     " size of the cache for exec/eval"
+  );
+  register_option (
+    "-html",
+    Arg.String (fun s -> common_options.html_output_path <- s),
+    " where the evaluation/execution tree in html format should be dumped"
   );
   ()

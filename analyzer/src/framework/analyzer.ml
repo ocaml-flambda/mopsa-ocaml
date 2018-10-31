@@ -17,6 +17,7 @@ open Eval
 open Post
 open Zone
 
+
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 let profiler fmt = Debug.debug ~channel:"framework.analyzer.profiler" fmt
@@ -27,6 +28,10 @@ let profiler fmt = Debug.debug ~channel:"framework.analyzer.profiler" fmt
 module Make(Domain : DOMAIN) =
 struct
 
+  (* Html output of the evaluation/execution tree *)
+  module Out = Output.Html.Make(Domain)
+
+  let output_actions () = Out.dump_html_actions ()
   (* Cache of previous evaluations and post-conditions *)
   module Cache = Cache.Make(struct type t = Domain.t end)
 
@@ -60,7 +65,6 @@ struct
     | Some flow -> flow
 
 
-
   (*==========================================================================*)
   (**                     {2 Statements execution}                            *)
   (*==========================================================================*)
@@ -87,6 +91,7 @@ struct
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
+    Out.push_action (Exec({s = stmt; z= zone}));
     debug "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose stmt.srange
       pp_stmt stmt
@@ -103,7 +108,7 @@ struct
 
     let t = Timing.stop timer in
     profiler "exec done in %.3fs of:@\n@[<v>  %a@]" t pp_stmt stmt;
-
+    Out.push_action (ExecDone({s_res = flow'}));
     debug "exec stmt done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_stmt stmt
       pp_zone zone
@@ -163,6 +168,7 @@ struct
 
   (** Evaluation of expressions. *)
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+    Out.push_action (Eval({e = exp ; zs = zone}));
     debug "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       Location.pp_range_verbose exp.erange
       pp_expr exp
@@ -210,7 +216,7 @@ struct
 
     let t = Timing.stop timer in
     profiler "eval done in %.3fs of @[%a@]" t pp_expr exp;
-
+    Out.push_action (EvalDone({e_res = ret}));
     debug "eval expr done:@\n expr: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
       pp_expr exp
       pp_zone2 zone

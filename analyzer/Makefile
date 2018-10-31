@@ -4,9 +4,9 @@ TARGET_NATIVES = mopsa
 mopsa = framework lang main
 
 framework = location exceptions ast visitor options query annotation	\
-lattice zone manager flow eval post channel value domain cache output	\
+lattice zone manager flow eval post channel value domain output cache	\
 analyzer lattices essentials domains config
-framework.output = alarm text json factory
+framework.output = alarm text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
 reduced_product empty
 framework.domains.reduced_product = pool reductions products factory

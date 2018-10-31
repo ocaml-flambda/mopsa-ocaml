@@ -94,6 +94,8 @@ let () =
         let res = Analyzer.exec stmt flow in
         let t = Timing.stop t in
 
+        Debug.info "Outputing actions ...";
+        let () = Analyzer.output_actions () in
         Output.Factory.render Analyzer.man res t files
 
       with
