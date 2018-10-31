@@ -63,7 +63,7 @@ struct
   (** ================= *)
 
   let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = [Z_any, Z_any]; import = []}
+  let eval_interface = {export = [Z_u, Z_any]; import = []}
 
   (** Initialization *)
   (** ============== *)
@@ -81,8 +81,8 @@ struct
     | S_return e ->
       Some (
         let cur = Flow.get T_cur man flow in
-        Flow.add (T_return (stmt.srange, e)) cur man flow |>
-        Flow.remove T_cur man |>
+        (* Flow.add (T_return (stmt.srange, e)) cur man flow |> *)
+        Flow.remove T_cur man flow |>
         Post.of_flow
       )
 
@@ -107,11 +107,11 @@ struct
 
       (* Add parameters and local variables to the environment *)
       let new_vars = f.fun_parameters @ f.fun_locvars in
-      let new_vars_declaration_block = List.map (fun v ->
-          mk_add_var v (tag_range range "variable addition")
-        ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
-      in
-      let flow0' = man.exec new_vars_declaration_block flow0 in
+      (* let new_vars_declaration_block = List.map (fun v ->
+       *     mk_add_var v (tag_range range "variable addition")
+       *   ) new_vars |> (fun x -> mk_block x (tag_range range "declaration_block"))
+       * in
+       * let flow0' = man.exec new_vars_declaration_block flow0 in *)
 
       (* Assign arguments to parameters *)
       let parameters_assign = List.mapi (fun i (param, arg) ->
@@ -123,7 +123,7 @@ struct
       (* Update call stack *)
       let cs = Flow.get_annot A_call_stack flow0 in
       let cs' = range :: cs in
-      let flow1 = Flow.set_annot A_call_stack cs' flow0' in
+      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>
