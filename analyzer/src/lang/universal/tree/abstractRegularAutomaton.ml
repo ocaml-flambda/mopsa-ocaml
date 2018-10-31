@@ -669,7 +669,7 @@ struct
       nd_algebra = u.nd_algebra;
       nd_trans = t';
       nd_finals =
-        if SS.mem u.nd_init u.nd_finals
+        if SS.mem u'.nd_init u'.nd_finals
         then SS.union u.nd_finals u'.nd_finals
         else u'.nd_finals
     } |> determinize

@@ -171,14 +171,15 @@ struct
       classes = r_classes_automata;
       env = r_env_automata;
       varbind = r_strvarbind
-      (* numeric = Numerical.top (Environmentext.empty) *)
     }, vari_numvar_eq
 
   let hole_position (reg_algebra) (u: TA.dfta) =
     let state_pos = TA.state_position_dfta u in
     let nsupport_u = TA.find_position_dfta hole_tree u state_pos in
-    (* let () = debug "nsupport_u: %a" RegExp.print_u nsupport_u in *)
-    RegExp.automata_of_regexp reg_algebra nsupport_u
+    let () = debug "nsupport_u: %a" RegExp.print_u nsupport_u in
+    let rep = RegExp.automata_of_regexp reg_algebra nsupport_u in
+    let () = debug "nsupport_u_auto: %a" RegExp.print rep in
+    rep
 
   (* let from_tree_and_num (st: input_tree) (num: Numerical.t): t =
    *   let u, renaming = from_tree st in
@@ -195,89 +196,6 @@ struct
 
   let print_splitter (* fmt (x : ((RegExp.t * string) list) ToolBox.StringM.t) *) =
     ToolBox.print_map (Format.pp_print_string) (RegexpPartition.print) (ToolBox.StringM.bindings)
-
-  (* let unify man (u: t) u_num (v: t) v_num =
-   *   let sa = TA.get_sigma_algebra u.shape in
-   *   let auto_algebra = automata_algebra_on_n sa in
-   *   let splitu, splitv = List.fold_left (fun (splitu, splitv) (ue, un) ->
-   *       let toto = RegExp.meet ue v.support in
-   *       if RegExp.is_bottom (\* auto_algebra *\) toto then (\* [ue] n'est pas dans le support de v*\)
-   *         (splitu, splitv)
-   *       else
-   *         begin
-   *           let (partition, splitv') =
-   *             List.fold_left (fun ((partition, splitv) as acc) (ve, vn) ->
-   *                 let inter = RegExp.meet ue ve in
-   *                 if not (RegExp.is_bottom (\* auto_algebra *\) inter) then
-   *                   let inter_n = var_of_automata inter in
-   *                   ((inter, inter_n) :: partition,
-   *                    ToolBox.stringm_replace vn (function Some x  -> (inter, inter_n) :: x | None -> [inter, inter_n]) splitv
-   *                   )
-   *                 else
-   *                   acc
-   *               ) ([], splitv) v.env
-   *           in
-   *           (\* let () = debug "u : %s --- partition : %a" un RegexpPartition.print partition in
-   *            * if  *\)
-   *           (ToolBox.StringM.add un partition splitu, merge_splitter splitv splitv')
-   *         end
-   *     ) (ToolBox.StringM.empty, ToolBox.StringM.empty) u.env in
-   *   let if_non_empty u un =
-   *     if RegExp.is_bottom (\* auto_algebra *\) u then
-   *       [], []
-   *     else
-   *       [(u, un)], [un]
-   *   in
-   *   let apply_splitter env splitter other_support =
-   *     List.fold_left (fun (nenv_commun, nenv_n_commun, var_extension) (ue, un) ->
-   *         try
-   *           let x = ToolBox.StringM.find un splitter in
-   *           (\* let () = debug "u : %s --- splitu : %a" un RegexpPartition.print x in *\)
-   *           let joined, vars =
-   *             List.fold_left (fun (joined, vars) (sue, sun) ->
-   *                 (RegExp.join (\* auto_algebra *\) joined sue, sun:: vars)
-   *               ) (RegExp.bottom auto_algebra, []) x
-   *           in
-   *           let nue = RegExp.meet (RegExp.compl (\* auto_algebra *\) joined) ue in
-   *           let nue_supp = RegExp.meet nue other_support in
-   *           let nue_supp_n = var_of_automata nue_supp in
-   *           let nue_non_supp = RegExp.meet nue (RegExp.compl (\* auto_algebra *\) other_support) in
-   *           let nue_non_supp_n = var_of_automata nue_non_supp in
-   *           let ns, ns' = if_non_empty nue_supp nue_supp_n in
-   *           let nns, nns' = if_non_empty nue_non_supp nue_non_supp_n in
-   *           let ll = vars @ ns' @ nns' in
-   *           if List.length ll = 1 then
-   *             (ns @ x @ nenv_commun,
-   *              nns @ nenv_n_commun,
-   *              var_extension)
-   *           else
-   *             (
-   *               ns @ x @ nenv_commun,
-   *               nns @ nenv_n_commun,
-   *               ToolBox.StringM.add un (ns' @ nns' @ vars) var_extension)
-   *         with
-   *         | Not_found ->
-   *           (nenv_commun, (ue, un) :: nenv_n_commun, var_extension)
-   *       ) ([], [], ToolBox.StringM.empty) env
-   *   in
-   *   let n_common_env, n_u_env, u_var_extension = apply_splitter u.env splitu v.support in
-   *   let _           , n_v_env, v_var_extension = apply_splitter v.env splitv u.support in
-   *   let n_full_env = ToolBox.fold (fun ((_, rn) as n) acc ->
-   *       if not (List.exists (fun (_, rn') -> rn = rn') n_v_env) then
-   *         (n :: acc)
-   *       else
-   *         acc
-   *     ) n_u_env n_v_env
-   *   in
-   *   let apply_var_extension num ve vb =
-   *     ToolBox.StringM.fold (fun un l (num, vb) ->
-   *         Numerical.extend (mk_fresh_range ()) man vb un l num
-   *       ) ve (num, vb)
-   *   in
-   *   let n_u_num, n_u_vb = apply_var_extension u_num u_var_extension u.varbind in
-   *   let n_v_num, n_v_vb = apply_var_extension v_num v_var_extension v.varbind in
-   *
-   *   (n_u_env, n_u_num, n_u_vb, n_v_env, n_v_num, n_v_vb, n_common_env, n_full_env) *)
 
   let unify (man: ('a, 'b) man) (u: t) u_num (v: t) v_num =
     let () = debug "u: %a@, v:%a" print u print v in
@@ -390,88 +308,6 @@ struct
         let b, part'' = class_and_rest y part' in
         (a @ b) :: part''
   end
-
-
-  (* let rec aux build_partition_u2v (un, ue) absu envu absv envv = *)
-
-
-  (* let u_part, to_extend, alone =
-   *   List.fold_left (fun (u_part, to_extend, alone) (ve, vn) ->
-   *       let reminder, met, u_untouched =
-   *         List.fold_left (fun (reminder, met, u_env) (ue, un) ->
-   *             let ue_meet_ve = RegExp.meet ue reminder in
-   *             if not (RegExp.is_bottom auto_algebra ue_meet_ve) then
-   *               let reminder = RegExp.diff auto_algebra ve ue_meet_ve in
-   *               (reminder, (ue, un, ue_meet_ve) :: met, u_env)
-   *             else
-   *               (reminder, met, (ue, un) :: u_env)
-   *           ) (ve, [], []) u.env
-   *       in
-   *       match met with
-   *       | [] ->
-   *         u_part,
-   *         to_extend,
-   *         (ve, vn) :: alone
-   *       | (pe, pn, _)::q  ->
-   *         let part' = List.fold_left (fun u_part (qe, qn, _) ->
-   *             BPart.mk_equiv (pe, pn) (qe, qn) u_part) u_part q
-   *         in
-   *         if RegExp.is_bottom auto_algebra reminder then
-   *           (part', (pe, pn, reminder) :: to_extend, alone)
-   *         else
-   *           (part', to_extend, alone)
-   *     ) (BPart.mk_part u.env, [], []) v.env
-   * in
-   *
-   * let (abs, env, renaming) = List.fold_left (fun (abs, env, renaming) l ->
-   *     match l with
-   *     | (pu, pn)::q::r ->
-   *       let joined =
-   *         List.fold_left (fun joined (ue, un) ->
-   *             RegExp.join auto_algebra joined ue
-   *           ) pu (q::r)
-   *       in
-   *       let joinedn = var_of_automata joined in
-   *       let renaming = List.fold_left (fun renaming (pu, pn) -> ToolBox.StringM.add pn joinedn renaming) renaming l in
-   *       (Numerical.merge abs joinedn (List.map snd l), (joined, joinedn) :: env, renaming)
-   *     | ((pu, pn) as p):: [] ->
-   *       let renaming = ToolBox.StringM.add pn pn renaming in
-   *       (abs, p::env, renaming)
-   *
-   *     | _ -> (abs, env, renaming)
-   *   ) (u.numeric, [], ToolBox.StringM.empty) u_part
-   * in
-   *
-   * let widening_position = RegExp.compl auto_algebra v.support in
-   *
-   * let to_extend = List.fold_left (fun acc (ue, un, ext) ->
-   *     let rpzn = ToolBox.StringM.find un renaming in
-   *     try
-   *       let cur_ext = ToolBox.StringM.find rpzn acc in
-   *       acc
-   *       |> ToolBox.StringM.remove rpzn
-   *       |> ToolBox.StringM.add rpzn (RegExp.join auto_algebra cur_ext ext)
-   *     with
-   *     | Not_found -> ToolBox.StringM.add rpzn ext acc
-   *   ) ToolBox.StringM.empty to_extend
-   * in
-   *
-   *
-   * let (common, abs, env, _) = ToolBox.StringM.fold (fun un ext (common, absu, absv, env, room_left) ->
-   *     let (ue, un) = RegexpPartition.find_by_name un env in
-   *     let w = RegExp.widening auto_algebra ue ext 5 |> RegExp.meet room_left in
-   *     let wn = var_of_automata w in
-   *     let room_left = RegExp.diff auto_algebra room_left w in
-   *     (\* Numerical.renaming_list *\)
-   *   ) to_extend ([], abs, env, widening_position)
-   * in
-   * List.fold_left (fun (u_env, available, abs) (ue, un, r) ->
-   *     let w = RegExp.widening auto_algebra ue r 6 in
-   *     let wr = RegExp.meet w available in
-   *     let wrn = var_of_automata wr in
-   *     let abs = Numerical.renaming_list [un,wrn] abs in
-   *     (RegexpPartition.replace (wr, wrn) u_env, RegExp.diff auto_algebra available wr, abs)
-   *   ) (u_env, widening_position) to_extend *)
 
   let vb_sanitize (u: t) =
     let s = ToolBox.fold (fun (_, rn) ->
@@ -902,16 +738,121 @@ struct
 
   end
 
-  let widen (man: ('b, 'b) man)
+  let widen (man : ('b, 'b) man)
+        (u: t) (u_num: 'b flow)
+        (v: t) (v_num: 'b flow) =
+
+    let sa = TA.get_sigma_algebra u.shape in
+    let auto_algebra = automata_algebra_on_n sa in
+
+    (* First we stabilize the shape of the automaton *)
+    let nshape = TA.widening_dfta u.shape v.shape in
+    (* if TA.leq_dfta nshape u.shape then
+     *   join man u u_num v v_num
+     * else *)
+    (* Once shape is stable we stabilize the environment *)
+    let nsupport = hole_position auto_algebra nshape in
+
+    let safe_region_in_v =
+      RegExp.join
+        (RegExp.compl v.support)
+        (RegexpPartition.fold (fun (re, rn) acc -> RegExp.join re acc)
+           v.env
+           (RegExp.bottom auto_algebra)
+        )
+    in
+    let p1' = RegexpPartition.fold (fun (re, rn) acc ->
+                  if RegExp.leq re safe_region_in_v then
+                    (re, rn) :: acc
+                  else acc
+                ) u.env []
+    in
+
+    let module RegM = Map.Make(struct type t = RegExp.t * string let compare (_, a) (_, b) = compare a b end) in
+    let module RegS = Set.Make(struct type t = RegExp.t * string let compare (_, a) (_, b) = compare a b end) in
+    let add a b m =
+      try
+        let s = RegM.find a m in
+        m |> RegM.add a (RegS.add b s)
+      with
+      | Not_found -> RegM.add a (RegS.singleton b) m
+    in
+
+    let links, links' =
+      RegexpPartition.fold (fun (re, rn) (linker, linker') ->
+          RegexpPartition.fold (fun (re', rn') (linker, linker') ->
+              if not (RegExp.is_bottom (RegExp.meet re re')) then
+                add (re, rn) (re', rn') linker
+              , add (re', rn') (re, rn) linker'
+              else linker, linker'
+            ) v.env (linker, linker')
+        ) p1' (RegM.empty, RegM.empty)
+    in
+    let rec connected_component_one (re, rn) l1 l2 seen1 seen2 bool =
+      let l = if bool then l1 else l2 in
+      let neighbours = match RegM.find_opt (re, rn) l with | Some s -> s | None -> RegS.empty in
+      RegS.fold (fun n (seen1, seen2) ->
+          if bool then
+            if RegS.mem n seen2 then
+              connected_component_one n l1 l2 seen1 (RegS.add n seen2) false
+            else seen1, seen2
+          else
+            if RegS.mem n seen1 then
+              connected_component_one n l1 l2 (RegS.add n seen1) seen2 true
+            else seen1, seen2
+        ) neighbours (seen1, seen2)
+    in
+    let rec build_connected_component v1 v2 l1 l2 result =
+      if RegS.is_empty v1 then
+        result
+      else
+        let x = RegS.choose v1 in
+        let seen1, seen2 = connected_component_one x l1 l2 (RegS.singleton x) RegS.empty true in
+        build_connected_component (RegS.diff v1 seen1) (RegS.diff v2 seen2) l1 l2 ((seen1, seen2) :: result)
+    in
+    let concomp = build_connected_component (RegS.of_list p1') (RegS.of_list v.env) links links' [] in
+    let wid_pos = RegExp.diff nsupport (RegExp.join u.support v.support) in
+
+    let env, u_num, v_num, u_vb, v_vb, res_vb =
+      List.fold_left (fun (env, u_num, v_num, u_vb, v_vb, res_vb) (u_set, v_set) ->
+          let a = RegS.fold (fun (re, rn) acc -> RegExp.join re acc) u_set (RegExp.bottom auto_algebra) in
+          let b = RegS.fold (fun (re, rn) acc -> RegExp.join re acc) v_set (RegExp.bottom auto_algebra) in
+
+          let p = a
+                  |> RegExp.join (RegExp.meet b (RegExp.diff v.support u.support))
+                  |> RegExp.join (RegExp.widening 6 a (RegExp.join a b) |> RegExp.meet wid_pos)
+          in
+          let pn = var_of_automata p in
+          let u_num, u_vb, res_vb = Numerical.fold_two_vb (mk_fresh_range ()) man u_vb res_vb (RegS.elements u_set |> List.map snd) pn u_num in
+          let v_num, v_vb, res_vb = Numerical.fold_two_vb (mk_fresh_range ()) man v_vb res_vb (RegS.elements u_set |> List.map snd) pn v_num in
+          ((p, pn) :: env, u_num, v_num, u_vb, v_vb, res_vb)
+        ) ([], u_num, v_num, u.varbind, v.varbind , StrVarBind.empty) concomp
+    in
+
+    let neqclass = join_eq_classes u v (Some(wid_pos)) in
+    {shape = nshape;
+     support = nsupport;
+     classes = neqclass;
+     env = env;
+     varbind = res_vb;
+    }, u_num, v_num
+
+  let widen2 (man: ('b, 'b) man)
       (u: t) (u_num: 'b flow)
       (v: t) (v_num: 'b flow) =
+
+    let () = debug "widening input: %a@, on: %a" print u (Flow.print man) u_num in
+    let () = debug "other widening input: %a@, on: %a" print v (Flow.print man) v_num in
 
     let sa = TA.get_sigma_algebra u.shape in
     let auto_algebra = automata_algebra_on_n sa in
 
     (* Shape and support widening *)
     let nshape = TA.widening_dfta_p u.shape v.shape 5 in
+    let () = debug "shape calculated: %a" TA.print_dfta nshape in
     let nsupport = hole_position auto_algebra nshape in
+    let () = debug "support calculated: %a" RegExp.print nsupport in
+
     (* Eq_class widening *)
     let widening_position = RegExp.meet nsupport
         (RegExp.compl (*auto_algebra*) (RegExp.join (*auto_algebra*) u.support v.support)) in
@@ -1094,6 +1035,7 @@ struct
         (envu |> List.map snd) (envv |> List.map snd)
         vb_u vb_v
     in
+
     let rep =
       {
         shape = nshape;
@@ -1103,6 +1045,8 @@ struct
         varbind = vb_u
       } |> vb_sanitize
     in
+    let () = debug "widening result: %a" print rep in
+    let () = debug "widening numerical result: %a@,and: %a" (Flow.print man) absu (Flow.print man) absv in
     (rep, absu, absv)
 
   let top (sa: TA.sigma_algebra) =

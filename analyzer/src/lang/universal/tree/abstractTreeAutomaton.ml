@@ -1703,6 +1703,11 @@ struct
   let leq_dfta u u' =
     meet_dfta u (complementary_dfta u') |> is_bottom_dfta
 
+  (* (\* Todo : improve by trying to find a renaming of the states from on
+   *    to another *\)
+   * let equal (u: dfta) (u': dfta) =
+   *   u == u' || u = u' || (leq_dfta u u' && leq_dfta u' u) *)
+
   module Int = struct
     type t = int
     let compare = compare

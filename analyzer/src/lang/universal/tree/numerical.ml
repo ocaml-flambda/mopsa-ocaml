@@ -255,6 +255,12 @@ let fold range man (vb: StrVarBind.t) (l : string list) (n : string) abs =
   let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "expand")) abs in
   abs', vb
 
+let fold_two_vb range man (vb: StrVarBind.t) (vb': StrVarBind.t) (l : string list) (n : string) abs =
+  let v, vb = StrVarBind.get_var n vb' in
+  let vl, vb = StrVarBind.get_var_list l vb in
+  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "expand")) abs in
+  abs', vb, vb'
+
 (* let merge rannge (abs: 'b flow) s list vb =
  *   match list with
  *   | [] -> failwith "merge of list of size 0"
