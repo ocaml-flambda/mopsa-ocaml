@@ -76,14 +76,15 @@ let join_different_support
   =
   let () = debug "full_env: %a" (ToolBox.print_list Format.pp_print_string) full_env in
   let () = debug "envv: %a" (ToolBox.print_list Format.pp_print_string) envv in
-  let vb_u, vb_v, renaming = ToolBox.fold (fun s (vb_u, vb_v, renaming) ->
-      let var_u, vb_u = StrVarBind.get_var s vb_u in
-      let var_v, vb_v = StrVarBind.get_var s vb_v in
-      if List.mem s envv then
-        (vb_u, vb_v, (var_v, var_u) :: renaming)
-      else
-        (vb_u, vb_v, renaming)
-    ) full_env (vb_u, vb_v, [])
+  let vb_u, vb_v, renaming =
+    ToolBox.fold (fun s (vb_u, vb_v, renaming) ->
+        let var_u, vb_u = StrVarBind.get_var s vb_u in
+        let var_v, vb_v = StrVarBind.get_var s vb_v in
+        if List.mem s envv then
+          (vb_u, vb_v, (var_v, var_u) :: renaming)
+        else
+          (vb_u, vb_v, renaming)
+      ) full_env (vb_u, vb_v, [])
   in
   let () = debug "renaming: %a" (ToolBox.print_list (ToolBox.print_pair pp_var pp_var)) renaming in
   (* Ici on n'ajoute pas les variables car c'est la sémantique du join
@@ -94,7 +95,6 @@ let join_different_support
         abs
     ) renaming v
   in
-  (* Gros problème : on ne peut rajouter les contraintes post join*)
   u, v, vb_u, vb_v
 
 
@@ -227,8 +227,17 @@ let eq
  *   let abs' = change_environment abs env' in
  *   renaming_list [(rep, n)] abs' *)
 
-let find_foldable_variables abs =
-  [] (* TODO *)
+let find_foldable_variables (man: ('a, 'b) man) vb (vl: string list) (abs: 'a flow) : string list list * StrVarBind.t =
+  let vl, vb = StrVarBind.get_var_list vl vb in
+  let foldable_vars = man.ask (Numeric.Relational.Q_fold vl) abs in
+  try
+    List.map (fun l ->
+        List.map (fun s ->
+            StrVarBind.find_r s vb
+          ) l
+      ) foldable_vars, vb
+  with
+  | Not_found -> Debug.fail "[universal.tree.numerical.find_foldable_variables] Could not look back"
 
 (* let find_foldable_variables abs =
  *   let env = A.env abs in
@@ -252,14 +261,16 @@ let find_foldable_variables abs =
 let fold range man (vb: StrVarBind.t) (l : string list) (n : string) abs =
   let v, vb = StrVarBind.get_var n vb in
   let vl, vb = StrVarBind.get_var_list l vb in
-  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "expand")) abs in
+  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "fold")) abs in
   abs', vb
 
 let fold_two_vb range man (vb: StrVarBind.t) (vb': StrVarBind.t) (l : string list) (n : string) abs =
-  let v, vb = StrVarBind.get_var n vb' in
-  let vl, vb = StrVarBind.get_var_list l vb in
-  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "expand")) abs in
-  abs', vb, vb'
+  begin
+    let v, vb' = StrVarBind.get_var n vb' in
+    let vl, vb = StrVarBind.get_var_list l vb in
+    let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "fold")) abs in
+    abs', vb, vb'
+  end
 
 (* let merge rannge (abs: 'b flow) s list vb =
  *   match list with

@@ -46,4 +46,7 @@ struct
 
   let to_list =
     SA.elements
+
+  let equal =
+    SA.equal
 end

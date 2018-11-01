@@ -166,24 +166,24 @@ module Domain : Framework.Domains.Stacked.S = struct
   let widen (annot: 'a annot) (man: ('b, 'b) man) ((u, u_num): t * 'b flow) ((v, v_num): t * 'b flow)
       : t * bool * 'b flow * 'b flow
       =
-      let w, u_num, v_num = bot_apply2 (v, u_num, v_num) (u, u_num, v_num)
+      let w, prop, u_num, v_num = bot_apply2 (v, true, u_num, v_num) (u, true, u_num, v_num)
         (fun u' v' ->
-           let res, u_num, v_num =
-             fold2 (fun k a b (res, u_num, v_num) ->
+           let res, prop, u_num, v_num =
+             fold2 (fun k a b (res, flag, u_num, v_num) ->
                  match a, b with
                  | None, None -> assert false
-                 | Some x, None -> (res, u_num, v_num)
-                 | None, Some y -> (res, u_num, v_num)
+                 | Some x, None -> (res, flag, u_num, v_num)
+                 | None, Some y -> (res, flag, u_num, v_num)
                  | Some x, Some y ->
-                   let pres, u_num, v_num = V.widen man x u_num y v_num in
-                   (VMap.add k pres res, u_num, v_num)
-               ) u' v' (VMap.empty, u_num, v_num)
+                   let pres, flag', u_num, v_num = V.widen man x u_num y v_num in
+                   (VMap.add k pres res, flag && flag', u_num, v_num)
+               ) u' v' (VMap.empty, true, u_num, v_num)
            in
-           (Nb res, u_num, v_num)
+           (Nb res, prop, u_num, v_num)
         ) u v
       in
       (* FIXME: check stability flag *)
-      w, true, u_num, v_num
+      w, prop, u_num, v_num
 
   (*==========================================================================*)
   (**                           {2 Transformers}                              *)

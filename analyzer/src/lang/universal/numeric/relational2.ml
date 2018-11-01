@@ -201,7 +201,7 @@ struct
                 added and we move on to the next constraint. Note that the
                 order in which the constraints are added modifies the
                 precision of the output *)
-             let res = Nt ({num = num ; inf = VarSet.inter u.inf v.inf ; sup = VarSet.union u.inf v.inf}) in
+             let res = Nt ({num = num ; inf = VarSet.inter u.inf v.inf ; sup = VarSet.union u.sup v.sup}) in
              let () = debug "res: %a" print res in
              res
            end
@@ -284,17 +284,20 @@ struct
         ) TOP a
       |> return
 
+    (* weak semantic here: rename(v, v') does not cut traces where v
+       is not present *)
     | S_rename_var(var, var') ->
-      top_apply (fun u ->
-          let var_apron  = var_to_apron var  in
-          let var_apron' = var_to_apron var' in
-          Nt {num = Abstract1.rename_array ApronManager.man u.num
-                  [| var_apron |] [| var_apron' |];
-              inf = u.inf |> VarSet.remove var |> VarSet.add var';
-              sup = u.sup |> VarSet.remove var |> VarSet.add var'
+       top_apply (fun u ->
+           let must_be = VarSet.mem var u.inf in
+           let var_apron  = var_to_apron var  in
+           let var_apron' = var_to_apron var' in
+           Nt {num = Abstract1.rename_array ApronManager.man u.num
+                       [| var_apron |] [| var_apron' |];
+               inf = if must_be then u.inf |> VarSet.remove var |> VarSet.add var' else u.inf ;
+               sup = u.sup |> VarSet.remove var |> VarSet.add var'
              }
-        ) TOP a
-      |> return
+         ) TOP a
+       |> return
 
     | S_assume(e) ->
       top_apply (fun u ->
@@ -355,6 +358,9 @@ struct
     | S_fold(v, vl) ->
       begin
         top_apply (fun u ->
+            let all_must_present = List.for_all (fun v -> VarSet.mem v u.inf) vl in
+            let () = debug "I am performing a fold of: %a" print (Nt u) in
+            let () = debug "%a <- {%a}" pp_var v (Format.pp_print_list pp_var) vl in
             match vl with
             | [] -> Debug.fail "Can not fold list of size 0"
             | p::q ->
@@ -363,29 +369,41 @@ struct
                   (List.map var_to_apron vl |> Array.of_list) in
               let abs = Apron.Abstract1.rename_array ApronManager.man abs
                   [|var_to_apron p|] [|var_to_apron v|] in
-              Nt { num = abs ;
-                   inf = VarSet.add v (VarSet.diff u.inf vs) ;
-                   sup = VarSet.add v (VarSet.diff u.inf vs)
-                 }
+              let rep =
+                Nt { num = abs ;
+                     inf = if all_must_present then
+                             VarSet.add v (VarSet.diff u.inf vs)
+                           else (VarSet.diff u.inf vs);
+                     sup = VarSet.add v (VarSet.diff u.sup vs)
+                  }
+              in
+              let () = debug "Answer is: %a" print (rep) in
+              rep
           ) TOP a
         |> return
       end
 
     | S_expand(v, vl) ->
-      begin
-        top_apply (fun u ->
-            let vs = VarSet.of_list vl in
-            let abs = Apron.Abstract1.expand ApronManager.man u.num
-                (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
-            let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
-            let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
-            Nt { num = abs ;
-                 inf = VarSet.union vs (VarSet.remove v u.inf) ;
-                 sup = VarSet.union vs (VarSet.remove v u.inf)
-               }
-          ) TOP a
-        |> return
-      end
+       begin
+         match vl with
+         | [ v' ] when Var.compare v v' = 0 -> a |> return
+         | [ v' ] ->  exec (mk_rename v v' (srange stmt)) a
+         | _ ->
+            top_apply (fun u ->
+                let vs = VarSet.of_list vl in
+                let abs = Apron.Abstract1.expand ApronManager.man u.num
+                            (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
+                let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
+                let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
+                Nt { num = abs ;
+                     inf = if VarSet.mem v u.inf then
+                             VarSet.union vs (VarSet.remove v u.inf)
+                           else (VarSet.remove v u.inf);
+                     sup = VarSet.union vs (VarSet.remove v u.sup)
+                  }
+              ) TOP a
+            |> return
+       end
 
     | S_assign({ekind = E_var(v, WEAK)} as lval, e) ->
       exec {stmt with skind = S_assign(lval, e)} a |> bind @@ fun a' ->
@@ -394,7 +412,40 @@ struct
 
     | _ -> return top
 
-  let ask _ _ = None
+  (* This is experimental *)
+  and find_foldable_variables lv abs =
+    top_apply (fun u ->
+        let rec cross l acc = match l with
+          | p::q ->
+             let reste, acc' = find_foldable p q [] [] in
+             cross reste ((p :: acc'):: acc)
+          | []   -> acc
+        and find_foldable x l reste acc = match l with
+          | y::q when compare_typ x.vtyp y.vtyp = 0 ->
+             let abs = u.num in
+             let tmp = mk_tmp ~vtyp:x.vtyp () in
+             let ax = var_to_apron x and ay = var_to_apron y and atmp = var_to_apron tmp in
+             let abs1 = Abstract1.fold ApronManager.man abs [| ax ; ay |] in
+             let abs2 = Abstract1.rename_array ApronManager.man abs1 [| ax |] [| atmp |] in
+             let abs3 = Abstract1.expand ApronManager.man abs2 (atmp) [| ax ; ay |] in
+             let env = Apron.Environment.remove (Apron.Abstract1.env abs3) [| atmp |] in
+             let abs4 = Apron.Abstract1.change_environment ApronManager.man abs3 env false in
+             if Abstract1.is_leq ApronManager.man abs4 abs then
+               find_foldable x q reste (y::acc)
+             else
+               find_foldable x q (y :: reste) acc
+          | y::q -> find_foldable x q (y :: reste) acc
+          | _ -> reste, acc
+        in
+        List.filter (fun cl -> match cl with | p::q::r -> true | _ -> false) (cross lv [])
+      ) [] abs
+
+  and ask : type r. r Framework.Query.query -> t -> r option =
+    fun query abs ->
+    match query with
+    | Q_fold vl -> Some (find_foldable_variables vl abs)
+    | _ -> None
+
 
   (* TODO: This should not be done in this domain: *)
   let init {prog_kind = p} =

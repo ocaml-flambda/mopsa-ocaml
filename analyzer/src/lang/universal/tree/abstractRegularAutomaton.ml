@@ -531,7 +531,6 @@ struct
     |> minimization
 
   let compl u =
-    let () = debug "in: %a" print u in
     let st = get_states u in
     let rep =
       {
@@ -540,7 +539,6 @@ struct
         hole_coreach = not u.hole_coreach;
       }
     in
-    let () = debug "out: %a" print rep in
     rep
 
   let diff u v =
@@ -700,6 +698,16 @@ struct
     | V of var
     | E
     | N
+
+  let is_u_var_free (u: u) =
+    let rec aux u cont =
+      match u with
+      | L _ | E | N -> cont true
+      | S u -> aux u cont
+      | C (u, v) | A (u, v) -> aux u (fun a -> aux v (fun b -> cont (a && b)))
+      | V _ -> false
+    in
+    aux u (fun x -> x)
 
   let rewrite (u : u) = match u with
     | C ( A ( a, b) , c) -> Some (A ( C (a,c) , C (b,c)))
@@ -1034,10 +1042,19 @@ struct
           acc |> VMap.add (vos s) r
       ) a.final sys
     in
+    let sys = SS.fold (fun s acc ->
+                  match VMap.find_opt (vos s) acc with
+                  | Some _ -> acc
+                  | None -> VMap.add (vos s) (None, VMap.empty) acc
+                ) a.states sys
+    in
     let s = arden_solve Left (VMap.bindings sys) in
     try
       let (x, a) = List.find (fun (x,_) -> x = vos (a.start)) s in
-      norm (vm_to_regexp Left a)
+      let rep = vm_to_regexp Left a in
+      if not (is_u_var_free rep) then
+        Debug.fail "sol of system: %a is %a: not variable free" (print_systemm Left) (VMap.bindings sys) print_u rep;
+      norm rep
     with
     | Not_found -> N
 

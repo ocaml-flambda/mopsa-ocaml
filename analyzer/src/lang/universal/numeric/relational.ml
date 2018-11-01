@@ -20,7 +20,8 @@ open Ast
 
 
 type _ Framework.Query.query +=
-  | Q_sat : Framework.Ast.expr -> bool Framework.Query.query
+  | Q_sat  : Framework.Ast.expr -> bool Framework.Query.query
+  | Q_fold : var list -> var list list Framework.Query.query
 
 let opt_float_rounding = ref Apron.Texpr1.Near
 

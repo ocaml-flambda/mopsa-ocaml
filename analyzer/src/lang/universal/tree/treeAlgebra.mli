@@ -10,6 +10,7 @@ module Make:
     val fold : (u -> 'a -> 'a) -> t -> 'a -> 'a
     val iter : (u -> unit) -> t -> unit
     val union : t -> t -> t
+    val equal : t -> t -> bool
     val add : u -> t -> t
     val empty : t
     val of_list : u list -> t
