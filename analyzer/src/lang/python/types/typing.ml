@@ -191,6 +191,8 @@ module Domain =
           *    let flow = Flow.set_domain_cur ncur man flow in
           *    Eval.singleton (mk_expr (E_type_partition tid) range) flow
           *    (\* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *\) *)
+         | A_py_method (func, self) ->
+            man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow
          | _ ->
             let addr = {addr_kind = akind; addr_uid=(-1)} in
             Eval.singleton (mk_addr addr range) flow
