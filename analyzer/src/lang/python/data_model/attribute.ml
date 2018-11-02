@@ -114,19 +114,19 @@ module Domain =
                                       (* FIXME: disjunction between instances an non-instances *)
                                       man.eval (mk_py_object_attr cls attr range) flow |>
                                         Eval.bind (fun obj' flow ->
-                                            (* Eval.assume
-                                             *   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
-                                             *   ~fthen:(fun flow ->
-                                             *     (\* Debug.fail "todo@\n"; *\)
-                                             *     let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', object_of_expr exp))) range in
-                                             *     man.eval exp flow)
-                                             *   ~felse:(fun flow ->
-                                             *     let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
-                                             *     Eval.singleton exp flow)
-                                             *   man flow
- *)
-                                            let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
-                                            man.eval exp flow
+                                            Eval.assume
+                                              (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
+                                              ~fthen:(fun flow ->
+                                                (* Debug.fail "todo@\n"; *)
+                                                debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
+                                                let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', exp))) range in
+                                                man.eval exp flow)
+                                              ~felse:(fun flow ->
+                                                let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
+                                                Eval.singleton exp flow)
+                                              man flow
+                                            (* let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
+                                             * man.eval exp flow *)
                                           )
                                     )
                                     ~felse:(fun flow -> search_mro flow tl)

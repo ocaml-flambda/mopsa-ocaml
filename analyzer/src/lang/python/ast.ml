@@ -320,11 +320,12 @@ let mk_py_object_attr obj attr ?(etyp=T_any) range =
 let mk_py_empty range =
   mk_constant C_py_empty ~etyp:T_py_empty range
 
-let mk_py_true range =
-  mk_constant (C_bool true) ~etyp:T_bool range
+let mk_py_bool b range =
+  mk_constant (C_bool b) ~etyp:T_bool range
 
-let mk_py_false range =
-  mk_constant (C_bool false) ~etyp:T_bool range
+let mk_py_true = mk_py_bool true
+
+let mk_py_false = mk_py_bool false
 
 let mk_py_top t range =
   mk_constant (C_top t) ~etyp:t range

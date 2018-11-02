@@ -92,7 +92,6 @@ struct
   (** ========================= *)
 
   let eval zone exp man flow =
-    let () = debug "I was asked" in
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->

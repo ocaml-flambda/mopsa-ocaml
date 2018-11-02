@@ -64,8 +64,7 @@ module Domain =
                (* Calls on other kinds of addresses is handled by other domains *)
                | E_py_object _ ->
                   Eval.eval_list args man.eval flow |>
-                    (* FIXME FIXME FIXME/danger: args'/arg *)
-                    Eval.bind (fun args' flow ->
+                    Eval.bind (fun args flow ->
                         let exp = {exp with ekind = E_py_call(f, args, [])} in
                         man.eval exp flow
                       )

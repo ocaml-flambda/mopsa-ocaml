@@ -22,18 +22,16 @@ module Domain =
 
     let init _ _ _ = None
 
+    let return_id_of_type man flow range ptype =
+      let cur = Flow.get_domain_cur man flow in
+      let tid, ncur = Typingdomain.get_type cur ptype in
+      let flow = Flow.set_domain_cur ncur man flow in
+      Eval.singleton (mk_expr (Typing.E_type_partition tid) range) flow |> OptionExt.return
+
     let eval zs exp man flow =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_constant (C_top T_bool)
-      | E_constant (C_bool _) ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "bool")) range) flow |> OptionExt.return
-
-      | E_constant (C_top T_int)
-      | E_constant (C_int _) ->
-         Eval.singleton (mk_expr (Typing.E_get_type_partition (Typingdomain.builtin_inst "int")) range) flow |> OptionExt.return
-
       (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun f ->
@@ -49,7 +47,7 @@ module Domain =
                        man.eval (mk_py_top T_bool range) true_flow)
                      ~felse:(fun false_flow ->
                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                       Eval.singleton expr false_flow)
+                       man.eval expr false_flow)
                      man true_flow
                  )
                  ~felse:(fun false_flow ->
@@ -73,7 +71,7 @@ module Domain =
                        man.eval (mk_py_top T_int range) true_flow)
                      ~felse:(fun false_flow ->
                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                       Eval.singleton expr false_flow)
+                       man.eval expr false_flow)
                      man true_flow
                  )
                  ~felse:(fun false_flow ->

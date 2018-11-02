@@ -20,7 +20,8 @@ let () =
       match ekind e1, ekind e2 with
       | E_get_type_partition p1, E_get_type_partition p2 -> Debug.fail "fixme"
       | E_type_partition i1, E_type_partition i2 -> Pervasives.compare i1 i2
-      | _ -> next e1 e2);
+      | _ -> next e1 e2)
+
 
 
 module Domain =
@@ -50,6 +51,12 @@ module Domain =
     let is_bottom = Typingdomain.is_bottom
     let print = Typingdomain.print
 
+    let return_id_of_type man flow range ptype =
+      let cur = Flow.get_domain_cur man flow in
+      let tid, ncur = Typingdomain.get_type cur ptype in
+      let flow = Flow.set_domain_cur ncur man flow in
+      Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return
+
     let init progr man flow =
       Some ( Flow.set_domain_env T_cur Typingdomain.top man flow )
 
@@ -73,18 +80,31 @@ module Domain =
                 fun e flow ->
                 let cur = Flow.get_domain_cur man flow in
                 begin match ekind e with
-                | E_get_type_partition ptype ->
-                   (*let pos, cur' = Typingdomain.get_type cur ptype in*)
-                   let cur' = Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some ptype} in
-                   let flow = Flow.set_domain_cur cur' man flow in
-                   debug "\t%a@\n" print (Flow.get_domain_cur man flow);
+                (* | E_get_type_partition ptype ->
+                 *    (\*let pos, cur' = Typingdomain.get_type cur ptype in*\)
+                 *    let cur' = Typingdomain.set_var cur v Typingdomain.{lundef=false; gundef=false; def=Some ptype} in
+                 *    let flow = Flow.set_domain_cur cur' man flow in
+                 *    debug "\t%a@\n" print (Flow.get_domain_cur man flow);
+                 *    Post.of_flow flow *)
+                | E_type_partition i ->
+                   let ncur = Typingdomain.set_var_tid cur v i in
+                   let flow = Flow.set_domain_cur ncur man flow in
                    Post.of_flow flow
+
                 | E_py_object (addr, _) ->
                    begin
                      let ty = match addr.addr_kind with
                        | A_py_class (c, mro) -> Typingdomain.Class (c, mro)
                        | A_py_module m ->         Typingdomain.Module m
                        | A_py_function f ->       Typingdomain.Function (f, [])
+                       | A_py_method (func, self) ->
+                          let func = match (fst func).addr_kind with
+                            | A_py_function f -> f
+                            | _ -> assert false in
+                          let self = match ekind self with
+                            | E_type_partition i -> i
+                            | _ -> assert false in
+                          Typingdomain.Method (func, self)
                        | _ -> debug "typing/exec/assign/E_py_object: %a@\n" Universal.Ast.pp_addr addr;
                               failwith "ni"
                      in
@@ -102,8 +122,8 @@ module Domain =
              (fun reval flow ->
                let cur = Flow.get_domain_cur man flow in
                match ekind reval with
-               | E_get_type_partition polytype ->
-                  Flow.set_domain_cur (Typingdomain.set_var_attr cur v attr polytype) man flow |> Post.of_flow
+               | E_type_partition i ->
+                  Flow.set_domain_cur (Typingdomain.set_var_attr_ty cur v attr i) man flow |> Post.of_flow
                | _ -> Debug.fail "%a" pp_expr reval
              )
          |> OptionExt.return
@@ -122,9 +142,7 @@ module Domain =
              (fun expr flow ->
                debug "Assuming %a@\n" pp_expr expr;
                match ekind expr with
-               | E_constant (C_top T_bool)
-                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) ->
-                  Post.of_flow flow
+               | E_constant (C_top T_bool) -> Post.of_flow flow
                | E_constant (C_bool true) -> Post.of_flow flow
                | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
 
@@ -138,25 +156,41 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_top T_bool)
+        | E_constant (C_bool _) ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bool")
+
+      | E_constant (C_top T_int)
+        | E_constant (C_int _) ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "int")
+
+      | E_constant (C_string _) ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "str")
+
+      | E_py_bytes _ ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bytes")
+
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
-         let expr = mk_expr (E_get_type_partition builtin_notimpl) range in
-         Eval.singleton expr flow |> OptionExt.return
+         return_id_of_type man flow range builtin_notimpl
 
       | E_constant C_py_none ->
          let builtin_none = Typingdomain.builtin_inst "NoneType" in
-         let expr = mk_expr (E_get_type_partition builtin_none) range in
-         Eval.singleton expr flow |> OptionExt.return
+         return_id_of_type man flow range builtin_none
 
       | E_alloc_addr akind ->
          begin match akind with
-         | A_py_method (f, obj) ->
-            let f = match (fst f).addr_kind with
-              | A_py_function f -> f
-              | _ -> assert false in
-            let expr = mk_expr (E_get_type_partition (Typingdomain.Method (f, 0))) range in
-            Eval.singleton expr flow
-            (* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *)
+         (* | A_py_method (f, obj) ->
+          *    let f = match (fst f).addr_kind with
+          *      | A_py_function f -> f
+          *      | _ -> assert false in
+          *    (\*            Debug.fail "todo"*\)
+          *    let cur = Flow.get_domain_cur man flow in
+          *    let ty = Typingdomain.Method (f, 0) in
+          *    let tid, ncur = Typingdomain.get_type cur ty in
+          *    let flow = Flow.set_domain_cur ncur man flow in
+          *    Eval.singleton (mk_expr (E_type_partition tid) range) flow
+          *    (\* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *\) *)
          | _ ->
             let addr = {addr_kind = akind; addr_uid=(-1)} in
             Eval.singleton (mk_addr addr range) flow
@@ -173,7 +207,9 @@ module Domain =
                | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
                | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
                | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | _ -> mk_expr (E_get_type_partition polytype) range in
+               | _ ->
+                  let tid = Typingdomain.typeindex_of_var cur.d1 v in
+                  mk_expr (E_type_partition tid) range in
              Eval.singleton expr flow
              (* FIXME: properly handle every case *)
              (* let ak = Typingdomain.get_addr_kind cur v in
@@ -191,20 +227,25 @@ module Domain =
            | _ -> assert false in
       (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
          begin match ekind e with
-         | E_py_object ({addr_kind = A_py_module _}, _) ->
-            debug "Module attr access: ok@\n";
-            if Addr.is_builtin_attribute (object_of_expr e) attr then
-              Eval.singleton (mk_py_true range) flow
-            else
-              Eval.singleton (mk_py_false range) flow
-         | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) when Addr.is_builtin_attribute (object_of_expr e) attr ->
-            Eval.singleton (mk_py_true range) flow
-         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) when List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes ->
-            Eval.singleton (mk_py_true range) flow
-         | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn; uattrs; oattrs}) when StringMap.exists (fun k _ -> k = attr) uattrs ->
-            Eval.singleton (mk_py_true range) flow
-         | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn; uattrs; oattrs} as ptype) when StringMap.exists (fun k _ -> k = attr) oattrs ->
-            (* let cur = Flow.get_domain_cur man flow in
+         | E_py_object ({addr_kind = A_py_module _}, _)
+           | E_py_object ({addr_kind = A_py_class (C_builtin _, _)}, _) ->
+            Eval.singleton (mk_py_bool (Addr.is_builtin_attribute (object_of_expr e) attr) range) flow
+         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
+            Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
+         | E_type_partition i ->
+            let cur = Flow.get_domain_cur man flow in
+            let pt = Typingdomain.TypeIdMap.find i cur.d2 in
+            begin match pt with
+            | Typingdomain.Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
+               Eval.singleton (mk_py_true range) flow
+            | Typingdomain.Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
+               Eval.singleton (mk_py_false range) flow
+            | Typingdomain.Instance {classn; uattrs; oattrs} ->
+               Eval.singleton (mk_py_top T_bool range) flow
+            | _ -> Debug.fail "ll_hasattr"
+            end
+            (* FIXME *)
+             (* let cur = Flow.get_domain_cur man flow in
              * let dt, df = Typingdomain.filter_ty_attr cur ptype attr in
              * debug "dt = %a@\n\ndf = %a@\n" print dt print df;
              * let flowt = Flow.set_domain_cur dt man flow in
@@ -213,11 +254,8 @@ module Domain =
              *   (Eval.singleton (mk_py_true range) flowt)
              *   (Eval.singleton (mk_py_false range) flowf) *)
          (* Ne marche pas puisqu'on ne refiltre pas sur l'instance en entrée *)
-            Eval.singleton (mk_py_top T_bool range) flow
-         | _ ->
-            (* FIXME *)
-            debug "%a: unknown case, returning false@\n" pp_expr exp;
-            Eval.singleton (mk_py_false range) flow
+          | _ ->
+            Debug.fail "%a: unknwon case" pp_expr exp
          end
          |> OptionExt.return
 
@@ -226,15 +264,28 @@ module Domain =
          let attr = match ekind attr with
            | E_constant (C_string s) -> s
            | _ -> assert false in
-         begin match ekind e with
-         | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
-            Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
-         | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
-            let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
-            man.eval (mk_var f range) flow
-         | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
-            Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
-         | _ -> Debug.fail "E_py_ll_getattr: todo"
+         begin
+           match ekind e with
+           | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
+              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+           | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
+              let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
+              man.eval (mk_var f range) flow
+           | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
+              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+           | E_type_partition i ->
+              let cur = Flow.get_domain_cur man flow in
+              let pt = Typingdomain.TypeIdMap.find i cur.d2 in
+              begin
+                match pt with
+                | Instance {classn; uattrs; oattrs} ->
+                   let ty = StringMap.find attr uattrs in
+                   let tid, ncur = Typingdomain.get_type cur ty in
+                   let flow = Flow.set_domain_cur ncur man flow in
+                   Eval.singleton (mk_expr (E_type_partition tid) range) flow
+                | _ -> Debug.fail "E_py_ll_getattr: shouldn't happen?"
+              end
+           | _ -> Debug.fail "E_py_ll_getattr: todo"
          end
          |> OptionExt.return
 
@@ -245,7 +296,7 @@ module Domain =
              (* FIXME: test if instance of bool and proceed accordingly *)
                match ekind exp with
                | E_constant (C_top T_bool)
-                 | E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)}) -> Eval.singleton exp flow
+                 (*| E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)})*) -> Eval.singleton exp flow
                | E_constant (C_bool true) ->  Eval.singleton (mk_py_false range) flow
                | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
                | _ -> failwith "not: ni"
@@ -257,7 +308,10 @@ module Domain =
            Eval.bind
              (fun e_arg flow ->
                let cl = match ekind e_arg with
-                 | E_get_type_partition pt ->
+                 | E_type_partition i ->
+                    let cur = Flow.get_domain_cur man flow in
+                    let pt = Typingdomain.TypeIdMap.find i cur.d2 in
+                 (* | E_get_type_partition pt -> *)
                     let ty = match pt with
                       | Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (c, b)} -> (c, b)
                       | Typingdomain.Class _ -> C_builtin "type", [Addr.find_builtin "object"]
@@ -294,9 +348,9 @@ module Domain =
                 let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
                 debug "eobj = %a, eattr = %a@\n" pp_expr eobj pp_expr eattr;
                 match ekind eobj, ekind eattr with
-                | E_get_type_partition ty, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
+                | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
                    let cur = Flow.get_domain_cur man flow in
-                   let dt, df = Typingdomain.filter_ty_inst cur ty (Typingdomain.Class (cls, b)) in
+                   let dt, df = Typingdomain.filter_inst cur tid (Typingdomain.Class (cls, b)) in
                    let flowt = Flow.set_domain_cur dt man flow and
                        flowf = Flow.set_domain_cur df man flow in
                    (* FIXME: just join ? *)
@@ -355,7 +409,10 @@ module Domain =
                     | A_py_class (c, mro) -> c, mro
                     | _ -> assert false in
                   let inst = Instance {classn=Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty} in
-                  Eval.singleton (mk_expr (E_get_type_partition inst) range) flow
+                  let cur = Flow.get_domain_cur man flow in
+                  let tid, ncur = Typingdomain.get_type cur inst in
+                  let flow = Flow.set_domain_cur ncur man flow in
+                  Eval.singleton (mk_expr (E_type_partition tid) range) flow
              )
          |> OptionExt.return
 

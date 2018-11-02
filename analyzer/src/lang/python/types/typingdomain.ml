@@ -660,7 +660,6 @@ let widening ctx d d' =
   else
     Debug.fail "unstable widening not implemented. Recommended widening delay: at least 1"
 
-
 let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   if is_bottom d then bottom else
   (* before mapping v to t in d, we need to check that v is not the root for some aliasing tree *)
@@ -668,23 +667,23 @@ let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   | None -> d
   | Some _ ->
      let tid, ov = typeindex_aliasing_of_var d.d1 v in
-    (* we may update d1 *)
-    match ov with
-    | Some root -> (* the root is something else, we don't need to perform anything *)
-       d
-    | None ->
-       (* we're searching for the elements having (Var v) as root *)
-       let under_v = VarMap.fold (fun k value acc ->
-                         if value.def = Some (Var v) then VarSet.add k acc else acc) d.d1 VarSet.empty in
-       if VarSet.is_empty under_v then d (* no other element *)
-       else
-         let new_root = VarSet.min_elt under_v in
-         let _, _, others = VarSet.split new_root under_v in
-         let d1 = VarMap.add new_root {(VarMap.find new_root d.d1) with def=Some (Ty tid)} d.d1 in
-         let d1 = VarSet.fold (fun o d1 ->
-                      let new_ty = {(VarMap.find o d.d1) with def=Some (Var new_root)} in
-                      VarMap.add o new_ty d.d1) others d1 in
-         {d with d1=d1}
+     (* we may update d1 *)
+     match ov with
+     | Some root -> (* the root is something else, we don't need to perform anything *)
+        d
+     | None ->
+        (* we're searching for the elements having (Var v) as root *)
+        let under_v = VarMap.fold (fun k value acc ->
+                          if value.def = Some (Var v) then VarSet.add k acc else acc) d.d1 VarSet.empty in
+        if VarSet.is_empty under_v then d (* no other element *)
+        else
+          let new_root = VarSet.min_elt under_v in
+          let _, _, others = VarSet.split new_root under_v in
+          let d1 = VarMap.add new_root {(VarMap.find new_root d.d1) with def=Some (Ty tid)} d.d1 in
+          let d1 = VarSet.fold (fun o d1 ->
+                       let new_ty = {(VarMap.find o d.d1) with def=Some (Var new_root)} in
+                       VarMap.add o new_ty d.d1) others d1 in
+          {d with d1=d1}
   in
   (* now, we check if t.def exists already...  *)
   let d, tovou (* Ty or Var or Undef *) =
@@ -703,6 +702,9 @@ let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   let d1 = VarMap.add v tovou d.d1 in
   {d with d1=d1}
 
+let set_var_tid (d:domain) (v:pyVar) (tid:typeid) : domain =
+  let ty = TypeIdMap.find tid d.d2 in
+  set_var d v {lundef=false; gundef=false; def=Some ty}
 
 let set_var_eq (d:domain) (x:pyVar) (y:pyVar) (* x := y *) =
   if is_bottom d then bottom else
@@ -770,6 +772,12 @@ let set_var_attr (d:domain) (v:pyVar) (attr:string) (t:polytype) : domain =
         let d2 = TypeIdMap.add tid new_instance d.d2 in
         {d with d2=d2}
      | _ -> assert false
+
+
+let set_var_attr_ty (d:domain) (v:pyVar) (attr:string) (tid:typeid) : domain =
+  let ty = TypeIdMap.find tid d.d2 in
+  set_var_attr d v attr ty
+
 
 
 let rm_var (d:domain) (v:pyVar) : domain =
