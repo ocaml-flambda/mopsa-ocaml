@@ -981,24 +981,29 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
      else
        (Bot, d3), (p, d3)
   | Class _ -> Debug.fail "filter_polyattr on unsupported or builtin class"
-  | Instance {classn=Class (C_user c, _); uattrs; oattrs} ->
+  | Instance ({classn=Class (C_user c, _); uattrs; oattrs} as inst) ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) uattrs then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) oattrs then
-       cp p d3
+       (* cp p d3 *)
+       let attr_value = StringMap.find attr oattrs in
+       (Instance {inst with uattrs=StringMap.add attr attr_value uattrs; oattrs=StringMap.remove attr oattrs}, d3),
+       (p, d3)
      else
        (Bot, d3), (p, d3)
-  | Instance {classn=Class (C_builtin c, _); uattrs; oattrs} ->
+  | Instance ({classn=Class (C_builtin c, _); uattrs; oattrs} as inst) ->
      let cls = Addr.find_builtin c in
      if Addr.is_builtin_attribute cls attr then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) uattrs then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) oattrs then
-       cp p d3
+       let attr_value = StringMap.find attr oattrs in
+       (Instance {inst with uattrs=StringMap.add attr attr_value uattrs; oattrs=StringMap.remove attr oattrs}, d3),
+       (p, d3)
      else
        (Bot, d3), (p, d3)
   | Instance _ -> Debug.fail "filter_polyattr on unsupported instance"
@@ -1025,6 +1030,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
 let filter_attr (d:domain) (t:typeid) (attr:string) : domain * domain =
   let ty = TypeIdMap.find t d.d2 in
   let (pt, d3t), (pf, d3f) = filter_polyattr (ty, d.d3) attr in
+  debug "Filter_attr: pt=%a, pf=%a@\n" pp_polytype pt pp_polytype pf;
   let dt = match pt with
     | Bot -> bottom
     | _ -> let d2t = TypeIdMap.add t pt d.d2 in

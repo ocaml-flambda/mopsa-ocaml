@@ -145,7 +145,13 @@ module Domain =
                | E_constant (C_top T_bool) -> Post.of_flow flow
                | E_constant (C_bool true) -> Post.of_flow flow
                | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
-
+               | E_type_partition i ->
+                  let cur = Flow.get_domain_cur man flow in
+                  let pt = Typingdomain.TypeIdMap.find i cur.d2 in
+                  begin match pt with
+                        | Instance {classn=Class (C_builtin "bool", _); _} -> Post.of_flow flow
+                        | _ -> Debug.fail "%a" Typingdomain.pp_polytype pt
+                  end
                | _ -> Debug.fail "%a" pp_expr e
              )
          |> OptionExt.return
@@ -169,6 +175,25 @@ module Domain =
 
       | E_py_bytes _ ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "bytes")
+
+      | E_py_list ls ->
+         (* FIXME: not modular *)
+         Eval.eval_list ls man.eval flow |>
+           Eval.bind (fun list_els flow ->
+               let cur = Flow.get_domain_cur man flow in
+               let dummy_annot = Flow.get_all_annot flow in
+               let els_types = List.fold_left (fun acc el ->
+                                   match ekind el with
+                                   | E_type_partition tid ->
+                                      let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
+                                      let mty = Typingdomain.concretize_poly pty cur.d3 in
+                                      Typingdomain.Monotypeset.union dummy_annot mty acc
+                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
+               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
+               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
+               let flow = Flow.set_domain_cur cur man flow in
+               Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
+         |> OptionExt.return
 
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
@@ -243,7 +268,14 @@ module Domain =
             | Typingdomain.Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
                Eval.singleton (mk_py_false range) flow
             | Typingdomain.Instance {classn; uattrs; oattrs} ->
-               Eval.singleton (mk_py_top T_bool range) flow
+               let cur = Flow.get_domain_cur man flow in
+               let dt, df = Typingdomain.filter_attr cur i attr in
+               let flowt = Flow.set_domain_cur dt man flow in
+               let flowf = Flow.set_domain_cur df man flow in
+               (* debug "Bad hasattr on partition %d, initial domain: %a@\n spliting in two cases: %a and %a@\n" i print cur print dt print df; *)
+               Eval.join
+                 (Eval.singleton (mk_py_true range) flowt)
+                 (Eval.singleton (mk_py_false range) flowf)
             | _ -> Debug.fail "ll_hasattr"
             end
             (* FIXME *)
@@ -301,6 +333,13 @@ module Domain =
                  (*| E_get_type_partition (Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (C_builtin "bool", _)})*) -> Eval.singleton exp flow
                | E_constant (C_bool true) ->  Eval.singleton (mk_py_false range) flow
                | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
+               | E_type_partition i ->
+                  let cur = Flow.get_domain_cur man flow in
+                  let pt = Typingdomain.TypeIdMap.find i cur.d2 in
+                  begin match pt with
+                  | Instance {classn=Class (C_builtin "bool", _); _} -> Eval.singleton (mk_py_top T_bool range) flow
+                  | _ -> Debug.fail "%a" Typingdomain.pp_polytype pt
+                  end
                | _ -> failwith "not: ni"
              )
          |> OptionExt.return
@@ -340,6 +379,22 @@ module Domain =
                  | _ -> debug "type(%a)?@\n" pp_expr e_arg; assert false in
                let obj = ({addr_kind=A_py_class (fst cl, snd cl); addr_uid=(-1)}, mk_expr (ekind exp) range) in
                Eval.singleton (mk_py_object obj range) flow
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
+         (* FIXME: TypeError if arg 1 is not a class, arg 2 is not a class or tuple of classes *)
+         Eval.eval_list [cls; cls'] man.eval flow |>
+           Eval.bind (fun evals flow ->
+               let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+               match ekind cls, ekind cls' with
+                   | E_py_object ({addr_kind = A_py_class (c, mro)} as a, _),
+                     E_py_object ({addr_kind = A_py_class (c', mro')} as a', _) ->
+                      if List.exists (fun x -> Universal.Ast.compare_addr (fst x) a' = 0) mro then
+                        Eval.singleton (mk_py_true range) flow
+                      else
+                        Eval.singleton (mk_py_false range) flow
+                   | _ -> Debug.fail "FIXME"
              )
          |> OptionExt.return
 
