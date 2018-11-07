@@ -221,9 +221,12 @@ and print_stat fmt = function
   | AST_print ->
     Format.fprintf fmt "print ()"
 
-  | AST_return e ->
+  | AST_return (Some e) ->
     Format.fprintf fmt "return (%a)"
       print_expr_ext e
+
+  | AST_return None ->
+    Format.fprintf fmt "return"
 
   | AST_expr (e,_) ->
     Format.fprintf fmt "%a"
