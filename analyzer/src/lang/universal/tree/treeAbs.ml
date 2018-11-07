@@ -393,6 +393,7 @@ module Domain : Framework.Domains.Stacked.S = struct
                 | V s -> s
               in
               let v, flow = V.build_tree_from_symbol range man s el flow in
+              let () = debug "inside the bind: %a" (Flow.print man) flow in
               Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set v) range) flow
             ) el
           |> OptionExt.return
@@ -405,18 +406,20 @@ module Domain : Framework.Domains.Stacked.S = struct
       begin
         match cur with
         | BOT ->
+           let b, flow = (V.bottom man range V.SA.empty flow) in
           Eval.singleton
             (mk_expr ~etyp:(etyp exp)
-               (TreeAst.E_tree_set (V.bottom V.SA.empty)) range)
+               (TreeAst.E_tree_set b) range)
             flow
         | Nb u ->
           begin
             match VMap.find_opt v u with
             | None ->
-              Eval.singleton
-                (mk_expr ~etyp:(etyp exp)
-                   (TreeAst.E_tree_set (V.top V.SA.empty)) range)
-                flow
+               let t, flow = (V.top man range V.SA.empty flow) in
+               Eval.singleton
+                 (mk_expr ~etyp:(etyp exp)
+                    (TreeAst.E_tree_set (t)) range)
+                 flow
             | Some x ->
               let x, y, flow' = V.copy range man x flow in
               let u = VMap.add v x u in
