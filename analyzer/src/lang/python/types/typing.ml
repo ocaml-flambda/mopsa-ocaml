@@ -244,9 +244,16 @@ module Domain =
               * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
              |> OptionExt.return
            with Not_found ->
-             debug "builtin variable@\n";
-             let a = Addr.find_builtin v.vname in
-             Eval.singleton (mk_py_object a range) flow |> OptionExt.return
+             if Addr.is_builtin_name v.vname then
+               let a = Addr.find_builtin v.vname in
+               let _ = debug "builtin variable@\n" in
+               Eval.singleton (mk_py_object a range) flow |> OptionExt.return
+             else
+               let cur = Flow.get_domain_cur man flow in
+               let tid, cur = Typingdomain.get_type cur Bot in
+               let flow = Flow.set_domain_cur cur man flow in
+               let () = debug "Cur is now %a@\n" print cur in
+               Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return
          end
       | E_py_ll_hasattr(e, attr) ->
          let attr = match ekind attr with
@@ -261,6 +268,7 @@ module Domain =
             Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
          | E_type_partition i ->
             let cur = Flow.get_domain_cur man flow in
+            debug "cur=%a@\n" print cur;
             let pt = Typingdomain.TypeIdMap.find i cur.d2 in
             begin match pt with
             | Typingdomain.Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
@@ -278,18 +286,8 @@ module Domain =
                  (Eval.singleton (mk_py_false range) flowf)
             | _ -> Debug.fail "ll_hasattr"
             end
-            (* FIXME *)
-             (* let cur = Flow.get_domain_cur man flow in
-             * let dt, df = Typingdomain.filter_ty_attr cur ptype attr in
-             * debug "dt = %a@\n\ndf = %a@\n" print dt print df;
-             * let flowt = Flow.set_domain_cur dt man flow in
-             * let flowf = Flow.set_domain_cur df man flow in
-             * Eval.join
-             *   (Eval.singleton (mk_py_true range) flowt)
-             *   (Eval.singleton (mk_py_false range) flowf) *)
-         (* Ne marche pas puisqu'on ne refiltre pas sur l'instance en entrée *)
-          | _ ->
-            Debug.fail "%a: unknwon case" pp_expr exp
+         | _ ->
+            Eval.empty_singleton flow
          end
          |> OptionExt.return
 
@@ -400,55 +398,55 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
          (* probablement évaluer dans la zone python des types ? *)
-         (Eval.eval_list [obj; attr] man.eval flow |>
-            Eval.bind (fun evals flow ->
-                let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
-                debug "eobj = %a, eattr = %a@\n" pp_expr eobj pp_expr eattr;
-                match ekind eobj, ekind eattr with
-                | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
-                   let cur = Flow.get_domain_cur man flow in
-                   let dt, df = Typingdomain.filter_inst cur tid (Typingdomain.Class (cls, b)) in
-                   let flowt = Flow.set_domain_cur dt man flow and
-                       flowf = Flow.set_domain_cur df man flow in
-                   (* FIXME: just join ? *)
-                   begin match is_bottom dt, is_bottom df with
-                   | true, true -> Eval.empty_singleton flowt
-                   | true, false -> Eval.singleton (mk_py_false range) flowf
-                   | false, true -> Eval.singleton (mk_py_true range) flowt
-                   | false, false ->
-                      Eval.join
-                        (Eval.singleton (mk_py_true range) flowt)
-                        (Eval.singleton (mk_py_false range) flowf)
-                   end
-                | E_py_object ({addr_kind = A_py_function _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
-                   if c = "function" then
+         Eval.eval_list [obj; attr] man.eval flow |>
+           Eval.bind (fun evals flow ->
+               let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+               debug "eobj = %a, eattr = %a@\n" pp_expr eobj pp_expr eattr;
+               match ekind eobj, ekind eattr with
+               | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
+                  let cur = Flow.get_domain_cur man flow in
+                  let dt, df = Typingdomain.filter_inst cur tid (Typingdomain.Class (cls, b)) in
+                  let flowt = Flow.set_domain_cur dt man flow and
+                      flowf = Flow.set_domain_cur df man flow in
+                  (* FIXME: just join ? *)
+                  begin match is_bottom dt, is_bottom df with
+                  | true, true -> Eval.empty_singleton flowt
+                  | true, false -> Eval.singleton (mk_py_false range) flowf
+                  | false, true -> Eval.singleton (mk_py_true range) flowt
+                  | false, false ->
+                     Eval.join
+                       (Eval.singleton (mk_py_true range) flowt)
+                       (Eval.singleton (mk_py_false range) flowf)
+                  end
+               | E_py_object ({addr_kind = A_py_function _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
+                  if c = "function" then
+                    Eval.singleton (mk_py_true range) flow
+                  else
+                    Eval.singleton (mk_py_false range) flow
+               | E_py_object ({addr_kind = A_py_class _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
+                  if c = "type" then
+                    Eval.singleton (mk_py_true range) flow
+                  else
+                    Eval.singleton (mk_py_false range) flow
+               | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
+                  Debug.fail "Left MRO %a@\nRight MRO %a@\n"
+                    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                    mro
+                    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                    mro'
+               | E_py_object ({addr_kind = A_py_module _}, _), _ ->
+                  begin match ekind eattr with
+                  | E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) when c = "object" || c = "module" ->
                      Eval.singleton (mk_py_true range) flow
-                   else
+                  | _ ->
                      Eval.singleton (mk_py_false range) flow
-                | E_py_object ({addr_kind = A_py_class _}, _), E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) ->
-                   if c = "type" then
-                     Eval.singleton (mk_py_true range) flow
-                   else
-                     Eval.singleton (mk_py_false range) flow
-                | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
-                   Debug.fail "Left MRO %a@\nRight MRO %a@\n"
-                       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
-                       mro
-                       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
-                       mro'
-                | E_py_object ({addr_kind = A_py_module _}, _), _ ->
-                   begin match ekind eattr with
-                   | E_py_object ({addr_kind = A_py_class (C_builtin c, _)}, _) when c = "object" || c = "module" ->
-                      Eval.singleton (mk_py_true range) flow
-                   | _ ->
-                      Eval.singleton (mk_py_false range) flow
-                   end
-                | _ ->
-                   Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
+                  end
+               | _ ->
+                  if is_bottom (Flow.get_domain_cur man flow) then Eval.empty_singleton flow else
+                  Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
-         )
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->

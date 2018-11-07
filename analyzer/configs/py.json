@@ -24,6 +24,7 @@
         "python.objects.class",
         "python.objects.function",
         "python.objects.nones",
+        "python.memory.string",
         // todo: numbers, etc
         // todo: container, etc
 
@@ -39,7 +40,7 @@
             "over": {
 		"iter": [
 		    "python.memory.addr_env",
-		    "python.memory.value"
+		    "universal.strings.value"
 		]
 	    }
         }

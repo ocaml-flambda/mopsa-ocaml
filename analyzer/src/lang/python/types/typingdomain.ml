@@ -202,7 +202,7 @@ type domain =
 
 let bottom = {d1=VarMap.empty; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_bottom {d1;d2;d3} =
-  VarMap.is_bottom d1 && TypeIdMap.is_empty d2 && TypeVarMap.is_empty d3
+  VarMap.is_bottom d1 (* && TypeIdMap.is_empty d2 && TypeVarMap.is_empty d3 *)
 
 let top = {d1=VarMap.top; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_top {d1;d2;d3} =
@@ -871,7 +871,7 @@ let get_polytype (d:domain) (v:pyVar) : polytype =
   let i = (VarMap.find v d.d1).def in
   let tid = match i with
     | Some i -> typeindex_of_var d.d1 v
-    | _ -> Debug.fail "get_polytype"
+    | _ -> raise Not_found (*Debug.fail "get_polytype"*)
   in
   TypeIdMap.find tid d.d2
 
