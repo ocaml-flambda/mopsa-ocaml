@@ -1,6 +1,16 @@
 #include <stddef.h>
 
 /*@
+ * requires: n <= size(s);
+ *
+ * assigns : s[0 .. n - 1];
+ *
+ * ensures : forall i in [0 .. n - 1]: s[i] == c
+ *           and return == s;
+ */
+void *memset(void *s, int c, size_t n);
+
+/*@
  * local: l1 = size(s1);
  * local: l2 = size(s2);
  *
@@ -10,8 +20,8 @@
  * requires: n <= min(l1, l2)
  *           and no_overlapping;
  *
- * assigns: s1{0 .. n - 1};
- * ensures: forall i in {0 .. n - 1}: s1[i] == s2[i]
+ * assigns: s1[0 .. n - 1];
+ * ensures: forall i in [0 .. n - 1]: s1[i] == s2[i]
  *          and return == s1;
  */
-void *memcpy (void *__restrict __dest, const void *__restrict __src, size_t __n); 
+void *memcpy (void *s1, const void *s2, size_t n);

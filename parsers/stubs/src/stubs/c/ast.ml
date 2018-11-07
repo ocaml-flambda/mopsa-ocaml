@@ -17,59 +17,52 @@ type range = loc * loc
 type 'a with_range = 'a * range
 
 type stub = {
-    stub_requires : formula list;
-    stub_local    : local list;
-    stub_predicates : predicate list;
-    stub_assigns  : assigns list;
-    stub_case     : case list;
-    stub_ensures  : ensures list;
+    stub_requires : requires with_range list;
+    stub_local    : local with_range list;
+    stub_predicates : predicate with_range list;
+    stub_assigns  : assigns with_range list;
+    stub_case     : case with_range list;
+    stub_ensures  : ensures with_range list;
   }
 
-and formula = formula_kind with_range
-and local = local_kind with_range
-and assigns = assigns_kind with_range
-and case = case_kind with_range
-and expr = expr_kind with_range
-and predicate = predicate_kind with_range
-and requires = formula_kind with_range
-and ensures = formula_kind with_range
-and assumes = formula_kind with_range
+and requires = formula with_range
+and ensures = formula with_range
+and assumes = formula with_range
 
-and local_kind = {
+and local = {
     local_var : var;
     local_value : local_value;
   }
 
 and local_value =
   | Local_new           of resource
-  | Local_function_call of var (** function *) * expr list (* arguments *)
-  | Local_builtin_call  of builtin * expr list
+  | Local_function_call of var (** function *) * expr with_range list (* arguments *)
 
-and assigns_kind = {
-    assign_target : expr;
-    assign_range  : (expr * expr) option;
+and assigns = {
+    assign_target : expr with_range;
+    assign_range  : (expr with_range * expr with_range) option;
   }
 
-and case_kind = {
+and case = {
     case_label: string;
-    case_assumes: assumes list;
-    case_requires : requires list;
-    case_local    : local list;
-    case_assigns  : assigns list;
-    case_ensures  : ensures list;
+    case_assumes: assumes with_range list;
+    case_requires : requires with_range list;
+    case_local    : local with_range list;
+    case_assigns  : assigns with_range list;
+    case_ensures  : ensures with_range list;
   }
 
-and formula_kind =
-  | F_expr   of expr
+and formula =
+  | F_expr   of expr with_range
   | F_bool   of bool
-  | F_binop  of log_binop * formula * formula
-  | F_not    of formula
-  | F_forall of var * set * formula
-  | F_exists of var * set * formula
+  | F_binop  of log_binop * formula with_range * formula with_range
+  | F_not    of formula with_range
+  | F_forall of var * set * formula with_range
+  | F_exists of var * set * formula with_range
   | F_in     of var * set
-  | F_free   of expr
+  | F_free   of expr with_range
 
-and expr_kind =
+and expr =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
@@ -77,23 +70,23 @@ and expr_kind =
 
   | E_var       of var
 
-  | E_unop      of unop  * expr
-  | E_binop     of binop * expr * expr
+  | E_unop      of unop  * expr with_range
+  | E_binop     of binop * expr with_range * expr with_range
 
-  | E_addr_of   of expr
-  | E_deref     of expr
+  | E_addr_of   of expr with_range
+  | E_deref     of expr with_range
 
-  | E_subscript of expr * expr
-  | E_member    of expr * string
-  | E_arrow     of expr * string
+  | E_subscript of expr with_range * expr with_range
+  | E_member    of expr with_range * string
+  | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin * expr
+  | E_builtin_call  of builtin * expr with_range
 
   | E_return
 
-and predicate_kind = {
+and predicate = {
   predicate_var : var;
-  predicate_body: formula;
+  predicate_body: formula with_range;
 }
 
 and log_binop =
@@ -128,7 +121,7 @@ and unop =
   | BNOT    (* ~ *)
 
 and set =
-  | S_interval of expr * expr
+  | S_interval of expr with_range * expr with_range
   | S_resource of resource
 
 and resource = string

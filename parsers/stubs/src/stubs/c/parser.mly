@@ -17,7 +17,6 @@
 	col = pos.pos_cnum - pos.pos_bol + 1;
       }
 
-    let with_range (e: 'a) pos1 pos2 : 'a with_range = (e, (pos_to_loc pos1, pos_to_loc pos2))
 %}
 
 (* Constants *)
@@ -80,180 +79,171 @@
 
 %start stub
 
-%type <Ast.stub Ast.with_range> stub
+%type <Ast.stub> stub
+
+%type <Ast.requires> requires
 
 %%
 
 stub:
   | local_list predicate_list requires_list assigns_list EOF
     {
-      with_range {
-          stub_local    = $1;
-          stub_predicates = $2;
-          stub_requires = $3;
-          stub_assigns  = $4;
-          stub_case     = [];
-          stub_ensures  = [];
-        }
-      $startpos $endpos
+      {
+        stub_local    = $1;
+        stub_predicates = $2;
+        stub_requires = $3;
+        stub_assigns  = $4;
+        stub_case     = [];
+        stub_ensures  = [];
+      }
     }
 
   | local_list predicate_list requires_list assigns_list case_list EOF
     {
-      with_range {
-          stub_local    = $1;
-          stub_predicates = $2;
-          stub_requires = $3;
-          stub_assigns  = $4;
-          stub_case     = $5;
-          stub_ensures  = [];
-        }
-      $startpos $endpos
+      {
+        stub_local    = $1;
+        stub_predicates = $2;
+        stub_requires = $3;
+        stub_assigns  = $4;
+        stub_case     = $5;
+        stub_ensures  = [];
+      }
     }
 
   | local_list predicate_list requires_list assigns_list ensures_list EOF
     {
-      with_range {
-          stub_local    = $1;
-          stub_predicates = $2;
-          stub_requires = $3;
-          stub_assigns  = $4;
-          stub_case     = [];
-          stub_ensures  = $5;
-	}
-      $startpos $endpos
+      {
+        stub_local    = $1;
+        stub_predicates = $2;
+        stub_requires = $3;
+        stub_assigns  = $4;
+        stub_case     = [];
+        stub_ensures  = $5;
+      }
     }
 
 requires_list:
   | { [] }
-  | requires requires_list { $1 :: $2 }
+  | with_range(requires) requires_list { $1 :: $2 }
 
 requires:
-  | REQUIRES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
+  | REQUIRES COLON with_range(formula) SEMICOL { $3 }
 
 local_list:
   | { [] }
-  | local local_list { $1 :: $2 }
+  | with_range(local) local_list { $1 :: $2 }
 
 local:
   | LOCAL COLON IDENT ASSIGN local_value SEMICOL
     {
-      with_range {
-          local_var = $3;
-          local_value = $5;
-        }
-      $startpos $endpos
+      {
+        local_var = $3;
+        local_value = $5;
+      }
     }
 
 local_value:
   | NEW resource { Local_new $2 }
-  | builtin LPAR args RPAR { Local_builtin_call ($1, $3) }
   | IDENT LPAR args RPAR { Local_function_call ($1, $3) }
 
 predicate_list:
   | { [] }
-  | predicate predicate_list { $1 :: $2 }
+  | with_range(predicate) predicate_list { $1 :: $2 }
 
 predicate:
-  | PREDICATE IDENT COLON formula SEMICOL
+  | PREDICATE IDENT COLON with_range(formula) SEMICOL
     {
-      with_range {
-          predicate_var = $2;
-          predicate_body = $4;
-        }
-      $startpos $endpos
+      {
+        predicate_var = $2;
+        predicate_body = $4;
+      }
     }
 
 assigns_list:
   | { [] }
-  | assigns assigns_list { $1 :: $2 }
+  | with_range(assigns) assigns_list { $1 :: $2 }
 
 assigns:
-  | ASSIGNS COLON expr SEMICOL
+  | ASSIGNS COLON with_range(expr) SEMICOL
     {
-      with_range {
-	  assign_target = $3;
-	  assign_range = None;
-	}
-      $startpos $endpos
+      {
+	assign_target = $3;
+	assign_range = None;
+      }
     }
 
-  | ASSIGNS COLON expr LBRACK expr DOT DOT expr RBRACK
+  | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK
     {
-      with_range {
-	  assign_target = $3;
-	  assign_range = Some ($5, $8);
-	}
-      $startpos $endpos
+      {
+	assign_target = $3;
+	assign_range = Some ($5, $8);
+      }
     }
 
 case_list:
-  | case { [ $1 ] }
-  | case case_list { $1 :: $2 }
+  | with_range(case) { [ $1 ] }
+  | with_range(case) case_list { $1 :: $2 }
 
 case:
   | CASE STRING COLON assumes_list requires_list local_list assigns_list ensures_list
     {
-      with_range {
-          case_label    = $2;
-          case_assumes  = $4;
-          case_requires = $5;
-          case_local    = $6;
-          case_assigns  = $7;
-          case_ensures  = $8;
-	}
-      $startpos $endpos
+      {
+        case_label    = $2;
+        case_assumes  = $4;
+        case_requires = $5;
+        case_local    = $6;
+        case_assigns  = $7;
+        case_ensures  = $8;
+      }
     }
 
 assumes_list:
   | { [] }
-  | assumes assumes_list { $1 :: $2 }
+  | with_range(assumes) assumes_list { $1 :: $2 }
 
 assumes:
-  | ASSUMES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
+  | ASSUMES COLON with_range(formula) SEMICOL { $3 }
 
 ensures_list:
-  | ensures { [ $1 ] }
-  | ensures ensures_list { $1 :: $2 }
+  | with_range(ensures) { [ $1 ] }
+  | with_range(ensures) ensures_list { $1 :: $2 }
 
 ensures:
-  | ENSURES COLON formula_kind SEMICOL { with_range $3 $startpos $endpos }
+  | ENSURES COLON with_range(formula) SEMICOL { $3 }
 
 formula:
   | RPAR formula RPAR         { $2 }
-  | formula_kind { with_range $1 $startpos $endpos }
-
-formula_kind:
-  | TRUE                      { F_bool true }
-  | FALSE                     { F_bool false }
-  | expr                      { F_expr $1 }
-  | formula log_binop formula { F_binop ($2, $1, $3) }
-  | NOT formula               { F_not $2 }
-  | FORALL IDENT IN set COLON formula { F_forall ($2, $4, $6) } %prec FORALL
-  | EXISTS IDENT IN set COLON formula { F_exists ($2, $4, $6) } %prec EXISTS
+  | with_range(TRUE)                      { F_bool true }
+  | with_range(FALSE)                     { F_bool false }
+  | with_range(expr)                      { F_expr $1 }
+  | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
+  | NOT with_range(formula)               { F_not $2 }
+  | FORALL IDENT IN set COLON with_range(formula) { F_forall ($2, $4, $6) } %prec FORALL
+  | EXISTS IDENT IN set COLON with_range(formula) { F_exists ($2, $4, $6) } %prec EXISTS
   | IDENT IN set                { F_in ($1, $3) }
-  | FREE expr                 { F_free $2 }
+  | FREE with_range(expr)                 { F_free $2 }
 
 expr:
   | LPAR expr RPAR { $2 }
+  | LPAR typ RPAR with_range(expr) { E_cast ($2, $4) }
   | PLUS expr { $2 }
-  | expr_kind { with_range $1 $startpos $endpos }
-
-expr_kind:
   | INT                     { E_int $1 }
   | STRING                  { E_string $1}
   | FLOAT                   { E_float $1 }
   | CHAR                    { E_char $1 }
-  | IDENT                   { E_var $1 }
-  | unop expr               { E_unop ($1, $2) }       %prec UNARY
-  | expr binop expr         { E_binop ($2, $1, $3) }
-  | ADDROF expr             { E_addr_of $2 }          %prec UNARY
-  | STAR expr               { E_deref $2 }            %prec UNARY
-  | expr LBRACK expr RBRACK { E_subscript ($1, $3) }
-  | expr DOT IDENT          { E_member ($1, $3) }
-  | expr ARROW IDENT        { E_arrow ($1, $3) }
+  | IDENT                               { E_var $1 }
+  | unop with_range(expr)               { E_unop ($1, $2) }       %prec UNARY
+  | with_range(expr) binop with_range(expr)         { E_binop ($2, $1, $3) }
+  | ADDROF with_range(expr)             { E_addr_of $2 }          %prec UNARY
+  | STAR with_range(expr)               { E_deref $2 }            %prec UNARY
+  | with_range(expr) LBRACK with_range(expr) RBRACK { E_subscript ($1, $3) }
+  | with_range(expr) DOT IDENT          { E_member ($1, $3) }
+  | with_range(expr) ARROW IDENT        { E_arrow ($1, $3) }
   | RETURN                  { E_return }
-  | builtin LPAR expr RPAR  { E_builtin_call ($1, $3) }
+  | builtin LPAR with_range(expr) RPAR  { E_builtin_call ($1, $3) }
+
+typ:
+  | IDENT { $1 }
 
 %inline binop:
   | PLUS { ADD }
@@ -281,7 +271,7 @@ expr_kind:
   | BNOT { BNOT }
 
 set:
-  | LBRACK expr DOT DOT expr RBRACK { S_interval ($2, $5) }
+  | LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK { S_interval ($2, $5) }
   | resource { S_resource $1 }
 
 %inline log_binop:
@@ -297,8 +287,12 @@ set:
 
 args:
   | { [] }
-  | expr COLON args { $1 :: $3 }
-  | expr { [ $1 ] }
+  | with_range(expr) COLON args { $1 :: $3 }
+  | with_range(expr) { [ $1 ] }
 
 resource:
   | IDENT { $1 }
+
+// adds range information to rule
+%inline with_range(X):
+  | x=X { x, (pos_to_loc $startpos, pos_to_loc $endpos) }
