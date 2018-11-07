@@ -45,7 +45,7 @@ alarms flows libs desugar objects data_model types program memory
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typingdomain typing t_string t_int
-lang.python.memory = value addr_env string
+lang.python.memory = value addr_env py_string
 
 lang.cfg = ast pp visitor frontend iterator
 
