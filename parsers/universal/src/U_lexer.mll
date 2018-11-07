@@ -37,6 +37,8 @@ let _ =
      "if",     TOK_IF;
      "else",   TOK_ELSE;
      "return", TOK_RETURN;
+     "break",  TOK_BREAK;
+     "continue", TOK_CONTINUE;
 
      (* special statements *)
      "assert", TOK_ASSERT;

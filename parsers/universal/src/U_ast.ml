@@ -140,7 +140,11 @@ type stat =
 
   | AST_for of (var ext * expr ext * expr ext * stat ext)
 
-  | AST_return of expr ext
+  | AST_return of (expr ext) option
+
+  | AST_break
+
+  | AST_continue
 
   (* assertion: exit if the boolean expression does not hold *)
   | AST_assert of expr ext

@@ -29,6 +29,8 @@
 %token TOK_IF
 %token TOK_ELSE
 %token TOK_RETURN
+%token TOK_BREAK
+%token TOK_CONTINUE
 %token TOK_RAND
 %token TOK_ASSERT
 %token TOK_PRINT
@@ -224,7 +226,7 @@ block_no_curly:
 
     // statements
 
-topt:
+%inline topt:
 | TOK_VOID { None }
 | t=typ { Some t }
 
@@ -251,7 +253,16 @@ stat:
   { AST_print }
 
 | TOK_RETURN e=ext(expr) TOK_SEMICOLON
-   { AST_return e }
+   { AST_return (Some e) }
+
+| TOK_RETURN TOK_SEMICOLON
+   { AST_return None }
+
+| TOK_BREAK TOK_SEMICOLON
+   { AST_break }
+
+| TOK_CONTINUE TOK_SEMICOLON
+   { AST_continue }
 
 | TOK_FOR TOK_LPAREN v=ext(var) TOK_COMMA e1=ext(expr) TOK_COMMA e2=ext(expr) st=ext(stat) TOK_SEMICOLON?
    { AST_for(v, e1, e2, st) }
@@ -260,11 +271,11 @@ stat:
   { AST_expr e }
 
 fundec:
-| t=typ f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
+| t=topt f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY
    ldec=list(ext(declaration))
    st=ext(block_no_curly)
    TOK_RCURLY
-{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = Some t}}
+{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
 
 prog:
 | st=ext(block_no_curly)
