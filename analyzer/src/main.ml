@@ -41,6 +41,7 @@ let get_config_path () =
 let parse_program files =
   match Options.(common_options.lang) with
   | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "cfg" -> Lang.Cfg.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
   | "java" -> Lang.Jvm.Frontend.parse_program files
