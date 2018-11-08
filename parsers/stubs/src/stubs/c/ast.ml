@@ -16,14 +16,23 @@ type range = loc * loc
 
 type 'a with_range = 'a * range
 
-type stub = {
-    stub_requires : requires with_range list;
-    stub_local    : local with_range list;
-    stub_predicates : predicate with_range list;
-    stub_assigns  : assigns with_range list;
-    stub_case     : case with_range list;
-    stub_ensures  : ensures with_range list;
-  }
+type stub =
+  | S_simple of simple_stub
+  | S_multi of multi_stub
+
+and simple_stub = {
+  simple_predicates : predicate with_range list;
+  simple_requires   : requires with_range list;
+  simple_assigns    : assigns with_range list;
+  simple_local      : local with_range list;
+  simple_ensures    : ensures with_range list;
+}
+
+and multi_stub = {
+  multi_predicates : predicate with_range list;
+  multi_requires   : requires with_range list;
+  multi_cases      : case with_range list;
+}
 
 and requires = formula with_range
 and ensures = formula with_range
@@ -31,7 +40,6 @@ and assumes = formula with_range
 
 and local = {
     local_var : var;
-    local_typ : typ;
     local_value : local_value;
   }
 
@@ -40,16 +48,16 @@ and local_value =
   | Local_function_call of var (** function *) * expr with_range list (* arguments *)
 
 and assigns = {
-    assign_target : expr with_range;
-    assign_range  : (expr with_range * expr with_range) option;
+    assigns_target : expr with_range;
+    assigns_range  : (expr with_range * expr with_range) option;
   }
 
 and case = {
     case_label: string;
     case_assumes: assumes with_range list;
     case_requires : requires with_range list;
-    case_local    : local with_range list;
     case_assigns  : assigns with_range list;
+    case_local    : local with_range list;
     case_ensures  : ensures with_range list;
   }
 
@@ -99,6 +107,7 @@ and typ =
   | T_user of var
   | T_struct of var
   | T_union of var
+  | T_predicate
   | T_unknown
 
 and predicate = {
@@ -155,7 +164,16 @@ and builtin =
   | OFFSET
   | BASE
 
-let map_kind (a: 'a with_range) (f: 'a -> 'b) : 'b =
+let compare_var v1 v2 =
+  Compare.compose [
+    (fun () -> compare v1.var_name v2.var_name);
+    (fun () -> compare v1.var_uid v2.var_uid);
+  ]
+
+let without_range (a: 'a with_range) (f: 'a -> 'b) : 'b =
   f (fst a)
 
-let kind (a: 'a with_range) : 'a = fst a
+let bind_range (a: 'a with_range) (f: 'a -> 'b) : 'b with_range =
+  let x, range = a in
+  let y = f x in
+  (y, range)

@@ -3,7 +3,7 @@ TARGET_LIBS = mlStubsParser
 # Packs
 mlStubsParser = stubs
 stubs = c
-stubs.c = ast parser lexer printer
+stubs.c = ast parser lexer printer scope
 
 # Packages
 PKGS = zarith
