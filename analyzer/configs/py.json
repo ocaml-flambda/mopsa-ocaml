@@ -15,6 +15,7 @@
         "universal.iterators.intraproc",
         "universal.iterators.interproc.inlining",
         "universal.iterators.loops",
+        "universal.iterators.unittest",
 
         "python.libs.mopsa",
         "python.libs.stdlib",
@@ -25,6 +26,7 @@
         "python.objects.function",
         "python.objects.nones",
         "python.memory.string",
+        "python.memory.int",
         // todo: numbers, etc
         // todo: container, etc
 
@@ -40,7 +42,9 @@
             "over": {
 		"iter": [
 		    "python.memory.addr_env",
-		    "universal.strings.value"
+		    "python.memory.vdispatcher",
+                    "universal.strings.value",
+                    "universal.numeric.values.intervals"
 		]
 	    }
         }

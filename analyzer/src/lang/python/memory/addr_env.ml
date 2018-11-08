@@ -91,7 +91,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py]; import = [Universal.Zone.Z_u_string]}
+  let exec_interface = {export = [Zone.Z_py]; import = [Zone.Z_py_value]}
   let eval_interface = {export = [any_zone, any_zone]; import = []}
 
   let print fmt m =
@@ -131,10 +131,10 @@ struct
                        | A_py_class (C_builtin "str", _) -> T_string
                        | A_py_class (C_builtin "NoneType", _) -> T_py_none
                        | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
-                       | _ -> T_py_empty
+                       | _s -> T_py_empty
                      in
                      let v' = mk_avar addr.addr_uid ~vtyp:t () in
-                     man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (mk_var v' range) ev range) flow |> Post.of_flow
+                     man.exec ~zone:Zone.Z_py_value (mk_assign (mk_var v' range) ev range) flow |> Post.of_flow
                    )
             | _ -> debug "%a@\n" pp_expr e; assert false
           )
@@ -213,6 +213,12 @@ struct
              match ekind e_arg with
              | E_py_object ({addr_kind = A_py_instance (instobj, _)}, _) ->
                 Eval.singleton (mk_py_object instobj range) flow
+             | E_py_object ({addr_kind = A_py_class _}, _) ->
+                Eval.singleton (mk_py_object (Addr.find_builtin "type") range) flow
+             | E_py_object ({addr_kind = A_py_module _}, _) ->
+                Eval.singleton (mk_py_object (Addr.find_builtin "module") range) flow
+             | E_py_object ({addr_kind = A_py_function _}, _) ->
+                Eval.singleton (mk_py_object (Addr.find_builtin "function") range) flow
              | _ -> assert false)
        |> OptionExt.return
     | _ -> None

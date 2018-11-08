@@ -196,7 +196,7 @@ let class_of_object (obj: py_object) : py_object =
 
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class (c, b) -> b
+  | A_py_class (c, b) -> obj::b
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
