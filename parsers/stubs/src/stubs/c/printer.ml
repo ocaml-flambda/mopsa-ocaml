@@ -120,7 +120,8 @@ let pp_opt pp fmt o =
 
 let rec pp_local fmt local =
   map_kind local @@ fun local ->
-  fprintf fmt "local: %a = @[%a@];"
+  fprintf fmt "local: %a %a = @[%a@];"
+    pp_typ local.local_typ
     pp_var local.local_var
     pp_local_value local.local_value
 

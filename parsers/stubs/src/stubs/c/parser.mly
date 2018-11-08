@@ -142,11 +142,12 @@ local_list:
   | with_range(local) local_list { $1 :: $2 }
 
 local:
-  | LOCAL COLON var ASSIGN local_value SEMICOL
+  | LOCAL COLON typ var ASSIGN local_value SEMICOL
     {
       {
-        local_var = $3;
-        local_value = $5;
+        local_var = $4;
+        local_typ = $3;
+        local_value = $6;
       }
     }
 
