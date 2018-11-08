@@ -55,6 +55,18 @@
 %token FORALL EXISTS IN NEW
 %token FREE OLD RETURN SIZE OFFSET BASE
 
+(* Types *)
+%token TCHAR TINT TLONG TFLOAT TDOUBLE
+%token SIGNED UNSIGNED CONST
+%token STRUCT UNION
+
+(* Priorities of logical operators *)
+%left IMPLIES
+%left OR
+%left AND
+%nonassoc FORALL EXISTS
+%nonassoc NOT
+
 (* Priorities of C operators *)
 %left LOR
 %left LAND
@@ -64,18 +76,14 @@
 %left EQ NEQ
 %left LT GT LE GE
 %left RSHIFT LSHIFT
+
 %left PLUS MINUS
 %left STAR DIV MOD
-%nonassoc LBRACK
+%nonassoc CAST
+%left LBRACK
 %nonassoc UNARY
 %left DOT ARROW
 
-(* Priorities of logical operators *)
-%left IMPLIES
-%left OR
-%left AND
-%nonassoc FORALL EXISTS
-%nonassoc NOT
 
 %start stub
 
@@ -134,7 +142,7 @@ local_list:
   | with_range(local) local_list { $1 :: $2 }
 
 local:
-  | LOCAL COLON IDENT ASSIGN local_value SEMICOL
+  | LOCAL COLON var ASSIGN local_value SEMICOL
     {
       {
         local_var = $3;
@@ -144,14 +152,14 @@ local:
 
 local_value:
   | NEW resource { Local_new $2 }
-  | IDENT LPAR args RPAR { Local_function_call ($1, $3) }
+  | var LPAR args RPAR { Local_function_call ($1, $3) }
 
 predicate_list:
   | { [] }
   | with_range(predicate) predicate_list { $1 :: $2 }
 
 predicate:
-  | PREDICATE IDENT COLON with_range(formula) SEMICOL
+  | PREDICATE var COLON with_range(formula) SEMICOL
     {
       {
         predicate_var = $2;
@@ -218,20 +226,20 @@ formula:
   | with_range(expr)                      { F_expr $1 }
   | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
   | NOT with_range(formula)               { F_not $2 }
-  | FORALL IDENT IN set COLON with_range(formula) { F_forall ($2, $4, $6) } %prec FORALL
-  | EXISTS IDENT IN set COLON with_range(formula) { F_exists ($2, $4, $6) } %prec EXISTS
-  | IDENT IN set                { F_in ($1, $3) }
+  | FORALL var IN set COLON with_range(formula) { F_forall ($2, $4, $6) } %prec FORALL
+  | EXISTS var IN set COLON with_range(formula) { F_exists ($2, $4, $6) } %prec EXISTS
+  | var IN set                { F_in ($1, $3) }
   | FREE with_range(expr)                 { F_free $2 }
 
 expr:
+  | LPAR typ RPAR with_range(expr) { E_cast ($2, $4) }            %prec CAST
   | LPAR expr RPAR { $2 }
-  | LPAR typ RPAR with_range(expr) { E_cast ($2, $4) }
   | PLUS expr { $2 }
   | INT                     { E_int $1 }
   | STRING                  { E_string $1}
   | FLOAT                   { E_float $1 }
   | CHAR                    { E_char $1 }
-  | IDENT                               { E_var $1 }
+  | var                               { E_var $1 }
   | unop with_range(expr)               { E_unop ($1, $2) }       %prec UNARY
   | with_range(expr) binop with_range(expr)         { E_binop ($2, $1, $3) }
   | ADDROF with_range(expr)             { E_addr_of $2 }          %prec UNARY
@@ -243,7 +251,20 @@ expr:
   | builtin LPAR with_range(expr) RPAR  { E_builtin_call ($1, $3) }
 
 typ:
-  | IDENT { $1 }
+  | SIGNED typ { T_signed $2 }
+  | UNSIGNED typ { T_unsigned $2 }
+  | CONST typ { T_const $2 }
+  | typ_spec { $1 }
+
+typ_spec:
+  | TCHAR { T_char }
+  | TINT { T_int }
+  | TFLOAT { T_float }
+  | TDOUBLE { T_double }
+  | TLONG { T_long }
+  | STRUCT var { T_struct $2 }
+  | UNION var { T_union $2 }
+  | typ_spec STAR { T_pointer $1 }
 
 %inline binop:
   | PLUS { ADD }
@@ -292,6 +313,9 @@ args:
 
 resource:
   | IDENT { $1 }
+
+var:
+  | IDENT { { var_name = $1; var_uid = 0; var_typ = T_unknown; } }
 
 // adds range information to rule
 %inline with_range(X):

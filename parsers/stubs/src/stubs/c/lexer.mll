@@ -38,6 +38,19 @@ let _ =
      "exists",  EXISTS;
      "in",    IN;
 
+     (* Types *)
+     "char", TCHAR;
+     "int", TINT;
+     "long", TLONG;     
+     "double", TDOUBLE;
+     "float", TFLOAT;
+     "signed", UNSIGNED;
+     "unsigned", UNSIGNED;
+     "const", CONST;
+     "struct", STRUCT;
+     "union", UNION;     
+
+
      (* Built-ins *)
      "old",     OLD;
      "size",   SIZE;

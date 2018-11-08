@@ -9,7 +9,7 @@
 open Ast
 open Format
 
-let pp_var fmt v = pp_print_string fmt v
+let pp_var fmt v = pp_print_string fmt v.var_name
 
 let pp_resource fmt resource = pp_print_string fmt resource
 
@@ -32,6 +32,7 @@ let rec pp_expr fmt exp =
   | E_binop (op, e1, e2) -> fprintf fmt "(%a) %a (%a)" pp_expr e1 pp_binop op pp_expr e2
   | E_addr_of e -> fprintf fmt "&(%a)" pp_expr e
   | E_deref e -> fprintf fmt "*(%a)" pp_expr e
+  | E_cast(t, e) -> fprintf fmt "(%a) %a" pp_typ t pp_expr e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
@@ -66,7 +67,23 @@ and pp_binop fmt =
   | BAND    -> pp_print_string fmt "&"
   | BXOR    -> pp_print_string fmt "^"
 
-let rec pp_formula fmt (f:formula) =
+and pp_typ fmt =
+  function
+  | T_int -> pp_print_string fmt "int"
+  | T_char -> pp_print_string fmt "char"
+  | T_pointer t -> fprintf fmt "%a *" pp_typ t
+  | T_user t  -> pp_var fmt t
+  | T_long -> pp_print_string fmt "int"
+  | T_float -> pp_print_string fmt "int"
+  | T_double -> pp_print_string fmt "int"
+  | T_signed t -> fprintf fmt "signed %a" pp_typ t
+  | T_unsigned t -> fprintf fmt "signed %a" pp_typ t
+  | T_const t -> fprintf fmt "signed %a" pp_typ t
+  | T_struct s -> fprintf fmt "struct %a" pp_var s
+  | T_union u -> fprintf fmt "union %a" pp_var u
+  | T_unknown -> pp_print_string fmt "?"
+
+let rec pp_formula fmt (f:formula with_range) =
   match kind f with
   | F_expr e -> pp_expr fmt e
   | F_bool true  -> pp_print_string fmt "true"
@@ -110,17 +127,17 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_builtin_call (f, args) -> fprintf fmt "%a(%a)" pp_builtin f pp_arguments args
   | Local_function_call (f, args) -> fprintf fmt "%a(%a)" pp_var f pp_arguments args
 
 
-let pp_predicate fmt (predicate:predicate) =
+let pp_predicate fmt (predicate:predicate with_range) =
   map_kind predicate @@ fun predicate ->
   fprintf fmt "predicate %a: @[%a@];"
     pp_var predicate.predicate_var
     pp_formula predicate.predicate_body
 
 let pp_requires fmt requires =
+  map_kind requires @@ fun requires ->
   fprintf fmt "requires: @[%a@];" pp_formula requires
 
 let pp_assigns fmt assigns =
@@ -133,10 +150,12 @@ let pp_assigns fmt assigns =
     ) assigns.assign_range
 
 
-let pp_assumes fmt (assumes:assumes) =
+let pp_assumes fmt (assumes:assumes with_range) =
+  map_kind assumes @@ fun assumes ->
   fprintf fmt "assumes: @[%a@];" pp_formula assumes
 
 let pp_ensures fmt ensures =
+  map_kind ensures @@ fun ensures ->
   fprintf fmt "ensures: @[%a@];" pp_formula ensures
 
 let pp_case fmt case =

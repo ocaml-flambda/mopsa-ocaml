@@ -75,6 +75,7 @@ and expr =
 
   | E_addr_of   of expr with_range
   | E_deref     of expr with_range
+  | E_cast      of typ * expr with_range
 
   | E_subscript of expr with_range * expr with_range
   | E_member    of expr with_range * string
@@ -83,6 +84,21 @@ and expr =
   | E_builtin_call  of builtin * expr with_range
 
   | E_return
+
+and typ =
+  | T_char
+  | T_int
+  | T_long
+  | T_float
+  | T_double
+  | T_pointer of typ
+  | T_signed of typ
+  | T_unsigned of typ
+  | T_const of typ
+  | T_user of var
+  | T_struct of var
+  | T_union of var
+  | T_unknown
 
 and predicate = {
   predicate_var : var;
@@ -126,7 +142,11 @@ and set =
 
 and resource = string
 
-and var = string
+and var = {
+    var_name: string;
+    var_uid: int;
+    var_typ: typ;
+  }
 
 and builtin =
   | OLD
