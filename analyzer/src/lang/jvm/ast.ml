@@ -17,7 +17,6 @@ open JCode
 open Framework.Ast
 open Framework.Flow
 open Framework.Manager
-open Framework.Location
 open Universal.Ast
 open Cfg.Ast
 
@@ -63,7 +62,7 @@ type token +=
 
    (** subroutines *)
    | F_java_jsr               (** subroutine jump *)
-   | F_java_ret of loc        (** return from subroutine, with ret_site *)
+   | F_java_ret of node_id    (** return from subroutine, with ret_site *)
    | F_java_ret_site          (** ret site: instruction following jsr *)
 
    (** methods *)
@@ -167,7 +166,7 @@ let () =
           | F_java_ret_site, F_java_ret_site
           | F_java_return_site, F_java_return_site
           | F_java_exn, F_java_exn -> 0
-        | F_java_ret a, F_java_ret b -> compare_location a b
+        | F_java_ret a, F_java_ret b -> TagLoc.compare a b
         | F_java_switch i1, F_java_switch i2 -> compare i1 i2
         | _ -> next t1 t2                                            
       );
@@ -175,7 +174,7 @@ let () =
         match token with
         | F_java_if_true -> Format.pp_print_string fmt "true"
         | F_java_jsr -> Format.pp_print_string fmt "jsr"
-        | F_java_ret i -> Format.fprintf fmt "ret %a" pp_location i
+        | F_java_ret i -> Format.fprintf fmt "ret %a" pp_node_id i
         | F_java_ret_site -> Format.pp_print_string fmt "ret-site"
         | F_java_return_site -> Format.pp_print_string fmt "return-site"
         | F_java_exn -> Format.pp_print_string fmt "exn"

@@ -32,8 +32,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         classes : RegexpPartition.t;
         env     : RegexpPartition.t;
         varbind : StrVarBind.t;
-        (* height    : var;
-         * size    : var; *)
+        height    : var;
+        size    : var;
       }
 
     let fresh_var = mk_tmp ~vtyp:Ast.T_int
@@ -90,12 +90,15 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
     let print fmt (u: t) =
       Format.fprintf fmt "@[<v>⯈ shape: @[<v 2>@,%a@]@,⯈ support: @[<v \
                           2>@,%a@]@,⯈ classes: @[<v 2>@,%a@]@,⯈ env: \
-                          @[<v 2>@,%a@]@,⯈ varbind: @[<v 2>@,%a@]@,@]"
+                          @[<v 2>@,%a@]@,⯈ varbind: @[<v 2>@,%a@]@,⯈ \
+                          height: @[<v 2>@,%a@]@,⯈ size: @[<v 2>@,%a@]@,@]"
         TA.print_dfta u.shape
         RegExp.pp_print_u (RegExp.regexp_of_automata u.support)
         RegexpPartition.print_left u.classes
         RegexpPartition.print u.env
         StrVarBind.print u.varbind
+        Var.print u.height
+        Var.print u.size
     (* Numerical.print u.numeric *)
 
     let automata_algebra_on_n (sa: TA.sigma_algebra) =
@@ -595,14 +598,14 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           let num_u, vb_u = Numerical.renaming_list (mk_fresh_range ()) man u.varbind renaming_u u_num in
           let num_v, vb_v = Numerical.renaming_list (mk_fresh_range ()) man v.varbind renaming_v v_num in
 
-          {
+          { u with
             shape = nshape_u;
             support = nsupport_u;
             classes = nclasses_u;
             env = nenv_u;
             varbind = vb_u;
           } |> vb_sanitize,
-          {
+          { v with
             shape = nshape_v;
             support = nsupport_v;
             classes = nclasses_v;
@@ -613,16 +616,19 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           num_v
         end
 
-    (* let same_height_and_size (man) u u_num v v_num =
-     *   u_num, man.exec (mk_rename v.height u.height (mk_fresh_range ())) v_num
-     *   |> man.exec (mk_rename v.size u.size (mk_fresh_range ())) *)
+    let same_height_and_size (man) u u_num v v_num =
+      u_num, man.exec (mk_rename v.height u.height (mk_fresh_range ())) v_num
+      |> man.exec (mk_rename v.size u.size (mk_fresh_range ()))
 
+    let same_height_and_size_one_num man u v num =
+      Numerical.fold_var (mk_fresh_range ()) man [u.height; v.height] u.height num
+      |> Numerical.fold_var (mk_fresh_range ()) man [u.size; v.size] u.size
 
     let meet (man: ('b, 'b) man) (u: t) (u_num: 'b flow) (v: t) (v_num: 'b flow)
         : (t * 'b flow * 'b flow) =
 
       let u, v, u_num, v_num = common_env man u u_num v v_num in
-      (* let u_num, v_num = same_height_and_size man u u_num v v_num in *)
+      let u_num, v_num = same_height_and_size man u u_num v v_num in
 
       let sa = TA.get_sigma_algebra u.shape in
       let auto_algebra = automata_algebra_on_n sa in
@@ -655,7 +661,9 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           support = nsupport;
           classes = nclasses;
           env = n_common_env;
-          varbind = vb_u
+          varbind = vb_u;
+          height = u.height;
+          size = u.size;
         }
       in
       (* TODO: on aimerait normaliser prep après, mais on n'a pas le
@@ -666,7 +674,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         : (t * 'b flow * 'b flow) =
 
       let u, v, u_num, v_num = common_env man u u_num v v_num in
-      (* let u_num, v_num = same_height_and_size man u u_num v v_num in *)
+      let u_num, v_num = same_height_and_size man u u_num v v_num in
 
       let u, u_num = normalize man u u_num in
       let v, v_num = normalize man v v_num in
@@ -691,7 +699,9 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           support = nsupport;
           classes = nclasses;
           env = n_full_env;
-          varbind = vb_u
+          varbind = vb_u;
+          size = u.size;
+          height = u.height;
         } |> vb_sanitize in
       let () = debug "end join" in
       let () = debug "prep:%a" print prep in
@@ -702,6 +712,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
     let join_same_num (man: ('a, 'b) man) (u: t) (v: t) (num: 'a flow)
         : (t * 'a flow) =
       let nshape = TA.join_dfta u.shape v.shape in
+      let num = same_height_and_size_one_num man u v num in
       let nsupport = RegExp.join (*auto_algebra*) u.support v.support in
       let nclasses = join_eq_classes u v None in
       let (n_u_diff_env, n_u_num, n_u_vb, n_v_diff_env, n_v_num, n_v_vb, n_common_env , n_full_env) =
@@ -720,7 +731,9 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           support = nsupport;
           classes = nclasses;
           env = n_full_env;
-          varbind = vb_u
+          varbind = vb_u;
+          height = u.height;
+          size = u.size;
         } in
       (* We would like to normalize *)
       (prep, Flow.join man n_u_num n_v_num)
@@ -900,7 +913,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       let u, u_num = normalize man u u_num in
       let v, v_num = normalize man v v_num in
 
-      (* let u_num, v_num = same_height_and_size man u u_num v v_num in *)
+      let u_num, v_num = same_height_and_size man u u_num v v_num in
 
       let () = debug "widening input: %a@, on: %a" print u (Flow.print man) u_num in
       let () = debug "other widening input: %a@, on: %a" print v (Flow.print man) v_num in
@@ -1045,6 +1058,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
           classes = neqclass;
           env = env;
           varbind = res_vb;
+          height = u.height;
+          size = u.size
         } in
       let () = debug "widening result: %a" print prep in
       let () = debug "on environments: %a@,and:%a" (Flow.print man) u_num (Flow.print man) v_num in
@@ -1262,33 +1277,46 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
      *   let () = debug "widening numerical result: %a@,and: %a" (Flow.print man) absu (Flow.print man) absv in
      *   (rep, absu, absv) *)
 
-    let top (sa: TA.sigma_algebra) =
+    let top (man: ('a, 'b) man) range (sa: TA.sigma_algebra) (flow :'a flow) =
       let sa = holify_sigma_algebra sa in
       let re_algebra = automata_algebra_on_n sa in
+      let h, s = fresh_var (), fresh_var () in
+      let flow' = man.exec (mk_add_var h range) flow
+      |> man.exec (mk_add_var h range) in
       {
         shape = TA.top_dfta sa;
         support = RegExp.top re_algebra;
         classes = [];
         env = [];
         varbind = StrVarBind.empty;
-        (* height = fresh_var ();
-         * size = fresh_var (); *)
-      }
+        height = fresh_var ();
+        size = fresh_var ();
+      }, flow'
 
-    let bottom (sa: TA.sigma_algebra)=
+
+    let bottom (man: ('a, 'b) man) range (sa: TA.sigma_algebra) (flow :'a flow) =
       let sa = holify_sigma_algebra sa in
       let re_algebra = automata_algebra_on_n sa in
+      let h, s = fresh_var (), fresh_var () in
+      let flow' = man.exec (mk_add_var h range) flow
+                  |> man.exec (mk_add_var h range) in
       {
         shape = TA.bottom_dfta sa;
         support = RegExp.bottom re_algebra;
         classes = [];
         env = [];
         varbind = StrVarBind.empty;
-        (* height = fresh_var ();
-         * size = fresh_var (); *)
-      }
+        height = fresh_var ();
+        size = fresh_var ();
+      }, flow'
 
 
+    let add_height_and_size man range h s num =
+      num
+      |> man.exec (mk_add_var h range)
+      |> man.exec (mk_add_var s range)
+      |> man.exec (mk_assume (mk_binop (mk_var h range) O_ge (Ast.mk_zero range) ~etyp:Ast.T_int range) range)
+      |> man.exec (mk_assume (mk_binop (mk_var s range) O_ge (Ast.mk_zero range) ~etyp:Ast.T_int range) range)
     (** Transformers *)
 
     (* anything but an integer on head *)
@@ -1373,6 +1401,10 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
     let underlying_tree_algebra (u: t) =
       u.shape.TA.dfta_a
 
+    let clear_height_and_size man range (u: t) flow =
+      man.exec (mk_remove_var u.size range) flow
+      |> man.exec (mk_remove_var u.height range)
+
     let sons range man (u: t) flow =
       let head_shape = TA.head u.shape in
 
@@ -1381,6 +1413,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         List.fold_left (fun (abs, res0, vb_old) (k, v) ->
             let _, abs, res, _ =
               List.fold_left (fun (i, abs, res, vb_old) nshape ->
+                  let height = fresh_var () in
+                  let size = fresh_var () in
                   (* let () = debug "mark1" in *)
                   let nsupport = hole_position auto_algebra nshape in
                   (* let () = debug "mark2" in *)
@@ -1408,12 +1442,17 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
                   in
                   (* let () = debug "mark4" in *)
                   let abs, vbold, vb = Numerical.renaming_list_diff_vb range man vb_old StrVarBind.empty renaming abs in
+                  let abs = add_height_and_size man (tag_range range "adding h and s") height size abs in
+                  let abs = man.exec (mk_assume (mk_binop (mk_var height range) O_lt (mk_var u.height range) range) range) abs in
+                  let abs = man.exec (mk_assume (mk_binop (mk_var size range) O_lt (mk_var u.size range) range) range) abs in
                   (i+1, abs,{
                        shape = nshape;
                        support = nsupport;
                        classes = nclasses;
                        env = nenv;
-                       varbind = vb
+                       varbind = vb;
+                       height = height;
+                       size = size;
                      }::res, vbold)
                 ) (0, abs, [], vb_old) v
             in
@@ -1433,7 +1472,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
              (Some u, flow)
         ) (None, flow) l
       |> function
-        | None, flow -> bottom (u.shape.TA.dfta_a), flow
+        | None, flow ->
+           bottom man range (u.shape.TA.dfta_a) flow
         | Some x, flow -> x, flow
 
     let filter_not_symbol range (man: ('a, 'b) man)
@@ -1460,11 +1500,18 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       in
       let num, vb = Numerical.renaming_list range man u.varbind renaming abs in
       let num, vb = ToolBox.fold (fun s (abs, vb) -> Numerical.forget range man vb s abs) removal (num, vb) in
+      let height = fresh_var () in
+      let size = fresh_var () in
+      let num = add_height_and_size man range height size num in
+      let num = man.exec (mk_assume (mk_binop (mk_var size range) O_eq (Ast.mk_one range) range) range) num in
+      let num = man.exec (mk_assume (mk_binop (mk_var height range) O_eq (Ast.mk_zero range) range) range) num in
       {shape = nshape;
        support = nsupport;
        classes = nclasses;
        env = nenv;
-       varbind = vb
+       varbind = vb;
+       height = height;
+       size = size;
       } |> vb_sanitize, num
 
     let filter_symbol range (man: ('a, 'b) man)
@@ -1499,14 +1546,39 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       in
       let num, vb = Numerical.renaming_list range man u.varbind renaming abs in
       let num, vb = ToolBox.fold (fun s (abs, vb) -> Numerical.forget range man vb s abs) removal (num, vb) in
+
+      let height = fresh_var () in
+      let size = fresh_var () in
+      let num = add_height_and_size man range height size num in
+      let num = man.exec (mk_assume (mk_binop (mk_var size range) O_gt (Ast.mk_one range) range) range) num in
+      let num = man.exec (mk_assume (mk_binop (mk_var height range) O_gt (Ast.mk_zero range) range) range) num in
+
+      let num = clear_height_and_size man range u num in
+
       let rep, flow = {shape = nshape;
                        support = nsupport;
                        classes = nclasses;
                        env = nenv;
-                       varbind = vb
+                       varbind = vb;
+                       height = height;
+                       size = size;
                       } |> vb_sanitize, num
       in
       rep, flow
+
+    let sum range l =
+      List.fold_left
+        (fun acc x ->
+          mk_binop acc Ast.O_plus (mk_var x range) ~etyp:Ast.T_int range
+        ) (Ast.mk_one range) l
+
+    let max range v l =
+      match l with
+      | [] -> [mk_binop (mk_var v range) O_eq (Ast.mk_zero range) range]
+      | [u] -> [mk_binop (mk_var v range) O_eq (mk_binop (mk_var u range) Ast.O_plus (Ast.mk_one range) ~etyp:Ast.T_int range) range]
+      | _ -> List.fold_left (fun acc x ->
+                 (mk_binop (mk_var v range) O_ge (mk_binop (mk_var x range) Ast.O_plus (Ast.mk_one range) ~etyp:Ast.T_int range) range)::acc
+               ) [] l
 
     let build_tree_from_symbol
           range (man: ('a, 'b) man)
@@ -1547,19 +1619,32 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
                     Numerical.renaming_list_var range man renamer abs
                   ) abs renamingl
       in
+
+      let height = fresh_var () in
+      let size = fresh_var () in
+      let abs = add_height_and_size man range height size abs in
+      let s_eq = sum range (List.map (fun x -> x.size) ul) in
+      let h_cons = max range height (List.map (fun x -> x.height) ul) in
+      let abs = man.exec (mk_assume (mk_binop (mk_var size range) O_eq s_eq range) range) abs in
+      let abs = List.fold_left (fun acc x -> man.exec (mk_assume x range) acc) abs h_cons in
+      let abs = List.fold_left (fun acc u -> clear_height_and_size man range u acc) abs ul in
       {
         shape = nshape;
         support = nsupport;
         env = nenv;
         classes = nclasses;
-        varbind = vb
+        varbind = vb;
+        height = height;
+        size = size;
       }, abs
 
     let remove_all_nums range man (u: t) flow =
       let u = u |> vb_sanitize in
       StrVarBind.fold (fun (_, v) flow ->
           man.exec (mk_stmt (S_remove_var v) range) flow
-        ) u.varbind flow
+        ) u.varbind flow |>
+        man.exec (mk_stmt (S_remove_var u.size) range) |>
+        man.exec (mk_stmt (S_remove_var u.height) range)
 
 
     let build_tree_from_expr range (man: ('a, 'b) man) (e: expr) (num: 'a flow):
@@ -1569,6 +1654,12 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       let epsilon = RegExp.from_word (RegExp.Algebra.of_list []) [] in
       let epsilon_name = var_of_automata epsilon in
       let v, vb = StrVarBind.get_var epsilon_name StrVarBind.empty in
+
+      let height = fresh_var () in
+      let size = fresh_var () in
+      let num = add_height_and_size man range height size num in
+      let num = man.exec (mk_assume (mk_binop (mk_var size range) O_eq (Ast.mk_one range) range) range) num in
+      let num = man.exec (mk_assume (mk_binop (mk_var height range) O_eq (Ast.mk_zero range) range) range) num in
       {
         shape =
           {
@@ -1582,7 +1673,9 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         support = epsilon;
         classes = [];
         env = [(epsilon, epsilon_name)];
-        varbind = vb
+        varbind = vb;
+        height = height;
+        size = size;
       },
       man.exec (mk_add_var v (tag_range range "add_var")) num
       |> man.exec (mk_assign (mk_var v ~mode:STRONG (tag_range range "var")) e (tag_range range "sub_var assign"))
@@ -1596,7 +1689,13 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
             (vb1, vb2, Numerical.extend_var range man v [v1; v2] abs)
           ) u.varbind (StrVarBind.empty, StrVarBind.empty, abs)
       in
-      {u with varbind = vb1}, {u with varbind = vb2}, abs
+      let h1 = fresh_var () in
+      let h2 = fresh_var () in
+      let s1 = fresh_var () in
+      let s2 = fresh_var () in
+      let abs = Numerical.extend_var range man u.height [h1; h2] abs in
+      let abs = Numerical.extend_var range man u.size [s1; s2] abs in
+      {u with varbind = vb1; height = h1; size = s1}, {u with varbind = vb2; height = h2; size = s2}, abs
 
   end
 

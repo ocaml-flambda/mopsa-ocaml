@@ -258,6 +258,10 @@ let find_foldable_variables (man: ('a, 'b) man) vb (vl: string list) (abs: 'a fl
  *   in
  *   List.filter (fun cl -> match cl with | p::q::r -> true | _ -> false) (cross lenv []) *)
 
+let fold_var range man (l : var list) (n : var) abs =
+  let abs' = man.exec (mk_stmt (S_fold(n, l)) (tag_range range "fold")) abs in
+  abs'
+
 let fold range man (vb: StrVarBind.t) (l : string list) (n : string) abs =
   let v, vb = StrVarBind.get_var n vb in
   let vl, vb = StrVarBind.get_var_list l vb in

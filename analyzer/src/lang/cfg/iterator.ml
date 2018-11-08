@@ -36,10 +36,10 @@ module type DOMAIN = sig
       not stored in the CFG.
    *)
 
-  val entry: manager -> loc -> node -> token -> t
+  val entry: manager -> node_id -> node -> token -> t
   (** Initial state at each node. *)
     
-  val exec: manager -> loc -> (token * t) list -> edge -> (token * t) list
+  val exec: manager -> node_id -> (token * t) list -> edge -> (token * t) list
   (** Edge propagation.
       Takes as arguments the input abstract elements, with associated flows.
       Returns output abstract elements and specifies on which flow to
@@ -56,9 +56,9 @@ module type DOMAIN = sig
 
   (** Lattice operations *)
   val bot: manager -> t
-  val join: manager -> loc -> t -> t -> t
-  val widen: manager -> loc -> t -> t -> t
-  val subset: manager -> loc -> t -> t -> bool
+  val join: manager -> node_id -> t -> t -> t
+  val widen: manager -> node_id -> t -> t -> t
+  val subset: manager -> node_id -> t -> t -> bool
 
 end
 
@@ -86,15 +86,15 @@ module type STRATEGY = sig
   val is_empty: t -> bool
   (** Whether there are dirty nodes at all. *)
 
-  val dirty: t -> loc -> unit
+  val dirty: t -> node_id -> unit
   (** Marks a node as dirty. *)
     
-  val get: t -> loc
+  val get: t -> node_id
   (** Gets the next dirty node to update (and undirty it).
       Raises [Not_found] if [is_empty] is true.
    *)
 
-  val is_widen: t -> loc -> bool
+  val is_widen: t -> node_id -> bool
   (** Whether we should use widening at that point. *)
     
 end
@@ -108,8 +108,8 @@ end
 module SetWorklist : STRATEGY = struct
 
   type t =
-    { mutable dirty: LocSet.t; (** dirty nodes *)
-      widen: LocSet.t; (** widening points *)
+    { mutable dirty: TagLocSet.t; (** dirty nodes *)
+      widen: TagLocSet.t; (** widening points *)
     }
     
   let create g =
@@ -120,30 +120,32 @@ module SetWorklist : STRATEGY = struct
           (* whether n has a back-edge *)
           let i = CFG.node_in_nodes n in
           if List.exists
-               (fun (nn,_,_,_) -> Loc.compare (CFG.node_id nn) id > 0)
+               (fun (nn,_,_,_) ->
+                 compare_node_id (CFG.node_id nn) id > 0
+               )
                i
-          then LocSet.add id acc
+          then TagLocSet.add id acc
           else acc
         )
-        g LocSet.empty
+        g TagLocSet.empty
     in
-    { dirty = LocSet.empty;
+    { dirty = TagLocSet.empty;
       widen = w;
     }
     
   let is_empty w =
-    LocSet.is_empty w.dirty
+    TagLocSet.is_empty w.dirty
     
   let dirty w id =
-    w.dirty <- LocSet.add id w.dirty
+    w.dirty <- TagLocSet.add id w.dirty
     
   let get w =
-    let id = LocSet.min_elt w.dirty in
-    w.dirty <- LocSet.remove id w.dirty;
+    let id = TagLocSet.min_elt w.dirty in
+    w.dirty <- TagLocSet.remove id w.dirty;
       id
       
   let is_widen w id =
-    LocSet.mem id w.widen
+    TagLocSet.mem id w.widen
     
 end
 
@@ -161,22 +163,22 @@ module Make(D:DOMAIN)(S:STRATEGY) = struct
   let iterate (man:D.manager) (g:cfg) =
     
     (* create *)
-    let a = LocHash.create 16 in
+    let a = TagLocHash.create 16 in
     let wl = S.create g in
     let bot = D.bot man in
 
     (* update *)
-    let get id = LocHash.find a id
+    let get id = TagLocHash.find a id
     and set id v =
-      let org = LocHash.find a id in
+      let org = TagLocHash.find a id in
       if not (D.subset man id v org) then (
-        LocHash.replace a id v;
+        TagLocHash.replace a id v;
         S.dirty wl id
       )
     in
 
     (* initial state *)    
-    CFG.iter_nodes (fun id _ -> LocHash.add a id bot) g;
+    CFG.iter_nodes (fun id _ -> TagLocHash.add a id bot) g;
     List.iter
       (fun (f,n) ->
         let id = CFG.node_id n in

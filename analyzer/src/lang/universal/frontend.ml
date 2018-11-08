@@ -408,11 +408,22 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
       ]
       range
 
-  | AST_return (e, ext) ->
+  | AST_return (Some (e, ext)) ->
     let e = from_expr e ext var_ctx fun_ctx in
     {skind = S_return (Some e);
      srange = range
     }
+
+  | AST_return None ->
+    {skind = S_return None;
+     srange = range
+    }
+
+  | AST_break ->
+    {skind = S_break; srange = range}
+
+  | AST_continue ->
+    {skind = S_continue; srange = range}
 
   | AST_assert (e, ext) ->
     let e = from_expr e ext var_ctx fun_ctx in

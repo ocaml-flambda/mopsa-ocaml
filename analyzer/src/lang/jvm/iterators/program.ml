@@ -6,24 +6,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Zones for the C language. *)
+(** Main handler of Java bytecode programs. *)
 
-open Framework.Zone
+open Framework.Essentials
+open Universal.Ast
+open Cfg.Ast
+open Ast
 
-type zone +=
-   | Z_py
-   | Z_py_value
 
-let () =
-  register_zone {
-    zone = Z_py;
-    name = "Z_py";
-    subset = None;
-    eval = (fun exp -> Process);
-    };
-  register_zone {
-      zone = Z_py_value;
-      name = "Z_py_value";
-      subset = Some Z_py;
-      eval = (fun exp -> Process);
-    }
+(** Iterator domain *)
+(** =============== *)
+
+module Domain =
+struct
+    (* TODO *)
+end
+  

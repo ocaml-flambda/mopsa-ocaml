@@ -43,6 +43,33 @@ end
 (*==========================================================================*)
 (**                          {2 Environment}                                *)
 (*==========================================================================*)
+type addr_kind +=
+   | A_py_instance of py_object (** class of the instance *) * obj_param option (** optional parameters *)
+
+let () =
+  Format.(
+    let info = {print =
+                  (fun default fmt a ->
+                    match a.addr_kind with
+                    | A_py_instance(obj, _) -> fprintf fmt "<inst of %a at $addr%@%d>" pp_addr (addr_of_object obj) a.addr_uid
+                    | _ -> default fmt a);
+                compare =
+                  (fun default a1 a2 ->
+                    match a1.addr_kind, a2.addr_kind with
+                    | A_py_instance (obj1, l1), A_py_instance (obj2, l2) ->
+                       Compare.pair
+                         Ast.compare_py_object
+                         (Compare.option (fun op1 op2 ->
+                              match op1, op2 with
+                              | List p1, List p2
+                                | Tuple p1, Tuple p2
+                                | Dict p1, Dict p2
+                                | Range p1, Range p2 -> Ast.compare_py_object p1 p2
+                              | Generator g1, Generator g2 -> Debug.fail "todo"
+                              | _ -> Pervasives.compare op1 op2)) (obj1, l1) (obj2, l2)
+                    | _ -> default a1 a2) } in
+    register_addr info
+  )
 
 module Domain =
 struct
@@ -64,13 +91,17 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [any_zone]; import = []}
+  let exec_interface = {export = [Zone.Z_py]; import = [Universal.Zone.Z_u_string]}
   let eval_interface = {export = [any_zone, any_zone]; import = []}
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow = Some (Flow.set_domain_cur top man flow)
+
+  let mk_avar addr_uid ?(vtyp = T_any) () =
+    let vname = "$addr@" ^ (string_of_int addr_uid) in
+    {vname; vuid = addr_uid (*FIXME*); vtyp}
 
   let rec exec zone stmt man flow =
     let range = srange stmt in
@@ -86,7 +117,9 @@ struct
             | E_py_undefined false -> assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
 
             | E_py_object((addr, ev) as obj) ->
+               debug "addr is %a@\n" pp_addr addr;
                let flow = assign_addr man v (PyAddr.Def addr) mode flow in
+               debug "cur is now %a@\n" print (Flow.get_domain_cur man flow);
                man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e] range) flow |>
                  Post.bind man
                    (fun cls flow ->
@@ -100,8 +133,8 @@ struct
                        | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
                        | _ -> T_py_empty
                      in
-                     let v' = {v with vtyp = t} in
-                     man.exec (mk_assign (mk_var v' range) ev range) flow |> Post.of_flow
+                     let v' = mk_avar addr.addr_uid ~vtyp:t () in
+                     man.exec ~zone:Universal.Zone.Z_u_string (mk_assign (mk_var v' range) ev range) flow |> Post.of_flow
                    )
             | _ -> debug "%a@\n" pp_expr e; assert false
           )
@@ -121,6 +154,8 @@ struct
       | STRONG -> ASet.singleton av
       | WEAK -> ASet.add av (find v cur)
     in
+    debug "av=%a@\n" PyAddr.print av;
+    debug "aset=%a@\n" ASet.print aset;
     Flow.set_domain_cur (add v aset cur) man flow
 
 
@@ -163,8 +198,8 @@ struct
                      | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
                      | _ -> T_py_empty
                    in
-                   let vv = {v with vtyp = t} in
-                   Eval.singleton (mk_py_object (addr, mk_var vv range) range) flow |> Eval.join acc
+                   let v' = mk_avar addr.addr_uid ~vtyp:t () in
+                   Eval.singleton (mk_py_object (addr, mk_var v' range) range) flow |> Eval.join acc
                  )
             (*  let t = Addr.type_of_object (addr, mk_py_empty range) in
              * let vv = mk_py_value_var v t in
@@ -172,6 +207,14 @@ struct
         ) aset (*FIXME?*) (Eval.empty_singleton flow)
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
+       man.eval arg flow |>
+         Eval.bind (fun e_arg flow ->
+             match ekind e_arg with
+             | E_py_object ({addr_kind = A_py_instance (instobj, _)}, _) ->
+                Eval.singleton (mk_py_object instobj range) flow
+             | _ -> assert false)
+       |> OptionExt.return
     | _ -> None
 
   let ask _ _ _ = None

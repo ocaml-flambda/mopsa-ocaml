@@ -9,40 +9,109 @@
 
 (** Converts a Universal program AST into a CFG. *)
 
+open OptionExt
 open Framework.Essentials
 open Universal.Ast
 open Ast
 open Flow
 
 
+let name = "cfg.frontend"
+let debug fmt = Debug.debug ~channel:name fmt
+
+              
+let dump_dot = false (** dump CFG in dot file (for debug) *)
+
+             
+
+(*==========================================================================*)
+                      (** {2 Graph conversion} *)
+(*==========================================================================*)
+
+
+(*
+  AST are transformed into graphs containing only "simple" statements.
+  Each edge is either:
+  - a single statement without any sub-statement (no if, while, etc.)
+  - a block, where each statement has no sub-statement
+
+  Expressions in statements are also simplified, either:
+  - an expression with no function call, or
+  - e0 = f(e1, ..., en), where e0, ..., en have no calls
+
+  NOTE: for e1 && e2 and e1 || e2, all calls in e1 and e2 are extracted
+  and evaluated before the simplified e1 and e2 are evaluated. 
+  This makes it impossible to implement shortcut boolean operations
+  (where e2 is not evaluated for e1 && e2 if e1 is false).
+ *)
+
 
 (* Extract calls from expression.
    Returns:
-   - a call-free expression e
-   - a sequence of statements of the form v = call(e1,...,en)
-   where v is a temporary variable and e1...en are call free
-   that must be executed before evaluating e
-   - the list of temporary variables introduced
+   - a list of temporary variables
+   - a sequence of assignments tmp = call(e1, ..., en)
+   - the expression with no longer any call
  *)
-let extract_calls (e:expr) : expr * stmt list * var list =
-  let (assigns, tmps), e =
-    Visitor.fold_map_expr
-      (fun (assigns,tmps) e ->
-        match ekind e with
-        | E_call (f, args) ->
-           let tmp = mk_tmp ~vtyp:(etyp e) () in
-           let v = mk_var tmp (erange e) in
-           let assign = mk_assign v e (erange e) in
-           (assign::assigns, tmp::tmps), v
-        | _ -> (assigns,tmps), e
-      )
-      (fun acc s -> acc, s)
-      ([],[])
-      e
+let extract_calls_expr (e:expr) : (var * range) list * stmt list * expr =
+  (* we need to match on AST root after recursively handling its sub-trees,
+     hence we cannot use Visitor.fold_map_expr directly
+   *)
+  let rec doit (tmps,assigns) e =
+    (* recursive call on argument expressions *)
+    let p, c = Visitor.split_expr e in
+    let (tmps,assigns), el = doit_list (tmps,assigns) [] p.Visitor.exprs in
+    (* recombine sub-expressions into expression *)
+    let e = c { p with exprs = el } in
+    (* extract top-level call *)
+    match ekind e with
+    | E_call (f, args) ->
+       let tmp = mk_tmp ~vtyp:(etyp e) () in
+       let v = mk_var tmp (erange e) in
+       let assign = mk_assign v e (erange e) in
+       ((tmp,erange e)::tmps, assign::assigns), v
+    | _ ->
+       (tmps, assigns), e
+  and doit_list x acc = function
+    | [] -> x, List.rev acc
+    | a::b -> let x,a = doit x a in doit_list x (a::acc) b
   in
-  e, List.rev assigns, tmps
+  let (tmps, assigns), e' = doit ([],[]) e in
+  match ekind e' with
+  | E_var _ when List.length assigns = 1 ->
+     (* special case: the original expression was call(e1, ..., en) with no
+        calls within e1, ..., en
+      *)
+     [], [], e
+  | _ ->
+     List.rev tmps, List.rev assigns, e'
+
+  
+(* Extract calls from all the expressions used in a statement.
+   Retuns the temporary variables, their assignments, and the argument
+   statement without calls in its expressions.
+   Does not change the sub-statements of the statement.
+ *)
+let extract_calls_stmt (s:stmt) : (var * range) list * stmt list * stmt =
+  let p, c = Visitor.split_stmt s in
+  let rec extract tmps assigns exprs = function
+    | [] -> tmps, assigns, List.rev exprs
+    | e::ee ->
+       let tmp, assign, e' = extract_calls_expr e in
+       extract (tmp@tmps) (assign@assigns) (e'::exprs) ee
+  in
+  let tmps, assigns, exprs = extract [] [] [] p.Visitor.exprs in
+  let p = { p with Visitor.exprs = exprs; } in
+  tmps, assigns, c p
   
 
+(* Generate add_var from temporary list. *)
+let mk_add_tmps (l:(var*range) list) : stmt list =
+  List.map (fun (v,r) -> mk_add_var v r) l
+  
+(* Generate remove_var from temporary list. *)
+let mk_remove_tmps (l:(var*range) list) : stmt list =
+  List.map (fun (v,r) -> mk_remove_var v r) l
+  
 
 (* Context used during conversion of a function. *)   
 type ctx = {
@@ -50,54 +119,90 @@ type ctx = {
     ctx_return: node;
     ctx_break: node list;
     ctx_continue: node list;
-    ctx_return_var: var;
+    ctx_return_var: var option;
   }
 
+
+(* Add a node, with given id. *)
+let add_node (c:ctx) (id:node_id) : node =
+  CFG.add_node c.ctx_cfg id ()
+
+
+(* Add an edge between src and dst nodes, with blk statements. *)
+let add_edge (c:ctx) range (src:(port*node) list) (dst:(port*node) list)
+             (blk:stmt list) : unit =
+  let s = match blk with
+    | [] -> mk_skip range
+    | [a] -> a
+    | _ -> mk_block blk range
+  in
+  let _ = CFG.add_edge c.ctx_cfg (mk_fresh_edge_id range) ~src ~dst s in
+  ()
+
+
+(* Insert a block after the src node.
+   If the block is not empty, add a fresh node to represent the end of 
+   the block; the end node is returned.
+   If the block is empty, no fresh node is created and src is returned.
+ *)  
+let add_block_after (c:ctx) range (src:node) (blk:stmt list) : node =
+  if blk = [] then src else
+    let src' = add_node c (copy_node_id (CFG.node_id src)) in
+    add_edge c range [T_cur,src] [T_cur,src'] blk;
+    src'
+
+(* Insert a block before the dst node. *)
+let add_block_before (c:ctx) range (dst:node) (blk:stmt list) : node =
+  if blk = [] then dst else
+    let dst' = add_node c (copy_node_id (CFG.node_id dst)) in
+    add_edge c range [T_cur,dst'] [T_cur,dst] blk;
+    dst'
+      
          
-(* Add a statement to the graph in the context. *)
-let rec stmt_to_cfg (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
+(* Add a statement to the graph in the context. 
+   Handle compound statements by induction.
+   Takes care of extracting calls from expressions.
+ *)
+let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
+  
   match skind s with
 
   (* compound statements *)
 
   | S_if (e,s1,s2) ->
+     let tmps, assigns, e = extract_calls_expr e in
+     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+     
      (* add nodes begining the true and false branches *)
-     let tloc = range_begin (get_origin_range (srange s1))
-     and floc = range_begin (get_origin_range (srange s2)) in
-     let tnode = CFG.add_node c.ctx_cfg tloc ()
-     and fnode = CFG.add_node c.ctx_cfg floc () in
+     let tloc = mk_fresh_node_id (range_begin (get_origin_range (srange s1)))
+     and floc = mk_fresh_node_id (range_begin (get_origin_range (srange s2))) in
+     let tnode = add_node c tloc
+     and fnode = add_node c floc in
+     
      (* add test edge *)
-     ignore
-       (CFG.add_edge
-          c.ctx_cfg (erange e)
-          ~src:[T_cur,pre]
-          ~dst:[T_true,tnode; T_false,fnode]
-          (mk_test e (erange e))
-       );
+     let blk = adds @ assigns @ [mk_test e (erange e)] in
+     add_edge c (erange e) [T_cur,pre] [T_true,tnode; T_false,fnode] blk;
+     let tnode = add_block_after c (erange e) tnode rems
+     and fnode = add_block_after c (erange e) fnode rems in
+     
      (* add branches *)
-     stmt_to_cfg c tnode post s1;
-     stmt_to_cfg c fnode post s2
-
+     add_stmt c tnode post s1;
+     add_stmt c fnode post s2
      
   | S_block l ->
      let rec add pre post = function
        | [] ->
           (* empty block: connect pre and post nodes with skip *)
-          ignore
-            (CFG.add_edge
-               c.ctx_cfg (srange s)
-               ~src:[T_cur,pre] ~dst:[T_cur,post]
-               (mk_skip (srange s))
-            )
+          add_edge c (srange s) [T_cur,pre] [T_cur,post] []
        | [s] ->
           (* connect pre to post with statement *)
-          stmt_to_cfg c pre post s
+          add_stmt c pre post s
        | a::b ->
           (* add a new node after the first statement *)
-          let loc = range_begin (get_origin_range (srange a)) in
-          let node = CFG.add_node c.ctx_cfg loc () in
+          let loc = mk_fresh_node_id (range_begin (get_origin_range (srange a))) in
+          let node = add_node c loc in
           (* add the first statement between pre and node *)
-          stmt_to_cfg c pre post s;
+          add_stmt c pre node a;
           (* add the rest between node and post *)
           add node post b
      in
@@ -105,17 +210,18 @@ let rec stmt_to_cfg (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
 
 
   | S_while (e,s) ->
+     let tmps, assigns, e = extract_calls_expr e in
+     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+     
      (* add node at the begining of the loop body *)
-     let loc = range_begin (get_origin_range (srange s)) in
-     let entry = CFG.add_node c.ctx_cfg loc () in
+     let loc = mk_fresh_node_id (range_begin (get_origin_range (srange s))) in
+     let entry = add_node c loc in
+
      (* add test edge *)
-     ignore
-       (CFG.add_edge
-          c.ctx_cfg (erange e)
-          ~src:[T_cur,pre]
-          ~dst:[T_true,entry; T_false,post]
-          (mk_test e (erange e))
-       );
+     let blk = adds @ assigns @ [mk_test e (erange e)] in
+     let post' = add_block_before c (erange e) post rems in
+     add_edge c (erange e) [T_cur,pre] [T_true,entry; T_false,post'] blk;
+
      (* add body *)
      let c = 
        { c with
@@ -123,37 +229,45 @@ let rec stmt_to_cfg (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
          ctx_continue = pre::c.ctx_continue;
        }
      in
-     stmt_to_cfg c entry post s
-
+     let entry = add_block_after c (erange e) entry rems in
+     add_stmt c entry pre s
+     
 
   (* jump statements *)
                    
-  | S_return eo -> failwith "TODO"
+  | S_return None ->
+     if c.ctx_return_var <> None then
+       Debug.fail "return without an expression for non-void function at %a" pp_range (srange s);
+     (* jump to return node *)
+     add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] []
+
+  | S_return (Some e) ->
+     let tmps, assigns, e = extract_calls_expr e in
+     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+     (* assigns expression to return variable *)
+     let ret =
+       match c.ctx_return_var with
+       | Some var -> mk_var var (erange e)
+       | None ->
+          Debug.fail "return with an expression for void function at %a" pp_range (srange s);
+     in
+     let blk = adds @ assigns @ [mk_assign ret e (erange e)] @ rems in
+     (* jump to return node *)
+     add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] blk
 
   | S_break ->
      if c.ctx_break = [] then
        Debug.fail "break without a loop at %a" pp_range (srange s);
      (* goto edge (skip statement) *)
-     ignore
-       (CFG.add_edge
-          c.ctx_cfg (srange s)
-          ~src:[T_cur,pre] ~dst:[T_cur,List.hd c.ctx_break]
-          (mk_skip (srange s))
-       )
+     add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_break] []
 
   | S_continue ->
      if c.ctx_continue = [] then
        Debug.fail "continue without a loop at %a" pp_range (srange s);
      (* goto edge (skip statement) *)
-     ignore
-       (CFG.add_edge
-          c.ctx_cfg (srange s)
-          ~src:[T_cur,pre] ~dst:[T_cur,List.hd c.ctx_continue]
-          (mk_skip (srange s))
-       )
-
+     add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_continue] []
      
-  (* atomic statements -> add an edge with the statement *)
+  (* atomic statements: add an edge with the statement *)
 
   | S_assign _
   | S_assume _
@@ -165,16 +279,72 @@ let rec stmt_to_cfg (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   | S_simple_assert _
   | S_assert _
   | S_print ->
-     ignore
-       (CFG.add_edge
-          c.ctx_cfg (srange s)
-          ~src:[T_cur,pre] ~dst:[T_cur,post]
-          s
-       )
-    
+     let tmps, assigns, s = extract_calls_stmt s in
+     let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
+     let blk = adds @ assigns @ [s] @ rems in
+     add_edge c (srange s) [T_cur,pre] [T_cur,post] blk
 
   (* unknown *)
 
   | _ ->
      Debug.fail "cannot convert statement %a to CFG" pp_stmt s
+
+
+(** Creates a new graph and fill-in with the given statement. *)
+let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
+  (* create empty graph *)
+  let cfg = CFG.create () in
+  (* entry and exit nodes *)
+  let range = get_origin_range (srange s) in
+  let entry = CFG.add_node cfg (mk_fresh_node_id range.range_begin) ()
+  and exit = CFG.add_node cfg (mk_fresh_node_id range.range_end) () in
+  CFG.node_set_entry cfg entry (Some T_cur);
+  CFG.node_set_exit  cfg exit  (Some T_cur);
+  (* fill-in graph *)
+  let c =
+    { ctx_cfg = cfg;
+      ctx_return = exit;
+      ctx_break = [];
+      ctx_continue = [];
+      ctx_return_var = ret;
+    }
+  in
+  add_stmt c entry exit s;
+  if dump_dot then Pp.output_dot name ("tmp/"^name^".dot") cfg;
+  mk_cfg cfg (srange s)
+
+  
+(** Converts a function AST to a CFG. *)
+let convert_fundec (f:fundec) : fundec =
+  (* create a variable to denote variable return *)
+  let ret = match f.fun_return_type with
+    | None -> None
+    | Some t ->
+       let v = mk_tmp ~vtyp:t () in
+       Some { v with vname = "$return$" ^ f.fun_name }
+  in
+  (* converts the body *)
+  { f with fun_body = convert_stmt ~name:f.fun_name ?ret f.fun_body; }
+
+
+(** Converts a full universal program. *)  
+let convert_program (p:program) : program =
+  match p.prog_kind with
+  | P_universal u ->
+     { p with
+       prog_kind =
+         P_universal
+           { universal_gvars = u.universal_gvars;
+             universal_fundecs = List.map convert_fundec u.universal_fundecs;
+             universal_main = convert_stmt ~name:"__main__" u.universal_main;
+           }
+     }
+
+  | _ ->        
+     Debug.fail "cannot convert program to CFG"
     
+
+(** From source to CFG. *)    
+let parse_program (files: string list) : program =
+  convert_program (Universal.Frontend.parse_program files)
+  

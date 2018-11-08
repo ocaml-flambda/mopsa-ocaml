@@ -21,7 +21,6 @@ open JBasics
 open JCode
 open Framework.Ast
 open Framework.Flow
-open Framework.Location
 open Framework.Manager
 open Cfg.Ast
 open Ast
@@ -55,7 +54,7 @@ type aval =
   | A_long of word
   | A_double of word
   | A_ref (** reference to an object or array *)
-  | A_pc of loc (** return address from subroutine *)
+  | A_pc of node_id (** return address from subroutine *)
   | A_top
 
 
@@ -70,13 +69,13 @@ type astate = {
   }
 
 (** Subroutine call stack, topmost element first. *)
-type substack = loc list
+type substack = node_id list
 
 (** Order on subroutine call stacks, to build maps. *)
 module SubStack =
 struct
   type t = substack
-  let compare = ListExt.compare compare_location
+  let compare = ListExt.compare compare_node_id
 end
 
 (** Maps indexed with subroutinr call stacks. *)
@@ -146,7 +145,7 @@ let pp_aval fmt  = function
   | A_double HI -> Format.pp_print_string fmt "double_hi"
   | A_ref -> Format.pp_print_string fmt "ref"
   | A_top -> Format.pp_print_string fmt "top"          
-  | A_pc x -> Format.fprintf fmt "pc(%a)" pp_location x
+  | A_pc x -> Format.fprintf fmt "pc(%a)" pp_node_id x
     
 let pp_astate fmt (a:astate) : unit =
   Format.fprintf
@@ -155,7 +154,7 @@ let pp_astate fmt (a:astate) : unit =
     (IntMap.fprint MapExt.printer_default Format.pp_print_int pp_aval) a.a_reg
 
 let pp_substack fmt (a:substack) : unit =
-  ListExt.fprint ListExt.printer_list pp_location fmt a
+  ListExt.fprint ListExt.printer_list pp_node_id fmt a
   
 let pp_pastate fmt (a:pastate) : unit =
   SubMap.fprint MapExt.printer_default pp_substack pp_astate fmt a
@@ -165,7 +164,7 @@ let pp_pastate fmt (a:pastate) : unit =
 
 let join_aval (v1:aval) (v2:aval) : aval = match v1, v2 with
   | A_pc s1, A_pc s2 ->
-     if compare_location s1 s2 = 0 then v1 else A_top
+     if compare_node_id s1 s2 = 0 then v1 else A_top
   | x, y ->
      if x = y then x else A_top
                          
@@ -213,7 +212,7 @@ let join_pastate (a1:pastate) (a2:pastate) : pastate * string list =
 (** Ordering *)
 
 let subset_val (v1:aval) (v2:aval) : bool = match v1, v2 with
-  | A_pc s1, A_pc s2 -> compare_location s1 s2 = 0
+  | A_pc s1, A_pc s2 -> compare_node_id s1 s2 = 0
   | _, A_top -> true
   | _ -> v1 = v2
 
@@ -368,7 +367,7 @@ let store_value index v a = match v with
 
 (** An error, with location information. *)
 type err =
-  loc (** location *)
+  node_id  (** location *)
   * string (** operation *)
   * string (** error message *)
 
@@ -576,12 +575,12 @@ let exec_normal (op:jopcode) (x:pastate) : pastate * string list =
     [next] is the location following the jsr ([F_java_ret_site]).
     Recursive calls are considered an error.
  *)
-let exec_jsr (next:loc) (x:pastate) : pastate * string list =
+let exec_jsr (next:node_id) (x:pastate) : pastate * string list =
   SubMap.fold
     (fun s a (m,err) ->
       let r,er = push (A_pc next) (a,err) in
       (* check recursivity *)
-      if List.exists (fun x -> compare_location x next = 0) s
+      if List.exists (fun x -> compare_node_id next x = 0) s
       then
         (* recursive calls are cut *)
         m, "recursive subroutine"::err
@@ -596,11 +595,11 @@ let exec_jsr (next:loc) (x:pastate) : pastate * string list =
 (** [ret] handling.
     Returns one abstract state for each possible return site.
  *)
-let exec_ret (index:int) (x:pastate) : pastate LocMap.t * string list =
+let exec_ret (index:int) (x:pastate) : pastate TagLocMap.t * string list =
   let add l s a m =
-    let old = try LocMap.find l m with Not_found -> SubMap.empty in
+    let old = try TagLocMap.find l m with Not_found -> SubMap.empty in
     if SubMap.mem s old then failwith "exec: duplicate subroutine stack in ret";
-    LocMap.add l (SubMap.add s a old) m
+    TagLocMap.add l (SubMap.add s a old) m
   in
   SubMap.fold
     (fun s a (m,err) ->
@@ -608,7 +607,7 @@ let exec_ret (index:int) (x:pastate) : pastate LocMap.t * string list =
         
       | A_pc ret1, ret2::rest ->
          (* check the return address *)
-         if compare_location ret1 ret2 <> 0 then
+         if compare_node_id ret1 ret2 <> 0 then
            m, "ret does not return to its call site"::err
          else
            (* pop the return address & use it as index *)
@@ -617,7 +616,7 @@ let exec_ret (index:int) (x:pastate) : pastate LocMap.t * string list =
       | _, [] -> m, "ret on an empty call stack"::err
       | _, _ ->  m, "invalid type in ret: bytecode address expected"::err
     )
-    x (LocMap.empty, [])
+    x (TagLocMap.empty, [])
 
 
 (** Executes an opcode block.
@@ -625,8 +624,8 @@ let exec_ret (index:int) (x:pastate) : pastate LocMap.t * string list =
     Returns a map from return sites to abstract states for ret.
     Also returns a list of errors, with location information.
  *)
-let exec_block (loc:loc) (ret:loc option) (l:jopcode_range list) (a:pastate)
-    : pastate with_bot * pastate LocMap.t * err list =
+let exec_block (loc:node_id) (ret:node_id option) (l:jopcode_range list) (a:pastate)
+    : pastate with_bot * pastate TagLocMap.t * err list =
   let add_err op err' err =
     (List.map (fun msg -> loc, JPrint.jopcode op, msg) err')@err
   in
@@ -634,14 +633,14 @@ let exec_block (loc:loc) (ret:loc option) (l:jopcode_range list) (a:pastate)
     match l with
     | [] ->
        (* ends on a normal opcode *)
-       Nb a, LocMap.empty, err
+       Nb a, TagLocMap.empty, err
 
     | [OpJsr _ as op,_] ->
        (* ends on a jsr opcode *)
        let next = match ret with
          | Some n -> n | _ -> failwith "jsr without ret_site edge" in
        let a',err' = exec_jsr next a in
-       Nb a', LocMap.empty, add_err op err' err
+       Nb a', TagLocMap.empty, add_err op err' err
 
     | [OpRet index as op,_] ->
        (* ends on a ret opcode *)
@@ -705,7 +704,7 @@ module Domain = struct
         (fun (loc,op,msg) ->
           Format.printf
             "precheck error at %a for %s: %s@\n"
-            pp_location loc op msg
+            pp_node_id loc op msg
         ) l
 
   let bot m = SubMap.empty
@@ -721,7 +720,7 @@ module Domain = struct
     if trace then
       Format.printf
         "join %a@.  @[%a@]@.  @[%a@]@.  @[%a@]@."
-        pp_location loc pp_pastate a pp_pastate b pp_pastate r;
+        pp_node_id loc pp_pastate a pp_pastate b pp_pastate r;
     r
                  
   let widen = join
@@ -753,9 +752,9 @@ module Domain = struct
     if trace then
       Format.printf
         "exec %a@.  @[%a@] -> @[%a@] @[%a@]@."
-        pp_location loc pp_pastate x
+        pp_node_id loc pp_pastate x
         (bot_fprint pp_pastate) rn
-        (LocMap.fprint MapExt.printer_default pp_location pp_pastate) rr;
+        (TagLocMap.fprint MapExt.printer_default pp_node_id pp_pastate) rr;
 
     (* non-ret propagation *)
     let acc =
@@ -785,7 +784,7 @@ module Domain = struct
     in
 
     (* add ret propagation *)
-    LocMap.fold
+    TagLocMap.fold
       (fun l r acc ->
         (* add the connction to the ret site, if needed *)
         let n = CFG.get_node m.m_cfg l in
@@ -810,7 +809,7 @@ let analyze (m:j_method) =
       (fun id _ ->
         Format.printf
           "  %a: @[%a@]@\n"
-          pp_location id pp_pastate (LocHash.find r id)
+          pp_node_id id pp_pastate (TagLocHash.find r id)
       ) m.m_cfg;
     Format.printf "@\n"
   )
