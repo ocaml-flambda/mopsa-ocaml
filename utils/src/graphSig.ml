@@ -54,6 +54,21 @@ end
 
                     
 (*==========================================================================*)
+                    (** {2 Nested lists} *)
+(*==========================================================================*)
+
+  
+(** Nested lists of nodes are used to represent herarchical decompositions
+    into strongly connected components.
+ *)
+
+type 'a nested_list =
+  | Simple of 'a
+  | Composed of 'a nested_list list
+
+
+
+(*==========================================================================*)
                      (** {2 Parameter signature} *)
 (*==========================================================================*)
 
@@ -542,7 +557,7 @@ module type S = sig
     
     
   (*========================================================================*)
-                       (** {2 Global operations} *)
+                        (** {2 Maps and folds} *)
   (*========================================================================*)
 
 
@@ -630,14 +645,37 @@ module type S = sig
       The function is called in increasing identifier order.
  *)
 
+
+                                   
+  (*========================================================================*)
+                         (** {Simplification} *)
+  (*========================================================================*)
+
+
   val remove_orphan: ('n,'e) graph -> unit
   (** Removes orphan nodes and edges.
       Orphan nodes have no incoming nor outgoing edges, and orphan
       edges have no source nor destination nodes.
    *)
 
-    
 
+    
+  (*========================================================================*)
+                      (** {Topological ordering} *)
+  (*========================================================================*)
+
+
+  (**
+     Computes a weak topological ordering suitable to perform fixpoint
+     iterations with widening.
+     Implements Bourdoncle's algorithm [1].
+     [1] Francois Bourdoncle. Efficient Chaotic Iteration Strategies 
+     With Widenings. In Proc. FMPA'93, 128-141, 1993. Springer.
+   *)
+  val weak_topological_order: ('n,'e) graph -> ('n,'e) node nested_list list
+
+
+    
   (*========================================================================*)
                          (** {2 Printing} *)
   (*========================================================================*)

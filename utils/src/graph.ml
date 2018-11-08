@@ -53,6 +53,23 @@ end
   
 
 (*==========================================================================*)
+                    (** {2 Nested lists} *)
+(*==========================================================================*)
+
+
+(** Printers. *)
+let rec pp_nested_list pp_elem fmt = function
+  | Simple x -> pp_elem fmt x
+  | Composed l -> pp_nested_list_list pp_elem fmt l
+
+and pp_nested_list_list pp_elem fmt l =
+  Format.fprintf
+    fmt "@[<hov 2>%a@]"
+    (ListExt.fprint ListExt.printer_list (pp_nested_list pp_elem)) l
+
+
+
+(*==========================================================================*)
                   (** {2 Graph Functor} *)
 (*==========================================================================*)
 
@@ -514,7 +531,7 @@ struct
     
     
   (*========================================================================*)
-                       (** {2 Global operations} *)
+                        (** {2 Maps and folds} *)
   (*========================================================================*)
 
 
@@ -572,6 +589,12 @@ struct
   let fold_edges_ordered f g a = EdgeMap.fold f (edge_map g) a
  
 
+                               
+  (*========================================================================*)
+                         (** {Simplification} *)
+  (*========================================================================*)
+
+                               
   let remove_orphan g =
     iter_nodes
       (fun _ n -> if n.n_in = [] && n.n_out = [] then remove_node g n)
@@ -579,10 +602,83 @@ struct
     iter_edges
       (fun _ e -> if e.e_src = [] && e.e_dst = [] then remove_edge g e)
       g
-                     
 
-                                     (* TODO *)
-                     
+
+
+                                   
+  (*========================================================================*)
+                      (** {Topological ordering} *)
+  (*========================================================================*)
+
+
+  (* Bourdoncle's algorithm to compute a weak topological order by 
+     hierarchical decomposition into strongly connected components
+     (FMPA'93, p. 128-141, 1993, Springer).
+   *)
+  let weak_topological_order g =
+    let stack = Stack.create () in
+    let index = NodeHash.create 16 in
+    let idx = ref 0 in
+    (* Tarjan's strongly connected component algorithm *)
+    let rec visit node acc =
+      Stack.push (node_id node) stack;
+      incr idx;
+      let orghead = !idx in
+      NodeHash.replace index (node_id node) orghead;
+      let acc,head,loop =
+        List.fold_left
+          (fun (acc,head,loop) (_,_,_,succ) ->
+            let acc, min =
+              if NodeHash.mem index (node_id succ)
+              then acc, NodeHash.find index (node_id succ)
+              else visit succ acc
+            in
+            if min >= 0 && min <= head then acc, min, true
+            else acc, head ,loop
+          )            
+          (acc,orghead,false)
+          (node_out_nodes node)
+      in
+      let acc = 
+        if head = orghead then (
+          NodeHash.replace index (node_id node) (-1);
+          let elem = Stack.pop stack in
+          if loop then
+            let rec pop_all elem =
+              if not (P.NodeId.equal (node_id node) elem) then (
+                NodeHash.remove index elem;
+                pop_all (Stack.pop stack)
+              )
+            in
+            pop_all elem;
+            (Composed (component node))::acc
+          else
+            (Simple node)::acc
+        )
+        else acc
+      in
+      acc, head
+    (* recursively decompose a strongly connected component *)      
+    and component node =
+      let acc =
+        List.fold_left
+          (fun acc (_,_,_,succ) ->
+            if NodeHash.mem index (node_id succ) then acc
+            else fst (visit succ acc)
+          )
+          []
+          (node_out_nodes node)
+      in
+      (Simple node)::acc
+    in
+    List.fold_left
+      (fun acc (_,node) ->
+        if NodeHash.mem index (node_id node) then acc
+        else fst (visit node acc)
+      )
+      [] (entries g)
+    
+
     
   (*========================================================================*)
                          (** {2 Printing} *)
