@@ -27,6 +27,7 @@
         "python.objects.nones",
         "python.memory.string",
         "python.memory.int",
+        "python.memory.float",
         // todo: numbers, etc
         // todo: container, etc
 
@@ -44,7 +45,8 @@
 		    "python.memory.addr_env",
 		    "python.memory.vdispatcher",
                     "universal.strings.value",
-                    "universal.numeric.values.intervals"
+                    "universal.numeric.values.intervals",
+                    "universal.numeric.values.float_intervals"
 		]
 	    }
         }
