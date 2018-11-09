@@ -9,6 +9,7 @@
 (** Data model for attribute access. *)
 
 open Framework.Essentials
+open Framework.Visitor
 open Universal.Ast
 open Ast
 open Addr
@@ -27,7 +28,23 @@ let () =
       match ekind exp with
       | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
       | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
-      | _ -> default fmt exp)
+      | _ -> default fmt exp);
+  register_expr_visitor (fun default exp ->
+      match ekind exp with
+      | E_py_ll_hasattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_hasattr(e1, e2)})
+      | E_py_ll_getattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_getattr(e1, e2)})
+      | _ -> default exp
+    )
 
 
 module Domain =
