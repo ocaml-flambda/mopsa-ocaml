@@ -679,6 +679,17 @@ struct
       [] (entries g)
     
 
+  let widening_points l =
+    let rec add_head acc = function
+      | (Simple x)::_ -> x::acc
+      | _ -> acc
+    and iter acc = function
+      | Simple _ -> acc
+      | Composed l -> List.fold_left iter (add_head acc l) l
+    in
+    List.fold_left iter [] l
+    
+    
     
   (*========================================================================*)
                          (** {2 Printing} *)

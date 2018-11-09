@@ -510,7 +510,7 @@ module type S = sig
    *)
 
   val node_in_nodes: ('n,'e) node
-                      -> (('n,'e) node * port * ('n,'e) edge * port) list
+                     -> (('n,'e) node * port * ('n,'e) edge * port) list
   (** Predecessor nodes of a given node. 
       Each returned element [(node,port1,edge,port2)] gives the predecessor 
       node [node], the port [port1] connecting it to an edge [edge], 
@@ -643,7 +643,7 @@ module type S = sig
                           -> ('n,'e) graph -> 'a -> 'a
   (** Accumulates a function on all edges.    
       The function is called in increasing identifier order.
- *)
+   *)
 
 
                                    
@@ -674,7 +674,13 @@ module type S = sig
    *)
   val weak_topological_order: ('n,'e) graph -> ('n,'e) node nested_list list
 
+  (** Returns an adminisible list of widening points.
+      Given a weak topological ordering, we compute the head of
+      every component.
+   *)
+  val widening_points: ('n,'e) node nested_list list -> ('n,'e) node list
 
+    
     
   (*========================================================================*)
                          (** {2 Printing} *)

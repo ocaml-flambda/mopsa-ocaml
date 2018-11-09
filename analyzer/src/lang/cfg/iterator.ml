@@ -10,10 +10,9 @@
 
 open Framework.Essentials
 open Universal.Ast
-open Universal.Zone
 open Ast
 
-
+              
 (*==========================================================================*)
                       (** {2 Domain signature} *)
 (*==========================================================================*)
@@ -125,7 +124,7 @@ module SetWorklist : STRATEGY = struct
           then TagLocSet.add id acc
           else acc
         )
-        g TagLocSet.empty
+        g.cfg_graph TagLocSet.empty
     in
     { dirty = TagLocSet.empty;
       widen = w;
@@ -158,11 +157,12 @@ end
 module Make(D:DOMAIN)(S:STRATEGY) = struct
 
 
-  let iterate (man:D.manager) (g:cfg) =
-    
+  let iterate (man:D.manager) (cfg:cfg) =
+
     (* create *)
+    let g = cfg.cfg_graph in
     let a = TagLocHash.create 16 in
-    let wl = S.create g in
+    let wl = S.create cfg in
     let bot = D.bot man in
 
     (* update *)
@@ -236,49 +236,3 @@ module Make(D:DOMAIN)(S:STRATEGY) = struct
   
 end
                     
-   
-
-(*==========================================================================*)
-(*==========================================================================*)
-(*==========================================================================*)
-
-
-
-                                          
-(*==========================================================================*)
-                       (** {2 Iterator} *)
-(*==========================================================================*)
-
-                    
-module Domain : Framework.Domains.Stateless.S =
-struct
-
-  type _ domain += D_universal_cfg : unit domain
-
-  let id = D_universal_cfg
-  let name = "cfg.iterator"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_cfg -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
-
-  let init prog man flow = None
-
-  let rec exec zone stmt man flow =
-    match skind stmt with
-    | S_cfg cfg ->
-       None
-       
-    | _ ->
-       None
-   
-  let eval _ _ _ _ = None
-
-  let ask _ _ _ = None
-
-end

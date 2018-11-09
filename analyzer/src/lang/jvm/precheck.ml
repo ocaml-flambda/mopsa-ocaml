@@ -787,7 +787,7 @@ module Domain = struct
     TagLocMap.fold
       (fun l r acc ->
         (* add the connction to the ret site, if needed *)
-        let n = CFG.get_node m.m_cfg l in
+        let n = CFG.get_node m.m_cfg.cfg_graph l in
         CFG.edge_add_dst_unique e (F_java_ret l) n;
         (* add flow *)
         (F_java_ret l, r)::acc
@@ -810,7 +810,7 @@ let analyze (m:j_method) =
         Format.printf
           "  %a: @[%a@]@\n"
           pp_node_id id pp_pastate (TagLocHash.find r id)
-      ) m.m_cfg;
+      ) m.m_cfg.cfg_graph;
     Format.printf "@\n"
   )
 

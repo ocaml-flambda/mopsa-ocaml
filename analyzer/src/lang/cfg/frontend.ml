@@ -115,7 +115,7 @@ let mk_remove_tmps (l:(var*range) list) : stmt list =
 
 (* Context used during conversion of a function. *)   
 type ctx = {
-    ctx_cfg: cfg;
+    ctx_cfg: graph;
     ctx_return: node;
     ctx_break: node list;
     ctx_continue: node list;
@@ -310,12 +310,13 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
     }
   in
   add_stmt c entry exit s;
-  let wto = CFG.weak_topological_order cfg in
-  if dump_dot then (
-    Pp.output_dot name ("tmp/"^name^".dot") cfg;
-    Format.printf "%s@.%a@.@." name (Graph.pp_nested_list_list (fun fmt n -> pp_node_id fmt (CFG.node_id n))) wto
-  );
-  mk_cfg cfg (srange s)
+  let c =
+    { cfg_graph = cfg;
+      cfg_order = CFG.weak_topological_order cfg;
+    }
+  in
+  if dump_dot then Pp.output_dot name ("tmp/"^name^".dot") c;
+  mk_cfg c (srange s)
 
   
 (** Converts a function AST to a CFG. *)
