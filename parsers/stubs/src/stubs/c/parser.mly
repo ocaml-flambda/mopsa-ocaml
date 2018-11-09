@@ -94,39 +94,23 @@
 %%
 
 stub:
-  | local_list predicate_list requires_list assigns_list EOF
+  | predicate_list requires_list assigns_list local_list ensures_list EOF
     {
-      {
-        stub_local    = $1;
-        stub_predicates = $2;
-        stub_requires = $3;
-        stub_assigns  = $4;
-        stub_case     = [];
-        stub_ensures  = [];
+      S_simple {
+        simple_predicates = $1;
+        simple_requires = $2;
+        simple_assigns  = $3;
+        simple_local    = $4;
+        simple_ensures  = $5;
       }
     }
 
-  | local_list predicate_list requires_list assigns_list case_list EOF
+  | predicate_list requires_list case_list EOF
     {
-      {
-        stub_local    = $1;
-        stub_predicates = $2;
-        stub_requires = $3;
-        stub_assigns  = $4;
-        stub_case     = $5;
-        stub_ensures  = [];
-      }
-    }
-
-  | local_list predicate_list requires_list assigns_list ensures_list EOF
-    {
-      {
-        stub_local    = $1;
-        stub_predicates = $2;
-        stub_requires = $3;
-        stub_assigns  = $4;
-        stub_case     = [];
-        stub_ensures  = $5;
+      S_multi {
+        multi_predicates = $1;
+        multi_requires = $2;
+        multi_cases     = $3;
       }
     }
 
@@ -145,8 +129,7 @@ local:
   | LOCAL COLON typ var ASSIGN local_value SEMICOL
     {
       {
-        local_var = $4;
-        local_typ = $3;
+        local_var = { $4 with var_typ = $3 };
         local_value = $6;
       }
     }
@@ -163,7 +146,7 @@ predicate:
   | PREDICATE var COLON with_range(formula) SEMICOL
     {
       {
-        predicate_var = $2;
+        predicate_var = { $2 with var_typ = T_predicate };
         predicate_body = $4;
       }
     }
@@ -176,16 +159,16 @@ assigns:
   | ASSIGNS COLON with_range(expr) SEMICOL
     {
       {
-	assign_target = $3;
-	assign_range = None;
+	assigns_target = $3;
+	assigns_range = None;
       }
     }
 
   | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK
     {
       {
-	assign_target = $3;
-	assign_range = Some ($5, $8);
+	assigns_target = $3;
+	assigns_range = Some ($5, $8);
       }
     }
 
@@ -214,7 +197,7 @@ assumes:
   | ASSUMES COLON with_range(formula) SEMICOL { $3 }
 
 ensures_list:
-  | with_range(ensures) { [ $1 ] }
+  | { [] }
   | with_range(ensures) ensures_list { $1 :: $2 }
 
 ensures:
@@ -227,8 +210,8 @@ formula:
   | with_range(expr)                      { F_expr $1 }
   | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
   | NOT with_range(formula)               { F_not $2 }
-  | FORALL var IN set COLON with_range(formula) { F_forall ($2, $4, $6) } %prec FORALL
-  | EXISTS var IN set COLON with_range(formula) { F_exists ($2, $4, $6) } %prec EXISTS
+  | FORALL typ var IN set COLON with_range(formula) { F_forall ({ $3 with var_typ = $2 }, $5, $7) } %prec FORALL
+  | EXISTS typ var IN set COLON with_range(formula) { F_exists ({ $3 with var_typ = $2 }, $5, $7) } %prec EXISTS
   | var IN set                { F_in ($1, $3) }
   | FREE with_range(expr)                 { F_free $2 }
 

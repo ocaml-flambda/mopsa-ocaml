@@ -22,7 +22,7 @@ let pp_builtin fmt f =
 
 
 let rec pp_expr fmt exp =
-  match kind exp with
+  without_range exp @@ function
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
@@ -81,17 +81,18 @@ and pp_typ fmt =
   | T_const t -> fprintf fmt "signed %a" pp_typ t
   | T_struct s -> fprintf fmt "struct %a" pp_var s
   | T_union u -> fprintf fmt "union %a" pp_var u
+  | T_predicate -> pp_print_string fmt "predicate"
   | T_unknown -> pp_print_string fmt "?"
 
 let rec pp_formula fmt (f:formula with_range) =
-  match kind f with
+  without_range f @@ function
   | F_expr e -> pp_expr fmt e
   | F_bool true  -> pp_print_string fmt "true"
   | F_bool false -> pp_print_string fmt "false"
   | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
-  | F_forall (x, set, f) -> fprintf fmt "∀ %a ∈ %a: @[%a@]" pp_var x pp_set set pp_formula f
-  | F_exists (x, set, f) -> fprintf fmt "∃ %a ∈ %a: @[%a@]" pp_var x pp_set set pp_formula f
+  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_typ x.var_typ pp_var x pp_set set pp_formula f
+  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_typ x.var_typ pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
@@ -119,9 +120,9 @@ let pp_opt pp fmt o =
 
 
 let rec pp_local fmt local =
-  map_kind local @@ fun local ->
+  without_range local @@ fun local ->
   fprintf fmt "local: %a %a = @[%a@];"
-    pp_typ local.local_typ
+    pp_typ local.local_var.var_typ
     pp_var local.local_var
     pp_local_value local.local_value
 
@@ -132,35 +133,35 @@ and pp_local_value fmt v =
 
 
 let pp_predicate fmt (predicate:predicate with_range) =
-  map_kind predicate @@ fun predicate ->
+  without_range predicate @@ fun predicate ->
   fprintf fmt "predicate %a: @[%a@];"
     pp_var predicate.predicate_var
     pp_formula predicate.predicate_body
 
 let pp_requires fmt requires =
-  map_kind requires @@ fun requires ->
+  without_range requires @@ fun requires ->
   fprintf fmt "requires: @[%a@];" pp_formula requires
 
 let pp_assigns fmt assigns =
-  map_kind assigns @@ fun assigns ->
+  without_range assigns @@ fun assigns ->
   fprintf fmt "assigns: %a%a;"
-    pp_expr assigns.assign_target
+    pp_expr assigns.assigns_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.assign_range
+    ) assigns.assigns_range
 
 
 let pp_assumes fmt (assumes:assumes with_range) =
-  map_kind assumes @@ fun assumes ->
+  without_range assumes @@ fun assumes ->
   fprintf fmt "assumes: @[%a@];" pp_formula assumes
 
 let pp_ensures fmt ensures =
-  map_kind ensures @@ fun ensures ->
+  without_range ensures @@ fun ensures ->
   fprintf fmt "ensures: @[%a@];" pp_formula ensures
 
 let pp_case fmt case =
-  map_kind case @@ fun case ->
+  without_range case @@ fun case ->
   fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a@]"
     case.case_label
     (pp_list pp_assumes) case.case_assumes
@@ -170,10 +171,17 @@ let pp_case fmt case =
     (pp_list pp_ensures) case.case_ensures
 
 let pp_stub fmt stub =
-  fprintf fmt "%a%a%a%a%a%a"
-    (pp_list pp_local) stub.stub_local
-    (pp_list pp_predicate) stub.stub_predicates
-    (pp_list pp_requires) stub.stub_requires
-    (pp_list pp_assigns) stub.stub_assigns
-    (pp_list pp_case) stub.stub_case
-    (pp_list pp_ensures) stub.stub_ensures
+  match stub with
+  | S_simple ss ->
+    fprintf fmt "%a%a%a%a%a"
+      (pp_list pp_predicate) ss.simple_predicates
+      (pp_list pp_requires) ss.simple_requires
+      (pp_list pp_assigns) ss.simple_assigns
+      (pp_list pp_local) ss.simple_local
+      (pp_list pp_ensures) ss.simple_ensures
+
+  | S_multi ms ->
+    fprintf fmt "%a%a%a"
+      (pp_list pp_predicate) ms.multi_predicates
+      (pp_list pp_requires) ms.multi_requires
+      (pp_list pp_case) ms.multi_cases

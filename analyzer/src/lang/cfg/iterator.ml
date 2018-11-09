@@ -8,11 +8,9 @@
 
 (** General iterator on Control Flow Graphs. *)
 
-open Framework.Location
-open Framework.Ast
-open Framework.Flow
-open Framework.Manager
+open Framework.Essentials
 open Universal.Ast
+open Universal.Zone
 open Ast
 
 
@@ -121,7 +119,7 @@ module SetWorklist : STRATEGY = struct
           let i = CFG.node_in_nodes n in
           if List.exists
                (fun (nn,_,_,_) ->
-                 compare_node_id (CFG.node_id nn) id > 0
+                 compare (CFG.node_id nn) id > 0
                )
                i
           then TagLocSet.add id acc
@@ -153,7 +151,7 @@ end
                     
         
 (*==========================================================================*)
-                         (** {2 Iterator} *)
+                       (** {2 Old iterator} *)
 (*==========================================================================*)
 
                     
@@ -239,3 +237,48 @@ module Make(D:DOMAIN)(S:STRATEGY) = struct
 end
                     
    
+
+(*==========================================================================*)
+(*==========================================================================*)
+(*==========================================================================*)
+
+
+
+                                          
+(*==========================================================================*)
+                       (** {2 Iterator} *)
+(*==========================================================================*)
+
+                    
+module Domain : Framework.Domains.Stateless.S =
+struct
+
+  type _ domain += D_universal_cfg : unit domain
+
+  let id = D_universal_cfg
+  let name = "cfg.iterator"
+  let identify : type a. a domain -> (unit, a) eq option =
+    function
+    | D_universal_cfg -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  let exec_interface = {export = [Z_u]; import = []}
+  let eval_interface = {export = []; import = []}
+
+  let init prog man flow = None
+
+  let rec exec zone stmt man flow =
+    match skind stmt with
+    | S_cfg cfg ->
+       None
+       
+    | _ ->
+       None
+   
+  let eval _ _ _ _ = None
+
+  let ask _ _ _ = None
+
+end

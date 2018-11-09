@@ -310,7 +310,11 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
     }
   in
   add_stmt c entry exit s;
-  if dump_dot then Pp.output_dot name ("tmp/"^name^".dot") cfg;
+  let wto = CFG.weak_topological_order cfg in
+  if dump_dot then (
+    Pp.output_dot name ("tmp/"^name^".dot") cfg;
+    Format.printf "%s@.%a@.@." name (Graph.pp_nested_list_list (fun fmt n -> pp_node_id fmt (CFG.node_id n))) wto
+  );
   mk_cfg cfg (srange s)
 
   
