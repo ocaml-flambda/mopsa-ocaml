@@ -54,6 +54,11 @@ type typ_info = {
   print : (Format.formatter -> Ast.typ -> unit) -> Format.formatter -> Ast.typ -> unit;
 }
 
+type operator_info = {
+  compare : (Ast.operator -> Ast.operator -> int) -> Ast.operator -> Ast.operator -> int;
+  print : (Format.formatter -> Ast.operator -> unit) -> Format.formatter -> Ast.operator -> unit;
+}
+
 type expr_info = {
   compare : (Ast.expr -> Ast.expr -> int) -> Ast.expr -> Ast.expr -> int;
   print : (Format.formatter -> Ast.expr -> unit) -> Format.formatter -> Ast.expr -> unit;
@@ -70,6 +75,11 @@ type stmt_info = {
 let register_typ (info: typ_info) : unit =
   Ast.register_typ_compare info.compare;
   Ast.register_pp_typ info.print;
+  ()
+
+let register_operator (info: operator_info) : unit =
+  Ast.register_operator_compare info.compare;
+  Ast.register_pp_operator info.print;
   ()
 
 let register_expr (info: expr_info) : unit =
