@@ -1,6 +1,0 @@
-_build/c_stubs_parser/scope.cmo : ../../utils/_build/setExt.cmi \
-    _build/c_stubs_parser/printer.cmo ../../utils/_build/debug.cmo \
-    _build/c_stubs_parser/ast.cmo
-_build/c_stubs_parser/scope.cmx : ../../utils/_build/setExt.cmx \
-    _build/c_stubs_parser/printer.cmx ../../utils/_build/debug.cmx \
-    _build/c_stubs_parser/ast.cmx

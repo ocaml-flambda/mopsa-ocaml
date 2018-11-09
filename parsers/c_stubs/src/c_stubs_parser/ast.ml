@@ -95,18 +95,7 @@ and expr =
   | E_return
 
 and typ =
-  | T_char
-  | T_int
-  | T_long
-  | T_float
-  | T_double
-  | T_pointer of typ
-  | T_signed of typ
-  | T_unsigned of typ
-  | T_const of typ
-  | T_user of var
-  | T_struct of var
-  | T_union of var
+  | T_c of C_AST.type_qual
   | T_predicate
   | T_unknown
 

@@ -69,18 +69,7 @@ and pp_binop fmt =
 
 and pp_typ fmt =
   function
-  | T_int -> pp_print_string fmt "int"
-  | T_char -> pp_print_string fmt "char"
-  | T_pointer t -> fprintf fmt "%a *" pp_typ t
-  | T_user t  -> pp_var fmt t
-  | T_long -> pp_print_string fmt "int"
-  | T_float -> pp_print_string fmt "int"
-  | T_double -> pp_print_string fmt "int"
-  | T_signed t -> fprintf fmt "signed %a" pp_typ t
-  | T_unsigned t -> fprintf fmt "signed %a" pp_typ t
-  | T_const t -> fprintf fmt "signed %a" pp_typ t
-  | T_struct s -> fprintf fmt "struct %a" pp_var s
-  | T_union u -> fprintf fmt "union %a" pp_var u
+  | T_c t -> pp_print_string fmt (C_print.string_of_type_qual t)
   | T_predicate -> pp_print_string fmt "predicate"
   | T_unknown -> pp_print_string fmt "?"
 

@@ -39,16 +39,15 @@ let _ =
      "in",    IN;
 
      (* Types *)
-     "char", TCHAR;
-     "int", TINT;
-     "long", TLONG;     
-     "double", TDOUBLE;
-     "float", TFLOAT;
+     "char", CHAR;
+     "short", SHORT;
+     "int", INT;
+     "long", LONG;     
+     "double", DOUBLE;
+     "float", FLOAT;
      "signed", UNSIGNED;
      "unsigned", UNSIGNED;
      "const", CONST;
-     "struct", STRUCT;
-     "union", UNION;     
 
 
      (* Built-ins *)
@@ -79,8 +78,8 @@ rule read =
   | white    { read lexbuf }
   | newline  { new_line lexbuf; read lexbuf }
   
-  | int      { INT (Z.of_string (Lexing.lexeme lexbuf)) }
-  | float    { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
+  | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
+  | float    { FLOAT_CONST (float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
@@ -125,7 +124,7 @@ rule read =
 
 and read_string buf =
   parse
-  | '"'       { STRING (Buffer.contents buf) }
+  | '"'       { STRING_CONST (Buffer.contents buf) }
   | '\\' '/'  { Buffer.add_char buf '/'; read_string buf lexbuf }
   | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
   | '\\' 'b'  { Buffer.add_char buf '\b'; read_string buf lexbuf }

@@ -19,7 +19,7 @@ struct
   include SetExt.Make(struct type t = var let compare = compare_var end)
 
   let uid_counter = ref 0
-  
+
   let create v s =
     incr uid_counter;
     let v' = { v with var_uid = !uid_counter } in
@@ -88,7 +88,7 @@ let rec visit_expr (expr:expr with_range) scope =
   | E_deref e ->
     let e, scope = visit_expr e scope in
     E_deref e, scope
-    
+
   | E_cast (t, e) ->
     let e, scope = visit_expr e scope in
     E_cast (t, e), scope
@@ -97,7 +97,7 @@ let rec visit_expr (expr:expr with_range) scope =
     let a, scope = visit_expr a scope in
     let i, scope = visit_expr i scope in
     E_subscript (a, i), scope
-    
+
   | E_member (s, f) ->
     let s, scope = visit_expr s scope in
     E_member (s, f), scope
@@ -141,7 +141,7 @@ let rec visit_formula (formula:formula with_range) scope =
   | F_in (v, s) ->
     let v = Scope.resolve v scope in
     F_in (v, s), scope
-    
+
   | F_free e ->
     let e, scope = visit_expr e scope in
     F_free e, scope
@@ -223,7 +223,7 @@ let visit stub scope : stub =
       simple_ensures = ensures;
     }
 
-  | S_multi s -> 
+  | S_multi s ->
     let predicates, scope = visit_list visit_predicate s.multi_predicates scope in
     let requires, scope = visit_list visit_requires s.multi_requires scope in
     let cases, scope = visit_list visit_case s.multi_cases scope in
@@ -233,5 +233,3 @@ let visit stub scope : stub =
       multi_requires  = requires;
       multi_cases = cases;
     }
-  
-    

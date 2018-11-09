@@ -20,10 +20,10 @@
 %}
 
 (* Constants *)
-%token <Z.t> INT
-%token <float> FLOAT
-%token <char> CHAR
-%token <string> STRING
+%token <Z.t> INT_CONST
+%token <float> FLOAT_CONST
+%token <char> CHAR_CONST
+%token <string> STRING_CONST
 
 (* Identifiers *)
 %token <string> IDENT
@@ -56,9 +56,8 @@
 %token FREE OLD RETURN SIZE OFFSET BASE
 
 (* Types *)
-%token TCHAR TINT TLONG TFLOAT TDOUBLE
+%token CHAR INT LONG FLOAT DOUBLE SHORT
 %token SIGNED UNSIGNED CONST
-%token STRUCT UNION
 
 (* Priorities of logical operators *)
 %left IMPLIES
@@ -83,7 +82,6 @@
 %left LBRACK
 %nonassoc UNARY
 %left DOT ARROW
-
 
 %start stub
 
@@ -177,7 +175,7 @@ case_list:
   | with_range(case) case_list { $1 :: $2 }
 
 case:
-  | CASE STRING COLON assumes_list requires_list local_list assigns_list ensures_list
+  | CASE STRING_CONST COLON assumes_list requires_list local_list assigns_list ensures_list
     {
       {
         case_label    = $2;
@@ -219,10 +217,10 @@ expr:
   | LPAR typ RPAR with_range(expr) { E_cast ($2, $4) }            %prec CAST
   | LPAR expr RPAR { $2 }
   | PLUS expr { $2 }
-  | INT                     { E_int $1 }
-  | STRING                  { E_string $1}
-  | FLOAT                   { E_float $1 }
-  | CHAR                    { E_char $1 }
+  | INT_CONST                     { E_int $1 }
+  | STRING_CONST                  { E_string $1}
+  | FLOAT_CONST                   { E_float $1 }
+  | CHAR_CONST                    { E_char $1 }
   | var                               { E_var $1 }
   | unop with_range(expr)               { E_unop ($1, $2) }       %prec UNARY
   | with_range(expr) binop with_range(expr)         { E_binop ($2, $1, $3) }
@@ -235,20 +233,37 @@ expr:
   | builtin LPAR with_range(expr) RPAR  { E_builtin_call ($1, $3) }
 
 typ:
-  | SIGNED typ { T_signed $2 }
-  | UNSIGNED typ { T_unsigned $2 }
-  | CONST typ { T_const $2 }
-  | typ_spec { $1 }
+  | c_typ { T_c $1 }
+
+c_typ:
+  | CONST typ_spec { ($2, C_AST.{ qual_is_const = true}) }
+  | typ_spec { ($1, C_AST.{ qual_is_const = false}) }
 
 typ_spec:
-  | TCHAR { T_char }
-  | TINT { T_int }
-  | TFLOAT { T_float }
-  | TDOUBLE { T_double }
-  | TLONG { T_long }
-  | STRUCT var { T_struct $2 }
-  | UNION var { T_union $2 }
-  | typ_spec STAR { T_pointer $1 }
+  | int_typ { C_AST.T_integer $1 }
+  | float_typ { C_AST.T_float $1 }
+  | c_typ STAR { C_AST.T_pointer $1 }
+
+int_typ:
+  | CHAR          { C_AST.(Char SIGNED) } (* FIXME: signeness should be defined by the platform. *)
+  | UNSIGNED CHAR { C_AST.UNSIGNED_CHAR }
+  | SIGNED CHAR { C_AST.SIGNED_CHAR }
+
+  | SHORT    { C_AST.SIGNED_SHORT }
+  | UNSIGNED SHORT { C_AST.UNSIGNED_SHORT }
+  | SIGNED SHORT { C_AST.SIGNED_SHORT }
+
+  | INT    { C_AST.SIGNED_INT }
+  | UNSIGNED INT { C_AST.UNSIGNED_INT }
+  | SIGNED INT { C_AST.SIGNED_INT }
+
+  | LONG    { C_AST.SIGNED_LONG }
+  | UNSIGNED LONG { C_AST.UNSIGNED_LONG }
+  | SIGNED LONG { C_AST.SIGNED_LONG }
+
+float_typ:
+  | FLOAT { C_AST.FLOAT }
+  | DOUBLE { C_AST.DOUBLE }
 
 %inline binop:
   | PLUS { ADD }
