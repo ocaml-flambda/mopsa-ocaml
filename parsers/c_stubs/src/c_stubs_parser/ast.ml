@@ -18,7 +18,7 @@ type 'a with_range = 'a * range
 
 type stub =
   | S_simple of simple_stub
-  | S_multi of multi_stub
+  | S_multi of multi_case_stub
 
 and simple_stub = {
   simple_predicates : predicate with_range list;
@@ -28,7 +28,7 @@ and simple_stub = {
   simple_ensures    : ensures with_range list;
 }
 
-and multi_stub = {
+and multi_case_stub = {
   multi_predicates : predicate with_range list;
   multi_requires   : requires with_range list;
   multi_cases      : case with_range list;

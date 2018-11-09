@@ -12,7 +12,7 @@ reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal c python cfg jvm
+lang = universal stubs c python cfg jvm
 
 lang.universal = ast pp visitor frontend utils zone u_stdlib router	\
 iterators heap numeric strings tree # arrays
@@ -29,6 +29,8 @@ lang.universal.tree = toolBox tools strVarBind SIG mapper mRelation	\
 rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
 treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
 abstractTreeAutomaton numerical value treeAst treeAbs
+
+lang.stubs = ast
 
 # lang.c = ast pp visitor zone frontend
 lang.c = zone ast alarms frontend libs desugar flows memory
@@ -56,7 +58,12 @@ PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith java
 
 # MOPSA
 MOPSAROOT = ..
-MOPSALIBS := utils:utils parsers/c:mlClangParser parsers/python:mlPythonParser parsers/universal:mlUniversalParser
+MOPSALIBS := utils:utils \
+parsers/c:mlClangParser \
+parsers/python:mlPythonParser \
+parsers/universal:mlUniversalParser \
+parsers/c_stubs:mlCStubsParser
+
 
 # Flags
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))

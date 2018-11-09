@@ -201,6 +201,13 @@ and from_init fun_ctx init = match init with
 
 and from_function =
   fun func ->
+  debug "Comments of function %s:@\n@[%a@]"
+    func.func_org_name
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n---------------@\n")
+       (fun fmt com -> Format.pp_print_string fmt com.Clang_AST.com_text)
+    ) func.func_com
+  ;
     {
       c_func_var = from_var_name func.func_org_name func.func_uid T_any;
       c_func_is_static = func.func_is_static;
