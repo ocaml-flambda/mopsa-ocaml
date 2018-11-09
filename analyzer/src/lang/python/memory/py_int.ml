@@ -14,7 +14,7 @@ open Ast
 open Addr
 open Addr_env
 
-module Domain= struct
+module Domain = struct
   type _ domain += D_python_memory_int : unit domain
 
   let id = D_python_memory_int
@@ -30,13 +30,12 @@ module Domain= struct
 
   let init _ _ flow = Some flow
 
-  let mk_py_int n range =
-    let mk_py_int_expr e range =
-      let addr = {addr_kind = A_py_instance (find_builtin "int", None);
-                  addr_uid = Universal.Heap.Pool.get_fresh ()} in
-      mk_py_object (addr, e) range
-    in
-    mk_py_int_expr (Universal.Ast.mk_z n range) range
+  let mk_py_int_expr e range =
+    let addr = {addr_kind = A_py_instance (find_builtin "int", None);
+                addr_uid = Universal.Heap.Pool.get_fresh ()} in
+    mk_py_object (addr, e) range
+
+  let mk_py_int n range = mk_py_int_expr (Universal.Ast.mk_z n range) range
 
 
   let rec eval zs exp man flow =
@@ -84,26 +83,56 @@ module Domain= struct
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {+, -, x, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-      when is_arithmetic_binop_fun f ->
-       Debug.fail "todo@\n"
-    (* eval_list [e1; e2] (man.eval ctx) flow |>
-       * eval_compose (fun el flow ->
-       *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-       *     let o1 = object_of_expr e1 in
-       *     if not (Addr.isinstance o1 (Addr.find_builtin "int")) then
-       *       let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
-       *       oeval_singleton (None, flow, [])
-       *     else
-       *       let e2' = Utils.mk_builtin_call "int" [e2] range in
-       *       man.eval ctx e2' flow |>
-       *       eval_compose (fun e2 flow ->
-       *           let o2 = object_of_expr e2 in
-       *           let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
-       *           let op = arithmetic_binop f in
-       *           oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
-       *         )
-       *   ) *)
-
+         when is_arithmetic_binop_fun f ->
+       Eval.eval_list [e1; e2] man.eval flow |>
+         Eval.bind (fun el flow ->
+             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+             Eval.assume
+               (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e1; mk_py_object (Addr.find_builtin "int") range] range)
+               ~fthen:(fun flow ->
+                 (* FIXME: felse correctN *)
+                 Eval.assume
+                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e2; mk_py_object (Addr.find_builtin "int") range] range)
+                   ~fthen:(fun flow ->
+                     (* FIXME: il faut évaluer les sous expressions
+                        dans la zone numérique puis les reconstruire
+                        ensuite ? ou le mecanisme des zones va s'en occuper ?*)
+                     let op = arithmetic_binop f in
+                     let ev1 = match ekind e1 with
+                       | E_py_object ({addr_kind = A_py_instance _; addr_uid}, e) -> e
+                          (* mk_var (Addr_env.mk_avar addr_uid ~vtyp:T_int) range *)
+                       | _ -> assert false in
+                     let ev2 = match ekind e2 with
+                       | E_py_object ({addr_kind = A_py_instance _; addr_uid}, e) -> e
+                          (* mk_var (Addr_env.mk_avar addr_uid ~vtyp:T_int) range *)
+                       | _ -> assert false in
+                     man.eval (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range) flow
+                   )
+                   ~felse:(fun flow ->
+                     man.eval (Addr_env.mk_py_not_implemented range) flow)
+                   man flow
+               )
+               ~felse:(fun flow ->
+                 man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                 Eval.empty_singleton)
+               man flow
+           )
+       |> OptionExt.return
+       (*       let o1 = object_of_expr e1 in
+        *       if not (Addr.isinstance o1 (Addr.find_builtin "int")) then
+        *         let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
+        *         oeval_singleton (None, flow, [])
+        *       else
+        *         let e2' = Utils.mk_builtin_call "int" [e2] range in
+        *         man.eval ctx e2' flow |>
+        *           eval_compose (fun e2 flow ->
+        *               let o2 = object_of_expr e2 in
+        *               let ev1 = value_of_object o1 and ev2 = value_of_object o2 in
+        *               let op = arithmetic_binop f in
+        *               oeval_singleton (Some (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range), flow, [])
+        *             )
+        *     )
+        * |> OptionExt.return *)
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_compare_op_fun f ->

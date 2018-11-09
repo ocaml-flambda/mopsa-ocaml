@@ -38,7 +38,7 @@ module Domain = struct
        let t = v.vtyp in
        begin match t with
        | T_string -> man.exec ~zone:Universal.Zone.Z_u_string stmt flow |> Post.of_flow
-       | T_int -> man.exec ~zone:Universal.Zone.Z_u_num stmt flow |> Post.of_flow
+       | T_int | T_float _  -> man.exec ~zone:Universal.Zone.Z_u_num stmt flow |> Post.of_flow
        | _ -> Debug.fail "autre@\n"
        end
        |> OptionExt.return
