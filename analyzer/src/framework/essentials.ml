@@ -49,6 +49,11 @@ struct
     Format.flush_str_formatter ();
 end
 
+type typ_info = {
+  compare : (Ast.typ -> Ast.typ -> int) -> Ast.typ -> Ast.typ -> int;
+  print : (Format.formatter -> Ast.typ -> unit) -> Format.formatter -> Ast.typ -> unit;
+}
+
 type expr_info = {
   compare : (Ast.expr -> Ast.expr -> int) -> Ast.expr -> Ast.expr -> int;
   print : (Format.formatter -> Ast.expr -> unit) -> Format.formatter -> Ast.expr -> unit;
@@ -61,6 +66,11 @@ type stmt_info = {
   visit : (Ast.stmt -> Ast.stmt Visitor.structure) -> Ast.stmt -> Ast.stmt Visitor.structure;
 }
 
+
+let register_typ (info: typ_info) : unit =
+  Ast.register_typ_compare info.compare;
+  Ast.register_pp_typ info.print;
+  ()
 
 let register_expr (info: expr_info) : unit =
   Ast.register_expr_compare info.compare;
