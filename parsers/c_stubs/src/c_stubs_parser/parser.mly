@@ -97,20 +97,20 @@ stub:
   | predicate_list requires_list assigns_list local_list ensures_list EOF
     {
       S_simple {
-        simple_predicates = $1;
-        simple_requires = $2;
-        simple_assigns  = $3;
-        simple_local    = $4;
-        simple_ensures  = $5;
+        simple_stub_predicates = $1;
+        simple_stub_requires = $2;
+        simple_stub_assigns  = $3;
+        simple_stub_local    = $4;
+        simple_stub_ensures  = $5;
       }
     }
 
   | predicate_list requires_list case_list EOF
     {
-      S_multi {
-        multi_predicates = $1;
-        multi_requires = $2;
-        multi_cases     = $3;
+      S_case {
+        case_stub_predicates = $1;
+        case_stub_requires = $2;
+        case_stub_cases     = $3;
       }
     }
 

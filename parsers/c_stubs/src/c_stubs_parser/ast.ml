@@ -18,20 +18,20 @@ type 'a with_range = 'a * range
 
 type stub =
   | S_simple of simple_stub
-  | S_multi of multi_case_stub
+  | S_case of case_stub
 
 and simple_stub = {
-  simple_predicates : predicate with_range list;
-  simple_requires   : requires with_range list;
-  simple_assigns    : assigns with_range list;
-  simple_local      : local with_range list;
-  simple_ensures    : ensures with_range list;
+  simple_stub_predicates : predicate with_range list;
+  simple_stub_requires   : requires with_range list;
+  simple_stub_assigns    : assigns with_range list;
+  simple_stub_local      : local with_range list;
+  simple_stub_ensures    : ensures with_range list;
 }
 
-and multi_case_stub = {
-  multi_predicates : predicate with_range list;
-  multi_requires   : requires with_range list;
-  multi_cases      : case with_range list;
+and case_stub = {
+  case_stub_predicates : predicate with_range list;
+  case_stub_requires   : requires with_range list;
+  case_stub_cases      : case with_range list;
 }
 
 and requires = formula with_range
