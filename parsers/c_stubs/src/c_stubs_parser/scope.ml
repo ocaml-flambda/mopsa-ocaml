@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Propagate type and UIDs of within scopes of variables. *)
+(** Propagate type and UIDs of variables within scopes of variables. *)
 
 open Ast
 

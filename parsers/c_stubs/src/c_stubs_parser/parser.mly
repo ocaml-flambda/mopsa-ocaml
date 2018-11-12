@@ -6,6 +6,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Parser of C stubs *)
+
 %{
     open Ast
 
@@ -112,6 +114,7 @@ stub:
       }
     }
 
+(* Requirements section *)
 requires_list:
   | { [] }
   | with_range(requires) requires_list { $1 :: $2 }
@@ -119,6 +122,8 @@ requires_list:
 requires:
   | REQUIRES COLON with_range(formula) SEMICOL { $3 }
 
+
+(* Locals section *)
 local_list:
   | { [] }
   | with_range(local) local_list { $1 :: $2 }
@@ -136,6 +141,7 @@ local_value:
   | NEW resource { Local_new $2 }
   | var LPAR args RPAR { Local_function_call ($1, $3) }
 
+(* Predicates section *)
 predicate_list:
   | { [] }
   | with_range(predicate) predicate_list { $1 :: $2 }
@@ -149,6 +155,7 @@ predicate:
       }
     }
 
+(* Assignments section *)
 assigns_list:
   | { [] }
   | with_range(assigns) assigns_list { $1 :: $2 }
@@ -170,6 +177,7 @@ assigns:
       }
     }
 
+(* Cases section *)
 case_list:
   | with_range(case) { [ $1 ] }
   | with_range(case) case_list { $1 :: $2 }
@@ -187,6 +195,7 @@ case:
       }
     }
 
+(* Assumptions section *)
 assumes_list:
   | { [] }
   | with_range(assumes) assumes_list { $1 :: $2 }
@@ -194,6 +203,8 @@ assumes_list:
 assumes:
   | ASSUMES COLON with_range(formula) SEMICOL { $3 }
 
+
+(* Ensures section *)
 ensures_list:
   | { [] }
   | with_range(ensures) ensures_list { $1 :: $2 }
@@ -201,6 +212,8 @@ ensures_list:
 ensures:
   | ENSURES COLON with_range(formula) SEMICOL { $3 }
 
+
+(* Logic formula *)
 formula:
   | RPAR formula RPAR         { $2 }
   | with_range(TRUE)                      { F_bool true }
@@ -213,6 +226,7 @@ formula:
   | var IN set                { F_in ($1, $3) }
   | FREE with_range(expr)                 { F_free $2 }
 
+(* C expressions *)
 expr:
   | LPAR typ RPAR with_range(expr) { E_cast ($2, $4) }            %prec CAST
   | LPAR expr RPAR { $2 }
@@ -232,17 +246,19 @@ expr:
   | RETURN                  { E_return }
   | builtin LPAR with_range(expr) RPAR  { E_builtin_call ($1, $3) }
 
+
+(* C types *)
 typ:
-  | c_typ { T_c $1 }
+  | c_qual_typ { T_c $1 }
+
+c_qual_typ:
+  | CONST c_typ { ($2, C_AST.{ qual_is_const = true}) }
+  | c_typ { ($1, C_AST.{ qual_is_const = false}) }
 
 c_typ:
-  | CONST typ_spec { ($2, C_AST.{ qual_is_const = true}) }
-  | typ_spec { ($1, C_AST.{ qual_is_const = false}) }
-
-typ_spec:
   | int_typ { C_AST.T_integer $1 }
   | float_typ { C_AST.T_float $1 }
-  | c_typ STAR { C_AST.T_pointer $1 }
+  | c_typ STAR { C_AST.T_pointer ($1, C_AST.{ qual_is_const = false }) } (* FIXME: fix conflict with const *)
 
 int_typ:
   | CHAR          { C_AST.(Char SIGNED) } (* FIXME: signeness should be defined by the platform. *)
@@ -265,6 +281,7 @@ float_typ:
   | FLOAT { C_AST.FLOAT }
   | DOUBLE { C_AST.DOUBLE }
 
+(* Operators *)
 %inline binop:
   | PLUS { ADD }
   | MINUS { SUB }
