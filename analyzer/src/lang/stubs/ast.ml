@@ -11,6 +11,8 @@
 open Framework.Essentials
 open Format
 
+
+
 (** {2 Types} *)
 (*  =-=-=-=-= *)
 
@@ -20,8 +22,10 @@ type quantifier =
 
 
 type typ +=
-  | T_stub_predicate (** predicate *)
-  | T_stub_quant_var of quantifier * typ
+  | T_stub_predicate                        (** predicate *)
+  | T_stub_quant_var of quantifier * typ    (** quantified variables *)
+
+
 
 (** {2 Operators} *)
 (*  =-=-=-=-=-=-= *)
@@ -30,9 +34,9 @@ type operator +=
   | O_log_implies (** ⇒ *)
 
 
+
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
-
 
 (** Built-in functions *)
 type builtin =
@@ -41,44 +45,37 @@ type builtin =
   | BASE
   | OLD
 
-let pp_builtin fmt f =
-  match f with
-  | SIZE   -> pp_print_string fmt "size"
-  | OFFSET -> pp_print_string fmt "offset"
-  | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
-
-
 type expr_kind +=
-  | E_stub_return
-  | E_stub_builtin of builtin
+  | E_stub_return               (* return value of the stub *)
+  | E_stub_builtin of builtin   (* built-in function *)
 
 
 (** {2 Formulas} *)
 (*  =-=-=-=-=-=- *)
 
+(* range tag of AST nodes *)
 type 'a with_range = {
   kind: 'a;
   range: range;
 }
 
+(* Logic formula *)
 type formula =
-  | F_expr   of expr
-  | F_bool   of bool
+  | F_expr   of expr (** boolean expression *)
   | F_binop  of operator * formula with_range * formula with_range
   | F_not    of formula with_range
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
-  | F_in     of var * set
-  | F_free   of expr
+  | F_in     of var * set (* set membership operator *)
+  | F_free   of expr (* resource release *)
 
 and set =
-  | S_interval of expr * expr
-  | S_resource of resource
+  | S_interval of expr * expr (* intervals of integers  *)
+  | S_resource of resource    (* set of allocated instances of a resource *)
 
 and resource = {
-  res_name : string;
-  res_uid  : int;
+  res_name : string;  (* resource name *)
+  res_uid  : int;     (* unique identifier *)
 }
 
 
@@ -86,12 +83,18 @@ and resource = {
 (*  =-=-=-=-=-=-=- *)
 
 type stub =
-  | S_simple of simple_stub
-  | S_case  of case_stub
+  | S_simple of simple_stub (* simple stubs without cases *)
+  | S_case  of case_stub    (* stubs with cases *)
 
+
+(* A simple stub describes a single post-condition. No case section is
+   defined. *)
 and simple_stub = {
+  (* Pre-condition sections *)
   sstub_predicates : predicate with_range list;
   sstub_requires   : requires with_range list;
+
+  (* Post-condition sections *)
   sstub_assigns    : assigns with_range list;
   sstub_local      : local with_range list;
   sstub_ensures    : ensures with_range list;
@@ -103,41 +106,48 @@ and case_stub = {
   cstub_cases      : case with_range list;
 }
 
+(* A predicate is a macro for a logic formula *)
 and predicate = {
   pred_var : var;
   pred_body: formula with_range;
 }
 
+(* Requirements, assumptions and ensures are just logic formula *)
 and requires = formula with_range
 and ensures = formula with_range
 and assumes = formula with_range
 
+(* Declarations of local variables in the post-condition. *)
 and local = {
-  local_var : var;
+  local_var   : var;
   local_value : local_value;
 }
 
+(* Values of locals *)
 and local_value =
-  | Local_new           of resource
-  | Local_function_call of var (** function *) * expr list (* arguments *)
+  | Local_new           of resource        (* allocation of a resource *)
+  | Local_function_call of var * expr list (* call to a function *)
 
+
+(* Assigned memory blocks *)
 and assigns = {
-  assigns_target: expr;
-  assigns_itv: (expr * expr) option;
+  assigns_target: expr;                  (* target memory block *)
+  assigns_indices: (expr * expr) option; (* range of modified indices *)
 }
 
+
+(* Behavior case *)
 and case = {
   case_label: string;
+  (* Pre-condition sections *)
   case_assumes: assumes with_range list;
   case_requires : requires with_range list;
+
+  (* Post-condition sections *)
   case_assigns  : assigns with_range list;
   case_local    : local with_range list;
   case_ensures  : ensures with_range list;
 }
-
-
-type stmt_kind +=
-  | S_stub of stub
 
 
 
@@ -152,11 +162,16 @@ let pp_opt pp fmt o =
   | None -> ()
   | Some x -> pp fmt x
 
+let pp_builtin fmt f =
+  match f with
+  | SIZE   -> pp_print_string fmt "size"
+  | OFFSET -> pp_print_string fmt "offset"
+  | BASE   -> pp_print_string fmt "base"
+  | OLD    -> pp_print_string fmt "old"
+
 let rec pp_formula fmt f =
   match f.kind with
   | F_expr e -> pp_expr fmt e
-  | F_bool true  -> pp_print_string fmt "true"
-  | F_bool false -> pp_print_string fmt "false"
   | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_operator op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
@@ -199,7 +214,7 @@ let pp_assigns fmt assigns =
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.kind.assigns_itv
+    ) assigns.kind.assigns_indices
 
 
 let pp_assumes fmt assumes =
@@ -287,26 +302,5 @@ let () =
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin f -> pp_builtin fmt f
         | _ -> next fmt e
-      );
-  }
-
-let () =
-  register_stmt {
-    compare = (fun next s1 s2 ->
-        match skind s1, skind s2 with
-        | S_stub _, S_stub _ -> compare_range (srange s1) (srange s2)
-        | _ -> next s1 s2
-      );
-
-    print = (fun next fmt s ->
-        match skind s with
-        | S_stub s -> pp_stub fmt s
-        | _ -> next fmt s
-      );
-
-    visit = (fun next s ->
-        match skind s with
-        | S_stub _ -> Framework.Visitor.leaf s
-        | _ -> next s
       );
   }
