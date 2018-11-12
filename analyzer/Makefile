@@ -46,7 +46,7 @@ lang.python = ast addr utils visitor operators pp frontend zone		\
 alarms flows libs desugar objects data_model types program memory
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
-lang.python.types = typingdomain typing t_string t_int
+lang.python.types = typingdomain typing t_string t_int t_float
 lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
 lang.cfg = ast pp visitor frontend iterator iterators

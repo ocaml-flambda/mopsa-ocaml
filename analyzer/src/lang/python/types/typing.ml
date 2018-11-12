@@ -170,6 +170,10 @@ module Domain =
         | E_constant (C_int _) ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "int")
 
+      | E_constant (C_top (T_float _))
+        | E_constant (C_float _) ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "float")
+
       | E_constant (C_string _) ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "str")
 
@@ -353,7 +357,8 @@ module Domain =
                  (* | E_get_type_partition pt -> *)
                     let ty = match pt with
                       | Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (c, b)} -> (c, b)
-                      | Typingdomain.Class _ -> C_builtin "type", [Addr.find_builtin "object"]
+                      | Typingdomain.Class _ -> C_builtin "type", List.map Addr.find_builtin ["type"; "object"]
+                      | Typingdomain.List _ -> C_builtin "list", List.map Addr.find_builtin ["list"; "object"]
                       | _ -> assert false
                     in ty
                  | E_py_object ({addr_kind = A_py_class (c, b)}, _) ->
