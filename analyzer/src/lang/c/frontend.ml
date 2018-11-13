@@ -12,6 +12,7 @@
 open C_AST
 open Framework.Essentials
 open Universal.Ast
+open Stubs.Ast
 open Ast
 
 let debug fmt =
@@ -20,6 +21,7 @@ let debug fmt =
 
 
 (** {2 Command-line options} *)
+(** ======================== *)
 
 let c_opts = ref []
 (** Extra options to pass to clang when parsing  *)
@@ -38,8 +40,8 @@ let () =
 
 
 
-
-(** {2 Entry points} *)
+(** {2 Contexts} *)
+(** ============ *)
 
 type type_space = TS_TYPEDEF | TS_RECORD | TS_ENUM
 
@@ -53,11 +55,24 @@ type ctx = {
   }
 
 
+let find_function_in_context fun_ctx (f: C_AST.func) =
+  try
+    List.find (fun c_fun ->
+        c_fun.c_func_var.vuid = f.func_uid
+      ) fun_ctx.ctx_fun
+  with
+  | Not_found -> Debug.fail "Could not find function %s in function context" f.func_unique_name
+
+
+
+(** {2 Entry} *)
+(** ========= *)
+
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
   let target = get_target_info (get_default_target_options ()) in
-  let ctx = Clang_to_C.create_context "_project" target in
+  let ctx = Clang_to_C.create_context "project" target in
   List.iter
     (fun file ->
        match Filename.extension file with
@@ -176,7 +191,151 @@ and from_project prj =
     prog_file = prj.C_AST.proj_name;
   }
 
+
+
+
+(** {2 functions} *)
+(** ============= *)
+
+and from_function =
+  fun func ->
+    {
+      c_func_var = from_var_name func.func_org_name func.func_uid T_any;
+      c_func_is_static = func.func_is_static;
+      c_func_return = T_any;
+      c_func_parameters = [];
+      c_func_body = None ;
+      c_func_static_vars = [];
+      c_func_local_vars = [];
+      c_func_variadic = func.func_variadic;
+      c_func_stub = None;
+
+    }, func
+
+
+
+
+(** {2 Statements} *)
+(** ============== *)
+
+and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
+  let srange = from_range range in
+  let skind = match skind with
+    | C_AST.S_local_declaration v ->
+      let v, init, range = from_var_with_init fun_ctx v in
+      Ast.S_c_local_declaration (v, init)
+    | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr fun_ctx e)
+    | C_AST.S_block block -> from_block fun_ctx srange block |> Framework.Ast.skind
+    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr fun_ctx cond, from_block fun_ctx srange body, from_block fun_ctx srange orelse)
+    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr fun_ctx cond, from_block fun_ctx srange body)
+    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block fun_ctx srange body, from_expr fun_ctx cond)
+    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block fun_ctx srange init, from_expr_option fun_ctx test, from_expr_option fun_ctx increm, from_block fun_ctx srange body)
+    | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
+    | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
+    | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
+    | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
+    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr fun_ctx e))
+    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr fun_ctx cond, from_block fun_ctx srange body)
+    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr fun_ctx e)
+    | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
+    | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
+  in
+  {skind; srange}
+
+and from_block fun_ctx range (block: C_AST.block) : Framework.Ast.stmt =
+  mk_block (List.map (from_stmt fun_ctx) block) range
+
+and from_block_option fun_ctx (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
+  match block with
+  | None -> mk_nop range
+  | Some stmtl -> from_block fun_ctx range stmtl
+
+and from_body_option (fun_ctx) (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+  match block with
+  | None -> None
+  | Some stmtl -> Some (from_block fun_ctx range stmtl)
+
+
+
+
+(** {2 Expressions} *)
+(** =============== *)
+
+and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
+  let erange = from_range range in
+  let etyp = from_typ fun_ctx tc in
+  let ekind =
+    match ekind with
+    | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
+    | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
+    | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
+    | C_AST.E_string_literal (s, k) ->
+      Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
+    | C_AST.E_variable v -> E_var (from_var fun_ctx v, STRONG)
+    | C_AST.E_function f -> Ast.E_c_function (find_function_in_context fun_ctx f)
+    | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
+    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr fun_ctx e)
+    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr fun_ctx e1, from_expr fun_ctx e2)
+    | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, true)
+    | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, false)
+    | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr fun_ctx lval, from_expr fun_ctx rval)
+    | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr fun_ctx e)
+    | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr fun_ctx p)
+    | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr fun_ctx a, from_expr fun_ctx i)
+    | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr fun_ctx r, i, f)
+    | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr fun_ctx r, i, f)
+    | C_AST.E_statement s -> Ast.E_c_statement (from_block fun_ctx erange s)
+
+    | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
+    | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
+    | C_AST.E_comma (_,_) -> Framework.Exceptions.panic "E_comma not supported"
+    | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
+    | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
+    | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
+    | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
+    | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
+  in
+  {ekind; erange; etyp}
+
+and from_expr_option fun_ctx : C_AST.expr option -> Framework.Ast.expr option = function
+  | None -> None
+  | Some e -> Some (from_expr fun_ctx e)
+
+and from_unary_operator op t = match op with
+  | C_AST.NEG -> O_minus
+  | C_AST.BIT_NOT -> O_bit_invert
+  | C_AST.LOGICAL_NOT -> O_log_not
+
+and from_binary_operator op t = match op with
+  | C_AST.O_arithmetic (C_AST.ADD) -> O_plus
+  | C_AST.O_arithmetic (C_AST.SUB) -> O_minus
+  | C_AST.O_arithmetic (C_AST.MUL) -> O_mult
+  | C_AST.O_arithmetic (C_AST.DIV) -> O_div
+  | C_AST.O_arithmetic (C_AST.MOD) -> O_mod
+  | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> O_bit_lshift
+  | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> O_bit_rshift
+  | C_AST.O_arithmetic (C_AST.BIT_AND) -> O_bit_and
+  | C_AST.O_arithmetic (C_AST.BIT_OR) -> O_bit_or
+  | C_AST.O_arithmetic (C_AST.BIT_XOR) -> O_bit_xor
+  | C_AST.O_logical (C_AST.LESS) -> O_lt
+  | C_AST.O_logical (C_AST.LESS_EQUAL) -> O_le
+  | C_AST.O_logical (C_AST.GREATER) -> O_gt
+  | C_AST.O_logical (C_AST.GREATER_EQUAL) -> O_ge
+  | C_AST.O_logical (C_AST.EQUAL) -> O_eq
+  | C_AST.O_logical (C_AST.NOT_EQUAL) -> O_ne
+  | C_AST.O_logical (C_AST.LOGICAL_AND) -> Ast.O_c_and
+  | C_AST.O_logical (C_AST.LOGICAL_OR) -> Ast.O_c_or
+
+and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = function
+  | Clang_AST.Char_Ascii -> Ast.C_char_ascii
+  | Clang_AST.Char_Wide -> Ast.C_char_wide
+  | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
+  | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
+  | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
+
+
 (** {2 Variables} *)
+(** ============= *)
 
 and from_var_with_init (fun_ctx) (v: C_AST.variable) : var * Ast.c_init option * range =
   from_var fun_ctx v, from_init_option fun_ctx v.var_init, from_range v.var_range
@@ -200,24 +359,11 @@ and from_init fun_ctx init = match init with
   | I_init_list(il, i) -> C_init_list (List.map (from_init fun_ctx) il, from_init_option fun_ctx i)
   | I_init_implicit t -> C_init_implicit (from_typ fun_ctx t)
 
-(** {2 functions} *)
 
-and from_function =
-  fun func ->
-    {
-      c_func_var = from_var_name func.func_org_name func.func_uid T_any;
-      c_func_is_static = func.func_is_static;
-      c_func_return = T_any;
-      c_func_parameters = [];
-      c_func_body = None ;
-      c_func_static_vars = [];
-      c_func_local_vars = [];
-      c_func_variadic = func.func_variadic;
-      c_func_stub = parse_stub func.func_com (from_range func.func_range);
 
-    }, func
 
 (** {2 Types} *)
+(** ========= *)
 
 and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
   let typ, qual = tc in
@@ -341,167 +487,19 @@ and from_function_type fun_ctx f =
     c_ftype_variadic = f.ftype_variadic;
   }
 
-and from_function_in_context fun_ctx (f: C_AST.func) =
-  try
-    List.find (fun c_fun ->
-        c_fun.c_func_var.vuid = f.func_uid
-      ) fun_ctx.ctx_fun
-  with
-  | Not_found -> Debug.fail "Could not find function %s in function context" f.func_unique_name
 
-(** {2 Expressions} *)
-
-and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
-  let erange = from_range range in
-  let etyp = from_typ fun_ctx tc in
-  let ekind =
-    match ekind with
-    | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
-    | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
-    | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
-    | C_AST.E_string_literal (s, k) ->
-      Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
-    | C_AST.E_variable v -> E_var (from_var fun_ctx v, STRONG)
-    | C_AST.E_function f -> Ast.E_c_function (from_function_in_context fun_ctx f)
-    | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
-    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr fun_ctx e)
-    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr fun_ctx e1, from_expr fun_ctx e2)
-    | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, true)
-    | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, false)
-    | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr fun_ctx lval, from_expr fun_ctx rval)
-    | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr fun_ctx e)
-    | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr fun_ctx p)
-    | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr fun_ctx a, from_expr fun_ctx i)
-    | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr fun_ctx r, i, f)
-    | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr fun_ctx r, i, f)
-    | C_AST.E_statement s -> Ast.E_c_statement (from_block fun_ctx erange s)
-
-    | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
-    | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
-    | C_AST.E_comma (_,_) -> Framework.Exceptions.panic "E_comma not supported"
-    | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
-    | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
-    | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
-    | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
-    | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
-  in
-  {ekind; erange; etyp}
-
-and from_expr_option fun_ctx : C_AST.expr option -> Framework.Ast.expr option = function
-  | None -> None
-  | Some e -> Some (from_expr fun_ctx e)
-
-and from_unary_operator op t = match op with
-  | C_AST.NEG -> O_minus
-  | C_AST.BIT_NOT -> O_bit_invert
-  | C_AST.LOGICAL_NOT -> O_log_not
-
-and from_binary_operator op t = match op with
-  | C_AST.O_arithmetic (C_AST.ADD) -> O_plus
-  | C_AST.O_arithmetic (C_AST.SUB) -> O_minus
-  | C_AST.O_arithmetic (C_AST.MUL) -> O_mult
-  | C_AST.O_arithmetic (C_AST.DIV) -> O_div
-  | C_AST.O_arithmetic (C_AST.MOD) -> O_mod
-  | C_AST.O_arithmetic (C_AST.LEFT_SHIFT) -> O_bit_lshift
-  | C_AST.O_arithmetic (C_AST.RIGHT_SHIFT) -> O_bit_rshift
-  | C_AST.O_arithmetic (C_AST.BIT_AND) -> O_bit_and
-  | C_AST.O_arithmetic (C_AST.BIT_OR) -> O_bit_or
-  | C_AST.O_arithmetic (C_AST.BIT_XOR) -> O_bit_xor
-  | C_AST.O_logical (C_AST.LESS) -> O_lt
-  | C_AST.O_logical (C_AST.LESS_EQUAL) -> O_le
-  | C_AST.O_logical (C_AST.GREATER) -> O_gt
-  | C_AST.O_logical (C_AST.GREATER_EQUAL) -> O_ge
-  | C_AST.O_logical (C_AST.EQUAL) -> O_eq
-  | C_AST.O_logical (C_AST.NOT_EQUAL) -> O_ne
-  | C_AST.O_logical (C_AST.LOGICAL_AND) -> Ast.O_c_and
-  | C_AST.O_logical (C_AST.LOGICAL_OR) -> Ast.O_c_or
-
-and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = function
-  | Clang_AST.Char_Ascii -> Ast.C_char_ascii
-  | Clang_AST.Char_Wide -> Ast.C_char_wide
-  | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
-  | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
-  | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
-
-(** {2 Ranges and locations} *)
-
-and from_range : Clang_AST.range -> Framework.Location.range =
-  fun range ->
-    let open Clang_AST in
-    let open Framework.Location in
-    Range_origin {
-      range_begin = {
-        loc_file = range.range_begin.loc_file;
-        loc_line = range.range_begin.loc_line;
-        loc_column = range.range_begin.loc_column;
-      };
-      range_end = {
-        loc_file = range.range_end.loc_file;
-        loc_line = range.range_end.loc_line;
-        loc_column = range.range_end.loc_column;
-      }
+and from_range (range:C_AST.range) =
+  let open Clang_AST in
+  let open Framework.Location in
+  Range_origin {
+    range_begin = {
+      loc_file = range.range_begin.loc_file;
+      loc_line = range.range_begin.loc_line;
+      loc_column = range.range_begin.loc_column;
+    };
+    range_end = {
+      loc_file = range.range_end.loc_file;
+      loc_line = range.range_end.loc_line;
+      loc_column = range.range_end.loc_column;
     }
-
-
-(** {2 Statements} *)
-
-and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
-  let srange = from_range range in
-  let skind = match skind with
-    | C_AST.S_local_declaration v ->
-      let v, init, range = from_var_with_init fun_ctx v in
-      Ast.S_c_local_declaration (v, init)
-    | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr fun_ctx e)
-    | C_AST.S_block block -> from_block fun_ctx srange block |> Framework.Ast.skind
-    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr fun_ctx cond, from_block fun_ctx srange body, from_block fun_ctx srange orelse)
-    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr fun_ctx cond, from_block fun_ctx srange body)
-    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block fun_ctx srange body, from_expr fun_ctx cond)
-    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block fun_ctx srange init, from_expr_option fun_ctx test, from_expr_option fun_ctx increm, from_block fun_ctx srange body)
-    | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
-    | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
-    | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
-    | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
-    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr fun_ctx e))
-    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr fun_ctx cond, from_block fun_ctx srange body)
-    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr fun_ctx e)
-    | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
-    | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
-  in
-  {skind; srange}
-
-and from_block fun_ctx range (block: C_AST.block) : Framework.Ast.stmt =
-  mk_block (List.map (from_stmt fun_ctx) block) range
-
-and from_block_option fun_ctx (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
-  match block with
-  | None -> mk_nop range
-  | Some stmtl -> from_block fun_ctx range stmtl
-
-and from_body_option (fun_ctx) (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
-  match block with
-  | None -> None
-  | Some stmtl -> Some (from_block fun_ctx range stmtl)
-
-
-and parse_stub comments range =
-  match comments with
-  | [] -> None
-  | com :: _ ->
-    let buf = Lexing.from_string com.Clang_AST.com_text in
-    let r = get_origin_range range in
-    buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = r.range_begin.loc_file; pos_lnum = r.range_begin.loc_line};
-
-    let stub = C_stubs_parser.Parser.stub C_stubs_parser.Lexer.read buf |>
-               from_stub
-    in
-    Some stub
-
-and from_stub stub =
-  match stub with
-  | C_stubs_parser.Ast.S_simple s -> from_simple_stub s
-  | C_stubs_parser.Ast.S_case s -> from_case_stub s
-
-and from_simple_stub s = assert false
-
-and from_case_stub s = assert false
-
+  }

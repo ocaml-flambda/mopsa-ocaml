@@ -91,19 +91,19 @@ type stub =
    defined. *)
 and simple_stub = {
   (* Pre-condition sections *)
-  sstub_predicates : predicate with_range list;
-  sstub_requires   : requires with_range list;
+  simple_stub_predicates : predicate with_range list;
+  simple_stub_requires   : requires with_range list;
 
   (* Post-condition sections *)
-  sstub_assigns    : assigns with_range list;
-  sstub_local      : local with_range list;
-  sstub_ensures    : ensures with_range list;
+  simple_stub_assigns    : assigns with_range list;
+  simple_stub_local      : local with_range list;
+  simple_stub_ensures    : ensures with_range list;
 }
 
 and case_stub = {
-  cstub_predicates : predicate with_range list;
-  cstub_requires   : requires with_range list;
-  cstub_cases      : case with_range list;
+  case_stub_predicates : predicate with_range list;
+  case_stub_requires   : requires with_range list;
+  case_stub_cases      : case with_range list;
 }
 
 (* A predicate is a macro for a logic formula *)
@@ -236,17 +236,17 @@ let pp_stub fmt stub =
   match stub with
   | S_simple ss ->
     fprintf fmt "%a%a%a%a%a"
-      (pp_list pp_predicate "@\n") ss.sstub_predicates
-      (pp_list pp_requires "@\n") ss.sstub_requires
-      (pp_list pp_assigns "@\n") ss.sstub_assigns
-      (pp_list pp_local "@\n") ss.sstub_local
-      (pp_list pp_ensures "@\n") ss.sstub_ensures
+      (pp_list pp_predicate "@\n") ss.simple_stub_predicates
+      (pp_list pp_requires "@\n") ss.simple_stub_requires
+      (pp_list pp_assigns "@\n") ss.simple_stub_assigns
+      (pp_list pp_local "@\n") ss.simple_stub_local
+      (pp_list pp_ensures "@\n") ss.simple_stub_ensures
 
   | S_case cs ->
     fprintf fmt "%a%a%a"
-      (pp_list pp_predicate "@\n") cs.cstub_predicates
-      (pp_list pp_requires "@\n") cs.cstub_requires
-      (pp_list pp_case "@\n") cs.cstub_cases
+      (pp_list pp_predicate "@\n") cs.case_stub_predicates
+      (pp_list pp_requires "@\n") cs.case_stub_requires
+      (pp_list pp_case "@\n") cs.case_stub_cases
 
 
 (** {2 AST registration} *)

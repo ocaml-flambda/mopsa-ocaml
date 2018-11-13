@@ -29,10 +29,6 @@ let render man alarms time files out =
   let print fmt = get_printer out fmt in
   print "Analysis terminated successfully@.";
   print "Time: %.3fs@." time;
-  print "File%a: @[%a@]@."
-    Debug.plurial_list files
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_print_string) files
-  ;
   match alarms with
   | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"; 0
   | _ ->

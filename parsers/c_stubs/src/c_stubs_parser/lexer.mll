@@ -12,6 +12,8 @@ open Parser
 
 exception SyntaxError of string
 
+let debug fmt = Debug.debug ~channel:"c_stubs.lexer" fmt
+
 (* keyword table *)
 let keywords = Hashtbl.create 10
 let _ =
@@ -64,22 +66,32 @@ let _ =
 
 let int = '-'? ['0'-'9'] ['0'-'9']*
 
-let digit = ['0'-'9']
-let frac = '.' digit*
-let exp = ['e' 'E'] ['-' '+']? digit+
-let float = digit* frac? exp?
+let digit = ['0' - '9']
+let digitpart = digit (['_'] | digit)*
+let exponent = ('e' | 'E') ('+' | '-')? digitpart 
+let fraction = '.' digitpart
+let pointfloat = digitpart* fraction | digitpart '.'
+let exponentfloat = (digitpart | pointfloat) exponent
+let float = pointfloat | exponentfloat
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
+let newline_star = newline white? ('*' [^ '/'])?
+
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+
+let begin_delimeter = "/*$"
+let end_delimeter = "*/"
+
+let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | white    { read lexbuf }
-  | newline  { new_line lexbuf; read lexbuf }
+  | white         { read lexbuf }
+  | newline_star  { new_line lexbuf; read lexbuf }
   
   | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
-  | float    { FLOAT_CONST (float_of_string (Lexing.lexeme lexbuf)) }
+  | float    { FLOAT_CONST (Format.printf "float %s@\n" (Lexing.lexeme lexbuf); float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
@@ -117,10 +129,17 @@ rule read =
 
   | "="    { ASSIGN }
 
-  | "(*" { read_comment lexbuf; read lexbuf }
+  | "(*"   { read_comment lexbuf; read lexbuf }
+
+  | begin_delimeter  { BEGIN }
+  | end_delimeter    { END }
+  
+  | line_comment  { read lexbuf }
+  | "/*"          { ignore_block_comment lexbuf; read lexbuf } 
+
+  | eof      { EOF }
 
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
-  | eof      { EOF }
 
 and read_string buf =
   parse
@@ -139,7 +158,14 @@ and read_string buf =
   | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
 
-and read_comment = parse
-| "*)" { () }
-| [^ '\n' '\r'] { read_comment lexbuf }
-| newline { new_line lexbuf; read_comment lexbuf }
+and read_comment = 
+  parse
+  | "*)"          { () }
+  | [^ '\n' '\r'] { read_comment lexbuf }
+  | newline       { new_line lexbuf; read_comment lexbuf }
+
+and ignore_block_comment = 
+  parse
+  | "*/"          { () }
+  | [^ '\n' '\r'] { ignore_block_comment lexbuf }
+  | newline       { new_line lexbuf; ignore_block_comment lexbuf }
