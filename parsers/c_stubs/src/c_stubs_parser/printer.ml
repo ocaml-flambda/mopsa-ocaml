@@ -163,14 +163,14 @@ let pp_stub fmt stub =
   match stub with
   | S_simple ss ->
     fprintf fmt "%a%a%a%a%a"
-      (pp_list pp_predicate) ss.simple_predicates
-      (pp_list pp_requires) ss.simple_requires
-      (pp_list pp_assigns) ss.simple_assigns
-      (pp_list pp_local) ss.simple_local
-      (pp_list pp_ensures) ss.simple_ensures
+      (pp_list pp_predicate) ss.simple_stub_predicates
+      (pp_list pp_requires) ss.simple_stub_requires
+      (pp_list pp_assigns) ss.simple_stub_assigns
+      (pp_list pp_local) ss.simple_stub_local
+      (pp_list pp_ensures) ss.simple_stub_ensures
 
-  | S_multi ms ->
+  | S_case ms ->
     fprintf fmt "%a%a%a"
-      (pp_list pp_predicate) ms.multi_predicates
-      (pp_list pp_requires) ms.multi_requires
-      (pp_list pp_case) ms.multi_cases
+      (pp_list pp_predicate) ms.case_stub_predicates
+      (pp_list pp_requires) ms.case_stub_requires
+      (pp_list pp_case) ms.case_stub_cases

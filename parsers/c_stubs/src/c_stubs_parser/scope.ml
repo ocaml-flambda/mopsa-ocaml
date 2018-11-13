@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Propagate type and UIDs of within scopes of variables. *)
+(** Propagate type and UIDs of variables within scopes of variables. *)
 
 open Ast
 
@@ -209,27 +209,27 @@ let visit_case c scope =
 let visit stub scope : stub =
   match stub with
   | S_simple s ->
-    let predicates, scope = visit_list visit_predicate s.simple_predicates scope in
-    let requires, scope = visit_list visit_requires s.simple_requires scope in
-    let assigns, scope = visit_list visit_assigns s.simple_assigns scope in
-    let local, scope = visit_list visit_local s.simple_local scope in
-    let ensures, scope = visit_list visit_ensures s.simple_ensures scope in
+    let predicates, scope = visit_list visit_predicate s.simple_stub_predicates scope in
+    let requires, scope = visit_list visit_requires s.simple_stub_requires scope in
+    let assigns, scope = visit_list visit_assigns s.simple_stub_assigns scope in
+    let local, scope = visit_list visit_local s.simple_stub_local scope in
+    let ensures, scope = visit_list visit_ensures s.simple_stub_ensures scope in
 
     S_simple {
-      simple_predicates = predicates;
-      simple_requires  = requires;
-      simple_assigns = assigns;
-      simple_local = local;
-      simple_ensures = ensures;
+      simple_stub_predicates = predicates;
+      simple_stub_requires  = requires;
+      simple_stub_assigns = assigns;
+      simple_stub_local = local;
+      simple_stub_ensures = ensures;
     }
 
-  | S_multi s ->
-    let predicates, scope = visit_list visit_predicate s.multi_predicates scope in
-    let requires, scope = visit_list visit_requires s.multi_requires scope in
-    let cases, scope = visit_list visit_case s.multi_cases scope in
+  | S_case s ->
+    let predicates, scope = visit_list visit_predicate s.case_stub_predicates scope in
+    let requires, scope = visit_list visit_requires s.case_stub_requires scope in
+    let cases, scope = visit_list visit_case s.case_stub_cases scope in
 
-    S_multi {
-      multi_predicates = predicates;
-      multi_requires  = requires;
-      multi_cases = cases;
+    S_case {
+      case_stub_predicates = predicates;
+      case_stub_requires  = requires;
+      case_stub_cases = cases;
     }

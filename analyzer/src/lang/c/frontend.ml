@@ -6,6 +6,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** C front-end to translate parser AST into MOPSA AST *)
+
+
 open C_AST
 open Framework.Essentials
 open Universal.Ast
@@ -201,13 +204,6 @@ and from_init fun_ctx init = match init with
 
 and from_function =
   fun func ->
-  debug "Comments of function %s:@\n@[%a@]"
-    func.func_org_name
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n---------------@\n")
-       (fun fmt com -> Format.pp_print_string fmt com.Clang_AST.com_text)
-    ) func.func_com
-  ;
     {
       c_func_var = from_var_name func.func_org_name func.func_uid T_any;
       c_func_is_static = func.func_is_static;
@@ -217,6 +213,8 @@ and from_function =
       c_func_static_vars = [];
       c_func_local_vars = [];
       c_func_variadic = func.func_variadic;
+      c_func_stub = parse_stub func.func_com (from_range func.func_range);
+
     }, func
 
 (** {2 Types} *)
@@ -484,101 +482,26 @@ and from_body_option (fun_ctx) (range: Framework.Location.range) (block: C_AST.b
   | None -> None
   | Some stmtl -> Some (from_block fun_ctx range stmtl)
 
-and construct_string_table globals funcs =
-  (* Collect all string litterals and replace them by unique variables *)
-  let module StringTable = Map.Make(struct type t = string let compare = compare end) in
-  let counter = ref 0 in
-  let type_of_string s = T_c_array(T_c_integer(C_signed_char), C_array_length_cst (Z.of_int (1 + String.length s))) in
 
-  let rec visit_expr table e =
-    match ekind e with
-    | E_constant(C_string s) ->
-      let v, table =
-        try StringTable.find s table, table
-        with Not_found ->
-          let v = {
-            vname = "_string_" ^ (string_of_int !counter);
-            vuid = 0;
-            vtyp = type_of_string s;
-          }
-          in
-          incr counter;
-          v, StringTable.add s v table
-      in
-      table, {ekind = E_var(v, STRONG); etyp = type_of_string s; erange = e.erange}
-    | _ -> table, e
+and parse_stub comments range =
+  match comments with
+  | [] -> None
+  | com :: _ ->
+    let buf = Lexing.from_string com.Clang_AST.com_text in
+    let r = get_origin_range range in
+    buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = r.range_begin.loc_file; pos_lnum = r.range_begin.loc_line};
 
+    let stub = C_stubs_parser.Parser.stub C_stubs_parser.Lexer.read buf |>
+               from_stub
+    in
+    Some stub
 
-  and visit_init table init =
-    match init with
-    | C_init_expr e ->
-      let table, e = visit_expr table e in
-      table, C_init_expr e
-    | C_init_list (l, filler) ->
-      let table, l = List.fold_left (fun (table, l) init ->
-          let table, init = visit_init table init in
-          table, init :: l
-        ) (table, []) l
-      in
-      let table, filler = visit_init_option table filler in
-      table, C_init_list(List.rev l, filler)
-    | C_init_implicit _ -> table, init
+and from_stub stub =
+  match stub with
+  | C_stubs_parser.Ast.S_simple s -> from_simple_stub s
+  | C_stubs_parser.Ast.S_case s -> from_case_stub s
 
+and from_simple_stub s = assert false
 
-  and visit_init_option table init =
-    match init with
-    | None -> table, None
-    | Some init ->
-      let table, init = visit_init table init in
-      table, Some init
+and from_case_stub s = assert false
 
-  in
-
-  let table, funcs =
-    List.fold_left (fun (table, funcs) f ->
-        (* Visit and change the body *)
-        let body_init = get_c_fun_body f in
-        let table, body' =
-          Framework.Visitor.fold_map_stmt
-            (fun acc e -> visit_expr acc e)
-            (fun acc s -> acc, s)
-            table body_init
-        in
-        (* Visit and change the locals *)
-        let table, locals' = List.fold_left (fun (table, locals) (v, init, range) ->
-            let table, init' = visit_init_option table init in
-            table, (v, init', range) :: locals
-          ) (table, []) f.c_func_local_vars
-        in
-        debug "fun: %a@\nbody = @[%a@]@\nbody' = @[%a@]" pp_var f.c_func_var pp_stmt body_init pp_stmt body';
-        table, {f with c_func_body = Some body'; c_func_local_vars = List.rev locals'} :: funcs
-      ) (StringTable.empty, []) funcs
-  in
-  let funcs = List.fold_left (fun acc f ->
-      let body_init = get_c_fun_body f in
-      let body' =
-        Framework.Visitor.map_stmt
-          (fun e ->
-             match ekind e with
-             | E_c_function f ->
-               debug "call to %a" pp_var f.c_func_var;
-               let f' = List.find (function {c_func_var} -> c_func_var.vname = f.c_func_var.vname) funcs in
-               {e with ekind = E_c_function f'}
-
-             | _ -> e
-          )
-          (fun s -> s)
-          body_init
-      in
-      debug "fun2: %a@\nbody = @[%a@]@\nbody' = @[%a@]" pp_var f.c_func_var pp_stmt body_init pp_stmt body';
-      {f with c_func_body = Some body'} :: funcs
-    ) ([]) funcs
-  in
-  (* Add table entries to the global variables *)
-  let range = Framework.Location.mk_fresh_range () in
-  let globals = StringTable.fold (fun s v acc ->
-      (v, Some (C_init_expr (mk_constant (C_string s) ~etyp:(type_of_string s) range))) :: acc
-    ) table globals
-  in
-
-  globals, funcs

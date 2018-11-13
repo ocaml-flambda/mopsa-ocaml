@@ -33,7 +33,6 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 lang.stubs = ast
 
 # lang.c = ast pp visitor zone frontend
-lang.c = zone ast alarms frontend libs desugar flows memory
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = loops andor aggregate record_copy stmt_expr
