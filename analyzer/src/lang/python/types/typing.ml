@@ -180,25 +180,6 @@ module Domain =
       | E_py_bytes _ ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "bytes")
 
-      | E_py_list ls ->
-         (* FIXME: not modular *)
-         Eval.eval_list ls man.eval flow |>
-           Eval.bind (fun list_els flow ->
-               let cur = Flow.get_domain_cur man flow in
-               let dummy_annot = Flow.get_all_annot flow in
-               let els_types = List.fold_left (fun acc el ->
-                                   match ekind el with
-                                   | E_type_partition tid ->
-                                      let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
-                                      let mty = Typingdomain.concretize_poly pty cur.d3 in
-                                      Typingdomain.Monotypeset.union dummy_annot mty acc
-                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
-               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
-               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
-               let flow = Flow.set_domain_cur cur man flow in
-               Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
-         |> OptionExt.return
-
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
          return_id_of_type man flow range builtin_notimpl
@@ -391,7 +372,7 @@ module Domain =
            Eval.bind (fun evals flow ->
                let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
                match ekind cls, ekind cls' with
-                   | E_py_object ({addr_kind = A_py_class (c, mro)} as a, _),
+                   | E_py_object ({addr_kind = A_py_class (c, mro)}, _),
                      E_py_object ({addr_kind = A_py_class (c', mro')} as a', _) ->
                       if List.exists (fun x -> Universal.Ast.compare_addr (fst x) a' = 0) mro then
                         Eval.singleton (mk_py_true range) flow
@@ -478,6 +459,40 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
          man.eval (mk_py_none range) flow |> OptionExt.return
+
+      (*********
+       * Lists *
+       *********)
+      | E_py_list ls ->
+         (* FIXME: not modular *)
+         Eval.eval_list ls man.eval flow |>
+           Eval.bind (fun list_els flow ->
+               let cur = Flow.get_domain_cur man flow in
+               let dummy_annot = Flow.get_all_annot flow in
+               let els_types = List.fold_left (fun acc el ->
+                                   match ekind el with
+                                   | E_type_partition tid ->
+                                      let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
+                                      let mty = Typingdomain.concretize_poly pty cur.d3 in
+                                      Typingdomain.Monotypeset.union dummy_annot mty acc
+                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
+               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
+               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
+               let flow = Flow.set_domain_cur cur man flow in
+               Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
+         Eval.eval_list args man.eval flow |>
+           Eval.bind (fun eargs flow ->
+               let lst, idx = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+               (* Eval.assume  *)
+               Eval.empty_singleton flow
+               (* check that lst inherits from list, otherwise raise a typeerror *)
+               (* check that idx is either an integer or a slide *)
+               (* return the type(s) of elements inside the container *)
+             )
+         |> OptionExt.return
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;

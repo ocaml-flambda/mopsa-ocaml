@@ -32,7 +32,6 @@ module Domain = struct
   let eval zs exp man flow = None
 
   let exec z stmt man flow =
-    let range = srange stmt in
     match skind stmt with
     | S_assign({ekind = E_var (v, mode)}, e) ->
        let t = v.vtyp in

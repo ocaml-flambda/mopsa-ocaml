@@ -86,7 +86,7 @@ module Domain =
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e2] range) flow |>
+               man.eval (mk_py_type e2 range) flow |>
                  Eval.bind (fun cls2 flow ->
                      Eval.assume
                        (Utils.mk_hasattr cls2 "__contains__" range)

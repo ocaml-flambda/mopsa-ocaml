@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Universal.Ast
 open Ast
+open Addr
 
 module Domain =
   struct
@@ -39,7 +40,7 @@ module Domain =
            Eval.bind (fun el flow ->
                let eobj, index = match el with [obj; index] -> obj, index | _ -> assert false in
 
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+               man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      Eval.assume
                        (Utils.mk_hasattr cls "__getitem__" range)
@@ -60,7 +61,7 @@ module Domain =
          Eval.eval_list [obj; start; stop; step] man.eval flow |>
            Eval.bind (fun el flow ->
                let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+               man.eval (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      Eval.assume
                        (Utils.mk_hasattr cls "__getitem__" range)
@@ -91,7 +92,7 @@ module Domain =
            Post.bind man
              (fun el flow ->
                let exp, eobj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+               man.eval (mk_py_type eobj range) flow |>
                  Post.bind man (fun cls flow ->
                      Post.assume
                        (Utils.mk_hasattr cls "__setitem__" range)
@@ -112,7 +113,7 @@ module Domain =
          Eval.eval_list [exp; obj; start; stop; step] man.eval flow |>
            Post.bind man (fun el flow ->
                let exp, eobj, start, stop, step = match el with [exp; obj; start; stop; step] -> exp, obj, start, stop, step | _ -> assert false in
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+               man.eval (mk_py_type eobj range) flow |>
                  Post.bind man (fun cls flow ->
                      Post.assume
                        (Utils.mk_hasattr cls "__setitem__" range)

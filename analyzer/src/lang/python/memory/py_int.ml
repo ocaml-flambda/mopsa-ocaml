@@ -88,11 +88,11 @@ module Domain = struct
          Eval.bind (fun el flow ->
              let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
              Eval.assume
-               (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e1; mk_py_object (Addr.find_builtin "int") range] range)
+               (mk_py_isinstance_builtin e1 "int" range)
                ~fthen:(fun flow ->
                  (* FIXME: felse correctN *)
                  Eval.assume
-                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e2; mk_py_object (Addr.find_builtin "int") range] range)
+                   (mk_py_isinstance_builtin e2 "int" range)
                    ~fthen:(fun flow ->
                      (* FIXME: il faut évaluer les sous expressions
                         dans la zone numérique puis les reconstruire
@@ -100,11 +100,11 @@ module Domain = struct
                      let op = arithmetic_binop f in
                      let ev1 = match ekind e1 with
                        | E_py_object ({addr_kind = A_py_instance _; addr_uid}, e) -> e
-                          (* mk_var (Addr_env.mk_avar addr_uid ~vtyp:T_int) range *)
+                          (* mk_var (Addr_env.mk_avar ~vtyp:T_int addr_uid ) range *)
                        | _ -> assert false in
                      let ev2 = match ekind e2 with
                        | E_py_object ({addr_kind = A_py_instance _; addr_uid}, e) -> e
-                          (* mk_var (Addr_env.mk_avar addr_uid ~vtyp:T_int) range *)
+                          (* mk_var (Addr_env.mk_avar ~vtyp:T_int addr_uid) range *)
                        | _ -> assert false in
                      man.eval (mk_py_int_expr (mk_binop ev1 op ev2 ~etyp:T_int range) range) flow
                    )

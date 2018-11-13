@@ -48,23 +48,23 @@ module Domain =
                let rop_fun = binop_to_rev_fun op in
 
                (* let o1 = object_of_expr e1 and o2 = object_of_expr e2 in *)
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e1] range) flow |>
+               man.eval (mk_py_type e1 range) flow |>
                  Eval.bind (fun cls1 flow ->
                      let cls1 = object_of_expr cls1 in
-                     man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e2] range) flow |>
+                     man.eval (mk_py_type e2 range) flow |>
                        Eval.bind (fun cls2 flow ->
                            let cls2 = object_of_expr cls2 in
                            (* let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in *)
 
                            let is_same_type = compare_py_object cls1 cls2 = 0 in
-                           let not_implemented_type = mk_py_call (mk_py_object (Addr.find_builtin "type") range) [mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range] range in
+                           let not_implemented_type = mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range in
 
                            Eval.assume
                              (Utils.mk_object_hasattr cls1 op_fun range)
                              ~fthen:(fun true_flow ->
                                man.eval (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) true_flow |>
                                  Eval.bind (fun r flow ->
-                                     let expr = (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [r; not_implemented_type] range) in
+                                     let expr = mk_py_isinstance r not_implemented_type range in
                                      Eval.assume expr
                                        ~fthen:(fun true_flow ->
                                          let flow = true_flow in
@@ -79,7 +79,7 @@ module Domain =
                                                man.eval (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                                  Eval.bind (fun r flow ->
                                                      Eval.assume
-                                                       (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [r; not_implemented_type] range)
+                                                       (mk_py_isinstance r not_implemented_type range)
                                                        ~fthen:(fun true_flow ->
                                                          (* if is_not_implemented r then *)
                                                          let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow in
@@ -111,7 +111,7 @@ module Domain =
                                      man.eval (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                        Eval.bind (fun r flow ->
                                            Eval.assume
-                                             (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [r; not_implemented_type] range)
+                                             (mk_py_isinstance r not_implemented_type range)
                                              ~fthen:(fun true_flow ->
                                                (* if is_not_implemented r then *)
                                                let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow in
@@ -136,7 +136,7 @@ module Domain =
            Eval.bind (fun e flow ->
                debug "Subexpression evaluated to %a(%a)" Framework.Ast.pp_expr e Framework.Ast.pp_typ e.etyp;
                let op_fun = unop_to_fun op in
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e] range) flow |>
+               man.eval (mk_py_type e range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
                      Eval.assume

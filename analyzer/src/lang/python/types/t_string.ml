@@ -24,7 +24,6 @@ module Domain =
 
     let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
       debug "eval %a@\n" pp_expr exp;
-      let range = erange exp in
       match ekind exp with
       | _ -> None
 

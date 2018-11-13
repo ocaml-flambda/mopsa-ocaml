@@ -93,34 +93,34 @@ module Domain =
             Post.bind man (fun exp flow ->
                 (* match ekind exp with
                  * | E_py_object obj -> *)
-                   Post.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "BaseException") range] range)
-                     man
-                     ~fthen:(fun true_flow ->
-                       debug "True flow, exp is %a@\n" pp_expr exp;
-                       (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
-                       let cur = Flow.get T_cur man true_flow in
-                       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
-                       let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
-                       let flow' = Flow.add (T_alarm a) cur man true_flow |>
-                                     Flow.set T_cur man.bottom man
-                       in
-                       Post.of_flow flow')
-                     ~felse:(fun false_flow ->
-                       Post.assume
-                         (* isclass obj <=> isinstance(obj, type) *)
-                         (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [ exp; mk_py_object (Addr.find_builtin "type") range] range)
-                         man
-                         ~fthen:(fun true_flow ->
-                           man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
-                           |> Post.of_flow)
-                         ~felse:(fun false_flow ->
-                           man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow
-                           |> Post.of_flow)
-                         false_flow
-                     )
-                     flow
-                (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
+                Post.assume
+                  (mk_py_isinstance_builtin exp "BaseException" range)
+                  man
+                  ~fthen:(fun true_flow ->
+                    debug "True flow, exp is %a@\n" pp_expr exp;
+                    (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
+                    let cur = Flow.get T_cur man true_flow in
+                    let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
+                    let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
+                    let flow' = Flow.add (T_alarm a) cur man true_flow |>
+                                  Flow.set T_cur man.bottom man
+                    in
+                    Post.of_flow flow')
+                  ~felse:(fun false_flow ->
+                    Post.assume
+                      (* isclass obj <=> isinstance(obj, type) *)
+                      (mk_py_isinstance_builtin exp "type" range)
+                      man
+                      ~fthen:(fun true_flow ->
+                        man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
+                        |> Post.of_flow)
+                      ~felse:(fun false_flow ->
+                        man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow
+                        |> Post.of_flow)
+                      false_flow
+                  )
+                  flow
+              (* | _ -> debug "%a@\n" pp_expr exp; assert false *)
               )
          )
          |> OptionExt.return
@@ -168,7 +168,7 @@ module Domain =
                                man
                                ~fthen:(fun true_flow ->
                                  Post.assume
-                                   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
+                                   (mk_py_isinstance exn e range)
                                    man
                                    ~fthen:(fun true_flow ->
                                      match excpt.py_excpt_name with
@@ -226,7 +226,7 @@ module Domain =
                               *   man.flow.add (TExn exn) env flow *)
                              ~fthen:(fun true_flow ->
                                Post.assume
-                                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; e] range)
+                                 (mk_py_isinstance exn e range)
                                  man
                                  ~fthen:(fun true_flow -> Post.of_flow true_flow)
                                  ~felse:(fun false_flow ->

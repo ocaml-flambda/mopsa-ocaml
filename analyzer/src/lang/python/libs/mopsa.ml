@@ -160,92 +160,93 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)}, [], [])  ->
          begin
-           Debug.fail "Unsure this is correclty implemented; FIXME: move to bools@\n";
-           let annot = Flow.get_all_annot flow in
-           let error_env = Flow.fold (fun acc tk env -> match tk with
-                                                        | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
-                                                        | _ -> acc
-                             ) man.bottom man flow in
-           let cond =
-             match Flow.get T_cur man flow |> man.is_bottom,
-                   man.is_bottom error_env with
-             | false, true -> mk_zero
-             | true, false -> mk_one
-             | false, false -> mk_int_interval 0 1
-             | true, true -> mk_zero
-           in
-           let stmt = mk_assert (cond exp.erange) exp.erange in
-           let cur = Flow.get T_cur man flow in
-           let flow = Flow.set T_cur man.top man flow in
-           let flow = man.exec stmt flow |>
-                        Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException _} -> false | _ -> true) man |>
-                        Flow.set T_cur cur man
-           in
-           (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_int 0 exp.erange) flow |> OptionExt.return
+           Debug.fail "Unsure this is correclty implemented; FIXME: move to bools@\n"
+           (* let annot = Flow.get_all_annot flow in
+            * let error_env = Flow.fold (fun acc tk env -> match tk with
+            *                                              | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
+            *                                              | _ -> acc
+            *                   ) man.bottom man flow in
+            * let cond =
+            *   match Flow.get T_cur man flow |> man.is_bottom,
+            *         man.is_bottom error_env with
+            *   | false, true -> mk_zero
+            *   | true, false -> mk_one
+            *   | false, false -> mk_int_interval 0 1
+            *   | true, true -> mk_zero
+            * in
+            * let stmt = mk_assert (cond exp.erange) exp.erange in
+            * let cur = Flow.get T_cur man flow in
+            * let flow = Flow.set T_cur man.top man flow in
+            * let flow = man.exec stmt flow |>
+            *              Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException _} -> false | _ -> true) man |>
+            *              Flow.set T_cur cur man
+            * in
+            * (\* FIXME:  mk_py_int ?*\)
+            * Eval.singleton (mk_int 0 exp.erange) flow |> OptionExt.return *)
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)}, [{ekind = cls}], [])  ->
-         Debug.fail "todo";
-         begin
-           debug "begin assert_exception";
-           let annot = Flow.get_all_annot flow in
-           let this_error_env = Flow.fold (fun acc tk env -> match tk with
-                                                             (* FIXME: addr.isinstance *)
-               | T_alarm {alarm_kind = APyException exn}
-                  (* Eval.assume
-                   *   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; cls])
-                   *   ~fthen:(fun flow -> man.join annot acc flow)
-                   *   ~felse:(fun _ -> man.bottom)
-                   *   man env *)
-                 -> Debug.fail "todo@\n"
-               (* when Debug.fail "todo" Addr.isinstance exn cls -> man.join annot acc env *)
-                                      | _ -> acc
-                                  ) man.bottom man flow
-                                           in
-           let cond =
-             match Flow.get T_cur man flow |> man.is_bottom,
-                   man.is_bottom this_error_env with
-             | true, false -> mk_py_false
-             | _, true -> mk_py_true
-             | false, false ->  mk_top T_bool
-           in
-           let stmt = mk_assert (cond exp.erange) exp.erange in
-           let cur = Flow.get T_cur man flow in
-           let flow = Flow.set T_cur man.top man flow in
-           let flow = man.exec stmt flow |>
-                                                             (* FIXME: addr.isinstance *)
-                        Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
-                        Flow.set T_cur cur man
-           in
-           (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_py_true exp.erange) flow
-           |> OptionExt.return
-         end
+         Debug.fail "todo"
+         (* begin
+          *   debug "begin assert_exception";
+          *   let annot = Flow.get_all_annot flow in
+          *   let this_error_env = Flow.fold (fun acc tk env -> match tk with
+          *                                                     (\* FIXME: addr.isinstance *\)
+          *       | T_alarm {alarm_kind = APyException exn}
+          *          (\* Eval.assume
+          *           *   (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exn; cls])
+          *           *   ~fthen:(fun flow -> man.join annot acc flow)
+          *           *   ~felse:(fun _ -> man.bottom)
+          *           *   man env *\)
+          *         -> Debug.fail "todo@\n"
+          *       (\* when Debug.fail "todo" Addr.isinstance exn cls -> man.join annot acc env *\)
+          *                              | _ -> acc
+          *                          ) man.bottom man flow
+          *                                   in
+          *   let cond =
+          *     match Flow.get T_cur man flow |> man.is_bottom,
+          *           man.is_bottom this_error_env with
+          *     | true, false -> mk_py_false
+          *     | _, true -> mk_py_true
+          *     | false, false ->  mk_top T_bool
+          *   in
+          *   let stmt = mk_assert (cond exp.erange) exp.erange in
+          *   let cur = Flow.get T_cur man flow in
+          *   let flow = Flow.set T_cur man.top man flow in
+          *   let flow = man.exec stmt flow |>
+          *                                                     (\* FIXME: addr.isinstance *\)
+          *                Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; false | _ -> true) man |>
+          *                Flow.set T_cur cur man
+          *   in
+          *   (\* FIXME:  mk_py_int ?*\)
+          *   Eval.singleton (mk_py_true exp.erange) flow
+          *   |> OptionExt.return
+          * end *)
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = E_py_object cls}], [])  ->
-         begin
-           let annot = Flow.get_all_annot flow in
-           let error_env = Flow.fold (fun acc tk env -> match tk with
-                                                             (* FIXME: addr.isinstance *)
-                                                        | T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; man.join annot acc env
-                               | _ -> acc
-                             ) man.bottom man flow in
-           let cur = Flow.get T_cur man flow in
-           let cur' = if man.is_bottom cur then man.top else cur in
-           let cond = if man.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
-           let stmt = mk_assert cond exp.erange in
-           let flow' = Flow.set T_cur cur' man flow |>
-                         man.exec stmt |>
-                                                             (* FIXME: addr.isinstance *)
-                         Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (*when Addr.isinstance exn cls*) -> Debug.fail "todo"; false | _ -> true) man |>
-                         Flow.set T_cur cur man
-           in
-           (* FIXME:  mk_py_int ?*)
-           Eval.singleton (mk_py_true exp.erange) flow'
-           |> OptionExt.return
-         end
+         Debug.fail "todo: fixme"
+         (* begin
+          *   let annot = Flow.get_all_annot flow in
+          *   let error_env = Flow.fold (fun acc tk env -> match tk with
+          *                                                     (\* FIXME: addr.isinstance *\)
+          *                                                | T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; man.join annot acc env
+          *                       | _ -> acc
+          *                     ) man.bottom man flow in
+          *   let cur = Flow.get T_cur man flow in
+          *   let cur' = if man.is_bottom cur then man.top else cur in
+          *   let cond = if man.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
+          *   let stmt = mk_assert cond exp.erange in
+          *   let flow' = Flow.set T_cur cur' man flow |>
+          *                 man.exec stmt |>
+          *                                                     (\* FIXME: addr.isinstance *\)
+          *                 Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; false | _ -> true) man |>
+          *                 Flow.set T_cur cur man
+          *   in
+          *   (\* FIXME:  mk_py_int ?*\)
+          *   Eval.singleton (mk_py_true exp.erange) flow'
+          *   |> OptionExt.return
+          * end *)
       | _ ->
          None
 

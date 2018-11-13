@@ -70,16 +70,16 @@ module Domain = struct
                | _ -> assert false
              in
 
-             man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e1] range) flow |>
+             man.eval (mk_py_type e1 range) flow |>
                Eval.bind (fun cls1 flow ->
                    let cls1 = object_of_expr cls1 in
                    man.eval (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
                      Eval.bind (fun cmp flow ->
-                         let not_implemented_type =
+                         let not_implemented_type = (* Addr.find_builtin "NotImplementedType" in*)
                            (* DONE? TODO: FIXME: ASK, issue with not_implemented *)
-                           mk_py_call (mk_py_object (Addr.find_builtin "type") range) [mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range] range
-                         in
-                         let expr = (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [cmp; not_implemented_type] range) in
+                           mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range
+                           in
+                         let expr = mk_py_isinstance cmp not_implemented_type range in
                          debug "Expr is %a@\n" pp_expr expr;
                          Eval.assume
                            expr

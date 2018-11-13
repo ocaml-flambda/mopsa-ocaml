@@ -98,7 +98,7 @@ module Domain =
                       and create a method *)
                    (* to test if an object o is a class, we call isinstance(o, type) *)
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "type") range] range)
+                     (mk_py_isinstance_builtin exp "type" range)
                      ~fthen:(fun flow ->
                        let mro = Addr.mro (object_of_expr exp) in
                        let rec search_mro flow mro = match mro with
@@ -116,7 +116,7 @@ module Domain =
                        in search_mro flow mro
                      )
                      ~felse:(fun flow ->
-                       man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [exp] range) flow |>
+                       man.eval (mk_py_isinstance_builtin exp "type" range) flow |>
                          Eval.bind (fun class_of_exp flow ->
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              let rec search_mro flow mro = match mro with
@@ -132,7 +132,7 @@ module Domain =
                                       man.eval (mk_py_object_attr cls attr range) flow |>
                                         Eval.bind (fun obj' flow ->
                                             Eval.assume
-                                              (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
+                                              (mk_py_isinstance_builtin obj' "function" range)
                                               ~fthen:(fun flow ->
                                                 (* Debug.fail "todo@\n"; *)
                                                 debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
@@ -174,12 +174,12 @@ module Domain =
                           man flow
                    in
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [eobj; mk_py_object (Addr.find_builtin "type") range] range)
+                     (mk_py_isinstance_builtin eobj "type" range)
                      ~fthen:(fun flow ->
                        let mro = Addr.mro (object_of_expr eobj) in
                        search_mro flow mro)
                      ~felse:(fun flow ->
-                       man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+                       man.eval (mk_py_type eobj range) flow |>
                          Eval.bind (fun class_of_exp flow ->
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              search_mro flow mro)

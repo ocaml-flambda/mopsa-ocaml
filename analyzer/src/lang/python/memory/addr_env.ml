@@ -72,7 +72,7 @@ let () =
     register_addr info
   )
 
-let mk_avar addr_uid ?(vtyp = T_any) =
+let mk_avar ?(vtyp = T_any) addr_uid =
   let vname = "$addr@" ^ (string_of_int addr_uid) in
   {vname; vuid = addr_uid (*FIXME*); vtyp}
 
@@ -125,10 +125,10 @@ struct
 
             | E_py_undefined false -> assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
 
-            | E_py_object((addr, ev) as obj) ->
+            | E_py_object(addr, ev) ->
                let flow = assign_addr man v (PyAddr.Def addr) mode flow in
                debug "cur is now %a@\n" print (Flow.get_domain_cur man flow);
-               man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [e] range) flow |>
+               man.eval (mk_py_type e range) flow |>
                  Post.bind man
                    (fun cls flow ->
                      let t = match kind_of_object (Addr.most_derive_builtin_base (object_of_expr cls)) with
@@ -141,7 +141,7 @@ struct
                        | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
                        | _s -> T_py_empty
                      in
-                     let v' = mk_avar addr.addr_uid ~vtyp:t in
+                     let v' = mk_avar ~vtyp:t addr.addr_uid in
                      man.exec ~zone:Zone.Z_py_value (mk_assign (mk_var v' range) ev range) flow |> Post.of_flow
                    )
             | _ -> debug "%a@\n" pp_expr e; assert false
@@ -204,7 +204,7 @@ struct
              Eval.empty_singleton flow |> Eval.join acc
 
           | PyAddr.Def addr ->
-             man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [mk_py_object (addr, mk_py_empty range) range] range) flow |>
+             man.eval (mk_py_type (mk_py_object (addr, exp) range) range) flow |>
                Eval.bind
                  (fun cls flow ->
                    let t = match kind_of_object (Addr.most_derive_builtin_base (object_of_expr cls)) with
@@ -217,7 +217,7 @@ struct
                      | A_py_class (C_builtin "NotImplementedType", _) -> T_py_not_implemented
                      | _ -> T_py_empty
                    in
-                   let v' = mk_avar addr.addr_uid ~vtyp:t in
+                   let v' = mk_avar ~vtyp:t addr.addr_uid in
                    Eval.singleton (mk_py_object (addr, mk_var v' range) range) flow |> Eval.join acc
                  )
             (*  let t = Addr.type_of_object (addr, mk_py_empty range) in
