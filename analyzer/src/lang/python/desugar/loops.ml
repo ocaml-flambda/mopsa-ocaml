@@ -67,7 +67,7 @@ module Domain =
            Post.bind man (fun iter flow ->
                let stmt =
                  mk_while
-                   (mk_one range)
+                   (mk_py_true range)
                    (mk_block [
                         (Utils.mk_try_stopiteration
                            (mk_assign

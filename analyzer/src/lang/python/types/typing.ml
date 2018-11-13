@@ -55,7 +55,7 @@ module Domain =
       let cur = Flow.get_domain_cur man flow in
       let tid, ncur = Typingdomain.get_type cur ptype in
       let flow = Flow.set_domain_cur ncur man flow in
-      Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return
+      Eval.singleton (mk_expr (E_type_partition tid) range) flow
 
     let init progr man flow =
       Some ( Flow.set_domain_env T_cur Typingdomain.top man flow )
@@ -164,29 +164,29 @@ module Domain =
       match ekind exp with
       | E_constant (C_top T_bool)
         | E_constant (C_bool _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "bool")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bool") |> OptionExt.return
 
       | E_constant (C_top T_int)
         | E_constant (C_int _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "int")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "int") |> OptionExt.return
 
       | E_constant (C_top (T_float _))
         | E_constant (C_float _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "float")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "float") |> OptionExt.return
 
       | E_constant (C_string _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "str")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "str") |> OptionExt.return
 
       | E_py_bytes _ ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "bytes")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bytes") |> OptionExt.return
 
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
-         return_id_of_type man flow range builtin_notimpl
+         return_id_of_type man flow range builtin_notimpl |> OptionExt.return
 
       | E_constant C_py_none ->
          let builtin_none = Typingdomain.builtin_inst "NoneType" in
-         return_id_of_type man flow range builtin_none
+         return_id_of_type man flow range builtin_none |> OptionExt.return
 
       | E_alloc_addr akind ->
          begin match akind with
@@ -486,11 +486,53 @@ module Domain =
          Eval.eval_list args man.eval flow |>
            Eval.bind (fun eargs flow ->
                let lst, idx = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
-               (* Eval.assume  *)
-               Eval.empty_singleton flow
+               Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                 ~fthen:(fun flow ->
+                   Eval.assume (mk_py_isinstance_builtin idx "int" range)
+                     ~fthen:(fun flow ->
+                       (* TODO: create new expr_kind so this part of the code is modular in each analysis? *)
+                       let cur = Flow.get_domain_cur man flow in
+                       let lst_tid = match ekind lst with
+                         | E_type_partition i -> i
+                         | _ -> assert false in
+                       let tid, ncur = Typingdomain.gather_list_types cur lst_tid in
+                       let flow = Flow.set_domain_cur ncur man flow in
+                       Eval.singleton (mk_expr (E_type_partition tid) range) flow
+                     )
+                     ~felse:(fun flow ->
+                       Eval.assume (mk_py_isinstance_builtin idx "slice" range)
+                         ~fthen:(fun flow -> Debug.fail "FIXME: slices are unsupported yet")
+                         ~felse:(fun flow ->
+                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                             Eval.empty_singleton
+                         )
+                         man flow
+                     )
+                     man flow
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+               man flow
                (* check that lst inherits from list, otherwise raise a typeerror *)
                (* check that idx is either an integer or a slide *)
                (* return the type(s) of elements inside the container *)
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__iter__")}, _)}, [arg], []) ->
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               Eval.assume (mk_py_isinstance_builtin earg "list" range)
+                 ~fthen:(fun flow ->
+                   return_id_of_type man flow range (Typingdomain.builtin_inst "listiter")
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+                 man flow
              )
          |> OptionExt.return
 

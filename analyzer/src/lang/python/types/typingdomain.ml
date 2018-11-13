@@ -1044,3 +1044,10 @@ let filter_attr (d:domain) (t:typeid) (attr:string) : domain * domain =
 let filter_ty_attr (d:domain) (ty:polytype) (attr:string) : domain * domain =
   let t, d = get_type d ty in
   filter_attr d t attr
+
+let gather_list_types (d:domain) (t:typeid) : typeid * domain =
+  let ty_list = TypeIdMap.find t d.d2 in
+  let ty_els = match ty_list with
+    | List x -> x
+    | _ -> assert false in
+  get_type ~local_use:true d ty_els
