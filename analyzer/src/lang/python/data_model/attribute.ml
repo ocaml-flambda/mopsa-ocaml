@@ -167,7 +167,7 @@ module Domain =
                      | [] -> Eval.singleton (mk_py_false range) flow
                      | cls::tl ->
                         Eval.assume
-                          (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
+                          (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                           ~fthen:(fun flow ->
                             Eval.singleton (mk_py_true range) flow)
                           ~felse:(fun flow -> search_mro flow tl)
