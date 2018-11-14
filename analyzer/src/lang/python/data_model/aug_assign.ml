@@ -44,19 +44,22 @@ module Domain = struct
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
-             let cls = Addr.class_of_object @@ object_of_expr x in
-             Post.assume
-               (Utils.mk_object_hasattr cls op_fun range)
-               man
-               ~fthen:(fun true_flow ->
-                 let stmt = mk_assign x0 (mk_py_call (mk_py_object_attr cls op_fun range) [x; e] range) range in
-                 man.exec stmt true_flow |> Post.of_flow
-               )
-               ~felse:(fun false_flow ->
-                 let default_assign = mk_assign x0 (mk_binop x op e range) range in
-                 man.exec default_assign flow |> Post.of_flow
-               )
-               flow
+             man.eval (mk_py_type x range) flow |>
+               Post.bind man (fun cls flow ->
+                   let cls = object_of_expr cls in
+                   Post.assume
+                     (Utils.mk_object_hasattr cls op_fun range)
+                     man
+                     ~fthen:(fun true_flow ->
+                       let stmt = mk_assign x0 (mk_py_call (mk_py_object_attr cls op_fun range) [x; e] range) range in
+                       man.exec stmt true_flow |> Post.of_flow
+                     )
+                     ~felse:(fun false_flow ->
+                       let default_assign = mk_assign x0 (mk_binop x op e range) range in
+                       man.exec default_assign flow |> Post.of_flow
+                     )
+                     flow
+                 )
            )
        |> OptionExt.return
 
