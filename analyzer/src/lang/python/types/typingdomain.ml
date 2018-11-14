@@ -35,7 +35,7 @@ type 'a pytype =
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
   | Class of class_address * py_object list (* class * mro *)
   (* we use the classes defined in MOPSA *)
-  | Function of function_address * 'a summary
+  | Function of function_address
   (* same for functions *)
   | Module of module_address
   (* and for modules *)
@@ -44,8 +44,6 @@ type 'a pytype =
   | Method of function_address * typeid
 and 'a pytypeinst =
   {classn:'a pytype; uattrs: 'a pytype StringMap.t; oattrs: 'a pytype StringMap.t }
-and 'a summary = (('a pytype list) * ('a pytype list)) list
-
 
 type typevar = int
 type monotype = unit pytype
@@ -78,8 +76,8 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
        Format.fprintf fmt "Instance[%a, [%a], [%a]]" (pp_pytype print_vars) classn pp_attrs uattrs pp_attrs oattrs
   | Class (C_user c, _) -> Format.fprintf fmt "Class[{%a}]" pp_var c.py_cls_var
   | Class (C_builtin c, _) | Class (C_unsupported c, _) -> Format.fprintf fmt "Class[%s]" c
-  | Function (F_user f, _) -> Format.fprintf fmt "Function[{%a}]" pp_var f.py_func_var
-  | Function (F_builtin f, _) | Function (F_unsupported f, _) -> Format.fprintf fmt "Function[%s]" f
+  | Function (F_user f) -> Format.fprintf fmt "Function[{%a}]" pp_var f.py_func_var
+  | Function (F_builtin f) | Function (F_unsupported f) -> Format.fprintf fmt "Function[%s]" f
   | Module (M_user (m, _) | M_builtin(m)) -> Format.fprintf fmt "Module[%s]" m
   | Typevar t -> print_vars fmt t
   | Method (F_user f, i) -> Format.fprintf fmt "Method[{%a}, id=%d]" pp_var f.py_func_var i
@@ -237,7 +235,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Bot -> Bot
   | Top -> Top
   | Class (c, b) -> Class (c, b)
-  | Function (func, summary) -> Function (func, List.map (fun (i, o) -> List.map (unsafe_cast f) i, List.map (unsafe_cast f) o) summary)
+  | Function func -> Function func
   | Module m -> Module m
   | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
@@ -312,9 +310,6 @@ let search_d3 (ms:Monotypeset.t) (d3:d3) : typevar option =
                                   | None -> if Monotypeset.equal v ms then Some k else None
                                   | Some v -> Some v) d3 None
 
-let merge_summaries (sum:'a summary) (sum':'a summary) : 'a summary =
-  (* TODO: proper merge *)
-  sum @ sum'
 
 let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (pos_d3:int) : polytype * d3 * int =
   match t, t' with
@@ -332,8 +327,8 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
   | List t, List t' ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
-  | Function (f, sum), Function (f', sum') when f = f' ->
-     Function (f, merge_summaries sum sum'), d3_acc, pos_d3
+  | Function f, Function f' when f = f' ->
+     Function f, d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
      Module m, d3_acc, pos_d3
   | Class (c, b), Class (c', b') when join_classes (c, b) (c', b') <> None ->
@@ -505,7 +500,7 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   | Bot, _ | _, Top -> true
   | List u, List v -> polytype_leq (u, d3) (v, d3')
   | Class (c, b), Class (c', b') -> class_le (c, b) (c', b')
-  | Function (f, sum), Function (f', sum') -> f = f' && Debug.fail "ni"
+  | Function f, Function f' -> f = f'
   | Module m, Module m' -> m = m'
   | Instance {classn=c; uattrs=u; oattrs=o},
     Instance {classn=c'; uattrs=u'; oattrs=o'} ->
@@ -558,8 +553,8 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | List t, List t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
-  | Function (f, sum), Function (f', sum') when f = f' ->
-     Function (f, Debug.fail "ni"), d3_acc, pos_d3
+  | Function f, Function f' when f = f' ->
+     Function f, d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
      Module m, d3_acc, pos_d3
   | Class (c, b), Class (c', b') when join_classes (c, b) (c', b') <> None ->
@@ -884,7 +879,7 @@ let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
   let ty = TypeIdMap.find tid d.d2 in
   match ty with
   | Class (c, b) -> A_py_class (c, b)
-  | Function (f, _) -> A_py_function f
+  | Function f -> A_py_function f
   | Module m -> A_py_module m
   | _ -> Type i
 
@@ -903,7 +898,7 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (list, listb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
-  | Function (f, _) ->
+  | Function f ->
      let func, funcb = match kind_of_object (Addr.find_builtin "function") with
        | A_py_class (c, b) -> c, b
        | _ -> assert false in
@@ -972,7 +967,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        (Bot, d3), (p, d3)
   | Module (M_builtin _) -> Debug.fail "ni, need to check if attr in module?"
   | List t -> Debug.fail "ni"
-  | Function (f, _) -> Debug.fail "ni"
+  | Function f -> Debug.fail "ni"
   | Method _ -> Debug.fail "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in
@@ -1051,3 +1046,42 @@ let gather_list_types (d:domain) (t:typeid) : typeid * domain =
     | List x -> x
     | _ -> assert false in
   get_type ~local_use:true d ty_els
+
+
+(*****************************)
+(* Analysis using summaries  *)
+(*****************************)
+
+type arg_types = polytype list
+type summary_part = arg_types (* type of input arguments *)
+               * arg_types (* type of input arguments after function call *)
+               * arg_types (* type of output arguments *)
+               * d3 (* map to keep polymorphic variables *)
+type closure = (pyVar * polytype) list
+type summary = Universal.Ast.fundec * (summary_part * closure) list
+
+let exist_compatible_summary (func:Universal.Ast.fundec) (inputs:arg_types) (closure:closure) (d3:d3) (summary: summary list) : bool =
+  (ListExt.mem_assoc func summary) &&
+    let func_summary = ListExt.assoc func summary in
+    ListExt.exists (fun ((i, _, _, _), _) -> i = inputs) func_summary
+
+let get_compatible_summary (func:Universal.Ast.fundec) (inputs:arg_types) (closure:closure) (d3:d3) (summary: summary list) : summary_part * closure =
+  let func_summary = ListExt.assoc func summary in
+  ListExt.find (fun ((i, _, _, _), _) -> i = inputs) func_summary
+
+let pp_arg_types fmt l = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_polytype fmt l
+
+let pp_summary_part fmt (sp:summary_part) =
+  let i, i_o, o, d3 = sp in
+  Format.fprintf fmt "inputs = %a@\ninputs_out = %a@\noutputs = %a@\nd3 = %a@\n"
+    pp_arg_types i
+    pp_arg_types i_o
+    pp_arg_types o
+    pp_d3 d3
+
+let pp_sp_closure fmt (sp, clos) =
+  pp_summary_part fmt sp
+
+let pp_summary fmt (summary:summary) =
+  let l, r = summary in
+  Format.fprintf fmt "%s |-->@[@\n%a@\n@]" l.fun_name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_sp_closure) r

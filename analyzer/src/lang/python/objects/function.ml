@@ -13,6 +13,31 @@ open Universal.Ast
 open Ast
 open Addr
 
+type expr_kind +=
+   | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
+
+let () =
+  register_pp_expr (fun default fmt exp ->
+      match ekind exp with
+      | E_py_sum_call (f, args) ->
+         Format.fprintf fmt "{py_sum_call}%a(%a)"
+           pp_expr f
+           (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
+      | _ -> default fmt exp);
+  Visitor.register_expr_visitor (fun default exp ->
+      match ekind exp with
+      | E_py_sum_call(f, args) ->
+         {exprs = f :: args; stmts = []},
+         (fun parts -> {exp with ekind = E_py_sum_call(List.hd parts.exprs, List.tl parts.exprs)})
+      | _ -> default exp)
+
+let mk_sum_call fundec args range =
+  mk_expr (E_py_sum_call (
+      mk_expr (E_function (User_defined fundec)) range,
+      args
+    )) range
+
+
 module Domain =
   struct
 
@@ -118,7 +143,7 @@ module Domain =
                          fun_return_type = Some T_any;
                        } in
 
-                     man.eval (mk_call fundec args exp.erange) flow |>
+                     man.eval (mk_sum_call fundec args exp.erange) flow |>
                        Eval.bind (fun e flow -> man.eval e flow)
                    )
                )
