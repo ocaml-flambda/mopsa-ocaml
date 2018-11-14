@@ -178,6 +178,7 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var_with_init ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var_with_init ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
+      f.c_func_stub <- parse_stub_comment ctx o.func_com
     ) funcs_and_origins;
 
   let globals = StringMap.bindings prj.proj_vars |>
@@ -485,6 +486,10 @@ and from_function_type fun_ctx f =
   }
 
 
+
+(** {2 Ranges and locations} *)
+(** ======================== *)
+
 and from_range (range:C_AST.range) =
   let open Clang_AST in
   let open Framework.Location in
@@ -499,3 +504,80 @@ and from_range (range:C_AST.range) =
       loc_line = range.range_end.loc_line;
       loc_column = range.range_end.loc_column;
     }
+
+
+
+(** {2 Stubs} *)
+(** ========= *)
+
+and parse_stub_comment ctx com =
+  match com with
+  | [] -> None
+
+  | com1 :: com2 :: _ -> panic "stub with more than one comment"
+
+  | [com] ->
+    let comment = com.com_text in
+    let range = from_range com.com_range in
+
+    let buf = Lexing.from_string comment in
+    buf.lex_curr_p <- {
+      buf.lex_curr_p with
+      pos_fname = get_range_file range;
+      pos_lnum = get_range_line range;
+    };
+
+    try
+      begin
+        let stub = C_stubs_parser.Parser.stub C_stubs_parser.Lexer.read buf in
+        match stub with
+        | None -> None
+        | Some stub ->
+          let stub = C_stubs_parser.Scope.(visit stub Scope.empty) in (* FIXME: enrich the scope with globals and function parameters *)
+          Some (from_stub ctx stub)
+      end
+    with
+    | C_stubs_parser.Lexer.SyntaxError e ->
+      let pos = Lexing.lexeme_start_p buf in
+      let line = pos.pos_lnum in
+      let col = pos.pos_cnum-pos.pos_bol + 1 in
+      Debug.fail "Lexer error \"%s\" in file %s, line %d, characters %d-%d:\n" e (get_range_file range) line (col-1) col
+
+    | C_stubs_parser.Parser.Error ->
+      let pos = Lexing.lexeme_start_p buf in
+      let line = pos.pos_lnum in
+      let col = pos.pos_cnum-pos.pos_bol + 1 in
+      Debug.fail "Parser error in file %s, line %d, characters %d-%d:\n" (get_range_file range) line (col-1) col
+
+and from_stub ctx stub : Stubs.Ast.stub =
+  match stub with
+  | S_simple s -> S_simple (from_simple_stub ctx s)
+  | S_case s   -> S_case (from_case_stub ctx s)
+
+and from_simple_stub ctx stub =
+  {
+    simple_stub_predicates = List.map (from_stub_predicate ctx) stub.simple_stub_predicates;
+    simple_stub_requires   = List.map (from_stub_requires ctx) stub.simple_stub_requires;
+    simple_stub_assigns    = List.map (from_stub_assigns ctx) stub.simple_stub_assigns;
+    simple_stub_local      = List.map (from_stub_local ctx) stub.simple_stub_local;
+    simple_stub_ensures    = List.map (from_stub_ensures ctx) stub.simple_stub_ensures;
+  }
+
+and from_case_stub ctx stub =
+  {
+    case_stub_predicates = List.map (from_stub_predicate ctx) stub.case_stub_predicates;
+    case_stub_requires   = List.map (from_stub_requires ctx) stub.case_stub_requires;
+    case_stub_cases    = List.map (from_stub_case ctx) stub.case_stub_cases;
+  }
+
+and from_stub_predicate ctx pred = assert false
+
+and from_stub_requires ctx req = assert false
+
+and from_stub_assigns ctx asgn = assert false
+
+and from_stub_local ctx loc = assert false
+
+and from_stub_ensures ctx ensr = assert false
+
+and from_stub_case ctx case = assert false
