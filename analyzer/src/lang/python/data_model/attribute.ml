@@ -116,7 +116,7 @@ module Domain =
                        in search_mro flow mro
                      )
                      ~felse:(fun flow ->
-                       man.eval (mk_py_isinstance_builtin exp "type" range) flow |>
+                       man.eval (mk_py_type exp range) flow |>
                          Eval.bind (fun class_of_exp flow ->
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              let rec search_mro flow mro = match mro with
