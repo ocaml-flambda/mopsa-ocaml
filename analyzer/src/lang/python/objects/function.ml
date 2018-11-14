@@ -141,6 +141,7 @@ module Domain =
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
                          fun_return_type = Some T_any;
+                         fun_range = pyfundec.py_func_range;
                        } in
 
                      man.eval (mk_sum_call fundec args exp.erange) flow |>

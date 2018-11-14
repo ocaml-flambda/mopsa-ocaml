@@ -77,7 +77,7 @@ and from_var v =
 and from_program filename (p: Py_AST.program) : Framework.Ast.program =
   let body = from_stmt p.prog_body in
   let globals = List.map from_var p.prog_globals in
-  {prog_kind = Ast.Py_program (globals, body); prog_file = filename}
+  Ast.Py_program (globals, body)
 
 
 (** Translation of a Python statement *)
@@ -132,6 +132,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_func_body = from_stmt f.func_body;
         py_func_is_generator = f.func_is_generator;
         py_func_decors = List.map from_exp f.func_decors;
+        py_func_range = from_range f.func_range;
       }
 
     | S_class cls ->
@@ -142,6 +143,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_cls_static_attributes = List.map from_var cls.cls_static_attributes;
         py_cls_keywords = List.map (fun (k, v) -> (k, from_exp v)) cls.cls_keywords;
         py_cls_decors = List.map from_exp cls.cls_decors;
+        py_cls_range = from_range cls.cls_range;
       }
 
     | S_for (target,iter,body,orelse) ->
@@ -383,10 +385,9 @@ and from_location loc : Framework.Location.loc =
   }
 
 and from_range range =
-  Range_origin {
-    range_begin = from_location range.rbegin;
-    range_end = from_location range.rend;
-  }
+  mk_source_range
+    (from_location range.rbegin)
+    (from_location range.rend)
 
 and from_binop : Py_AST.binop -> Framework.Ast.operator = function
   | O_arithmetic op -> from_arithmetic_op op

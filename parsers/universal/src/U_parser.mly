@@ -275,7 +275,7 @@ fundec:
    ldec=list(ext(declaration))
    st=ext(block_no_curly)
    TOK_RCURLY
-{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t}}
+{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t; range = ($startpos, $endpos)}}
 
 prog:
 | st=ext(block_no_curly)

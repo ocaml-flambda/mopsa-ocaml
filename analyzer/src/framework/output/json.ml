@@ -33,9 +33,8 @@ let render man alarms time files out =
           `Assoc [
             "title", `String title;
             "trace", `List (List.map (fun range ->
-                let origin = Location.get_origin_range range in
-                let file = Location.(origin.range_begin.loc_file) in
-                let line = Location.(origin.range_begin.loc_line) in
+                let file = Location.get_range_file range in
+                let line = Location.get_range_line range in
                 let r = file ^ ":" ^ (string_of_int line) in
                 `String r
               ) trace)

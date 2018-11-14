@@ -87,7 +87,7 @@ let () =
         let flow = Analyzer.init prog in
         Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
         let stmt =
-          Ast.mk_stmt (Ast.S_program prog) Framework.Location.(mk_file_range prog.Framework.Ast.prog_file)
+          Ast.mk_stmt (Ast.S_program prog) (Framework.Location.mk_program_range files)
         in
 
         Debug.info "Starting the analysis ...";

@@ -15,19 +15,19 @@ void test_struct_field_in_lval() {
   point p;
   p.x = 1;
   p.y = 2;
-  _mopsa_assert_true(p.x + p.y == 3);
+  _mopsa_assert(p.x + p.y == 3);
 }
 
 void test_array_of_structs() {
   point a[5];
   a[0].x = 1;
   a[1].x = 2;
-  _mopsa_assert_true(a[0].x + a[1].x == 3);
+  _mopsa_assert(a[0].x + a[1].x == 3);
 }
 
 void test_initialization_with_expression_list() {
   point p = {1, 2};
-  _mopsa_assert_true(p.x == p.y -1);
+  _mopsa_assert(p.x == p.y -1);
 }
 
 point global_point;
@@ -35,26 +35,26 @@ segment global_segment;
 
 
 void test_initialization_uninitialized_global_struct() {
-  _mopsa_assert_true(global_point.x == 0);
-  _mopsa_assert_true(global_segment.p1.y == 0);
+  _mopsa_assert(global_point.x == 0);
+  _mopsa_assert(global_segment.p1.y == 0);
 }
 
 void test_initialization_with_designated_names() {
   point p = {.y = 2, .x = 1};
-  _mopsa_assert_true(p.x == p.y -1);
+  _mopsa_assert(p.x == p.y -1);
 }
 
 point p3 = {.y = 2};
 
 void test_partial_initialization_with_designated_names() {
-  _mopsa_assert_true(p3.x == 0);
-  _mopsa_assert_true(p3.y == 2);
+  _mopsa_assert(p3.x == 0);
+  _mopsa_assert(p3.y == 2);
 }
 
 void test_struct_copy() {
   point p = {.x = 1, .y = 2};
   point q = p;
-  _mopsa_assert_true(p.x == q.x);
+  _mopsa_assert(p.x == q.x);
 }
 
 int f1(point p) {
@@ -69,9 +69,9 @@ int f2(point p) {
 void test_pass_struct_by_value() {
   point p = {.x = 10, .y = 20};
   int x = f1(p);
-  _mopsa_assert_true(x == 11);
+  _mopsa_assert(x == 11);
   int y = f2(p);
-  _mopsa_assert_true(p.x == 10 && y == 20);
+  _mopsa_assert(p.x == 10 && y == 20);
 }
 
 

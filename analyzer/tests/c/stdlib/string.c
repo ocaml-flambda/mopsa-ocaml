@@ -1,4 +1,5 @@
 #include <string.h>
+#include "mopsa.h"
 
 void test_memset_on_static_char_array() {
   char a[10];

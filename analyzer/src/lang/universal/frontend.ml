@@ -54,10 +54,9 @@ let from_position (pos: U.position) : Framework.Location.loc =
   }
 
 let from_extent ((b, e): extent) : Framework.Location.range =
-  Framework.Location.(Range_origin {
-      range_begin = from_position b;
-      range_end = from_position e;
-    })
+  Framework.Location.mk_source_range
+    (from_position b)
+    (from_position e)
 
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
@@ -325,7 +324,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
 
   | AST_assign((e1, ext1), (e2, ext2)) ->
     begin
-      let e1o = e1 and e2o = e2 in
+      let e1o = e1 in
       match e1 with
       | AST_array_access(_, _)
       | AST_identifier _ ->
@@ -532,6 +531,7 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   {
     fun_name = f.funname;
+    fun_range = from_extent f.range;
     fun_parameters = List.map (fun ((_, v), ext) -> from_var v ext var_ctx) f.parameters;
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
@@ -551,7 +551,7 @@ let add_body (fl: fun_context) (f: string) (b: stmt): unit =
   with
   | Not_found -> Debug.fail "[Universal.frontend] should not happen"
 
-let from_prog (p: U_ast.prog) : FA.program_kind =
+let from_prog (p: U_ast.prog) : FA.program =
   let ext = snd (p.main) in
   let var_ctx, init, gvars = var_ctx_init_of_declaration p.gvars MS.empty None None in
   let fun_ctx, var_ctx_map = fun_ctx_of_global p.funs var_ctx in
@@ -574,6 +574,6 @@ let rec parse_program (files: string list): Framework.Ast.program =
   match files with
   | [filename] ->
     let ast = U_file_parser.parse_file filename in
-    {prog_kind = from_prog ast; prog_file = filename}
+    from_prog ast
   | _ ->
     Debug.fail "only one file supported for universal"

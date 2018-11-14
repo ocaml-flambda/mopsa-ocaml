@@ -174,8 +174,8 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
      let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
      
      (* add nodes begining the true and false branches *)
-     let tloc = mk_fresh_node_id (range_begin (get_origin_range (srange s1)))
-     and floc = mk_fresh_node_id (range_begin (get_origin_range (srange s2))) in
+     let tloc = mk_fresh_node_id (get_range_start (srange s1))
+     and floc = mk_fresh_node_id (get_range_end (srange s2)) in
      let tnode = add_node c tloc
      and fnode = add_node c floc in
      
@@ -199,7 +199,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
           add_stmt c pre post s
        | a::b ->
           (* add a new node after the first statement *)
-          let loc = mk_fresh_node_id (range_begin (get_origin_range (srange a))) in
+          let loc = mk_fresh_node_id (get_range_start (srange a)) in
           let node = add_node c loc in
           (* add the first statement between pre and node *)
           add_stmt c pre node a;
@@ -214,7 +214,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
      let adds, rems = mk_add_tmps tmps, mk_remove_tmps tmps in
      
      (* add node at the begining of the loop body *)
-     let loc = mk_fresh_node_id (range_begin (get_origin_range (srange s))) in
+     let loc = mk_fresh_node_id (get_range_start (srange s)) in
      let entry = add_node c loc in
 
      (* add test edge *)
@@ -295,9 +295,8 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
   (* create empty graph *)
   let cfg = CFG.create () in
   (* entry and exit nodes *)
-  let range = get_origin_range (srange s) in
-  let entry = CFG.add_node cfg (mk_fresh_node_id range.range_begin) ()
-  and exit = CFG.add_node cfg (mk_fresh_node_id range.range_end) () in
+  let entry = CFG.add_node cfg (mk_fresh_node_id (get_range_start (srange s))) ()
+  and exit = CFG.add_node cfg (mk_fresh_node_id (get_range_end (srange s))) () in
   CFG.node_set_entry cfg entry (Some T_cur);
   CFG.node_set_exit  cfg exit  (Some T_cur);
   (* fill-in graph *)
@@ -334,16 +333,13 @@ let convert_fundec (f:fundec) : fundec =
 
 (** Converts a full universal program. *)  
 let convert_program (p:program) : program =
-  match p.prog_kind with
+  match p with
   | P_universal u ->
-     { p with
-       prog_kind =
-         P_universal
-           { universal_gvars = u.universal_gvars;
-             universal_fundecs = List.map convert_fundec u.universal_fundecs;
-             universal_main = convert_stmt ~name:"__main__" u.universal_main;
-           }
-     }
+    P_universal
+      { universal_gvars = u.universal_gvars;
+        universal_fundecs = List.map convert_fundec u.universal_fundecs;
+        universal_main = convert_stmt ~name:"__main__" u.universal_main;
+      }
 
   | _ ->        
      Debug.fail "cannot convert program to CFG"

@@ -192,8 +192,9 @@ let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
 (** Bytecode ranges *)
 let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   mk_edge_id
-    (Range_origin
-       (mk_range (mk_loc meth_uid pos1 0) (mk_loc meth_uid pos2 0))
+    (mk_source_range
+       (mk_loc meth_uid pos1 0)
+       (mk_loc meth_uid pos2 0)
     )
   
 (** Fill-in [g] with a CFG for code [jcode].
@@ -266,11 +267,11 @@ let coalesce_cfg g =
            when CFG.edge_dst_size e1 = 1 && CFG.edge_src_size e2 = 1
         ->
          (match CFG.edge_data e1, CFG.edge_data e2 with
-          | { skind = S_java_opcode o1; srange = Range_origin r1; },
-            { skind = S_java_opcode o2; srange = Range_origin r2; }
+          | { skind = S_java_opcode o1; srange = r1; },
+            { skind = S_java_opcode o2; srange = r2; }
             ->
              (* merge ranges *)
-             let r = Range_origin { r1 with range_end = r2.range_end } in
+             let r = set_range_end r1 (get_range_end r2) in
              (* merge opcode lists *)
              let s = mk_stmt (S_java_opcode (o1@o2)) r in
              (* update graph *)
@@ -399,10 +400,6 @@ let () =
     )
 
 let parse_program files =
-  let name = match files with
-    | [] -> "_project"
-    | a::_ -> a
-  in
   let m = ref MapExt.StringMap.empty in
   let parse_file f =
     if Sys.file_exists f then
@@ -419,8 +416,5 @@ let parse_program files =
       m := MapExt.StringMap.add cls.c_uid cls !m
   in
   List.iter parse_file files;
-  {
-    prog_kind = Java_program { p_classes = !m; };
-    prog_file = name;
-  }
+  Java_program { p_classes = !m; }
   

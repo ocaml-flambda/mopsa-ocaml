@@ -25,7 +25,6 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     let func_return = translate_expr_option scope f.func_return in
     let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters)) lscope in
     let new_lscope = func_var :: func_parameters @ func_locals @ func_nonlocals @ parent_scope in
-    
     { stmt with
       skind = S_function {
           func_var;
@@ -38,6 +37,7 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
           func_is_generator = f.func_is_generator;
           func_decors;
           func_return;
+          func_range = f.func_range;
         }
     }
 
@@ -55,6 +55,7 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
            cls_bases = List.map (translate_expr scope) cls.cls_bases;
            cls_decors;
            cls_keywords = List.map (fun (k, v) -> (k, translate_expr scope v)) cls.cls_keywords;
+           cls_range = cls.cls_range;
          }
       }
       

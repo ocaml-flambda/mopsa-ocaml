@@ -71,7 +71,13 @@ struct
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
 
         | E_c_function fundec ->
-          let body = get_c_fun_body_panic fundec in
+          let body =
+            match fundec.c_func_body with
+            | Some body -> body
+            | None      -> panic_at (erange exp)
+                             "no implementation for function %a"
+                             pp_var fundec.c_func_var
+          in
           debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
           let open Universal.Ast in
           let fundec' = {
@@ -80,6 +86,7 @@ struct
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
             fun_return_type = Some fundec.c_func_return;
+            fun_range = fundec.c_func_range;
           }
           in
           let exp' = mk_call fundec' args exp.erange in

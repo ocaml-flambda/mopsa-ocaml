@@ -433,10 +433,10 @@ module Domain =
                | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
                   Debug.fail "Left MRO %a@\nRight MRO %a@\n"
                     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x range)))
                     mro
                     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x range)))
                     mro'
                | E_py_object ({addr_kind = A_py_module _}, _), _ ->
                   begin match ekind eattr with

@@ -191,6 +191,7 @@ type c_init =
 type c_fundec = {
   mutable c_func_var: var; (** function name variable with unique identifier *)
   c_func_is_static: bool;
+  c_func_range: range; (** range of the function *)
   mutable c_func_return: typ; (** type of returned value *)
   mutable c_func_parameters: var list; (** function parameters *)
   mutable c_func_body: stmt option; (** function body *)
@@ -296,7 +297,7 @@ type stmt_kind +=
   (** default case of switch statements. *)
 
 
-type program_kind +=
+type program +=
   | C_program of
       (var * c_init option * range) list (** global variables *) *
       c_fundec list (** functions *)
@@ -810,32 +811,3 @@ let range_cond e_mint rmin rmax range =
    etyp = T_bool;
    erange = tag_range range "wrap_full"
   }
-
-let get_c_fun_body f =
-  match f.c_func_body with
-  | Some stmt -> stmt
-  | None ->
-    mk_block [] (Location.mk_fresh_range ())
-
-
-let format_to_string prt x =
-  let b = Buffer.create 12 in
-  let f = Format.formatter_of_buffer b in
-  let () = Format.fprintf f "%a%!" prt x in
-  Buffer.contents b
-
-let get_c_fun_body_panic f =
-  match f.c_func_body with
-  | Some stmt -> stmt
-  | None ->
-    let f = fun fmt () ->
-      Format.fprintf fmt "empty function %a : %a -> %a"
-        pp_var f.c_func_var
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-           (fun fmt x -> Format.fprintf fmt "%a" pp_typ (x.vtyp))
-        ) f.c_func_parameters
-        pp_typ (f.c_func_return)
-    in
-    let s = format_to_string f () in
-    raise (Framework.Exceptions.Panic (s))

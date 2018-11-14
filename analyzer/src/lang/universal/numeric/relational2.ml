@@ -448,7 +448,7 @@ struct
 
 
   (* TODO: This should not be done in this domain: *)
-  let init {prog_kind = p} =
+  let init p =
     match p with
     | Ast.P_universal pu ->
       let vs = VarSet.of_list (pu.universal_gvars |> List.filter is_numerical_var) in

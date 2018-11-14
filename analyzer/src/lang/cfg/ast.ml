@@ -162,7 +162,7 @@ let compare_node_id = TagLoc.compare
 
                
 let mk_edge_id ?(tag="") (range:range) : edge_id =
-  if tag = "" then range else Range_tagged (tag, range)
+  if tag = "" then range else tag_range range "%s" tag
 
 let fresh_edge_id = RangeHash.create 16
 (* we use our own fresh range generator to keep an origin_range information *)

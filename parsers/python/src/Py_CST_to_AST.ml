@@ -59,6 +59,7 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
         func_is_generator = detect_yield_in_function body;
         func_decors = List.map translate_expr decors;
         func_return = translate_expr_option2 return;
+        func_range = range;
       }
 
     | ClassDef (name, bases, keywords, body, decors) ->
@@ -71,6 +72,7 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
         cls_decors = List.map translate_expr decors;
         cls_static_attributes = attributes |> List.sort_uniq compare |> List.map translate_var;
         cls_keywords = List.map (fun (k, v) -> (k, translate_expr v)) keywords;
+        cls_range = range;
       }
         
     | Return value ->

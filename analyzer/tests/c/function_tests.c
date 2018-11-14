@@ -11,11 +11,11 @@ int mult(int x, int y) {
 void test_call() {
   int i;
   i = 10;
-  _mopsa_assert_true(incr(i) == 11);
+  _mopsa_assert(incr(i) == 11);
 }
 
 void test_call_in_chain() {
   int i;
   i = 10;
-  _mopsa_assert_true(mult(incr(i), 10) == 110);
+  _mopsa_assert(mult(incr(i), 10) == 110);
 }

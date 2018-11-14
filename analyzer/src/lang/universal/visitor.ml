@@ -85,12 +85,12 @@ let () =
         {exprs = [e]; stmts = []},
         (function {exprs = [e]} -> {stmt with skind = S_simple_assert(e,b,b')} | _ -> assert false)
 
-      | S_unit_tests(file, tests) ->
+      | S_unit_tests(tests) ->
         let tests_names, tests_bodies = List.split tests in
         {exprs = []; stmts = tests_bodies},
         (function {stmts = tests_bodies} ->
            let tests = List.combine tests_names tests_bodies in
-           {stmt with skind = S_unit_tests(file, tests)}
+           {stmt with skind = S_unit_tests(tests)}
         )
 
       | S_print -> leaf stmt

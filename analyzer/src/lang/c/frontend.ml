@@ -186,10 +186,7 @@ and from_project prj =
   in
 
 
-  {
-    prog_kind = Ast.C_program (globals, funcs);
-    prog_file = prj.C_AST.proj_name;
-  }
+  Ast.C_program (globals, funcs);
 
 
 
@@ -209,7 +206,7 @@ and from_function =
       c_func_local_vars = [];
       c_func_variadic = func.func_variadic;
       c_func_stub = None;
-
+      c_func_range = from_range func.func_range;
     }, func
 
 
@@ -491,15 +488,14 @@ and from_function_type fun_ctx f =
 and from_range (range:C_AST.range) =
   let open Clang_AST in
   let open Framework.Location in
-  Range_origin {
-    range_begin = {
+  mk_source_range
+    {
       loc_file = range.range_begin.loc_file;
       loc_line = range.range_begin.loc_line;
       loc_column = range.range_begin.loc_column;
-    };
-    range_end = {
+    }
+    {
       loc_file = range.range_end.loc_file;
       loc_line = range.range_end.loc_line;
       loc_column = range.range_end.loc_column;
     }
-  }

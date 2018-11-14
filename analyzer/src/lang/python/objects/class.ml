@@ -96,7 +96,7 @@ module Domain =
                      let mro = Addr.c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1)}, mk_py_empty range) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))
                        mro;
 
                      Addr.eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
