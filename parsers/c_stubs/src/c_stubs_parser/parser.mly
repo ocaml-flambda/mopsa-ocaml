@@ -147,7 +147,28 @@ local:
 
 local_value:
   | NEW resource { Local_new $2 }
-  | var LPAR args RPAR { Local_function_call ($1, $3) }
+  | IDENT LPAR args RPAR
+    {
+      let func = C_AST.{
+	  func_uid = 0;
+	  func_org_name = $1;
+	  func_unique_name = $1;
+	  func_is_static = false;
+	  func_return = T_void, { qual_is_const = true };
+	  func_parameters = [| |];
+	  func_body = None;
+	  func_static_vars = [];
+	  func_local_vars = [];
+	  func_variadic = false;
+	  func_range = {
+	      range_begin = {loc_line = 0; loc_column = 0; loc_file = ""};
+	      range_end = {loc_line = 0; loc_column = 0; loc_file = ""};
+	    };
+	  func_com = [];
+	}
+      in
+      Local_function_call (func, $3)
+    }
 
 (* Predicates section *)
 predicate_list:

@@ -45,7 +45,7 @@ and local = {
 
 and local_value =
   | Local_new           of resource
-  | Local_function_call of var (** function *) * expr with_range list (* arguments *)
+  | Local_function_call of C_AST.func (** function *) * expr with_range list (* arguments *)
 
 and assigns = {
     assigns_target : expr with_range;
@@ -166,3 +166,8 @@ let bind_range (a: 'a with_range) (f: 'a -> 'b) : 'b with_range =
   let x, range = a in
   let y = f x in
   (y, range)
+
+let bind2_range (a: 'a with_range) (f: 'a -> 'b * 'c) : 'b with_range * 'c =
+  let x, range = a in
+  let y, s = f x in
+  (y, range), s

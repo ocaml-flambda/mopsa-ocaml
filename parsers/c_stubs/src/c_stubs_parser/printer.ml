@@ -118,7 +118,7 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_function_call (f, args) -> fprintf fmt "%a(%a)" pp_var f pp_arguments args
+  | Local_function_call (f, args) -> fprintf fmt "%s(%a)" f.C_AST.func_org_name pp_arguments args
 
 
 let pp_predicate fmt (predicate:predicate with_range) =

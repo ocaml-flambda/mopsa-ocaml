@@ -16,8 +16,9 @@ open Ast
 
 module Scope =
 struct
-  include SetExt.Make(struct type t = var let compare = compare_var end)
 
+  include SetExt.Make(struct type t = var let compare = compare_var end)
+      
   let uid_counter = ref 0
 
   let create v s =
@@ -36,10 +37,7 @@ struct
     | [] -> Debug.fail "Variable %a not defined in scope" Printer.pp_var v
     | _ -> Debug.fail "Too many variables %a in scope" Printer.pp_var v
 
-  let bind_range (a: 'a with_range) (f: 'a -> 'b * t) : 'b with_range * t =
-    let x, range = a in
-    let y, s = f x in
-    (y, range), s
+  let resolve_function f s = assert false
 
 
 end
@@ -63,7 +61,7 @@ let visit_option f o scope =
     Some x, scope
 
 let rec visit_expr (expr:expr with_range) scope =
-  Scope.bind_range expr @@ fun expr ->
+  bind2_range expr @@ fun expr ->
   match expr with
   | E_int _ | E_float _
   | E_string _ | E_char _ | E_return ->
@@ -111,7 +109,7 @@ let rec visit_expr (expr:expr with_range) scope =
     E_builtin_call (f, arg), scope
 
 let rec visit_formula (formula:formula with_range) scope =
-  Scope.bind_range formula @@ fun formula ->
+  bind2_range formula @@ fun formula ->
   match formula with
   | F_expr e ->
     let e, scope = visit_expr e scope in
@@ -147,25 +145,25 @@ let rec visit_formula (formula:formula with_range) scope =
     F_free e, scope
 
 let visit_predicate pred scope =
-  Scope.bind_range pred @@ fun pred ->
+  bind2_range pred @@ fun pred ->
   let v, scope = Scope.create pred.predicate_var scope in
   let body, scope = visit_formula pred.predicate_body scope in
   { predicate_var = v; predicate_body = body}, scope
 
 let visit_requires requires scope =
-  Scope.bind_range requires @@ fun requires ->
+  bind2_range requires @@ fun requires ->
   visit_formula requires scope
 
 let visit_assumes assumes scope =
-  Scope.bind_range assumes @@ fun assumes ->
+  bind2_range assumes @@ fun assumes ->
   visit_formula assumes scope
 
 let visit_ensures ensures scope =
-  Scope.bind_range ensures @@ fun ensures ->
+  bind2_range ensures @@ fun ensures ->
   visit_formula ensures scope
 
 let visit_assigns assigns scope =
-  Scope.bind_range assigns @@ fun assigns ->
+  bind2_range assigns @@ fun assigns ->
   let assigns_target, scope = visit_expr assigns.assigns_target scope in
   let assigns_range, scope = visit_option (fun (l, u) ->
       let l, scope = visit_expr l scope in
@@ -179,18 +177,18 @@ let visit_local_value lv scope =
   match lv with
   | Local_new rc -> lv, scope
   | Local_function_call (f, args) ->
-    let f = Scope.resolve f scope in
+    let f = Scope.resolve_function f scope in
     let args, scope = visit_list visit_expr args scope in
     Local_function_call (f, args), scope
 
 let visit_local local scope =
-  Scope.bind_range local @@ fun local ->
+  bind2_range local @@ fun local ->
   let local_value, scope = visit_local_value local.local_value scope in
   let local_var, scope = Scope.create local.local_var scope in
   { local_var; local_value }, scope
 
 let visit_case c scope =
-  Scope.bind_range c @@ fun c ->
+  bind2_range c @@ fun c ->
   let requires, scope = visit_list visit_requires c.case_requires scope in
   let assumes, scope = visit_list visit_assumes c.case_assumes scope in
   let assigns, scope = visit_list visit_assigns c.case_assigns scope in

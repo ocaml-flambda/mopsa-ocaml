@@ -63,21 +63,21 @@ struct
     match ekind exp with
     | E_c_call(f, args) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |> Eval.bind @@ fun f flow ->
+        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |>
+        Eval.bind @@ fun f flow ->
+
         match ekind f with
         | E_c_builtin_function(name) ->
           let () = debug "builtin : %a" pp_expr f in
           let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
 
-        | E_c_function fundec ->
-          let body =
-            match fundec.c_func_body with
-            | Some body -> body
-            | None      -> panic_at (erange exp)
-                             "no implementation for function %a"
-                             pp_var fundec.c_func_var
-          in
+        | E_c_function (
+            {
+              c_func_body = Some body;
+              c_func_stub = None
+            } as fundec
+          ) ->
           debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
           let open Universal.Ast in
           let fundec' = {
@@ -92,6 +92,12 @@ struct
           let exp' = mk_call fundec' args exp.erange in
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
+
+        | E_c_function {c_func_stub = Some stub} ->
+          panic_at (erange exp) "stubs not yet supported"
+
+        | E_c_function {c_func_body = None; c_func_var} ->
+          panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var
 
         | _ -> assert false
       end |>
