@@ -9,8 +9,8 @@
 (** Parser of C stubs *)
 
 %{
-    open Ast
-    open Printer
+    open Range
+    open Cst
 
     let pos_to_loc pos =
       let open Lexing in
@@ -62,8 +62,9 @@
 %token FREE OLD RETURN SIZE OFFSET BASE
 
 (* Types *)
-%token CHAR INT LONG FLOAT DOUBLE SHORT
+%token VOID CHAR INT LONG FLOAT DOUBLE SHORT
 %token SIGNED UNSIGNED CONST
+%token STRUCT UNION ENUM
 
 (* Priorities of logical operators *)
 %left IMPLIES
@@ -91,7 +92,7 @@
 
 %start stub
 
-%type <Ast.stub option> stub
+%type <Cst.stub Range.with_range option> stub
 
 %%
 
@@ -99,24 +100,28 @@ stub:
   | BEGIN predicate_list requires_list assigns_list local_list ensures_list END EOF
     {
       Some (
-          S_simple {
-              simple_stub_predicates = $2;
-              simple_stub_requires   = $3;
-              simple_stub_assigns    = $4;
-              simple_stub_local      = $5;
-              simple_stub_ensures    = $6;
-            }
+          with_range
+            (S_simple {
+                 simple_stub_predicates = $2;
+                 simple_stub_requires   = $3;
+                 simple_stub_assigns    = $4;
+                 simple_stub_local      = $5;
+                 simple_stub_ensures    = $6;
+            })
+            (pos_to_loc $startpos, pos_to_loc $endpos)
         )
     }
 
   | BEGIN predicate_list requires_list case_list END EOF
     {
       Some (
-          S_case {
-              case_stub_predicates = $2;
-              case_stub_requires   = $3;
-              case_stub_cases      = $4;
-            }
+          with_range
+            (S_case {
+                 case_stub_predicates = $2;
+                 case_stub_requires   = $3;
+                 case_stub_cases      = $4;
+            })
+            (pos_to_loc $startpos, pos_to_loc $endpos)
         )
     }
 
@@ -137,38 +142,18 @@ local_list:
   | with_range(local) local_list { $1 :: $2 }
 
 local:
-  | LOCAL COLON typ var ASSIGN local_value SEMICOL
+  | LOCAL COLON c_qual_typ var ASSIGN local_value SEMICOL
     {
       {
-        local_var = { $4 with var_typ = $3 };
+        local_var = $4;
+        local_typ = $3;
         local_value = $6;
       }
     }
 
 local_value:
   | NEW resource { Local_new $2 }
-  | IDENT LPAR args RPAR
-    {
-      let func = C_AST.{
-	  func_uid = 0;
-	  func_org_name = $1;
-	  func_unique_name = $1;
-	  func_is_static = false;
-	  func_return = T_void, { qual_is_const = true };
-	  func_parameters = [| |];
-	  func_body = None;
-	  func_static_vars = [];
-	  func_local_vars = [];
-	  func_variadic = false;
-	  func_range = {
-	      range_begin = {loc_line = 0; loc_column = 0; loc_file = ""};
-	      range_end = {loc_line = 0; loc_column = 0; loc_file = ""};
-	    };
-	  func_com = [];
-	}
-      in
-      Local_function_call (func, $3)
-    }
+  | with_range(expr) LPAR args RPAR { Local_function_call ($1, $3) }
 
 (* Predicates section *)
 predicate_list:
@@ -179,8 +164,18 @@ predicate:
   | PREDICATE var COLON with_range(formula) SEMICOL
     {
       {
-        predicate_var = { $2 with var_typ = T_predicate };
+        predicate_var = $2;
+        predicate_args = [];
         predicate_body = $4;
+      }
+    }
+
+  | PREDICATE var LPAR var_list COLON with_range(formula) SEMICOL
+    {
+      {
+        predicate_var = $2;
+        predicate_args = $4;
+        predicate_body = $6;
       }
     }
 
@@ -250,14 +245,14 @@ formula:
   | with_range(expr)                                  { F_expr $1 }
   | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
   | NOT with_range(formula)                           { F_not $2 }
-  | FORALL typ var IN set COLON with_range(formula)   { F_forall ({ $3 with var_typ = $2 }, $5, $7) } %prec FORALL
-  | EXISTS typ var IN set COLON with_range(formula)   { F_exists ({ $3 with var_typ = $2 }, $5, $7) } %prec EXISTS
+  | FORALL c_qual_typ var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
+  | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
   | var IN set                                        { F_in ($1, $3) }
   | FREE with_range(expr)                             { F_free $2 }
 
 (* C expressions *)
 expr:
-  | LPAR typ RPAR with_range(expr)                    { E_cast ($2, $4) } %prec CAST
+  | LPAR c_qual_typ RPAR with_range(expr)             { E_cast ($2, $4) } %prec CAST
   | LPAR expr RPAR                                    { $2 }
   | INT_CONST                                         { E_int $1 }
   | STRING_CONST                                      { E_string $1}
@@ -276,38 +271,39 @@ expr:
 
 
 (* C types *)
-typ:
-  | c_qual_typ { T_c $1 }
-
 c_qual_typ:
-  | CONST c_typ { ($2, C_AST.{ qual_is_const = true}) }
-  | c_typ       { ($1, C_AST.{ qual_is_const = false}) }
+  | c_qual_typ STAR        { (T_pointer $1, false) }
+  | c_qual_typ CONST STAR  { (T_pointer $1, true) }
+  | c_qual_typ_no_ptr      { $1 }
+
+c_qual_typ_no_ptr:
+  | CONST c_typ { ($2, true) }
+  | c_typ       { ($1, false) }
 
 c_typ:
-  | int_typ    { C_AST.T_integer $1 }
-  | float_typ  { C_AST.T_float $1 }
-  | c_typ STAR { C_AST.T_pointer ($1, C_AST.{ qual_is_const = false }) } (* FIXME: fix conflict with const *)
-
-int_typ:
-  | CHAR          { C_AST.(Char SIGNED) } (* FIXME: signeness should be defined by the platform. *)
-  | UNSIGNED CHAR { C_AST.UNSIGNED_CHAR }
-  | SIGNED CHAR   { C_AST.SIGNED_CHAR }
-
-  | SHORT          { C_AST.SIGNED_SHORT }
-  | UNSIGNED SHORT { C_AST.UNSIGNED_SHORT }
-  | SIGNED SHORT   { C_AST.SIGNED_SHORT }
-
-  | INT          { C_AST.SIGNED_INT }
-  | UNSIGNED INT { C_AST.UNSIGNED_INT }
-  | SIGNED INT   { C_AST.SIGNED_INT }
-
-  | LONG          { C_AST.SIGNED_LONG }
-  | UNSIGNED LONG { C_AST.UNSIGNED_LONG }
-  | SIGNED LONG  { C_AST.SIGNED_LONG }
-
-float_typ:
-  | FLOAT  { C_AST.FLOAT }
-  | DOUBLE { C_AST.DOUBLE }
+  | VOID               { T_void }
+  | CHAR               { T_char }
+  | UNSIGNED CHAR      { T_unsigned_char }
+  | SIGNED CHAR        { T_signed_char }
+  | SHORT              { T_signed_short }
+  | UNSIGNED SHORT     { T_unsigned_short }
+  | SIGNED SHORT       { T_signed_short }
+  | INT                { T_signed_int }
+  | UNSIGNED INT       { T_unsigned_int }
+  | SIGNED INT         { T_signed_int }
+  | LONG               { T_signed_long }
+  | UNSIGNED LONG      { T_unsigned_long }
+  | SIGNED LONG        { T_signed_long }
+  | LONG LONG          { T_signed_long_long }
+  | SIGNED LONG LONG   { T_signed_long_long }
+  | UNSIGNED LONG LONG { T_unsigned_long_long }
+  | FLOAT              { T_float }
+  | DOUBLE             { T_double }
+  | LONG DOUBLE        { T_long_double }
+  | STRUCT var         { T_struct($2) }
+  | UNION var          { T_union($2) }
+  | ENUM var           { T_enum($2) }
+  | var                { T_typedef($1) }
 
 (* Operators *)
 %inline binop:
@@ -355,12 +351,17 @@ args:
   | with_range(expr) COLON args { $1 :: $3 }
   | with_range(expr)            { [ $1 ] }
 
+var_list:
+  |                    { [] }
+  | var COLON var_list { $1 :: $3 }
+
+
 resource:
   | IDENT { $1 }
 
 var:
-  | IDENT { { var_name = $1; var_uid = 0; var_typ = T_unknown; } }
+  | IDENT { $1 }
 
 // adds range information to rule
 %inline with_range(X):
-  | x=X { x, (pos_to_loc $startpos, pos_to_loc $endpos) }
+  | x=X { with_range x (pos_to_loc $startpos, pos_to_loc $endpos) }
