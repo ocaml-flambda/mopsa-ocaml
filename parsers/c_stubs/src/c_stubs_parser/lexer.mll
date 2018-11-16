@@ -50,6 +50,9 @@ let _ =
      "signed", UNSIGNED;
      "unsigned", UNSIGNED;
      "const", CONST;
+     "struct", STRUCT;
+     "union", UNION;
+     "enum", ENUM;
 
 
      (* Built-ins *)

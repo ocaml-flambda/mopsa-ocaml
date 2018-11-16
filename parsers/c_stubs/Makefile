@@ -2,7 +2,7 @@ TARGET_LIBS = mlCStubsParser
 
 # Packs
 mlCStubsParser = c_stubs_parser
-c_stubs_parser = ast printer parser lexer scope
+c_stubs_parser = range cst parser lexer ast passes cst_to_ast
 
 # Packages
 PKGS = zarith
