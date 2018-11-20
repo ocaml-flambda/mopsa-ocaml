@@ -168,7 +168,9 @@ let with_range a range =
     range;
   }
 
-let get_range_content a = a.content
+let get_content a = a.content
+
+let get_range a = a.range
 
 let bind_range (a: 'a with_range) (f: 'a -> 'b) : 'b with_range =
   { a with content = f a.content }

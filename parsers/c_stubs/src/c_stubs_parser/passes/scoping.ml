@@ -134,6 +134,11 @@ let rec visit_formula (formula:formula with_range) scope =
     let f, scope' = visit_formula f scope' in
     F_exists (v, t, s, f), scope
 
+  | F_predicate(p, params) ->
+    let p = Scope.resolve p scope in
+    let params, scope = visit_list visit_expr params scope in
+    F_predicate(p, params), scope
+
   | F_in (v, s) ->
     let v = Scope.resolve v scope in
     F_in (v, s), scope

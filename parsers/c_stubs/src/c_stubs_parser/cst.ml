@@ -43,28 +43,29 @@ and local_value =
   | Local_function_call of expr with_range (** function *) * expr with_range list (* arguments *)
 
 and assigns = {
-    assigns_target : expr with_range;
-    assigns_range  : (expr with_range * expr with_range) option;
-  }
+  assigns_target : expr with_range;
+  assigns_range  : (expr with_range * expr with_range) option;
+}
 
 and case = {
-    case_label: string;
-    case_assumes: assumes with_range list;
-    case_requires : requires with_range list;
-    case_assigns  : assigns with_range list;
-    case_local    : local with_range list;
-    case_ensures  : ensures with_range list;
-  }
+  case_label: string;
+  case_assumes: assumes with_range list;
+  case_requires : requires with_range list;
+  case_assigns  : assigns with_range list;
+  case_local    : local with_range list;
+  case_ensures  : ensures with_range list;
+}
 
 and formula =
-  | F_expr   of expr with_range
-  | F_bool   of bool
-  | F_binop  of log_binop * formula with_range * formula with_range
-  | F_not    of formula with_range
-  | F_forall of var * c_qual_typ * set * formula with_range
-  | F_exists of var * c_qual_typ * set * formula with_range
-  | F_in     of var * set
-  | F_free   of expr with_range
+  | F_expr      of expr with_range
+  | F_bool      of bool
+  | F_binop     of log_binop * formula with_range * formula with_range
+  | F_not       of formula with_range
+  | F_forall    of var * c_qual_typ * set * formula with_range
+  | F_exists    of var * c_qual_typ * set * formula with_range
+  | F_in        of var * set
+  | F_free      of expr with_range
+  | F_predicate of var * expr with_range list
 
 and expr =
   | E_int       of Z.t
@@ -189,9 +190,11 @@ let pp_builtin fmt f =
   | BASE   -> pp_print_string fmt "base"
   | OLD    -> pp_print_string fmt "old"
 
+let pp_list pp sep fmt l =
+  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
 
 let rec pp_expr fmt exp =
-  match get_range_content exp with
+  match get_content exp with
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
@@ -270,7 +273,7 @@ and pp_c_typ fmt =
 
 
 let rec pp_formula fmt (f:formula with_range) =
-  match get_range_content f with
+  match get_content f with
   | F_expr e -> pp_expr fmt e
   | F_bool true  -> pp_print_string fmt "true"
   | F_bool false -> pp_print_string fmt "false"
@@ -278,6 +281,7 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, t, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
+  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., ") params
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
@@ -292,9 +296,6 @@ and pp_set fmt =
   | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
   | S_resource(r) -> pp_resource fmt r
 
-let pp_list pp sep fmt l =
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
-
 let pp_opt pp fmt o =
   match o with
   | None -> ()
@@ -302,7 +303,7 @@ let pp_opt pp fmt o =
 
 
 let rec pp_local fmt local =
-  let local = get_range_content local in
+  let local = get_content local in
   fprintf fmt "local: %a %a = @[%a@];"
     pp_c_qual_typ local.local_typ
     pp_var local.local_var
