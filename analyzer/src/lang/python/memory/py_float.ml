@@ -149,7 +149,7 @@ module Domain = struct
 
 
   (* and new_float_from_int man ctx arg range flow =
-   *   Framework.Exceptions.panic_at range "float(int) not supported"
+   *   panic_at range "float(int) not supported"
    *
    *
    * and new_float_from_object man ctx arg range flow =
@@ -193,7 +193,7 @@ module Domain = struct
     | "float.__add__" -> O_plus
     | "float.__sub__" -> O_minus
     | "float.__mul__" -> O_mult
-    | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
+    | f -> panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function
     | "float.__eq__" -> O_eq

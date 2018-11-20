@@ -11,59 +11,27 @@
 *)
 open Framework.Essentials
 open Lexing
-open Py_CST
-open Py_AST
+open Py_parser.Cst
+open Py_parser.Ast
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
-
-let build_ast_from_file filename =
-  let f = open_in filename in
-  let buf = Lexing.from_channel f in
-  buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = filename };
-
-  let ast =
-    try
-      (* Parse the program source *)
-      let cst = Py_parser.file_input Py_lexer.next_token buf in
-      close_in f;
-
-      (* Simplify the CST into an AST *)
-      Py_CST_to_AST.translate_program cst |>
-
-      (* Resolve scopes and generate unique IDs for variables *)
-      Py_UID.translate_program
-
-    with
-    | Py_lexer.LexingError e ->
-      let pos = Lexing.lexeme_start_p buf in
-      let line = pos.pos_lnum in
-      let col = pos.pos_cnum-pos.pos_bol + 1 in
-      Debug.fail "Lexer error \"%s\" in file %s, line %d, characters %d-%d:\n" e filename line (col-1) col
-    | Py_parser.Error ->
-      let pos = Lexing.lexeme_start_p buf in
-      let line = pos.pos_lnum in
-      let col = pos.pos_cnum-pos.pos_bol + 1 in
-      Debug.fail "Parser error in file %s, line %d, characters %d-%d:\n" filename line (col-1) col
-  in
-  debug "ast =@\n  @[%a@]" Py_pp.print_program ast;
-  ast
 
 (** Entry point of the frontend *)
 let rec parse_program (files: string list) : Framework.Ast.program =
   match files with
   | [filename] ->
-    let ast = build_ast_from_file filename in
+    let ast = Py_parser.Main.parse_file filename in
     (* Start the translation of the AST *)
     from_program filename ast
 
   | _ -> assert false
 
 and parse_file (filename: string) =
-  let ast = build_ast_from_file filename in
+  let ast = Py_parser.Main.parse_file filename in
   from_stmt ast.prog_body
 
-(** Create a Universal.var variable from Py_AST.var *)
+(** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var v =
   let open Framework.Ast in
   {
@@ -74,15 +42,15 @@ and from_var v =
   }
 
 (** Translate a Python program into a Framework.Ast.stmt *)
-and from_program filename (p: Py_AST.program) : Framework.Ast.program =
+and from_program filename (p: Py_parser.Ast.program) : Framework.Ast.program =
   let body = from_stmt p.prog_body in
   let globals = List.map from_var p.prog_globals in
   Ast.Py_program (globals, body)
 
 
 (** Translation of a Python statement *)
-and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
-  let srange' = from_range stmt.srange in
+and from_stmt (stmt: Py_parser.Ast.stmt) : Framework.Ast.stmt =
+  let srange' = stmt.srange in
   let skind' =
     match stmt.skind with
     | S_assign (x, e) ->
@@ -132,7 +100,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_func_body = from_stmt f.func_body;
         py_func_is_generator = f.func_is_generator;
         py_func_decors = List.map from_exp f.func_decors;
-        py_func_range = from_range f.func_range;
+        py_func_range = f.func_range;
       }
 
     | S_class cls ->
@@ -143,7 +111,7 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
         py_cls_static_attributes = List.map from_var cls.cls_static_attributes;
         py_cls_keywords = List.map (fun (k, v) -> (k, from_exp v)) cls.cls_keywords;
         py_cls_decors = List.map from_exp cls.cls_decors;
-        py_cls_range = from_range cls.cls_range;
+        py_cls_range = cls.cls_range;
       }
 
     | S_for (target,iter,body,orelse) ->
@@ -196,12 +164,12 @@ and from_stmt (stmt: Py_AST.stmt) : Framework.Ast.stmt =
   {skind = skind'; srange = srange'}
 
 (** Translate an optional statement into en eventual empty one *)
-and from_stmt_option : Framework.Location.range -> Py_AST.stmt option -> Framework.Ast.stmt
+and from_stmt_option : Location.range -> Py_parser.Ast.stmt option -> Framework.Ast.stmt
   = fun none_case_range -> function
     | None -> {skind = Universal.Ast.S_block []; srange = none_case_range}
     | Some s -> from_stmt s
 
-and from_exp_option : Py_AST.expr option -> Framework.Ast.expr option
+and from_exp_option : Py_parser.Ast.expr option -> Framework.Ast.expr option
   = function
     | None -> None
     | Some e -> Some (from_exp e)
@@ -226,15 +194,15 @@ and from_exp exp =
       E_constant (C_py_not_implemented),
       T_py_not_implemented
 
-    | E_num (Py_CST.Int i) ->
+    | E_num (Py_parser.Cst.Int i) ->
       E_constant (Universal.Ast.C_int i),
       Universal.Ast.T_int
 
-    | E_num (Py_CST.Float f) ->
+    | E_num (Py_parser.Cst.Float f) ->
       E_constant (Universal.Ast.C_float f),
       Universal.Ast.T_float Universal.Ast.F_DOUBLE
 
-    | E_num (Py_CST.Imag j) ->
+    | E_num (Py_parser.Cst.Imag j) ->
       ignore (Str.string_match (Str.regexp "\\(.*\\)j") j 0);
       let j = Str.matched_group 1 j in
       let j = float_of_string j in
@@ -374,22 +342,10 @@ and from_exp exp =
 
 
   in
-  {ekind; etyp; erange = from_range exp.erange}
+  {ekind; etyp; erange = exp.erange}
 
 
-and from_location loc : Framework.Location.loc =
-  {
-    loc_file = loc.file;
-    loc_line = loc.line;
-    loc_column = loc.column;
-  }
-
-and from_range range =
-  mk_source_range
-    (from_location range.rbegin)
-    (from_location range.rend)
-
-and from_binop : Py_AST.binop -> Framework.Ast.operator = function
+and from_binop : Py_parser.Ast.binop -> Framework.Ast.operator = function
   | O_arithmetic op -> from_arithmetic_op op
   | O_comparison op -> from_comparison_op op
   | O_bool op -> from_bool_op op
@@ -413,7 +369,7 @@ and from_bool_op = function
   | And -> O_py_and
   | Or -> O_py_or
 
-and from_comparison_op : Py_CST.cmpop -> Framework.Ast.operator = function
+and from_comparison_op : Py_parser.Cst.cmpop -> Framework.Ast.operator = function
   | Eq -> Framework.Ast.O_eq
   | NotEq -> Framework.Ast.O_ne
   | Lt -> Framework.Ast.O_lt

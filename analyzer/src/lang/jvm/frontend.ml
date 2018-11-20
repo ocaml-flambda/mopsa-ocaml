@@ -186,15 +186,15 @@ let raises_exn (op:jopcode) : bool =
     
 (** Use bytecode position as locations *)
 let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
-  mk_node_id (mk_loc meth_uid pos 0)
+  mk_node_id (Location.mk_pos meth_uid pos 0)
 
   
 (** Bytecode ranges *)
 let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   mk_edge_id
-    (mk_source_range
-       (mk_loc meth_uid pos1 0)
-       (mk_loc meth_uid pos2 0)
+    (Location.mk_orig_range
+       (Location.mk_pos meth_uid pos1 0)
+       (Location.mk_pos meth_uid pos2 0)
     )
   
 (** Fill-in [g] with a CFG for code [jcode].
@@ -331,7 +331,7 @@ let load_method
         let fmt = Format.formatter_of_out_channel f in
         CFG.print_dot
           { CFG.dot_pp_node =
-              (fun fmt n -> Format.fprintf fmt "%i:" (node_loc (CFG.node_id n)).loc_line);
+              (fun fmt n -> Format.fprintf fmt "%i:" (node_loc (CFG.node_id n)).pos_line);
             CFG.dot_pp_edge =
               (fun fmt e -> pp_stmt fmt (CFG.edge_data e));
             CFG.dot_pp_port =

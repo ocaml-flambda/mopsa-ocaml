@@ -544,7 +544,7 @@ let rec is_signed (t : typ) : bool=
      end
 
   | T_c_enum e -> is_signed (T_c_integer e.c_enum_integer_type)
-  | _ -> Framework.Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
+  | _ -> Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
 let rangeof (t : typ) =
@@ -749,7 +749,7 @@ let () =
           (fun () -> compare_typ t1 t2);
           (fun () -> match l1, l2 with
              | C_array_length_cst n1, C_array_length_cst n2 -> Z.compare n1 n2
-             | C_array_length_expr e1, C_array_length_expr e2 -> Framework.Exceptions.panic "type compare on arrays with expr length not supported"
+             | C_array_length_expr e1, C_array_length_expr e2 -> Exceptions.panic "type compare on arrays with expr length not supported"
              | C_array_no_length, C_array_no_length -> 0
              | _ -> compare l1 l2
           )

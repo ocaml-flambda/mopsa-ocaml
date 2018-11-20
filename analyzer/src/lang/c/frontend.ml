@@ -118,36 +118,12 @@ and parse_db (dbfile: string) ctx : unit =
     assert false
 
 and parse_file (opts: string list) (file: string) ctx =
-  let target_options = Clang_parser.get_default_target_options () in
-  (* remove some options that are in the way *)
-  let filter_out_opts opts =
-    List.filter (fun o -> not (List.mem o ["-MF"])) opts
-  in
   let opts =
     List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
-    (@) opts |>
-    filter_out_opts
+    (@) opts
   in
-  let opts = "-fparse-all-comments"::opts in (* needed to get all comments *)
-  debug
-    "clang %s %s %a"
-    target_options.Clang_AST.target_triple file
-    (ListExt.fprint ListExt.printer_plain Format.pp_print_string) opts;
-  let x, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
-  let () =
-    match diag with
-    | [] -> ()
-    | _ ->
-      let error_diag = List.exists (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false) diag in
-      if error_diag then
-        Framework.Exceptions.panic "Fatal parsing errors:@\n @[%a@]"
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
-             (Format.pp_print_string)
-          ) (List.map (Clang_dump.string_of_diagnostic) diag)
 
-  in
-  Clang_to_C.add_translation_unit ctx (Filename.basename file) x coms
+  C_parser.parse_file file opts ctx
 
 
 and from_project prj =
@@ -178,7 +154,7 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var_with_init ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var_with_init ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      f.c_func_stub <- parse_stub_comment ctx o.func_com
+      f.c_func_stub <- parse_stub_comment prj ctx o.func_com
     ) funcs_and_origins;
 
   let globals = StringMap.bindings prj.proj_vars |>
@@ -243,12 +219,12 @@ and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
 and from_block fun_ctx range (block: C_AST.block) : Framework.Ast.stmt =
   mk_block (List.map (from_stmt fun_ctx) block) range
 
-and from_block_option fun_ctx (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
+and from_block_option fun_ctx (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
   match block with
   | None -> mk_nop range
   | Some stmtl -> from_block fun_ctx range stmtl
 
-and from_body_option (fun_ctx) (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+and from_body_option (fun_ctx) (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
   match block with
   | None -> None
   | Some stmtl -> Some (from_block fun_ctx range stmtl)
@@ -284,14 +260,14 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr fun_ctx r, i, f)
     | C_AST.E_statement s -> Ast.E_c_statement (from_block fun_ctx erange s)
 
-    | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
-    | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
-    | C_AST.E_comma (_,_) -> Framework.Exceptions.panic "E_comma not supported"
-    | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
-    | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
-    | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
-    | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
-    | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
+    | C_AST.E_conditional (_,_,_) -> Exceptions.panic_at erange "E_conditional not supported"
+    | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
+    | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
+    | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
+    | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
+    | C_AST.E_predefined _ -> Exceptions.panic_at erange "E_predefined not supported"
+    | C_AST.E_var_args _ -> Exceptions.panic_at erange "E_var_args not supported"
+    | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
   {ekind; erange; etyp}
 
@@ -492,17 +468,17 @@ and from_function_type fun_ctx f =
 
 and from_range (range:C_AST.range) =
   let open Clang_AST in
-  let open Framework.Location in
-  mk_source_range
+  let open Location in
+  mk_orig_range
     {
-      loc_file = range.range_begin.loc_file;
-      loc_line = range.range_begin.loc_line;
-      loc_column = range.range_begin.loc_column;
+      pos_file = range.range_begin.loc_file;
+      pos_line = range.range_begin.loc_line;
+      pos_column = range.range_begin.loc_column;
     }
     {
-      loc_file = range.range_end.loc_file;
-      loc_line = range.range_end.loc_line;
-      loc_column = range.range_end.loc_column;
+      pos_file = range.range_end.loc_file;
+      pos_line = range.range_end.loc_line;
+      pos_column = range.range_end.loc_column;
     }
 
 
@@ -510,7 +486,7 @@ and from_range (range:C_AST.range) =
 (** {2 Stubs} *)
 (** ========= *)
 
-and parse_stub_comment ctx com =
+and parse_stub_comment prj ctx com =
   match com with
   | [] -> None
 
@@ -519,56 +495,18 @@ and parse_stub_comment ctx com =
   | [com] ->
     let comment = com.com_text in
     let range = from_range com.com_range in
+    let file = get_range_file range in
+    let line = get_range_line range in
+    let col = get_range_column range in
 
-    let buf = Lexing.from_string comment in
-    buf.lex_curr_p <- {
-      buf.lex_curr_p with
-      pos_fname = get_range_file range;
-      pos_lnum = get_range_line range;
-    };
+    begin
+      let stub = C_stubs_parser.Main.parse comment file line col prj in
+      match stub with
+      | None -> None
+      | Some stub -> Some (from_stub ctx stub)
+    end
 
-    try
-      begin
-        let stub = C_stubs_parser.Parser.stub C_stubs_parser.Lexer.read buf in
-        match stub with
-        | None -> None
-        | Some stub ->
-          let stub = C_stubs_parser.Scope.(visit stub Scope.empty) in (* FIXME: enrich the scope with globals and function parameters *)
-          Some (from_stub ctx stub)
-      end
-    with
-    | C_stubs_parser.Lexer.SyntaxError e ->
-      let pos = Lexing.lexeme_start_p buf in
-      let line = pos.pos_lnum in
-      let col = pos.pos_cnum-pos.pos_bol + 1 in
-      Debug.fail "Lexer error \"%s\" in file %s, line %d, characters %d-%d:\n" e (get_range_file range) line (col-1) col
-
-    | C_stubs_parser.Parser.Error ->
-      let pos = Lexing.lexeme_start_p buf in
-      let line = pos.pos_lnum in
-      let col = pos.pos_cnum-pos.pos_bol + 1 in
-      Debug.fail "Parser error in file %s, line %d, characters %d-%d:\n" (get_range_file range) line (col-1) col
-
-and from_stub ctx stub : Stubs.Ast.stub =
-  match stub with
-  | S_simple s -> S_simple (from_simple_stub ctx s)
-  | S_case s   -> S_case (from_case_stub ctx s)
-
-and from_simple_stub ctx stub =
-  {
-    simple_stub_predicates = List.map (from_stub_predicate ctx) stub.simple_stub_predicates;
-    simple_stub_requires   = List.map (from_stub_requires ctx) stub.simple_stub_requires;
-    simple_stub_assigns    = List.map (from_stub_assigns ctx) stub.simple_stub_assigns;
-    simple_stub_local      = List.map (from_stub_local ctx) stub.simple_stub_local;
-    simple_stub_ensures    = List.map (from_stub_ensures ctx) stub.simple_stub_ensures;
-  }
-
-and from_case_stub ctx stub =
-  {
-    case_stub_predicates = List.map (from_stub_predicate ctx) stub.case_stub_predicates;
-    case_stub_requires   = List.map (from_stub_requires ctx) stub.case_stub_requires;
-    case_stub_cases    = List.map (from_stub_case ctx) stub.case_stub_cases;
-  }
+and from_stub ctx stub : Stubs.Ast.stub = assert false
 
 and from_stub_predicate ctx pred = assert false
 

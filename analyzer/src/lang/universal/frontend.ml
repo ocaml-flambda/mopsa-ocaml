@@ -46,17 +46,7 @@ let builtin_functions =
     {name = "mopsa_assume"; args = [None]; output = T_unit};
   ]
 
-let from_position (pos: U.position) : Framework.Location.loc =
-  Framework.Location.{
-    loc_file = pos.pos_fname;
-    loc_line = pos.pos_lnum;
-    loc_column = pos.pos_cnum;
-  }
-
-let from_extent ((b, e): extent) : Framework.Location.range =
-  Framework.Location.mk_source_range
-    (from_position b)
-    (from_position e)
+let from_extent (e: extent) : Location.range = e
 
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
@@ -68,9 +58,9 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
     }
   with
   | Not_found ->
-    Debug.fail "%s at %s was not found in typing/naming context"
+    Exceptions.panic_at ext
+      "%s was not found in typing/naming context"
       v
-      (U_ast_printer.string_of_extent ext)
 
 let rec from_typ (typ: U_ast.typ) : FA.typ =
   match typ with
@@ -171,9 +161,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                 with
                 | NoMatch -> ()
             ) builtin_functions;
-          Debug.fail "%s at %s was not found in naming context nor in builtin functions"
+          Exceptions.panic_at ext
+            "%s was not found in naming context nor in builtin functions"
             f
-            (U_ast_printer.string_of_extent ext)
         with
         | Match(el, bi) ->
           (mk_expr ~etyp:(bi.output) (E_call(mk_expr (E_function (Builtin bi)) range, el)) range)
@@ -191,9 +181,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                   if compare_typ x.vtyp typ = 0 then
                     e'
                   else
-                    Debug.fail "type of %a at %s incompatible with declared function"
+                    Exceptions.panic_at ext
+                      "type of %a incompatible with declared function"
                       U_ast_printer.print_expr e
-                      (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
               (* <<<<<<< HEAD *)
               (* void function return an (unitialized) int *)
@@ -202,9 +192,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
               (* ======= *)
               (* (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range) *)
             else
-              Debug.fail "%s number of arguments incompatible with call at %s"
+              Exceptions.panic_at ext
+                "%s number of arguments incompatible with call"
                 f
-                (U_ast_printer.string_of_extent ext)
           with
           | Not_found ->
             begin
@@ -278,9 +268,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
           etyp  = t;
           erange= range
         }
-      | _ -> Debug.fail "%a at %s is of type %a and can not be subscripted"
+      | _ -> Exceptions.panic_at ext
+               "%a is of type %a and can not be subscripted"
                U_ast_printer.print_expr e1o
-               (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
 
@@ -295,9 +285,8 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
           etyp  = T_int;
           erange= range
         }
-      | _ -> Debug.fail "%a at %s is of type %a and can not be lengthed"
+      | _ -> Exceptions.panic_at ext "%a is of type %a and can not be lengthed"
                U_ast_printer.print_expr e
-               (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
   | AST_tree tc ->
@@ -348,9 +337,8 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
  *             pp_typ (etyp e2)
  * >>>>>>> mopsa-v2-universal-w-tree *)
       | _ ->
-        Debug.fail "%a at %s not considered a left-value for now "
+        Exceptions.panic_at ext "%a not considered a left-value for now "
           U_ast_printer.print_expr e1o
-          (U_ast_printer.string_of_extent ext)
     end
 
   | AST_if((e1, ext_e1), (s1, ext_s1), Some (s2, ext_s2)) ->
@@ -443,10 +431,9 @@ let rec check_declaration_list (dl : U_ast.declaration ext list) =
   | [] -> ()
 and aux (((((_,v),e),_),_) as p : U_ast.declaration ext) (dl: U_ast.declaration ext list) =
   match dl with
-  | ((((_,v'),e'),_),_)::q when v = v' -> Debug.fail "%s at %s has already been declared at %s"
+  | ((((_,v'),e'),_),_)::q when v = v' -> Exceptions.panic_at e "%s has already been declared at %a"
                                             v'
-                                            (U_ast_printer.string_of_extent e)
-                                            (U_ast_printer.string_of_extent e')
+                                            pp_range e'
   | p':: q -> aux p q
   | [] -> ()
 

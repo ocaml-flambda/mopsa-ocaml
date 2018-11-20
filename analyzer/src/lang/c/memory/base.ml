@@ -42,4 +42,4 @@ let base_size =
   | V v -> sizeof_type v.vtyp
   | A {addr_kind = Libs.C_stdlib.A_c_static_malloc s} -> s
   | S s -> Z.of_int @@ String.length s
-  | b -> Framework.Exceptions.panic "[base_size]: unknown base %a" pp_base b
+  | b -> Exceptions.panic "[base_size]: unknown base %a" pp_base b

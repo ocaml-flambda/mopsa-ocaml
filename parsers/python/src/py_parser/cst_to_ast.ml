@@ -10,26 +10,26 @@
    But we do not give yet unique IDs to variables.
 *)
 
-open Py_CST
-open Py_AST
+open Cst
+open Ast
 
 let debug fmt = Debug.debug ~channel:"frontend.cst_to_ast" fmt
 
 (** Main entry point that translates a CST to an AST *)
-let rec translate_program (sl: Py_CST.stmt list) : Py_AST.program =
+let rec translate_program (sl: Cst.stmt list) : Ast.program =
   {
-    prog_body = translate_block sl;
+    prog_body = translate_block sl (block_range sl);
     prog_globals = find_program_globals sl;
   }
 
 (** Collect the set of global variables *)
-and find_program_globals (sl: Py_CST.stmt list) =
+and find_program_globals (sl: Cst.stmt list) =
   (find_lvals_in_block sl @ find_globals_in_block sl) |>
   List.sort_uniq compare |>
   List.map translate_var
 
 (** Statement visitor to *)
-and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
+and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
   let range = stmt.srange in
   let skind = match stmt.skind with
     | FunctionDef (id, args, body, decors, return) ->
@@ -40,7 +40,7 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
           List.map (fun v -> fst v) args
         | _ -> failwith "Unsupported function arguments"
       in
-      let defaults = List.map (fun (e: Py_CST.expr) ->
+      let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
           | Null -> None
           | _ -> Some (translate_expr e)
@@ -55,7 +55,7 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
         func_locals = List.sort_uniq compare locals |> List.map translate_var;
         func_globals = List.sort_uniq compare globals |> List.map translate_var;
         func_nonlocals = List.sort_uniq compare nonlocals |> List.map translate_var;
-        func_body = {skind = S_block (List.map translate_stmt body |> add_implicit_return); srange = range};
+        func_body = {skind = S_block (List.map translate_stmt body |> add_implicit_return range); srange = range};
         func_is_generator = detect_yield_in_function body;
         func_decors = List.map translate_expr decors;
         func_return = translate_expr_option2 return;
@@ -92,19 +92,19 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
       S_for (
         translate_expr target,
         translate_expr iter,
-        translate_block body,
+        translate_block body range,
         translate_block_option orelse
       )
     | While (test, body, orelse) ->
       S_while (
         translate_expr test,
-        translate_block  body,
+        translate_block body range,
         translate_block_option orelse
       )
     | If (test, body, orelse) ->
       S_if (
         translate_expr test,
-        translate_block body,
+        translate_block body range,
         translate_block_option orelse
       )
         
@@ -116,11 +116,11 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
         
     | Try (body, excepts, orelse, finalbody) ->
       S_try (
-        translate_block body,
-        excepts |> List.map (function Py_CST.ExceptHandler(ex, name, body) ->
+        translate_block body range,
+        excepts |> List.map (function Cst.ExceptHandler(ex, name, body) ->
             let ex' = (match ex with None -> None | Some e -> Some (translate_expr e))
             and name' = (match name with None -> None | Some n -> Some (translate_var n))
-            and body' = translate_block  body
+            and body' = translate_block body range (* FIXME: give a correct range for empty bodies *)
             in
             ex', name', body'
           ),
@@ -167,7 +167,7 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
       S_with (
         translate_expr ctx,
         translate_expr_option2 asname,
-        translate_block body
+        translate_block body range
       )
 
     | With ((ctx, asname) :: tl, body) ->
@@ -199,18 +199,18 @@ and translate_stmt (stmt: Py_CST.stmt) : Py_AST.stmt =
   in
   {skind = skind; srange = stmt.srange}
 
-and translate_expr_option range (expr: Py_CST.expr option) : Py_AST.expr =
+and translate_expr_option range (expr: Cst.expr option) : Ast.expr =
   match expr with
   | None -> {ekind = E_none; erange = range}
   | Some e -> translate_expr e
 
-and translate_expr_option2 (expr: Py_CST.expr option) : Py_AST.expr option =
+and translate_expr_option2 (expr: Cst.expr option) : Ast.expr option =
   match expr with
   | None -> None
   | Some e -> Some (translate_expr e)
 
 (** Expressions visitor *)
-and translate_expr (expr: Py_CST.expr) : Py_AST.expr =
+and translate_expr (expr: Cst.expr) : Ast.expr =
   let ekind, range = expr.ekind, expr.erange in
   let ekind' = match ekind with
     | BinOp (left, op, right) ->
@@ -326,7 +326,7 @@ and translate_expr (expr: Py_CST.expr) : Py_AST.expr =
           List.map (fun v -> fst v) args
         | _ -> failwith "Unsupported function arguments"
       in
-      let defaults = List.map (fun (e: Py_CST.expr) ->
+      let defaults = List.map (fun (e: Cst.expr) ->
           match e.ekind with
           | Null -> None
           | _ -> Some (translate_expr e)
@@ -352,23 +352,22 @@ and translate_expr (expr: Py_CST.expr) : Py_AST.expr =
   in
   {ekind = ekind'; erange = range}
 
-and translate_block (sl : Py_CST.stmt list) : Py_AST.stmt =
+and translate_block (sl : Cst.stmt list) range : Ast.stmt =
   (* FIXME: compute ranges of blocks *)
   match sl with
-  | [] -> {skind = S_pass; srange = dummy_range}
+  | [] -> {skind = S_pass; srange = range}
   | [s] -> translate_stmt s
   | (hd :: tl) as sl ->
-    {skind = S_block (
-         List.map translate_stmt sl
-       );
-     srange = dummy_range
+    let range = block_range sl in
+    {
+      skind = S_block (List.map translate_stmt sl);
+      srange = range;
     }
 
-and translate_block_option (sl : Py_CST.stmt list) : Py_AST.stmt option =
+and translate_block_option (sl : Cst.stmt list) : Ast.stmt option =
   match sl with
   | [] -> None
-  | (hd :: _) as sl ->
-    Some (translate_block sl)
+  | _ -> Some (translate_block sl (block_range sl))
 
 and translate_comprehension = function
   | (taregt, iter, conds, _) ->
@@ -617,16 +616,26 @@ and detect_yield_in_function body =
   in
   doit ()
 
-and add_implicit_return = function
-  | [] -> [{skind = S_return {ekind = E_none; erange = dummy_range}; srange = dummy_range}]
+and add_implicit_return range l =
+  match l with
+  | [] -> [{skind = S_return {ekind = E_none; erange = range}; srange = range}]
   | l ->
     let last_stmt = List.hd @@ List.rev l in
     match last_stmt.skind with
     | S_return _ -> l
-    | _ -> l @ [{skind = S_return {ekind = E_none; erange = dummy_range}; srange = dummy_range}]
+    | _ -> l @ [{skind = S_return {ekind = E_none; erange = range}; srange = range}]
 
 and (+@) (l1, l2, l3) (l1', l2', l3') = (l1 @ l1'), (l2 @ l2'), (l3 @ l3')
 and (-@) (l1) (l1', l2', l3') = (l1 @ l1'), l2', l3'
+
+and block_range sl =
+  match sl with
+  | [] -> Exceptions.panic "block_range: empty block"
+  | [s] -> s.srange
+  | hd :: tl ->
+    let last = List.rev tl |> List.hd in
+    let open Location in
+    mk_orig_range (get_range_start hd.srange) (get_range_end last.srange)
 
 and module_hd modl =
   Str.split (Str.regexp "\\.") modl |>

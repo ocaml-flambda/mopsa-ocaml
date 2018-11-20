@@ -180,7 +180,7 @@ module Domain = struct
        *         match f with
        *             | "int.__neg__" -> mk_unop O_minus ev ~etyp:T_int range
        *             | "int.__pos__" -> ev
-       *             | "int.__abs__" -> Framework.Exceptions.panic_at range "int.__abs__ not supported"
+       *             | "int.__abs__" -> panic_at range "int.__abs__ not supported"
        *             | "int.__invert__" -> mk_unop O_bit_invert ev ~etyp:T_int range
        *             | _ -> assert false
        *       in
@@ -248,7 +248,7 @@ module Domain = struct
    *                   oeval_singleton (None, flow, []) |>
    *                   oeval_join acc
    *                 else if Z.gt base (Z.of_int 16) then
-   *                   Framework.Exceptions.panic "base > 16 not supported"
+   *                   panic "base > 16 not supported"
    *                 else
    *                   let s =
    *                     if List.mem (String.sub s 0 2) ["0b"; "0B"; "0o"; "0O"; "0x"; "0X"] then
@@ -265,7 +265,7 @@ module Domain = struct
    *                 oeval_join acc
    *             ) s None)
    *         else
-   *           Framework.Exceptions.panic_at range "TODO: fail with a non-constant base in int.__new__"
+   *           panic_at range "TODO: fail with a non-constant base in int.__new__"
    *
    *       | _ ->
    *         let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
@@ -379,7 +379,7 @@ module Domain = struct
     | "int.__rsub__" -> O_minus
     | "int.__xor__"
     | "int.__rxor__" -> O_bit_xor
-    | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
+    | f -> panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function
     | "int.__eq__" -> O_eq

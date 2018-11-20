@@ -326,7 +326,9 @@ struct
                      | T_float _, T_int
                      | T_int, T_float _
                      | T_float _, T_float _ -> Apron.Texpr1.Real
-                     | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                     | _ -> Exceptions.panic_at (srange stmt)
+                              "Unsupported case (%a, %a) in stmt @[%a@]"
+                              pp_typ typ1 pp_typ typ2 pp_stmt stmt
                    in
                    let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
                    let diff_texpr = Apron.Texpr1.of_expr env diff in

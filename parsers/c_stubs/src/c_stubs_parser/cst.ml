@@ -34,7 +34,7 @@ and assumes = formula with_range
 
 and local = {
   local_var   : var;
-  local_typ    : c_qual_typ;
+  local_typ   : c_qual_typ;
   local_value : local_value;
 }
 

@@ -86,14 +86,14 @@ struct
             let () = debug "exec for %a found" pp_zone zone in
             ExecMap.add zone (Domain.exec zone) map
           else
-            let () = Exceptions.warn "exec for %a not found" pp_zone zone in
+            let () = Debug.warn "exec for %a not found" pp_zone zone in
             map
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     Out.push_action (Exec({s = stmt; z= zone}));
     debug "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      Location.pp_range_verbose stmt.srange
+      Location.pp_range stmt.srange
       pp_stmt stmt
       pp_zone zone
       (Flow.print man) flow
@@ -144,7 +144,7 @@ struct
             let paths = Zone.find_all_eval_paths src dst eval_graph in
             if List.length paths = 0
             then
-              let () = Exceptions.warn "eval for %a not found" pp_zone2 (src, dst) in
+              let () = Debug.warn "eval for %a not found" pp_zone2 (src, dst) in
               acc
             else
               let () = debug "eval for %a found@\npaths: @[%a@]"
@@ -170,7 +170,7 @@ struct
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Out.push_action (Eval({e = exp ; zs = zone}));
     debug "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      Location.pp_range_verbose exp.erange
+      Location.pp_range exp.erange
       pp_expr exp
       pp_zone2 zone
       (Flow.print man) flow

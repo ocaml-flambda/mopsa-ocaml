@@ -129,7 +129,7 @@ module Domain =
                    end
                 | E_constant _ ->
                    Post.of_flow @@ man.exec {stmt with skind=(S_assign(l, e))} flow
-                | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
+                | _ -> panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
 
       | S_assign({ekind = E_py_attribute({ekind = E_var (v, mode)}, attr)}, rval) ->

@@ -87,6 +87,7 @@ let () =
                         (** {2 DOT output} *)
 (*==========================================================================*)
 
+let pp_location = Location.pp_position
   
 let dot_printer =
   { CFG.dot_pp_node =

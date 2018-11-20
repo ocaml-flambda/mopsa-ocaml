@@ -5,10 +5,6 @@
 open Format
 open U_ast
 
-(* locations *)
-val string_of_position: position -> string
-val string_of_extent: extent -> string
-
 (* printers *)
 val print_unary_op: formatter -> unary_op -> unit
 val print_binary_op: formatter -> binary_op -> unit

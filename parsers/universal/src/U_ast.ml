@@ -6,14 +6,8 @@
 open Lexing
 
 
-(* position in the source file, we use ocamllex's default type *)
-type position = Lexing.position
-let position_unknown = Lexing.dummy_pos
-
-
-(* extents are pairs of positions *)
-type extent = position * position (* start/end *)
-let extent_unknown = (position_unknown, position_unknown)
+(* extents are ranges *)
+type extent = Location.range
 
 
 (* Many parts of the syntax are tagged with an extent indicating which

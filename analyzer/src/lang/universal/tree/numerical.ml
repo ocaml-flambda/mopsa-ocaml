@@ -174,7 +174,7 @@ let widening_different_support
 
 
 let eq
-    (range: Framework.Location.range)
+    (range: Location.range)
     (man: ('b, 'b) man)
     (u: string)
     (v: string)

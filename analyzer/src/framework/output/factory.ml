@@ -27,7 +27,7 @@ let () =
         match s with
         | "text" -> opt_format := F_text
         | "json" -> opt_format := F_json
-        | _ -> Exceptions.fail "Unknown output format %s" s
+        | _ -> Exceptions.panic "Unknown output format %s" s
       ),
     " display format of the results. Possible values: text or json (default: text)."
   );

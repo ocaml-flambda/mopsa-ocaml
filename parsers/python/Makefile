@@ -1,7 +1,8 @@
 TARGET_LIBS = mlPythonParser
 
 # Packs
-mlPythonParser = Py_tokens Py_CST Py_parser Py_lexer Py_builtins Py_AST Py_pp Py_CST_to_AST Py_UID
+mlPythonParser = py_parser
+py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
 
 # Packages
 PKGS = zarith

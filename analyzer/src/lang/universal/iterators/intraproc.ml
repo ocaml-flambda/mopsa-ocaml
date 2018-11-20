@@ -60,7 +60,7 @@ struct
 
     | S_print ->
       Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_range_verbose (srange stmt)
+        pp_position (srange stmt |> get_range_start)
         (Flow.print man) flow
       ;
       Some (Post.of_flow flow)

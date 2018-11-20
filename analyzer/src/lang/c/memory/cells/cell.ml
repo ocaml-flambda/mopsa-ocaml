@@ -25,7 +25,7 @@ type cell = ..
 (* ============================= *)
 
 let cell_extract_chain : (cell-> base * (range -> expr) * typ) ref = ref (
-    fun _ -> fail "cell.extract: unknown cell"
+    fun _ -> panic "cell.extract: unknown cell"
   )
 let register_cell_extract ex = cell_extract_chain := ex !cell_extract_chain
 let extract_cell_info c = !cell_extract_chain c
@@ -45,7 +45,7 @@ let cell_offset c =
 (* Transformation to variables *)
 (* =========================== *)
 
-let cell_var_chain : (cell-> var) ref = ref (fun _ -> fail "cell.to_var: unknown cell")
+let cell_var_chain : (cell-> var) ref = ref (fun _ -> panic "cell.to_var: unknown cell")
 let register_cell_var f = cell_var_chain := f !cell_var_chain
 let cell_to_var c = !cell_var_chain c
 

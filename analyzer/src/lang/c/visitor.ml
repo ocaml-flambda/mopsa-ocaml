@@ -164,7 +164,7 @@ let () =
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
       | S_program(C_program(globals, funcs)) ->
-        Framework.Exceptions.panic "visitor of C_program not yet implemented"
+        Exceptions.panic "visitor of C_program not yet implemented"
 
       | S_c_local_declaration(v, init) ->
         let exprs = exprs_in_init_option init in

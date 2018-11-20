@@ -33,7 +33,7 @@ struct
       | None ->
         Exceptions.panic
           "Unable to analyze statement in %a:@\n @[%a@]"
-          Location.pp_range_verbose stmt.srange
+          Location.pp_range stmt.srange
           pp_stmt stmt
 
       | Some post -> post.Post.flow
