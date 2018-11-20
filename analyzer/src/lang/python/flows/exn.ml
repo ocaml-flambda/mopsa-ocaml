@@ -127,7 +127,7 @@ module Domain =
 
 
       | S_py_raise None ->
-         Framework.Exceptions.panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
+         panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
 
       | _ -> None
 

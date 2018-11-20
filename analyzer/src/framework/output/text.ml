@@ -44,9 +44,27 @@ let render man alarms time files out =
 let panic ?btrace exn files out =
   let print fmt = get_printer out fmt in
   print "Analysis aborted@.";
-  print "File%a: @[%a@]@."
-    Debug.plurial_list files
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_print_string) files
-  ;
-    print "Uncaught exception: %s@." (Printexc.to_string exn);
-  (match btrace with Some x -> print "backtrace:@.%s" x | None -> ())
+  let () =
+    match exn with
+    | Exceptions.Panic msg -> print "Panic: %s@." msg
+    | Exceptions.PanicAt (range, msg) -> print "Panic in %a: %s@." Location.pp_range range msg
+    | Exceptions.SyntaxError (range, msg) -> print "Syntax error in %a: %s@." Location.pp_range range msg
+    | Exceptions.UnnamedSyntaxError range -> print "Syntax error in %a@." Location.pp_range range
+    | Exceptions.SyntaxErrorList l ->
+      print "Syntax errors:@\n  @[%a@]@."
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+           (fun fmt (range, msg) -> fprintf fmt "%a: %s" Location.pp_range range msg
+           )
+        ) l
+    | Exceptions.UnnamedSyntaxErrorList l ->
+      print "Syntax errors:@\n  @[%a@]@."
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") Location.pp_range)
+        l
+    | _ -> print "Uncaught exception: %s@." (Printexc.to_string exn)
+  in
+  let () =
+    match btrace with
+    | Some x -> print "backtrace:@.%s" x
+    | None -> ()
+  in
+  ()

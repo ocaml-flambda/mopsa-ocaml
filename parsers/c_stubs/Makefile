@@ -2,7 +2,8 @@ TARGET_LIBS = mlCStubsParser
 
 # Packs
 mlCStubsParser = c_stubs_parser
-c_stubs_parser = range cst parser lexer ast passes cst_to_ast
+c_stubs_parser = range cst parser lexer ast passes main
+c_stubs_parser.passes = predicate_inlining implicit_cast scoping typer cst_to_ast
 
 # Packages
 PKGS = zarith

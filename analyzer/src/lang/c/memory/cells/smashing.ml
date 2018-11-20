@@ -389,7 +389,7 @@ struct
       match base with
       | V v -> static_offset_case (sizeof_type v.vtyp)
       (* | A {addr_kind = Libs.Stdlib.A_c_static_malloc s} -> static_offset_case s *)
-      | _ -> Framework.Exceptions.panic "base %a not supported" pp_base base
+      | _ -> panic_at range "base %a not supported" pp_base base
 
     and static_offset_case base_size =
       debug "static base case";

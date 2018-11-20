@@ -78,7 +78,7 @@ module Domain =
         | E_py_attribute(obj, ("__mro__" as attr))
         | E_py_attribute(obj, ("mro" as attr))
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
-         Framework.Exceptions.panic_at range "Access to special attribute %s not supported" attr
+         panic_at range "Access to special attribute %s not supported" attr
 
       (* Other attributes *)
       | E_py_attribute (e, attr) ->

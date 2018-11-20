@@ -117,7 +117,7 @@ module Domain =
                              Eval.assume
                                (Utils.mk_hasattr cls2 "__getitem__" range)
                                ~fthen:(fun true_flow ->
-                                 Framework.Exceptions.panic_at range "evaluating 'in' operator using __getitem__ not supported"
+                                 panic_at range "evaluating 'in' operator using __getitem__ not supported"
                                )
                                ~felse:(fun false_flow ->
                                  let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in

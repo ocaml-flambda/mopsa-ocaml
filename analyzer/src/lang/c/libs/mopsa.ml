@@ -199,11 +199,11 @@ struct
         | E_constant(C_c_string (s, _)) -> s
         | _ -> assert false
       in
-      Framework.Exceptions.panic "%s" s
+      Exceptions.panic "%s" s
 
     | E_c_builtin_call("_mopsa_print", []) ->
         Debug.debug ~channel:"print" "%a@\n  @[%a@]"
-        pp_range_verbose (erange exp)
+        pp_position (erange exp |> get_range_start)
         (Flow.print man) flow
       ;
       Eval.singleton (mk_int 0 exp.erange) flow |>

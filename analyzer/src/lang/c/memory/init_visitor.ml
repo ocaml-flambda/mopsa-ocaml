@@ -77,7 +77,7 @@ and init_array visitor a is_global init range flow =
       aux 0
 
     | _ ->
-      Framework.Exceptions.panic "Array initialization not supported"
+      Exceptions.panic "Array initialization not supported"
   in
   visitor.array a is_global el range flow
 
@@ -85,7 +85,7 @@ and init_union visitor u is_global init range flow =
   match init with
   | None when not is_global -> flow
   | _ ->
-    Framework.Exceptions.panic "Initialization of union not supported"
+    Exceptions.panic "Initialization of union not supported"
 
 
 and init_record visitor s is_global init range flow =
@@ -124,7 +124,7 @@ and init_expr visitor e is_global (init: c_init option) (range: range) flow =
   if is_c_scalar_type e.etyp then init_scalar visitor e is_global init range flow else
   if is_c_array_type e.etyp then  init_array visitor e is_global init range flow else
   if is_c_record_type e.etyp then init_record visitor e is_global init range flow else
-    Framework.Exceptions.panic "Unsupported initialization of %a" pp_expr e
+    Exceptions.panic "Unsupported initialization of %a" pp_expr e
 
 
 let init_global visitor v init range flow =

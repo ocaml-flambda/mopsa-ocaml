@@ -18,7 +18,6 @@
 %token TOK_REAL
 %token TOK_CHAR
 %token TOK_STRING
-%token TOK_ARRAY
 %token TOK_TREE
 %token TOK_UNIT
 
@@ -34,7 +33,6 @@
 %token TOK_RAND
 %token TOK_ASSERT
 %token TOK_PRINT
-%token TOK_PRINT_ALL
 
 %token TOK_LPAREN
 %token TOK_RPAREN
@@ -275,7 +273,7 @@ fundec:
    ldec=list(ext(declaration))
    st=ext(block_no_curly)
    TOK_RCURLY
-{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t; range = ($startpos, $endpos)}}
+{{funname = f; parameters = args; body=st ; locvars = ldec; return_type = t; range = Location.from_lexing_range $startpos $endpos}}
 
 prog:
 | st=ext(block_no_curly)
@@ -290,7 +288,7 @@ prog:
 
 // adds extent information to rule
 %inline ext(X):
-| x=X { x, ($startpos, $endpos) }
+| x=X { x, Location.from_lexing_range $startpos $endpos }
 
 
 %%

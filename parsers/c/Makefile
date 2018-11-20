@@ -2,7 +2,7 @@ TARGET_CLIBS = mlClangParser
 TARGET_NATIVES = wrapper
 
 # Packs
-mlClangParser = Clang_AST Clang_utils Clang_dump Clang_parser C_AST C_print C_utils C_simplify Clang_to_C Build_DB
+mlClangParser = Clang_AST Clang_utils Clang_dump Clang_parser C_AST C_print C_utils C_simplify Clang_to_C C_parser Build_DB
 
 wrapper = Build_DB Build_wrapper
 

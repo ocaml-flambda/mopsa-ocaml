@@ -1,6 +1,7 @@
 %{
     open Format
-    open Py_CST
+    open Cst
+    open Location
 
     let breakClassdef = function
         | ClassDef (name, bases, keywords, body, decs) -> name, bases, keywords, body, decs
@@ -21,19 +22,6 @@
     let breakWith = function
         | With (it, b) -> it, b
         | _ -> assert false
-
-    let pos_to_loc pos =
-    	let open Lexing in {
-	    	file = pos.pos_fname;
-		line = pos.pos_lnum;
-		column = pos.pos_cnum - pos.pos_bol + 1;
-	}
-
-    let pos_to_range pos1 pos2 = {
-    	rbegin = pos_to_loc pos1;
-	rend = pos_to_loc pos2;
-    }
-
 %}
 
 %token <string> IDENT
@@ -77,9 +65,9 @@
 %start file_input
 
 /* Type returned */
-%type <Py_CST.stmt list> file_input
+%type <Cst.stmt list> file_input
 
-%type <Py_CST.stmt list> stmt
+%type <Cst.stmt list> stmt
 %type <string> dotted_name
 
 %%
@@ -98,16 +86,16 @@ nl_stmt_list:
 
 decorator:
     | AT decor_name NEWLINE { $2 }
-    | AT decor_name LPAR RPAR NEWLINE { {erange = pos_to_range $startpos($2) $endpos($4); ekind = Call ($2, [], [])} }
+    | AT decor_name LPAR RPAR NEWLINE { {erange = from_lexing_range $startpos($2) $endpos($4); ekind = Call ($2, [], [])} }
     | AT decor_name LPAR arglist RPAR NEWLINE
-        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
+        { {erange = from_lexing_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
     | AT decor_name LPAR arglist COMMARPAR NEWLINE
-        { {erange = pos_to_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
+        { {erange = from_lexing_range $startpos($2) $endpos($5); ekind = Call ($2, fst $4, snd $4)} }
 ;
 
 decor_name:
-    | name                    { {erange = pos_to_range $startpos $endpos; ekind = Name ($1, Load)} }
-    | decor_name DOT name     { {erange = pos_to_range $startpos $endpos; ekind = Attribute ($1, $3, Load)} }
+    | name                    { {erange = from_lexing_range $startpos $endpos; ekind = Name ($1, Load)} }
+    | decor_name DOT name     { {erange = from_lexing_range $startpos $endpos; ekind = Attribute ($1, $3, Load)} }
 ;
 
 decorators:
@@ -141,11 +129,11 @@ parameters:
 
 typedargslist:
    | { [], (None : arg option), [], [], (None : arg option), [] }
-   | tfpdef { [$1], (None : arg option), [], [], (None : arg option), [{erange = pos_to_range $startpos $endpos; ekind = Null}] }
+   | tfpdef { [$1], (None : arg option), [], [], (None : arg option), [{erange = from_lexing_range $startpos $endpos; ekind = Null}] }
    | tfpdef EQ test { [$1], (None : arg option), [], [], (None : arg option), [$3] }
    | tfpdef COMMA typedargslist {
        match $3 with (a, va, kwon, kwdef, kwa, def) ->
-       ($1 :: a, va, kwon, kwdef, kwa, {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} :: def)
+       ($1 :: a, va, kwon, kwdef, kwa, {erange = from_lexing_range $startpos($3) $endpos($3); ekind = Null} :: def)
        }
    | tfpdef EQ test COMMA typedargslist {
        match $5 with (a, va, kwon, kwdef, kwa, def) ->
@@ -167,7 +155,7 @@ tfpvarargs:
         (Some $1, kwonly, kwdef, kwargs) }
     | COMMA tfpdef tfpkwonly_args {
             match $3 with (kwonly, kwdef, kwarg) ->
-            ((None : arg option), $2 :: kwonly, {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} :: kwdef, kwarg)
+            ((None : arg option), $2 :: kwonly, {erange = from_lexing_range $startpos($3) $endpos($3); ekind = Null} :: kwdef, kwarg)
         }
     | COMMA tfpdef EQ test tfpkwonly_args {
         match $5 with (kwonly, kwdef, kwarg) ->
@@ -178,7 +166,7 @@ tfpvarargs:
 tfpkwonly_args:
     | COMMA tfpdef tfpkwonly_args { match $3 with
             ( kwonly, kwdef, kwarg) ->
-            ($2 :: kwonly, {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} :: kwdef, kwarg)
+            ($2 :: kwonly, {erange = from_lexing_range $startpos($3) $endpos($3); ekind = Null} :: kwdef, kwarg)
         }
     | COMMA tfpdef EQ test tfpkwonly_args {
         match $5 with (kwonly, kwdef, kwarg) ->
@@ -195,7 +183,7 @@ tfpkwargs:
 /* varargs is similar to typedargslist, without the possible annotations */
 varargslist:
    | { [], None, [], [], None, [] }
-   | vfpdef { [$1], None, [], [], None, [{erange = pos_to_range $startpos $endpos; ekind = Null}] }
+   | vfpdef { [$1], None, [], [], None, [{erange = from_lexing_range $startpos $endpos; ekind = Null}] }
    | vfpdef EQ test { [$1], None, [], [], None, [$3] }
    | vfpdef COMMA varargslist {
        match $3 with (a, va, kwon, kwdef, kwa, def) ->
@@ -204,7 +192,7 @@ varargslist:
        va, kwon,
        kwdef,
        kwa,
-       {erange = pos_to_range $startpos($3) $endpos($3); ekind = Null} ::
+       {erange = from_lexing_range $startpos($3) $endpos($3); ekind = Null} ::
        def)
        }
    | vfpdef EQ test COMMA varargslist {
@@ -229,7 +217,7 @@ vfpvarargs:
             (None,
 	    $3 ::
 	    kwonly,
-	    {erange = pos_to_range $startpos $endpos; ekind = Null} ::
+	    {erange = from_lexing_range $startpos $endpos; ekind = Null} ::
 	    kwdef,
 	    kwarg)
         }
@@ -238,7 +226,7 @@ vfpvarargs:
 vfpkwonly_args:
     | COMMA vfpdef vfpkwonly_args { match $3 with
             ( kwonly, kwdef, kwarg) ->
-            ($2 :: kwonly, {erange = pos_to_range $startpos $endpos; ekind = Null} :: kwdef, kwarg)
+            ($2 :: kwonly, {erange = from_lexing_range $startpos $endpos; ekind = Null} :: kwdef, kwarg)
         }
     | COMMA vfpdef EQ test vfpkwonly_args {
         match $5 with (kwonly, kwdef, kwarg) ->
@@ -263,7 +251,7 @@ simple_stmt:
 ;
 
 small_stmt:
-    small_stmt_kind {{skind = $1; srange = pos_to_range $startpos $endpos}}
+    small_stmt_kind {{skind = $1; srange = from_lexing_range $startpos $endpos}}
 ;
 
 small_stmt_kind:
@@ -306,10 +294,10 @@ test_starexpr:
 ;
 
 testlist_star_expr:
-    | nonempty_list(terminated(test_starexpr, COMMA))    { {erange = pos_to_range $startpos $endpos; ekind = Tuple ($1, Load)} }
+    | nonempty_list(terminated(test_starexpr, COMMA))    { {erange = from_lexing_range $startpos $endpos; ekind = Tuple ($1, Load)} }
     | separated_nonempty_list(COMMA, test_starexpr)         { match $1 with
         | [s] -> s
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple (l, Load)} }
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = Tuple (l, Load)} }
 ;
 
 augassign:
@@ -439,7 +427,7 @@ assert_stmt:
 ;
 
 compound_stmt:
-    compound_stmt_kind { {skind = $1; srange = pos_to_range $startpos $endpos} }
+    compound_stmt_kind { {skind = $1; srange = from_lexing_range $startpos $endpos} }
 ;
 
 compound_stmt_kind:
@@ -470,7 +458,7 @@ if_stmt:
 
 elif_else:
     | { [] }
-    | ELIF test COLON suite elif_else { [ {skind = If ($2, $4, $5); srange = pos_to_range $startpos $endpos} ] }
+    | ELIF test COLON suite elif_else { [ {skind = If ($2, $4, $5); srange = from_lexing_range $startpos $endpos} ] }
     | ELSE COLON suite      { $3 }
 ;
 
@@ -482,10 +470,10 @@ while_stmt:
 for_stmt:
     | FOR exprlist IN testlist COLON suite  { match $2 with
         | [e]  -> For (e, $4, $6, [])
-        | l -> For ({erange = pos_to_range $startpos($2) $endpos($2); ekind = Tuple(l, Store)}, $4, $6, []) }
+        | l -> For ({erange = from_lexing_range $startpos($2) $endpos($2); ekind = Tuple(l, Store)}, $4, $6, []) }
     | FOR exprlist IN testlist COLON suite ELSE COLON suite    { match $2 with
         | [e] -> For (e, $4, $6, $9)
-        | l -> For ({erange = pos_to_range $startpos($2) $endpos($2); ekind = Tuple(l, Store)}, $4, $6, $9) }
+        | l -> For ({erange = from_lexing_range $startpos($2) $endpos($2); ekind = Tuple(l, Store)}, $4, $6, $9) }
 ;
 
 try_stmt:
@@ -526,7 +514,7 @@ suite:
 
 test:
     | or_test                       { $1 }
-    | or_test IF or_test ELSE test  { {erange = pos_to_range $startpos $endpos; ekind = IfExp($3, $1, $5)} }
+    | or_test IF or_test ELSE test  { {erange = from_lexing_range $startpos $endpos; ekind = IfExp($3, $1, $5)} }
     | lambdef                     { $1 }
 ;
 
@@ -536,33 +524,33 @@ test_nocond:
 ;
 
 lambdef:
-    | LAMBDA varargslist COLON test { {erange = pos_to_range $startpos $endpos; ekind = Lambda ($2, $4)} }
+    | LAMBDA varargslist COLON test { {erange = from_lexing_range $startpos $endpos; ekind = Lambda ($2, $4)} }
 ;
 
 lambdef_nocond:
-    | LAMBDA varargslist COLON test_nocond { {erange = pos_to_range $startpos $endpos; ekind = Lambda ($2, $4)} }
+    | LAMBDA varargslist COLON test_nocond { {erange = from_lexing_range $startpos $endpos; ekind = Lambda ($2, $4)} }
 ;
 
 or_test:
     | separated_nonempty_list(OR, and_test) { match $1 with
         | [s] -> s
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = BoolOp(Or, l)} }
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = BoolOp(Or, l)} }
 ;
 
 and_test:
     | separated_nonempty_list(AND, not_test)    { match $1 with
         | [s] -> s
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = BoolOp(And, l)} }
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = BoolOp(And, l)} }
 ;
 
 not_test:
-    | NOT not_test      { {erange = pos_to_range $startpos $endpos; ekind = UnaryOp(Not, $2)} }
+    | NOT not_test      { {erange = from_lexing_range $startpos $endpos; ekind = UnaryOp(Not, $2)} }
     | comparison        { $1 }
 ;
 
 comparison:
     | expr              { $1 }
-    | expr comp_list    { {erange = pos_to_range $startpos $endpos; ekind = Compare ($1, fst $2, snd $2)} }
+    | expr comp_list    { {erange = from_lexing_range $startpos $endpos; ekind = Compare ($1, fst $2, snd $2)} }
 ;
 
 comp_list:
@@ -588,39 +576,39 @@ comp_op:
 ;
 
 star_expr:
-    MUL expr       { {erange = pos_to_range $startpos $endpos; ekind = Starred ($2, Load)} }
+    MUL expr       { {erange = from_lexing_range $startpos $endpos; ekind = Starred ($2, Load)} }
 ;
 
 expr:
     | xor_expr      { $1 }
-    | expr BITOR xor_expr { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, BitOr, $3)} }
+    | expr BITOR xor_expr { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, BitOr, $3)} }
 ;
 
 xor_expr:
     | and_expr      { $1 }
-    | xor_expr BITXOR and_expr  { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, BitXor, $3)} }
+    | xor_expr BITXOR and_expr  { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, BitXor, $3)} }
 ;
 
 and_expr:
     | shift_expr                    { $1 }
-    | and_expr BITAND shift_expr    { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, BitAnd, $3)} }
+    | and_expr BITAND shift_expr    { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, BitAnd, $3)} }
 ;
 
 shift_expr:
     | arith_expr                    { $1 }
-    | shift_expr LSHIFT arith_expr  { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, LShift, $3)} }
-    | shift_expr RSHIFT arith_expr  { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, RShift, $3)} }
+    | shift_expr LSHIFT arith_expr  { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, LShift, $3)} }
+    | shift_expr RSHIFT arith_expr  { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, RShift, $3)} }
 ;
 
 arith_expr:
     | term                         { $1 }
-    | arith_expr ADD term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Add, $3)} }
-    | arith_expr SUB term          { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Sub, $3)} }
+    | arith_expr ADD term          { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, Add, $3)} }
+    | arith_expr SUB term          { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, Sub, $3)} }
 ;
 
 term:
     | factor                { $1 }
-    | term term_op factor   { {erange = pos_to_range $startpos $endpos; ekind = BinOp ($1, $2, $3)} }
+    | term term_op factor   { {erange = from_lexing_range $startpos $endpos; ekind = BinOp ($1, $2, $3)} }
 ;
 
 term_op:
@@ -633,7 +621,7 @@ term_op:
 
 factor:
     | power             { $1 }
-    | factor_op factor  { {erange = pos_to_range $startpos $endpos; ekind = UnaryOp ($1, $2)} }
+    | factor_op factor  { {erange = from_lexing_range $startpos $endpos; ekind = UnaryOp ($1, $2)} }
 ;
 
 factor_op:
@@ -644,70 +632,70 @@ factor_op:
 
 power:
     | atom_expr             { $1 }
-    | atom_expr POW factor  { {erange = pos_to_range $startpos $endpos; ekind = BinOp($1, Pow, $3)} }
+    | atom_expr POW factor  { {erange = from_lexing_range $startpos $endpos; ekind = BinOp($1, Pow, $3)} }
 ;
 
 atom_expr:
     | atom_trailer          { $1 }
-    | AWAIT atom_trailer    { {erange = pos_to_range $startpos $endpos; ekind = Await ($2)} }
+    | AWAIT atom_trailer    { {erange = from_lexing_range $startpos $endpos; ekind = Await ($2)} }
 ;
 
 atom_trailer:
     | atom                      { $1 }
-    | atom_trailer LPAR RPAR    { {erange = pos_to_range $startpos $endpos; ekind = Call ($1, [], [])} }
-    | atom_trailer LPAR arglist RPAR { {erange = pos_to_range $startpos $endpos; ekind = Call ($1, fst $3, snd $3)} }
-    | atom_trailer LPAR arglist COMMARPAR { {erange = pos_to_range $startpos $endpos; ekind = Call ($1, fst $3, snd $3)} }
+    | atom_trailer LPAR RPAR    { {erange = from_lexing_range $startpos $endpos; ekind = Call ($1, [], [])} }
+    | atom_trailer LPAR arglist RPAR { {erange = from_lexing_range $startpos $endpos; ekind = Call ($1, fst $3, snd $3)} }
+    | atom_trailer LPAR arglist COMMARPAR { {erange = from_lexing_range $startpos $endpos; ekind = Call ($1, fst $3, snd $3)} }
     | atom_trailer LSQ subscriptlist RSQ { match $3 with
-        | [s] -> {erange = pos_to_range $startpos $endpos; ekind = Subscript ($1, s, Load)}
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = Subscript ($1, ExtSlice l, Load)}
+        | [s] -> {erange = from_lexing_range $startpos $endpos; ekind = Subscript ($1, s, Load)}
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = Subscript ($1, ExtSlice l, Load)}
         }
-    | atom_trailer LSQ subscriptlist COMMARSQ { {erange = pos_to_range $startpos $endpos; ekind = Subscript ($1, ExtSlice $3, Load)} }
-    | atom_trailer DOT name     { {erange = pos_to_range $startpos $endpos; ekind = Attribute ($1, $3, Load)} }
+    | atom_trailer LSQ subscriptlist COMMARSQ { {erange = from_lexing_range $startpos $endpos; ekind = Subscript ($1, ExtSlice $3, Load)} }
+    | atom_trailer DOT name     { {erange = from_lexing_range $startpos $endpos; ekind = Attribute ($1, $3, Load)} }
 ;
 
 atom:
     | atom_tuple        { $1 }
     | atom_list         { $1 }
     | atom_dict         { $1 }
-    | name              { {erange = pos_to_range $startpos $endpos; ekind = Name ($1, Load)} }
-    | number            { {erange = pos_to_range $startpos $endpos; ekind = Num $1} }
-    | strings           { {erange = pos_to_range $startpos $endpos; ekind = Str $1} }
-    | bytes             { {erange = pos_to_range $startpos $endpos; ekind = Bytes $1} }
-    | DOT DOT DOT       { {erange = pos_to_range $startpos $endpos; ekind = Ellipsis} }
-    | NONE              { {erange = pos_to_range $startpos $endpos; ekind = NameConstant SNone} }
-    | NOTIMPLEMENTED    { {erange = pos_to_range $startpos $endpos; ekind = NameConstant SNotImplemented} }
-    | TRUE              { {erange = pos_to_range $startpos $endpos; ekind = NameConstant True} }
-    | FALSE             { {erange = pos_to_range $startpos $endpos; ekind = NameConstant False} }
+    | name              { {erange = from_lexing_range $startpos $endpos; ekind = Name ($1, Load)} }
+    | number            { {erange = from_lexing_range $startpos $endpos; ekind = Num $1} }
+    | strings           { {erange = from_lexing_range $startpos $endpos; ekind = Str $1} }
+    | bytes             { {erange = from_lexing_range $startpos $endpos; ekind = Bytes $1} }
+    | DOT DOT DOT       { {erange = from_lexing_range $startpos $endpos; ekind = Ellipsis} }
+    | NONE              { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant SNone} }
+    | NOTIMPLEMENTED    { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant SNotImplemented} }
+    | TRUE              { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant True} }
+    | FALSE             { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant False} }
 ;
 
 /* Iterable cannot be used in comprehension : Star_expr forbidden */
 atom_tuple:
-    | LPAR RPAR                 { {erange = pos_to_range $startpos $endpos; ekind = Tuple ([], Load)} }
+    | LPAR RPAR                 { {erange = from_lexing_range $startpos $endpos; ekind = Tuple ([], Load)} }
     | LPAR yield_expr RPAR      { $2 }
     | LPAR separated_nonempty_list(COMMA, test_starexpr) RPAR   { match $2 with
         | [s] -> s
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Load)} }
-    | LPAR separated_nonempty_list(COMMA, test_starexpr) COMMARPAR   { {erange = pos_to_range $startpos $endpos; ekind = Tuple($2, Load)} }
-    | LPAR test comp_for RPAR   { {erange = pos_to_range $startpos $endpos; ekind = GeneratorExp($2, $3)} }
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = Tuple(l, Load)} }
+    | LPAR separated_nonempty_list(COMMA, test_starexpr) COMMARPAR   { {erange = from_lexing_range $startpos $endpos; ekind = Tuple($2, Load)} }
+    | LPAR test comp_for RPAR   { {erange = from_lexing_range $startpos $endpos; ekind = GeneratorExp($2, $3)} }
 ;
 
 /* Iterable cannot be used in comprehension : Star_expr forbidden */
 atom_list:
-    | LSQ RSQ               { {erange = pos_to_range $startpos $endpos; ekind = List ([], Load)} }
-    | LSQ separated_nonempty_list(COMMA, test_starexpr) RSQ { {erange = pos_to_range $startpos $endpos; ekind = List ($2, Load)} }
-    | LSQ separated_nonempty_list(COMMA, test_starexpr) COMMARSQ { {erange = pos_to_range $startpos $endpos; ekind = List ($2, Load)} }
-    | LSQ test comp_for RSQ { {erange = pos_to_range $startpos $endpos; ekind = ListComp($2, $3)} }
+    | LSQ RSQ               { {erange = from_lexing_range $startpos $endpos; ekind = List ([], Load)} }
+    | LSQ separated_nonempty_list(COMMA, test_starexpr) RSQ { {erange = from_lexing_range $startpos $endpos; ekind = List ($2, Load)} }
+    | LSQ separated_nonempty_list(COMMA, test_starexpr) COMMARSQ { {erange = from_lexing_range $startpos $endpos; ekind = List ($2, Load)} }
+    | LSQ test comp_for RSQ { {erange = from_lexing_range $startpos $endpos; ekind = ListComp($2, $3)} }
 ;
 
 /* Iterable cannot be used in comprehension : Star_expr forbidden */
 atom_dict:
-    | LBRACE RBRACE                 { {erange = pos_to_range $startpos $endpos; ekind = Dict ([], [])} }
-    | LBRACE test COLON test comp_for RBRACE  { {erange = pos_to_range $startpos $endpos; ekind = DictComp ($2, $4, $5)} }
-    | LBRACE dict_elts  RBRACE      { {erange = pos_to_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
-    | LBRACE dict_elts  COMMARBRA   { {erange = pos_to_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
-    | LBRACE test comp_for RBRACE   { {erange = pos_to_range $startpos $endpos; ekind = SetComp($2, $3)} }
-    | LBRACE separated_nonempty_list(COMMA, test_starexpr) RBRACE  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} }
-    | LBRACE separated_nonempty_list(COMMA, test_starexpr) COMMARBRA  { {erange = pos_to_range $startpos $endpos; ekind = Set $2} }
+    | LBRACE RBRACE                 { {erange = from_lexing_range $startpos $endpos; ekind = Dict ([], [])} }
+    | LBRACE test COLON test comp_for RBRACE  { {erange = from_lexing_range $startpos $endpos; ekind = DictComp ($2, $4, $5)} }
+    | LBRACE dict_elts  RBRACE      { {erange = from_lexing_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
+    | LBRACE dict_elts  COMMARBRA   { {erange = from_lexing_range $startpos $endpos; ekind = Dict (fst $2, snd $2)} }
+    | LBRACE test comp_for RBRACE   { {erange = from_lexing_range $startpos $endpos; ekind = SetComp($2, $3)} }
+    | LBRACE separated_nonempty_list(COMMA, test_starexpr) RBRACE  { {erange = from_lexing_range $startpos $endpos; ekind = Set $2} }
+    | LBRACE separated_nonempty_list(COMMA, test_starexpr) COMMARBRA  { {erange = from_lexing_range $startpos $endpos; ekind = Set $2} }
 ;
 
 number:
@@ -747,17 +735,17 @@ exprlist:
 ;
 
 testlist:
-   | nonempty_list(terminated(test, COMMA)) { {erange = pos_to_range $startpos $endpos; ekind = Tuple($1, Load)} }
+   | nonempty_list(terminated(test, COMMA)) { {erange = from_lexing_range $startpos $endpos; ekind = Tuple($1, Load)} }
    | separated_nonempty_list(COMMA, test)  { match $1 with
         | [s] -> s
-        | l -> {erange = pos_to_range $startpos $endpos; ekind = Tuple (l, Load)} }
+        | l -> {erange = from_lexing_range $startpos $endpos; ekind = Tuple (l, Load)} }
 ;
 
 dict_elts:
     | test COLON test  { [$1], [$3] }
-    | POW expr         { [{erange = pos_to_range $startpos $endpos; ekind = Null}], [$2] }
+    | POW expr         { [{erange = from_lexing_range $startpos $endpos; ekind = Null}], [$2] }
     | test COLON test COMMA dict_elts   { $1 :: (fst $5), $3 :: (snd $5)  }
-    | POW expr COMMA dict_elts   { {erange = pos_to_range $startpos $endpos; ekind = Null} :: (fst $4), $2 :: (snd $4) }
+    | POW expr COMMA dict_elts   { {erange = from_lexing_range $startpos $endpos; ekind = Null} :: (fst $4), $2 :: (snd $4) }
 ;
 
 classdef:
@@ -779,7 +767,7 @@ arglist:
 
 argument:
     | test          { ([$1], [] ) }
-    | test comp_for { ([{erange = pos_to_range $startpos $endpos; ekind = GeneratorExp($1, $2)}], []) }
+    | test comp_for { ([{erange = from_lexing_range $startpos $endpos; ekind = GeneratorExp($1, $2)}], []) }
     | name EQ test  { ([], [(Some $1, $3)]) }
     | POW test      { ([], [((None : identifier option), $2)]) }
     | MUL test      { ([$2], []) }
@@ -792,10 +780,10 @@ comp_for:
 comp_for1:
     | FOR exprlist IN or_test list(comp_if) { match $2 with
         | [s] -> (s, $4, $5, false)
-        | l -> ({erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Store)}, $4, $5, false) }
+        | l -> ({erange = from_lexing_range $startpos $endpos; ekind = Tuple(l, Store)}, $4, $5, false) }
     | ASYNC FOR exprlist IN or_test list(comp_if) { match $3 with
         | [s] -> (s, $5, $6, true)
-        | l -> ({erange = pos_to_range $startpos $endpos; ekind = Tuple(l, Store)}, $5, $6, true) }
+        | l -> ({erange = from_lexing_range $startpos $endpos; ekind = Tuple(l, Store)}, $5, $6, true) }
 ;
 
 comp_if:
@@ -803,9 +791,9 @@ comp_if:
 ;
 
 yield_expr:
-    | YIELD             { {erange = pos_to_range $startpos $endpos; ekind = Yield (None : expr option)} }
-    | YIELD FROM test   { {erange = pos_to_range $startpos $endpos; ekind = YieldFrom $3} }
-    | YIELD testlist    { {erange = pos_to_range $startpos $endpos; ekind = Yield (Some $2)} }
+    | YIELD             { {erange = from_lexing_range $startpos $endpos; ekind = Yield (None : expr option)} }
+    | YIELD FROM test   { {erange = from_lexing_range $startpos $endpos; ekind = YieldFrom $3} }
+    | YIELD testlist    { {erange = from_lexing_range $startpos $endpos; ekind = Yield (Some $2)} }
 
 name:
     IDENT   { $1 }

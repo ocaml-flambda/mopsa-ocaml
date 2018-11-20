@@ -14,10 +14,9 @@ let parse_from_string s =
     lex.lex_curr_p <- {lex.lex_curr_p with pos_cnum = 0};
     U_parser.file U_lexer.token lex
   with
-    | Failure s ->
-      Printf.eprintf "Error near %s\n\n"
-        (string_of_position lex.lex_start_p);
-      failwith s
+  | Failure s ->
+    let range = Location.from_lexing_range (Lexing.lexeme_start_p lex) (Lexing.lexeme_end_p lex) in
+    Exceptions.syntax_error range "%s" s
 
 let parse_file (filename:string) : prog =
   let f = open_in filename in
@@ -27,13 +26,13 @@ let parse_file (filename:string) : prog =
     U_parser.file U_lexer.token lex
   with
   | U_parser.Error ->
-      Printf.eprintf "Parse error (invalid syntax) near %s\n"
-        (string_of_position lex.lex_start_p);
-      failwith "Parse error"
+    let range = Location.from_lexing_range (Lexing.lexeme_start_p lex) (Lexing.lexeme_end_p lex) in
+    Exceptions.unnamed_syntax_error range
+
   | Failure x ->
-     if x = "lexing: empty token" then (
-       Printf.eprintf "Parse error (invalid token) near %s\n"
-                      (string_of_position lex.lex_start_p);
-       failwith "Parse error"
-     )
-     else raise (Failure x)
+    if x = "lexing: empty token" then (
+      let range = Location.from_lexing_range (Lexing.lexeme_start_p lex) (Lexing.lexeme_end_p lex) in
+      Exceptions.unnamed_syntax_error range
+    )
+    else
+      raise (Exceptions.panic "%s" x)

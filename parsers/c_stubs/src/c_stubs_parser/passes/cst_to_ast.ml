@@ -6,9 +6,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Add implicit casts to C expressions *)
+(** Translate a CST into a AST:
+    - The input CST should not contain any predicate.
+    - The local variables of the AST are given uids depending on their scope.
+    - User-defined C types (struct, union, enum and typedef) are resolved 
+    using the project declarations.
+    - Implicit casts are added to C expressions.
+ *)
 
-open Ast
 open Range
 
-let doit (s:stub with_range) : stub with_range = assert false
+let rec doit
+    (prj:C_AST.project)
+    (cst:Cst.stub with_range)
+  : Ast.stub with_range
+  =
+  assert false

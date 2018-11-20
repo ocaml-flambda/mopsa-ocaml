@@ -6,16 +6,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Common exceptions raised by domains. *)
 
-(** Panic exceptions are raised by domains when they encounter an unsupported
-    language construct.
-*)
+(** {2 Panic exceptions} *)
+(** =-=-=-=-=-=-=-=-=-=- *)
+
 exception Panic of string
-
-(** Panic exception with location information *)
 exception PanicAt of Location.range * string
-
 
 (** Raise a panic exception using a formatted string *)
 let panic fmt =
@@ -28,8 +24,27 @@ let panic_at range fmt =
       raise (PanicAt (range, str))
     ) fmt
 
-(** Warning message *)
-let warn = Debug.warn
 
-(** Failure exception *)
-let fail fmt = Debug.fail fmt
+(** {2 Syntax-related exceptions *)
+(** =-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
+
+exception SyntaxError of Location.range * string
+exception SyntaxErrorList of (Location.range * string) list
+
+exception UnnamedSyntaxError of Location.range
+exception UnnamedSyntaxErrorList of Location.range list
+
+let syntax_error range fmt =
+    Format.kasprintf (fun str ->
+      raise (SyntaxError (range, str))
+    ) fmt
+
+let syntax_errors l =
+  raise (SyntaxErrorList l)
+
+let unnamed_syntax_error range =
+    raise (UnnamedSyntaxError range)
+
+let unnamed_syntax_errors ranges =
+    raise (UnnamedSyntaxErrorList ranges)
+
