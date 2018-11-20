@@ -105,8 +105,10 @@ let set_range_end r l' =
     ) r
 
 let get_range_file r =
-  let pos = get_range_start r in
-  pos.pos_file
+  match untag_range r with
+  | R_orig(pos, _) -> pos.pos_file
+  | R_program [p] -> p
+  | _ -> failwith "get_range_file: invalid argument"
 
 let get_range_line r =
   let pos = get_range_start r in
