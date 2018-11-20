@@ -8,7 +8,7 @@
 
 (** Main entry point of the stub parser *)
 
-open Range
+open Location
 
 let parse
     (comment:string)
@@ -45,4 +45,3 @@ let parse
   | Parser.Error ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
     Exceptions.unnamed_syntax_error range
-
