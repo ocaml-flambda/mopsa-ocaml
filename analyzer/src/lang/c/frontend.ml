@@ -506,7 +506,7 @@ and parse_stub_comment prj ctx com =
       | Some stub -> Some (from_stub ctx stub)
     end
 
-and from_stub ctx stub : Stubs.Ast.stub = assert false
+and from_stub ctx stub = assert false
 
 and from_stub_predicate ctx pred = assert false
 

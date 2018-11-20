@@ -8,6 +8,6 @@
 
 (** Inline predicates as for macro expansion. *)
 
-open Range
+open Location
 
 let doit (s:Cst.stub with_range) : Cst.stub with_range = assert false

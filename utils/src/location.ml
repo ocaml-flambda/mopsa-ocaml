@@ -156,24 +156,24 @@ let rec compare_range (r1: range) (r2: range) =
 (** ===================== *)
            
 type 'a with_range = {
-  node: 'a;
+  content: 'a;
   range: range;
 }
 
 let with_range a range =
   {
-    node = a;
+    content = a;
     range;
   }
 
-let without_range a = a.node
+let get_range_content a = a.content
 
 let bind_range (a: 'a with_range) (f: 'a -> 'b) : 'b with_range =
-  { a with node = f a.node }
+  { a with content = f a.content }
 
 let bind_pair_range (a: 'a with_range) (f: 'a -> 'b * 'c) : 'b with_range * 'c =
-  let b, c = f a.node in
-  { node = b; range = a.range }, c
+  let b, c = f a.content in
+  { content = b; range = a.range }, c
 
 
 (** {2 Pretty printers} *)

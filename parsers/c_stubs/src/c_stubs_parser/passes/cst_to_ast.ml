@@ -9,12 +9,12 @@
 (** Translate a CST into a AST:
     - The input CST should not contain any predicate.
     - The local variables of the AST are given uids depending on their scope.
-    - User-defined C types (struct, union, enum and typedef) are resolved 
+    - User-defined C types (struct, union, enum and typedef) are resolved
     using the project declarations.
     - Implicit casts are added to C expressions.
  *)
 
-open Range
+open Location
 
 let rec doit
     (prj:C_AST.project)

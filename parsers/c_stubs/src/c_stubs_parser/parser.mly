@@ -9,16 +9,8 @@
 (** Parser of C stubs *)
 
 %{
-    open Range
+    open Location
     open Cst
-
-    let pos_to_loc pos =
-      let open Lexing in
-      {
-	file = pos.pos_fname;
-	line = pos.pos_lnum;
-	col = pos.pos_cnum - pos.pos_bol + 1;
-      }
 
     let debug fmt = Debug.debug ~channel:"c_stub.parser" fmt
 
@@ -92,7 +84,7 @@
 
 %start stub
 
-%type <Cst.stub Range.with_range option> stub
+%type <Cst.stub Location.with_range option> stub
 
 %%
 
@@ -108,7 +100,7 @@ stub:
                  simple_stub_local      = $5;
                  simple_stub_ensures    = $6;
             })
-            (pos_to_loc $startpos, pos_to_loc $endpos)
+            (from_lexing_range $startpos $endpos)
         )
     }
 
@@ -121,7 +113,7 @@ stub:
                  case_stub_requires   = $3;
                  case_stub_cases      = $4;
             })
-            (pos_to_loc $startpos, pos_to_loc $endpos)
+            (from_lexing_range $startpos $endpos)
         )
     }
 
@@ -364,4 +356,4 @@ var:
 
 // adds range information to rule
 %inline with_range(X):
-  | x=X { with_range x (pos_to_loc $startpos, pos_to_loc $endpos) }
+  | x=X { with_range x (from_lexing_range $startpos $endpos) }

@@ -9,6 +9,6 @@
 (** Add implicit casts to C expressions *)
 
 open Ast
-open Range
+open Location
 
 let doit (s:stub with_range) : stub with_range = assert false

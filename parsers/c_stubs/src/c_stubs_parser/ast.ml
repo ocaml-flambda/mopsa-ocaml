@@ -8,7 +8,7 @@
 
 (** Abstract syntax trees for C stubs *)
 
-open Range
+open Location
 
 type stub = {
   stub_requires: requires with_range list;
@@ -158,7 +158,7 @@ let pp_builtin fmt f =
 
 
 let rec pp_expr fmt exp =
-  match exp.kind with
+  match exp.content with
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
@@ -207,7 +207,7 @@ and pp_c_qual_typ fmt t = Format.pp_print_string fmt (C_print.string_of_type_qua
 
 
 let rec pp_formula fmt (f:formula with_range) =
-  match f.kind with
+  match f.content with
   | F_expr e -> pp_expr fmt e
   | F_bool true  -> pp_print_string fmt "true"
   | F_bool false -> pp_print_string fmt "false"
@@ -240,9 +240,9 @@ let pp_opt pp fmt o =
 
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
-    pp_c_qual_typ local.kind.local_var.var_typ
-    pp_var local.kind.local_var
-    pp_local_value local.kind.local_value
+    pp_c_qual_typ local.content.local_var.var_typ
+    pp_var local.content.local_var
+    pp_local_value local.content.local_value
 
 and pp_local_value fmt v =
   match v with
@@ -251,22 +251,22 @@ and pp_local_value fmt v =
 
 
 let pp_requires fmt requires =
-  fprintf fmt "requires: @[%a@];" pp_formula requires.kind
+  fprintf fmt "requires: @[%a@];" pp_formula requires.content
 
 let pp_assigns fmt assigns =
   fprintf fmt "assigns: %a%a;"
-    pp_expr assigns.kind.assigns_target
+    pp_expr assigns.content.assigns_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.kind.assigns_range
+    ) assigns.content.assigns_range
 
 
 let pp_assumes fmt (assumes:assumes with_range) =
-  fprintf fmt "assumes: @[%a@];" pp_formula assumes.kind
+  fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures: @[%a@];" pp_formula ensures.kind
+  fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
 
 let pp_simple_body fmt body =
   fprintf fmt "%a%a%a"
@@ -276,10 +276,10 @@ let pp_simple_body fmt body =
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
-    case.kind.case_label
-    (pp_list pp_assumes "@\n") case.kind.case_assumes
-    (pp_list pp_requires "@\n") case.kind.case_requires
-    pp_simple_body case.kind.case_body
+    case.content.case_label
+    (pp_list pp_assumes "@\n") case.content.case_assumes
+    (pp_list pp_requires "@\n") case.content.case_requires
+    pp_simple_body case.content.case_body
 
 let pp_body fmt body =
   match body with
