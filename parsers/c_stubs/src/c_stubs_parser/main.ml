@@ -32,10 +32,13 @@ let parse
     match cst with
     | None -> None
     | Some cst ->
+      (* Resolve scoping of variables *)
+      let cst1 = Passes.Scoping.doit cst in
       (* Remove predicates *)
-      let cst' = Passes.Predicate_inlining.doit cst in
+      let cst2 = Passes.Predicate_expansion.doit cst1 in
+
       (* Translate CST into AST *)
-      let ast = Passes.Cst_to_ast.doit prj cst' in
+      let ast = Passes.Cst_to_ast.doit prj cst2 in
       Some ast
   with
   | Lexer.SyntaxError s ->

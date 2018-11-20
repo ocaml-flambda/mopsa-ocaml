@@ -245,7 +245,7 @@ formula:
 (* C expressions *)
 expr:
   | LPAR c_qual_typ RPAR with_range(expr)             { E_cast ($2, $4) } %prec CAST
-  | LPAR expr RPAR                                    { $2 }
+  | LPAR expr RPAR                                    { $2 } (* FIXME: conflict between `(id) e` and `(id + e) *)
   | INT_CONST                                         { E_int $1 }
   | STRING_CONST                                      { E_string $1}
   | FLOAT_CONST                                       { E_float $1 }
@@ -352,7 +352,7 @@ resource:
   | IDENT { $1 }
 
 var:
-  | IDENT { $1 }
+  | IDENT { { vname = $1; vuid = 0; } }
 
 // adds range information to rule
 %inline with_range(X):

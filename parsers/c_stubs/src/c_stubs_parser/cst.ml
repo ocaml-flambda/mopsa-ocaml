@@ -152,7 +152,10 @@ and set =
 
 and resource = string
 
-and var = string
+and var = {
+  vname: string;
+  vuid : int;
+}
 
 and builtin =
   | OLD
@@ -161,12 +164,21 @@ and builtin =
   | BASE
 
 
-(** Pretty printer *)
-(** ============== *)
+(** {2 Comparison functions} *)
+(** ************************ *)
+
+let compare_var v1 v2 =
+  Compare.compose [
+    (fun () -> compare v1.vname v2.vname);
+    (fun () -> compare v1.vuid v2.vuid);
+  ]
+
+(** {2 Pretty printer} *)
+(** ****************** *)
 
 open Format
 
-let pp_var fmt v = pp_print_string fmt v
+let pp_var fmt v = pp_print_string fmt v.vname
 
 let pp_resource fmt resource = pp_print_string fmt resource
 
