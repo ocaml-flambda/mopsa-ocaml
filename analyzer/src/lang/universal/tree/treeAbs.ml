@@ -90,6 +90,16 @@ module Domain : Framework.Domains.Stacked.S = struct
     | Nb cur ->
       VMap.fold (fun _ u flow -> V.remove_all_nums range man u flow) cur flow
 
+  let assign0_no_removal range man cur v x flow =
+    match cur with
+    | BOT -> (BOT, flow)
+    | Nb cur ->
+       begin
+         match VMap.find_opt v cur with
+         | Some x' -> Nb (VMap.add v x cur), flow
+         | None -> Nb (VMap.add v x cur), flow
+       end
+
   let assign0 range man cur v x flow =
     match cur with
     | BOT -> (BOT, flow)
@@ -99,6 +109,7 @@ module Domain : Framework.Domains.Stacked.S = struct
         | Some x' -> let flow' = V.remove_all_nums range man x' flow in Nb (VMap.add v x cur), flow'
         | None -> Nb (VMap.add v x cur), flow
       end
+
   let is_top = bot_apply (fun _ -> VMap.is_empty) false
 
   let is_bottom = bot_apply (fun _ _ -> false) true
@@ -175,14 +186,15 @@ module Domain : Framework.Domains.Stacked.S = struct
                  | Some x, None -> (res, flag, u_num, v_num)
                  | None, Some y -> (res, flag, u_num, v_num)
                  | Some x, Some y ->
-                   let pres, flag', u_num, v_num = V.widen man x u_num y v_num in
+                    let pres, flag', u_num, v_num = V.widen man x u_num y v_num in
+                    let () = debug "I gave back %b" flag' in
                    (VMap.add k pres res, flag && flag', u_num, v_num)
                ) u' v' (VMap.empty, true, u_num, v_num)
            in
            (Nb res, prop, u_num, v_num)
         ) u v
       in
-      (* FIXME: check stability flag *)
+
       w, prop, u_num, v_num
 
   (*==========================================================================*)
@@ -212,6 +224,28 @@ module Domain : Framework.Domains.Stacked.S = struct
     in
     Flow.set_domain_cur u man flow
 
+  let get_from_flow (man: ('a, t) man) v flow =
+    let u = Flow.get_domain_cur man flow in
+    match u with
+    | BOT -> failwith "domain at bottom"
+    | Nb abs ->
+       match VMap.find_opt v abs with
+       | Some t -> t
+       | None -> failwith "could not found in domain"
+
+  let remove_from_flow range (man: ('a, t) man) v flow =
+    let u = Flow.get_domain_cur man flow in
+    let u, flow = match u with
+    | BOT -> BOT, flow
+    | Nb abs ->
+       match VMap.find_opt v abs with
+       | Some t ->
+          let f = V.remove_all_nums range man t flow in
+          (Nb (VMap.remove v abs)), f
+       | None -> failwith "could not found in domain"
+    in
+    Flow.set_domain_cur u man flow
+
   let exec
       (zone: Framework.Zone.zone)
       (stmt: stmt)
@@ -221,17 +255,21 @@ module Domain : Framework.Domains.Stacked.S = struct
     =
     let () = debug "I am asked" in
     match skind stmt with
+    | S_add_var(v) when v.vtyp = T_tree -> Some (flow |> Post.of_flow)
+    | S_remove_var(v) when v.vtyp = T_tree -> remove_from_flow (srange stmt) man v flow |> Post.of_flow |> OptionExt.return
     | S_assign({ekind = E_var(v, mode); etyp = T_tree}, e2) ->
       let range = srange stmt in
       man.eval e2 flow
       |> (Post.bind man (fun expr flow ->
-          match ekind expr with
-          | TreeAst.E_tree_set t ->
-            begin
+              let t =
+                match ekind expr with
+                | TreeAst.E_tree_set t -> t
+                | E_var(v, _) -> get_from_flow man v flow
+                | _ -> failwith "not properly evaluated"
+              in
               assign range man v t mode flow
-              |> Post.of_flow
-            end
-          | _ -> Debug.fail "tree not evaluated correctly"))
+              |> Post.of_flow)
+         )
       |> OptionExt.return
     | S_assume({ekind = E_call ({ekind = E_function (Builtin {name = "is_symbol"})}, [{ekind = E_var(v, _)}])}) ->
       let range = srange stmt in
@@ -244,14 +282,14 @@ module Domain : Framework.Domains.Stacked.S = struct
             let curstate = Flow.get_domain_cur man flow in
             match VMap.find_opt v cur with
             | Some tree_v ->
-              let u, flow = V.filter_symbol range man tree_v flow in
-              (if V.is_bottom range man u flow then
-                 let flow = go_to_bottom range man curstate flow in
-                 Flow.set_domain_cur (BOT) man flow
-               else
-                 let dom, flow = assign0 range man curdom v u flow in
-                 Flow.set_domain_cur dom man flow)
-              |> Post.of_flow |> OptionExt.return
+               let u, flow = V.filter_symbol range man tree_v flow in
+               (if V.is_bottom range man u flow then
+                  let flow = go_to_bottom range man curstate flow in
+                  Flow.set_domain_cur (BOT) man flow
+                else
+                  let dom, flow = assign0_no_removal range man curdom v u flow in
+                  Flow.set_domain_cur dom man flow)
+               |> Post.of_flow |> OptionExt.return
             | None -> None
           end
       end
@@ -270,7 +308,8 @@ module Domain : Framework.Domains.Stacked.S = struct
                  let flow = go_to_bottom range man curstate flow in
                  Flow.set_domain_cur (BOT) man flow
                else
-                 let dom, flow = assign0 range man curstate v u flow in
+                 let () = debug "flow: %a" (Flow.print man) flow in
+                 let dom, flow = assign0_no_removal range man curstate v u flow in
                  Flow.set_domain_cur dom man flow)
               |> Post.of_flow |> OptionExt.return
             | None -> None
@@ -345,21 +384,65 @@ module Domain : Framework.Domains.Stacked.S = struct
   let eval zone exp (man: ('a, t) man) (flow: 'a flow) =
     let () = debug "asked: %a" pp_expr exp in
     match ekind exp, etyp exp with
+    | E_call ({ekind = E_function (Builtin {name = "read_int"})}, [t]), _ ->
+       begin
+         let exception Nt in
+         let evl = man.eval ~zone:(Zone.Z_u, Zone.Z_u_tree) t flow in
+         try
+           Eval.bind (fun t flow ->
+               match ekind t with
+               | TreeAst.E_tree_set t ->
+                  begin
+                    let () = debug "read_int tree set is:%a@,on%a" V.print t (Flow.print man) flow in
+                    let range = erange exp in
+                    match V.get_number range man t flow with
+                    | Some x, flow' -> Eval.singleton (mk_var x range) ~cleaners:([mk_remove_var x range]) flow'
+                    | None  , flow  -> failwith "erreur None"
+                  end
+               | _ -> raise Nt
+             ) evl |> OptionExt.return
+         with
+         | Nt -> None
+       end
+    | E_call ({ekind = E_function (Builtin {name = "read_symbol"})}, [t]), _ ->
+       begin
+         let range = erange exp in
+         let exception Nt in
+         let evl = man.eval ~zone:(Zone.Z_u, Zone.Z_u_tree) t flow in
+         try
+           Eval.bind (fun t flow ->
+               match ekind t with
+               | TreeAst.E_tree_set t ->
+                  begin
+                    let mk_one p flow = Eval.singleton (mk_constant ~etyp:T_string (C_string p) range) flow in
+                    match V.get_symbol range man t flow with
+                    | l, f -> List.map (fun p -> mk_one p f) l |> Eval.join_list
+                  end
+               | _ -> raise Nt
+             ) evl |> OptionExt.return
+         with
+         | Nt -> None
+       end
     | E_call ({ekind = E_function (Builtin {name = "subtree"})}, [t; i]), _ ->
       begin
         let exception Nt in
         let range = erange exp in
         try
           let evl = man.eval ~zone:(Zone.Z_u, Zone.Z_u_tree) t flow in
-          Eval.bind (fun t flow -> match ekind t with
+          Eval.bind (fun t flow ->
+              match ekind t with
               | TreeAst.E_tree_set t ->
-                let q = man.ask (Numeric.Values.Intervals.Value.Q_interval i) flow in
-                let (l, r) = Numeric.Values.Intervals.Value.bounds q in
-                z_fold (fun z acc ->
-                    let i = Z.to_int z in
-                    Eval.join acc (let a, flow = V.read_i range man t i flow in
-                                   Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set a) range) flow)
-                  ) l r (Eval.empty)
+                 let () = debug "I am there at least" in
+                 let q = man.ask (Numeric.Values.Intervals.Value.Q_interval i) flow in
+                 let () = debug "I am there at least III" in
+                 let (l, r) = Numeric.Values.Intervals.Value.bounds q in
+                 let () = debug "I am there at least II" in
+                 z_fold (fun z acc ->
+                     let i = Z.to_int z in
+                     let () = debug "I am there at least %d" i in
+                     Eval.join acc (let a, flow = V.read_i range man t i flow in
+                                    Eval.singleton (mk_expr ~etyp:(etyp exp) (TreeAst.E_tree_set a) range) flow)
+                   ) l r (Eval.empty)
               | _ -> raise Nt
             ) evl |> OptionExt.return
         with
@@ -423,6 +506,9 @@ module Domain : Framework.Domains.Stacked.S = struct
             | Some x ->
               let x, y, flow' = V.copy range man x flow in
               let u = VMap.add v x u in
+              let () = debug "read_tree_var: %a@,%a" pp_expr ((mk_expr ~etyp:(etyp exp)
+                                                                 (TreeAst.E_tree_set y) range)
+                         ) (Flow.print man)                 (Flow.set_domain_cur (Nb u) man flow') in
               Eval.singleton
                 (mk_expr ~etyp:(etyp exp)
                    (TreeAst.E_tree_set y) range)

@@ -70,6 +70,17 @@ struct
    *     | Binop(_ , e, e', _, _) -> aux e (fun r -> aux e' (fun r' -> cont (SVar.union r r')))
    *   in
    *   aux expr (fun x -> x) |> SVar.elements *)
+  let var_to_apron v =
+    (match v.vtyp with
+     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
+     | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
+     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
+    let name = Format.flush_str_formatter () in
+    Apron.Var.of_string name
+
+  let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
+    Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
+    Values.Intervals.Value.of_apron
 
   let is_numerical_var (v: var): bool =
     match v.vtyp with
@@ -153,13 +164,6 @@ struct
 
 
   exception UnsupportedExpression
-  let var_to_apron v =
-    (match v.vtyp with
-     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-     | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
-     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
-    let name = Format.flush_str_formatter () in
-    Apron.Var.of_string name
 
   let apron_to_var v =
     let v = Apron.Var.to_string v in
@@ -397,6 +401,12 @@ struct
         Apron.Tcons1.array_set cond_array i c;
       ) l in
     cond_array
+
+  let get_interval_expr (e:expr) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
+    Apron.Abstract1.bound_texpr ApronManager.man a
+      (exp_to_apron e |> Apron.Texpr1.of_expr (Apron.Abstract1.env a)) |>
+      Values.Intervals.Value.of_apron
+
 end
 
 
@@ -677,10 +687,6 @@ struct
 
     List.sort_uniq compare_var (rel1 @ rel2)
 
-
-  let get_interval (v:var) (a:t) : (Values.Intervals.Value.t) =
-    Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
-    Values.Intervals.Value.of_apron
 
   let set_interval v i a =
     let env = Apron.Abstract1.env a in

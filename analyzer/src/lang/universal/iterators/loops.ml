@@ -97,12 +97,12 @@ struct
 
       let res0 =
         lfp !opt_loop_widening_delay cond body man flow_init flow_init |>
+          (fun flow_lfp -> debug "lfp reached:@\n abs = @[%a@]" (Flow.print man) flow_lfp; flow_lfp) |>
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
         (fun x -> debug "joining %a and %a" (Flow.print man) flow_out (Flow.print man) x ; x) |>
         Flow.join man flow_out
       in
 
-      debug "lfp reached:@\n abs = @[%a@]" (Flow.print man) res0;
 
       let res1 = Flow.add T_cur (Flow.get T_break man res0) man res0 |>
                  Flow.set T_break (Flow.get T_break man flow) man |>

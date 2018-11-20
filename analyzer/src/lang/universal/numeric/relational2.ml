@@ -191,7 +191,7 @@ struct
                      meet_with_constraints
                  else
                    meet_with_constraints
-               ) meet_on_full_env useful_constraints
+               ) meet_on_full_env (List.rev useful_constraints)
              in
              (* We test all useful constraints from U and V to check
                 whether adding them would result in a numerical element
@@ -209,7 +209,13 @@ struct
 
   let join_  = join_and_widen Abstract1.join
   let join _ = join_and_widen Abstract1.join
-  let widen _ = join_and_widen Abstract1.widening
+  let widen _ a b =
+    let () = debug "entering numerical widening" in
+    let () = debug "a: %a" print a in
+    let () = debug "b: %a" print b in
+    let res = join_and_widen Abstract1.widening a b in
+    let () = debug "res:%a" print res in
+    res
 
   let subset (u: t) (v: t) = match u, v with
     | _   , TOP  -> true
@@ -412,6 +418,16 @@ struct
 
     | _ -> return top
 
+  and my_fold man abs (x, y) =
+    let env = Abstract1.env abs in
+    let env1 = filter_env (fun a -> Apron.Var.compare a x != 0) (fun a -> Apron.Var.compare a x != 0) env in
+    let env2 = filter_env (fun a -> Apron.Var.compare a y != 0) (fun a -> Apron.Var.compare a y != 0) env in
+    let a0 = Abstract1.change_environment man abs env1 false in
+    let a1 = Abstract1.rename_array man a0 [|y|] [|x|] in
+    let a2 = Abstract1.change_environment man abs env2 false in
+    let res = Abstract1.join man a1 a2 in
+    res
+
   (* This is experimental *)
   and find_foldable_variables lv abs =
     top_apply (fun u ->
@@ -424,15 +440,24 @@ struct
           | y::q when compare_typ x.vtyp y.vtyp = 0 ->
              let abs = u.num in
              let tmp = mk_tmp ~vtyp:x.vtyp () in
+             let () = debug "We try to fold: %a and %a using tmp %a" Var.print x Var.print y Var.print tmp in
              let ax = var_to_apron x and ay = var_to_apron y and atmp = var_to_apron tmp in
-             let abs1 = Abstract1.fold ApronManager.man abs [| ax ; ay |] in
+             let () = debug "Folding on %a and %a@,%a" Apron.Var.print ax Apron.Var.print ay (Apron.Abstract1.print) abs in
+             (* let abs1 = Abstract1.fold ApronManager.man abs [| ax ; ay |] in *)
+             let abs1 = my_fold ApronManager.man abs (ax, ay) in
+             let () = debug "result is: %a" Apron.Abstract1.print abs1 in
              let abs2 = Abstract1.rename_array ApronManager.man abs1 [| ax |] [| atmp |] in
+             (* let () = debug "Folded: %a" Apron.Abstract1.print abs2 in *)
              let abs3 = Abstract1.expand ApronManager.man abs2 (atmp) [| ax ; ay |] in
              let env = Apron.Environment.remove (Apron.Abstract1.env abs3) [| atmp |] in
              let abs4 = Apron.Abstract1.change_environment ApronManager.man abs3 env false in
+             (* let () = debug "FoldExpand input : %a" Apron.Abstract1.print abs  in
+              * let () = debug "FoldExpand output: %a" Apron.Abstract1.print abs4 in *)
              if Abstract1.is_leq ApronManager.man abs4 abs then
+               let () = debug "added to foldable" in
                find_foldable x q reste (y::acc)
              else
+               let () = debug "not added to foldable" in
                find_foldable x q (y :: reste) acc
           | y::q -> find_foldable x q (y :: reste) acc
           | _ -> reste, acc
@@ -444,6 +469,10 @@ struct
     fun query abs ->
     match query with
     | Q_fold vl -> Some (find_foldable_variables vl abs)
+    | Values.Intervals.Value.Q_interval e ->
+       top_apply
+         (fun x -> Some (get_interval_expr e x.num))
+         (Some Values.Intervals.Value.top) abs
     | _ -> None
 
 

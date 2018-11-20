@@ -119,6 +119,7 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
+  | T_string, AST_EQUAL         -> O_eq
   | T_float _, AST_PLUS          -> O_plus
   | T_float _, AST_MINUS         -> O_minus
   | T_float _, AST_MULTIPLY      -> O_mult
