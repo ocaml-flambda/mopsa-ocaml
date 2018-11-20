@@ -29,7 +29,7 @@ and build_leaf name =
     let module D = Domains.Nonrel.Make(V) in
     (module D)
   with Not_found ->
-    Debug.fail "Domain %s not found" name
+    Exceptions.panic "Domain %s not found" name
 
 
 and build_iter json =
@@ -70,7 +70,7 @@ and build_functor assoc =
     let module D = F.Make(A) in
     (module D : Domain.DOMAIN)
   with Not_found ->
-    Debug.fail "Functor %s not found" f
+    Exceptions.panic "Functor %s not found" f
 
 and build_stack assoc =
   let d1 = List.assoc "stack" assoc |> to_string in
@@ -85,7 +85,7 @@ and build_stack assoc =
     let module D = Domains.Stacked.Make(D1)(D2) in
     (module D : Domain.DOMAIN)
   with Not_found ->
-    Debug.fail "Stack domains %s not found" d1
+    Exceptions.panic "Stack domains %s not found" d1
 
 
 let parse (file: string) : (module Domain.DOMAIN) =

@@ -147,7 +147,7 @@ struct
         try
           Flow.get_annot KSwitchExpr flow
         with
-        | Not_found -> Debug.fail "Could not find KSwitchExpr token in \
+        | Not_found -> Exceptions.panic "Could not find KSwitchExpr token in \
                                    annotations at %a" pp_range (srange stmt)
       in
 

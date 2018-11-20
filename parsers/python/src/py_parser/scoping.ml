@@ -246,9 +246,8 @@ and find_in_scope (globals, lscope) v =
     if List.mem v.name Builtins.all then
       { name = v.name; uid = 0}
     else
-      Debug.fail "Unbounded variable %a" Pp.print_var v
+      Exceptions.panic "Unbounded variable %a" Pp.print_var v
 
 and create_new_uid v =
   incr counter;
   {v with uid = !counter}
-  

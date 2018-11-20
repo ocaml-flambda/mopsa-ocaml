@@ -58,7 +58,7 @@ module Domain =
 
       (* E⟦ e1 is e2 ⟧ *)
       | E_binop(O_py_is, e1, e2) ->
-         Debug.fail "FIXME: To implement (maybe with id(e1)==id(e2), or to leave to another domain?)"
+         Exceptions.panic "FIXME: To implement (maybe with id(e1)==id(e2), or to leave to another domain?)"
          (* Eval.eval_list [e1; e2] man.eval flow |>
           *   Eval.bind @@
           *     fun el flow ->

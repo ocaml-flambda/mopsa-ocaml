@@ -62,7 +62,7 @@ let compare_cell c1 c2 = !cell_compare_chain c1 c2
 (* ============== *)
 
 let cell_pp_chain : (Format.formatter -> cell -> unit) ref = ref (
-    fun _ _ -> Debug.fail "cell.pp: unknown cell"
+    fun _ _ -> Exceptions.panic "cell.pp: unknown cell"
   )
 let register_cell_pp pp = cell_pp_chain := pp !cell_pp_chain
 let pp_cell fmt c = !cell_pp_chain fmt c

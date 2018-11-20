@@ -57,7 +57,7 @@ let expr_chain : Ast.expr chain = ref (fun exp ->
         {exprs = [e1; e2]; stmts = []},
         (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
     | _ ->
-      Debug.fail "Unknown expression %a" pp_expr exp
+      Exceptions.panic "Unknown expression %a" pp_expr exp
   )
 
 let stmt_chain : Ast.stmt chain = ref (fun stmt ->

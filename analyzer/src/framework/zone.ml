@@ -120,7 +120,7 @@ let rec pp_zone fmt (z: zone) =
       let info = ZoneMap.find z !zones in
       Format.pp_print_string fmt info.name
     with Not_found ->
-      Debug.fail "Unknown zone"
+      Exceptions.panic "Unknown zone"
 
 let pp_zone2 fmt (z1, z2) = Format.fprintf fmt "[%a ↠ %a]" pp_zone z1 pp_zone z2
 

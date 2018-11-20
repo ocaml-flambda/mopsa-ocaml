@@ -27,7 +27,7 @@ let get_printer out =
 
 let render man alarms time files out =
   let print fmt = get_printer out fmt in
-  print "Analysis terminated successfully@.";
+  print "%a@." (Debug.color_str "green") "Analysis terminated successfully";
   print "Time: %.3fs@." time;
   match alarms with
   | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"; 0
@@ -43,7 +43,7 @@ let render man alarms time files out =
 
 let panic ?btrace exn files out =
   let print fmt = get_printer out fmt in
-  print "Analysis aborted@.";
+  print "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with
     | Exceptions.Panic msg -> print "Panic: %s@." msg
@@ -64,7 +64,7 @@ let panic ?btrace exn files out =
   in
   let () =
     match btrace with
-    | Some x -> print "backtrace:@.%s" x
-    | None -> ()
+    | Some x when String.length x > 0 -> print "backtrace:@.{%s}" x
+    | _ -> ()
   in
   ()

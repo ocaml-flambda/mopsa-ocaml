@@ -43,7 +43,7 @@ module Domain = struct
     match ekind exp with
     (* 𝔼⟦ int.__new__(cls, arg) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, cls :: args, kwds) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
     (* begin match args with
        *   | [] -> oeval_singleton (Some (mk_py_zero range), flow, [])
        *
@@ -136,7 +136,7 @@ module Domain = struct
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_compare_op_fun f ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* eval_list [e1; e2] (man.eval ctx) flow |>
        * eval_compose (fun el flow ->
        *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -167,7 +167,7 @@ module Domain = struct
     (* 𝔼⟦ int.__op__(e) | op ∈ {-, +, ~, abs} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
          when is_unop_fun f ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* man.eval ctx e flow |>
        * eval_compose (fun e flow ->
        *     let o = object_of_expr e in
@@ -195,7 +195,7 @@ module Domain = struct
 
     (* 𝔼⟦ int.__bool__(self) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, [self], []) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
     (* man.eval ctx self flow |>
        * eval_compose (fun self flow ->
        *     let o = object_of_expr self in
@@ -214,7 +214,7 @@ module Domain = struct
 
     (* 𝔼⟦ int.__bool__(arg1, arg2, ..., argn) | n != 1 ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, _, []) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
        * oeval_singleton (None, flow, []) *)
 
