@@ -94,14 +94,14 @@ let set_range_start r l =
   map_tag (fun r ->
       match r with
       | R_orig (_, l') -> R_orig (l, l')
-      | _ -> Debug.fail "set_range_start: called on non R_source"
+      | _ -> failwith "set_range_start: called on non R_source"
     ) r
 
 let set_range_end r l' =
   map_tag (fun r ->
       match r with
       | R_orig (l, _) -> R_orig (l, l')
-      | _ -> Debug.fail "set_range_end: called on non R_source"
+      | _ -> failwith "set_range_end: called on non R_source"
     ) r
 
 let get_range_file r =

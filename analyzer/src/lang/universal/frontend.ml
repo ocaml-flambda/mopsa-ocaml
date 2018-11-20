@@ -79,7 +79,7 @@ let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
   | T_float _, T_int -> x
   | _ ->
      if compare_typ x y = 0 then x
-     else Debug.fail "cannot unify types %a and %a" pp_typ x pp_typ y
+     else Exceptions.panic "cannot unify types %a and %a" pp_typ x pp_typ y
 
 (* cast expression to the given type (if needed) *)
 let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
@@ -91,7 +91,7 @@ let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
     | (T_int | T_float _), (T_int | T_float _) ->
        mk_unop O_cast e ~etyp:t range
     | _ ->
-       Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
+       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   match t, b with
@@ -119,7 +119,7 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_float _, AST_LESS_EQUAL    -> O_le
   | T_float _, AST_GREATER       -> O_gt
   | T_float _, AST_GREATER_EQUAL -> O_ge
-  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
+  | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   match t, b with
@@ -128,7 +128,7 @@ let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
-  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
+  | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
@@ -241,10 +241,10 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_string s range
 
   | AST_char_const(c, _) ->
-    Debug.fail "char not implemented yet"
+    Exceptions.panic "char not implemented yet"
 
   | AST_array_const(a, _) ->
-    Debug.fail "array not implemented yet"
+    Exceptions.panic "array not implemented yet"
 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range
@@ -327,7 +327,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
  *         if (compare_typ (etyp e1) (etyp e2) = 0) then
  *           mk_assign e1 e2 range
  *         else
- *           Debug.fail "%a (at %s) has type %a and %a (at %s) has type \
+ *           Exceptions.panic "%a (at %s) has type %a and %a (at %s) has type \
  *                       %a, could not translate assignement"
  *             U_ast_printer.print_expr e1o
  *             (U_ast_printer.string_of_extent ext1)
@@ -537,7 +537,7 @@ let add_body (fl: fun_context) (f: string) (b: stmt): unit =
     let fundec = MS.find f fl in
     fundec.fun_body <- b;
   with
-  | Not_found -> Debug.fail "[Universal.frontend] should not happen"
+  | Not_found -> Exceptions.panic "[Universal.frontend] should not happen"
 
 let from_prog (p: U_ast.prog) : FA.program =
   let ext = snd (p.main) in
@@ -564,4 +564,4 @@ let rec parse_program (files: string list): Framework.Ast.program =
     let ast = U_file_parser.parse_file filename in
     from_prog ast
   | _ ->
-    Debug.fail "only one file supported for universal"
+    Exceptions.panic "only one file supported for universal"

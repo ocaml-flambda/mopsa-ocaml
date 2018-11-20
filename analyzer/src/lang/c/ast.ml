@@ -348,7 +348,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
   | t ->
-    Debug.fail "to_clang_type: %a not a C type" pp_typ t
+    Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
@@ -481,22 +481,22 @@ let rec sizeof_type (t : typ) : Z.t =
   | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type (get_target())
   | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
   | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
-     Debug.fail "sizeof_type: %a has no length information" pp_typ t
+     Exceptions.panic "sizeof_type: %a has no length information" pp_typ t
   | T_c_bitfield(t, size) ->
-     Debug.fail "sizeof_type: %a is a bitfield" pp_typ t
+     Exceptions.panic "sizeof_type: %a is a bitfield" pp_typ t
   | T_c_function _ | T_c_builtin_fn ->
-     Debug.fail "sizeof_type: %a is a function" pp_typ t
+     Exceptions.panic "sizeof_type: %a is a function" pp_typ t
   | T_c_typedef td -> sizeof_type td.c_typedef_def
   | T_c_record r ->
      if not r.c_record_defined then
-       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
      r.c_record_sizeof
   | T_c_enum e ->
      if not e.c_enum_defined then
-       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
      sizeof_type (T_c_integer e.c_enum_integer_type)
   | T_c_qualified (_,t) -> sizeof_type t
-  | t -> Debug.fail "to_clang_type: %a not a C type" pp_typ t
+  | t -> Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
 
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =

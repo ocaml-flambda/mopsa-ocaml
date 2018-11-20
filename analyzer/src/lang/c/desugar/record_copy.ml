@@ -68,7 +68,7 @@ struct
         let t1 = lval |> etyp |> remove_typedef |> remove_qual
         and t2 = lval |> etyp |> remove_typedef |> remove_qual in
         if compare t1 t2 != 0 then
-          Debug.fail "[%s] assignment of records with uncompatible \
+          Exceptions.panic "[%s] assignment of records with uncompatible \
                       types: %a %a" name pp_typ t1 pp_typ t2
         else
           begin
@@ -103,7 +103,7 @@ struct
                   man.exec ~zone:Z_c stmt flow
                   |> Post.of_flow
                   |> OptionExt.return
-                | None -> Debug.fail "[%s] all fields have size 0" name
+                | None -> Exceptions.panic "[%s] all fields have size 0" name
               end
           end
       end

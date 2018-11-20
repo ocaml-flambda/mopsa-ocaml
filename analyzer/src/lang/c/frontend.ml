@@ -61,7 +61,7 @@ let find_function_in_context fun_ctx (f: C_AST.func) =
         c_fun.c_func_var.vuid = f.func_uid
       ) fun_ctx.ctx_fun
   with
-  | Not_found -> Debug.fail "Could not find function %s in function context" f.func_unique_name
+  | Not_found -> Exceptions.panic "Could not find function %s in function context" f.func_unique_name
 
 
 
@@ -78,7 +78,7 @@ let rec parse_program (files: string list) =
        match Filename.extension file with
        | ".c" | ".h" -> parse_file !c_opts file ctx
        | ".db" -> parse_db file ctx
-       | x -> Debug.fail "Unknown C extension %s" x
+       | x -> Exceptions.panic "Unknown C extension %s" x
     ) files;
   let prj = Clang_to_C.link_project ctx in
   from_project prj

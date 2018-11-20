@@ -99,12 +99,12 @@ let to_universal_type t =
       | C_float -> T_float F_SINGLE
       | C_double -> T_float F_DOUBLE
       | C_long_double -> T_float F_LONG_DOUBLE
-    else Debug.fail "[to_universal_type] in machine_integers called \
+    else Exceptions.panic "[to_universal_type] in machine_integers called \
                      on non int nor float type ; %a" pp_typ t
   else
     match t with
     | T_int | T_float _ | T_bool | T_any | T_c_void -> t
-    | _ -> Debug.fail "[to_universal_type] in machine_integers called \
+    | _ -> Exceptions.panic "[to_universal_type] in machine_integers called \
                        on non scalar type ; %a" pp_typ t
 
 let var_machine_integers v =

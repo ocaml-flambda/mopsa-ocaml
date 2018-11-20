@@ -118,7 +118,7 @@ struct
           | O_minus  -> bot_to_exn (I.bwd_neg a r)
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
           | _ ->
-            let () = Debug.fail "following backward %a unary operator is not yet implemented"
+            let () = Exceptions.panic "following backward %a unary operator is not yet implemented"
                 Framework.Ast.pp_operator op in
             assert false
         in

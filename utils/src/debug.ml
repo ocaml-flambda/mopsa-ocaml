@@ -48,12 +48,14 @@ let can_print channel =
 (** Gives a random map of channel colors *)
 let random_color channel = (Hashtbl.hash channel mod 26) * 10 + 1
 
-let color c fx fmt x =
+let color c pp fmt x =
   if !print_color then
     let code = try List.assoc c colors with Not_found -> failwith "Unknwon color" in
-    Format.fprintf fmt "\027[1;38;5;%dm%a\027[0m" code fx x
+    Format.fprintf fmt "\027[1;38;5;%dm%a\027[0m" code pp x
   else
-    Format.fprintf fmt "%a" fx x
+    Format.fprintf fmt "%a" pp x
+
+let color_str c fmt s = color c Format.pp_print_string fmt s
 
 let debug ?(channel = "debug") fmt =
   if can_print channel then
@@ -70,14 +72,6 @@ let debug ?(channel = "debug") fmt =
 let warn fmt = debug ~channel:"warning" fmt
 
 let info fmt = debug ~channel:"info" fmt
-
-let fail fmt =
-  Format.kasprintf (fun str ->
-      if !print_color
-      then Format.printf "\027[1;41m[FAIL %.6f]\027[0m @.@[%s@]@." (Sys.time ()) str
-      else Format.printf "[FAIL %.6f] @.@[%s@]@." (Sys.time ()) str;
-      raise Exit
-    ) fmt
 
 let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"
 let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"

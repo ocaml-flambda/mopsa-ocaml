@@ -34,7 +34,7 @@ let () =
         | "up"   -> opt_float_rounding := Apron.Texpr1.Up
         | "down" -> opt_float_rounding := Apron.Texpr1.Down
         | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Debug.fail "Unknown rounding mode %s" x
+        | x -> Exceptions.panic "Unknown rounding mode %s" x
       ),
     "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
   )
@@ -549,7 +549,7 @@ struct
       begin
         debug "Starting fold";
         match vl with
-        | [] -> Debug.fail "Can not fold list of size 0"
+        | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
           let abs = Apron.Abstract1.fold ApronManager.man a
               (List.map var_to_apron vl |> Array.of_list) in
