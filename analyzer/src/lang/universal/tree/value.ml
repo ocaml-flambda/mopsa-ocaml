@@ -471,6 +471,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
        * in *)
       let () = debug "normalization started on:@,%a@,with:%a@" print u (Flow.print man) u_num in
       let foldable_env, vb = Numerical.find_foldable_variables man u.varbind (u.env |> List.map snd) u_num in
+      let () = debug "normalization found: %a" (ToolBox.print_list (ToolBox.print_list_inline Format.pp_print_string)) foldable_env in
       let foldable_env_with_regexp = List.map (fun cl ->
                                          List.map (fun x ->
                                              List.find (fun (ue, un) -> x = un) u.env
@@ -1006,33 +1007,28 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       let concomp = build_connected_component (RegS.of_list p1') (RegS.of_list v.env) links links' [] in
 
       let env, u_num, v_num, u_vb, v_vb, res_vb, _ =
-        List.fold_left (fun (env, u_num, v_num, u_vb, v_vb, res_vb, spot_occupied) (u_set, v_set) ->
+        List.fold_left (fun (env, u_num, v_num, u_vb, v_vb, res_vb, wid_pos) (u_set, v_set) ->
             let () = debug "u_set:%a" print_regs u_set in
             let () = debug "v_set:%a" print_regs v_set in
             let a = RegS.fold (fun (re, rn) acc -> RegExp.join re acc) u_set (RegExp.bottom auto_algebra) in
             let b = RegS.fold (fun (re, rn) acc -> RegExp.join re acc) v_set (RegExp.bottom auto_algebra) in
             let () = debug "a:%a" RegExp.print_u (RegExp.regexp_of_automata a) in
             let () = debug "b:%a" RegExp.print_u (RegExp.regexp_of_automata b) in
-            let p, spot_occupied =
-              if spot_occupied then
-                a
-                |> RegExp.join (RegExp.meet b (RegExp.diff v.support u.support)), true
-              else
-                let wid = RegExp.widening 5 a (RegExp.join a b) |> RegExp.meet wid_pos in
-                if not (RegExp.is_bottom wid) then
-                  a
-                  |> RegExp.join (RegExp.meet b (RegExp.diff v.support u.support))
-                  |> RegExp.join wid_pos, true
-                else
-                  a
-                  |> RegExp.join (RegExp.meet b (RegExp.diff v.support u.support)), false
+            let () = debug "wid_pos:%a" RegExp.print_u ((RegExp.regexp_of_automata wid_pos)) in
+            let could_occupy = RegExp.widening 4 a (RegExp.join a b) |> RegExp.meet wid_pos in
+            let () = debug "wid_res:%a" RegExp.print_u (RegExp.regexp_of_automata could_occupy) in
+
+            let reminder = RegExp.diff wid_pos could_occupy in
+            let p = a
+                    |> RegExp.join (RegExp.meet b (RegExp.diff v.support u.support))
+                    |> RegExp.join could_occupy
             in
             let () = debug "p:%a" RegExp.print_u (RegExp.regexp_of_automata p) in
             let pn = var_of_automata p in
             let u_num, u_vb, res_vb = Numerical.fold_two_vb (mk_fresh_range ()) man u_vb res_vb (RegS.elements u_set |> List.map snd) pn u_num in
             let v_num, v_vb, res_vb = Numerical.fold_two_vb (mk_fresh_range ()) man v_vb res_vb (RegS.elements v_set |> List.map snd) pn v_num in
-            ((p, pn) :: env, u_num, v_num, u_vb, v_vb, res_vb, spot_occupied)
-          ) ([], u_num, v_num, u.varbind, v.varbind , StrVarBind.empty, false) concomp
+            ((p, pn) :: env, u_num, v_num, u_vb, v_vb, res_vb, reminder)
+          ) ([], u_num, v_num, u.varbind, v.varbind , StrVarBind.empty, wid_pos) concomp
       in
 
       let u_num, u_vb =
@@ -1048,8 +1044,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       let neqclass = join_eq_classes u v (Some(wid_pos)) in
 
       let should_wid_propagate =
-        List.for_all (fun (_, rn) -> List.exists (fun (_, rn') -> rn = rn') u_starting_env) env
-        && List.for_all (fun (_, rn) -> List.exists (fun (_, rn') -> rn = rn') env) u_starting_env
+        List.for_all (fun (re, rn) -> List.exists (fun (re', rn') -> RegExp.equ re re') u_starting_env) env
+        && List.for_all (fun (re, rn) -> List.exists (fun (re', rn') -> RegExp.equ re re') env) u_starting_env
       in
       let prep =
         {
@@ -1405,7 +1401,16 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       man.exec (mk_remove_var u.size range) flow
       |> man.exec (mk_remove_var u.height range)
 
-    let sons range man (u: t) flow =
+
+    let remove_all_nums range man (u: t) flow =
+      let u = u |> vb_sanitize in
+      StrVarBind.fold (fun (_, v) flow ->
+          man.exec (mk_stmt (S_remove_var v) range) flow
+        ) u.varbind flow |>
+        man.exec (mk_stmt (S_remove_var u.size) range) |>
+        man.exec (mk_stmt (S_remove_var u.height) range)
+
+    let sons range man (u: t) flow j =
       let head_shape = TA.head u.shape in
 
       let auto_algebra = u.support.RegExp.algebra in
@@ -1413,47 +1418,53 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         List.fold_left (fun (abs, res0, vb_old) (k, v) ->
             let _, abs, res, _ =
               List.fold_left (fun (i, abs, res, vb_old) nshape ->
-                  let height = fresh_var () in
-                  let size = fresh_var () in
-                  (* let () = debug "mark1" in *)
-                  let nsupport = hole_position auto_algebra nshape in
-                  (* let () = debug "mark2" in *)
-                  let nclasses = RegexpPartition.fold (fun (re, ne) acc ->
-                                     let re' = RegExp.derivative re i in
-                                     if RegExp.is_bottom re' then
-                                       acc
-                                     else
-                                       let ne' = var_of_automata re' in
-                                       (re', ne') :: acc
-                                   ) u.classes []
-                  in
-                  (* let () = debug "mark3" in *)
-                  let nenv, renaming = RegexpPartition.fold (fun (re, ne) (nenv, renaming) ->
-                                           let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re) in
-                                           let re' = RegExp.derivative re i in
-                                           let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re') in
-                                           if RegExp.is_bottom re' then
-                                             let () = debug "is bottom %a" (RegExp.print) (re') in
-                                             nenv, renaming
-                                           else
-                                             let ne' = var_of_automata re' in
-                                             (re', ne') :: nenv, (ne, ne') :: renaming
-                                         ) u.env ([], [])
-                  in
-                  (* let () = debug "mark4" in *)
-                  let abs, vbold, vb = Numerical.renaming_list_diff_vb range man vb_old StrVarBind.empty renaming abs in
-                  let abs = add_height_and_size man (tag_range range "adding h and s") height size abs in
-                  let abs = man.exec (mk_assume (mk_binop (mk_var height range) O_lt (mk_var u.height range) range) range) abs in
-                  let abs = man.exec (mk_assume (mk_binop (mk_var size range) O_lt (mk_var u.size range) range) range) abs in
-                  (i+1, abs,{
-                       shape = nshape;
-                       support = nsupport;
-                       classes = nclasses;
-                       env = nenv;
-                       varbind = vb;
-                       height = height;
-                       size = size;
-                     }::res, vbold)
+                  if i = j then
+                    begin
+                      let height = fresh_var () in
+                      let size = fresh_var () in
+                      (* let () = debug "mark1" in *)
+                      let nsupport = hole_position auto_algebra nshape in
+                      (* let () = debug "mark2" in *)
+                      let nclasses = RegexpPartition.fold (fun (re, ne) acc ->
+                                         let re' = RegExp.derivative re i in
+                                         if RegExp.is_bottom re' then
+                                           acc
+                                         else
+                                           let ne' = var_of_automata re' in
+                                           (re', ne') :: acc
+                                       ) u.classes []
+                      in
+                      (* let () = debug "mark3" in *)
+                      let nenv, renaming = RegexpPartition.fold (fun (re, ne) (nenv, renaming) ->
+                                               let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re) in
+                                               let re' = RegExp.derivative re i in
+                                               let () = debug "re: %a" (RegExp.print_u) (RegExp.regexp_of_automata re') in
+                                               if RegExp.is_bottom re' then
+                                                 let () = debug "is bottom %a" (RegExp.print) (re') in
+                                                 nenv, renaming
+                                               else
+                                                 let ne' = var_of_automata re' in
+                                                 (re', ne') :: nenv, (ne, ne') :: renaming
+                                             ) u.env ([], [])
+                      in
+                      (* let () = debug "mark4" in *)
+                      let () = debug "computing son: %d" i in
+                      let abs, vbold, vb = Numerical.renaming_list_diff_vb range man vb_old StrVarBind.empty renaming abs in
+                      let abs = add_height_and_size man (tag_range range "adding h and s") height size abs in
+                      let abs = man.exec (mk_assume (mk_binop (mk_var height range) O_lt (mk_var u.height range) range) range) abs in
+                      let abs = man.exec (mk_assume (mk_binop (mk_var size range) O_lt (mk_var u.size range) range) range) abs in
+                      (i+1, abs,{
+                           shape = nshape;
+                           support = nsupport;
+                           classes = nclasses;
+                           env = nenv;
+                           varbind = vb;
+                           height = height;
+                           size = size;
+                         }::res, vbold)
+                    end
+                  else
+                    (i+1, abs, res, vb_old)
                 ) (0, abs, [], vb_old) v
             in
             (abs, (k, List.rev res) :: res0, vb_old)
@@ -1462,9 +1473,11 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
       abs, res
 
     let read_i range man (u: t) (i: int) flow =
-      let flow, l = sons range man u flow in
+      let () = debug "asked to read_i in %a@,on%a@,at %d" print u (Flow.print man) flow i in
+      let flow, l = sons range man u flow i in
+      let () = debug "sons done" in
       List.fold_left (fun ((curjoin, flow) as acc) (_, ll) ->
-          match List.nth_opt ll i, curjoin with
+          match List.nth_opt ll 0, curjoin with
           | None, _ -> acc
           | Some v, None -> (Some v, flow)
           | Some v, Some curjoin ->
@@ -1490,78 +1503,99 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
                          else acc
                        ) u.classes []
       in
-      let nenv, renaming, removal = RegexpPartition.fold (fun (re, rn) (nenv, renaming, removal) ->
-                                        let re' = RegExp.diff (re) (RegExp.from_word auto_algebra []) in
-                                        let rn' = var_of_automata re in
-                                        if not (RegExp.is_bottom re) then
-                                          ((re', rn') :: nenv, (if rn <> rn' then (rn, rn') :: renaming else renaming), removal)
-                                        else (nenv, renaming, rn :: removal)
-                                      ) u.env ([], [], [])
+      let nenv, renaming, removal =
+        RegexpPartition.fold (fun (re, rn) (nenv, renaming, removal) ->
+            let re' = RegExp.meet (re) (RegExp.from_word auto_algebra []) in
+            let rn' = var_of_automata re' in
+            if not (RegExp.is_bottom re') then
+              ((re', rn') :: nenv, (if rn <> rn' then (rn, rn') :: renaming else renaming), removal)
+            else (nenv, renaming, rn :: removal)
+          ) u.env ([], [], [])
       in
+      let () = debug "removal list :%a" (ToolBox.print_list Format.pp_print_string) removal in
       let num, vb = Numerical.renaming_list range man u.varbind renaming abs in
       let num, vb = ToolBox.fold (fun s (abs, vb) -> Numerical.forget range man vb s abs) removal (num, vb) in
-      let height = fresh_var () in
-      let size = fresh_var () in
-      let num = add_height_and_size man range height size num in
-      let num = man.exec (mk_assume (mk_binop (mk_var size range) O_eq (Ast.mk_one range) range) range) num in
-      let num = man.exec (mk_assume (mk_binop (mk_var height range) O_eq (Ast.mk_zero range) range) range) num in
+      (* let height = fresh_var () in
+       * let size = fresh_var () in
+       * let num = add_height_and_size man range height size num in *)
+      let num = man.exec (mk_assume (mk_binop (mk_var u.size range) O_eq (Ast.mk_one range) range) range) num in
+      let num = man.exec (mk_assume (mk_binop (mk_var u.height range) O_eq (Ast.mk_zero range) range) range) num in
       {shape = nshape;
        support = nsupport;
        classes = nclasses;
        env = nenv;
        varbind = vb;
-       height = height;
-       size = size;
+       height = u.height;
+       size = u.size;
       } |> vb_sanitize, num
+
+    let get_number range man u abs =
+      let auto_algebra = automata_algebra_on_n (u.shape.TA.dfta_a) in
+      if RegExp.leq (RegExp.from_word auto_algebra []) (u.support) then
+        let rep = fresh_var () in
+        let abs = man.exec (mk_add_var rep range) abs in
+        match List.find_opt (fun (re, rn) -> RegExp.leq (RegExp.from_word auto_algebra []) re) u.env with
+        | Some (re, rn) ->
+           let v' = StrVarBind.find_l rn u.varbind in
+
+           let abs = man.exec (mk_assume (mk_binop (mk_var rep range) O_eq (mk_var v' range) range) range) abs in
+           Some rep, (remove_all_nums range man u abs)
+        | None ->
+           Some rep, (remove_all_nums range man u abs)
+      else
+        None, (remove_all_nums range man u abs)
+
+    let get_symbol range man u abs =
+      TA.head_symbol u.shape |> List.filter (fun s -> not (A.compare s hole_tree = 0)), (remove_all_nums range man u abs)
 
     let filter_symbol range (man: ('a, 'b) man)
           (u: t)
           (abs: 'a flow) =
-      (* let () = debug "filter_symbol_cur: %a" print u in
-       * let () = debug "filter_symbol_flow: %a" (Flow.print man) abs in *)
       let nshape = TA.not_final_constant hole_tree u.shape in
-      (* let () = debug "final_constat" *)
+      let () = debug "not_final_constant %a" TA.print_dfta nshape in
       let auto_algebra = automata_algebra_on_n (nshape.TA.dfta_a) in
       let nsupport = hole_position auto_algebra nshape in
       let nclasses = RegexpPartition.fold (fun (re, rn) acc ->
-                         let re = RegExp.meet (re) (RegExp.from_word auto_algebra []) in
+                         let re = RegExp.diff (re) (RegExp.from_word auto_algebra []) in
                          let rn = var_of_automata re in
                          if not (RegExp.is_bottom re) then
                            (re, rn) :: acc
                          else acc
                        ) u.classes []
       in
-      let nenv, renaming, removal = RegexpPartition.fold (fun (re, rn) (nenv, renaming, removal) ->
-                                        let rt = (RegExp.from_word auto_algebra []) in
-                                        let re' = RegExp.diff (re) rt in
-                                        let () = debug "rt: %a, re:%a, re':%a" RegExp.print_u (RegExp.regexp_of_automata rt)
-                                                   RegExp.print_u (RegExp.regexp_of_automata re)
-                                                   RegExp.print_u (RegExp.regexp_of_automata re')
-                                        in
-                                        let rn' = var_of_automata re in
-                                        if not (RegExp.is_bottom re) then
-                                          ((re', rn') :: nenv, (if rn <> rn' then (rn, rn') :: renaming else renaming), removal)
-                                        else (nenv, renaming, rn :: removal)
-                                      ) u.env ([], [], [])
+      let nenv, renaming, removal =
+        RegexpPartition.fold (fun (re, rn) (nenv, renaming, removal) ->
+            let rt = (RegExp.from_word auto_algebra []) in
+            let re' = RegExp.diff (re) rt in
+            let () = debug "rt: %a, re:%a, re':%a" RegExp.print_u (RegExp.regexp_of_automata rt)
+                       RegExp.print_u (RegExp.regexp_of_automata re)
+                       RegExp.print_u (RegExp.regexp_of_automata re')
+            in
+            let rn' = var_of_automata re' in
+            if not (RegExp.is_bottom re') then
+              ((re', rn') :: nenv, (if rn <> rn' then (rn, rn') :: renaming else renaming), removal)
+            else (nenv, renaming, rn :: removal)
+          ) u.env ([], [], [])
       in
+      let () = debug "removal list :%a" (ToolBox.print_list Format.pp_print_string) removal in
       let num, vb = Numerical.renaming_list range man u.varbind renaming abs in
       let num, vb = ToolBox.fold (fun s (abs, vb) -> Numerical.forget range man vb s abs) removal (num, vb) in
 
-      let height = fresh_var () in
-      let size = fresh_var () in
-      let num = add_height_and_size man range height size num in
-      let num = man.exec (mk_assume (mk_binop (mk_var size range) O_gt (Ast.mk_one range) range) range) num in
-      let num = man.exec (mk_assume (mk_binop (mk_var height range) O_gt (Ast.mk_zero range) range) range) num in
+      (* let height = fresh_var () in
+       * let size = fresh_var () in
+       * let num = add_height_and_size man range height size num in *)
+      let num = man.exec (mk_assume (mk_binop (mk_var u.size range) O_ge (Ast.mk_one range) range) range) num in
+      let num = man.exec (mk_assume (mk_binop (mk_var u.height range) O_ge (Ast.mk_zero range) range) range) num in
 
-      let num = clear_height_and_size man range u num in
+      (* let num = clear_height_and_size man range u num in *)
 
       let rep, flow = {shape = nshape;
                        support = nsupport;
                        classes = nclasses;
                        env = nenv;
                        varbind = vb;
-                       height = height;
-                       size = size;
+                       height = u.height;
+                       size = u.size;
                       } |> vb_sanitize, num
       in
       rep, flow
@@ -1637,15 +1671,6 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         height = height;
         size = size;
       }, abs
-
-    let remove_all_nums range man (u: t) flow =
-      let u = u |> vb_sanitize in
-      StrVarBind.fold (fun (_, v) flow ->
-          man.exec (mk_stmt (S_remove_var v) range) flow
-        ) u.varbind flow |>
-        man.exec (mk_stmt (S_remove_var u.size) range) |>
-        man.exec (mk_stmt (S_remove_var u.height) range)
-
 
     let build_tree_from_expr range (man: ('a, 'b) man) (e: expr) (num: 'a flow):
           t * 'a flow =

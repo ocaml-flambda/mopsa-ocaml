@@ -9,7 +9,7 @@
         "universal.stdlib.builtins",
         {
             "stack" : "universal.tree.treeabs",
-            "over" : "universal.numeric.relational2.polyhedra"
+            "over" : "universal.numeric.relational2.octagon"
         },
         "universal.strings.value"
     ]
