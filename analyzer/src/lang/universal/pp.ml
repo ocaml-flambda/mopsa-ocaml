@@ -131,7 +131,7 @@ let () =
         fprintf fmt "while %a {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s
       | S_break -> pp_print_string fmt "break;"
       | S_continue -> pp_print_string fmt "continue;"
-      | S_unit_tests (_, tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
+      | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
       | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
       | S_simple_assert(e,b,b') ->
         begin
@@ -145,7 +145,7 @@ let () =
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->
-      match prg.prog_kind with
+      match prg with
       | Ast.P_universal (u_prog) ->
         Format.fprintf fmt "@[<v>%a@,%a@]"
           (

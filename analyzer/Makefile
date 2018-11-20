@@ -12,7 +12,7 @@ reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal c python cfg jvm
+lang = universal stubs c python cfg jvm
 
 lang.universal = ast pp visitor frontend utils zone u_stdlib router	\
 iterators heap numeric strings tree # arrays
@@ -30,8 +30,8 @@ rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
 treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
 abstractTreeAutomaton numerical value treeAst treeAbs
 
-# lang.c = ast pp visitor zone frontend
-lang.c = zone ast alarms frontend libs desugar flows memory
+lang.stubs = ast
+
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = loops andor aggregate record_copy stmt_expr
@@ -44,10 +44,11 @@ lang.python = ast addr utils visitor operators pp frontend zone		\
 alarms flows libs desugar objects data_model types program memory
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
-lang.python.types = typingdomain typing t_string t_int
-lang.python.memory = value addr_env py_string
+lang.python.types = typingdomain typing t_string t_int t_float
+lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
-lang.cfg = ast pp visitor frontend iterator
+lang.cfg = ast pp visitor frontend iterator iterators
+lang.cfg.iterators = intraproc
 
 lang.jvm = ast precheck frontend
 
@@ -56,7 +57,12 @@ PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith java
 
 # MOPSA
 MOPSAROOT = ..
-MOPSALIBS := utils:utils parsers/c:mlClangParser parsers/python:mlPythonParser parsers/universal:mlUniversalParser
+MOPSALIBS := utils:utils \
+parsers/c:mlClangParser \
+parsers/python:mlPythonParser \
+parsers/universal:mlUniversalParser \
+parsers/c_stubs:mlCStubsParser
+
 
 # Flags
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config*))))

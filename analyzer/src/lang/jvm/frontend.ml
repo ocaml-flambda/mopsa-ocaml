@@ -192,14 +192,15 @@ let mk_jvm_loc (meth_uid:string) (pos:op_loc) =
 (** Bytecode ranges *)
 let mk_jvm_range (meth_uid:string) (pos1:op_loc) (pos2:op_loc) =
   mk_edge_id
-    (Range_origin
-       (mk_range (mk_loc meth_uid pos1 0) (mk_loc meth_uid pos2 0))
+    (mk_source_range
+       (mk_loc meth_uid pos1 0)
+       (mk_loc meth_uid pos2 0)
     )
   
 (** Fill-in [g] with a CFG for code [jcode].
     Uses the unique identifier [meth_uid] as location filename.
  *)
-let fill_cfg (meth_uid:string) (g:cfg) (jcode:jcode) =
+let fill_cfg (meth_uid:string) (g:graph) (jcode:jcode) =
   let code = jcode.c_code in
 
   (* add locations (nodes) *)
@@ -266,11 +267,11 @@ let coalesce_cfg g =
            when CFG.edge_dst_size e1 = 1 && CFG.edge_src_size e2 = 1
         ->
          (match CFG.edge_data e1, CFG.edge_data e2 with
-          | { skind = S_java_opcode o1; srange = Range_origin r1; },
-            { skind = S_java_opcode o2; srange = Range_origin r2; }
+          | { skind = S_java_opcode o1; srange = r1; },
+            { skind = S_java_opcode o2; srange = r2; }
             ->
              (* merge ranges *)
-             let r = Range_origin { r1 with range_end = r2.range_end } in
+             let r = set_range_end r1 (get_range_end r2) in
              (* merge opcode lists *)
              let s = mk_stmt (S_java_opcode (o1@o2)) r in
              (* update graph *)
@@ -306,7 +307,10 @@ let load_method
       m_name = ms_name jmethod.cm_signature;
       m_args = ms_args jmethod.cm_signature;
       m_ret = ms_rtype jmethod.cm_signature;
-      m_cfg = g;
+      m_cfg =
+        { cfg_graph = g;
+          cfg_order = [];
+        };
       m_native = (jmethod.cm_implementation = Native);
       m_static = jmethod.cm_static;
     }
@@ -320,6 +324,7 @@ let load_method
       let jcode = Lazy.force j in
       fill_cfg meth.m_uid g jcode;
       coalesce_cfg g;
+      meth.m_cfg.cfg_order <- CFG.weak_topological_order g;
       Precheck.analyze meth;
       if dump_dot then (
         let f = open_out (Printf.sprintf "tmp/%s.dot" meth.m_name) in
@@ -341,7 +346,7 @@ let load_method
         close_out f
       );
       if dump_text then
-        Format.printf "    %a@\n" pp_stmt (mk_cfg g (mk_fresh_range ()))
+        Format.printf "    %a@\n" pp_stmt (mk_cfg meth.m_cfg (mk_fresh_range ()))
   );
   meth
 
@@ -395,10 +400,6 @@ let () =
     )
 
 let parse_program files =
-  let name = match files with
-    | [] -> "_project"
-    | a::_ -> a
-  in
   let m = ref MapExt.StringMap.empty in
   let parse_file f =
     if Sys.file_exists f then
@@ -415,8 +416,5 @@ let parse_program files =
       m := MapExt.StringMap.add cls.c_uid cls !m
   in
   List.iter parse_file files;
-  {
-    prog_kind = Java_program { p_classes = !m; };
-    prog_file = name;
-  }
+  Java_program { p_classes = !m; }
   

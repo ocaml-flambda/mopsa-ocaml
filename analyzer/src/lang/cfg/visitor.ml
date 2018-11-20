@@ -26,7 +26,8 @@ let () =
          (function { exprs = [e] } -> { stmt with skind = S_test e }
          | _ -> failwith "invalid S_test visitor")
 
-      | S_cfg cfg ->
+      | S_cfg c ->
+         let cfg = c.cfg_graph in
          (* get edges *)
          let l = CFG.edge_list cfg in
 
@@ -49,7 +50,7 @@ let () =
                 CFG.edge_set_data e d
               )
               cfg;
-            mk_cfg cfg (srange stmt)
+            mk_cfg { c with cfg_graph = cfg; } (srange stmt)
          )
          
       | _ -> default stmt

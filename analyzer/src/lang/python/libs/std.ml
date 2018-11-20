@@ -38,80 +38,87 @@ module Domain =
       let range = exp.erange in
       match ekind exp with
       (* Calls to iter built-in function *)
-      | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "iter")}},
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "iter")}, _)},
                   [obj], []) ->
          (* Check that the class of obj has an attribute __iter__ *)
          man.eval obj flow |>
            Eval.bind (fun eobj flow ->
-               let obj = object_of_expr eobj in
-               let cls = Addr.class_of_object obj in
-               Eval.assume
-                 (Utils.mk_object_hasattr cls "__iter__" range)
-                 ~fthen:(fun true_flow ->
-                   (* Call iter and check that it returns an object with an attribute __next__ *)
-                   man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow |>
-                     Eval.bind (fun iter flow ->
-                         Eval.assume
-                           (Utils.mk_hasattr iter "__next__" range)
-                           ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
-                           ~felse:(fun false_flow ->
-                             man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                             Eval.empty_singleton)
-                           man flow
+               man.eval (mk_py_type eobj range) flow |>
+                 Eval.bind (fun cls' flow ->
+                     let cls = object_of_expr cls' in
+                     Eval.assume
+                       (Utils.mk_object_hasattr cls "__iter__" range)
+                       ~fthen:(fun true_flow ->
+                         (* Call iter and check that it returns an object with an attribute __next__ *)
+                         man.eval (mk_py_call (mk_py_object_attr cls "__iter__" range) [eobj] range) true_flow |>
+                           Eval.bind (fun iter flow ->
+                               Eval.assume
+                                 (Utils.mk_hasattr iter "__next__" range)
+                                 ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
+                                 ~felse:(fun false_flow ->
+                                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                                     Eval.empty_singleton)
+                                 man flow
+                             )
                        )
-                 )
-                 ~felse:(fun false_flow ->
-                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                   Eval.empty_singleton)
-                 man flow
+                       ~felse:(fun false_flow ->
+                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Eval.empty_singleton)
+                       man flow
+                   )
              )
          |> OptionExt.return
 
       (* Calls to len built-in function *)
-      | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "len")}},
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "len")}, _)},
                   [obj], [])  ->
+         Debug.fail "todo@\n"
          (* Check that the class of obj has an attribute __len__ *)
          man.eval obj flow |>
            Eval.bind (fun eobj flow ->
-               let obj = object_of_expr eobj in
-               let cls = Addr.class_of_object obj in
-               Eval.assume
-                 (Utils.mk_object_hasattr cls "__len__" range)
-                 ~fthen:(fun true_flow ->
-                   (* Call __len__ and check that it returns an integer *)
-                   man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
-                     Eval.bind (fun len flow ->
-                         match etyp len with
-                         | T_int -> Eval.singleton len flow
-                         | _ ->
-                            man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow |>
-                            Eval.empty_singleton
+               man.eval (mk_py_type eobj range) flow |>
+                 Eval.bind (fun cls flow ->
+                     let cls = object_of_expr cls in
+                     Eval.assume
+                       (Utils.mk_object_hasattr cls "__len__" range)
+                       ~fthen:(fun true_flow ->
+                         (* Call __len__ and check that it returns an integer *)
+                         man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
+                           Eval.bind (fun len flow ->
+                               match etyp len with
+                               | T_int -> Eval.singleton len flow
+                               | _ ->
+                                  man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow |>
+                                    Eval.empty_singleton
+                             )
                        )
-                 )
-                 ~felse:(fun false_flow ->
-                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                     Eval.empty_singleton)
-                 man flow
+                       ~felse:(fun false_flow ->
+                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Eval.empty_singleton)
+                       man flow
+                   )
              )
          |> OptionExt.return
 
       (* Calls to built-in function next *)
-      | E_py_call({ekind = E_addr {addr_kind = A_py_function (F_builtin "next")}},
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "next")}, _)},
                   [obj], [])  ->
          (* Check that the class of obj has an attribute __next__ *)
          man.eval obj flow |>
            Eval.bind (fun eobj flow ->
-               let obj = object_of_expr eobj in
-               let cls = Addr.class_of_object obj in
-               Eval.assume
-                 (Utils.mk_object_hasattr cls "__next__" range)
-                 ~fthen:(fun true_flow ->
-                   man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
-                 )
-                 ~felse:(fun false_flow ->
-                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                     Eval.empty_singleton)
-                 man flow
+               man.eval (mk_py_type eobj range) flow |>
+                 Eval.bind (fun cls flow ->
+                     let cls = object_of_expr cls in
+                     Eval.assume
+                       (Utils.mk_object_hasattr cls "__next__" range)
+                       ~fthen:(fun true_flow ->
+                         man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
+                       )
+                       ~felse:(fun false_flow ->
+                         man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                           Eval.empty_singleton)
+                       man flow
+                   )
              )
          |> OptionExt.return
 

@@ -8,14 +8,11 @@
 
 (** General iterator on Control Flow Graphs. *)
 
-open Framework.Location
-open Framework.Ast
-open Framework.Flow
-open Framework.Manager
+open Framework.Essentials
 open Universal.Ast
 open Ast
 
-
+              
 (*==========================================================================*)
                       (** {2 Domain signature} *)
 (*==========================================================================*)
@@ -121,13 +118,13 @@ module SetWorklist : STRATEGY = struct
           let i = CFG.node_in_nodes n in
           if List.exists
                (fun (nn,_,_,_) ->
-                 compare_node_id (CFG.node_id nn) id > 0
+                 compare (CFG.node_id nn) id > 0
                )
                i
           then TagLocSet.add id acc
           else acc
         )
-        g TagLocSet.empty
+        g.cfg_graph TagLocSet.empty
     in
     { dirty = TagLocSet.empty;
       widen = w;
@@ -153,18 +150,19 @@ end
                     
         
 (*==========================================================================*)
-                         (** {2 Iterator} *)
+                       (** {2 Old iterator} *)
 (*==========================================================================*)
 
                     
 module Make(D:DOMAIN)(S:STRATEGY) = struct
 
 
-  let iterate (man:D.manager) (g:cfg) =
-    
+  let iterate (man:D.manager) (cfg:cfg) =
+
     (* create *)
+    let g = cfg.cfg_graph in
     let a = TagLocHash.create 16 in
-    let wl = S.create g in
+    let wl = S.create cfg in
     let bot = D.bot man in
 
     (* update *)
@@ -238,4 +236,3 @@ module Make(D:DOMAIN)(S:STRATEGY) = struct
   
 end
                     
-   

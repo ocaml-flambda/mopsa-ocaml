@@ -35,6 +35,7 @@
 
         "python.types.t_string",
         "python.types.t_int",
+        "python.types.t_float",
         "python.types.typing"
     ]
 }

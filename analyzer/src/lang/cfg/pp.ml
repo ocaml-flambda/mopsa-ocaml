@@ -53,9 +53,12 @@ let cfg_printer = {
 let () =
   register_pp_stmt (fun next fmt s ->
       match s.skind with
-      | S_cfg g -> Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g
-      | S_test e -> Format.fprintf fmt "test %a" pp_expr e
-      | S_skip -> Format.pp_print_string fmt "skip"
+      | S_cfg g ->
+         Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g.cfg_graph
+      | S_test e ->
+         Format.fprintf fmt "test %a" pp_expr e
+      | S_skip ->
+         Format.pp_print_string fmt "skip"
       | _ -> next fmt s
     )
   
@@ -64,14 +67,14 @@ let () =
   register_token
     { compare = (fun next t1 t2 ->
         match t1, t2 with
-        | T_loc l1, T_loc l2 -> compare_location l1 l2
+        | T_node l1, T_node l2 -> compare_node_id l1 l2
         | T_true, T_true -> 0
         | T_false, T_false -> 0
         | _ -> next t1 t2
       );
       print = (fun next fmt t ->
         match t with
-        | T_loc l -> pp_location fmt l
+        | T_node l -> pp_node_id fmt l
         | T_true -> Format.pp_print_string fmt "true"
         | T_false -> Format.pp_print_string fmt "false"
         | _ -> next fmt t
@@ -102,7 +105,7 @@ let dot_printer =
 let output_dot (title:string) (filename:string) (cfg:cfg) : unit =
   let f = open_out filename in
   let fmt = Format.formatter_of_out_channel f in
-  CFG.print_dot dot_printer title fmt cfg;
+  CFG.print_dot dot_printer title fmt cfg.cfg_graph;
   Format.pp_print_flush fmt ();
   close_out f
 

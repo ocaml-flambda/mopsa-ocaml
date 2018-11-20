@@ -154,6 +154,7 @@ let register_addr info =
 (** Function definition *)
 type fundec = {
   fun_name: string; (** unique name of the function *)
+  fun_range: range; (** function range *)
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
@@ -179,7 +180,7 @@ let compare_fun_expr x y = match x, y with
                            (** {2 Programs} *)
 (*==========================================================================*)
 
-type program_kind +=
+type program +=
   | P_universal of {
       universal_gvars   : var list;
       universal_fundecs : fundec list;
@@ -357,7 +358,7 @@ type stmt_kind +=
   | S_rebase_addr of addr (** old *) * addr (** new *) * mode
   (** Change the address of a previously allocated object *)
 
-  | S_unit_tests of string (** test file *) * (string * stmt) list (** list of unit tests and their names *)
+  | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
   (** Unit tests suite *)
 
   | S_simple_assert of expr * bool * bool
@@ -404,7 +405,8 @@ let () =
           (fun () -> Pervasives.compare m1 m2);
         ]
 
-      | S_unit_tests(f1, _), S_unit_tests(f2, _) -> Pervasives.compare f1 f2
+      | S_unit_tests(tl1), S_unit_tests(tl2) ->
+        Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
 
       | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
         Compare.compose [

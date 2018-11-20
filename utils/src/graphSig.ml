@@ -54,6 +54,21 @@ end
 
                     
 (*==========================================================================*)
+                    (** {2 Nested lists} *)
+(*==========================================================================*)
+
+  
+(** Nested lists of nodes are used to represent herarchical decompositions
+    into strongly connected components.
+ *)
+
+type 'a nested_list =
+  | Simple of 'a
+  | Composed of 'a nested_list list
+
+
+
+(*==========================================================================*)
                      (** {2 Parameter signature} *)
 (*==========================================================================*)
 
@@ -495,7 +510,7 @@ module type S = sig
    *)
 
   val node_in_nodes: ('n,'e) node
-                      -> (('n,'e) node * port * ('n,'e) edge * port) list
+                     -> (('n,'e) node * port * ('n,'e) edge * port) list
   (** Predecessor nodes of a given node. 
       Each returned element [(node,port1,edge,port2)] gives the predecessor 
       node [node], the port [port1] connecting it to an edge [edge], 
@@ -542,7 +557,7 @@ module type S = sig
     
     
   (*========================================================================*)
-                       (** {2 Global operations} *)
+                        (** {2 Maps and folds} *)
   (*========================================================================*)
 
 
@@ -628,7 +643,14 @@ module type S = sig
                           -> ('n,'e) graph -> 'a -> 'a
   (** Accumulates a function on all edges.    
       The function is called in increasing identifier order.
- *)
+   *)
+
+
+                                   
+  (*========================================================================*)
+                         (** {Simplification} *)
+  (*========================================================================*)
+
 
   val remove_orphan: ('n,'e) graph -> unit
   (** Removes orphan nodes and edges.
@@ -636,8 +658,30 @@ module type S = sig
       edges have no source nor destination nodes.
    *)
 
-    
 
+    
+  (*========================================================================*)
+                      (** {Topological ordering} *)
+  (*========================================================================*)
+
+
+  (**
+     Computes a weak topological ordering suitable to perform fixpoint
+     iterations with widening.
+     Implements Bourdoncle's algorithm [1].
+     [1] Francois Bourdoncle. Efficient Chaotic Iteration Strategies 
+     With Widenings. In Proc. FMPA'93, 128-141, 1993. Springer.
+   *)
+  val weak_topological_order: ('n,'e) graph -> ('n,'e) node nested_list list
+
+  (** Returns an adminisible list of widening points.
+      Given a weak topological ordering, we compute the head of
+      every component.
+   *)
+  val widening_points: ('n,'e) node nested_list list -> ('n,'e) node list
+
+    
+    
   (*========================================================================*)
                          (** {2 Printing} *)
   (*========================================================================*)

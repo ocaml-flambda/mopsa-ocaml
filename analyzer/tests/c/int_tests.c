@@ -5,39 +5,39 @@ void test_add() {
   i = 27;
   j = 100;
   k = i + j;
-  _mopsa_assert_true(k == 127);
+  _mopsa_assert(k == 127);
 }
 
 void test_mult() {
   int i, j;
   i = 10;
   j = 20;
-  _mopsa_assert_true(i * j == 200);
+  _mopsa_assert(i * j == 200);
 }
 
 void test_div() {
   int i, j;
   i = 10;
   j = 2;
-  _mopsa_assert_true(i / j == 5);
+  _mopsa_assert(i / j == 5);
 }
 
 void test_mod() {
   char i, j;
   i = 10;
   j = 3;
-  _mopsa_assert_true(i % j == 1);
+  _mopsa_assert(i % j == 1);
 }
 
 int glob;
 
 void test_global_init_with_zero() {
-  _mopsa_assert_true(glob == 0);
+  _mopsa_assert(glob == 0);
 }
 
 void test_rand_int() {
   int a = _mopsa_rand_int(0, 10);
-  _mopsa_assert_true(a >= 0 && a <= 10);
+  _mopsa_assert(a >= 0 && a <= 10);
 }
 
 void test_divide_by_constant() {
@@ -78,5 +78,5 @@ int test_overflow() {
 /*   while (i <= 10) { */
 /*     i = i + 2; */
 /*   } */
-/*   _mopsa_assert_true(i == 11); */
+/*   _mopsa_assert(i == 11); */
 /* } */

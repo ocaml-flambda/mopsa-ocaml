@@ -47,13 +47,13 @@ module Domain =
            Eval.bind
              (fun eobj flow ->
                Eval.assume
-                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [eobj; ecls] range)
+                 (mk_py_isinstance eobj ecls range)
                  ~fthen:(fun flow ->
                    debug "init!@\n";
                    man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>
                      Eval.bind (fun r flow ->
                          Eval.assume
-                           (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [r; mk_py_object (Addr.find_builtin "NoneType") range] range)
+                           (mk_py_isinstance_builtin r "NoneType" range)
                            ~fthen:(fun flow -> Eval.singleton eobj flow)
                            ~felse:(fun flow ->
                              let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
@@ -96,7 +96,7 @@ module Domain =
                      let mro = Addr.c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1)}, mk_py_empty range) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                          (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))
                        mro;
 
                      Addr.eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>

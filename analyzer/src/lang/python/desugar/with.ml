@@ -42,63 +42,65 @@ module Domain =
          man.eval context flow |>
            Post.bind man (fun econtext flow ->
                (* Enter the context *)
-               let context = object_of_expr econtext in
-               let cls = Addr.class_of_object context in
-               let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
-               let flow =
-                 match target with
-                 | None -> man.exec (mk_stmt (S_expression eenter) srange)  flow
-                 | Some x -> man.exec (mk_assign x eenter srange) flow
-               in
+               man.eval (mk_py_type econtext econtext.erange) flow |>
+                 Post.bind man (fun cls flow ->
+                     let cls = object_of_expr cls in
+                     let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
+                     let flow =
+                       match target with
+                       | None -> man.exec (mk_stmt (S_expression eenter) srange)  flow
+                       | Some x -> man.exec (mk_assign x eenter srange) flow
+                     in
 
-               (* Execute body *)
-               let tmpexn = mk_tmp () in
-               let tmpret = mk_tmp () in
-               let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
-               let stmt =
-                 mk_try
-                   (mk_block [
-                        body;
-                        (* In case of normal execution, call context.__exit__(None, None, None) *)
-                        (mk_stmt
-                           (S_expression (eexit
-                                            (mk_py_none srange)
-                                            (mk_py_none srange)
-                                            (mk_py_none srange)
-                           ))
-                           srange
-                        )
-                      ] srange)
-                   [mk_except
-                      (Some (mk_py_object (Addr.find_builtin "BaseException") srange))
-                      (Some tmpexn)
-                      (mk_block [
-                           (* In case of exception, call __exit__ and give the exception as argument *)
-                           (* FIXME : the type and the traceback are not implmented *)
-                           mk_assign (mk_var tmpret srange)
-                             (eexit
-                                (mk_py_none srange)
-                                (mk_var tmpexn srange)
-                                (mk_py_none srange)
-                             )
-                             srange
-                         ;
-                           (* Check the return value of the __exit__ method and re-raise the exception when it is false *)
-                           mk_if
-                             (mk_var tmpret srange)
-                             (mk_block [] srange)
-                             (mk_stmt (S_py_raise (Some (mk_var tmpexn erange))) srange)
-                             srange
-                         ] srange
-                      )
-                   ]
-                   (mk_block [] srange)
-                   (mk_block [] srange)
-                   srange
-               in
-               man.exec stmt flow |>
-                 man.exec (mk_remove_var tmpexn srange) |>
-                 man.exec (mk_remove_var tmpret srange) |> Post.of_flow
+                     (* Execute body *)
+                     let tmpexn = mk_tmp () in
+                     let tmpret = mk_tmp () in
+                     let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
+                     let stmt =
+                       mk_try
+                         (mk_block [
+                              body;
+                              (* In case of normal execution, call context.__exit__(None, None, None) *)
+                              (mk_stmt
+                                 (S_expression (eexit
+                                                  (mk_py_none srange)
+                                                  (mk_py_none srange)
+                                                  (mk_py_none srange)
+                                 ))
+                                 srange
+                              )
+                            ] srange)
+                         [mk_except
+                            (Some (mk_py_object (Addr.find_builtin "BaseException") srange))
+                            (Some tmpexn)
+                            (mk_block [
+                                 (* In case of exception, call __exit__ and give the exception as argument *)
+                                 (* FIXME : the type and the traceback are not implmented *)
+                                 mk_assign (mk_var tmpret srange)
+                                   (eexit
+                                      (mk_py_none srange)
+                                      (mk_var tmpexn srange)
+                                      (mk_py_none srange)
+                                   )
+                                   srange
+                               ;
+                                 (* Check the return value of the __exit__ method and re-raise the exception when it is false *)
+                                 mk_if
+                                   (mk_var tmpret srange)
+                                   (mk_block [] srange)
+                                   (mk_stmt (S_py_raise (Some (mk_var tmpexn erange))) srange)
+                                   srange
+                               ] srange
+                            )
+                         ]
+                         (mk_block [] srange)
+                         (mk_block [] srange)
+                         srange
+                     in
+                     man.exec stmt flow |>
+                       man.exec (mk_remove_var tmpexn srange) |>
+                       man.exec (mk_remove_var tmpret srange) |> Post.of_flow
+                   )
              )
          |> OptionExt.return
 

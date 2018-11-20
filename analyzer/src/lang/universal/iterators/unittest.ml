@@ -188,12 +188,11 @@ struct
 
   let rec exec zone stmt man flow  =
     match skind stmt with
-    | S_unit_tests(file, tests) ->
+    | S_unit_tests(tests) ->
       debug "Starting tests";
       let flow1, ok, fail, may_fail, panic = execute_test_functions tests man flow in
       summary
-        "Analysis of %s done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven\n %a  %a test%a skipped"
-        file
+        "Analysis done@\n %a  %a assertion%a passed@\n %a  %a assertion%a failed@\n %a  %a assertion%a unproven\n %a  %a test%a skipped"
         ((Debug.color "green") Format.pp_print_string) "✔" ((Debug.color "green") Format.pp_print_int) ok Debug.plurial_int ok
         ((Debug.color "red") Format.pp_print_string) "✘" ((Debug.color "red") Format.pp_print_int) fail Debug.plurial_int fail
         ((Debug.color "orange") Format.pp_print_string) "⚠" ((Debug.color "orange") Format.pp_print_int) may_fail Debug.plurial_int may_fail

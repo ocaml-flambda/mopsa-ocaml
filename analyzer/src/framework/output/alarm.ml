@@ -71,7 +71,7 @@ let pp_alarm fmt alarm =
   Format.fprintf fmt "%a  %a in %a@\nDescription: @[%a@]@\nTrace: @[%a@]"
     pp_level alarm.alarm_level
     !pp_title_chain alarm
-    Location.pp_location_verbose (alarm.alarm_trace |> List.hd |> Location.get_origin_range |> Location.range_begin)
+    Location.pp_range_verbose (alarm.alarm_trace |> List.hd |> Location.untag_range)
     !pp_report_chain alarm
     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Location.pp_range_verbose) alarm.alarm_trace
 

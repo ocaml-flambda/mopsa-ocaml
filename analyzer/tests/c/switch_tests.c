@@ -11,7 +11,7 @@ void test_int_condition() {
   case 6: j = 40; break;
   default: j = 40;
   }
-  _mopsa_assert_true(j == 30);
+  _mopsa_assert(j == 30);
 }
 
 void test_char_condition() {
@@ -24,7 +24,7 @@ void test_char_condition() {
   case 'd': j = 30; break;
   default: j = 40;
   }
-  _mopsa_assert_true(j == 10);
+  _mopsa_assert(j == 10);
 }
 
 void test_default_case() {
@@ -36,7 +36,7 @@ void test_default_case() {
   case 3: j = 40; break;
   default: j = 50;
   }
-  _mopsa_assert_true(j == 50);
+  _mopsa_assert(j == 50);
 }
 
 void test_case_with_no_break() {
@@ -48,7 +48,7 @@ void test_case_with_no_break() {
   case 15: j = j + 4; break;
   default: j = -1;
   }
-  _mopsa_assert_true(j == 7);
+  _mopsa_assert(j == 7);
 }
 
 void test_no_default() {
@@ -59,7 +59,7 @@ void test_no_default() {
   case 2: j = 30; break;
   case 3: j = 40; break;
   }
-  _mopsa_assert_true(j == 0);
+  _mopsa_assert(j == 0);
 }
 
 
@@ -78,5 +78,5 @@ void test_duff_device() {
     case 1:      to = from++;
     n = n - 1; } while (n > 0);
   }
-  _mopsa_assert_true(from == 10);
+  _mopsa_assert(from == 10);
 }

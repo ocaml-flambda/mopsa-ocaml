@@ -10,9 +10,8 @@
 (** Locations and ranges *)
 
 
-(*==========================================================================*)
-(**                           {2 Locations}                                 *)
-(*==========================================================================*)
+(** {2 Locations} *)
+(** ============= *)
 
 type loc = {
   loc_file: string; (** Filename. *)
@@ -34,15 +33,11 @@ let compare_location (l1: loc) (l2: loc) =
   ]
 
 
-(*==========================================================================*)
-(**                            {2 Ranges}                                   *)
-(*==========================================================================*)
+
+(** {2 Ranges} *)
+(** ========== *)
 
 
-type range_orig = {
-  range_begin: loc; (** Start location. *)
-  range_end: loc; (** End location. *)
-}
 (** Location range of an AST node. *)
 
 type range_tag = string
@@ -51,59 +46,106 @@ type range_tag = string
 
 (** Location range of AST nodes. *)
 type range =
-  | Range_file of string (** range covering an entire file *)
-  | Range_origin of range_orig (** original range from source files *)
-  | Range_fresh of int (** non-original fresh range with unique id *)
-  | Range_tagged of range_tag * range
+  | R_program of string list (** list of source files *)
+  (** Program range covering a list source files *)
+
+  | R_source of loc (** start location. *) * loc (** end location *)
+  (** Source range with a start and an end locations. *)
+
+  | R_fresh of int (** non-original fresh range with unique id *)
+  (** Fresh ranges with unique identifiers *)
+      
+  | R_tagged of string * range
+  (** Tagged range with a string annotation *)
 
 (** Tag a range with a (formatted) annotation. *)
 let tag_range range fmt =
   Format.kasprintf (fun tag ->
-      Range_tagged (tag, range)
+      R_tagged (tag, range)
     ) fmt
 
-
-let mk_range loc1 loc2 =
-  {range_begin = loc1; range_end = loc2}
+let mk_source_range loc1 loc2 = R_source (loc1, loc2)
 
 let fresh_range_counter = ref 0
 
 let mk_fresh_range () =
   incr fresh_range_counter;
-  Range_fresh !fresh_range_counter
+  R_fresh !fresh_range_counter
 
-let mk_file_range f = Range_file f
+let mk_program_range pl = R_program pl
 
-let rec get_origin_range = function
-  | Range_origin range -> range
-  | Range_file filename -> mk_range (mk_loc filename 1 1) (mk_loc filename (-1) (-1))
-  | Range_tagged(_, range) -> get_origin_range range
-  | Range_fresh _ -> failwith "get_origin_range: call on non-original range"
+let rec untag_range = function
+  | R_tagged(_, range) -> untag_range range
+  | range -> range
 
-let range_begin r = r.range_begin
+let rec map_tag f = function
+  | R_tagged (t, r) -> R_tagged (t, map_tag f r)
+  | r -> f r
+                            
+let get_range_file r =
+  match untag_range r with
+  | R_program [f] -> f
+  | R_program _ -> Debug.fail "get_range_file: wrong program range"
+  | R_source (loc1, _) -> loc1.loc_file
+  | R_fresh _ -> Debug.fail "get_range_file: called on R_fresh"
+  | R_tagged _ -> assert false
+
+let get_range_line r =
+  match untag_range r with
+  | R_source (loc1, _) -> loc1.loc_line
+  | _ -> Debug.fail "get_range_line: called on non R_source"
+
+let get_range_start r =
+  match untag_range r with
+  | R_source (l, _) -> l
+  | _ -> Debug.fail "get_range_start: called on non R_source"
+
+let get_range_end r =
+  match untag_range r with
+  | R_source (_, l) -> l
+  | _ -> Debug.fail "get_range_end: called on non R_source"
+
+let set_range_start r l =
+  map_tag (fun r ->
+      match r with
+      | R_source (_, l') -> R_source (l, l')
+      | _ -> Debug.fail "set_range_start: called on non R_source"
+    ) r
+
+let set_range_end r l' =
+  map_tag (fun r ->
+      match r with
+      | R_source (l, _) -> R_source (l, l')
+      | _ -> Debug.fail "set_range_end: called on non R_source"
+    ) r
+
 
 (** Comparison function of ranges. *)
 let rec compare_range (r1: range) (r2: range) =
   match r1, r2 with
-  | Range_origin r1, Range_origin r2 ->
+  | R_program pl1, R_program pl2 ->
+    Compare.list compare pl1 pl2
+
+  | R_source (l1, l2), R_source (l1', l2') ->
     Compare.compose [
-      (fun () -> compare_location r1.range_begin r2.range_begin);
-      (fun () -> compare_location r1.range_end r2.range_end);
+      (fun () -> compare_location l1 l2);
+      (fun () -> compare_location l1' l2');
     ]
-  | Range_file f1, Range_file f2 -> compare f1 f2
-  | Range_tagged(t1, r1), Range_tagged(t2, r2) ->
+
+  | R_tagged(t1, r1), R_tagged(t2, r2) ->
     Compare.compose [
       (fun () -> compare_range r1 r2);
       (fun () -> compare t1 t2)
     ]
-  | Range_fresh(uid1), Range_fresh(uid2) -> compare uid1 uid2
+
+  | R_fresh(uid1), R_fresh(uid2) -> compare uid1 uid2
+
   | _ -> compare r1 r2
 
 
-(*==========================================================================*)
-(**                      {2 Pretty printers}                                *)
-(*==========================================================================*)
 
+(** {2 Pretty printers} *)
+(** =================== *)
 
 let rec pp_location fmt loc =
   Format.fprintf fmt "%d:%d" loc.loc_line loc.loc_column
@@ -114,24 +156,14 @@ and pp_location_verbose fmt loc =
 
 and pp_range fmt range =
   match range with
-  | Range_origin r ->
-    Format.fprintf fmt "%a-%a"
-      pp_location r.range_begin pp_location r.range_end
-  | Range_file f ->
-    Format.fprintf fmt "%s" f
-  | Range_fresh uid ->
-    (* Format.fprintf fmt "!%d" uid *)
-    ()
-  | Range_tagged (t, r) ->
-    Format.fprintf fmt "%a<%s>" pp_range r t
+  | R_program pl -> Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string fmt pl
+  | R_source (l1, l2) -> Format.fprintf fmt "%a-%a" pp_location l1 pp_location l2
+  | R_fresh uid -> Format.fprintf fmt "!%d" uid
+  | R_tagged (t, r) -> Format.fprintf fmt "%a<%s>" pp_range r t
 
 and pp_range_verbose fmt range =
   match range with
-  | Range_origin r ->
-    pp_location_verbose fmt r.range_begin
-  | Range_file f ->
-    Format.fprintf fmt "File %s" f
-  | Range_fresh uid ->
-    Format.fprintf fmt "!%d" uid
-  | Range_tagged(t, r) ->
-    Format.fprintf fmt "%a<%s>" pp_range_verbose r t
+  | R_program pl -> pp_range fmt range
+  | R_source (l1, _) -> pp_location_verbose fmt l1
+  | R_fresh uid -> pp_range fmt range
+  | R_tagged(t, r) -> Format.fprintf fmt "%a~%s" pp_range_verbose r t

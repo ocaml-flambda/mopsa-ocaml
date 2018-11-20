@@ -196,7 +196,7 @@ let class_of_object (obj: py_object) : py_object =
 
 let mro (obj: py_object) : py_object list =
   match kind_of_object obj with
-  | A_py_class (c, b) -> b
+  | A_py_class (c, b) -> obj::b
   | _ -> assert false
 
 (** Return the closest non-heap (i.e. non-user defined) base class *)
@@ -303,6 +303,14 @@ let mk_attribute_var obj attr range =
   in
   mk_var v range
 
+let mk_py_isinstance e1 e2 range =
+  mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
+
+let mk_py_isinstance_builtin e builtin range =
+  mk_py_isinstance e (mk_py_object (find_builtin builtin) range) range
+
+let mk_py_type e range =
+  mk_py_call (mk_py_object (find_builtin "type") range) [e] range
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =

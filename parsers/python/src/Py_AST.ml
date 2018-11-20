@@ -119,6 +119,7 @@ and func = {
   func_is_generator: bool; (** is the function a generator? *)
   func_decors: expr list;
   func_return: expr option;
+  func_range: Py_CST.range;
 }
 
 (** Class definition *)
@@ -128,7 +129,8 @@ and cls = {
   cls_static_attributes: var list;
   cls_bases: expr list; (** inheritance base classes *)
   cls_decors: expr list;
-  cls_keywords: (string option * expr) list (** keywords (None id for **kwargs) *)
+  cls_keywords: (string option * expr) list; (** keywords (None id for **kwargs) *)
+  cls_range: Py_CST.range;
 }
 
 

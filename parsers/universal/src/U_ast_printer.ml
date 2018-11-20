@@ -232,6 +232,12 @@ and print_stat fmt = function
     Format.fprintf fmt "%a"
       print_expr e
 
+  | AST_continue ->
+    Format.pp_print_string fmt "continue"
+
+  | AST_break ->
+    Format.pp_print_string fmt "break"
+
 
 and print_stat_ext fmt (s, _) =
   print_stat fmt s

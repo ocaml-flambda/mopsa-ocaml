@@ -39,10 +39,10 @@ module Domain =
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                Eval.assume
-                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e1; mk_py_object (Addr.find_builtin "int") range] range)
+                 (mk_py_isinstance_builtin e1 "int" range)
                  ~fthen:(fun true_flow ->
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e2; mk_py_object (Addr.find_builtin "int") range] range)
+                     (mk_py_isinstance_builtin e2 "int" range)
                      ~fthen:(fun true_flow ->
                        man.eval (mk_py_top T_bool range) true_flow)
                      ~felse:(fun false_flow ->
@@ -63,10 +63,10 @@ module Domain =
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                Eval.assume
-                 (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e1; mk_py_object (Addr.find_builtin "int") range] range)
+                 (mk_py_isinstance_builtin e1 "int" range)
                  ~fthen:(fun true_flow ->
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [e2; mk_py_object (Addr.find_builtin "int") range] range)
+                     (mk_py_isinstance_builtin e2 "int" range)
                      ~fthen:(fun true_flow ->
                        man.eval (mk_py_top T_int range) true_flow)
                      ~felse:(fun false_flow ->

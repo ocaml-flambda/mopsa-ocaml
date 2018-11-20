@@ -9,8 +9,8 @@ union {
 } regs;
 
 void test_initialization_of_uninitialized_global() {
-  _mopsa_assert_true(regs.w.ax == 0);
-  _mopsa_assert_true(regs.b.al == 0);
+  _mopsa_assert(regs.w.ax == 0);
+  _mopsa_assert(regs.b.al == 0);
 }
 
 void test_modify_part_and_reconstruct() {
@@ -18,5 +18,5 @@ void test_modify_part_and_reconstruct() {
   if (!regs.b.ah) regs.b.bl = regs.b.al;
   else regs.b.bh = regs.b.al;
   regs.b.al = 0xab;
-  _mopsa_assert_true(regs.w.ax == 0x12ab);
+  _mopsa_assert(regs.w.ax == 0x12ab);
 }

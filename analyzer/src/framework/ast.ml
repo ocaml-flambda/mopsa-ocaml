@@ -209,23 +209,16 @@ let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
 
-(*==========================================================================*)
-                        (** {2 Programs} *)
-(*==========================================================================*)
-type program_kind = ..
-(** Extensible type for describing analyzed programs. *)
-
-type program = {
-  prog_kind : program_kind;
-  prog_file : string;
-}
 
 (*==========================================================================*)
                      (**      {2 Statements}      *)
 (*==========================================================================*)
 
+
 type stmt_kind = ..
 (** Extensible statements kinds. *)
+
+type program = ..
 
 (** Basic statements *)
 type stmt_kind +=

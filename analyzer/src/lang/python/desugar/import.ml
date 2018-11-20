@@ -82,7 +82,7 @@ module Domain =
         | Some dir ->
            let filename = dir ^ "/" ^ name ^ ".py" in
            let prog = Frontend.parse_program [filename] in
-           let globals, body = match prog.prog_kind with Py_program(body, globals) -> body, globals | _ -> assert false in
+           let globals, body = match prog with Py_program(body, globals) -> body, globals | _ -> assert false in
            let addr = {
                addr_kind = A_py_module (M_user(name, globals));
                addr_uid = 0;
@@ -105,7 +105,6 @@ module Domain =
       | None -> Framework.Exceptions.panic "builtin module %s not found" file
       | Some dir ->
          let path = dir ^ "/" ^ file in
-         let range = mk_file_range path in
          let stmt = Frontend.parse_file path in
 
          let rec parse base stmt =
@@ -122,7 +121,7 @@ module Domain =
                 if Libs.Mopsa.is_unsupported_clsdec cls then C_unsupported name
                 else C_builtin name
               in
-              Addr.create_builtin_class kind name cls bases range;
+              Addr.create_builtin_class kind name cls bases (srange stmt);
               parse (Some name) cls.py_cls_body
 
            | S_py_function(fundec) ->
@@ -138,7 +137,7 @@ module Domain =
                   addr_uid = 0;
                 }
               in
-              Addr.add_builtin_function (addr, mk_py_empty range) ()
+              Addr.add_builtin_function (addr, mk_py_empty (srange stmt)) ()
 
            | S_block(block) ->
               List.iter (parse base) block
@@ -155,7 +154,7 @@ module Domain =
                addr_uid = 0;
              }
            in
-           Addr.add_builtin_module (addr, mk_py_empty range) ()
+           Addr.add_builtin_module (addr, mk_py_empty (srange stmt)) ()
          else
            ()
 

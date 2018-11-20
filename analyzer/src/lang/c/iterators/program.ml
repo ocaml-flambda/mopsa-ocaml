@@ -68,9 +68,8 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_program({prog_kind = C_program(globals, functions); prog_file})
+    | S_program(C_program(globals, functions))
       when not !Universal.Iterators.Unittest.unittest_flag ->
-      let range = mk_file_range prog_file in
       (* Initialize global variables *)
       let flow1 = init_globals globals man flow in
       (* Find entry function *)
@@ -83,11 +82,11 @@ struct
           Framework.Exceptions.panic "entry function %s not found" !opt_entry_function
       in
       (* Execute body of entry function *)
-      let stmt = mk_c_call_stmt entry [] range in
+      let stmt = mk_c_call_stmt entry [] (srange stmt) in
       man.exec ~zone:Zone.Z_c stmt flow1 |>
       Post.return
 
-    | S_program({prog_kind = C_program(globals, functions); prog_file})
+    | S_program(C_program(globals, functions))
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals globals man flow in
@@ -106,21 +105,19 @@ struct
         List.filter is_test functions
       in
 
-      let mk_c_unit_tests file tests =
-        let range = mk_file_range file in
+      let mk_c_unit_tests tests =
         let tests =
           tests |> List.map (fun test ->
               let name = test.c_func_var.vname in
-              let range = tag_range range "test %s" name in
-              let stmt = mk_c_call_stmt test [] range in
+              let stmt = mk_c_call_stmt test [] test.c_func_range in
               (name, stmt)
             )
         in
-        mk_stmt (Universal.Ast.S_unit_tests (file, tests)) range
+        mk_stmt (Universal.Ast.S_unit_tests tests) (srange stmt)
       in
 
       let tests = get_test_functions functions in
-      let stmt = mk_c_unit_tests prog_file tests in
+      let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
       Post.return
 

@@ -32,7 +32,7 @@ let pp_py_object fmt (obj: py_object) =
 
 let () =
   register_pp_program (fun default fmt prog ->
-      match prog.prog_kind with
+      match prog with
       | Py_program(globals, body) -> pp_stmt fmt body
       | _ -> default fmt prog
     );

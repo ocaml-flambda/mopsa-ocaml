@@ -24,5 +24,5 @@ int f0(int x) {
 
 
 void test_goto_with_return_flows() {
-  _mopsa_assert_true(f0(5) == 0);
+  _mopsa_assert(f0(5) == 0);
 }

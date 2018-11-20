@@ -194,6 +194,7 @@ type py_fundec = {
   py_func_body: stmt; (** function body *)
   py_func_is_generator: bool; (** is the function a generator? *)
   py_func_decors: expr list;
+  py_func_range: range; (** range of the function *)
 }
 
 (** A Python class *)
@@ -203,7 +204,8 @@ type py_clsdec = {
   py_cls_static_attributes: var list; (** list of declared attributes: static variables and methods *)
   py_cls_bases : expr list; (** base classes *)
   py_cls_decors: expr list;
-  py_cls_keywords: (string option * expr) list (** keywords (None id for **kwargs) *)
+  py_cls_keywords: (string option * expr) list; (** keywords (None id for **kwargs) *)
+  py_cls_range : range; (** range of the class *)
 }
 
 
@@ -273,7 +275,7 @@ type stmt_kind +=
                            (** {2 Programs} *)
 (*==========================================================================*)
 
-type Framework.Ast.program_kind +=
+type Framework.Ast.program +=
   | Py_program of
       var list (** global variables *) *
       stmt (** body *)

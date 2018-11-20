@@ -161,6 +161,7 @@ type fundec =
     body : stat ext;
     locvars : declaration ext list;
     return_type : typ option;
+    range : extent;
   }
 
 (* a program is a list of statements preceded by function declaration *)

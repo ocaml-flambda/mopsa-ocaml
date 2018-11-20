@@ -58,8 +58,7 @@ struct
     | "_mopsa_panic"
     | "_mopsa_print"
     | "_mopsa_assert_exists"
-    | "_mopsa_assert_true"
-    | "_mopsa_assert_false"
+    | "_mopsa_assert"
     | "_mopsa_assert_safe"
     | "_mopsa_assert_unsafe"
     | "_mopsa_assert_error"
@@ -211,14 +210,8 @@ struct
       OptionExt.return
 
 
-    | E_c_builtin_call("_mopsa_assert_true", [cond]) ->
+    | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
-      let flow = man.exec stmt flow in
-      Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
-
-    | E_c_builtin_call("_mopsa_assert_exists", [cond]) ->
-      let stmt = {skind = S_simple_assert(cond,false,true); srange = exp.erange} in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
@@ -323,7 +316,7 @@ struct
             | T_alarm a
               when is_c_alarm a
                 && code = alarm_to_code a
-                && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
+                && line = get_range_line @@ List.hd a.alarm_trace
               ->
               man.join annot acc env
             | _ -> acc
@@ -345,7 +338,7 @@ struct
                        | T_alarm a
                          when is_c_alarm a
                            && code = alarm_to_code a
-                           && line = (let r = get_origin_range @@ List.hd a.alarm_trace in r.range_begin.loc_line)
+                           && line = get_range_line @@ List.hd a.alarm_trace
                          -> false
                        | _ -> true) man |>
                    Flow.set T_cur cur man

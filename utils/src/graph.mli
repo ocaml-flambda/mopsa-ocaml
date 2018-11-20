@@ -31,6 +31,20 @@ module IdUnit   : ID_TYPE with type t = unit
 (** Product. *)         
 module IdPair(A:ID_TYPE)(B:ID_TYPE) : ID_TYPE with type t = A.t * B.t
 
+  
+
+(*==========================================================================*)
+                    (** {2 Nested lists} *)
+(*==========================================================================*)
+
+
+(** Printers. *)
+val pp_nested_list: (Format.formatter -> 'a -> unit) -> Format.formatter ->
+                    'a nested_list -> unit
+
+val pp_nested_list_list: (Format.formatter -> 'a -> unit) -> Format.formatter ->
+                         'a nested_list list -> unit
+
 
      
 (*==========================================================================*)

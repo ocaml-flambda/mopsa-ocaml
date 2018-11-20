@@ -163,59 +163,8 @@ let () =
 
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
-      | S_program(({prog_kind = C_program(globals, funcs)} as prog)) ->
-        (* Get initialization expressions from a list of variable declarations *)
-        let rec exprs_in_vars = function
-          | [] -> []
-          | (v, init, range) :: tl -> (exprs_in_init_option init) @ (exprs_in_vars tl)
-        in
-
-        (* Get initialization expressions of local variables *)
-        let rec exprs_in_funcs = function
-          | [] -> []
-          | f :: tl -> (exprs_in_vars f.c_func_local_vars) @ (exprs_in_funcs tl)
-        in
-
-        (* Re-construct a list variable declarations from a list of initialization expressions *)
-        let rec vars_in_exprs exprs vars =
-          match vars with
-          | (v, init, range) :: tl ->
-            let init, exprs = init_option_from_exprs exprs init in
-            let vars, exprs = vars_in_exprs exprs tl in
-            (v, init, range) :: vars, exprs
-          | [] -> [], exprs
-        in
-
-        (* Re-construct a list of function declarations from a list of initialization expressions *)
-        let rec funcs_in_exprs exprs stmts funcs =
-          match stmts, funcs with
-          | [], [] -> [], exprs
-          | body :: stmts, f :: funcs ->
-            let locals, exprs = vars_in_exprs exprs f.c_func_local_vars in
-            let f = {f with c_func_local_vars = locals; c_func_body = body} in
-            let funcs, exprs = funcs_in_exprs exprs stmts funcs in
-            (f :: funcs), exprs
-          | _ -> assert false
-        in
-
-        (* Construct the parts of the program *)
-        let exprs = exprs_in_vars globals @ exprs_in_funcs funcs in
-        let stmts = List.map (fun f -> Ast.get_c_fun_body f) funcs in
-        let empty_functions = List.map (fun f -> match f.c_func_body with | Some _ -> true | None -> false) funcs in
-        ({exprs; stmts},
-        (function {exprs; stmts} ->
-           (* Re-construct the program from its parts *)
-           let globals, exprs = vars_in_exprs exprs globals in
-           let funcs, _ = funcs_in_exprs exprs
-               (List.map2 (fun x b -> if b then
-                              Some x
-                            else None
-                          )
-                  stmts empty_functions
-               ) funcs
-           in
-           {stmt with skind = S_program({prog with prog_kind = C_program(globals, funcs)})}
-        ))
+      | S_program(C_program(globals, funcs)) ->
+        Framework.Exceptions.panic "visitor of C_program not yet implemented"
 
       | S_c_local_declaration(v, init) ->
         let exprs = exprs_in_init_option init in

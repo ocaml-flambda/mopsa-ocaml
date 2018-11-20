@@ -106,14 +106,19 @@ module CFG = Graph.Make(CFG_Param)
     from the CFG. 
     This way, CFG can be kept immutable.
  *)
-type cfg  = (unit, stmt) CFG.graph
-type node = (unit, stmt) CFG.node
-type edge = (unit, stmt) CFG.edge
-
+type graph = (unit, stmt) CFG.graph
+type node  = (unit, stmt) CFG.node
+type edge  = (unit, stmt) CFG.edge
+          
 type node_id = TagLoc.t
 type edge_id = Range.t
 type port = token
-             
+
+type cfg =
+  { cfg_graph: graph;
+    mutable cfg_order: node GraphSig.nested_list list;
+  }
+
 
 (*==========================================================================*)
                        (** {2 Graph utilities} *)
@@ -150,13 +155,14 @@ let copy_node_id (n:node_id) : node_id =
 let node_loc (t:node_id) : loc = t.TagLoc.loc
 
 let pp_node_id = TagLoc.print
+let pp_node_as_id fmt node = pp_node_id fmt (CFG.node_id node)
 
 let compare_node_id = TagLoc.compare
 
 
                
 let mk_edge_id ?(tag="") (range:range) : edge_id =
-  if tag = "" then range else Range_tagged (tag, range)
+  if tag = "" then range else tag_range range "%s" tag
 
 let fresh_edge_id = RangeHash.create 16
 (* we use our own fresh range generator to keep an origin_range information *)
@@ -182,6 +188,7 @@ let mk_anonymous_edge_id ?(tag="") () : edge_id =
 let edge_range (t:edge_id) : range = t
 
 let pp_edge_id = Range.print
+let pp_edge_as_id fmt edge = pp_edge_id fmt (CFG.edge_id edge)
 
 let compare_edge_id = Range.compare
                 
@@ -196,7 +203,7 @@ let compare_edge_id = Range.compare
     single abstract state, using node flows.
  *)
 type token +=
-   | T_loc of Loc.t
+   | T_node of node_id
 
 (** Flow for true and false branch of tests. *)            
 type token +=

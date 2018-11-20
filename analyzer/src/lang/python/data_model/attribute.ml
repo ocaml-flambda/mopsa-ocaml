@@ -9,6 +9,7 @@
 (** Data model for attribute access. *)
 
 open Framework.Essentials
+open Framework.Visitor
 open Universal.Ast
 open Ast
 open Addr
@@ -27,7 +28,23 @@ let () =
       match ekind exp with
       | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
       | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr
-      | _ -> default fmt exp)
+      | _ -> default fmt exp);
+  register_expr_visitor (fun default exp ->
+      match ekind exp with
+      | E_py_ll_hasattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_hasattr(e1, e2)})
+      | E_py_ll_getattr(e1, e2) ->
+         {exprs = [e1; e2]; stmts = [];},
+         (fun parts -> let e1, e2 = match parts.exprs with
+                         | [e1; e2] -> e1, e2
+                         | _ -> assert false in
+                       {exp with ekind = E_py_ll_getattr(e1, e2)})
+      | _ -> default exp
+    )
 
 
 module Domain =
@@ -81,7 +98,7 @@ module Domain =
                       and create a method *)
                    (* to test if an object o is a class, we call isinstance(o, type) *)
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [exp; mk_py_object (Addr.find_builtin "type") range] range)
+                     (mk_py_isinstance_builtin exp "type" range)
                      ~fthen:(fun flow ->
                        let mro = Addr.mro (object_of_expr exp) in
                        let rec search_mro flow mro = match mro with
@@ -99,7 +116,7 @@ module Domain =
                        in search_mro flow mro
                      )
                      ~felse:(fun flow ->
-                       man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [exp] range) flow |>
+                       man.eval (mk_py_type exp range) flow |>
                          Eval.bind (fun class_of_exp flow ->
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              let rec search_mro flow mro = match mro with
@@ -115,7 +132,7 @@ module Domain =
                                       man.eval (mk_py_object_attr cls attr range) flow |>
                                         Eval.bind (fun obj' flow ->
                                             Eval.assume
-                                              (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [obj'; mk_py_object (Addr.find_builtin "function") range] range)
+                                              (mk_py_isinstance_builtin obj' "function" range)
                                               ~fthen:(fun flow ->
                                                 (* Debug.fail "todo@\n"; *)
                                                 debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
@@ -150,19 +167,19 @@ module Domain =
                      | [] -> Eval.singleton (mk_py_false range) flow
                      | cls::tl ->
                         Eval.assume
-                          (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
+                          (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                           ~fthen:(fun flow ->
                             Eval.singleton (mk_py_true range) flow)
                           ~felse:(fun flow -> search_mro flow tl)
                           man flow
                    in
                    Eval.assume
-                     (mk_py_call (mk_py_object (Addr.find_builtin "isinstance") range) [eobj; mk_py_object (Addr.find_builtin "type") range] range)
+                     (mk_py_isinstance_builtin eobj "type" range)
                      ~fthen:(fun flow ->
                        let mro = Addr.mro (object_of_expr eobj) in
                        search_mro flow mro)
                      ~felse:(fun flow ->
-                       man.eval (mk_py_call (mk_py_object (Addr.find_builtin "type") range) [eobj] range) flow |>
+                       man.eval (mk_py_type eobj range) flow |>
                          Eval.bind (fun class_of_exp flow ->
                              let mro = Addr.mro (object_of_expr class_of_exp) in
                              search_mro flow mro)

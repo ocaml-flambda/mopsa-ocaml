@@ -5,6 +5,7 @@ open Universal.Ast
 open Addr
 open Data_model.Attribute
 open MapExt
+open Objects.Function
 
 type expr_kind +=
    | E_get_type_partition of Typingdomain.polytype
@@ -22,6 +23,21 @@ let () =
       | E_type_partition i1, E_type_partition i2 -> Pervasives.compare i1 i2
       | _ -> next e1 e2)
 
+type summaries = Typingdomain.summary list
+
+type ('a, _) Annotation.key +=
+   | A_py_summaries: ('a, summaries) Annotation.key
+
+let pp_summaries fmt summaries = Format.pp_print_list Typingdomain.pp_summary fmt summaries
+
+let () =
+  Annotation.(register_stateless_annot {
+      eq = (let f: type a b. (a, b) Annotation.key -> (summaries, b) eq option =
+             function
+             | A_py_summaries -> Some Eq
+             | _ -> None in f);
+      print = (fun fmt s -> Format.fprintf fmt "Summaries: %a" pp_summaries s)
+    }) ()
 
 
 module Domain =
@@ -55,7 +71,7 @@ module Domain =
       let cur = Flow.get_domain_cur man flow in
       let tid, ncur = Typingdomain.get_type cur ptype in
       let flow = Flow.set_domain_cur ncur man flow in
-      Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return
+      Eval.singleton (mk_expr (E_type_partition tid) range) flow
 
     let init progr man flow =
       Some ( Flow.set_domain_env T_cur Typingdomain.top man flow )
@@ -96,7 +112,7 @@ module Domain =
                      let ty = match addr.addr_kind with
                        | A_py_class (c, mro) -> Typingdomain.Class (c, mro)
                        | A_py_module m ->         Typingdomain.Module m
-                       | A_py_function f ->       Typingdomain.Function (f, [])
+                       | A_py_function f ->       Typingdomain.Function f
                        | A_py_method (func, self) ->
                           let func = match (fst func).addr_kind with
                             | A_py_function f -> f
@@ -164,44 +180,29 @@ module Domain =
       match ekind exp with
       | E_constant (C_top T_bool)
         | E_constant (C_bool _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "bool")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bool") |> OptionExt.return
 
       | E_constant (C_top T_int)
         | E_constant (C_int _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "int")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "int") |> OptionExt.return
+
+      | E_constant (C_top (T_float _))
+        | E_constant (C_float _) ->
+         return_id_of_type man flow range (Typingdomain.builtin_inst "float") |> OptionExt.return
 
       | E_constant (C_string _) ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "str")
+         return_id_of_type man flow range (Typingdomain.builtin_inst "str") |> OptionExt.return
 
       | E_py_bytes _ ->
-         return_id_of_type man flow range (Typingdomain.builtin_inst "bytes")
-
-      | E_py_list ls ->
-         (* FIXME: not modular *)
-         Eval.eval_list ls man.eval flow |>
-           Eval.bind (fun list_els flow ->
-               let cur = Flow.get_domain_cur man flow in
-               let dummy_annot = Flow.get_all_annot flow in
-               let els_types = List.fold_left (fun acc el ->
-                                   match ekind el with
-                                   | E_type_partition tid ->
-                                      let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
-                                      let mty = Typingdomain.concretize_poly pty cur.d3 in
-                                      Typingdomain.Monotypeset.union dummy_annot mty acc
-                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
-               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
-               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
-               let flow = Flow.set_domain_cur cur man flow in
-               Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
-         |> OptionExt.return
+         return_id_of_type man flow range (Typingdomain.builtin_inst "bytes") |> OptionExt.return
 
       | E_constant C_py_not_implemented ->
          let builtin_notimpl = Typingdomain.builtin_inst "NotImplementedType" in
-         return_id_of_type man flow range builtin_notimpl
+         return_id_of_type man flow range builtin_notimpl |> OptionExt.return
 
       | E_constant C_py_none ->
          let builtin_none = Typingdomain.builtin_inst "NoneType" in
-         return_id_of_type man flow range builtin_none
+         return_id_of_type man flow range builtin_none |> OptionExt.return
 
       | E_alloc_addr akind ->
          begin match akind with
@@ -232,7 +233,7 @@ module Domain =
              let polytype = Typingdomain.get_polytype cur v in
              let expr = match polytype with
                | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | Typingdomain.Function (f, _) -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | Typingdomain.Function f -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
                | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
                | _ ->
                   let tid = Typingdomain.typeindex_of_var cur.d1 v in
@@ -353,7 +354,8 @@ module Domain =
                  (* | E_get_type_partition pt -> *)
                     let ty = match pt with
                       | Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (c, b)} -> (c, b)
-                      | Typingdomain.Class _ -> C_builtin "type", [Addr.find_builtin "object"]
+                      | Typingdomain.Class _ -> C_builtin "type", List.map Addr.find_builtin ["type"; "object"]
+                      | Typingdomain.List _ -> C_builtin "list", List.map Addr.find_builtin ["list"; "object"]
                       | _ -> assert false
                     in ty
                  | E_py_object ({addr_kind = A_py_class (c, b)}, _) ->
@@ -386,7 +388,7 @@ module Domain =
            Eval.bind (fun evals flow ->
                let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
                match ekind cls, ekind cls' with
-                   | E_py_object ({addr_kind = A_py_class (c, mro)} as a, _),
+                   | E_py_object ({addr_kind = A_py_class (c, mro)}, _),
                      E_py_object ({addr_kind = A_py_class (c', mro')} as a', _) ->
                       if List.exists (fun x -> Universal.Ast.compare_addr (fst x) a' = 0) mro then
                         Eval.singleton (mk_py_true range) flow
@@ -431,10 +433,10 @@ module Domain =
                | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
                   Debug.fail "Left MRO %a@\nRight MRO %a@\n"
                     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x range)))
                     mro
                     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (Range_fresh (-1)))))
+                       (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x range)))
                     mro'
                | E_py_object ({addr_kind = A_py_module _}, _), _ ->
                   begin match ekind eattr with
@@ -473,6 +475,153 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
          man.eval (mk_py_none range) flow |> OptionExt.return
+
+      (*********
+       * Lists *
+       *********)
+      | E_py_list ls ->
+         (* FIXME: not modular *)
+         Eval.eval_list ls man.eval flow |>
+           Eval.bind (fun list_els flow ->
+               let cur = Flow.get_domain_cur man flow in
+               let dummy_annot = Flow.get_all_annot flow in
+               let els_types = List.fold_left (fun acc el ->
+                                   match ekind el with
+                                   | E_type_partition tid ->
+                                      let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
+                                      let mty = Typingdomain.concretize_poly pty cur.d3 in
+                                      Typingdomain.Monotypeset.union dummy_annot mty acc
+                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
+               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
+               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
+               let flow = Flow.set_domain_cur cur man flow in
+               Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
+         Eval.eval_list args man.eval flow |>
+           Eval.bind (fun eargs flow ->
+               let lst, idx = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+               Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                 ~fthen:(fun flow ->
+                   Eval.assume (mk_py_isinstance_builtin idx "int" range)
+                     ~fthen:(fun flow ->
+                       (* TODO: create new expr_kind so this part of the code is modular in each analysis? *)
+                       let cur = Flow.get_domain_cur man flow in
+                       let lst_tid = match ekind lst with
+                         | E_type_partition i -> i
+                         | _ -> assert false in
+                       let tid, ncur = Typingdomain.gather_list_types cur lst_tid in
+                       let flow = Flow.set_domain_cur ncur man flow in
+                       Eval.singleton (mk_expr (E_type_partition tid) range) flow
+                     )
+                     ~felse:(fun flow ->
+                       Eval.assume (mk_py_isinstance_builtin idx "slice" range)
+                         ~fthen:(fun flow -> Debug.fail "FIXME: slices are unsupported yet")
+                         ~felse:(fun flow ->
+                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                             Eval.empty_singleton
+                         )
+                         man flow
+                     )
+                     man flow
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+               man flow
+               (* check that lst inherits from list, otherwise raise a typeerror *)
+               (* check that idx is either an integer or a slide *)
+               (* return the type(s) of elements inside the container *)
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__iter__")}, _)}, [arg], []) ->
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               Eval.assume (mk_py_isinstance_builtin earg "list" range)
+                 ~fthen:(fun flow ->
+                   return_id_of_type man flow range (Typingdomain.builtin_inst "listiter")
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+                 man flow
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "listiter.__next__")}, _)}, [arg], []) ->
+         Debug.fail "todo: listiternext@\n"
+
+      | E_py_sum_call (f, args) ->
+         Eval.eval_list args man.eval flow |>
+            Eval.bind (fun eargs flow ->
+                let func = match ekind f with
+                  | E_function (User_defined func) -> func
+                  | _ -> assert false in
+                let cur = Flow.get_domain_cur man flow in
+                let annots = try Flow.get_annot A_py_summaries flow with Not_found -> [] in
+                let inputs = List.map (fun exp -> match ekind exp with
+                                                  | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                                                  | _ -> debug "%a@\n" pp_expr exp; assert false) eargs in
+                let closure = [] in
+                let d3 = (Flow.get_domain_cur man flow).d3 in
+                if Typingdomain.exist_compatible_summary func inputs closure d3 annots then
+                  (
+                    let sp, cl = Typingdomain.get_compatible_summary func inputs closure d3 annots in
+                    let s_i, s_io, s_o, s_d3 = sp in
+                  (* change the inputs into the type of s_io *)
+                    let cur = List.fold_left2 (fun cur e_arg ptype ->
+                                  match ekind e_arg with
+                                  | E_type_partition i ->
+                                  (* FIXME: this update is too brutal if different variables are pointing here *)
+                                     let d2 = Typingdomain.TypeIdMap.add i ptype cur.Typingdomain.d2 in
+                                     {cur with d2}
+                                  | _ -> assert false
+                                ) cur eargs s_io in
+                    let s_o = match s_o with
+                      | [x] -> x
+                      | _ -> assert false in
+                    let tid, cur = Typingdomain.get_type cur s_o in
+                    let flow = Flow.set_domain_cur cur man flow in
+                    Eval.singleton (mk_expr (E_type_partition tid) range) flow
+                  (* get the output type s_o and return it *)
+                  (* fixme: d3 use at least *)
+                  )
+                else
+                  (
+                    debug "no summary found, proceeding with the inlining@\n";
+                    man.eval (mk_call func args range) flow |>
+                      Eval.bind (fun output flow ->
+                          man.eval output flow |>
+                            Eval.bind (fun e_output flow ->
+                                let cur = Flow.get_domain_cur man flow in
+                                let inputs_out = List.map (fun exp -> match ekind exp with
+                                                                      | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                                                                      | _ -> debug "%a@\n" pp_expr exp; assert false) eargs in
+                                let outputs = List.map (fun exp -> match ekind exp with
+                                                                   | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                                                                   | _ -> debug "%a@\n" pp_expr exp; assert false) [e_output] in
+                                let function_summary = ((inputs, inputs_out, outputs, cur.d3), []) in
+                                let function_summaries =
+                                  if ListExt.mem_assoc func annots then
+                                    let tl = ListExt.assoc func annots in
+                                    (func, function_summary::tl)
+                                  else
+                                    (func, [function_summary]) in
+                                let updated_summaries = function_summaries::(ListExt.remove_assoc func annots) in
+                                Format.set_margin 160;
+                                debug "%d@\n" (Format.get_margin ());
+                                debug "Summaries are now:@\n%a@\n" pp_summaries updated_summaries;
+                                let flow = Flow.set_annot A_py_summaries updated_summaries flow in
+                                Eval.singleton output flow)
+                        )
+                  )
+              )
+         |> OptionExt.return
+
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;

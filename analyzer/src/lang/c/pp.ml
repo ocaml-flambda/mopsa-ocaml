@@ -165,7 +165,7 @@ let () =
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->
-      match prg.prog_kind with
+      match prg with
       | Ast.C_program (globals, funcs) ->
         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
           (fun fmt f ->
@@ -173,7 +173,7 @@ let () =
                pp_typ f.c_func_return
                pp_var f.c_func_var
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
-               pp_stmt (Ast.get_c_fun_body f)
+               (OptionExt.print pp_stmt) f.c_func_body
           )
           fmt funcs
 
