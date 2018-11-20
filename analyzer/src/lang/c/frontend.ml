@@ -492,19 +492,19 @@ and parse_stub_comment prj ctx com =
 
   | com1 :: com2 :: _ -> panic "stub with more than one comment"
 
-  | [com] ->
-    let comment = com.com_text in
-    let range = from_range com.com_range in
-    let file = get_range_file range in
-    let line = get_range_line range in
-    let col = get_range_column range in
-
-    begin
-      let stub = C_stubs_parser.Main.parse comment file line col prj in
-      match stub with
-      | None -> None
-      | Some stub -> Some (from_stub ctx stub)
-    end
+  | [com] -> None
+    (* let comment = com.com_text in
+     * let range = from_range com.com_range in
+     * let file = get_range_file range in
+     * let line = get_range_line range in
+     * let col = get_range_column range in
+     * 
+     * begin
+     *   let stub = C_stubs_parser.Main.parse comment file line col prj in
+     *   match stub with
+     *   | None -> None
+     *   | Some stub -> Some (from_stub ctx stub)
+     * end *)
 
 and from_stub ctx stub = assert false
 
