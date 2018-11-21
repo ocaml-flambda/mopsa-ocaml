@@ -27,13 +27,13 @@ type program = {
 (** Statements *)
 and stmt = {
   skind : stmt_kind;
-  srange : Py_CST.range;
+  srange : Location.range;
 }
 
 and binop =
-  | O_arithmetic of Py_CST.binop
-  | O_comparison of Py_CST.cmpop
-  | O_bool of Py_CST.boolop
+  | O_arithmetic of Cst.binop
+  | O_comparison of Cst.cmpop
+  | O_bool of Cst.boolop
 
 and stmt_kind =
   | S_assign
@@ -119,7 +119,7 @@ and func = {
   func_is_generator: bool; (** is the function a generator? *)
   func_decors: expr list;
   func_return: expr option;
-  func_range: Py_CST.range;
+  func_range: Location.range;
 }
 
 (** Class definition *)
@@ -130,7 +130,7 @@ and cls = {
   cls_bases: expr list; (** inheritance base classes *)
   cls_decors: expr list;
   cls_keywords: (string option * expr) list; (** keywords (None id for **kwargs) *)
-  cls_range: Py_CST.range;
+  cls_range: Location.range;
 }
 
 
@@ -143,7 +143,7 @@ and lambda = {
 (** Expressions *)
 and expr = {
   ekind : expr_kind;
-  erange : Py_CST.range;
+  erange : Location.range;
 }
 
 and expr_kind =
@@ -155,7 +155,7 @@ and expr_kind =
 
     | E_notimplemented
 
-    | E_num of Py_CST.number
+    | E_num of Cst.number
 
     | E_str of string
 
@@ -234,7 +234,7 @@ and expr_kind =
 
 
     (** Unary operato expressions *)
-    | E_unop of Py_CST.unop * expr
+    | E_unop of Cst.unop * expr
 
     | E_lambda of lambda
 

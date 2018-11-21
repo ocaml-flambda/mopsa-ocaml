@@ -59,7 +59,7 @@ let eval_alloc man kind range flow =
   Eval.bind (fun exp flow ->
       match ekind exp with
       | E_addr addr -> Eval.singleton addr flow
-      | _ -> Framework.Exceptions.panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
+      | _ -> panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
     )
 
 (*==========================================================================*)
@@ -104,7 +104,7 @@ let object_name obj =
     -> name
   | A_py_function(F_user f) -> f.py_func_var.vname
   | A_py_class(C_user c, _) -> c.py_cls_var.vname
-  | _ -> Framework.Exceptions.fail "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
+  | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
   classes := obj :: !classes
@@ -136,7 +136,7 @@ let is_builtin obj = List.mem obj (all ())
 let is_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Framework.Exceptions.panic "Unsupported builtin %s" name
+    panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) ->
@@ -147,7 +147,7 @@ let is_builtin_attribute base attr =
 let find_builtin_attribute base attr =
   let name = object_name base in
   if is_object_unsupported base then
-    Framework.Exceptions.panic "Unsupported builtin %s" name
+    panic "Unsupported builtin %s" name
   else
     match kind_of_object base with
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->

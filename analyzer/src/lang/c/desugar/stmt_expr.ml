@@ -72,7 +72,7 @@ struct
           OptionExt.return
 
         | _ ->
-          Debug.fail "E_c_statement %a" pp_expr exp
+          Exceptions.panic "E_c_statement %a" pp_expr exp
       end
 
     | E_c_statement {skind = S_expression e} ->

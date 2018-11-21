@@ -163,7 +163,7 @@ let find_safe finder d =
     finder d
   with
   | Not_found ->
-    Debug.fail "Domain %s not found" d
+    Exceptions.panic "Domain %s not found" d
 
 
 let make (pool: string list) (rules: string list) (over: (module DOMAIN)) : (module DOMAIN) =
@@ -190,7 +190,7 @@ let make (pool: string list) (rules: string list) (over: (module DOMAIN)) : (mod
   let value_rules = List.map (find_safe Reductions.Value_reduction.find_reduction) value_rules in
 
   match domain_pool, value_pool with
-  | [], [] -> Debug.fail "reduced product: empty pool"
+  | [], [] -> Exceptions.panic "reduced product: empty pool"
   | [], _ -> make_value_product value_pool value_rules
   | _, [] -> make_domain_product domain_pool over post_rules eval_rules
   | _, _ -> make_mixed_product domain_pool value_pool over post_rules eval_rules value_rules

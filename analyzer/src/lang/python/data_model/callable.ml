@@ -42,10 +42,10 @@ module Domain =
       (*   (\* Calls to addresses should be captured by other domains. If we
        *      are here, then we are missing an implementation of the
        *      function *\)
-       *   Framework.Exceptions.panic_at range "call %a can not be resolved" pp_expr exp *)
+       *   panic_at range "call %a can not be resolved" pp_expr exp *)
 
       | E_py_call(f, args, []) ->
-         debug "Calling %a from %a" pp_expr exp pp_range_verbose exp.erange;
+         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
          man.eval f flow |>
            Eval.bind
              (fun f flow ->
@@ -84,7 +84,7 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call(f, args, _) ->
-         Framework.Exceptions.panic_at range "calls with keyword arguments not supported"
+         panic_at range "calls with keyword arguments not supported"
 
       | _ -> None
 

@@ -118,7 +118,7 @@ struct
           | O_minus  -> bot_to_exn (I.bwd_neg a r)
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
           | _ ->
-            let () = Debug.fail "following backward %a unary operator is not yet implemented"
+            let () = Exceptions.panic "following backward %a unary operator is not yet implemented"
                 Framework.Ast.pp_operator op in
             assert false
         in
@@ -144,7 +144,7 @@ struct
           | O_bit_xor -> bot_to_exn (I.bwd_bit_xor a1 a2 r)
           | O_bit_rshift -> bot_to_exn (I.bwd_shift_right a1 a2 r)
           | O_bit_lshift -> bot_to_exn (I.bwd_shift_left a1 a2 r)
-          | _ -> Framework.Exceptions.fail "bwd_binop: unknown operator %a" Framework.Ast.pp_operator op
+          | _ -> Exceptions.panic "bwd_binop: unknown operator %a" Framework.Ast.pp_operator op
         in
         Nb aa1, Nb aa2
       with Found_BOT ->
@@ -164,7 +164,7 @@ struct
           | O_gt -> bot_to_exn (I.filter_gt a1 a2)
           | O_le -> bot_to_exn (I.filter_leq a1 a2)
           | O_ge -> bot_to_exn (I.filter_geq a1 a2)
-          | _ -> Framework.Exceptions.fail "compare: unknown operator %a" pp_operator op
+          | _ -> Exceptions.panic "compare: unknown operator %a" pp_operator op
         in
         Nb aa1, Nb aa2
       with Found_BOT ->

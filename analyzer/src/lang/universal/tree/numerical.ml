@@ -174,7 +174,7 @@ let widening_different_support
 
 
 let eq
-    (range: Framework.Location.range)
+    (range: Location.range)
     (man: ('b, 'b) man)
     (u: string)
     (v: string)
@@ -237,7 +237,7 @@ let find_foldable_variables (man: ('a, 'b) man) vb (vl: string list) (abs: 'a fl
           ) l
       ) foldable_vars, vb
   with
-  | Not_found -> Debug.fail "[universal.tree.numerical.find_foldable_variables] Could not look back"
+  | Not_found -> Exceptions.panic "[universal.tree.numerical.find_foldable_variables] Could not look back"
 
 (* let find_foldable_variables abs =
  *   let env = A.env abs in

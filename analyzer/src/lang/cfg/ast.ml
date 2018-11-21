@@ -20,24 +20,24 @@ open Framework.Manager
 
 module Loc =
 struct    
-  type t = loc (* maybe add a unique tag? *)
-  let compare = compare_location
+  type t = Location.pos (* maybe add a unique tag? *)
+  let compare = Location.compare_pos
   let hash = Hashtbl.hash
-  let equal l1 l2 = compare l1 l2 = 0
-  let print = pp_location
+  let equal l1 l2 = Location.compare_pos l1 l2 = 0
+  let print = Location.pp_position
 end
 
 module TagLoc =
 struct    
   type t =
-    { loc: loc;
+    { loc: Loc.t;
       tag: string; (* optional tag (may be "") *)
       id:  int;    (* unique among t with the same log ans tag *)
     }
 
   let compare (t1:t) (t2:t) : int =
     Compare.triple
-      compare_location compare compare
+      Loc.compare compare compare
       (t1.loc, t1.id, t1.tag) (t2.loc, t2.id, t2.tag)
 
   let hash : t -> int = Hashtbl.hash
@@ -46,10 +46,10 @@ struct
 
   let print fmt (t:t) =
     match t.tag, t.id with
-    | "",0 -> pp_location fmt t.loc
-    | "",_ -> Format.fprintf fmt "%a(%i)" pp_location t.loc t.id
-    | _,0  -> Format.fprintf fmt "%a(%s)" pp_location t.loc t.tag
-    | _    -> Format.fprintf fmt "%a(%s:%i)" pp_location t.loc t.tag t.id
+    | "",0 -> Loc.print fmt t.loc
+    | "",_ -> Format.fprintf fmt "%a(%i)" Loc.print t.loc t.id
+    | _,0  -> Format.fprintf fmt "%a(%s)" Loc.print t.loc t.tag
+    | _    -> Format.fprintf fmt "%a(%s:%i)" Loc.print t.loc t.tag t.id
 
 end
 
@@ -124,12 +124,12 @@ type cfg =
 (*==========================================================================*)
 
           
-let mk_node_id ?(id=0) ?(tag="") (loc:loc) : node_id =
+let mk_node_id ?(id=0) ?(tag="") (loc:Loc.t) : node_id =
   TagLoc.{ id; tag; loc; }
 
 let fresh_node_id = LocHash.create 16 
   
-let mk_fresh_node_id ?(tag="") (loc:loc) : node_id =
+let mk_fresh_node_id ?(tag="") (loc:Loc.t) : node_id =
   let id = try LocHash.find fresh_node_id loc with Not_found -> 0 in
   LocHash.replace fresh_node_id loc (id+1);
   mk_node_id ~id ~tag loc
@@ -138,11 +138,8 @@ let mk_fresh_node_id ?(tag="") (loc:loc) : node_id =
     uniqueness.
  *)  
 
-let loc_anonymous : loc =
-  { loc_file = "<anonymous>";
-    loc_line = -1;
-    loc_column = -1;
-  }
+let loc_anonymous : Loc.t =
+  Location.mk_pos "<anonymous>" (-1) (-1)
   
 let mk_anonymous_node_id ?(tag="") () : node_id =
   mk_fresh_node_id ~tag loc_anonymous
@@ -151,7 +148,7 @@ let mk_anonymous_node_id ?(tag="") () : node_id =
 let copy_node_id (n:node_id) : node_id =
   mk_fresh_node_id ~tag:n.TagLoc.tag n.TagLoc.loc
   
-let node_loc (t:node_id) : loc = t.TagLoc.loc
+let node_loc (t:node_id) : Loc.t = t.TagLoc.loc
 
 let pp_node_id = TagLoc.print
 let pp_node_as_id fmt node = pp_node_id fmt (CFG.node_id node)

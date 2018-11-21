@@ -3,7 +3,7 @@ TARGET_NATIVES = mopsa
 # Packs
 mopsa = framework lang main
 
-framework = location exceptions ast visitor options query annotation	\
+framework = ast visitor options query annotation	\
 lattice zone manager flow eval post channel value domain output cache	\
 analyzer lattices essentials domains config
 framework.output = alarm text json factory html

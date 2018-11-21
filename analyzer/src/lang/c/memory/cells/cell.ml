@@ -25,7 +25,7 @@ type cell = ..
 (* ============================= *)
 
 let cell_extract_chain : (cell-> base * (range -> expr) * typ) ref = ref (
-    fun _ -> fail "cell.extract: unknown cell"
+    fun _ -> panic "cell.extract: unknown cell"
   )
 let register_cell_extract ex = cell_extract_chain := ex !cell_extract_chain
 let extract_cell_info c = !cell_extract_chain c
@@ -45,7 +45,7 @@ let cell_offset c =
 (* Transformation to variables *)
 (* =========================== *)
 
-let cell_var_chain : (cell-> var) ref = ref (fun _ -> fail "cell.to_var: unknown cell")
+let cell_var_chain : (cell-> var) ref = ref (fun _ -> panic "cell.to_var: unknown cell")
 let register_cell_var f = cell_var_chain := f !cell_var_chain
 let cell_to_var c = !cell_var_chain c
 
@@ -62,7 +62,7 @@ let compare_cell c1 c2 = !cell_compare_chain c1 c2
 (* ============== *)
 
 let cell_pp_chain : (Format.formatter -> cell -> unit) ref = ref (
-    fun _ _ -> Debug.fail "cell.pp: unknown cell"
+    fun _ _ -> Exceptions.panic "cell.pp: unknown cell"
   )
 let register_cell_pp pp = cell_pp_chain := pp !cell_pp_chain
 let pp_cell fmt c = !cell_pp_chain fmt c

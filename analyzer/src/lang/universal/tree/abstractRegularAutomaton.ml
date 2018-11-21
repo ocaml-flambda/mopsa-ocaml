@@ -1053,7 +1053,7 @@ struct
       let (x, a) = List.find (fun (x,_) -> x = vos (a.start)) s in
       let rep = vm_to_regexp Left a in
       if not (is_u_var_free rep) then
-        Debug.fail "sol of system: %a is %a: not variable free" (print_systemm Left) (VMap.bindings sys) print_u rep;
+        Exceptions.panic "sol of system: %a is %a: not variable free" (print_systemm Left) (VMap.bindings sys) print_u rep;
       norm rep
     with
     | Not_found -> N

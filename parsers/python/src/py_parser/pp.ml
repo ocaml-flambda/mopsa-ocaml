@@ -2,8 +2,8 @@
    Pp - Pretty printer of the AST.
 *)
 
-open Py_CST
-open Py_AST
+open Cst
+open Ast
 open Format
 
 let str = pp_print_string
@@ -13,7 +13,7 @@ let rec print_var fmt v =
 
 and print_program fmt p = print_stmt fmt p.prog_body
 
-and print_stmt fmt (stmt: Py_AST.stmt) =
+and print_stmt fmt (stmt: Ast.stmt) =
   match stmt.skind with
   | S_assign (v, e) -> fprintf fmt "%a = %a" print_exp v print_exp e
   | S_expression e -> print_exp fmt e
@@ -102,11 +102,11 @@ and print_except fmt (exc: except) =
     ) v
     print_stmt body
 
-and print_number fmt (n: Py_CST.number) =
+and print_number fmt (n: Cst.number) =
   match n with
-  | Py_CST.Int i -> Z.pp_print fmt i
-  | Py_CST.Float f -> pp_print_float fmt f
-  | Py_CST.Imag s -> pp_print_string fmt s
+  | Cst.Int i -> Z.pp_print fmt i
+  | Cst.Float f -> pp_print_float fmt f
+  | Cst.Imag s -> pp_print_string fmt s
 
 and print_exp fmt exp =
   match exp.ekind with
@@ -260,6 +260,3 @@ and print_finally fmt = function
     | Some s ->
       fprintf fmt "@\nfinally:@\n@[<h 2>  %a@]"
         print_stmt s
-
-and print_location fmt loc =
-  fprintf fmt "%s:%d" loc.file loc.line

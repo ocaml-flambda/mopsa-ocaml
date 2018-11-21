@@ -34,7 +34,7 @@ let () =
         | "up"   -> opt_float_rounding := Apron.Texpr1.Up
         | "down" -> opt_float_rounding := Apron.Texpr1.Down
         | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Debug.fail "Unknown rounding mode %s" x
+        | x -> Exceptions.panic "Unknown rounding mode %s" x
       ),
     "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
   )
@@ -255,7 +255,7 @@ struct
       |> fun x -> strongify_rhs x abs l
 
     | _ ->
-      warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Debug.warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and is_env_var v abs =
@@ -323,7 +323,7 @@ struct
       |> exp_to_apron
 
     | _ ->
-      warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Debug.warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and typ_to_apron = function
@@ -549,7 +549,7 @@ struct
       begin
         debug "Starting fold";
         match vl with
-        | [] -> Debug.fail "Can not fold list of size 0"
+        | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
           let abs = Apron.Abstract1.fold ApronManager.man a
               (List.map var_to_apron vl |> Array.of_list) in
@@ -592,7 +592,9 @@ struct
                  | T_float _, T_int
                  | T_int, T_float _
                  | T_float _, T_float _ -> Apron.Texpr1.Real
-                 | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                 | _ -> Exceptions.panic_at (srange stmt)
+                          "Unsupported case (%a, %a) in stmt @[%a@]"
+                          pp_typ typ1 pp_typ typ2 pp_stmt stmt
                in
                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
                let diff_texpr = Apron.Texpr1.of_expr env diff in
@@ -618,7 +620,7 @@ struct
            | T_float _, T_int
            | T_int, T_float _
            | T_float _, T_float _ -> Apron.Texpr1.Real
-           | _ -> fail "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
+           | _ -> Exceptions.panic "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
          in
          let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
          let diff_texpr = Apron.Texpr1.of_expr env diff in

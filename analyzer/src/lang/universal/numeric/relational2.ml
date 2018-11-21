@@ -256,7 +256,7 @@ struct
   let assert_env env1 env2 =
     let comp = Environment.compare env1 env2 in
     if comp <> -1 && comp <> 0 then
-      Debug.fail "Environment %a is not contained in environment %a"
+      Exceptions.panic "Environment %a is not contained in environment %a"
         print_env env1
         print_env env2
 
@@ -326,7 +326,9 @@ struct
                      | T_float _, T_int
                      | T_int, T_float _
                      | T_float _, T_float _ -> Apron.Texpr1.Real
-                     | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                     | _ -> Exceptions.panic_at (srange stmt)
+                              "Unsupported case (%a, %a) in stmt @[%a@]"
+                              pp_typ typ1 pp_typ typ2 pp_stmt stmt
                    in
                    let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
                    let diff_texpr = Apron.Texpr1.of_expr env diff in
@@ -368,7 +370,7 @@ struct
             let () = debug "I am performing a fold of: %a" print (Nt u) in
             let () = debug "%a <- {%a}" pp_var v (Format.pp_print_list pp_var) vl in
             match vl with
-            | [] -> Debug.fail "Can not fold list of size 0"
+            | [] -> Exceptions.panic "Can not fold list of size 0"
             | p::q ->
               let vs = VarSet.of_list vl in
               let abs = Apron.Abstract1.fold ApronManager.man u.num

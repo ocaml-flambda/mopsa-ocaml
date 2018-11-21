@@ -97,7 +97,7 @@ struct
       (* get widening node *)
       let wid = match lst with
         | (GraphSig.Simple node)::_ -> CFG.node_id node
-        | _ -> Debug.fail "node expected at the head of a component"
+        | _ -> Exceptions.panic "node expected at the head of a component"
       in
       let old = Flow.get (T_node wid) man flow in
       debug "analyzing component @[%a@], widen=%a, abs=@[%a@]"
