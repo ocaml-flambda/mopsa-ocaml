@@ -247,6 +247,10 @@ let visit_requires req prj func ctx =
   bind_range req @@ fun req ->
   visit_formula req prj func ctx
 
+let visit_assumes asm prj func ctx =
+  bind_range asm @@ fun asm ->
+  visit_formula asm prj func ctx
+
 let visit_assigns a prj func ctx =
   bind_range a @@ fun a ->
   Ast.{
@@ -269,7 +273,26 @@ let visit_local loc prj func ctx =
     | L_call (f, args) -> Ast.L_call (find_function f prj, visit_list visit_expr args prj func ctx)
   in
   Ast.{ lvar; lval }, ctx'
-  
+
+let visit_case c prj func ctx =
+  bind_range c @@ fun c ->
+  let requires = visit_list visit_requires c.case_requires prj func ctx in
+  let assumes = visit_list visit_assumes c.case_assumes prj func ctx in
+  let assigns = visit_list visit_assigns c.case_assigns prj func ctx in
+  let local, ctx' = visit_list2 visit_local c.case_local prj func ctx in
+  let ensures = visit_list visit_ensures c.case_ensures prj func ctx' in
+
+  Ast.{
+    case_label = c.case_label;
+    case_assumes = assumes;
+    case_requires = requires;
+    case_post = {
+      post_assigns = assigns;
+      post_local   = local;
+      post_ensures = ensures;
+    }
+  }
+
 let doit
     (prj:C_AST.project)
     (func: C_AST.func)
@@ -293,5 +316,11 @@ let doit
         }
     }
 
-  | S_case c -> assert false
+  | S_case c ->
+    let requires = visit_list visit_requires c.case_stub_requires prj func Context.empty in
+    Ast.{
+      stub_requires = requires;
+      stub_body = B_case (visit_list visit_case c.case_stub_cases prj func Context.empty);
+    }
+
   
