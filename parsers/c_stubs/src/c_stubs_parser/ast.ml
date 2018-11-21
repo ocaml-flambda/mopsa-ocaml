@@ -14,7 +14,7 @@ open Location
 (** {2 Expressions} *)
 (** *=*=*=*=*=*=*=* *)
 
-type expr =
+type expr_kind =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
@@ -36,6 +36,11 @@ type expr =
   | E_builtin_call  of builtin * expr with_range
 
   | E_return
+
+and expr = {
+  kind : expr_kind;
+  typ  : C_AST.type_qual;
+}
 
 and log_binop =
   | AND
@@ -178,7 +183,7 @@ let pp_builtin fmt f =
 
 
 let rec pp_expr fmt exp =
-  match exp.content with
+  match exp.content.kind with
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s

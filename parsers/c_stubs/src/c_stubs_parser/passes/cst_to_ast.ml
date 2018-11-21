@@ -59,8 +59,8 @@ let visit_pair visitor1 visitor2 (x, y) prj func ctx =
   (visitor1 x prj func ctx, visitor2 y prj func ctx)
 
 
-(** {2 Visitors for types} *)
-(** ********************** *)
+(** {2 Types} *)
+(** ********* *)
 
 let find_record r prj =
   let open C_AST in
@@ -128,8 +128,52 @@ and visit_array_length len prj func ctx =
   | A_constant_length n -> C_AST.Length_cst n
 
 
-(** {2 Visitors for expressions} *)
-(** **************************** *)
+let int_type = C_AST.(T_integer SIGNED_INT, no_qual)
+let bool_type = C_AST.(T_bool, no_qual)
+let float_type = C_AST.(T_float FLOAT, no_qual)
+let double_type = C_AST.(T_float DOUBLE, no_qual)
+let string_type s = C_AST.(T_array((T_integer(SIGNED_CHAR), no_qual), Length_cst (Z.of_int (1 + String.length s))), no_qual)
+let char_type = C_AST.(T_integer (Char SIGNED), no_qual)
+let pointer_type t = C_AST.(T_pointer t, no_qual)
+
+let pointed_type t =
+  let t0, _ = t in
+  match t0 with
+  | C_AST.T_pointer t' -> t'
+  | C_AST.T_array(t', _) -> t'
+  | _ -> Exceptions.panic "pointed_type(cst_to_ast.ml): unsupported type %s" (C_print.string_of_type_qual t)
+
+let subscript_type t = pointed_type t
+
+let field_type t f =
+  match fst t with
+  | C_AST.T_record r ->
+    begin try
+      let field = Array.to_list r.C_AST.record_fields |>
+                  List.find (fun field -> field.C_AST.field_org_name == f)
+      in
+      field.field_type
+    with Not_found ->
+      Exceptions.panic "field_type(cst_to_ast.ml): unknown field %s in record %s"
+        f r.C_AST.record_org_name
+  end
+  | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
+           (C_print.string_of_type_qual t)
+
+let unop_type op t = Exceptions.panic "cst_to_ast: unop_type not implemented"
+
+let binop_type op t1 t2 = Exceptions.panic "cst_to_ast: binop_type not implemented"
+
+let builtin_type f arg =
+  match f with
+  | SIZE   -> int_type
+  | OFFSET -> int_type
+  | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
+  | OLD    -> arg.content.Ast.typ
+
+
+(** {2 Expressions} *)
+(** *************** *)
 
 let visit_unop = function
   | PLUS  -> Ast.PLUS
@@ -181,22 +225,46 @@ let visit_var v prj func ctx =
     with Not_found -> Exceptions.panic "cst_to_ast: variable %a not found" pp_var v
 
 let rec visit_expr e prj func ctx =
-  bind_range e @@ function
-  | E_int(n)            -> Ast.E_int(n)
-  | E_float(f)          -> Ast.E_float(f)
-  | E_string(s)         -> Ast.E_string(s)
-  | E_char(c)           -> Ast.E_char(c)
-  | E_var(v)            -> Ast.E_var(visit_var v prj func ctx)
-  | E_unop(op, e')      -> Ast.E_unop(visit_unop op, visit_expr e' prj func ctx)
-  | E_binop(op, e1, e2) -> Ast.E_binop(visit_binop op, visit_expr e1 prj func ctx, visit_expr e2 prj func ctx)
-  | E_addr_of(e')       -> Ast.E_addr_of(visit_expr e' prj func ctx)
-  | E_deref(e')         -> Ast.E_deref(visit_expr e' prj func ctx)
-  | E_cast(t, e')       -> Ast.E_cast(visit_qual_typ t prj func ctx, visit_expr e' prj func ctx)
-  | E_subscript(a, i)   -> Ast.E_subscript(visit_expr a prj func ctx, visit_expr i prj func ctx)
-  | E_member(s, f)      -> Ast.E_member(visit_expr s prj func ctx, f)
-  | E_arrow(p, f)       -> Ast.E_arrow(visit_expr p prj func ctx, f)
-  | E_builtin_call(f,a) -> Ast.E_builtin_call(visit_builtin f, visit_expr a prj func ctx)
-  | E_return            -> Ast.E_return
+  bind_range e @@ fun e ->
+  let kind, typ = match e with
+    | E_int(n) -> Ast.E_int(n), int_type
+    | E_float(f) -> Ast.E_float(f), float_type
+    | E_string(s) -> Ast.E_string(s), string_type s
+    | E_char(c) -> Ast.E_char(c), char_type
+    | E_var(v) ->
+      let v = visit_var v prj func ctx in
+      Ast.E_var v, v.var_type
+    | E_unop(op, e')      ->
+      let e' = visit_expr e' prj func ctx in
+      Ast.E_unop(visit_unop op, e'), unop_type op e'.content.typ
+    | E_binop(op, e1, e2) ->
+      let e1 = visit_expr e1 prj func ctx in
+      let e2 = visit_expr e2 prj func ctx in
+      Ast.E_binop(visit_binop op, e1, e2), binop_type op e1.content.typ e2.content.typ
+    | E_addr_of(e')       ->
+      let e' = visit_expr e' prj func ctx in
+      Ast.E_addr_of e', pointer_type e'.content.typ
+    | E_deref(e')         ->
+      let e' = visit_expr e' prj func ctx in
+      Ast.E_deref e', pointed_type e'.content.typ
+    | E_cast(t, e') ->
+      let t = visit_qual_typ t prj func ctx in
+      Ast.E_cast(t, visit_expr e' prj func ctx), t
+    | E_subscript(a, i)   ->
+      let a  = visit_expr a prj func ctx in
+      Ast.E_subscript(a, visit_expr i prj func ctx), subscript_type a.content.typ
+    | E_member(s, f)      ->
+      let s = visit_expr s prj func ctx in
+      Ast.E_member(s, f), field_type s.content.typ f
+    | E_arrow(p, f) ->
+      let p = visit_expr p prj func ctx in
+      Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
+    | E_builtin_call(f,a) ->
+      let a = visit_expr a prj func ctx in
+      Ast.E_builtin_call(visit_builtin f, a), builtin_type f a
+    | E_return -> Ast.E_return, func.func_return
+  in
+  Ast.{ kind; typ }
 
 and visit_builtin = function
   | OLD    -> Ast.OLD
@@ -205,8 +273,8 @@ and visit_builtin = function
   | BASE   -> Ast.BASE
 
 
-(** {2 Visitors for formulas} *)
-(** ************************* *)
+(** {2 Formulas} *)
+(** ************ *)
 
 let visit_log_binop = function
   | AND -> Ast.AND
@@ -240,8 +308,8 @@ let rec visit_formula f prj func ctx =
   | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
 
 
-(** {2 Visitors for stub sections} *)
-(** ****************************** *)
+(** {2 Stub sections} *)
+(** **************** *)
 
 let visit_requires req prj func ctx =
   bind_range req @@ fun req ->
@@ -292,6 +360,9 @@ let visit_case c prj func ctx =
       post_ensures = ensures;
     }
   }
+
+(** {2 Entry point} *)
+(** *************** *)
 
 let doit
     (prj:C_AST.project)
