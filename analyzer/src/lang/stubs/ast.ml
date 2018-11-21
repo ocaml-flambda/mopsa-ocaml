@@ -12,19 +12,12 @@ open Framework.Essentials
 open Format
 
 
-
 (** {2 Types} *)
 (*  =-=-=-=-= *)
 
-type quantifier =
-  | FORALL
-  | EXISTS
-
-
 type typ +=
-  | T_stub_predicate                        (** predicate *)
-  | T_stub_quant_var of quantifier * typ    (** quantified variables *)
-
+  | T_stub_forall_var of typ  (** universally quantified variables *)
+  | T_stub_exists_var of typ  (** existentially quantified variables *)
 
 
 (** {2 Operators} *)
@@ -32,7 +25,6 @@ type typ +=
 
 type operator +=
   | O_log_implies (** ⇒ *)
-
 
 
 (** {2 Expressions} *)
@@ -46,27 +38,20 @@ type builtin =
   | OLD
 
 type expr_kind +=
-  | E_stub_return               (* return value of the stub *)
-  | E_stub_builtin of builtin   (* built-in function *)
+  | E_stub_return  (* return value of the stub *)
+  | E_stub_builtin of builtin (* built-in function *)
 
 
 (** {2 Formulas} *)
 (*  =-=-=-=-=-=- *)
 
-(* range tag of AST nodes *)
-type 'a with_range = {
-  kind: 'a;
-  range: range;
-}
-
-(* Logic formula *)
 type formula =
   | F_expr   of expr (** boolean expression *)
   | F_binop  of operator * formula with_range * formula with_range
   | F_not    of formula with_range
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
-  | F_in     of var * set (* set membership operator *)
+  | F_in     of var * set (* set membership predicate *)
   | F_free   of expr (* resource release *)
 
 and set =
@@ -79,76 +64,66 @@ and resource = {
 }
 
 
-(** {2 Statements} *)
-(*  =-=-=-=-=-=-=- *)
+(** {2 Stubs} *)
+(*  =-=-=-=-= *)
 
-type stub =
-  | S_simple of simple_stub (* simple stubs without cases *)
-  | S_case  of case_stub    (* stubs with cases *)
-
-
-(* A simple stub describes a single post-condition. No case section is
-   defined. *)
-and simple_stub = {
-  (* Pre-condition sections *)
-  simple_stub_predicates : predicate with_range list;
-  simple_stub_requires   : requires with_range list;
-
-  (* Post-condition sections *)
-  simple_stub_assigns    : assigns with_range list;
-  simple_stub_local      : local with_range list;
-  simple_stub_ensures    : ensures with_range list;
+(** A stub is composed of some requirements on the pre-condition and a
+    body. *)
+type stub = {
+  stub_requires: requires with_range list;
+  stub_body: body;
 }
 
-and case_stub = {
-  case_stub_predicates : predicate with_range list;
-  case_stub_requires   : requires with_range list;
-  case_stub_cases      : case with_range list;
+(** Body of a stub *)
+and body =
+  | B_simple of post
+  (** A simple stub body is composed of only one post-condition *)
+
+  | B_case   of case with_range list
+  (** A complex stub is composed of a number of cases *)
+
+(** Post-conditions give the modified variables, the value of locals
+    and the ensured conditions on the output state. *)
+and post = {
+  post_assigns  : assigns with_range list;
+  post_local    : local with_range list;
+  post_ensures  : ensures with_range list;
 }
 
-(* A predicate is a macro for a logic formula *)
-and predicate = {
-  pred_var : var;
-  pred_body: formula with_range;
-}
-
-(* Requirements, assumptions and ensures are just logic formula *)
-and requires = formula with_range
-and ensures = formula with_range
-and assumes = formula with_range
-
-(* Declarations of local variables in the post-condition. *)
-and local = {
-  local_var   : var;
-  local_value : local_value;
-}
-
-(* Values of locals *)
-and local_value =
-  | Local_new           of resource        (* allocation of a resource *)
-  | Local_function_call of var * expr list (* call to a function *)
-
-
-(* Assigned memory blocks *)
-and assigns = {
-  assigns_target: expr;                  (* target memory block *)
-  assigns_indices: (expr * expr) option; (* range of modified indices *)
-}
-
-
-(* Behavior case *)
+(** A stub case consists of a filtering on the pre-condition and a
+   post-condition. The assumes section is equivalent to an if
+   statement, while the requires section is equivalent to an assert
+   statement. *)
 and case = {
-  case_label: string;
-  (* Pre-condition sections *)
-  case_assumes: assumes with_range list;
+  case_label    : string;
+  case_assumes  : assumes with_range list;
   case_requires : requires with_range list;
-
-  (* Post-condition sections *)
-  case_assigns  : assigns with_range list;
-  case_local    : local with_range list;
-  case_ensures  : ensures with_range list;
+  case_post : post;
 }
 
+
+(* The sections requires, assumes and ensures are just logic formula *)
+and requires = formula with_range
+and ensures  = formula with_range
+and assumes  = formula with_range
+
+(* Local variables have values in the post-condition only. *)
+and local = {
+  lvar   : var;
+  lval : local_value;
+}
+
+(* Values of local variables *)
+and local_value =
+  | Local_new  of resource         (* allocation of a resource *)
+  | Local_call of expr * expr list (* call to a function *)
+
+
+(* Assigned memory regions are declared in the assigns section *)
+and assigns = {
+  assign_target: expr;                 (* assigned memory block *)
+  assign_offset: (expr * expr) option; (* range of modified indices *)
+}
 
 
 (** {2 Pretty printers} *)
@@ -170,7 +145,7 @@ let pp_builtin fmt f =
   | OLD    -> pp_print_string fmt "old"
 
 let rec pp_formula fmt f =
-  match f.kind with
+  match f.content with
   | F_expr e -> pp_expr fmt e
   | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_operator op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
@@ -189,64 +164,57 @@ and pp_resource fmt res =
 
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
-    pp_typ local.kind.local_var.vtyp
-    pp_var local.kind.local_var
-    pp_local_value local.kind.local_value
+    pp_typ local.content.lvar.vtyp
+    pp_var local.content.lvar
+    pp_local_value local.content.lval
 
 and pp_local_value fmt v =
   match v with
   | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_function_call (f, args) -> fprintf fmt "%a(%a)" pp_var f (pp_list pp_expr ", ") args
+  | Local_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_list pp_expr ", ") args
 
-
-let pp_predicate fmt pred =
-  fprintf fmt "predicate %a: @[%a@];"
-    pp_var pred.kind.pred_var
-    pp_formula pred.kind.pred_body
 
 let pp_requires fmt requires =
   fprintf fmt "requires: @[%a@];"
-    pp_formula requires.kind
+    pp_formula requires.content
 
 let pp_assigns fmt assigns =
   fprintf fmt "assigns: %a%a;"
-    pp_expr assigns.kind.assigns_target
+    pp_expr assigns.content.assign_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.kind.assigns_indices
+    ) assigns.content.assign_offset
 
 
 let pp_assumes fmt assumes =
-  fprintf fmt "assumes: @[%a@];" pp_formula assumes.kind
+  fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures: @[%a@];" pp_formula ensures.kind
+  fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
+
+let pp_post fmt post =
+  fprintf fmt "%a%a%a"
+    (pp_list pp_assigns "@\n") post.post_assigns
+    (pp_list pp_local "@\n") post.post_local
+    (pp_list pp_ensures "@\n") post.post_ensures
 
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a@]"
-    case.kind.case_label
-    (pp_list pp_assumes "@\n") case.kind.case_assumes
-    (pp_list pp_local "@\n") case.kind.case_local
-    (pp_list pp_requires "@\n") case.kind.case_requires
-    (pp_list pp_assigns "@\n") case.kind.case_assigns
-    (pp_list pp_ensures "@\n") case.kind.case_ensures
+  fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
+    case.content.case_label
+    (pp_list pp_assumes "@\n") case.content.case_assumes
+    (pp_list pp_requires "@\n") case.content.case_requires
+    pp_post case.content.case_post
+
+let pp_body fmt body =
+  match body with
+  | B_simple post -> pp_post fmt post
+  | B_case cases  -> (pp_list pp_case "@\n") fmt cases
 
 let pp_stub fmt stub =
-  match stub with
-  | S_simple ss ->
-    fprintf fmt "%a%a%a%a%a"
-      (pp_list pp_predicate "@\n") ss.simple_stub_predicates
-      (pp_list pp_requires "@\n") ss.simple_stub_requires
-      (pp_list pp_assigns "@\n") ss.simple_stub_assigns
-      (pp_list pp_local "@\n") ss.simple_stub_local
-      (pp_list pp_ensures "@\n") ss.simple_stub_ensures
-
-  | S_case cs ->
-    fprintf fmt "%a%a%a"
-      (pp_list pp_predicate "@\n") cs.case_stub_predicates
-      (pp_list pp_requires "@\n") cs.case_stub_requires
-      (pp_list pp_case "@\n") cs.case_stub_cases
+  fprintf fmt "%a%a"
+    (pp_list pp_requires "@\n") stub.stub_requires
+    pp_body stub.stub_body
 
 
 (** {2 AST registration} *)
@@ -256,20 +224,15 @@ let () =
   register_typ {
     compare = (fun next t1 t2 ->
         match t1, t2 with
-        | T_stub_predicate, T_stub_predicate -> 0
-        | T_stub_quant_var(q1, t1), T_stub_quant_var(q2, t2) ->
-          Compare.compose [
-            (fun () -> compare q1 q2);
-            (fun () -> compare_typ t1 t2);
-          ]
+        | T_stub_forall_var(t1), T_stub_forall_var(t2) -> compare_typ t1 t2
+        | T_stub_exists_var(t1), T_stub_exists_var(t2) -> compare_typ t1 t2
         | _ -> next t1 t2
       );
 
     print = (fun next fmt t ->
         match t with
-        | T_stub_predicate -> fprintf fmt "predicate"
-        | T_stub_quant_var(FORALL, t') -> fprintf fmt "∀%a" pp_typ t'
-        | T_stub_quant_var(EXISTS, t') -> fprintf fmt "∃%a" pp_typ t'
+        | T_stub_forall_var(t') -> fprintf fmt "∀%a" pp_typ t'
+        | T_stub_exists_var(t') -> fprintf fmt "∃%a" pp_typ t'
         | _ -> next fmt t
       );
   }
