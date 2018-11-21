@@ -137,15 +137,15 @@ local:
   | LOCAL COLON c_qual_typ var ASSIGN local_value SEMICOL
     {
       {
-        local_var = $4;
-        local_typ = $3;
-        local_value = $6;
+        lvar = $4;
+        ltyp = $3;
+        lval = $6;
       }
     }
 
 local_value:
-  | NEW resource { Local_new $2 }
-  | with_range(expr) LPAR args RPAR { Local_function_call ($1, $3) }
+  | NEW resource { L_new $2 }
+  | var LPAR args RPAR { L_call ($1, $3) }
 
 (* Predicates section *)
 predicate_list:
@@ -180,16 +180,16 @@ assigns:
   | ASSIGNS COLON with_range(expr) SEMICOL
     {
       {
-	assigns_target = $3;
-	assigns_range = None;
+	assign_target = $3;
+	assign_offset = None;
       }
     }
 
   | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK SEMICOL
     {
       {
-	assigns_target = $3;
-	assigns_range = Some ($5, $8);
+	assign_target = $3;
+	assign_offset = Some ($5, $8);
       }
     }
 
@@ -352,7 +352,7 @@ resource:
   | IDENT { $1 }
 
 var:
-  | IDENT { { vname = $1; vuid = 0; } }
+  | IDENT { { vname = $1; vuid = 0; vlocal = false; } }
 
 // adds range information to rule
 %inline with_range(X):

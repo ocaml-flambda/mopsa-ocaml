@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 (** Inline predicates similarly to macro expansion. At the end,
-    formula in the CST should not contain any predicate. 
+    formulas in the CST should not contain any predicate. 
 *)
 
 open Location
@@ -54,6 +54,7 @@ struct
       in
       iter args
     in
+
     (* Replace occurrences of args in body by params *)
     let rec visit_list visit l =
       match l with
@@ -63,6 +64,7 @@ struct
         let tl' = visit_list visit tl in
         hd' :: tl'
     in
+
     let rec visit_formula f =
       bind_range f @@ fun f ->
       match f with

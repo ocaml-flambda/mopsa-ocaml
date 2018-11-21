@@ -24,7 +24,7 @@ struct
 
   let create v s =
     incr uid_counter;
-    let v' = { v with vuid = !uid_counter } in
+    let v' = { vname = v.vname; vuid = !uid_counter; vlocal = true; } in
     let s' = filter (fun v' -> v'.vname != v.vname ) s |>
              add v
     in
@@ -171,28 +171,28 @@ let visit_ensures ensures scope =
 
 let visit_assigns assigns scope =
   bind_pair_range assigns @@ fun assigns ->
-  let assigns_target, scope = visit_expr assigns.assigns_target scope in
-  let assigns_range, scope = visit_option (fun (l, u) ->
+  let assign_target, scope = visit_expr assigns.assign_target scope in
+  let assign_offset, scope = visit_option (fun (l, u) ->
       let l, scope = visit_expr l scope in
       let u, scope = visit_expr u scope in
       (l, u), scope
-    ) assigns.assigns_range scope
+    ) assigns.assign_offset scope
   in
-  { assigns_target; assigns_range }, scope
+  { assign_target; assign_offset }, scope
 
 let visit_local_value lv scope =
   match lv with
-  | Local_new rc -> lv, scope
-  | Local_function_call (f, args) ->
-    let f, scope = visit_expr f scope in
+  | L_new rc -> lv, scope
+  | L_call (f, args) ->
+    let f = Scope.resolve f scope in
     let args, scope = visit_list visit_expr args scope in
-    Local_function_call (f, args), scope
+    L_call (f, args), scope
 
 let visit_local local scope =
   bind_pair_range local @@ fun local ->
-  let local_value, scope = visit_local_value local.local_value scope in
-  let local_var, scope = Scope.create local.local_var scope in
-  { local_var; local_typ = local.local_typ; local_value }, scope
+  let lval, scope = visit_local_value local.lval scope in
+  let lvar, scope = Scope.create local.lvar scope in
+  { lvar; ltyp = local.ltyp; lval }, scope
 
 let visit_case c scope =
   bind_pair_range c @@ fun c ->

@@ -10,57 +10,11 @@
 
 open Location
 
-type stub = {
-  stub_requires: requires with_range list;
-  stub_body: stub_body;
-}
 
-and stub_body =
-  | S_simple_body of simple_body
-  | S_case_body   of case with_range list
+(** {2 Expressions} *)
+(** *=*=*=*=*=*=*=* *)
 
-and simple_body = {
-  simple_assigns  : assigns with_range list;
-  simple_local    : local with_range list;
-  simple_ensures  : ensures with_range list;
-}
-
-and case = {
-  case_label    : string;
-  case_assumes  : assumes with_range list;
-  case_requires : requires with_range list;
-  case_body     : simple_body;
-}
-
-and requires = formula with_range
-and ensures = formula with_range
-and assumes = formula with_range
-
-and local = {
-    local_var : var;
-    local_value : local_value;
-  }
-
-and local_value =
-  | Local_new           of resource
-  | Local_function_call of C_AST.func (** function *) * expr with_range list (* arguments *)
-
-and assigns = {
-    assigns_target : expr with_range;
-    assigns_range  : (expr with_range * expr with_range) option;
-  }
-
-and formula =
-  | F_expr   of expr with_range
-  | F_bool   of bool
-  | F_binop  of log_binop * formula with_range * formula with_range
-  | F_not    of formula with_range
-  | F_forall of var * set * formula with_range
-  | F_exists of var * set * formula with_range
-  | F_in     of var * set
-  | F_free   of expr with_range
-
-and expr =
+type expr =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
@@ -120,11 +74,7 @@ and set =
 
 and resource = string
 
-and var = {
-    var_name: string;
-    var_uid: int;
-    var_typ: C_AST.type_qual;
-  }
+and var = C_AST.variable
 
 and builtin =
   | OLD
@@ -132,12 +82,82 @@ and builtin =
   | OFFSET
   | BASE
 
+
+
+(** {2 Formulas} *)
+(** ************ *)
+
+type formula =
+  | F_expr   of expr with_range
+  | F_bool   of bool
+  | F_binop  of log_binop * formula with_range * formula with_range
+  | F_not    of formula with_range
+  | F_forall of var * set * formula with_range
+  | F_exists of var * set * formula with_range
+  | F_in     of var * set
+  | F_free   of expr with_range
+
+
+
+(** {2 Pre-condition} *)
+(** ***************** *)
+
+type requires = formula with_range
+type assumes  = formula with_range
+
+
+
+(** {2 Post-condition} *)
+(** ****************** *)
+
+type ensures = formula with_range
+
+type local = {
+    lvar : var;
+    lval : local_value;
+  }
+
+and local_value =
+  | L_new  of resource
+  | L_call of C_AST.func (** function *) * expr with_range list (* arguments *)
+
+type assigns = {
+  assign_target: expr with_range;
+  assign_offset: (expr with_range * expr with_range) option;  (** offset *)
+}
+
+
+(** {2 Stubs} *)
+(** ********* *)
+
+type stub = {
+  stub_requires: requires with_range list;
+  stub_body: body;
+}
+
+and body =
+  | B_simple of post
+  | B_case   of case with_range list
+
+and post = {
+  post_assigns  : assigns with_range list;
+  post_local    : local with_range list;
+  post_ensures  : ensures with_range list;
+}
+
+and case = {
+  case_label    : string;
+  case_assumes  : assumes with_range list;
+  case_requires : requires with_range list;
+  case_post : post;
+}
+
+
 let compare_var v1 v2 =
   Compare.compose [
-    (fun () -> compare v1.var_name v2.var_name);
-    (fun () -> compare v1.var_uid v2.var_uid);
+    (fun () -> compare v1.C_AST.var_unique_name v2.C_AST.var_unique_name);
+    (fun () -> compare v1.C_AST.var_uid v2.C_AST.var_uid);
   ]
-
 
 
 (** Pretty printer *)
@@ -145,7 +165,7 @@ let compare_var v1 v2 =
 
 open Format
 
-let pp_var fmt v = pp_print_string fmt v.var_name
+let pp_var fmt v = pp_print_string fmt v.C_AST.var_org_name
 
 let pp_resource fmt resource = pp_print_string fmt resource
 
@@ -213,8 +233,8 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_bool false -> pp_print_string fmt "false"
   | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
-  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.var_typ pp_var x pp_set set pp_formula f
-  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.var_typ pp_var x pp_set set pp_formula f
+  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
+  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
@@ -237,30 +257,27 @@ let pp_opt pp fmt o =
   | None -> ()
   | Some x -> pp fmt x
 
-
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
-    pp_c_qual_typ local.content.local_var.var_typ
-    pp_var local.content.local_var
-    pp_local_value local.content.local_value
+    pp_c_qual_typ local.content.lvar.C_AST.var_type
+    pp_var local.content.lvar
+    pp_local_value local.content.lval
 
 and pp_local_value fmt v =
   match v with
-  | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_function_call (f, args) -> fprintf fmt "%s(%a)" f.C_AST.func_org_name (pp_list pp_expr ", ") args
-
+  | L_new resouce -> fprintf fmt "new %a" pp_resource resouce
+  | L_call (f, args) -> fprintf fmt "%s(%a)" f.C_AST.func_org_name (pp_list pp_expr ", ") args
 
 let pp_requires fmt requires =
   fprintf fmt "requires: @[%a@];" pp_formula requires.content
 
 let pp_assigns fmt assigns =
   fprintf fmt "assigns: %a%a;"
-    pp_expr assigns.content.assigns_target
+    pp_expr assigns.content.assign_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.content.assigns_range
-
+    ) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
@@ -268,23 +285,23 @@ let pp_assumes fmt (assumes:assumes with_range) =
 let pp_ensures fmt ensures =
   fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
 
-let pp_simple_body fmt body =
+let pp_post fmt post =
   fprintf fmt "%a%a%a"
-    (pp_list pp_assigns "@\n") body.simple_assigns
-    (pp_list pp_local "@\n") body.simple_local
-    (pp_list pp_ensures "@\n") body.simple_ensures
+    (pp_list pp_assigns "@\n") post.post_assigns
+    (pp_list pp_local "@\n") post.post_local
+    (pp_list pp_ensures "@\n") post.post_ensures
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
     case.content.case_label
     (pp_list pp_assumes "@\n") case.content.case_assumes
     (pp_list pp_requires "@\n") case.content.case_requires
-    pp_simple_body case.content.case_body
+    pp_post case.content.case_post
 
 let pp_body fmt body =
   match body with
-  | S_simple_body body -> pp_simple_body fmt body
-  | S_case_body cases  -> (pp_list pp_case "@\n") fmt cases
+  | B_simple post -> pp_post fmt post
+  | B_case cases  -> (pp_list pp_case "@\n") fmt cases
 
 let pp_stub fmt stub =
   fprintf fmt "%a%a"

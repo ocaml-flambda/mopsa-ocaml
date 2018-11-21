@@ -33,18 +33,18 @@ and ensures = formula with_range
 and assumes = formula with_range
 
 and local = {
-  local_var   : var;
-  local_typ   : c_qual_typ;
-  local_value : local_value;
+  lvar   : var;
+  ltyp   : c_qual_typ;
+  lval : local_value;
 }
 
 and local_value =
-  | Local_new           of resource
-  | Local_function_call of expr with_range (** function *) * expr with_range list (* arguments *)
+  | L_new of resource
+  | L_call  of var (** function *) * expr with_range list (* arguments *)
 
 and assigns = {
-  assigns_target : expr with_range;
-  assigns_range  : (expr with_range * expr with_range) option;
+  assign_target : expr with_range;
+  assign_offset : (expr with_range * expr with_range) option;
 }
 
 and case = {
@@ -102,13 +102,16 @@ and c_typ =
   | T_signed_long_long | T_unsigned_long_long
   | T_signed_int128 | T_unsigned_int128
   | T_float | T_double | T_long_double
-  | T_array of c_qual_typ * expr with_range option
+  | T_array of c_qual_typ * array_length
   | T_struct of var
   | T_union of var
   | T_typedef of var
   | T_pointer of c_qual_typ
   | T_enum of var
 
+and array_length =
+  | A_no_length
+  | A_constant_length of Z.t
 
 and predicate = {
   predicate_var  : var;
@@ -154,8 +157,9 @@ and set =
 and resource = string
 
 and var = {
-  vname: string;
-  vuid : int;
+  vname  : string; (** variable name *)
+  vlocal : bool;   (** is it a local variable ? *)
+  vuid   : int;    (** unique identifier *)
 }
 
 and builtin =
@@ -263,8 +267,8 @@ and pp_c_typ fmt =
   | T_float -> pp_print_string fmt "float"
   | T_double  -> pp_print_string fmt "double"
   | T_long_double  -> pp_print_string fmt "long double"
-  | T_array(t, None) -> fprintf fmt "%a[]" pp_c_qual_typ t
-  | T_array(t, Some len) -> fprintf fmt "%a[%a]" pp_c_qual_typ t pp_expr len
+  | T_array(t, A_no_length) -> fprintf fmt "%a[]" pp_c_qual_typ t
+  | T_array(t, A_constant_length len) -> fprintf fmt "%a[%a]" pp_c_qual_typ t Z.pp_print len
   | T_struct(s) -> fprintf fmt "struct %a" pp_var s
   | T_union(u) -> fprintf fmt "union %a" pp_var u
   | T_typedef(t) -> pp_var fmt t
@@ -305,14 +309,14 @@ let pp_opt pp fmt o =
 let rec pp_local fmt local =
   let local = get_content local in
   fprintf fmt "local: %a %a = @[%a@];"
-    pp_c_qual_typ local.local_typ
-    pp_var local.local_var
-    pp_local_value local.local_value
+    pp_c_qual_typ local.ltyp
+    pp_var local.lvar
+    pp_local_value local.lval
 
 and pp_local_value fmt v =
   match v with
-  | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_function_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_list pp_expr ", ") args
+  | L_new resource -> fprintf fmt "new %a" pp_resource resource
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f (pp_list pp_expr ", ") args
 
 
 let pp_predicate fmt (predicate:predicate with_range) =
@@ -326,11 +330,11 @@ let pp_requires fmt requires =
 
 let pp_assigns fmt assigns =
   fprintf fmt "assigns: %a%a;"
-    pp_expr assigns.content.assigns_target
+    pp_expr assigns.content.assign_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
-    ) assigns.content.assigns_range
+    ) assigns.content.assign_offset
 
 
 let pp_assumes fmt (assumes:assumes with_range) =
