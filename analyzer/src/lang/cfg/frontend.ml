@@ -20,10 +20,9 @@ let name = "cfg.frontend"
 let debug fmt = Debug.debug ~channel:name fmt
 
               
-let dump_dot = false (** dump CFG in dot file (for debug) *)
+let dump_dot = false (** dump CFG in dot file (for debugging) *)
 
              
-
 (*==========================================================================*)
                       (** {2 Graph conversion} *)
 (*==========================================================================*)

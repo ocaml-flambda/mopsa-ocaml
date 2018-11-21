@@ -48,7 +48,7 @@ lang.python.types = typingdomain typing t_string t_int t_float
 lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
 lang.cfg = ast pp visitor frontend iterator iterators
-lang.cfg.iterators = intraproc
+lang.cfg.iterators = intraproc inlining
 
 lang.jvm = ast precheck frontend
 
