@@ -195,6 +195,9 @@ struct
     | S_test expr ->
        Some (Post.of_flow (test_iterator man expr flow))
 
+    | S_skip ->
+       Some (Post.of_flow flow)
+      
     | _ ->
        (* S_expression, S_block and S_print are handled by universal's intraproc *)
        None

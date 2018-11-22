@@ -318,7 +318,7 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
 
   
 (** Converts a function AST to a CFG. *)
-let convert_fundec (f:fundec) : fundec =
+let convert_fundec (f:fundec) =
   (* create a variable to denote variable return *)
   let ret = match f.fun_return_type with
     | None -> None
@@ -326,19 +326,19 @@ let convert_fundec (f:fundec) : fundec =
        let v = mk_tmp ~vtyp:t () in
        Some { v with vname = "$return$" ^ f.fun_name }
   in
-  (* converts the body *)
-  { f with fun_body = convert_stmt ~name:f.fun_name ?ret f.fun_body; }
+  (* convert the body in-place *)
+  f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body
 
 
 (** Converts a full universal program. *)  
-let convert_program (p:program) : program =
+let convert_program (p:program) = 
   match p with
   | P_universal u ->
-    P_universal
-      { universal_gvars = u.universal_gvars;
-        universal_fundecs = List.map convert_fundec u.universal_fundecs;
-        universal_main = convert_stmt ~name:"__main__" u.universal_main;
-      }
+     List.iter convert_fundec u.universal_fundecs;
+     P_universal
+       { u with
+         universal_main = convert_stmt ~name:"__main__" u.universal_main;
+       }
 
   | _ ->        
      Exceptions.panic "cannot convert program to CFG"
