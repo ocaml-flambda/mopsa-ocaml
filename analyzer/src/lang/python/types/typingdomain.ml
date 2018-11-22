@@ -471,7 +471,7 @@ let join (d:domain) (d':domain) : domain =
   res
 
 let class_le (c, b:class_address * py_object list) (d, b':class_address * py_object list) : bool =
-  Debug.warn "class_le not correctly implemented@\n";
+  Exceptions.warn "class_le not correctly implemented@\n";
   List.exists (fun x -> match (fst x).addr_kind with
                         | A_py_class (x, _) -> x = d
                         | _ -> false) b (* = d && b = b' *)

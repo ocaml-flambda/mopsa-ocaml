@@ -145,7 +145,7 @@ local:
 
 local_value:
   | NEW resource { L_new $2 }
-  | var LPAR args RPAR { L_call ($1, $3) }
+  | with_range(var) LPAR args RPAR { L_call ($1, $3) }
 
 (* Predicates section *)
 predicate_list:
@@ -259,7 +259,7 @@ expr:
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
-  | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
+  | with_range(builtin) LPAR with_range(expr) RPAR    { E_builtin_call ($1, $3) }
 
 
 (* C types *)

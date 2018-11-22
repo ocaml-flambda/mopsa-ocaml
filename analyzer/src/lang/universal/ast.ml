@@ -310,6 +310,9 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 
+let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
+let mk_true = mk_bool true
+let mk_false = mk_bool false
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 

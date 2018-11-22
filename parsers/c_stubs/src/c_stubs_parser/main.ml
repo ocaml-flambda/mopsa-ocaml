@@ -10,7 +10,8 @@
 
 open Location
 
-let parse
+(** Parse the stub specification from comments of a function *)
+let parse_function_comment
     (func:C_AST.func)
     (prj:C_AST.project)
   : Ast.stub with_range option
@@ -19,7 +20,7 @@ let parse
   | [] -> None
 
   | _ :: _ :: _ ->
-    Debug.warn "c_stubs.main: comments skipped";
+    Exceptions.warn "c_stubs.main: %s: functions with several comments not supported" func.func_org_name;
     None
 
   | [com] ->

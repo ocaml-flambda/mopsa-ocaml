@@ -48,3 +48,13 @@ let unnamed_syntax_error range =
 let unnamed_syntax_errors ranges =
     raise (UnnamedSyntaxErrorList ranges)
 
+
+(** {2 Warnings} *)
+(** =-=-=-=-=-=- *)
+
+let warn fmt = Debug.warn fmt
+
+let warn_at range fmt =
+  Format.kasprintf (fun str ->
+      Debug.warn "in %a: %s" Location.pp_range range str
+    ) fmt

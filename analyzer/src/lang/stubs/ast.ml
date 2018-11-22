@@ -39,7 +39,7 @@ type builtin =
 
 type expr_kind +=
   | E_stub_return  (* return value of the stub *)
-  | E_stub_builtin of builtin (* built-in function *)
+  | E_stub_builtin_call of builtin with_range (* built-in function *) * expr
 
 
 (** {2 Formulas} *)
@@ -58,10 +58,7 @@ and set =
   | S_interval of expr * expr (* intervals of integers  *)
   | S_resource of resource    (* set of allocated instances of a resource *)
 
-and resource = {
-  res_name : string;  (* resource name *)
-  res_uid  : int;     (* unique identifier *)
-}
+and resource = string (* FIXME: add a uid *)
 
 
 (** {2 Stubs} *)
@@ -76,11 +73,11 @@ type stub = {
 
 (** Body of a stub *)
 and body =
-  | B_simple of post
-  (** A simple stub body is composed of only one post-condition *)
+  | B_post of post
+  (** A simple stub body composed of only one post-condition *)
 
-  | B_case   of case with_range list
-  (** A complex stub is composed of a number of cases *)
+  | B_cases   of case with_range list
+  (** A composed stub containing a number of cases *)
 
 (** Post-conditions give the modified variables, the value of locals
     and the ensured conditions on the output state. *)
@@ -115,8 +112,8 @@ and local = {
 
 (* Values of local variables *)
 and local_value =
-  | Local_new  of resource         (* allocation of a resource *)
-  | Local_call of expr * expr list (* call to a function *)
+  | L_new  of resource         (* allocation of a resource *)
+  | L_call of expr * expr list (* call to a function *)
 
 
 (* Assigned memory regions are declared in the assigns section *)
@@ -159,8 +156,7 @@ and pp_set fmt =
   | S_interval(e1, e2) -> fprintf fmt "[%a .. %a]" pp_expr e1 pp_expr e2
   | S_resource(r) -> pp_resource fmt r
 
-and pp_resource fmt res =
-  pp_print_string fmt res.res_name
+and pp_resource fmt res = pp_print_string fmt res
 
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
@@ -170,8 +166,8 @@ let rec pp_local fmt local =
 
 and pp_local_value fmt v =
   match v with
-  | Local_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | Local_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_list pp_expr ", ") args
+  | L_new resouce -> fprintf fmt "new %a" pp_resource resouce
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_list pp_expr ", ") args
 
 
 let pp_requires fmt requires =
@@ -208,8 +204,8 @@ let pp_case fmt case =
 
 let pp_body fmt body =
   match body with
-  | B_simple post -> pp_post fmt post
-  | B_case cases  -> (pp_list pp_case "@\n") fmt cases
+  | B_post post -> pp_post fmt post
+  | B_cases cases  -> (pp_list pp_case "@\n") fmt cases
 
 let pp_stub fmt stub =
   fprintf fmt "%a%a"
@@ -251,19 +247,25 @@ let () =
   register_expr {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
-        | E_stub_builtin(f1), E_stub_builtin(f2) -> compare f1 f2
+        | E_stub_builtin_call(f1, arg1), E_stub_builtin_call(f2, arg2) ->
+          Compare.compose [
+            (fun () -> compare f1 f2);
+            (fun () -> compare_expr arg1 arg2)
+          ]
         | _ -> next e1 e2
       );
-    visit   = (fun next e ->
+    visit  = (fun next e ->
         match ekind e with
         | E_stub_return -> Framework.Visitor.leaf e
-        | E_stub_builtin _ -> Framework.Visitor.leaf e
+        | E_stub_builtin_call(f, arg) ->
+          { exprs = [arg]; stmts = [] },
+          (function {exprs = [args]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
         | _ -> next e
       );
     print   = (fun next fmt e ->
         match ekind e with
         | E_stub_return -> pp_print_string fmt "return"
-        | E_stub_builtin f -> pp_builtin fmt f
+        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
         | _ -> next fmt e
       );
   }

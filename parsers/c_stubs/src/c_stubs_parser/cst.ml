@@ -40,7 +40,7 @@ and local = {
 
 and local_value =
   | L_new of resource
-  | L_call  of var (** function *) * expr with_range list (* arguments *)
+  | L_call  of var with_range (** function *) * expr with_range list (* arguments *)
 
 and assigns = {
   assign_target : expr with_range;
@@ -86,7 +86,7 @@ and expr =
   | E_member    of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin * expr with_range
+  | E_builtin_call  of builtin with_range * expr with_range
 
   | E_return
 
@@ -194,7 +194,10 @@ let pp_builtin fmt f =
   | BASE   -> pp_print_string fmt "base"
   | OLD    -> pp_print_string fmt "old"
 
-let pp_list pp sep fmt l =
+let pp_list pp ~is_first sep fmt l =
+  if not is_first then
+    fprintf fmt sep
+  ;
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
 
 let rec pp_expr fmt exp =
@@ -204,15 +207,15 @@ let rec pp_expr fmt exp =
   | E_string s -> fprintf fmt "\"%s\"" s
   | E_char c -> fprintf fmt "'%c'" c
   | E_var v -> pp_var fmt v
-  | E_unop (op, e) -> fprintf fmt "%a(%a)" pp_unop op pp_expr e
-  | E_binop (op, e1, e2) -> fprintf fmt "(%a) %a (%a)" pp_expr e1 pp_binop op pp_expr e2
-  | E_addr_of e -> fprintf fmt "&(%a)" pp_expr e
-  | E_deref e -> fprintf fmt "*(%a)" pp_expr e
+  | E_unop (op, e) -> fprintf fmt "%a %a" pp_unop op pp_expr e
+  | E_binop (op, e1, e2) -> fprintf fmt "%a %a %a" pp_expr e1 pp_binop op pp_expr e2
+  | E_addr_of e -> fprintf fmt "&%a" pp_expr e
+  | E_deref e -> fprintf fmt "*%a" pp_expr e
   | E_cast(t, e) -> fprintf fmt "(%a) %a" pp_c_qual_typ t pp_expr e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
 and pp_unop fmt =
@@ -281,11 +284,11 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_expr e -> pp_expr fmt e
   | F_bool true  -> pp_print_string fmt "true"
   | F_bool false -> pp_print_string fmt "false"
-  | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
+  | F_binop (op, f1, f2) -> fprintf fmt "(%a)@\n%a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, t, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
-  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., ") params
+  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., " ~is_first:true) params
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
@@ -308,7 +311,7 @@ let pp_opt pp fmt o =
 
 let rec pp_local fmt local =
   let local = get_content local in
-  fprintf fmt "local: %a %a = @[%a@];"
+  fprintf fmt "local    : %a %a = @[%a@];"
     pp_c_qual_typ local.ltyp
     pp_var local.lvar
     pp_local_value local.lval
@@ -316,20 +319,20 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | L_new resource -> fprintf fmt "new %a" pp_resource resource
-  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f (pp_list pp_expr ", ") args
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", "  ~is_first:true) args
 
 
 let pp_predicate fmt (predicate:predicate with_range) =
   fprintf fmt "predicate %a(%a): @[%a@];"
     pp_var predicate.content.predicate_var
-    (pp_list pp_var ", ") predicate.content.predicate_args
+    (pp_list pp_var ", "  ~is_first:true) predicate.content.predicate_args
     pp_formula predicate.content.predicate_body
 
 let pp_requires fmt requires =
-  fprintf fmt "requires: @[%a@];" pp_formula requires.content
+  fprintf fmt "requires : @[%a@];" pp_formula requires.content
 
 let pp_assigns fmt assigns =
-  fprintf fmt "assigns: %a%a;"
+  fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
@@ -338,32 +341,66 @@ let pp_assigns fmt assigns =
 
 
 let pp_assumes fmt (assumes:assumes with_range) =
-  fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
+  fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
+  fprintf fmt "ensures  : @[%a@];" pp_formula ensures.content
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a@]"
     case.content.case_label
-    (pp_list pp_assumes "@\n") case.content.case_assumes
-    (pp_list pp_local "@\n") case.content.case_local
-    (pp_list pp_requires "@\n") case.content.case_requires
-    (pp_list pp_assigns "@\n") case.content.case_assigns
-    (pp_list pp_ensures "@\n") case.content.case_ensures
+    (pp_list pp_assumes "@\n" ~is_first:true) case.content.case_assumes
+    (pp_list pp_local "@\n" ~is_first:
+       (List.length case.content.case_assumes == 0)
+    ) case.content.case_local
+    (pp_list pp_requires "@\n" ~is_first:(
+        (List.length case.content.case_assumes == 0) &&
+        (List.length case.content.case_local == 0))
+    ) case.content.case_requires
+    (pp_list pp_assigns "@\n" ~is_first:(
+        (List.length case.content.case_assumes == 0) &&
+        (List.length case.content.case_local == 0) &&
+        (List.length case.content.case_requires == 0))
+    ) case.content.case_assigns
+    (pp_list pp_ensures "@\n" ~is_first:(
+        (List.length case.content.case_assumes == 0) &&
+        (List.length case.content.case_local == 0) &&
+        (List.length case.content.case_requires == 0) &&
+        (List.length case.content.case_assigns == 0))
+    ) case.content.case_ensures
+
 
 let pp_stub fmt stub =
-  match stub with
+  match stub.content with
   | S_simple ss ->
     fprintf fmt "%a%a%a%a%a"
-      (pp_list pp_predicate "@\n") ss.simple_stub_predicates
-      (pp_list pp_requires "@\n") ss.simple_stub_requires
-      (pp_list pp_assigns "@\n") ss.simple_stub_assigns
-      (pp_list pp_local "@\n") ss.simple_stub_local
-      (pp_list pp_ensures "@\n") ss.simple_stub_ensures
+      (pp_list pp_predicate "@\n" ~is_first:true) ss.simple_stub_predicates
+      (pp_list pp_requires "@\n" ~is_first:
+         (List.length ss.simple_stub_predicates == 0)
+      ) ss.simple_stub_requires
+      (pp_list pp_assigns "@\n" ~is_first:(
+          (List.length ss.simple_stub_predicates == 0) &&
+          (List.length ss.simple_stub_requires == 0))
+      ) ss.simple_stub_assigns
+      (pp_list pp_local "@\n" ~is_first:(
+          (List.length ss.simple_stub_predicates == 0) &&
+          (List.length ss.simple_stub_requires == 0) &&
+          (List.length ss.simple_stub_assigns == 0))
+      ) ss.simple_stub_local
+      (pp_list pp_ensures "@\n" ~is_first:(
+          (List.length ss.simple_stub_predicates == 0) &&
+          (List.length ss.simple_stub_requires == 0) &&
+          (List.length ss.simple_stub_assigns == 0) &&
+          (List.length ss.simple_stub_local == 0))
+      ) ss.simple_stub_ensures
 
   | S_case ms ->
     fprintf fmt "%a%a%a"
-      (pp_list pp_predicate "@\n") ms.case_stub_predicates
-      (pp_list pp_requires "@\n") ms.case_stub_requires
-      (pp_list pp_case "@\n") ms.case_stub_cases
+      (pp_list pp_predicate "@\n" ~is_first:true) ms.case_stub_predicates
+      (pp_list pp_requires "@\n" ~is_first:(
+          List.length ms.case_stub_predicates == 0)
+      ) ms.case_stub_requires
+      (pp_list pp_case "@\n" ~is_first:(
+          (List.length ms.case_stub_predicates == 0) &&
+          (List.length ms.case_stub_requires == 0)
+      )) ms.case_stub_cases

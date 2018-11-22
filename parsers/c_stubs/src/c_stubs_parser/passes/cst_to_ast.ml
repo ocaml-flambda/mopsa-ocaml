@@ -13,6 +13,8 @@ open Location
 open Cst
 
 
+let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.cst_to_ast" fmt
+
 (** Type maps of resolving types of local variables *)
 module Context =
 struct
@@ -67,28 +69,28 @@ let find_record r prj =
   StringMap.bindings prj.proj_records |>
   List.split |>
   snd |>
-  List.find (fun r' -> r'.record_org_name == r.vname) 
+  List.find (fun r' -> compare r'.record_org_name r.vname == 0) 
 
 let find_typedef t prj =
   let open C_AST in
   StringMap.bindings prj.proj_typedefs |>
   List.split |>
   snd |>
-  List.find (fun t' -> t'.typedef_org_name == t.vname)
+  List.find (fun t' -> compare t'.typedef_org_name t.vname == 0)
 
 let find_enum e prj =
   let open C_AST in
   StringMap.bindings prj.proj_enums |>
   List.split |>
   snd |>
-  List.find (fun e' -> e'.enum_org_name == e.vname) 
+  List.find (fun e' -> compare e'.enum_org_name e.vname == 0) 
 
 let find_function f prj =
   let open C_AST in
   StringMap.bindings prj.proj_funcs |>
   List.split |>
   snd |>
-  List.find (fun f' -> f'.func_org_name == f.vname) 
+  List.find (fun f' -> compare f'.func_org_name f.vname == 0) 
 
 let rec visit_qual_typ t prj func ctx : C_AST.type_qual=
   let (t0, is_const) = t in
@@ -150,7 +152,7 @@ let field_type t f =
   | C_AST.T_record r ->
     begin try
       let field = Array.to_list r.C_AST.record_fields |>
-                  List.find (fun field -> field.C_AST.field_org_name == f)
+                  List.find (fun field -> compare field.C_AST.field_org_name f == 0)
       in
       field.field_type
     with Not_found ->
@@ -165,7 +167,7 @@ let unop_type op t = Exceptions.panic "cst_to_ast: unop_type not implemented"
 let binop_type op t1 t2 = Exceptions.panic "cst_to_ast: binop_type not implemented"
 
 let builtin_type f arg =
-  match f with
+  match f.content with
   | SIZE   -> int_type
   | OFFSET -> int_type
   | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
@@ -221,7 +223,7 @@ let visit_var v prj func ctx =
     let vars = Array.to_list func.func_parameters @
                (StringMap.bindings prj.proj_vars |> List.split |> snd)
     in
-    try List.find (fun v' -> v'.var_org_name == v.vname) vars
+    try List.find (fun v' -> compare v'.var_org_name v.vname == 0) vars
     with Not_found -> Exceptions.panic "cst_to_ast: variable %a not found" pp_var v
 
 let rec visit_expr e prj func ctx =
@@ -249,7 +251,7 @@ let rec visit_expr e prj func ctx =
       Ast.E_deref e', pointed_type e'.content.typ
     | E_cast(t, e') ->
       let t = visit_qual_typ t prj func ctx in
-      Ast.E_cast(t, visit_expr e' prj func ctx), t
+      Ast.E_cast(t, true, visit_expr e' prj func ctx), t
     | E_subscript(a, i)   ->
       let a  = visit_expr a prj func ctx in
       Ast.E_subscript(a, visit_expr i prj func ctx), subscript_type a.content.typ
@@ -266,7 +268,8 @@ let rec visit_expr e prj func ctx =
   in
   Ast.{ kind; typ }
 
-and visit_builtin = function
+and visit_builtin b =
+  bind_range b @@ function
   | OLD    -> Ast.OLD
   | SIZE   -> Ast.SIZE
   | OFFSET -> Ast.OFFSET
@@ -338,7 +341,9 @@ let visit_local loc prj func ctx =
   let lval =
     match loc.lval with
     | L_new r -> Ast.L_new r
-    | L_call (f, args) -> Ast.L_call (find_function f prj, visit_list visit_expr args prj func ctx)
+    | L_call (f, args) ->
+      let f = bind_range f @@ fun f -> find_function f prj in
+      Ast.L_call (f, visit_list visit_expr args prj func ctx)
   in
   Ast.{ lvar; lval }, ctx'
 
@@ -370,6 +375,7 @@ let doit
     (stub:Cst.stub with_range)
   : Ast.stub with_range
   =
+  debug "converting cst to ast:@\n  @[%a@]" Cst.pp_stub stub;
   bind_range stub @@ fun stub ->
   match stub with
   | S_simple s ->
@@ -380,7 +386,7 @@ let doit
 
     Ast.{
       stub_requires = requires;
-      stub_body = B_simple {
+      stub_body = B_post {
           post_assigns = assigns;
           post_local   = local;
           post_ensures = ensures;
@@ -391,7 +397,7 @@ let doit
     let requires = visit_list visit_requires c.case_stub_requires prj func Context.empty in
     Ast.{
       stub_requires = requires;
-      stub_body = B_case (visit_list visit_case c.case_stub_cases prj func Context.empty);
+      stub_body = B_cases (visit_list visit_case c.case_stub_cases prj func Context.empty);
     }
 
   

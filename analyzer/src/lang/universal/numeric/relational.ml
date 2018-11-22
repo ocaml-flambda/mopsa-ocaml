@@ -255,7 +255,7 @@ struct
       |> fun x -> strongify_rhs x abs l
 
     | _ ->
-      Debug.warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Exceptions.warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and is_env_var v abs =
@@ -323,7 +323,7 @@ struct
       |> exp_to_apron
 
     | _ ->
-      Debug.warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Exceptions.warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and typ_to_apron = function

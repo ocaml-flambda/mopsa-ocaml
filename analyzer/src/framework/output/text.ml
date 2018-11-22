@@ -64,7 +64,7 @@ let panic ?btrace exn files out =
   in
   let () =
     match btrace with
-    | Some x when String.length x > 0 -> print "backtrace:@.{%s}" x
+    | Some x when String.length x > 0 -> print "Backtrace:@\n%s" x
     | _ -> ()
   in
   ()

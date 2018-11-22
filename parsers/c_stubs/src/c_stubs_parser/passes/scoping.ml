@@ -184,7 +184,7 @@ let visit_local_value lv scope =
   match lv with
   | L_new rc -> lv, scope
   | L_call (f, args) ->
-    let f = Scope.resolve f scope in
+    let f = bind_range f @@ fun f -> Scope.resolve f scope in
     let args, scope = visit_list visit_expr args scope in
     L_call (f, args), scope
 

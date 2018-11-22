@@ -305,13 +305,13 @@ struct
           nb_panic
         with
         | Exceptions.Panic (msg) ->
-          Debug.warn "Panic: @[%s@]" msg;
+          Exceptions.warn "Panic: @[%s@]" msg;
           let a = mk_alarm (A_panic_test (msg, name)) test.srange ~level:PANIC in
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
           Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
         | Exceptions.PanicAt (range, msg) ->
-          Debug.warn "Panic: @[%s@] at %a" msg pp_range range;
+          Exceptions.warn "Panic: @[%s@] at %a" msg pp_range range;
           let a = mk_alarm (A_panic_test (msg, name)) range ~level:PANIC in
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
           Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1

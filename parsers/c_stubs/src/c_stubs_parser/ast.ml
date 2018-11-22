@@ -27,13 +27,13 @@ type expr_kind =
 
   | E_addr_of   of expr with_range
   | E_deref     of expr with_range
-  | E_cast      of C_AST.type_qual * expr with_range
+  | E_cast      of C_AST.type_qual * bool (** is it explicit? *) * expr with_range
 
   | E_subscript of expr with_range * expr with_range
   | E_member    of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin * expr with_range
+  | E_builtin_call  of builtin with_range * expr with_range
 
   | E_return
 
@@ -124,7 +124,7 @@ type local = {
 
 and local_value =
   | L_new  of resource
-  | L_call of C_AST.func (** function *) * expr with_range list (* arguments *)
+  | L_call of C_AST.func with_range (** function *) * expr with_range list (* arguments *)
 
 type assigns = {
   assign_target: expr with_range;
@@ -141,8 +141,8 @@ type stub = {
 }
 
 and body =
-  | B_simple of post
-  | B_case   of case with_range list
+  | B_post  of post
+  | B_cases of case with_range list
 
 and post = {
   post_assigns  : assigns with_range list;
@@ -193,11 +193,13 @@ let rec pp_expr fmt exp =
   | E_binop (op, e1, e2) -> fprintf fmt "(%a) %a (%a)" pp_expr e1 pp_binop op pp_expr e2
   | E_addr_of e -> fprintf fmt "&(%a)" pp_expr e
   | E_deref e -> fprintf fmt "*(%a)" pp_expr e
-  | E_cast(t, e) -> fprintf fmt "(%a) %a" pp_c_qual_typ t pp_expr e
+  | E_cast(t, explicit, e) ->
+    if explicit then fprintf fmt "(%a) %a" pp_c_qual_typ t pp_expr e
+    else pp_expr fmt e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
 and pp_unop fmt =
@@ -271,7 +273,7 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | L_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | L_call (f, args) -> fprintf fmt "%s(%a)" f.C_AST.func_org_name (pp_list pp_expr ", ") args
+  | L_call (f, args) -> fprintf fmt "%s(%a)" f.content.func_org_name (pp_list pp_expr ", ") args
 
 let pp_requires fmt requires =
   fprintf fmt "requires: @[%a@];" pp_formula requires.content
@@ -305,8 +307,8 @@ let pp_case fmt case =
 
 let pp_body fmt body =
   match body with
-  | B_simple post -> pp_post fmt post
-  | B_case cases  -> (pp_list pp_case "@\n") fmt cases
+  | B_post post -> pp_post fmt post
+  | B_cases cases  -> (pp_list pp_case "@\n") fmt cases
 
 let pp_stub fmt stub =
   fprintf fmt "%a%a"

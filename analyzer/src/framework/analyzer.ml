@@ -86,7 +86,7 @@ struct
             let () = debug "exec for %a found" pp_zone zone in
             ExecMap.add zone (Domain.exec zone) map
           else
-            let () = Debug.warn "exec for %a not found" pp_zone zone in
+            let () = Exceptions.warn "exec for %a not found" pp_zone zone in
             map
       ) map
 
@@ -144,7 +144,7 @@ struct
             let paths = Zone.find_all_eval_paths src dst eval_graph in
             if List.length paths = 0
             then
-              let () = Debug.warn "eval for %a not found" pp_zone2 (src, dst) in
+              let () = Exceptions.warn "eval for %a not found" pp_zone2 (src, dst) in
               acc
             else
               let () = debug "eval for %a found@\npaths: @[%a@]"
