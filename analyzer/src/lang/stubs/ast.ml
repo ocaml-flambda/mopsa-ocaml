@@ -126,9 +126,6 @@ and assigns = {
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
 
-let pp_list pp sep fmt l =
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
-
 let pp_opt pp fmt o =
   match o with
   | None -> ()
@@ -158,6 +155,10 @@ and pp_set fmt =
 
 and pp_resource fmt res = pp_print_string fmt res
 
+let pp_args pp fmt args =
+  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp fmt args
+
+
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
     pp_typ local.content.lvar.vtyp
@@ -167,7 +168,7 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | L_new resouce -> fprintf fmt "new %a" pp_resource resouce
-  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_list pp_expr ", ") args
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_expr f (pp_args pp_expr) args
 
 
 let pp_requires fmt requires =
@@ -189,28 +190,33 @@ let pp_assumes fmt assumes =
 let pp_ensures fmt ensures =
   fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
 
-let pp_post fmt post =
+let pp_section pp ?(first=false) fmt l =
+  if not first then fprintf fmt "@\n";
+  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp fmt l
+
+
+let pp_post ~first fmt post =
   fprintf fmt "%a%a%a"
-    (pp_list pp_assigns "@\n") post.post_assigns
-    (pp_list pp_local "@\n") post.post_local
-    (pp_list pp_ensures "@\n") post.post_ensures
+    (pp_section pp_assigns ~first) post.post_assigns
+    (pp_section pp_local ~first:(first && post.post_assigns == [])) post.post_local
+    (pp_section pp_ensures ~first:(first && post.post_assigns == [] && post.post_local == [])) post.post_ensures
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
     case.content.case_label
-    (pp_list pp_assumes "@\n") case.content.case_assumes
-    (pp_list pp_requires "@\n") case.content.case_requires
-    pp_post case.content.case_post
+    (pp_section pp_assumes ~first:true) case.content.case_assumes
+    (pp_section pp_requires ~first:(case.content.case_assumes == [])) case.content.case_requires
+    (pp_post ~first:(case.content.case_assumes == [] && case.content.case_requires == [])) case.content.case_post
 
-let pp_body fmt body =
+let pp_body ~first fmt body =
   match body with
-  | B_post post -> pp_post fmt post
-  | B_cases cases  -> (pp_list pp_case "@\n") fmt cases
+  | B_post post -> pp_post ~first fmt post
+  | B_cases cases  -> (pp_section pp_case ~first) fmt cases
 
 let pp_stub fmt stub =
   fprintf fmt "%a%a"
-    (pp_list pp_requires "@\n") stub.stub_requires
-    pp_body stub.stub_body
+    (pp_section pp_requires ~first:true) stub.stub_requires
+    (pp_body ~first:(stub.stub_requires == [])) stub.stub_body
 
 
 (** {2 AST registration} *)

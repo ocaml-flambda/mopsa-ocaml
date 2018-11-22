@@ -94,6 +94,7 @@ struct
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
         | E_c_function {c_func_stub = Some stub} ->
+          debug "stub:@\n  @[%a@]" Stubs.Ast.pp_stub stub.content;
           panic_at (erange exp) "stubs not yet supported"
 
         | E_c_function {c_func_body = None; c_func_var} ->
