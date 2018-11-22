@@ -352,7 +352,7 @@ resource:
   | IDENT { $1 }
 
 var:
-  | IDENT { { vname = $1; vuid = 0; vlocal = false; } }
+  | IDENT { { vname = $1; vuid = 0; vlocal = false; vrange = from_lexing_range $startpos $endpos; } }
 
 // adds range information to rule
 %inline with_range(X):

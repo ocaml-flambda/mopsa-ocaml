@@ -38,7 +38,7 @@ struct
 
   let inline (pred:var) (params:expr with_range list) (ctx:t) range : formula with_range =
     (* We need to find the predicate record containing the names of the arguments *)
-    let pred, body = PredMap.find_first (fun p -> compare_var p.predicate_var pred == 0) ctx in
+    let pred, body = PredMap.find_first (fun p -> compare_var p.predicate_var pred = 0) ctx in
 
     (* Combine arguments and call parameters *)
     let args = List.map get_content params |>
@@ -49,7 +49,7 @@ struct
         function
         | [] -> None
         | (v,e) :: tl ->
-          if compare_var arg v == 0 then Some e
+          if compare_var arg v = 0 then Some e
           else iter tl
       in
       iter args

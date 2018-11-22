@@ -21,6 +21,10 @@ type pos = {
 (** Position in a file. *)
 
 
+let get_pos_file p = p.pos_file
+let get_pos_line p = p.pos_line
+let get_pos_column p = p.pos_column
+
 let mk_pos file line column =
   {pos_file = file; pos_line = line; pos_column = column}
 
@@ -179,6 +183,11 @@ let bind_pair_range (a: 'a with_range) (f: 'a -> 'b * 'c) : 'b with_range * 'c =
   let b, c = f a.content in
   { content = b; range = a.range }, c
 
+let compare_with_range cmp a b =
+  Compare.compose [
+    (fun () -> compare_range a.range b.range);
+    (fun () -> cmp a.content b.content);
+  ]
 
 (** {2 Pretty printers} *)
 (** =================== *)

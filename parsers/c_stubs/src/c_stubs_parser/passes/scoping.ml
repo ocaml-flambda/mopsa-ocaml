@@ -12,6 +12,9 @@ open Location
 open Cst
 
 
+let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.scoping" fmt
+
+
 (* {2 Scope definition} *)
 (* ******************** *)
 
@@ -20,13 +23,13 @@ struct
 
   include SetExt.Make(struct type t = var let compare = compare_var end)
 
-  let uid_counter = ref 0
+  let uid_counter = ref 1000
 
   let create v s =
     incr uid_counter;
-    let v' = { vname = v.vname; vuid = !uid_counter; vlocal = true; } in
+    let v' = { vname = v.vname; vuid = !uid_counter; vlocal = true; vrange = v.vrange; } in
     let s' = filter (fun v' -> v'.vname != v.vname ) s |>
-             add v
+             add v'
     in
     v', s'
 

@@ -160,6 +160,7 @@ and var = {
   vname  : string; (** variable name *)
   vlocal : bool;   (** is it a local variable ? *)
   vuid   : int;    (** unique identifier *)
+  vrange : range;  (** declaration location *)
 }
 
 and builtin =

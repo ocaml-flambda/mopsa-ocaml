@@ -15,12 +15,12 @@ open Cst
 
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.cst_to_ast" fmt
 
-(** Type maps of resolving types of local variables *)
+(** Maps for resolving types of local variables *)
 module Context =
 struct
 
   module Map = MapExt.Make(struct type t = var let compare = compare_var end)
-      
+
   type t = C_AST.type_qual Map.t
 
   let empty : t = Map.empty
@@ -69,28 +69,28 @@ let find_record r prj =
   StringMap.bindings prj.proj_records |>
   List.split |>
   snd |>
-  List.find (fun r' -> compare r'.record_org_name r.vname == 0) 
+  List.find (fun r' -> compare r'.record_org_name r.vname = 0)
 
 let find_typedef t prj =
   let open C_AST in
   StringMap.bindings prj.proj_typedefs |>
   List.split |>
   snd |>
-  List.find (fun t' -> compare t'.typedef_org_name t.vname == 0)
+  List.find (fun t' -> compare t'.typedef_org_name t.vname = 0)
 
 let find_enum e prj =
   let open C_AST in
   StringMap.bindings prj.proj_enums |>
   List.split |>
   snd |>
-  List.find (fun e' -> compare e'.enum_org_name e.vname == 0) 
+  List.find (fun e' -> compare e'.enum_org_name e.vname = 0)
 
 let find_function f prj =
   let open C_AST in
   StringMap.bindings prj.proj_funcs |>
   List.split |>
   snd |>
-  List.find (fun f' -> compare f'.func_org_name f.vname == 0) 
+  List.find (fun f' -> compare f'.func_org_name f.vname = 0)
 
 let rec visit_qual_typ t prj func ctx : C_AST.type_qual=
   let (t0, is_const) = t in
@@ -152,7 +152,7 @@ let field_type t f =
   | C_AST.T_record r ->
     begin try
       let field = Array.to_list r.C_AST.record_fields |>
-                  List.find (fun field -> compare field.C_AST.field_org_name f == 0)
+                  List.find (fun field -> compare field.C_AST.field_org_name f = 0)
       in
       field.field_type
     with Not_found ->
@@ -161,10 +161,6 @@ let field_type t f =
   end
   | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
            (C_print.string_of_type_qual t)
-
-let unop_type op t = Exceptions.panic "cst_to_ast: unop_type not implemented"
-
-let binop_type op t1 t2 = Exceptions.panic "cst_to_ast: binop_type not implemented"
 
 let builtin_type f arg =
   match f.content with
@@ -214,7 +210,18 @@ let visit_var v prj func ctx =
       var_kind = Variable_local func;
       var_type = vtyp;
       var_init = None;
-      var_range = assert false;
+      var_range = Clang_AST.{
+          range_begin = {
+            loc_file = get_range_start v.vrange |> get_pos_file;
+            loc_line = get_range_start v.vrange |> get_pos_line;
+            loc_column = get_range_start v.vrange |> get_pos_column;
+          };
+          range_end = {
+            loc_file = get_range_end v.vrange |> get_pos_file;
+            loc_line = get_range_end v.vrange |> get_pos_line;
+            loc_column = get_range_end v.vrange |> get_pos_column;
+          }
+        };
       var_com = [];
     }
   else
@@ -223,47 +230,154 @@ let visit_var v prj func ctx =
     let vars = Array.to_list func.func_parameters @
                (StringMap.bindings prj.proj_vars |> List.split |> snd)
     in
-    try List.find (fun v' -> compare v'.var_org_name v.vname == 0) vars
+    try List.find (fun v' -> compare v'.var_org_name v.vname = 0) vars
     with Not_found -> Exceptions.panic "cst_to_ast: variable %a not found" pp_var v
 
+let rec unroll_type t =
+  let open C_AST in
+  match fst t with
+  | T_typedef td -> unroll_type td.typedef_def
+  | T_enum e -> T_integer e.enum_integer_type, snd t
+  | _ -> t
+
+let rec promote_expression_type (e: Ast.expr with_range) =
+  let open C_AST in
+  bind_range e @@ fun ee ->
+  let t = unroll_type ee.typ in
+  match fst t with
+  | T_integer (SIGNED_INT | UNSIGNED_INT |
+               SIGNED_LONG | UNSIGNED_LONG |
+               SIGNED_LONG_LONG | UNSIGNED_LONG_LONG |
+               SIGNED_INT128 | UNSIGNED_INT128
+              ) ->
+    ee
+
+  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) ->
+    let tt = (T_integer SIGNED_INT), snd t in
+    { kind = E_cast(tt, false, e); typ = tt }
+
+  | T_integer (Char UNSIGNED | UNSIGNED_CHAR | UNSIGNED_SHORT) ->
+    let tt = (T_integer UNSIGNED_INT), snd t in
+    { kind = E_cast(tt, false, e); typ = tt }
+
+  | T_float _ -> ee
+
+  | T_pointer _ -> ee
+
+  | T_array _ -> ee
+
+  | _ -> Exceptions.panic "promote_expression_type: unsupported type %s"
+           (C_print.string_of_type_qual t)
+
+let convert_expression_type (e:Ast.expr with_range) t =
+  bind_range e @@ fun ee ->
+  if compare ee.typ t = 0 then ee
+  else { kind = E_cast(t, false, e); typ = t }
+
+let binop_type t1 t2 =
+  let open C_AST in
+  match fst (unroll_type t1), fst (unroll_type t2) with
+  | _, _ when compare t1 t2 = 0 -> t1
+
+  | T_float LONG_DOUBLE, _ -> t1
+  | _, T_float LONG_DOUBLE -> t2
+
+  | T_float DOUBLE, _ -> t1
+  | _, T_float DOUBLE -> t2
+
+  | T_float FLOAT, _ -> t1
+  | _, T_float FLOAT -> t2
+
+  | T_integer UNSIGNED_LONG_LONG, T_integer _ -> t1
+  | T_integer _, T_integer UNSIGNED_LONG_LONG -> t2
+
+  | T_integer UNSIGNED_LONG, T_integer _ -> t1
+  | T_integer _, T_integer UNSIGNED_LONG -> t2
+
+  | T_integer UNSIGNED_INT, T_integer SIGNED_INT -> t1
+  | T_integer SIGNED_INT, T_integer UNSIGNED_INT -> t2
+
+  | T_pointer _, T_integer _ -> t1
+  | T_integer _, T_pointer _ -> t2
+
+  | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
+           (C_print.string_of_type_qual t1)
+           (C_print.string_of_type_qual t2)
+
 let rec visit_expr e prj func ctx =
-  bind_range e @@ fun e ->
-  let kind, typ = match e with
+  bind_range e @@ fun ee ->
+  let kind, typ = match ee with
     | E_int(n) -> Ast.E_int(n), int_type
+
     | E_float(f) -> Ast.E_float(f), float_type
+
     | E_string(s) -> Ast.E_string(s), string_type s
+
     | E_char(c) -> Ast.E_char(c), char_type
+
     | E_var(v) ->
       let v = visit_var v prj func ctx in
       Ast.E_var v, v.var_type
+
     | E_unop(op, e')      ->
       let e' = visit_expr e' prj func ctx in
-      Ast.E_unop(visit_unop op, e'), unop_type op e'.content.typ
+      let e' = promote_expression_type e' in
+      let ee' =
+        with_range
+          Ast.{ kind = E_unop(visit_unop op, e'); typ = e'.content.typ }
+          e.range
+      in
+
+      E_cast(e'.content.typ, false, ee'), e'.content.typ
+
     | E_binop(op, e1, e2) ->
       let e1 = visit_expr e1 prj func ctx in
       let e2 = visit_expr e2 prj func ctx in
-      Ast.E_binop(visit_binop op, e1, e2), binop_type op e1.content.typ e2.content.typ
+
+      let e1 = promote_expression_type e1 in
+      let e2 = promote_expression_type e2 in
+
+      let t = binop_type e1.content.typ e2.content.typ in
+
+      let e1 = convert_expression_type e1 t in
+      let e2 = convert_expression_type e2 t in
+
+      let ee' =
+        with_range
+          Ast.{ kind = E_binop(visit_binop op, e1, e2); typ = t }
+          e.range
+      in
+
+      Ast.E_cast(t, false, ee'), t
+
     | E_addr_of(e')       ->
       let e' = visit_expr e' prj func ctx in
       Ast.E_addr_of e', pointer_type e'.content.typ
+
     | E_deref(e')         ->
       let e' = visit_expr e' prj func ctx in
       Ast.E_deref e', pointed_type e'.content.typ
+
     | E_cast(t, e') ->
       let t = visit_qual_typ t prj func ctx in
       Ast.E_cast(t, true, visit_expr e' prj func ctx), t
+
     | E_subscript(a, i)   ->
       let a  = visit_expr a prj func ctx in
       Ast.E_subscript(a, visit_expr i prj func ctx), subscript_type a.content.typ
+
     | E_member(s, f)      ->
       let s = visit_expr s prj func ctx in
       Ast.E_member(s, f), field_type s.content.typ f
+
     | E_arrow(p, f) ->
       let p = visit_expr p prj func ctx in
       Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
+
     | E_builtin_call(f,a) ->
       let a = visit_expr a prj func ctx in
       Ast.E_builtin_call(visit_builtin f, a), builtin_type f a
+
     | E_return -> Ast.E_return, func.func_return
   in
   Ast.{ kind; typ }
@@ -375,7 +489,6 @@ let doit
     (stub:Cst.stub with_range)
   : Ast.stub with_range
   =
-  debug "converting cst to ast:@\n  @[%a@]" Cst.pp_stub stub;
   bind_range stub @@ fun stub ->
   match stub with
   | S_simple s ->
@@ -399,5 +512,3 @@ let doit
       stub_requires = requires;
       stub_body = B_cases (visit_list visit_case c.case_stub_cases prj func Context.empty);
     }
-
-  
