@@ -34,7 +34,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {export = []; import = [Stubs.Zone.Z_stubs]}
 
   let eval_interface = {
     export = [Zone.Z_c, Zone.Z_c_scalar];

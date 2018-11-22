@@ -44,11 +44,11 @@ let parse_function_comment
       match cst with
       | None -> None
       | Some cst ->
-        (* Resolve scoping of variables *)
-        let cst1 = Passes.Scoping.doit cst in
-
         (* Remove predicates *)
-        let cst2 = Passes.Predicate_expansion.doit cst1 in
+        let cst1 = Passes.Predicate_expansion.doit cst in
+
+        (* Resolve scoping of variables *)
+        let cst2 = Passes.Scoping.doit cst1 in
 
         (* Translate CST into AST *)
         let ast = Passes.Cst_to_ast.doit prj func cst2 in

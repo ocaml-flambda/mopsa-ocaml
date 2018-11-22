@@ -508,12 +508,14 @@ and from_range (range:C_AST.range) =
 and from_stub_comment prj ctx f =
   match C_stubs_parser.Main.parse_function_comment f prj with
   | None -> None
-  | Some stub -> Some (from_stub ctx stub)
+  | Some stub -> Some (from_stub ctx f stub)
 
-and from_stub ctx stub =
+and from_stub ctx f stub =
   bind_range stub @@ fun stub ->
   {
+    stub_name     = f.func_org_name;
     stub_requires = List.map (from_stub_requires ctx) stub.stub_requires;
+    stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
     stub_body     = from_stub_body ctx stub.stub_body;
   }
 
@@ -622,9 +624,9 @@ and from_stub_builtin f =
   | BASE -> BASE
 
 and from_stub_log_binop = function
-  | C_stubs_parser.Ast.AND -> O_log_and
-  | OR -> O_log_or
-  | IMPLIES -> O_log_implies
+  | AND -> AND
+  | OR -> OR
+  | IMPLIES -> IMPLIES
 
 and from_stub_expr_binop = function
   | C_stubs_parser.Ast.ADD -> O_plus

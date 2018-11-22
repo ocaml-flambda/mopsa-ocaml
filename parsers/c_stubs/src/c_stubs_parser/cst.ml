@@ -108,6 +108,7 @@ and c_typ =
   | T_typedef of var
   | T_pointer of c_qual_typ
   | T_enum of var
+  | T_unknown
 
 and array_length =
   | A_no_length
@@ -157,10 +158,11 @@ and set =
 and resource = string
 
 and var = {
-  vname  : string; (** variable name *)
-  vlocal : bool;   (** is it a local variable ? *)
-  vuid   : int;    (** unique identifier *)
-  vrange : range;  (** declaration location *)
+  vname  : string;     (** variable name *)
+  vlocal : bool;       (** is it a local variable ? *)
+  vuid   : int;        (** unique identifier *)
+  vtyp   : c_qual_typ; (** variable type *)
+  vrange : range;      (** declaration location *)
 }
 
 and builtin =
@@ -170,7 +172,7 @@ and builtin =
   | BASE
 
 
-(** {2 Comparison functions} *)
+(** {2 Utility functions} *)
 (** ************************ *)
 
 let compare_var v1 v2 =
@@ -178,6 +180,8 @@ let compare_var v1 v2 =
     (fun () -> compare v1.vname v2.vname);
     (fun () -> compare v1.vuid v2.vuid);
   ]
+
+let no_qual t = t, false
 
 (** {2 Pretty printer} *)
 (** ****************** *)
@@ -278,6 +282,7 @@ and pp_c_typ fmt =
   | T_typedef(t) -> pp_var fmt t
   | T_pointer(t) -> fprintf fmt "%a *" pp_c_qual_typ t
   | T_enum(e) -> fprintf fmt "enum %a" pp_var e
+  | T_unknown -> fprintf fmt "?"
 
 
 let rec pp_formula fmt (f:formula with_range) =

@@ -12,6 +12,9 @@
         "universal.iterators.interproc.inlining",
         "universal.iterators.unittest",
 
+	// Stubs iterator
+	"stubs.iterator",
+
         // C desugar
         "c.desugar.loops",
         "c.desugar.aggregate",

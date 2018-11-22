@@ -6,29 +6,21 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstract Syntax Tree for stubs specifications. *)
+(** Abstract Syntax Tree for stub specification. *)
 
 open Framework.Essentials
 open Format
 
 
-(** {2 Types} *)
-(*  =-=-=-=-= *)
+(** {2 Formulas} *)
+(*  =-=-=-=-=-=- *)
 
-type typ +=
-  | T_stub_forall_var of typ  (** universally quantified variables *)
-  | T_stub_exists_var of typ  (** existentially quantified variables *)
+(** Logical binary operators *)
+type log_binop =
+  | AND     (** ∧ *)
+  | OR      (** ∨ *)
+  | IMPLIES (** ⟹ *)
 
-
-(** {2 Operators} *)
-(*  =-=-=-=-=-=-= *)
-
-type operator +=
-  | O_log_implies (** ⇒ *)
-
-
-(** {2 Expressions} *)
-(*  =-=-=-=-=-=-=-= *)
 
 (** Built-in functions *)
 type builtin =
@@ -37,17 +29,10 @@ type builtin =
   | BASE
   | OLD
 
-type expr_kind +=
-  | E_stub_return  (* return value of the stub *)
-  | E_stub_builtin_call of builtin with_range (* built-in function *) * expr
-
-
-(** {2 Formulas} *)
-(*  =-=-=-=-=-=- *)
 
 type formula =
   | F_expr   of expr (** boolean expression *)
-  | F_binop  of operator * formula with_range * formula with_range
+  | F_binop  of log_binop * formula with_range * formula with_range
   | F_not    of formula with_range
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
@@ -58,16 +43,17 @@ and set =
   | S_interval of expr * expr (* intervals of integers  *)
   | S_resource of resource    (* set of allocated instances of a resource *)
 
-and resource = string (* FIXME: add a uid *)
+and resource = string (* FIXME: add an uid *)
 
 
 (** {2 Stubs} *)
 (*  =-=-=-=-= *)
 
-(** A stub is composed of some requirements on the pre-condition and a
-    body. *)
+(** A stub is composed of pre-conditions requirements and a body. *)
 type stub = {
+  stub_name: string;
   stub_requires: requires with_range list;
+  stub_params: var list;
   stub_body: body;
 }
 
@@ -87,9 +73,9 @@ and post = {
   post_ensures  : ensures with_range list;
 }
 
-(** A stub case consists of a filtering on the pre-condition and a
-   post-condition. The assumes section is equivalent to an if
-   statement, while the requires section is equivalent to an assert
+(** A stub case consists of a filter on the pre-condition and a
+   post-condition. The assumes section is equivalent to an `if`
+   statement, while the requires section is equivalent to an `assert`
    statement. *)
 and case = {
   case_label    : string;
@@ -122,6 +108,13 @@ and assigns = {
   assign_offset: (expr * expr) option; (* range of modified indices *)
 }
 
+(** {2 Expressions} *)
+(*  =-=-=-=-=-=-=-= *)
+
+type expr_kind +=
+  | E_stub_call of stub (** called stub *) * expr list (** arguments *)
+  | E_stub_return
+  | E_stub_builtin_call of builtin with_range * expr
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -138,13 +131,18 @@ let pp_builtin fmt f =
   | BASE   -> pp_print_string fmt "base"
   | OLD    -> pp_print_string fmt "old"
 
+let pp_log_binop fmt = function
+  | AND -> pp_print_string fmt "∧"
+  | OR  -> pp_print_string fmt "∨"
+  | IMPLIES -> pp_print_string fmt "⟹"
+
 let rec pp_formula fmt f =
   match f.content with
   | F_expr e -> pp_expr fmt e
-  | F_binop (op, f1, f2) -> fprintf fmt "(%a) %a (%a)" pp_formula f1 pp_operator op pp_formula f2
+  | F_binop (op, f1, f2) -> fprintf fmt "(%a)@\n%a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
-  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
-  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
+  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
+  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
@@ -157,7 +155,6 @@ and pp_resource fmt res = pp_print_string fmt res
 
 let pp_args pp fmt args =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp fmt args
-
 
 let rec pp_local fmt local =
   fprintf fmt "local: %a %a = @[%a@];"
@@ -172,11 +169,11 @@ and pp_local_value fmt v =
 
 
 let pp_requires fmt requires =
-  fprintf fmt "requires: @[%a@];"
+  fprintf fmt "requires:@ @[<v 2>  %a@];"
     pp_formula requires.content
 
 let pp_assigns fmt assigns =
-  fprintf fmt "assigns: %a%a;"
+  fprintf fmt "assigns:@ @[<v 2>  %a%a@];"
     pp_expr assigns.content.assign_target
     (pp_opt (fun fmt (l, u) ->
          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
@@ -185,13 +182,13 @@ let pp_assigns fmt assigns =
 
 
 let pp_assumes fmt assumes =
-  fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
+  fprintf fmt "assumes:@ @[<v 2>  %a@];" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
+  fprintf fmt "ensures:@ @[<v 2>  %a@];" pp_formula ensures.content
 
 let pp_section pp ?(first=false) fmt l =
-  if not first then fprintf fmt "@\n";
+  if not first && l != [] then fprintf fmt "@\n";
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp fmt l
 
 
@@ -219,40 +216,14 @@ let pp_stub fmt stub =
     (pp_body ~first:(stub.stub_requires == [])) stub.stub_body
 
 
-(** {2 AST registration} *)
-(*  =-=-=-=-=-=-=-=-=-=- *)
-
-let () =
-  register_typ {
-    compare = (fun next t1 t2 ->
-        match t1, t2 with
-        | T_stub_forall_var(t1), T_stub_forall_var(t2) -> compare_typ t1 t2
-        | T_stub_exists_var(t1), T_stub_exists_var(t2) -> compare_typ t1 t2
-        | _ -> next t1 t2
-      );
-
-    print = (fun next fmt t ->
-        match t with
-        | T_stub_forall_var(t') -> fprintf fmt "∀%a" pp_typ t'
-        | T_stub_exists_var(t') -> fprintf fmt "∃%a" pp_typ t'
-        | _ -> next fmt t
-      );
-  }
-
-let () =
-  register_operator {
-    compare = (fun next -> next);
-    print   = (fun next fmt o ->
-        match o with
-        | O_log_implies -> Format.fprintf fmt "⇒"
-        | _ -> next fmt o
-      );
-  }
+(** {2 Registration of expressions} *)
+(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
 
 let () =
   register_expr {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
+        | E_stub_call _, E_stub_call _ -> panic "stub comparison not supported"
         | E_stub_builtin_call(f1, arg1), E_stub_builtin_call(f2, arg2) ->
           Compare.compose [
             (fun () -> compare f1 f2);
@@ -262,6 +233,7 @@ let () =
       );
     visit  = (fun next e ->
         match ekind e with
+        | E_stub_call _ -> panic "stub visitor not supported"
         | E_stub_return -> Framework.Visitor.leaf e
         | E_stub_builtin_call(f, arg) ->
           { exprs = [arg]; stmts = [] },
@@ -270,8 +242,12 @@ let () =
       );
     print   = (fun next fmt e ->
         match ekind e with
+        | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
         | _ -> next fmt e
       );
   }
+
+(** {2 Registration of statements} *)
+(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
