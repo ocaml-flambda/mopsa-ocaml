@@ -12,6 +12,7 @@ open Framework.Essentials
 open Universal.Ast
 open Ast
 open Zone
+open Alarms
 
 module Domain =
 struct
@@ -66,21 +67,49 @@ struct
         ~felse:(fun flow -> Eval.singleton false flow)
         man flow
 
-    | F_binop (AND, f1, f2) -> assert false
+    | F_binop (AND, f1, f2) -> panic "F_binop (AND, f1, f2) not implemented"
 
-    | F_binop (OR, f1, f2) -> assert false
+    | F_binop (OR, f1, f2) -> panic "F_binop (OR, f1, f2) not implemented"
 
-    | F_binop (IMPLIES, f1, f2) -> assert false
+    | F_binop (IMPLIES, f1, f2) -> panic "F_binop (IMPLIES, f1, f2) not implemented"
 
-    | F_not ff -> assert false
+    | F_not ff -> panic "F_not ff not implemented"
 
-    | F_forall (v, s, ff) -> assert false
+    | F_forall (v, s, ff) -> panic "F_forall (v, s, ff) not implemented"
 
-    | F_exists (v, s, ff) -> assert false
+    | F_exists (v, s, ff) -> panic "F_exists (v, s, ff) not implemented"
 
-    | F_in (v, s) -> assert false
+    | F_in (v, s) -> panic "F_in (v, s) not implemented"
 
-    | F_free(e) -> assert false
+    | F_free(e) -> panic "F_free(e) not implemented"
+
+  let init_params args params range man flow =
+        List.combine args params |>
+        List.fold_left (fun flow (arg, param) ->
+            man.exec (mk_assign (mk_var param range) arg range) flow
+          ) flow
+          
+  let check_requirements reqs range man flow =
+    List.fold_left (fun flow req ->
+        eval_formula req.content man flow |>
+        Post.bind_flow man @@ fun b flow ->
+        if b then
+          (* valid requirement formula *)
+          flow
+        else
+          (* invalid requirement formula *)
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+          let alarm = mk_alarm (A_stub_invalid_require req) range ~cs in
+          Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+          Flow.remove T_cur man
+      ) flow reqs
+
+  let eval_post post man flow = panic "eval_post not supported"
+
+  let eval_body body man flow =
+    match body with
+    | B_post post -> eval_post post man flow
+    | B_cases cases -> panic "eval_body(B_cases cases) not supported"
 
   let eval zone exp man flow =
     match ekind exp with
@@ -91,24 +120,12 @@ struct
       ;
 
       (* Initialize parameters *)
-      let flow1 =
-        List.combine args stub.stub_params |>
-        List.fold_left (fun flow (arg, param) ->
-            man.exec (mk_assign (mk_var param exp.erange) arg exp.erange) flow
-          ) flow
-      in
+      let flow1 = init_params args stub.stub_params exp.erange man flow in
 
       (* Check requirements *)
-      let flow2 =
-        stub.stub_requires |>
-        List.fold_left (fun flow req ->
-            eval_formula req.content man flow |>
-            Post.bind_flow man @@ fun b flow ->
-            if b then flow
-            else assert false
-          ) flow1
-      in
-      panic_at exp.erange "stubs not supported"
+      let flow2 = check_requirements stub.stub_requires exp.erange man flow1 in
+
+      eval_body stub.stub_body man flow2
 
     | _ -> None
 
