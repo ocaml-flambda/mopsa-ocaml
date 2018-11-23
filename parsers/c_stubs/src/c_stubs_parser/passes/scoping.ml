@@ -25,9 +25,15 @@ struct
 
   let uid_counter = ref 1000
 
-  let create v s =
+  let create v t s =
     incr uid_counter;
-    let v' = { vname = v.vname; vuid = !uid_counter; vlocal = true; vrange = v.vrange; } in
+    let v' = {
+      vname = v.vname;
+      vuid = !uid_counter;
+      vlocal = true;
+      vrange = v.vrange;
+      vtyp = t;
+    } in
     let s' = filter (fun v' -> v'.vname != v.vname ) s |>
              add v'
     in
@@ -128,12 +134,12 @@ let rec visit_formula (formula:formula with_range) scope =
     F_not f, scope
 
   | F_forall (v, t, s, f) ->
-    let v, scope' = Scope.create v scope in
+    let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
     F_forall (v, t, s, f), scope
 
   | F_exists (v, t, s, f) ->
-    let v, scope' = Scope.create v scope in
+    let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
     F_exists (v, t, s, f), scope
 
@@ -150,15 +156,7 @@ let rec visit_formula (formula:formula with_range) scope =
     let e, scope = visit_expr e scope in
     F_free e, scope
 
-let visit_predicate pred scope =
-  bind_pair_range pred @@ fun pred ->
-  let v, scope = Scope.create pred.predicate_var scope in
-  let args, scope = List.fold_left (fun (args, scope) arg ->
-      let arg, scope = Scope.create arg scope in arg :: args, scope
-    ) ([], scope) pred.predicate_args
-  in
-  let body, scope = visit_formula pred.predicate_body scope in
-  { predicate_var = v; predicate_args = List.rev args; predicate_body = body}, scope
+let visit_predicate pred scope = Exceptions.panic "scoping: predicate not expanded"
 
 let visit_requires requires scope =
   bind_pair_range requires @@ fun requires ->
@@ -194,7 +192,7 @@ let visit_local_value lv scope =
 let visit_local local scope =
   bind_pair_range local @@ fun local ->
   let lval, scope = visit_local_value local.lval scope in
-  let lvar, scope = Scope.create local.lvar scope in
+  let lvar, scope = Scope.create local.lvar local.ltyp scope in
   { lvar; ltyp = local.ltyp; lval }, scope
 
 let visit_case c scope =

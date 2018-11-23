@@ -15,50 +15,25 @@ open Cst
 
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.cst_to_ast" fmt
 
-(** Maps for resolving types of local variables *)
-module Context =
-struct
-
-  module Map = MapExt.Make(struct type t = var let compare = compare_var end)
-
-  type t = C_AST.type_qual Map.t
-
-  let empty : t = Map.empty
-
-  let add (v:var) (vtyp:C_AST.type_qual) (ctx:t) : t =
-    Map.add v vtyp ctx
-
-  let find (v:var) (ctx:t) : C_AST.type_qual =
-    Map.find v ctx
-
-end
 
 (** {2 Generic visitors} *)
 (** ******************** *)
 
-let rec visit_list visit l prj func ctx =
+let rec visit_list visit l prj func =
   match l with
   | [] -> []
   | hd :: tl ->
-    let hd' = visit hd prj func ctx in
-    let tl' = visit_list visit tl prj func ctx in
+    let hd' = visit hd prj func in
+    let tl' = visit_list visit tl prj func in
     hd' :: tl'
 
-let rec visit_list2 visit l prj func ctx =
-  match l with
-  | [] -> [], ctx
-  | hd :: tl ->
-    let hd', ctx' = visit hd prj func ctx in
-    let tl', ctx'' = visit_list2 visit tl prj func ctx' in
-    hd' :: tl', ctx''
-
-let visit_option visit o prj func ctx =
+let visit_option visit o prj func =
   match o with
   | None -> None
-  | Some x -> Some (visit x prj func ctx)
+  | Some x -> Some (visit x prj func)
 
-let visit_pair visitor1 visitor2 (x, y) prj func ctx =
-  (visitor1 x prj func ctx, visitor2 y prj func ctx)
+let visit_pair visitor1 visitor2 (x, y) prj func =
+  (visitor1 x prj func, visitor2 y prj func)
 
 
 (** {2 Types} *)
@@ -92,13 +67,13 @@ let find_function f prj =
   snd |>
   List.find (fun f' -> compare f'.func_org_name f.vname = 0)
 
-let rec visit_qual_typ t prj func ctx : C_AST.type_qual=
+let rec visit_qual_typ t prj func : C_AST.type_qual=
   let (t0, is_const) = t in
-  let t0' = visit_typ t0 prj func ctx in
+  let t0' = visit_typ t0 prj func in
   let qual = C_AST.{ qual_is_const = is_const; } in
   t0', qual
 
-and visit_typ t prj func ctx =
+and visit_typ t prj func =
   match t with
   | T_void -> C_AST.T_void
   | T_char -> C_AST.(T_integer (Char SIGNED)) (* FIXME: get the signedness defined by the platform *)
@@ -117,14 +92,15 @@ and visit_typ t prj func ctx =
   | T_float -> C_AST.(T_float FLOAT)
   | T_double -> C_AST.(T_float DOUBLE)
   | T_long_double -> C_AST.(T_float LONG_DOUBLE)
-  | T_array(t, len) -> C_AST.T_array (visit_qual_typ t prj func ctx, visit_array_length len prj func ctx)
+  | T_array(t, len) -> C_AST.T_array (visit_qual_typ t prj func , visit_array_length len prj func )
   | T_struct(s) -> C_AST.T_record (find_record s prj)
   | T_union(u) -> C_AST.T_record (find_record u prj)
   | T_typedef(t) -> C_AST.T_typedef (find_typedef t prj)
-  | T_pointer(t) -> C_AST.T_pointer (visit_qual_typ t prj func ctx)
+  | T_pointer(t) -> C_AST.T_pointer (visit_qual_typ t prj func )
   | T_enum(e) -> C_AST.T_enum (find_enum e prj)
+  | T_unknown -> Exceptions.panic "unknown type not resolved"
 
-and visit_array_length len prj func ctx =
+and visit_array_length len prj func =
   match len with
   | A_no_length -> C_AST.No_length
   | A_constant_length n -> C_AST.Length_cst n
@@ -199,16 +175,15 @@ let visit_binop = function
   | BAND -> Ast.BAND
   | BXOR -> Ast.BXOR
 
-let visit_var v prj func ctx =
+let visit_var v prj func =
   let open C_AST in
   if v.vlocal then
-    let vtyp = Context.find v ctx in
     {
       var_uid = v.vuid; (** FIXME: ensure that v.vuid is unique in the entire project *)
       var_org_name = v.vname;
       var_unique_name = v.vname ^ (string_of_int v.vuid); (** FIXME: give better unique names *)
       var_kind = Variable_local func;
-      var_type = vtyp;
+      var_type = visit_qual_typ v.vtyp prj func;
       var_init = None;
       var_range = Clang_AST.{
           range_begin = {
@@ -304,7 +279,7 @@ let binop_type t1 t2 =
            (C_print.string_of_type_qual t1)
            (C_print.string_of_type_qual t2)
 
-let rec visit_expr e prj func ctx =
+let rec visit_expr e prj func =
   bind_range e @@ fun ee ->
   let kind, typ = match ee with
     | E_int(n) -> Ast.E_int(n), int_type
@@ -316,11 +291,11 @@ let rec visit_expr e prj func ctx =
     | E_char(c) -> Ast.E_char(c), char_type
 
     | E_var(v) ->
-      let v = visit_var v prj func ctx in
+      let v = visit_var v prj func in
       Ast.E_var v, v.var_type
 
     | E_unop(op, e')      ->
-      let e' = visit_expr e' prj func ctx in
+      let e' = visit_expr e' prj func in
       let e' = promote_expression_type e' in
       let ee' =
         with_range
@@ -331,8 +306,8 @@ let rec visit_expr e prj func ctx =
       E_cast(e'.content.typ, false, ee'), e'.content.typ
 
     | E_binop(op, e1, e2) ->
-      let e1 = visit_expr e1 prj func ctx in
-      let e2 = visit_expr e2 prj func ctx in
+      let e1 = visit_expr e1 prj func in
+      let e2 = visit_expr e2 prj func in
 
       let e1 = promote_expression_type e1 in
       let e2 = promote_expression_type e2 in
@@ -342,40 +317,42 @@ let rec visit_expr e prj func ctx =
       let e1 = convert_expression_type e1 t in
       let e2 = convert_expression_type e2 t in
 
-      let ee' =
-        with_range
+      let ee' = with_range
           Ast.{ kind = E_binop(visit_binop op, e1, e2); typ = t }
           e.range
       in
-
-      Ast.E_cast(t, false, ee'), t
+      
+      begin match op with
+        | EQ | NEQ | LT | LE | GT | GE -> ee'.content.kind, ee'.content.typ
+        | _ -> Ast.E_cast(t, false, ee'), t
+      end
 
     | E_addr_of(e')       ->
-      let e' = visit_expr e' prj func ctx in
+      let e' = visit_expr e' prj func in
       Ast.E_addr_of e', pointer_type e'.content.typ
 
     | E_deref(e')         ->
-      let e' = visit_expr e' prj func ctx in
+      let e' = visit_expr e' prj func in
       Ast.E_deref e', pointed_type e'.content.typ
 
     | E_cast(t, e') ->
-      let t = visit_qual_typ t prj func ctx in
-      Ast.E_cast(t, true, visit_expr e' prj func ctx), t
+      let t = visit_qual_typ t prj func in
+      Ast.E_cast(t, true, visit_expr e' prj func ), t
 
     | E_subscript(a, i)   ->
-      let a  = visit_expr a prj func ctx in
-      Ast.E_subscript(a, visit_expr i prj func ctx), subscript_type a.content.typ
+      let a  = visit_expr a prj func in
+      Ast.E_subscript(a, visit_expr i prj func ), subscript_type a.content.typ
 
     | E_member(s, f)      ->
-      let s = visit_expr s prj func ctx in
+      let s = visit_expr s prj func in
       Ast.E_member(s, f), field_type s.content.typ f
 
     | E_arrow(p, f) ->
-      let p = visit_expr p prj func ctx in
+      let p = visit_expr p prj func in
       Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
 
     | E_builtin_call(f,a) ->
-      let a = visit_expr a prj func ctx in
+      let a = visit_expr a prj func in
       Ast.E_builtin_call(visit_builtin f, a), builtin_type f a
 
     | E_return -> Ast.E_return, func.func_return
@@ -398,76 +375,70 @@ let visit_log_binop = function
   | OR  -> Ast.OR
   | IMPLIES -> Ast.IMPLIES
 
-let visit_set s prj func ctx =
+let visit_set s prj func =
   match s with
-  | S_interval(e1, e2) -> Ast.S_interval(visit_expr e1 prj func ctx, visit_expr e2 prj func ctx)
+  | S_interval(e1, e2) -> Ast.S_interval(visit_expr e1 prj func , visit_expr e2 prj func )
   | S_resource(r) -> Ast.S_resource(r)
 
-let rec visit_formula f prj func ctx =
+let rec visit_formula f prj func =
   bind_range f @@ fun f ->
   match f with
-  | F_expr(e) -> Ast.F_expr (visit_expr e prj func ctx)
+  | F_expr(e) -> Ast.F_expr (visit_expr e prj func )
   | F_bool(b) -> Ast.F_bool b
-  | F_binop(op, f1, f2) -> Ast.F_binop(visit_log_binop op, visit_formula f1 prj func ctx, visit_formula f2 prj func ctx)
-  | F_not f' -> Ast.F_not (visit_formula f' prj func ctx)
+  | F_binop(op, f1, f2) -> Ast.F_binop(visit_log_binop op, visit_formula f1 prj func , visit_formula f2 prj func )
+  | F_not f' -> Ast.F_not (visit_formula f' prj func)
   | F_forall(v, t, s, f') ->
-    let t' = visit_qual_typ t prj func ctx in
-    let ctx' = Context.add v t' ctx in
-    let v' = visit_var v prj func ctx' in
-    Ast.F_forall(v', visit_set s prj func ctx, visit_formula f' prj func ctx')
+    let v' = visit_var v prj func in
+    Ast.F_forall(v', visit_set s prj func, visit_formula f' prj func)
   | F_exists(v, t, s, f') ->
-    let t' = visit_qual_typ t prj func ctx in
-    let ctx' = Context.add v t' ctx in
-    let v' = visit_var v prj func ctx' in
-    Ast.F_exists(v', visit_set s prj func ctx, visit_formula f' prj func ctx')
-  | F_in(v, s) -> Ast.F_in(visit_var v prj func ctx, visit_set s prj func ctx)
-  | F_free(e) -> Ast.F_free(visit_expr e prj func ctx)
+    let v' = visit_var v prj func in
+    Ast.F_exists(v', visit_set s prj func, visit_formula f' prj func)
+  | F_in(v, s) -> Ast.F_in(visit_var v prj func, visit_set s prj func)
+  | F_free(e) -> Ast.F_free(visit_expr e prj func)
   | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
 
 
 (** {2 Stub sections} *)
 (** **************** *)
 
-let visit_requires req prj func ctx =
+let visit_requires req prj func =
   bind_range req @@ fun req ->
-  visit_formula req prj func ctx
+  visit_formula req prj func
 
-let visit_assumes asm prj func ctx =
+let visit_assumes asm prj func =
   bind_range asm @@ fun asm ->
-  visit_formula asm prj func ctx
+  visit_formula asm prj func
 
-let visit_assigns a prj func ctx =
+let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
-    assign_target = visit_expr a.Cst.assign_target prj func ctx;
-    assign_offset = visit_option (visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func ctx;
+    assign_target = visit_expr a.Cst.assign_target prj func;
+    assign_offset = visit_option (visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
   }
 
-let visit_ensures ens prj func ctx =
+let visit_ensures ens prj func =
   bind_range ens @@ fun ens ->
-  visit_formula ens prj func ctx
+  visit_formula ens prj func
 
-let visit_local loc prj func ctx =
-  bind_pair_range loc @@ fun loc ->
-  let t = visit_qual_typ loc.ltyp prj func ctx in
-  let ctx' = Context.add loc.lvar t ctx in
-  let lvar = visit_var loc.lvar prj func ctx' in
+let visit_local loc prj func =
+  bind_range loc @@ fun loc ->
+  let lvar = visit_var loc.lvar prj func in
   let lval =
     match loc.lval with
     | L_new r -> Ast.L_new r
     | L_call (f, args) ->
       let f = bind_range f @@ fun f -> find_function f prj in
-      Ast.L_call (f, visit_list visit_expr args prj func ctx)
+      Ast.L_call (f, visit_list visit_expr args prj func)
   in
-  Ast.{ lvar; lval }, ctx'
+  Ast.{ lvar; lval }
 
-let visit_case c prj func ctx =
+let visit_case c prj func =
   bind_range c @@ fun c ->
-  let requires = visit_list visit_requires c.case_requires prj func ctx in
-  let assumes = visit_list visit_assumes c.case_assumes prj func ctx in
-  let assigns = visit_list visit_assigns c.case_assigns prj func ctx in
-  let local, ctx' = visit_list2 visit_local c.case_local prj func ctx in
-  let ensures = visit_list visit_ensures c.case_ensures prj func ctx' in
+  let requires = visit_list visit_requires c.case_requires prj func in
+  let assumes = visit_list visit_assumes c.case_assumes prj func in
+  let assigns = visit_list visit_assigns c.case_assigns prj func in
+  let local = visit_list visit_local c.case_local prj func in
+  let ensures = visit_list visit_ensures c.case_ensures prj func in
 
   Ast.{
     case_label = c.case_label;
@@ -492,10 +463,10 @@ let doit
   bind_range stub @@ fun stub ->
   match stub with
   | S_simple s ->
-    let requires = visit_list visit_requires s.simple_stub_requires prj func Context.empty in
-    let assigns = visit_list visit_assigns s.simple_stub_assigns prj func Context.empty in
-    let local, ctx = visit_list2 visit_local s.simple_stub_local prj func Context.empty in
-    let ensures = visit_list visit_ensures s.simple_stub_ensures prj func ctx in
+    let requires = visit_list visit_requires s.simple_stub_requires prj func in
+    let assigns = visit_list visit_assigns s.simple_stub_assigns prj func  in
+    let local = visit_list visit_local s.simple_stub_local prj func  in
+    let ensures = visit_list visit_ensures s.simple_stub_ensures prj func in
 
     Ast.{
       stub_requires = requires;
@@ -507,8 +478,8 @@ let doit
     }
 
   | S_case c ->
-    let requires = visit_list visit_requires c.case_stub_requires prj func Context.empty in
+    let requires = visit_list visit_requires c.case_stub_requires prj func in
     Ast.{
       stub_requires = requires;
-      stub_body = B_cases (visit_list visit_case c.case_stub_cases prj func Context.empty);
+      stub_body = B_cases (visit_list visit_case c.case_stub_cases prj func);
     }

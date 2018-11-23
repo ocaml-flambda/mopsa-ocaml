@@ -80,10 +80,8 @@ struct
         if ExecMap.mem zone map
         then map
         else
-          let () = debug "Searching for an exec function for the zone %a" pp_zone zone in
           if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.export
           then
-            let () = debug "exec for %a found" pp_zone zone in
             ExecMap.add zone (Domain.exec zone) map
           else
             let () = Exceptions.warn "exec for %a not found" pp_zone zone in
@@ -125,8 +123,6 @@ struct
 
   (** Build the map of [eval] functions *)
   and eval_map =
-    debug "Eval graph: @[%a@]" Zone.pp_graph eval_graph;
-
     (* Add the implicit [* -> *] eval path that uses all domains *)
     let map = EvalMap.singleton
         (any_zone, any_zone)
@@ -140,17 +136,12 @@ struct
         if EvalMap.mem (src, dst) acc then acc
         else
           begin
-            debug "Searching for an eval function for the zone %a" pp_zone2 (src, dst);
             let paths = Zone.find_all_eval_paths src dst eval_graph in
             if List.length paths = 0
             then
               let () = Exceptions.warn "eval for %a not found" pp_zone2 (src, dst) in
               acc
             else
-              let () = debug "eval for %a found@\npaths: @[%a@]"
-                  pp_zone2 (src, dst)
-                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Zone.pp_eval_path) paths
-              in
               (* Map each hop to an eval function *)
               let eval_paths = List.map (fun path ->
                   let rec aux =

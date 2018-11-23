@@ -6,6 +6,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Common exceptions and warnings *)
+
+
+
+(** {2 Warnings} *)
+(** =-=-=-=-=-=- *)
+
+let warn fmt = Debug.warn fmt
+
+let warn_at range fmt =
+  Format.kasprintf (fun str ->
+      Debug.warn "%a: %s" Location.pp_range range str
+    ) fmt
 
 (** {2 Panic exceptions} *)
 (** =-=-=-=-=-=-=-=-=-=- *)
@@ -16,11 +29,13 @@ exception PanicAt of Location.range * string
 (** Raise a panic exception using a formatted string *)
 let panic fmt =
   Format.kasprintf (fun str ->
+      warn "panic: %s" str;
       raise (Panic str)
     ) fmt
 
 let panic_at range fmt =
   Format.kasprintf (fun str ->
+      warn_at range "panic: %s" str;
       raise (PanicAt (range, str))
     ) fmt
 
@@ -47,14 +62,3 @@ let unnamed_syntax_error range =
 
 let unnamed_syntax_errors ranges =
     raise (UnnamedSyntaxErrorList ranges)
-
-
-(** {2 Warnings} *)
-(** =-=-=-=-=-=- *)
-
-let warn fmt = Debug.warn fmt
-
-let warn_at range fmt =
-  Format.kasprintf (fun str ->
-      Debug.warn "in %a: %s" Location.pp_range range str
-    ) fmt
