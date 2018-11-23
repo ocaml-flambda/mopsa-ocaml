@@ -46,17 +46,7 @@ let builtin_functions =
     {name = "mopsa_assume"; args = [None]; output = T_unit};
   ]
 
-let from_position (pos: U.position) : Framework.Location.loc =
-  Framework.Location.{
-    loc_file = pos.pos_fname;
-    loc_line = pos.pos_lnum;
-    loc_column = pos.pos_cnum;
-  }
-
-let from_extent ((b, e): extent) : Framework.Location.range =
-  Framework.Location.mk_source_range
-    (from_position b)
-    (from_position e)
+let from_extent (e: extent) : Location.range = e
 
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
@@ -68,9 +58,9 @@ let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
     }
   with
   | Not_found ->
-    Debug.fail "%s at %s was not found in typing/naming context"
+    Exceptions.panic_at ext
+      "%s was not found in typing/naming context"
       v
-      (U_ast_printer.string_of_extent ext)
 
 let rec from_typ (typ: U_ast.typ) : FA.typ =
   match typ with
@@ -89,7 +79,7 @@ let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
   | T_float _, T_int -> x
   | _ ->
      if compare_typ x y = 0 then x
-     else Debug.fail "cannot unify types %a and %a" pp_typ x pp_typ y
+     else Exceptions.panic "cannot unify types %a and %a" pp_typ x pp_typ y
 
 (* cast expression to the given type (if needed) *)
 let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
@@ -101,7 +91,7 @@ let to_typ (t:FA.typ) (e:FA.expr) : FA.expr =
     | (T_int | T_float _), (T_int | T_float _) ->
        mk_unop O_cast e ~etyp:t range
     | _ ->
-       Debug.fail "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
+       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   match t, b with
@@ -118,6 +108,7 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
+  | T_string, AST_EQUAL         -> O_eq
   | T_float _, AST_PLUS          -> O_plus
   | T_float _, AST_MINUS         -> O_minus
   | T_float _, AST_MULTIPLY      -> O_mult
@@ -128,7 +119,7 @@ let from_binop (t: FA.typ) (b: U.binary_op) : FA.operator =
   | T_float _, AST_LESS_EQUAL    -> O_le
   | T_float _, AST_GREATER       -> O_gt
   | T_float _, AST_GREATER_EQUAL -> O_ge
-  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
+  | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   match t, b with
@@ -137,7 +128,7 @@ let from_unop (t: FA.typ) (b: U.unary_op) : FA.operator =
   | T_int, AST_NOT           -> O_log_not
   | T_float f, AST_UNARY_PLUS  -> O_plus
   | T_float f, AST_UNARY_MINUS -> O_minus
-  | _ -> Debug.fail "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
+  | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_unary_op b pp_typ t
 
 let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.expr =
   let range = from_extent ext in
@@ -170,9 +161,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                 with
                 | NoMatch -> ()
             ) builtin_functions;
-          Debug.fail "%s at %s was not found in naming context nor in builtin functions"
+          Exceptions.panic_at ext
+            "%s was not found in naming context nor in builtin functions"
             f
-            (U_ast_printer.string_of_extent ext)
         with
         | Match(el, bi) ->
           (mk_expr ~etyp:(bi.output) (E_call(mk_expr (E_function (Builtin bi)) range, el)) range)
@@ -190,9 +181,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                   if compare_typ x.vtyp typ = 0 then
                     e'
                   else
-                    Debug.fail "type of %a at %s incompatible with declared function"
+                    Exceptions.panic_at ext
+                      "type of %a incompatible with declared function"
                       U_ast_printer.print_expr e
-                      (U_ast_printer.string_of_extent ext)
                 ) args fundec.fun_parameters in
               (* <<<<<<< HEAD *)
               (* void function return an (unitialized) int *)
@@ -201,9 +192,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
               (* ======= *)
               (* (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range) *)
             else
-              Debug.fail "%s number of arguments incompatible with call at %s"
+              Exceptions.panic_at ext
+                "%s number of arguments incompatible with call"
                 f
-                (U_ast_printer.string_of_extent ext)
           with
           | Not_found ->
             begin
@@ -250,10 +241,10 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_string s range
 
   | AST_char_const(c, _) ->
-    Debug.fail "char not implemented yet"
+    Exceptions.panic "char not implemented yet"
 
   | AST_array_const(a, _) ->
-    Debug.fail "array not implemented yet"
+    Exceptions.panic "array not implemented yet"
 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range
@@ -277,9 +268,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
           etyp  = t;
           erange= range
         }
-      | _ -> Debug.fail "%a at %s is of type %a and can not be subscripted"
+      | _ -> Exceptions.panic_at ext
+               "%a is of type %a and can not be subscripted"
                U_ast_printer.print_expr e1o
-               (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
 
@@ -294,9 +285,8 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
           etyp  = T_int;
           erange= range
         }
-      | _ -> Debug.fail "%a at %s is of type %a and can not be lengthed"
+      | _ -> Exceptions.panic_at ext "%a is of type %a and can not be lengthed"
                U_ast_printer.print_expr e
-               (U_ast_printer.string_of_extent ext)
                (pp_typ) (etyp e1)
     end
   | AST_tree tc ->
@@ -337,7 +327,7 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
  *         if (compare_typ (etyp e1) (etyp e2) = 0) then
  *           mk_assign e1 e2 range
  *         else
- *           Debug.fail "%a (at %s) has type %a and %a (at %s) has type \
+ *           Exceptions.panic "%a (at %s) has type %a and %a (at %s) has type \
  *                       %a, could not translate assignement"
  *             U_ast_printer.print_expr e1o
  *             (U_ast_printer.string_of_extent ext1)
@@ -347,9 +337,8 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
  *             pp_typ (etyp e2)
  * >>>>>>> mopsa-v2-universal-w-tree *)
       | _ ->
-        Debug.fail "%a at %s not considered a left-value for now "
+        Exceptions.panic_at ext "%a not considered a left-value for now "
           U_ast_printer.print_expr e1o
-          (U_ast_printer.string_of_extent ext)
     end
 
   | AST_if((e1, ext_e1), (s1, ext_s1), Some (s2, ext_s2)) ->
@@ -442,10 +431,9 @@ let rec check_declaration_list (dl : U_ast.declaration ext list) =
   | [] -> ()
 and aux (((((_,v),e),_),_) as p : U_ast.declaration ext) (dl: U_ast.declaration ext list) =
   match dl with
-  | ((((_,v'),e'),_),_)::q when v = v' -> Debug.fail "%s at %s has already been declared at %s"
+  | ((((_,v'),e'),_),_)::q when v = v' -> Exceptions.panic_at e "%s has already been declared at %a"
                                             v'
-                                            (U_ast_printer.string_of_extent e)
-                                            (U_ast_printer.string_of_extent e')
+                                            pp_range e'
   | p':: q -> aux p q
   | [] -> ()
 
@@ -529,13 +517,16 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
+  let typ = OptionExt.option_lift1 from_typ f.return_type in
+  let ret_var = mk_tmp ~vtyp:(OptionExt.option_dfl T_int typ) () in
   {
     fun_name = f.funname;
     fun_range = from_extent f.range;
     fun_parameters = List.map (fun ((_, v), ext) -> from_var v ext var_ctx) f.parameters;
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
-    fun_return_type = (OptionExt.option_lift1 from_typ) (f.return_type)
+    fun_return_type = typ;
+    fun_return_var = ret_var;
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec ext list) (var_ctx: var_context) =
@@ -549,7 +540,7 @@ let add_body (fl: fun_context) (f: string) (b: stmt): unit =
     let fundec = MS.find f fl in
     fundec.fun_body <- b;
   with
-  | Not_found -> Debug.fail "[Universal.frontend] should not happen"
+  | Not_found -> Exceptions.panic "[Universal.frontend] should not happen"
 
 let from_prog (p: U_ast.prog) : FA.program =
   let ext = snd (p.main) in
@@ -576,4 +567,4 @@ let rec parse_program (files: string list): Framework.Ast.program =
     let ast = U_file_parser.parse_file filename in
     from_prog ast
   | _ ->
-    Debug.fail "only one file supported for universal"
+    Exceptions.panic "only one file supported for universal"

@@ -66,7 +66,7 @@ let () =
                                 | Tuple p1, Tuple p2
                                 | Dict p1, Dict p2
                                 | Range p1, Range p2 -> Ast.compare_py_object p1 p2
-                              | Generator g1, Generator g2 -> Debug.fail "todo"
+                              | Generator g1, Generator g2 -> Exceptions.panic "todo"
                               | _ -> Pervasives.compare op1 op2)) (obj1, l1) (obj2, l2)
                     | _ -> default a1 a2) } in
     register_addr info
@@ -161,7 +161,7 @@ struct
              | E_constant (C_bool true) -> Post.of_flow flow
              | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
              | _ ->
-                Debug.fail "todo")
+                Exceptions.panic "todo")
        |> OptionExt.return
 
     | _ -> None
@@ -251,7 +251,7 @@ struct
           Eval.singleton (mk_py_bool (Addr.is_builtin_attribute (object_of_expr e) attr) range) flow
        | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
-       | _ -> Debug.fail "E_py_ll_hasattr on expr %a@\n" pp_expr e
+       | _ -> Exceptions.panic "E_py_ll_hasattr on expr %a@\n" pp_expr e
        end
        |> OptionExt.return
 
@@ -268,7 +268,7 @@ struct
           man.eval (mk_var f range) flow
        | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
           Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
-       | _ -> Debug.fail "E_py_ll_getattr(%a, %s): todo" pp_expr e attr
+       | _ -> Exceptions.panic "E_py_ll_getattr(%a, %s): todo" pp_expr e attr
        end
        |> OptionExt.return
 
@@ -292,7 +292,7 @@ struct
                                       | A_py_class (x, _) -> x = cls
                                       | _ -> false) mro_c in
                 Eval.singleton (mk_py_bool res range) flow
-             | _ -> Debug.fail "todo: %a %a" pp_expr eobj pp_expr eattr
+             | _ -> Exceptions.panic "todo: %a %a" pp_expr eobj pp_expr eattr
            )
        |> OptionExt.return
 
@@ -302,7 +302,7 @@ struct
          Eval.bind (fun exp flow ->
              match ekind exp with
              | E_constant (C_bool b) -> Eval.singleton (mk_py_bool (not b) range) flow
-             | _ -> Debug.fail "not(%a) ni@\n" pp_expr e'
+             | _ -> Exceptions.panic "not(%a) ni@\n" pp_expr e'
            )
        |> OptionExt.return
 

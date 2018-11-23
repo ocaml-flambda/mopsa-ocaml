@@ -109,7 +109,7 @@ module Domain =
                              Post.of_flow
                          )
                    with Addr.C3_lin_failure ->
-                     Debug.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
+                     Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
                      man.exec (Utils.mk_builtin_raise "TypeError" range) flow
                      |> Post.of_flow
              )

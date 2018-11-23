@@ -6,46 +6,51 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Propagate type and UIDs of variables within scopes of variables. *)
+(** Resolve variables scope and give unique identifiers accordingly. *)
 
-open Ast
+open Location
+open Cst
 
 
-(* Scope definition *)
-(* **************** *)
+let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.scoping" fmt
+
+
+(* {2 Scope definition} *)
+(* ******************** *)
 
 module Scope =
 struct
+
   include SetExt.Make(struct type t = var let compare = compare_var end)
 
-  let uid_counter = ref 0
+  let uid_counter = ref 1000
 
-  let create v s =
+  let create v t s =
     incr uid_counter;
-    let v' = { v with var_uid = !uid_counter } in
-    let s' = filter (fun v' -> v'.var_name != v.var_name ) s |>
-             add v
+    let v' = {
+      vname = v.vname;
+      vuid = !uid_counter;
+      vlocal = true;
+      vrange = v.vrange;
+      vtyp = t;
+    } in
+    let s' = filter (fun v' -> v'.vname != v.vname ) s |>
+             add v'
     in
     v', s'
 
   let resolve v s =
-    filter (fun v' -> v'.var_name = v.var_name) s |>
+    filter (fun v' -> v'.vname = v.vname) s |>
     elements |>
     function
     | [v] -> v
-    | [] -> Debug.fail "Variable %a not defined in scope" Printer.pp_var v
-    | _ -> Debug.fail "Too many variables %a in scope" Printer.pp_var v
-
-  let bind_range (a: 'a with_range) (f: 'a -> 'b * t) : 'b with_range * t =
-    let x, range = a in
-    let y, s = f x in
-    (y, range), s
-
+    | [] -> v
+    | _ -> Exceptions.panic "Too many variables %a in scope" pp_var v
 
 end
 
-(* Visitors *)
-(* ******** *)
+(* {2 Visitors} *)
+(* ************ *)
 
 let rec visit_list f l scope =
   match l with
@@ -63,7 +68,7 @@ let visit_option f o scope =
     Some x, scope
 
 let rec visit_expr (expr:expr with_range) scope =
-  Scope.bind_range expr @@ fun expr ->
+  bind_pair_range expr @@ fun expr ->
   match expr with
   | E_int _ | E_float _
   | E_string _ | E_char _ | E_return ->
@@ -111,7 +116,7 @@ let rec visit_expr (expr:expr with_range) scope =
     E_builtin_call (f, arg), scope
 
 let rec visit_formula (formula:formula with_range) scope =
-  Scope.bind_range formula @@ fun formula ->
+  bind_pair_range formula @@ fun formula ->
   match formula with
   | F_expr e ->
     let e, scope = visit_expr e scope in
@@ -128,15 +133,20 @@ let rec visit_formula (formula:formula with_range) scope =
     let f, scope = visit_formula f scope in
     F_not f, scope
 
-  | F_forall (v, s, f) ->
-    let v, scope' = Scope.create v scope in
+  | F_forall (v, t, s, f) ->
+    let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
-    F_forall (v, s, f), scope
+    F_forall (v, t, s, f), scope
 
-  | F_exists (v, s, f) ->
-    let v, scope' = Scope.create v scope in
+  | F_exists (v, t, s, f) ->
+    let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
-    F_exists (v, s, f), scope
+    F_exists (v, t, s, f), scope
+
+  | F_predicate(p, params) ->
+    let p = Scope.resolve p scope in
+    let params, scope = visit_list visit_expr params scope in
+    F_predicate(p, params), scope
 
   | F_in (v, s) ->
     let v = Scope.resolve v scope in
@@ -146,51 +156,47 @@ let rec visit_formula (formula:formula with_range) scope =
     let e, scope = visit_expr e scope in
     F_free e, scope
 
-let visit_predicate pred scope =
-  Scope.bind_range pred @@ fun pred ->
-  let v, scope = Scope.create pred.predicate_var scope in
-  let body, scope = visit_formula pred.predicate_body scope in
-  { predicate_var = v; predicate_body = body}, scope
+let visit_predicate pred scope = Exceptions.panic "scoping: predicate not expanded"
 
 let visit_requires requires scope =
-  Scope.bind_range requires @@ fun requires ->
+  bind_pair_range requires @@ fun requires ->
   visit_formula requires scope
 
 let visit_assumes assumes scope =
-  Scope.bind_range assumes @@ fun assumes ->
+  bind_pair_range assumes @@ fun assumes ->
   visit_formula assumes scope
 
 let visit_ensures ensures scope =
-  Scope.bind_range ensures @@ fun ensures ->
+  bind_pair_range ensures @@ fun ensures ->
   visit_formula ensures scope
 
 let visit_assigns assigns scope =
-  Scope.bind_range assigns @@ fun assigns ->
-  let assigns_target, scope = visit_expr assigns.assigns_target scope in
-  let assigns_range, scope = visit_option (fun (l, u) ->
+  bind_pair_range assigns @@ fun assigns ->
+  let assign_target, scope = visit_expr assigns.assign_target scope in
+  let assign_offset, scope = visit_option (fun (l, u) ->
       let l, scope = visit_expr l scope in
       let u, scope = visit_expr u scope in
       (l, u), scope
-    ) assigns.assigns_range scope
+    ) assigns.assign_offset scope
   in
-  { assigns_target; assigns_range }, scope
+  { assign_target; assign_offset }, scope
 
 let visit_local_value lv scope =
   match lv with
-  | Local_new rc -> lv, scope
-  | Local_function_call (f, args) ->
-    let f = Scope.resolve f scope in
+  | L_new rc -> lv, scope
+  | L_call (f, args) ->
+    let f = bind_range f @@ fun f -> Scope.resolve f scope in
     let args, scope = visit_list visit_expr args scope in
-    Local_function_call (f, args), scope
+    L_call (f, args), scope
 
 let visit_local local scope =
-  Scope.bind_range local @@ fun local ->
-  let local_value, scope = visit_local_value local.local_value scope in
-  let local_var, scope = Scope.create local.local_var scope in
-  { local_var; local_value }, scope
+  bind_pair_range local @@ fun local ->
+  let lval, scope = visit_local_value local.lval scope in
+  let lvar, scope = Scope.create local.lvar local.ltyp scope in
+  { lvar; ltyp = local.ltyp; lval }, scope
 
 let visit_case c scope =
-  Scope.bind_range c @@ fun c ->
+  bind_pair_range c @@ fun c ->
   let requires, scope = visit_list visit_requires c.case_requires scope in
   let assumes, scope = visit_list visit_assumes c.case_assumes scope in
   let assigns, scope = visit_list visit_assigns c.case_assigns scope in
@@ -206,10 +212,15 @@ let visit_case c scope =
     case_ensures = ensures;
   }, scope
 
-let visit stub scope : stub =
+
+(** {2 Entry point} *)
+(** *************** *)
+
+let doit (stub: stub with_range) : stub with_range =
+  bind_range stub @@ fun stub ->
   match stub with
   | S_simple s ->
-    let predicates, scope = visit_list visit_predicate s.simple_stub_predicates scope in
+    let predicates, scope = visit_list visit_predicate s.simple_stub_predicates Scope.empty in
     let requires, scope = visit_list visit_requires s.simple_stub_requires scope in
     let assigns, scope = visit_list visit_assigns s.simple_stub_assigns scope in
     let local, scope = visit_list visit_local s.simple_stub_local scope in
@@ -224,7 +235,7 @@ let visit stub scope : stub =
     }
 
   | S_case s ->
-    let predicates, scope = visit_list visit_predicate s.case_stub_predicates scope in
+    let predicates, scope = visit_list visit_predicate s.case_stub_predicates Scope.empty in
     let requires, scope = visit_list visit_requires s.case_stub_requires scope in
     let cases, scope = visit_list visit_case s.case_stub_cases scope in
 

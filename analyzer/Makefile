@@ -3,7 +3,7 @@ TARGET_NATIVES = mopsa
 # Packs
 mopsa = framework lang main
 
-framework = location exceptions ast visitor options query annotation	\
+framework = ast visitor options query annotation	\
 lattice zone manager flow eval post channel value domain output cache	\
 analyzer lattices essentials domains config
 framework.output = alarm text json factory html
@@ -30,7 +30,8 @@ rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
 treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
 abstractTreeAutomaton numerical value treeAst treeAbs
 
-lang.stubs = ast
+lang.stubs = ast zone alarms iterators
+lang.stubs.iterators = inlining
 
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
@@ -48,7 +49,7 @@ lang.python.types = typingdomain typing t_string t_int t_float
 lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
 lang.cfg = ast pp visitor frontend iterator iterators
-lang.cfg.iterators = intraproc
+lang.cfg.iterators = intraproc inlining
 
 lang.jvm = ast precheck frontend
 

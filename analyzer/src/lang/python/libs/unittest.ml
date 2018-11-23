@@ -187,7 +187,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, _)
            when Addr.is_builtin_class_function "unittest.TestCase" f ->
-         Framework.Exceptions.panic "unittest.TestCase function %s not implemented" f
+         panic "unittest.TestCase function %s not implemented" f
 
       | _ -> None
 

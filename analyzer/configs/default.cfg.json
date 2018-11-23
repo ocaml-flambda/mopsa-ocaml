@@ -4,7 +4,8 @@
 	"universal.iterators.program",
 	"cfg.iterators.intraproc",
         "universal.iterators.intraproc",
-        "universal.iterators.interproc.inlining",
+        "cfg.iterators.inlining",
+        "universal.iterators.unittest",
 
         // Abstract domains
         "universal.numeric.values.integer_float_mix"

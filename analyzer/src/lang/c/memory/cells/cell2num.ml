@@ -50,7 +50,7 @@ let get_cell flow v =
     (CellNumEquiv.find_r v cne, flow)
   with
   | Not_found ->
-    Debug.fail "Cell2Num get_cell could not find binding of %a in \
+    Exceptions.panic "Cell2Num get_cell could not find binding of %a in \
                 annot: (*FIXME print annot*)"
       pp_var v
 

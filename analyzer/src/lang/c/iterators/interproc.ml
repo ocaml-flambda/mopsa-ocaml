@@ -40,7 +40,8 @@ struct
     export = [Zone.Z_c, Zone.Z_c_scalar];
     import = [
       Zone.Z_c, Zone.Z_c_points_to_fun;
-      Universal.Zone.Z_u, any_zone
+      Universal.Zone.Z_u, any_zone;
+      Stubs.Zone.Z_stubs, Z_any
     ]
   }
 
@@ -63,35 +64,44 @@ struct
     match ekind exp with
     | E_c_call(f, args) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |> Eval.bind @@ fun f flow ->
+        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |>
+        Eval.bind @@ fun f flow ->
+
         match ekind f with
         | E_c_builtin_function(name) ->
           let () = debug "builtin : %a" pp_expr f in
           let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
 
-        | E_c_function fundec ->
-          let body =
-            match fundec.c_func_body with
-            | Some body -> body
-            | None      -> panic_at (erange exp)
-                             "no implementation for function %a"
-                             pp_var fundec.c_func_var
-          in
+        | E_c_function (
+            {
+              c_func_body = Some body;
+              c_func_stub = None
+            } as fundec
+          ) ->
           debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
           let open Universal.Ast in
+          let ret_var = mk_tmp ~vtyp:fundec.c_func_return () in
           let fundec' = {
             fun_name = get_var_uniq_name fundec.c_func_var;
             fun_parameters = fundec.c_func_parameters;
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
             fun_return_type = Some fundec.c_func_return;
+            fun_return_var = ret_var;
             fun_range = fundec.c_func_range;
           }
           in
           let exp' = mk_call fundec' args exp.erange in
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
+
+        | E_c_function {c_func_stub = Some stub} ->
+          let exp' = Stubs.Ast.mk_stub_call stub.content args exp.erange in
+          man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
+
+        | E_c_function {c_func_body = None; c_func_var} ->
+          panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var
 
         | _ -> assert false
       end |>

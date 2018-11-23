@@ -133,7 +133,6 @@ struct
      expression *)
   let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t with_channel =
     let r' = Value.meet Annotation.empty v r in
-    debug "refine_expr:@ a = @[%a@]@ r = @[%a@]@ rr = @[%a@]" print a Value.print r Value.print v;
     match ae with
     | A_var (var, _) ->
       if Value.is_bottom r'
@@ -222,11 +221,7 @@ struct
 
 
   let init prog man flow =
-    Some (
-      let flow' = Flow.set_domain_env T_cur top man flow in
-      debug "init %a" (Flow.print man) flow';
-      flow'
-    )
+    Some (Flow.set_domain_env T_cur top man flow)
 
   let exec_interface = Domain.{
     import = [];

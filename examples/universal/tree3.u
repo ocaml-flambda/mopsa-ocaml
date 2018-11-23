@@ -1,0 +1,15 @@
+tree t;
+int x;
+int y;
+
+if (x >= y) {
+  t = Tree(x + 1);
+ } else {
+  t = Tree("None",{});
+ };
+
+if (is_symbol(t)) {
+  mopsa_assert(read_symbol(t) == "None");
+  } else {
+  mopsa_assert(y < read_int(t));
+ }

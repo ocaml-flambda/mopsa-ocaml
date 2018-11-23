@@ -72,7 +72,7 @@ module Domain =
       (* Calls to len built-in function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "len")}, _)},
                   [obj], [])  ->
-         Debug.fail "todo@\n"
+         Exceptions.panic "todo@\n"
          (* Check that the class of obj has an attribute __len__ *)
          man.eval obj flow |>
            Eval.bind (fun eobj flow ->

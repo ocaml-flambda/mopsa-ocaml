@@ -160,7 +160,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_unsafe")}, _)}, [], [])  ->
          begin
-           Debug.fail "Unsure this is correclty implemented; FIXME: move to bools@\n"
+           Exceptions.panic "Unsure this is correclty implemented; FIXME: move to bools@\n"
            (* let annot = Flow.get_all_annot flow in
             * let error_env = Flow.fold (fun acc tk env -> match tk with
             *                                              | T_alarm {alarm_kind = APyException _} -> man.join annot acc env
@@ -186,7 +186,7 @@ module Domain =
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception")}, _)}, [{ekind = cls}], [])  ->
-         Debug.fail "todo"
+         Exceptions.panic "todo"
          (* begin
           *   debug "begin assert_exception";
           *   let annot = Flow.get_all_annot flow in
@@ -198,8 +198,8 @@ module Domain =
           *           *   ~fthen:(fun flow -> man.join annot acc flow)
           *           *   ~felse:(fun _ -> man.bottom)
           *           *   man env *\)
-          *         -> Debug.fail "todo@\n"
-          *       (\* when Debug.fail "todo" Addr.isinstance exn cls -> man.join annot acc env *\)
+          *         -> Exceptions.panic "todo@\n"
+          *       (\* when Exceptions.panic "todo" Addr.isinstance exn cls -> man.join annot acc env *\)
           *                              | _ -> acc
           *                          ) man.bottom man flow
           *                                   in
@@ -215,7 +215,7 @@ module Domain =
           *   let flow = Flow.set T_cur man.top man flow in
           *   let flow = man.exec stmt flow |>
           *                                                     (\* FIXME: addr.isinstance *\)
-          *                Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; false | _ -> true) man |>
+          *                Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Exceptions.panic "todo"; false | _ -> true) man |>
           *                Flow.set T_cur cur man
           *   in
           *   (\* FIXME:  mk_py_int ?*\)
@@ -225,12 +225,12 @@ module Domain =
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = E_py_object cls}], [])  ->
-         Debug.fail "todo: fixme"
+         Exceptions.panic "todo: fixme"
          (* begin
           *   let annot = Flow.get_all_annot flow in
           *   let error_env = Flow.fold (fun acc tk env -> match tk with
           *                                                     (\* FIXME: addr.isinstance *\)
-          *                                                | T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; man.join annot acc env
+          *                                                | T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Exceptions.panic "todo"; man.join annot acc env
           *                       | _ -> acc
           *                     ) man.bottom man flow in
           *   let cur = Flow.get T_cur man flow in
@@ -240,7 +240,7 @@ module Domain =
           *   let flow' = Flow.set T_cur cur' man flow |>
           *                 man.exec stmt |>
           *                                                     (\* FIXME: addr.isinstance *\)
-          *                 Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Debug.fail "todo"; false | _ -> true) man |>
+          *                 Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} (\*when Addr.isinstance exn cls*\) -> Exceptions.panic "todo"; false | _ -> true) man |>
           *                 Flow.set T_cur cur man
           *   in
           *   (\* FIXME:  mk_py_int ?*\)

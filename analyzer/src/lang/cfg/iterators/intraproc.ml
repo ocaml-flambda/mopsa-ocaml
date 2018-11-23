@@ -6,6 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
+
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
 open Framework.Essentials
@@ -91,12 +92,12 @@ struct
         flow (CFG.node_out node)
     in
     
-    (* analyze a componenent until its head is stable, with widening *)
+    (* analyze a component until its head is stable, with widening *)
     let rec fix_component count lst flow =
       (* get widening node *)
       let wid = match lst with
         | (GraphSig.Simple node)::_ -> CFG.node_id node
-        | _ -> Debug.fail "node expected at the head of a component"
+        | _ -> Exceptions.panic "node expected at the head of a component"
       in
       let old = Flow.get (T_node wid) man flow in
       debug "analyzing component @[%a@], widen=%a, abs=@[%a@]"
@@ -187,9 +188,19 @@ struct
     
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_cfg cfg -> Some (Post.of_flow (cfg_iterator cfg man flow))
-    | S_test expr -> Some (Post.of_flow (test_iterator man expr flow))
-    | _ -> None
+
+    | S_cfg cfg ->
+       Some (Post.of_flow (cfg_iterator cfg man flow))
+
+    | S_test expr ->
+       Some (Post.of_flow (test_iterator man expr flow))
+
+    | S_skip ->
+       Some (Post.of_flow flow)
+      
+    | _ ->
+       (* S_expression, S_block and S_print are handled by universal's intraproc *)
+       None
    
   let eval _ _ _ _ = None
 

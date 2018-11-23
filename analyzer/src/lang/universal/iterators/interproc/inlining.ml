@@ -128,11 +128,10 @@ struct
                   man.exec f.fun_body
       in
 
-      (* Create a temporary variable to store return expressions *)
-      let typ = OptionExt.option_dfl T_int f.fun_return_type in
-      let tmp = mk_tmp ~vtyp:typ () in
+      (* Store the return expression in fun_return_var *)
+      let ret = f.fun_return_var in
 
-      (* Iterate over return flows and assign the returned value to tmp *)
+      (* Iterate over return flows and assign the returned value to ret *)
       let flow3 =
         Flow.fold (fun acc tk env ->
             match tk with
@@ -140,8 +139,8 @@ struct
 
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
-              (* man.exec (mk_add_var tmp (tag_range range "adding tmp")) |> *)
-              man.exec (mk_assign (mk_var tmp range) e range) |>
+              (* man.exec (mk_add_var ret (tag_range range "adding ret")) |> *)
+              man.exec (mk_assign (mk_var ret range) e range) |>
               Flow.join man acc
 
             | _ -> Flow.add tk env man acc
@@ -160,7 +159,7 @@ struct
 
       let flow4 = man.exec ignore_block flow3 in
 
-      Eval.singleton (mk_var tmp range) flow4 ~cleaners:[mk_remove_var tmp range] |>
+      Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
       OptionExt.return
 
     | _ -> None

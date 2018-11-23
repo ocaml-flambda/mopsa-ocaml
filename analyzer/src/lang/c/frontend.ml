@@ -61,7 +61,7 @@ let find_function_in_context fun_ctx (f: C_AST.func) =
         c_fun.c_func_var.vuid = f.func_uid
       ) fun_ctx.ctx_fun
   with
-  | Not_found -> Debug.fail "Could not find function %s in function context" f.func_unique_name
+  | Not_found -> Exceptions.panic "Could not find function %s in function context" f.func_unique_name
 
 
 
@@ -78,7 +78,7 @@ let rec parse_program (files: string list) =
        match Filename.extension file with
        | ".c" | ".h" -> parse_file !c_opts file ctx
        | ".db" -> parse_db file ctx
-       | x -> Debug.fail "Unknown C extension %s" x
+       | x -> Exceptions.panic "Unknown C extension %s" x
     ) files;
   let prj = Clang_to_C.link_project ctx in
   from_project prj
@@ -92,12 +92,10 @@ and parse_db (dbfile: string) ctx : unit =
   match execs with
   | [exec] ->
     let srcs = get_executable_sources db exec in
-    let nb = List.length srcs
-    and i = ref 0 in
+    let i = ref 0 in
     List.iter
       (fun src ->
          incr i;
-         debug "%i/%i\n" !i nb;
          match src.source_kind with
          | SOURCE_C | SOURCE_CXX ->
            let cwd = Sys.getcwd() in
@@ -111,43 +109,19 @@ and parse_db (dbfile: string) ctx : unit =
               Sys.chdir cwd;
               raise x
            )
-         | _ -> Debug.warn "ignoring file %s\n%!" src.source_path
+         | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
       ) srcs
 
   | l ->
     assert false
 
 and parse_file (opts: string list) (file: string) ctx =
-  let target_options = Clang_parser.get_default_target_options () in
-  (* remove some options that are in the way *)
-  let filter_out_opts opts =
-    List.filter (fun o -> not (List.mem o ["-MF"])) opts
-  in
   let opts =
     List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
-    (@) opts |>
-    filter_out_opts
+    (@) opts
   in
-  let opts = "-fparse-all-comments"::opts in (* needed to get all comments *)
-  debug
-    "clang %s %s %a"
-    target_options.Clang_AST.target_triple file
-    (ListExt.fprint ListExt.printer_plain Format.pp_print_string) opts;
-  let x, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
-  let () =
-    match diag with
-    | [] -> ()
-    | _ ->
-      let error_diag = List.exists (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false) diag in
-      if error_diag then
-        Framework.Exceptions.panic "Fatal parsing errors:@\n @[%a@]"
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@,")
-             (Format.pp_print_string)
-          ) (List.map (Clang_dump.string_of_diagnostic) diag)
 
-  in
-  Clang_to_C.add_translation_unit ctx (Filename.basename file) x coms
+  C_parser.parse_file file opts ctx
 
 
 and from_project prj =
@@ -178,6 +152,7 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var_with_init ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var_with_init ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
+      f.c_func_stub <- from_stub_comment prj ctx o
     ) funcs_and_origins;
 
   let globals = StringMap.bindings prj.proj_vars |>
@@ -242,12 +217,12 @@ and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
 and from_block fun_ctx range (block: C_AST.block) : Framework.Ast.stmt =
   mk_block (List.map (from_stmt fun_ctx) block) range
 
-and from_block_option fun_ctx (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
+and from_block_option fun_ctx (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
   match block with
   | None -> mk_nop range
   | Some stmtl -> from_block fun_ctx range stmtl
 
-and from_body_option (fun_ctx) (range: Framework.Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+and from_body_option (fun_ctx) (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
   match block with
   | None -> None
   | Some stmtl -> Some (from_block fun_ctx range stmtl)
@@ -283,14 +258,14 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr fun_ctx r, i, f)
     | C_AST.E_statement s -> Ast.E_c_statement (from_block fun_ctx erange s)
 
-    | C_AST.E_conditional (_,_,_) -> Framework.Exceptions.panic "E_conditional not supported"
-    | C_AST.E_compound_assign (_,_,_,_,_) -> Framework.Exceptions.panic "E_compound_assign not supported"
-    | C_AST.E_comma (_,_) -> Framework.Exceptions.panic "E_comma not supported"
-    | C_AST.E_increment (_,_,_) -> Framework.Exceptions.panic "E_increment not supported"
-    | C_AST.E_compound_literal _ -> Framework.Exceptions.panic "E_compound_literal not supported"
-    | C_AST.E_predefined _ -> Framework.Exceptions.panic "E_predefined not supported"
-    | C_AST.E_var_args _ -> Framework.Exceptions.panic "E_var_args not supported"
-    | C_AST.E_atomic (_,_,_) -> Framework.Exceptions.panic "E_atomic not supported"
+    | C_AST.E_conditional (_,_,_) -> Exceptions.panic_at erange "E_conditional not supported"
+    | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
+    | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
+    | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
+    | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
+    | C_AST.E_predefined _ -> Exceptions.panic_at erange "E_predefined not supported"
+    | C_AST.E_var_args _ -> Exceptions.panic_at erange "E_var_args not supported"
+    | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
   {ekind; erange; etyp}
 
@@ -484,18 +459,198 @@ and from_function_type fun_ctx f =
     c_ftype_variadic = f.ftype_variadic;
   }
 
+and find_field_index t f =
+  try
+    match fst t with
+    | T_record {record_fields} ->
+      let field = Array.to_list record_fields |>
+                  List.find (fun field -> field.field_org_name == f)
+      in
+      field.field_index
+
+    | _ -> Exceptions.panic "find_field_index: called on a non-record type %s"
+             (C_print.string_of_type_qual t)
+  with
+    Not_found -> Exceptions.panic "find_field_index: field %s not found in type %s"
+                   f (C_print.string_of_type_qual t)
+
+and under_type t =
+  match fst t with
+  | T_pointer t' -> t'
+  | T_array(t', _) -> t'
+  | T_typedef td -> under_type td.typedef_def
+  | _ -> Exceptions.panic "under_type: unsupported type %s"
+           (C_print.string_of_type_qual t)
+
+(** {2 Ranges and locations} *)
+(** ======================== *)
 
 and from_range (range:C_AST.range) =
   let open Clang_AST in
-  let open Framework.Location in
-  mk_source_range
+  let open Location in
+  mk_orig_range
     {
-      loc_file = range.range_begin.loc_file;
-      loc_line = range.range_begin.loc_line;
-      loc_column = range.range_begin.loc_column;
+      pos_file = range.range_begin.loc_file;
+      pos_line = range.range_begin.loc_line;
+      pos_column = range.range_begin.loc_column;
     }
     {
-      loc_file = range.range_end.loc_file;
-      loc_line = range.range_end.loc_line;
-      loc_column = range.range_end.loc_column;
+      pos_file = range.range_end.loc_file;
+      pos_line = range.range_end.loc_line;
+      pos_column = range.range_end.loc_column;
     }
+
+
+
+(** {2 Stubs annotations} *)
+(** ===================== *)
+
+and from_stub_comment prj ctx f =
+  match C_stubs_parser.Main.parse_function_comment f prj with
+  | None -> None
+  | Some stub -> Some (from_stub ctx f stub)
+
+and from_stub ctx f stub =
+  bind_range stub @@ fun stub ->
+  {
+    stub_name     = f.func_org_name;
+    stub_requires = List.map (from_stub_requires ctx) stub.stub_requires;
+    stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
+    stub_body     = from_stub_body ctx stub.stub_body;
+    stub_return_type = from_typ ctx f.func_return;
+  }
+
+and from_stub_body ctx body =
+  match body with
+  | B_post post -> B_post (from_stub_post ctx post)
+  | B_cases cases -> B_cases (List.map (from_stub_case ctx) cases)
+
+and from_stub_post ctx post =
+  {
+    post_assigns = List.map (from_stub_assigns ctx) post.post_assigns;
+    post_local   = List.map (from_stub_local ctx) post.post_local;
+    post_ensures = List.map (from_stub_ensures ctx) post.post_ensures;
+  }
+
+and from_stub_requires ctx req =
+  bind_range req @@ fun req ->
+  from_stub_formula ctx req
+
+and from_stub_assigns ctx assign =
+  bind_range assign @@ fun assign ->
+  {
+    assign_target = from_stub_expr ctx assign.assign_target;
+    assign_offset = OptionExt.option_lift1 (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b)) assign.assign_offset;
+  }
+
+and from_stub_local ctx loc =
+  bind_range loc @@ fun loc ->
+  { lvar = from_var ctx loc.lvar; lval = from_stub_local_value ctx loc.lval }
+
+and from_stub_local_value ctx lval =
+  match lval with
+  | L_new res -> L_new res
+  | L_call (f, args) ->
+    let ff = find_function_in_context ctx f.content in
+    let t = T_c_function (Some {
+          c_ftype_return = from_typ ctx f.content.func_return;
+          c_ftype_params = Array.to_list f.content.func_parameters |>
+                           List.map (fun p -> from_typ ctx p.var_type);
+          c_ftype_variadic = f.content.func_variadic;
+        })
+    in
+    let fff = mk_expr (Ast.E_c_function ff) f.range ~etyp:t in
+    L_call (fff, List.map (from_stub_expr ctx) args)
+
+and from_stub_ensures ctx ens =
+  bind_range ens @@ fun ens ->
+  from_stub_formula ctx ens
+
+and from_stub_assumes ctx asm =
+  bind_range asm @@ fun asm ->
+  from_stub_formula ctx asm
+
+and from_stub_case ctx case =
+  bind_range case @@ fun case ->
+  {
+    case_label    = case.C_stubs_parser.Ast.case_label;
+    case_assumes  = List.map (from_stub_assumes ctx) case.case_assumes;
+    case_requires = List.map (from_stub_requires ctx) case.case_requires;
+    case_post     = from_stub_post ctx case.case_post;
+  }
+
+and from_stub_formula ctx f =
+  bind_range f @@ function
+  | F_expr e -> F_expr (from_stub_expr ctx e)
+  | F_bool b -> F_expr (mk_bool b f.range)
+  | F_binop(op, f1, f2) -> F_binop(from_stub_log_binop op, from_stub_formula ctx f1, from_stub_formula ctx f2)
+  | F_not f -> F_not (from_stub_formula ctx f)
+  | F_forall (v, s, f) -> F_forall(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
+  | F_exists (v, s, f) -> F_exists(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
+  | F_in (v, s) -> F_in(from_var ctx v, from_stub_set ctx s)
+  | F_free e -> F_free(from_stub_expr ctx e)
+
+and from_stub_set ctx s =
+  match s with
+  | S_interval(a, b) -> S_interval(from_stub_expr ctx a, from_stub_expr ctx b)
+  | S_resource r -> S_resource r
+
+and from_stub_expr ctx exp =
+  let bind_range_expr (exp:C_stubs_parser.Ast.expr with_range) f =
+    let ekind = f exp.content.kind
+    in { ekind; erange = exp.range; etyp = from_typ ctx exp.content.typ }
+  in
+  bind_range_expr exp @@ function
+  | E_int n -> E_constant (C_int n)
+  | E_float f -> E_constant (C_float f)
+  | E_string s -> E_constant (C_string s)
+  | E_char c -> E_constant (C_c_character (Z.of_int (int_of_char c), Ast.C_char_ascii)) (* FIXME: support other character kinds *)
+  | E_var v -> E_var (from_var ctx v, STRONG)
+  | E_unop (op, e) -> E_unop(from_stub_expr_unop op, from_stub_expr ctx e)
+  | E_binop (op, e1, e2) -> E_binop(from_stub_expr_binop op, from_stub_expr ctx e1, from_stub_expr ctx e2)
+  | E_addr_of e -> E_c_address_of(from_stub_expr ctx e)
+  | E_deref p -> E_c_deref(from_stub_expr ctx p)
+  | E_cast (t, explicit, e) -> E_c_cast(from_stub_expr ctx e, explicit)
+  | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
+  | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
+  | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
+  | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
+  | E_return -> E_stub_return
+
+and from_stub_builtin f =
+  bind_range f @@ function
+  | OLD -> OLD
+  | SIZE -> SIZE
+  | OFFSET -> OFFSET
+  | BASE -> BASE
+
+and from_stub_log_binop = function
+  | AND -> AND
+  | OR -> OR
+  | IMPLIES -> IMPLIES
+
+and from_stub_expr_binop = function
+  | C_stubs_parser.Ast.ADD -> O_plus
+  | SUB -> O_minus
+  | MUL -> O_mult
+  | DIV -> O_div
+  | MOD -> O_mod
+  | RSHIFT -> O_bit_rshift
+  | LSHIFT -> O_bit_lshift
+  | LOR -> O_c_and
+  | LAND -> O_c_or
+  | LT -> O_lt
+  | LE -> O_le
+  | GT -> O_gt
+  | GE -> O_ge
+  | EQ -> O_eq
+  | NEQ -> O_ne
+  | BOR -> O_bit_or
+  | BAND -> O_bit_and
+  | BXOR -> O_bit_xor
+
+and from_stub_expr_unop = function
+  | C_stubs_parser.Ast.PLUS -> O_plus
+  | MINUS -> O_minus
+  | LNOT -> O_log_not
+  | BNOT -> O_bit_invert

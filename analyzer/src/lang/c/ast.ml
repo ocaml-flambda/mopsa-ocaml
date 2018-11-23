@@ -197,7 +197,7 @@ type c_fundec = {
   mutable c_func_body: stmt option; (** function body *)
   mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
   mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
-  mutable c_func_stub : Stubs.Ast.stub option; (** stub specification of the function *)
+  mutable c_func_stub : Stubs.Ast.stub with_range option; (** stub specification of the function *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
 }
 (** Function descriptor. *)
@@ -348,7 +348,7 @@ let rec to_clang_type : typ -> C_AST.type_qual = function
     let q = C_AST.merge_qualifiers qual other_qual in
     t,  q
   | t ->
-    Debug.fail "to_clang_type: %a not a C type" pp_typ t
+    Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
 
 and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
   {
@@ -481,22 +481,22 @@ let rec sizeof_type (t : typ) : Z.t =
   | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type (get_target())
   | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
   | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
-     Debug.fail "sizeof_type: %a has no length information" pp_typ t
+     Exceptions.panic "sizeof_type: %a has no length information" pp_typ t
   | T_c_bitfield(t, size) ->
-     Debug.fail "sizeof_type: %a is a bitfield" pp_typ t
+     Exceptions.panic "sizeof_type: %a is a bitfield" pp_typ t
   | T_c_function _ | T_c_builtin_fn ->
-     Debug.fail "sizeof_type: %a is a function" pp_typ t
+     Exceptions.panic "sizeof_type: %a is a function" pp_typ t
   | T_c_typedef td -> sizeof_type td.c_typedef_def
   | T_c_record r ->
      if not r.c_record_defined then
-       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
      r.c_record_sizeof
   | T_c_enum e ->
      if not e.c_enum_defined then
-       Debug.fail "sizeof_type: %a is undefined" pp_typ t;
+       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
      sizeof_type (T_c_integer e.c_enum_integer_type)
   | T_c_qualified (_,t) -> sizeof_type t
-  | t -> Debug.fail "to_clang_type: %a not a C type" pp_typ t
+  | t -> Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
 
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
@@ -544,7 +544,7 @@ let rec is_signed (t : typ) : bool=
      end
 
   | T_c_enum e -> is_signed (T_c_integer e.c_enum_integer_type)
-  | _ -> Framework.Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
+  | _ -> Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
 let rangeof (t : typ) =
@@ -749,7 +749,7 @@ let () =
           (fun () -> compare_typ t1 t2);
           (fun () -> match l1, l2 with
              | C_array_length_cst n1, C_array_length_cst n2 -> Z.compare n1 n2
-             | C_array_length_expr e1, C_array_length_expr e2 -> Framework.Exceptions.panic "type compare on arrays with expr length not supported"
+             | C_array_length_expr e1, C_array_length_expr e2 -> Exceptions.panic "type compare on arrays with expr length not supported"
              | C_array_no_length, C_array_no_length -> 0
              | _ -> compare l1 l2
           )

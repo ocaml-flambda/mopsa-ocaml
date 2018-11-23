@@ -1,4 +1,4 @@
-open Py_AST
+open Ast
 
 let debug fmt = Debug.debug ~channel:"frontend.uid" fmt
 
@@ -243,12 +243,11 @@ and find_in_scope (globals, lscope) v =
   try
     List.find (fun v' -> v.name = v'.name) globals
   with Not_found ->
-    if List.mem v.name Py_builtins.all then
+    if List.mem v.name Builtins.all then
       { name = v.name; uid = 0}
     else
-      Debug.fail "Unbounded variable %a" Py_pp.print_var v
+      Exceptions.panic "Unbounded variable %a" Pp.print_var v
 
 and create_new_uid v =
   incr counter;
   {v with uid = !counter}
-  

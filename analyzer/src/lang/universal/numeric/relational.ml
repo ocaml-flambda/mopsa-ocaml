@@ -34,7 +34,7 @@ let () =
         | "up"   -> opt_float_rounding := Apron.Texpr1.Up
         | "down" -> opt_float_rounding := Apron.Texpr1.Down
         | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Debug.fail "Unknown rounding mode %s" x
+        | x -> Exceptions.panic "Unknown rounding mode %s" x
       ),
     "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
   )
@@ -70,6 +70,17 @@ struct
    *     | Binop(_ , e, e', _, _) -> aux e (fun r -> aux e' (fun r' -> cont (SVar.union r r')))
    *   in
    *   aux expr (fun x -> x) |> SVar.elements *)
+  let var_to_apron v =
+    (match v.vtyp with
+     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
+     | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
+     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
+    let name = Format.flush_str_formatter () in
+    Apron.Var.of_string name
+
+  let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
+    Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
+    Values.Intervals.Value.of_apron
 
   let is_numerical_var (v: var): bool =
     match v.vtyp with
@@ -153,13 +164,6 @@ struct
 
 
   exception UnsupportedExpression
-  let var_to_apron v =
-    (match v.vtyp with
-     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-     | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
-     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
-    let name = Format.flush_str_formatter () in
-    Apron.Var.of_string name
 
   let apron_to_var v =
     let v = Apron.Var.to_string v in
@@ -251,7 +255,7 @@ struct
       |> fun x -> strongify_rhs x abs l
 
     | _ ->
-      warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Exceptions.warn "[strongify rhs] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and is_env_var v abs =
@@ -319,7 +323,7 @@ struct
       |> exp_to_apron
 
     | _ ->
-      warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
+      Exceptions.warn "[exp_to_apron] : failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
       raise UnsupportedExpression
 
   and typ_to_apron = function
@@ -397,6 +401,12 @@ struct
         Apron.Tcons1.array_set cond_array i c;
       ) l in
     cond_array
+
+  let get_interval_expr (e:expr) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
+    Apron.Abstract1.bound_texpr ApronManager.man a
+      (exp_to_apron e |> Apron.Texpr1.of_expr (Apron.Abstract1.env a)) |>
+      Values.Intervals.Value.of_apron
+
 end
 
 
@@ -539,7 +549,7 @@ struct
       begin
         debug "Starting fold";
         match vl with
-        | [] -> Debug.fail "Can not fold list of size 0"
+        | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
           let abs = Apron.Abstract1.fold ApronManager.man a
               (List.map var_to_apron vl |> Array.of_list) in
@@ -582,7 +592,9 @@ struct
                  | T_float _, T_int
                  | T_int, T_float _
                  | T_float _, T_float _ -> Apron.Texpr1.Real
-                 | _ -> fail "Unsupported case (%a, %a) in stmt @[%a@]" pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                 | _ -> Exceptions.panic_at (srange stmt)
+                          "Unsupported case (%a, %a) in stmt @[%a@]"
+                          pp_typ typ1 pp_typ typ2 pp_stmt stmt
                in
                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
                let diff_texpr = Apron.Texpr1.of_expr env diff in
@@ -608,7 +620,7 @@ struct
            | T_float _, T_int
            | T_int, T_float _
            | T_float _, T_float _ -> Apron.Texpr1.Real
-           | _ -> fail "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
+           | _ -> Exceptions.panic "Unsupported case (%a, %a)" pp_typ t1 pp_typ t2 pp_stmt
          in
          let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
          let diff_texpr = Apron.Texpr1.of_expr env diff in
@@ -677,10 +689,6 @@ struct
 
     List.sort_uniq compare_var (rel1 @ rel2)
 
-
-  let get_interval (v:var) (a:t) : (Values.Intervals.Value.t) =
-    Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
-    Values.Intervals.Value.of_apron
 
   let set_interval v i a =
     let env = Apron.Abstract1.env a in

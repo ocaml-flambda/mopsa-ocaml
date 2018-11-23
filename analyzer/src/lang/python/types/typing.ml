@@ -19,7 +19,7 @@ let () =
       | _ -> default fmt exp);
   register_expr_compare (fun next e1 e2 ->
       match ekind e1, ekind e2 with
-      | E_get_type_partition p1, E_get_type_partition p2 -> Debug.fail "fixme"
+      | E_get_type_partition p1, E_get_type_partition p2 -> Exceptions.panic "fixme"
       | E_type_partition i1, E_type_partition i2 -> Pervasives.compare i1 i2
       | _ -> next e1 e2)
 
@@ -129,7 +129,7 @@ module Domain =
                    end
                 | E_constant _ ->
                    Post.of_flow @@ man.exec {stmt with skind=(S_assign(l, e))} flow
-                | _ -> Framework.Exceptions.panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
+                | _ -> panic_at stmt.srange "typing/exec/S_assign: exp %a ni@\n" pp_expr e
                 end)
 
       | S_assign({ekind = E_py_attribute({ekind = E_var (v, mode)}, attr)}, rval) ->
@@ -140,7 +140,7 @@ module Domain =
                match ekind reval with
                | E_type_partition i ->
                   Flow.set_domain_cur (Typingdomain.set_var_attr_ty cur v attr i) man flow |> Post.of_flow
-               | _ -> Debug.fail "%a" pp_expr reval
+               | _ -> Exceptions.panic "%a" pp_expr reval
              )
          |> OptionExt.return
 
@@ -166,9 +166,9 @@ module Domain =
                   let pt = Typingdomain.TypeIdMap.find i cur.d2 in
                   begin match pt with
                         | Instance {classn=Class (C_builtin "bool", _); _} -> Post.of_flow flow
-                        | _ -> Debug.fail "%a" Typingdomain.pp_polytype pt
+                        | _ -> Exceptions.panic "%a" Typingdomain.pp_polytype pt
                   end
-               | _ -> Debug.fail "%a" pp_expr e
+               | _ -> Exceptions.panic "%a" pp_expr e
              )
          |> OptionExt.return
 
@@ -210,7 +210,7 @@ module Domain =
           *    let f = match (fst f).addr_kind with
           *      | A_py_function f -> f
           *      | _ -> assert false in
-          *    (\*            Debug.fail "todo"*\)
+          *    (\*            Exceptions.panic "todo"*\)
           *    let cur = Flow.get_domain_cur man flow in
           *    let ty = Typingdomain.Method (f, 0) in
           *    let tid, ncur = Typingdomain.get_type cur ty in
@@ -285,7 +285,7 @@ module Domain =
                Eval.join
                  (Eval.singleton (mk_py_true range) flowt)
                  (Eval.singleton (mk_py_false range) flowf)
-            | _ -> Debug.fail "ll_hasattr"
+            | _ -> Exceptions.panic "ll_hasattr"
             end
          | _ ->
             Eval.empty_singleton flow
@@ -316,9 +316,9 @@ module Domain =
                    let tid, ncur = Typingdomain.get_type cur ty in
                    let flow = Flow.set_domain_cur ncur man flow in
                    Eval.singleton (mk_expr (E_type_partition tid) range) flow
-                | _ -> Debug.fail "E_py_ll_getattr: shouldn't happen?"
+                | _ -> Exceptions.panic "E_py_ll_getattr: shouldn't happen?"
               end
-           | _ -> Debug.fail "E_py_ll_getattr: todo"
+           | _ -> Exceptions.panic "E_py_ll_getattr: todo"
          end
          |> OptionExt.return
 
@@ -341,7 +341,7 @@ module Domain =
                   let pt = Typingdomain.TypeIdMap.find i cur.d2 in
                   begin match pt with
                   | Instance {classn=Class (C_builtin "bool", _); _} -> Eval.singleton (mk_py_top T_bool range) flow
-                  | _ -> Debug.fail "%a" Typingdomain.pp_polytype pt
+                  | _ -> Exceptions.panic "%a" Typingdomain.pp_polytype pt
                   end
                | _ -> failwith "not: ni"
              )
@@ -403,7 +403,7 @@ module Domain =
                         Eval.singleton (mk_py_true range) flow
                       else
                         Eval.singleton (mk_py_false range) flow
-                   | _ -> Debug.fail "FIXME"
+                   | _ -> Exceptions.panic "FIXME"
              )
          |> OptionExt.return
 
@@ -440,7 +440,7 @@ module Domain =
                   else
                     Eval.singleton (mk_py_false range) flow
                | E_py_object ({addr_kind = A_py_class (c, mro)}, _), E_py_object ({addr_kind = A_py_class (c', mro')}, _) ->
-                  Debug.fail "Left MRO %a@\nRight MRO %a@\n"
+                  Exceptions.panic "Left MRO %a@\nRight MRO %a@\n"
                     (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                        (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x range)))
                     mro
@@ -456,7 +456,7 @@ module Domain =
                   end
                | _ ->
                   if is_bottom (Flow.get_domain_cur man flow) then Eval.empty_singleton flow else
-                  Debug.fail "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
+                  Exceptions.panic "todo: implement isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr
              )
          |> OptionExt.return
 
@@ -500,7 +500,7 @@ module Domain =
                                       let pty = Typingdomain.TypeIdMap.find tid cur.d2 in
                                       let mty = Typingdomain.concretize_poly pty cur.d3 in
                                       Typingdomain.Monotypeset.union dummy_annot mty acc
-                                   | _ -> Debug.fail "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
+                                   | _ -> Exceptions.panic "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
                let pos_types, cur = Typingdomain.get_mtypes cur els_types in
                let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
                let flow = Flow.set_domain_cur cur man flow in
@@ -526,7 +526,7 @@ module Domain =
                      )
                      ~felse:(fun flow ->
                        Eval.assume (mk_py_isinstance_builtin idx "slice" range)
-                         ~fthen:(fun flow -> Debug.fail "FIXME: slices are unsupported yet")
+                         ~fthen:(fun flow -> Exceptions.panic "FIXME: slices are unsupported yet")
                          ~felse:(fun flow ->
                            man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
                              Eval.empty_singleton
@@ -562,7 +562,7 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [arg], []) ->
-         Debug.fail "todo: listiternext@\n"
+         Exceptions.panic "todo: listiternext@\n"
 
       (*********
        * Range *

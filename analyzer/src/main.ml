@@ -33,7 +33,7 @@ let get_config_path () =
     else
       let config'' = "analyzer/" ^ config' in
       if Sys.file_exists config'' && not (Sys.is_directory config'') then config''
-      else Framework.Exceptions.fail "Unable to find configuration file %s" config
+      else Exceptions.panic "Unable to find configuration file %s" config
 
 
 
@@ -45,7 +45,7 @@ let parse_program files =
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
   | "java" -> Lang.Jvm.Frontend.parse_program files
-  | _ -> Framework.Exceptions.panic "Unknown language"
+  | _ -> Exceptions.panic "Unknown language"
 
 
 
@@ -87,7 +87,7 @@ let () =
         let flow = Analyzer.init prog in
         Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
         let stmt =
-          Ast.mk_stmt (Ast.S_program prog) (Framework.Location.mk_program_range files)
+          Ast.mk_stmt (Ast.S_program prog) (Location.mk_program_range files)
         in
 
         Debug.info "Starting the analysis ...";

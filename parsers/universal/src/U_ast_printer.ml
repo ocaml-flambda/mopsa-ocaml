@@ -6,26 +6,6 @@ open U_ast
 open Lexing
 
 
-(* locations *)
-(* ********* *)
-
-let string_of_position p =
-  Printf.sprintf "%s:%i:%i" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol)
-
-let string_of_extent (p,q) =
-  if p.pos_fname = q.pos_fname then
-    if p.pos_lnum = q.pos_lnum then
-      if p.pos_cnum = q.pos_cnum then
-        Printf.sprintf "%s:%i.%i" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol)
-      else
-        Printf.sprintf "%s:%i.%i-%i" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) (q.pos_cnum - q.pos_bol)
-    else
-      Printf.sprintf "%s:%i.%i-%i.%i" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) q.pos_lnum (q.pos_cnum - q.pos_bol)
-  else
-    Printf.sprintf "%s:%i.%i-%s:%i.%i" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) q.pos_fname q.pos_lnum (q.pos_cnum - q.pos_bol)
-
-
-
 (* operators *)
 (* ********* *)
 

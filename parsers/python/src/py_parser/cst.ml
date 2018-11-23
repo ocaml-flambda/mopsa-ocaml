@@ -11,18 +11,9 @@
    https://docs.python.org/3/library/ast.html#abstract-grammar
 *)
 
+open Location
+
 type identifier = string
-
-type location = {
-  file: string;
-  line: int;
-  column: int;
-}
-
-type range = {
-  rbegin: location;
-  rend: location;
-}
 
 and stmt = {
   skind : stmt_kind;
@@ -250,6 +241,3 @@ and singleton =
     | False
     | SNone
     | SNotImplemented
-
-let dummy_loc = {file = ""; line = -1; column = -1}
-let dummy_range = {rbegin = dummy_loc; rend = dummy_loc}

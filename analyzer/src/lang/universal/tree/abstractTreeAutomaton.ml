@@ -1847,6 +1847,9 @@ struct
     let u = minimization_w u in
     minimization_p u (Some n) true
 
+  let head_symbol (u: dfta) =
+    DetTrans.fold (fun (a, _, s) acc -> if SS.mem s u.dfta_f then a :: acc else acc) u.dfta_d []
+
   let head (u: dfta) =
     let module MM = Map.Make(struct type t = algebra * int let compare = ToolBox.pair_compare A.compare (-) end) in
     let addl (s, n) (l: S.t list) (cur: SS.t list MM.t) =
@@ -1924,14 +1927,17 @@ struct
     }
 
   let not_final_constant (s: A.t) (u: dfta): dfta =
+
     let sa = u.dfta_a in
     let () = S.restart () in
     let u = rename_all_states u S.fresh in
+    let () = debug "input: %a" print_dfta u in
     let from_s = DetTrans.fold (fun (s', l, q) ss ->
         if A.compare s s' = 0 then SS.add q ss
         else ss
       ) u.dfta_d SS.empty in
     let final_from_s = SS.inter u.dfta_f from_s in
+    let () = debug "final_from_s:%a" (ToolBox.print_set S.print SS.elements) final_from_s in
     let renaming, newstates, renamingopp = SS.fold (fun q (renaming, newstates, renamingopp) ->
         let q' = S.fresh () in
         (MS.add q q'  renaming, SS.add q' newstates, MS.add q' q renamingopp)
@@ -1940,19 +1946,23 @@ struct
     let u = t_of_dfta u in
     let r = apply_map renaming u in
     let r = { r with
-      f = SS.union final_from_s r.f;
+      f = final_from_s;
       q = SS.union final_from_s r.q
             } in
     let trans =
-      ST.fold (fun (s, ql, q) trans ->
-          if SS.mem q newstates then
+      ST.fold (fun (s', ql, q) trans ->
+          if SS.mem q newstates && A.compare s s' != 0 then
             trans
-            |> ST.add (s, ql, q)
-            |> ST.add (s, ql, MS.find q renamingopp)
-          else trans |> ST.add (s, ql, q)
+            |> ST.add (s', ql, q)
+            |> ST.add (s', ql, MS.find q renamingopp)
+          else trans |> ST.add (s', ql, q)
         ) r.d ST.empty
     in
-    {r with d = trans} |> dfta_of_t (sa)
+    let res = {r with d = trans} in
+    let () = debug "output: %a" print res in
+    let res = res |> dfta_of_t (sa) in
+
+    res
 
   let final_constant (s: A.t) (u: dfta): dfta =
     {u with dfta_d = DetTrans.filter_symbol s u.dfta_d}

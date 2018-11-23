@@ -32,10 +32,10 @@ module Domain =
       let range = srange stmt in
       match skind stmt with
       | S_py_import(modul, _, _) when String.contains modul '.'->
-         Framework.Exceptions.panic_at range "import of sub-module %s not supported" modul
+         panic_at range "import of sub-module %s not supported" modul
 
       | S_py_import_from(modul, _, _, _) when String.contains modul '.'->
-         Framework.Exceptions.panic_at range "import from sub-module %s not supported" modul
+         panic_at range "import from sub-module %s not supported" modul
 
       | S_py_import(modul, vasname, vroot) ->
          let obj, flow = import_module man modul range flow in
@@ -78,7 +78,7 @@ module Domain =
                                                         )
         in
         match dir with
-        | None -> Framework.Exceptions.panic_at range "module %s not found in stubs" name
+        | None -> panic_at range "module %s not found in stubs" name
         | Some dir ->
            let filename = dir ^ "/" ^ name ^ ".py" in
            let prog = Frontend.parse_program [filename] in
@@ -102,7 +102,7 @@ module Domain =
                                                               )
       in
       match dir with
-      | None -> Framework.Exceptions.panic "builtin module %s not found" file
+      | None -> panic "builtin module %s not found" file
       | Some dir ->
          let path = dir ^ "/" ^ file in
          let stmt = Frontend.parse_file path in
@@ -144,7 +144,7 @@ module Domain =
 
            | S_py_import(name, _, _) when Addr.is_builtin_name name -> ()
 
-           | _ -> Framework.Exceptions.fail "stmt %a not supported in %s" Framework.Ast.pp_stmt stmt file
+           | _ -> panic "stmt %a not supported in %s" Framework.Ast.pp_stmt stmt file
 
          in
          parse base stmt;

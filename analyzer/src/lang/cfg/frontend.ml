@@ -20,10 +20,9 @@ let name = "cfg.frontend"
 let debug fmt = Debug.debug ~channel:name fmt
 
               
-let dump_dot = false (** dump CFG in dot file (for debug) *)
+let dump_dot = false (** dump CFG in dot file (for debugging) *)
 
              
-
 (*==========================================================================*)
                       (** {2 Graph conversion} *)
 (*==========================================================================*)
@@ -237,7 +236,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
                    
   | S_return None ->
      if c.ctx_return_var <> None then
-       Debug.fail "return without an expression for non-void function at %a" pp_range (srange s);
+       Exceptions.panic "return without an expression for non-void function at %a" pp_range (srange s);
      (* jump to return node *)
      add_edge c (srange s) [T_cur,pre] [T_cur,c.ctx_return] []
 
@@ -249,7 +248,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
        match c.ctx_return_var with
        | Some var -> mk_var var (erange e)
        | None ->
-          Debug.fail "return with an expression for void function at %a" pp_range (srange s);
+          Exceptions.panic "return with an expression for void function at %a" pp_range (srange s);
      in
      let blk = adds @ assigns @ [mk_assign ret e (erange e)] @ rems in
      (* jump to return node *)
@@ -257,13 +256,13 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
 
   | S_break ->
      if c.ctx_break = [] then
-       Debug.fail "break without a loop at %a" pp_range (srange s);
+       Exceptions.panic "break without a loop at %a" pp_range (srange s);
      (* goto edge (skip statement) *)
      add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_break] []
 
   | S_continue ->
      if c.ctx_continue = [] then
-       Debug.fail "continue without a loop at %a" pp_range (srange s);
+       Exceptions.panic "continue without a loop at %a" pp_range (srange s);
      (* goto edge (skip statement) *)
      add_edge c (srange s) [T_cur,pre] [T_cur,List.hd c.ctx_continue] []
      
@@ -287,7 +286,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   (* unknown *)
 
   | _ ->
-     Debug.fail "cannot convert statement %a to CFG" pp_stmt s
+     Exceptions.panic "cannot convert statement %a to CFG" pp_stmt s
 
 
 (** Creates a new graph and fill-in with the given statement. *)
@@ -319,30 +318,28 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
 
   
 (** Converts a function AST to a CFG. *)
-let convert_fundec (f:fundec) : fundec =
-  (* create a variable to denote variable return *)
+let convert_fundec (f:fundec) =
+  (* get the variable to denote the return value *)
   let ret = match f.fun_return_type with
     | None -> None
-    | Some t ->
-       let v = mk_tmp ~vtyp:t () in
-       Some { v with vname = "$return$" ^ f.fun_name }
+    | Some t -> Some f.fun_return_var
   in
-  (* converts the body *)
-  { f with fun_body = convert_stmt ~name:f.fun_name ?ret f.fun_body; }
+  (* convert the body in-place *)
+  f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body
 
 
 (** Converts a full universal program. *)  
-let convert_program (p:program) : program =
+let convert_program (p:program) = 
   match p with
   | P_universal u ->
-    P_universal
-      { universal_gvars = u.universal_gvars;
-        universal_fundecs = List.map convert_fundec u.universal_fundecs;
-        universal_main = convert_stmt ~name:"__main__" u.universal_main;
-      }
+     List.iter convert_fundec u.universal_fundecs;
+     P_universal
+       { u with
+         universal_main = convert_stmt ~name:"__main__" u.universal_main;
+       }
 
   | _ ->        
-     Debug.fail "cannot convert program to CFG"
+     Exceptions.panic "cannot convert program to CFG"
     
 
 (** From source to CFG. *)    

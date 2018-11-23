@@ -108,7 +108,7 @@ struct
 
 
         | false, true ->
-          Debug.fail "? case")
+          Exceptions.panic "? case")
         |> Flow.set_domain_cur (add_recent recent_addr pool) man
         |> Eval.singleton (mk_addr recent_addr (tag_range range "mk_recent_addr"))
         |> OptionExt.return

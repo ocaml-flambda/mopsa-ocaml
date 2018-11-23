@@ -205,7 +205,7 @@ let is_bottom {d1;d2;d3} =
 let top = {d1=VarMap.top; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_top {d1;d2;d3} =
   (* vérifier que dans d2 tout est à top plutôt... *)
-  Debug.fail "ni"
+  Exceptions.panic "ni"
 
 let pp_d2 fmt (d2:d2) =
   TypeIdMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "%d" k)
@@ -396,7 +396,7 @@ let search_d2 (t:polytype) (d2:d2) : typeid option =
 
 let get_type ?local_use:(local_use=false) (d:domain) (t:polytype) : typeid * domain =
   if not local_use && not (Typevarset.is_empty (collect_vars t)) then
-    Debug.fail "get_type: not monomorphic, bad idea"
+    Exceptions.panic "get_type: not monomorphic, bad idea"
   else
     let opos = search_d2 t d.d2 in
     match opos with
@@ -471,7 +471,7 @@ let join (d:domain) (d':domain) : domain =
   res
 
 let class_le (c, b:class_address * py_object list) (d, b':class_address * py_object list) : bool =
-  Debug.warn "class_le not correctly implemented@\n";
+  Exceptions.warn "class_le not correctly implemented@\n";
   List.exists (fun x -> match (fst x).addr_kind with
                         | A_py_class (x, _) -> x = d
                         | _ -> false) b (* = d && b = b' *)
@@ -534,7 +534,7 @@ let leq d d' =
             ty2 = TypeIdMap.find tid2 d'.d2 in
         acc && (polytype_leq (ty1, d.d3) (ty2, d'.d3)) && (ov1 = None || ov1 = ov2)) d.d1 true
 
-let meet d1 d2 = Debug.fail "ni"
+let meet d1 d2 = Exceptions.panic "ni"
 
 let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (pos_d3:int) : polytype * d3 * int =
   (* FIXME: except for the last case, this is like the join. So maybe we should just give a flag to join_poly enforcing the widening *)
@@ -653,7 +653,7 @@ let widening ctx d d' =
       res
     )
   else
-    Debug.fail "unstable widening not implemented. Recommended widening delay: at least 1"
+    Exceptions.panic "unstable widening not implemented. Recommended widening delay: at least 1"
 
 let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   if is_bottom d then bottom else
@@ -826,7 +826,7 @@ let get_types (d:domain) (ts:Polytypeset.t) : typevar * domain =
   (* FIXME: perform the join of polytypes only, and everything should work by itself? *)
   (* folding on join_poly would work, but would create |ts|-1 type variables and only the last one would be used afterwards  *)
   if Polytypeset.exists (fun t -> not (Typevarset.is_empty (collect_vars t))) ts then
-    Debug.fail "get_types: not monomorphic, bad idea"
+    Exceptions.panic "get_types: not monomorphic, bad idea"
   else
     let mts = mono_set_cast ts in
     let d3 = d.d3 and pos_d3 = d.pos_d3 in
@@ -860,13 +860,13 @@ let class_of (d:domain) (t:typeid) : class_address * py_object list =
   match TypeIdMap.find t d.d2 with
   | Instance {classn=Class (c, b)} -> (c, b)
   | Class _ -> C_builtin "type", [Addr.find_builtin "object"]
-  | _ -> Debug.fail "class_of: ni"
+  | _ -> Exceptions.panic "class_of: ni"
 
 let get_polytype (d:domain) (v:pyVar) : polytype =
   let i = (VarMap.find v d.d1).def in
   let tid = match i with
     | Some i -> typeindex_of_var d.d1 v
-    | _ -> raise Not_found (*Debug.fail "get_polytype"*)
+    | _ -> raise Not_found (*Exceptions.panic "get_polytype"*)
   in
   TypeIdMap.find tid d.d2
 
@@ -874,7 +874,7 @@ let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
   (* quand v pointe vers une classe/fonction, ressortir l'addresse *)
   let i = (VarMap.find v d.d1).def in
   let tid, i = match i with
-    | None -> Debug.fail "get_tvid"
+    | None -> Exceptions.panic "get_tvid"
     | Some i -> typeindex_of_var d.d1 v, i in
   let ty = TypeIdMap.find tid d.d2 in
   match ty with
@@ -907,16 +907,16 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (func, funcb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
-  | Method _ -> Debug.fail "ni"
+  | Method _ -> Exceptions.panic "ni"
   | Class (c, b) ->
-     debug "p=%a@\ninst=%a@\n" pp_polytype p pp_monotype inst; Debug.fail "Cni"
+     debug "p=%a@\ninst=%a@\n" pp_polytype p pp_monotype inst; Exceptions.panic "Cni"
   | Instance {classn=Class (c, b)} ->
      begin match inst with
      | Class (d, b') ->
         if class_le (c, b) (d, b') then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
-  | Instance {classn} -> Debug.fail "ni"
+  | Instance {classn} -> Exceptions.panic "ni"
   | Typevar var ->
      let m = concretize_poly p d3 in
      let t, f = Monotypeset.fold (fun el (acct, accf) ->
@@ -965,17 +965,17 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
-  | Module (M_builtin _) -> Debug.fail "ni, need to check if attr in module?"
-  | List t -> Debug.fail "ni"
-  | Function f -> Debug.fail "ni"
-  | Method _ -> Debug.fail "ni"
+  | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
+  | List t -> Exceptions.panic "ni"
+  | Function f -> Exceptions.panic "ni"
+  | Method _ -> Exceptions.panic "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
-  | Class _ -> Debug.fail "filter_polyattr on unsupported or builtin class"
+  | Class _ -> Exceptions.panic "filter_polyattr on unsupported or builtin class"
   | Instance ({classn=Class (C_user c, _); uattrs; oattrs} as inst) ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then
@@ -1001,7 +1001,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        (p, d3)
      else
        (Bot, d3), (p, d3)
-  | Instance _ -> Debug.fail "filter_polyattr on unsupported instance"
+  | Instance _ -> Exceptions.panic "filter_polyattr on unsupported instance"
   | Typevar var ->
      let ms = concretize_poly p d3 in
      let t, f = Monotypeset.fold (fun el (acct, accf) ->

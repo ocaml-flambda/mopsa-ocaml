@@ -43,7 +43,7 @@ module Domain = struct
     match ekind exp with
     (* 𝔼⟦ float.__new__(cls, arg) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, cls :: args, []) ->
-       Debug.fail "todo"
+       Exceptions.panic "todo"
     (* begin match args with
        *   | [] -> oeval_singleton (Some (mk_py_float 0.0 range), flow, [])
        *
@@ -68,7 +68,7 @@ module Domain = struct
     (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {+, -, x, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_arithmetic_op_fun f ->
-       Debug.fail "todo"
+       Exceptions.panic "todo"
       (* eval_list [e1; e2] (man.eval ctx) flow |>
        * eval_compose (fun el flow ->
        *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -90,7 +90,7 @@ module Domain = struct
     (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_compare_op_fun f ->
-       Debug.fail "todo"
+       Exceptions.panic "todo"
       (* eval_list [e1; e2] (man.eval ctx) flow |>
        * eval_compose (fun el flow ->
        *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -124,7 +124,7 @@ module Domain = struct
 
     (* 𝔼⟦ float.__bool__(self) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__bool__")}, _)}, [self], []) ->
-       Debug.fail "todo"
+       Exceptions.panic "todo"
       (* man.eval ctx self flow |>
        * eval_compose (fun self flow ->
        *     let o = object_of_expr self in
@@ -149,7 +149,7 @@ module Domain = struct
 
 
   (* and new_float_from_int man ctx arg range flow =
-   *   Framework.Exceptions.panic_at range "float(int) not supported"
+   *   panic_at range "float(int) not supported"
    *
    *
    * and new_float_from_object man ctx arg range flow =
@@ -193,7 +193,7 @@ module Domain = struct
     | "float.__add__" -> O_plus
     | "float.__sub__" -> O_minus
     | "float.__mul__" -> O_mult
-    | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
+    | f -> panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function
     | "float.__eq__" -> O_eq

@@ -43,7 +43,7 @@ module Domain = struct
     match ekind exp with
     (* 𝔼⟦ int.__new__(cls, arg) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, cls :: args, kwds) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
     (* begin match args with
        *   | [] -> oeval_singleton (Some (mk_py_zero range), flow, [])
        *
@@ -136,7 +136,7 @@ module Domain = struct
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
       when is_compare_op_fun f ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* eval_list [e1; e2] (man.eval ctx) flow |>
        * eval_compose (fun el flow ->
        *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -167,7 +167,7 @@ module Domain = struct
     (* 𝔼⟦ int.__op__(e) | op ∈ {-, +, ~, abs} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
          when is_unop_fun f ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* man.eval ctx e flow |>
        * eval_compose (fun e flow ->
        *     let o = object_of_expr e in
@@ -180,7 +180,7 @@ module Domain = struct
        *         match f with
        *             | "int.__neg__" -> mk_unop O_minus ev ~etyp:T_int range
        *             | "int.__pos__" -> ev
-       *             | "int.__abs__" -> Framework.Exceptions.panic_at range "int.__abs__ not supported"
+       *             | "int.__abs__" -> panic_at range "int.__abs__ not supported"
        *             | "int.__invert__" -> mk_unop O_bit_invert ev ~etyp:T_int range
        *             | _ -> assert false
        *       in
@@ -195,7 +195,7 @@ module Domain = struct
 
     (* 𝔼⟦ int.__bool__(self) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, [self], []) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
     (* man.eval ctx self flow |>
        * eval_compose (fun self flow ->
        *     let o = object_of_expr self in
@@ -214,7 +214,7 @@ module Domain = struct
 
     (* 𝔼⟦ int.__bool__(arg1, arg2, ..., argn) | n != 1 ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__bool__")}, _)}, _, []) ->
-       Debug.fail "todo@\n"
+       Exceptions.panic "todo@\n"
       (* let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
        * oeval_singleton (None, flow, []) *)
 
@@ -248,7 +248,7 @@ module Domain = struct
    *                   oeval_singleton (None, flow, []) |>
    *                   oeval_join acc
    *                 else if Z.gt base (Z.of_int 16) then
-   *                   Framework.Exceptions.panic "base > 16 not supported"
+   *                   panic "base > 16 not supported"
    *                 else
    *                   let s =
    *                     if List.mem (String.sub s 0 2) ["0b"; "0B"; "0o"; "0O"; "0x"; "0X"] then
@@ -265,7 +265,7 @@ module Domain = struct
    *                 oeval_join acc
    *             ) s None)
    *         else
-   *           Framework.Exceptions.panic_at range "TODO: fail with a non-constant base in int.__new__"
+   *           panic_at range "TODO: fail with a non-constant base in int.__new__"
    *
    *       | _ ->
    *         let flow = man.exec ctx (Utils.mk_builtin_raise "TypeError" range) flow in
@@ -379,7 +379,7 @@ module Domain = struct
     | "int.__rsub__" -> O_minus
     | "int.__xor__"
     | "int.__rxor__" -> O_bit_xor
-    | f -> Framework.Exceptions.panic "arithmetic_op: %s not yet supported" f
+    | f -> panic "arithmetic_op: %s not yet supported" f
 
   and compare_op = function
     | "int.__eq__" -> O_eq

@@ -79,7 +79,7 @@ struct
                 {c_func_var} -> c_func_var.vname = !opt_entry_function
             ) functions
         with Not_found ->
-          Framework.Exceptions.panic "entry function %s not found" !opt_entry_function
+          Exceptions.panic "entry function %s not found" !opt_entry_function
       in
       (* Execute body of entry function *)
       let stmt = mk_c_call_stmt entry [] (srange stmt) in

@@ -44,7 +44,7 @@ module Domain = struct
     match ekind exp with
     (* 𝔼⟦ str.__new__(cls, arg) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}, cls :: args, []) ->
-      Framework.Exceptions.panic_at range "str.__new__ not implemented"
+      panic_at range "str.__new__ not implemented"
 
     (* 𝔼⟦ s | s ∈ String ⟧ *)
     | E_constant (C_string s) ->
@@ -53,15 +53,15 @@ module Domain = struct
 
     (* 𝔼⟦ str.__len__(self) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__len__")}, _)}, [self], []) ->
-      Framework.Exceptions.panic_at range "str.__len__ not implemented"
+      panic_at range "str.__len__ not implemented"
 
     (* 𝔼⟦ str.__eq__(self, other) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__eq__")}, _)}, [self; other], []) ->
-      Framework.Exceptions.panic_at range "str.__eq__ not implemented"
+      panic_at range "str.__eq__ not implemented"
 
     (* 𝔼⟦ str.__ne__(self, other) ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__ne__")}, _)}, [self; other], []) ->
-      Framework.Exceptions.panic_at range "str.__eq__ not implemented"
+      panic_at range "str.__eq__ not implemented"
 
     | _ -> None
 
