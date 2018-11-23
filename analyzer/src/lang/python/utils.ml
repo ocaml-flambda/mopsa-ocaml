@@ -34,7 +34,7 @@ let mk_try_stopiteration body except range =
   mk_try
     body
     [mk_except
-       (Some (mk_addr (fst @@ Addr.find_builtin "StopIteration") range))
+       (Some (mk_py_object (Addr.find_builtin "StopIteration") range)) (* (mk_addr (fst @@ Addr.find_builtin "StopIteration") range)) *)
        None
        except
     ]

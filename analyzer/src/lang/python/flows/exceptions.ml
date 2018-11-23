@@ -55,20 +55,25 @@ module Domain =
       | S_py_try(body, excepts, orelse, finally) ->
          let old_flow = flow in
          (* Remove all previous exception flows *)
-         let flow0 = Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man flow in
+         let flow0 = Flow.filter (function
+                         | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+                         | _ -> fun _ -> true) man flow in
 
          (* Execute try body *)
          let try_flow = man.exec body flow0 in
           debug "post try flow:@\n  @[%a@]" (Flow.print man) try_flow;
          (* Execute handlers *)
-         let flow_caught, flow_uncaught = List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
-                                              let caught = exec_except man excpt range acc_uncaught in
-                                              let uncaught = escape_except man excpt range acc_uncaught in
-                                              Flow.join man caught acc_caught, uncaught
-                                            ) (Flow.bottom (Flow.get_all_annot try_flow), try_flow)  excepts in
+          let flow_caught, flow_uncaught =
+            List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
+                let caught = exec_except man excpt range acc_uncaught in
+                let uncaught = escape_except man excpt range acc_uncaught in
+                Flow.join man caught acc_caught, uncaught)
+              (Flow.bottom (Flow.get_all_annot try_flow), try_flow)  excepts in
 
          (* Execute else body after removing all exceptions *)
-         let orelse_flow = Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man try_flow |>
+         let orelse_flow = Flow.filter (function
+                               | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+                               | _ -> fun _ -> true) man try_flow |>
                              man.exec orelse
          in
 
@@ -134,8 +139,11 @@ module Domain =
 
     and exec_except (man:('a, unit) man) excpt range (flow:'a flow) : 'a flow =
       debug "exec except on@ @[%a@]" (Flow.print man) flow;
-      let flow0 = Flow.set T_cur man.bottom man flow |>
-                    Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man in
+      let flow0 = Flow.set T_cur man.bottom man flow in
+      debug "flow_cur %a@\n" (Flow.print man) flow;
+      let flow0 = Flow.filter (function
+                        | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+                        | _ -> fun _ -> true) man flow0 in
       debug "exec except flow0@ @[%a@]" (Flow.print man) flow0;
       let flow1 =
         match excpt.py_excpt_type with
@@ -204,7 +212,9 @@ module Domain =
     and escape_except man excpt range flow =
       debug "escape except";
       let flow0 = Flow.set T_cur man.bottom man flow |>
-                    Flow.filter (function T_alarm {alarm_kind = APyException _} -> fun _ -> false | _ -> fun _ -> true) man in
+                    Flow.filter (function
+                        | T_alarm {alarm_kind = APyException _} -> fun _ -> false
+                        | _ -> fun _ -> true) man in
       match excpt.py_excpt_type with
       | None -> flow0
 

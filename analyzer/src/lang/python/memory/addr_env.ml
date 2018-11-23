@@ -159,7 +159,7 @@ struct
          Post.bind man (fun expr flow ->
              match ekind expr with
              | E_constant (C_bool true) -> Post.of_flow flow
-             | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
+             | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
              | _ ->
                 Debug.fail "todo")
        |> OptionExt.return
@@ -306,10 +306,18 @@ struct
            )
        |> OptionExt.return
 
+    | Objects.Function.E_py_sum_call (f, args) ->
+       let func = match ekind f with
+         | E_function (User_defined func) -> func
+         | _ -> assert false in
+       man.eval (mk_call func args range) flow
+       |> OptionExt.return
 
-      | _ -> None
+    | _ -> None
 
-  let ask _ _ _ = None
+
+
+         let ask _ _ _ = None
 
 
 end

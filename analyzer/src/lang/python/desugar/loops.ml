@@ -63,32 +63,35 @@ module Domain =
             not iterable), and is not an AttributeError stating that
             __iter__ does not exist *)
          (* same for next *)
-         man.eval (Utils.mk_builtin_call "iter" [iterable] range) flow |>
-           Post.bind man (fun iter flow ->
-               let stmt =
-                 mk_while
-                   (mk_py_true range)
-                   (mk_block [
-                        (Utils.mk_try_stopiteration
-                           (mk_assign
-                              target
-                              (Utils.mk_builtin_call "next" [iter] range)
-                              range
-                           )
-                           (mk_block [
-                                orelse;
-                                mk_stmt S_break range
-                              ] range)
-                           range)
-                      ;
-                        body
-                      ] range)
-                   range
-               in
-               man.exec stmt flow
-               |> Post.of_flow
-             )
-         |> OptionExt.return
+         let tmp = mk_tmp () in
+           (* Post.bind man (fun iter flow -> *)
+         let stmt =
+           mk_block
+             [ mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [iterable] range) range;
+               mk_while
+                 (mk_py_true range)
+                 (mk_block [
+                      (Utils.mk_try_stopiteration
+                         (mk_assign
+                            target
+                            (Utils.mk_builtin_call "next" [mk_var tmp range] range)
+                            range
+                         )
+                         (mk_block [
+                              orelse;
+                              mk_stmt S_break range
+                            ] range)
+                         range)
+                    ;
+                      body
+                    ] range)
+                 range;
+               mk_remove_var tmp range
+             ]
+             range
+         in
+         man.exec stmt flow |> Post.return
+
 
       | _ -> None
 

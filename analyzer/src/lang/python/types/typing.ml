@@ -160,7 +160,7 @@ module Domain =
                match ekind expr with
                | E_constant (C_top T_bool) -> Post.of_flow flow
                | E_constant (C_bool true) -> Post.of_flow flow
-               | E_constant (C_bool false) -> Post.of_flow (Flow.bottom (Flow.get_all_annot flow))
+               | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
                | E_type_partition i ->
                   let cur = Flow.get_domain_cur man flow in
                   let pt = Typingdomain.TypeIdMap.find i cur.d2 in
@@ -322,6 +322,10 @@ module Domain =
          end
          |> OptionExt.return
 
+      | E_unop(Framework.Ast.O_log_not, {ekind=E_constant (C_bool b)}) ->
+         Eval.singleton (mk_py_bool (not b) range) flow
+         |> OptionExt.return
+
       | E_unop(Framework.Ast.O_log_not, e') ->
          man.eval e' flow |>
            Eval.bind
@@ -342,6 +346,11 @@ module Domain =
                | _ -> failwith "not: ni"
              )
          |> OptionExt.return
+
+      (* | E_type_partition i ->
+       *    let cur = Flow.get_domain_cur man flow in
+       *    (if Typingdomain.TypeIdMap.mem i cur.d2 then Eval.singleton exp flow
+       *     else return_id_of_type man flow range Typingdomain.Bot) |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
          man.eval arg flow |>
@@ -542,7 +551,7 @@ module Domain =
            Eval.bind (fun earg flow ->
                Eval.assume (mk_py_isinstance_builtin earg "list" range)
                  ~fthen:(fun flow ->
-                   return_id_of_type man flow range (Typingdomain.builtin_inst "listiter")
+                   return_id_of_type man flow range (Typingdomain.builtin_inst "list_iterator")
                  )
                  ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
@@ -552,9 +561,137 @@ module Domain =
              )
          |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "listiter.__next__")}, _)}, [arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [arg], []) ->
          Debug.fail "todo: listiternext@\n"
 
+      (*********
+       * Range *
+       *********)
+      (* FIXME: most of that part should be moved from OCaml code to python type signatures *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
+         let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+         man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [down; up], []) ->
+         let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
+         man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         (if ListExt.length args = 3 then
+            Eval.eval_list args man.eval flow |>
+              Eval.bind (fun eargs flow ->
+                  let down, up, step = match eargs with [e1;e2;e3] -> e1, e2, e3 | _ -> assert false in
+                  Eval.assume (mk_py_isinstance_builtin down "int" range)
+                    ~fthen:(fun flow ->
+                      Eval.assume (mk_py_isinstance_builtin up "int" range)
+                        ~fthen:(fun flow ->
+                          Eval.assume (mk_py_isinstance_builtin step "int" range)
+                            ~fthen:(fun flow ->
+                              return_id_of_type man flow range (Typingdomain.builtin_inst "range"))
+                            ~felse:tyerror
+                            man flow
+                        )
+                        ~felse:tyerror
+                        man flow
+                    )
+                    ~felse:tyerror
+                    man flow
+                )
+          else
+           tyerror flow)
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 2 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let ra, el = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin ra "range" range)
+                   ~fthen:(fun flow ->
+                     Eval.assume (mk_py_isinstance_builtin el "int" range)
+                       ~fthen:(fun flow ->
+                         return_id_of_type man flow range (Typingdomain.builtin_inst "bool"))
+                       ~felse:tyerror
+                       man flow
+                   )
+                   ~felse:tyerror
+                   man flow
+               )
+           |> OptionExt.return
+         else
+           tyerror flow
+           |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__len__")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 1 then
+           man.eval (List.hd args) flow |>
+             Eval.bind (fun ra flow ->
+                 Eval.assume (mk_py_isinstance_builtin ra "range" range)
+                   ~fthen:(fun flow ->
+                     return_id_of_type man flow range (Typingdomain.builtin_inst "int"))
+                   ~felse:tyerror
+                   man flow
+               )
+           |> OptionExt.return
+         else
+           tyerror flow
+           |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 1 then
+           man.eval (List.hd args) flow |>
+             Eval.bind (fun ra flow ->
+                 Eval.assume (mk_py_isinstance_builtin ra "range" range)
+                   ~fthen:(fun flow ->
+                     return_id_of_type man flow range (Typingdomain.builtin_inst "range_iterator"))
+                   ~felse:tyerror
+                   man flow
+               )
+           |> OptionExt.return
+         else
+           tyerror flow
+           |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
+         (* FIXME: ne pas oublier le StopIteration. Pour les autres next *)
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 1 then
+           man.eval (List.hd args) flow |>
+             Eval.bind (fun ra flow ->
+                 Eval.assume (mk_py_isinstance_builtin ra "range_iterator" range)
+                   ~fthen:(fun flow ->
+                     Eval.join (return_id_of_type man flow range (Typingdomain.builtin_inst "int"))
+                       (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton)
+                   )
+                   ~felse:tyerror
+                   man flow
+               )
+           |> OptionExt.return
+         else
+           tyerror flow
+           |> OptionExt.return
+
+
+
+        (*************
+         * Summaries *
+         *************)
       | E_py_sum_call (f, args) ->
          Eval.eval_list args man.eval flow |>
             Eval.bind (fun eargs flow ->
@@ -612,8 +749,6 @@ module Domain =
                                   else
                                     (func, [function_summary]) in
                                 let updated_summaries = function_summaries::(ListExt.remove_assoc func annots) in
-                                Format.set_margin 160;
-                                debug "%d@\n" (Format.get_margin ());
                                 debug "Summaries are now:@\n%a@\n" pp_summaries updated_summaries;
                                 let flow = Flow.set_annot A_py_summaries updated_summaries flow in
                                 Eval.singleton output flow)
@@ -621,7 +756,6 @@ module Domain =
                   )
               )
          |> OptionExt.return
-
 
       | _ ->
          debug "Warning: no eval for %a" pp_expr exp;

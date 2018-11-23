@@ -267,6 +267,9 @@ class str(object):
     def upper(self): pass
     def zfill(self): pass
 
+class str_iterator:
+    def __next__(self): pass
+
 class generator(object):
     def __del__(self): pass
     def __eq__(self): pass
@@ -314,7 +317,7 @@ class list(object):
     def sort(self): pass
 
 
-class listiter(object):
+class list_iterator(object):
     def __next__(self): pass
 
 class dict(object):
@@ -328,6 +331,18 @@ class dict_values(object):
 class dict_valueiterator(object):
     def __next__(self): pass
 
+class dict_keys(object):
+    def __iter__(self): pass
+
+class dict_keyiterator(object):
+    def __next__(self): pass
+
+class dict_items(object):
+    def __iter__(self): pass
+
+class dict_itemiterator(object):
+    def __next__(self): pass
+
 class range(object):
     def __new__(cls, args): pass
     def __len__(self): pass
@@ -335,7 +350,7 @@ class range(object):
     def __contains__(self, v): pass
     def __getitem__(self, k): pass
 
-class rangeiter(object):
+class range_iterator(object):
     def __next__(self): pass
 
 class set(object):
@@ -346,12 +361,15 @@ class set(object):
     def add(self, c): pass
     def clear(self): pass
 
+class set_iterator(object):
+    def __next__(self): pass
+
 class tuple(object):
     def __init__(self): pass
     def __iter__(self): pass
     def __getitem__(self, k): pass
 
-class tupleiter(object):
+class tuple_iterator(object):
     def __next__(self): pass
 
 class slice(object):
@@ -365,6 +383,9 @@ class bytearray(object): pass
 
 @mopsa.unsupported
 class bytes(object): pass
+
+@mopsa.unsupported
+class bytes_iterator(object): pass
 
 @mopsa.unsupported
 class classmethod(object):pass
