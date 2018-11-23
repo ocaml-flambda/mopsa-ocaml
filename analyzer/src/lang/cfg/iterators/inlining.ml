@@ -72,6 +72,9 @@ struct
        * in
        * let flow0' = man.exec new_vars_declaration_block flow0 in *)
 
+      (* TODO: mk_add_var for ret? *)
+      let ret = f.fun_return_var in
+
       (* Assign arguments to parameters *)
       let parameters_assign = List.mapi (fun i (param, arg) ->
           mk_assign (mk_var param range) arg range
@@ -89,28 +92,6 @@ struct
                   man.exec f.fun_body
       in
 
-      (* Create a temporary variable to store return expressions *)
-      let typ = OptionExt.option_dfl T_int f.fun_return_type in
-      let tmp = mk_tmp ~vtyp:typ () in
-
-      (* Iterate over return flows and assign the returned value to tmp *)
-      let flow3 =
-        Flow.fold (fun acc tk env ->
-            match tk with
-            | T_return(_, None) -> Flow.add T_cur env man acc
-
-            | T_return(_, Some e) ->
-              Flow.set T_cur env man acc |>
-              (* man.exec (mk_add_var tmp (tag_range range "adding tmp")) |> *)
-              man.exec (mk_assign (mk_var tmp range) e range) |>
-              Flow.join man acc
-
-            | _ -> Flow.add tk env man acc
-          )
-          (Flow.remove T_cur man flow)
-          man flow2
-      in
-
       (* Remove parameters and local variables from the environment *)
       let ignore_stmt_list =
         List.mapi (fun i v ->
@@ -119,9 +100,9 @@ struct
       in
       let ignore_block = mk_block ignore_stmt_list range in
 
-      let flow4 = man.exec ignore_block flow3 in
+      let flow3 = man.exec ignore_block flow2 in
 
-      Eval.singleton (mk_var tmp range) flow4 ~cleaners:[mk_remove_var tmp range] |>
+      Eval.singleton (mk_var ret range) flow3 ~cleaners:[mk_remove_var ret range] |>
       OptionExt.return
 
     | _ -> None

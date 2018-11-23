@@ -319,12 +319,10 @@ let convert_stmt ?(name="cfg") ?(ret:var option) (s:stmt) : stmt =
   
 (** Converts a function AST to a CFG. *)
 let convert_fundec (f:fundec) =
-  (* create a variable to denote variable return *)
+  (* get the variable to denote the return value *)
   let ret = match f.fun_return_type with
     | None -> None
-    | Some t ->
-       let v = mk_tmp ~vtyp:t () in
-       Some { v with vname = "$return$" ^ f.fun_name }
+    | Some t -> Some f.fun_return_var
   in
   (* convert the body in-place *)
   f.fun_body <- convert_stmt ~name:f.fun_name ?ret f.fun_body

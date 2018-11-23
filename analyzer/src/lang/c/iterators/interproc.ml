@@ -80,12 +80,14 @@ struct
           ) ->
           debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
           let open Universal.Ast in
+          let ret_var = mk_tmp ~vtyp:fundec.c_func_return () in
           let fundec' = {
             fun_name = get_var_uniq_name fundec.c_func_var;
             fun_parameters = fundec.c_func_parameters;
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
             fun_return_type = Some fundec.c_func_return;
+            fun_return_var = ret_var;
             fun_range = fundec.c_func_range;
           }
           in
