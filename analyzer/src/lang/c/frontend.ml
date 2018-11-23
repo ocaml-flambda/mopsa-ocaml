@@ -517,6 +517,7 @@ and from_stub ctx f stub =
     stub_requires = List.map (from_stub_requires ctx) stub.stub_requires;
     stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
     stub_body     = from_stub_body ctx stub.stub_body;
+    stub_return_type = from_typ ctx f.func_return;
   }
 
 and from_stub_body ctx body =

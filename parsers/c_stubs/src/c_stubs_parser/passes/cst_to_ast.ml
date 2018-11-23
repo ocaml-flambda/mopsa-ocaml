@@ -317,13 +317,15 @@ let rec visit_expr e prj func =
       let e1 = convert_expression_type e1 t in
       let e2 = convert_expression_type e2 t in
 
-      let ee' =
-        with_range
+      let ee' = with_range
           Ast.{ kind = E_binop(visit_binop op, e1, e2); typ = t }
           e.range
       in
-
-      Ast.E_cast(t, false, ee'), t
+      
+      begin match op with
+        | EQ | NEQ | LT | LE | GT | GE -> ee'.content.kind, ee'.content.typ
+        | _ -> Ast.E_cast(t, false, ee'), t
+      end
 
     | E_addr_of(e')       ->
       let e' = visit_expr e' prj func in

@@ -326,7 +326,10 @@ module Domain = struct
   }
 
   let eval_interface = {
-    export = [Z_c_scalar, Z_c_cell];
+    export = [
+      Z_c_scalar, Z_c_cell;
+      Z_c, Z_c_scalar
+    ];
     import = [
       (Z_c, Z_c_scalar);
       (Z_c, Universal.Zone.Z_u_num);
@@ -553,18 +556,35 @@ module Domain = struct
   (** =========================== *)
 
   let eval zone exp man flow =
-    eval_cell exp man flow |>
-    OptionExt.lift @@ Eval.bind @@ fun c flow ->
-    match c with
-    | C_cell(c, mode) ->
-      add_cons_cell man exp.erange c flow |>
-      Eval.singleton (mk_ocell c ~mode exp.erange)
+    match ekind exp with
+    | E_var _ | E_c_deref _ ->
+      eval_cell exp man flow |>
+      OptionExt.lift @@ Eval.bind @@ fun c flow ->
+      begin match c with
+        | C_cell(c, mode) ->
+          add_cons_cell man exp.erange c flow |>
+          Eval.singleton (mk_ocell c ~mode exp.erange)
 
-    | C_range(b, pred) ->
-      let a, b = rangeof exp.etyp in
-      Eval.singleton (mk_z_interval a b exp.erange) flow
+        | C_range(b, pred) ->
+          let a, b = rangeof exp.etyp in
+          Eval.singleton (mk_z_interval a b exp.erange) flow
 
-    | C_fun f -> Eval.singleton {exp with ekind = E_c_function f} flow
+        | C_fun f -> Eval.singleton {exp with ekind = E_c_function f} flow
+      end
+
+    | Stubs.Ast.E_stub_builtin_call({ content = SIZE }, p) ->
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
+      Eval.bind_opt @@ fun pe flow ->
+      begin match ekind pe with
+        | E_c_points_to(P_var (b, o, t)) ->
+          Eval.singleton (mk_z (base_size b) exp.erange) flow |>
+          OptionExt.return
+
+        | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
+      end
+
+
+    | _ -> None
 
 
   (** Computation of post-conditions *)

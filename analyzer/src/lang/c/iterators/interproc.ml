@@ -34,13 +34,14 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = [Stubs.Zone.Z_stubs]}
+  let exec_interface = {export = []; import = []}
 
   let eval_interface = {
     export = [Zone.Z_c, Zone.Z_c_scalar];
     import = [
       Zone.Z_c, Zone.Z_c_points_to_fun;
-      Universal.Zone.Z_u, any_zone
+      Universal.Zone.Z_u, any_zone;
+      Stubs.Zone.Z_stubs, Z_any
     ]
   }
 
@@ -94,8 +95,8 @@ struct
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
         | E_c_function {c_func_stub = Some stub} ->
-          debug "stub:@\n  @[%a@]" Stubs.Ast.pp_stub stub.content;
-          panic_at (erange exp) "stubs not yet supported"
+          let exp' = Stubs.Ast.mk_stub_call stub.content args exp.erange in
+          man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
         | E_c_function {c_func_body = None; c_func_var} ->
           panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var

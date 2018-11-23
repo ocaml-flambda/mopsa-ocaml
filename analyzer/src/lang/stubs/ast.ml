@@ -54,6 +54,7 @@ type stub = {
   stub_name: string;
   stub_requires: requires with_range list;
   stub_params: var list;
+  stub_return_type: typ;
   stub_body: body;
 }
 
@@ -115,6 +116,9 @@ type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
   | E_stub_builtin_call of builtin with_range * expr
+
+let mk_stub_call stub args range =
+  mk_expr (E_stub_call (stub, args)) range ~etyp:stub.stub_return_type
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
