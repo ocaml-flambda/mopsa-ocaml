@@ -2,6 +2,7 @@ open Framework.Essentials
 open Ast
 open Universal.Ast
 open MapExt
+open Addr
 (* au moins gérer les strings *)
 
 module Domain =
@@ -22,9 +23,67 @@ module Domain =
 
     let init _ _ _ = None
 
+    let is_str_binop_fun = function
+      | "str.__add__"
+        | "str.__mod__"
+        | "str.__mul__"
+        | "str.__rmod__"
+        | "str.__rmul__" -> true
+      | _ -> false
+
     let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
       debug "eval %a@\n" pp_expr exp;
+      let range = erange exp in
       match ekind exp with
+      (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+           when is_compare_op_fun "str" f ->
+         Eval.eval_list [e1; e2] man.eval flow |>
+           Eval.bind (fun el flow ->
+               let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+               Eval.assume
+                 (mk_py_isinstance_builtin e1 "str" range)
+                 ~fthen:(fun true_flow ->
+                   Eval.assume
+                     (mk_py_isinstance_builtin e2 "str" range)
+                     ~fthen:(fun true_flow ->
+                       man.eval (mk_py_top T_bool range) true_flow)
+                     ~felse:(fun false_flow ->
+                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                       man.eval expr false_flow)
+                     man true_flow
+                 )
+                 ~felse:(fun false_flow ->
+                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                   Eval.empty_singleton flow)
+                 man flow
+             )
+         |>  OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
+           when is_str_binop_fun f ->
+         Eval.eval_list [e1; e2] man.eval flow |>
+           Eval.bind (fun el flow ->
+               let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+               Eval.assume
+                 (mk_py_isinstance_builtin e1 "str" range)
+                 ~fthen:(fun true_flow ->
+                   Eval.assume
+                     (mk_py_isinstance_builtin e2 "str" range)
+                     ~fthen:(fun true_flow ->
+                           man.eval (mk_py_top T_string range) true_flow)
+                     ~felse:(fun false_flow ->
+                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                       man.eval expr false_flow)
+                     man true_flow
+                 )
+                 ~felse:(fun false_flow ->
+                   let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
+                   Eval.empty_singleton flow)
+                 man flow
+             )
+         |>  OptionExt.return
+
       | _ -> None
 
     let exec _ _ _ _ = None

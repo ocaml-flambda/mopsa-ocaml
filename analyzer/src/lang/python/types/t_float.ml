@@ -34,7 +34,7 @@ module Domain =
       match ekind exp with
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-           when is_compare_op_fun f ->
+           when is_compare_op_fun "float" f ->
          Eval.eval_list [e1; e2] man.eval flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -58,7 +58,7 @@ module Domain =
          |>  OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-           when is_arith_binop_fun f ->
+           when is_arith_binop_fun "float" f ->
          Eval.eval_list [e1; e2] man.eval flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in

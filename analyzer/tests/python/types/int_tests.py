@@ -25,7 +25,7 @@ def test_mult():
 def test_div():
     x = 84
     y = 42
-    z = x / y
+    z = x // y
     mopsa.massert(isinstance(z, int))
 
 def test_comps():
