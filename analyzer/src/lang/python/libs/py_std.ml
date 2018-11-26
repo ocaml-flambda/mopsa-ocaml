@@ -122,6 +122,14 @@ module Domain =
              )
          |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "input")}, _)}, args, [])  ->
+         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+         if List.length args <= 1 then
+           man.eval (mk_py_top T_string range) flow |> OptionExt.return
+         else
+           tyerror flow |> OptionExt.return
+
+
       | _ ->
          None
 
