@@ -74,29 +74,33 @@ let is_arith_op = function
 
   | _ -> false
 
- let is_arith_binop_fun = function
-    | "int.__add__"
-    | "int.__radd__"
-    | "int.__and__"
-    | "int.__rand__"
-    | "int.__floordiv__"
-    | "int.__rfloordiv__"
-    | "int.__lshift__"
-    | "int.__rlshift__"
-    | "int.__mod__"
-    | "int.__rmod__"
-    | "int.__mul__"
-    | "int.__rmul__"
-    | "int.__or__"
-    | "int.__ror__"
-    | "int.__pow__"
-    | "int.__rpow__"
-    | "int.__truediv__"
-    | "int.__rtruediv__"
-    | "int.__sub__"
-    | "int.__rsub__"
-    | "int.__xor__"
-    | "int.__rxor__" -> true
+let is_arith_binop_fun cl str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  ListExt.hd splitted = cl &&
+    match l with
+    | "__add__"
+    | "__radd__"
+    | "__floordiv__"
+    | "__rfloordiv__"
+    | "__mod__"
+    | "__rmod__"
+    | "__mul__"
+    | "__rmul__"
+    | "__pow__"
+    | "__rpow__"
+    | "__truediv__"
+    | "__rtruediv__"
+    | "__sub__"
+    | "__rsub__" -> true
+    | "__and__"
+    | "__rand__"
+    | "__lshift__"
+    | "__rlshift__"
+    | "__or__"
+    | "__ror__"
+    | "__xor__"
+    | "__rxor__" -> cl = "int"
     | _ -> false
 
 let is_comp_op = function
@@ -108,13 +112,17 @@ let is_comp_op = function
   | Framework.Ast.O_ge -> true
   | _ -> false
 
-let is_compare_op_fun = function
-  | "int.__eq__"
-    | "int.__ne__"
-    | "int.__lt__"
-    | "int.__le__"
-    | "int.__gt__"
-    | "int.__ge__" -> true
+let is_compare_op_fun cl str =
+  let splitted = String.split_on_char '.' str in
+  let l = ListExt.nth splitted (ListExt.length splitted - 1) in
+  ListExt.hd splitted = cl &&
+  match l with
+  | "__eq__"
+    | "__ne__"
+    | "__lt__"
+    | "__le__"
+    | "__gt__"
+    | "__ge__" -> true
   | _ -> false
 
 

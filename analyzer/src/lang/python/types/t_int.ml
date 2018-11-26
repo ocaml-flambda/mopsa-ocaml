@@ -34,7 +34,7 @@ module Domain =
       match ekind exp with
       (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-           when is_compare_op_fun f ->
+           when is_compare_op_fun "int" f ->
          Eval.eval_list [e1; e2] man.eval flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -58,7 +58,7 @@ module Domain =
          |>  OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
-           when is_arith_binop_fun f ->
+           when is_arith_binop_fun "int" f ->
          Eval.eval_list [e1; e2] man.eval flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -68,7 +68,11 @@ module Domain =
                    Eval.assume
                      (mk_py_isinstance_builtin e2 "int" range)
                      ~fthen:(fun true_flow ->
-                       man.eval (mk_py_top T_int range) true_flow)
+                       match f with
+                       | "int.__truediv__"
+                         | "int.__rtruediv__" ->
+                          man.eval (mk_py_top (T_float F_DOUBLE) range) true_flow
+                       | _ -> man.eval (mk_py_top T_int range) true_flow)
                      ~felse:(fun false_flow ->
                        let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                        man.eval expr false_flow)
