@@ -177,6 +177,16 @@ let () =
 
   register_pp_stmt (fun default fmt stmt ->
       match skind stmt with
+      | Universal.Ast.S_block(l) ->
+         if l = [] then
+           fprintf fmt "pass"
+         else
+           fprintf fmt "@[<v>%a@]"
+             (pp_print_list
+                ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                pp_stmt
+             ) l
+
       | S_py_class(cls) ->
         fprintf fmt "class %a:@\n@[<h 2>  %a@]" pp_var cls.py_cls_var pp_stmt cls.py_cls_body
 
@@ -188,7 +198,7 @@ let () =
           pp_stmt func.py_func_body
 
       | S_py_try(body, excepts, orelse, final) ->
-        fprintf fmt "try:@\n@[<h 2>  %a@]@\n%a@\nelse:@[<h 2>  %a@]@\nfinal:@[<h 2>  %a@]"
+        fprintf fmt "try:@\n@[<h 2>  %a@]@\n%a@\nelse:@[<h 2>  %a@]@\nfinally:@[<h 2>  %a@]"
           pp_stmt body
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_except) excepts
           pp_stmt orelse

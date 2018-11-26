@@ -64,7 +64,11 @@ module Domain =
             __iter__ does not exist *)
          (* same for next *)
          let tmp = mk_tmp () in
-           (* Post.bind man (fun iter flow -> *)
+         (* Post.bind man (fun iter flow -> *)
+         let l_else =
+           match skind orelse with
+           | S_block [] -> [mk_stmt S_break range]
+           | _ -> [orelse; mk_stmt S_break range] in
          let stmt =
            mk_block
              [ mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [iterable] range) range;
@@ -77,10 +81,7 @@ module Domain =
                             (Utils.mk_builtin_call "next" [mk_var tmp range] range)
                             range
                          )
-                         (mk_block [
-                              orelse;
-                              mk_stmt S_break range
-                            ] range)
+                         (mk_block l_else range)
                          range)
                     ;
                       body
