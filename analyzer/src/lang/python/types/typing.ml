@@ -189,20 +189,9 @@ module Domain =
            Eval.empty_singleton flow |> OptionExt.return
          else
            Eval.singleton exp flow |> OptionExt.return
-      (* | E_type_partition i ->
-       *    let cur = Flow.get_domain_cur man flow in
-       *    (if Typingdomain.TypeIdMap.mem i cur.d2 then Eval.singleton exp flow
-       *     else return_id_of_type man flow range Typingdomain.Bot) |> OptionExt.return *)
-      (* | E_type_partition i ->
-       *    let cur = Flow.get_domain_cur man flow in
-       *    if not (Typingdomain.TypeIdMap.mem i cur.Typingdomain.d2) then
-       *      return_id_of_type man flow range Typingdomain.Bot |> OptionExt.return
-       *    else
-       *      Eval.singleton exp flow |> OptionExt.return *)
 
-      | E_constant (C_bool _) -> Eval.singleton exp flow |> OptionExt.return
-
-      | E_constant (C_top T_bool) ->
+      | E_constant (C_top T_bool)
+        | E_constant (C_bool _ ) ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "bool") |> OptionExt.return
 
       | E_constant (C_top T_int)
@@ -214,7 +203,8 @@ module Domain =
          debug "That's a float!@\n";
          return_id_of_type man flow range (Typingdomain.builtin_inst "float") |> OptionExt.return
 
-      | E_constant (C_string _) ->
+      | E_constant (C_top T_string)
+        | E_constant (C_string _) ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "str") |> OptionExt.return
 
       | E_py_bytes _ ->
