@@ -75,7 +75,7 @@ module Domain =
 
     let return_id_of_type man flow range ptype =
       let cur = Flow.get_domain_cur man flow in
-      let tid, ncur = Typingdomain.get_type cur ptype in
+      let tid, ncur = Typingdomain.get_type ~local_use:true cur ptype in
       let flow = Flow.set_domain_cur ncur man flow in
       Eval.singleton (mk_expr (E_type_partition tid) range) flow
 
@@ -184,8 +184,25 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_constant (C_top T_bool)
-        | E_constant (C_bool _) ->
+      | E_type_partition i ->
+         if is_bottom @@ Flow.get_domain_cur man flow then
+           Eval.empty_singleton flow |> OptionExt.return
+         else
+           Eval.singleton exp flow |> OptionExt.return
+      (* | E_type_partition i ->
+       *    let cur = Flow.get_domain_cur man flow in
+       *    (if Typingdomain.TypeIdMap.mem i cur.d2 then Eval.singleton exp flow
+       *     else return_id_of_type man flow range Typingdomain.Bot) |> OptionExt.return *)
+      (* | E_type_partition i ->
+       *    let cur = Flow.get_domain_cur man flow in
+       *    if not (Typingdomain.TypeIdMap.mem i cur.Typingdomain.d2) then
+       *      return_id_of_type man flow range Typingdomain.Bot |> OptionExt.return
+       *    else
+       *      Eval.singleton exp flow |> OptionExt.return *)
+
+      | E_constant (C_bool _) -> Eval.singleton exp flow |> OptionExt.return
+
+      | E_constant (C_top T_bool) ->
          return_id_of_type man flow range (Typingdomain.builtin_inst "bool") |> OptionExt.return
 
       | E_constant (C_top T_int)
@@ -194,6 +211,7 @@ module Domain =
 
       | E_constant (C_top (T_float _))
         | E_constant (C_float _) ->
+         debug "That's a float!@\n";
          return_id_of_type man flow range (Typingdomain.builtin_inst "float") |> OptionExt.return
 
       | E_constant (C_string _) ->
@@ -256,11 +274,12 @@ module Domain =
                let _ = debug "builtin variable@\n" in
                Eval.singleton (mk_py_object a range) flow |> OptionExt.return
              else
-               let cur = Flow.get_domain_cur man flow in
-               let tid, cur = Typingdomain.get_type cur Bot in
-               let flow = Flow.set_domain_cur cur man flow in
-               let () = debug "Cur is now %a@\n" print cur in
-               Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return
+               Eval.empty_singleton flow |> OptionExt.return
+               (* let cur = Flow.get_domain_cur man flow in
+                * let tid, cur = Typingdomain.get_type cur Bot in
+                * let flow = Flow.set_domain_cur cur man flow in
+                * let () = debug "Cur is now %a@\n" print cur in
+                * Eval.singleton (mk_expr (E_type_partition tid) range) flow |> OptionExt.return *)
          end
       | E_py_ll_hasattr(e, attr) ->
          let attr = match ekind attr with
@@ -291,6 +310,8 @@ module Domain =
                Eval.join
                  (Eval.singleton (mk_py_true range) flowt)
                  (Eval.singleton (mk_py_false range) flowf)
+            | Typingdomain.Iterator x ->
+               Eval.singleton (mk_py_bool (attr = "next") range) flow
             | _ -> Exceptions.panic "ll_hasattr"
             end
          | _ ->
@@ -353,10 +374,6 @@ module Domain =
              )
          |> OptionExt.return
 
-      (* | E_type_partition i ->
-       *    let cur = Flow.get_domain_cur man flow in
-       *    (if Typingdomain.TypeIdMap.mem i cur.d2 then Eval.singleton exp flow
-       *     else return_id_of_type man flow range Typingdomain.Bot) |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
          man.eval arg flow |>
@@ -371,6 +388,7 @@ module Domain =
                       | Typingdomain.Instance {Typingdomain.classn=Typingdomain.Class (c, b)} -> (c, b)
                       | Typingdomain.Class _ -> C_builtin "type", List.map Addr.find_builtin ["type"; "object"]
                       | Typingdomain.List _ -> C_builtin "list", List.map Addr.find_builtin ["list"; "object"]
+                      | Typingdomain.Iterator (Typingdomain.List _) -> C_builtin "list_iterator", List.map Addr.find_builtin ["list_iterator"; "object"]
                       | _ -> assert false
                     in ty
                  | E_py_object ({addr_kind = A_py_class (c, b)}, _) ->
@@ -507,8 +525,13 @@ module Domain =
                                       let mty = Typingdomain.concretize_poly pty cur.d3 in
                                       Typingdomain.Monotypeset.union dummy_annot mty acc
                                    | _ -> Exceptions.panic "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
-               let pos_types, cur = Typingdomain.get_mtypes cur els_types in
-               let pos_list, cur = Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
+               let pos_list, cur =
+                 if Typingdomain.Monotypeset.cardinal els_types = 1 then
+                   let ty = Typingdomain.Monotypeset.choose els_types in
+                   Typingdomain.get_type ~local_use:true cur (List (Typingdomain.poly_cast ty))
+                 else
+                   let pos_types, cur = Typingdomain.get_mtypes cur els_types in
+                   Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
                let flow = Flow.set_domain_cur cur man flow in
                Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
          |> OptionExt.return
@@ -557,7 +580,14 @@ module Domain =
            Eval.bind (fun earg flow ->
                Eval.assume (mk_py_isinstance_builtin earg "list" range)
                  ~fthen:(fun flow ->
-                   return_id_of_type man flow range (Typingdomain.builtin_inst "list_iterator")
+                   let cur = Flow.get_domain_cur man flow in
+                   let lis:Typingdomain.polytype = match ekind arg with
+                     | E_type_partition i ->
+                        begin match Typingdomain.TypeIdMap.find i cur.d2 with
+                        | List t -> List t
+                        | _ -> assert false end
+                     | _ -> assert false in
+                   return_id_of_type man flow range (Typingdomain.Iterator lis) (* builtin_inst "list_iterator"*)
                  )
                  ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
@@ -568,7 +598,19 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [arg], []) ->
-         Exceptions.panic "todo: listiternext@\n"
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               match ekind earg with
+               | E_type_partition i ->
+                  let cur = Flow.get_domain_cur man flow in
+                  let evl =
+                    begin match Typingdomain.TypeIdMap.find i cur.d2 with
+                    | Iterator (List x) -> return_id_of_type man flow range x
+                    | _ -> assert false
+                    end
+                  in Eval.join evl (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton)
+               | _ -> assert false)
+         |> OptionExt.return
 
       (*********
        * Range *
@@ -682,7 +724,8 @@ module Domain =
              Eval.bind (fun ra flow ->
                  Eval.assume (mk_py_isinstance_builtin ra "range_iterator" range)
                    ~fthen:(fun flow ->
-                     Eval.join (return_id_of_type man flow range (Typingdomain.builtin_inst "int"))
+                     Eval.join
+                       (return_id_of_type man flow range (Typingdomain.builtin_inst "int"))
                        (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton)
                    )
                    ~felse:tyerror

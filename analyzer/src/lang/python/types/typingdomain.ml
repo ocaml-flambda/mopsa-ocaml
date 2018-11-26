@@ -31,6 +31,8 @@ type 'a pytype =
   | Bot | Top
   | List of 'a pytype
   (* standard library containers are defined locally *)
+  | Iterator of 'a pytype
+  (* used as Iterator[List[int]] to define list_iterator for example *)
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
   | Class of class_address * py_object list (* class * mro *)
@@ -68,6 +70,7 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Bot -> Format.fprintf fmt "⊥"
   | Top -> Format.fprintf fmt "⊤"
   | List ty -> Format.fprintf fmt "List[%a]" (pp_pytype print_vars) ty
+  | Iterator ty -> Format.fprintf fmt "Iterator[%a]" (pp_pytype print_vars) ty
   | Instance {classn; uattrs; oattrs} ->
      if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
        Format.fprintf fmt "Instance[%a]" (pp_pytype print_vars) classn
@@ -200,7 +203,7 @@ type domain =
 
 let bottom = {d1=VarMap.empty; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_bottom {d1;d2;d3} =
-  VarMap.is_bottom d1 (* && TypeIdMap.is_empty d2 && TypeVarMap.is_empty d3 *)
+  VarMap.is_bottom d1 (* TypeIdMap.is_empty d2 && TypeVarMap.is_empty d3 *)
 
 let top = {d1=VarMap.top; d2=TypeIdMap.empty; d3=TypeVarMap.empty; pos_d2=0; pos_d3=0}
 let is_top {d1;d2;d3} =
@@ -239,6 +242,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Module m -> Module m
   | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
+  | Iterator t -> Iterator (unsafe_cast f t)
   | Typevar v -> Typevar (f v)
   | Instance {classn;uattrs;oattrs} ->
      let classn = unsafe_cast f classn in
@@ -259,6 +263,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   match t with
   | Typevar v when v = var -> value
   | List v -> List (subst v var value)
+  | Iterator v -> Iterator (subst v var value)
   | Instance {classn; uattrs; oattrs} ->
      let classn = subst classn var value in
      let uattrs = StringMap.map (fun v -> subst v var value) uattrs in
@@ -270,6 +275,7 @@ let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
     match t with
     | List t -> collect t acc
+    | Iterator t -> collect t acc
     | Typevar v -> Typevarset.add v acc
     | Instance {classn; uattrs; oattrs} ->
        let acc = collect classn acc in
@@ -327,6 +333,9 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
   | List t, List t' ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
+  | Iterator t, Iterator t' ->
+     let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Iterator t, d3_acc, pos_d3
   | Function f, Function f' when f = f' ->
      Function f, d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
@@ -429,10 +438,8 @@ let join (d:domain) (d':domain) : domain =
          let {d1;d2;d3} = if el1.def = None then d' else d in
          let tid, ov = typeindex_aliasing_of_var d1 var in
          let new_ty, d3, pos_d3 = join_poly (TypeIdMap.find tid d2, d3) (Bot, d3) dcur.d3 dcur.pos_d3 in
-         debug "Type is %a@\n" pp_polytype new_ty;
          let tid, dcur = get_type ~local_use:true {dcur with d3;pos_d3} new_ty in
          let d1 = VarMap.add var (merge_undefs el1 el1' (Ty tid)) dcur.d1 in
-         debug "Tid is %d; Result is %a@\n" tid print {dcur with d1};
          {dcur with d1}
       | Some _, Some _ ->
          let tid1, ov1 = typeindex_aliasing_of_var d.d1 var and
@@ -499,6 +506,7 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
   | List u, List v -> polytype_leq (u, d3) (v, d3')
+  | Iterator u, Iterator v -> polytype_leq (u, d3) (v, d3')
   | Class (c, b), Class (c', b') -> class_le (c, b) (c', b')
   | Function f, Function f' -> f = f'
   | Module m, Module m' -> m = m'
@@ -553,6 +561,10 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | List t, List t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
+  | Iterator t, Iterator t' ->
+     let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Iterator t, d3_acc, pos_d3
+
   | Function f, Function f' when f = f' ->
      Function f, d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
@@ -650,6 +662,7 @@ let widening ctx d d' =
           ) d.d2 d'.d2 (TypeIdMap.empty, TypeVarMap.empty, 0) in
       let res = {d1=r1; d2=r2; d3=r3; pos_d2=d.pos_d2; pos_d3=pos_r3} in
       debug "Result of widening is %a@\n" print res;
+      debug "leq d res %b; leq d' res %b" (leq d res) (leq d' res);
       res
     )
   else
@@ -898,6 +911,16 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (list, listb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
+  | Iterator (List _) ->
+     let list_it, list_itb = match kind_of_object (Addr.find_builtin "list_iterator") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
+  | Iterator _ -> Exceptions.panic "filter_polyinst iterator _@\n"
   | Function f ->
      let func, funcb = match kind_of_object (Addr.find_builtin "function") with
        | A_py_class (c, b) -> c, b
@@ -967,6 +990,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
        (Bot, d3), (p, d3)
   | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
   | List t -> Exceptions.panic "ni"
+  | Iterator i -> Exceptions.panic "ni"
   | Function f -> Exceptions.panic "ni"
   | Method _ -> Exceptions.panic "ni"
   | Class (C_user c, _) ->
