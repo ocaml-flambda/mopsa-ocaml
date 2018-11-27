@@ -132,7 +132,7 @@ rule read =
 
   | "="    { ASSIGN }
 
-  | "(*"   { read_comment lexbuf; read lexbuf }
+  | "{*"   { read_comment lexbuf; read lexbuf }
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
@@ -163,7 +163,7 @@ and read_string buf =
 
 and read_comment = 
   parse
-  | "*)"          { () }
+  | "*}"          { () }
   | [^ '\n' '\r'] { read_comment lexbuf }
   | newline       { new_line lexbuf; read_comment lexbuf }
 
