@@ -20,8 +20,6 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
-let profiler fmt = Debug.debug ~channel:"framework.analyzer.profiler" fmt
-
 (**
    Functor to create an [Analyzer] module from an top-level abstract domain.
 *)
@@ -90,12 +88,13 @@ struct
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     Out.push_action (Exec({s = stmt; z= zone}));
-    debug "exec stmt in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      Location.pp_range stmt.srange
+    debug "exec:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_stmt stmt
+      Location.pp_range stmt.srange
       pp_zone zone
       (Flow.print man) flow
     ;
+
     let timer = Timing.start () in
 
     let fexec =
@@ -104,14 +103,14 @@ struct
     in
     let flow' = Cache.exec fexec zone stmt man flow in
 
-    let t = Timing.stop timer in
-    profiler "exec done in %.3fs of:@\n@[<v>  %a@]" t pp_stmt stmt;
     Out.push_action (ExecDone({s_res = flow'}));
-    debug "exec stmt done:@\n @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+    debug "exec done:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]@\n time: %.4fs"
       pp_stmt stmt
+      Location.pp_range stmt.srange
       pp_zone zone
       (Flow.print man) flow
       (Flow.print man) flow'
+      (Timing.stop timer)
     ;
     flow'
 
@@ -160,20 +159,19 @@ struct
   (** Evaluation of expressions. *)
   and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Out.push_action (Eval({e = exp ; zs = zone}));
-    debug "eval expr in %a:@\n @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      Location.pp_range exp.erange
+    debug "eval:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_expr exp
+      Location.pp_range exp.erange
       pp_zone2 zone
       (Flow.print man) flow
     ;
+
     let timer = Timing.start () in
 
     let ret =
       (* Check whether exp is already in the desired zone *)
       match Zone.eval exp (snd zone) with
-      | Keep ->
-        debug "already in zone";
-        Eval.singleton exp flow
+      | Keep -> Eval.singleton exp flow
 
       | other_action ->
         (* Try available eval paths in sequence *)
@@ -188,7 +186,6 @@ struct
           | Keep -> assert false (* already done *)
           | Process -> Eval.singleton exp flow
           | Visit ->
-            debug "visiting sub-expressions";
             let open Visitor in
             let parts, builder = split_expr exp in
             match parts with
@@ -205,14 +202,14 @@ struct
             | _ -> Eval.singleton exp flow
     in
 
-    let t = Timing.stop timer in
-    profiler "eval done in %.3fs of @[%a@]" t pp_expr exp;
     Out.push_action (EvalDone({e_res = ret}));
-    debug "eval expr done:@\n expr: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]"
+    debug "eval done:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output: @[  %a@]@\n time: %.4fs"
       pp_expr exp
+      Location.pp_range exp.erange
       pp_zone2 zone
       (Flow.print man) flow
       (Eval.print ~pp:pp_expr) ret
+      (Timing.stop timer)
     ;
     ret
 
@@ -227,22 +224,18 @@ struct
   and eval_over_path path man exp flow =
     match path with
     | [] -> None
-    | [(z1, z2, path, feval)] ->
-      debug "trying path %a" pp_eval_path path;
-      eval_hop z1 z2 feval man exp  flow
+
+    | [(z1, z2, path, feval)] -> eval_hop z1 z2 feval man exp  flow
+
     | (z1, z2, path, feval) :: tl ->
-      debug "trying path %a" pp_eval_path path;
       eval_hop z1 z2 feval man exp flow |>
       OptionExt.bind @@
       Eval.bind_opt @@
       eval_over_path tl man
 
   and eval_hop z1 z2 feval man exp flow =
-    debug "eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
     match Zone.eval exp z2 with
-    | Keep ->
-      debug "already in zone";
-      Eval.singleton exp flow |>
+    | Keep -> Eval.singleton exp flow |>
       OptionExt.return
     | other_action ->
       match Cache.eval feval (z1, z2) exp man flow with
@@ -250,11 +243,12 @@ struct
       | None ->
         match other_action with
         | Keep -> assert false
+
         | Process ->
-          debug "no answer";
+          debug "no evaluation of %a in zone %a" pp_expr exp pp_zone2 (z1, z2);
           None
+
         | Visit ->
-          debug "visiting sub-expressions";
           let open Visitor in
           let parts, builder = split_expr exp in
           match parts with
