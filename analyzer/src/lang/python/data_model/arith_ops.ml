@@ -37,7 +37,7 @@ module Domain =
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
-      | E_binop(op, e1, e2) when is_arith_op op && is_py_expr e1 && is_py_expr e2 ->
+      | E_binop(op, e1, e2) when is_arith_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
          debug "arith op@\n";
          Eval.eval_list [e1; e2] man.eval flow |>
            Eval.bind
@@ -130,7 +130,7 @@ module Domain =
                            man flow
              )))
          |> OptionExt.return
-      | E_unop(op, e) when is_arith_op op && is_py_expr e ->
+      | E_unop(op, e) when is_arith_op op(* && is_py_expr e*) ->
          debug "Resolving unary operator %a" Framework.Ast.pp_operator op;
          man.eval e flow |>
            Eval.bind (fun e flow ->

@@ -35,6 +35,12 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)} as f), [cls; obj], []) ->
+         (* check if obj has str method, run it, check return type (can't be notimplemented) *)
+         (* otherwise, call __repr__. Or repr? *)
+         (* FIXME!*)
+         man.eval (mk_py_top T_string range) flow |> OptionExt.return
+
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun "str" f ->
