@@ -711,6 +711,7 @@ let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   {d with d1=d1}
 
 let set_var_tid (d:domain) (v:pyVar) (tid:typeid) : domain =
+  if is_bottom d then bottom else
   let ty = TypeIdMap.find tid d.d2 in
   set_var d v {lundef=false; gundef=false; def=Some ty}
 
