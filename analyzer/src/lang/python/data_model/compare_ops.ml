@@ -53,7 +53,7 @@ module Domain = struct
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_binop(op, e1, e2) when is_comp_op op && is_py_expr e1 && is_py_expr e2 ->
+    | E_binop(op, e1, e2) when is_comp_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
        debug "compare op@\n";
        Eval.eval_list [e1; e2] man.eval flow |>
          Eval.bind (fun el flow ->

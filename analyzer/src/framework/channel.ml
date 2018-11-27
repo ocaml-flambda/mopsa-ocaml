@@ -23,6 +23,9 @@ let return ?(channels = []) a = {
   channels;
 }
 
+let without_channel (a: 'a with_channel) : 'a =
+  a.value
+
 (** Apply a decorated function on a value *)
 let bind (f: 'a -> 'b with_channel) (a: 'a with_channel) : 'b with_channel =
   let b = f a.value in

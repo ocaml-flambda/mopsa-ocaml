@@ -55,6 +55,7 @@ module Domain = struct
                        man.exec stmt true_flow |> Post.of_flow
                      )
                      ~felse:(fun false_flow ->
+                       debug "Fallback on default assignment@\n";
                        let default_assign = mk_assign x0 (mk_binop x op e range) range in
                        man.exec default_assign flow |> Post.of_flow
                      )

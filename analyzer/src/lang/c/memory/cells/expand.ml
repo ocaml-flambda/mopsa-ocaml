@@ -15,8 +15,9 @@ open Zone
 open Base
 open Pointer
 open Cell
+module Intervals = Universal.Numeric.Values.Intervals.Value
 
-
+(** Maximal number of expanded cells when dereferencing a pointer *)
 let opt_expand = ref 1
 
 let () =
@@ -30,8 +31,13 @@ let () =
 module Domain = struct
 
 
-  (** Definition of offset cells *)
-  (** ========================== *)
+  (** Definition of offset cells
+      ==========================
+
+      Offset cells represent contiguous memory regions within some
+      base.  The position of the region is given by an integer offset,
+      and its size is given by a type.
+  *)
 
   type ocell = {
     b: base;
@@ -101,11 +107,13 @@ module Domain = struct
     {o with b = Base.A addr}
 
 
-  (** Abstract element *)
-  (** ================ *)
 
-  (* We keep track of the set of previously realized cells. We use the
-     Powerset generic lattice. *)
+  (** Abstract element
+      ================
+
+      We keep track of the set of previously expanded cells. For that,
+      we use the Powerset generic lattice.
+  *)
 
   include Framework.Lattices.Powerset.Make(struct
       type t = ocell
@@ -151,6 +159,7 @@ module Domain = struct
           check_overlap (cell_range c) (cell_range c')
         )
       ) cs
+
 
 
   (** Cell unification *)
@@ -301,6 +310,7 @@ module Domain = struct
     (u, true, s, s')
 
 
+
   (** Domain identification *)
   (** ===================== *)
 
@@ -315,6 +325,7 @@ module Domain = struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
+
 
 
   (** Zoning interface *)
@@ -337,6 +348,7 @@ module Domain = struct
       (Z_c, Z_c_points_to_cell)
     ];
   }
+
 
   (** Initialization *)
   (** ============== *)
@@ -420,15 +432,18 @@ module Domain = struct
     )
 
 
+
   (** Evaluation of offsets *)
   (** ===================== *)
 
   (* Kinds of offset evaluations *)
   type offset =
-    | O_concrete of Z.t
-    | O_range of (Z.t -> bool)
-    | O_out_of_bound
+    | O_concrete of Z.t         (* specific offset with some numerical value *)
+    | O_interval of Intervals.t (* interval of offsets *)
+    | O_out_of_bound            (* invalid offset *)
 
+
+  (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
     (* Try the static case *)
     match Universal.Utils.expr_to_z offset with
@@ -468,7 +483,7 @@ module Domain = struct
                 else if i >= !opt_expand
                 then
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton (O_range (fun o' -> Z.geq o' o && Z.leq o' u)) flow']
+                  [Eval.singleton (O_interval (Intervals.of_constant () (C_int_interval (o, u)))) flow']
                 else
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                   Eval.singleton (O_concrete o) flow' :: aux (i + 1) (Z.add o step)
@@ -476,7 +491,7 @@ module Domain = struct
               let evals = aux 0 l in
               Eval.join_list evals
             else
-              Eval.singleton (O_range (fun o -> Value.mem o itv)) flow
+              Eval.singleton (O_interval itv) flow
           )
         ~felse:(fun flow -> Eval.singleton O_out_of_bound flow)
         man flow
@@ -485,11 +500,61 @@ module Domain = struct
   (** Evaluation of cells *)
   (** =================== *)
 
+  (** Kinds of evaluated cells *)
   type ecell =
-    | C_cell of ocell * mode
-    | C_range of base * (Z.t -> bool)
-    | C_fun of c_fundec
+    | C_cell of ocell * mode                        (* specific cell with an integer offset *)
+    | C_interval_offset of base * Intervals.t * typ (* set of cells with an interval offset *)
+    | C_fun of c_fundec                             (* functions *)
 
+  let eval_pointed_cell p man flow =
+    man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
+    Eval.bind_opt @@ fun pe flow ->
+
+    match ekind pe with
+    | E_c_points_to(P_var (b, o, t)) ->
+      begin
+        eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
+        Eval.bind @@ fun o flow ->
+        match o with
+        | O_concrete o -> Eval.singleton (C_cell ({b; o; t}, STRONG)) flow
+        | O_interval itv -> Eval.singleton (C_interval_offset (b, itv, t)) flow
+        | O_out_of_bound ->
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+          let alarm = mk_alarm Alarms.AOutOfBound p.erange ~cs in
+          let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
+          in
+          Eval.empty_singleton flow'
+      end
+      |>
+      OptionExt.return
+
+    | E_c_points_to(P_fun fundec) ->
+      Eval.singleton (C_fun fundec) flow |>
+      OptionExt.return
+
+    | E_c_points_to(P_null) ->
+      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+      let alarm = mk_alarm Alarms.ANullDeref p.erange ~cs in
+      let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                  Flow.set T_cur man.bottom man
+      in
+      Eval.empty_singleton flow1 |>
+      OptionExt.return
+
+    | E_c_points_to(P_invalid) ->
+      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+      let alarm = mk_alarm Alarms.AInvalidDeref p.erange ~cs in
+      let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                  Flow.set T_cur man.bottom man
+      in
+      Eval.empty_singleton flow1 |>
+      OptionExt.return
+
+
+    | _ -> assert false
+
+  (** Evaluate an lval into a cell *)
   let rec eval_cell exp man flow =
     match ekind exp with
     | E_var (v, mode) when is_c_type v.vtyp ->
@@ -499,55 +564,7 @@ module Domain = struct
       Eval.singleton (C_cell (c, mode)) flow |>
       OptionExt.return
 
-    | E_c_deref(p) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
-      Eval.bind_opt @@ fun pe flow ->
-
-      begin
-        match ekind pe with
-        | E_c_points_to(P_var (b, o, t)) ->
-          begin
-            eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
-            Eval.bind @@ fun o flow ->
-            match o with
-            | O_concrete o -> Eval.singleton (C_cell ({b; o; t}, STRONG)) flow
-            | O_range pred -> Eval.singleton (C_range (b, pred)) flow
-            | O_out_of_bound ->
-               let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-               let alarm = mk_alarm Alarms.AOutOfBound exp.erange ~cs in
-               let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                           Flow.set T_cur man.bottom man
-               in
-               Eval.empty_singleton flow'
-          end
-          |>
-          OptionExt.return
-
-        | E_c_points_to(P_fun fundec) ->
-          Eval.singleton (C_fun fundec) flow |>
-          OptionExt.return
-
-        | E_c_points_to(P_null) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.ANullDeref exp.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1 |>
-          OptionExt.return
-
-        | E_c_points_to(P_invalid) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.AInvalidDeref exp.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1 |>
-          OptionExt.return
-
-
-        | _ -> assert false
-      end
+    | E_c_deref(p) -> eval_pointed_cell p man flow
 
     | _ -> None
 
@@ -565,8 +582,8 @@ module Domain = struct
           add_cons_cell man exp.erange c flow |>
           Eval.singleton (mk_ocell c ~mode exp.erange)
 
-        | C_range(b, pred) ->
-          let a, b = rangeof exp.etyp in
+        | C_interval_offset(b, itv, t) ->
+          let a, b = rangeof t in
           Eval.singleton (mk_z_interval a b exp.erange) flow
 
         | C_fun f -> Eval.singleton {exp with ekind = E_c_function f} flow
@@ -589,6 +606,83 @@ module Domain = struct
 
   (** Computation of post-conditions *)
   (** ============================== *)
+
+  (** Assign an rval to a cell *)
+  let assign_cell c rval mode range man flow =
+    let lval = mk_ocell c ~mode:mode range in
+    let flow' = Flow.map_domain_env T_cur (add c) man flow |>
+                man.exec ~zone:Z_c_cell (mk_assign lval rval range)
+    in
+
+    let a = Flow.get_domain_env T_cur man flow' in
+    let overlappings = get_overlappings c a in
+
+    let a' =
+      overlappings |>
+      List.fold_left (fun a c' -> remove c' a) a
+    in
+
+    let flow'' = Flow.set_domain_env T_cur a' man flow' in
+
+    let block = List.map (fun c' -> mk_remove_cell c' range) overlappings in
+
+    man.exec ~zone:Z_c_cell (mk_block block range) flow'' |>
+    Post.of_flow |>
+    Post.add_mergers (mk_remove_cell c range :: block) ~zone:Z_c_cell
+
+
+  (** Remove cells identified by an offset membership predicate *)
+  let remove_cells base pred range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let cells =
+      a |>
+      exist_and_find_cells
+        (fun c -> compare_base c.b base = 0 &&
+                  pred c.o
+        )
+    in
+    let block = List.map (fun c' -> mk_remove_cell c' range) cells in
+
+    man.exec ~zone:Z_c_cell (mk_block block range) flow |>
+    Post.of_flow |>
+    Post.add_mergers block ~zone:Z_c_cell
+
+
+  (** Prepare the assignment of a cell in a stub. All cells within
+     container [c] and having an offset in the range [offsets] are put
+     to ⊤.  *)
+  let prepare_cells_for_stub_assigns c offsets t range man flow =
+    (* Get info about the container cell [c] *)
+    let cb, co, ct =
+      match c with
+      | C_cell(oc, _) -> oc.b, (Intervals.of_constant () (C_int oc.o)), oc.t
+      | C_interval_offset(b, o, t) -> b, o, t
+      | _ -> panic "prepare_cells_for_stub_assigns: invalid cell argument"
+    in
+
+    (* Compute the offset interval of assigned cell *)
+    let offset =
+      match offsets with
+      | None -> co
+      | Some(l, u) ->
+        (* Compute the intervals of the bound expressions *)
+        let itv1 = man.ask (Intervals.Q_interval l) flow in
+        let itv2 = man.ask (Intervals.Q_interval u) flow in
+
+        (* Compute the interval containing the two intervals *)
+        let itv = Intervals.join () itv1 itv2 in
+
+        (* Multiply by the size of the assigned cell *)
+        Intervals.binop () O_mult itv (Intervals.of_constant () (C_int (sizeof_type t))) |>
+        Channel.without_channel |>
+
+        (* Add the container offset *)
+        Intervals.binop () O_plus co |>
+        Channel.without_channel
+    in
+
+    remove_cells cb (fun o -> Intervals.mem o offset) range man flow
+
 
   let rec exec zone stmt man flow =
     match skind stmt with
@@ -649,7 +743,7 @@ module Domain = struct
         match c with
         | C_cell(c, mode) -> assign_cell c rval mode stmt.srange man flow
 
-        | C_range(b, pred) -> remove_cells b pred stmt.srange man flow
+        | C_interval_offset(b, itv, _) -> remove_cells b (fun o -> Intervals.mem o itv) stmt.srange man flow
 
         | C_fun f -> assert false
       end
@@ -664,46 +758,32 @@ module Domain = struct
       Post.of_flow |>
       OptionExt.return
 
+    | Stubs.Ast.S_stub_assigns(x, None) ->
+      let t = x.etyp in
+      man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
+      Post.bind_opt man @@ fun x flow ->
+
+      eval_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      prepare_cells_for_stub_assigns x None t stmt.srange man flow
+
+    | Stubs.Ast.S_stub_assigns(x, Some (o1, o2)) ->
+      let t = under_type x.etyp in
+      eval_pointed_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o1 flow |>
+      Post.bind man @@ fun o1 flow ->
+
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o2 flow |>
+      Post.bind man @@ fun o2 flow ->
+
+      prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+
     | _ -> None
 
 
-  and assign_cell c rval mode range man flow =
-    let lval = mk_ocell c ~mode:mode range in
-    let flow' = Flow.map_domain_env T_cur (add c) man flow |>
-                man.exec ~zone:Z_c_cell (mk_assign lval rval range)
-    in
-
-    let a = Flow.get_domain_env T_cur man flow' in
-    let overlappings = get_overlappings c a in
-
-    let a' =
-      overlappings |>
-      List.fold_left (fun a c' -> remove c' a) a
-    in
-
-    let flow'' = Flow.set_domain_env T_cur a' man flow' in
-
-    let block = List.map (fun c' -> mk_remove_cell c' range) overlappings in
-
-    man.exec ~zone:Z_c_cell (mk_block block range) flow'' |>
-    Post.of_flow |>
-    Post.add_mergers (mk_remove_cell c range :: block) ~zone:Z_c_cell
-
-
-  and remove_cells base pred range man flow =
-    let a = Flow.get_domain_env T_cur man flow in
-    let cells =
-      a |>
-      exist_and_find_cells
-        (fun c -> compare_base c.b base = 0 &&
-                  pred c.o
-        )
-    in
-    let block = List.map (fun c' -> mk_remove_cell c' range) cells in
-
-    man.exec ~zone:Z_c_cell (mk_block block range) flow |>
-    Post.of_flow |>
-    Post.add_mergers block ~zone:Z_c_cell
 
   let ask _ _ _ = None
 
