@@ -57,7 +57,6 @@ module Domain =
     let init _ _ flow = Some flow
 
     let eval zs exp man flow =
-      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
@@ -85,10 +84,21 @@ module Domain =
                )
              else
                (
+                 debug "|params| = %d" (List.length pyfundec.py_func_parameters);
+                 debug "|args| = %d" (List.length args);
+                 debug "|default| = %d" (List.length default_args);
+                 debug "|non-default| = %d" (List.length nondefault_args);
                  let args =
                    if List.length args = (List.length pyfundec.py_func_parameters) then
                      args
                    else
+                     (* Remove the first default parameters that are already specified *)
+                     let default_args =
+                       let rec remove_first n l =
+                         match n with
+                         | 0 -> l
+                         | _ -> remove_first (n-1) (ListExt.tl l)
+                       in remove_first (List.length args - List.length nondefault_args) default_args in
                      (* Fill missing args with default parameters *)
                      let default_args = List.map (function Some e -> e | None -> assert false) default_args in
                      let rec fill_with_default dfs ndfs args =
@@ -103,10 +113,6 @@ module Domain =
                              arg :: (fill_with_default dfs ndfs' args')
                      in
 
-                     debug "|params| = %d" (List.length pyfundec.py_func_parameters);
-                     debug "|args| = %d" (List.length args);
-                     debug "|default| = %d" (List.length default_args);
-                     debug "|non-default| = %d" (List.length nondefault_args);
                      let args = fill_with_default default_args nondefault_args args in
 
                      debug "|args'| = %d" (List.length args);
