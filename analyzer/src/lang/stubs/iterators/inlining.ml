@@ -104,7 +104,24 @@ struct
           Flow.remove T_cur man
       ) flow reqs
 
-  let eval_post post man flow = panic "eval_post not supported"
+  let exec_assigns a man flow =
+    let stmt =
+      mk_stub_assigns
+        a.content.assign_target
+        a.content.assign_offset
+        a.range
+    in
+    man.exec stmt flow
+
+  let add_local l man flow =
+    match l.content.lval with
+    | L_new  _ -> panic "allocations not yet supported"
+    | L_call _ -> panic "function calls not yet supporetd"
+
+  let eval_post post man flow =
+    let flow = List.fold_left (fun flow a -> exec_assigns a man flow) flow post.post_assigns in
+    let flow = List.fold_left (fun flow l -> add_local l man flow) flow post.post_local in
+    assert false
 
   let eval_body body man flow =
     match body with

@@ -112,6 +112,7 @@ and assigns = {
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
 
+
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
@@ -119,6 +120,19 @@ type expr_kind +=
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range ~etyp:stub.stub_return_type
+
+
+(** {2 Statements} *)
+(*  =-=-=-=-=-=-=- *)
+
+type stmt_kind +=
+  | S_stub_assigns of expr                 (** modified target *) *
+                      (expr * expr) option (** modification range *)
+
+
+let mk_stub_assigns target offsets range =
+  mk_stmt (S_stub_assigns (target, offsets)) range
+
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -254,4 +268,31 @@ let () =
   }
 
 (** {2 Registration of statements} *)
-(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
+(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
+
+let () =
+  register_stmt {
+    compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | S_stub_assigns(t1, o1), S_stub_assigns(t2, o2) ->
+          Compare.compose [
+            (fun () -> compare_expr t1 t2);
+            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+          ]
+
+        | _ -> next s1 s2
+      );
+
+    visit = (fun next s ->
+        match skind s with
+        | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
+        | _ -> next s
+      );
+
+    print = (fun next fmt s ->
+        match skind s with
+        | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
+        | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
+        | _ -> next fmt s
+      );
+  }
