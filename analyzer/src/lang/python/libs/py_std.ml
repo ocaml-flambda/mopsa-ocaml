@@ -72,7 +72,6 @@ module Domain =
       (* Calls to len built-in function *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "len")}, _)},
                   [obj], [])  ->
-         Exceptions.panic "todo@\n"
          (* Check that the class of obj has an attribute __len__ *)
          man.eval obj flow |>
            Eval.bind (fun eobj flow ->
@@ -85,11 +84,14 @@ module Domain =
                          (* Call __len__ and check that it returns an integer *)
                          man.eval (mk_py_call (mk_py_object_attr cls "__len__" range) [eobj] range) true_flow |>
                            Eval.bind (fun len flow ->
-                               match etyp len with
-                               | T_int -> Eval.singleton len flow
-                               | _ ->
-                                  man.exec (Utils.mk_builtin_raise "TypeError" range) true_flow |>
-                                    Eval.empty_singleton
+                               Eval.assume
+                                 (mk_py_isinstance_builtin len "int" range)
+                                 ~fthen:(fun true_flow ->
+                                   Eval.singleton len true_flow)
+                                 ~felse:(fun false_flow ->
+                                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+                                     Eval.empty_singleton)
+                                 man flow
                              )
                        )
                        ~felse:(fun false_flow ->
