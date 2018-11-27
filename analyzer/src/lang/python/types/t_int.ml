@@ -38,15 +38,15 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, args, []) ->
-       *    Exceptions.panic "%d@\n" (ListExt.length args) *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls], []) ->
+         man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)} as f), [cls; arg], []) ->
          (* FIXME *)
          debug "ok, let's move on@\n";
          man.eval {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow |> OptionExt.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)} as f), [cls; str; base], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls; str; base], []) ->
          (* FIXME?*)
          debug "ok@\n";
          man.eval (mk_py_top T_int range) flow |> OptionExt.return
