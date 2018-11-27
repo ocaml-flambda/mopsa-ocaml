@@ -23,6 +23,7 @@ let return ?(channels = []) a = {
   channels;
 }
 
+(** Get a value by removing the channel decoration *)
 let without_channel (a: 'a with_channel) : 'a =
   a.value
 

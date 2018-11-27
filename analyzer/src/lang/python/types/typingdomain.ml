@@ -51,6 +51,7 @@ type typevar = int
 type monotype = unit pytype
 type polytype = typevar pytype
 
+
 let builtin_inst s =
   let obj = Addr.find_builtin s in
   match Addr.kind_of_object obj with
@@ -76,15 +77,15 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
        Format.fprintf fmt "Instance[%a]" (pp_pytype print_vars) classn
      else
        let pp_attrs = (StringMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "%s" k) (pp_pytype print_vars)) in
-       Format.fprintf fmt "Instance[%a, [%a], [%a]]" (pp_pytype print_vars) classn pp_attrs uattrs pp_attrs oattrs
-  | Class (C_user c, _) -> Format.fprintf fmt "Class[{%a}]" pp_var c.py_cls_var
+       Format.fprintf fmt "Instance[%a, %a, %a]" (pp_pytype print_vars) classn pp_attrs uattrs pp_attrs oattrs
+  | Class (C_user c, _) -> Format.fprintf fmt "Class {%a}" pp_var c.py_cls_var
   | Class (C_builtin c, _) | Class (C_unsupported c, _) -> Format.fprintf fmt "Class[%s]" c
-  | Function (F_user f) -> Format.fprintf fmt "Function[{%a}]" pp_var f.py_func_var
+  | Function (F_user f) -> Format.fprintf fmt "Function {%a}" pp_var f.py_func_var
   | Function (F_builtin f) | Function (F_unsupported f) -> Format.fprintf fmt "Function[%s]" f
   | Module (M_user (m, _) | M_builtin(m)) -> Format.fprintf fmt "Module[%s]" m
   | Typevar t -> print_vars fmt t
-  | Method (F_user f, i) -> Format.fprintf fmt "Method[{%a}, id=%d]" pp_var f.py_func_var i
-  | Method (F_builtin f, i) | Method (F_unsupported f, i) -> Format.fprintf fmt "Method[{%s}, id=%d]" f i
+  | Method (F_user f, i) -> Format.fprintf fmt "Method {%a}, id=%d" pp_var f.py_func_var i
+  | Method (F_builtin f, i) | Method (F_unsupported f, i) -> Format.fprintf fmt "Method {%s}, id=%d" f i
 
 let pp_typevar fmt (i:typevar) = Format.fprintf fmt "α(%d)" i
 
@@ -311,6 +312,9 @@ let join_classes (c:class_address * py_object list) (c':class_address * py_objec
 let supp_attr (m: 'a StringMap.t) : StringSet.t =
   StringMap.fold (fun k _ acc -> StringSet.add k acc) m StringSet.empty
 
+let instance_sanity_check i =
+  assert (StringSet.is_empty (StringSet.inter (supp_attr i.oattrs) (supp_attr i.uattrs)))
+
 let search_d3 (ms:Monotypeset.t) (d3:d3) : typevar option =
   TypeVarMap.fold (fun k v acc -> match acc with
                                   | None -> if Monotypeset.equal v ms then Some k else None
@@ -361,10 +365,12 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
          let new_acc = StringMap.add attrn new_t acc in
          new_acc, d3_acc, pos_d3) in
      let uattrs, d3_acc, pos_d3 = StringSet.fold join_uattrs supp_uattrs (StringMap.empty, d3_acc, pos_d3) in
+     debug "uo of %a@\n" pp_polytype t;
      let uo = StringMap.merge (fun k l r -> match l, r with
                                             | Some l, None -> Some l
                                             | None, Some r -> Some r
-                                            | _ -> assert false) u o
+                                            | None, None -> debug "NoneNone@\n"; assert false
+                                            | Some l, Some l' -> debug "Some %a Some %a@\n" pp_polytype l pp_polytype l'; assert false) u o
      and uo' = StringMap.merge (fun k l r -> match l, r with
                                             | Some l, None -> Some l
                                             | None, Some r -> Some r
@@ -708,7 +714,9 @@ let set_var (d:domain) (v:pyVar) (t:polytype with_undefs) : domain =
   in
   (* the last thing is to update d1 *)
   let d1 = VarMap.add v tovou d.d1 in
-  {d with d1=d1}
+  let res = {d with d1=d1} in
+  debug "set_var _ %a _ = %a@\n" pp_var v print res;
+  res
 
 let set_var_tid (d:domain) (v:pyVar) (tid:typeid) : domain =
   if is_bottom d then bottom else
@@ -731,7 +739,7 @@ let set_var_eq (d:domain) (x:pyVar) (y:pyVar) (* x := y *) =
   | Some old_root ->
      if old_root.vuid < x.vuid then
        (* the root doesn't change *)
-       {d with d1=VarMap.add x {lundef=false; gundef=false; def=Some (Var x)} d.d1}
+       {d with d1=VarMap.add x {lundef=false; gundef=false; def=Some (Var old_root)} d.d1}
      else
        let d1 = VarMap.add x (VarMap.find old_root d.d1) d.d1 in
        let d1 = VarMap.map (fun el -> if el.def = Some (Var old_root) then {lundef=false; gundef=false; def= Some (Var x)} else el) d1 in
@@ -758,10 +766,17 @@ let set_var_attr (d:domain) (v:pyVar) (attr:string) (t:polytype) : domain =
      begin match old_instance with
      | Instance old_instance ->
         (* we created the new instance *)
-        let new_instance = Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs} in
+        let new_instance =
+          if StringMap.mem attr old_instance.oattrs then
+            Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs;
+                                        oattrs = StringMap.remove attr old_instance.oattrs}
+          else
+            Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs} in
         let d2 = TypeIdMap.add d.pos_d2 new_instance d.d2 in
 
-        let new_oinstance = Instance {old_instance with oattrs = StringMap.add attr t old_instance.oattrs} in
+        let new_oinstance =
+          if StringMap.mem attr old_instance.uattrs then Instance old_instance
+          else Instance {old_instance with oattrs = StringMap.add attr t old_instance.oattrs} in
         let d2 = TypeIdMap.add tid new_oinstance d2 in
         (* there are two cases to handle: either v is aliased with others or it isn't *)
         (* if it isn't, we bind v to pos_d2 then we have nothing else to do *)
@@ -777,7 +792,12 @@ let set_var_attr (d:domain) (v:pyVar) (attr:string) (t:polytype) : domain =
   | false ->
      match old_instance with
      | Instance old_instance ->
-        let new_instance = Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs} in
+        let new_instance =
+          if StringMap.mem attr old_instance.oattrs then
+            Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs;
+                                        oattrs = StringMap.remove attr old_instance.oattrs}
+          else
+            Instance {old_instance with uattrs = StringMap.add attr t old_instance.uattrs} in
         let d2 = TypeIdMap.add tid new_instance d.d2 in
         {d with d2=d2}
      | _ -> assert false

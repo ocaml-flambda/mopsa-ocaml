@@ -24,13 +24,13 @@ def c(x):
     return x.g() + str(x.f())
 
 
-a(A())
-a(C())
+z1 = a(A())
+z2 = a(C())
 
-b(B())
-b(C())
+z3 = b(B())
+z4 = b(C())
 
-c(C())
+z5 = c(C())
 
 
 # A := Type[A]
@@ -39,3 +39,11 @@ c(C())
 # a := Callable[[A], int]
 # b := Callable[[B], str]
 # c := Callable[[C], str]
+
+# z1 := int
+# z2 := int
+
+# z3 := str
+# z4 := str
+
+# z5 := str

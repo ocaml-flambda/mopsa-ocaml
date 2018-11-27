@@ -13,4 +13,3 @@ y = x([])
 # __call__ := Callable[[A, List[float]], List[float]]
 # x := A
 # y := List[float]
-

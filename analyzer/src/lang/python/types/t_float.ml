@@ -32,6 +32,39 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)} as f), [cls], []) ->
+         (* FIXME?*)
+         man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
+
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)} as f), [cls; arg], []) ->
+         (* FIXME?*)
+         man.eval arg flow |>
+           Eval.bind (fun el flow ->
+               Eval.assume
+                 (mk_py_isinstance_builtin el "float" range)
+                 ~fthen:(fun flow ->
+                   man.eval (mk_py_top (T_float F_DOUBLE) range) flow)
+                 ~felse:(fun flow ->
+                   Eval.assume
+                     (mk_py_isinstance_builtin el "int" range)
+                     ~fthen:(fun flow ->
+                       man.eval (mk_py_top (T_float F_DOUBLE) range) flow)
+                     ~felse:(fun flow ->
+                       Eval.assume
+                         (mk_py_isinstance_builtin el "str" range)
+                         ~fthen:(fun flow ->
+                           man.eval (mk_py_top (T_float F_DOUBLE) range) flow)
+                         ~felse:(fun flow ->
+                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                             Eval.empty_singleton)
+                         man flow)
+                     man flow
+                 )
+                 man flow
+             )
+         |> OptionExt.return
+
+
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun "float" f ->

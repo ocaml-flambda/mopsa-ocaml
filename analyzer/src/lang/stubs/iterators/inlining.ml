@@ -55,7 +55,7 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let eval_formula
+  let rec eval_formula
       (f: formula with_range)
       (man:('a, unit) man)
       (flow:'a flow)
@@ -67,13 +67,40 @@ struct
         ~felse:(fun flow -> Eval.singleton false flow)
         man flow
 
-    | F_binop (AND, f1, f2) -> panic "F_binop (AND, f1, f2) not implemented"
+    | F_binop (AND, f1, f2) ->
+      eval_formula f1 man flow |>
+      Eval.bind @@ fun b1 flow1 ->
 
-    | F_binop (OR, f1, f2) -> panic "F_binop (OR, f1, f2) not implemented"
+      eval_formula f2 man flow |>
+      Eval.bind @@ fun b2 flow2 ->
 
-    | F_binop (IMPLIES, f1, f2) -> panic "F_binop (IMPLIES, f1, f2) not implemented"
+      Eval.singleton (b1 && b2) (Flow.meet man flow1 flow2)
 
-    | F_not ff -> panic "F_not ff not implemented"
+    | F_binop (OR, f1, f2) ->
+      eval_formula f1 man flow |>
+      Eval.bind @@ fun b1 flow1 ->
+
+      eval_formula f2 man flow |>
+      Eval.bind @@ fun b2 flow2 ->
+
+      Eval.singleton (b1 || b2) (Flow.join man flow1 flow2)
+
+
+    | F_binop (IMPLIES, f1, f2) ->
+      eval_formula f1 man flow |>
+      Eval.bind @@ fun b1 flow1 ->
+
+      eval_formula f2 man flow |>
+      Eval.bind @@ fun b2 flow2 ->
+
+      Eval.singleton ((not b1) || b2) (if b1 then Flow.meet man flow1 flow2 else flow1)
+
+
+    | F_not ff ->
+      eval_formula ff man flow |>
+      Eval.bind @@ fun b flow ->
+
+      Eval.singleton (not b) flow
 
     | F_forall (v, s, ff) -> panic "F_forall (v, s, ff) not implemented"
 
@@ -83,12 +110,14 @@ struct
 
     | F_free(e) -> panic "F_free(e) not implemented"
 
+  (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
         List.combine args params |>
         List.fold_left (fun flow (arg, param) ->
             man.exec (mk_assign (mk_var param range) arg range) flow
           ) flow
-          
+
+  (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let check_requirements reqs range man flow =
     List.fold_left (fun flow req ->
         eval_formula req.content man flow |>
@@ -104,6 +133,7 @@ struct
           Flow.remove T_cur man
       ) flow reqs
 
+  (** Execute the `assigns` section *)
   let exec_assigns a man flow =
     let stmt =
       mk_stub_assigns
@@ -113,21 +143,42 @@ struct
     in
     man.exec stmt flow
 
-  let add_local l man flow =
+  (** Execute the `local` section *)
+  let exec_local l man flow =
     match l.content.lval with
     | L_new  _ -> panic "allocations not yet supported"
-    | L_call _ -> panic "function calls not yet supporetd"
+    | L_call _ -> panic "function calls not yet supported"
 
-  let eval_post post man flow =
+  let exec_ensures e man flow =
+    eval_formula e.content man flow |>
+    Post.bind_flow man @@ fun b flow ->
+    if b then flow
+    else Flow.remove T_cur man flow
+
+
+  (** Compute a post-condition *)
+  let exec_post post retyp man flow =
+    (* Execute `assigns` section *)
     let flow = List.fold_left (fun flow a -> exec_assigns a man flow) flow post.post_assigns in
-    let flow = List.fold_left (fun flow l -> add_local l man flow) flow post.post_local in
-    assert false
+    (* Execute `local` section *)
+    let flow = List.fold_left (fun flow l -> exec_local l man flow) flow post.post_local in
+    (* Execute `ensures` section *)
+    let rec doit = function
+      | [] -> flow
+      | [e] -> exec_ensures e man flow
+      | e :: tl ->
+        exec_ensures e man flow |>
+        Flow.meet man (doit tl)
+    in
+    doit post.post_ensures
 
-  let eval_body body man flow =
+  (** Execute the body of a stub *)
+  let exec_body body return man flow =
     match body with
-    | B_post post -> eval_post post man flow
+    | B_post post -> exec_post post return man flow
     | B_cases cases -> panic "eval_body(B_cases cases) not supported"
 
+  (** Entry point of expression evaluations *)
   let eval zone exp man flow =
     match ekind exp with
     | E_stub_call (stub, args) ->
@@ -142,7 +193,15 @@ struct
       (* Check requirements *)
       let flow2 = check_requirements stub.stub_requires exp.erange man flow1 in
 
-      eval_body stub.stub_body man flow2
+      (* Create the return variable *)
+      let return = mk_tmp ~vtyp:stub.stub_return_type () in
+      let flow3 = man.exec (mk_add_var return exp.erange) flow2 in
+
+      (* Evaluate the body of the styb *)
+      let flow4 = exec_body stub.stub_body return man flow3 in
+
+      Eval.singleton (mk_var return exp.erange) flow4 ~cleaners:[mk_remove_var return exp.erange] |>
+      Eval.return
 
     | _ -> None
 

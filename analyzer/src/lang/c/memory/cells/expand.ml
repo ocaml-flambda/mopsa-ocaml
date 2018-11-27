@@ -103,6 +103,11 @@ module Domain = struct
       (S_c_remove_cell (OffsetCell c))
       range
 
+  let mk_add_cell (c: ocell) range =
+    mk_stmt
+      (S_c_add_cell (OffsetCell c))
+      range
+
   let ch_addr_of_ocell o addr =
     {o with b = Base.A addr}
 
@@ -560,7 +565,7 @@ module Domain = struct
     | E_var (v, mode) when is_c_type v.vtyp ->
       let c = {b = V v; o = Z.zero; t = v.vtyp}  in
       let flow = add_cons_cell man exp.erange c flow in
-      debug "new variable %a in %a" pp_var v (Flow.print man) flow;
+      debug "new variable %a" pp_var v;
       Eval.singleton (C_cell (c, mode)) flow |>
       OptionExt.return
 
@@ -695,6 +700,17 @@ module Domain = struct
       Init_visitor.init_local (init_visitor man) v init stmt.srange flow
       |> Post.of_flow
       |> OptionExt.return
+
+    | S_add_var (v) when is_c_type v.vtyp ->
+      eval_cell (mk_var v stmt.srange) man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun ce flow ->
+      let c = match ce with
+        | C_cell (c, _) -> c
+        | _ -> assert false
+      in
+      man.exec ~zone:Z_c_cell (mk_add_cell c stmt.srange) flow |>
+      Post.of_flow |>
+      Post.add_merger (mk_add_cell c stmt.srange)
 
     | S_rebase_addr(adr, adr', mode) ->
       begin

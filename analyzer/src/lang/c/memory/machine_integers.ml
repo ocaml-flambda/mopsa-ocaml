@@ -335,6 +335,13 @@ struct
       Post.of_flow |>
       OptionExt.return
 
+    | S_add_var v when is_c_int_type v.vtyp ->
+      let v' = {v with vtyp = to_universal_type v.vtyp} in
+      man.exec ~zone:Z_u_num (mk_add_var v' stmt.srange) flow |>
+      Post.of_flow |>
+      OptionExt.return
+
+
     | S_remove_var v when is_c_int_type v.vtyp ->
       let v' = {v with vtyp = to_universal_type v.vtyp} in
       man.exec ~zone:Z_u_num (mk_remove_var v' stmt.srange) flow |>

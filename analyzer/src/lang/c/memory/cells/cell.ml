@@ -143,6 +143,7 @@ type expr_kind +=
   | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
+  | S_c_add_cell    of cell (* Add a cell as a new dimension *)
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
 
 let mk_cell c ?(mode = STRONG) range =
@@ -150,6 +151,9 @@ let mk_cell c ?(mode = STRONG) range =
 
 let mk_remove_cell c range =
   mk_stmt (S_c_remove_cell c) range
+
+let mk_c_add_cell c range =
+  mk_stmt (S_c_add_cell c) range
 
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
@@ -192,21 +196,22 @@ let () =
   register_stmt {
     compare = (fun next stmt1 stmt2 ->
         match skind stmt1, skind stmt2 with
+        | S_c_add_cell c1, S_c_add_cell c2 -> compare_cell c1 c2
         | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
         | _ -> next stmt1 stmt2
       );
     print = (fun next fmt stmt ->
         match skind stmt with
+        | S_c_add_cell c ->
+          Format.fprintf fmt "S_c_add_cell(%a)" pp_cell c
         | S_c_remove_cell c ->
           Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
         | _ -> next fmt stmt
       );
     visit = (fun next stmt ->
         match skind stmt with
-        | S_c_remove_cell c ->
-          (* no expr? *)
-          {exprs = []; stmts = []},
-          (fun _ -> stmt)
+        | S_c_add_cell c -> Visitor.leaf stmt
+        | S_c_remove_cell c -> Visitor.leaf stmt
         | _ -> next stmt
       );
   };
