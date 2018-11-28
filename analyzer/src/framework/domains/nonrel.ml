@@ -286,6 +286,16 @@ struct
         Post.add_channels channels
       )
 
+    | S_expand(v, vl) ->
+      let a = Flow.get_domain_env T_cur man flow in
+      let value = find v a in
+      let aa = List.fold_left (fun acc v' ->
+          add v' value acc
+        ) a vl
+      in
+      Flow.set_domain_env T_cur aa man flow |>
+      Post.return
+
     | S_assume e ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->

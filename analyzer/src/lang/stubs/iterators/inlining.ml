@@ -55,60 +55,114 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
+  (** Evaluate a formula into a disjunction of two flows, depending on
+     its truth value *)
   let rec eval_formula
       (f: formula with_range)
+      ~(negate: bool)
       (man:('a, unit) man)
       (flow:'a flow)
-    : ('a, bool) evl =
+    : 'a flow * 'a flow option =
     match f.content with
     | F_expr e ->
-      Eval.assume e
-        ~fthen:(fun flow -> Eval.singleton true flow)
-        ~felse:(fun flow -> Eval.singleton false flow)
-        man flow
+      man.exec (mk_assume e f.range) flow,
+      (if not negate then None else Some (man.exec (mk_assume (mk_not e f.range) f.range) flow))
 
     | F_binop (AND, f1, f2) ->
-      eval_formula f1 man flow |>
-      Eval.bind @@ fun b1 flow1 ->
+      let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
+      let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
-      eval_formula f2 man flow |>
-      Eval.bind @@ fun b2 flow2 ->
+      let ftrue = Flow.meet man ftrue1 ftrue2 in
 
-      Eval.singleton (b1 && b2) (Flow.meet man flow1 flow2)
+      let ffalse =
+        match negate, ffalse1, ffalse2 with
+        | false, None, None      -> None
+        | true, Some f1, Some f2 -> Some (Flow.join man f1 f2)
+        | _ -> assert false
+      in
+
+      ftrue, ffalse
 
     | F_binop (OR, f1, f2) ->
-      eval_formula f1 man flow |>
-      Eval.bind @@ fun b1 flow1 ->
+      let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
+      let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
-      eval_formula f2 man flow |>
-      Eval.bind @@ fun b2 flow2 ->
+      let ftrue = Flow.join man ftrue1 ftrue2 in
 
-      Eval.singleton (b1 || b2) (Flow.join man flow1 flow2)
+      let ffalse =
+        match negate, ffalse1, ffalse2 with
+        | false, None, None      -> None
+        | true, Some f1, Some f2 -> Some (Flow.meet man f1 f2)
+        | _ -> assert false
+      in
+
+      ftrue, ffalse
 
 
-    | F_binop (IMPLIES, f1, f2) ->
-      eval_formula f1 man flow |>
-      Eval.bind @@ fun b1 flow1 ->
-
-      eval_formula f2 man flow |>
-      Eval.bind @@ fun b2 flow2 ->
-
-      Eval.singleton ((not b1) || b2) (if b1 then Flow.meet man flow1 flow2 else flow1)
-
+    | F_binop (IMPLIES, f1, f2) -> panic_at f.range "IMPLIES not supported"
 
     | F_not ff ->
-      eval_formula ff man flow |>
-      Eval.bind @@ fun b flow ->
+      let ftrue, ffalse = eval_formula ff ~negate:true man flow in
 
-      Eval.singleton (not b) flow
+      begin match negate, ffalse with
+        | false, Some f -> f, None
+        | true, Some f  -> f, Some ftrue
+        | _ -> assert false
+      end
 
-    | F_forall (v, s, ff) -> panic "F_forall (v, s, ff) not implemented"
-
-    | F_exists (v, s, ff) -> panic "F_exists (v, s, ff) not implemented"
+    | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
+    | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
 
     | F_in (v, s) -> panic "F_in (v, s) not implemented"
 
     | F_free(e) -> panic "F_free(e) not implemented"
+
+  (** Evaluate a quantified formula and its eventual negation *)
+  and eval_quantified_formula q v s f ~negate range man flow =
+    (* Add [v] to the environment *)
+    let flow = man.exec (mk_add_var v range) flow in
+
+    (* Initialize its value *)
+    let flow =
+      match s with
+      | S_interval (l, u) -> man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
+                             man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+      | S_resource _ -> panic_at range "quantified resource instances not supported"
+    in
+
+    (* Replace [v] in [ff] with a quantified expression *)
+    let ff1 =
+      visit_expr_in_formula
+        (fun e ->
+           Visitor.map_expr
+             (fun ee ->
+                match ekind ee with
+                | E_var (vv, _) when compare_var v vv = 0 -> { ee with ekind = E_stub_quantified (q, ee) }
+                | _ -> ee
+             )
+             (fun stmt -> stmt)
+             e
+        )
+        f
+    in
+
+    let ftrue, _ = eval_formula ff1 ~negate:false man flow in
+
+    let ffalse =
+      if not negate then None
+      else
+        let ff = with_range (F_not f) f.range in
+        let f =
+          match q with
+          | FORALL -> with_range (F_exists (v, s, ff)) range
+          | EXISTS -> with_range (F_forall (v, s, ff)) range
+        in
+        let ftrue, _ = eval_formula f ~negate:false man flow in
+        Some ftrue
+    in
+
+    ftrue, ffalse
+
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
@@ -118,20 +172,34 @@ struct
           ) flow
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
-  let check_requirements reqs range man flow =
-    List.fold_left (fun flow req ->
-        eval_formula req.content man flow |>
-        Post.bind_flow man @@ fun b flow ->
-        if b then
-          (* valid requirement formula *)
-          flow
-        else
-          (* invalid requirement formula *)
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm (A_stub_invalid_require req) range ~cs in
-          Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-          Flow.remove T_cur man
-      ) flow reqs
+  let check_requirement req man flow =
+    let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
+    match ffalse with
+    | Some f when Flow.is_bottom man f -> ftrue
+
+    | Some f ->
+      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+      let alarm = mk_alarm (A_stub_invalid_require req) req.range ~cs in
+      Flow.add (alarm_token alarm) (Flow.get T_cur man f) man ftrue
+
+    | _ -> assert false
+
+  (** Fold the checks of pre-conditions over a list of requirements *)
+  let rec check_requirements reqs man flow =
+    match reqs with
+    | [] -> flow
+    | [req] -> check_requirement req man flow
+    | hd :: tl ->
+      let flow1 = check_requirement hd man flow in
+      let flow2 = check_requirements tl man flow in
+      (* Meet T_cur and keep all other flows *)
+      let annot = Flow.get_all_annot flow2 in
+      Flow.merge
+        (fun tk env1 env2 ->
+           match tk with
+           | T_cur -> OptionExt.option_lift2 (man.meet annot) env1 env2
+           | _ -> OptionExt.option_neutral2 (man.join annot) env1 env2
+        ) man flow1 flow2
 
   (** Execute the `assigns` section *)
   let exec_assigns a man flow =
@@ -150,11 +218,8 @@ struct
     | L_call _ -> panic "function calls not yet supported"
 
   let exec_ensures e man flow =
-    eval_formula e.content man flow |>
-    Post.bind_flow man @@ fun b flow ->
-    if b then flow
-    else Flow.remove T_cur man flow
-
+    eval_formula e.content ~negate:false man flow |>
+    fst
 
   (** Compute a post-condition *)
   let exec_post post retyp man flow =
@@ -191,7 +256,7 @@ struct
       let flow1 = init_params args stub.stub_params exp.erange man flow in
 
       (* Check requirements *)
-      let flow2 = check_requirements stub.stub_requires exp.erange man flow1 in
+      let flow2 = check_requirements stub.stub_requires man flow1 in
 
       (* Create the return variable *)
       let return = mk_tmp ~vtyp:stub.stub_return_type () in

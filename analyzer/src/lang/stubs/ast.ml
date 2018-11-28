@@ -45,6 +45,8 @@ and set =
 
 and resource = string (* FIXME: add an uid *)
 
+let mk_stub_and f1 f2 range =
+  with_range (F_binop (AND, f1, f2)) range
 
 (** {2 Stubs} *)
 (*  =-=-=-=-= *)
@@ -112,14 +114,20 @@ and assigns = {
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
 
+type quantifier =
+  | FORALL
+  | EXISTS
 
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
   | E_stub_builtin_call of builtin with_range * expr
+  | E_stub_quantified of quantifier * expr (** quantified expression *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range ~etyp:stub.stub_return_type
+
+let mk_stub_quantified quant exp range = mk_expr (E_stub_quantified(quant, exp)) range ~etyp:exp.etyp
 
 
 (** {2 Statements} *)
@@ -242,27 +250,46 @@ let () =
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_stub_call _, E_stub_call _ -> panic "stub comparison not supported"
+
         | E_stub_builtin_call(f1, arg1), E_stub_builtin_call(f2, arg2) ->
           Compare.compose [
             (fun () -> compare f1 f2);
             (fun () -> compare_expr arg1 arg2)
           ]
+
+        | E_stub_quantified(q1, ee1), E_stub_quantified(q2, ee2) ->
+          Compare.compose [
+            (fun () -> compare q1 q2);
+            (fun () -> compare_expr ee1 ee2);
+          ]
+
         | _ -> next e1 e2
       );
+
     visit  = (fun next e ->
         match ekind e with
         | E_stub_call _ -> panic "stub visitor not supported"
+
         | E_stub_return -> Framework.Visitor.leaf e
+
         | E_stub_builtin_call(f, arg) ->
           { exprs = [arg]; stmts = [] },
           (function {exprs = [args]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
+
+        | E_stub_quantified(q, ee) ->
+          { exprs = [ee]; stmts = [] },
+          (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee)} | _ -> assert false)
+
         | _ -> next e
       );
+
     print   = (fun next fmt e ->
         match ekind e with
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+        | E_stub_quantified(FORALL, ee) -> fprintf fmt "∀%a" pp_expr ee
+        | E_stub_quantified(EXISTS, ee) -> fprintf fmt "∃%a" pp_expr ee
         | _ -> next fmt e
       );
   }
@@ -296,3 +323,18 @@ let () =
         | _ -> next fmt s
       );
   }
+
+
+(** {2 Visitors} *)
+(** =-=-=-=-=-=- *)
+
+let rec visit_expr_in_formula expr_visitor f =
+  bind_range f @@ fun f ->
+  match f with
+  | F_expr e -> F_expr (expr_visitor e)
+  | F_binop (op, f1, f2) -> F_binop (op, visit_expr_in_formula expr_visitor f1, visit_expr_in_formula expr_visitor f2)
+  | F_not ff -> F_not (visit_expr_in_formula expr_visitor ff)
+  | F_forall (v, s, ff) -> F_forall (v, s, visit_expr_in_formula expr_visitor ff)
+  | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
+  | F_in (v, s) -> F_in (v, s)
+  | F_free e -> F_free (expr_visitor e)

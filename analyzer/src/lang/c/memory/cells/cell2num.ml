@@ -113,6 +113,25 @@ struct
       |> Post.of_flow
       |> OptionExt.return
 
+    | S_c_expand_cell (c, cl) when cell_type c |> is_c_int_type ->
+      let v, flow = get_num flow c in
+      let vl, flow =
+        let rec doit flow = function
+          | [] -> assert false
+          | [c] ->
+            let v, flow = get_num flow c in
+            [v], flow
+          | c :: tl ->
+            let v, flow = get_num flow c in
+            let vl, flow = doit flow tl in
+            v :: vl, flow
+        in
+        doit flow cl
+      in
+      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_expand (v, vl)}) flow
+      |> Post.of_flow
+      |> OptionExt.return
+
     | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
       man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->

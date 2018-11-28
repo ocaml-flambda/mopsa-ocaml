@@ -317,6 +317,9 @@ let mk_rename v v' =
 let mk_assign v e =
   mk_stmt (S_assign (v, e))
 
+let mk_expand v vl range =
+  mk_stmt (S_expand(v, vl)) range
+
 let mk_assume e =
   mk_stmt (S_assume e)
 
