@@ -45,6 +45,8 @@ and set =
 
 and resource = string (* FIXME: add an uid *)
 
+let mk_stub_and f1 f2 range =
+  with_range (F_binop (AND, f1, f2)) range
 
 (** {2 Stubs} *)
 (*  =-=-=-=-= *)
