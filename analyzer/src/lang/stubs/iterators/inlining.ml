@@ -54,7 +54,7 @@ struct
 
   (** Evaluation of expressions *)
   (** ========================= *)
-  
+
   (** Evaluate a formula into a disjunction of two flows, depending on
      its truth value *)
   let rec eval_formula
@@ -73,7 +73,7 @@ struct
       let ftrue2, ffalse2 = eval_formula f1 ~negate man flow in
 
       let ftrue = Flow.meet man ftrue1 ftrue2 in
-      
+
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
@@ -88,7 +88,7 @@ struct
       let ftrue2, ffalse2 = eval_formula f1 ~negate man flow in
 
       let ftrue = Flow.join man ftrue1 ftrue2 in
-      
+
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
@@ -110,26 +110,62 @@ struct
         | _ -> assert false
       end
 
-    | F_forall (v, s, ff) ->
-      (* Add [v] to the environment *)
-      let flow = man.exec (mk_add_var v f.range) flow in
-
-      (* Initialize its value *)
-      let flow =
-        match s with
-        | S_interval (l, u) -> man.exec (mk_assume (mk_binop (mk_var v f.range) O_ge l f.range) f.range) flow |>
-                               man.exec (mk_assume (mk_binop (mk_var v f.range) O_le u f.range) f.range)
-        | S_resource _ -> panic_at f.range "quantified resource instances not supported"
-      in
-      
-      (* Replace [v] in [ff] with a quantified expression *)
-      assert false
-
-    | F_exists (v, s, ff) -> panic "F_exists (v, s, ff) not implemented"
+    | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
+    | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
 
     | F_in (v, s) -> panic "F_in (v, s) not implemented"
 
     | F_free(e) -> panic "F_free(e) not implemented"
+
+  (** Evaluate a quantified formula and its eventual negation *)
+  and eval_quantified_formula q v s f ~negate range man flow =
+    (* Add [v] to the environment *)
+    let flow = man.exec (mk_add_var v range) flow in
+
+    (* Initialize its value *)
+    let flow =
+      match s with
+      | S_interval (l, u) -> man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
+                             man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+      | S_resource _ -> panic_at range "quantified resource instances not supported"
+    in
+
+    (* Replace [v] in [ff] with a quantified expression *)
+    let ff1 =
+      visit_expr_in_formula
+        (fun e ->
+           Visitor.map_expr
+             (fun ee ->
+                match ekind ee with
+                | E_var (vv, _) when compare_var v vv = 0 -> { ee with ekind = E_stub_quantified (q, ee) }
+                | _ -> ee
+             )
+             (fun stmt -> stmt)
+             e
+        )
+        f
+    in
+
+    let ftrue = eval_formula ff1 ~negate:false man flow |>
+                fst
+    in
+
+    let ffalse =
+      if not negate then None
+      else
+        let ff = with_range (F_not f) f.range in
+        let f =
+          match q with
+          | FORALL -> with_range (F_exists (v, s, ff)) range
+          | EXISTS -> with_range (F_forall (v, s, ff)) range
+        in
+        eval_formula f ~negate:false man flow |>
+        fst |>
+        OptionExt.return
+    in
+
+    ftrue, ffalse
+
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
@@ -144,7 +180,7 @@ struct
     match ffalse with
     | Some f when Flow.is_bottom man f -> ftrue
 
-    | Some f -> 
+    | Some f ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
       let alarm = mk_alarm (A_stub_invalid_require req) req.range ~cs in
       Flow.add (alarm_token alarm) (Flow.get T_cur man f) man ftrue
