@@ -110,7 +110,20 @@ struct
         | _ -> assert false
       end
 
-    | F_forall (v, s, ff) -> panic "F_forall (v, s, ff) not implemented"
+    | F_forall (v, s, ff) ->
+      (* Add [v] to the environment *)
+      let flow = man.exec (mk_add_var v f.range) flow in
+
+      (* Initialize its value *)
+      let flow =
+        match s with
+        | S_interval (l, u) -> man.exec (mk_assume (mk_binop (mk_var v f.range) O_ge l f.range) f.range) flow |>
+                               man.exec (mk_assume (mk_binop (mk_var v f.range) O_le u f.range) f.range)
+        | S_resource _ -> panic_at f.range "quantified resource instances not supported"
+      in
+      
+      (* Replace [v] in [ff] with a quantified expression *)
+      assert false
 
     | F_exists (v, s, ff) -> panic "F_exists (v, s, ff) not implemented"
 
