@@ -70,7 +70,7 @@ struct
 
     | F_binop (AND, f1, f2) ->
       let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
-      let ftrue2, ffalse2 = eval_formula f1 ~negate man flow in
+      let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
       let ftrue = Flow.meet man ftrue1 ftrue2 in
 
@@ -85,7 +85,7 @@ struct
 
     | F_binop (OR, f1, f2) ->
       let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
-      let ftrue2, ffalse2 = eval_formula f1 ~negate man flow in
+      let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
       let ftrue = Flow.join man ftrue1 ftrue2 in
 
@@ -146,9 +146,7 @@ struct
         f
     in
 
-    let ftrue = eval_formula ff1 ~negate:false man flow |>
-                fst
-    in
+    let ftrue, _ = eval_formula ff1 ~negate:false man flow in
 
     let ffalse =
       if not negate then None
@@ -159,9 +157,8 @@ struct
           | FORALL -> with_range (F_exists (v, s, ff)) range
           | EXISTS -> with_range (F_forall (v, s, ff)) range
         in
-        eval_formula f ~negate:false man flow |>
-        fst |>
-        OptionExt.return
+        let ftrue, _ = eval_formula f ~negate:false man flow in
+        Some ftrue
     in
 
     ftrue, ffalse
