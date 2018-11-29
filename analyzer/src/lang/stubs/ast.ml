@@ -56,7 +56,7 @@ type stub = {
   stub_name: string;
   stub_requires: requires with_range list;
   stub_params: var list;
-  stub_return_type: typ;
+  stub_return_type: typ option;
   stub_body: body;
 }
 
@@ -125,7 +125,7 @@ type expr_kind +=
   | E_stub_quantified of quantifier * expr (** quantified expression *)
 
 let mk_stub_call stub args range =
-  mk_expr (E_stub_call (stub, args)) range ~etyp:stub.stub_return_type
+  mk_expr (E_stub_call (stub, args)) range
 
 let mk_stub_quantified quant exp range = mk_expr (E_stub_quantified(quant, exp)) range ~etyp:exp.etyp
 
