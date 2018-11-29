@@ -744,6 +744,41 @@ module Domain = struct
     Post.of_flow flow |>
     Post.add_mergers mergers ~zone:Z_c_cell
 
+  let remove_old_cells c range man flow =
+    let b =
+      match c with
+      | C_cell (c, _) -> (base c)
+      | C_interval_offset(b, _, _) -> b
+      | _ -> assert false
+    in
+    let cells =
+      Flow.get_domain_env T_cur man flow |>
+      exist_and_find_cells
+        (fun cc ->
+           match cc with
+           | C_old ccc ->
+             compare_base b (base ccc) = 0
+           | _ -> false
+        )
+    in
+
+    let flow = List.fold_left (fun flow old ->
+        Flow.map_domain_cur (remove old) man flow |>
+        man.exec ~zone:Z_c_cell (mk_remove_cell old range)
+      ) flow cells
+    in
+
+    (* Create a list of mergers *)
+    let mergers =
+      List.fold_left (fun acc old ->
+          (mk_remove_cell old range) ::
+          acc
+        ) [] cells
+    in
+
+    Post.of_flow flow |>
+    Post.add_mergers mergers ~zone:Z_c_cell
+
 
   let rec exec zone stmt man flow =
     match skind stmt with
@@ -853,6 +888,20 @@ module Domain = struct
       Post.bind man @@ fun o2 flow ->
 
       prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+
+    | Stubs.Ast.S_stub_remove_old(x) when is_c_scalar_type x.etyp ->
+      man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
+      Post.bind_opt man @@ fun x flow ->
+      eval_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      remove_old_cells x stmt.srange man flow
+
+    | Stubs.Ast.S_stub_remove_old(x) ->
+      eval_pointed_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      remove_old_cells x stmt.srange man flow
 
     | _ -> None
 

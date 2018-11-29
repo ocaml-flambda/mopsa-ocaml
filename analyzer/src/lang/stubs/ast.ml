@@ -56,7 +56,7 @@ type stub = {
   stub_name: string;
   stub_requires: requires with_range list;
   stub_params: var list;
-  stub_return_type: typ;
+  stub_return_type: typ option;
   stub_body: body;
 }
 
@@ -125,7 +125,7 @@ type expr_kind +=
   | E_stub_quantified of quantifier * expr (** quantified expression *)
 
 let mk_stub_call stub args range =
-  mk_expr (E_stub_call (stub, args)) range ~etyp:stub.stub_return_type
+  mk_expr (E_stub_call (stub, args)) range
 
 let mk_stub_quantified quant exp range = mk_expr (E_stub_quantified(quant, exp)) range ~etyp:exp.etyp
 
@@ -136,10 +136,17 @@ let mk_stub_quantified quant exp range = mk_expr (E_stub_quantified(quant, exp))
 type stmt_kind +=
   | S_stub_assigns of expr                 (** modified target *) *
                       (expr * expr) option (** modification range *)
+  (** Declare an assignment and create old copies *)
+
+  | S_stub_remove_old of expr
+  (** remove old copies of an assigned target *)
 
 
 let mk_stub_assigns target offsets range =
   mk_stmt (S_stub_assigns (target, offsets)) range
+
+let mk_stub_remove_old target range =
+  mk_stmt (S_stub_remove_old target) range
 
 
 (** {2 Pretty printers} *)
@@ -307,12 +314,16 @@ let () =
             (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
           ]
 
+        | S_stub_remove_old(t1), S_stub_remove_old(t2) ->
+          compare_expr t1 t2
+
         | _ -> next s1 s2
       );
 
     visit = (fun next s ->
         match skind s with
         | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
+        | S_stub_remove_old(t) -> panic "visitor for S_stub_remove_old not supported"
         | _ -> next s
       );
 
@@ -320,6 +331,7 @@ let () =
         match skind s with
         | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
         | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
+        | S_stub_remove_old(target) -> fprintf fmt "remove old(%a);" pp_expr target
         | _ -> next fmt s
       );
   }
@@ -331,7 +343,7 @@ let () =
 let rec visit_expr_in_formula expr_visitor f =
   bind_range f @@ fun f ->
   match f with
-  | F_expr e -> F_expr (expr_visitor e)
+  | F_expr e -> F_expr (Visitor.map_expr expr_visitor (fun stmt -> stmt) e)
   | F_binop (op, f1, f2) -> F_binop (op, visit_expr_in_formula expr_visitor f1, visit_expr_in_formula expr_visitor f2)
   | F_not ff -> F_not (visit_expr_in_formula expr_visitor ff)
   | F_forall (v, s, ff) -> F_forall (v, s, visit_expr_in_formula expr_visitor ff)

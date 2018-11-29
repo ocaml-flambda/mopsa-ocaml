@@ -134,14 +134,9 @@ struct
     let ff1 =
       visit_expr_in_formula
         (fun e ->
-           Visitor.map_expr
-             (fun ee ->
-                match ekind ee with
-                | E_var (vv, _) when compare_var v vv = 0 -> { ee with ekind = E_stub_quantified (q, ee) }
-                | _ -> ee
-             )
-             (fun stmt -> stmt)
-             e
+           match ekind e with
+           | E_var (vv, _) when compare_var v vv = 0 -> { e with ekind = E_stub_quantified (q, e) }
+           | _ -> e
         )
         f
     in
@@ -217,12 +212,40 @@ struct
     | L_new  _ -> panic "allocations not yet supported"
     | L_call _ -> panic "function calls not yet supported"
 
-  let exec_ensures e man flow =
-    eval_formula e.content ~negate:false man flow |>
+  let exec_ensures e return man flow =
+    (* Replace E_stub_return expression with the fresh return variable *)
+    let f =
+      match return with
+      | None -> e.content
+      | Some v ->
+        visit_expr_in_formula
+          (fun e ->
+             match ekind e with
+             | E_stub_return -> debug "return found"; { e with ekind = E_var (v, STRONG) }
+             | _ -> e
+          )
+          e.content
+    in
+    (* Evaluate ensure body and return flows that verify it *)
+    eval_formula f ~negate:false man flow |>
     fst
 
+  (** Remove locals and old copies of assigned variables *)
+  let clean_post post return range man flow =
+    let block1 =
+      post.post_local |> List.fold_left (fun block l ->
+          mk_remove_var l.content.lvar range :: block
+        ) []
+    in
+    let block2 =
+      post.post_assigns |> List.fold_left (fun block a ->
+          mk_stub_remove_old a.content.assign_target range :: block
+        ) block1
+    in
+    man.exec (mk_block block2 range) flow
+
   (** Compute a post-condition *)
-  let exec_post post retyp man flow =
+  let exec_post post return range man flow =
     (* Execute `assigns` section *)
     let flow = List.fold_left (fun flow a -> exec_assigns a man flow) flow post.post_assigns in
     (* Execute `local` section *)
@@ -230,12 +253,13 @@ struct
     (* Execute `ensures` section *)
     let rec doit = function
       | [] -> flow
-      | [e] -> exec_ensures e man flow
+      | [e] -> exec_ensures e return man flow
       | e :: tl ->
-        exec_ensures e man flow |>
+        exec_ensures e return man flow |>
         Flow.meet man (doit tl)
     in
-    doit post.post_ensures
+    let flow = doit post.post_ensures in
+    clean_post post return range man flow
 
   (** Execute the body of a stub *)
   let exec_body body return man flow =
@@ -259,14 +283,27 @@ struct
       let flow2 = check_requirements stub.stub_requires man flow1 in
 
       (* Create the return variable *)
-      let return = mk_tmp ~vtyp:stub.stub_return_type () in
-      let flow3 = man.exec (mk_add_var return exp.erange) flow2 in
+      let return, flow3 =
+        match stub.stub_return_type with
+        | None -> None, flow2
+        | Some t ->
+          let return = mk_tmp ~vtyp:t () in
+          let flow3 = man.exec (mk_add_var return exp.erange) flow2 in
+          Some return, flow3
+      in
 
       (* Evaluate the body of the styb *)
-      let flow4 = exec_body stub.stub_body return man flow3 in
+      let flow4 = exec_body stub.stub_body return exp.erange man flow3 in
 
-      Eval.singleton (mk_var return exp.erange) flow4 ~cleaners:[mk_remove_var return exp.erange] |>
-      Eval.return
+      begin match return with
+        | None ->
+          Eval.empty_singleton flow4 |>
+          Eval.return
+
+        | Some v ->
+          Eval.singleton (mk_var v exp.erange) flow4 ~cleaners:[mk_remove_var v exp.erange] |>
+          Eval.return
+      end
 
     | _ -> None
 

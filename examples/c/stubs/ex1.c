@@ -4,9 +4,9 @@
  * requires: p != q;
  * assigns: *p;
  * assigns: *q;
- * ensures: *p == old(*q) and *q == old(*p) and return == 0;
+ * ensures: *p == old(*q) and *q == old(*p);
  */
-int swap(int*p, int*q) {}
+void swap(int*p, int*q) {}
 
 void main() {
   int x = 1;
