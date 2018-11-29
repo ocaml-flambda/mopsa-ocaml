@@ -129,6 +129,7 @@ module Domain =
                                     (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
                                     ~fthen:(fun flow ->
                                       (* FIXME: disjunction between instances an non-instances *)
+                                      (* FIXME: perf: optim this into a get_attr? *)
                                       man.eval (mk_py_object_attr cls attr range) flow |>
                                         Eval.bind (fun obj' flow ->
                                             Eval.assume
@@ -136,7 +137,7 @@ module Domain =
                                               ~fthen:(fun flow ->
                                                 (* Debug.fail "todo@\n"; *)
                                                 debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
-                                                let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', exp))) range in
+                                                let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', e))) range in
                                                 man.eval exp flow)
                                               ~felse:(fun flow ->
                                                 let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
@@ -151,6 +152,17 @@ module Domain =
                              in search_mro flow mro)
                      )
                      man flow
+                 )
+                 ~fnone:(fun flow ->
+                   (* In a bottom environment, the only thing that we
+                      can do is to search for builtins attributes and
+                      resolve them statically *)
+                   let oexp = object_of_expr exp in
+                   if Addr.is_builtin oexp && Addr.is_builtin_attribute oexp attr then
+                     let rese = mk_py_object (Addr.find_builtin_attribute oexp attr) range in
+                     Eval.singleton rese flow
+                   else
+                     Eval.empty_singleton flow
                  )
                  man flow
              )

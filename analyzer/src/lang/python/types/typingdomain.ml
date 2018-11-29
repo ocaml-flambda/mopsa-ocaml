@@ -424,6 +424,9 @@ let get_type ?local_use:(local_use=false) (d:domain) (t:polytype) : typeid * dom
 let join (d:domain) (d':domain) : domain =
   (* FIXME: see if union of vars still (as we are now handling the undefs *)
   debug "Joining %a and@\n%a@\n" print d print d';
+  if is_bottom d then d'
+  else if is_bottom d' then d
+  else
   let h = Hashtbl.create (2 * (fst (TypeIdMap.max_binding d.d2))) in
   let all_vars = VarMap.fold (fun k _ acc -> VarSet.add k acc) d.d1 VarSet.empty in
   let all_vars = VarMap.fold (fun k _ acc -> VarSet.add k acc) d'.d1 all_vars in
