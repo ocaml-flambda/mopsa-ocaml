@@ -223,3 +223,5 @@ let choose evl =
   match Dnf.choose evl with
   | Some case -> Some (case.expr, case.flow)
   | None -> None
+
+let return evl = Some evl

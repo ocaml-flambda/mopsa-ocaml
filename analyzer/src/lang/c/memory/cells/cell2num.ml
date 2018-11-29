@@ -101,9 +101,34 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
+    | S_c_add_cell c when cell_type c |> is_c_int_type ->
+      let v, flow = get_num flow c in
+      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_add_var v}) flow
+      |> Post.of_flow
+      |> OptionExt.return
+
     | S_c_remove_cell c when cell_type c |> is_c_int_type ->
       let v, flow = get_num_and_remove flow c in
       man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
+      |> Post.of_flow
+      |> OptionExt.return
+
+    | S_c_expand_cell (c, cl) when cell_type c |> is_c_int_type ->
+      let v, flow = get_num flow c in
+      let vl, flow =
+        let rec doit flow = function
+          | [] -> assert false
+          | [c] ->
+            let v, flow = get_num flow c in
+            [v], flow
+          | c :: tl ->
+            let v, flow = get_num flow c in
+            let vl, flow = doit flow tl in
+            v :: vl, flow
+        in
+        doit flow cl
+      in
+      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_expand (v, vl)}) flow
       |> Post.of_flow
       |> OptionExt.return
 

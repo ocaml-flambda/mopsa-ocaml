@@ -370,6 +370,13 @@ struct
       |>
       OptionExt.return
 
+    | S_c_add_cell(p) when cell_type p |> is_c_pointer_type ->
+      let flow1 = Flow.map_domain_env T_cur (add p PointerBaseSet.top) man flow in
+      let o = mk_offset_var p in
+      let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add_var o range) flow1 in
+      Post.of_flow flow2 |>
+      OptionExt.return
+
     | S_c_remove_cell(p) when cell_type p |> is_c_pointer_type ->
       let flow1 = Flow.map_domain_env T_cur (remove p) man flow in
       let o = mk_offset_var p in

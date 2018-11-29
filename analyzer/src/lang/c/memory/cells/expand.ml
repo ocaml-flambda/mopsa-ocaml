@@ -39,39 +39,24 @@ module Domain = struct
       and its size is given by a type.
   *)
 
-  type ocell = {
-    b: base;
-    o: Z.t;
-    t: typ;
-  }
-
-  let pp_ocell fmt c =
-    Format.fprintf fmt "⟨%a,%a,%a⟩"
-      pp_base c.b
-      Z.pp_print c.o
-      pp_typ c.t
-
-  let compare_ocell c c' =
-    Compare.compose [
-      (fun () -> compare_base c.b c'.b);
-      (fun () -> Z.compare c.o c'.o);
-      (fun () -> compare_typ c.t c'.t);
-    ]
-
   type cell +=
-    | OffsetCell of ocell
+    | C_offset of {
+        b: base;
+        o: Z.t;
+        t: typ;
+      }
 
   let () =
     register_cell
       {
         extract = (fun f c ->
             match c with
-            | OffsetCell o -> (o.b, mk_z o.o, o.t)
+            | C_offset o -> (o.b, mk_z o.o, o.t)
             | _ -> f c
           );
         to_var = (fun next c ->
             match c with
-            | OffsetCell o ->
+            | C_offset o ->
               let vname =
                 let () = Format.fprintf Format.str_formatter "{%a:%a:%a}" pp_base o.b Z.pp_print o.o Pp.pp_c_type_short o.t in
                 Format.flush_str_formatter ()
@@ -85,28 +70,55 @@ module Domain = struct
           );
         compare = (fun f a b ->
             match a, b with
-            | OffsetCell o, OffsetCell o' -> compare_ocell o o'
+            | C_offset o, C_offset o' ->
+              Compare.compose [
+                (fun () -> compare_base o.b o'.b);
+                (fun () -> Z.compare o.o o'.o);
+                (fun () -> compare_typ o.t o'.t);
+              ]
+
             | _ -> f a b
           );
         print = (fun f fmt x ->
             match x with
-            | OffsetCell o -> Format.fprintf fmt "%a" pp_ocell o
+            | C_offset o ->
+              Format.fprintf fmt "⟨%a,%a,%a⟩"
+                pp_base o.b
+                Z.pp_print o.o
+                pp_typ o.t
+
             | _ -> f fmt x
           )
       }
 
-  let mk_ocell (c: ocell) ?(mode = STRONG) range =
-    mk_cell (OffsetCell c) ~mode:mode range
-
-  let mk_remove_cell (c: ocell) range =
-    mk_stmt
-      (S_c_remove_cell (OffsetCell c))
-      range
-
-  let ch_addr_of_ocell o addr =
-    {o with b = Base.A addr}
+  let mk_offset_cell b o t ?(mode = STRONG) range =
+    mk_cell (C_offset {b; o; t}) ~mode:mode range
 
 
+  let rec base c =
+    match c with
+    | C_offset cc -> cc.b
+    | C_old cc -> base cc
+    | _ -> assert false
+
+  let rec offset c =
+    match c with
+    | C_offset cc -> cc.o
+    | C_old cc -> offset cc
+    | _ -> assert false
+
+  let rec typ c =
+    match c with
+    | C_offset cc -> cc.t
+    | C_old cc -> typ cc
+    | _ -> assert false
+
+
+  let rec ch_addr_of_cell c addr =
+    match c with
+    | C_offset cc -> C_offset {cc with b = Base.A addr}
+    | C_old cc -> ch_addr_of_cell cc addr
+    | _ -> assert false
 
   (** Abstract element
       ================
@@ -116,9 +128,9 @@ module Domain = struct
   *)
 
   include Framework.Lattices.Powerset.Make(struct
-      type t = ocell
-      let compare = compare_ocell
-      let print = pp_ocell
+      type t = cell
+      let compare = compare_cell
+      let print = pp_cell
     end)
 
   let is_bottom _ = false
@@ -130,7 +142,7 @@ module Domain = struct
 
   let exist_and_find_cell f (cs:t) =
     apply (fun r ->
-        let exception Found of ocell in
+        let exception Found of cell in
         try
           let () = Set.iter (fun c ->
               if f c then raise (Found(c))
@@ -151,11 +163,11 @@ module Domain = struct
 
   let get_overlappings c cs =
     exist_and_find_cells (fun c' ->
-        compare_ocell c c' <> 0 &&
+        compare_cell c c' <> 0 &&
         (
-          let cell_range c = (c.o, Z.add c.o (sizeof_type c.t)) in
+          let cell_range c = (offset c, Z.add (offset c) (sizeof_type (typ c))) in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          compare_base c.b c'.b = 0 &&
+          compare_base (base c) (base c') = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
       ) cs
@@ -166,43 +178,43 @@ module Domain = struct
   (** ================ *)
 
   (** [phi c u] collects constraints over cell [c] found in [u] *)
-  let phi (c: ocell) (u : t) range : expr option =
+  let phi (c: cell) (u : t) range : expr option =
     let open Universal.Ast in
     let cs = u in
-    match exist_and_find_cell (fun c' -> compare_ocell c c' = 0) cs  with
-    | Some c -> Some (mk_ocell c range)
+    match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
+    | Some c -> Some (mk_cell c range)
     | None ->
       begin
         match exist_and_find_cell
                 (fun c' ->
-                   is_c_int_type @@ c'.t && Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
-                   compare_base c.b c'.b = 0 &&
-                   Z.equal c.o c'.o) cs
+                   is_c_int_type @@ (typ c') && Z.equal (sizeof_type (typ c')) (sizeof_type (typ c)) &&
+                   compare_base (base c) (base c') = 0 &&
+                   Z.equal (offset c) (offset c')) cs
         with
-        | Some (c') -> Some (wrap_expr (mk_ocell c' range) (int_rangeof c.t) range)
+        | Some (c') -> Some (wrap_expr (mk_cell c' range) (int_rangeof (typ c)) range)
         | None ->
           begin
             match exist_and_find_cell ( fun c' ->
-                let b = Z.sub c.o c'.o in
-                Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare (remove_typedef c.t) (T_c_integer(C_unsigned_char)) = 0
+                let b = Z.sub (offset c) (offset c') in
+                Z.lt b (sizeof_type (typ c')) && is_c_int_type (typ c') && compare (remove_typedef (typ c)) (T_c_integer(C_unsigned_char)) = 0
               ) cs with
             | Some (c') ->
-              let b = Z.sub c.o c'.o in
+              let b = Z.sub (offset c) (offset c') in
               let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-              Some (mk_binop (mk_binop (mk_ocell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
+              Some (mk_binop (mk_binop (mk_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
             | None ->
               begin
                 let exception NotPossible in
                 try
-                  if is_c_int_type c.t then
+                  if is_c_int_type (typ c) then
                     begin
                       let t' = T_c_integer(C_unsigned_char) in
-                      let n = Z.to_int (sizeof_type (c.t)) in
+                      let n = Z.to_int (sizeof_type ((typ c))) in
                       let rec aux i l =
                         if i < n then
-                          let tobein = {b = c.b ; o = Z.add c.o (Z.of_int i); t = t'} in
+                          let tobein = C_offset {b = (base c) ; o = Z.add (offset c) (Z.of_int i); t = t'} in
                           match exist_and_find_cell (fun c' ->
-                              compare_ocell c' tobein = 0
+                              compare_cell c' tobein = 0
                             ) cs with
                           | Some (c') ->
                             aux (i+1) (c' :: l)
@@ -213,7 +225,7 @@ module Domain = struct
                       in
                       let ll = aux 0 [] in
                       let _,e = List.fold_left (fun (time, res) x ->
-                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_ocell x range) range) O_plus res range in
+                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_cell x range) range) O_plus res range in
                           let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -224,15 +236,15 @@ module Domain = struct
                     raise NotPossible
                 with
                 | NotPossible ->
-                  match c.b with
+                  match (base c) with
                   | S s ->
-                    Some (mk_int (String.get s (Z.to_int c.o) |> int_of_char) range)
+                    Some (mk_int (String.get s (Z.to_int (offset c)) |> int_of_char) range)
                   | _ ->
                     begin
-                      if is_c_scalar_type c.t then
-                        let a,b = rangeof c.t in
+                      if is_c_scalar_type (typ c) then
+                        let a,b = rangeof (typ c) in
                         Some ( mk_z_interval a b range)
-                      else if is_c_pointer_type c.t then
+                      else if is_c_pointer_type (typ c) then
                         assert false
                       else
                         None
@@ -244,30 +256,30 @@ module Domain = struct
   (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
       abstraction [u] given a manager [subman] on the sub element of
       the stack [s] *)
-  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: ocell) u (s: 'b flow) =
+  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: cell) u (s: 'b flow) =
     if mem c u then u, s
-    else if not (is_c_scalar_type c.t) then u, s
-    else if is_c_pointer_type (c.t) then
+    else if not (is_c_scalar_type (typ c)) then u, s
+    else if is_c_pointer_type ((typ c)) then
       add c u, s
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_ocell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
         add c u, subman.exec stmt s
       | None ->
         add c u, s
 
   (** [add_cons_cell v u] adds a variable [v] to the abstraction [u] *)
-  let add_cons_cell man range (c: ocell) f =
+  let add_cons_cell man range (c: cell) f =
     let u = Flow.get_domain_cur man f in
     if mem c u then f
-    else if not (is_c_scalar_type c.t) then f
-    else if is_c_pointer_type (c.t) then
+    else if not (is_c_scalar_type (typ c)) then f
+    else if is_c_pointer_type ((typ c)) then
       Flow.set_domain_cur (add c u) man f
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_ocell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_cell c range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add c u) man |>
         man.exec ~zone:(Z_c_cell) stmt
@@ -359,15 +371,15 @@ module Domain = struct
       scalar = (fun v e range flow ->
           let c =
             match ekind v with
-            | E_var(v, mode) -> {b = V v; o = Z.zero; t = v.vtyp}
-            | E_c_cell (OffsetCell c, mode) -> c
+            | E_var(v, mode) -> C_offset {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
           man.eval ~zone:(Z_c, Z_c_cell) e flow |>
           Post.bind_flow man @@ fun e flow ->
 
           let flow = add_cons_cell man range c flow in
-          let stmt = mk_assign (mk_ocell c range) e range in
+          let stmt = mk_assign (mk_cell c range) e range in
           man.exec ~zone:Z_c_cell stmt flow
         );
 
@@ -375,8 +387,8 @@ module Domain = struct
       array =  (fun a is_global init_list range flow ->
           let c =
             match ekind a with
-            | E_var(v, mode) -> {b = V v; o = Z.zero; t = v.vtyp}
-            | E_c_cell (OffsetCell c, mode) -> c
+            | E_var(v, mode) -> C_offset {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
           let rec aux i l flow =
@@ -385,9 +397,9 @@ module Domain = struct
               match l with
               | [] -> flow
               | init :: tl ->
-                let t' = under_array_type c.t in
-                let ci = {b = c.b; o = Z.(c.o + (Z.of_int i) * (sizeof_type t')); t = t'} in
-                let flow' = init_expr (init_visitor man) (mk_ocell ci range) is_global init range flow in
+                let t' = under_array_type (typ c) in
+                let ci = C_offset {b = (base c); o = Z.((offset c) + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                let flow' = init_expr (init_visitor man) (mk_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
           aux 0 init_list flow
@@ -397,11 +409,11 @@ module Domain = struct
       record =  (fun s is_global init_list range flow ->
           let c =
             match ekind s with
-            | E_var (v, _) -> {b = V v; o = Z.zero; t = v.vtyp}
-            | E_c_cell(OffsetCell c, _) -> c
+            | E_var (v, _) -> C_offset {b = V v; o = Z.zero; t = v.vtyp}
+            | E_c_cell(c, _) -> c
             | _ -> assert false
           in
-          let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+          let record = match remove_typedef (typ c) with T_c_record r -> r | _ -> assert false in
           match init_list with
           | Parts l ->
             let rec aux i l flow =
@@ -410,8 +422,8 @@ module Domain = struct
               | init :: tl ->
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
-                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
-                let flow' = init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global init range flow in
+                let cf = C_offset {b = (base c); o = Z.((offset c) + (Z.of_int field.c_field_offset)); t = t'} in
+                let flow' = init_expr (init_visitor man) (mk_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -419,9 +431,9 @@ module Domain = struct
           | Expr e ->
             record.c_record_fields |> List.fold_left (fun acc field ->
                 let t' = field.c_field_type in
-                let cf = {b = c.b; o = Z.(c.o + (Z.of_int field.c_field_offset)); t = t'} in
+                let cf = C_offset {b = (base c); o = Z.((offset c) + (Z.of_int field.c_field_offset)); t = t'} in
                 let init = C_init_expr (mk_c_member_access e field range) in
-                init_expr (init_visitor man) (mk_ocell cf ~mode:STRONG range) is_global (Some init) range acc
+                init_expr (init_visitor man) (mk_cell cf ~mode:STRONG range) is_global (Some init) range acc
               ) flow
         );
     }
@@ -502,7 +514,7 @@ module Domain = struct
 
   (** Kinds of evaluated cells *)
   type ecell =
-    | C_cell of ocell * mode                        (* specific cell with an integer offset *)
+    | C_cell of cell * mode                         (* specific cell with an integer offset *)
     | C_interval_offset of base * Intervals.t * typ (* set of cells with an interval offset *)
     | C_fun of c_fundec                             (* functions *)
 
@@ -516,7 +528,7 @@ module Domain = struct
         eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
         Eval.bind @@ fun o flow ->
         match o with
-        | O_concrete o -> Eval.singleton (C_cell ({b; o; t}, STRONG)) flow
+        | O_concrete o -> Eval.singleton (C_cell (C_offset {b; o; t}, STRONG)) flow
         | O_interval itv -> Eval.singleton (C_interval_offset (b, itv, t)) flow
         | O_out_of_bound ->
           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -558,9 +570,9 @@ module Domain = struct
   let rec eval_cell exp man flow =
     match ekind exp with
     | E_var (v, mode) when is_c_type v.vtyp ->
-      let c = {b = V v; o = Z.zero; t = v.vtyp}  in
+      let c = C_offset {b = V v; o = Z.zero; t = v.vtyp}  in
       let flow = add_cons_cell man exp.erange c flow in
-      debug "new variable %a in %a" pp_var v (Flow.print man) flow;
+      debug "new variable %a" pp_var v;
       Eval.singleton (C_cell (c, mode)) flow |>
       OptionExt.return
 
@@ -580,7 +592,7 @@ module Domain = struct
       begin match c with
         | C_cell(c, mode) ->
           add_cons_cell man exp.erange c flow |>
-          Eval.singleton (mk_ocell c ~mode exp.erange)
+          Eval.singleton (mk_cell c ~mode exp.erange)
 
         | C_interval_offset(b, itv, t) ->
           let a, b = rangeof t in
@@ -600,6 +612,24 @@ module Domain = struct
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
       end
 
+    | Stubs.Ast.E_stub_builtin_call({content = OLD }, e) ->
+      man.eval ~zone:(Z_c, Z_c_scalar) e flow |>
+      Eval.bind_opt @@ fun e flow ->
+
+      eval_cell e man flow |>
+      OptionExt.lift @@ Eval.bind @@ fun c flow ->
+      begin match c with
+        | C_cell(c, mode) ->
+          add_cons_cell man exp.erange c flow |>
+          Eval.singleton (mk_old_cell c ~mode exp.erange)
+
+        | C_interval_offset(b, itv, t) ->
+          let a, b = rangeof t in
+          Eval.singleton (mk_z_interval a b exp.erange) flow
+
+        | _ -> panic_at exp.erange "old on functions not supported"
+      end
+
 
     | _ -> None
 
@@ -609,7 +639,7 @@ module Domain = struct
 
   (** Assign an rval to a cell *)
   let assign_cell c rval mode range man flow =
-    let lval = mk_ocell c ~mode:mode range in
+    let lval = mk_cell c ~mode:mode range in
     let flow' = Flow.map_domain_env T_cur (add c) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
@@ -632,13 +662,13 @@ module Domain = struct
 
 
   (** Remove cells identified by an offset membership predicate *)
-  let remove_cells base pred range man flow =
+  let remove_cells b pred range man flow =
     let a = Flow.get_domain_env T_cur man flow in
     let cells =
       a |>
       exist_and_find_cells
-        (fun c -> compare_base c.b base = 0 &&
-                  pred c.o
+        (fun c -> compare_base (base c) b = 0 &&
+                  pred (offset c)
         )
     in
     let block = List.map (fun c' -> mk_remove_cell c' range) cells in
@@ -649,19 +679,20 @@ module Domain = struct
 
 
   (** Prepare the assignment of a cell in a stub. All cells within
-     container [c] and having an offset in the range [offsets] are put
-     to ⊤.  *)
+      container [c] and having an offset in the range [offsets] are put
+      to ⊤, and old copies created.
+  *)
   let prepare_cells_for_stub_assigns c offsets t range man flow =
     (* Get info about the container cell [c] *)
     let cb, co, ct =
       match c with
-      | C_cell(oc, _) -> oc.b, (Intervals.of_constant () (C_int oc.o)), oc.t
+      | C_cell(c, _) -> (base c), (Intervals.of_constant () (C_int (offset c))), (typ c)
       | C_interval_offset(b, o, t) -> b, o, t
       | _ -> panic "prepare_cells_for_stub_assigns: invalid cell argument"
     in
 
     (* Compute the offset interval of assigned cell *)
-    let offset =
+    let offset_itv =
       match offsets with
       | None -> co
       | Some(l, u) ->
@@ -681,7 +712,72 @@ module Domain = struct
         Channel.without_channel
     in
 
-    remove_cells cb (fun o -> Intervals.mem o offset) range man flow
+    (* Get assigned cells *)
+    let cells =
+      Flow.get_domain_env T_cur man flow |>
+      exist_and_find_cells
+        (fun c -> compare_base (base c) cb = 0 &&
+                  Intervals.mem (offset c) offset_itv
+        )
+    in
+
+    (* Remove assigned cells and create old ones *)
+    let flow = List.fold_left (fun flow c ->
+        let old = C_old c in
+        Flow.map_domain_cur (add old) man flow |>
+        man.exec ~zone:Z_c_cell (mk_c_add_cell old range) |>
+        man.exec ~zone:Z_c_cell (mk_cell_expand c [old] range) |>
+        man.exec ~zone:Z_c_cell (mk_remove_cell c range)
+      ) flow cells
+    in
+
+    (* Create a list of mergers *)
+    let mergers =
+      List.fold_left (fun acc c ->
+          let old = C_old c in
+          (mk_remove_cell old range) ::
+          (mk_remove_cell c range) ::
+          acc
+      ) [] cells
+    in
+
+    Post.of_flow flow |>
+    Post.add_mergers mergers ~zone:Z_c_cell
+
+  let remove_old_cells c range man flow =
+    let b =
+      match c with
+      | C_cell (c, _) -> (base c)
+      | C_interval_offset(b, _, _) -> b
+      | _ -> assert false
+    in
+    let cells =
+      Flow.get_domain_env T_cur man flow |>
+      exist_and_find_cells
+        (fun cc ->
+           match cc with
+           | C_old ccc ->
+             compare_base b (base ccc) = 0
+           | _ -> false
+        )
+    in
+
+    let flow = List.fold_left (fun flow old ->
+        Flow.map_domain_cur (remove old) man flow |>
+        man.exec ~zone:Z_c_cell (mk_remove_cell old range)
+      ) flow cells
+    in
+
+    (* Create a list of mergers *)
+    let mergers =
+      List.fold_left (fun acc old ->
+          (mk_remove_cell old range) ::
+          acc
+        ) [] cells
+    in
+
+    Post.of_flow flow |>
+    Post.add_mergers mergers ~zone:Z_c_cell
 
 
   let rec exec zone stmt man flow =
@@ -696,17 +792,29 @@ module Domain = struct
       |> Post.of_flow
       |> OptionExt.return
 
+    | S_add_var (v) when is_c_type v.vtyp ->
+      eval_cell (mk_var v stmt.srange) man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun ce flow ->
+      let c = match ce with
+        | C_cell (c, _) -> c
+        | _ -> assert false
+      in
+      man.exec ~zone:Z_c_cell (mk_c_add_cell c stmt.srange) flow |>
+      Post.of_flow |>
+      Post.add_merger (mk_c_add_cell c stmt.srange)
+
     | S_rebase_addr(adr, adr', mode) ->
       begin
         let u = Flow.get_domain_cur man flow in
-        let l = exist_and_find_cells (fun c -> compare_base c.b (Base.A adr) = 0) u in
+        let l = exist_and_find_cells (fun c -> compare_base (base c) (Base.A adr) = 0) u in
         let u = List.fold_left (fun acc c -> remove c acc) u l in
         let assigns = List.map
-            (fun c -> let c' = ch_addr_of_ocell c adr' in
-              mk_assign
-                (mk_ocell c' ~mode:mode (tag_range stmt.srange "lval"))
-                (mk_ocell c  (tag_range stmt.srange "rval"))
-                (tag_range stmt.srange "assign")
+            (fun c ->
+               let c' = ch_addr_of_cell c adr' in
+               mk_assign
+                 (mk_cell c' ~mode:mode (tag_range stmt.srange "lval"))
+                 (mk_cell c  (tag_range stmt.srange "rval"))
+                 (tag_range stmt.srange "assign")
             ) l
         in
         let mergers = List.map (fun c -> mk_remove_cell c (srange stmt)) l in
@@ -720,7 +828,7 @@ module Domain = struct
 
     | S_remove_var (v) when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> compare_base c.b (Base.V v) = 0) u in
+      let l = exist_and_find_cells (fun c -> compare_base (base c) (Base.V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
       let mergers = List.map (fun c -> mk_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in
@@ -736,7 +844,7 @@ module Domain = struct
 
       man.eval ~zone:(Z_c, Z_c_scalar) lval flow |>
       Post.bind_opt man @@ fun lval flow ->
-      debug "lval done %a" pp_expr lval;
+
       eval_cell lval man flow |>
       OptionExt.lift @@ Post.bind man @@ fun c flow ->
       begin
@@ -780,6 +888,20 @@ module Domain = struct
       Post.bind man @@ fun o2 flow ->
 
       prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+
+    | Stubs.Ast.S_stub_remove_old(x) when is_c_scalar_type x.etyp ->
+      man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
+      Post.bind_opt man @@ fun x flow ->
+      eval_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      remove_old_cells x stmt.srange man flow
+
+    | Stubs.Ast.S_stub_remove_old(x) ->
+      eval_pointed_cell x man flow |>
+      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+
+      remove_old_cells x stmt.srange man flow
 
     | _ -> None
 

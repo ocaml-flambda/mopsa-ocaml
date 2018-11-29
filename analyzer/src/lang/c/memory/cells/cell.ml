@@ -143,7 +143,9 @@ type expr_kind +=
   | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
+  | S_c_add_cell    of cell (* Add a cell as a new dimension *)
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
+  | S_c_expand_cell of cell * cell list (* Expand a cell into a set of cells *)
 
 let mk_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:(cell_type c) range
@@ -151,8 +153,14 @@ let mk_cell c ?(mode = STRONG) range =
 let mk_remove_cell c range =
   mk_stmt (S_c_remove_cell c) range
 
+let mk_c_add_cell c range =
+  mk_stmt (S_c_add_cell c) range
+
 let mk_c_invalid range =
   mk_constant C_c_invalid range ~etyp:(Ast.T_c_pointer(Ast.T_c_void))
+
+let mk_cell_expand c cl range =
+  mk_stmt (S_c_expand_cell (c, cl)) range
 
 let cell_of_expr e =
   match ekind e with
@@ -192,21 +200,40 @@ let () =
   register_stmt {
     compare = (fun next stmt1 stmt2 ->
         match skind stmt1, skind stmt2 with
+        | S_c_add_cell c1, S_c_add_cell c2 -> compare_cell c1 c2
+
         | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
+
+        | S_c_expand_cell (c1, cl1), S_c_expand_cell (c2, cl2) ->
+          Compare.compose [
+            (fun () -> compare_cell c1 c2);
+            (fun () -> Compare.list compare_cell cl1 cl2)
+          ]
+
         | _ -> next stmt1 stmt2
       );
     print = (fun next fmt stmt ->
         match skind stmt with
+        | S_c_add_cell c ->
+          Format.fprintf fmt "S_c_add_cell(%a)" pp_cell c
+
         | S_c_remove_cell c ->
           Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
+
+        | S_c_expand_cell(c, cl) ->
+          Format.fprintf fmt "expand(%a,{%a})"
+            pp_cell c
+            (Format.pp_print_list
+               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+               pp_cell) cl
+
         | _ -> next fmt stmt
       );
     visit = (fun next stmt ->
         match skind stmt with
-        | S_c_remove_cell c ->
-          (* no expr? *)
-          {exprs = []; stmts = []},
-          (fun _ -> stmt)
+        | S_c_add_cell c -> Visitor.leaf stmt
+        | S_c_remove_cell c -> Visitor.leaf stmt
+        | S_c_expand_cell _ -> Visitor.leaf stmt
         | _ -> next stmt
       );
   };
@@ -283,3 +310,42 @@ struct
   let compare = compare_points_to
   let print = pp_points_to
 end
+
+
+(** Stub support *)
+(** ============ *)
+
+type cell +=
+  | C_old of cell (** old version of a cell, used in stubs *)
+
+let mk_old_cell c ?(mode = STRONG) range =
+  mk_expr (E_c_cell(C_old c, mode)) ~etyp:(cell_type c) range
+
+let () =
+  register_cell {
+    extract = (fun next c ->
+        match c with
+        | C_old cc -> extract_cell_info cc
+        | _ -> next c
+      );
+
+    to_var = (fun next c ->
+        match c with
+        | C_old cc ->
+          let v = cell_to_var cc in
+          { v with vname = "old(" ^ v.vname ^ ")" }
+        | _ -> next c
+      );
+
+    compare = (fun next c1 c2 ->
+        match c1, c2 with
+        | C_old cc1, C_old cc2 -> compare_cell cc1 cc2
+        | _ -> next c1 c2
+      );
+
+    print = (fun next fmt c ->
+        match c with
+        | C_old cc -> Format.fprintf fmt "old(%a)" pp_cell cc
+        | _ -> next fmt c
+      );
+  }
