@@ -1,16 +1,22 @@
-"""Number of solutions of linear equality"""
+import mopsa
+
+def test_main():
+
+    """Number of solutions of linear equality"""
 
 
-def count_solutions(a, b):
-    dp = [0] * (b + 1)
-    dp[0] = 1
+    def count_solutions(a, b):
+        dp = [0] * (b + 1)
+        dp[0] = 1
 
-    for i in range(len(a)):
-        for j in range(a[i]):
-            dp[j] += dp[j - a[i]]
-    return dp[b]
+        for i in range(len(a)):
+            for j in range(a[i]):
+                dp[j] += dp[j - a[i]]
+        return dp[b]
 
-a = count_solutions([1, 2, 3], 2)
+    a = count_solutions([1, 2, 3], 2)
 
+    mopsa.assert_safe()
+    mopsa.massert(isinstance(a, int))
 # a := int
 # count_solutions := Callable[[List[int], int], int]

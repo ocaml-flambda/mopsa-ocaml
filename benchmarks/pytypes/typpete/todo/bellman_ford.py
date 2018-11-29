@@ -58,4 +58,3 @@ for source in range(size):
 # adj_list := List[List[Edge]]
 # bellman_ford := Callable[[int, List[List[Edge]]], List[int]]
 # has_negative_cycle := Callable[[int, List[List[Edge]]], bool]
-

@@ -1,13 +1,21 @@
-class A:
-    @staticmethod
-    def f():
-        return 1
+import mopsa
 
-    def g(self):
-        return A.f()
+def test_main():
+    class A:
+        @staticmethod
+        def f():
+            return 1
 
-x = A.f()
-y = A().g()
+        def g(self):
+            return A.f()
+
+    x = A.f()
+    y = A().g()
+
+    mopsa.assert_safe()
+    mopsa.massert(isinstance(x, int))
+    mopsa.massert(isinstance(y, int))
+
 
 # A := Type[A]
 # f := Callable[[], int]

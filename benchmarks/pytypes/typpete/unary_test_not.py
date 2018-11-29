@@ -1,6 +1,10 @@
-x = [1, 2, 3]
+import mopsa
 
-if not x["string"]:
-    pass
+def test_main():
+    x = [1, 2, 3]
+    mopsa.assert_safe()
+    if not x["string"]:
+        pass
+    mopsa.assert_exception(TypeError)
 
 # unsat

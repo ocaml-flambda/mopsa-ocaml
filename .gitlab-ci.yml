@@ -11,6 +11,7 @@ image: mopsa-build
 stages:
 - build
 - test
+- benchmarks
 
 build_job:
   stage: build
@@ -51,6 +52,13 @@ build_job:
   script:
     - eval `opam config env`
     - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
+
+.bench-typpete:
+  stage: benchmarks
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - $MOPSA_PYTY benchmarks/pytypes/typpete/$PY_FILE
 
 test-c 1/12:
   variables:
@@ -202,3 +210,104 @@ test-pyty 2/2:
   variables:
     PY_FILE: 'misc_tests.py'
   extends: .test-pyty
+
+
+bench-typpete 1/20:
+  variables:
+    PY_FILE: 'classes.py'
+  extends: .bench-typpete
+
+bench-typpete 2/20:
+  variables:
+    PY_FILE: 'class_pre_store.py'
+  extends: .bench-typpete
+
+bench-typpete 3/20:
+  variables:
+    PY_FILE: 'deceitful.py'
+  extends: .bench-typpete
+
+bench-typpete 4/20:
+  variables:
+    PY_FILE: 'default_args_class.py'
+  extends: .bench-typpete
+
+bench-typpete 5/20:
+  variables:
+    PY_FILE: 'except_clause.py'
+  extends: .bench-typpete
+
+bench-typpete 6/20:
+  variables:
+    PY_FILE: 'guess_the_number.py'
+  extends: .bench-typpete
+
+bench-typpete 7/20:
+  variables:
+    PY_FILE: 'inheritance_cov_incorrect.py'
+  extends: .bench-typpete
+
+bench-typpete 8/20:
+  variables:
+    PY_FILE: 'inheritance_cov_sat.py'
+  extends: .bench-typpete
+
+bench-typpete 9/20:
+  variables:
+    PY_FILE: 'isinstance.py'
+  extends: .bench-typpete
+
+bench-typpete 10/20:
+  variables:
+    PY_FILE: 'linear_equality.py'
+  extends: .bench-typpete
+
+bench-typpete 11/20:
+  variables:
+    PY_FILE: 'linked_list.py'
+  extends: .bench-typpete
+
+bench-typpete 12/20:
+  variables:
+    PY_FILE: 'magic.py'
+  extends: .bench-typpete
+
+bench-typpete 13/20:
+  variables:
+    PY_FILE: 'mro.py'
+  extends: .bench-typpete
+
+bench-typpete 14/20:
+  variables:
+    PY_FILE: 'mult_inheritance.py'
+  extends: .bench-typpete
+
+bench-typpete 15/20:
+  variables:
+    PY_FILE: 'override_default_args_correct.py'
+  extends: .bench-typpete
+
+bench-typpete 16/20:
+  variables:
+    PY_FILE: 'statements.py'
+  extends: .bench-typpete
+
+bench-typpete 17/20:
+  variables:
+    PY_FILE: 'staticmethod.py'
+  extends: .bench-typpete
+
+bench-typpete 18/20:
+  variables:
+    PY_FILE: 'stubs_default_args.py'
+  extends: .bench-typpete
+
+bench-typpete 19/20:
+  variables:
+    PY_FILE: 'syntax.py'
+  extends: .bench-typpete
+
+bench-typpete 20/20:
+  variables:
+    PY_FILE: 'unary_test_not.py'
+  extends: .bench-typpete

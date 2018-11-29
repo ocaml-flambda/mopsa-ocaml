@@ -1,33 +1,40 @@
-guesses_made = 0
+import mopsa
 
-print('Hello! What is your name?\n')
-name = input()
+def test_main():
+    guesses_made = 0
 
-number = 233
-print('Well ' + name + ',I am thinking of a number between 1 and 20.')
+    print('Hello! What is your name?\n')
+    name = input()
 
-guess = -1
-while guesses_made < 6:
+    number = 233
+    print('Well ' + name + ',I am thinking of a number between 1 and 20.')
 
-    print('Take a guess: ')
-    guess = int(input())
+    guess = -1
+    while guesses_made < 6:
 
-    guesses_made += 1
+        print('Take a guess: ')
+        guess = int(input())
 
-    if guess < number:
-        print('Your guess is too low.')
+        guesses_made += 1
 
-    if guess > number:
-        print('Your guess is too high.')
+        if guess < number:
+            print('Your guess is too low.')
+
+        if guess > number:
+            print('Your guess is too high.')
+
+        if guess == number:
+            break
 
     if guess == number:
-        break
+        print('Good job, ' + name + '! You guessed my number in ' + str(guesses_made) + ' guesses!')
+    else:
+        print('Nope. The number I was thinking of was {0}')
 
-if guess == number:
-    print('Good job, ' + name + '! You guessed my number in ' + str(guesses_made) + ' guesses!')
-else:
-    print('Nope. The number I was thinking of was {0}')
-
+    mopsa.massert(isinstance(guesses_made, int))
+    mopsa.massert(isinstance(guess, int))
+    mopsa.massert(isinstance(name, str))
+    mopsa.massert(isinstance(number, int))
 
 # guesses_made := int
 # guess := int

@@ -1,7 +1,12 @@
-class A:
-    def f(self, x):
-        pass
+import mopsa
 
-class B(A):
-    def f(self, x=1):
-        pass
+def test_main():
+    class A:
+        def f(self, x):
+            pass
+
+    class B(A):
+        def f(self, x=1):
+            pass
+
+    mopsa.assert_safe()
