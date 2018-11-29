@@ -166,6 +166,13 @@ struct
             man.exec (mk_assign (mk_var param range) arg range) flow
           ) flow
 
+  (** Remove parameters from the returned flow *)
+  let remove_params params range man flow =
+    params |> List.fold_left (fun flow param ->
+        man.exec (mk_remove_var param range) flow
+      ) flow
+
+
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let check_requirement req man flow =
     let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
@@ -295,13 +302,16 @@ struct
       (* Evaluate the body of the styb *)
       let flow4 = exec_body stub.stub_body return exp.erange man flow3 in
 
+      (* Remove parameters *)
+      let flow5 = remove_params stub.stub_params exp.erange man flow4 in
+
       begin match return with
         | None ->
-          Eval.empty_singleton flow4 |>
+          Eval.empty_singleton flow5 |>
           Eval.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow4 ~cleaners:[mk_remove_var v exp.erange] |>
+          Eval.singleton (mk_var v exp.erange) flow5 ~cleaners:[mk_remove_var v exp.erange] |>
           Eval.return
       end
 

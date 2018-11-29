@@ -11,8 +11,8 @@ void swap(int*p, int*q) {}
 void main() {
   int x = 1;
   int y = 2;
+  _mopsa_print();
 
   swap(&x, &y);
-
   _mopsa_print();
 }
