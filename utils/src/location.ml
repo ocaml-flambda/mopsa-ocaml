@@ -56,7 +56,7 @@ type range =
 
   | R_fresh of int (** non-original fresh range with unique id *)
   (** Fresh ranges with unique identifiers *)
-      
+
   | R_tagged of string * range
   (** Tagged range with a string annotation *)
 
@@ -143,8 +143,8 @@ let rec compare_range (r1: range) (r2: range) =
 
   | R_orig (l1, l2), R_orig (l1', l2') ->
     Compare.compose [
-      (fun () -> compare_pos l1 l2);
-      (fun () -> compare_pos l1' l2');
+      (fun () -> compare_pos l1 l1');
+      (fun () -> compare_pos l2 l2');
     ]
 
   | R_tagged(t1, r1), R_tagged(t2, r2) ->
@@ -160,7 +160,7 @@ let rec compare_range (r1: range) (r2: range) =
 
 (** {2 Range annotations} *)
 (** ===================== *)
-           
+
 type 'a with_range = {
   content: 'a;
   range: range;
