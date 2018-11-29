@@ -606,7 +606,7 @@ module Domain = struct
       Eval.bind_opt @@ fun pe flow ->
       begin match ekind pe with
         | E_c_points_to(P_var (b, o, t)) ->
-          Eval.singleton (mk_z (base_size b) exp.erange) flow |>
+          Eval.singleton (mk_z (Z.div (base_size b) (sizeof_type t)) exp.erange) flow |>
           OptionExt.return
 
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
