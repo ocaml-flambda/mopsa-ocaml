@@ -64,6 +64,7 @@ module Domain =
                (* Calls on other kinds of addresses is handled by other domains *)
                | E_py_object _ ->
                   (* FIXME: be careful with evaluation zone *)
+                  (* FIXME: assigner un tmp à chaque evaluation, et passer les tmps en argument. Ne pas oublier de nettoyer *)
                   Eval.eval_list args man.eval flow |>
                     Eval.bind (fun args' flow ->
                         let exp = {exp with ekind = E_py_call(f, args, [])} in

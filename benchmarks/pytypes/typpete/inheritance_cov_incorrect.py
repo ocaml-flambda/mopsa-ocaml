@@ -22,9 +22,10 @@ def test_main():
         return cls.f(1, 2, 3)
 
 
-    f(A())
-    # mopsa.assert_safe()
-    f(B())
+    z1 = f(A())
+    mopsa.assert_safe()
+    mopsa.massert(isinstance(z1, int))
+    z2 = f(B())
     mopsa.assert_exception(TypeError)
 
 # throws TypeError

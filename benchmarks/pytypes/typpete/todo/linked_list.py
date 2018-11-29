@@ -1,3 +1,6 @@
+# import mopsa
+
+# def test_main():
 class Node:
     def __init__(self, data):
         self.data = data
@@ -40,6 +43,10 @@ for i in range(5):
         l.insert_at_begin(i)
     else:
         l.insert_at_begin(l.first_node.get_data() + i)
+
+#    mopsa.assert_safe()
+#    mopsa.massert(isinstance(n, Node))
+#    mopsa.massert(isinstance(l, LList))
 
 # Node := Type[Node]
 # get_data := Callable[[Node], int]

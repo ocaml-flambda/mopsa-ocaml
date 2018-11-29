@@ -150,6 +150,8 @@ module Domain =
              )
          |> OptionExt.return
 
+      | S_assign({ekind = E_py_attribute(lexpr, attr)}, rval) ->
+         Exceptions.panic "lexpr.attr = rval, with lexpr <> E_Var@\n"
 
       | S_remove_var v ->
          debug "Removing var %a@\n" pp_var v;
@@ -301,7 +303,12 @@ module Domain =
                  (Eval.singleton (mk_py_true range) flowt)
                  (Eval.singleton (mk_py_false range) flowf)
             | Typingdomain.Iterator x ->
+               (* FIXME: should be the type(Iterator _) that has this attribute, I think *)
                Eval.singleton (mk_py_bool (attr = "next") range) flow
+            | Typingdomain.List _ ->
+               Eval.singleton (mk_py_false range) flow
+               (* let cls = Addr.find_builtin "list" in
+                * Eval.singleton (mk_py_bool (Addr.is_builtin_attribute cls attr) range) flow *)
             | _ -> Exceptions.panic "ll_hasattr"
             end
          | _ ->
@@ -516,15 +523,63 @@ module Domain =
                                       Typingdomain.Monotypeset.union dummy_annot mty acc
                                    | _ -> Exceptions.panic "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
                let pos_list, cur =
-                 if Typingdomain.Monotypeset.cardinal els_types = 1 then
-                   let ty = Typingdomain.Monotypeset.choose els_types in
-                   Typingdomain.get_type ~local_use:true cur (List (Typingdomain.poly_cast ty))
-                 else
-                   let pos_types, cur = Typingdomain.get_mtypes cur els_types in
-                   Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
+                 match Typingdomain.Monotypeset.cardinal els_types with
+                 | 0 ->
+                    Typingdomain.get_type ~local_use:true cur (List Bot)
+                 | 1 ->
+                    let ty = Typingdomain.Monotypeset.choose els_types in
+                    Typingdomain.get_type ~local_use:true cur (List (Typingdomain.poly_cast ty))
+                 | _ ->
+                    let pos_types, cur = Typingdomain.get_mtypes cur els_types in
+                    Typingdomain.get_type ~local_use:true cur (List (Typevar pos_types)) in
                let flow = Flow.set_domain_cur cur man flow in
                Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
          |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__add__")}, _)}, args, []) ->
+         Exceptions.panic "todo: __add__ for lists@\n"
+      (* just check that both are instances of lists, and merge the types of both lists? *)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.append")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 2 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let lst, el = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                   ~fthen:(fun flow ->
+                     let cur = Flow.get_domain_cur man flow in
+                     let pty_ellist =
+                       let pty_list = match ekind lst with
+                       | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                       | _ -> assert false in
+                       match pty_list with
+                       | List x -> x
+                       | _ -> assert false in
+                     let pty_el = match ekind el with
+                       | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                       | _ -> assert false in
+                     if Typingdomain.polytype_leq (pty_el, cur.d3) (pty_ellist, cur.d3) then
+                       Eval.singleton lst flow
+                     else
+                       let ty, d3, pos_d3 = Typingdomain.join_poly (pty_el, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in
+                       let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype ty in
+                       let cur = {cur with d3; pos_d3} in
+                       let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
+                       let flow = Flow.set_domain_cur cur man flow in
+                       match ekind @@ List.hd args with
+                       | E_var _ ->
+                          man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                            Eval.singleton (mk_py_none range)
+                       | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                   )
+                   ~felse:tyerror
+                   man flow
+               ) |> OptionExt.return
+         else
+           tyerror flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
          Eval.eval_list args man.eval flow |>

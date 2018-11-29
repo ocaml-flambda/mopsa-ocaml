@@ -1,22 +1,29 @@
-class A:
-    def who_am_i(self):
-        return A()
+import mopsa
 
 
-class B(A):
-    pass
+def test_main():
+    class A:
+        def who_am_i(self):
+            return A()
 
 
-class C(A):
-    def who_am_i(self):
-        return C()
+    class B(A):
+        pass
 
 
-class D(B, C):
-    pass
+    class C(A):
+        def who_am_i(self):
+            return C()
 
-d1 = D()
-who = d1.who_am_i()
+
+    class D(B, C):
+        pass
+
+    d1 = D()
+    who = d1.who_am_i()
+    mopsa.assert_safe()
+    mopsa.massert(isinstance(d1, D))
+    mopsa.massert(isinstance(who, C))
 
 """With the old MRO algorithm, the type of `who` would be Type[A], because
 The naive DFS will reach A before C
