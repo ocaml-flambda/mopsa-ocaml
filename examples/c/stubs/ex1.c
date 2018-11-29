@@ -12,7 +12,7 @@ void main() {
   int x = 1;
   int y = 2;
 
-  swap(&x, &y);
+  int z = swap(&x, &y);
 
   _mopsa_print();
 }

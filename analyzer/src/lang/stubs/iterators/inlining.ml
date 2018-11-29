@@ -134,14 +134,9 @@ struct
     let ff1 =
       visit_expr_in_formula
         (fun e ->
-           Visitor.map_expr
-             (fun ee ->
-                match ekind ee with
-                | E_var (vv, _) when compare_var v vv = 0 -> { ee with ekind = E_stub_quantified (q, ee) }
-                | _ -> ee
-             )
-             (fun stmt -> stmt)
-             e
+           match ekind e with
+           | E_var (vv, _) when compare_var v vv = 0 -> { e with ekind = E_stub_quantified (q, e) }
+           | _ -> e
         )
         f
     in
@@ -217,12 +212,24 @@ struct
     | L_new  _ -> panic "allocations not yet supported"
     | L_call _ -> panic "function calls not yet supported"
 
-  let exec_ensures e man flow =
-    eval_formula e.content ~negate:false man flow |>
+  let exec_ensures e return man flow =
+    (* Replace E_stub_return expression with the fresh return variable *)
+    let f = visit_expr_in_formula
+        (fun e ->
+           match ekind e with
+           | E_stub_return -> debug "return found"; { e with ekind = E_var (return, STRONG) }
+           | _ -> e
+        )
+        e.content
+    in
+    (* Evaluate ensure body and return flows that verify it *)
+    eval_formula f ~negate:false man flow |>
     fst
 
+  let clean_post post return man flow = flow
+
   (** Compute a post-condition *)
-  let exec_post post retyp man flow =
+  let exec_post post return man flow =
     (* Execute `assigns` section *)
     let flow = List.fold_left (fun flow a -> exec_assigns a man flow) flow post.post_assigns in
     (* Execute `local` section *)
@@ -230,12 +237,13 @@ struct
     (* Execute `ensures` section *)
     let rec doit = function
       | [] -> flow
-      | [e] -> exec_ensures e man flow
+      | [e] -> exec_ensures e return man flow
       | e :: tl ->
-        exec_ensures e man flow |>
+        exec_ensures e return man flow |>
         Flow.meet man (doit tl)
     in
-    doit post.post_ensures
+    let flow = doit post.post_ensures in
+    clean_post post return man flow
 
   (** Execute the body of a stub *)
   let exec_body body return man flow =
