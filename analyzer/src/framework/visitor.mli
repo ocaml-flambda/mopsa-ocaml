@@ -91,28 +91,28 @@ val map_stmt :
 (** [map_stmt fe fs s] same as [map_expr] but on statements. *)
 
 val fold_expr :
-  ('a -> expr -> 'a) ->
-  ('a -> stmt -> 'a) ->
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
   'a -> expr -> 'a
 (** Folding function for expressions  *)
 
 
 val fold_stmt :
-  ('a -> expr -> 'a) ->
-  ('a -> stmt -> 'a) ->
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
   'a -> stmt -> 'a
 (** Folding function for statements *)
 
 val fold_map_expr :
-  ('a -> expr -> 'a * expr action) ->
-  ('a -> stmt -> 'a * stmt action) ->
+  ('a -> expr -> ('a * expr) action) ->
+  ('a -> stmt -> ('a * stmt) action) ->
   'a -> expr -> 'a * expr
 (** Combination of map and fold for expressions *)
 
 val fold_map_stmt :
-  ('a -> expr -> 'a * expr action) ->
-  ('a -> stmt -> 'a * stmt action) ->
-  'a -> stmt -> 'a * stmt
+  ('a -> expr -> ('a * expr) action) ->
+  ('a -> stmt -> ('a * stmt) action) ->
+  'a -> stmt -> ('a * stmt)
 (** Combination of map and fold for statements *)
 
 val expr_vars : expr -> var list

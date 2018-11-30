@@ -101,13 +101,13 @@ struct
 
   let get_test_functions body =
     Framework.Visitor.fold_stmt
-        (fun acc exp -> acc)
+        (fun acc exp -> VisitParts acc)
         (fun acc stmt ->
            match skind stmt with
            | S_py_function(fundec)
              when is_test fundec  ->
-             fundec :: acc
-           | _ -> acc
+             Keep (fundec :: acc)
+           | _ -> VisitParts (acc)
         ) [] body
 
 
