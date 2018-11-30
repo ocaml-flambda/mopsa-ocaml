@@ -173,10 +173,10 @@ let eval exp z =
       let evals, is_stmt_free =
         Visitor.fold_expr
           (fun (eacc, sacc) exp ->
-             (template exp) :: eacc, sacc
+             VisitParts ((template exp) :: eacc, sacc)
           )
           (fun (eacc, sacc) stmt ->
-             eacc, false
+             VisitParts (eacc, false)
           )
           ([], true) exp
       in

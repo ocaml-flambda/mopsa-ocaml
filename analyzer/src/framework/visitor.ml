@@ -136,37 +136,42 @@ and map_stmt
 
 (** Folding function for expressions  *)
 let rec fold_expr
-    (fe: 'a -> Ast.expr -> 'a)
-    (fs: 'a -> Ast.stmt -> 'a) x0 e =
-  let x1 = fe x0 e in
-  let parts, _ = split_expr e in
-  let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
-  List.fold_left (fold_stmt fe fs) x2 parts.stmts
+    (fe: 'a -> Ast.expr -> 'a action)
+    (fs: 'a -> Ast.stmt -> 'a action) x0 e =
+  match fe x0 e with
+  | Keep x1 -> x1
+  | Visit x1 -> fold_expr fe fs x1 e
+  | VisitParts x1 ->
+    let parts, _ = split_expr e in
+    let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
+    List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
 
 (** Folding function for statements *)
 and fold_stmt
-    (fe: 'a -> Ast.expr -> 'a)
-    (fs: 'a -> Ast.stmt -> 'a) x0 s =
-  let x1 = fs x0 s in
-  let parts, _ = split_stmt s in
-  let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
-  List.fold_left (fold_stmt fe fs) x2 parts.stmts
+    (fe: 'a -> Ast.expr -> 'a action)
+    (fs: 'a -> Ast.stmt -> 'a action) x0 s =
+  match fs x0 s with
+  | Keep x1 -> x1
+  | Visit x1 -> fold_stmt fe fs x1 s
+  | VisitParts x1 ->
+    let parts, _ = split_stmt s in
+    let x2 = List.fold_left (fold_expr fe fs) x1 parts.exprs in
+    List.fold_left (fold_stmt fe fs) x2 parts.stmts
 
 (** Combination of map and fold for expressions *)
 and fold_map_expr
-    (fme  : 'a -> Ast.expr -> 'a * Ast.expr action)
-    (fms  : 'a -> Ast.stmt -> 'a * Ast.stmt action)
+    (fme  : 'a -> Ast.expr -> ('a * Ast.expr) action)
+    (fms  : 'a -> Ast.stmt -> ('a * Ast.stmt) action)
     (x0   : 'a)
     (expr : Ast.expr)
   :
     ('a * Ast.expr)
   =
-  let x1, action = fme x0 expr in
-  match action with
-  | Keep expr' -> x1, expr'
-  | Visit expr' -> fold_map_expr fme fms x1 expr'
-  | VisitParts expr' ->
+  match fme x0 expr with
+  | Keep (x1, expr') -> x1, expr'
+  | Visit (x1, expr') -> fold_map_expr fme fms x1 expr'
+  | VisitParts (x1, expr') ->
     let parts, builder = split_expr expr' in
     let x2, exprs =
       fold_map_list (fun x0 (z : Ast.expr) ->
@@ -182,18 +187,17 @@ and fold_map_expr
 
 (** Combination of map and fold for statements *)
 and fold_map_stmt
-    (fme  : 'a -> Ast.expr -> 'a * Ast.expr action)
-    (fms  : 'a -> Ast.stmt -> 'a * Ast.stmt action)
+    (fme  : 'a -> Ast.expr -> ('a * Ast.expr) action)
+    (fms  : 'a -> Ast.stmt -> ('a * Ast.stmt) action)
     (x0   : 'a)
     (stmt : Ast.stmt)
   :
     ('a * Ast.stmt)
   =
-    let x1, action = fms x0 stmt in
-    match action with
-    | Keep stmt' -> x1, stmt'
-    | Visit stmt' -> fold_map_stmt fme fms x1 stmt'
-    | VisitParts stmt' ->
+    match fms x0 stmt with
+    | Keep (x1, stmt') -> x1, stmt'
+    | Visit (x1, stmt') -> fold_map_stmt fme fms x1 stmt'
+    | VisitParts (x1, stmt') ->
       let parts, builder = split_stmt stmt' in
       let x2, exprs =
         fold_map_list (fun x0 z ->
@@ -213,10 +217,10 @@ let expr_vars (e: Ast.expr) : Ast.var list =
   fold_expr
     (fun acc e ->
        match Ast.ekind e with
-       | Ast.E_var(v, m) -> v :: acc
-       | _ -> acc
+       | Ast.E_var(v, m) -> Keep (v :: acc)
+       | _ -> VisitParts acc
     )
-    (fun acc s -> acc)
+    (fun acc s -> VisitParts acc)
     [] e
 
 (** Extract variables from a statement *)
@@ -224,8 +228,8 @@ let stmt_vars (s: stmt) : var list =
   fold_stmt
     (fun acc e ->
        match Ast.ekind e with
-       | Ast.E_var(v, m) -> v :: acc
-       | _ -> acc
+       | Ast.E_var(v, m) -> Keep (v :: acc)
+       | _ -> VisitParts acc
     )
-    (fun acc s -> acc)
+    (fun acc s -> VisitParts acc)
     [] s

@@ -31,7 +31,7 @@ and mk_or ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
 
 and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
   a |> List.fold_left (fun acc conj ->
-      mk_and acc (
+      mk_and ~compare acc (
         conj |>
         List.fold_left (fun acc x ->
             mk_or ~compare acc (neg x)

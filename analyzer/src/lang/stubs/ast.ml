@@ -344,6 +344,7 @@ let () =
 (** {2 Visitors} *)
 (** =-=-=-=-=-=- *)
 
+(** Visit expressions present in a formula *)
 let rec visit_expr_in_formula expr_visitor f =
   bind_range f @@ fun f ->
   match f with
@@ -354,3 +355,54 @@ let rec visit_expr_in_formula expr_visitor f =
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
   | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
+
+
+(** {2 Utility functions} *)
+(** =-=-=-=-=-=-=-=-=-=-= *)
+
+(** Check whether an expression is quantified? *)
+let is_expr_quantified e =
+  Visitor.fold_expr
+    (fun acc e ->
+       match ekind e with
+       | E_stub_quantified _ -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    false
+    e
+
+(** Remove quantifiers from an expression.
+    Note: only top-level quantifiers are processed.
+*)
+let unquantify_expr e : quantifier * var list * expr =
+
+  (* Unify two quantifiers *)
+  let unify_quant oq1 oq2 =
+    OptionExt.option_neutral2 (fun q1 q2 ->
+        match q1, q2 with
+        | FORALL, FORALL -> FORALL
+        | EXISTS, EXISTS -> EXISTS
+        | _ -> MIXED
+      ) oq1 oq2
+  in
+
+  (* Visit the expression *)
+  let (oq, vl), e' =
+    Visitor.fold_map_expr
+      (fun (acc1, acc2) ee ->
+         match ekind ee with
+         | E_stub_quantified(q, eee, vl) ->
+           Keep (
+             (unify_quant (Some q) acc1, vl @ acc2),
+             eee
+           )
+         | _ -> VisitParts ((acc1, acc2), ee)
+      )
+      (fun acc s -> VisitParts (acc, s))
+      (None, [])
+      e
+  in
+  match oq with
+  | Some q -> q, vl, e'
+  | None -> panic "unquantify_expr: no quantifier found"

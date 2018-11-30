@@ -57,6 +57,9 @@ let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  
       {case with cleaners = case.cleaners @ cleaners}
     ) evl
 
+let flip (evl: ('e, 'a) evl) : ('e, 'a) evl =
+  Dnf.mk_neg (fun x -> case x) evl
+
 let fold
     (f: 'b -> ('a, 'e) evl_case -> 'b)
     (join: 'b -> 'b -> 'b)
@@ -65,6 +68,23 @@ let fold
     (evl: ('a, 'e) evl)
   : 'b =
   Dnf.fold f join meet init evl
+
+let fold2
+    (f: 'c -> ('a, 'e) evl_case -> 'b * 'c)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (init: 'c)
+    (evl: ('a, 'e) evl)
+  : 'b * 'c =
+  Dnf.fold2 f join meet init evl
+
+let substitute
+    (f: ('a, 'e) evl_case -> 'b)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (evl: ('a, 'e) evl)
+  : 'b =
+  Dnf.substitute f join meet evl
 
 
 (* [choose_annot evl] returns any annotation from evaluation flows
