@@ -12,6 +12,7 @@ class DisjointSets:
         if self.p[i] == i:
             return i
 
+        # /!\ recursion
         self.p[i] = self.find_set(self.p[i])
         return self.p[i]
 
