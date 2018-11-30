@@ -315,7 +315,9 @@ module Domain = struct
     let (u, s), (_, s') = unify subman (u, s) (u', s') in
     (u, s, s')
 
-  let meet = join
+  let meet annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
+    let u = meet annot u u' in
+    (u, s, s')
 
   let widen annot subman (u,s) (u', s') =
     let (u, s, s') = join annot subman (u,s) (u',s') in
@@ -518,32 +520,48 @@ module Domain = struct
     | C_interval_offset of base * Intervals.t * typ (* set of cells with an interval offset *)
     | C_fun of c_fundec                             (* functions *)
 
+  let eval_cell b o t range man flow =
+    eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
+    Eval.bind @@ fun o flow ->
+    match o with
+    | O_concrete o -> Eval.singleton (C_cell (C_offset {b; o; t}, STRONG)) flow
+    | O_interval itv -> Eval.singleton (C_interval_offset (b, itv, t)) flow
+    | O_out_of_bound ->
+      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+      let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
+      let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                  Flow.set T_cur man.bottom man
+      in
+      Eval.empty_singleton flow'
+
+
+  (** Evaluate a quantified cell *)
+  let eval_quantified_cell b o t range man flow =
+    let q, qvl, o' = Stubs.Ast.unquantify_expr o in
+    let evl = eval_cell b o' t range man flow in
+    let evl' =
+      match q with
+      | EXISTS -> evl
+      | FORALL -> Eval.flip evl
+      | MIXED  -> panic_at range "cell: evaluation of offsets with mixed quantifiers not supported"
+    in
+    let cleaners = List.map (fun qv -> mk_remove_var qv range) qvl in
+    Eval.add_cleaners cleaners evl'
+
+
   let eval_pointed_cell p man flow =
     man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
-    Eval.bind_opt @@ fun pe flow ->
+    Eval.bind @@ fun pe flow ->
 
     match ekind pe with
+    | E_c_points_to(P_var (b, o, t)) when Stubs.Ast.is_expr_quantified o ->
+      eval_quantified_cell b o t p.erange man flow
+
     | E_c_points_to(P_var (b, o, t)) ->
-      begin
-        eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
-        Eval.bind @@ fun o flow ->
-        match o with
-        | O_concrete o -> Eval.singleton (C_cell (C_offset {b; o; t}, STRONG)) flow
-        | O_interval itv -> Eval.singleton (C_interval_offset (b, itv, t)) flow
-        | O_out_of_bound ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.AOutOfBound p.erange ~cs in
-          let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow'
-      end
-      |>
-      OptionExt.return
+      eval_cell b o t p.erange man flow
 
     | E_c_points_to(P_fun fundec) ->
-      Eval.singleton (C_fun fundec) flow |>
-      OptionExt.return
+      Eval.singleton (C_fun fundec) flow
 
     | E_c_points_to(P_null) ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -551,8 +569,7 @@ module Domain = struct
       let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                   Flow.set T_cur man.bottom man
       in
-      Eval.empty_singleton flow1 |>
-      OptionExt.return
+      Eval.empty_singleton flow1
 
     | E_c_points_to(P_invalid) ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -560,9 +577,7 @@ module Domain = struct
       let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
                   Flow.set T_cur man.bottom man
       in
-      Eval.empty_singleton flow1 |>
-      OptionExt.return
-
+      Eval.empty_singleton flow1
 
     | _ -> assert false
 
@@ -576,7 +591,9 @@ module Domain = struct
       Eval.singleton (C_cell (c, mode)) flow |>
       OptionExt.return
 
-    | E_c_deref(p) -> eval_pointed_cell p man flow
+    | E_c_deref(p) ->
+      eval_pointed_cell p man flow |>
+      OptionExt.return
 
     | _ -> None
 
@@ -878,16 +895,19 @@ module Domain = struct
 
     | Stubs.Ast.S_stub_assigns(x, Some (o1, o2)) ->
       let t = under_type x.etyp in
-      eval_pointed_cell x man flow |>
-      OptionExt.lift @@ Post.bind man @@ fun x flow ->
 
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o1 flow |>
-      Post.bind man @@ fun o1 flow ->
+      Some (
+        eval_pointed_cell x man flow |>
+        Post.bind man @@ fun x flow ->
 
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o2 flow |>
-      Post.bind man @@ fun o2 flow ->
+        man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o1 flow |>
+        Post.bind man @@ fun o1 flow ->
 
-      prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+        man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o2 flow |>
+        Post.bind man @@ fun o2 flow ->
+
+        prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+      )
 
     | Stubs.Ast.S_stub_remove_old(x) when is_c_scalar_type x.etyp ->
       man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
@@ -898,10 +918,12 @@ module Domain = struct
       remove_old_cells x stmt.srange man flow
 
     | Stubs.Ast.S_stub_remove_old(x) ->
-      eval_pointed_cell x man flow |>
-      OptionExt.lift @@ Post.bind man @@ fun x flow ->
+      Some (
+        eval_pointed_cell x man flow |>
+        Post.bind man @@ fun x flow ->
 
-      remove_old_cells x stmt.srange man flow
+        remove_old_cells x stmt.srange man flow
+      )
 
     | _ -> None
 
