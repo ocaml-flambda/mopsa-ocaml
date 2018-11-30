@@ -55,7 +55,10 @@ module Domain =
               mk_stmt (S_py_for(target, iter,
                                 if_stmt,
                                 empty_stmt)) range in
-         let stmt = mk_block ((mk_assign acc_var (mk_expr (E_py_list []) range) range) :: (unfold_lc comprehensions) :: []) range in
+         let clean_targets = List.fold_left (fun acc (target, _, _) -> match ekind target with
+                                                                       | E_var (v, _) -> (mk_remove_var v range)::acc
+                                                                       | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr exp) [] comprehensions in
+         let stmt = mk_block ((mk_assign acc_var (mk_expr (E_py_list []) range) range) :: (unfold_lc comprehensions) :: clean_targets) range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
            man.eval acc_var |>
