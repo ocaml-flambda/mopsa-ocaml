@@ -315,6 +315,13 @@ struct
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
           Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
+        (* | exn ->
+         *   let msg = Printexc.to_string exn in
+         *   let a = mk_alarm (A_panic_test (msg, name)) test.srange ~level:PANIC in
+         *   let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
+         *   Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1 *)
+
+
       ) (Flow.bottom annot, 0, 0, 0, 0)
 
 
