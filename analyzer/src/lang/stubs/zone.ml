@@ -22,7 +22,7 @@ let () =
     name = "Stubs";
     eval = (fun exp ->
         match ekind exp with
-        | E_stub_call _                -> Process
+        | E_stub_call _           -> Process
         | E_stub_return           -> Keep
         | E_stub_builtin_call _   -> Process
         | _                       -> Process

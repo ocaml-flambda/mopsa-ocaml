@@ -31,8 +31,11 @@ type 'a pytype =
   | Bot | Top
   | List of 'a pytype
   (* standard library containers are defined locally *)
-  | Iterator of 'a pytype
+  | Iterator of 'a pytype * int
   (* used as Iterator[List[int]] to define list_iterator for example *)
+  (* and position in iterator, if applicable *)
+  | FiniteTuple of 'a pytype list
+  (* tuples of given size *)
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
   | Class of class_address * py_object list (* class * mro *)
@@ -71,7 +74,8 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Bot -> Format.fprintf fmt "⊥"
   | Top -> Format.fprintf fmt "⊤"
   | List ty -> Format.fprintf fmt "List[%a]" (pp_pytype print_vars) ty
-  | Iterator ty -> Format.fprintf fmt "Iterator[%a]" (pp_pytype print_vars) ty
+  | FiniteTuple l -> Format.fprintf fmt "FiniteTuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") (pp_pytype print_vars)) l
+  | Iterator (ty, d) -> Format.fprintf fmt "Iterator[%a, %d]" (pp_pytype print_vars) ty d
   | Instance {classn; uattrs; oattrs} ->
      if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
        Format.fprintf fmt "Instance[%a]" (pp_pytype print_vars) classn
@@ -243,7 +247,8 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Module m -> Module m
   | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
-  | Iterator t -> Iterator (unsafe_cast f t)
+  | FiniteTuple l -> FiniteTuple ((List.map @@ unsafe_cast f) l)
+  | Iterator (t, d) -> Iterator ((unsafe_cast f t), d)
   | Typevar v -> Typevar (f v)
   | Instance {classn;uattrs;oattrs} ->
      let classn = unsafe_cast f classn in
@@ -264,7 +269,8 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   match t with
   | Typevar v when v = var -> value
   | List v -> List (subst v var value)
-  | Iterator v -> Iterator (subst v var value)
+  | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
+  | Iterator (v, d) -> Iterator ((subst v var value), d)
   | Instance {classn; uattrs; oattrs} ->
      let classn = subst classn var value in
      let uattrs = StringMap.map (fun v -> subst v var value) uattrs in
@@ -276,7 +282,12 @@ let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
     match t with
     | List t -> collect t acc
-    | Iterator t -> collect t acc
+    (* l: 'a pytype list *)
+    (* el : 'a pytype *)
+    (* acc: Typevarset *)
+    | FiniteTuple l ->
+       List.fold_left (fun set el -> collect el set) acc l
+    | Iterator (t, _) -> collect t acc
     | Typevar v -> Typevarset.add v acc
     | Instance {classn; uattrs; oattrs} ->
        let acc = collect classn acc in
@@ -337,9 +348,16 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
   | List t, List t' ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
-  | Iterator t, Iterator t' ->
+  | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
+     let t, d3_acc, pos_d3 =
+       List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
+           let r, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
+           r :: t_l, d3_acc, pos_d3) ([], d3_acc, pos_d3) l l' in
+     FiniteTuple (List.rev t), d3_acc, pos_d3
+  | Iterator (t, d), Iterator (t', d') ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
-     Iterator t, d3_acc, pos_d3
+     (* FIXME *)
+     Iterator (t, -1), d3_acc, pos_d3
   | Function f, Function f' when f = f' ->
      Function f, d3_acc, pos_d3
   | Module m, Module m' when m = m' ->
@@ -515,7 +533,9 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
   | List u, List v -> polytype_leq (u, d3) (v, d3')
-  | Iterator u, Iterator v -> polytype_leq (u, d3) (v, d3')
+  | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
+     List.fold_left2 (fun acc t t' -> acc && polytype_leq (t, d3) (t', d3')) true l l'
+  | Iterator (u, _), Iterator (v, _) -> polytype_leq (u, d3) (v, d3')
   | Class (c, b), Class (c', b') -> class_le (c, b) (c', b')
   | Function f, Function f' -> f = f'
   | Module m, Module m' -> m = m'
@@ -570,9 +590,16 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | List t, List t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
-  | Iterator t, Iterator t' ->
+  | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
+     let t, d3_acc, pos_d3 =
+       List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
+           let r, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
+           r :: t_l, d3_acc, pos_d3) ([], d3_acc, pos_d3) l l' in
+     FiniteTuple (List.rev t), d3_acc, pos_d3
+  | Iterator (t, d), Iterator (t', d') ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
-     Iterator t, d3_acc, pos_d3
+     (* FIXME *)
+     Iterator (t, -1), d3_acc, pos_d3
 
   | Function f, Function f' when f = f' ->
      Function f, d3_acc, pos_d3
@@ -639,13 +666,15 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
 
 
 let widening ctx d d' =
-  debug "%a ∇ %a@\n" print d print d';
+  debug "Widening: %a ∇ %a@\n" print d print d';
   (* if the shape of the domain is stable (i.e, variables point to the same type ids) *)
   (* we perform a widening on polytype * d3 for each partition *)
   (* otherwise, unstable partitions are set to top *)
   let is_stable =
     VarMap.fold (fun k tid acc ->
-        acc && VarMap.mem k d'.d1 &&
+        acc &&
+          let () = debug "is_stable : %a@\n" pp_var k in
+          VarMap.mem k d'.d1 &&
           let tid'_wundef = VarMap.find k d'.d1 in
           tid'_wundef.lundef = tid.lundef &&
             tid'_wundef.gundef = tid.gundef &&
@@ -935,8 +964,26 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (list, listb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
-  | Iterator (List _) ->
+  | FiniteTuple l ->
+     let tuple, tupleb = match kind_of_object (Addr.find_builtin "tuple") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (tuple, tupleb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
+  | Iterator (List _, _) ->
      let list_it, list_itb = match kind_of_object (Addr.find_builtin "list_iterator") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
+  | Iterator (FiniteTuple _, _) ->
+     let list_it, list_itb = match kind_of_object (Addr.find_builtin "tuple_iterator") with
        | A_py_class (c, b) -> c, b
        | _ -> assert false in
      begin match inst with
@@ -1013,9 +1060,10 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
      else
        (Bot, d3), (p, d3)
   | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
-  | List t -> Exceptions.panic "ni"
-  | Iterator i -> Exceptions.panic "ni"
-  | Function f -> Exceptions.panic "ni"
+  | List _ -> Exceptions.panic "ni"
+  | FiniteTuple _ -> Exceptions.panic "ni"
+  | Iterator _ -> Exceptions.panic "ni"
+  | Function _ -> Exceptions.panic "ni"
   | Method _ -> Exceptions.panic "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in

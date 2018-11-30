@@ -8,6 +8,7 @@
         "python.desugar.if",
         "python.desugar.iterable_assign",
         "python.desugar.with",
+        "python.desugar.comprehensions",
         "python.desugar.loops",
 
         "python.flows.exceptions",

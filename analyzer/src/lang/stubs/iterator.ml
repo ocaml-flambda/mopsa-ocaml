@@ -21,13 +21,13 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_stubs_iterators_inlining : unit domain
+  type _ domain += D_stubs_iterator : unit domain
 
-  let id = D_stubs_iterators_inlining
-  let name = "stubs.iterators.inlining"
+  let id = D_stubs_iterator
+  let name = "stubs.iterator"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_stubs_iterators_inlining -> Some Eq
+    | D_stubs_iterator -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -113,9 +113,25 @@ struct
     | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
     | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
 
-    | F_in (v, s) -> panic "F_in (v, s) not implemented"
+    | F_in (v, S_interval (l, u)) ->
+      let ftrue = man.exec (mk_assume (mk_in (mk_var v f.range) l u f.range) f.range) flow in
+      let ffalse =
+        if not negate then None
+        else Some (
+            man.exec (mk_assume (
+                mk_binop
+                  (mk_binop (mk_var v f.range) O_lt l f.range)
+                  O_log_or
+                  (mk_binop (mk_var v f.range) O_gt u f.range)
+                  f.range
+              ) f.range) flow
+          )
+      in
+      ftrue, ffalse
 
-    | F_free(e) -> panic "F_free(e) not implemented"
+    | F_in (v, S_resource _ ) -> panic_at f.range "F_in(_, S_resource) not implemented"
+
+    | F_free(e) -> panic_at f.range "F_free(e) not implemented"
 
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula q v s f ~negate range man flow =
@@ -135,8 +151,8 @@ struct
       visit_expr_in_formula
         (fun e ->
            match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 -> { e with ekind = E_stub_quantified (q, e) }
-           | _ -> e
+           | E_var (vv, _) when compare_var v vv = 0 -> Keep { e with ekind = E_stub_quantified (q, e, [vv]) }
+           | _ -> VisitParts e
         )
         f
     in
@@ -151,6 +167,7 @@ struct
           match q with
           | FORALL -> with_range (F_exists (v, s, ff)) range
           | EXISTS -> with_range (F_forall (v, s, ff)) range
+          | MIXED  -> assert false
         in
         let ftrue, _ = eval_formula f ~negate:false man flow in
         Some ftrue
@@ -228,8 +245,8 @@ struct
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> debug "return found"; { e with ekind = E_var (v, STRONG) }
-             | _ -> e
+             | E_stub_return -> debug "return found"; Keep { e with ekind = E_var (v, STRONG) }
+             | _ -> VisitParts e
           )
           e.content
     in
@@ -246,7 +263,7 @@ struct
     in
     let block2 =
       post.post_assigns |> List.fold_left (fun block a ->
-          mk_stub_remove_old a.content.assign_target range :: block
+          mk_stub_remove_old a.content.assign_target a.content.assign_offset range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow

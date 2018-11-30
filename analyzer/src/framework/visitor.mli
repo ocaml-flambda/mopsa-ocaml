@@ -66,9 +66,16 @@ val register_stmt_visitor :
 (*==========================================================================*)
 
 
+(** Kinds of returned actions by a visitor *)
+type 'a action =
+  | Keep of 'a       (** Keep the result *)
+  | VisitParts of 'a (** Continue visiting the parts of the result *)
+  | Visit of 'a      (** Iterate the visitor on the result *)
+
+
 val map_expr :
-    (expr -> expr) ->
-    (stmt -> stmt) ->
+    (expr -> expr action) ->
+    (stmt -> stmt action) ->
     expr -> expr
 (** [map_expr fe fs e] transforms the exprression [e] into a new one,
     by splitting [fe e] into its sub-parts, applying [map_expr fe fs] and
@@ -78,34 +85,34 @@ val map_expr :
 
 
 val map_stmt :
-  (expr -> expr) ->
-  (stmt -> stmt) ->
+  (expr -> expr action) ->
+  (stmt -> stmt action) ->
   stmt -> stmt
 (** [map_stmt fe fs s] same as [map_expr] but on statements. *)
 
 val fold_expr :
-  ('a -> expr -> 'a) ->
-  ('a -> stmt -> 'a) ->
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
   'a -> expr -> 'a
 (** Folding function for expressions  *)
 
 
 val fold_stmt :
-  ('a -> expr -> 'a) ->
-  ('a -> stmt -> 'a) ->
+  ('a -> expr -> 'a action) ->
+  ('a -> stmt -> 'a action) ->
   'a -> stmt -> 'a
 (** Folding function for statements *)
 
 val fold_map_expr :
-  ('a -> expr -> 'a * expr) ->
-  ('a -> stmt -> 'a * stmt) ->
+  ('a -> expr -> ('a * expr) action) ->
+  ('a -> stmt -> ('a * stmt) action) ->
   'a -> expr -> 'a * expr
 (** Combination of map and fold for expressions *)
 
 val fold_map_stmt :
-  ('a -> expr -> 'a * expr) ->
-  ('a -> stmt -> 'a * stmt) ->
-  'a -> stmt -> 'a * stmt
+  ('a -> expr -> ('a * expr) action) ->
+  ('a -> stmt -> ('a * stmt) action) ->
+  'a -> stmt -> ('a * stmt)
 (** Combination of map and fold for statements *)
 
 val expr_vars : expr -> var list

@@ -117,17 +117,19 @@ and assigns = {
 type quantifier =
   | FORALL
   | EXISTS
+  | MIXED
 
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
   | E_stub_builtin_call of builtin with_range * expr
-  | E_stub_quantified of quantifier * expr (** quantified expression *)
+  | E_stub_quantified of quantifier * expr * var list (** quantified expression over a set of variables *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
 
-let mk_stub_quantified quant exp range = mk_expr (E_stub_quantified(quant, exp)) range ~etyp:exp.etyp
+let mk_stub_quantified quant exp vars range =
+  mk_expr (E_stub_quantified(quant, exp, vars)) range ~etyp:exp.etyp
 
 
 (** {2 Statements} *)
@@ -138,15 +140,15 @@ type stmt_kind +=
                       (expr * expr) option (** modification range *)
   (** Declare an assignment and create old copies *)
 
-  | S_stub_remove_old of expr
+  | S_stub_remove_old of expr * (expr * expr) option
   (** remove old copies of an assigned target *)
 
 
 let mk_stub_assigns target offsets range =
   mk_stmt (S_stub_assigns (target, offsets)) range
 
-let mk_stub_remove_old target range =
-  mk_stmt (S_stub_remove_old target) range
+let mk_stub_remove_old target offsets range =
+  mk_stmt (S_stub_remove_old (target, offsets)) range
 
 
 (** {2 Pretty printers} *)
@@ -264,10 +266,11 @@ let () =
             (fun () -> compare_expr arg1 arg2)
           ]
 
-        | E_stub_quantified(q1, ee1), E_stub_quantified(q2, ee2) ->
+        | E_stub_quantified(q1, ee1, vars1), E_stub_quantified(q2, ee2, vars2) ->
           Compare.compose [
             (fun () -> compare q1 q2);
             (fun () -> compare_expr ee1 ee2);
+            (fun () -> Compare.list compare_var vars1 vars2);
           ]
 
         | _ -> next e1 e2
@@ -283,9 +286,9 @@ let () =
           { exprs = [arg]; stmts = [] },
           (function {exprs = [args]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
-        | E_stub_quantified(q, ee) ->
+        | E_stub_quantified(q, ee, vars) ->
           { exprs = [ee]; stmts = [] },
-          (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee)} | _ -> assert false)
+          (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee, vars)} | _ -> assert false)
 
         | _ -> next e
       );
@@ -295,8 +298,9 @@ let () =
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
-        | E_stub_quantified(FORALL, ee) -> fprintf fmt "∀%a" pp_expr ee
-        | E_stub_quantified(EXISTS, ee) -> fprintf fmt "∃%a" pp_expr ee
+        | E_stub_quantified(FORALL, ee, _) -> fprintf fmt "∀%a" pp_expr ee
+        | E_stub_quantified(EXISTS, ee, _) -> fprintf fmt "∃%a" pp_expr ee
+        | E_stub_quantified(MIXED, ee, _) -> fprintf fmt "(∀|∃)%a" pp_expr ee
         | _ -> next fmt e
       );
   }
@@ -314,8 +318,11 @@ let () =
             (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
           ]
 
-        | S_stub_remove_old(t1), S_stub_remove_old(t2) ->
-          compare_expr t1 t2
+        | S_stub_remove_old(t1, o1), S_stub_remove_old(t2, o2) ->
+          Compare.compose [
+            (fun () -> compare_expr t1 t2);
+            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+          ]
 
         | _ -> next s1 s2
       );
@@ -323,7 +330,7 @@ let () =
     visit = (fun next s ->
         match skind s with
         | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
-        | S_stub_remove_old(t) -> panic "visitor for S_stub_remove_old not supported"
+        | S_stub_remove_old(t, o) -> panic "visitor for S_stub_remove_old not supported"
         | _ -> next s
       );
 
@@ -331,7 +338,7 @@ let () =
         match skind s with
         | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
         | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
-        | S_stub_remove_old(target) -> fprintf fmt "remove old(%a);" pp_expr target
+        | S_stub_remove_old(target, _) -> fprintf fmt "remove old(%a);" pp_expr target
         | _ -> next fmt s
       );
   }
@@ -340,13 +347,65 @@ let () =
 (** {2 Visitors} *)
 (** =-=-=-=-=-=- *)
 
+(** Visit expressions present in a formula *)
 let rec visit_expr_in_formula expr_visitor f =
   bind_range f @@ fun f ->
   match f with
-  | F_expr e -> F_expr (Visitor.map_expr expr_visitor (fun stmt -> stmt) e)
+  | F_expr e -> F_expr (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
   | F_binop (op, f1, f2) -> F_binop (op, visit_expr_in_formula expr_visitor f1, visit_expr_in_formula expr_visitor f2)
   | F_not ff -> F_not (visit_expr_in_formula expr_visitor ff)
   | F_forall (v, s, ff) -> F_forall (v, s, visit_expr_in_formula expr_visitor ff)
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
-  | F_free e -> F_free (expr_visitor e)
+  | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
+
+
+(** {2 Utility functions} *)
+(** =-=-=-=-=-=-=-=-=-=-= *)
+
+(** Check whether an expression is quantified? *)
+let is_expr_quantified e =
+  Visitor.fold_expr
+    (fun acc e ->
+       match ekind e with
+       | E_stub_quantified _ -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    false
+    e
+
+(** Remove quantifiers from an expression.
+    Note: only top-level quantifiers are processed.
+*)
+let unquantify_expr e : quantifier * var list * expr =
+
+  (* Unify two quantifiers *)
+  let unify_quant oq1 oq2 =
+    OptionExt.option_neutral2 (fun q1 q2 ->
+        match q1, q2 with
+        | FORALL, FORALL -> FORALL
+        | EXISTS, EXISTS -> EXISTS
+        | _ -> MIXED
+      ) oq1 oq2
+  in
+
+  (* Visit the expression *)
+  let (oq, vl), e' =
+    Visitor.fold_map_expr
+      (fun (acc1, acc2) ee ->
+         match ekind ee with
+         | E_stub_quantified(q, eee, vl) ->
+           Keep (
+             (unify_quant (Some q) acc1, vl @ acc2),
+             eee
+           )
+         | _ -> VisitParts ((acc1, acc2), ee)
+      )
+      (fun acc s -> VisitParts (acc, s))
+      (None, [])
+      e
+  in
+  match oq with
+  | Some q -> q, vl, e'
+  | None -> panic "unquantify_expr: no quantifier found"

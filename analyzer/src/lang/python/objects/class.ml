@@ -43,27 +43,32 @@ module Domain =
          None
       | E_py_call({ekind = E_py_object cls} as ecls, args, []) when Addr.isclass cls ->
          (* Call __new__ *)
-         man.eval (mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range) flow |>
-           Eval.bind
-             (fun eobj flow ->
-               Eval.assume
-                 (mk_py_isinstance eobj ecls range)
+         let tmp_inst = mk_tmp () in
+         let inst_var = mk_var tmp_inst range in
+         let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
+         man.exec (mk_assign inst_var new_call range) flow |>
+           (* man.eval inst_var |>
+            * Eval.bind
+            *   (fun eobj flow -> *)
+           Eval.assume
+                 (mk_py_isinstance inst_var ecls range)
                  ~fthen:(fun flow ->
                    debug "init!@\n";
-                   man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (eobj :: args) range) flow |>
+                   man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (inst_var :: args) range) flow |>
                      Eval.bind (fun r flow ->
                          Eval.assume
                            (mk_py_isinstance_builtin r "NoneType" range)
-                           ~fthen:(fun flow -> Eval.singleton eobj flow)
+                           ~fthen:(fun flow -> man.eval inst_var flow)
                            ~felse:(fun flow ->
                              let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                              Eval.empty_singleton flow
                            )
                            man flow
                  ))
-                 ~felse:(fun flow -> Eval.singleton eobj flow)
-                 man flow
-             )
+                 ~felse:(fun flow -> Eval.singleton inst_var flow)
+                 man |>
+             (* ) |> *)
+           Eval.add_cleaners [mk_remove_var tmp_inst range]
          |> OptionExt.return
 
       | _ -> None
