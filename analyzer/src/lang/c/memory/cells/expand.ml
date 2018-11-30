@@ -544,17 +544,25 @@ module Domain = struct
 
   (** Evaluate a quantified cell *)
   let eval_quantified_cell b o t range man flow =
-    let q, qvl, o' = Stubs.Ast.unquantify_expr o in
-    let evl = eval_cell_cases b o' t range man flow in
+    let open Stubs.Ast in
+    let q, vl, o' = unquantify_expr o in
+    eval_cell_cases b o' t range man flow |>
+    Eval.bind @@ fun l flow ->
+    let evl = List.map (fun (c, flow) ->
+        match c with
+        | Some cc -> Eval.singleton cc flow
+        | None -> Eval.empty_singleton flow
+      ) l
+    in
     let evl' =
       match q with
-      | EXISTS -> evl
-      | FORALL -> Eval.flip evl
+      | EXISTS -> Eval.join_list evl
+      | FORALL -> Eval.meet_list evl
       | MIXED  -> panic_at range "cell: evaluation of offsets with mixed quantifiers not supported"
     in
-    let cleaners = List.map (fun qv -> mk_remove_var qv range) qvl in
+    let cleaners = List.map (fun v -> mk_remove_var v range) vl in
     Eval.add_cleaners cleaners evl'
-    assert false
+
 
   (** Evaluate a non-quantified cell *)
   let eval_non_quantified_cell b o t range man flow =
@@ -642,7 +650,7 @@ module Domain = struct
       Eval.bind_opt @@ fun pe flow ->
       begin match ekind pe with
         | E_c_points_to(P_var (b, o, t)) ->
-          Eval.singleton (mk_z (Z.div (base_size b) (sizeof_type t)) exp.erange) flow |>
+          Eval.singleton (mk_z (Z.div (base_size b) (Z.max Z.one (sizeof_type t))) exp.erange) flow |>
           OptionExt.return
 
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
@@ -928,7 +936,7 @@ module Domain = struct
         prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
       )
 
-    | Stubs.Ast.S_stub_remove_old(x) when is_c_scalar_type x.etyp ->
+    | Stubs.Ast.S_stub_remove_old(x, None) ->
       man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
       Post.bind_opt man @@ fun x flow ->
       eval_lval x man flow |>
@@ -936,7 +944,7 @@ module Domain = struct
 
       remove_old_cells x stmt.srange man flow
 
-    | Stubs.Ast.S_stub_remove_old(x) ->
+    | Stubs.Ast.S_stub_remove_old(x, Some _) ->
       Some (
         eval_pointed_cell x man flow |>
         Post.bind man @@ fun x flow ->

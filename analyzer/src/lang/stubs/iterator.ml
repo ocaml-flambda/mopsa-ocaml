@@ -263,7 +263,7 @@ struct
     in
     let block2 =
       post.post_assigns |> List.fold_left (fun block a ->
-          mk_stub_remove_old a.content.assign_target range :: block
+          mk_stub_remove_old a.content.assign_target a.content.assign_offset range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow
