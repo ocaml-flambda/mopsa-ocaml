@@ -105,6 +105,7 @@ rule read =
   | ")"      { RPAR }
   | ':'      { COLON }
   | ';'      { SEMICOL }
+  | ','      { COMMA }
 
   | "."      { DOT }
   | "->"     { ARROW }

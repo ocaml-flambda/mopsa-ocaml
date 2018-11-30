@@ -43,7 +43,7 @@
 (* Delimiters *)
 %token LPAR RPAR
 %token LBRACK RBRACK
-%token COLON SEMICOL DOT
+%token COLON SEMICOL DOT COMMA
 %token BEGIN END
 %token EOF
 
@@ -185,11 +185,11 @@ assigns:
       }
     }
 
-  | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK SEMICOL
+  | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) COMMA with_range(expr) RBRACK SEMICOL
     {
       {
 	assign_target = $3;
-	assign_offset = Some ($5, $8);
+	assign_offset = Some ($5, $7);
       }
     }
 
@@ -324,8 +324,8 @@ c_typ:
   | BNOT  { BNOT }
 
 set:
-  | LBRACK with_range(expr) DOT DOT with_range(expr) RBRACK  { S_interval ($2, $5) }
-  | resource                                                 { S_resource $1 }
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK  { S_interval ($2, $4) }
+  | resource                                               { S_resource $1 }
 
 %inline log_binop:
   | AND     { AND }

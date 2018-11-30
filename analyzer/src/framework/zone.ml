@@ -190,14 +190,14 @@ let eval exp z =
   aux exp
 
 
-(** {2 Eval graph} 
+(** {2 Eval graph}
     ==============
 
     The collection of evaluations exported by domains is represented
-   by a directed weighted graph. The vertices of the graph is the set
-   of zones. An edge (z1, z2, w) represents an evaluation from zone z1
-   to zone z2. The weight w represents the priority of the evaluation
-   by considering the order of domains in the configuration file.  
+    by a directed weighted graph. The vertices of the graph is the set
+    of zones. An edge (z1, z2, w) represents an evaluation from zone z1
+    to zone z2. The weight w represents the priority of the evaluation
+    by considering the order of domains in the configuration file.
 *)
 
 module AdjencyMap = MapExt.Make(struct

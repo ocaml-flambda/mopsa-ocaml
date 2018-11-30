@@ -13,7 +13,7 @@
         "universal.iterators.unittest",
 
 	// Stubs iterator
-	"stubs.iterators.inlining",
+	"stubs.iterator",
 
         // C desugar
         "c.desugar.loops",
