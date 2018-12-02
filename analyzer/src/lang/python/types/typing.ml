@@ -174,7 +174,15 @@ module Domain =
                   let pt = Typingdomain.TypeIdMap.find i cur.d2 in
                   begin match pt with
                         | Instance {classn=Class (C_builtin "bool", _); _} -> Post.of_flow flow
-                        | _ -> Exceptions.panic "%a" Typingdomain.pp_polytype pt
+                        | Instance {classn=Class (C_builtin "int", _); _} -> Post.of_flow flow
+                        | _ ->
+                           (* TODO: According to the documentation: By
+                              default, an object is considered true
+                              unless its class defines either a
+                              __bool__() method that returns False or
+                              a __len__() method that returns zero,
+                              when called with the object.  *)
+                           Exceptions.panic "%a" Typingdomain.pp_polytype pt
                   end
                | _ -> Exceptions.panic "%a" pp_expr e
              )
@@ -364,7 +372,9 @@ module Domain =
                   let pt = Typingdomain.TypeIdMap.find i cur.d2 in
                   begin match pt with
                   | Instance {classn=Class (C_builtin "bool", _); _} -> Eval.singleton (mk_py_top T_bool range) flow
-                  | _ -> Exceptions.panic "%a" Typingdomain.pp_polytype pt
+                  | Instance {classn=Class (C_builtin "int", _); _} -> Eval.singleton (mk_py_top T_bool range) flow
+                  | _ -> (* FIXME: cast into bool and see what happens *)
+                     Exceptions.panic "%a" Typingdomain.pp_polytype pt
                   end
                | _ -> failwith "not: ni"
              )
@@ -387,6 +397,7 @@ module Domain =
                       | Typingdomain.FiniteTuple _ -> C_builtin "tuple", List.map Addr.find_builtin ["tuple"; "object"]
                       | Typingdomain.Iterator (Typingdomain.List _, _) -> C_builtin "list_iterator", List.map Addr.find_builtin ["list_iterator"; "object"]
                       | Typingdomain.Iterator (Typingdomain.FiniteTuple _, _) -> C_builtin "tuple_iterator", List.map Addr.find_builtin ["tuple_iterator"; "object"]
+                      | Typingdomain.Iterator (Typingdomain.Instance {classn=Class (C_builtin "str",  _)}, _) -> C_builtin "str_iterator", List.map Addr.find_builtin ["str_iterator"; "object"]
                       | _ -> assert false
                     in ty
                  | E_py_object ({addr_kind = A_py_class (c, b)}, _) ->
@@ -507,6 +518,39 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
          man.eval (mk_py_none range) flow |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
+         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+         man.eval iterable flow |>
+           Eval.bind (fun eit flow ->
+               Eval.assume
+                 (mk_py_hasattr eit "__iter__" range)
+                 ~fthen:(fun flow ->
+                   (* (\* Eval.assume
+                    *  *   (mk_py_hasattr eit "__next__" range) *\)
+                    *   ~fthen:(fun flow -> *)
+                       let cur = Flow.get_domain_cur man flow in
+                       let ptype = match ekind eit with
+                         | E_type_partition tid ->
+                            begin match Typingdomain.TypeIdMap.find tid cur.d2 with
+                            | Iterator (List x, _) | List x -> x
+                            | Iterator (FiniteTuple s, _) | FiniteTuple s ->
+                               Exceptions.panic "max tuple: todo"
+                            | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) ->
+                               Typingdomain.builtin_inst "str"
+                            | _-> assert false
+                            end
+                         | _ -> assert false in
+                       return_id_of_type man flow range ptype
+                       )
+                     (* ~felse:tyerror
+                      * man flow) *)
+                 ~felse:tyerror
+                 man flow
+             )
+         |> OptionExt.return
+
+
+
       (*********
        * Lists *
        *********)
@@ -538,8 +582,39 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__add__")}, _)}, args, []) ->
-         Exceptions.panic "todo: __add__ for lists@\n"
-      (* just check that both are instances of lists, and merge the types of both lists? *)
+         (* just check that both are instances of lists, and merge the types of both lists? *)
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 2 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let lst, lst' = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                   ~fthen:(fun flow ->
+                     Eval.assume (mk_py_isinstance_builtin lst' "list" range)
+                       ~fthen:(fun flow ->
+                         let cur = Flow.get_domain_cur man flow in
+                         let tyl = match ekind lst with
+                           | E_type_partition tid -> Typingdomain.TypeIdMap.find tid cur.d2
+                           | _ -> assert false in
+                         let tyl' = match ekind lst' with
+                           | E_type_partition tid -> Typingdomain.TypeIdMap.find tid cur.d2
+                           | _ -> assert false in
+                         let t, d3, pos_d3 = Typingdomain.join_poly (tyl, cur.d3) (tyl', cur.d3) cur.d3 cur.pos_d3 in
+                         let cur = {cur with d3; pos_d3} in
+                         let flow = Flow.set_domain_cur cur man flow in
+                         return_id_of_type man flow range t
+                       )
+                       ~felse:tyerror
+                       man flow
+                   )
+                   ~felse:tyerror
+                   man flow
+               )
+           |> OptionExt.return
+         else
+           tyerror flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.append")}, _)}, args, []) ->
          let tyerror = fun flow ->
@@ -581,6 +656,25 @@ module Domain =
                ) |> OptionExt.return
          else
            tyerror flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.index")}, _)}, [list; value], []) ->
+         Eval.eval_list [list; value] man.eval flow |>
+           Eval.bind (fun eargs flow ->
+               let elist, evalue = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+               Eval.assume (mk_py_isinstance_builtin elist "list" range)
+                 ~fthen:(fun flow ->
+                   man.eval (mk_py_top T_int range) flow |>
+                   Eval.join (man.exec (Utils.mk_builtin_raise "ValueError" range) flow |> Eval.empty_singleton)
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+               man flow
+             )
+         |> OptionExt.return
+
+
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
          Eval.eval_list args man.eval flow |>
@@ -642,6 +736,10 @@ module Domain =
                  man flow
              )
          |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__iter__")}, _)}, [self], []) ->
+         man.eval self flow |> OptionExt.return
+
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [arg], []) ->
          man.eval arg flow |>
@@ -746,6 +844,8 @@ module Domain =
              )
          |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple_iterator.__iter__")}, _)}, [self], []) ->
+         man.eval self flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple_iterator.__next__")}, _)}, [arg], []) ->
          man.eval arg flow |>
@@ -769,6 +869,80 @@ module Domain =
                       Eval.empty_singleton
                | _ -> assert false)
          |> OptionExt.return
+
+      (***********
+       * Strings *
+       ***********)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__iter__")}, _)}, [arg], []) ->
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               Eval.assume (mk_py_isinstance_builtin earg "str" range)
+                 ~fthen:(fun flow ->
+                   let cur = Flow.get_domain_cur man flow in
+                   let str:Typingdomain.polytype = match ekind earg with
+                     | E_type_partition i ->
+                        Typingdomain.TypeIdMap.find i cur.d2
+                     | _ -> assert false in
+                   return_id_of_type man flow range (Typingdomain.Iterator (str, -1)) (* builtin_inst "list_iterator"*)
+                 )
+                 ~felse:(fun flow ->
+                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                     Eval.empty_singleton
+                 )
+                 man flow
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [arg], []) ->
+         let args' = arg :: (mk_py_none range) :: (mk_constant T_int (C_int (Z.of_int (-1))) range) :: [] in
+         man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [arg; sep], []) ->
+         let args' = arg :: sep :: (mk_constant T_int (C_int (Z.of_int (-1))) range) :: [] in
+         man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)}, [arg; sep; maxsplit], []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         Eval.eval_list [arg; sep; maxsplit] man.eval flow |>
+           Eval.bind (fun eargs flow ->
+               let earg, esep, emaxsplit = match eargs with [e1; e2; e3] -> e1, e2, e3 | _ -> assert false in
+               Eval.assume (mk_py_isinstance_builtin earg "str" range)
+                 ~fthen:(fun flow ->
+                   Eval.assume (mk_py_isinstance_builtin maxsplit "int" range)
+                     ~fthen:(fun flow ->
+                       Eval.assume (mk_py_isinstance_builtin sep "str" range)
+                         ~fthen:(fun flow -> return_id_of_type man flow range (Typingdomain.List (Typingdomain.builtin_inst "str")))
+                         ~felse:tyerror
+                         man flow
+                     )
+                     ~felse:tyerror
+                     man flow
+                 )
+                 ~felse:tyerror
+                 man flow
+             )
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str_iterator.__iter__")}, _)}, [self], []) ->
+         man.eval self flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str_iterator.__next__")}, _)}, [arg], []) ->
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               match ekind earg with
+               | E_type_partition i ->
+                  let cur = Flow.get_domain_cur man flow in
+                  let evl =
+                    begin match Typingdomain.TypeIdMap.find i cur.d2 with
+                    | Iterator (Instance {classn=Class (C_builtin "str", _)} as i, _) -> return_id_of_type man flow range i
+                    | _ -> assert false
+                    end
+                  in Eval.join evl (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton)
+               | _ -> assert false)
+         |> OptionExt.return
+
 
       (*********
        * Range *
@@ -871,6 +1045,10 @@ module Domain =
          else
            tyerror flow
            |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__iter__")}, _)}, [self], []) ->
+         man.eval self flow |> OptionExt.return
+
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
          (* FIXME: ne pas oublier le StopIteration. Pour les autres next *)

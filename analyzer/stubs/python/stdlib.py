@@ -319,6 +319,7 @@ class list(object):
 
 class list_iterator(object):
     def __next__(self): pass
+    def __iter__(self): pass
 
 class dict(object):
     def __getitem__(self, k): pass
@@ -352,6 +353,7 @@ class range(object):
 
 class range_iterator(object):
     def __next__(self): pass
+    def __iter__(self): pass
 
 class set(object):
     def __init__(self, start, stop): pass
@@ -363,6 +365,7 @@ class set(object):
 
 class set_iterator(object):
     def __next__(self): pass
+    def __iter__(self): pass
 
 class tuple(object):
     def __init__(self): pass
@@ -371,6 +374,7 @@ class tuple(object):
 
 class tuple_iterator(object):
     def __next__(self): pass
+    def __iter__(self): pass
 
 class slice(object):
     def __new__(self, args): pass

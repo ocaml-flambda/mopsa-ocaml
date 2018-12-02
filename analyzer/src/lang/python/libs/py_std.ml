@@ -131,6 +131,69 @@ module Domain =
          else
            tyerror flow |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)} as call, [els], [])  ->
+         let args' = els :: (mk_constant T_int (C_int (Z.of_int 0)) range) :: [] in
+         man.eval {exp with ekind = E_py_call(call, args', [])} flow |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)}, [ els; start ], [])  ->
+      (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
+         let counter = mk_tmp () in
+         let counter_var = mk_var counter range in
+         let target = mk_tmp () in
+         let target_var = mk_var target range in
+         let assign = mk_assign counter_var (mk_constant T_int (C_int (Z.of_int 0)) range) range in
+         let pass = mk_block [] range in
+         let for_loop = mk_stmt (S_py_for (target_var, els,
+                                           mk_assign counter_var (mk_binop counter_var O_plus target_var range) range,
+                                           pass)) range in
+         let stmt = mk_block (assign :: for_loop :: []) range in
+         debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
+         man.exec stmt flow |>
+           man.eval counter_var |>
+           Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
+           OptionExt.return
+
+      (* I prefer the version in typing.ml for now... *)
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
+       *    (\* desugaring max(iterable) into:
+       *     *    tmp1 = iter(iterable)
+       *     *    max = next(tmp1)
+       *     *    for x in tmp1:
+       *     *        if x > max:
+       *     *            max = x *\)
+       *    let iter = mk_tmp () in
+       *    let iter_var = mk_var iter range in
+       *    let maxi = mk_tmp () in
+       *    let maxi_var = mk_var maxi range in
+       *    let target = mk_tmp () in
+       *    let target_var = mk_var target range in
+       *
+       *    let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
+       *    let pass = mk_block [] range in
+       *
+       *    let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+       *    let assign_max =
+       *      Utils.mk_try_stopiteration
+       *        (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
+       *        (Utils.mk_builtin_raise "ValueError" range)
+       *      range in
+       *    let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
+       *                                      mk_if (mk_binop target_var O_gt maxi_var range)
+       *                                        (mk_assign maxi_var target_var range)
+       *                                        pass range
+       *                                      , pass)) range in
+       *    let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
+       *    debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
+       *    man.exec stmt flow |>
+       *      man.eval maxi_var |>
+       *      Eval.add_cleaners cleaners |>
+       *      OptionExt.return *)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [e1; e2], []) ->
+         (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
+         let expr = mk_expr (E_py_if (mk_binop e1 O_gt e2 range, e1, e2)) range in
+         debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
+         man.eval expr flow |> OptionExt.return
 
       | _ ->
          None

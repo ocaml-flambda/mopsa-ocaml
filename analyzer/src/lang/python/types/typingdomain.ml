@@ -991,6 +991,16 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
+  | Iterator (Instance {classn=Class (C_builtin "str",  _)}, _) ->
+     let list_it, list_itb = match kind_of_object (Addr.find_builtin "str_iterator") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
+
   | Iterator _ -> Exceptions.panic "filter_polyinst iterator _@\n"
   | Function f ->
      let func, funcb = match kind_of_object (Addr.find_builtin "function") with

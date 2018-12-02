@@ -303,6 +303,9 @@ let mk_attribute_var obj attr range =
   in
   mk_var v range
 
+let mk_py_hasattr e attr range =
+  mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
+
 let mk_py_isinstance e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
 

@@ -26,15 +26,16 @@ def test_mro_pos():
     mopsa.massert(isinstance(a, O))
     mopsa.massert(isinstance(a, object))
 
-# def test_mro_neg():
-#     class G: pass
-#     class F: pass
-#     class E(F): pass
-#     class D(G): pass
-#     class C(D, E): pass
-#     class B(F, G): pass
-#     class A(B, C): pass
-#     mopsa.assert_exception(TypeError)
+def test_mro_neg():
+    class G: pass
+    class F: pass
+    class E(F): pass
+    class D(G): pass
+    class C(D, E): pass
+    class B(F, G): pass
+    mopsa.assert_safe()
+    class A(B, C): pass
+    mopsa.assert_exception(TypeError)
 
 def test_attr_pos():
     class A: pass
