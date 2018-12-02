@@ -97,7 +97,12 @@ let () =
 
         Debug.info "Outputing actions ...";
         let () = Analyzer.output_actions () in
-        Output.Factory.render Analyzer.man res t files
+        let ret = Output.Factory.render Analyzer.man res t files in
+        if List.exists (fun (k, _, _) -> k = "-unittest") !Options.spec then
+          (* il faudrait passer une option = Factory.render pour filtrer? *)
+          0
+        else
+          ret
 
       with
         e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2

@@ -30,14 +30,14 @@ let render man alarms time files out =
   print "%a@." (Debug.color_str "green") "Analysis terminated successfully";
   print "Time: %.3fs@." time;
   match alarms with
-  | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"; 0
+  | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
   | _ ->
     print "%d alarm%a detected:@." (List.length alarms) Debug.plurial_list alarms;
     print "  @[%a@]@."
       (pp_print_list
          ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
          Alarm.pp_alarm
-      ) alarms; 1
+      ) alarms
 
 
 

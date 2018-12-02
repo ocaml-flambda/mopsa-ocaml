@@ -42,7 +42,7 @@ let render man alarms time files out =
         ) alarms);
     ]
   in
-  print json out; 0
+  print json out
 
 
 let panic ?(btrace="<none>") exn files out =
