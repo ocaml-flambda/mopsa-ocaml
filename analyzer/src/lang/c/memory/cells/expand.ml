@@ -458,14 +458,17 @@ module Domain = struct
 
 
   (** Evaluate an offset expression into an offset evaluation *)
-  let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
+  let eval_cell_offset_cases (offset:expr) cell_size base_size man flow : ('a, (offset * 'a flow) list) evl =
+    let singleton e flow =
+      Eval.singleton [e, flow] flow
+    in
     (* Try the static case *)
     match Universal.Utils.expr_to_z offset with
     | Some z ->
       if Z.geq z Z.zero &&
          Z.leq (Z.add z cell_size) base_size
-      then Eval.singleton (O_concrete z) flow
-      else Eval.singleton O_out_of_bound flow
+      then singleton (O_concrete z) flow
+      else singleton O_out_of_bound flow
 
     | None ->
       (* Evaluate the offset in Z_u_num and check the bounds *)
@@ -497,17 +500,17 @@ module Domain = struct
                 else if i >= !opt_expand
                 then
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton (O_interval (Intervals.of_constant () (C_int_interval (o, u)))) flow']
+                  [O_interval (Intervals.of_constant () (C_int_interval (o, u))), flow']
                 else
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
-                  Eval.singleton (O_concrete o) flow' :: aux (i + 1) (Z.add o step)
+                  (O_concrete o, flow') :: aux (i + 1) (Z.add o step)
               in
               let evals = aux 0 l in
-              Eval.join_list evals
+              Eval.singleton (evals) flow
             else
-              Eval.singleton (O_interval itv) flow
+              singleton (O_interval itv) flow
           )
-        ~felse:(fun flow -> Eval.singleton O_out_of_bound flow)
+        ~felse:(fun flow -> singleton O_out_of_bound flow)
         man flow
 
 
@@ -520,33 +523,57 @@ module Domain = struct
     | C_interval_offset of base * Intervals.t * typ (* set of cells with an interval offset *)
     | C_fun of c_fundec                             (* functions *)
 
-  let eval_cell b o t range man flow =
-    eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
-    Eval.bind @@ fun o flow ->
-    match o with
-    | O_concrete o -> Eval.singleton (C_cell (C_offset {b; o; t}, STRONG)) flow
-    | O_interval itv -> Eval.singleton (C_interval_offset (b, itv, t)) flow
-    | O_out_of_bound ->
-      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-      let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
-      let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                  Flow.set T_cur man.bottom man
-      in
-      Eval.empty_singleton flow'
+  let eval_cell_cases b o t range man flow =
+    eval_cell_offset_cases o (sizeof_type t) (base_size b) man flow |>
+    Eval.bind @@ fun ol flow ->
+    let cl = List.map (fun (o, flow) ->
+        match o with
+        | O_concrete o -> Some (C_cell (C_offset {b; o; t}, STRONG)), flow
+        | O_interval itv -> Some (C_interval_offset (b, itv, t)), flow
+        | O_out_of_bound ->
+          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
+          let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
+          let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
+                      Flow.set T_cur man.bottom man
+          in
+          None, flow'
+      ) ol
+    in
+    Eval.singleton cl flow
 
 
   (** Evaluate a quantified cell *)
   let eval_quantified_cell b o t range man flow =
-    let q, qvl, o' = Stubs.Ast.unquantify_expr o in
-    let evl = eval_cell b o' t range man flow in
+    let open Stubs.Ast in
+    let q, vl, o' = unquantify_expr o in
+    eval_cell_cases b o' t range man flow |>
+    Eval.bind @@ fun l flow ->
+    let evl = List.map (fun (c, flow) ->
+        match c with
+        | Some cc -> Eval.singleton cc flow
+        | None -> Eval.empty_singleton flow
+      ) l
+    in
     let evl' =
       match q with
-      | EXISTS -> evl
-      | FORALL -> Eval.flip evl
+      | EXISTS -> Eval.join_list evl
+      | FORALL -> Eval.meet_list evl
       | MIXED  -> panic_at range "cell: evaluation of offsets with mixed quantifiers not supported"
     in
-    let cleaners = List.map (fun qv -> mk_remove_var qv range) qvl in
+    let cleaners = List.map (fun v -> mk_remove_var v range) vl in
     Eval.add_cleaners cleaners evl'
+
+
+  (** Evaluate a non-quantified cell *)
+  let eval_non_quantified_cell b o t range man flow =
+    eval_cell_cases b o t range man flow |>
+    Eval.bind @@ fun cl flow ->
+    let cl' = cl |> List.map(function
+        | Some c, flow -> Eval.singleton c flow
+        | None, flow -> Eval.empty_singleton flow
+      )
+    in
+    Eval.join_list cl'
 
 
   let eval_pointed_cell p man flow =
@@ -558,7 +585,7 @@ module Domain = struct
       eval_quantified_cell b o t p.erange man flow
 
     | E_c_points_to(P_var (b, o, t)) ->
-      eval_cell b o t p.erange man flow
+      eval_non_quantified_cell b o t p.erange man flow
 
     | E_c_points_to(P_fun fundec) ->
       Eval.singleton (C_fun fundec) flow
@@ -582,7 +609,7 @@ module Domain = struct
     | _ -> assert false
 
   (** Evaluate an lval into a cell *)
-  let rec eval_cell exp man flow =
+  let rec eval_lval exp man flow =
     match ekind exp with
     | E_var (v, mode) when is_c_type v.vtyp ->
       let c = C_offset {b = V v; o = Z.zero; t = v.vtyp}  in
@@ -604,7 +631,7 @@ module Domain = struct
   let eval zone exp man flow =
     match ekind exp with
     | E_var _ | E_c_deref _ ->
-      eval_cell exp man flow |>
+      eval_lval exp man flow |>
       OptionExt.lift @@ Eval.bind @@ fun c flow ->
       begin match c with
         | C_cell(c, mode) ->
@@ -623,7 +650,7 @@ module Domain = struct
       Eval.bind_opt @@ fun pe flow ->
       begin match ekind pe with
         | E_c_points_to(P_var (b, o, t)) ->
-          Eval.singleton (mk_z (Z.div (base_size b) (sizeof_type t)) exp.erange) flow |>
+          Eval.singleton (mk_z (Z.div (base_size b) (Z.max Z.one (sizeof_type t))) exp.erange) flow |>
           OptionExt.return
 
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
@@ -633,7 +660,7 @@ module Domain = struct
       man.eval ~zone:(Z_c, Z_c_scalar) e flow |>
       Eval.bind_opt @@ fun e flow ->
 
-      eval_cell e man flow |>
+      eval_lval e man flow |>
       OptionExt.lift @@ Eval.bind @@ fun c flow ->
       begin match c with
         | C_cell(c, mode) ->
@@ -810,7 +837,7 @@ module Domain = struct
       |> OptionExt.return
 
     | S_add_var (v) when is_c_type v.vtyp ->
-      eval_cell (mk_var v stmt.srange) man flow |>
+      eval_lval (mk_var v stmt.srange) man flow |>
       OptionExt.lift @@ Post.bind man @@ fun ce flow ->
       let c = match ce with
         | C_cell (c, _) -> c
@@ -862,7 +889,7 @@ module Domain = struct
       man.eval ~zone:(Z_c, Z_c_scalar) lval flow |>
       Post.bind_opt man @@ fun lval flow ->
 
-      eval_cell lval man flow |>
+      eval_lval lval man flow |>
       OptionExt.lift @@ Post.bind man @@ fun c flow ->
       begin
         match c with
@@ -888,7 +915,7 @@ module Domain = struct
       man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
       Post.bind_opt man @@ fun x flow ->
 
-      eval_cell x man flow |>
+      eval_lval x man flow |>
       OptionExt.lift @@ Post.bind man @@ fun x flow ->
 
       prepare_cells_for_stub_assigns x None t stmt.srange man flow
@@ -909,15 +936,15 @@ module Domain = struct
         prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
       )
 
-    | Stubs.Ast.S_stub_remove_old(x) when is_c_scalar_type x.etyp ->
+    | Stubs.Ast.S_stub_remove_old(x, None) ->
       man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
       Post.bind_opt man @@ fun x flow ->
-      eval_cell x man flow |>
+      eval_lval x man flow |>
       OptionExt.lift @@ Post.bind man @@ fun x flow ->
 
       remove_old_cells x stmt.srange man flow
 
-    | Stubs.Ast.S_stub_remove_old(x) ->
+    | Stubs.Ast.S_stub_remove_old(x, Some _) ->
       Some (
         eval_pointed_cell x man flow |>
         Post.bind man @@ fun x flow ->

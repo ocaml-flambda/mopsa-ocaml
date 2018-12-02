@@ -140,15 +140,15 @@ type stmt_kind +=
                       (expr * expr) option (** modification range *)
   (** Declare an assignment and create old copies *)
 
-  | S_stub_remove_old of expr
+  | S_stub_remove_old of expr * (expr * expr) option
   (** remove old copies of an assigned target *)
 
 
 let mk_stub_assigns target offsets range =
   mk_stmt (S_stub_assigns (target, offsets)) range
 
-let mk_stub_remove_old target range =
-  mk_stmt (S_stub_remove_old target) range
+let mk_stub_remove_old target offsets range =
+  mk_stmt (S_stub_remove_old (target, offsets)) range
 
 
 (** {2 Pretty printers} *)
@@ -318,8 +318,11 @@ let () =
             (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
           ]
 
-        | S_stub_remove_old(t1), S_stub_remove_old(t2) ->
-          compare_expr t1 t2
+        | S_stub_remove_old(t1, o1), S_stub_remove_old(t2, o2) ->
+          Compare.compose [
+            (fun () -> compare_expr t1 t2);
+            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+          ]
 
         | _ -> next s1 s2
       );
@@ -327,7 +330,7 @@ let () =
     visit = (fun next s ->
         match skind s with
         | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
-        | S_stub_remove_old(t) -> panic "visitor for S_stub_remove_old not supported"
+        | S_stub_remove_old(t, o) -> panic "visitor for S_stub_remove_old not supported"
         | _ -> next s
       );
 
@@ -335,7 +338,7 @@ let () =
         match skind s with
         | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
         | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
-        | S_stub_remove_old(target) -> fprintf fmt "remove old(%a);" pp_expr target
+        | S_stub_remove_old(target, _) -> fprintf fmt "remove old(%a);" pp_expr target
         | _ -> next fmt s
       );
   }

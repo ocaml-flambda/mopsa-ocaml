@@ -50,7 +50,9 @@ lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 lang.cfg = ast pp visitor frontend iterator iterators
 lang.cfg.iterators = intraproc inlining
 
-lang.jvm = ast precheck frontend
+lang.jvm = ast precheck frontend iterators
+lang.jvm.iterators = stack_typing program
+
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib

@@ -20,31 +20,29 @@ open Javalib
 open JBasics
 open JCode
 open Framework.Essentials
+open Framework.Domains.Leaf
 open Cfg.Ast
 open Ast
 open Bot
+open Top
 
 
-let name = "jvm.precheck"
-let debug fmt = Debug.debug ~channel:name fmt
-
-
+   
 let dump_errors = true (** show precheck errors *)
 let dump_result = false (** show the analysis result *)
-let trace = false (** trace CFG iteration *)
-          
+
 
 (*==========================================================================*)
                        (** {2 Abstract values} *)
 (*==========================================================================*)
 
 
-(** For double-word data: whether this is the low or hi word *)
+(** For double-word data: tell whether this is the low or hi word *)
 type word = HI | LO
 
                
 (** Abstract values: type & return address. 
-    We do not distinguish between reference types.
+    We do not distinguish between references to different objet types.
  *)
 type aval =
   | A_int
@@ -365,7 +363,7 @@ let store_value index v a = match v with
 
 (** An error, with location information. *)
 type err =
-  node_id  (** location *)
+  range    (** location *)
   * string (** operation *)
   * string (** error message *)
 
@@ -622,7 +620,7 @@ let exec_ret (index:int) (x:pastate) : pastate TagLocMap.t * string list =
     Returns a map from return sites to abstract states for ret.
     Also returns a list of errors, with location information.
  *)
-let exec_block (loc:node_id) (ret:node_id option) (l:jopcode_range list) (a:pastate)
+let exec_block (loc:range) (ret:node_id option) (l:jopcode_range list) (a:pastate)
     : pastate with_bot * pastate TagLocMap.t * err list =
   let add_err op err' err =
     (List.map (fun msg -> loc, JPrint.jopcode op, msg) err')@err
@@ -680,19 +678,32 @@ let method_start (static:bool) (args:value_type list) =
                         (** {2 Iterator} *)
 (*==========================================================================*)
 
-
-  (* TODO:
-     - check return 
-     - ensure termination (limiting the stack should be enough)
-   *)
-
-let nb_errors = ref 0
   
-module Domain = struct
+module StackTyping : S =
+struct
 
-  type t = pastate
+  type t = pastate with_top
 
-  type manager = j_method
+  type _ domain += D_jvm_stack_typing : t domain
+
+  let name = "jvm.iterators.jvm_stack_typing"
+
+  let id = D_jvm_stack_typing
+
+  let identify : type a. a domain -> (t, a) eq option =
+    function
+    | D_jvm_stack_typing -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
+                
+  let zone = any_zone
+
+
+  let print fmt x =
+   top_fprint pp_pastate fmt x
+
+  let nb_errors = ref 0
 
   (* error printing *)
   let print_err l =
@@ -702,113 +713,64 @@ module Domain = struct
         (fun (loc,op,msg) ->
           Format.printf
             "precheck error at %a for %s: %s@\n"
-            pp_node_id loc op msg
+            pp_range loc op msg
         ) l
 
-  let bot m = SubMap.empty
+  let bottom = Nt SubMap.empty
 
-  let entry m id n flow =
-    let init,err = method_start m.m_static m.m_args in
-    print_err err;
-    init
+  let top = TOP
 
-  let join m loc a b =
-    let r,err = join_pastate a b in
-    print_err (List.map (fun msg -> loc,"join",msg) err);
-    if trace then
-      Format.printf
-        "join %a@.  @[%a@]@.  @[%a@]@.  @[%a@]@."
-        pp_node_id loc pp_pastate a pp_pastate b pp_pastate r;
-    r
-                 
+  let is_bottom x =
+    x = bottom
+
+    
+  let subset x y =
+    top_included subset_pastate x y
+
+    
+  let join annot x y =
+    let j a b =
+      let r,err = join_pastate a b in
+      r
+    in
+    top_lift2 j x y
+
+    
   let widen = join
 
-  let join_list m loc l =
-    List.fold_left (join m loc) SubMap.empty l
             
-  let subset m loc = subset_pastate
+  let meet annot x y =
+    (* TODO *)
+    x
 
-  let exec m loc i e =
-
-    (* merge abstract state inputs *)
-    let x = join_list m loc (List.map snd i) in
     
-    (* get ret site associated to a jsr instruction *)
-    let ret = match CFG.edge_dst_port e F_java_ret_site with
-      | [n] -> Some (CFG.node_id n)
-      | _ -> None
-    in
+  let init prog =
+    bottom
+
     
-    (* execute transfer function *)
-    let ops = match (CFG.edge_data e).skind with
-      | S_java_opcode ops -> ops
-      | _ -> failwith "not Java bytecode in Precheck.Domain.exec"
-    in
-    let rn, rr, err = exec_block loc ret ops x in
-    print_err err;
+  let exec stmt x =
+    match skind stmt, x with
 
-    if trace then
-      Format.printf
-        "exec %a@.  @[%a@] -> @[%a@] @[%a@]@."
-        pp_node_id loc pp_pastate x
-        (bot_fprint pp_pastate) rn
-        (TagLocMap.fprint MapExt.printer_default pp_node_id pp_pastate) rr;
+    | S_java_opcode op, Nt x ->
 
-    (* non-ret propagation *)
-    let acc =
-      match rn with
-      | BOT -> []
-      | Nb rn ->
-         List.fold_left
-           (fun acc (t,n) ->
-             match t with
-             | T_cur | F_java_if_true
-             | F_java_jsr | F_java_return_site | F_java_switch _
-               ->
-                (* direct propagation *)
-                (t,rn)::acc
-                
-             | F_java_exn ->
-                (* exception *)
-                (t, (exec_exn rn))::acc
+       let ret = None in
+       let rn, rr, err = exec_block (srange stmt) ret op x in
+       print_err err;
+ 
+       return top
+      
+    | _ ->
+       return top
 
-             | F_java_ret _ | F_java_ret_site ->
-                (* no direct propagation to from jsr to the ret site *)
-                acc
-          
-             | _ -> failwith "not a Java flow in Precheck.Domain.exec"
-           )
-           [] (CFG.edge_dst e)
-    in
 
-    (* add ret propagation *)
-    TagLocMap.fold
-      (fun l r acc ->
-        (* add the connction to the ret site, if needed *)
-        let n = CFG.get_node m.m_cfg.cfg_graph l in
-        CFG.edge_add_dst_unique e (F_java_ret l) n;
-        (* add flow *)
-        (F_java_ret l, r)::acc
-      )
-      rr acc
-    
+  let ask : type r. r Framework.Query.query -> t -> r option =
+    fun query abs ->
+    match query with
+    | _ -> None         
+           
 end
+  
+let () = register_domain (module StackTyping)
+       
 
-
-module Analyze = Cfg.Iterator.Make(Domain)(Cfg.Iterator.SetWorklist)
-              
-
-let analyze (m:j_method) =
-  let r = Analyze.iterate m m.m_cfg in
-  (* print result *)
-  if dump_result then (
-    Format.printf "precheck results:@\n";
-    CFG.iter_nodes_ordered
-      (fun id _ ->
-        Format.printf
-          "  %a: @[%a@]@\n"
-          pp_node_id id pp_pastate (TagLocHash.find r id)
-      ) m.m_cfg.cfg_graph;
-    Format.printf "@\n"
-  )
-
+       

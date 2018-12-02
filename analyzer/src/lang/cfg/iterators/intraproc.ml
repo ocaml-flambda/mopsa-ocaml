@@ -75,7 +75,7 @@ struct
           )
           flow dst
       in
-      (* clean-up flows used by transfoer function *)
+      (* clean-up flows used by transfer function *)
       let flow =
         List.fold_left
           (fun flow (port,_) -> Flow.remove port man flow)
