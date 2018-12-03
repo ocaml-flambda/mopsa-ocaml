@@ -38,6 +38,37 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)} as f), [cls; arg], []) ->
+         (* FIXME: check: According to the documentation: By default,
+            an object is considered true unless its class defines
+            either a __bool__() method that returns False or a __l
+            en__() method that returns zero, when called with the
+            object.  *)
+
+         man.eval arg flow |>
+           Eval.bind (fun earg flow ->
+               Eval.assume
+                 (mk_py_hasattr earg "__bool__" range)
+                 ~fthen:(fun flow ->
+                   let attr = mk_py_attr earg "__bool__" range in
+                   man.eval (mk_py_call attr [] range) flow
+                 )
+                 ~felse:(fun flow ->
+                   Eval.assume
+                     (mk_py_hasattr earg "__len__" range)
+                     ~fthen:(fun flow ->
+                       let attr = mk_py_attr earg "__len__" range in
+                       let comp = mk_binop (mk_py_call attr [] range) O_ne (mk_zero range) range in
+                       man.eval comp flow)
+                     ~felse:(fun flow ->
+                       man.eval (mk_py_true range) flow)
+                     man flow
+                 )
+                 man flow
+             )
+         |> OptionExt.return
+
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "int.__new__")}, _)}, [cls], []) ->
          man.eval (mk_py_top T_int range) flow |> OptionExt.return
 

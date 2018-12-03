@@ -95,6 +95,8 @@ let is_arith_binop_fun cl str =
     | "__rsub__" -> true
     | "__and__"
     | "__rand__"
+    | "__rshift__"
+    | "__rrshift__"
     | "__lshift__"
     | "__rlshift__"
     | "__or__"

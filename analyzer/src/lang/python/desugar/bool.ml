@@ -37,6 +37,12 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       (* E⟦ e1 and e2 ⟧ *)
+      | E_binop(O_py_and, {ekind = E_constant (C_bool true)}, e2) ->
+         man.eval e2 flow |> OptionExt.return
+
+      | E_binop(O_py_and, {ekind = E_constant (C_bool false)}, e2) ->
+         Eval.singleton (mk_py_false range) flow |> OptionExt.return
+
       | E_binop(O_py_and, e1, e2) ->
          Some (man.eval e1 flow |>
                  Eval.bind @@
@@ -45,6 +51,12 @@ module Domain =
                      ~fthen:(fun true_flow -> man.eval e2 true_flow)
                      ~felse:(fun false_flow -> Eval.singleton e1 false_flow)
                      flow1)
+
+      | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
+         Eval.singleton (mk_py_true range) flow |> OptionExt.return
+
+      | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
+         man.eval e2 flow |> OptionExt.return
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->

@@ -553,3 +553,10 @@ let () =
                       | _ -> default a1 a2) } in
       register_addr info
     )
+
+
+let builtin_cl_and_mro s =
+  let tyo = kind_of_object (find_builtin s) in
+  match tyo with
+  | A_py_class (c, b) -> c, b
+  | _ -> assert false
