@@ -103,8 +103,13 @@ module Domain =
                      ~fthen:(fun true_flow ->
                        man.eval (mk_py_top (T_float F_DOUBLE) range) true_flow)
                      ~felse:(fun false_flow ->
-                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                       man.eval expr false_flow)
+                       Eval.assume
+                         (mk_py_isinstance_builtin e2 "int" range)
+                         ~fthen:(fun flow -> man.eval (mk_py_top (T_float F_DOUBLE) range) true_flow)
+                         ~felse:(fun false_flow ->
+                           let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                           man.eval expr false_flow)
+                         man false_flow)
                      man true_flow
                  )
                  ~felse:(fun false_flow ->

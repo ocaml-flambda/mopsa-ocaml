@@ -80,7 +80,16 @@ module Domain =
                 *        (\*                        Eval.singleton exp flow *\)
                 *        ) *)
 
-               | _ -> debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
+               | _ ->
+                  (* if f has attribute call, restart with that *)
+                  Eval.assume
+                    (mk_py_hasattr f "__call__" range)
+                    ~fthen:(fun flow ->
+                      man.eval (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
+                    ~felse:(fun flow ->
+                      debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
+                    )
+                    man flow
              )
          |> OptionExt.return
 
