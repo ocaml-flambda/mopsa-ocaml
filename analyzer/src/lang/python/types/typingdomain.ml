@@ -36,6 +36,7 @@ type 'a pytype =
   (* and position in iterator, if applicable *)
   | FiniteTuple of 'a pytype list
   (* tuples of given size *)
+  | Set of 'a pytype
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
   | Class of class_address * py_object list (* class * mro *)
@@ -74,6 +75,7 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Bot -> Format.fprintf fmt "⊥"
   | Top -> Format.fprintf fmt "⊤"
   | List ty -> Format.fprintf fmt "List[%a]" (pp_pytype print_vars) ty
+  | Set ty -> Format.fprintf fmt "Set[%a]" (pp_pytype print_vars) ty
   | FiniteTuple l -> Format.fprintf fmt "FiniteTuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") (pp_pytype print_vars)) l
   | Iterator (ty, d) -> Format.fprintf fmt "Iterator[%a, %d]" (pp_pytype print_vars) ty d
   | Instance {classn; uattrs; oattrs} ->
@@ -247,6 +249,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Module m -> Module m
   | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
+  | Set v -> Set (unsafe_cast f v)
   | FiniteTuple l -> FiniteTuple ((List.map @@ unsafe_cast f) l)
   | Iterator (t, d) -> Iterator ((unsafe_cast f t), d)
   | Typevar v -> Typevar (f v)
@@ -265,10 +268,14 @@ let poly_cast (t:monotype) : polytype =
 let mono_set_cast (ts:Polytypeset.t) : Monotypeset.t =
   Polytypeset.fold (fun el monos -> Monotypeset.add (mono_cast el) monos) ts Monotypeset.empty
 
+let poly_set_cast (ts:Monotypeset.t) : Polytypeset.t =
+  Monotypeset.fold (fun el polys -> Polytypeset.add (poly_cast el) polys) ts Polytypeset.empty
+
 let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   match t with
   | Typevar v when v = var -> value
   | List v -> List (subst v var value)
+  | Set v -> Set (subst v var value)
   | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
   | Iterator (v, d) -> Iterator ((subst v var value), d)
   | Instance {classn; uattrs; oattrs} ->
@@ -282,6 +289,7 @@ let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
     match t with
     | List t -> collect t acc
+    | Set t -> collect t acc
     (* l: 'a pytype list *)
     (* el : 'a pytype *)
     (* acc: Typevarset *)
@@ -348,6 +356,9 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
   | List t, List t' ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
+  | Set t, Set t' ->
+     let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Set t, d3_acc, pos_d3
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      let t, d3_acc, pos_d3 =
        List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
@@ -532,7 +543,7 @@ let is_mono (u:polytype)  : bool =
 let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
-  | List u, List v -> polytype_leq (u, d3) (v, d3')
+  | List u, List v | Set u, Set v  -> polytype_leq (u, d3) (v, d3')
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      List.fold_left2 (fun acc t t' -> acc && polytype_leq (t, d3) (t', d3')) true l l'
   | Iterator (u, _), Iterator (v, _) -> polytype_leq (u, d3) (v, d3')
@@ -590,6 +601,9 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | List t, List t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      List t, d3_acc, pos_d3
+  | Set t, Set t' ->
+     let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Set t, d3_acc, pos_d3
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      let t, d3_acc, pos_d3 =
        List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
@@ -964,6 +978,15 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
         if class_le (list, listb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
+  | Set t ->
+     let sett, setb = match kind_of_object (Addr.find_builtin "set") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (sett, setb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
   | FiniteTuple l ->
      let tuple, tupleb = match kind_of_object (Addr.find_builtin "tuple") with
        | A_py_class (c, b) -> c, b
@@ -980,6 +1003,15 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
      begin match inst with
      | Class (d, b) ->
         if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+     | _ -> assert false
+     end
+  | Iterator (Set _, _) ->
+     let set_it, set_itb = match kind_of_object (Addr.find_builtin "set_iterator") with
+       | A_py_class (c, b) -> c, b
+       | _ -> assert false in
+     begin match inst with
+     | Class (d, b) ->
+        if class_le (set_it, set_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
      | _ -> assert false
      end
   | Iterator (FiniteTuple _, _) ->
@@ -1018,7 +1050,7 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
      begin match inst with
      | Class (d, b') ->
         if class_le (c, b) (d, b') then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
+     | _ -> debug "%a@\n" pp_monotype inst; assert false
      end
   | Instance {classn} -> Exceptions.panic "ni"
   | Typevar var ->
@@ -1059,6 +1091,35 @@ let filter_ty_inst (d:domain) (ty:polytype) (inst:monotype) : domain * domain =
   filter_inst d t inst
 
 
+let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list) * domain) list =
+  let triplet domain (a, b) = (a, b, domain) in
+  let rec aux pt domain = match pt with
+    | Instance {classn=Class (c, b)} -> [c, b, domain]
+    | Class _ -> [triplet domain @@ Addr.builtin_cl_and_mro "type"]
+    | List _ -> [triplet domain @@ Addr.builtin_cl_and_mro "list"]
+    | Set _ -> [triplet domain @@ Addr.builtin_cl_and_mro "set"]
+    | FiniteTuple _ -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple"]
+    | Iterator (List _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "list_iterator"]
+    | Iterator (Set _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "set_iterator"]
+    | Iterator (FiniteTuple _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple_iterator"]
+    | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "str_iterator"]
+    | Typevar a ->
+       let mtys = concretize_poly pt d.d3 in
+       Monotypeset.fold (fun mty acc ->
+           debug "MFold %a %a %a@\n" pp_polytype pt pp_monotype mty print domain;
+           let mtype = match mty with
+             | Instance {classn=c} -> c
+             | _ -> assert false in
+           let new_domain = fst @@ filter_inst domain tid mtype in
+           debug "new_domain = %a@\n" print new_domain;
+           (aux (poly_cast mty) new_domain) @ acc) mtys []
+    | _ -> debug "type_of %a@\n" pp_polytype pt; assert false
+
+  in
+  let pt = TypeIdMap.find tid d.d2 in
+  aux pt d
+
+
 
 let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) * (polytype * d3) =
   let cp x y = (x, y), (x, y) in
@@ -1070,11 +1131,12 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
      else
        (Bot, d3), (p, d3)
   | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
-  | List _ -> Exceptions.panic "ni"
-  | FiniteTuple _ -> Exceptions.panic "ni"
-  | Iterator _ -> Exceptions.panic "ni"
-  | Function _ -> Exceptions.panic "ni"
-  | Method _ -> Exceptions.panic "ni"
+  | List _
+    | Set _
+    | FiniteTuple _
+    | Iterator _
+    | Function _
+    | Method _ -> Exceptions.panic "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in
      if List.exists (fun x -> x.vname = attr) attrs then

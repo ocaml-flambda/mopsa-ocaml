@@ -38,6 +38,7 @@
         "python.types.t_int",
         "python.types.t_float",
         "python.types.t_list",
+        "python.types.t_set",
         "python.types.typing"
     ]
 }

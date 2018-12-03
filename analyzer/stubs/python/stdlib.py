@@ -360,6 +360,12 @@ class set(object):
     def __len__(self): pass
     def __iter__(self): pass
     def __contains__(self, v): pass
+    def __eq__(self, o): pass
+    def __ge__(self, o): pass
+    def __gt__(self, o): pass
+    def __le__(self, o): pass
+    def __lt__(self, o): pass
+    def __ne__(self, o): pass
     def add(self, c): pass
     def clear(self): pass
 

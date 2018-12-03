@@ -1,8 +1,12 @@
+# To fix: original file does not work... the raise BailOut is never catched
+# Also, there is a recursive function we don't handle yet
+
 BOARD_SIZE = 8
 
-
-class BailOut:
-    pass
+# Original Typpete file is not valid in Python3, as BailOut should inherit from BaseException
+# class BailOut:
+#    pass
+class BailOut(Exception): pass
 
 
 def validate(q):
