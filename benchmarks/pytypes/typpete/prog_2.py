@@ -31,6 +31,7 @@ def test_main():
     mopsa.massert(isinstance(s, int))
     mopsa.massert(isinstance(v, int))
     mopsa.massert(isinstance(w, int))
+    mopsa.ignore_exception(ValueError)
 # arr := List[int]
 # arr2 := List[int]
 # i := int

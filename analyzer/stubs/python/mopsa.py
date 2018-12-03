@@ -6,6 +6,7 @@ def assert_exists(cond): pass
 def assert_safe(cond): pass
 def assert_exception(exn): pass
 def assert_exception_exists(exn): pass
+def ignore_exception(exn): pass
 
 # Ranges
 def random_int(a, b): pass
