@@ -91,6 +91,24 @@ module Domain =
          |> OptionExt.return
 
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.insert")} as addr, r)} as call, args, []) ->
+      (* we're just doing a type analysis, so we can rewrite list.insert into list.append *)
+         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+         if List.length args = 3 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let lst, idx, el = match eargs with | [e1; e2; e3] -> e1, e2, e3 | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                   ~fthen:(fun flow ->
+                     Eval.assume (mk_py_isinstance_builtin idx "int" range)
+                       ~fthen:(fun flow ->
+                         man.eval {exp with ekind = E_py_call({call with ekind = E_py_object ({addr with addr_kind = A_py_function (F_builtin "list.append")}, r)}, args, [])} flow)
+                       ~felse:tyerror
+                       man flow)
+                   ~felse:tyerror
+                   man flow)
+           |> OptionExt.return
+         else tyerror flow |> OptionExt.return
 
       | _ -> None
 
