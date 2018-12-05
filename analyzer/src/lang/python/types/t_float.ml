@@ -28,6 +28,11 @@ module Domain =
       let flow = Flow.set_domain_cur ncur man flow in
       Eval.singleton (mk_expr (Typing.E_type_partition tid) range) flow |> OptionExt.return
 
+    let is_arith_unop_fun = function
+      | "float.__pos__"
+        | "float.__neg__" -> true
+           | _ -> false
+
     let eval zs exp man flow =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
@@ -118,6 +123,21 @@ module Domain =
                  man flow
              )
          |>  OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
+           when is_arith_unop_fun f ->
+         man.eval e flow |>
+           Eval.bind (fun el flow ->
+               Eval.assume
+                 (mk_py_isinstance_builtin e "float" range)
+                 ~fthen:(fun true_flow ->
+                   man.eval (mk_py_top (T_float F_DOUBLE) range) true_flow)
+                 ~felse:(fun false_flow ->
+                   let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                   man.eval expr false_flow)
+                 man flow
+             )
+         |> OptionExt.return
 
 
       | _ -> None
