@@ -68,7 +68,7 @@
     let open_pars = ref 0
 }
 
-let space = ' ' | '\t' 
+let space = ' ' | '\t'
 let endline = '\n' | '\r' | "\r\n"
 let comment = "#" [^ '\n' '\r']*
 
@@ -79,12 +79,12 @@ let id_start = ['a' - 'z' 'A' - 'Z' '_'] (* TODO : Add unicode from OOO080 to 10
 let identifier = id_start id_continue*
 
 (* Strings *)
-let stringprefix =  "u" | "U" 
-let rawstringprefix = "r" | "R" 
+let stringprefix =  "u" | "U"
+let rawstringprefix = "r" | "R"
 let escapeseq = "\\" _
 
 (* Bytestrings *)
-let byteprefix = "b" | "B" 
+let byteprefix = "b" | "B"
 let rawbyteprefix = "br" | "Br" | "bR" | "BR" | "rb" | "rB" | "Rb" | "RB"
 
 (* Integer literals *)
@@ -103,7 +103,7 @@ let integer = decinteger | bininteger | octinteger | hexinteger
 (* Floating point literals *)
 
 let digitpart = digit (['_'] | digit)*
-let exponent = ('e' | 'E') ('+' | '-')? digitpart 
+let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let fraction = '.' digitpart
 let pointfloat = digitpart* fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
@@ -157,9 +157,9 @@ rule token = parse
     | "<>"                      { [NEQ] }
     | "!="                      { [NEQ] }
     (* Delimiters *)
-    | ',' space* ']'            { decr open_pars; [COMMARSQ] }
-    | ',' space* ')'            { decr open_pars; [COMMARPAR] }
-    | ',' space* '}'            { decr open_pars; [COMMARBRA] }
+    | ',' (space | endline)* ']'            { decr open_pars; [COMMARSQ] }
+    | ',' (space | endline)* ')'            { decr open_pars; [COMMARPAR] }
+    | ',' (space | endline)* '}'            { decr open_pars; [COMMARBRA] }
     | "("                       { incr open_pars; [LPAR] }
     | ")"                       { decr open_pars; [RPAR] }
     | "["                       { incr open_pars; [LSQ] }
@@ -190,55 +190,55 @@ rule token = parse
     | floatnumber as f          { [FLOAT (float_of_string f)] }
     | imagnumber  as i          { [IMAG i] }
     (* Long string literals *)
-    | rawbyteprefix "\"\"\"" 
+    | rawbyteprefix "\"\"\""
         { [BYTES (let x = unesc_long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | rawstringprefix  "\"\"\"" 
-        { [STR (let x = unesc_long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
+    | rawstringprefix  "\"\"\""
+        { [STR (let x = unesc_long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | byteprefix "\"\"\""
         { [BYTES (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | stringprefix? "\"\"\"" 
+    | stringprefix? "\"\"\""
         { [STR (let x = long_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawbyteprefix  "'''"
-        { [BYTES (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
-    | rawstringprefix  "'''" 
-        { [STR (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
+        { [BYTES (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | rawstringprefix  "'''"
+        { [STR (let x = unesc_long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | byteprefix  "'''"
         { [BYTES (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | stringprefix? "'''" 
+    | stringprefix? "'''"
         { [STR (let x = long_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     (* Short string literals *)
-    | rawbyteprefix  '\''  
+    | rawbyteprefix  '\''
         { [BYTES (let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  '\''
-        { [STR (let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
-    | byteprefix '\'' 
+        { [STR (let x = unesc_sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
+    | byteprefix '\''
         { [BYTES (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | stringprefix? '\''
         { [STR  (let x = sq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawbyteprefix  '"'
-        { [BYTES (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
+        { [BYTES (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | rawstringprefix  '"'
-        { [STR (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] } 
+        { [STR (let x = unesc_dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | byteprefix '"'
         { [BYTES (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
-    | stringprefix? '"' 
+    | stringprefix? '"'
         { [STR (let x = dq_prefix lexbuf in String.concat "" (List.map (String.make 1) x))] }
     | eof                       { [EOF] }
     | _ as c                    { raise (LexingError ("illegal character (unicode not supported) : " ^ String.make 1 c)) }
-    
+
 and indentation = parse
     | (space | comment)* '\n'
         { newline lexbuf; indentation lexbuf }
     | space* as s   { String.length s }
 
 and unesc_dq_prefix = parse
-    | eof           { raise (LexingError ("unterminated string")) } 
+    | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; unesc_dq_prefix lexbuf }
     | "\""          { [] }
-    | _ as c        { (c) :: (unesc_dq_prefix lexbuf) }    
+    | _ as c        { (c) :: (unesc_dq_prefix lexbuf) }
 
 and dq_prefix = parse
-    | eof           { raise (LexingError ("unterminated string")) } 
+    | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; dq_prefix lexbuf }
     | "\""          { [] }
     | "\\\\"        {  '\\' :: (dq_prefix lexbuf) }
@@ -246,21 +246,21 @@ and dq_prefix = parse
     | "\\\""        {  '"' :: (dq_prefix lexbuf)  }
     | "\\a"         { (Char.chr 7) :: (dq_prefix lexbuf) }
     | "\\b"         { ('\b') :: (dq_prefix lexbuf) }
-    | "\\f"         { (Char.chr 12) :: (dq_prefix lexbuf) } 
+    | "\\f"         { (Char.chr 12) :: (dq_prefix lexbuf) }
     | "\\n"         { ('\n') :: (dq_prefix lexbuf) }
     | "\\r"         { ('\r'):: (dq_prefix lexbuf) }
     | "\\t"         { ('\t')::(dq_prefix lexbuf) }
     | "\\v"         { (Char.chr 11) :: (dq_prefix lexbuf) }
-    | _ as c        { (c) :: (dq_prefix lexbuf) }    
+    | _ as c        { (c) :: (dq_prefix lexbuf) }
 
 and unesc_sq_prefix = parse
-    | eof           { raise (LexingError ("unterminated string")) } 
+    | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; unesc_sq_prefix lexbuf }
     | "\'"          { [] }
-    | _ as c        { (c) :: (unesc_sq_prefix lexbuf) }    
+    | _ as c        { (c) :: (unesc_sq_prefix lexbuf) }
 
 and sq_prefix = parse
-    | eof           { raise (LexingError ("unterminated string")) } 
+    | eof           { raise (LexingError ("unterminated string")) }
     | "\\\n"        { newline lexbuf; sq_prefix lexbuf }
     | "\'"          { [] }
     | "\\\\"        {  '\\' :: (sq_prefix lexbuf) }
@@ -268,18 +268,18 @@ and sq_prefix = parse
     | "\\\""        {  '"' :: (sq_prefix lexbuf)  }
     | "\\a"         { (Char.chr 7) :: (sq_prefix lexbuf) }
     | "\\b"         { ('\b') :: (sq_prefix lexbuf) }
-    | "\\f"         { (Char.chr 12) :: (sq_prefix lexbuf) } 
+    | "\\f"         { (Char.chr 12) :: (sq_prefix lexbuf) }
     | "\\n"         { ('\n') :: (sq_prefix lexbuf) }
     | "\\r"         { ('\r'):: (sq_prefix lexbuf) }
     | "\\t"         { ('\t')::(sq_prefix lexbuf) }
     | "\\v"         { (Char.chr 11) :: (sq_prefix lexbuf) }
-    | _ as c        { (c) :: (sq_prefix lexbuf) }    
+    | _ as c        { (c) :: (sq_prefix lexbuf) }
 
 and unesc_long_sq_prefix = parse
-    | eof                     { raise (LexingError ("unterminated string")) } 
+    | eof                     { raise (LexingError ("unterminated string")) }
     | "\\\n" | endline        { newline lexbuf; unesc_long_sq_prefix lexbuf }
     | "\'\'\'"                { [] }
-    | _ as c                  { (c) :: (unesc_long_sq_prefix lexbuf) }    
+    | _ as c                  { (c) :: (unesc_long_sq_prefix lexbuf) }
 
 and long_sq_prefix = parse
     | eof                     { raise (LexingError ("unterminated string")) }
@@ -293,21 +293,21 @@ and long_sq_prefix = parse
     | "\\\""                  {  '"' :: (long_sq_prefix lexbuf)  }
     | "\\a"                   { (Char.chr 7) :: (long_sq_prefix lexbuf) }
     | "\\b"                   { ('\b') :: (long_sq_prefix lexbuf) }
-    | "\\f"                   { (Char.chr 12) :: (long_sq_prefix lexbuf) } 
+    | "\\f"                   { (Char.chr 12) :: (long_sq_prefix lexbuf) }
     | "\\n"                   { ('\n') :: (long_sq_prefix lexbuf) }
     | "\\r"                   { ('\r'):: (long_sq_prefix lexbuf) }
     | "\\t"                   { ('\t')::(long_sq_prefix lexbuf) }
     | "\\v"                   { (Char.chr 11) :: (long_sq_prefix lexbuf) }
-    | _ as c                  { (c) :: (long_sq_prefix lexbuf) }    
+    | _ as c                  { (c) :: (long_sq_prefix lexbuf) }
 
 and unesc_long_dq_prefix = parse
-    | eof                     { raise (LexingError ("unterminated string")) } 
+    | eof                     { raise (LexingError ("unterminated string")) }
     | "\\\n" | endline        { newline lexbuf; unesc_long_dq_prefix lexbuf }
     | "\"\"\""                { [] }
-    | _ as c                  { (c) :: (unesc_long_dq_prefix lexbuf) }    
+    | _ as c                  { (c) :: (unesc_long_dq_prefix lexbuf) }
 
 and long_dq_prefix = parse
-    | eof                     { raise (LexingError ("unterminated string")) } 
+    | eof                     { raise (LexingError ("unterminated string")) }
     | '\\' endline            { newline lexbuf; long_dq_prefix lexbuf }
     | endline "\'\'\'"        { [] }
     | "\\\n" | endline        { newline lexbuf; ('\n') :: long_dq_prefix lexbuf }
@@ -317,14 +317,14 @@ and long_dq_prefix = parse
     | "\\\""                  {  '"' :: (long_dq_prefix lexbuf)  }
     | "\\a"                   { (Char.chr 7) :: (long_dq_prefix lexbuf) }
     | "\\b"                   { ('\b') :: (long_dq_prefix lexbuf) }
-    | "\\f"                   { (Char.chr 12) :: (long_dq_prefix lexbuf) } 
+    | "\\f"                   { (Char.chr 12) :: (long_dq_prefix lexbuf) }
     | "\\n"                   { ('\n') :: (long_dq_prefix lexbuf) }
     | "\\r"                   { ('\r'):: (long_dq_prefix lexbuf) }
     | "\\t"                   { ('\t')::(long_dq_prefix lexbuf) }
     | "\\v"                   { (Char.chr 11) :: (long_dq_prefix lexbuf) }
-    | _ as c                  { (c) :: (long_dq_prefix lexbuf) }    
+    | _ as c                  { (c) :: (long_dq_prefix lexbuf) }
 (* TODO : Deal with \ooo, \xhh, \uxxxx and \Uxxxx according to the doc *)
- 
+
  {
     (* Useful for debug *)
     let print_token = function
@@ -335,12 +335,12 @@ and long_dq_prefix = parse
         | IMAG s-> "IMAG " ^ s ^ " "
         | STR s-> "STR " ^ s ^ " "
         | BYTES s -> "BYTES " ^ s ^" "
-        
+
         | INDENT  -> "INDENT "
         | DEDENT -> "DEDENT "
         | NEWLINE -> "NEWLINE "
         | EOF -> "EOF "
-        
+
         (* Operators *)
         | ADD -> "ADD "
         | SUB -> "SUB "
@@ -350,21 +350,21 @@ and long_dq_prefix = parse
         | TDIV -> "TDIV "
         | MOD -> "MOD "
         | AT -> "AT "
-        
+
         | LSHIFT -> "LSHIFT "
         | RSHIFT -> "RSHIFT "
         | BITAND -> "BITAND "
         | BITOR -> "BITOR "
         | BITXOR -> "BITXOR "
         | BITNOT -> "BITNOT "
-        
+
         | LT -> "LT "
         | GT -> "GT "
         | LE -> "LE "
         | GE -> "GE "
         | EQUAL -> "EQUAL "
         | NEQ -> "NEQ "
-        
+
         | SEMICOLEND -> "SEMICOLEND "(* ; at the end of a line *)
         | COMMARSQ  -> "COMMARSQ " (* , ] *)
         | COMMARPAR -> "COMMAPAR " (* , ) *)
@@ -381,7 +381,7 @@ and long_dq_prefix = parse
         | SEMICOL -> "SEMICOL "
         | EQ -> "EQ "
         | ARROW -> "ARROW "
-        
+
         | ADDEQ -> "ADDEQ "
         | SUBEQ -> "SUBEQ "
         | MULEQ -> "MULEQ "
@@ -435,7 +435,7 @@ and long_dq_prefix = parse
 
       let next_token =
         let tokens = Queue.create () in
-        fun lb -> 
+        fun lb ->
             if Queue.is_empty tokens then begin
         let l = token lb in
         List.iter (fun t -> Queue.add t tokens) l
@@ -443,4 +443,4 @@ and long_dq_prefix = parse
             Queue.pop tokens
 
 
-}            
+}
