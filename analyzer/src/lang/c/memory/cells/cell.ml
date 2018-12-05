@@ -13,7 +13,7 @@
 
 open Framework.Essentials
 open Framework.Visitor
-open Base
+open Common.Base
 open Ast
 
 (* To support different cell-based memory models, an extensible type
@@ -86,53 +86,7 @@ let register_cell info =
   ()
 
 
-(* Pointers bases *)
-(* ============== *)
 
-type pointer_base =
-  | PB_fun of Ast.c_fundec
-  | PB_var of base
-  | PB_null
-  | PB_invalid
-
-let pp_pointer_base fmt = function
-  | PB_fun f -> Format.fprintf fmt "(fun: %a)" pp_var f.Ast.c_func_var
-  | PB_var base -> Format.fprintf fmt "(var: %a)" pp_base base
-  | PB_null -> Format.pp_print_string fmt "NULL"
-  | PB_invalid -> Format.pp_print_string fmt "Invalid"
-
-let compare_pointer_base p1 p2 =
-  match p1, p2 with
-  | PB_fun f1, PB_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
-  | PB_var b1, PB_var b2 -> compare_base b1 b2
-  | _, _ -> Pervasives.compare p1 p2
-
-
-(* Points-to results *)
-(* ================= *)
-
-type points_to =
-  | P_fun of Ast.c_fundec
-  | P_var of base (** base *) * expr (** offset *) * typ (** type *)
-  | P_null
-  | P_invalid
-
-let pp_points_to fmt = function
-  | P_fun f -> Format.fprintf fmt "(fp %a)" pp_var f.Ast.c_func_var
-  | P_var(base, offset, typ) -> Format.fprintf fmt "(%a, %a, %a)" pp_base base pp_expr offset pp_typ typ
-  | P_null -> Format.pp_print_string fmt "NULL"
-  | P_invalid -> Format.pp_print_string fmt "Invalid"
-
-let compare_points_to p1 p2 =
-  match p1, p2 with
-  | P_fun f1, P_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
-  | P_var (b1, o1, t1), P_var (b2, o2, t2) ->
-    Compare.compose [
-      (fun () -> compare_base b1 b2);
-      (fun () -> compare_expr o1 o2);
-      (fun () -> compare_typ t1 t2);
-    ]
-  | _, _ -> Pervasives.compare p1 p2
 
 
 (* Cell expressions and statements *)
@@ -140,7 +94,6 @@ let compare_points_to p1 p2 =
 
 type expr_kind +=
   | E_c_cell of cell * mode (* Expression representing a cell *)
-  | E_c_points_to of points_to  (* Reply to a points-to evaluation *)
 
 type stmt_kind +=
   | S_c_add_cell    of cell (* Add a cell as a new dimension *)
@@ -178,22 +131,18 @@ let () =
               (fun () -> compare_mode s1 s2 )
             ]
 
-        | E_c_points_to p1, E_c_points_to p2 -> compare_points_to p1 p2
-
         | _ -> next e1 e2
       );
     print = (fun next fmt e ->
         match ekind e with
         | E_c_cell(c, STRONG) -> pp_cell fmt c
         | E_c_cell(c, WEAK) -> Format.fprintf fmt "_w_%a" pp_cell c
-        | E_c_points_to p -> Format.fprintf fmt "⇝ %a" pp_points_to p
         | _ -> next fmt e
       );
     visit = (fun next e ->
         let open Framework.Visitor in
         match ekind e with
         | E_c_cell(c, s) -> leaf e
-        | E_c_points_to p -> leaf e (* FIXME: do we need to visit the offset expression? *)
         | _ -> next e
       )
   };
@@ -270,22 +219,6 @@ let () =
       );
   }
 
-type zone +=
-  | Z_c_points_to_cell
-
-let () =
-  register_zone {
-    zone = Z_c_points_to_cell;
-    name = "C/Cell/Points-To";
-    subset = Some Z_c_cell;
-    eval = (fun exp ->
-        match ekind exp with
-        | E_c_points_to _ -> Keep
-
-        | _ -> Process
-      );
-  }
-
 
 (* Utility modules *)
 (* ============== *)
@@ -295,20 +228,6 @@ struct
   type t = cell
   let compare = compare_cell
   let print = pp_cell
-end
-
-module PointerBase =
-struct
-  type t = pointer_base
-  let compare = compare_pointer_base
-  let print = pp_pointer_base
-end
-
-module PointsTo =
-struct
-  type t = points_to
-  let compare = compare_points_to
-  let print = pp_points_to
 end
 
 

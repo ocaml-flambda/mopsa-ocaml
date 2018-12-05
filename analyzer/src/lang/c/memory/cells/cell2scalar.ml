@@ -164,7 +164,7 @@ struct
       begin
         match cell_base c with
         (* Case of a static string literal *)
-        | Base.S s ->
+        | Common.Base.S s ->
           begin
             let offset = cell_offset c exp.erange in
             match Universal.Utils.expr_to_z offset with

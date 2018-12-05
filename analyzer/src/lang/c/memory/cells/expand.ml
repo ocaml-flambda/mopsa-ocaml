@@ -12,8 +12,8 @@ open Framework.Essentials
 open Universal.Ast
 open Ast
 open Zone
-open Base
-open Pointer
+open Common.Base
+open Common.Points_to
 open Cell
 module Intervals = Universal.Numeric.Values.Intervals.Value
 
@@ -116,7 +116,7 @@ module Domain = struct
 
   let rec ch_addr_of_cell c addr =
     match c with
-    | C_offset cc -> C_offset {cc with b = Base.A addr}
+    | C_offset cc -> C_offset {cc with b = A addr}
     | C_old cc -> ch_addr_of_cell cc addr
     | _ -> assert false
 
@@ -359,7 +359,7 @@ module Domain = struct
       (Z_c, Z_c_scalar);
       (Z_c, Universal.Zone.Z_u_num);
       (Z_c, Z_c_cell);
-      (Z_c, Z_c_points_to_cell)
+      (Z_c, Z_c_points_to)
     ];
   }
 
@@ -368,7 +368,7 @@ module Domain = struct
   (** ============== *)
 
   let rec init_visitor man =
-    Init_visitor.{
+    Common.Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
           let c =
@@ -543,25 +543,18 @@ module Domain = struct
 
 
   (** Evaluate a quantified cell *)
-  let eval_quantified_cell b o t range man flow =
-    let open Stubs.Ast in
-    let q, vl, o' = unquantify_expr o in
-    eval_cell_cases b o' t range man flow |>
-    Eval.bind @@ fun l flow ->
-    let evl = List.map (fun (c, flow) ->
-        match c with
-        | Some cc -> Eval.singleton cc flow
-        | None -> Eval.empty_singleton flow
-      ) l
+  let eval_quantified_cell b o t range man flow = panic_at range "expand: evaluation of quantified cells not supported"
+
+  (** Evaluate a non-quantified cell *)
+  let eval_non_quantified_cell b o t range man flow =
+    eval_cell_cases b o t range man flow |>
+    Eval.bind @@ fun cl flow ->
+    let cl' = cl |> List.map(function
+        | Some c, flow -> Eval.singleton c flow
+        | None, flow -> Eval.empty_singleton flow
+      )
     in
-    let evl' =
-      match q with
-      | EXISTS -> Eval.join_list evl
-      | FORALL -> Eval.meet_list evl
-      | MIXED  -> panic_at range "cell: evaluation of offsets with mixed quantifiers not supported"
-    in
-    let cleaners = List.map (fun v -> mk_remove_var v range) vl in
-    Eval.add_cleaners cleaners evl'
+    Eval.join_list cl'
 
 
   (** Evaluate a non-quantified cell *)
@@ -577,14 +570,16 @@ module Domain = struct
 
 
   let eval_pointed_cell p man flow =
-    man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
+    let t = under_type p.etyp in
+
+    man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
     Eval.bind @@ fun pe flow ->
 
     match ekind pe with
-    | E_c_points_to(P_var (b, o, t)) when Stubs.Ast.is_expr_quantified o ->
+    | E_c_points_to(P_block (b, o)) when Stubs.Ast.is_expr_quantified o ->
       eval_quantified_cell b o t p.erange man flow
 
-    | E_c_points_to(P_var (b, o, t)) ->
+    | E_c_points_to(P_block (b, o)) ->
       eval_non_quantified_cell b o t p.erange man flow
 
     | E_c_points_to(P_fun fundec) ->
@@ -646,10 +641,11 @@ module Domain = struct
       end
 
     | Stubs.Ast.E_stub_builtin_call({ content = SIZE }, p) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to_cell) p flow |>
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
       Eval.bind_opt @@ fun pe flow ->
       begin match ekind pe with
-        | E_c_points_to(P_var (b, o, t)) ->
+        | E_c_points_to(P_block (b, o)) ->
+          let t = under_type p.etyp in
           Eval.singleton (mk_z (Z.div (base_size b) (Z.max Z.one (sizeof_type t))) exp.erange) flow |>
           OptionExt.return
 
@@ -827,12 +823,12 @@ module Domain = struct
   let rec exec zone stmt man flow =
     match skind stmt with
     | S_c_global_declaration(v, init) ->
-      Init_visitor.init_global (init_visitor man) v init stmt.srange flow |>
+      Common.Init_visitor.init_global (init_visitor man) v init stmt.srange flow |>
       Post.of_flow |>
       OptionExt.return
 
     | S_c_local_declaration(v, init) ->
-      Init_visitor.init_local (init_visitor man) v init stmt.srange flow
+      Common.Init_visitor.init_local (init_visitor man) v init stmt.srange flow
       |> Post.of_flow
       |> OptionExt.return
 
@@ -850,7 +846,7 @@ module Domain = struct
     | S_rebase_addr(adr, adr', mode) ->
       begin
         let u = Flow.get_domain_cur man flow in
-        let l = exist_and_find_cells (fun c -> compare_base (base c) (Base.A adr) = 0) u in
+        let l = exist_and_find_cells (fun c -> compare_base (base c) (A adr) = 0) u in
         let u = List.fold_left (fun acc c -> remove c acc) u l in
         let assigns = List.map
             (fun c ->
@@ -872,7 +868,7 @@ module Domain = struct
 
     | S_remove_var (v) when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> compare_base (base c) (Base.V v) = 0) u in
+      let l = exist_and_find_cells (fun c -> compare_base (base c) (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
       let mergers = List.map (fun c -> mk_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in

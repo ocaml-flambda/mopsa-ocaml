@@ -11,7 +11,8 @@
 open Framework.Essentials
 open Universal.Ast
 open Ast
-open Base
+open Common.Base
+open Common.Points_to
 open Cell
 open Zone
 
@@ -128,7 +129,7 @@ struct
     import = [
       Z_c, Z_c_scalar; (* To simplify lvals *)
       Z_c, Z_c_cell; (* To evaluate rhs expressions in assignments *)
-      Z_c, Z_c_points_to_cell; (* To dereference pointer expressions *)
+      Z_c, Z_c_points_to; (* To dereference pointer expressions *)
     ];
   }
 
@@ -139,7 +140,7 @@ struct
   (** ============== *)
 
   let rec init_visitor man =
-    let open Init_visitor in
+    let open Common.Init_visitor in
     {
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
@@ -233,12 +234,12 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_c_global_declaration(v, init) ->
-      Init_visitor.init_global (init_visitor man) v init range flow |>
+      Common.Init_visitor.init_global (init_visitor man) v init range flow |>
       Post.of_flow |>
       OptionExt.return
 
     | S_c_local_declaration(v, init) ->
-      Init_visitor.init_local (init_visitor man) v init range flow |>
+      Common.Init_visitor.init_local (init_visitor man) v init range flow |>
       Post.of_flow |>
       OptionExt.return
 
@@ -335,12 +336,13 @@ struct
 
     | E_c_deref p ->
       begin
-        man.eval ~zone:(Z_c, Z_c_points_to_cell) p flow |> Eval.bind @@ fun pt flow ->
+        man.eval ~zone:(Z_c, Z_c_points_to) p flow |> Eval.bind @@ fun pt flow ->
         match ekind pt with
         | E_c_points_to(P_fun fundec) ->
           Eval.singleton ({exp with ekind = E_c_function fundec}) flow
 
-        | E_c_points_to(P_var (base, offset, t)) ->
+        | E_c_points_to(P_block (base, offset)) ->
+          let t = under_type p.etyp in
           eval_base_offset
             ~safe:(fun c flow ->
                 let flow1 = Flow.map_domain_env T_cur (add c) man flow in

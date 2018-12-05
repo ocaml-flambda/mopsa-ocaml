@@ -72,8 +72,7 @@ let () =
         | E_binop _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
-        | E_c_address_of _
-        | E_c_deref _                        -> Keep
+        | E_c_address_of _                   -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
@@ -98,16 +97,3 @@ let () =
         | _                                  -> Process
       );
     }
-
-let () =
-  register_zone {
-    zone = Z_c_points_to_fun;
-    subset = None;
-    name = "C/PointsToFun";
-    eval = (fun exp ->
-        match ekind exp with
-        | E_c_function f                      -> Visit
-        (* ------------------------------------------- *)
-        | _                                  -> Process
-      );
-  }

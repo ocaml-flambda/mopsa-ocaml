@@ -35,8 +35,10 @@ lang.stubs = ast zone alarms iterator
 lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = loops andor aggregate record_copy stmt_expr
-lang.c.memory = base init_visitor cells machine_integers
-lang.c.memory.cells = cell pointer smashing expand cell2num
+lang.c.memory = common cells pointers machine_integers
+lang.c.memory.common = base points_to init_visitor
+lang.c.memory.cells = cell smashing expand cell2scalar
+lang.c.memory.pointers = bases nonrel
 lang.c.libs = c_stdlib mopsa
 
 # lang.python = ast addr utils visitor operators pp frontend
