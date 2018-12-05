@@ -211,128 +211,143 @@ test-pyty 2/2:
     PY_FILE: 'misc_tests.py'
   extends: .test-pyty
 
-bench-typpete 1/25:
+bench-typpete 1/28:
+  variables:
+    PY_FILE: 'builtins_test.py'
+  extends: .bench-typpete
+
+bench-typpete 2/28:
   variables:
     PY_FILE: 'callable_class.py'
   extends: .bench-typpete
 
-bench-typpete 2/25:
+bench-typpete 3/28:
   variables:
     PY_FILE: 'classes.py'
   extends: .bench-typpete
 
-bench-typpete 3/25:
+bench-typpete 4/28:
   variables:
     PY_FILE: 'class_pre_store.py'
   extends: .bench-typpete
 
-bench-typpete 4/25:
+bench-typpete 5/28:
+  variables:
+    PY_FILE: 'comparison_test.py'
+  extends: .bench-typpete
+
+bench-typpete 6/28:
   variables:
     PY_FILE: 'cookie.py'
   extends: .bench-typpete
 
-bench-typpete 5/25:
+bench-typpete 7/28:
   variables:
     PY_FILE: 'coop_concatenate.py'
   extends: .bench-typpete
 
-bench-typpete 6/25:
+bench-typpete 8/28:
   variables:
     PY_FILE: 'deceitful.py'
   extends: .bench-typpete
 
-bench-typpete 7/25:
+bench-typpete 9/28:
   variables:
     PY_FILE: 'default_args_class.py'
   extends: .bench-typpete
 
-bench-typpete 8/25:
+bench-typpete 10/28:
   variables:
     PY_FILE: 'disjoint_sets_nonrec.py'
   extends: .bench-typpete
 
-bench-typpete 9/25:
+bench-typpete 11/28:
   variables:
     PY_FILE: 'except_clause.py'
   extends: .bench-typpete
 
-bench-typpete 10/25:
+bench-typpete 12/28:
   variables:
     PY_FILE: 'guess_the_number.py'
   extends: .bench-typpete
 
-bench-typpete 11/25:
+bench-typpete 13/28:
   variables:
     PY_FILE: 'inheritance_cov_incorrect.py'
   extends: .bench-typpete
 
-bench-typpete 12/25:
+bench-typpete 14/28:
   variables:
     PY_FILE: 'inheritance_cov_sat.py'
   extends: .bench-typpete
 
-bench-typpete 13/25:
+bench-typpete 15/28:
   variables:
     PY_FILE: 'isinstance.py'
   extends: .bench-typpete
 
-bench-typpete 14/25:
+bench-typpete 16/28:
   variables:
     PY_FILE: 'linear_equality.py'
   extends: .bench-typpete
 
-bench-typpete 15/25:
+bench-typpete 17/28:
   variables:
     PY_FILE: 'magic.py'
   extends: .bench-typpete
 
-bench-typpete 16/25:
+bench-typpete 18/28:
   variables:
     PY_FILE: 'mro.py'
   extends: .bench-typpete
 
-bench-typpete 17/25:
+bench-typpete 19/28:
   variables:
     PY_FILE: 'mult_inheritance.py'
   extends: .bench-typpete
 
-bench-typpete 18/25:
+bench-typpete 20/28:
   variables:
     PY_FILE: 'override_default_args_correct.py'
   extends: .bench-typpete
 
-bench-typpete 19/25:
+bench-typpete 21/28:
   variables:
     PY_FILE: 'prog_1.py'
   extends: .bench-typpete
 
-bench-typpete 20/25:
+bench-typpete 22/28:
   variables:
     PY_FILE: 'prog_2.py'
   extends: .bench-typpete
   allow_failure: true
 
-bench-typpete 21/25:
+bench-typpete 23/28:
   variables:
     PY_FILE: 'statements.py'
   extends: .bench-typpete
 
-bench-typpete 22/25:
+bench-typpete 24/28:
   variables:
     PY_FILE: 'staticmethod.py'
   extends: .bench-typpete
 
-bench-typpete 23/25:
+bench-typpete 25/28:
+  variables:
+    PY_FILE: 'str_methods.py'
+  extends: .bench-typpete
+
+bench-typpete 26/28:
   variables:
     PY_FILE: 'stubs_default_args.py'
   extends: .bench-typpete
 
-bench-typpete 24/25:
+bench-typpete 27/28:
   variables:
     PY_FILE: 'syntax.py'
   extends: .bench-typpete
 
-bench-typpete 25/25:
+bench-typpete 28/28:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
