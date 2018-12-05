@@ -26,6 +26,7 @@ let debug fmt = Debug.debug ~channel:name fmt
  *                          end) *)
 (* question: possible dans 'a pytype inst de declarer un module stringrange qui aurait pour type t stirng * 'a pytype ? il y a de la récursivité mutuelle un peu poussée là *)
 
+
 type typeid = int
 type 'a pytype =
   | Bot | Top
@@ -36,6 +37,8 @@ type 'a pytype =
   (* and position in iterator, if applicable *)
   | FiniteTuple of 'a pytype list
   (* tuples of given size *)
+  | Dict of 'a pytype * 'a pytype
+  (* keys and values are abstracted separately *)
   | Set of 'a pytype
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
@@ -69,7 +72,6 @@ let map_printer = MapExtSig.{ print_empty = "∅";
                               print_sep = ";";
                               print_end = "}"; }
 
-
 let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.formatter) (ty: 'a pytype) =
   match ty with
   | Bot -> Format.fprintf fmt "⊥"
@@ -77,12 +79,13 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | List ty -> Format.fprintf fmt "List[%a]" (pp_pytype print_vars) ty
   | Set ty -> Format.fprintf fmt "Set[%a]" (pp_pytype print_vars) ty
   | FiniteTuple l -> Format.fprintf fmt "FiniteTuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") (pp_pytype print_vars)) l
+  | Dict (k, v) -> Format.fprintf fmt "Dict[%a:%a]" (pp_pytype print_vars) k (pp_pytype print_vars) v
   | Iterator (ty, d) -> Format.fprintf fmt "Iterator[%a, %d]" (pp_pytype print_vars) ty d
   | Instance {classn; uattrs; oattrs} ->
      if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
        Format.fprintf fmt "Instance[%a]" (pp_pytype print_vars) classn
      else
-       let pp_attrs = (StringMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "%s" k) (pp_pytype print_vars)) in
+       let pp_attrs = (StringMap.fprint map_printer Format.pp_print_string (pp_pytype print_vars)) in
        Format.fprintf fmt "Instance[%a, %a, %a]" (pp_pytype print_vars) classn pp_attrs uattrs pp_attrs oattrs
   | Class (C_user c, _) -> Format.fprintf fmt "Class {%a}" pp_var c.py_cls_var
   | Class (C_builtin c, _) | Class (C_unsupported c, _) -> Format.fprintf fmt "Class[%s]" c
@@ -251,6 +254,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | List v -> List (unsafe_cast f v)
   | Set v -> Set (unsafe_cast f v)
   | FiniteTuple l -> FiniteTuple ((List.map @@ unsafe_cast f) l)
+  | Dict (k, v) -> Dict (unsafe_cast f k, unsafe_cast f v)
   | Iterator (t, d) -> Iterator ((unsafe_cast f t), d)
   | Typevar v -> Typevar (f v)
   | Instance {classn;uattrs;oattrs} ->
@@ -277,6 +281,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   | List v -> List (subst v var value)
   | Set v -> Set (subst v var value)
   | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
+  | Dict (k, v) -> Dict (subst k var value, subst v var value)
   | Iterator (v, d) -> Iterator ((subst v var value), d)
   | Instance {classn; uattrs; oattrs} ->
      let classn = subst classn var value in
@@ -295,6 +300,7 @@ let collect_vars (t:polytype) : Typevarset.t =
     (* acc: Typevarset *)
     | FiniteTuple l ->
        List.fold_left (fun set el -> collect el set) acc l
+    | Dict (k, v) -> collect k (collect v acc)
     | Iterator (t, _) -> collect t acc
     | Typevar v -> Typevarset.add v acc
     | Instance {classn; uattrs; oattrs} ->
@@ -365,6 +371,10 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
            let r, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
            r :: t_l, d3_acc, pos_d3) ([], d3_acc, pos_d3) l l' in
      FiniteTuple (List.rev t), d3_acc, pos_d3
+  | Dict (k, v), Dict (k', v') ->
+     let rk, d3_acc, pos_d3 = join_poly (k, d3) (k', d3') d3_acc pos_d3 in
+     let rv, d3_acc, pos_d3 = join_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     Dict (rk, rv), d3_acc, pos_d3
   | Iterator (t, d), Iterator (t', d') ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      (* FIXME *)
@@ -544,6 +554,7 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
   | List u, List v | Set u, Set v  -> polytype_leq (u, d3) (v, d3')
+  | Dict (k, v), Dict (k', v') -> polytype_leq (k, d3) (k', d3')
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      List.fold_left2 (fun acc t t' -> acc && polytype_leq (t, d3) (t', d3')) true l l'
   | Iterator (u, _), Iterator (v, _) -> polytype_leq (u, d3) (v, d3')
@@ -565,7 +576,7 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
          acc && polytype_leq (poly_cast ty, d3) (t', d3')) us true
   | _, Typevar v ->
      if is_mono t then
-       Monotypeset.mem (mono_cast t) (TypeVarMap.find v d3')
+       Monotypeset.exists (fun concr_v -> polytype_leq (t, d3) (poly_cast concr_v, d3')) (TypeVarMap.find v d3')
      else
        let concrt = concretize_poly t d3 in
        Monotypeset.fold (fun ty acc ->
@@ -604,6 +615,10 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | Set t, Set t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      Set t, d3_acc, pos_d3
+  | Dict (k, v), Dict (k', v') ->
+     let rk, d3_acc, pos_d3 = widening_poly (k, d3) (k', d3') d3_acc pos_d3 in
+     let rv, d3_acc, pos_d3 = widening_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     Dict (rk, rv), d3_acc, pos_d3
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      let t, d3_acc, pos_d3 =
        List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
@@ -965,84 +980,25 @@ let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
 
 
 let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3) * (polytype * d3) =
+  let process_builtin str =
+    match inst with
+    | Class (d, b) -> if class_le (Addr.builtin_cl_and_mro str) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+    | _ -> assert false in
   (* TODO: remove filter_monoinst? or at least write polymorphic function *)
   let cp x y = (x, y), (x, y) in
   match p with
   | Bot | Top | Module _ -> cp p d3
-  | List t ->
-     let list, listb = match kind_of_object (Addr.find_builtin "list") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (list, listb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | Set t ->
-     let sett, setb = match kind_of_object (Addr.find_builtin "set") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (sett, setb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | FiniteTuple l ->
-     let tuple, tupleb = match kind_of_object (Addr.find_builtin "tuple") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (tuple, tupleb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | Iterator (List _, _) ->
-     let list_it, list_itb = match kind_of_object (Addr.find_builtin "list_iterator") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | Iterator (Set _, _) ->
-     let set_it, set_itb = match kind_of_object (Addr.find_builtin "set_iterator") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (set_it, set_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | Iterator (FiniteTuple _, _) ->
-     let list_it, list_itb = match kind_of_object (Addr.find_builtin "tuple_iterator") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-  | Iterator (Instance {classn=Class (C_builtin "str",  _)}, _) ->
-     let list_it, list_itb = match kind_of_object (Addr.find_builtin "str_iterator") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (list_it, list_itb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
-
+  | List t -> process_builtin "list"
+  | Set t ->  process_builtin "set"
+  | Dict _ -> process_builtin "dict"
+  | FiniteTuple l -> process_builtin "tuple"
+  | Iterator (List _, _) -> process_builtin "list_iterator"
+  | Iterator (Set _, _) ->  process_builtin "set_iterator"
+  | Iterator (Dict _, _) -> process_builtin "dict_keyiterator"
+  | Iterator (FiniteTuple _, _) -> process_builtin "tuple_iterator"
+  | Iterator (Instance {classn=Class (C_builtin "str",  _)}, _) -> process_builtin "str_iterator"
   | Iterator _ -> Exceptions.panic "filter_polyinst iterator _@\n"
-  | Function f ->
-     let func, funcb = match kind_of_object (Addr.find_builtin "function") with
-       | A_py_class (c, b) -> c, b
-       | _ -> assert false in
-     begin match inst with
-     | Class (d, b) ->
-        if class_le (func, funcb) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
-     | _ -> assert false
-     end
+  | Function f -> process_builtin "function"
   | Method _ -> Exceptions.panic "ni"
   | Class (c, b) ->
      debug "p=%a@\ninst=%a@\n" pp_polytype p pp_monotype inst; Exceptions.panic "Cni"
@@ -1099,9 +1055,11 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
     | List _ -> [triplet domain @@ Addr.builtin_cl_and_mro "list"]
     | Set _ -> [triplet domain @@ Addr.builtin_cl_and_mro "set"]
     | FiniteTuple _ -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple"]
+    | Dict _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict"]
     | Iterator (List _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "list_iterator"]
     | Iterator (Set _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "set_iterator"]
     | Iterator (FiniteTuple _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple_iterator"]
+    | Iterator (Dict _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keyiterator"]
     | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "str_iterator"]
     | Typevar a ->
        let mtys = concretize_poly pt d.d3 in
@@ -1133,6 +1091,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
   | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
   | List _
     | Set _
+    | Dict _
     | FiniteTuple _
     | Iterator _
     | Function _
@@ -1228,6 +1187,7 @@ type summary_part = arg_types (* type of input arguments *)
 type closure = (pyVar * polytype) list
 type summary = Universal.Ast.fundec * (summary_part * closure) list
 
+
 let exist_compatible_summary (func:Universal.Ast.fundec) (inputs:arg_types) (closure:closure) (d3:d3) (summary: summary list) : bool =
   (ListExt.mem_assoc func summary) &&
     let func_summary = ListExt.assoc func summary in
@@ -1253,3 +1213,33 @@ let pp_sp_closure fmt (sp, clos) =
 let pp_summary fmt (summary:summary) =
   let l, r = summary in
   Format.fprintf fmt "%s |-->@[@\n%a@\n@]" l.fun_name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_sp_closure) r
+
+
+(************************)
+(* Analysis using stubs *)
+(************************)
+
+type signature = {in_args: arg_types;
+                  out_args: arg_types;
+                  possible_exn: string list}
+type signature_base = signature list StringMap.t
+
+let add_signature fname in_args out_args possible_exn base =
+  let signature = {in_args;out_args;possible_exn} in
+  if StringMap.mem fname base then
+    let prev = StringMap.find fname base in
+    StringMap.add fname (signature::prev) base
+  else
+    StringMap.add fname [signature] base
+
+let get_signatures fname base = StringMap.find fname base
+
+let pp_signature fmt sign =
+  let pp_args = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " * ") pp_polytype in
+  if List.length sign.possible_exn > 0 then
+    Format.fprintf fmt "%a -> %a + %a" pp_args sign.in_args pp_args sign.out_args (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " | ") Format.pp_print_string) sign.possible_exn
+  else
+    Format.fprintf fmt "%a -> %a" pp_args sign.in_args pp_args sign.out_args
+
+let pp_sb = StringMap.fprint map_printer Format.pp_print_string
+              (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_signature)
