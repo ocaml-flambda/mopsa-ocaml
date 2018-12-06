@@ -135,13 +135,13 @@ struct
 
   let eval_interface =
     {
-      export = [Z_c_scalar_num, Z_u_num];
-      import = [Z_c_scalar_num, Z_u_num];
+      export = [Z_c_scalar, Z_u_num];
+      import = [Z_c_scalar, Z_u_num];
     }
   let exec_interface =
     {
+      export = [Z_c_scalar];
       import = [Z_u_num];
-      export = [Z_c_scalar_num]
     }
 
   let rec eval zone exp man flow =

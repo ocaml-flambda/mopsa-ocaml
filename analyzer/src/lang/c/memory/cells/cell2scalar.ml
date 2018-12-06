@@ -85,8 +85,15 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c_cell]; import = [Z_c_scalar_num]}
-  let eval_interface = {export = [Z_c_cell, Z_c_scalar_num]; import = [Z_c_cell, Z_c_scalar_num]}
+  let exec_interface = {
+    export = [Z_c_cell];
+    import = [Z_c_scalar]
+  }
+
+  let eval_interface = {
+    export = [Z_c_cell, Z_c_scalar];
+    import = []
+  }
 
   (** Initialization *)
   (** ============== *)

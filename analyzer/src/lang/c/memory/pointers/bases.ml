@@ -54,8 +54,8 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:(fst name) fmt
-    
-  let zone = Z_any
+
+  let zone = Zone.Z_c_scalar
 
   let null = singleton PB_null
 
@@ -86,13 +86,17 @@ struct
     cardinal v == 1
 
   let compare _ op v1 v2 r =
-    let op = if r then op else negate_comparison op in        
+    let op = if r then op else negate_comparison op in
     match op with
-    | O_eq -> let v = meet () v1 v2 in v, v
+    | O_eq ->
+      let v = meet () v1 v2 in
+      v, v
+
     | O_ne ->
       if is_singleton v1 then v1, diff v2 v1
       else if is_singleton v2 then diff v1 v2, v2
       else v1, v2
+
     | _ -> v1, v2
 
   let ask _ _ = None
