@@ -20,6 +20,8 @@ def test_main():
 
     mopsa.massert(isinstance(L1[0], int))
     mopsa.massert(isinstance(L2[0], int))
+    mopsa.ignore_exception(IndexError)
+
 
 # L1 := List[int]
 # L2 := List[int]

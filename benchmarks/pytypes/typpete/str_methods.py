@@ -29,6 +29,7 @@ def test_main():
     mopsa.massert(isinstance(h, str))
     mopsa.massert(isinstance(i, list))
     mopsa.massert(isinstance(i[0], str))
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(j, str))
     mopsa.massert(isinstance(k, str))
     mopsa.massert(isinstance(l, str))

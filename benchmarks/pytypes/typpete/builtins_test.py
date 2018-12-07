@@ -19,6 +19,7 @@ def test_main():
     m = str(l)
     n = f[l]
     o = f[k]
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, int))
     mopsa.massert(isinstance(b, str))

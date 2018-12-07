@@ -39,6 +39,8 @@ def test_main():
     mopsa.massert(isinstance(N, list))
     mopsa.massert(isinstance(K[0], float))
     mopsa.massert(isinstance(N[0], float))
+    mopsa.ignore_exception(IndexError)
+
 # T := int
 # x := int
 # n := int

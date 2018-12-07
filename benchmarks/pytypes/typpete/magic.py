@@ -35,6 +35,7 @@ def test_main():
             else:
                 res = ""
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(T, int))
     mopsa.massert(isinstance(x, int))
@@ -49,7 +50,7 @@ def test_main():
     mopsa.massert(isinstance(L2, list))
     mopsa.massert(isinstance(L1[0], int))
     mopsa.massert(isinstance(L2[0], int))
-
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(res, str))
 
 # T := int
