@@ -276,6 +276,7 @@ let poly_set_cast (ts:Monotypeset.t) : Polytypeset.t =
   Monotypeset.fold (fun el polys -> Polytypeset.add (poly_cast el) polys) ts Polytypeset.empty
 
 let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
+  (* t[var |-> value] *)
   match t with
   | Typevar v when v = var -> value
   | List v -> List (subst v var value)
@@ -1067,6 +1068,9 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
            debug "MFold %a %a %a@\n" pp_polytype pt pp_monotype mty print domain;
            let mtype = match mty with
              | Instance {classn=c} -> c
+             | List _ ->
+                let cclass (x, y) = Class (x, y) in
+                cclass @@ Addr.builtin_cl_and_mro "list"
              | _ -> assert false in
            let new_domain = fst @@ filter_inst domain tid mtype in
            debug "new_domain = %a@\n" print new_domain;
@@ -1243,3 +1247,54 @@ let pp_signature fmt sign =
 
 let pp_sb = StringMap.fprint map_printer Format.pp_print_string
               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_signature)
+
+
+let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: polytype list) (sign_d3: d3) (acc : (polytype IntMap.t * d3) option) : (polytype IntMap.t * d3) option =
+  (* TODO: opt for monomorphic types? *)
+  OptionExt.bind (fun (cstrs, d3) ->
+      match in_types, sign_types with
+      | [], [] -> Some (cstrs, d3)
+      | in_ty::tl, sign_ty::tl' ->
+         begin match in_ty, sign_ty with
+         | Bot, Bot
+           | Top, Top
+           | Class _, Class _
+           | Function _, Function _
+           | Module _, Module _
+           | Method _, Method _
+           -> Some (cstrs, d3)
+         | Iterator (e, _), Iterator (e', _)
+           | Set e, Set e'
+           | List e, List e' ->
+            collect_constraints (e::tl) in_d3 (e'::tl') sign_d3 (Some (cstrs, d3))
+         | Dict (k, v), Dict (k', v') ->
+            collect_constraints (k::v::tl) in_d3 (k'::v::tl') sign_d3 (Some (cstrs, d3))
+         | FiniteTuple l, FiniteTuple l' ->
+            collect_constraints (l @ tl) in_d3 (l' @ tl') sign_d3 (Some (cstrs, d3))
+         | Instance {classn=c; uattrs=u; oattrs=o}, Instance {classn=c'; uattrs=u'; oattrs=o'} ->
+            let flatten_smap =
+              StringMap.fold2o
+                (fun _ _ _ -> Exceptions.panic "not the same attrs")
+                (fun _ _ _ -> Exceptions.panic "not the same attrs")
+                (fun k in_a sign_a (in_acc, sign_acc) -> (in_a::in_acc), (sign_a::sign_acc)) in
+            let in_args, sign_args = flatten_smap o o' (flatten_smap u u' (c::tl, c'::tl')) in
+            collect_constraints in_args in_d3 sign_args sign_d3 (Some (cstrs, d3))
+         | Typevar a, Typevar b ->
+            if IntMap.mem b cstrs then
+              Exceptions.panic "todo: conflict?@\n"
+            else
+              Some (IntMap.add b (Typevar a) cstrs, d3)
+         | _, Typevar b ->
+            if IntMap.mem b cstrs then
+              Exceptions.panic "todo: conflict?@\n"
+            else if is_mono in_ty then
+              Some (IntMap.add b in_ty cstrs, d3)
+            else
+              Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3
+         | _ -> None
+         end
+      | _ -> assert false
+    ) acc
+
+let subst_ctrs (poly: polytype) (cstr: polytype IntMap.t) : polytype =
+  IntMap.fold (fun tyvar typ acc_type -> subst acc_type tyvar typ) cstr poly

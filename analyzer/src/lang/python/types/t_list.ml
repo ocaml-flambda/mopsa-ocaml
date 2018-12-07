@@ -102,7 +102,7 @@ module Domain =
                    ~fthen:(fun flow ->
                      Eval.assume (mk_py_isinstance_builtin idx "int" range)
                        ~fthen:(fun flow ->
-                         man.eval {exp with ekind = E_py_call({call with ekind = E_py_object ({addr with addr_kind = A_py_function (F_builtin "list.append")}, r)}, args, [])} flow)
+                         man.eval {exp with ekind = E_py_call({call with ekind = E_py_object ({addr with addr_kind = A_py_function (F_builtin "list.append")}, r)}, lst::el::[], [])} flow)
                        ~felse:tyerror
                        man flow)
                    ~felse:tyerror

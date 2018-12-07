@@ -91,6 +91,8 @@ module Domain =
       let float = builtin_inst "float" in
       let none = builtin_inst "NoneType" in
       let str = builtin_inst "str" in
+      let slice = builtin_inst "slice" in
+      let slice_cls = let a, b = Addr.builtin_cl_and_mro "slice" in Class (a, b) in
       let lstub_base =
         StringMap.empty |>
           (* TODO: add rewriting for default arguments?... *)
@@ -157,6 +159,7 @@ module Domain =
           add_signature "str.swapcase" [str] [str] [] |>
           add_signature "str.title" [str] [str] [] |>
           add_signature "str.__getitem__" [str; int] [str] ["IndexError"] |>
+          add_signature "str.__getitem__" [str; slice] [str] [] |>
           add_signature "str.isalnum" [str] [bool] [] |>
           add_signature "str.isalpha" [str] [bool] [] |>
           add_signature "str.isdecimal" [str] [bool] [] |>
@@ -167,10 +170,25 @@ module Domain =
           add_signature "str.istitle" [str] [bool] [] |>
           add_signature "str.isupper" [str] [bool] [] |>
 
-          add_signature "list.count" [List (Typevar 0); Top] [int] ["IndexError"] |>
+          add_signature "list.count" [List (Typevar 0); Top] [int] [] |>
           add_signature "list.remove" [List (Typevar 0); Top] [none] ["ValueError"] |>
-          add_signature "list.pop" [List (Typevar 0)] [Typevar 0] []
-          (* add_signature "list.__getitem__" [List (Typevar (-1)); int] [Typevar (-1)] ["IndexError"] *)
+          add_signature "list.pop" [List (Typevar 0)] [Typevar 0] ["IndexError"] |>
+          add_signature "list.reverse" [List (Typevar 0)] [none] [] |>
+          add_signature "list.sort" [List (Typevar 0)] [none] [] |>
+          add_signature "list.__getitem__" [List (Typevar 0); int] [Typevar 0] ["IndexError"] |>
+          add_signature "list.__getitem__" [List (Typevar 0); slice] [List (Typevar 0)] [] |>
+          (* TODO: add list[bottom] to signal empty list ? *)
+
+
+
+          add_signature "slice.__new__" [slice_cls; int; none; none] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; int; none; int] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; int; int; none] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; int; int; int] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; none; int; none] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; none; int; int] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; none; none; int] [slice] [] |>
+          add_signature "slice.__new__" [slice_cls; none; none; none] [slice] []
       in
       stub_base := lstub_base;
       debug "stub_base = %a@\n" pp_sb !stub_base;
@@ -701,22 +719,35 @@ module Domain =
                                                      | _ -> assert false) eargs in
                  let f_signatures = List.filter (fun x -> is_compatible_signature in_types x.in_args cur) f_signatures in
                  (* fun fact, we don't do the isinstance checks, but lower-level things *)
+                 debug "f_signatures has size %d@\n" (List.length f_signatures);
                  if List.length f_signatures = 0 then tyerror flow
                  else if List.length f_signatures = 1 then
                    let sign = List.hd f_signatures in
-                   (* TODO: change output to be a singleton for both stubs and summaries... *)
-                   let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
-                   let tid, ncur = Typingdomain.get_type cur output in
-                   let flow_ret = Flow.set_domain_cur ncur man flow in
-                   let eval_ret = Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret in
-                   if List.length sign.possible_exn = 0 then eval_ret
-                   else
-                     let eval_exns =
-                       if List.length sign.possible_exn = 1 then
-                         man.exec (Utils.mk_builtin_raise (List.hd sign.possible_exn) range) flow |> Eval.empty_singleton
-                       else
-                         List.fold_left (fun acc exn -> Eval.join acc (man.exec (Utils.mk_builtin_raise exn range) flow |> Eval.empty_singleton)) (Eval.empty_singleton flow) sign.possible_exn in
-                     Eval.join eval_exns eval_ret
+                   let vars = List.fold_left (fun acc el -> Typevarset.union acc (collect_vars el)) Typevarset.empty sign.in_args in
+                   let empty_d3 = Typevarset.fold (fun var acc -> TypeVarMap.add var (Monotypeset.add Top Monotypeset.empty) acc) vars TypeVarMap.empty in
+                   let eval_ret =
+                     begin match collect_constraints in_types cur.d3 sign.in_args empty_d3 (Some (IntMap.empty, TypeVarMap.empty)) with
+                     | None -> debug "collect_constraints: None!@\n"; []
+                     | Some (cstrs, d3) ->
+                        debug "constraints found@\n";
+                        (* FIXME: use d3, or remove it? *)
+                        (* TODO: change output to be a singleton for both stubs and summaries... *)
+                        let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
+                        let output = subst_ctrs output cstrs in
+                        debug "output_ty = %a@\n" pp_polytype output;
+                        let tid, ncur = get_type ~local_use:true cur output in
+                        let flow_ret = Flow.set_domain_cur ncur man flow in
+                        [Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret] end in
+                   let eval_exns = List.map (fun exn -> man.exec (Utils.mk_builtin_raise exn range) flow |> Eval.empty_singleton) sign.possible_exn in
+                   Eval.join_list (eval_ret @ eval_exns)
+                   (* if List.length sign.possible_exn = 0 then eval_ret
+                    * else
+                    *   let eval_exns =
+                    *     if List.length sign.possible_exn = 1 then
+                    *       man.exec (Utils.mk_builtin_raise (List.hd sign.possible_exn) range) flow |> Eval.empty_singleton
+                    *     else
+                    *       List.fold_left (fun acc exn -> Eval.join acc (man.exec (Utils.mk_builtin_raise exn range) flow |> Eval.empty_singleton)) (Eval.empty_singleton flow) sign.possible_exn in
+                    *   Eval.join eval_exns eval_ret *)
                  else Exceptions.panic "todo")
            |> OptionExt.return
 
@@ -872,44 +903,44 @@ module Domain =
 
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
-         Eval.eval_list args man.eval flow |>
-           Eval.bind (fun eargs flow ->
-               let lst, idx = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume (mk_py_isinstance_builtin lst "list" range)
-                 ~fthen:(fun flow ->
-                   Eval.assume (mk_py_isinstance_builtin idx "int" range)
-                     ~fthen:(fun flow ->
-                       (* TODO: create new expr_kind so this part of the code is modular in each analysis? *)
-                       let cur = Flow.get_domain_cur man flow in
-                       let lst_tid = match ekind lst with
-                         | E_type_partition i -> i
-                         | _ -> assert false in
-                       let tid, ncur = Typingdomain.gather_list_types cur lst_tid in
-                       let flow = Flow.set_domain_cur ncur man flow in
-                       Eval.singleton (mk_expr (E_type_partition tid) range) flow
-                     )
-                     ~felse:(fun flow ->
-                       Eval.assume (mk_py_isinstance_builtin idx "slice" range)
-                         ~fthen:(fun flow -> Exceptions.panic "FIXME: slices are unsupported yet")
-                         ~felse:(fun flow ->
-                           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
-                             Eval.empty_singleton
-                         )
-                         man flow
-                     )
-                     man flow
-                 )
-                 ~felse:(fun flow ->
-                   man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
-                     Eval.empty_singleton
-                 )
-               man flow
-               (* check that lst inherits from list, otherwise raise a typeerror *)
-               (* check that idx is either an integer or a slide *)
-               (* return the type(s) of elements inside the container *)
-             )
-         |> OptionExt.return
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
+       *    Eval.eval_list args man.eval flow |>
+       *      Eval.bind (fun eargs flow ->
+       *          let lst, idx = match eargs with [e1; e2] -> e1, e2 | _ -> assert false in
+       *          Eval.assume (mk_py_isinstance_builtin lst "list" range)
+       *            ~fthen:(fun flow ->
+       *              Eval.assume (mk_py_isinstance_builtin idx "int" range)
+       *                ~fthen:(fun flow ->
+       *                  (\* TODO: create new expr_kind so this part of the code is modular in each analysis? *\)
+       *                  let cur = Flow.get_domain_cur man flow in
+       *                  let lst_tid = match ekind lst with
+       *                    | E_type_partition i -> i
+       *                    | _ -> assert false in
+       *                  let tid, ncur = Typingdomain.gather_list_types cur lst_tid in
+       *                  let flow = Flow.set_domain_cur ncur man flow in
+       *                  Eval.singleton (mk_expr (E_type_partition tid) range) flow
+       *                )
+       *                ~felse:(fun flow ->
+       *                  Eval.assume (mk_py_isinstance_builtin idx "slice" range)
+       *                    ~fthen:(fun flow -> Exceptions.panic "FIXME: slices are unsupported yet")
+       *                    ~felse:(fun flow ->
+       *                      man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+       *                        Eval.empty_singleton
+       *                    )
+       *                    man flow
+       *                )
+       *                man flow
+       *            )
+       *            ~felse:(fun flow ->
+       *              man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+       *                Eval.empty_singleton
+       *            )
+       *          man flow
+       *          (\* check that lst inherits from list, otherwise raise a typeerror *\)
+       *          (\* check that idx is either an integer or a slide *\)
+       *          (\* return the type(s) of elements inside the container *\)
+       *        )
+       *    |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__iter__")}, _)}, [arg], []) ->
          man.eval arg flow |>
