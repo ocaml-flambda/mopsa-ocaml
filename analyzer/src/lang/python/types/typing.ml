@@ -158,7 +158,7 @@ module Domain =
           add_signature "str.strip" [str; str] [str] [] |>
           add_signature "str.swapcase" [str] [str] [] |>
           add_signature "str.title" [str] [str] [] |>
-          add_signature "str.__getitem__" [str; int] [str] ["IndexError"] |>
+          add_signature "str.__getitem__" [str; int] [str] [] (* ["IndexError"] *) |>
           add_signature "str.__getitem__" [str; slice] [str] [] |>
           add_signature "str.isalnum" [str] [bool] [] |>
           add_signature "str.isalpha" [str] [bool] [] |>
@@ -175,7 +175,7 @@ module Domain =
           add_signature "list.pop" [List (Typevar 0)] [Typevar 0] ["IndexError"] |>
           add_signature "list.reverse" [List (Typevar 0)] [none] [] |>
           add_signature "list.sort" [List (Typevar 0)] [none] [] |>
-          add_signature "list.__getitem__" [List (Typevar 0); int] [Typevar 0] ["IndexError"] |>
+          add_signature "list.__getitem__" [List (Typevar 0); int] [Typevar 0] (*["IndexError"]*) [] |>
           add_signature "list.__getitem__" [List (Typevar 0); slice] [List (Typevar 0)] [] |>
           (* TODO: add list[bottom] to signal empty list ? *)
 
@@ -568,7 +568,7 @@ module Domain =
          Eval.eval_list [obj; attr] man.eval flow |>
            Eval.bind (fun evals flow ->
                let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
-               debug "eobj = %a, eattr = %a@\n" pp_expr eobj pp_expr eattr;
+               debug "eobj = %a, eattr = %a@\ncur = %a@\n" pp_expr eobj pp_expr eattr print (Flow.get_domain_cur man flow);
                match ekind eobj, ekind eattr with
                | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
                   let cur = Flow.get_domain_cur man flow in
