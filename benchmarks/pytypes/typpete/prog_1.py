@@ -30,6 +30,7 @@ def test_main():
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, list))
     mopsa.massert(isinstance(a[0], str))
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(i, int))
     mopsa.massert(isinstance(k, int))
     mopsa.massert(isinstance(l, int))

@@ -51,6 +51,7 @@ def test_main():
     mopsa.massert(isinstance(xlst, list))
     mopsa.massert(isinstance(wlst[0], W))
     mopsa.massert(isinstance(xlst[0], X))
+    mopsa.ignore_exception(IndexError)
 
     class ZP:
         def foo(self):
@@ -80,8 +81,10 @@ def test_main():
     xlstP[0].baz()
     concatenatorP.concatenate(XP(), wlstP, xlstP)
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(wlstP, list))
     mopsa.massert(isinstance(xlstP, list))
     mopsa.massert(isinstance(wlstP[0], WP))
     mopsa.massert(isinstance(xlstP[0], XP))
+    mopsa.ignore_exception(IndexError)

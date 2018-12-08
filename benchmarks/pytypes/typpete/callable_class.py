@@ -16,6 +16,7 @@ def test_main():
     mopsa.massert(isinstance(x, A))
     mopsa.massert(isinstance(y, list))
     mopsa.massert(isinstance(y[0], float))
+    mopsa.ignore_exception(IndexError)
 
 # A := Type[A]
 # __call__ := Callable[[A, List[float]], List[float]]

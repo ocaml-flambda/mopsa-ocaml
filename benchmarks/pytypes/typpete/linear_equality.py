@@ -16,6 +16,7 @@ def test_main():
 
     a = count_solutions([1, 2, 3], 2)
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, int))
 # a := int
