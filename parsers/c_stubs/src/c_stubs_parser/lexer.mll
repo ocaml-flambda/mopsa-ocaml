@@ -94,12 +94,8 @@ let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | white         { read lexbuf }
-  | newline       { new_line lexbuf;
-                    match eat_star lexbuf with
-                    | Some x -> x
-                    | None -> read lexbuf }
-  
+  | white    { read lexbuf }
+  | newline (white* "*")? { new_line lexbuf; read lexbuf }  
   | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
   | float    { FLOAT_CONST ((*Format.printf "float %s@\n" (Lexing.lexeme lexbuf);*) float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
@@ -144,6 +140,7 @@ rule read =
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
+  | newline white* end_delimeter    { new_line lexbuf; END }
   
   | line_comment  { read lexbuf }
   | "/*"          { ignore_block_comment lexbuf; read lexbuf } 
@@ -166,7 +163,7 @@ and read_string buf =
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_string buf lexbuf
     }
-  | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
+  | _ { raise (SyntaxError ("Illegal string character #1: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
 
 and read_comment = 
@@ -174,18 +171,12 @@ and read_comment =
   | "*}"          { () }
   | [^ '\n' '\r'] { read_comment lexbuf }
   | newline       { new_line lexbuf; read_comment lexbuf }
+  | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }
 
 and ignore_block_comment = 
   parse
   | "*/"          { () }
   | [^ '\n' '\r'] { ignore_block_comment lexbuf }
   | newline       { new_line lexbuf; ignore_block_comment lexbuf }
+  | _ { raise (SyntaxError ("Illegal string character #3: " ^ Lexing.lexeme lexbuf)) }
 
-and eat_star =
-  parse
-  | white                 { eat_star lexbuf }
-  | "*" [^ '/' '\r' '\n'] { None }
-  | end_delimeter         { Some END }
-  | "*" newline           { new_line lexbuf; eat_star lexbuf }
-  
-    
