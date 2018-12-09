@@ -15,8 +15,6 @@ open Ast
 type zone +=
   | Z_c
   | Z_c_scalar
-  | Z_c_scalar_num
-  | Z_c_points_to_fun
 
 let () =
   register_zone {
@@ -66,33 +64,15 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
-        | E_var _                            -> Keep
+        | E_var _
+        | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
         | E_c_address_of _                   -> Visit
-        (* ------------------------------------------- *)
-        | _                                  -> Process
-      );
-    }
-
-
-let () =
-  register_zone {
-    zone = Z_c_scalar_num;
-    subset = Some Z_c_scalar;
-    name = "C/Scalar/Num";
-    eval = (fun exp ->
-        match ekind exp with
-        (* ------------------------------------------- *)
-        | E_constant _
-        | E_var _                            -> Keep
-        (* ------------------------------------------- *)
-        | E_unop _
-        | E_binop _
-        | E_c_cast _                         -> Visit
+        | E_c_deref _                        -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );

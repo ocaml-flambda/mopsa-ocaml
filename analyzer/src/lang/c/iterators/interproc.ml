@@ -9,6 +9,7 @@
 (** Abstraction of C function calls *)
 
 open Framework.Essentials
+open Memory.Common.Points_to
 open Ast
 
 
@@ -39,7 +40,7 @@ struct
   let eval_interface = {
     export = [Zone.Z_c, Zone.Z_c_scalar];
     import = [
-      Zone.Z_c, Zone.Z_c_points_to_fun;
+      Zone.Z_c, Z_c_points_to;
       Universal.Zone.Z_u, any_zone;
       Stubs.Zone.Z_stubs, Z_any
     ]
@@ -64,22 +65,15 @@ struct
     match ekind exp with
     | E_c_call(f, args) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |>
+        man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
         Eval.bind @@ fun f flow ->
 
         match ekind f with
-        | E_c_builtin_function(name) ->
-          let () = debug "builtin : %a" pp_expr f in
-          let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
+        | E_c_points_to (P_fun f) when Libs.Mopsa.is_builtin_function f.c_func_var.vname ->
+          let exp' = {exp with ekind = E_c_builtin_call(f.c_func_var.vname, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
 
-        | E_c_function (
-            {
-              c_func_body = Some body;
-              c_func_stub = None
-            } as fundec
-          ) ->
-          debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
+        | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
           let open Universal.Ast in
           let ret_var = mk_tmp ~vtyp:fundec.c_func_return () in
           let fundec' = {
@@ -96,24 +90,17 @@ struct
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
-        | E_c_function {c_func_stub = Some stub} ->
+        | E_c_points_to (P_fun {c_func_stub = Some stub}) ->
           let exp' = Stubs.Ast.mk_stub_call stub.content args exp.erange in
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-        | E_c_function {c_func_body = None; c_func_var} ->
+        | E_c_points_to (P_fun {c_func_body = None; c_func_var}) ->
           panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var
 
         | _ -> assert false
       end |>
       OptionExt.return
 
-    | E_c_cast(e, _)
-      when (exp |> etyp |> is_c_pointer_type)
-        && (exp |> etyp |> under_pointer_type |> is_c_function_type)
-      ->
-      let t' = exp |> etyp |> under_pointer_type in
-      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) {e with etyp = t'} flow |>
-      OptionExt.return
 
     | _ -> None
 

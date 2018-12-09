@@ -234,9 +234,13 @@ struct
       eval_over_path tl man
 
   and eval_hop z1 z2 feval man exp flow =
+    debug "eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
     match Zone.eval exp z2 with
-    | Keep -> Eval.singleton exp flow |>
+    | Keep ->
+      debug "keep";
+      Eval.singleton exp flow |>
       OptionExt.return
+
     | other_action ->
       match Cache.eval feval (z1, z2) exp man flow with
       | Some evl -> Some evl
@@ -249,6 +253,7 @@ struct
           None
 
         | Visit ->
+          debug "visit";
           let open Visitor in
           let parts, builder = split_expr exp in
           match parts with

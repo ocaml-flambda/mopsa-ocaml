@@ -6,9 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Base storage of program variables, distinguishing between stack and heap
-    storage.
-*)
+(** Base storage of scalar values. *)
 
 open Framework.Ast
 open Universal.Ast
@@ -40,6 +38,5 @@ let base_uid = function
 let base_size =
   function
   | V v -> sizeof_type v.vtyp
-  | A {addr_kind = Libs.C_stdlib.A_c_static_malloc s} -> s
   | S s -> Z.of_int @@ String.length s
   | b -> Exceptions.panic "[base_size]: unknown base %a" pp_base b

@@ -97,8 +97,8 @@ let rec subset (z1: zone) (z2: zone) : bool =
 let sat_zone export z =
   match z with
   | Z_any -> true
-  | Z_under z' -> subset export z
-  | Z_above z' -> subset z export
+  | Z_under z' -> subset export z'
+  | Z_above z' -> subset z' export
   | _ -> compare_zone export Z_any = 0 ||
          compare_zone export z = 0
 

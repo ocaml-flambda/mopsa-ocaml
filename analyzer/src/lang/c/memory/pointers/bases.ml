@@ -6,102 +6,104 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Pointer bases as a non-relational value abstraction *)
+(** This module handles the base part of a pointer value. Bases
+   represent the allocated memory blocks in which pointers can
+   point. Bases are abstracted as powersets, which can be used as
+   argument to the non-relational functor [Framework.Domains.Nonrel].
+*)
+
 
 open Framework.Essentials
 open Framework.Value
 open Universal.Ast
 open Common.Base
 
-(** Pointer bases *)
-module PB =
-struct
-  type t =
-    | PB_fun of Ast.c_fundec
-    | PB_block of base
-    | PB_null
-    | PB_invalid
 
-  let print fmt = function
-    | PB_fun f -> Format.fprintf fmt "(fun: %a)" pp_var f.Ast.c_func_var
-    | PB_block base -> Format.fprintf fmt "(var: %a)" pp_base base
-    | PB_null-> Format.pp_print_string fmt "NULL"
-    | PB_invalid -> Format.pp_print_string fmt "Invalid"
+(** Pointer base *)
+type pb =
+  | PB_block of base         (** Memory blocks, such as program variables, mallocs and strings *)
+  | PB_fun   of Ast.c_fundec (** Functions *)
+  | PB_null                  (** Null pointers *)
+  | PB_invalid               (** Invalid pointers: uninitialized or deallocated pointers *)
 
-  let compare p1 p2 =
-    match p1, p2 with
-    | PB_fun f1, PB_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
-    | PB_block b1, PB_block b2 -> compare_base b1 b2
-    | _, _ -> Pervasives.compare p1 p2
-end
 
-module Value =
-struct
+(** Bases are abstracted as powersets *)
+module BaseSet = Framework.Lattices.Powerset.Make(
+  struct
 
-  module PBS = Framework.Lattices.Powerset.Make(PB)
+    type t = pb
 
-  include PBS
+    let print fmt = function
+      | PB_block base -> Format.fprintf fmt "(var: %a)" pp_base base
+      | PB_fun f -> Format.fprintf fmt "(fun: %a)" pp_var f.Ast.c_func_var
+      | PB_null-> Format.pp_print_string fmt "NULL"
+      | PB_invalid -> Format.pp_print_string fmt "Invalid"
 
-  let name = "c.memory.pointers.bases", "bases"
+    let compare p1 p2 =
+      match p1, p2 with
+      | PB_block b1, PB_block b2 -> compare_base b1 b2
+      | PB_fun f1, PB_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
+      | _, _ -> Pervasives.compare p1 p2
+  end
+  )
 
-  type _ value += V_c_pointers_bases : t value
+include BaseSet
 
-  let id = V_c_pointers_bases
+let name = "c.memory.pointers", "pointers"
 
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_c_pointers_bases -> Some Eq
-    | _ -> None
+type _ value += V_c_pointers_bases : t value
 
-  let debug fmt = Debug.debug ~channel:(fst name) fmt
+let id = V_c_pointers_bases
 
-  let zone = Zone.Z_c_scalar
+let identify : type a. a value -> (t, a) eq option =
+  function
+  | V_c_pointers_bases -> Some Eq
+  | _ -> None
 
-  let null = singleton PB_null
+let debug fmt = Debug.debug ~channel:(fst name) fmt
 
-  let invalid = singleton PB_invalid
+let zone = Zone.Z_c_scalar
 
-  let block b = singleton (PB_block b)
+let null = singleton PB_null
 
-  let bfun f = singleton (PB_fun f)
+let invalid = singleton PB_invalid
 
-  let of_constant _ c =
-    match c with
-    | C_int n when Z.equal n Z.zero -> null
-    | _ -> top
+let block b = singleton (PB_block b)
 
-  let unop _ op v = top
+let bfun f = singleton (PB_fun f)
 
-  let binop _ op v1 v2 = top
+let of_constant _ c =
+  match c with
+  | C_int n when Z.equal n Z.zero -> null
+  | _ -> top
 
-  let bwd_unop = default_bwd_unop_simple
-  let bwd_binop = default_bwd_binop_simple
+let unop _ op v = top
 
-  let filter _ v b =
-    if b then diff v null
-    else meet () v null
+let binop _ op v1 v2 = top
 
-  let is_singleton v =
-    not (is_top v) &&
-    cardinal v == 1
+let bwd_unop = default_bwd_unop_simple
+let bwd_binop = default_bwd_binop_simple
 
-  let compare _ op v1 v2 r =
-    let op = if r then op else negate_comparison op in
-    match op with
-    | O_eq ->
-      let v = meet () v1 v2 in
-      v, v
+let filter _ v b =
+  if b then diff v null
+  else meet () v null
 
-    | O_ne ->
-      if is_singleton v1 then v1, diff v2 v1
-      else if is_singleton v2 then diff v1 v2, v2
-      else v1, v2
+let is_singleton v =
+  not (is_top v) &&
+  cardinal v == 1
 
-    | _ -> v1, v2
+let compare _ op v1 v2 r =
+  let op = if r then op else negate_comparison op in
+  match op with
+  | O_eq ->
+    let v = meet () v1 v2 in
+    v, v
 
-  let ask _ _ = None
+  | O_ne ->
+    if is_singleton v1 then v1, diff v2 v1
+    else if is_singleton v2 then diff v1 v2, v2
+    else v1, v2
 
-end
+  | _ -> v1, v2
 
-let () =
-  register_simple_value (module Value)
+let ask _ _ = None

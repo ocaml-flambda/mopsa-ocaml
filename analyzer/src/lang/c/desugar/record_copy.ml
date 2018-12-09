@@ -66,10 +66,10 @@ struct
       begin
         let range = srange stmt in
         let t1 = lval |> etyp |> remove_typedef |> remove_qual
-        and t2 = lval |> etyp |> remove_typedef |> remove_qual in
-        if compare t1 t2 != 0 then
+        and t2 = rval |> etyp |> remove_typedef |> remove_qual in
+        if compare_typ t1 t2 != 0 then
           Exceptions.panic "[%s] assignment of records with uncompatible \
-                      types: %a %a" name pp_typ t1 pp_typ t2
+                            types: %a %a" name pp_typ t1 pp_typ t2
         else
           begin
             let fields, record_kind = match t1 with

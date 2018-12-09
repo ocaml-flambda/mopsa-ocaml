@@ -248,6 +248,9 @@ struct
         let i = Finite i in
         geq i a && leq i b
       ) itv
+
+  let compare_interval itv1 itv2 =
+    bot_compare (I.compare) itv1 itv2
 end
 
 

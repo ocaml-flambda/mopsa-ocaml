@@ -231,7 +231,7 @@ struct
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       let () = debug "case 5" in
-      eval (Z_c_scalar_num, Z_u_num) e man flow |>
+      eval (Z_c_scalar, Z_u_num) e man flow |>
       OptionExt.lift @@ Eval.bind @@ fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
@@ -293,11 +293,11 @@ struct
       None
 
   and eval_binop op e e' exp man flow =
-    eval (Z_c_scalar_num, Z_u_num) e man flow |>
+    eval (Z_c_scalar, Z_u_num) e man flow |>
     OptionExt.bind @@
     Eval.bind_opt @@ fun e flow ->
 
-    eval (Z_c_scalar_num, Z_u_num) e' man flow |>
+    eval (Z_c_scalar, Z_u_num) e' man flow |>
     OptionExt.lift @@
     Eval.bind @@ fun e' flow ->
 
@@ -310,7 +310,7 @@ struct
 
 
   and eval_unop op e exp man flow =
-    eval (Z_c_scalar_num, Z_u_num) e man flow |>
+    eval (Z_c_scalar, Z_u_num) e man flow |>
     OptionExt.lift @@
     Eval.bind @@ fun e flow ->
 
@@ -325,10 +325,10 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
-      man.eval ~zone:(Z_c_scalar_num, Z_u_num) lval flow |>
+      man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->
 
-      man.eval ~zone:(Z_c_scalar_num, Z_u_num) rval flow |>
+      man.eval ~zone:(Z_c_scalar, Z_u_num) rval flow |>
       Post.bind_opt man @@ fun rval' flow ->
 
       man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
@@ -355,7 +355,7 @@ struct
       OptionExt.return
 
     | S_assume(e) ->
-      man.eval ~zone:(Z_c_scalar_num, Z_u_num) e flow |>
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Post.bind_opt man @@ fun e' flow ->
 
       man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>

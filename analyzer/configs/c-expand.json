@@ -17,6 +17,7 @@
 
         // C desugar
         "c.desugar.loops",
+        "c.desugar.addr_deref",
         "c.desugar.aggregate",
         "c.desugar.andor",
         "c.desugar.stmt_expr",
@@ -24,7 +25,6 @@
 
         // C libraries
         "c.libs.mopsa",
-        "c.libs.c_stdlib",
 
         // Memory model
         {
@@ -34,14 +34,16 @@
                     {
                         "stack": "c.memory.cells.expand",
                         "over" : {
-                            "iter" : [
-                                "c.memory.cells.cell_2_num",
-                                "c.machine_integers",
-                                "universal.numeric.values.intervals"
-                            ]
+                            "stack" : "c.memory.cells.cell_2_scalar",
+			    "over": {
+				"iter": [
+				    "c.memory.cells.pointer",
+                                    "c.machine_integers",
+                                    "universal.numeric.values.intervals"
+				]
+                            }
                         }
-                    },
-                    "c.memory.cells.pointer"
+                    }
                 ]
             }
         }

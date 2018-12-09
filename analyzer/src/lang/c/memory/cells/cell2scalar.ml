@@ -6,62 +6,67 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Cell to Numerical variable bindings *)
+(** Cell to Scalarerical variable bindings *)
 
 open Framework.Essentials
 open Ast
 open Cell
 open Zone
 
-module CellNumEquiv = Equiv.Make(Cell)(Var)
+module CellScalarEquiv = Equiv.Make(Cell)(Var)
 
 type ('a, _) Annotation.key +=
-  | KCellNumEquiv: ('a, CellNumEquiv.t) Annotation.key
+  | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
 
 
 let () =
   Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (CellNumEquiv.t, b) eq option =
+      eq = (let f: type a b. (a, b) key -> (CellScalarEquiv.t, b) eq option =
               function
-              | KCellNumEquiv -> Some Eq
+              | A_cell_scalar -> Some Eq
               | _ -> None
             in
             f);
-      print = (fun fmt m -> Format.fprintf fmt "Cells vars: @[%a@]" CellNumEquiv.print m);
+      print = (fun fmt m -> Format.fprintf fmt "Cells vars: @[%a@]" CellScalarEquiv.print m);
     }) ();
   ()
 
 let get_annot flow =
-  try Flow.get_annot KCellNumEquiv flow
-  with _ -> CellNumEquiv.empty
+  try Flow.get_annot A_cell_scalar flow
+  with _ -> CellScalarEquiv.empty
 
-let get_num flow c =
-  let cne = get_annot flow in
-  try
-    (CellNumEquiv.find_l c cne, flow)
+let get_scalar_or_create flow c =
+  let annot = get_annot flow in
+  try CellScalarEquiv.find_l c annot, flow
   with
   | Not_found ->
     let v = cell_to_var c in
-    (v, Flow.set_annot KCellNumEquiv (CellNumEquiv.add (c, v) cne) flow)
+    let annot' = CellScalarEquiv.add (c, v) annot in
+    let flow' = Flow.set_annot A_cell_scalar annot' flow in
+    (v, flow')
 
 let get_cell flow v =
-  let cne = get_annot flow in
-  try
-    (CellNumEquiv.find_r v cne, flow)
+  let annot = get_annot flow in
+  try CellScalarEquiv.find_r v annot
   with
   | Not_found ->
-    Exceptions.panic "Cell2Num get_cell could not find binding of %a in \
-                annot: (*FIXME print annot*)"
+    Exceptions.panic
+      "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
       pp_var v
+      CellScalarEquiv.print annot
 
-let get_num_and_remove flow c =
-  let cne = get_annot flow in
+let get_scalar_and_remove flow c =
+  let annot = get_annot flow in
   try
-    (CellNumEquiv.find_l c cne, Flow.set_annot KCellNumEquiv (CellNumEquiv.remove_l c cne) flow)
+    let v = CellScalarEquiv.find_l c annot in
+    let annot' = CellScalarEquiv.remove_l c annot in
+    let flow' = Flow.set_annot A_cell_scalar annot' flow in
+    v, flow'
   with
   | Not_found ->
     let v = cell_to_var c in
     (v, flow)
+
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -72,12 +77,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_cell_2_num : unit domain
-  let id = D_c_cell_2_num
-  let name = "c.memory.cells.cell_2_num"
+  type _ domain += D_c_cell_2_scalar : unit domain
+  let id = D_c_cell_2_scalar
+  let name = "c.memory.cells.cell_2_scalar"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_cell_2_num -> Some Eq
+    | D_c_cell_2_scalar -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -92,7 +97,7 @@ struct
 
   let eval_interface = {
     export = [Z_c_cell, Z_c_scalar];
-    import = []
+    import = [Z_c_cell, Z_c_scalar]
   }
 
   (** Initialization *)
@@ -100,7 +105,7 @@ struct
 
   let init prog man flow =
     Some (
-      Flow.set_annot KCellNumEquiv CellNumEquiv.empty flow
+      Flow.set_annot A_cell_scalar CellScalarEquiv.empty flow
     )
 
   (** Post-conditions *)
@@ -108,57 +113,51 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_add_cell c when cell_type c |> is_c_int_type ->
-      let v, flow = get_num flow c in
-      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_add_var v}) flow
-      |> Post.of_flow
-      |> OptionExt.return
+    | S_c_add_cell c ->
+      let v, flow = get_scalar_or_create flow c in
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_add_var v}) flow |>
+      Post.return
 
-    | S_c_remove_cell c when cell_type c |> is_c_int_type ->
-      let v, flow = get_num_and_remove flow c in
-      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_remove_var v}) flow
-      |> Post.of_flow
-      |> OptionExt.return
+    | S_c_remove_cell c ->
+      let v, flow = get_scalar_and_remove flow c in
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_remove_var v}) flow |>
+      Post.return
 
-    | S_c_expand_cell (c, cl) when cell_type c |> is_c_int_type ->
-      let v, flow = get_num flow c in
+    | S_c_expand_cell (c, cl) ->
+      let v, flow = get_scalar_or_create flow c in
       let vl, flow =
         let rec doit flow = function
           | [] -> assert false
           | [c] ->
-            let v, flow = get_num flow c in
+            let v, flow = get_scalar_or_create flow c in
             [v], flow
           | c :: tl ->
-            let v, flow = get_num flow c in
+            let v, flow = get_scalar_or_create flow c in
             let vl, flow = doit flow tl in
             v :: vl, flow
         in
         doit flow cl
       in
-      man.exec ~zone:Z_c_scalar_num ({stmt with skind = S_expand (v, vl)}) flow
-      |> Post.of_flow
-      |> OptionExt.return
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (v, vl)}) flow |>
+      Post.return
 
-    | S_assign(lval, rval) when etyp lval |> is_c_int_type ->
-      man.eval ~zone:(Z_c_cell, Z_c_scalar_num) lval flow |>
+    | S_assign({ ekind = E_c_cell _ } as lval, rval)  ->
+      man.eval ~zone:(Z_c_cell, Z_c_scalar) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->
 
-      man.eval ~zone:(Z_c_cell, Z_c_scalar_num) rval flow |>
+      man.eval ~zone:(Z_c_cell, Z_c_scalar) rval flow |>
       Post.bind_opt man @@ fun rval' flow ->
 
-      man.exec ~zone:Z_c_scalar_num (mk_assign lval' rval' stmt.srange) flow |>
-      Post.of_flow |>
-      OptionExt.return
+      man.exec ~zone:Z_c_scalar (mk_assign lval' rval' stmt.srange) flow |>
+      Post.return
 
     | S_assume(e) ->
-      begin
-        man.eval ~zone:(Z_c_cell, Z_c_scalar_num) e flow |>
-        Post.bind man @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assume e'} in
-        man.exec ~zone:Zone.Z_c_scalar_num stmt' flow |>
-        Post.of_flow
-      end |>
-      OptionExt.return
+      man.eval ~zone:(Z_c_cell, Z_c_scalar) e flow |>
+      Post.bind_opt man @@ fun e' flow ->
+
+      let stmt' = {stmt with skind = S_assume e'} in
+      man.exec ~zone:Zone.Z_c_scalar stmt' flow |>
+      Post.return
 
     | _ -> None
 
@@ -167,43 +166,35 @@ struct
 
   let rec eval zone exp man flow =
     match ekind exp with
-    | E_c_cell(c, mode) when cell_type c |> is_c_int_type ->
-      begin
-        match cell_base c with
-        (* Case of a static string literal *)
-        | Common.Base.S s ->
-          begin
-            let offset = cell_offset c exp.erange in
-            match Universal.Utils.expr_to_z offset with
-            (* Case of constant offset => return the num value of the character *)
-            | Some z ->
-              let ch = String.get s (Z.to_int z) in
-              Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow
+    | E_c_cell({b = S s; o = O_single z}, mode) ->
+      (* Case of a static string literal with a constant offset *)
+      (* return the scalar value of the character *)
+      let ch = String.get s (Z.to_int z) in
+      Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow |>
+      Eval.return
 
-            (* Otherwise, return the interval covering all characters of the string *)
-            | None ->
-              let len = String.length s in
-              let at i = String.get s i |> int_of_char in
-              let rec aux i a b =
-                if i = 0
-                then aux (i + 1) (at 0) (at 0)
-                else if i = len
-                then a, b
-                else
-                  let a', b' = aux (i + 1) a b in
-                  min a a', max b b'
-              in
-              let min, max = aux 0 0 0 in
-              Eval.singleton (Universal.Ast.mk_int_interval min max exp.erange) flow
-          end
+    | E_c_cell({b = S s; o = _}, mode) ->
+      (* Otherwise, return the interval covering all characters of the string *)
+      let len = String.length s in
+      let at i = String.get s i |> int_of_char in
+      let rec aux i a b =
+        if i = 0
+        then aux (i + 1) (at 0) (at 0)
+        else if i = len
+        then a, b
+        else
+          let a', b' = aux (i + 1) a b in
+          min a a', max b b'
+      in
+      let min, max = aux 0 0 0 in
+      Eval.singleton (Universal.Ast.mk_int_interval min max exp.erange) flow |>
+      Eval.return
 
-        | _ ->
-          let range = erange exp in
-          let v, flow = get_num flow c in
-          let exp = mk_var v (tag_range range "cell2num") ~mode in
-          Eval.singleton exp flow
-      end
-      |> OptionExt.return
+    | E_c_cell(c, mode) ->
+      let v, flow = get_scalar_or_create flow c in
+      let exp = mk_var v exp.erange ~mode in
+      Eval.singleton exp flow |>
+      Eval.return
 
     | _ -> None
 

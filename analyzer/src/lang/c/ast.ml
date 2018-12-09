@@ -811,3 +811,8 @@ let range_cond e_mint rmin rmax range =
    etyp = T_bool;
    erange = tag_range range "wrap_full"
   }
+
+let rec remove_casts e =
+  match ekind e with
+  | E_c_cast (e', _) -> remove_casts e'
+  | _ -> e

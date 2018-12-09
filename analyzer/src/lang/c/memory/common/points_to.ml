@@ -86,7 +86,6 @@ let () =
     eval = (fun exp ->
         match ekind exp with
         | E_c_points_to _ -> Keep
-
         | _ -> Process
       );
   }

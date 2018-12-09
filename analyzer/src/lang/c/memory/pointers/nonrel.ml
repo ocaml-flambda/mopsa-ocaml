@@ -21,7 +21,7 @@ struct
   (** Domain lattice *)
   (** ============== *)
 
-  module NR = Framework.Domains.Nonrel.Make(Framework.Value.LiftSimpleValue(Bases.Value))
+  module NR = Framework.Domains.Nonrel.Make(Framework.Value.LiftSimpleValue(Bases))
 
   type t = NR.t
 
@@ -39,9 +39,7 @@ struct
 
   let widen = NR.widen
 
-  let print fmt a =
-    Format.fprintf fmt "pointers: @[%a@]@\n"
-      NR.print a
+  let print = NR.print
 
 
   (** Domain identification *)
@@ -127,7 +125,7 @@ struct
 
   (** Get the pointer variable and the offset of a pointer expression *)
   let rec eval_pointer exp : ptr =
-    let open Bases.Value in
+    let open Bases in
     match ekind exp with
     | E_constant(C_int n) when Z.equal n Z.zero ->
       NULL
@@ -152,6 +150,9 @@ struct
 
     | E_var (a, _) when is_c_array_type a.vtyp ->
       ADDROF(V a, mk_zero exp.erange)
+
+    | E_c_deref a when is_c_array_type (under_type a.etyp) ->
+      eval_pointer a
 
     | E_var (p, _) when is_c_pointer_type p.vtyp ->
       EQ (p, mk_zero exp.erange)
@@ -185,7 +186,7 @@ struct
       | EQ (p, offset) ->
         let offset' = mk_binop (mk_var (mk_offset_var p) exp.erange) O_plus offset exp.erange in
         let bases = NR.find p (Flow.get_domain_env T_cur man flow) in
-        let el = Bases.Value.fold (fun b acc ->
+        let el = Bases.fold (fun b acc ->
             match b with
             | PB_block b ->
               Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
@@ -200,7 +201,7 @@ struct
               Eval.singleton (mk_c_points_to_invalid exp.erange) flow :: acc
           ) bases []
         in
-        Eval.join_list el
+        Eval.join_list el ~empty:(Eval.empty_singleton flow)
 
       | FUN f ->
         Eval.singleton (mk_c_points_to_fun f exp.erange) flow
@@ -215,13 +216,12 @@ struct
   let rec eval_pointer_compare exp man flow =
     match ekind exp with
     | E_var (p, _) when is_c_pointer_type p.vtyp ->
-      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num)
-        (mk_not
-           (mk_binop exp O_eq (mk_zero exp.erange) exp.erange)
-           exp.erange
-        )
-        flow |>
-      Eval.return
+      let exp' = mk_binop exp O_eq (mk_zero exp.erange) exp.erange in
+
+      eval_pointer_compare exp' man flow |>
+      OptionExt.lift @@ Eval.bind @@ fun exp' flow ->
+
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_not exp' exp.erange) flow
 
     | E_binop(O_eq, e1, e2) when is_c_pointer_type e1.etyp ||
                                  is_c_pointer_type e2.etyp
@@ -229,10 +229,10 @@ struct
       let p1 = eval_pointer e1 in
       let p2 = eval_pointer e2 in
 
-      let get_pointer_info (p:ptr) : (Bases.Value.t * expr option * var option) =
+      let get_pointer_info (p:ptr) : (Bases.t * expr option * var option) =
         match p with
         | ADDROF (b, o) ->
-          Bases.Value.block b, Some o, None
+          Bases.block b, Some o, None
 
         | EQ(q, o) ->
           let b = Flow.get_domain_env T_cur man flow |>
@@ -241,10 +241,10 @@ struct
           b, Some o, Some q
 
         | NULL ->
-          Bases.Value.null, None, None
+          Bases.null, None, None
 
         | INVALID ->
-          Bases.Value.invalid, None, None
+          Bases.invalid, None, None
 
         | FUN _ ->
           panic_at exp.erange "eval_pointer_compare: function pointers not supported"
@@ -259,22 +259,22 @@ struct
           let e1 = mk_binop (mk_offset_var_expr v1 exp.erange) O_plus o1 exp.erange ~etyp:T_int in
           let e2 = mk_binop (mk_offset_var_expr v2 exp.erange) O_plus o2 exp.erange ~etyp:T_int in
           let cond = mk_binop e1 O_eq e2 exp.erange in
-          if b then man.exec ~zone:Universal.Zone.Z_u_num (mk_assume cond exp.erange) flow
-          else man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_not cond exp.erange) exp.erange) flow
+          if b then cond
+          else (mk_not cond exp.erange)
 
         | Some v, Some o, None, Some oo
         | None, Some oo, Some v, Some o ->
           let e1 = mk_binop (mk_offset_var_expr v exp.erange) O_plus o exp.erange ~etyp:T_int in
           let cond = mk_binop e1 O_eq oo exp.erange in
-          if b then man.exec ~zone:Universal.Zone.Z_u_num (mk_assume cond exp.erange) flow
-          else man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_not cond exp.erange) exp.erange) flow
+          if b then cond
+          else mk_not cond exp.erange
 
         | None, Some o1, None, Some o2 ->
           let cond = mk_binop o1 O_eq o2 exp.erange in
-          if b then man.exec ~zone:Universal.Zone.Z_u_num (mk_assume cond exp.erange) flow
-          else man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_not cond exp.erange) exp.erange) flow
+          if b then cond
+          else mk_not cond exp.erange
 
-        | _ -> flow
+        | _ -> mk_one exp.erange
 
       in
 
@@ -284,52 +284,62 @@ struct
         | Some vv -> Flow.map_domain_env T_cur (NR.add vv b) man flow
       in
 
-      let btrue1, btrue2 = Bases.Value.compare () O_eq b1 b2 true in
-      let bfalse1, bfalse2 = Bases.Value.compare () O_ne b1 b2 true in
+      let btrue1, btrue2 = Bases.compare () O_eq b1 b2 true in
+      let bfalse1, bfalse2 = Bases.compare () O_ne b1 b2 true in
 
-      let btrue = Bases.Value.meet () btrue1 btrue2 in
-      let bfalse = Bases.Value.meet () bfalse1 bfalse2 in
+      let btrue = Bases.meet () btrue1 btrue2 in
+      let bfalse = Bases.join () bfalse1 bfalse2 in
 
-      let evl = match Bases.Value.is_bottom btrue,
-                      Bases.Value.is_bottom bfalse
+      let evl =
+        match Bases.is_bottom btrue,
+              Bases.is_bottom bfalse
         with
         | true, true ->
           [Eval.empty_singleton flow]
 
         | false, true ->
-          let ftrue = filter_offsets true |>
-                      assign_base v1 btrue1 man |>
+          let ftrue = assign_base v1 btrue1 man flow |>
                       assign_base v2 btrue2 man
           in
-          [Eval.singleton (mk_one exp.erange) ftrue]
+          let cond = filter_offsets true in
+          [Eval.singleton cond ftrue]
 
         | true, false ->
-          let ffalse = filter_offsets false |>
-                       assign_base v1 bfalse1 man |>
+          let ffalse = assign_base v1 bfalse1 man flow |>
                        assign_base v2 bfalse2 man
           in
-          [Eval.singleton (mk_zero exp.erange) ffalse]
+          let cond = filter_offsets false in
+          [Eval.singleton cond ffalse]
 
         | false, false ->
-          let ftrue = filter_offsets true |>
-                      assign_base v1 btrue1 man |>
+          let ftrue = assign_base v1 btrue1 man flow |>
                       assign_base v2 btrue2 man
           in
-          let evl1 = Eval.singleton (mk_one exp.erange) ftrue in
+          let cond = filter_offsets true in
+          let evl1 = Eval.singleton cond ftrue in
 
-          let ffalse = filter_offsets false |>
-                       assign_base v1 bfalse1 man |>
+          let ffalse = assign_base v1 bfalse1 man flow |>
                        assign_base v2 bfalse2 man
           in
-          let evl2 = Eval.singleton (mk_zero exp.erange) ffalse in
+          let cond = filter_offsets false in
+          let evl2 = Eval.singleton cond ffalse in
 
           [evl1; evl2]
       in
       Eval.join_list evl |>
       Eval.return
 
-    | E_binop(O_minus, e1, e2) when is_c_pointer_type e1.etyp &&
-                                    is_c_pointer_type e2.etyp
+    | E_binop (O_ne, p, q)  when is_c_pointer_type p.etyp ||
+                                 is_c_pointer_type q.etyp ->
+      let exp' = { exp with ekind = E_binop (O_eq, p, q) } in
+      eval_pointer_compare exp' man flow |>
+      OptionExt.lift @@ Eval.bind @@ fun exp' flow ->
+      
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_not exp' exp.erange) flow
+
+    | E_binop(O_minus, e1, e2)
+      when is_c_pointer_type e1.etyp &&
+           is_c_pointer_type e2.etyp
       ->
       panic_at exp.erange "eval_pointer_compare: pointer difference not supported"
 
@@ -352,7 +362,7 @@ struct
     match skind stmt with
     | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
       let flow' = Flow.map_domain_env T_cur (
-          NR.add p Bases.Value.null
+          NR.add p Bases.null
         ) man flow
       in
       Post.return flow'
@@ -363,7 +373,7 @@ struct
       let flow' =
         match ptr with
         | ADDROF (b, offset) ->
-          let flow' = Flow.map_domain_env T_cur (NR.add p (Bases.Value.block b)) man flow in
+          let flow' = Flow.map_domain_env T_cur (NR.add p (Bases.block b)) man flow in
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign (mk_var o range) offset range) flow'
 
         | EQ (q, offset) ->
@@ -372,18 +382,18 @@ struct
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign (mk_var o range) (mk_binop (mk_var qo range) O_plus offset range) range) flow'
 
         | FUN f ->
-          Flow.map_domain_env T_cur (NR.add p (Bases.Value.bfun f)) man flow
+          Flow.map_domain_env T_cur (NR.add p (Bases.bfun f)) man flow
 
         | INVALID ->
-          Flow.map_domain_env T_cur (NR.add p Bases.Value.invalid) man flow
+          Flow.map_domain_env T_cur (NR.add p Bases.invalid) man flow
 
         | NULL ->
-          Flow.map_domain_env T_cur (NR.add p Bases.Value.null) man flow
+          Flow.map_domain_env T_cur (NR.add p Bases.null) man flow
       in
       Post.return flow'
 
     | S_add_var(p) when is_c_pointer_type p.vtyp ->
-      let flow1 = Flow.map_domain_env T_cur (NR.add p Bases.Value.top) man flow in
+      let flow1 = Flow.map_domain_env T_cur (NR.add p Bases.top) man flow in
       let o = mk_offset_var p in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add_var o range) flow1 in
       Post.return flow2
