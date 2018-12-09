@@ -19,7 +19,9 @@ let parse_file
   let filtered_opts =
     List.filter (fun o -> not (List.mem o ["-MF"])) opts
   in
-  let opts = "-fparse-all-comments"::filtered_opts in (* needed to get all comments *)
+  let opts = "-fparse-all-comments":: (* needed to get all comments *)
+               filtered_opts
+  in
 
   let obj, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
 
