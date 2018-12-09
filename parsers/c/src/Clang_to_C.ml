@@ -47,7 +47,7 @@ let fix_va_list = true
    as it refuses to call __builtin_va_arg with anything other than va_list
  *)
 
-
+                
 (** {2 Conversion & linking} *)
                 
     
@@ -115,6 +115,7 @@ let new_uid ctx =
     
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) =
 
+  
   (* utilities *)
   (* ********* *)
 
@@ -657,6 +658,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic        
       );
+      
       func.func_com <- comment_unify func.func_com f.C.function_com;
       (* fill in body *)
       if func.func_body <> None && f.C.function_body <> None
@@ -1043,7 +1045,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
   | _ -> error decl.C.decl_range "expected TranslationUnitDecl" (C.decl_kind_name decl.C.decl_kind)
   );
 
-  (* add comments, merging dupplicates *)
+  (* add comments, merging duplicates *)
   let c =
     List.fold_left
       (fun ctx c ->

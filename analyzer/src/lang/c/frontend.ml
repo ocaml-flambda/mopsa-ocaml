@@ -626,6 +626,9 @@ and from_stub_builtin f =
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
+  | FLOAT_VALID -> FLOAT_VALID
+  | FLOAT_INF -> FLOAT_INF
+  | FLOAT_NAN -> FLOAT_NAN
 
 and from_stub_log_binop = function
   | AND -> AND

@@ -35,12 +35,14 @@ let _ =
      (* Operators *)
      "and",  AND;
      "or",  OR;
+     "not", NOT;
      "implies", IMPLIES;
      "forall",  FORALL;
      "exists",  EXISTS;
      "in",    IN;
 
      (* Types *)
+     "void", VOID;
      "char", CHAR;
      "short", SHORT;
      "int", INT;
@@ -63,6 +65,9 @@ let _ =
      "new", NEW;
      "free", FREE;
      "return", RETURN;
+     "float_valid", FLOAT_VALID;
+     "float_inf", FLOAT_INF;
+     "float_nan", FLOAT_NAN;
    ]
 
 }
@@ -75,12 +80,11 @@ let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let fraction = '.' digitpart
 let pointfloat = digitpart* fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
-let float = pointfloat | exponentfloat
+let float = '-'? (pointfloat | exponentfloat)
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let newline_star = newline white? ('*' [^ '/'])?
-
+                 
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
 let begin_delimeter = "/*$"
@@ -91,10 +95,13 @@ let line_comment = "//" [^ '\n' '\r']*
 rule read =
   parse
   | white         { read lexbuf }
-  | newline_star  { new_line lexbuf; read lexbuf }
+  | newline       { new_line lexbuf;
+                    match eat_star lexbuf with
+                    | Some x -> x
+                    | None -> read lexbuf }
   
   | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
-  | float    { FLOAT_CONST (Format.printf "float %s@\n" (Lexing.lexeme lexbuf); float_of_string (Lexing.lexeme lexbuf)) }
+  | float    { FLOAT_CONST ((*Format.printf "float %s@\n" (Lexing.lexeme lexbuf);*) float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
@@ -173,3 +180,12 @@ and ignore_block_comment =
   | "*/"          { () }
   | [^ '\n' '\r'] { ignore_block_comment lexbuf }
   | newline       { new_line lexbuf; ignore_block_comment lexbuf }
+
+and eat_star =
+  parse
+  | white                 { eat_star lexbuf }
+  | "*" [^ '/' '\r' '\n'] { None }
+  | end_delimeter         { Some END }
+  | "*" newline           { new_line lexbuf; eat_star lexbuf }
+  
+    

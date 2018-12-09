@@ -28,6 +28,9 @@ type builtin =
   | OFFSET
   | BASE
   | OLD
+  | FLOAT_VALID
+  | FLOAT_INF
+  | FLOAT_NAN
 
 
 type formula =
@@ -165,6 +168,9 @@ let pp_builtin fmt f =
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
   | OLD    -> pp_print_string fmt "old"
+  | FLOAT_VALID -> pp_print_string fmt "float_valid"
+  | FLOAT_INF   -> pp_print_string fmt "float_inf"
+  | FLOAT_NAN   -> pp_print_string fmt "float_nan"
 
 let pp_log_binop fmt = function
   | AND -> pp_print_string fmt "∧"

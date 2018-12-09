@@ -144,6 +144,7 @@ let builtin_type f arg =
   | OFFSET -> int_type
   | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
   | OLD    -> arg.content.Ast.typ
+  | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
 
 
 (** {2 Expressions} *)
@@ -252,7 +253,7 @@ let convert_expression_type (e:Ast.expr with_range) t =
 let binop_type t1 t2 =
   let open C_AST in
   match fst (unroll_type t1), fst (unroll_type t2) with
-  | _, _ when compare t1 t2 = 0 -> t1
+  | x1, x2 when compare x1 x2 = 0 -> t1
 
   | T_float LONG_DOUBLE, _ -> t1
   | _, T_float LONG_DOUBLE -> t2
@@ -274,6 +275,10 @@ let binop_type t1 t2 =
 
   | T_pointer _, T_integer _ -> t1
   | T_integer _, T_pointer _ -> t2
+
+  | T_pointer (T_void,_), T_pointer _ -> t2
+  | T_pointer _, T_pointer (T_void,_) -> t1
+  | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
 
   | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
@@ -365,6 +370,9 @@ and visit_builtin b =
   | SIZE   -> Ast.SIZE
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE
+  | FLOAT_VALID -> Ast.FLOAT_VALID
+  | FLOAT_INF   -> Ast.FLOAT_INF
+  | FLOAT_NAN   -> Ast.FLOAT_NAN
 
 
 (** {2 Formulas} *)

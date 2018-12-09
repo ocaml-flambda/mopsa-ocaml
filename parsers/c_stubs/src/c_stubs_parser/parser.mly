@@ -52,6 +52,7 @@
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE OLD RETURN SIZE OFFSET BASE
+%token FLOAT_VALID FLOAT_INF FLOAT_NAN
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
@@ -241,6 +242,7 @@ formula:
   | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
   | var IN set                                        { F_in ($1, $3) }
   | FREE with_range(expr)                             { F_free $2 }
+  | LPAR formula RPAR                                 { $2 }
 
 (* C expressions *)
 expr:
@@ -337,6 +339,9 @@ set:
   | OFFSET { OFFSET }
   | BASE   { BASE }
   | OLD    { OLD }
+  | FLOAT_VALID { FLOAT_VALID }
+  | FLOAT_INF   { FLOAT_INF }
+  | FLOAT_NAN   { FLOAT_NAN }
 
 args:
   |                             { [] }

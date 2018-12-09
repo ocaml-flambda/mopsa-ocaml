@@ -29,7 +29,7 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 Tested on Ubuntu 16.04:
 
 ```bash
-sudo apt install build-essential m4 opam llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
+sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 opam init
 eval `opam config env`
 opam install apron ocp-pack-split zarith menhir yojson javalib

@@ -19,7 +19,8 @@ OCAMLC = ocamlc -g -cc "$(CXX)"
 OCAMLOPT = ocamlopt -cc "$(CXX)"
 
 LLVMCONFIG := $(if $(shell which llvm-config), llvm-config, $(lastword $(sort $(wildcard /usr/bin/llvm-config-*))))
-CLANGRESOURCE := $(shell $(LLVMCONFIG) --libdir)/clang/$(shell $(LLVMCONFIG) --version)
+CLANG := $(if $(shell which clang), clang, $(lastword $(sort $(wildcard /usr/bin/clang-[0-9]*))))
+CLANGRESOURCE := $(shell $(CLANG) -print-resource-dir)
 
 CXXFLAGS := -fPIC  -I $(shell ocamlc -where) $(shell $(LLVMCONFIG) --cxxflags) -Wno-strict-aliasing "-DCLANGRESOURCE=\"$(CLANGRESOURCE)\"" $(CXXFLAGS)
 

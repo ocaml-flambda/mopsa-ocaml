@@ -1000,7 +1000,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
         });
 
       GENERATE_NODE_INDIRECT(TypeAliasTemplateDecl, ret, node, 4, {
-          x = x->getCanonicalDecl();
+          //x = x->getCanonicalDecl();
           Store_field(ret, 0, TranslateNamedDecl(x));
           Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
           Store_field(ret, 2, TranslateTypedefNameDecl(x->getTemplatedDecl()));
@@ -1119,18 +1119,20 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUnresolvedUsingTypenameDecl(const 
 }
 
 /* FriendDecl -> friend_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateFriendDecl(const FriendDecl *org) {
   CAMLparam0();
   CAMLlocal1(ret);
 
-  check_null(x, "FriendDecl");
-  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
+  check_null(org, "FriendDecl");
+  const FriendDecl *x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 6, {
       Store_field_option(ret, 0, x->getFriendType(), TranslateQualType(x->getFriendType()->getType()));
       Store_field_option(ret, 1, x->getFriendDecl(), TranslateDecl(x->getFriendDecl()));
       Store_field(ret, 2, Val_bool(x->isUnsupportedFriend()));
       Store_field_array(ret, 3, x->getFriendTypeNumTemplateParameterLists(), TranslateTemplateParameterList(x->getFriendTypeTemplateParameterList(i)));
-      Store_field(ret, 4, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 5, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 4, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 5, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
     });
 
   CAMLreturn(ret);
@@ -1142,6 +1144,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateTemplateParmDecl(const Tem
   CAMLlocal1(ret);
 
   check_null(x, "TemplateTemplateParmDecl");
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 8, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
@@ -1166,6 +1169,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNonTypeTemplateParmDecl(const NonT
   CAMLlocal1(ret);
 
   check_null(x, "NonTypeTemplateParmDecl");
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateQualType(x->getType()));
@@ -1187,7 +1191,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUnresolvedUsingValueDecl(const Unr
   CAMLlocal1(ret);
 
   check_null(x, "UnresolvedUsingValueDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateQualType(x->getType()));
@@ -1205,7 +1209,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateIndirectFieldDecl(const IndirectFi
   CAMLlocal1(ret);
 
   check_null(x, "IndirectFieldDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
       ArrayRef<NamedDecl*> d = x->chain();
       Store_field(ret, 0, TranslateNamedDecl(x));
@@ -1224,7 +1228,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingDecl(const UsingDecl *x) {
   CAMLlocal1(ret);
 
   check_null(x, "UsingDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateNestedNameSpecifierLoc(x->getQualifierLoc()));
@@ -1240,7 +1244,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingPackDecl(const UsingPackDecl 
   CAMLlocal1(ret);
 
   check_null(x, "UsingPackDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
       ArrayRef<NamedDecl*> r = x->expansions();
       Store_field(ret, 0, TranslateNamedDecl(x));
@@ -1257,7 +1261,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingShadowDecl(const UsingShadowD
   CAMLlocal1(ret);
 
   check_null(x, "UsingShadowDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateDecl(x->getTargetDecl()));
@@ -1273,7 +1277,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateClassTemplateDecl(const ClassTempl
   CAMLlocal1(ret);
 
   check_null(x, "ClassTemplateDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
@@ -1292,7 +1296,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFunctionTemplateDecl(const Functio
   CAMLlocal1(ret);
 
   check_null(x, "FunctionTemplateDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
@@ -1310,7 +1314,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarTemplateDecl(const VarTemplateD
   CAMLlocal1(ret);
 
   check_null(x, "VarTemplateDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 5, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateTemplateParameterList(x->getTemplateParameters()));
@@ -1375,7 +1379,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNamespaceDecl(const NamespaceDecl 
   CAMLlocal1(ret);
 
   check_null(x, "NamespaceDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc, ret, x, 3, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, Val_bool(x->isAnonymousNamespace()));
@@ -1391,7 +1395,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNamespaceAliasDecl(const Namespace
   CAMLlocal1(ret);
 
   check_null(x, "NamespaceAliasDecl");
-  x = x->getCanonicalDecl();
+  //x = x->getCanonicalDecl();
   WITH_CACHE_TUPLE(cacheMisc, ret, x, 4, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateNamespaceDecl(x->getNamespace()));
@@ -1507,14 +1511,14 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStorageDuration(StorageDuration c)
 }
 
 /* VarDecl -> var_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "TranslateVarDecl");
-  if (x->getDefinition(*Context)) x = x->getDefinition(*Context);
-  //else x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 10, {
+  check_null(org, "TranslateVarDecl");
+  const VarDecl *x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 10, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getType()));
@@ -1522,8 +1526,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateVarDecl(const VarDecl *x) {
       Store_field_option(ret, 4, x->hasInit(), TranslateExpr(x->getInit()));
       Store_field(ret, 5, Val_bool(x->isFileVarDecl()));
       Store_field(ret, 6, Val_bool(x->isLocalVarDeclOrParm()));
-      Store_field(ret, 7, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 8, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 7, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 8, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
       // template information
       Store_field_option(ret, 9, isa<VarTemplateSpecializationDecl>(x),
                          TranslateVarTemplateSpecializationDecl(cast<VarTemplateSpecializationDecl>(x)));
@@ -1549,26 +1553,25 @@ enum {
 };
 
 /* FunctionDecl -> function_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateFunctionDecl(const FunctionDecl *org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "FunctionDecl");
-  if (x->getDefinition()) x = x->getDefinition();
-  else x = x->getCanonicalDecl();
-
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 14, {
+  check_null(org, "FunctionDecl");
+  const FunctionDecl *x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 14, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
-      Store_field_option(ret, 2, x->hasBody(), TranslateStmt(x->getBody()));
+      Store_field_option(ret, 2, x->hasBody() && x->doesThisDeclarationHaveABody(), TranslateStmt(x->getBody()));
       Store_field(ret, 3, Val_bool(x->isVariadic()));
       Store_field(ret, 4, Val_bool(x->isMain()));
       Store_field(ret, 5, Val_bool(x->isGlobal()));
       Store_field(ret, 6, TranslateStorageClass(x->getStorageClass()));
       Store_field(ret, 7, TranslateQualType(x->getReturnType()));
       Store_field_array(ret, 8, x->getNumParams(), TranslateParmVarDecl(x->getParamDecl(i)));
-      Store_field(ret, 9, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
       // C++
       Store_field_option(ret, 11, x->getPrimaryTemplate (), TranslateFunctionTemplateSpecializationDecl(x));
       Store_field_option(ret, 12, x->isOverloadedOperator(), TranslateOverloadedOperatorKind(x->getOverloadedOperator(), NULL));
@@ -4039,31 +4042,32 @@ CAMLprim value MLTreeBuilderVisitor::TranslateQualTypeOption(QualType x) {
 
 
 /* EnumConstantDecl -> enum_cst */
-CAMLprim value MLTreeBuilderVisitor::TranslateEnumConstantDecl(const EnumConstantDecl* x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateEnumConstantDecl(const EnumConstantDecl* org) {
   CAMLparam0();
   CAMLlocal1(ret);
 
-  check_null(x, "TranslateEnumConstantDecl");
-  x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
+  check_null(org, "TranslateEnumConstantDecl");
+  const EnumConstantDecl* x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateAPSInt(x->getInitVal()));
-      Store_field(ret, 3, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 4, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 3, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 4, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
     });
   CAMLreturn(ret);
 }
 
 /* EnumDecl -> enum_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateEnumDecl(const EnumDecl * x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateEnumDecl(const EnumDecl * org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "TranslateEnumDecl");
-  if (x->getDefinition()) x = x->getDefinition();
-  else x = x->getCanonicalDecl();
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 11, {
+  check_null(org, "TranslateEnumDecl");
+  const EnumDecl * x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 11, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, Val_int(x->getNumPositiveBits()));
@@ -4073,19 +4077,21 @@ CAMLprim value MLTreeBuilderVisitor::TranslateEnumDecl(const EnumDecl * x) {
       Store_field(ret, 6, TranslateQualTypeOption(x->getPromotionType()));
       Store_field_list(ret, 7, x->enumerators(), TranslateEnumConstantDecl(child));
       Store_field_option(ret, 8, x->getTypedefNameForAnonDecl(), TranslateTypedefNameDecl(x->getTypedefNameForAnonDecl()));
-      Store_field(ret, 9, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
     });
   CAMLreturn(ret);
 }
 
 /* FieldDecl -> field_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "TranslateFieldDecl");
-  WITH_CACHE_TUPLE(cacheMisc2, ret, x, 12, {
+  check_null(org, "TranslateFieldDecl");
+  const FieldDecl * x = org;
+  //x = x->getCanonicalDecl();
+  WITH_CACHE_TUPLE(cacheMisc2, ret, org, 12, {
       const RecordDecl* d = x->getParent();
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
@@ -4105,8 +4111,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * x) {
         Store_field(ret, 7, caml_copy_int64(0));
       }
       Store_field_option(ret, 8, x->hasCapturedVLAType(), TranslateExpr(x->getCapturedVLAType()->getSizeExpr()));
-      Store_field(ret, 9, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 9, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 10, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
     });
   CAMLreturn(ret);
 }
@@ -4120,14 +4126,14 @@ enum {
 };
 
 /* RecordDecl -> record_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "TranslateRecordDecl");
-  if (x->getDefinition()) x = x->getDefinition();
-  else x = dyn_cast<RecordDecl>(x->getCanonicalDecl());
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 19, {
+  check_null(org, "TranslateRecordDecl");
+  const RecordDecl *x = org;
+  //x = dyn_cast<RecordDecl>(x->getCanonicalDecl());
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 19, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       int kind;
@@ -4161,8 +4167,8 @@ CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * x) {
       }
       Store_field_list(ret, 11, x->fields(), TranslateFieldDecl(child));
       Store_field_option(ret, 12, x->getTypedefNameForAnonDecl(), TranslateTypedefNameDecl(x->getTypedefNameForAnonDecl()));
-      Store_field(ret, 13, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 14, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 13, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 14, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
 
       // template information
       Store_field_option(ret, 15, isa<ClassTemplateSpecializationDecl>(x),
@@ -4203,21 +4209,20 @@ bool MLTreeBuilderVisitor::TraverseType(QualType node) {
 }
 
 /* TypedefDecl -> typedef_decl */
-CAMLprim value MLTreeBuilderVisitor::TranslateTypedefNameDecl(const TypedefNameDecl * x) {
+CAMLprim value MLTreeBuilderVisitor::TranslateTypedefNameDecl(const TypedefNameDecl * org) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
 
-  check_null(x, "TranslateTypedefNameDecl");
-
-  // NOTE: removed as the canonical decl may sometimes miss its name!
+  check_null(org, "TranslateTypedefNameDecl");
+  const TypedefNameDecl * x = org;
+  // NOTE: the canonical decl may sometimes miss its name!
   // x = dyn_cast<TypedefDecl>(x->getCanonicalDecl());
-
-  WITH_CACHE_TUPLE(cacheMisc, ret, x, 5, {
+  WITH_CACHE_TUPLE(cacheMisc, ret, org, 5, {
       Store_uid(ret, 0);
       Store_field(ret, 1, TranslateNamedDecl(x));
       Store_field(ret, 2, TranslateQualType(x->getUnderlyingType()));
-      Store_field(ret, 3, loc.TranslateSourceRange(x->getSourceRange()));
-      Store_field(ret, 4, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(x)));
+      Store_field(ret, 3, loc.TranslateSourceRange(org->getSourceRange()));
+      Store_field(ret, 4, com.TranslateRawCommentOpt(Context->getRawCommentForDeclNoCache(org)));
     });
   CAMLreturn(ret);
 }
