@@ -66,6 +66,13 @@ let find_function f prj =
   List.split |>
   snd |>
   List.find (fun f' -> compare f'.func_org_name f.vname = 0)
+  
+let rec unroll_type t =
+  let open C_AST in
+  match fst t with
+  | T_typedef td -> unroll_type td.typedef_def
+  | T_enum e -> T_integer e.enum_integer_type, snd t
+  | _ -> t
 
 let rec visit_qual_typ t prj func : C_AST.type_qual=
   let (t0, is_const) = t in
@@ -115,8 +122,7 @@ let char_type = C_AST.(T_integer (Char SIGNED), no_qual)
 let pointer_type t = C_AST.(T_pointer t, no_qual)
 
 let pointed_type t =
-  let t0, _ = t in
-  match t0 with
+  match fst (unroll_type t) with
   | C_AST.T_pointer t' -> t'
   | C_AST.T_array(t', _) -> t'
   | _ -> Exceptions.panic "pointed_type(cst_to_ast.ml): unsupported type %s" (C_print.string_of_type_qual t)
@@ -124,7 +130,7 @@ let pointed_type t =
 let subscript_type t = pointed_type t
 
 let field_type t f =
-  match fst t with
+  match fst (unroll_type t) with
   | C_AST.T_record r ->
     begin try
       let field = Array.to_list r.C_AST.record_fields |>
@@ -208,13 +214,6 @@ let visit_var v prj func =
     in
     try List.find (fun v' -> compare v'.var_org_name v.vname = 0) vars
     with Not_found -> Exceptions.panic "cst_to_ast: variable %a not found" pp_var v
-
-let rec unroll_type t =
-  let open C_AST in
-  match fst t with
-  | T_typedef td -> unroll_type td.typedef_def
-  | T_enum e -> T_integer e.enum_integer_type, snd t
-  | _ -> t
 
 let rec promote_expression_type prj (e: Ast.expr with_range) =
   (* Integer promotions (C99 6.3.1.1) *)
