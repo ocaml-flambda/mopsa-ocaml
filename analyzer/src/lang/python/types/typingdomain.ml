@@ -969,20 +969,49 @@ let get_types (d:domain) (ts:Polytypeset.t) : typevar * domain =
     in
     pos, {d with d3; pos_d3}
 
+let factor_mtypes (mts:Monotypeset.t) : ((polytype -> polytype) * Monotypeset.t) =
+  (* Example: mts = {List[Instance[int]], List[Instance[str]] }
+     return is fun x -> List x, mts = {Instance[int], Instance[str]} *)
+  let factorisable = function
+    | Top | Bot | Class _ | Function _ | Module _ | Typevar _ | Method _ | Instance _ | FiniteTuple _ | Dict _  -> false
+    | List _ | Iterator _ | DictValues _ | DictKeys _ | DictItems _ | Set _ -> true in
+  let extract_ty = function
+    | List x | Iterator (x, _) | DictValues x | DictKeys x | DictItems x | Set x -> x
+    | _ -> assert false in
+  let rec process acc_f acc_mset =
+    if Monotypeset.exists (fun x -> not (factorisable x)) acc_mset then (acc_f, acc_mset)
+    else
+      let el = Monotypeset.choose acc_mset in
+      let cons = match el with
+        | List _ -> fun x -> List x
+        | Iterator _ -> fun x -> Iterator (x, -1)
+        | DictValues _ -> fun x -> DictValues x
+        | DictKeys _ -> fun x -> DictKeys x
+        | DictItems _ -> fun x -> DictItems x
+        | Set _ -> fun x -> Set x
+        | _ -> assert false in
+      if Monotypeset.exists (fun ty -> cons (extract_ty ty) <> ty) acc_mset then (acc_f, acc_mset)
+      else
+        (* let's factor by cons! *)
+      (fun x -> acc_f (cons x)), Monotypeset.map (fun ty -> extract_ty ty) acc_mset
+  in process (fun x -> x) mts
 
-let get_mtypes (d:domain) (mts:Monotypeset.t) : typevar * domain =
+
+let get_mtypes (d:domain) (mts:Monotypeset.t) : polytype * domain =
   (* FIXME: perform the join of polytypes only, and everything should work by itself? *)
   (* folding on join_poly would work, but would create |ts|-1 type variables and only the last one would be used afterwards  *)
-    let d3 = d.d3 and pos_d3 = d.pos_d3 in
-    let opos = search_d3 mts d3 in
-    let pos, d3, pos_d3 = match opos with
-      | None ->
-         let d3 = TypeVarMap.add pos_d3 mts d3 in
-         pos_d3, d3, pos_d3+1
-      | Some pos ->
-         pos, d3, pos_d3
-    in
-    pos, {d with d3; pos_d3}
+  let f, mts_f = factor_mtypes mts in
+  debug "mts = %a@\nmts_f = %a@\n" Monotypeset.print mts Monotypeset.print mts_f;
+  let d3 = d.d3 and pos_d3 = d.pos_d3 in
+  let opos = search_d3 mts_f d3 in
+  let pos, d3, pos_d3 = match opos with
+    | None ->
+       let d3 = TypeVarMap.add pos_d3 mts_f d3 in
+       pos_d3, d3, pos_d3+1
+    | Some pos ->
+       pos, d3, pos_d3
+  in
+  f (Typevar pos), {d with d3; pos_d3}
 
 
 let class_of (d:domain) (t:typeid) : class_address * py_object list =

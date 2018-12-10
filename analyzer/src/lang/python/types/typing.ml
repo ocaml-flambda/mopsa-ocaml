@@ -315,25 +315,26 @@ module Domain =
     let summary_constructor man flow range c ls =
       Eval.eval_list ls man.eval flow |>
         Eval.bind (fun list_els flow ->
+            let open Typingdomain in
             let cur = Flow.get_domain_cur man flow in
             let dummy_annot = Flow.get_all_annot flow in
             let els_types = List.fold_left (fun acc el ->
                                 match ekind el with
                                 | E_type_partition tid ->
-                                   let pty = Typingdomain.TypeIdMap.find tid cur.Typingdomain.d2 in
-                                   let mty = Typingdomain.concretize_poly pty cur.Typingdomain.d3 in
-                                   Typingdomain.Monotypeset.union dummy_annot mty acc
-                                | _ -> Exceptions.panic "%a@\n" pp_expr el) Typingdomain.Monotypeset.empty list_els in
+                                   let pty = TypeIdMap.find tid cur.d2 in
+                                   let mty = concretize_poly pty cur.d3 in
+                                   Monotypeset.union dummy_annot mty acc
+                                | _ -> Exceptions.panic "%a@\n" pp_expr el) Monotypeset.empty list_els in
             let pos_list, cur =
-              match Typingdomain.Monotypeset.cardinal els_types with
+              match Monotypeset.cardinal els_types with
               | 0 ->
-                 Typingdomain.get_type ~local_use:true cur (c Typingdomain.Bot)
+                 get_type ~local_use:true cur (c Bot)
               | 1 ->
-                 let ty = Typingdomain.Monotypeset.choose els_types in
-                 Typingdomain.get_type ~local_use:true cur (c (Typingdomain.poly_cast ty))
+                 let ty = Monotypeset.choose els_types in
+                 get_type ~local_use:true cur (c (poly_cast ty))
               | _ ->
-                 let pos_types, cur = Typingdomain.get_mtypes cur els_types in
-                 Typingdomain.get_type ~local_use:true cur (c (Typevar pos_types)) in
+                 let ptype, cur = get_mtypes cur els_types in
+                 get_type ~local_use:true cur (c ptype) in
             let flow = Flow.set_domain_cur cur man flow in
             Eval.singleton (mk_expr (E_type_partition pos_list) range) flow)
       |> OptionExt.return
@@ -1129,12 +1130,12 @@ module Domain =
                           get_type cur (Dict (poly_cast k_ty, poly_cast v_ty))
                        | 1, _ ->
                           let k_ty = Monotypeset.choose keys_tys in
-                          let v_typevar, cur = get_mtypes cur values_tys in
-                          get_type ~local_use:true cur (Dict (poly_cast k_ty, Typevar v_typevar))
+                          let v_ptype, cur = get_mtypes cur values_tys in
+                          get_type ~local_use:true cur (Dict (poly_cast k_ty, v_ptype))
                        | _ ->
-                          let k_typevar, cur = get_mtypes cur keys_tys in
-                          let v_typevar, cur = get_mtypes cur values_tys in
-                          get_type ~local_use:true cur (Dict (Typevar k_typevar, Typevar v_typevar)) in
+                          let k_type, cur = get_mtypes cur keys_tys in
+                          let v_type, cur = get_mtypes cur values_tys in
+                          get_type ~local_use:true cur (Dict (k_type, v_type)) in
                      let flow = Flow.set_domain_cur cur man flow in
                      Eval.singleton (mk_expr (E_type_partition pos) range) flow
                    )
@@ -1274,8 +1275,8 @@ module Domain =
                        debug "merged_types:%a@\n" Typingdomain.Monotypeset.print merged_types;
                        let pos_tupleel, cur =
                          if Typingdomain.Monotypeset.cardinal merged_types > 1 then
-                           let pos_var, cur = Typingdomain.get_mtypes cur merged_types in
-                           Typingdomain.get_type ~local_use:true cur (Typevar pos_var)
+                           let ptype, cur = Typingdomain.get_mtypes cur merged_types in
+                           Typingdomain.get_type ~local_use:true cur ptype
                          else
                            Typingdomain.get_type cur (Typingdomain.poly_cast (Typingdomain.Monotypeset.choose merged_types))
                        in
