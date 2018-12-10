@@ -52,30 +52,30 @@ module Domain =
              )
          |>  OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__mul__")}, _)}, [e1; e2], []) ->
-         Eval.eval_list [e1; e2] man.eval flow |>
-           Eval.bind (fun el flow ->
-               let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume
-                 (mk_py_isinstance_builtin e1 "list" range)
-                 ~fthen:(fun true_flow ->
-                   Eval.assume
-                     (mk_py_isinstance_builtin e2 "int" range)
-                     ~fthen:(fun true_flow ->
-                     (* FIXME: works only USING TYPES! *)
-                       Eval.singleton e1 true_flow
-                     )
-                     ~felse:(fun false_flow ->
-                       man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                         Eval.empty_singleton)
-                     man flow
-                 )
-                 ~felse:(fun false_flow ->
-                   man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
-                     Eval.empty_singleton)
-                 man flow
-             )
-         |> OptionExt.return
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__mul__")}, _)}, [e1; e2], []) ->
+       *    Eval.eval_list [e1; e2] man.eval flow |>
+       *      Eval.bind (fun el flow ->
+       *          let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+       *          Eval.assume
+       *            (mk_py_isinstance_builtin e1 "list" range)
+       *            ~fthen:(fun true_flow ->
+       *              Eval.assume
+       *                (mk_py_isinstance_builtin e2 "int" range)
+       *                ~fthen:(fun true_flow ->
+       *                (\* FIXME: works only USING TYPES! *\)
+       *                  Eval.singleton e1 true_flow
+       *                )
+       *                ~felse:(fun false_flow ->
+       *                  man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+       *                    Eval.empty_singleton)
+       *                man flow
+       *            )
+       *            ~felse:(fun false_flow ->
+       *              man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>
+       *                Eval.empty_singleton)
+       *            man flow
+       *        )
+       *    |> OptionExt.return *)
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__len__")}, _)}, [e], []) ->
          man.eval e flow |>

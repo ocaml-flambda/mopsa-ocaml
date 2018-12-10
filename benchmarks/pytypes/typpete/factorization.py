@@ -1,5 +1,6 @@
 """Factorization. Fermat's, Pollard's methods"""
 
+import mopsa
 
 def factorize(n):
     factors = {}
@@ -29,7 +30,12 @@ def get_all_divisors(n):
     return sorted(divisors)
 
 
-a = get_all_divisors(2)
+def test_main():
+    a = get_all_divisors(2)
+
+    mopsa.assert_safe()
+    mopsa.assert_list_of(a, int)
+
 
 # a := List[int]
 # factorize := Callable[[int], Dict[int, int]]

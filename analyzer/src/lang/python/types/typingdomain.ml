@@ -1138,14 +1138,16 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
     | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "str_iterator"]
     | Typevar a ->
        let mtys = concretize_poly pt d.d3 in
+       let cclass (x, y) = Class (x, y) in
        Monotypeset.fold (fun mty acc ->
            debug "MFold %a %a %a@\n" pp_polytype pt pp_monotype mty print domain;
            let mtype = match mty with
              | Instance {classn=c} -> c
              | List _ ->
-                let cclass (x, y) = Class (x, y) in
                 cclass @@ Addr.builtin_cl_and_mro "list"
-             | _ -> assert false in
+             | Dict _ ->
+                cclass @@ Addr.builtin_cl_and_mro "dict"
+             | _ -> debug "%a@\n" pp_monotype mty; assert false in
            let new_domain = fst @@ filter_inst domain tid mtype in
            debug "new_domain = %a@\n" print new_domain;
            (aux (poly_cast mty) new_domain) @ acc) mtys []
@@ -1368,13 +1370,14 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
          | _, Typevar b ->
             if IntMap.mem b cstrs then
               Exceptions.panic "todo: conflict?@\n"
-            else if is_mono in_ty then
-              collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b in_ty cstrs, d3))
             else
-              Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3
+              (* if is_mono in_ty then *)
+                collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b in_ty cstrs, d3))
+              (* else
+               *   Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3 *)
          | _, Top -> collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
          | _ ->
-            debug "Collecting constraints on %a %a@\n" pp_polytype in_ty pp_polytype sign_ty;
+            debug "Whatodo? collecting constraints on %a %a@\n" pp_polytype in_ty pp_polytype sign_ty;
             None
          end
       | _ -> assert false
