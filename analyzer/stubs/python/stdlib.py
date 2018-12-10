@@ -324,24 +324,30 @@ class list_iterator(object):
 class dict(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass
+    def __iter__(self): pass
+    def keys(self): pass
     def values(self): pass
+    def items(self): pass
 
 class dict_values(object):
     def __iter__(self): pass
 
 class dict_valueiterator(object):
+    def __iter__(self): pass
     def __next__(self): pass
 
 class dict_keys(object):
     def __iter__(self): pass
 
 class dict_keyiterator(object):
+    def __iter__(self): pass
     def __next__(self): pass
 
 class dict_items(object):
     def __iter__(self): pass
 
 class dict_itemiterator(object):
+    def __iter__(self): pass
     def __next__(self): pass
 
 class range(object):
