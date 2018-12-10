@@ -22,7 +22,7 @@ type 'a ext = 'a * extent
  *)
 type var = string
 
-(* types: only integers (mathematical integers, in Z) *)
+(* types *)
 type typ =
     AST_INT
   | AST_REAL
@@ -30,7 +30,6 @@ type typ =
   | AST_STRING
   | AST_CHAR
   | AST_TREE
-  | AST_UNIT
 
 (* unary expression operators *)
 type unary_op =
@@ -145,7 +144,7 @@ type stat =
 
   (* evaluates expression (useful for function calls) *)
   | AST_expr of expr ext
-                
+
   | AST_print
 
 type fundec =

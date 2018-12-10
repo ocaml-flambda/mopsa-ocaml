@@ -1,6 +1,6 @@
 int i;
 int x;
-[int] a;
+int array a;
 
 i = 0;
 while (i < 10) {

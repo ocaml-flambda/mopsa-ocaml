@@ -69,13 +69,12 @@ let rec print_typ fmt t =
   | AST_ARRAY t -> Format.printf "[%a]" print_typ t
   | AST_STRING -> Format.pp_print_string fmt "string"
   | AST_CHAR -> Format.pp_print_string fmt "char"
-  | AST_UNIT -> Format.pp_print_string fmt "unit"
   | AST_TREE -> Format.pp_print_string fmt "tree"
 
 and print_typ_opt fmt = function
   | None -> Format.pp_print_string fmt "void"
   | Some x -> print_typ fmt x
-              
+
 and print_typed_var fmt ((t, v), _) =
   Format.fprintf fmt "%a %a"
     print_typ t
