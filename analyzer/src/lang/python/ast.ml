@@ -63,6 +63,7 @@ let is_arith_op = function
   | O_py_mat_mult
   | Universal.Ast.O_div
   | O_py_floor_div
+  | Universal.Ast.O_bit_invert
   | Universal.Ast.O_mod
   | Universal.Ast.O_pow
   | Universal.Ast.O_bit_lshift
@@ -295,6 +296,36 @@ type Framework.Ast.program +=
                            (** {2 Utility functions} *)
 (*==========================================================================*)
 
+let mk_py_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
+  match strict, left_strict, right_strict with
+  | true, _, _
+  | false, true, true ->
+    mk_binop
+      (mk_binop e1 O_lt v erange)
+      O_py_and
+      (mk_binop v O_lt e2 erange)
+      erange
+
+  | false, true, false ->
+    mk_binop
+      (mk_binop e1 O_lt v erange)
+      O_py_and
+      (mk_binop v O_le e2 erange)
+      erange
+
+  | false, false, true ->
+    mk_binop
+      (mk_binop e1 O_le v erange)
+      O_py_and
+      (mk_binop v O_lt e2 erange)
+      erange
+
+  | false, false, false ->
+    mk_binop
+      (mk_binop e1 O_le v erange)
+      O_py_and
+      (mk_binop v O_le e2 erange)
+      erange
 
 let mk_except typ name body =
   {

@@ -52,26 +52,29 @@ module Domain =
                      ~felse:(fun false_flow -> Eval.singleton e1 false_flow)
                      flow1)
 
-      | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
-         Eval.singleton (mk_py_true range) flow |> OptionExt.return
-
-      | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
-         man.eval e2 flow |> OptionExt.return
+      (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
+       *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
+       *
+       * | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
+       *    man.eval e2 flow |> OptionExt.return *)
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
-         Some (man.eval e1 flow |>
-           Eval.bind @@
-             fun e1 flow1 ->
-             Eval.assume e1 man
-               ~fthen:(fun true_flow -> Eval.singleton e1 true_flow)
-               ~felse:(fun false_flow -> man.eval e2 false_flow)
-               flow1)
+         man.eval e1 flow |>
+           Eval.bind (fun e1 flow1 ->
+               Eval.assume e1
+                 ~fthen:(fun true_flow -> Eval.singleton e1 true_flow)
+                 ~felse:(fun false_flow -> man.eval e2 false_flow)
+                 man flow1)
+         |> OptionExt.return
+      (* combinatorial explosion *)
+      (* man.eval (mk_expr (E_py_if (e1, e1, e2)) range) flow |> OptionExt.return *)
+
 
       (* E⟦ e1 is e2 ⟧ *)
-      | E_binop(O_py_is, e1, e2) ->
-         Exceptions.panic "FIXME: To implement (maybe with id(e1)==id(e2), or to leave to another domain?)"
-         (* Eval.eval_list [e1; e2] man.eval flow |>
+      (* | E_binop(O_py_is, e1, e2) ->
+       *    Exceptions.panic "FIXME: To implement (maybe with id(e1)==id(e2), or to leave to another domain?)" *)
+      (* Eval.eval_list [e1; e2] man.eval flow |>
           *   Eval.bind @@
           *     fun el flow ->
           *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
