@@ -65,8 +65,8 @@ struct
            rval |> etyp |> is_c_record_type ->
       begin
         let range = srange stmt in
-        let t1 = lval |> etyp |> remove_typedef |> remove_qual
-        and t2 = lval |> etyp |> remove_typedef |> remove_qual in
+        let t1 = lval |> etyp |> remove_typedef_qual
+        and t2 = lval |> etyp |> remove_typedef_qual in
         if compare t1 t2 != 0 then
           Exceptions.panic "[%s] assignment of records with uncompatible \
                       types: %a %a" name pp_typ t1 pp_typ t2

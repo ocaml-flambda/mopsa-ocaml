@@ -35,12 +35,14 @@ let _ =
      (* Operators *)
      "and",  AND;
      "or",  OR;
+     "not", NOT;
      "implies", IMPLIES;
      "forall",  FORALL;
      "exists",  EXISTS;
      "in",    IN;
 
      (* Types *)
+     "void", VOID;
      "char", CHAR;
      "short", SHORT;
      "int", INT;
@@ -63,6 +65,9 @@ let _ =
      "new", NEW;
      "free", FREE;
      "return", RETURN;
+     "float_valid", FLOAT_VALID;
+     "float_inf", FLOAT_INF;
+     "float_nan", FLOAT_NAN;
    ]
 
 }
@@ -75,12 +80,11 @@ let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let fraction = '.' digitpart
 let pointfloat = digitpart* fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
-let float = pointfloat | exponentfloat
+let float = '-'? (pointfloat | exponentfloat)
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let newline_star = newline white? ('*' [^ '/'])?
-
+                 
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
 let begin_delimeter = "/*$"
@@ -90,11 +94,10 @@ let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | white         { read lexbuf }
-  | newline_star  { new_line lexbuf; read lexbuf }
-  
+  | white    { read lexbuf }
+  | newline (white* "*")? { new_line lexbuf; read lexbuf }  
   | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
-  | float    { FLOAT_CONST (Format.printf "float %s@\n" (Lexing.lexeme lexbuf); float_of_string (Lexing.lexeme lexbuf)) }
+  | float    { FLOAT_CONST ((*Format.printf "float %s@\n" (Lexing.lexeme lexbuf);*) float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
@@ -137,6 +140,7 @@ rule read =
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
+  | newline white* end_delimeter    { new_line lexbuf; END }
   
   | line_comment  { read lexbuf }
   | "/*"          { ignore_block_comment lexbuf; read lexbuf } 
@@ -159,7 +163,7 @@ and read_string buf =
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_string buf lexbuf
     }
-  | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
+  | _ { raise (SyntaxError ("Illegal string character #1: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
 
 and read_comment = 
@@ -167,9 +171,12 @@ and read_comment =
   | "*}"          { () }
   | [^ '\n' '\r'] { read_comment lexbuf }
   | newline       { new_line lexbuf; read_comment lexbuf }
+  | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }
 
 and ignore_block_comment = 
   parse
   | "*/"          { () }
   | [^ '\n' '\r'] { ignore_block_comment lexbuf }
   | newline       { new_line lexbuf; ignore_block_comment lexbuf }
+  | _ { raise (SyntaxError ("Illegal string character #3: " ^ Lexing.lexeme lexbuf)) }
+

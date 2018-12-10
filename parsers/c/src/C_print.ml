@@ -522,8 +522,7 @@ and c_buf_var_advance_decl indent buf v =
 and c_buf_func_decl indent buf f =
   let indent2 = inc_indent indent in
   bp_loc indent buf f.func_range;
-  (* include comments only when printing prototypes *)
-  if f.func_body = None then c_buf_com indent buf f.func_com;
+  c_buf_com indent buf f.func_com;
   let variadic = if f.func_variadic then if f.func_parameters= [||] then "..." else ", ..." else ""
   and param buf v = c_buf_type_qual indent v.var_unique_name buf v.var_type in
   let inner buf var = bp buf "%a(%a%s)" bp_str var (bp_array param ", ") f.func_parameters variadic

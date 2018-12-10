@@ -532,9 +532,14 @@ let rec remove_qual = function
   | T_c_qualified(_, t) -> remove_qual t
   | t -> t
 
+let rec remove_typedef_qual = function
+  | T_c_qualified(_, t) -> remove_typedef_qual t
+  | T_c_typedef(td) -> remove_typedef_qual (td.c_typedef_def)
+  | t -> t
+    
 (** [is_signed t] whether [t] is signed *)
 let rec is_signed (t : typ) : bool=
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_integer it ->
      begin
        match it with
@@ -598,34 +603,34 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
 
 (** [is_c_int_type t] wheter [t] is an integer type *)
 let is_c_int_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_integer _ -> true
   | _ -> false
 
 let is_c_float_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_float _ -> true
   | _ -> false
 
 let is_c_record_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_record _ -> true
   | _ -> false
 
 let is_c_struct_type (t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_record({c_record_kind = C_struct}) -> true
   | _ -> false
 
 let is_c_union_type (t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_record({c_record_kind = C_union}) -> true
   | _ -> false
 
 
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
   | T_c_bitfield _ -> true
   | T_c_enum _ -> true
@@ -633,17 +638,17 @@ let is_c_scalar_type ( t : typ) =
 
 (** [is_c_pointer t] wheter [t] is a pointer *)
 let rec is_c_pointer_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_pointer _ -> true
   | _ -> false
 
 let rec is_c_array_type (t: typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_array _ -> true
   | _ -> false
 
 let rec is_c_function_type (t: typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_function _ -> true
   | _ -> false
 
@@ -652,33 +657,33 @@ let pointer_type (t : typ) =
   (T_c_pointer t)
 
 let rec under_pointer_type (t : typ) : typ =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_pointer t' -> t'
   | _ -> failwith "[under_pointer_type] called with a non pointer argument"
 
 let rec under_array_type (t : typ) : typ =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_array (t', _) -> t'
   | _ -> failwith "[under_array_type] called with a non array argument"
 
 let under_type (t: typ) : typ =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_array _ -> under_array_type t
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
 let get_c_float_type ( t : typ) =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_float t -> t
   | _ -> failwith "[get_c_float_type] called with a non-float type"
        
 let get_array_constant_length t =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_array(_, C_array_length_cst n) -> Z.to_int n
   | _ -> assert false
 
 let align_byte t i =
-  match remove_typedef t |> remove_qual with
+  match remove_typedef_qual t with
   | T_c_record crt -> (List.nth crt.c_record_fields i).c_field_offset
   | _ -> assert false
 

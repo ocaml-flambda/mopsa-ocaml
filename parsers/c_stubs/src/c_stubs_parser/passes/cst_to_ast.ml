@@ -144,6 +144,7 @@ let builtin_type f arg =
   | OFFSET -> int_type
   | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
   | OLD    -> arg.content.Ast.typ
+  | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
 
 
 (** {2 Expressions} *)
@@ -215,8 +216,10 @@ let rec unroll_type t =
   | T_enum e -> T_integer e.enum_integer_type, snd t
   | _ -> t
 
-let rec promote_expression_type (e: Ast.expr with_range) =
+let rec promote_expression_type prj (e: Ast.expr with_range) =
+  (* Integer promotions (C99 6.3.1.1) *)
   let open C_AST in
+  let open C_utils in
   bind_range e @@ fun ee ->
   let t = unroll_type ee.typ in
   match fst t with
@@ -231,8 +234,14 @@ let rec promote_expression_type (e: Ast.expr with_range) =
     let tt = (T_integer SIGNED_INT), snd t in
     { kind = E_cast(tt, false, e); typ = tt }
 
-  | T_integer (Char UNSIGNED | UNSIGNED_CHAR | UNSIGNED_SHORT) ->
-    let tt = (T_integer UNSIGNED_INT), snd t in
+  | T_integer ((Char UNSIGNED | UNSIGNED_CHAR | UNSIGNED_SHORT) as i) ->
+    (* signed int wins if it can represent all unsigned values *)
+    let ii =
+      if sizeof_int prj.proj_target i < sizeof_int prj.proj_target SIGNED_INT
+      then SIGNED_INT
+      else UNSIGNED_INT
+    in
+    let tt = (T_integer ii), snd t in
     { kind = E_cast(tt, false, e); typ = tt }
 
   | T_float _ -> ee
@@ -249,31 +258,76 @@ let convert_expression_type (e:Ast.expr with_range) t =
   if compare ee.typ t = 0 then ee
   else { kind = E_cast(t, false, e); typ = t }
 
-let binop_type t1 t2 =
+let int_rank = 
   let open C_AST in
+  function
+  | Char _ | UNSIGNED_CHAR | SIGNED_CHAR -> 0
+  | UNSIGNED_SHORT | SIGNED_SHORT -> 1
+  | UNSIGNED_INT | SIGNED_INT -> 2
+  | UNSIGNED_LONG | SIGNED_LONG -> 3
+  | UNSIGNED_LONG_LONG | SIGNED_LONG_LONG -> 4
+  | UNSIGNED_INT128 | SIGNED_INT128 -> 5
+
+let int_sign =
+  let open C_AST in
+  function
+  | SIGNED_CHAR | SIGNED_SHORT | SIGNED_INT | SIGNED_LONG
+  | SIGNED_LONG_LONG | SIGNED_INT128 -> true
+  | UNSIGNED_CHAR | UNSIGNED_SHORT | UNSIGNED_INT | UNSIGNED_LONG
+  | UNSIGNED_LONG_LONG | UNSIGNED_INT128 -> false
+  | Char SIGNED -> true
+  | Char UNSIGNED -> false
+
+let make_unsigned =
+  let open C_AST in
+  function
+  | Char _ | UNSIGNED_CHAR | SIGNED_CHAR -> UNSIGNED_CHAR
+  | UNSIGNED_SHORT | SIGNED_SHORT -> UNSIGNED_SHORT
+  | UNSIGNED_INT | SIGNED_INT -> UNSIGNED_INT
+  | UNSIGNED_LONG | SIGNED_LONG -> UNSIGNED_LONG
+  | UNSIGNED_LONG_LONG | SIGNED_LONG_LONG -> UNSIGNED_LONG_LONG
+  | UNSIGNED_INT128 | SIGNED_INT128 -> UNSIGNED_INT128
+
+let rank_float =
+  let open C_AST in
+  function
+  | FLOAT -> 0
+  | DOUBLE -> 1
+  | LONG_DOUBLE -> 2
+  
+let binop_type prj t1 t2 =
+  let open C_AST in
+  let open C_utils in
   match fst (unroll_type t1), fst (unroll_type t2) with
-  | _, _ when compare t1 t2 = 0 -> t1
+  | x1, x2 when compare x1 x2 = 0 -> t1
 
-  | T_float LONG_DOUBLE, _ -> t1
-  | _, T_float LONG_DOUBLE -> t2
+  | T_float a, T_float b ->
+     if rank_float a >= rank_float b then t1 else t2
 
-  | T_float DOUBLE, _ -> t1
-  | _, T_float DOUBLE -> t2
-
-  | T_float FLOAT, _ -> t1
-  | _, T_float FLOAT -> t2
-
-  | T_integer UNSIGNED_LONG_LONG, T_integer _ -> t1
-  | T_integer _, T_integer UNSIGNED_LONG_LONG -> t2
-
-  | T_integer UNSIGNED_LONG, T_integer _ -> t1
-  | T_integer _, T_integer UNSIGNED_LONG -> t2
-
-  | T_integer UNSIGNED_INT, T_integer SIGNED_INT -> t1
-  | T_integer SIGNED_INT, T_integer UNSIGNED_INT -> t2
+  | T_float _, T_integer _ -> t1
+  | T_integer _, T_float _ -> t2
+    
+  | T_integer a, T_integer b ->
+     (* Usual arithmetic conversions (C99 6.3.1.8) *)
+     (* same sign: the highest ranked wins *)
+     if int_sign a = int_sign b then
+       if int_rank a >= int_rank b then t1 else t2
+     (* if the unsigned has greater or equal rank, it wins *)
+     else if not (int_sign a) && int_rank a >= int_rank b then t1
+     else if not (int_sign b) && int_rank b >= int_rank a then t2
+     (* if the signed can hold all unsigned values, it wins *)
+     else if int_sign a && sizeof_int prj.proj_target a > sizeof_int prj.proj_target b then t1
+     else if int_sign b && sizeof_int prj.proj_target b > sizeof_int prj.proj_target a then t2
+     (* otherwise, use an unsigned version of the signed type *)
+     else if int_sign a then T_integer (make_unsigned a), snd t1
+     else T_integer (make_unsigned b), snd t2
 
   | T_pointer _, T_integer _ -> t1
   | T_integer _, T_pointer _ -> t2
+
+  | T_pointer (T_void,_), T_pointer _ -> t2
+  | T_pointer _, T_pointer (T_void,_) -> t1
+  | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
 
   | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
@@ -296,7 +350,7 @@ let rec visit_expr e prj func =
 
     | E_unop(op, e')      ->
       let e' = visit_expr e' prj func in
-      let e' = promote_expression_type e' in
+      let e' = promote_expression_type prj e' in
       let ee' =
         with_range
           Ast.{ kind = E_unop(visit_unop op, e'); typ = e'.content.typ }
@@ -309,10 +363,10 @@ let rec visit_expr e prj func =
       let e1 = visit_expr e1 prj func in
       let e2 = visit_expr e2 prj func in
 
-      let e1 = promote_expression_type e1 in
-      let e2 = promote_expression_type e2 in
+      let e1 = promote_expression_type prj e1 in
+      let e2 = promote_expression_type prj e2 in
 
-      let t = binop_type e1.content.typ e2.content.typ in
+      let t = binop_type prj e1.content.typ e2.content.typ in
 
       let e1 = convert_expression_type e1 t in
       let e2 = convert_expression_type e2 t in
@@ -365,6 +419,9 @@ and visit_builtin b =
   | SIZE   -> Ast.SIZE
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE
+  | FLOAT_VALID -> Ast.FLOAT_VALID
+  | FLOAT_INF   -> Ast.FLOAT_INF
+  | FLOAT_NAN   -> Ast.FLOAT_NAN
 
 
 (** {2 Formulas} *)
