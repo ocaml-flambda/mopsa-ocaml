@@ -19,7 +19,7 @@
 %token TOK_CHAR
 %token TOK_STRING
 %token TOK_TREE
-%token TOK_UNIT
+%token TOK_ARRAY
 
 %token TOK_TRUE
 %token TOK_FALSE
@@ -69,13 +69,21 @@
 
 %token TOK_EOF
 
-/* priorities of binary operators (lowest to highest) */
+/* priorities of operators (lowest to highest) */
 %left TOK_BAR_BAR
 %left TOK_AND_AND
 %left TOK_EXCLAIM
+%left TOK_NOT_EQUAL TOK_LESS TOK_LESS_EQUAL TOK_GREATER_EQUAL TOK_EQUAL_EQUAL TOK_GREATER
 %left TOK_PLUS TOK_MINUS
 %left TOK_STAR TOK_DIVIDE
+%left TOK_CONCAT
+%left TOK_LBRACKET
 
+
+
+%nonassoc lowPrec1
+%nonassoc TOK_SEMICOLON
+%nonassoc TOK_ELSE
 
 /* entry-point */
 /****************/
@@ -210,11 +218,10 @@ declaration:
 typ:
 | TOK_INT { AST_INT }
 | TOK_REAL { AST_REAL }
-| TOK_LBRACKET t=typ TOK_RBRACKET { AST_ARRAY t }
+| t=typ TOK_ARRAY { AST_ARRAY t }
 | TOK_STRING { AST_STRING }
 | TOK_CHAR { AST_CHAR }
 | TOK_TREE { AST_TREE }
-| TOK_UNIT { AST_UNIT }
 
 separated_ended_list(X, Y):
 | l=separated_list(X, Y) X {l}
@@ -235,13 +242,13 @@ stat:
 | e=ext(expr) TOK_EQUAL f=ext(expr) TOK_SEMICOLON
   { AST_assign (e, f) }
 
-| TOK_IF TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) TOK_SEMICOLON?
+| TOK_IF TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) ender
   { AST_if (e, s, None) }
 
-| TOK_IF TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) TOK_ELSE t=ext(stat) TOK_SEMICOLON?
+| TOK_IF TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) TOK_ELSE t=ext(stat) ender
   { AST_if (e, s, Some t) }
 
-| TOK_WHILE TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) TOK_SEMICOLON?
+| TOK_WHILE TOK_LPAREN e=ext(expr) TOK_RPAREN s=ext(stat) ender
   { AST_while (e, s) }
 
 | TOK_ASSERT TOK_LPAREN e=ext(expr) TOK_RPAREN TOK_SEMICOLON
@@ -262,11 +269,15 @@ stat:
 | TOK_CONTINUE TOK_SEMICOLON
    { AST_continue }
 
-| TOK_FOR TOK_LPAREN v=ext(var) TOK_COMMA e1=ext(expr) TOK_COMMA e2=ext(expr) st=ext(stat) TOK_SEMICOLON?
+| TOK_FOR TOK_LPAREN v=ext(var) TOK_COMMA e1=ext(expr) TOK_COMMA e2=ext(expr) TOK_RPAREN st=ext(stat) ender
    { AST_for(v, e1, e2, st) }
 
 | e=ext(expr) TOK_SEMICOLON
-  { AST_expr e }
+      { AST_expr e }
+
+ender:
+| TOK_SEMICOLON {}
+| %prec lowPrec1 {}
 
 fundec:
 | t=topt f=var TOK_LPAREN args=separated_list(TOK_COMMA, ext(tvar)) TOK_RPAREN TOK_LCURLY

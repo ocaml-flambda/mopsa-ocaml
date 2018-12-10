@@ -70,7 +70,6 @@ let rec from_typ (typ: U_ast.typ) : FA.typ =
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
   | AST_TREE    -> T_tree
-  | AST_UNIT    -> T_unit
 
 (* find a common type for the arguments of binary operations *)
 let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =

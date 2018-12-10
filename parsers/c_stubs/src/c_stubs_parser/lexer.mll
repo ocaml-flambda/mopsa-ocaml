@@ -118,6 +118,7 @@ rule read =
   | "-"    { MINUS }
   | "*"    { STAR }
   | "/"    { DIV }
+  | "%"    { MOD }
   | "<"    { LT }
   | ">"    { GT }
   | "<="   { LE }
