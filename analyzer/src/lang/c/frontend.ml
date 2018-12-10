@@ -464,10 +464,12 @@ and find_field_index t f =
     match fst t with
     | T_record {record_fields} ->
       let field = Array.to_list record_fields |>
-                  List.find (fun field -> field.field_org_name == f)
+                  List.find (fun field -> field.field_org_name = f)
       in
       field.field_index
 
+    | T_typedef td -> find_field_index td.typedef_def f
+      
     | _ -> Exceptions.panic "find_field_index: called on a non-record type %s"
              (C_print.string_of_type_qual t)
   with
