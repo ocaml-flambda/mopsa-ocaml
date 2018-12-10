@@ -264,7 +264,7 @@ struct
         eval_points_to q man flow |> Eval.bind @@ fun q flow ->
         match p, q with
         | P_var (base1, offset1, t1), P_var (base2, offset2, t2) ->
-          if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+          if compare_base base1 base2 <> 0 || compare (remove_typedef_qual t1) (remove_typedef_qual t2) <> 0 then
             Eval.singleton (mk_zero range) flow
           else
             Eval.assume
@@ -294,7 +294,7 @@ struct
         eval_points_to q man flow |> Eval.bind @@ fun q flow ->
         match p, q with
         | P_var (base1, offset1, t1), P_var (base2, offset2, t2) ->
-          if compare_base base1 base2 <> 0 || compare (remove_typedef t1) (remove_typedef t2) <> 0 then
+          if compare_base base1 base2 <> 0 || compare (remove_typedef_qual t1) (remove_typedef_qual t2) <> 0 then
             Eval.singleton (mk_one range) flow
           else
             Eval.assume

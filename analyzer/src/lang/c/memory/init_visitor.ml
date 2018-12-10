@@ -124,7 +124,7 @@ and init_expr visitor e is_global (init: c_init option) (range: range) flow =
   if is_c_scalar_type e.etyp then init_scalar visitor e is_global init range flow else
   if is_c_array_type e.etyp then  init_array visitor e is_global init range flow else
   if is_c_record_type e.etyp then init_record visitor e is_global init range flow else
-    Exceptions.panic "Unsupported initialization of %a" pp_expr e
+    Exceptions.panic "Unsupported initialization of %a of type %a" pp_expr e pp_typ e.etyp
 
 
 let init_global visitor v init range flow =

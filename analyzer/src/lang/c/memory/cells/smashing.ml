@@ -190,7 +190,7 @@ struct
             | E_c_cell (C_smash (b, t), mode) -> b, t, mode
             | _ -> assert false
           in
-          let record = match remove_typedef t with T_c_record r -> r | _ -> assert false in
+          let record = match remove_typedef_qual t with T_c_record r -> r | _ -> assert false in
           match init_list with
           | Parts parts ->
             let rec aux i l acc =
