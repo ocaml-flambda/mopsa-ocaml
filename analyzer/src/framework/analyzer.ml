@@ -145,8 +145,8 @@ struct
             else
               (* Map each hop to an eval function *)
               let () = debug "eval paths for %a" pp_zone2 (src, dst) in
-              let eval_paths = List.map (fun path ->
-                  debug "%a" pp_eval_path path;
+              let eval_paths = List.mapi (fun i path ->
+                  debug " path #%d: %a" i pp_eval_path path;
                   let rec aux =
                     function
                     | [] -> []

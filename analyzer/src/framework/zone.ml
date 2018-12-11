@@ -275,17 +275,17 @@ let build_eval_graph (edges: (zone * zone) list) : graph =
 let find_all_eval_paths (src:zone) (dst:zone) (g:graph) : path list =
   let rec dfs z before =
     let similar = ZoneSet.filter (fun z' -> sat_zone z z') g.vertices in
-    ZoneSet.fold (fun z acc ->
-        let next = try AdjencyMap.find z g.adjency with Not_found -> NextSet.empty in
+    ZoneSet.fold (fun zz acc ->
+        let next = try AdjencyMap.find zz g.adjency with Not_found -> NextSet.empty in
         NextSet.fold (fun (z', w) acc ->
-            if List.exists (fun (z1, z2, _) -> compare_zone z' z1 = 0 ||
+            if List.exists (fun (z1, z2, _) -> compare_zone zz z1 = 0 &&
                                                compare_zone z' z2 = 0
                            ) before
             then acc
             else
             if sat_zone z' dst
-            then (before @ [(z, z', w)]) :: acc
-            else (dfs z' (before @ [(z, z', w)])) @ acc
+            then (before @ [(zz, z', w)]) :: acc
+            else (dfs z' (before @ [(zz, z', w)])) @ acc
           ) next acc
         ) similar []
   in
