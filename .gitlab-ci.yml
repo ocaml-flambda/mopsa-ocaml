@@ -2,7 +2,7 @@ variables:
   MOPSA_C: "./bin/mopsa-c -unittest"
   MOPSA_U: "./bin/mopsa-universal -unittest"
   MOPSA_PY: "./bin/mopsa-python -unittest"
-  MOPSA_PYTY: "./bin/mopsa -lang=python -config=./analyzer/configs/python-types.json -stub=./analyzer/stubs/python -widening-delay=1 -loop-unrolling=1 -unittest"
+  MOPSA_PYTY: "./bin/mopsa-python-types -unittest -debug=unittest"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
@@ -395,4 +395,3 @@ bench-typpete 37/37:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
-
