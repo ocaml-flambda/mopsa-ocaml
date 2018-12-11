@@ -23,6 +23,7 @@ def flatten_dict(dicts,
                 result[key] = value
     return result
 
+
 a = flatten([[1,2], [1,2], [True, False]])
 
 b = [{1:[2]}, {True: [True]}, {5: [1.2, 2]}]

@@ -106,7 +106,9 @@ module Domain =
       | Some dir ->
          let path = dir ^ "/" ^ file in
          let stmt = Frontend.parse_file path in
-
+         (* FIXME: pour les fonctions récursives, ça marche ça ? *)
+         (* pour les variables globales : collecter les variables globales, puis faire des man.exec dessus ? *)
+         (* et pour les modules normaux, il y a aussi un pb sur les noms de variables, non ? *)
          let rec parse base stmt =
            match skind stmt with
            | S_py_class(cls) ->
@@ -161,6 +163,7 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
+      (* import_builtin_module (Some "math") "math"; *)
       OptionExt.return flow
 
     let eval _ _ _ _ = None

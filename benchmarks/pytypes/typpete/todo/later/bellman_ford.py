@@ -1,3 +1,4 @@
+# Il faut gérer les effets de bord (cf adj_list[i].append)
 INF = 100000000
 
 

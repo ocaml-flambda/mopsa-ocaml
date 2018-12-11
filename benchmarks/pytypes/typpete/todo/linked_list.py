@@ -1,3 +1,4 @@
+# Handle widening of attributes instances
 # import mopsa
 
 # def test_main():

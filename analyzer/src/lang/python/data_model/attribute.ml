@@ -140,8 +140,10 @@ module Domain =
                                                 let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', e))) range in
                                                 man.eval exp flow)
                                               ~felse:(fun flow ->
-                                                let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
-                                                Eval.singleton exp flow)
+                                                Eval.singleton obj' flow
+                                                (* let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
+                                                 *     Eval.singleton exp flow *)
+                                              )
                                               man flow
                                             (* let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
                                              * man.eval exp flow *)

@@ -36,6 +36,12 @@ module Domain =
       let range = srange stmt in
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
+      | S_py_assert ({ekind = E_constant (C_bool true)}, msg)->
+         Post.of_flow flow |> OptionExt.return
+
+      | S_py_assert ({ekind = E_constant (C_bool false)}, msg)->
+         man.exec (Utils.mk_builtin_raise "AssertionError" range) flow |> Post.of_flow |> OptionExt.return
+
       | S_py_assert (e, msg)->
          man.eval e flow |>
            Post.bind man @@

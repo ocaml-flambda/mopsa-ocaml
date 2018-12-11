@@ -55,21 +55,21 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_bool")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_bool range) flow |> OptionExt.return
+         man.eval (mk_py_top T_bool range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
+         man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_string")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_string range) flow |> OptionExt.return
+         man.eval (mk_py_top T_string range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
-         Eval.singleton (mk_py_top T_int range) flow |> OptionExt.return
+         man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
                      {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
                    ], []) ->
-         Eval.singleton (mk_py_z_interval l u range) flow |> OptionExt.return
+         man.eval (mk_py_z_interval l u range) flow |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
          begin
@@ -99,9 +99,10 @@ module Domain =
               let u = Utils.mk_builtin_call "float" [u] range in
               (* FIXME: T_float *)
               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top (T_float F_DOUBLE) range) range) flow |>
-                           man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
+                           man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
-              Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
+              man.eval (mk_var tmp range) flow |> Eval.add_cleaners [mk_remove_var tmp range]
+              (* Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow *)
          end
          |> OptionExt.return
 

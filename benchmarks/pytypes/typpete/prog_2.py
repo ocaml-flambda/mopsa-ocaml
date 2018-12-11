@@ -12,26 +12,27 @@ def test_main():
         w -= s
         while w > 0:
             m = max(arr)
-            v = arr.index(m)
+            # v = arr.index(m)
+            try:
+                v = arr.index(m)
+            # FIXME: ignore ValueErrors?
+            except ValueError:
+                v = 0
             while arr2[v] < arr[v] and w > 0:
                 arr2[v] += 1
                 w -= 1
             arr[v] = -1
         for i in range(n):
             print(arr2[i])
-    # FIXME: one weird false alarm
     mopsa.assert_safe()
-    mopsa.massert(isinstance(arr, list))
-    mopsa.massert(isinstance(arr2, list))
-    mopsa.massert(isinstance(arr[0], int))
-    mopsa.massert(isinstance(arr2[0], int))
+    mopsa.assert_list_of(arr, int)
+    mopsa.assert_list_of(arr2, int)
     mopsa.massert(isinstance(i, int))
     mopsa.massert(isinstance(m, int))
     mopsa.massert(isinstance(n, int))
     mopsa.massert(isinstance(s, int))
     mopsa.massert(isinstance(v, int))
     mopsa.massert(isinstance(w, int))
-    mopsa.ignore_exception(ValueError)
 # arr := List[int]
 # arr2 := List[int]
 # i := int
