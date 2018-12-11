@@ -343,7 +343,7 @@ let concretize_poly (t:polytype) (d3:d3) : Monotypeset.t =
   mono_set_cast res_poly
 
 let join_classes (c:class_address * py_object list) (c':class_address * py_object list) : (class_address  * py_object list) option =
-  debug "Join_classes: FIXME@\n";
+  (* debug "Join_classes: FIXME@\n"; *)
   if c = c' then Some c
   else None
 
@@ -495,7 +495,7 @@ let join (d:domain) (d':domain) : domain =
   let all_vars = VarMap.fold (fun k _ acc -> VarSet.add k acc) d'.d1 all_vars in
   let res = VarSet.fold
               (fun var dcur ->
-                (* debug "Var is %a@\n" pp_var var; *)
+                debug "Var is %a@\n" pp_var var;
       let el1 = VarMap.find var d.d1 and el1' = VarMap.find var d'.d1 in
       match el1.def, el1'.def with
       | None, None ->
@@ -520,6 +520,7 @@ let join (d:domain) (d':domain) : domain =
          | true ->
             (* this equivalence class is already known *)
             let r = Hashtbl.find h (tid1, tid2) in
+            let () = debug "Eq class already known, result is %d@\n" r in
             (* there are now two cases:
                   1) if ov1 <> None and ov1 = ov2 and the concrete types described by d2.(tid1) and d2.(tid2) are the same , there is the same aliasing so we can preserve it (we need to find the good root for the aliasing?! <- nope, due to the fact the all variable alias to the one having the smallest vuid <- todo: fix vuid issue)
                   2) otherwise, we bind the result of this variable to the good type id
@@ -532,8 +533,6 @@ let join (d:domain) (d':domain) : domain =
                let r = merge_undefs el1 el1' (Ty r) in
                {dcur with d1 = VarMap.add var r dcur.d1} end
          | false ->
-            let pos_d2 = dcur.pos_d2 in
-            Hashtbl.add h (tid1, tid2) pos_d2;
             let t1 =
               if TypeIdMap.mem tid1 d.d2 then TypeIdMap.find tid1 d.d2
               else Bot in
@@ -543,6 +542,8 @@ let join (d:domain) (d':domain) : domain =
             let new_ty, d3, pos_d3 = join_poly (t1, d.d3) (t2, d'.d3) dcur.d3 dcur.pos_d3 in
             let d = {d1=dcur.d1; d2=dcur.d2; d3; pos_d2=dcur.pos_d2; pos_d3} in
             let tid, d = get_type ~local_use:true d new_ty in
+            Hashtbl.add h (tid1, tid2) tid;
+            debug "Eq class not known, now %d@\n" tid;
             let d1 = VarMap.add var (merge_undefs el1 el1' (Ty tid)) dcur.d1 in
             {d with d1}
          end)  all_vars top
