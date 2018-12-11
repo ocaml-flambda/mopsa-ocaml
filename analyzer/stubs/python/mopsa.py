@@ -23,3 +23,4 @@ def builtin(f, name): pass
 def assert_list_of(l, ty): pass
 def assert_set_of(l, ty): pass
 def assert_dict_of(l, ty_k, ty_v): pass
+def assert_tuple_of(t, ty): pass

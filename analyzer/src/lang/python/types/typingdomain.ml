@@ -426,7 +426,6 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
          let new_acc = StringMap.add attrn new_t acc in
          new_acc, d3_acc, pos_d3) in
      let uattrs, d3_acc, pos_d3 = StringSet.fold join_uattrs supp_uattrs (StringMap.empty, d3_acc, pos_d3) in
-     debug "uo of %a@\n" pp_polytype t;
      let uo = StringMap.merge (fun k l r -> match l, r with
                                             | Some l, None -> Some l
                                             | None, Some r -> Some r
@@ -475,11 +474,14 @@ let get_type ?local_use:(local_use=false) (d:domain) (t:polytype) : typeid * dom
     Exceptions.panic "get_type: not monomorphic, bad idea"
   else
     let opos = search_d2 t d.d2 in
+    (* let () = debug "Searching for %a in %a, found = %b@\n" pp_polytype t pp_d2 d.d2 (opos <> None) in *)
     match opos with
     | None ->
        let d2 = TypeIdMap.add d.pos_d2 t d.d2 in
        d.pos_d2, {d with d2=d2; pos_d2=d.pos_d2+1}
-    | Some pos -> pos, d
+    | Some pos ->
+       (* debug "At pos %d@\n" pos; *)
+       pos, d
 
 
 let join (d:domain) (d':domain) : domain =
@@ -539,12 +541,13 @@ let join (d:domain) (d':domain) : domain =
               if TypeIdMap.mem tid2 d'.d2 then TypeIdMap.find tid2 d'.d2
               else Bot in
             let new_ty, d3, pos_d3 = join_poly (t1, d.d3) (t2, d'.d3) dcur.d3 dcur.pos_d3 in
-            let d1 = VarMap.add var (merge_undefs el1 el1' (Ty pos_d2)) dcur.d1 in
-            let d2 = TypeIdMap.add pos_d2 new_ty dcur.d2 in
-            let pos_d2 = pos_d2+1 in
-            {d1;d2;d3;pos_d2;pos_d3}
+            let d = {d1=dcur.d1; d2=dcur.d2; d3; pos_d2=dcur.pos_d2; pos_d3} in
+            let tid, d = get_type ~local_use:true d new_ty in
+            let d1 = VarMap.add var (merge_undefs el1 el1' (Ty tid)) dcur.d1 in
+            {d with d1}
          end)  all_vars top
   in
+  debug "Result is %a@\n" print res;
   res
 
 let class_le (c, b:class_address * py_object list) (d, b':class_address * py_object list) : bool =
@@ -1152,7 +1155,6 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
            debug "new_domain = %a@\n" print new_domain;
            (aux (poly_cast mty) new_domain) @ acc) mtys []
     | _ -> debug "type_of %a@\n" pp_polytype pt; assert false
-
   in
   let pt = TypeIdMap.find tid d.d2 in
   aux pt d

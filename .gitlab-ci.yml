@@ -365,7 +365,6 @@ bench-typpete 31/37:
   variables:
     PY_FILE: 'prog_2.py'
   extends: .bench-typpete
-  allow_failure: true
 
 bench-typpete 32/37:
   variables:
@@ -396,3 +395,4 @@ bench-typpete 37/37:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
+

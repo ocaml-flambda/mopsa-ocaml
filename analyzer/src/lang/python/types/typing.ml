@@ -1779,6 +1779,37 @@ module Domain =
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_tuple_of")}, _)}, args, []) ->
+         let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+         if List.length args = 2 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let open Typingdomain in
+                 let var, tu_classes = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
+                 let cur = Flow.get_domain_cur man flow in
+                 let ty_var = match ekind var with
+                   | E_type_partition i ->
+                      begin match TypeIdMap.find i cur.d2 with
+                      | FiniteTuple t ->
+                         FiniteTuple (List.map (function
+                                          | Instance {classn} -> classn
+                                          | List _ ->
+                                             let x, y = Addr.builtin_cl_and_mro "list" in
+                                             Class (x, y)
+                                          | _ -> Exceptions.panic "otod, assert_tuple_of@\n") t)
+                      | _ -> assert false end
+                   | _ -> assert false in
+                 let ty_classes = match ekind tu_classes with
+                   | E_type_partition i ->
+                      begin match TypeIdMap.find i cur.d2 with
+                      | FiniteTuple t -> FiniteTuple t
+                      | _ -> assert false end
+                   | _ -> assert false in
+                 debug "assert_tuple of %a: [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) pp_polytype ty_var pp_d3 cur.d3 pp_polytype ty_classes pp_d3 cur.d3;
+                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) range flow
+               ) |> OptionExt.return
+         else tyerror flow |> OptionExt.return
+
         (*************
          * Summaries *
          *************)
