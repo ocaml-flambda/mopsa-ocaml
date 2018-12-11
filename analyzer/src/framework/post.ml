@@ -92,6 +92,35 @@ let bind
   in
   post
 
+let bind_with_cleaners
+    ?(zone = any_zone) (man: ('a, _) man)
+    (f: 'e -> Ast.stmt list -> 'a flow -> 'a post)
+    (evl: ('a, 'e) evl)
+  : 'a post =
+  let annot = Eval.choose evl |>
+              OptionExt.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
+  in
+  let post, _ =
+    Eval.fold2 (fun annot case ->
+        let flow' = Flow.set_all_annot annot case.flow in
+        match case.expr with
+        | None -> of_flow flow', annot
+
+        | Some e ->
+          let post = f e case.cleaners flow' in
+          let flow'' = List.fold_left (fun acc stmt ->
+                           man.exec ~zone stmt acc
+                         ) post.flow [] (*case.cleaners*)
+          in
+          let post' = {post with flow = flow''} in
+          let annot'' = Flow.get_all_annot flow'' in
+          post', annot''
+      )
+      (join man) (meet man)
+      annot
+      evl
+  in
+  post
 
 let bind_flow
     ?(zone = any_zone) (man: ('a, 't) man)

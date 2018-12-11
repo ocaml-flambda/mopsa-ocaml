@@ -45,6 +45,7 @@ module Domain =
          (* Call __new__ *)
          let tmp_inst = mk_tmp () in
          let inst_var = mk_var tmp_inst range in
+         debug "tmp inst var = %a@\n" pp_expr inst_var;
          let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
          man.exec (mk_assign inst_var new_call range) flow |>
            (* man.eval inst_var |>

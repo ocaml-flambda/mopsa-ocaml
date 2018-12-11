@@ -95,7 +95,7 @@ module Domain =
       | S_py_raise(Some exp) ->
          debug "Raising %a@\n" pp_expr exp;
          (man.eval exp flow |>
-            Post.bind man (fun exp flow ->
+            Post.bind_with_cleaners man (fun exp cleaners flow ->
                 (* match ekind exp with
                  * | E_py_object obj -> *)
                 Post.assume
@@ -104,6 +104,8 @@ module Domain =
                   ~fthen:(fun true_flow ->
                     debug "True flow, exp is %a@\n" pp_expr exp;
                     (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
+
+                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                     let cur = Flow.get T_cur man true_flow in
                     let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
                     let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
