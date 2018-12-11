@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Universal.Ast
 open Ast
+open Zone
 
 module Domain =
 struct
@@ -33,12 +34,12 @@ struct
 
   let exec_interface = {
     export = [];
-    import = [Zone.Z_c]
+    import = [Z_c]
   }
 
   let eval_interface = {
-    export = [Zone.Z_c, Zone.Z_c_scalar];
-    import = [Zone.Z_c, Zone.Z_c_scalar]
+    export = [Z_c, Z_c_low_level];
+    import = [Z_c, Z_c_low_level]
   }
 
   (** Initialization *)
@@ -54,9 +55,9 @@ struct
     match ekind exp with
     | E_c_assign(lval, rval) ->
       begin
-        man.eval rval ~zone:(Zone.Z_c, Zone.Z_c_scalar) flow |>
+        man.eval rval ~zone:(Z_c, Z_c_low_level) flow |>
         Eval.bind @@ fun rval flow ->
-        let flow = man.exec ~zone:Zone.Z_c (mk_assign lval rval exp.erange) flow in
+        let flow = man.exec ~zone:Z_c (mk_assign lval rval exp.erange) flow in
         Eval.singleton rval flow
       end
       |> OptionExt.return
@@ -67,8 +68,8 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (tag_range (erange exp) "block'") in
-          let flow' = man.exec ~zone:Zone.Z_c stmt' flow in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) e flow' |>
+          let flow' = man.exec ~zone:Z_c stmt' flow in
+          man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
           OptionExt.return
 
         | _ ->
@@ -76,7 +77,7 @@ struct
       end
 
     | E_c_statement {skind = S_expression e} ->
-      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) e flow |>
+      man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
       OptionExt.return
 
     | _ -> None

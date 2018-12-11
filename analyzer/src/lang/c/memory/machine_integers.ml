@@ -214,6 +214,46 @@ struct
                 erange = tag_range range "wrap"} flow1
           )
 
+    | E_binop(O_c_and, e1, e2) ->
+        Eval.assume
+          e1 ~zone:(Z_c_scalar)
+          ~fthen:(fun flow ->
+              Eval.assume
+                e2 ~zone:(Z_c_scalar)
+                ~fthen:(fun flow ->
+                    Eval.singleton (mk_one exp.erange) flow
+                  )
+                ~felse:(fun flow ->
+                    Eval.singleton (mk_zero exp.erange) flow
+                  )
+                man flow
+            )
+          ~felse:(fun flow ->
+              Eval.singleton (mk_zero exp.erange) flow
+            )
+          man flow |>
+        OptionExt.return
+
+    | E_binop(O_c_or, e1, e2) ->
+      Eval.assume
+        e1 ~zone:(Z_c_scalar)
+        ~fthen:(fun flow ->
+            Eval.singleton (mk_one exp.erange) flow
+          )
+        ~felse:(fun flow ->
+            Eval.assume
+              e2 ~zone:(Z_c_scalar)
+              ~fthen:(fun flow ->
+                  Eval.singleton (mk_one exp.erange) flow
+                )
+              ~felse:(fun flow ->
+                  Eval.singleton (mk_zero exp.erange) flow
+                )
+              man flow
+          )
+        man flow |>
+      OptionExt.return
+
     | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
       let () = debug "case 4" in
       let r = exp |> etyp |> rangeof in

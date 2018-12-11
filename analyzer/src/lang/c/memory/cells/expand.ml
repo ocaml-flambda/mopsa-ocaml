@@ -282,7 +282,7 @@ module Domain = struct
 
   let eval_interface = {
     export = [
-      Z_c_scalar, Z_c_cell_expand
+      Z_c_low_level, Z_c_cell_expand
     ];
     import = [
       (Z_c, Universal.Zone.Z_u_num);
@@ -360,13 +360,7 @@ module Domain = struct
             in
             aux 0 l flow
 
-          | Expr e ->
-            record.c_record_fields |> List.fold_left (fun acc field ->
-                let t' = field.c_field_type in
-                let cf = {b = c.b; o = O_single Z.((offset c) + (Z.of_int field.c_field_offset)); t = t'} in
-                let init = C_init_expr (mk_c_member_access e field range) in
-                init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global (Some init) range acc
-              ) flow
+          | Expr e -> panic "expand: record assignment not supported"
         );
     }
 
@@ -543,7 +537,7 @@ module Domain = struct
       end
 
     | Stubs.Ast.E_stub_builtin_call({content = OLD }, e) ->
-      man.eval ~zone:(Z_c, Z_c_scalar) e flow |>
+      man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
       Eval.bind_opt @@ fun e flow ->
 
       eval_cell e man flow |>
@@ -638,10 +632,11 @@ module Domain = struct
       OptionExt.return
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      debug "assign";
       man.eval ~zone:(Z_c, Z_under Z_c_cell) rval flow |>
       Post.bind_opt man @@ fun rval flow ->
 
-      man.eval ~zone:(Z_c, Z_c_scalar) lval flow |>
+      man.eval ~zone:(Z_c, Z_c_low_level) lval flow |>
       Post.bind_opt man @@ fun lval flow ->
 
       eval_cell lval man flow |>
@@ -664,7 +659,7 @@ module Domain = struct
 
     | Stubs.Ast.S_stub_assigns(x, None) ->
       let t = x.etyp in
-      man.eval ~zone:(Z_c, Z_c_scalar) x flow |>
+      man.eval ~zone:(Z_c, Z_c_low_level) x flow |>
       Post.bind_opt man @@ fun x flow ->
 
       eval_cell x man flow |>

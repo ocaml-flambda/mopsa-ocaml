@@ -19,7 +19,6 @@
         "c.desugar.loops",
         "c.desugar.addr_deref",
         "c.desugar.aggregate",
-        "c.desugar.andor",
         "c.desugar.stmt_expr",
         "c.desugar.record_copy",
 

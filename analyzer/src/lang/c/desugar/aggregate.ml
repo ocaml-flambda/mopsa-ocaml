@@ -12,6 +12,7 @@
 open Framework.Essentials
 open Universal.Ast
 open Ast
+open Zone
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -41,8 +42,8 @@ struct
   }
 
   let eval_interface = {
-    export = [Zone.Z_c, Zone.Z_c_scalar];
-    import = [Zone.Z_c, Zone.Z_c_scalar]
+    export = [Z_c, Z_c_low_level];
+    import = [Z_c, Z_c_low_level]
   }
 
   (** Initialization *)
@@ -58,24 +59,28 @@ struct
     match ekind exp with
     (* 𝔼⟦ a[i] ⟧ = *(a + i) *)
     | E_c_array_subscript(a, i) ->
+      man.eval ~zone a flow |> Eval.bind_return @@ fun a flow ->
+      man.eval ~zone i flow |> Eval.bind @@ fun i flow ->
+
       let t = exp |> etyp |> Ast.pointer_type in
       let exp' = mk_c_deref (mk_binop a O_plus i ~etyp:t range) range in
-      man.eval ~zone exp' flow |>
-      Eval.return
+
+      Eval.singleton exp' flow
 
     (* 𝔼⟦ s.f ⟧ = *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
     | E_c_member_access (s, i, f) ->
+      let ss = mk_c_address_of s range in
+      man.eval ~zone ss flow |> Eval.bind_return @@ fun ss flow ->
+
       let st = etyp s in
       let t = etyp exp in
       let align = mk_int (align_byte st i) range in
-
-      let ss = remove_casts s in
 
       let exp' =
         mk_c_deref
           (mk_c_cast
              (mk_binop
-                (mk_c_cast (mk_c_address_of ss range) (pointer_type s8) range)
+                (mk_c_cast ss (pointer_type s8) range)
                 O_plus
                 align
                 range
@@ -85,11 +90,12 @@ struct
           )
           range
       in
-      man.eval ~zone exp' flow |>
-      Eval.return
+      Eval.singleton exp' flow
 
     (* 𝔼⟦ p->f ⟧ = *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
     | E_c_arrow_access(p, i, f) ->
+      man.eval ~zone p flow |> Eval.bind_return @@ fun p flow ->
+
       let st = under_pointer_type p.etyp in
       let t = etyp exp in
       let align = mk_int (align_byte st i) range in
@@ -108,8 +114,7 @@ struct
           )
           range
       in
-      man.eval ~zone exp' flow |>
-      Eval.return
+      Eval.singleton exp' flow
 
 
     | _ -> None

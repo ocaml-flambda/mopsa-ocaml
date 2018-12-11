@@ -334,7 +334,7 @@ struct
       let exp' = { exp with ekind = E_binop (O_eq, p, q) } in
       eval_pointer_compare exp' man flow |>
       OptionExt.lift @@ Eval.bind @@ fun exp' flow ->
-      
+
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (mk_not exp' exp.erange) flow
 
     | E_binop(O_minus, e1, e2)

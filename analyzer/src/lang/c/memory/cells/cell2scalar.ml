@@ -96,8 +96,8 @@ struct
   }
 
   let eval_interface = {
-    export = [Z_c_cell, Z_c_scalar];
-    import = [Z_c_cell, Z_c_scalar]
+    export = [Z_under Z_c_cell, Z_c_scalar];
+    import = [Z_under Z_c_cell, Z_c_scalar]
   }
 
   (** Initialization *)
@@ -142,17 +142,17 @@ struct
       Post.return
 
     | S_assign({ ekind = E_c_cell _ } as lval, rval)  ->
-      man.eval ~zone:(Z_c_cell, Z_c_scalar) lval flow |>
+      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) lval flow |>
       Post.bind_opt man @@ fun lval' flow ->
 
-      man.eval ~zone:(Z_c_cell, Z_c_scalar) rval flow |>
+      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) rval flow |>
       Post.bind_opt man @@ fun rval' flow ->
 
       man.exec ~zone:Z_c_scalar (mk_assign lval' rval' stmt.srange) flow |>
       Post.return
 
     | S_assume(e) ->
-      man.eval ~zone:(Z_c_cell, Z_c_scalar) e flow |>
+      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
       Post.bind_opt man @@ fun e' flow ->
 
       let stmt' = {stmt with skind = S_assume e'} in

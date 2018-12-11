@@ -61,7 +61,7 @@ struct
   let exec_interface = {export = []; import = []}
   let eval_interface = {
     export = [
-      Zone.Z_c, Zone.Z_c_scalar
+      Zone.Z_c, Zone.Z_c_low_level
     ];
     import = []
   }
@@ -88,7 +88,7 @@ struct
     let l, r = rangeof (T_c_integer t) in
     let ll, rr = mk_z l (tag_range range "ll"), mk_z r (tag_range range "rr") in
     let exp' = mk_expr (E_c_builtin_call("_mopsa_rand_int", [ll; rr])) range ~etyp:(T_c_integer t) in
-    man.eval exp' ~zone:(Zone.Z_c, Zone.Z_c_scalar) flow
+    man.eval exp' ~zone:(Zone.Z_c, Zone.Z_c_low_level) flow
 
   (*==========================================================================*)
   (** {2 Transfer functions} *)

@@ -10,6 +10,7 @@
 open Framework.Essentials
 open Universal.Ast
 open Ast
+open Zone
 
 (** {2 Domain definition} *)
 (** ===================== *)
@@ -39,8 +40,8 @@ struct
   }
 
   let eval_interface = {
-    export = [Zone.Z_c, Zone.Z_c_scalar];
-    import = [Zone.Z_c, Zone.Z_c_scalar]
+    export = [Z_c, Z_c_low_level];
+    import = [Z_c, Z_c_low_level]
   }
 
   (** Initialization *)

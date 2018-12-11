@@ -180,20 +180,9 @@ let () =
     subset = None;
     eval = (fun exp ->
         match ekind exp with
-        | E_constant _
         | E_c_cell _ -> Keep
-
-        | E_var(v, _) when Universal.Ast.is_math_type v.vtyp -> Keep
-
-        | E_c_deref _ -> Process
-
-        | E_c_address_of _  -> Keep
-
-        | E_c_cast _
-        | E_unop _
-        | E_binop _ -> Visit
-
-        | _ -> Process
+        | E_var _ when exp.etyp |> is_c_scalar_type -> Process
+        | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );
   }
 

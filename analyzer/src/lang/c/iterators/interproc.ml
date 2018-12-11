@@ -11,6 +11,7 @@
 open Framework.Essentials
 open Memory.Common.Points_to
 open Ast
+open Zone
 
 
 module Domain =
@@ -38,9 +39,9 @@ struct
   let exec_interface = {export = []; import = []}
 
   let eval_interface = {
-    export = [Zone.Z_c, Zone.Z_c_scalar];
+    export = [Z_c, Z_c_low_level];
     import = [
-      Zone.Z_c, Z_c_points_to;
+      Z_c, Z_c_points_to;
       Universal.Zone.Z_u, any_zone;
       Stubs.Zone.Z_stubs, Z_any
     ]
@@ -71,7 +72,7 @@ struct
         match ekind f with
         | E_c_points_to (P_fun f) when Libs.Mopsa.is_builtin_function f.c_func_var.vname ->
           let exp' = {exp with ekind = E_c_builtin_call(f.c_func_var.vname, args)} in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
+          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
         | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
           let open Universal.Ast in

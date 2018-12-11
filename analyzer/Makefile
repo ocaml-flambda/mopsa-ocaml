@@ -34,7 +34,7 @@ lang.stubs = ast zone alarms iterator
 
 lang.c = ast pp visitor zone frontend alarms desugar  memory libs iterators
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = loops andor addr_deref aggregate record_copy stmt_expr
+lang.c.desugar = loops addr_deref aggregate record_copy stmt_expr
 lang.c.memory = common cells pointers machine_integers
 lang.c.memory.common = base points_to init_visitor
 lang.c.memory.cells = cell expand cell2scalar

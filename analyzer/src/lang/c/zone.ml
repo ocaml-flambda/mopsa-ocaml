@@ -11,10 +11,11 @@
 open Framework.Essentials
 open Ast
 
-
+(** Zones of the C language *)
 type zone +=
-  | Z_c
-  | Z_c_scalar
+  | Z_c           (* Entire C language *)
+  | Z_c_low_level (* C without aggregates (arrays and records) *)
+  | Z_c_scalar    (* C with only scalars *)
 
 let () =
   register_zone {
@@ -54,6 +55,29 @@ let () =
       );
     }
 
+let () =
+  register_zone {
+    zone = Z_c_low_level;
+    subset = Some Z_c;
+    name = "C/LowLevel";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_var _
+        | E_c_function _                     -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _
+        | E_c_cast _                         -> Visit
+        (* ------------------------------------------- *)
+        | E_c_address_of _                   -> Visit
+        | E_c_deref _                        -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+    }
+
 
 let () =
   register_zone {
@@ -72,8 +96,8 @@ let () =
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
         | E_c_address_of _                   -> Visit
-        | E_c_deref _                        -> Visit
+        | E_c_deref p when p.etyp |> under_type |> is_c_array_type -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
-    }
+  }
