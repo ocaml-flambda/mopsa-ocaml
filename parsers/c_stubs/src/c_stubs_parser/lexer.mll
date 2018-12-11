@@ -112,7 +112,6 @@ rule read =
 
   | "."      { DOT }
   | "->"     { ARROW }
-  | "&"      { ADDROF }
 
   | "+"    { PLUS }
   | "-"    { MINUS }

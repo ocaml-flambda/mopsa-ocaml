@@ -33,12 +33,13 @@ imaxdiv_t imaxdiv (intmax_t __numer, intmax_t __denom);
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr":
  *   assumes: __endptr != _NULL;
  *   assigns:  *__endptr;
  *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr <= __nptr + size(__nptr);
+ *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
  *
  * case "without_endptr":
  *   assumes: __endptr == _NULL;
@@ -50,12 +51,13 @@ intmax_t strtoimax (const char *__restrict __nptr,
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr":
  *   assumes: __endptr != _NULL;
  *   assigns:  *__endptr;
  *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr <= __nptr + size(__nptr);
+ *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
  *
  * case "without_endptr":
  *   assumes: __endptr == _NULL;
@@ -67,12 +69,13 @@ uintmax_t strtoumax (const char *__restrict __nptr,
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr":
  *   assumes: __endptr != _NULL;
  *   assigns:  *__endptr;
  *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr <= __nptr + size(__nptr);
+ *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
  *
  * case "without_endptr":
  *   assumes: __endptr == _NULL;
@@ -84,12 +87,13 @@ intmax_t wcstoimax (const __gwchar_t *__restrict __nptr,
 /*$
  * //NOTE: we are more strict than the spec by requiring that __nptr is 0-terminated
  * requires: exists int i in [0, size(__nptr) - 1]: __nptr[i] == 0;
+ * requires: __base == 0 or (__base >= 2 and __base <= 36);
  *
  * case "with_endptr":
  *   assumes: __endptr != _NULL;
  *   assigns:  *__endptr;
  *   assigns:  _errno;
- *   ensures:  *__endptr >= __nptr and *__endptr <= __nptr + size(__nptr);
+ *   ensures:  *__endptr >= __nptr and *__endptr < __nptr + size(__nptr);
  *
  * case "without_endptr":
  *   assumes: __endptr == _NULL;

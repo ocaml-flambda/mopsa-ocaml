@@ -255,7 +255,7 @@ expr:
   | var                                               { E_var $1 }
   | unop with_range(expr)                             { E_unop ($1, $2) } %prec UNARY
   | with_range(expr) binop with_range(expr)           { E_binop ($2, $1, $3) }
-  | ADDROF with_range(expr)                           { E_addr_of $2 } %prec UNARY
+  | BAND with_range(expr)                             { E_addr_of $2 } %prec UNARY
   | STAR with_range(expr)                             { E_deref $2 } %prec UNARY
   | with_range(expr) LBRACK with_range(expr) RBRACK   { E_subscript ($1, $3) }
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
