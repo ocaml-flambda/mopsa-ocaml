@@ -37,11 +37,11 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)} as f), [cls], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
          (* FIXME?*)
          man.eval (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
 
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)} as f), [cls; arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls; arg], []) ->
          (* FIXME?*)
          man.eval arg flow |>
            Eval.bind (fun el flow ->

@@ -18,3 +18,8 @@ def random_string(): pass
 def stub(f): pass
 def unsupported(f): pass
 def builtin(f, name): pass
+
+# Assertions used in the type analysis
+def assert_list_of(l, ty): pass
+def assert_set_of(l, ty): pass
+def assert_dict_of(l, ty_k, ty_v): pass

@@ -73,6 +73,7 @@ let () =
   exit @@ iter_sources (fun files ->
       try
         let prog = parse_program files in
+        Debug.info "@[<v>Parsed program:@,%a@]" Essentials.pp_program prog;
         let config = get_config_path () in
 
         let domain = Config.parse config in

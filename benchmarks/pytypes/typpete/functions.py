@@ -1,3 +1,4 @@
+import mopsa
 
 def f1(x):
     u = x[0]
@@ -36,15 +37,25 @@ def f7(x):
     return f7(x - 1) + f7(x - 2)
 
 
-a = f1([1, 2, 3])
-b = f2(a[0])
-c = f3(b)
-d = f4({"": c[0]}, 1)
-e = f5(a, {"": d}, 2)
-f = b[e]
-g = f6({"st": 1})
-h = b[g]
+def test_main():
+    a = f1([1, 2, 3])
+    b = f2(a[0])
+    c = f3(b)
+    d = f4({"": c[0]}, 1)
+    e = f5(a, {"": d}, 2)
+    f = b[e]
+    g = f6({"st": 1})
+    h = b[g]
 
+    mopsa.assert_safe()
+    mopsa.assert_list_of(a, int)
+    mopsa.assert_list_of(b, int)
+    mopsa.assert_list_of(c, int)
+    mopsa.massert(isinstance(d, int))
+    mopsa.massert(isinstance(e, int))
+    mopsa.massert(isinstance(f, int))
+    mopsa.massert(isinstance(g, int))
+    mopsa.massert(isinstance(h, int))
 
 # a := List[int]
 # b := List[int]
@@ -55,4 +66,3 @@ h = b[g]
 # f4 := Callable[[Dict[str, int], int], int]
 # f5 := Callable[[List[int], Dict[str, int], int], int]
 # f6 := Callable[[Dict[str, int]], int]
-

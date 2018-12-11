@@ -126,7 +126,7 @@ module Domain = struct
           begin
             match exist_and_find_cell ( fun c' ->
                 let b = Z.sub (offset c) (offset c') in
-                Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare (remove_typedef c.t) (T_c_integer(C_unsigned_char)) = 0
+                Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare_typ (remove_typedef_qual c.t) (T_c_integer(C_unsigned_char)) = 0
               ) cs with
             | Some (c') ->
               let b = Z.sub (offset c) (offset c') in
@@ -345,7 +345,7 @@ module Domain = struct
             | E_c_cell(c, _) -> c
             | _ -> assert false
           in
-          let record = match remove_typedef c.t with T_c_record r -> r | _ -> assert false in
+          let record = match remove_typedef_qual c.t with T_c_record r -> r | _ -> assert false in
           match init_list with
           | Parts l ->
             let rec aux i l flow =

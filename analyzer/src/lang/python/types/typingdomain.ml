@@ -28,6 +28,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 
 type typeid = int
+(* FIXME: merge lists, sets, dictv, dictk into containers of 'a pytype * str? *)
 type 'a pytype =
   | Bot | Top
   | List of 'a pytype
@@ -39,6 +40,9 @@ type 'a pytype =
   (* tuples of given size *)
   | Dict of 'a pytype * 'a pytype
   (* keys and values are abstracted separately *)
+  | DictValues of 'a pytype
+  | DictKeys of 'a pytype
+  | DictItems of 'a pytype
   | Set of 'a pytype
   | Instance of 'a pytypeinst
   (* instances are described using a classname, and under-approximation of the attributes, and an over-approximation of the attributes *)
@@ -80,6 +84,9 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Set ty -> Format.fprintf fmt "Set[%a]" (pp_pytype print_vars) ty
   | FiniteTuple l -> Format.fprintf fmt "FiniteTuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") (pp_pytype print_vars)) l
   | Dict (k, v) -> Format.fprintf fmt "Dict[%a:%a]" (pp_pytype print_vars) k (pp_pytype print_vars) v
+  | DictValues ty -> Format.fprintf fmt "DictValues[%a]" (pp_pytype print_vars) ty
+  | DictKeys ty -> Format.fprintf fmt "DictKeys[%a]" (pp_pytype print_vars) ty
+  | DictItems ty -> Format.fprintf fmt "DictItems[%a]" (pp_pytype print_vars) ty
   | Iterator (ty, d) -> Format.fprintf fmt "Iterator[%a, %d]" (pp_pytype print_vars) ty d
   | Instance {classn; uattrs; oattrs} ->
      if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
@@ -255,6 +262,9 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Set v -> Set (unsafe_cast f v)
   | FiniteTuple l -> FiniteTuple ((List.map @@ unsafe_cast f) l)
   | Dict (k, v) -> Dict (unsafe_cast f k, unsafe_cast f v)
+  | DictValues t -> DictValues (unsafe_cast f t)
+  | DictKeys t -> DictKeys (unsafe_cast f t)
+  | DictItems t -> DictItems (unsafe_cast f t)
   | Iterator (t, d) -> Iterator ((unsafe_cast f t), d)
   | Typevar v -> Typevar (f v)
   | Instance {classn;uattrs;oattrs} ->
@@ -283,6 +293,9 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   | Set v -> Set (subst v var value)
   | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
   | Dict (k, v) -> Dict (subst k var value, subst v var value)
+  | DictValues v -> DictValues (subst v var value)
+  | DictKeys k -> DictKeys (subst k var value)
+  | DictItems k -> DictItems (subst k var value)
   | Iterator (v, d) -> Iterator ((subst v var value), d)
   | Instance {classn; uattrs; oattrs} ->
      let classn = subst classn var value in
@@ -294,8 +307,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
 let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
     match t with
-    | List t -> collect t acc
-    | Set t -> collect t acc
+    | DictValues t | DictKeys t | List t | Set t | DictItems t -> collect t acc
     (* l: 'a pytype list *)
     (* el : 'a pytype *)
     (* acc: Typevarset *)
@@ -376,6 +388,15 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
      let rk, d3_acc, pos_d3 = join_poly (k, d3) (k', d3') d3_acc pos_d3 in
      let rv, d3_acc, pos_d3 = join_poly (v, d3) (v', d3') d3_acc pos_d3 in
      Dict (rk, rv), d3_acc, pos_d3
+  | DictValues v, DictValues v' ->
+     let t, d3_acc, pos_d3 = join_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     DictValues t, d3_acc, pos_d3
+  | DictItems v, DictItems v' ->
+     let t, d3_acc, pos_d3 = join_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     DictItems t, d3_acc, pos_d3
+  | DictKeys k, DictKeys k' ->
+     let t, d3_acc, pos_d3 = join_poly (k, d3) (k', d3') d3_acc pos_d3 in
+     DictKeys t, d3_acc, pos_d3
   | Iterator (t, d), Iterator (t', d') ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      (* FIXME *)
@@ -555,6 +576,9 @@ let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
   | List u, List v | Set u, Set v  -> polytype_leq (u, d3) (v, d3')
+  | DictItems v, DictItems v' -> polytype_leq (v, d3) (v', d3')
+  | DictValues v, DictValues v' -> polytype_leq (v, d3) (v', d3')
+  | DictKeys k, DictKeys k' -> polytype_leq (k, d3) (k', d3')
   | Dict (k, v), Dict (k', v') -> polytype_leq (k, d3) (k', d3')
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      List.fold_left2 (fun acc t t' -> acc && polytype_leq (t, d3) (t', d3')) true l l'
@@ -620,6 +644,15 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
      let rk, d3_acc, pos_d3 = widening_poly (k, d3) (k', d3') d3_acc pos_d3 in
      let rv, d3_acc, pos_d3 = widening_poly (v, d3) (v', d3') d3_acc pos_d3 in
      Dict (rk, rv), d3_acc, pos_d3
+  | DictValues v, DictValues v' ->
+     let t, d3_acc, pos_d3 = widening_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     DictValues t, d3_acc, pos_d3
+  | DictItems v, DictItems v' ->
+     let t, d3_acc, pos_d3 = widening_poly (v, d3) (v', d3') d3_acc pos_d3 in
+     DictItems t, d3_acc, pos_d3
+  | DictKeys k, DictKeys k' ->
+     let t, d3_acc, pos_d3 = widening_poly (k, d3) (k', d3') d3_acc pos_d3 in
+     DictKeys t, d3_acc, pos_d3
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      let t, d3_acc, pos_d3 =
        List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
@@ -936,20 +969,49 @@ let get_types (d:domain) (ts:Polytypeset.t) : typevar * domain =
     in
     pos, {d with d3; pos_d3}
 
+let factor_mtypes (mts:Monotypeset.t) : ((polytype -> polytype) * Monotypeset.t) =
+  (* Example: mts = {List[Instance[int]], List[Instance[str]] }
+     return is fun x -> List x, mts = {Instance[int], Instance[str]} *)
+  let factorisable = function
+    | Top | Bot | Class _ | Function _ | Module _ | Typevar _ | Method _ | Instance _ | FiniteTuple _ | Dict _  -> false
+    | List _ | Iterator _ | DictValues _ | DictKeys _ | DictItems _ | Set _ -> true in
+  let extract_ty = function
+    | List x | Iterator (x, _) | DictValues x | DictKeys x | DictItems x | Set x -> x
+    | _ -> assert false in
+  let rec process acc_f acc_mset =
+    if Monotypeset.exists (fun x -> not (factorisable x)) acc_mset then (acc_f, acc_mset)
+    else
+      let el = Monotypeset.choose acc_mset in
+      let cons = match el with
+        | List _ -> fun x -> List x
+        | Iterator _ -> fun x -> Iterator (x, -1)
+        | DictValues _ -> fun x -> DictValues x
+        | DictKeys _ -> fun x -> DictKeys x
+        | DictItems _ -> fun x -> DictItems x
+        | Set _ -> fun x -> Set x
+        | _ -> assert false in
+      if Monotypeset.exists (fun ty -> cons (extract_ty ty) <> ty) acc_mset then (acc_f, acc_mset)
+      else
+        (* let's factor by cons! *)
+      (fun x -> acc_f (cons x)), Monotypeset.map (fun ty -> extract_ty ty) acc_mset
+  in process (fun x -> x) mts
 
-let get_mtypes (d:domain) (mts:Monotypeset.t) : typevar * domain =
+
+let get_mtypes (d:domain) (mts:Monotypeset.t) : polytype * domain =
   (* FIXME: perform the join of polytypes only, and everything should work by itself? *)
   (* folding on join_poly would work, but would create |ts|-1 type variables and only the last one would be used afterwards  *)
-    let d3 = d.d3 and pos_d3 = d.pos_d3 in
-    let opos = search_d3 mts d3 in
-    let pos, d3, pos_d3 = match opos with
-      | None ->
-         let d3 = TypeVarMap.add pos_d3 mts d3 in
-         pos_d3, d3, pos_d3+1
-      | Some pos ->
-         pos, d3, pos_d3
-    in
-    pos, {d with d3; pos_d3}
+  let f, mts_f = factor_mtypes mts in
+  debug "mts = %a@\nmts_f = %a@\n" Monotypeset.print mts Monotypeset.print mts_f;
+  let d3 = d.d3 and pos_d3 = d.pos_d3 in
+  let opos = search_d3 mts_f d3 in
+  let pos, d3, pos_d3 = match opos with
+    | None ->
+       let d3 = TypeVarMap.add pos_d3 mts_f d3 in
+       pos_d3, d3, pos_d3+1
+    | Some pos ->
+       pos, d3, pos_d3
+  in
+  f (Typevar pos), {d with d3; pos_d3}
 
 
 let class_of (d:domain) (t:typeid) : class_address * py_object list =
@@ -992,10 +1054,16 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
   | List t -> process_builtin "list"
   | Set t ->  process_builtin "set"
   | Dict _ -> process_builtin "dict"
+  | DictValues _ -> process_builtin "dict_values"
+  | DictItems _ -> process_builtin "dict_items"
+  | DictKeys _ -> process_builtin "dict_keys"
   | FiniteTuple l -> process_builtin "tuple"
   | Iterator (List _, _) -> process_builtin "list_iterator"
   | Iterator (Set _, _) ->  process_builtin "set_iterator"
   | Iterator (Dict _, _) -> process_builtin "dict_keyiterator"
+  | Iterator (DictKeys _, _) -> process_builtin "dict_keyiterator"
+  | Iterator (DictValues _, _) -> process_builtin "dict_valueiterator"
+  | Iterator (DictItems _, _) -> process_builtin "dict_itemiterator"
   | Iterator (FiniteTuple _, _) -> process_builtin "tuple_iterator"
   | Iterator (Instance {classn=Class (C_builtin "str",  _)}, _) -> process_builtin "str_iterator"
   | Iterator _ -> Exceptions.panic "filter_polyinst iterator _@\n"
@@ -1057,21 +1125,29 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
     | Set _ -> [triplet domain @@ Addr.builtin_cl_and_mro "set"]
     | FiniteTuple _ -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple"]
     | Dict _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict"]
+    | DictKeys _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keys"]
+    | DictValues _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_values"]
+    | DictItems _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_items"]
     | Iterator (List _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "list_iterator"]
     | Iterator (Set _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "set_iterator"]
     | Iterator (FiniteTuple _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple_iterator"]
     | Iterator (Dict _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keyiterator"]
+    | Iterator (DictKeys _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keyiterator"]
+    | Iterator (DictValues _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_valueiterator"]
+    | Iterator (DictItems _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_itemiterator"]
     | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "str_iterator"]
     | Typevar a ->
        let mtys = concretize_poly pt d.d3 in
+       let cclass (x, y) = Class (x, y) in
        Monotypeset.fold (fun mty acc ->
            debug "MFold %a %a %a@\n" pp_polytype pt pp_monotype mty print domain;
            let mtype = match mty with
              | Instance {classn=c} -> c
              | List _ ->
-                let cclass (x, y) = Class (x, y) in
                 cclass @@ Addr.builtin_cl_and_mro "list"
-             | _ -> assert false in
+             | Dict _ ->
+                cclass @@ Addr.builtin_cl_and_mro "dict"
+             | _ -> debug "%a@\n" pp_monotype mty; assert false in
            let new_domain = fst @@ filter_inst domain tid mtype in
            debug "new_domain = %a@\n" print new_domain;
            (aux (poly_cast mty) new_domain) @ acc) mtys []
@@ -1093,7 +1169,10 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
      else
        (Bot, d3), (p, d3)
   | Module (M_builtin _) -> Exceptions.panic "ni, need to check if attr in module?"
-  | List _
+  | DictItems _
+    | DictValues _
+    | DictKeys _
+    | List _
     | Set _
     | Dict _
     | FiniteTuple _
@@ -1262,13 +1341,17 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
            | Function _, Function _
            | Module _, Module _
            | Method _, Method _
-           -> Some (cstrs, d3)
+           ->
+            collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
          | Iterator (e, _), Iterator (e', _)
            | Set e, Set e'
-           | List e, List e' ->
+           | List e, List e'
+           | DictValues e, DictValues e'
+           | DictKeys e, DictKeys e'
+           | DictItems e, DictItems e' ->
             collect_constraints (e::tl) in_d3 (e'::tl') sign_d3 (Some (cstrs, d3))
          | Dict (k, v), Dict (k', v') ->
-            collect_constraints (k::v::tl) in_d3 (k'::v::tl') sign_d3 (Some (cstrs, d3))
+            collect_constraints (k::v::tl) in_d3 (k'::v'::tl') sign_d3 (Some (cstrs, d3))
          | FiniteTuple l, FiniteTuple l' ->
             collect_constraints (l @ tl) in_d3 (l' @ tl') sign_d3 (Some (cstrs, d3))
          | Instance {classn=c; uattrs=u; oattrs=o}, Instance {classn=c'; uattrs=u'; oattrs=o'} ->
@@ -1283,15 +1366,19 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
             if IntMap.mem b cstrs then
               Exceptions.panic "todo: conflict?@\n"
             else
-              Some (IntMap.add b (Typevar a) cstrs, d3)
+              collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b (Typevar a) cstrs, d3))
          | _, Typevar b ->
             if IntMap.mem b cstrs then
               Exceptions.panic "todo: conflict?@\n"
-            else if is_mono in_ty then
-              Some (IntMap.add b in_ty cstrs, d3)
             else
-              Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3
-         | _ -> None
+              (* if is_mono in_ty then *)
+                collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b in_ty cstrs, d3))
+              (* else
+               *   Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3 *)
+         | _, Top -> collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
+         | _ ->
+            debug "Whatodo? collecting constraints on %a %a@\n" pp_polytype in_ty pp_polytype sign_ty;
+            None
          end
       | _ -> assert false
     ) acc

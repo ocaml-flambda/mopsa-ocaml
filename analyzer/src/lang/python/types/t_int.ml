@@ -38,7 +38,7 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)} as f), [cls; arg], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bool.__new__")}, _)}, [cls; arg], []) ->
          (* FIXME: check: According to the documentation: By default,
             an object is considered true unless its class defines
             either a __bool__() method that returns False or a __l

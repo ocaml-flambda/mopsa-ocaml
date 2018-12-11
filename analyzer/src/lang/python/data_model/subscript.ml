@@ -98,7 +98,7 @@ module Domain =
                        (Utils.mk_hasattr cls "__setitem__" range)
                        man
                        ~fthen:(fun true_flow ->
-                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; index; exp] range in
+                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
                          man.exec {stmt with skind = S_expression(exp')} true_flow |> Post.of_flow
                        )
                        ~felse:(fun false_flow ->
