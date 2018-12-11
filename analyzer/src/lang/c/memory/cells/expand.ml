@@ -285,7 +285,7 @@ module Domain = struct
       Z_c_low_level, Z_c_cell_expand
     ];
     import = [
-      (Z_c, Universal.Zone.Z_u_num);
+      (Z_c_scalar, Universal.Zone.Z_u_num);
       (Z_c, Z_under Z_c_cell);
       (Z_c, Z_c_cell_expand);
       (Z_c, Z_c_points_to);
@@ -387,7 +387,7 @@ module Domain = struct
 
     | None ->
       (* Evaluate the offset in Z_u_num and check the bounds *)
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) offset flow |>
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) offset flow |>
       Eval.bind @@ fun offset exp ->
 
       (* safety condition: offset ∈ [0, base_size - cell_size] *)
