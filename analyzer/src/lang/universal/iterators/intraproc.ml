@@ -26,7 +26,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [any_zone]; import = []}
+  let exec_interface = {export = [Z_any]; import = []}
   let eval_interface = {export = []; import = []}
 
   let init prog man flow = None

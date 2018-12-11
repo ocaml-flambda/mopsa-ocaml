@@ -114,7 +114,7 @@ let () =
       (* FIXME: improve pretty printer by checking whether this is a
          Strong or a Weak assign*)
       | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
-      | S_expression(e) -> fprintf fmt "%a;" pp_expr e
+      | S_expression(e) -> fprintf fmt "S_expression %a;" pp_expr e
       | S_if(e, s1, s2) ->
         fprintf fmt "if (%a) {@\n@[<v 2>  %a@]@\n} else {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s1 pp_stmt s2
       | S_block(l) ->

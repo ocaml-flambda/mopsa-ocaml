@@ -182,6 +182,7 @@ let () =
         match ekind exp with
         | E_c_cell _ -> Keep
         | E_var _ when exp.etyp |> is_c_scalar_type -> Process
+        | E_c_address_of _ -> Keep
         | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );
   }

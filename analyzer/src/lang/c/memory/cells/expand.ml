@@ -454,8 +454,8 @@ module Domain = struct
   (** Evaluate a quantified cell *)
   let eval_quantified_cell b o t range man flow = panic_at range "expand: evaluation of quantified cells not supported"
 
-  (** Evaluate an lval into a cell *)
-  let rec eval_cell exp man flow =
+  (** Evaluate a scalar lval into a cell *)
+  let rec eval_scalar_cell exp man flow =
     match ekind exp with
     | E_var (v, mode) when is_c_scalar_type v.vtyp ->
       let c = {b = V v; o = O_single Z.zero; t = v.vtyp}  in
@@ -505,8 +505,8 @@ module Domain = struct
   and eval zone exp man flow =
     match ekind exp with
     | E_var _
-    | E_c_deref _ when is_c_scalar_type exp.etyp->
-      eval_cell exp man flow |>
+    | E_c_deref _ when is_c_scalar_type exp.etyp ->
+      eval_scalar_cell exp man flow |>
       Eval.bind_return @@ fun c flow ->
 
       begin match c.o with
@@ -521,6 +521,16 @@ module Domain = struct
         | _ -> assert false
       end
 
+    | E_c_deref p when is_c_function_type exp.etyp ->
+      man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |> Eval.bind_return @@ fun pp flow ->
+      man.eval ~zone:(Z_c_cell, Z_c_points_to) pp flow |> Eval.bind @@ fun pe flow ->
+
+      begin match ekind pe with
+        | E_c_points_to(P_fun f) ->
+          Eval.singleton { exp with ekind = E_c_function f } flow
+
+        | _ -> panic_at exp.erange "expand: unsupported function pointer %a" pp_expr p
+      end
       
 
     | Stubs.Ast.E_stub_builtin_call({ content = SIZE }, p) ->
@@ -537,10 +547,6 @@ module Domain = struct
       end
 
     | Stubs.Ast.E_stub_builtin_call({content = OLD }, e) ->
-      man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
-      Eval.bind_opt @@ fun e flow ->
-
-      eval_cell e man flow |>
       panic_at exp.erange "old not supported"
 
     | _ -> None
@@ -609,7 +615,7 @@ module Domain = struct
       Post.return
 
     | S_add_var (v) when is_c_type v.vtyp ->
-      eval_cell (mk_var v stmt.srange) man flow |>
+      eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
       man.exec ~zone:Z_c_cell (mk_c_add_cell c stmt.srange) flow |>
@@ -639,7 +645,7 @@ module Domain = struct
       man.eval ~zone:(Z_c, Z_c_low_level) lval flow |>
       Post.bind_opt man @@ fun lval flow ->
 
-      eval_cell lval man flow |>
+      eval_scalar_cell lval man flow |>
       Post.bind_return man @@ fun c flow ->
 
       begin match c.o with
@@ -662,7 +668,7 @@ module Domain = struct
       man.eval ~zone:(Z_c, Z_c_low_level) x flow |>
       Post.bind_opt man @@ fun x flow ->
 
-      eval_cell x man flow |>
+      eval_scalar_cell x man flow |>
       Post.bind_return man @@ fun x flow ->
 
       prepare_cells_for_stub_assigns x None t stmt.srange man flow
@@ -670,7 +676,7 @@ module Domain = struct
     | Stubs.Ast.S_stub_assigns(x, Some (o1, o2)) ->
       let t = under_type x.etyp in
 
-      eval_cell (mk_c_deref x stmt.srange) man flow |>
+      eval_scalar_cell (mk_c_deref x stmt.srange) man flow |>
       Post.bind_return man @@ fun x flow ->
 
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o1 flow |>
