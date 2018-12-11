@@ -128,6 +128,8 @@ struct
         [[(any_zone, any_zone, [any_zone, any_zone], Domain.eval (any_zone, any_zone))]]
     in
 
+    debug "eval graph:@\n @[%a@]" Zone.pp_graph eval_graph;
+
     (* Iterate over the required zone paths of domain Domain *)
     let required = Domain.eval_interface.import in
     required |>
@@ -142,7 +144,9 @@ struct
               acc
             else
               (* Map each hop to an eval function *)
+              let () = debug "eval paths for %a" pp_zone2 (src, dst) in
               let eval_paths = List.map (fun path ->
+                  debug "%a" pp_eval_path path;
                   let rec aux =
                     function
                     | [] -> []

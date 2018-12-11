@@ -230,7 +230,7 @@ struct
 
   let eval_interface = Domain.{
     import = [Zone.any_zone, Value.zone];
-    export = [Zone.any_zone, Value.zone];
+    export = [];
   }
 
   let rec exec zone stmt man flow =

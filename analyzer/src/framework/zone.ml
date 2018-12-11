@@ -94,13 +94,17 @@ let rec subset (z1: zone) (z2: zone) : bool =
     with Not_found -> false
 
 
-let sat_zone export z =
-  match z with
-  | Z_any -> true
-  | Z_under z' -> subset export z'
-  | Z_above z' -> subset z' export
-  | _ -> compare_zone export Z_any = 0 ||
-         compare_zone export z = 0
+let rec sat_zone export z =
+  match export, z with
+  | Z_any, _ | _, Z_any -> true
+
+  | Z_under z1, z2 -> subset z2 z1
+  | z1, Z_under z2 -> subset z1 z2
+
+  | Z_above z1, z2 -> subset z1 z2
+  | z1, Z_above z2 -> subset z2 z1
+
+  | _ -> compare_zone export z = 0
 
 let sat_zone2 export zz =
   sat_zone (fst export) (fst zz) &&
@@ -128,11 +132,11 @@ let pp_eval_path fmt (zp:path) =
   let rec aux fmt =
     function
     | [] -> ()
-    | (z1, z2) :: tl -> Format.fprintf fmt " ↠ %a%a" pp_zone z2 aux tl
+    | (z1, z2) :: tl -> Format.fprintf fmt " ↠ %a%a" pp_zone2 (z1, z2) aux tl
   in
   match zp with
   | [] -> ()
-  | (z1, _) :: _ ->  Format.fprintf fmt "%a%a" pp_zone z1 aux zp
+  | (z1, z2) :: tl ->  Format.fprintf fmt "%a%a" pp_zone2 (z1, z2) aux tl
 
 
 (** {2 Static templates for evaluations}
@@ -270,23 +274,22 @@ let build_eval_graph (edges: (zone * zone) list) : graph =
 
 let find_all_eval_paths (src:zone) (dst:zone) (g:graph) : path list =
   let rec dfs z before =
-    let next = try AdjencyMap.find z g.adjency with Not_found -> NextSet.empty in
-    NextSet.fold (fun (z', w) acc ->
-        if List.exists (fun (z1, z2, _) -> compare_zone z' z1 = 0 ||
-                                           compare_zone z' z2 = 0
-                       ) before
-        then acc
-        else if sat_zone z' dst
-        then (before @ [(z, z', w)]) :: acc
-        else (dfs z' (before @ [(z, z', w)])) @ acc
-      ) next []
+    let similar = ZoneSet.filter (fun z' -> sat_zone z z') g.vertices in
+    ZoneSet.fold (fun z acc ->
+        let next = try AdjencyMap.find z g.adjency with Not_found -> NextSet.empty in
+        NextSet.fold (fun (z', w) acc ->
+            if List.exists (fun (z1, z2, _) -> compare_zone z' z1 = 0 ||
+                                               compare_zone z' z2 = 0
+                           ) before
+            then acc
+            else
+            if sat_zone z' dst
+            then (before @ [(z, z', w)]) :: acc
+            else (dfs z' (before @ [(z, z', w)])) @ acc
+          ) next acc
+        ) similar []
   in
-  let weighted_paths = ZoneSet.fold (fun z acc ->
-      if sat_zone z src
-      then dfs z [] @ acc
-      else acc
-    ) g.vertices []
-  in
+  let weighted_paths = dfs src [] in
   (* Sort paths *)
   weighted_paths
   |>
