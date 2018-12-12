@@ -6,65 +6,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   Generic visitors for statements and expressions.
-
-   To allow visiting the extensible types of statements and expressions,
-   the developper should define its structure giving:
-   - its parts consisting of sub-expressions and sub-statements,
-   - its builder that can reconstitute the statement/expression from its parts.
-*)
+(** Generic visitors for statements and expressions. *)
 
 open Ast
 
-(*==========================================================================*)
-                           (** {2 Types} *)
-(*==========================================================================*)
-
-type parts = {
-  exprs : expr list; (** child expressions *)
-  stmts : stmt list; (** child statements *)
-}
-(** Parts are the direct sub-elements of an AST node *)
-
-type 'a structure = parts * (parts -> 'a)
-(** A structure of an extensible type ['a] is a tuple composed of two elements:
-    the parts and a builder function.
-*)
 
 val split_stmt : stmt -> stmt structure
+
 val split_expr : expr -> expr structure
-
-(*==========================================================================*)
-                        (** {2 Visitors chains} *)
-(*==========================================================================*)
-
-type 'a chain = ('a -> 'a structure) ref
-(** A chain stores the head of the visitors, each of which will call
-    the next one in the chain when encountering an AST node that
-    can not be handled.
-*)
-
-
-(** Leaf nodes are identity composer *)
-val leaf : 'a -> 'a structure
-
-(** To register a visitor of new expressions, [register_exp_visitor]
-    should be called with a function having two arguments:
-       - a default visitor to use for unknown expressions
-       - the expression to visit
-*)
-val register_expr_visitor :
-  ((expr -> expr structure) -> expr -> expr structure) -> unit
-
-val register_stmt_visitor :
-    ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
-
-
-(*==========================================================================*)
-                        (** {2 Iterators} *)
-(*==========================================================================*)
-
 
 (** Kinds of returned actions by a visitor *)
 type 'a action =

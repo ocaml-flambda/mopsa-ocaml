@@ -10,7 +10,7 @@
 (** Converts a Universal program AST into a CFG. *)
 
 open OptionExt
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Flow
@@ -58,7 +58,7 @@ let extract_calls_expr (e:expr) : (var * range) list * stmt list * expr =
   let rec doit (tmps,assigns) e =
     (* recursive call on argument expressions *)
     let p, c = Visitor.split_expr e in
-    let (tmps,assigns), el = doit_list (tmps,assigns) [] p.Visitor.exprs in
+    let (tmps,assigns), el = doit_list (tmps,assigns) [] p.exprs in
     (* recombine sub-expressions into expression *)
     let e = c { p with exprs = el } in
     (* extract top-level call *)
@@ -98,8 +98,8 @@ let extract_calls_stmt (s:stmt) : (var * range) list * stmt list * stmt =
        let tmp, assign, e' = extract_calls_expr e in
        extract (tmp@tmps) (assign@assigns) (e'::exprs) ee
   in
-  let tmps, assigns, exprs = extract [] [] [] p.Visitor.exprs in
-  let p = { p with Visitor.exprs = exprs; } in
+  let tmps, assigns, exprs = extract [] [] [] p.exprs in
+  let p = { p with exprs = exprs; } in
   tmps, assigns, c p
   
 

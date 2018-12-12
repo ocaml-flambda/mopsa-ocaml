@@ -116,6 +116,8 @@ let bind_with_cleaners
   in
   post
 
+let bind_return ?(zone = any_zone) man f evl = bind ~zone man f evl |> OptionExt.return
+
 let bind_flow
     ?(zone = any_zone) (man: ('a, 't) man)
     (f: 'e -> 'a flow -> 'a flow)

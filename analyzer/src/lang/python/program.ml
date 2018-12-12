@@ -11,7 +11,7 @@
    variables __name__, __main__, __file__, and collects unit-testing
    functions if required *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager

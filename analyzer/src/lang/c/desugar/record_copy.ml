@@ -8,7 +8,7 @@
 
 (** Removal of syntaxic sugar in record assignment *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 
@@ -58,18 +58,31 @@ struct
   (** Post-conditions *)
   (** *************** *)
 
-  let exec zone stmt man flow =
+  let rec remove_casts e =
+    match ekind e with
+    | E_c_cast(e', _) -> remove_casts e'
+    | _ -> e
+
+  let rec exec zone stmt man flow =
     match skind stmt with
+    | S_c_local_declaration(v, Some (C_init_expr rval))
+      when v.vtyp |> remove_typedef_qual |> is_c_record_type  ->
+      exec zone (mk_assign (mk_var v stmt.srange) rval stmt.srange) man flow
+
     | S_assign(lval, rval)
-      when lval |> etyp |> is_c_record_type &&
-           rval |> etyp |> is_c_record_type ->
+      when lval |> etyp |> remove_typedef_qual |> is_c_record_type &&
+           rval |> etyp |> remove_typedef_qual |> is_c_record_type ->
       begin
+        debug "assign record";
         let range = srange stmt in
+        let rval = remove_casts rval in
+
         let t1 = lval |> etyp |> remove_typedef_qual
-        and t2 = lval |> etyp |> remove_typedef_qual in
-        if compare t1 t2 != 0 then
+        and t2 = rval |> etyp |> remove_typedef_qual in
+
+        if compare_typ t1 t2 != 0 then
           Exceptions.panic "[%s] assignment of records with uncompatible \
-                      types: %a %a" name pp_typ t1 pp_typ t2
+                            types: %a %a" name pp_typ t1 pp_typ t2
         else
           begin
             let fields, record_kind = match t1 with

@@ -28,9 +28,9 @@ let empty_singleton flow : ('a, 'e) evl  =
 let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
   Dnf.mk_or evl1 evl2
 
-let join_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
+let join_list ?(empty=empty) (l: ('a, 'e) evl list) : ('a, 'e) evl =
   match l with
-  | [] -> []
+  | [] -> empty
   | hd :: tl -> List.fold_left join hd tl
 
 let meet (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
@@ -116,6 +116,8 @@ let bind
     (choose_annot evl) evl
   in
   evl
+
+let bind_return f evl = bind f evl |> OptionExt.return
 
 let bind_opt f evl =
   let evl, _ = Dnf.fold2

@@ -9,7 +9,7 @@
 
 (** Interprocedural iterator for CFG based on inlining. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Universal.Zone
 open Universal.Iterators.Interproc.Callstack

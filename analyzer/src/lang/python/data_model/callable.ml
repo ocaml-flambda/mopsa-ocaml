@@ -8,7 +8,7 @@
 
 (** Python data model for callables. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Universal.Ast
 open Ast

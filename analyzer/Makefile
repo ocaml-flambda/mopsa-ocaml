@@ -1,11 +1,11 @@
 TARGET_NATIVES = mopsa
 
 # Packs
-mopsa = framework lang main
+mopsa = framework mopsa lang main
 
 framework = ast visitor options query annotation	\
 lattice zone manager flow eval post channel value domain output cache	\
-analyzer lattices essentials domains config
+analyzer lattices domains config
 framework.output = alarm text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
 reduced_product empty
@@ -14,12 +14,12 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal stubs c python cfg jvm
 
-lang.universal = ast pp visitor frontend utils zone u_stdlib router	\
+lang.universal = ast frontend zone u_stdlib 	\
 iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
-lang.universal.numeric = rounding values relational relational2	\
+lang.universal.numeric = rounding values relational \
 reductions
 lang.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix
@@ -32,12 +32,14 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
+lang.c = ast pp visitor zone frontend alarms desugar  memory libs iterators
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = loops andor aggregate record_copy stmt_expr
-lang.c.memory = base init_visitor cells machine_integers
-lang.c.memory.cells = cell pointer smashing expand cell2num
-lang.c.libs = c_stdlib mopsa
+lang.c.desugar = low_level record_copy loops
+lang.c.memory = common cells pointers machine_integers
+lang.c.memory.common = base points_to init_visitor
+lang.c.memory.cells = cell expand cell2scalar
+lang.c.memory.pointers = bases nonrel
+lang.c.libs = c_mopsa
 
 # lang.python = ast addr utils visitor operators pp frontend
 lang.python = ast addr utils visitor operators pp frontend zone		\

@@ -1,6 +1,5 @@
 open Framework.Ast
 open Universal.Ast
-open Universal.Pp
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt

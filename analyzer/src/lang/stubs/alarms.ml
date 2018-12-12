@@ -8,7 +8,7 @@
 
 (** Stub alarms *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 type alarm_kind +=

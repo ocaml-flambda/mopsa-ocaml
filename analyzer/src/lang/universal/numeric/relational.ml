@@ -8,7 +8,7 @@
 
 (** Relational numeric abstract domain, based on APRON. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Leaf
 open Rounding
 open Ast
@@ -71,11 +71,7 @@ struct
    *   in
    *   aux expr (fun x -> x) |> SVar.elements *)
   let var_to_apron v =
-    (match v.vtyp with
-     | T_int -> Format.fprintf Format.str_formatter "%s:%d" v.vname v.vuid;
-     | T_float _ -> Format.fprintf Format.str_formatter "%s@%d" v.vname v.vuid;
-     | _ -> panic "relational: unsupported variable type %a" pp_typ v.vtyp);
-    let name = Format.flush_str_formatter () in
+    let name = uniq_vname v in
     Apron.Var.of_string name
 
   let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
@@ -165,20 +161,7 @@ struct
 
   exception UnsupportedExpression
 
-  let apron_to_var v =
-    let v = Apron.Var.to_string v in
-    debug "apron_to_var %s" v;
-    if Str.string_match (Str.regexp "\\([^:]+\\):\\([0-9]+\\)") v 0 then
-      let vname = Str.matched_group 1 v in
-      let vuid = Str.matched_group 2 v |> int_of_string in
-      {vname; vuid; vtyp = T_int}
-    else
-    if Str.string_match (Str.regexp "\\([^@]+\\)@\\([0-9]+\\)") v 0 then
-      let vname = Str.matched_group 1 v in
-      let vuid = Str.matched_group 2 v |> int_of_string in
-      (* TODO: replace F_REAL with real type *)
-      {vname; vuid; vtyp = T_float F_REAL}
-    else raise (Invalid_argument v)
+  let apron_to_var v = panic "relational: apron_to_var not implemented"
 
   let rec binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
@@ -213,7 +196,7 @@ struct
     | E_var(x, STRONG) ->
       Apron.Texpr1.Var(var_to_apron x), abs, l
     | E_var(x, WEAK) ->
-      let x' = mk_tmp ~vtyp:(x.vtyp) () in
+      let x' = mktmp x.vtyp () in
       let x_apr = var_to_apron x in
       let x_apr' = var_to_apron x' in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in

@@ -12,7 +12,7 @@
    it's a generic, rewriting-based approach that may be helpful *)
 
 
-open Framework.Essentials
+open Mopsa
 open Framework.Ast
 open Universal.Ast
 open Ast

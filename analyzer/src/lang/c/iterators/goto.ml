@@ -8,7 +8,7 @@
 
 (** Control flow abstraction for Goto statements. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 
