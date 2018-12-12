@@ -26,6 +26,7 @@ build_job:
 
 .test-c:
   stage: test
+  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
