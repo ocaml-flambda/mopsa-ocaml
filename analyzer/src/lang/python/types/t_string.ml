@@ -26,7 +26,7 @@ module Domain =
     let is_str_binop_fun = function
       | "str.__add__"
         | "str.__mod__"
-        | "str.__mul__"
+        (* | "str.__mul__" *)
         | "str.__rmod__"
         | "str.__rmul__" -> true
       | _ -> false

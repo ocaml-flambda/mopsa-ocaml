@@ -36,6 +36,7 @@ type 'a pytype =
   | Iterator of 'a pytype * int
   (* used as Iterator[List[int]] to define list_iterator for example *)
   (* and position in iterator, if applicable *)
+  | Generator of 'a pytype
   | FiniteTuple of 'a pytype list
   (* tuples of given size *)
   | Dict of 'a pytype * 'a pytype
@@ -82,6 +83,7 @@ let rec pp_pytype (print_vars:Format.formatter -> 'a -> unit)  (fmt:Format.forma
   | Top -> Format.fprintf fmt "⊤"
   | List ty -> Format.fprintf fmt "List[%a]" (pp_pytype print_vars) ty
   | Set ty -> Format.fprintf fmt "Set[%a]" (pp_pytype print_vars) ty
+  | Generator ty -> Format.fprintf fmt "Generator[%a]" (pp_pytype print_vars) ty
   | FiniteTuple l -> Format.fprintf fmt "FiniteTuple[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") (pp_pytype print_vars)) l
   | Dict (k, v) -> Format.fprintf fmt "Dict[%a:%a]" (pp_pytype print_vars) k (pp_pytype print_vars) v
   | DictValues ty -> Format.fprintf fmt "DictValues[%a]" (pp_pytype print_vars) ty
@@ -260,6 +262,7 @@ let rec unsafe_cast (f:'a -> 'b) (t:'a pytype) : 'b pytype =
   | Method (f, i) -> Method (f, i)
   | List v -> List (unsafe_cast f v)
   | Set v -> Set (unsafe_cast f v)
+  | Generator v -> Generator (unsafe_cast f v)
   | FiniteTuple l -> FiniteTuple ((List.map @@ unsafe_cast f) l)
   | Dict (k, v) -> Dict (unsafe_cast f k, unsafe_cast f v)
   | DictValues t -> DictValues (unsafe_cast f t)
@@ -291,6 +294,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
   | Typevar v when v = var -> value
   | List v -> List (subst v var value)
   | Set v -> Set (subst v var value)
+  | Generator v -> Generator (subst v var value)
   | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
   | Dict (k, v) -> Dict (subst k var value, subst v var value)
   | DictValues v -> DictValues (subst v var value)
@@ -307,7 +311,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
 let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
     match t with
-    | DictValues t | DictKeys t | List t | Set t | DictItems t -> collect t acc
+    | DictValues t | DictKeys t | List t | Set t | Generator t | DictItems t -> collect t acc
     (* l: 'a pytype list *)
     (* el : 'a pytype *)
     (* acc: Typevarset *)
@@ -378,6 +382,9 @@ let rec join_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3) (p
   | Set t, Set t' ->
      let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
      Set t, d3_acc, pos_d3
+  | Generator t, Generator t' ->
+     let t, d3_acc, pos_d3 = join_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Generator t, d3_acc, pos_d3
   | FiniteTuple l, FiniteTuple l' when List.length l = List.length l' ->
      let t, d3_acc, pos_d3 =
        List.fold_left2 (fun (t_l, d3_acc, pos_d3) t t' ->
@@ -579,7 +586,7 @@ let is_mono (u:polytype)  : bool =
 let rec polytype_leq (t, d3: polytype * d3) (t', d3' : polytype * d3) : bool =
   match t, t' with
   | Bot, _ | _, Top -> true
-  | List u, List v | Set u, Set v  -> polytype_leq (u, d3) (v, d3')
+  | List u, List v | Set u, Set v | Generator u, Generator v  -> polytype_leq (u, d3) (v, d3')
   | DictItems v, DictItems v' -> polytype_leq (v, d3) (v', d3')
   | DictValues v, DictValues v' -> polytype_leq (v, d3) (v', d3')
   | DictKeys k, DictKeys k' -> polytype_leq (k, d3) (k', d3')
@@ -644,6 +651,9 @@ let rec widening_poly (t, d3: polytype * d3) (t', d3': polytype * d3) (d3_acc:d3
   | Set t, Set t' ->
      let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
      Set t, d3_acc, pos_d3
+  | Generator t, Generator t' ->
+     let t, d3_acc, pos_d3 = widening_poly (t, d3) (t', d3') d3_acc pos_d3 in
+     Generator t, d3_acc, pos_d3
   | Dict (k, v), Dict (k', v') ->
      let rk, d3_acc, pos_d3 = widening_poly (k, d3) (k', d3') d3_acc pos_d3 in
      let rv, d3_acc, pos_d3 = widening_poly (v, d3) (v', d3') d3_acc pos_d3 in
@@ -978,9 +988,9 @@ let factor_mtypes (mts:Monotypeset.t) : ((polytype -> polytype) * Monotypeset.t)
      return is fun x -> List x, mts = {Instance[int], Instance[str]} *)
   let factorisable = function
     | Top | Bot | Class _ | Function _ | Module _ | Typevar _ | Method _ | Instance _ | FiniteTuple _ | Dict _  -> false
-    | List _ | Iterator _ | DictValues _ | DictKeys _ | DictItems _ | Set _ -> true in
+    | List _ | Iterator _ | DictValues _ | DictKeys _ | DictItems _ | Set _ | Generator _ -> true in
   let extract_ty = function
-    | List x | Iterator (x, _) | DictValues x | DictKeys x | DictItems x | Set x -> x
+    | List x | Iterator (x, _) | DictValues x | DictKeys x | DictItems x | Set x | Generator x -> x
     | _ -> assert false in
   let rec process acc_f acc_mset =
     if Monotypeset.exists (fun x -> not (factorisable x)) acc_mset then (acc_f, acc_mset)
@@ -993,6 +1003,7 @@ let factor_mtypes (mts:Monotypeset.t) : ((polytype -> polytype) * Monotypeset.t)
         | DictKeys _ -> fun x -> DictKeys x
         | DictItems _ -> fun x -> DictItems x
         | Set _ -> fun x -> Set x
+        | Generator _ -> fun x -> Generator x
         | _ -> assert false in
       if Monotypeset.exists (fun ty -> cons (extract_ty ty) <> ty) acc_mset then (acc_f, acc_mset)
       else
@@ -1057,6 +1068,7 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
   | Bot | Top | Module _ -> cp p d3
   | List t -> process_builtin "list"
   | Set t ->  process_builtin "set"
+  | Generator _ -> process_builtin "generator"
   | Dict _ -> process_builtin "dict"
   | DictValues _ -> process_builtin "dict_values"
   | DictItems _ -> process_builtin "dict_items"
@@ -1103,6 +1115,7 @@ let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3)
 
 
 let filter_inst (d:domain) (t:typeid) (inst:monotype) : domain * domain =
+  debug "filter_inst %a %d %a" print d t pp_monotype inst;
   let ty = TypeIdMap.find t d.d2 in
   let (pt, d3t), (pf, d3f) = filter_polyinst (ty, d.d3) inst in
   let dt = match pt with
@@ -1127,6 +1140,7 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
     | Class _ -> [triplet domain @@ Addr.builtin_cl_and_mro "type"]
     | List _ -> [triplet domain @@ Addr.builtin_cl_and_mro "list"]
     | Set _ -> [triplet domain @@ Addr.builtin_cl_and_mro "set"]
+    | Generator _ -> [triplet domain @@ Addr.builtin_cl_and_mro "generator"]
     | FiniteTuple _ -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple"]
     | Dict _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict"]
     | DictKeys _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keys"]
@@ -1177,6 +1191,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
     | DictKeys _
     | List _
     | Set _
+    | Generator _
     | Dict _
     | FiniteTuple _
     | Iterator _
@@ -1348,6 +1363,7 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
             collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
          | Iterator (e, _), Iterator (e', _)
            | Set e, Set e'
+           | Generator e, Generator e'
            | List e, List e'
            | DictValues e, DictValues e'
            | DictKeys e, DictKeys e'

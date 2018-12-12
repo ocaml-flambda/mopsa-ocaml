@@ -95,6 +95,8 @@ module Domain =
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
+      | E_py_generator_comprehension (expr, comprehensions) ->
+         Debug.warn "No desugaring for generator comprehensions@\n"; None
 
       | _ -> None
 
