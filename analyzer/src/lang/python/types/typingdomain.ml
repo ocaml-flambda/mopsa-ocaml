@@ -213,6 +213,12 @@ let map_printer = MapExtSig.{ print_empty = "⊥";
                               print_sep = ";";
                               print_end = "}"; }
 
+let map_printer_endl = MapExtSig.{ print_empty = "⊥";
+                              print_begin = "{\n";
+                              print_arrow = ": ";
+                              print_sep = ";\n";
+                              print_end = "}"; }
+
 type domain =
   { d1: d1;
     d2: d2;
@@ -230,7 +236,7 @@ let is_top {d1;d2;d3} =
   Exceptions.panic "ni"
 
 let pp_d2 fmt (d2:d2) =
-  TypeIdMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "%d" k)
+  TypeIdMap.fprint map_printer_endl (fun fmt k -> Format.fprintf fmt "\t%d" k)
     pp_polytype fmt d2
 
 let pp_d3 fmt (d3:d3) =
