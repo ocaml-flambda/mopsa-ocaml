@@ -9,7 +9,7 @@
 (** Unittest library. *)
 
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr
@@ -96,39 +96,39 @@ module Domain =
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertEqual")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
+         Py_mopsa.check man (mk_binop arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertTrue")}, _)}, [test; cond], []) ->
-         Mopsa.check man cond range flow
+         Py_mopsa.check man cond range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertFalse")}, _)}, [test; cond], []) ->
-         Mopsa.check man (mk_not cond range) range flow
+         Py_mopsa.check man (mk_not cond range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIs")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_binop arg1 O_py_is arg2 range) range flow
+         Py_mopsa.check man (mk_binop arg1 O_py_is arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsNot")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_binop arg1 O_py_is_not arg2 range) range flow
+         Py_mopsa.check man (mk_binop arg1 O_py_is_not arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIn")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_binop arg1 O_py_in arg2 range) range flow
+         Py_mopsa.check man (mk_binop arg1 O_py_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIn")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_binop arg1 O_py_not_in arg2 range) range flow
+         Py_mopsa.check man (mk_binop arg1 O_py_not_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertIsInstance")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
+         Py_mopsa.check man (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertNotIsInstance")}, _)}, [test; arg1; arg2], []) ->
-         Mopsa.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
+         Py_mopsa.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")}, _)}, test :: exn :: f :: args, []) ->

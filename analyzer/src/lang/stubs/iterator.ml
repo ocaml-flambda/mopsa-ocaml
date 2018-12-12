@@ -8,7 +8,7 @@
 
 (** Inter-procedural iterator of stubs by inlining. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Zone
@@ -311,7 +311,7 @@ struct
         match stub.stub_return_type with
         | None -> None, flow2
         | Some t ->
-          let return = mk_tmp ~vtyp:t () in
+          let return = mktmp t () in
           let flow3 = man.exec (mk_add_var return exp.erange) flow2 in
           Some return, flow3
       in

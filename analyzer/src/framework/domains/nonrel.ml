@@ -9,7 +9,10 @@
 (** Generic domain for creating non-relational value abstractions. *)
 
 open Value
-open Essentials
+open Ast
+open Manager
+open Domain
+open Annotation
 
 module Make(Value: VALUE) =
 struct
@@ -230,7 +233,7 @@ struct
 
   let eval_interface = Domain.{
     import = [Zone.any_zone, Value.zone];
-    export = [Zone.any_zone, Value.zone];
+    export = [];
   }
 
   let rec exec zone stmt man flow =

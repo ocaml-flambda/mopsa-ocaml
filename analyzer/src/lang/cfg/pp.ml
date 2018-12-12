@@ -9,7 +9,7 @@
 
 (** Pretty-printing for CFG. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 
@@ -50,7 +50,7 @@ let cfg_printer = {
 
            
 let () =
-  register_pp_stmt (fun next fmt s ->
+  register_stmt_pp (fun next fmt s ->
       match s.skind with
       | S_cfg g ->
          Format.fprintf fmt "@[<v>%a@]" (CFG.print cfg_printer) g.cfg_graph

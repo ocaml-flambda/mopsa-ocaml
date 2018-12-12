@@ -9,7 +9,7 @@
 
 (** Extends the simple Universal language with Control Flow Graphs. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Manager
 
    

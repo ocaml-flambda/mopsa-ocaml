@@ -10,7 +10,9 @@
    their local abstractions only; the global manager and its flow
    abstraction are not accessible. *)
 
-open Essentials
+open Ast
+open Manager
+open Domain
 include Channel
 
 module type S =

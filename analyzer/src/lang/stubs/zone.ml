@@ -8,7 +8,7 @@
 
 (** Zones for the Stubs language. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 

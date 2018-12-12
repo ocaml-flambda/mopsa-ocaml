@@ -73,19 +73,25 @@ and build_functor assoc =
     Exceptions.panic "Functor %s not found" f
 
 and build_stack assoc =
-  let d1 = List.assoc "stack" assoc |> to_string in
+  let d1 = List.assoc "stack" assoc in
+
+  let d1 =
+    try Domains.Stacked.find_domain (to_string d1)
+    with Not_found ->
+      let d1 = build_domain d1 in
+      let module D1 = (val d1) in
+      let module D1 = Domains.Stacked.MakeStacked(D1) in
+      (module D1)
+  in
+  
+  let module D1 = (val d1 : Domains.Stacked.S) in
+
   let d2 = List.assoc "over" assoc in
-  try
-    let d1 = Domains.Stacked.find_domain d1 in
-    let module D1 = (val d1 : Domains.Stacked.S) in
+  let d2 = build_domain d2 in
+  let module D2 = (val d2 : Domain.DOMAIN) in
 
-    let d2 = build_domain d2 in
-    let module D2 = (val d2 : Domain.DOMAIN) in
-
-    let module D = Domains.Stacked.Make(D1)(D2) in
-    (module D : Domain.DOMAIN)
-  with Not_found ->
-    Exceptions.panic "Stack domains %s not found" d1
+  let module D = Domains.Stacked.Make(D1)(D2) in
+  (module D : Domain.DOMAIN)
 
 
 let parse (file: string) : (module Domain.DOMAIN) =

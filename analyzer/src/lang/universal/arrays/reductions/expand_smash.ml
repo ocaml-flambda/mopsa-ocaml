@@ -9,7 +9,7 @@
 (** Reduction operator for refining an array access concurrently rewritten by
    expansion and smashing *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Reduced_product.Reductions
 open Framework.Domains.Reduced_product.Pool
 open Ast

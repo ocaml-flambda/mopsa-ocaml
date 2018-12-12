@@ -8,7 +8,7 @@
 
 (** Main handler of Java bytecode programs. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Cfg.Ast
 open Ast

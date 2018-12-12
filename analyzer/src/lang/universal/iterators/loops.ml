@@ -9,7 +9,7 @@
 (** Loops iterator with widening *)
 
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Stateless
 open Ast
 open Zone

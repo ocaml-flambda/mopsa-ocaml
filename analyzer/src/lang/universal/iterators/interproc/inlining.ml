@@ -8,7 +8,7 @@
 
 (** Inter-procedural iterator by inlining.  *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 open Callstack
@@ -160,7 +160,7 @@ struct
       let flow4 = man.exec ignore_block flow3 in
 
       Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      OptionExt.return
+      Eval.return
 
     | _ -> None
 

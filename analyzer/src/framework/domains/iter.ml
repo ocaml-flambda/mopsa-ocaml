@@ -12,7 +12,8 @@
    result of the first domain giving an non-empty answer.  The order
    of domains follows the order given in the configuration file.  *)
 
-open Essentials
+open Manager
+open Domain
 
 module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
 struct

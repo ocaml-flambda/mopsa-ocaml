@@ -8,7 +8,7 @@
 
 (** Python AST *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 
 (*==========================================================================*)

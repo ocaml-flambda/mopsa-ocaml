@@ -18,7 +18,7 @@ val empty_singleton : 'a flow -> ('a, 'e) evl
 
 val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
-val join_list : ('a, 'e) evl list -> ('a, 'e) evl
+val join_list : ?empty:(('a, 'e) evl) -> ('a, 'e) evl list -> ('a, 'e) evl
 
 val meet : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
@@ -52,6 +52,8 @@ val substitute :
 val iter : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
 
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
+
+val bind_return : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl option
 
 val bind_opt : ('e -> 'a flow -> ('a, 'f) evl option) -> ('a, 'e) evl -> ('a, 'f) evl option
 

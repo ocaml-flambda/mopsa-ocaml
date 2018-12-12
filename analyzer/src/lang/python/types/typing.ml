@@ -1,5 +1,5 @@
 (* TODO: move S_assume and eval of not into t_bool domain? *)
-open Framework.Essentials
+open Mopsa
 open Ast
 open Universal.Ast
 open Addr
@@ -12,7 +12,7 @@ type expr_kind +=
    | E_type_partition of Typingdomain.typeid
 
 let () =
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_get_type_partition ptype -> Format.fprintf fmt "E_get_tp %a" Typingdomain.pp_polytype ptype
       | E_type_partition tid -> Format.fprintf fmt "TypeId %d" tid
@@ -1700,7 +1700,7 @@ module Domain =
                  let li = match ekind li with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range flow
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1737,7 +1737,7 @@ module Domain =
                  let li = match ekind li with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (Set ty, cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (Set ty, cur.d3)) range) range flow
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1776,7 +1776,7 @@ module Domain =
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
                  debug "assert_dict_of %a [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) pp_polytype dict pp_d3 cur.d3 pp_polytype (Dict (ty_k, ty_v));
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) range flow
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1808,7 +1808,7 @@ module Domain =
                       | _ -> assert false end
                    | _ -> assert false in
                  debug "assert_tuple of %a: [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) pp_polytype ty_var pp_d3 cur.d3 pp_polytype ty_classes pp_d3 cur.d3;
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) range flow
                ) |> OptionExt.return
          else tyerror flow |> OptionExt.return
 

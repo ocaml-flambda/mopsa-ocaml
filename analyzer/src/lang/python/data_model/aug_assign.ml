@@ -9,7 +9,7 @@
 (** Python data model for augmented assignments. *)
 
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr

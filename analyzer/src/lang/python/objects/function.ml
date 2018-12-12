@@ -8,7 +8,7 @@
 
 (** Definition of python functions and evaluation of their calls. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr
@@ -17,14 +17,14 @@ type expr_kind +=
    | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
 
 let () =
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_py_sum_call (f, args) ->
          Format.fprintf fmt "{py_sum_call}%a(%a)"
            pp_expr f
            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
       | _ -> default fmt exp);
-  Visitor.register_expr_visitor (fun default exp ->
+  register_expr_visitor (fun default exp ->
       match ekind exp with
       | E_py_sum_call(f, args) ->
          {exprs = f :: args; stmts = []},
@@ -172,9 +172,9 @@ module Domain =
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
-             if Libs.Mopsa.is_builtin_fundec func then
-               let name = Libs.Mopsa.builtin_fundec_name func in
+           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
+             if Libs.Py_mopsa.is_builtin_fundec func then
+               let name = Libs.Py_mopsa.builtin_fundec_name func in
                F_builtin name
              else F_user func
          in

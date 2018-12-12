@@ -8,9 +8,36 @@
 
 (** Evaluation of MOPSA built-in functions *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
+
+let is_builtin_function = function
+  | "_mopsa_range_char"
+  | "_mopsa_range_unsigned_char"
+  | "_mopsa_range_short"
+  | "_mopsa_range_unsigned_short"
+  | "_mopsa_range_int"
+  | "_mopsa_range_unsigned_int"
+  | "_mopsa_range_long"
+  | "_mopsa_range_unsigned_long"
+  | "_mopsa_range_long_long"
+  | "_mopsa_range_unsigned_long_long"
+  | "_mopsa_set_debug_channels"
+  | "_mopsa_range"
+  | "_mopsa_rand_int"
+  | "_mopsa_rand_unsigned_long"
+  | "_mopsa_panic"
+  | "_mopsa_print"
+  | "_mopsa_assert_exists"
+  | "_mopsa_assert"
+  | "_mopsa_assert_safe"
+  | "_mopsa_assert_unsafe"
+  | "_mopsa_assert_error"
+  | "_mopsa_assert_error_exists"
+  | "_mopsa_assert_error_at_line" -> true
+  | _ -> false
+
 
 module Domain =
 struct
@@ -34,37 +61,10 @@ struct
   let exec_interface = {export = []; import = []}
   let eval_interface = {
     export = [
-      Zone.Z_c, Zone.Z_c_scalar;
-      Zone.Z_c_scalar, Zone.Z_c_points_to_fun;
+      Zone.Z_c, Zone.Z_c_low_level
     ];
     import = []
   }
-
-  let is_builtin_function = function
-    | "_mopsa_range_char"
-    | "_mopsa_range_unsigned_char"
-    | "_mopsa_range_short"
-    | "_mopsa_range_unsigned_short"
-    | "_mopsa_range_int"
-    | "_mopsa_range_unsigned_int"
-    | "_mopsa_range_long"
-    | "_mopsa_range_unsigned_long"
-    | "_mopsa_range_long_long"
-    | "_mopsa_range_unsigned_long_long"
-    | "_mopsa_set_debug_channels"
-    | "_mopsa_range"
-    | "_mopsa_rand_int"
-    | "_mopsa_rand_unsigned_long"
-    | "_mopsa_panic"
-    | "_mopsa_print"
-    | "_mopsa_assert_exists"
-    | "_mopsa_assert"
-    | "_mopsa_assert_safe"
-    | "_mopsa_assert_unsafe"
-    | "_mopsa_assert_error"
-    | "_mopsa_assert_error_exists"
-    | "_mopsa_assert_error_at_line" -> true
-    | _ -> false
 
   let is_c_alarm a =
     match a.alarm_kind with
@@ -88,7 +88,7 @@ struct
     let l, r = rangeof (T_c_integer t) in
     let ll, rr = mk_z l (tag_range range "ll"), mk_z r (tag_range range "rr") in
     let exp' = mk_expr (E_c_builtin_call("_mopsa_rand_int", [ll; rr])) range ~etyp:(T_c_integer t) in
-    man.eval exp' ~zone:(Zone.Z_c, Zone.Z_c_scalar) flow
+    man.eval exp' ~zone:(Zone.Z_c, Zone.Z_c_low_level) flow
 
   (*==========================================================================*)
   (** {2 Transfer functions} *)
@@ -100,14 +100,6 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_function(f)
-      when is_builtin_function f.c_func_var.vname
-        && sat_zone Zone.Z_c_points_to_fun (snd zone)
-      ->
-      let exp' = mk_expr (E_c_builtin_function f.c_func_var.vname) ~etyp:T_c_builtin_fn exp.erange in
-      Eval.singleton exp' flow |>
-      OptionExt.return
-
     | E_c_builtin_call("_mopsa_set_debug_channels", [e']) ->
       let channels = match ekind e' with
         | E_constant (C_c_string (s,_))
@@ -161,7 +153,7 @@ struct
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_signed_long) in
-      let tmp = mk_tmp ~vtyp:typ () in
+      let tmp = mktmp typ () in
       let v = mk_var tmp erange in
       let flow = man.exec (mk_assume (
           mk_binop
@@ -177,7 +169,7 @@ struct
     | E_c_builtin_call("_mopsa_rand_unsigned_long", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_unsigned_long) in
-      let tmp = mk_tmp ~vtyp:typ () in
+      let tmp = mktmp typ () in
       let v = mk_var tmp erange in
       let flow = man.exec (mk_assume (
           mk_binop

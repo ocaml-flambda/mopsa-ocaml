@@ -8,15 +8,14 @@
 
 (** Zones for the C language. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
-
+(** Zones of the C language *)
 type zone +=
-  | Z_c
-  | Z_c_scalar
-  | Z_c_scalar_num
-  | Z_c_points_to_fun
+  | Z_c           (* Entire C language *)
+  | Z_c_low_level (* C without aggregates (arrays and records) *)
+  | Z_c_scalar    (* C with only scalars (no dereferences) *)
 
 let () =
   register_zone {
@@ -56,6 +55,29 @@ let () =
       );
     }
 
+let () =
+  register_zone {
+    zone = Z_c_low_level;
+    subset = Some Z_c;
+    name = "C/LowLevel";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_constant _
+        | E_var _
+        | E_c_function _                     -> Keep
+        (* ------------------------------------------- *)
+        | E_unop _
+        | E_binop _
+        | E_c_cast _                         -> Visit
+        (* ------------------------------------------- *)
+        | E_c_address_of _                   -> Visit
+        | E_c_deref _                        -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+    }
+
 
 let () =
   register_zone {
@@ -66,47 +88,15 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
-        | E_var _                            -> Keep
+        | E_var _
+        | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
-        | E_c_address_of _
-        | E_c_deref _                        -> Keep
-        (* ------------------------------------------- *)
-        | _                                  -> Process
-      );
-    }
-
-
-let () =
-  register_zone {
-    zone = Z_c_scalar_num;
-    subset = Some Z_c_scalar;
-    name = "C/Scalar/Num";
-    eval = (fun exp ->
-        match ekind exp with
-        (* ------------------------------------------- *)
-        | E_constant _
-        | E_var _                            -> Keep
-        (* ------------------------------------------- *)
-        | E_unop _
-        | E_binop _
-        | E_c_cast _                         -> Visit
-        (* ------------------------------------------- *)
-        | _                                  -> Process
-      );
-    }
-
-let () =
-  register_zone {
-    zone = Z_c_points_to_fun;
-    subset = None;
-    name = "C/PointsToFun";
-    eval = (fun exp ->
-        match ekind exp with
-        | E_c_function f                      -> Visit
+        | E_c_address_of _                   -> Visit
+        | E_c_deref p when p.etyp |> under_type |> is_c_array_type -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );

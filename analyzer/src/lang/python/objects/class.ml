@@ -8,7 +8,7 @@
 
 (** Handling of class definition and instantiation. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr
@@ -88,12 +88,12 @@ module Domain =
                  | [] -> [Addr.find_builtin "object"]
                  | _ -> List.map object_of_expr  bases
                in
-               if Libs.Mopsa.is_builtin_clsdec cls then
-                 let name = Libs.Mopsa.builtin_clsdec_name cls in
+               if Libs.Py_mopsa.is_builtin_clsdec cls then
+                 let name = Libs.Py_mopsa.builtin_clsdec_name cls in
                  Addr.create_builtin_class (C_builtin name) name cls bases' range;
                  Post.of_flow flow
                else
-                 if Libs.Mopsa.is_unsupported_clsdec cls then
+                 if Libs.Py_mopsa.is_unsupported_clsdec cls then
                    let name = cls.py_cls_var.vname in
                    Addr.create_builtin_class (C_unsupported name) name cls bases' range;
                    Post.of_flow flow

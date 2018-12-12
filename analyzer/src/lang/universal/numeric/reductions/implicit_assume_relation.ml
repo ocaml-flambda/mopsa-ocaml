@@ -12,7 +12,7 @@
    two variables x and y.
 *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Reduced_product.Reductions.Post_reduction
 open Framework.Domains.Reduced_product.Pool
 open Ast

@@ -8,8 +8,10 @@
 
 (** N-ary reduced product of abstract abstractions. *)
 
-open Essentials
+open Manager
+open Annotation
 open Domain
+open Post
 open Pool
 
 (** Domain identification *)
