@@ -59,6 +59,9 @@ module Domain =
       | D_python_typing -> Some Eq
       | _ -> None
 
+    type _ Framework.Query.query +=
+       | Q_types : Framework.Ast.expr -> Typingdomain.polytype Framework.Query.query
+
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = { export = [any_zone]; import = [any_zone]; }
@@ -153,6 +156,8 @@ module Domain =
           add_signature "str.center" [str; int] [str] [] |>
           add_signature "str.center" [str; int; str] [str] [] |>
           add_signature "str.join" [str; List str] [str] [] |>
+          add_signature "str.join" [str; Generator str] [str] [] |>
+
           add_signature "str.lower" [str] [str] [] |>
           add_signature "str.upper" [str] [str] [] |>
           add_signature "str.split" [str] [List str] [] |>
@@ -168,8 +173,11 @@ module Domain =
           add_signature "str.title" [str] [str] [] |>
           add_signature "str.__new__" [str_cls] [str] [] |>
           add_signature "str.__len__" [str] [int] [] |>
+          add_signature "str.__mul__" [str; int] [str] [] |>
+          add_signature "str.__rmul__" [str; int] [str] [] |>
           add_signature "str.__getitem__" [str; int] [str] [] (* ["IndexError"] *) |>
           add_signature "str.__getitem__" [str; slice] [str] [] |>
+          add_signature "str.__contains__" [str; str] [bool] [] |>
           add_signature "str.isalnum" [str] [bool] [] |>
           add_signature "str.isalpha" [str] [bool] [] |>
           add_signature "str.isdecimal" [str] [bool] [] |>
@@ -190,7 +198,7 @@ module Domain =
           add_signature "list.__iter__" [List (Typevar 0)] [Iterator (List (Typevar 0), -1)] [] |>
           add_signature "list.__mul__" [List (Typevar 0); int] [List (Typevar 0)] [] |>
           add_signature "list.__rmul__" [List (Typevar 0); int] [List (Typevar 0)] [] |>
-
+          add_signature "list.__contains__" [List (Typevar 0); Top] [bool] [] |>
           add_signature "list_iterator.__next__" [Iterator (List (Typevar 0), -1)] [Typevar 0] ["StopIteration"] |>
           (* TODO: add list[bottom] to signal empty list ? *)
 
@@ -217,6 +225,7 @@ module Domain =
           add_signature "dict.__new__" [dict_cls] [Dict (Bot, Bot)] [] |>
           add_signature "dict.__iter__" [Dict (Typevar 0, Typevar 1)] [Iterator (Dict (Typevar 0, Typevar 1), -1)] [] |>
           add_signature "dict.__getitem__" [Dict (Typevar 0, Typevar 1); Top] [Typevar 1] [] (* ["KeyError"] *) |>
+          add_signature "dict.__contains__" [Dict (Typevar 0, Typevar 1); Top] [bool] [] |>
           add_signature "dict_iterator.__next__" [Iterator (Dict (Typevar 0, Typevar 1), -1)] [Typevar 0] ["StopIteration"] |>
           add_signature "dict_values.__iter__" [DictValues (Dict (Typevar 0, Typevar 1))] [Iterator (DictValues (Dict (Typevar 0, Typevar 1)), -1)] [] |>
           add_signature "dict_keys.__iter__" [DictKeys (Dict (Typevar 0, Typevar 1))] [Iterator (DictKeys (Dict (Typevar 0, Typevar 1)), -1)] [] |>
@@ -224,8 +233,11 @@ module Domain =
           add_signature "dict_valueiterator.__next__" [Iterator (DictValues (Dict (Typevar 0, Typevar 1)), -1)] [Typevar 1] ["StopIteration"] |>
           add_signature "dict_keyiterator.__next__" [Iterator (DictKeys (Dict (Typevar 0, Typevar 1)), -1)] [Typevar 0] ["StopIteration"] |>
           add_signature "dict_keyiterator.__next__" [Iterator (Dict (Typevar 0, Typevar 1), -1)] [Typevar 0] ["StopIteration"] |>
-          add_signature "dict_itemiterator.__next__" [Iterator (DictItems (Dict (Typevar 0, Typevar 1)), -1)] [FiniteTuple [Typevar 0; Typevar 1]] ["StopIteration"]
+          add_signature "dict_itemiterator.__next__" [Iterator (DictItems (Dict (Typevar 0, Typevar 1)), -1)] [FiniteTuple [Typevar 0; Typevar 1]] ["StopIteration"] |>
 
+          add_signature "set.__contains__" [Set (Typevar 0); Top] [bool] [] |>
+          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1]; Top] [bool] [] |>
+          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1; Typevar 2]; Top] [bool] []
       in
       stub_base := lstub_base;
       debug "stub_base = %a@\n" pp_sb !stub_base;
@@ -310,6 +322,10 @@ module Domain =
 
       (* S⟦ ?e ⟧ *)
       | S_assume e ->
+         begin match ekind e with
+         | E_constant (C_top T_bool) | E_constant (C_bool true) -> Post.of_flow flow |> OptionExt.return
+         | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow) |> OptionExt.return
+         | _ ->
          man.eval e flow |>
            Post.bind man
              (fun expr flow ->
@@ -331,7 +347,7 @@ module Domain =
                | _ -> Exceptions.panic "%a" pp_expr e
              )
          |> OptionExt.return
-
+         end
       | _ -> None
 
     let summary_constructor man flow range c ls =
@@ -365,6 +381,12 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_get_type_partition pty ->
+         if is_bottom @@ Flow.get_domain_cur man flow then
+           Eval.empty_singleton flow |> OptionExt.return
+         else
+           return_id_of_type man flow range pty |> OptionExt.return
+
       | E_type_partition i ->
          if is_bottom @@ Flow.get_domain_cur man flow then
            Eval.empty_singleton flow |> OptionExt.return
@@ -743,6 +765,41 @@ module Domain =
                  man flow
              )
          |> OptionExt.return
+
+      (* generators *)
+      | E_py_generator_comprehension (expr, comprehensions) ->
+         let rec unfold_pseudolc to_clean stmt_acc aux_compr = match aux_compr with
+           | [] -> to_clean, List.rev stmt_acc
+           | (target, iter, conds)::tl ->
+              let i_tmp = mk_tmp () in
+              let i_var = mk_var i_tmp range in
+              let s1 = mk_assign i_var (Utils.mk_builtin_call "iter" [iter] range) range in
+              let s2 = mk_assign target (Utils.mk_builtin_call "next" [i_var] range) range in
+              let b_tmp = mk_tmp () in
+              let b_var = mk_var b_tmp range in
+              let inline_conds = List.fold_left (fun acc cond -> mk_expr (E_py_if (cond, acc, mk_py_false range)) range) (mk_py_true range) (List.rev conds) in
+              (* FIXME: enforce that s3 is bool? *)
+              let s3 = mk_assign b_var inline_conds range in
+              let target_var = match ekind target with
+                | E_var (v, _) -> v
+                | _ -> assert false in
+              unfold_pseudolc (i_tmp::b_tmp::target_var::to_clean) (s3::s2::s1::stmt_acc) tl in
+         let to_clean, stmt_list = unfold_pseudolc [] [] comprehensions in
+         let stmt = mk_block stmt_list range in
+         let cleaners = List.map (fun x -> mk_remove_var x range) to_clean in
+         let empty_stmt = mk_block [] range in
+         debug "Generator Comprehension: Rewriting %a into @[@\nexec:@[@\n%a@]@\neval:@[@\n%a@]@\ncleaners:@[@\n%a@]@]@\n" pp_expr exp pp_stmt stmt pp_expr expr pp_stmt (mk_block cleaners range);
+         man.exec (Utils.mk_try_stopiteration stmt empty_stmt range) flow |>
+           man.eval expr |>
+           Eval.bind (fun expr flow ->
+               let cur = Flow.get_domain_cur man flow in
+               let ty_in_gen = match ekind expr with
+                 | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                 | _ -> assert false in
+               return_id_of_type man flow range (Typingdomain.Generator ty_in_gen)
+             ) |>
+           Eval.add_cleaners cleaners |>
+           OptionExt.return
 
       (* stubs *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin fname)}, _)}, args, []) when StringMap.mem fname !stub_base ->
@@ -1892,7 +1949,22 @@ module Domain =
          None
 
 
-    let ask query man flow = None
+    let is_type_query : type r. r Framework.Query.query -> bool =
+      function
+      | Q_types _ -> true
+      | _ -> false
+
+    let ask : type r. r Framework.Query.query -> ('a, t) man -> 'a flow -> r option =
+      fun query man flow ->
+      match query with
+      | Q_types t ->
+         let cur = Flow.get_domain_cur man flow in
+         let tid = match ekind t with
+           | E_type_partition i -> i
+           | _ -> assert false in
+         Some (Typingdomain.TypeIdMap.find tid cur.d2)
+      | _ -> None
+
   end
 
 let () = register_domain (module Domain)

@@ -41,7 +41,7 @@ lang.c.libs = c_stdlib mopsa
 
 # lang.python = ast addr utils visitor operators pp frontend
 lang.python = ast addr utils visitor operators pp frontend zone		\
-alarms flows libs desugar objects data_model types program memory
+alarms  libs desugar objects data_model types flows program memory
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typingdomain typing t_string t_int t_float t_list t_set
