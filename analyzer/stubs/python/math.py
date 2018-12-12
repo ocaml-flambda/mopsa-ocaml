@@ -1,10 +1,10 @@
 import mopsa
 
-#pi = 3.141592653589793
-#e  = 2.718281828459045
-#tau = 6.283185307179586
-#inf = float('inf')
-#nan = float('nan')
+pi = 3.141592653589793
+e  = 2.718281828459045
+tau = 6.283185307179586
+inf = float('inf')
+nan = float('nan')
 
 def sin(x): return mopsa.random_float(-1, 1)
 def cos(x): return mopsa.random_float(-1, 1)
@@ -28,38 +28,89 @@ def atan2(y, x): return atan(y/x)
 def degrees(x): return x * 180 / pi
 def radians(x): return x * pi / 180
 
+@mopsa.builtin("math.ceil")
 def ceil(x): pass
+
+@mopsa.builtin("math.copysign")
 def copysign(x, y): pass
+
+@mopsa.builtin("math.fabs")
 def fabs(x): pass
+
+@mopsa.builtin("math.factorial")
 def factorial(x): pass
+
+@mopsa.builtin("math.floor")
 def floor(x): pass
+
+@mopsa.builtin("math.erf")
 def erf(x): pass
+
+@mopsa.builtin("math.erfc")
 def erfc(x): pass
+
+@mopsa.builtin("math.exp")
 def exp(x): pass
+
+@mopsa.builtin("math.expm1")
 def expm1(x): pass
+
+@mopsa.builtin("math.fmod")
 def fmod(x, n): pass
+
+@mopsa.builtin("math.frexp")
 def frexp(x): pass
+
+@mopsa.builtin("math.fsum")
 def fsum(x): pass
+
+@mopsa.builtin("math.gamma")
 def gamma(x): pass
+
+@mopsa.builtin("math.gcd")
 def gcd(x, y): pass
+
+@mopsa.builtin("math.hypot")
 def hypot(x, y): pass
+
+@mopsa.builtin("math.isclose")
 def isclose(a, b): pass
+
+@mopsa.builtin("math.isfinite")
 def isfinite(x): pass
+
+@mopsa.builtin("math.isinf")
 def isinf(x): pass
+
+@mopsa.builtin("math.isnan")
 def isnan(x): pass
+
+@mopsa.builtin("math.ldexp")
 def ldexp(x, i): pass
+
+@mopsa.builtin("math.lgamma")
 def lgamma(x): pass
+
+@mopsa.builtin("math.log")
 def log(x): pass
+
+@mopsa.builtin("math.log10")
 def log10(x): pass
+
+@mopsa.builtin("math.log1p")
 def log1p(x): pass
+
+@mopsa.builtin("math.log2")
 def log2(x): pass
+
+@mopsa.builtin("math.modf")
 def modf(x): pass
+
+@mopsa.builtin("math.pow")
 def pow(x, y): pass
+
+@mopsa.builtin("math.trunc")
 def trunc(x): pass
-
-
-
-
 
 @mopsa.builtin("math.sqrt")
 def sqrt(x): pass

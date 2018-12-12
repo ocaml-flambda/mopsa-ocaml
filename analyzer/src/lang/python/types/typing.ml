@@ -126,6 +126,7 @@ module Domain =
           add_signature "math.expm1" [float] [float] [] |>
           add_signature "math.fabs" [float] [float] [] |>
           add_signature "math.factorial" [int] [int] [] |>
+          add_signature "math.floor" [float] [int] [] |>
           add_signature "math.fmod" [float; float] [float] [] |>
           add_signature "math.frexp" [float] [FiniteTuple [float; int]] [] |>
           add_signature "math.fsum" [List float] [float] [] |> (* add iterator as well *)
@@ -140,6 +141,7 @@ module Domain =
           add_signature "math.lgamma" [float] [float] [] |>
           add_signature "math.log" [float; float] [float] [] |>
           add_signature "math.log1p" [float] [float] [] |>
+          add_signature "math.log10" [float] [float] [] |>
           add_signature "math.log2" [float] [float] [] |>
           add_signature "math.modf" [float] [FiniteTuple [float; float]] [] |>
           add_signature "math.sqrt" [float] [float] [] |>
@@ -786,7 +788,7 @@ module Domain =
                                                             | _ -> debug "typing/stubs %a@\n" Universal.Ast.pp_addr addr;
                                                                    Exceptions.panic "ni"
                                                         end
-                                                     | _ -> assert false) eargs in
+                                                     | _ -> debug "%a@\n" pp_expr exp; assert false) eargs in
                  let f_signatures = List.filter (fun x -> is_compatible_signature in_types x.in_args cur) f_signatures in
                  (* fun fact, we don't do the isinstance checks, but lower-level things *)
                  debug "f_signatures has size %d@\n" (List.length f_signatures);

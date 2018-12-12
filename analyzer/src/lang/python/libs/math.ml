@@ -35,16 +35,17 @@ module Domain =
 
     let exec _ _ _ _ = None
 
-    let eval zones exp man flow =
-      let range = erange exp in
-      match ekind exp with
-      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
-         let exp' = mk_unop O_sqrt e ~etyp:(T_float F_DOUBLE) range in
-         Eval.singleton exp' flow
-         |> OptionExt.return
-
-      | _ ->
-         None
+    let eval zones exp man flow = None
+      (* let range = erange exp in
+       * match ekind exp with
+       * | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
+       *    Exceptions.panic "blaaaaa@\n";
+       *    let exp' = mk_unop O_sqrt e ~etyp:(T_float F_DOUBLE) range in
+       *    Eval.singleton exp' flow
+       *    |> OptionExt.return
+       *
+       * | _ ->
+       *    None *)
 
 
     let ask _ _ _ = None
