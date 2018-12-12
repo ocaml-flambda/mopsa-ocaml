@@ -8,7 +8,7 @@
 
 (** Relational numeric abstract domain, based on APRON. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Leaf
 open Rounding
 open Ast
@@ -213,7 +213,7 @@ struct
     | E_var(x, STRONG) ->
       Apron.Texpr1.Var(var_to_apron x), abs, l
     | E_var(x, WEAK) ->
-      let x' = mk_tmp ~vtyp:(x.vtyp) () in
+      let x' = mktmp x.vtyp () in
       let x_apr = var_to_apron x in
       let x_apr' = var_to_apron x' in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in

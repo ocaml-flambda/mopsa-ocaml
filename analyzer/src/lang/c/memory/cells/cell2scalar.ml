@@ -8,7 +8,7 @@
 
 (** Cell to Scalarerical variable bindings *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Cell
 open Zone

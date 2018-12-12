@@ -8,11 +8,8 @@
 
 (** AST of the C language. *)
 
-open Framework
-open Framework.Ast
-open Framework.Visitor
+open Mopsa
 open Universal.Ast
-open Framework.Essentials
 
 (*==========================================================================*)
                            (** {2 Types} *)

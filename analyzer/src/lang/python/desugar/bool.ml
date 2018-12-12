@@ -8,7 +8,7 @@
 
 (** Handling of and/or operators. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr

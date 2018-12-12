@@ -8,7 +8,7 @@
 
 (** Rounding mode. *)
 
-open Framework.Essentials
+open Mopsa
 
 
 (****************************************************************************)

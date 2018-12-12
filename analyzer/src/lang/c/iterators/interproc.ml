@@ -8,7 +8,7 @@
 
 (** Abstraction of C function calls *)
 
-open Framework.Essentials
+open Mopsa
 open Memory.Common.Points_to
 open Ast
 open Zone
@@ -70,15 +70,15 @@ struct
         Eval.bind @@ fun f flow ->
 
         match ekind f with
-        | E_c_points_to (P_fun f) when Libs.Mopsa.is_builtin_function f.c_func_var.vname ->
+        | E_c_points_to (P_fun f) when Libs.C_mopsa.is_builtin_function f.c_func_var.vname ->
           let exp' = {exp with ekind = E_c_builtin_call(f.c_func_var.vname, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
         | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
           let open Universal.Ast in
-          let ret_var = mk_tmp ~vtyp:fundec.c_func_return () in
+          let ret_var = mktmp fundec.c_func_return () in
           let fundec' = {
-            fun_name = get_var_uniq_name fundec.c_func_var;
+            fun_name = uniq_vname fundec.c_func_var;
             fun_parameters = fundec.c_func_parameters;
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};

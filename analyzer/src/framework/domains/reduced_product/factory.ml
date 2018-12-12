@@ -8,7 +8,8 @@
 
 (** N-ary reduced product of abstract abstractions. *)
 
-open Essentials
+open Ast
+open Manager
 open Domain
 open Value
 open Pool

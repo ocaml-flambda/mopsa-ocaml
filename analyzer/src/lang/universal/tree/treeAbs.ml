@@ -10,7 +10,7 @@
    An abstraction for tree like structures
 *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Visitor
 open Ast
 open Bot

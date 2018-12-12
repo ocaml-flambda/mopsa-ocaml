@@ -8,7 +8,7 @@
 
 (** Common constructs for points-to evaluations. *)
 
-open Framework.Essentials
+open Mopsa
 open Base
 
 (* Points-to results *)

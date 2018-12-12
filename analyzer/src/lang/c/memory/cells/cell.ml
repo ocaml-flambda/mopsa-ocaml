@@ -9,7 +9,7 @@
 (** Cells are contiguous memory blocks identified by a base storage
    variable, a numeric offset and a type.  *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Visitor
 open Common.Base
 open Ast
@@ -158,9 +158,9 @@ let () =
       );
     visit = (fun next stmt ->
         match skind stmt with
-        | S_c_add_cell c -> Visitor.leaf stmt
-        | S_c_remove_cell c -> Visitor.leaf stmt
-        | S_c_expand_cell _ -> Visitor.leaf stmt
+        | S_c_add_cell c    -> leaf stmt
+        | S_c_remove_cell c -> leaf stmt
+        | S_c_expand_cell _ -> leaf stmt
         | _ -> next stmt
       )
   }

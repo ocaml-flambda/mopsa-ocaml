@@ -8,7 +8,7 @@
 
 (** Zones for the Universal language. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 type zone +=

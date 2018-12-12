@@ -8,7 +8,7 @@
 
 (** Abstract Syntax Tree for stub specification. *)
 
-open Framework.Essentials
+open Mopsa
 open Format
 
 
@@ -286,7 +286,7 @@ let () =
         match ekind e with
         | E_stub_call _ -> panic "stub visitor not supported"
 
-        | E_stub_return -> Framework.Visitor.leaf e
+        | E_stub_return -> leaf e
 
         | E_stub_builtin_call(f, arg) ->
           { exprs = [arg]; stmts = [] },

@@ -8,7 +8,7 @@
 
 (** Smashing abstraction of arrays. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 (** Zoning definition *)

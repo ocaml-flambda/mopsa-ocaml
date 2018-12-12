@@ -10,6 +10,45 @@
 (** Extensible Abstract Syntax Tree. *)
 
 
+open Format
+
+
+(** Information record on an AST construct (types, variables, ... etc) *)
+type 'a info = {
+  compare : ('a -> 'a -> int) -> 'a -> 'a -> int;
+  print : (formatter -> 'a -> unit) -> formatter -> 'a -> unit;
+}
+
+
+(*==========================================================================*)
+(**                           {2 Programs}                                  *)
+(*==========================================================================*)
+
+type program = ..
+
+let program_pp_chain : (formatter -> program -> unit) ref =
+  ref (fun fmt prg ->
+      Exceptions.panic "program_pp_chain: unknown program"
+    )
+
+let program_compare_chain : (program -> program -> int) ref =
+  ref (fun p1 p2 ->
+      compare p1 p2
+    )
+
+let register_program (info: program info) =
+  program_compare_chain := info.compare !program_compare_chain;
+  program_pp_chain := info.print !program_pp_chain;
+  ()
+
+let register_program_pp pp =
+  program_pp_chain := pp !program_pp_chain
+
+let compare_program p1 p2 = !program_compare_chain p1 p2
+
+let pp_program fmt program = !program_pp_chain fmt program
+
+
 (*==========================================================================*)
 (**                             {2 Types}                                   *)
 (*==========================================================================*)
@@ -21,33 +60,48 @@ type typ = ..
 type typ +=
   | T_any (** Generic unknown type. *)
 
-
 let typ_compare_chain : (typ -> typ -> int) ref = ref (fun t1 t2 ->
     match t1, t2 with
     | T_any, T_any -> 0
     | _ -> compare t1 t2
   )
 
+(* Processing chain for the extensible type [Ast.stmt] *)
+let typ_pp_chain : (Format.formatter -> typ -> unit) ref =
+  ref (fun fmt typ ->
+      match typ with
+      | T_any -> Format.pp_print_string fmt "?"
+      | _ -> Exceptions.panic "typ_pp_chain: unknown type"
+    )
+
+let register_typ (info: typ info) : unit =
+  typ_compare_chain := info.compare !typ_compare_chain;
+  typ_pp_chain := info.print !typ_pp_chain;
+  ()
+
 let register_typ_compare cmp =
   typ_compare_chain := cmp !typ_compare_chain
 
+let register_typ_pp pp =
+  typ_pp_chain := pp !typ_pp_chain
+
 let compare_typ t1 t2 = !typ_compare_chain t1 t2
 
-
+let pp_typ fmt typ = !typ_pp_chain fmt typ
 
 
 (*==========================================================================*)
 (**                           {2 Variables}                                 *)
 (*==========================================================================*)
 
+
+(** variables *)
 type var = {
   vname : string;      (** original name of the variable. *)
   vuid  : int;         (** unique identifier. *)
   vtyp  : typ;         (** type of the variable. *)
 }
-(** variables *)
 
-(** Compare two variables *)
 let compare_var v1 v2 =
   Compare.compose [
     (fun () -> compare v1.vname v2.vname);
@@ -55,16 +109,11 @@ let compare_var v1 v2 =
     (fun () -> compare_typ v1.vtyp v2.vtyp);
   ]
 
-let tmp_counter = ref 1
+let pp_var fmt v = pp_print_string fmt v.vname
 
-(** Create a temporary variable with a unique name. *)
-let mk_tmp ?(vtyp = T_any) () =
-  incr tmp_counter;
-  let vname = "$tmp" ^ (string_of_int !tmp_counter) in
-  {vname; vuid = !tmp_counter; vtyp}
+let vtyp v = v.vtyp
 
-let get_var_uniq_name v : string =
-  v.vname ^ ":" ^ (string_of_int v.vuid)
+let uniq_vname v = v.vname ^ ":" ^ (string_of_int v.vuid)
 
 (*==========================================================================*)
 (**                            {2 Operators}                                *)
@@ -88,9 +137,40 @@ type operator +=
   | O_log_and    (** && *)
 
 
-let operator_compare_chain : (operator -> operator -> int) ref = ref Pervasives.compare
-let register_operator_compare cmp = operator_compare_chain := cmp !operator_compare_chain
-let compare_operator op1 op2 = !operator_compare_chain op1 op2
+let operator_compare_chain : (operator -> operator -> int) ref = ref (fun o1 o2 ->
+    compare o1 o2
+  )
+
+let operator_pp_chain : (Format.formatter -> operator -> unit) ref =
+  ref (fun fmt op ->
+      match op with
+      | O_lt -> pp_print_string fmt "<"
+      | O_le -> pp_print_string fmt "<="
+      | O_gt -> pp_print_string fmt ">"
+      | O_ge -> pp_print_string fmt ">="
+      | O_eq -> pp_print_string fmt "=="
+      | O_ne -> pp_print_string fmt "!="
+      | O_log_or -> pp_print_string fmt "or"
+      | O_log_and -> pp_print_string fmt "and"
+      | O_log_not -> pp_print_string fmt "not"
+      | _ -> Exceptions.panic "operator_pp_chain: unknown operator"
+    )
+
+
+let register_operator (info: operator info) : unit =
+  operator_compare_chain := info.compare !operator_compare_chain;
+  operator_pp_chain := info.print !operator_pp_chain;
+  ()
+
+let register_operator_compare cmp =
+  operator_compare_chain := cmp !operator_compare_chain
+
+let register_operator_pp pp =
+  operator_pp_chain := pp !operator_pp_chain
+
+let compare_operator o1 o2 = !operator_compare_chain o1 o2
+
+let pp_operator fmt operator = !operator_pp_chain fmt operator
 
 
 (*==========================================================================*)
@@ -104,21 +184,43 @@ type constant = ..
 type constant +=
   | C_top of typ (** top value of a specific type *)
 
-let constant_compare_chain : (constant -> constant -> int) ref =
-  ref (fun c1 c2 ->
-      match c1, c2 with
-      | C_top t1, C_top t2 -> compare_typ t1 t2
-      | _ -> Pervasives.compare c1 c2
+let constant_compare_chain : (constant -> constant -> int) ref = ref (fun c1 c2 ->
+    match c1, c2 with
+    | C_top t1, C_top t2 -> compare_typ t1 t2
+    | _ -> compare c1 c2
+  )
+
+let constant_pp_chain : (Format.formatter -> constant -> unit) ref =
+  ref (fun fmt c ->
+      match c with
+      | C_top T_any -> fprintf fmt "⊤"
+      | C_top t -> fprintf fmt "⊤:%a" pp_typ t
+      | _ -> Exceptions.panic "constant_pp_chain: unknown constant"
     )
-let register_constant_compare cmp = constant_compare_chain := cmp !constant_compare_chain
-let compare_constant op1 op2 = !constant_compare_chain op1 op2
+
+
+let register_constant (info: constant info) : unit =
+  constant_compare_chain := info.compare !constant_compare_chain;
+  constant_pp_chain := info.print !constant_pp_chain;
+  ()
+
+let register_constant_compare cmp =
+  constant_compare_chain := cmp !constant_compare_chain
+
+let register_constant_pp pp =
+  constant_pp_chain := pp !constant_pp_chain
+
+
+let compare_constant o1 o2 = !constant_compare_chain o1 o2
+
+let pp_constant fmt constant = !constant_pp_chain fmt constant
 
 
 (*==========================================================================*)
 (**                           {2 Expressions}                               *)
 (*==========================================================================*)
 
-
+type expr_kind = ..
 
 type expr = {
   ekind: expr_kind;
@@ -126,15 +228,14 @@ type expr = {
   erange: Location.range;
 }
 
-(** Extensible type of expressions. *)
-and expr_kind = ..
 
-
-(** Mode of a variable*)
+(** Mode of a variable expression *)
 type mode =
   | STRONG
   | WEAK
+
 let compare_mode = compare
+
 let pp_mode fmt mode =
   match mode with
   | STRONG -> Format.fprintf fmt "STRONG"
@@ -182,32 +283,27 @@ let rec expr_compare_chain : (expr -> expr -> int) ref =
       | _ -> Pervasives.compare e1 e2
     )
 
-and register_expr_compare cmp = expr_compare_chain := cmp !expr_compare_chain
 and compare_expr e1 e2 =
   if e1 == e2 then 0 else !expr_compare_chain e1 e2
 
+let rec expr_pp_chain : (Format.formatter -> expr -> unit) ref =
+  ref (fun fmt expr ->
+      match ekind expr with
+      | E_constant c -> pp_constant fmt c
+      | E_var(v, STRONG) -> pp_var fmt v
+      | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
+      | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
+      | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
+      | _ -> failwith "Pp: Unknown expression"
+    )
 
-let mk_expr
-    ?(etyp = T_any)
-    ekind
-    erange
-  =
-  {ekind; etyp; erange}
+and pp_expr fmt exp = !expr_pp_chain fmt exp
 
-let mk_var v ?(mode = STRONG) erange =
-  mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
+let register_expr_pp pp =
+  expr_pp_chain := pp !expr_pp_chain
 
-let mk_binop left op right ?(etyp = T_any) erange =
-  mk_expr (E_binop (op, left, right)) ~etyp erange
-
-let mk_unop op operand ?(etyp = T_any) erange =
-  mk_expr (E_unop (op, operand)) ~etyp erange
-
-let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
-
-let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
-
-let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
+let register_expr_compare cmp =
+  expr_compare_chain := cmp !expr_compare_chain
 
 
 (*==========================================================================*)
@@ -217,8 +313,6 @@ let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
 
 type stmt_kind = ..
 (** Extensible statements kinds. *)
-
-type program = ..
 
 (** Basic statements *)
 type stmt_kind +=
@@ -303,11 +397,176 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
       | _ -> Pervasives.compare s1 s2
     )
 
-and register_stmt_compare cmp = stmt_compare_chain := cmp !stmt_compare_chain
-
 and compare_stmt s1 s2 =
   if s1 == s2 then 0 else !stmt_compare_chain s1 s2
 
+let stmt_pp_chain : (Format.formatter -> stmt -> unit) ref =
+  ref (fun fmt stmt ->
+      match skind stmt with
+      | S_program prog -> pp_program fmt prog
+      | S_expand(v, vl) ->
+        fprintf fmt "expand(%a,{%a})"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+      | S_fold(v, vl) ->
+        fprintf fmt "fold(%a,{%a})"
+          pp_var v
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             pp_var) vl
+
+      | _ -> failwith "Pp: Unknown statement"
+    )
+
+
+let pp_stmt fmt stmt = !stmt_pp_chain fmt stmt
+
+let register_stmt_pp pp =
+  stmt_pp_chain := pp !stmt_pp_chain
+
+let register_stmt_compare cmp =
+  stmt_compare_chain := cmp !stmt_compare_chain
+
+
+(*==========================================================================*)
+(**                            {2 Visitors}                                 *)
+(*==========================================================================*)
+
+
+(** Parts are the direct sub-elements of an AST node *)
+type parts = {
+  exprs : expr list; (** child expressions *)
+  stmts : stmt list; (** child statements *)
+}
+
+(** A structure of an extensible type ['a] is a tuple composed of two elements:
+    the parts and a builder function.
+*)
+type 'a structure = parts * (parts -> 'a)
+
+let leaf (x: 'a) : 'a structure =
+  {exprs = []; stmts = []}, (fun _ -> x)
+
+
+
+(** Information record of an AST construct with visitors *)
+type 'a info2 = {
+  compare : ('a -> 'a -> int) -> 'a -> 'a -> int;
+  print   : (formatter -> 'a -> unit) -> formatter -> 'a -> unit;
+  visit : ('a -> 'a structure) -> 'a -> 'a structure;
+}
+
+
+let expr_visit_chain = ref (fun exp ->
+    match ekind exp with
+    | E_var _ -> leaf exp
+    | E_constant _ -> leaf exp
+    | E_unop(unop, e) ->
+      {exprs = [e]; stmts = []},
+      (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})
+    | E_binop(binop, e1, e2) ->
+        {exprs = [e1; e2]; stmts = []},
+        (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
+    | _ ->
+      Exceptions.panic "Unknown expression %a" pp_expr exp
+  )
+
+let register_expr (info: expr info2) : unit =
+  expr_compare_chain := info.compare !expr_compare_chain;
+  expr_pp_chain := info.print !expr_pp_chain;
+  expr_visit_chain := info.visit !expr_visit_chain;
+  ()
+
+let register_expr_visitor visitor =
+  expr_visit_chain := visitor !expr_visit_chain
+
+let stmt_visit_chain : (stmt -> stmt structure) ref =
+  ref (fun stmt ->
+      match skind stmt with
+      | S_program _ -> Exceptions.panic "visitor of S_program not supported"
+
+      | S_assign(lhs, rhs) -> {
+          exprs = [lhs; rhs];
+          stmts = []
+        } , (
+            function
+            | { exprs = [lhs; rhs] } -> { stmt with skind = S_assign(lhs, rhs) }
+            | _ -> assert false
+          )
+
+      | S_assume cond ->  {
+          exprs = [cond];
+          stmts = []
+        } , (
+            function
+            | { exprs = [cond] } -> { stmt with skind = S_assume(cond) }
+            | _ -> assert false
+          )
+
+      | S_rename_var _
+      | S_add_var _
+      | S_remove_var _
+      | S_project_vars _
+      | S_expand _
+      | S_fold _ -> leaf stmt
+
+      | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
+    )
+
+let register_stmt (info: stmt info2) : unit =
+  stmt_compare_chain := info.compare !stmt_compare_chain;
+  stmt_pp_chain := info.print !stmt_pp_chain;
+  stmt_visit_chain := info.visit !stmt_visit_chain;
+  ()
+
+let register_stmt_visitor visitor =
+  stmt_visit_chain := visitor !stmt_visit_chain
+
+
+
+(*==========================================================================*)
+(**                       {2 Utility functions}                             *)
+(*==========================================================================*)
+
+let mkv vname vuid vtyp =
+  {vname; vuid; vtyp}
+
+let vcounter = ref 0
+
+let mkfresh f vtyp () =
+  incr vcounter;
+  mkv (f !vcounter) !vcounter vtyp
+
+let mktmp vtyp () =
+  mkfresh (fun _ -> "$tmp") vtyp ()
+
+(** deprecated function; use mktmp instead *)
+let mk_tmp ?(vtyp=T_any) () =
+  mktmp vtyp ()
+
+let mk_expr
+    ?(etyp = T_any)
+    ekind
+    erange
+  =
+  {ekind; etyp; erange}
+
+let mk_var v ?(mode = STRONG) erange =
+  mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
+
+let mk_binop left op right ?(etyp = T_any) erange =
+  mk_expr (E_binop (op, left, right)) ~etyp erange
+
+let mk_unop op operand ?(etyp = T_any) erange =
+  mk_expr (E_unop (op, operand)) ~etyp erange
+
+let mk_constant ~etyp c = mk_expr ~etyp (E_constant c)
+
+let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
+
+let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
 
 let mk_stmt skind srange = {skind; srange}
 
@@ -328,110 +587,6 @@ let mk_remove_var v = mk_stmt (S_remove_var v)
 let mk_add_var v = mk_stmt (S_add_var v)
 
 let mk_project_vars vars = mk_stmt (S_project_vars vars)
-
-
-(*==========================================================================*)
-(**                      {2 Pretty printers}                                *)
-(*==========================================================================*)
-
-open Format
-
-let rec pp_var fmt v = fprintf fmt "%s" v.vname
-
-(* Processing chain for the extensible type [Ast.expr] *)
-and pp_expr_chain : (Format.formatter -> expr -> unit) ref =
-  ref (fun fmt expr ->
-      match ekind expr with
-      | E_constant c -> pp_constant fmt c
-      | E_var(v, STRONG) -> pp_var fmt v
-      | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
-      | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
-      | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
-      | _ -> failwith "Pp: Unknown expression"
-    )
-
-(* Processing chain for the extensible type [Ast.stmt] *)
-and pp_stmt_chain : (Format.formatter -> stmt -> unit) ref =
-  ref (fun fmt stmt ->
-      match skind stmt with
-      | S_program prog -> pp_program fmt prog
-      | S_expand(v, vl) ->
-        fprintf fmt "expand(%a,{%a})"
-          pp_var v
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
-      | S_fold(v, vl) ->
-        fprintf fmt "fold(%a,{%a})"
-          pp_var v
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
-
-      | _ -> failwith "Pp: Unknown statement"
-    )
-
-(* Processing chain for the extensible type [Ast.program] *)
-and pp_program_chain : (Format.formatter -> program -> unit) ref =
-  ref (fun fmt prg ->
-      failwith "Pp: Unknown program"
-    )
-
-(* Processing chain for the extensible type [Ast.stmt] *)
-and pp_typ_chain : (Format.formatter -> typ -> unit) ref =
-  ref (fun fmt typ ->
-      match typ with
-      | T_any -> fprintf fmt "?"
-      | _ -> failwith "Pp: Unknown type"
-    )
-
-(* Processing chain for the extensible type [Ast.operator] *)
-and pp_operator_chain : (Format.formatter -> operator -> unit) ref =
-  ref (fun fmt op ->
-      match op with
-      | O_lt -> pp_print_string fmt "<"
-      | O_le -> pp_print_string fmt "<="
-      | O_gt -> pp_print_string fmt ">"
-      | O_ge -> pp_print_string fmt ">="
-      | O_eq -> pp_print_string fmt "=="
-      | O_ne -> pp_print_string fmt "!="
-      | O_log_or -> pp_print_string fmt "lor"
-      | O_log_and -> pp_print_string fmt "land"
-      | O_log_not -> pp_print_string fmt "lnot"
-      | _ -> failwith "Pp: Unknown operator"
-    )
-
-(* Processing chain for the extensible type [Ast.constant] *)
-and pp_constant_chain : (Format.formatter -> constant -> unit) ref =
-  ref (fun fmt c ->
-      match c with
-      | C_top T_any -> fprintf fmt "⊤"
-      | C_top t -> fprintf fmt "⊤:%a" pp_typ t
-      | _ -> failwith "Pp: Unknown constant"
-    )
-
-
-
-(* To register a new pp, we just give the previous chain as argument to pp
- * so that it can call the chain when it can not handle the given case
- *)
-
-and register_pp_expr pp = pp_expr_chain := pp !pp_expr_chain
-and register_pp_stmt pp = pp_stmt_chain := pp !pp_stmt_chain
-and register_pp_program pp = pp_program_chain := pp !pp_program_chain
-and register_pp_typ pp = pp_typ_chain := pp !pp_typ_chain
-and register_pp_operator pp = pp_operator_chain := pp !pp_operator_chain
-and register_pp_constant pp = pp_constant_chain := pp !pp_constant_chain
-
-
-(* These functions start the chain processing *)
-and pp_expr fmt expr = !pp_expr_chain fmt expr
-and pp_stmt fmt stmt = !pp_stmt_chain fmt stmt
-and pp_program fmt prg = !pp_program_chain fmt prg
-and pp_typ fmt typ = !pp_typ_chain fmt typ
-and pp_operator fmt op = !pp_operator_chain fmt op
-and pp_constant fmt c = !pp_constant_chain fmt c
-
 
 (* Utility to negate the comparisons in framework *)
 let negate_comparison = function

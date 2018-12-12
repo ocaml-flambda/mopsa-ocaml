@@ -8,7 +8,7 @@
 
 (** Pretty printer of the Universal extension to the AST. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Format
 
@@ -29,7 +29,7 @@ let pp_typ_opt fmt = function
   | Some x -> pp_typ fmt x
 
 let () =
-  register_pp_operator (fun default fmt -> function
+  register_operator_pp (fun default fmt -> function
       | O_plus -> pp_print_string fmt "+"
       | O_minus -> pp_print_string fmt "-"
       | O_mult -> pp_print_string fmt "*"
@@ -48,7 +48,7 @@ let () =
       | O_cast -> Format.fprintf fmt "cast"
       | op -> default fmt op
     );
-  register_pp_constant (fun default fmt -> function
+  register_constant_pp (fun default fmt -> function
       | C_unit -> fprintf fmt "()"
       | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
       | C_string(s) -> fprintf fmt "\"%s\"" s
@@ -59,7 +59,7 @@ let () =
       | c -> default fmt c
     );
 
-  register_pp_typ (fun default fmt typ ->
+  register_typ_pp (fun default fmt typ ->
       match typ with
       | T_unit -> pp_print_string fmt "unit"
       | T_bool -> pp_print_string fmt "bool"
@@ -72,7 +72,7 @@ let () =
       | T_array t -> Format.fprintf fmt "[%a]" pp_typ t
       | _ -> default fmt typ
   );
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_array(el) ->
         fprintf fmt "[@[<h>%a@]]"
@@ -97,7 +97,7 @@ let () =
       | _ -> default fmt exp
     );
 
-  register_pp_stmt (fun default fmt stmt ->
+  register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
       | S_remove_var(v) ->
         fprintf fmt "remove(@[<h>%a@])" pp_var v
@@ -144,7 +144,7 @@ let () =
       | S_print -> fprintf fmt "print();"
       | _ -> default fmt stmt
     );
-  register_pp_program (fun default fmt prg ->
+  register_program_pp (fun default fmt prg ->
       match prg with
       | Ast.P_universal (u_prog) ->
         Format.fprintf fmt "@[<v>%a@,%a@]"

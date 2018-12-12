@@ -8,7 +8,7 @@
 
 (** An environment is a total map from variables to addresses. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Addr

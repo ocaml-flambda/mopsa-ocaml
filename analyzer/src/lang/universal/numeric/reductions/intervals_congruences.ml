@@ -8,7 +8,7 @@
 
 (** Reduction operator for intervals and congruences. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Reduced_product.Reductions
 open Framework.Domains.Reduced_product.Pool
 open Ast

@@ -8,7 +8,7 @@
 
 (** Data model for attribute access. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Visitor
 open Universal.Ast
 open Ast
@@ -24,7 +24,7 @@ type expr_kind +=
 
 
 let () =
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_py_ll_hasattr (e, attr) -> Format.fprintf fmt "E_py_ll_hasattr(%a, %a)" pp_expr e pp_expr attr
       | E_py_ll_getattr (e, attr) -> Format.fprintf fmt "E_py_ll_getattr(%a, %a)" pp_expr e pp_expr attr

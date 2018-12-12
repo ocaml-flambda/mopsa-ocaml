@@ -1,5 +1,5 @@
 open Format
-open Framework.Essentials
+open Mopsa
 open Framework.Ast
 open Ast
 
@@ -50,7 +50,7 @@ let rec pp_c_type_short fmt =
 
 
 let () =
-  register_pp_typ (fun default fmt typ ->
+  register_typ_pp (fun default fmt typ ->
       match typ with
       | T_c_void -> pp_print_string fmt "void"
 
@@ -101,20 +101,20 @@ let () =
       | T_c_builtin_fn -> fprintf fmt "builtin_fn"
       | _ -> default fmt typ
     );
-  register_pp_constant (fun next fmt c ->
+  register_constant_pp (fun next fmt c ->
       match c with
       | C_c_character(c, C_char_ascii) -> fprintf fmt "'%c'" (char_of_int @@ Z.to_int c)
       | C_c_string(s, _) -> fprintf fmt "C_c_string(\"%s\")" s
       | C_c_invalid -> fprintf fmt "Invalid"
       | _ -> next fmt c
     );
-  register_pp_operator (fun next fmt op ->
+  register_operator_pp (fun next fmt op ->
       match op with
       | O_c_and -> pp_print_string fmt "&&"
       | O_c_or -> pp_print_string fmt "||"
       | _ -> next fmt op
     );
-  register_pp_expr (fun default fmt expr ->
+  register_expr_pp (fun default fmt expr ->
       match ekind expr with
       | E_c_conditional(cond, body, orelse) -> assert false
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
@@ -137,7 +137,7 @@ let () =
       | E_c_atomic _ -> assert false
       | _ -> default fmt expr
     );
-  register_pp_stmt (fun default fmt stmt ->
+  register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
       | S_c_global_declaration (v, None)
       | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
@@ -164,7 +164,7 @@ let () =
       | S_c_goto_stab s -> fprintf fmt "goto_stab {%a};" pp_stmt s
       | _ -> default fmt stmt
     );
-  register_pp_program (fun default fmt prg ->
+  register_program_pp (fun default fmt prg ->
       match prg with
       | Ast.C_program (globals, funcs) ->
         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")

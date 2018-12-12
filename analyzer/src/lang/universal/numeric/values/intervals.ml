@@ -8,7 +8,7 @@
 
 (** Interval abstraction of integer values. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Value
 open Ast
 open Bot

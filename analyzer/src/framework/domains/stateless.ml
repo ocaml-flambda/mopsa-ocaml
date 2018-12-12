@@ -9,7 +9,9 @@
 (** Stateless domains are domains without a lattice structure. Only
    transfer functions are defined. *)
 
-open Essentials
+open Manager
+open Domain
+open Post
 
 module type S =
 sig

@@ -19,7 +19,7 @@ open Javalib_pack
 open Javalib
 open JBasics
 open JCode
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Leaf
 open Cfg.Ast
 open Ast

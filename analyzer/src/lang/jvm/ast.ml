@@ -136,7 +136,7 @@ type program +=
 
 
 let () =
-  register_pp_stmt (fun next fmt stmt ->
+  register_stmt_pp (fun next fmt stmt ->
       match stmt.skind with
       | S_java_opcode ops ->
          let first = ref true in
@@ -153,7 +153,7 @@ let () =
       | T_java v1, T_java v2 -> value_type_compare v1 v2
       | _ -> next t1 t2
     );
-  register_pp_typ (fun next fmt typ ->
+  register_typ_pp (fun next fmt typ ->
       match typ with
       | T_java t -> Format.pp_print_string fmt (JPrint.value_type t)
       | _ -> next fmt typ

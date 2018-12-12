@@ -8,7 +8,7 @@
 
 (** Handling of assert statements. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Ast
 open Universal.Ast
 open Ast

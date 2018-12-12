@@ -8,7 +8,7 @@
 
 (** Mixing float and integer value abstractions. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Value
 open Ast
 

@@ -8,7 +8,7 @@
 
 (** Heap addresses of Python objects. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Universal.Ast
 

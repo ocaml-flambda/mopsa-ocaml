@@ -8,7 +8,7 @@
 
 (** Expansion-based abstraction of C memory cells. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 open Zone
@@ -378,7 +378,7 @@ module Domain = struct
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
     (* Try the static case *)
-    match Universal.Utils.expr_to_z offset with
+    match expr_to_z offset with
     | Some z ->
       if Z.geq z Z.zero &&
          Z.leq (Z.add z cell_size) base_size
@@ -663,29 +663,8 @@ module Domain = struct
 
       Post.return
 
-    | Stubs.Ast.S_stub_assigns(x, None) ->
-      let t = x.etyp in
-      man.eval ~zone:(Z_c, Z_c_low_level) x flow |>
-      Post.bind_opt man @@ fun x flow ->
-
-      eval_scalar_cell x man flow |>
-      Post.bind_return man @@ fun x flow ->
-
-      prepare_cells_for_stub_assigns x None t stmt.srange man flow
-
-    | Stubs.Ast.S_stub_assigns(x, Some (o1, o2)) ->
-      let t = under_type x.etyp in
-
-      eval_scalar_cell (mk_c_deref x stmt.srange) man flow |>
-      Post.bind_return man @@ fun x flow ->
-
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o1 flow |>
-      Post.bind man @@ fun o1 flow ->
-
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) o2 flow |>
-      Post.bind man @@ fun o2 flow ->
-
-      prepare_cells_for_stub_assigns x (Some (o1, o2)) t stmt.srange man flow
+    | Stubs.Ast.S_stub_assigns _ ->
+      panic_at stmt.srange "expand: stub assigns directive not supported"
 
     | _ -> None
 

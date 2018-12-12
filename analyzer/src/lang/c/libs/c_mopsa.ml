@@ -8,7 +8,7 @@
 
 (** Evaluation of MOPSA built-in functions *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Ast
 
@@ -153,7 +153,7 @@ struct
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_signed_long) in
-      let tmp = mk_tmp ~vtyp:typ () in
+      let tmp = mktmp typ () in
       let v = mk_var tmp erange in
       let flow = man.exec (mk_assume (
           mk_binop
@@ -169,7 +169,7 @@ struct
     | E_c_builtin_call("_mopsa_rand_unsigned_long", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_unsigned_long) in
-      let tmp = mk_tmp ~vtyp:typ () in
+      let tmp = mktmp typ () in
       let v = mk_var tmp erange in
       let flow = man.exec (mk_assume (
           mk_binop

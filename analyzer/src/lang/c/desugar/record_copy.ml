@@ -8,7 +8,7 @@
 
 (** Removal of syntaxic sugar in record assignment *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 

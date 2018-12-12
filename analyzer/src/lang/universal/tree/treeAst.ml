@@ -1,4 +1,4 @@
-open Framework.Essentials
+open Mopsa
 open Framework.Visitor
 
 type expr_kind +=
@@ -12,7 +12,7 @@ let () =
         Pervasives.compare v1 v2
       | _ -> next e1 e2
     );
-  register_pp_expr (fun next fmt e ->
+  register_expr_pp (fun next fmt e ->
       match ekind e with
       | E_tree_set v ->
         Format.fprintf fmt "E_tree_set(%a)" Value.VString.print v

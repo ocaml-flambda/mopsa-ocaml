@@ -8,7 +8,7 @@
 
 (** Empty domain. *)
 
-open Essentials
+open Domain
 
 include Stateless.Make(
   struct

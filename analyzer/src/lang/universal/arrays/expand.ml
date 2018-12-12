@@ -12,7 +12,7 @@
     realized. Each realized cell is encoded with a distinct variable.
 *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 

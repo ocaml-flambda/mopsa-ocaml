@@ -8,14 +8,14 @@
 
 (** Zones for the C language. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 (** Zones of the C language *)
 type zone +=
   | Z_c           (* Entire C language *)
   | Z_c_low_level (* C without aggregates (arrays and records) *)
-  | Z_c_scalar    (* C with only scalars *)
+  | Z_c_scalar    (* C with only scalars (no dereferences) *)
 
 let () =
   register_zone {

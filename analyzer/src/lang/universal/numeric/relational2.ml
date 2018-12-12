@@ -9,7 +9,7 @@
 (** Relational numeric abstract domain, based on APRON.
 *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Leaf
 open Rounding
 open Ast
@@ -17,14 +17,14 @@ open Relational
 open Top
 open Apron
 module AVar = Apron.Var
-module Var = Framework.Essentials.Var
+module Var = Mopsa.Var
 
 module Make(ApronManager : APRONMANAGER) : Framework.Domains.Leaf.S =
 struct
 
   include ApronTransformer(ApronManager)
 
-  module VarSet = Set.Make(Framework.Essentials.Var)
+  module VarSet = Set.Make(Mopsa.Var)
 
   (** [type t = 〈p, inf, sup〉] where [p] is a numerical domain with
      environment greater that [sup], [inf] and [sup] are sets of
@@ -441,7 +441,7 @@ struct
         and find_foldable x l reste acc = match l with
           | y::q when compare_typ x.vtyp y.vtyp = 0 ->
              let abs = u.num in
-             let tmp = mk_tmp ~vtyp:x.vtyp () in
+             let tmp = mktmp x.vtyp () in
              let () = debug "We try to fold: %a and %a using tmp %a" Var.print x Var.print y Var.print tmp in
              let ax = var_to_apron x and ay = var_to_apron y and atmp = var_to_apron tmp in
              let () = debug "Folding on %a and %a@,%a" Apron.Var.print ax Apron.Var.print ay (Apron.Abstract1.print) abs in

@@ -9,7 +9,7 @@
 
 (** General intraprocedural iterator on Control Flow Graphs. *)
 
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Universal.Zone
 open Ast

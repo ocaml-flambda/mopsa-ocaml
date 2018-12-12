@@ -8,7 +8,7 @@
 
 (** Inter-procedural iterator by inlining.  *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 open Callstack
