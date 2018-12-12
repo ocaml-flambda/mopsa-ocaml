@@ -328,6 +328,9 @@ let binop_type prj t1 t2 =
   | T_pointer _, T_pointer (T_void,_) -> t1
   | T_pointer (p1,_), T_pointer (p2,_) when compare p1 p2 = 0 -> t1
 
+  | T_pointer p, T_array (e,_) when compare p e = 0 -> t1
+  | T_array (e,_), T_pointer p when compare p e = 0 -> t2
+
   | _ -> Exceptions.panic "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
            (C_print.string_of_type_qual t2)
