@@ -97,7 +97,7 @@ let pp_typ fmt typ = !typ_pp_chain fmt typ
 
 (** variables *)
 type var = {
-  vname : string;      (** original name of the variable. *)
+  vname : string;
   vuid  : int;         (** unique identifier. *)
   vtyp  : typ;         (** type of the variable. *)
 }

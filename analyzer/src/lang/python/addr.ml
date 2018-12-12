@@ -515,44 +515,45 @@ let create_builtin_class kind name cls bases range =
 
 
 let () =
-    Format.(
-      let info = {print =
-                    (fun default fmt a ->
-                      match a.addr_kind with
-                      | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
-                      | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
-                      | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
-                      | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
-                      | A_py_method(f, e) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_expr e
-                      | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
-                      | _ -> default fmt a
-                    );
-                  compare =
-                    (fun default a1 a2 ->
-                      match a1.addr_kind, a2.addr_kind with
-                      | A_py_class (c1, _), A_py_class (c2, _) ->
-                         begin match c1, c2 with
-                         | C_builtin s1, C_builtin s2
-                           | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
-                         | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
-                         | _, _ -> default a1 a2
-                         end
-                      | A_py_function f1, A_py_function f2 ->
-                         begin match f1, f2 with
-                         | F_builtin s1, F_builtin s2
-                           | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
-                         | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
-                         | _, _ -> default a1 a2
-                         end
-                      | A_py_module m1, A_py_module m2 ->
-                         begin match m1, m2 with
-                         | M_user (s1, _), M_user (s2, _)
-                           | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
-                         | _, _ -> default a1 a2
-                         end
-                      | _ -> default a1 a2) } in
-      register_addr info
-    )
+  Format.(
+    register_addr {
+      print =
+        (fun default fmt a ->
+           match a.addr_kind with
+           | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
+           | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
+           | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
+           | A_py_function((F_builtin f | F_unsupported f)) -> fprintf fmt "builtin-function %s" f
+           | A_py_method(f, e) -> fprintf fmt "method %a of %a" pp_addr (addr_of_object f) pp_expr e
+           | A_py_module(M_user(m, _) | M_builtin(m)) -> fprintf fmt "module %s" m
+           | _ -> default fmt a
+        );
+      compare =
+        (fun default a1 a2 ->
+           match a1.addr_kind, a2.addr_kind with
+           | A_py_class (c1, _), A_py_class (c2, _) ->
+             begin match c1, c2 with
+               | C_builtin s1, C_builtin s2
+               | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
+               | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+               | _, _ -> default a1 a2
+             end
+           | A_py_function f1, A_py_function f2 ->
+             begin match f1, f2 with
+               | F_builtin s1, F_builtin s2
+               | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
+               | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+               | _, _ -> default a1 a2
+             end
+           | A_py_module m1, A_py_module m2 ->
+             begin match m1, m2 with
+               | M_user (s1, _), M_user (s2, _)
+               | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
+               | _, _ -> default a1 a2
+             end
+           | _ -> default a1 a2)
+    }
+  )
 
 
 let builtin_cl_and_mro s =

@@ -14,12 +14,12 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal stubs c python cfg jvm
 
-lang.universal = ast pp visitor frontend zone u_stdlib 	\
+lang.universal = ast frontend zone u_stdlib 	\
 iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.iterators.interproc = callstack inlining
 lang.universal.heap = pool recency
-lang.universal.numeric = rounding values relational relational2	\
+lang.universal.numeric = rounding values relational \
 reductions
 lang.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix

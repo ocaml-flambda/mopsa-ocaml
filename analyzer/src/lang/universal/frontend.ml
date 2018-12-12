@@ -51,11 +51,7 @@ let from_extent (e: extent) : Location.range = e
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
     let (id, typ) = MS.find v var_ctx in
-    {
-      vname = v;
-      vuid = id;
-      vtyp = typ;
-    }
+    mkv v id typ
   with
   | Not_found ->
     Exceptions.panic_at ext
@@ -186,7 +182,11 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                 ) args fundec.fun_parameters in
               (* <<<<<<< HEAD *)
               (* void function return an (unitialized) int *)
-              let rettyp = OptionExt.option_dfl T_int fundec.T.fun_return_type in
+              let rettyp =
+                match fundec.fun_return_type with
+                | None -> T_int
+                | Some t -> t
+              in
               (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range)
               (* ======= *)
               (* (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range) *)
@@ -517,7 +517,7 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.option_lift1 from_typ f.return_type in
-  let ret_var = mktmp (OptionExt.option_dfl T_int typ) () in
+  let ret_var = mk_tmp ~vtyp:(OptionExt.option_dfl T_int typ) () in
   {
     fun_name = f.funname;
     fun_range = from_extent f.range;
