@@ -9,7 +9,11 @@
 (** A stacked combination of D1 over D2 allows domain D1 to unify the
     state of D2 before lattice binary operators *)
 
-open Essentials
+open Ast
+open Manager
+open Annotation
+open Domain
+open Post
 
 module type S =
 sig

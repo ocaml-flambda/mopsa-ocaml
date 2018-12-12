@@ -9,7 +9,7 @@
 (** Call stacks are represented as sequences of call sites
    (ranges). They are saved as annotations into flows. *)
 
-open Framework.Essentials
+open Mopsa
 
 type cs = range list
 

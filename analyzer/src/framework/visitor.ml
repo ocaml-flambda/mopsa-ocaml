@@ -14,77 +14,9 @@ open Ast
 let debug fmt = Debug.debug ~channel:"framework.visitor" fmt
 
 
-(*==========================================================================*)
-                           (** {2 Types} *)
-(*==========================================================================*)
+let split_expr (expr : Ast.expr) : Ast.expr structure = !expr_visit_chain expr
+let split_stmt (stmt : Ast.stmt) : Ast.stmt structure = !stmt_visit_chain stmt
 
-(** Parts are the direct sub-elements of an AST node *)
-type parts = {
-  exprs : Ast.expr list; (** child expressions *)
-  stmts : Ast.stmt list; (** child statements *)
-}
-
-(** A structure of an extensible type ['a] is a tuple composed of two elements:
-    the parts and a builder function.
-*)
-type 'a structure = parts * (parts -> 'a)
-
-(*==========================================================================*)
-                        (** {2 Visitors chains} *)
-(*==========================================================================*)
-
-(** A chain stores the head of the visitors, each of which will call
-    the next one in the chain when encountering an AST node that
-    can not be handled.
-*)
-type 'a chain = ('a -> 'a structure) ref
-
-
-(** Leaf nodes maybe defined with a generic identity composer *)
-let leaf (x: 'a) : 'a structure =
-  {exprs = []; stmts = []}, (fun _ -> x)
-
-
-(** Empty chains, that should not be reached when visiting an AST node *)
-let expr_chain : Ast.expr chain = ref (fun exp ->
-    match ekind exp with
-    | E_var _ -> leaf exp
-    | E_constant _ -> leaf exp
-    | E_unop(unop, e) ->
-      {exprs = [e]; stmts = []},
-      (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})
-    | E_binop(binop, e1, e2) ->
-        {exprs = [e1; e2]; stmts = []},
-        (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
-    | _ ->
-      Exceptions.panic "Unknown expression %a" pp_expr exp
-  )
-
-let stmt_chain : Ast.stmt chain = ref (fun stmt ->
-    failwith "Unknown statement"
-  )
-
-(** To register a visitor of new expressions, [register_exp_visitor]
-    should be called with a function having two arguments:
-       - a default visitor to use for unknown expressions
-       - the expression to visit
-*)
-let register_expr_visitor
-    (v: (Ast.expr -> Ast.expr structure) -> Ast.expr -> Ast.expr structure) =
-  expr_chain := v !expr_chain
-
-let register_stmt_visitor
-    (v: (Ast.stmt -> Ast.stmt structure) -> Ast.stmt -> Ast.stmt structure) =
-  stmt_chain := v !stmt_chain
-
-
-let split_expr (expr : Ast.expr) : Ast.expr structure = !expr_chain expr
-let split_stmt (stmt : Ast.stmt) : Ast.stmt structure = !stmt_chain stmt
-
-
-(*==========================================================================*)
-                        (** {2 Iterators} *)
-(*==========================================================================*)
 
 (** Kinds of returned actions by a visitor *)
 type 'a action =

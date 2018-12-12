@@ -8,7 +8,7 @@
 
 (** Constant string abstraction of string values *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Value
 open Ast
 

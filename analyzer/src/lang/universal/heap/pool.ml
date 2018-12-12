@@ -13,7 +13,7 @@
    recent and old allocations.
 *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Ast
 open Ast
 

@@ -9,7 +9,10 @@
 (** Generic domain for creating non-relational value abstractions. *)
 
 open Value
-open Essentials
+open Ast
+open Manager
+open Domain
+open Annotation
 
 module Make(Value: VALUE) =
 struct

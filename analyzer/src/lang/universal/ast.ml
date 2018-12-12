@@ -8,12 +8,13 @@
 
 (** Abstract Syntax Tree extension for the simple Universal language. *)
 
-open Framework.Essentials
+open Mopsa
+open Format
 
 
-(*==========================================================================*)
-                           (** {2 Types} *)
-(*==========================================================================*)
+(*============*)
+(** {2 Types} *)
+(*============*)
 
 type float_prec =
   | F_SINGLE      (** IEEE single-precision 32-bit *)
@@ -32,16 +33,45 @@ type typ +=
   | T_unit (** Unit type *)
   | T_char
 
-let () =
-  register_typ_compare (fun next t1 t2 ->
-      match t1, t2 with
-      | T_array t1, T_array t2 -> compare_typ t1 t2
-      | _ -> next t1 t2
-    )
+let pp_float_prec fmt = function
+  | F_SINGLE      -> pp_print_string fmt "float"
+  | F_DOUBLE      -> pp_print_string fmt "double"
+  | F_LONG_DOUBLE -> pp_print_string fmt "long double"
+  | F_REAL        -> pp_print_string fmt "real"
 
-(*==========================================================================*)
-                           (** {2 Constants} *)
-(*==========================================================================*)
+let pp_float_op opreal opfloat fmt = function
+  | F_SINGLE      -> fprintf fmt "%sf" opfloat
+  | F_DOUBLE      -> fprintf fmt "%sd" opfloat
+  | F_LONG_DOUBLE -> fprintf fmt "%sl" opreal
+  | F_REAL        -> pp_print_string fmt opreal
+
+let () =
+  register_typ {
+    compare = (fun next t1 t2 ->
+        match t1, t2 with
+        | T_array t1, T_array t2 -> compare_typ t1 t2
+        | _ -> next t1 t2
+      );
+
+    print = (fun default fmt typ ->
+        match typ with
+        | T_unit -> pp_print_string fmt "unit"
+        | T_bool -> pp_print_string fmt "bool"
+        | T_int -> pp_print_string fmt "int"
+        | T_float p -> pp_float_prec fmt p
+        | T_string -> pp_print_string fmt "string"
+        | T_addr -> pp_print_string fmt "addr"
+        | T_char -> pp_print_string fmt "char"
+        | T_tree -> pp_print_string fmt "tree"
+        | T_array t -> Format.fprintf fmt "[%a]" pp_typ t
+        | _ -> default fmt typ
+      );
+  }
+
+
+(*================*)
+(** {2 Constants} *)
+(*================*)
 
 
 type constant +=
@@ -55,31 +85,77 @@ type constant +=
 (** Constants. *)
 
 let () =
-  register_constant_compare (fun next c1 c2 ->
-      match c1, c2 with
-      | C_int z1, C_int z2 -> Z.compare z1 z2
-      | C_float f1, C_float f2 -> Pervasives.compare f1 f2
-      | C_string s1, C_string s2 -> Pervasives.compare s1 s2
-      | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
-        Compare.compose [
-          (fun () -> Z.compare z1 z2);
-          (fun () -> Z.compare z1' z2')
-        ]
-      | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
-        Compare.compose [
-          (fun () -> Pervasives.compare f1 f2);
-          (fun () -> Pervasives.compare f1' f2')
-        ]
-      | _ -> next c1 c2
-    )
+  register_constant {
+    compare = (fun next c1 c2 ->
+        match c1, c2 with
+        | C_int z1, C_int z2 -> Z.compare z1 z2
+        | C_float f1, C_float f2 -> Pervasives.compare f1 f2
+        | C_string s1, C_string s2 -> Pervasives.compare s1 s2
+        | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
+          Compare.compose [
+            (fun () -> Z.compare z1 z2);
+            (fun () -> Z.compare z1' z2')
+          ]
+        | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
+          Compare.compose [
+            (fun () -> Pervasives.compare f1 f2);
+            (fun () -> Pervasives.compare f1' f2')
+          ]
+        | _ -> next c1 c2
+      );
 
-(*==========================================================================*)
-                           (** {2 Operators} *)
-(*==========================================================================*)
+    print = (fun default fmt -> function
+        | C_unit -> fprintf fmt "()"
+        | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
+        | C_string(s) -> fprintf fmt "\"%s\"" s
+        | C_int(n) -> Z.pp_print fmt n
+        | C_float(f) -> pp_print_float fmt f
+        | C_int_interval(a,b) -> fprintf fmt "[%a,%a]" Z.pp_print a Z.pp_print b
+        | C_float_interval(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
+        | c -> default fmt c
+      );
+  }
+
+
+(*================*)
+(** {2 Variables} *)
+(*================*)
+
+type var_kind +=
+  | V_universal of string (** Original name of the variable *)
+
+let () =
+  register_var {
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_universal name1, V_universal name2 -> compare name1 name2
+        | _ -> next v1 v2
+      );
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_universal name -> Format.pp_print_string fmt name
+        | _ -> next fmt v
+      );
+    to_uniq_name = (fun next v ->
+        match vkind v with
+        | V_universal orig_name -> orig_name ^ ":" ^ (string_of_int v.vuid)
+        | _ -> next v
+      )
+  }
+
+let mkv name vtyp vuid =
+  Mopsa.mkv (V_universal name) vtyp vuid
+
+let mktmp vtyp =
+  Mopsa.mkfresh (V_universal "$tmp") vtyp
+  
+(*================*)
+(** {2 Operators} *)
+(*================*)
 
 
 type operator +=
-   (* Unary operators *)
+  (* Unary operators *)
   | O_sqrt         (** Square root *)
   | O_bit_invert   (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
@@ -101,23 +177,45 @@ type operator +=
 
 
 let () =
-  register_operator_compare (fun next op1 op2 ->
-      match op1, op2 with
-      | O_wrap(l1, u1), O_wrap(l2, u2) ->
-        Compare.compose [
-          (fun () -> Z.compare l1 l2);
-          (fun () -> Z.compare u1 u2)
-        ]
-      | _ -> next op1 op2
-    )
+  register_operator {
+    compare = (fun next op1 op2 ->
+        match op1, op2 with
+        | O_wrap(l1, u1), O_wrap(l2, u2) ->
+          Compare.compose [
+            (fun () -> Z.compare l1 l2);
+            (fun () -> Z.compare u1 u2)
+          ]
+        | _ -> next op1 op2
+      );
+    print = (fun default fmt op ->
+        match op with
+        | O_plus       -> pp_print_string fmt "+"
+        | O_minus      -> pp_print_string fmt "-"
+        | O_mult       -> pp_print_string fmt "*"
+        | O_div        -> pp_print_string fmt "/"
+        | O_mod        -> pp_print_string fmt "%"
+        | O_pow        -> pp_print_string fmt "**"
+        | O_sqrt       -> pp_print_string fmt "sqrt"
+        | O_bit_invert -> pp_print_string fmt "~"
+        | O_wrap(l,u)  -> fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
+        | O_concat     -> pp_print_string fmt "@"
+        | O_bit_and    -> pp_print_string fmt "&"
+        | O_bit_or     -> pp_print_string fmt "|"
+        | O_bit_xor    -> pp_print_string fmt "^"
+        | O_bit_rshift -> pp_print_string fmt ">>"
+        | O_bit_lshift -> pp_print_string fmt "<<"
+        | O_cast       -> pp_print_string fmt "cast"
+        | op           -> default fmt op
+      );
+  }
 
 
 
-(*==========================================================================*)
-                         (** {2 Heap addresses} *)
-(*==========================================================================*)
+(*  ~-~-~-~-~-~-~-~-~- *)
+(** {2 Heap addresses} *)
+(*  ~-~-~-~-~-~-~-~-~- *)
 
-(** Kind of heap addresses, may be used to store extra information. *)
+(** Kind of heap addresses, used to store extra information. *)
 type addr_kind = ..
 
 (** Heap addresses. *)
@@ -126,29 +224,26 @@ type addr = {
   addr_kind : addr_kind; (** Kind de l'adresse. *)
 }
 
-type addr_info = {
-  compare : (addr -> addr -> int) -> addr -> addr -> int;
-  print   : (Format.formatter -> addr -> unit) -> Format.formatter -> addr -> unit;
-}
 
 let addr_compare_chain : (addr -> addr -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
 
 let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
-  ref (fun fmt a -> failwith "Pp: Unknown address")
+  ref (fun fmt a -> panic "addr_pp_chain: unknown address")
 
 let pp_addr fmt a = !addr_pp_chain fmt a
 
 let compare_addr a b = !addr_compare_chain a b
 
-let register_addr info =
+let register_addr (info: addr info) =
   addr_compare_chain := info.compare !addr_compare_chain;
   addr_pp_chain := info.print !addr_pp_chain;
   ()
 
-(*==========================================================================*)
-                           (** {2 Functions} *)
-(*==========================================================================*)
+
+(*================*)
+(** {2 Functions} *)
+(*================*)
 
 
 (** Function definition *)
@@ -158,8 +253,7 @@ type fundec = {
   fun_parameters: var list; (** list of parameters *)
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
-  fun_return_type: typ option; (** return type *)
-  fun_return_var: var; (** variable storing the return value *)
+  fun_return_var: var option; (** variable storing the return value *)
 }
 
 type fun_builtin =
@@ -177,9 +271,9 @@ let compare_fun_expr x y = match x, y with
   | Builtin a, Builtin b -> Pervasives.compare a b
   | _ -> 1
 
-(*==========================================================================*)
-                           (** {2 Programs} *)
-(*==========================================================================*)
+(*===============*)
+(** {2 Programs} *)
+(*===============*)
 
 type program +=
   | P_universal of {
@@ -188,8 +282,40 @@ type program +=
       universal_main    : stmt;
     }
 
+let () =
+  register_program {
+    compare = (fun next -> next);
+    print   = (fun default fmt prg ->
+        match prg with
+        | P_universal (u_prog) ->
+          Format.fprintf fmt "@[<v>%a@,%a@]"
+            (
+              pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                (fun fmt f ->
+                   fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+                     (fun fmt ov ->
+                        match ov with
+                        | None -> pp_print_string fmt "void"
+                        | Some v -> pp_typ fmt v.vtyp
+                     ) f.fun_return_var
+                     Format.pp_print_string f.fun_name
+                     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+                        (fun fmt v -> Format.fprintf fmt "%a %a"
+                            pp_typ v.vtyp
+                            pp_var v
+                        )
+                     ) f.fun_parameters
+                     pp_stmt f.fun_body
+                )
+            ) u_prog.universal_fundecs
+            pp_stmt u_prog.universal_main
+        | _ -> default fmt prg
+      );
+  }
+
+
 (*==========================================================================*)
-                           (** {2 Expressions} *)
+(** {2 Expressions} *)
 (*==========================================================================*)
 type tc =
   | TC_int of expr
@@ -221,37 +347,87 @@ type expr_kind +=
   | E_tree of tc
 
 let () =
-  register_expr_compare (fun next e1 e2 ->
-      match ekind e1, ekind e2 with
-      | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
+  register_expr {
+    compare = (fun next e1 e2 ->
+        match ekind e1, ekind e2 with
+        | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
 
-      | E_call(f1, args1), E_call(f2, args2) ->
-        Compare.compose [
-          (fun () -> compare_expr f1 f2);
-          (fun () -> Compare.list compare_expr args1 args2)
-        ]
+        | E_call(f1, args1), E_call(f2, args2) ->
+          Compare.compose [
+            (fun () -> compare_expr f1 f2);
+            (fun () -> Compare.list compare_expr args1 args2)
+          ]
 
-      | E_array(el1), E_array(el2) ->
-        Compare.list compare_expr el1 el2
+        | E_array(el1), E_array(el2) ->
+          Compare.list compare_expr el1 el2
 
-      | E_subscript(a1, i1), E_subscript(a2, i2) ->
-        Compare.compose [
-          (fun () -> compare_expr a1 a2);
-          (fun () -> compare_expr i1 i2);
-        ]
+        | E_subscript(a1, i1), E_subscript(a2, i2) ->
+          Compare.compose [
+            (fun () -> compare_expr a1 a2);
+            (fun () -> compare_expr i1 i2);
+          ]
 
-      | E_alloc_addr(a1), E_alloc_addr(a2) ->
-        compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
+        | E_alloc_addr(a1), E_alloc_addr(a2) ->
+          compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
 
-      | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
+        | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
 
-      | E_len(a1), E_len(a2) -> compare_expr a1 a2
+        | E_len(a1), E_len(a2) -> compare_expr a1 a2
 
-      | _ -> next e1 e2
-    )
+        | _ -> next e1 e2
+      );
+
+    print = (fun default fmt exp ->
+        match ekind exp with
+        | E_array(el) ->
+          fprintf fmt "[@[<h>%a@]]"
+            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
+        | E_subscript(v, e) -> fprintf fmt "%a[%a]" pp_expr v pp_expr e
+        | E_function(f) -> fprintf fmt "fun %s" (match f with | User_defined f -> f.fun_name | Builtin f -> f.name)
+        | E_call(f, args) ->
+          fprintf fmt "%a(%a)"
+            pp_expr f
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr {addr_uid=(-1); addr_kind=akind}
+        | E_addr addr -> pp_addr fmt addr
+        | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
+        | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
+        | E_tree (TC_symbol(e, l)) ->
+          Format.fprintf fmt "Tree(%a,{%a})"
+            pp_expr e
+            (Format.pp_print_list
+               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+               pp_expr
+            ) l
+        | _ -> default fmt exp
+      );
+
+    visit = (fun default exp ->
+        match ekind exp with
+        | E_function _ -> leaf exp
+
+        | E_subscript(v, e) ->
+          {exprs = [v; e]; stmts = []},
+          (fun parts -> {exp with ekind = (E_subscript(List.hd parts.exprs, List.hd @@ List.tl parts.exprs))})
+
+        | E_alloc_addr _ -> leaf exp
+
+        | E_addr _ -> leaf exp
+
+        | E_array(el) ->
+          {exprs = el; stmts = []},
+          (fun parts -> {exp with ekind = E_array parts.exprs})
+
+        | E_call(f, args) ->
+          {exprs = f :: args; stmts = []},
+          (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
+
+        | _ -> default exp
+      );
+  }
 
 (*==========================================================================*)
-                           (** {2 Utility functions} *)
+(** {2 Utility functions} *)
 (*==========================================================================*)
 
 let mk_not e = mk_unop O_log_not e
@@ -337,7 +513,7 @@ let is_math_type = function
   | _ -> false
 
 (*==========================================================================*)
-                           (** {2 Statements} *)
+(** {2 Statements} *)
 (*==========================================================================*)
 
 type stmt_kind +=
@@ -351,7 +527,7 @@ type stmt_kind +=
   | S_return of expr option (** Function return with an optional return expression *)
 
   | S_while of expr (** loop condition *) *
-             stmt (** loop body *)
+               stmt (** loop body *)
   (** While loops *)
 
 
@@ -367,7 +543,7 @@ type stmt_kind +=
 
   | S_simple_assert of expr * bool * bool
   (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
-     is_bottom(assume(b' cond)) where b exp is understood as exp if b
+      is_bottom(assume(b' cond)) where b exp is understood as exp if b
       = true and not exp otherwise *)
 
   | S_assert of expr
@@ -381,47 +557,161 @@ type stmt_kind +=
 
 
 let () =
-  register_stmt_compare (fun next s1 s2 ->
-      match skind s1, skind s2 with
-      | S_expression(e1), S_expression(e2) -> compare_expr e1 e2
+  register_stmt {
+    compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | S_expression(e1), S_expression(e2) -> compare_expr e1 e2
 
-      | S_if(c1,then1,else1), S_if(c2,then2,else2) ->
-        Compare.compose [
-          (fun () -> compare_expr c1 c2);
-          (fun () -> compare_stmt then1 then2);
-          (fun () -> compare_stmt else1 else2);
-        ]
+        | S_if(c1,then1,else1), S_if(c2,then2,else2) ->
+          Compare.compose [
+            (fun () -> compare_expr c1 c2);
+            (fun () -> compare_stmt then1 then2);
+            (fun () -> compare_stmt else1 else2);
+          ]
 
-      | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
+        | S_block(sl1), S_block(sl2) -> Compare.list compare_stmt sl1 sl2
 
-      | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
+        | S_return(e1), S_return(e2) -> Compare.option compare_expr e1 e2
 
-      | S_while(c1, body1), S_while(c2, body2) ->
-        Compare.compose [
-          (fun () -> compare_expr c1 c2);
-          (fun () -> compare_stmt body1 body2)
-        ]
+        | S_while(c1, body1), S_while(c2, body2) ->
+          Compare.compose [
+            (fun () -> compare_expr c1 c2);
+            (fun () -> compare_stmt body1 body2)
+          ]
 
-      | S_rebase_addr(a1,a1',m1), S_rebase_addr(a2,a2',m2) ->
-        Compare.compose [
-          (fun () -> compare_addr a1 a2);
-          (fun () -> compare_addr a1' a2');
-          (fun () -> Pervasives.compare m1 m2);
-        ]
+        | S_rebase_addr(a1,a1',m1), S_rebase_addr(a2,a2',m2) ->
+          Compare.compose [
+            (fun () -> compare_addr a1 a2);
+            (fun () -> compare_addr a1' a2');
+            (fun () -> Pervasives.compare m1 m2);
+          ]
 
-      | S_unit_tests(tl1), S_unit_tests(tl2) ->
-        Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
+        | S_unit_tests(tl1), S_unit_tests(tl2) ->
+          Compare.list (fun (t1, _) (t2, _) -> Pervasives.compare t1 t2) tl1 tl2
 
-      | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
-        Compare.compose [
-          (fun () -> compare_expr e1 e2);
-          (fun () -> Pervasives.compare b1 b2);
-          (fun () -> Pervasives.compare b1' b2');
-        ]
+        | S_simple_assert(e1,b1,b1'), S_simple_assert(e2,b2,b2') ->
+          Compare.compose [
+            (fun () -> compare_expr e1 e2);
+            (fun () -> Pervasives.compare b1 b2);
+            (fun () -> Pervasives.compare b1' b2');
+          ]
 
-      | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
-      | _ -> next s1 s2
-    )
+        | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+        | _ -> next s1 s2
+      );
+
+    print = (fun default fmt stmt ->
+        match skind stmt with
+        | S_remove_var(v) ->
+          fprintf fmt "remove(@[<h>%a@])" pp_var v
+        | S_add_var(v) ->
+          fprintf fmt "add(@[<h>%a@])" pp_var v
+        | S_project_vars(vl) ->
+          fprintf fmt "project(@[<h>%a@])"
+            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) vl
+
+        | S_rename_var(v, v') -> fprintf fmt "rename(%a, %a)" pp_var v pp_var v'
+        | S_rebase_addr(a, a', STRONG) -> fprintf fmt "rebase %a = %a" pp_addr a pp_addr a'
+        | S_rebase_addr(a, a', WEAK) -> fprintf fmt "rebase %a ≈ %a" pp_addr a pp_addr a'
+        | S_assign(v, e) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
+        (* FIXME: improve pretty printer by checking whether this is a
+           Strong or a Weak assign*)
+        | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
+        | S_expression(e) -> fprintf fmt "%a;" pp_expr e
+        | S_if(e, s1, s2) ->
+          fprintf fmt "if (%a) {@\n@[<v 2>  %a@]@\n} else {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s1 pp_stmt s2
+        | S_block(l) ->
+          begin
+            fprintf fmt "@[<v>%a@]"
+              (pp_print_list
+                 ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                 pp_stmt
+              ) l
+          end
+        | S_return(None) -> pp_print_string fmt "return;"
+        | S_return(Some e) -> fprintf fmt "return %a;" pp_expr e
+        | S_while(e, s) ->
+          fprintf fmt "while %a {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s
+        | S_break -> pp_print_string fmt "break;"
+        | S_continue -> pp_print_string fmt "continue;"
+        | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
+        | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
+        | S_simple_assert(e,b,b') ->
+          begin
+            match b,b' with
+            | true, true -> fprintf fmt "is_bottom(assume(%a))" pp_expr e
+            | true, false -> fprintf fmt "is_bottom(assume(!%a))" pp_expr e
+            | false, false -> fprintf fmt "!is_bottom(assume(!%a))" pp_expr e
+            | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
+          end
+        | S_print -> fprintf fmt "print();"
+        | _ -> default fmt stmt
+      );
+
+    visit = (fun default stmt ->
+        match skind stmt with
+        | S_break
+        | S_continue
+        | S_rename_var _
+        | S_remove_var _
+        | S_add_var _
+        | S_project_vars _
+        | S_rebase_addr _ -> leaf stmt
+
+        | S_assign(x, e) ->
+          {exprs = [e; x]; stmts = []},
+          (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e)} | _ -> assert false)
+
+        | S_assume(e) ->
+          {exprs = [e]; stmts = []},
+          (fun parts -> {stmt with skind = S_assume(List.hd parts.exprs)})
+
+        | S_expression(e) ->
+          {exprs = [e]; stmts = []},
+          (fun parts -> {stmt with skind = S_expression(List.hd parts.exprs)})
+
+
+        | S_if(e, s1, s2) ->
+          {exprs = [e]; stmts = [s1; s2]},
+          (fun parts -> {stmt with skind = S_if(List.hd parts.exprs, List.hd parts.stmts, List.nth parts.stmts 1)})
+
+        | S_while(e, s)  ->
+          {exprs = [e]; stmts = [s]},
+          (fun parts -> {stmt with skind = S_while(List.hd parts.exprs, List.hd parts.stmts)})
+
+        | S_block(sl) ->
+          {exprs = []; stmts = sl},
+          (fun parts -> {stmt with skind = S_block(parts.stmts)})
+
+        | S_return(None) -> leaf stmt
+
+        | S_return(Some e) ->
+          {exprs = [e]; stmts = []},
+          (function {exprs = [e]} -> {stmt with skind = S_return(Some e)} | _ -> assert false)
+
+        | S_assert(e) ->
+          {exprs = [e]; stmts = []},
+          (function {exprs = [e]} -> {stmt with skind = S_assert(e)} | _ -> assert false)
+
+        | S_simple_assert(e,b,b') ->
+          {exprs = [e]; stmts = []},
+          (function {exprs = [e]} -> {stmt with skind = S_simple_assert(e,b,b')} | _ -> assert false)
+
+        | S_unit_tests(tests) ->
+          let tests_names, tests_bodies = List.split tests in
+          {exprs = []; stmts = tests_bodies},
+          (function {stmts = tests_bodies} ->
+             let tests = List.combine tests_names tests_bodies in
+             {stmt with skind = S_unit_tests(tests)}
+          )
+
+        | S_print -> leaf stmt
+        | S_fold(_, _) -> leaf stmt
+        | S_expand(_, _) -> leaf stmt
+
+        | _ -> default stmt
+      );
+  }
 
 let mk_assert e range =
   mk_stmt (S_assert e) range
@@ -456,3 +746,28 @@ let mk_call fundec args range =
 
 let mk_expr_stmt e =
   mk_stmt (S_expression e)
+
+let rec expr_to_z (e: expr) : Z.t option =
+  match ekind e with
+  | E_constant (C_int n) -> Some n
+  | E_unop (O_minus, e') ->
+    begin
+      match expr_to_z e' with
+      | None -> None
+      | Some n -> Some (Z.neg n)
+    end
+  | E_binop(op, e1, e2) ->
+    begin
+      match expr_to_z e1, expr_to_z e2 with
+      | Some n1, Some n2 ->
+        begin
+          match op with
+          | O_plus -> Some (Z.add n1 n2)
+          | O_minus -> Some (Z.sub n1 n2)
+          | O_mult -> Some (Z.mul n1 n2)
+          | O_div -> if Z.equal n2 Z.zero then None else Some (Z.div n1 n2)
+          | _ -> None
+        end
+      | _ -> None
+    end
+  | _ -> None

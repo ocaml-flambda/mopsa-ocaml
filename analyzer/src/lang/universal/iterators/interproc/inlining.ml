@@ -8,7 +8,7 @@
 
 (** Inter-procedural iterator by inlining.  *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 open Callstack
@@ -134,10 +134,11 @@ struct
       (* Iterate over return flows and assign the returned value to ret *)
       let flow3 =
         Flow.fold (fun acc tk env ->
-            match tk with
-            | T_return(_, None) -> Flow.add T_cur env man acc
+            match ret, tk with
+            | None, T_return(_, _)
+            | _, T_return(_, None) -> Flow.add T_cur env man acc
 
-            | T_return(_, Some e) ->
+            | Some ret, T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
               (* man.exec (mk_add_var ret (tag_range range "adding ret")) |> *)
               man.exec (mk_assign (mk_var ret range) e range) |>
@@ -159,8 +160,12 @@ struct
 
       let flow4 = man.exec ignore_block flow3 in
 
-      Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      OptionExt.return
+      let evl =
+        match ret with
+        | Some ret -> Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range]
+        | None ->  Eval.empty_singleton flow4
+      in
+      Eval.return evl
 
     | _ -> None
 

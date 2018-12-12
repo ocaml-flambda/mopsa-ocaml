@@ -9,7 +9,7 @@
 (** array access and structure member access transformation to pointer
    arithmetic*)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 

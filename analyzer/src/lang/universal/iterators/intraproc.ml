@@ -8,7 +8,7 @@
 
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 

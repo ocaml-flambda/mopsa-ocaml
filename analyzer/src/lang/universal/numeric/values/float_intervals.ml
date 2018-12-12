@@ -8,7 +8,7 @@
 
 (** Interval abstraction of float values. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Value
 open Rounding
 open Ast

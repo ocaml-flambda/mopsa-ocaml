@@ -1,4 +1,4 @@
-open Framework.Essentials
+open Mopsa
 
 module Aux = Equiv.Make(
   struct
@@ -21,7 +21,7 @@ let get_var (s: string) (vb: Aux.t) =
     (Aux.find_l s vb, vb)
   with
   | Not_found ->
-    let v = mk_tmp ~vtyp:(Ast.T_int) () in
+    let v = Ast.mktmp Ast.T_int in
     (v, Aux.add (s, v) vb)
 
 let get_var_list (s: string list) (vb: Aux.t) =
