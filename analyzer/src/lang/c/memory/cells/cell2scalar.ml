@@ -12,8 +12,10 @@ open Mopsa
 open Ast
 open Cell
 open Zone
-
-module CellScalarEquiv = Equiv.Make(Cell)(Var)
+open Stubs.Old
+module Itv =  ItvUtils.IntItv
+           
+module CellScalarEquiv = Equiv.Make(Cell)(Stubs.Old.Lift(Var))
 
 type ('a, _) Annotation.key +=
   | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
@@ -52,7 +54,7 @@ let get_cell flow v =
   | Not_found ->
     Exceptions.panic
       "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
-      pp_var v
+      (pp_old pp_var) v
       CellScalarEquiv.print annot
 
 let get_scalar_and_remove flow c =
@@ -166,28 +168,39 @@ struct
 
   let rec eval zone exp man flow =
     match ekind exp with
-    | E_c_cell({b = S s; o = O_single z}, mode) ->
+    | E_c_cell({b = Cur (S s); o = O_single z}, mode) ->
       (* Case of a static string literal with a constant offset *)
       (* return the scalar value of the character *)
       let ch = String.get s (Z.to_int z) in
       Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow |>
       Eval.return
 
-    | E_c_cell({b = S s; o = _}, mode) ->
-      (* Otherwise, return the interval covering all characters of the string *)
-      let len = String.length s in
-      let at i = String.get s i |> int_of_char in
-      let rec aux i a b =
-        if i = 0
-        then aux (i + 1) (at 0) (at 0)
-        else if i = len
-        then a, b
-        else
-          let a', b' = aux (i + 1) a b in
-          min a a', max b b'
-      in
-      let min, max = aux 0 0 0 in
-      Eval.singleton (Universal.Ast.mk_int_interval min max exp.erange) flow |>
+    | E_c_cell({b = Cur (S s); o = O_region itv}, mode) ->
+      (* Otherwise, return the interval covering characters of the string within itv *)
+      itv |> Bot.bot_dfl1
+        (* Case of empty interval *)
+        (Eval.empty_singleton flow)
+
+        (* Otherwise, iterate over the values of itv *)
+        (fun (imin, imax) ->
+           let imin, imax =
+             match imin, imax with
+             | ItvUtils.IntBound.Finite imin, ItvUtils.IntBound.Finite imax -> imin, imax
+             | _ -> assert false
+           in
+           let at i = String.get s (Z.to_int i) |> int_of_char |> Z.of_int in
+           let cst n = (n,n) in
+           let add n (a,b) = (Z.min n a), (Z.max n b) in
+
+           let rec aux i =
+             if Z.equal i imax
+             then cst (at i)
+             else add (at i) (aux (Z.succ i))
+           in
+           let vmin, vmax = aux imin in
+           Eval.singleton (Universal.Ast.mk_z_interval vmin vmax exp.erange) flow
+        )
+      |>
       Eval.return
 
     | E_c_cell(c, mode) ->

@@ -14,6 +14,11 @@ type 'a with_old =
   | Cur of 'a (** current value *)
   | Old of 'a (** old value *)
 
+let is_old (a: 'a with_old) : bool =
+  match a with
+  | Cur _ -> false
+  | Old _ -> true
+
 let old_extract (a: 'a with_old) : 'a =
   match a with
   | Cur aa -> aa
@@ -33,7 +38,7 @@ let old_apply2 (f: 'a -> 'b -> 'c) (a: 'a with_old) (b: 'b with_old) : 'c =
 let old_bind (f: 'a -> 'b with_old) (a: 'a with_old) : 'b with_old =
   old_apply f a
 
-let old_print pp fmt a =
+let pp_old pp fmt a =
   match a with
   | Cur aa -> pp fmt aa
   | Old aa -> Format.fprintf fmt "old(%a)" pp aa
@@ -49,5 +54,5 @@ struct
 
   let compare = old_apply2 M.compare
 
-  let print = old_print M.print
+  let print = pp_old M.print
 end

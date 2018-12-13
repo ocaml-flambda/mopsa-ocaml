@@ -15,8 +15,8 @@ open Zone
 open Common.Base
 open Common.Points_to
 open Cell
+open Stubs.Old
 module Intervals = Universal.Numeric.Values.Intervals.Value
-module Old = Stubs.Old
 
 (** Maximal number of expanded cells when dereferencing a pointer *)
 let opt_expand = ref 1
@@ -42,22 +42,18 @@ let () =
   }
 
 
-(** Cells with `old` annotations *)
-module OCell = Old.Lift(Cell)
-
-
 module Domain = struct
 
+  (*
+   * Abstract element
+   * ================
+   *
+   * We keep track of the set of previously expanded cells using the generic 
+   * Powerset lattice.
+   *)
 
-  (** Abstract element
-      ================
 
-      We keep track of the set of previously expanded cells. For that,
-      we use the Powerset generic lattice.
-  *)
-
-
-  include Framework.Lattices.Powerset.Make(OCell)
+  include Framework.Lattices.Powerset.Make(Cell)
 
   let is_bottom _ = false
 
@@ -65,28 +61,16 @@ module Domain = struct
     Format.fprintf fmt "expand cells: @[%a@]@\n"
       print c
 
-  let base c =
-    let cc = Old.old_extract c in
-    cc.b
-
-  let offset c =
-    let cc = Old.old_extract c in
-    cc.o
-
-  let typ c =
-    let cc = Old.old_extract c in
-    cc.t
-
   (** Get the integer offset of a cell *)
   let zoffset c =
-    match offset c with
+    match c.o with
     | O_single n -> n
     | _ -> assert false
 
 
-  let exist_and_find_cell (f:OCell.t -> bool) (cs:t) =
+  let exist_and_find_cell (f:cell -> bool) (cs:t) =
     apply (fun r ->
-        let exception Found of cell Old.with_old in
+        let exception Found of cell in
         try
           let () = Set.iter (fun c ->
               if f c then raise (Found(c))
@@ -107,13 +91,13 @@ module Domain = struct
 
   let get_overlappings c cs =
     exist_and_find_cells (fun c' ->
-        OCell.compare c c' <> 0 &&
+        compare_cell c c' <> 0 &&
         (
           let cell_range c =
-            (zoffset c, Z.add (zoffset c) (sizeof_type @@ typ c))
+            (zoffset c, Z.add (zoffset c) (sizeof_type c.t))
           in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          compare_base (base c) (base c') = 0 &&
+          old_apply2 compare_base c.b c'.b = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
       ) cs
@@ -127,26 +111,26 @@ module Domain = struct
   let phi (c: cell) (u : t) range : expr option =
     let open Universal.Ast in
     let cs = u in
-    match exist_and_find_cell (fun c' -> OCell.compare c c' = 0) cs  with
+    match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
     | Some c -> Some (mk_c_cell c range)
     | None ->
       begin
         match exist_and_find_cell
                 (fun c' ->
                    is_c_int_type c'.t && Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
-                   compare_base (base c) (base c') = 0 &&
-                   Z.equal (offset c) (offset c')
+                   old_apply2 compare_base c.b c'.b = 0 &&
+                   Z.equal (zoffset c) (zoffset c')
                 ) cs
         with
         | Some (c') -> Some (wrap_expr (mk_c_cell c' range) (int_rangeof c.t) range)
         | None ->
           begin
             match exist_and_find_cell ( fun c' ->
-                let b = Z.sub (offset c) (offset c') in
+                let b = Z.sub (zoffset c) (zoffset c') in
                 Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare_typ (remove_typedef_qual c.t) (T_c_integer(C_unsigned_char)) = 0
               ) cs with
             | Some (c') ->
-              let b = Z.sub (offset c) (offset c') in
+              let b = Z.sub (zoffset c) (zoffset c') in
               let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
               Some (mk_binop (mk_binop (mk_c_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
             | None ->
@@ -159,7 +143,7 @@ module Domain = struct
                       let n = Z.to_int (sizeof_type (c.t)) in
                       let rec aux i l =
                         if i < n then
-                          let tobein = {b = (base c) ; o = O_single (Z.add (offset c) (Z.of_int i)); t = t'} in
+                          let tobein = {b = c.b ; o = O_single (Z.add (zoffset c) (Z.of_int i)); t = t'} in
                           match exist_and_find_cell (fun c' ->
                               compare_cell c' tobein = 0
                             ) cs with
@@ -183,9 +167,9 @@ module Domain = struct
                     raise NotPossible
                 with
                 | NotPossible ->
-                  match (base c) with
+                  match old_extract c.b with
                   | S s ->
-                    Some (mk_int (String.get s (Z.to_int (offset c)) |> int_of_char) range)
+                    Some (mk_int (String.get s (Z.to_int (zoffset c)) |> int_of_char) range)
                   | _ ->
                     begin
                       if is_c_scalar_type c.t then
@@ -320,7 +304,7 @@ module Domain = struct
       scalar = (fun v e range flow ->
           let c =
             match ekind v with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var(v, mode) -> mkcell (V v) (O_single Z.zero) v.vtyp
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -336,7 +320,7 @@ module Domain = struct
       array =  (fun a is_global init_list range flow ->
           let c =
             match ekind a with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var(v, mode) -> mkcell (V v) (O_single Z.zero) v.vtyp
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -347,7 +331,7 @@ module Domain = struct
               | [] -> flow
               | init :: tl ->
                 let t' = under_array_type c.t in
-                let ci = {b = (base c); o = O_single Z.((offset c) + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                let ci = {b = c.b; o = O_single Z.((zoffset c) + (Z.of_int i) * (sizeof_type t')); t = t'} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
@@ -358,7 +342,7 @@ module Domain = struct
       record =  (fun s is_global init_list range flow ->
           let c =
             match ekind s with
-            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var (v, _) -> mkcell (V v) (O_single Z.zero) (v.vtyp)
             | E_c_cell(c, _) -> c
             | _ -> assert false
           in
@@ -371,7 +355,7 @@ module Domain = struct
               | init :: tl ->
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
-                let cf = {b = (base c); o = O_single Z.((offset c) + (Z.of_int field.c_field_offset)); t = t'} in
+                let cf = {b = c.b; o = O_single Z.((zoffset c) + (Z.of_int field.c_field_offset)); t = t'} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
@@ -453,7 +437,7 @@ module Domain = struct
     Eval.bind @@ fun o flow ->
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton {b; o; t} flow
+      Eval.singleton (mkcell b o t) flow
 
     | O_out_of_bound ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -474,7 +458,7 @@ module Domain = struct
   let eval_scalar_cell exp man flow : ('a, cell) evl =
     match ekind exp with
     | E_var (v, mode) when is_c_scalar_type v.vtyp ->
-      let c = {b = V v; o = O_single Z.zero; t = v.vtyp}  in
+      let c = mkcell (V v) (O_single Z.zero) v.vtyp  in
       Eval.singleton c flow
 
     | E_c_deref(p) ->
@@ -605,8 +589,9 @@ module Domain = struct
     let cells =
       a |>
       exist_and_find_cells
-        (fun c -> compare_base (base c) b = 0 &&
-                  pred (offset c)
+        (fun c ->
+           old_apply2 compare_base c.b b = 0 &&
+           pred (zoffset c)
         )
     in
     let block = List.map (fun c' -> mk_c_remove_cell c' range) cells in
@@ -654,7 +639,7 @@ module Domain = struct
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove_var (v) when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> compare_base (base c) (V v) = 0) u in
+      let l = exist_and_find_cells (fun c -> old_apply compare_base c.b (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
       let mergers = List.map (fun c -> mk_c_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in
@@ -666,7 +651,6 @@ module Domain = struct
 
     (* 𝕊⟦ lval = rval ⟧ *)
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      debug "assign";
       man.eval ~zone:(Z_c, Z_under Z_c_cell) rval flow |>
       Post.bind_opt man @@ fun rval flow ->
 
@@ -678,7 +662,7 @@ module Domain = struct
 
       begin match c.o with
         | O_single _ -> assign_cell c rval stmt.srange man flow
-        | O_region itv -> remove_cells (base c) (fun o -> Intervals.mem o itv) stmt.srange man flow
+        | O_region itv -> remove_cells c.b (fun o -> Intervals.mem o itv) stmt.srange man flow
         | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" pp_cell c
       end
 

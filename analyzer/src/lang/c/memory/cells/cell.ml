@@ -15,7 +15,7 @@ open Framework.Visitor
 open Common.Base
 open Ast
 module Itv = Universal.Numeric.Values.Intervals.Value
-
+open Stubs.Old
 
 
 (** {2 Cell offset} *)
@@ -25,7 +25,6 @@ module Itv = Universal.Numeric.Values.Intervals.Value
 type offset =
   | O_single of Z.t     (** Integer offset of a single cell *)
   | O_region of Itv.t   (** Interval offset covering a contiguous region of cells*)
-  | O_all               (** Offsets of all cells within a base *)
   | O_out_of_bound      (** Offsets out-of-bound of the allocated size of a base *)
 
 let compare_offset o1 o2 =
@@ -38,7 +37,6 @@ let pp_offset fmt o =
   match o with
   | O_single n -> Z.pp_print fmt n
   | O_region itv -> Itv.print fmt itv
-  | O_all -> Format.fprintf fmt "∀"
   | O_out_of_bound -> Format.fprintf fmt "⚠"
 
 
@@ -47,39 +45,54 @@ let pp_offset fmt o =
 
 (** A cell is identified by a base, an offset and a type *)
 type cell = {
-  b: base;
-  o: offset;
-  t: typ;
+  b: base with_old; (** base of the cell, possibly denoting an old copy *)
+  o: offset;        (** offset of the cell within the base *)
+  t: typ;           (** type of the cell *) 
 }
 
+(** Create a cell *)
+let mkcell b o t =
+  { b = Cur b; o; t }
+
+(** Create an old cell *)
+let mkocell b o t =
+  { b = Old b; o; t }
+
+(** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [
-    (fun () -> compare_base c1.b c2.b);
+    (fun () -> old_apply2 compare_base c1.b c2.b);
     (fun () -> compare_offset c1.o c2.o);
     (fun () -> compare_typ c1.t c2.t);
   ]
 
+(** Print a cell *)
 let pp_cell fmt c =
-  Format.fprintf fmt "⟨%a,%a,%a⟩"
-    pp_base c.b
-    pp_offset c.o
-    pp_typ c.t
-
-let cell_to_var c =
-  let vname =
-    let () = Format.fprintf Format.str_formatter
-        "{%a:%a:%a}"
-        pp_base c.b
+  pp_old (fun fmt b ->
+      Format.fprintf fmt "⟨%a,%a,%a⟩"
+        pp_base b
         pp_offset c.o
-        Pp.pp_c_type_short c.t
-    in
-    Format.flush_str_formatter ()
-  in
-  {
-    vname;
-    vuid = base_uid c.b;
-    vtyp = c.t;
-  }
+        pp_typ c.t
+    ) fmt c.b
+
+(** Create a C scalar variable from a cell *)
+let cell_to_var c : var with_old =
+  old_lift (fun b ->
+      let vname =
+        let () = Format.fprintf Format.str_formatter
+            "{%a:%a:%a}"
+            pp_base b
+            pp_offset c.o
+            Pp.pp_c_type_short c.t
+        in
+        Format.flush_str_formatter ()
+      in
+      {
+        vname;
+        vuid = base_uid b;
+        vtyp = c.t;
+      }
+    ) c.b
 
 
 (** {2 Cell extensions to the AST} *)
@@ -92,6 +105,7 @@ type stmt_kind +=
   | S_c_remove_cell of cell (* Ask for the removing of a cell *)
   | S_c_expand_cell of cell * cell list (* Expand a cell into a set of cells *)
 
+(** Create a cell expression *)
 let mk_c_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
