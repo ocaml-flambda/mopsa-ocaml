@@ -7,7 +7,8 @@
 (****************************************************************************)
 
 (** Cells are contiguous memory blocks identified by a base storage
-   variable, a numeric offset and a type.  *)
+   region (a variable, a string literal or a dynamically allocated
+   memory block), a numeric offset and a type.  *)
 
 open Mopsa
 open Framework.Visitor
@@ -37,8 +38,8 @@ let pp_offset fmt o =
   match o with
   | O_single n -> Z.pp_print fmt n
   | O_region itv -> Itv.print fmt itv
-  | O_all -> Format.fprintf fmt "⋆"
-  | O_out_of_bound -> Format.fprintf fmt "🛇"
+  | O_all -> Format.fprintf fmt "∀"
+  | O_out_of_bound -> Format.fprintf fmt "⚠"
 
 
 (** {2 Cells} *)
@@ -63,7 +64,7 @@ let pp_cell fmt c =
     pp_base c.b
     pp_offset c.o
     pp_typ c.t
-  
+
 let cell_to_var c =
   let vname =
     let () = Format.fprintf Format.str_formatter
