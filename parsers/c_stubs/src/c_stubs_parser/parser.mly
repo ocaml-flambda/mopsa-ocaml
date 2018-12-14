@@ -36,7 +36,7 @@
 %token LAND LOR
 %token BAND BOR
 %token LNOT BNOT
-%token ARROW ADDROF STAR
+%token ARROW STAR
 %token GT GE LT LE EQ NEQ
 %token RSHIFT LSHIFT BXOR
 
@@ -345,7 +345,7 @@ set:
 
 args:
   |                             { [] }
-  | with_range(expr) COLON args { $1 :: $3 }
+  | with_range(expr) COMMA args { $1 :: $3 }
   | with_range(expr)            { [ $1 ] }
 
 var_list:

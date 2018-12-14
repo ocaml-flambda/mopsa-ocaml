@@ -16,7 +16,23 @@
 #include "mopsa_libc_utils.h"
 
 
+/* Utilities */
+
 static const size_t _MB_LEN_MAX = MB_LEN_MAX;
+
+static const size_t _PATH_MAX = PATH_MAX;
+
+/*$
+ * local: char* r = new Memory;
+ * ensures: return == r;
+ * ensures: size(return) >= 1 and size(return) <= max;
+ * ensures: return[size(return) - 1] == 0;
+ */
+static char* _alloc_string(size_t max);
+
+
+/* Stubs */
+
 
 /*$
  * ensures: return >= 1 and return <= _MB_LEN_MAX;
@@ -847,22 +863,6 @@ char *mktemp (char *__template);
  */
 int mkstemp (char *__template);
 
-/*$
- * // TODO: same issue as mktemp
- * requires: exists int i in [0, size(__template) - 1]: __template[i] == 0;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: __template[0, size(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int mkstemp64 (char *__template);
-
 #endif
 
 #ifdef __USE_MISC
@@ -883,23 +883,6 @@ int mkstemp64 (char *__template);
  *   ensures: return == -1;
  */
 int mkstemps (char *__template, int __suffixlen);
-
-/*$
- * // TODO: same issue as mktemp
- * requires: exists int i in [0, size(__template) - 1]: __template[i] == 0;
- * requires: __suffixlen >= 0;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: __template[0, size(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int mkstemps64 (char *__template, int __suffixlen);
 
 #endif
   
@@ -943,22 +926,6 @@ int mkostemp (char *__template, int __flags);
 /*$
  * // TODO: same issue as mktemp
  * requires: exists int i in [0, size(__template) - 1]: __template[i] == 0;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: __template[0, size(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int mkostemp64 (char *__template, int __flags);
-
-/*$
- * // TODO: same issue as mktemp
- * requires: exists int i in [0, size(__template) - 1]: __template[i] == 0;
  * requires: __suffixlen >= 0;
  *
  * case "success":
@@ -973,23 +940,6 @@ int mkostemp64 (char *__template, int __flags);
  */
 int mkostemps (char *__template, int __suffixlen, int __flags);
 
-/*$
- * // TODO: same issue as mktemp
- * requires: exists int i in [0, size(__template) - 1]: __template[i] == 0;
- * requires: __suffixlen >= 0;
- *
- * case "success":
- *   local:   void* fd = new FileDescriptor;
- *   assigns: __template[0, size(__template) - 1];
- *   ensures: return == (int)fd;
- *
- * case "failure":
- *   assigns: __template[0, size(__template) - 1];
- *   assigns: _errno;
- *   ensures: return == -1;
- */
-int mkostemps64 (char *__template, int __suffixlen, int __flags);
-
 #endif
 
 /*$
@@ -999,18 +949,14 @@ int mkostemps64 (char *__template, int __suffixlen, int __flags);
 int system (const char *__command);
 
 
-static const size_t _PATH_MAX = PATH_MAX;
-
 #ifdef	__USE_GNU
 
 /*$
  * requires: exists int i in [0, size(__name) - 1]: __name[i] == 0;
  *
  * case "success":
- *   local:    char* r = new Memory;
- *   ensures:  size(r) <= _PATH_MAX;
+ *   local:    char* r = _alloc_string(_PATH_MAX);
  *   ensures:  return == r;
- *   ensures:  exists int i in [0, size(return) - 1]: return[i] == 0;
  *
  * case "failure":
  *   assigns:  _errno;
@@ -1027,10 +973,8 @@ char *canonicalize_file_name (const char *__name);
  *
  * case "alloc":
  *   assumes:  __resolved == _NULL;
- *   local:    char* r = new Memory;
- *   ensures:  size(r) <= _PATH_MAX;
+ *   local:    char* r = _alloc_string(_PATH_MAX);
  *   ensures:  return == r;
- *   ensures:  exists int i in [0, size(return) - 1]: return[i] == 0;
  *
  * case "copy":
  *   assumes:  __resolved != _NULL;
