@@ -100,20 +100,15 @@ let cell_to_var c : var with_old =
 type expr_kind +=
   | E_c_cell of cell * mode (* Expression representing a cell *)
 
-type stmt_kind +=
-  | S_c_add_cell    of cell (* Add a cell as a new dimension *)
-  | S_c_remove_cell of cell (* Ask for the removing of a cell *)
-  | S_c_expand_cell of cell * cell list (* Expand a cell into a set of cells *)
-
 (** Create a cell expression *)
 let mk_c_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
 let mk_c_remove_cell c range =
-  mk_stmt (S_c_remove_cell c) range
+  mk_remove (mk_c_cell c range) range
 
 let mk_c_add_cell c range =
-  mk_stmt (S_c_add_cell c) range
+  mk_add (mk_c_cell c range) range
 
 let () =
   register_expr {
@@ -137,48 +132,8 @@ let () =
         | E_c_cell _ -> leaf e
         | _ -> next e
       )
-   };
+   }
 
-  register_stmt {
-    compare = (fun next stmt1 stmt2 ->
-        match skind stmt1, skind stmt2 with
-        | S_c_add_cell c1, S_c_add_cell c2 -> compare_cell c1 c2
-
-        | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
-
-        | S_c_expand_cell (c1, cl1), S_c_expand_cell (c2, cl2) ->
-          Compare.compose [
-            (fun () -> compare_cell c1 c2);
-            (fun () -> Compare.list compare_cell cl1 cl2)
-          ]
-
-        | _ -> next stmt1 stmt2
-      );
-    print = (fun next fmt stmt ->
-        match skind stmt with
-        | S_c_add_cell c ->
-          Format.fprintf fmt "S_c_add_cell(%a)" pp_cell c
-
-        | S_c_remove_cell c ->
-          Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
-
-        | S_c_expand_cell(c, cl) ->
-          Format.fprintf fmt "expand(%a,{%a})"
-            pp_cell c
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-               pp_cell) cl
-
-        | _ -> next fmt stmt
-      );
-    visit = (fun next stmt ->
-        match skind stmt with
-        | S_c_add_cell c    -> leaf stmt
-        | S_c_remove_cell c -> leaf stmt
-        | S_c_expand_cell _ -> leaf stmt
-        | _ -> next stmt
-      )
-  }
 
 (* Cell zoning *)
 (* =========== *)

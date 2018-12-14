@@ -520,9 +520,6 @@ type stmt_kind +=
   | S_print
   (** Print the abstract flow map at current location *)
 
-  | S_forget of var
-  (** Forgets variable *)
-
 
 let () =
   register_stmt {
@@ -570,17 +567,6 @@ let () =
 
     print = (fun default fmt stmt ->
         match skind stmt with
-        | S_remove_var(v) ->
-          fprintf fmt "remove(@[<h>%a@])" pp_var v
-        | S_add_var(v) ->
-          fprintf fmt "add(@[<h>%a@])" pp_var v
-        | S_project_vars(vl) ->
-          fprintf fmt "project(@[<h>%a@])"
-            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) vl
-
-        | S_rename_var(v, v') -> fprintf fmt "rename(%a, %a)" pp_var v pp_var v'
-        | S_rebase_addr(a, a', STRONG) -> fprintf fmt "rebase %a = %a" pp_addr a pp_addr a'
-        | S_rebase_addr(a, a', WEAK) -> fprintf fmt "rebase %a ≈ %a" pp_addr a pp_addr a'
         | S_assign(v, e) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
         (* FIXME: improve pretty printer by checking whether this is a
            Strong or a Weak assign*)
@@ -619,12 +605,7 @@ let () =
     visit = (fun default stmt ->
         match skind stmt with
         | S_break
-        | S_continue
-        | S_rename_var _
-        | S_remove_var _
-        | S_add_var _
-        | S_project_vars _
-        | S_rebase_addr _ -> leaf stmt
+        | S_continue -> leaf stmt
 
         | S_assign(x, e) ->
           {exprs = [e; x]; stmts = []},

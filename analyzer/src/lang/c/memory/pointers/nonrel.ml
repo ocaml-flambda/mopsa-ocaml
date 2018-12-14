@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstraction of pointer arithmetic *)
+(** Non-relational abstract for C pointers *)
 
 open Mopsa
 open Universal.Ast
@@ -392,19 +392,20 @@ struct
       in
       Post.return flow'
 
-    | S_add_var(p) when is_c_pointer_type p.vtyp ->
+    | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let flow1 = Flow.map_domain_env T_cur (NR.add p Bases.top) man flow in
       let o = mk_offset_var p in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add_var o range) flow1 in
       Post.return flow2
 
-    | S_remove_var(p) when is_c_pointer_type p.vtyp ->
+    | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let flow1 = Flow.map_domain_env T_cur (NR.remove p) man flow in
       let o = mk_offset_var p in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove_var o range) flow1 in
       Post.return flow2
 
-    | S_expand(p, pl) when is_c_pointer_type p.vtyp ->
+    | S_expand( { ekind = E_var (p, _) } , pl) when is_c_pointer_type p.vtyp ->
+      let pl = List.map (function { ekind = E_var (p, _) } -> p | _ -> assert false) pl in
       let a = Flow.get_domain_env T_cur man flow in
       let pt = NR.find p a in
       let o = mk_offset_var p in
@@ -412,7 +413,7 @@ struct
         pl |> List.fold_left (fun flow pp ->
             let oo = mk_offset_var pp in
             Flow.map_domain_env T_cur (NR.add pp pt) man flow |>
-            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_expand o [oo] range)
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_expand_var o [oo] range)
           ) flow
       in
       Post.return flow

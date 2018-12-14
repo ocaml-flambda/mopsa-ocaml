@@ -447,9 +447,6 @@ module Domain = struct
       in
       Eval.empty_singleton flow'
 
-    | _ -> assert false
-
-
   (** Evaluate a base and a quantified offset expression into a cell *)
   let eval_quantified_cell b o t range man flow : ('a, cell) evl =
     panic_at range "expand: evaluation of quantified cells not supported"
@@ -624,7 +621,7 @@ module Domain = struct
       Post.return
 
     (* 𝕊⟦ add v ⟧ *)
-    | S_add_var (v) when is_c_type v.vtyp ->
+    | S_add { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
@@ -637,7 +634,7 @@ module Domain = struct
       panic_at stmt.srange "expand: S_rebase_addr not supported"
 
     (* 𝕊⟦ remove v ⟧ *)
-    | S_remove_var (v) when is_c_type v.vtyp ->
+    | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
       let l = exist_and_find_cells (fun c -> old_apply compare_base c.b (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in

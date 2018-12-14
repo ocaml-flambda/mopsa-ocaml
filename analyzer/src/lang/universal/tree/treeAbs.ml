@@ -255,8 +255,8 @@ module Domain : Framework.Domains.Stacked.S = struct
     =
     let () = debug "I am asked" in
     match skind stmt with
-    | S_add_var(v) when v.vtyp = T_tree -> Some (flow |> Post.of_flow)
-    | S_remove_var(v) when v.vtyp = T_tree -> remove_from_flow (srange stmt) man v flow |> Post.of_flow |> OptionExt.return
+    | S_add { ekind = E_var (v, _) } when v.vtyp = T_tree -> Some (flow |> Post.of_flow)
+    | S_remove { ekind = E_var (v, _) } when v.vtyp = T_tree -> remove_from_flow (srange stmt) man v flow |> Post.of_flow |> OptionExt.return
     | S_assign({ekind = E_var(v, mode); etyp = T_tree}, e2) ->
       let range = srange stmt in
       man.eval e2 flow

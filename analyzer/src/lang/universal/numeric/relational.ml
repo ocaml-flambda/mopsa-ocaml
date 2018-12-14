@@ -489,7 +489,7 @@ struct
   let rec exec stmt a =
     let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
-    | S_remove_var var ->
+    | S_remove { ekind = E_var (var, _) } ->
       let env = Apron.Abstract1.env a in
       let vars =
         List.filter (fun v -> is_env_var v a) [var] |>
@@ -499,13 +499,16 @@ struct
       Apron.Abstract1.change_environment ApronManager.man a env true |>
       return
 
-    | S_rename_var(v, v') ->
+    | S_rename( { ekind = E_var (v, _) }, { ekind = E_var (v', _) } ) ->
       Apron.Abstract1.rename_array ApronManager.man a
         [| var_to_apron v  |]
         [| var_to_apron v' |] |>
       return
 
-    | S_project_vars vars ->
+    | S_project vars
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
+      ->
+      let vars = List.map (function { ekind = E_var (v, _) } -> v | _ -> assert false) vars in
       let env = Apron.Abstract1.env a in
       let vars = List.map var_to_apron vars in
       let old_vars1, old_vars2 = Apron.Environment.vars env in
@@ -525,11 +528,12 @@ struct
           remove_tmp l |>
           return
         with UnsupportedExpression ->
-          exec {stmt with skind = S_remove_var v} a
+          exec (mk_remove_var v stmt.srange) a
       end
 
-    | S_fold(v, vl) ->
+    | S_fold({ ekind = E_var (v, _)}, vl) ->
       begin
+        let vl = List.map (function { ekind = E_var (v, _) } -> v | _ -> assert false) vl in
         debug "Starting fold";
         match vl with
         | [] -> Exceptions.panic "Can not fold list of size 0"
@@ -541,8 +545,9 @@ struct
           abs |> return
       end
 
-    | S_expand(v, vl) ->
+    | S_expand({ ekind = E_var (v, _)}, vl) ->
       begin
+        let vl = List.map (function { ekind = E_var (v, _) } -> v | _ -> assert false) vl in
         debug "Starting expand";
         let abs = Apron.Abstract1.expand ApronManager.man a
             (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in

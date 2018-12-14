@@ -314,7 +314,7 @@ module Domain =
       | S_assign({ekind = E_py_attribute(lexpr, attr)}, rval) ->
          Exceptions.panic "lexpr.attr = rval, with lexpr <> E_Var@\n"
 
-      | S_remove_var v ->
+      | S_remove { ekind = E_var (v, _) } ->
          debug "Removing var %a@\n" pp_var v;
          let cur = Flow.get_domain_cur man flow in
          let flow = Flow.set_domain_cur (Typingdomain.rm_var cur v) man flow in

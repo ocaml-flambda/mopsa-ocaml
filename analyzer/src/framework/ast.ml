@@ -324,25 +324,28 @@ type stmt_kind +=
 
   | S_assume of expr (** condition *)
 
-  | S_rename_var of var (** old *) * var (** new *)
-  (** Rename a variable into another*)
+  | S_add of expr
+  (** Add a dimension to the abstract environments. *)
 
-  | S_add_var of var
-  (** Add a variable to the abstract environments. *)
+  | S_remove of expr
+  (** Remove a dimension from the abstract environments. *)
 
-  | S_remove_var of var
-  (** Remove a variable from the abstract environments. *)
+  | S_rename of expr (** old *) * expr (** new *)
+  (** Rename the first dimension into the second one *)
 
-  | S_project_vars of var list
+  | S_forget of expr
+  (** Forget a dimension from the abstract environments. *)
+
+  | S_project of expr list
   (** Project the abstract environments on the given list of variables. *)
 
-  | S_expand of var * var list
-  (** Expands the first variable into the list of variables, the first
-      variable is removed from the environment *)
+  | S_expand of expr * expr list
+  (** Expands the first dimension into the list of dimensions, the first
+      dimension is removed from the environment *)
 
-  | S_fold of var * var list
-  (** Folds the the list of variables into the first variable, the
-      list of variable is then removed from the environment *)
+  | S_fold of expr * expr list
+  (** Folds the the list of dimensions into the first one, the
+      list of dimensions is then removed from the environment *)
 
 
 type stmt = {
@@ -365,33 +368,28 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
 
       | S_assume(e1), S_assume(e2) -> compare_expr e1 e2
 
-      | S_rename_var(v1, v1'), S_rename_var(v2, v2') ->
+      | S_rename(e1, e1'), S_rename(e2, e2') ->
         Compare.compose [
-          (fun () -> compare_var v1 v2);
-          (fun () -> compare_var v1' v2');
+          (fun () -> compare_expr e1 e2);
+          (fun () -> compare_expr e1' e2');
         ]
 
-      | S_remove_var(v1), S_remove_var(v2) -> compare_var v1 v2
+      | S_remove(e1), S_remove(e2) -> compare_expr e1 e2
 
-      | S_add_var(v1), S_add_var(v2) -> compare_var v1 v2
+      | S_add(e1), S_add(e2) -> compare_expr e1 e2
 
-      | S_project_vars(vl1), S_project_vars(vl2) ->
-        Compare.compose (
-          (fun () -> Pervasives.compare (List.length vl1) (List.length vl2))
-          ::
-          (List.map (fun (v1, v2) -> (fun () -> compare_var v1 v2)) @@ List.combine vl1 vl2)
-        )
-      | S_expand(v, vl), S_expand(v', vl') ->
+      | S_project(el1), S_project(el2) -> Compare.list compare_expr el1 el2
+
+      | S_expand(e, el), S_expand(e', el') ->
         Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list compare_var vl vl')
+          (fun () -> compare_expr e e');
+          (fun () -> Compare.list compare_expr el el')
         ]
 
-      | S_fold(v, vl), S_fold(v', vl') ->
+      | S_fold(e, el), S_fold(e', el') ->
         Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list
-              compare_var vl vl')
+          (fun () -> compare_expr e e');
+          (fun () -> Compare.list compare_expr el el')
         ]
 
       | _ -> Pervasives.compare s1 s2
@@ -404,18 +402,32 @@ let stmt_pp_chain : (Format.formatter -> stmt -> unit) ref =
   ref (fun fmt stmt ->
       match skind stmt with
       | S_program prog -> pp_program fmt prog
-      | S_expand(v, vl) ->
+
+      | S_remove(e) -> fprintf fmt "remove(%a)" pp_expr e
+
+      | S_add(e) -> fprintf fmt "add(%a)" pp_expr e
+
+      | S_forget(e) -> fprintf fmt "forget(%a)" pp_expr e
+
+      | S_project(el) ->
+        fprintf fmt "project(@[<h>%a@])"
+          (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
+
+      | S_rename(e, e') -> fprintf fmt "rename(%a, %a)" pp_expr e pp_expr e'
+
+      | S_expand(e, el) ->
         fprintf fmt "expand(%a,{%a})"
-          pp_var v
+          pp_expr e
           (pp_print_list
              ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
-      | S_fold(v, vl) ->
+             pp_expr) el
+
+      | S_fold(e, el) ->
         fprintf fmt "fold(%a,{%a})"
-          pp_var v
+          pp_expr e
           (pp_print_list
              ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
+             pp_expr) el
 
       | _ -> failwith "Pp: Unknown statement"
     )
@@ -505,10 +517,11 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
             | _ -> assert false
           )
 
-      | S_rename_var _
-      | S_add_var _
-      | S_remove_var _
-      | S_project_vars _
+      | S_rename _
+      | S_add _
+      | S_remove _
+      | S_forget _
+      | S_project _
       | S_expand _
       | S_fold _ -> leaf stmt
 
@@ -571,22 +584,57 @@ let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
 let mk_stmt skind srange = {skind; srange}
 
 let mk_rename v v' =
-  mk_stmt (S_rename_var (v, v'))
+  mk_stmt (S_rename (v, v'))
 
 let mk_assign v e =
   mk_stmt (S_assign (v, e))
 
-let mk_expand v vl range =
-  mk_stmt (S_expand(v, vl)) range
-
 let mk_assume e =
   mk_stmt (S_assume e)
 
-let mk_remove_var v = mk_stmt (S_remove_var v)
+let mk_remove v = mk_stmt (S_remove v)
 
-let mk_add_var v = mk_stmt (S_add_var v)
+let mk_remove_var v range =
+  mk_remove (mk_var v range) range
 
-let mk_project_vars vars = mk_stmt (S_project_vars vars)
+let mk_add v = mk_stmt (S_add v)
+
+let mk_add_var v range =
+  mk_add (mk_var v range) range
+
+let mk_rename e e' range =
+  mk_stmt (S_rename (e, e')) range
+
+let mk_rename_var v v' range =
+  mk_rename (mk_var v range) (mk_var v' range) range
+
+let mk_project vars = mk_stmt (S_project vars)
+
+let mk_project_vars vars range =
+  mk_project (List.map (fun v -> mk_var v range) vars) range
+
+let mk_forget e = mk_stmt (S_forget e)
+
+let mk_forget_var v range = mk_forget (mk_var v range) range
+
+let mk_expand v vl range =
+  mk_stmt (S_expand(v, vl)) range
+
+let mk_expand_var v vl range =
+  mk_expand
+    (mk_var v range)
+    (List.map (fun v' -> mk_var v' range) vl)
+    range
+
+let mk_fold v vl range =
+  mk_stmt (S_fold(v, vl)) range
+
+let mk_fold_var v vl range =
+  mk_fold
+    (mk_var v range)
+    (List.map (fun v' -> mk_var v' range) vl)
+    range
+
 
 (* Utility to negate the comparisons in framework *)
 let negate_comparison = function

@@ -115,37 +115,39 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_add_cell c ->
+    | S_add { ekind = E_c_cell (c, mode) } ->
       let v, flow = get_scalar_or_create flow c in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_add_var v}) flow |>
+      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+      man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
       Post.return
 
-    | S_c_remove_cell c ->
+    | S_remove { ekind = E_c_cell (c, mode) } ->
       let v, flow = get_scalar_and_remove flow c in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_remove_var v}) flow |>
+      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+      man.exec ~zone:Z_c_scalar (mk_remove vv stmt.srange) flow |>
       Post.return
 
-    | S_c_expand_cell (c, cl) ->
+    | S_expand ({ ekind = E_c_cell (c, mode) }, cl) ->
       let v, flow = get_scalar_or_create flow c in
+      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
       let vl, flow =
         let rec doit flow = function
-          | [] -> assert false
-          | [c] ->
+          | [] -> [], flow
+          | { ekind = E_c_cell (c, mode) } :: tl ->
             let v, flow = get_scalar_or_create flow c in
-            [v], flow
-          | c :: tl ->
-            let v, flow = get_scalar_or_create flow c in
+            let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
             let vl, flow = doit flow tl in
-            v :: vl, flow
+            vv :: vl, flow
+          | _ -> assert false
         in
         doit flow cl
       in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (v, vl)}) flow |>
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
       Post.return
 
-    | S_assign({ ekind = E_c_cell _ } as lval, rval)  ->
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) lval flow |>
-      Post.bind_opt man @@ fun lval' flow ->
+    | S_assign({ ekind = E_c_cell (c, mode) }, rval)  ->
+      let lval, flow = get_scalar_or_create flow c in
+      let lval' = mk_stub_old (mk_var ~mode) lval stmt.srange in
 
       man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) rval flow |>
       Post.bind_opt man @@ fun rval' flow ->
@@ -205,8 +207,8 @@ struct
 
     | E_c_cell(c, mode) ->
       let v, flow = get_scalar_or_create flow c in
-      let exp = mk_var v exp.erange ~mode in
-      Eval.singleton exp flow |>
+      let vv = mk_stub_old (mk_var ~mode) v exp.erange in
+      Eval.singleton vv flow |>
       Eval.return
 
     | _ -> None

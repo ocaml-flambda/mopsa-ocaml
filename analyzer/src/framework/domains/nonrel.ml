@@ -238,20 +238,23 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_remove_var v ->
+    | S_remove { ekind = E_var (v, _) } ->
       Some (
         let flow' = Flow.map_domain_env T_cur (VarMap.remove v) man flow in
         Post.of_flow flow'
       )
 
-    | S_add_var v ->
+    | S_add { ekind = E_var (v, _) } ->
       Some (
         let flow' = Flow.map_domain_env T_cur (VarMap.add v Value.top) man flow in
         Post.of_flow flow'
       )
 
-    | S_project_vars vars ->
+    | S_project vars
+        when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
+      ->
       Some (
+        let vars = List.map (function { ekind = E_var (v, _) } -> v | _ -> assert false) vars in
         let flow' = Flow.map_domain_env T_cur (fun a ->
             VarMap.fold (fun v _ acc ->
                 if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
@@ -261,7 +264,7 @@ struct
         Post.of_flow flow'
       )
 
-    | S_rename_var (var1, var2) ->
+    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       Some (
         let flow' = Flow.map_domain_env T_cur (fun a ->
             let v = VarMap.find var1 a in
@@ -271,7 +274,10 @@ struct
         Post.of_flow flow'
       )
 
-    (* FIXME: No check on weak variables in rhs *)
+    | S_forget ( { ekind = E_var (v, _) } ) ->
+      Flow.map_domain_env T_cur (add v Value.top) man flow |>
+      Post.return
+
     | S_assign({ekind = E_var(var, mode)}, e) ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
@@ -289,7 +295,8 @@ struct
         Post.add_channels channels
       )
 
-    | S_expand(v, vl) ->
+    | S_expand({ ekind = E_var (v, _) }, vl) ->
+      let vl = List.map (function { ekind = E_var (v, _) } -> v | _ -> assert false) vl in
       let a = Flow.get_domain_env T_cur man flow in
       let value = find v a in
       let aa = List.fold_left (fun acc v' ->
@@ -299,6 +306,7 @@ struct
       Flow.set_domain_env T_cur aa man flow |>
       Post.return
 
+    (* FIXME: No check on weak variables in rhs *)
     | S_assume e ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
