@@ -109,7 +109,11 @@ let compare_var v1 v2 =
     (fun () -> compare_typ v1.vtyp v2.vtyp);
   ]
 
-let pp_var fmt v = pp_print_string fmt v.vname
+let pp_var fmt v =
+  if v.vname = "$tmp" then
+    Format.fprintf fmt "%s_%d" v.vname v.vuid
+  else
+    pp_print_string fmt v.vname
 
 let vtyp v = v.vtyp
 

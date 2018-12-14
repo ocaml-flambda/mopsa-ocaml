@@ -237,7 +237,9 @@ module Domain =
 
           add_signature "set.__contains__" [Set (Typevar 0); Top] [bool] [] |>
           add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1]; Top] [bool] [] |>
-          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1; Typevar 2]; Top] [bool] []
+          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1; Typevar 2]; Top] [bool] [] |>
+
+          add_signature "int.__bool__" [int] [bool] []
       in
       stub_base := lstub_base;
       debug "stub_base = %a@\n" pp_sb !stub_base;
@@ -490,30 +492,35 @@ module Domain =
          | E_type_partition i ->
             let cur = Flow.get_domain_cur man flow in
             debug "cur=%a@\n" print cur;
-            let pt = Typingdomain.TypeIdMap.find i cur.d2 in
-            begin match pt with
-            | Typingdomain.Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
-               Eval.singleton (mk_py_true range) flow
-            | Typingdomain.Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
-               Eval.singleton (mk_py_false range) flow
-            | Typingdomain.Instance {classn; uattrs; oattrs} ->
-               let cur = Flow.get_domain_cur man flow in
-               let dt, df = Typingdomain.filter_attr cur i attr in
-               let flowt = Flow.set_domain_cur dt man flow in
-               let flowf = Flow.set_domain_cur df man flow in
-               (* debug "Bad hasattr on partition %d, initial domain: %a@\n spliting in two cases: %a and %a@\n" i print cur print dt print df; *)
-               Eval.join
-                 (Eval.singleton (mk_py_true range) flowt)
-                 (Eval.singleton (mk_py_false range) flowf)
-            | Typingdomain.Iterator (x, _) ->
-               (* FIXME: should be the type(Iterator _) that has this attribute, I think *)
-               Eval.singleton (mk_py_bool (attr = "next") range) flow
-            | Typingdomain.List _ | Typingdomain.Set _ | Typingdomain.Dict _ ->
-               Eval.singleton (mk_py_false range) flow
-               (* let cls = Addr.find_builtin "list" in
-                * Eval.singleton (mk_py_bool (Addr.is_builtin_attribute cls attr) range) flow *)
-            | _ -> Exceptions.panic "ll_hasattr"
-            end
+            let open Typingdomain in
+            let pt = TypeIdMap.find i cur.d2 in
+            let rec process pt cur =
+              begin match pt with
+              | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
+                 [Eval.singleton (mk_py_true range) flow]
+              | Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
+                 [Eval.singleton (mk_py_false range) flow]
+              | Instance {classn; uattrs; oattrs} ->
+                 let dt, df = filter_attr cur i attr in
+                 let flowt = Flow.set_domain_cur dt man flow in
+                 let flowf = Flow.set_domain_cur df man flow in
+                 (* debug "Bad hasattr on partition %d, initial domain: %a@\n spliting in two cases: %a and %a@\n" i print cur print dt print df; *)
+                 [Eval.singleton (mk_py_true range) flowt; Eval.singleton (mk_py_false range) flowf]
+              | Iterator (x, _) ->
+                 (* FIXME: should be the type(Iterator _) that has this attribute, I think *)
+                 [Eval.singleton (mk_py_bool (attr = "next") range) flow]
+              | List _ | Set _ | Dict _ ->
+                 [Eval.singleton (mk_py_false range) flow]
+              | Typevar alpha ->
+                 let mtys = TypeVarMap.find alpha cur.d3 in
+                 Monotypeset.fold (fun mty acc -> process (poly_cast mty) {cur with d3 = TypeVarMap.add alpha (Monotypeset.singleton mty) cur.d3} @ acc)  mtys []
+              (* let cls = Addr.find_builtin "list" in
+               * Eval.singleton (mk_py_bool (Addr.is_builtin_attribute cls attr) range) flow *)
+              | _ -> Exceptions.panic "ll_hasattr %a@\n" Typingdomain.pp_polytype pt
+              end
+            in
+            let cur = Flow.get_domain_cur man flow in
+            Eval.join_list (process pt cur)
          | _ ->
             Eval.empty_singleton flow
          end
@@ -821,8 +828,9 @@ module Domain =
              let vars = List.fold_left (fun acc el -> Typevarset.union acc (collect_vars el)) Typevarset.empty in_signature in
              let empty_d3 = Typevarset.fold (fun var acc -> TypeVarMap.add var (Monotypeset.add Top Monotypeset.empty) acc) vars TypeVarMap.empty in
              List.fold_left2 (fun acc in_ty sign_ty ->
-                 debug "leq? %a[%a] %a[%a]@\n" pp_polytype in_ty pp_d3 domain.d3 pp_polytype sign_ty pp_d3 empty_d3;
-                 acc && polytype_leq (in_ty, domain.d3) (sign_ty, empty_d3)) true in_types in_signature in
+                 let r = polytype_leq (in_ty, domain.d3) (sign_ty, empty_d3) in
+                 debug "leq? %a[%a] %a[%a]@\nresult is %b@\n" pp_polytype in_ty pp_d3 domain.d3 pp_polytype sign_ty pp_d3 empty_d3 r;
+                 acc && r) true in_types in_signature in
            Eval.eval_list args man.eval flow |>
              Eval.bind (fun eargs flow ->
                  let cur = Flow.get_domain_cur man flow in
@@ -858,18 +866,23 @@ module Domain =
                      let vars = List.fold_left (fun acc el -> Typevarset.union acc (collect_vars el)) Typevarset.empty sign.in_args in
                      let empty_d3 = Typevarset.fold (fun var acc -> TypeVarMap.add var (Monotypeset.add Top Monotypeset.empty) acc) vars TypeVarMap.empty in
                      let eval_ret =
-                       begin match collect_constraints in_types cur.d3 sign.in_args empty_d3 (Some (IntMap.empty, TypeVarMap.empty)) with
-                       | None -> debug "collect_constraints: None!@\n"; assert false (* [] *)
-                       | Some (cstrs, d3) ->
-                          debug "constraints found@\n";
-                          (* FIXME: use d3, or remove it? *)
-                          (* TODO: change output to be a singleton for both stubs and summaries... *)
-                          let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
-                          let output = subst_ctrs output cstrs in
-                          debug "output_ty = %a@\n" pp_polytype output;
-                          let tid, ncur = get_type ~local_use:true cur output in
-                          let flow_ret = Flow.set_domain_cur ncur man flow in
-                          [Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret] end in
+                       let cstrs = collect_constraints in_types cur.d3 sign.in_args empty_d3 [IntMap.empty, cur.d3 (*cur.d3?*) (*TypeVarMap.empty*)] in
+                       if cstrs = [] then let () = debug "collect_constraints: None!@\n" in assert false
+                       else
+                         List.map (fun (cstrs, d3) ->
+                       (* begin match collect_constraints in_types cur.d3 sign.in_args empty_d3 [IntMap.empty, (\* cur.d3 ? *\) TypeVarMap.empty] with
+                        * | None -> debug "collect_constraints: None!@\n"; assert false (\* [] *\)
+                        * | Some (cstrs, d3) -> *)
+                             debug "constraints found: %a@\n" (IntMap.fprint map_printer_endl (fun fmt k -> Format.fprintf fmt "(%d)" k) pp_polytype) cstrs;
+                             (* FIXME: use d3, or remove it? *)
+                             (* TODO: change output to be a singleton for both stubs and summaries... *)
+                             let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
+                             let output = subst_ctrs output cstrs in
+                             debug "output_ty = %a, d3=%a@\n" pp_polytype output pp_d3 d3;
+                             let tid, ncur = get_type ~local_use:true cur output in
+                             let flow_ret = Flow.set_domain_cur {ncur with d3} man flow in
+                             Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret) cstrs
+                     in
                      let eval_exns = List.map (fun exn -> man.exec (Utils.mk_builtin_raise exn range) flow |> Eval.empty_singleton) sign.possible_exn in
                      eval_ret @ eval_exns in
                    let evals = List.fold_left (fun acc sign -> (process_sign sign) @ acc) [] f_signatures in
@@ -1832,7 +1845,7 @@ module Domain =
                  let dict = match ekind dict with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
-                 debug "assert_dict_of %a [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) pp_polytype dict pp_d3 cur.d3 pp_polytype (Dict (ty_k, ty_v));
+                 debug "assert_dict_of %a [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) pp_polytype dict pp_d3 cur.d3 pp_polytype (Dict (ty_k, ty_v)) pp_d3 cur.d3;
                  Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) range flow
                )
            |> OptionExt.return

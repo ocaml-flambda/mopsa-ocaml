@@ -240,7 +240,7 @@ let pp_d2 fmt (d2:d2) =
     pp_polytype fmt d2
 
 let pp_d3 fmt (d3:d3) =
-  TypeVarMap.fprint map_printer (fun fmt k -> Format.fprintf fmt "α(%d)" k)
+  TypeVarMap.fprint map_printer_endl (fun fmt k -> Format.fprintf fmt "α(%d)" k)
     Monotypeset.print fmt d3
 
 let print fmt {d1;d2;d3} =
@@ -294,14 +294,18 @@ let mono_set_cast (ts:Polytypeset.t) : Monotypeset.t =
 let poly_set_cast (ts:Monotypeset.t) : Polytypeset.t =
   Monotypeset.fold (fun el polys -> Polytypeset.add (poly_cast el) polys) ts Polytypeset.empty
 
-let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
+let rec subst t var value =
   (* t[var |-> value] *)
   match t with
   | Typevar v when v = var -> value
+  | Typevar v -> t
   | List v -> List (subst v var value)
   | Set v -> Set (subst v var value)
   | Generator v -> Generator (subst v var value)
-  | FiniteTuple l -> FiniteTuple (List.map (fun v -> subst v var value) l)
+  | FiniteTuple l ->
+     let res = FiniteTuple (List.map (fun v -> subst v var value) l) in
+     debug "subst %a %d %a = %a" pp_polytype t var pp_polytype value pp_polytype res;
+     res
   | Dict (k, v) -> Dict (subst k var value, subst v var value)
   | DictValues v -> DictValues (subst v var value)
   | DictKeys k -> DictKeys (subst k var value)
@@ -312,7 +316,7 @@ let rec subst (t:'a pytype) (var:'a) (value:'a pytype) =
      let uattrs = StringMap.map (fun v -> subst v var value) uattrs in
      let oattrs = StringMap.map (fun v -> subst v var value) oattrs in
      Instance {classn; uattrs; oattrs}
-  | _ -> t
+  | Bot | Top | Class _ | Module _ | Method _ | Function _ -> t
 
 let collect_vars (t:polytype) : Typevarset.t =
   let rec collect t acc =
@@ -1352,11 +1356,11 @@ let pp_sb = StringMap.fprint map_printer Format.pp_print_string
               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_signature)
 
 
-let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: polytype list) (sign_d3: d3) (acc : (polytype IntMap.t * d3) option) : (polytype IntMap.t * d3) option =
+let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: polytype list) (sign_d3: d3) (acc : (polytype IntMap.t * d3) list) : (polytype IntMap.t * d3) list =
   (* TODO: opt for monomorphic types? *)
-  OptionExt.bind (fun (cstrs, d3) ->
+  (* List.map (fun (cstrs, d3) -> *)
       match in_types, sign_types with
-      | [], [] -> Some (cstrs, d3)
+      | [], [] -> acc
       | in_ty::tl, sign_ty::tl' ->
          begin match in_ty, sign_ty with
          | Bot, Bot
@@ -1366,7 +1370,7 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
            | Module _, Module _
            | Method _, Method _
            ->
-            collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
+            collect_constraints tl in_d3 tl' sign_d3 acc
          | Iterator (e, _), Iterator (e', _)
            | Set e, Set e'
            | Generator e, Generator e'
@@ -1374,11 +1378,11 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
            | DictValues e, DictValues e'
            | DictKeys e, DictKeys e'
            | DictItems e, DictItems e' ->
-            collect_constraints (e::tl) in_d3 (e'::tl') sign_d3 (Some (cstrs, d3))
+            collect_constraints (e::tl) in_d3 (e'::tl') sign_d3 acc
          | Dict (k, v), Dict (k', v') ->
-            collect_constraints (k::v::tl) in_d3 (k'::v'::tl') sign_d3 (Some (cstrs, d3))
+            collect_constraints (k::v::tl) in_d3 (k'::v'::tl') sign_d3 acc
          | FiniteTuple l, FiniteTuple l' ->
-            collect_constraints (l @ tl) in_d3 (l' @ tl') sign_d3 (Some (cstrs, d3))
+            collect_constraints (l @ tl) in_d3 (l' @ tl') sign_d3 acc
          | Instance {classn=c; uattrs=u; oattrs=o}, Instance {classn=c'; uattrs=u'; oattrs=o'} ->
             let flatten_smap =
               StringMap.fold2o
@@ -1386,27 +1390,65 @@ let rec collect_constraints (in_types: polytype list) (in_d3:d3) (sign_types: po
                 (fun _ _ _ -> Exceptions.panic "not the same attrs")
                 (fun k in_a sign_a (in_acc, sign_acc) -> (in_a::in_acc), (sign_a::sign_acc)) in
             let in_args, sign_args = flatten_smap o o' (flatten_smap u u' (c::tl, c'::tl')) in
-            collect_constraints in_args in_d3 sign_args sign_d3 (Some (cstrs, d3))
-         | Typevar a, Typevar b ->
-            if IntMap.mem b cstrs then
-              Exceptions.panic "todo: conflict?@\n"
-            else
-              collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b (Typevar a) cstrs, d3))
+            collect_constraints in_args in_d3 sign_args sign_d3 acc
+         (* | Typevar a, Typevar b ->
+          *    if IntMap.mem b cstrs then
+          *      Exceptions.panic "todo: conflict?@\n"
+          *    else
+          *      collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b (Typevar a) cstrs, d3)) *)
          | _, Typevar b ->
-            if IntMap.mem b cstrs then
-              Exceptions.panic "todo: conflict?@\n"
-            else
-              (* if is_mono in_ty then *)
-                collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b in_ty cstrs, d3))
+            let new_acc = List.fold_left (fun new_acc (cstrs, d3) ->
+                              if IntMap.mem b cstrs then Exceptions.panic "todo: conflict?@\n"
+                              else (IntMap.add b in_ty cstrs, d3)::new_acc) [] acc in
+            collect_constraints tl in_d3 tl' sign_d3 new_acc
+            (* if IntMap.mem b cstrs then
+             *   Exceptions.panic "todo: conflict?@\n"
+             * else
+             *   (\* if is_mono in_ty then *\)
+             *     collect_constraints tl in_d3 tl' sign_d3 (Some (IntMap.add b in_ty cstrs, d3)) *)
               (* else
                *   Exceptions.panic "%a[%a] %a[%a]@\ntodo: Concr_poly@\n" pp_polytype in_ty pp_d3 in_d3 pp_polytype sign_ty pp_d3 sign_d3 *)
-         | _, Top -> collect_constraints tl in_d3 tl' sign_d3 (Some (cstrs, d3))
+         | Typevar a, _ ->
+            List.fold_left (fun new_acc (cstrs, d3) ->
+                              debug "%a@\n" pp_polytype in_ty;
+                              let mtys = TypeVarMap.find a d3 in
+                              (Monotypeset.fold (fun mty new_cstrs ->
+                                   (collect_constraints ((poly_cast mty)::tl) in_d3 (sign_ty::tl') sign_d3 [cstrs, TypeVarMap.add a (Monotypeset.singleton mty) d3]) @ new_cstrs
+                                 ) mtys [])
+                              @ new_acc) [] acc
+            (* collect_constraints tl in_d3 tl' sign_d3 new_acc *)
+         | _, Top -> collect_constraints tl in_d3 tl' sign_d3 acc
          | _ ->
             debug "Whatodo? collecting constraints on %a %a@\n" pp_polytype in_ty pp_polytype sign_ty;
-            None
+            []
          end
       | _ -> assert false
-    ) acc
+    (* ) acc *)
 
-let subst_ctrs (poly: polytype) (cstr: polytype IntMap.t) : polytype =
-  IntMap.fold (fun tyvar typ acc_type -> subst acc_type tyvar typ) cstr poly
+
+let rec parallel_subst t (substs: polytype IntMap.t) = (* = var value =*)
+  (* t[var |-> value] *)
+  match t with
+  | Typevar v when IntMap.mem v substs -> IntMap.find v substs
+  | Typevar v -> t
+  | List v -> List (parallel_subst v substs)
+  | Set v -> Set (parallel_subst v substs)
+  | Generator v -> Generator (parallel_subst v substs)
+  | FiniteTuple l ->
+     let res = FiniteTuple (List.map (fun v -> parallel_subst v substs) l) in
+     debug "parallel_subst %a _ = %a" pp_polytype t pp_polytype res;
+     res
+  | Dict (k, v) -> Dict (parallel_subst k substs, parallel_subst v substs)
+  | DictValues v -> DictValues (parallel_subst v substs)
+  | DictKeys k -> DictKeys (parallel_subst k substs)
+  | DictItems k -> DictItems (parallel_subst k substs)
+  | Iterator (v, d) -> Iterator ((parallel_subst v substs), d)
+  | Instance {classn; uattrs; oattrs} ->
+     let classn = parallel_subst classn substs in
+     let uattrs = StringMap.map (fun v -> parallel_subst v substs) uattrs in
+     let oattrs = StringMap.map (fun v -> parallel_subst v substs) oattrs in
+     Instance {classn; uattrs; oattrs}
+  | Bot | Top | Class _ | Module _ | Method _ | Function _ -> t
+
+
+let subst_ctrs (poly: polytype) (cstr: polytype IntMap.t) : polytype = parallel_subst poly cstr
