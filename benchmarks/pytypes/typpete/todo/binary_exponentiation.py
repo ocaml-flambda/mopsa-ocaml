@@ -1,3 +1,6 @@
+# Sans les annotations de type, typpete décrète que x et y sont de
+# type complex, ce qui est faux pour x au moins.
+
 # """Binary exponentiation"""
 # from typing import TypeVar
 
@@ -8,7 +11,6 @@
 def exp(a, b: int):
     res = 1
     while b > 0:
-        print(res)
         if b & 1 != 0:
             res = res * a
         a = a * a
@@ -42,8 +44,8 @@ y = exp(2.0, 3)
 #         z = 3
 #     else:
 #         z = []
-z1 = True or False
-z2 = isinstance(y, int) or isinstance(y, float)
+# z1 = True or False
+# z2 = isinstance(y, int) or isinstance(y, float)
 # assert(isinstance(y, int) or isinstance(y, float))
 
 # f := Callable[[int], float]

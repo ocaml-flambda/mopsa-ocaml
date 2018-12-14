@@ -5,8 +5,7 @@ def flatten(lists):
     return [item for sublist in lists for item in sublist]
 
 
-def flatten_dict(dicts,
-                 defaults):
+def flatten_dict(dicts, defaults):
     """
     Flattens a dict of lists, i.e., concatenates all lists for the same keys.
     """
@@ -15,7 +14,7 @@ def flatten_dict(dicts,
         result[key] = []
     for d in dicts:
         for key, value in d.items():
-            a = [1]
+            a = [1,2,3,4,5,6]
             b = a[key]
             if key in result:
                 result[key].extend(value)
