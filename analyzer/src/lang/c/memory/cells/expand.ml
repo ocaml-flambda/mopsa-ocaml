@@ -15,8 +15,7 @@ open Zone
 open Common.Base
 open Common.Points_to
 open Cell
-open Stubs.Old
-module Intervals = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Intervals.Value
 
 (** Maximal number of expanded cells when dereferencing a pointer *)
 let opt_expand = ref 1
@@ -44,16 +43,10 @@ let () =
 
 module Domain = struct
 
-  (*
-   * Abstract element
-   * ================
-   *
-   * We keep track of the set of previously expanded cells using the generic 
-   * Powerset lattice.
-   *)
+  (* An abstract element is the set of previously expanded cells,
+     represented as a powerset lattice.  *)
 
-
-  include Framework.Lattices.Powerset.Make(Cell)
+  include Framework.Lattices.Powerset.Make(PrimedCell)
 
   let is_bottom _ = false
 
@@ -68,9 +61,9 @@ module Domain = struct
     | _ -> assert false
 
 
-  let exist_and_find_cell (f:cell -> bool) (cs:t) =
+  let exist_and_find_cell (f:cell primed-> bool) (cs:t) =
     apply (fun r ->
-        let exception Found of cell in
+        let exception Found of cell primed in
         try
           let () = Set.iter (fun c ->
               if f c then raise (Found(c))
@@ -91,13 +84,13 @@ module Domain = struct
 
   let get_overlappings c cs =
     exist_and_find_cells (fun c' ->
-        compare_cell c c' <> 0 &&
+        PrimedCell.compare c c' <> 0 &&
         (
           let cell_range c =
-            (zoffset c, Z.add (zoffset c) (sizeof_type c.t))
+            (PrimedCell.zoffset c, Z.add (PrimedCell.zoffset c) (sizeof_type (PrimedCell.typ c)))
           in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          old_apply2 compare_base c.b c'.b = 0 &&
+          compare_base (PrimedCell.base c) (PrimedCell.base c') = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
       ) cs
@@ -108,44 +101,51 @@ module Domain = struct
   (** ================ *)
 
   (** [phi c u] collects constraints over cell [c] found in [u] *)
-  let phi (c: cell) (u : t) range : expr option =
+  let phi (c: cell primed) (u : t) range : expr option =
     let open Universal.Ast in
     let cs = u in
-    match exist_and_find_cell (fun c' -> compare_cell c c' = 0) cs  with
-    | Some c -> Some (mk_c_cell c range)
+    match exist_and_find_cell (fun c' -> PrimedCell.compare c c' = 0) cs  with
+    | Some c -> Some (mk_c_primed_cell c range)
     | None ->
       begin
         match exist_and_find_cell
                 (fun c' ->
-                   is_c_int_type c'.t && Z.equal (sizeof_type c'.t) (sizeof_type c.t) &&
-                   old_apply2 compare_base c.b c'.b = 0 &&
-                   Z.equal (zoffset c) (zoffset c')
+                   is_c_int_type (PrimedCell.typ c') && Z.equal (sizeof_type (PrimedCell.typ c')) (sizeof_type (PrimedCell.typ c)) &&
+                   compare_base (PrimedCell.base c) (PrimedCell.base c') = 0 &&
+                   Z.equal (PrimedCell.zoffset c) (PrimedCell.zoffset c')
                 ) cs
         with
-        | Some (c') -> Some (wrap_expr (mk_c_cell c' range) (int_rangeof c.t) range)
+        | Some (c') -> Some (wrap_expr
+                               (mk_c_primed_cell c' range)
+                               (int_rangeof (PrimedCell.typ c))
+                               range
+                            )
         | None ->
           begin
             match exist_and_find_cell ( fun c' ->
-                let b = Z.sub (zoffset c) (zoffset c') in
-                Z.lt b (sizeof_type c'.t) && is_c_int_type c'.t && compare_typ (remove_typedef_qual c.t) (T_c_integer(C_unsigned_char)) = 0
-              ) cs with
+                let b = Z.sub (PrimedCell.zoffset c) (PrimedCell.zoffset c') in
+                Z.lt b (sizeof_type (PrimedCell.typ c')) &&
+                is_c_int_type (PrimedCell.typ c') &&
+                compare_typ (remove_typedef_qual (PrimedCell.typ c)) (T_c_integer(C_unsigned_char)) = 0
+              ) cs
+            with
             | Some (c') ->
-              let b = Z.sub (zoffset c) (zoffset c') in
+              let b = Z.sub (PrimedCell.zoffset c) (PrimedCell.zoffset c') in
               let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-              Some (mk_binop (mk_binop (mk_c_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
+              Some (mk_binop (mk_binop (mk_c_primed_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
             | None ->
               begin
                 let exception NotPossible in
                 try
-                  if is_c_int_type c.t then
+                  if is_c_int_type (PrimedCell.typ c) then
                     begin
                       let t' = T_c_integer(C_unsigned_char) in
-                      let n = Z.to_int (sizeof_type (c.t)) in
+                      let n = Z.to_int (sizeof_type ((PrimedCell.typ c))) in
                       let rec aux i l =
                         if i < n then
-                          let tobein = {b = c.b ; o = O_single (Z.add (zoffset c) (Z.of_int i)); t = t'} in
+                          let tobein = primed_lift (fun cc -> {b = cc.b ; o = O_single (Z.add (PrimedCell.zoffset c) (Z.of_int i)); t = t'}) c in
                           match exist_and_find_cell (fun c' ->
-                              compare_cell c' tobein = 0
+                              PrimedCell.compare c' tobein = 0
                             ) cs with
                           | Some (c') ->
                             aux (i+1) (c' :: l)
@@ -156,7 +156,7 @@ module Domain = struct
                       in
                       let ll = aux 0 [] in
                       let _,e = List.fold_left (fun (time, res) x ->
-                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_c_cell x range) range) O_plus res range in
+                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_c_primed_cell x range) range) O_plus res range in
                           let time' = Z.mul time (Z.of_int 256) in
                           time',res'
                         ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -167,15 +167,15 @@ module Domain = struct
                     raise NotPossible
                 with
                 | NotPossible ->
-                  match old_extract c.b with
+                  match PrimedCell.base c with
                   | S s ->
-                    Some (mk_int (String.get s (Z.to_int (zoffset c)) |> int_of_char) range)
+                    Some (mk_int (String.get s (Z.to_int (PrimedCell.zoffset c)) |> int_of_char) range)
                   | _ ->
                     begin
-                      if is_c_scalar_type c.t then
-                        let a,b = rangeof c.t in
+                      if is_c_scalar_type (PrimedCell.typ c) then
+                        let a,b = rangeof (PrimedCell.typ c) in
                         Some ( mk_z_interval a b range)
-                      else if is_c_pointer_type c.t then
+                      else if is_c_pointer_type (PrimedCell.typ c) then
                         assert false
                       else
                         None
@@ -187,15 +187,15 @@ module Domain = struct
   (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
       abstraction [u] given a manager [subman] on the sub element of
       the stack [s] *)
-  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: cell) u (s: 'b flow) =
+  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: cell primed) u (s: 'b flow) =
     if mem c u then u, s
-    else if not (is_c_scalar_type c.t) then u, s
-    else if is_c_pointer_type (c.t) then
+    else if not (is_c_scalar_type (PrimedCell.typ c)) then u, s
+    else if is_c_pointer_type ((PrimedCell.typ c)) then
       add c u, s
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_primed_cell c range) O_eq e ~etyp:T_int range) range) in
         add c u, subman.exec stmt s
       | None ->
         add c u, s
@@ -204,13 +204,13 @@ module Domain = struct
   let add_cell c range man f  =
     let u = Flow.get_domain_cur man f in
     if mem c u then f
-    else if not (is_c_scalar_type c.t) then f
-    else if is_c_pointer_type (c.t) then
+    else if not (is_c_scalar_type (PrimedCell.typ c)) then f
+    else if is_c_pointer_type ((PrimedCell.typ c)) then
       Flow.set_domain_cur (add c u) man f
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_primed_cell c range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add c u) man |>
         man.exec ~zone:(Z_c_cell) stmt
@@ -304,14 +304,14 @@ module Domain = struct
       scalar = (fun v e range flow ->
           let c =
             match ekind v with
-            | E_var(v, mode) -> mkcell (V v) (O_single Z.zero) v.vtyp
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
           man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
           Post.bind_flow man @@ fun e flow ->
 
-          let flow = add_cell c range man flow in
+          let flow = add_cell (unprimed c) range man flow in
           let stmt = mk_assign (mk_c_cell c range) e range in
           man.exec ~zone:Z_c_cell stmt flow
         );
@@ -320,7 +320,7 @@ module Domain = struct
       array =  (fun a is_global init_list range flow ->
           let c =
             match ekind a with
-            | E_var(v, mode) -> mkcell (V v) (O_single Z.zero) v.vtyp
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -342,7 +342,7 @@ module Domain = struct
       record =  (fun s is_global init_list range flow ->
           let c =
             match ekind s with
-            | E_var (v, _) -> mkcell (V v) (O_single Z.zero) (v.vtyp)
+            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
             | E_c_cell(c, _) -> c
             | _ -> assert false
           in
@@ -414,7 +414,7 @@ module Domain = struct
                 else if i >= !opt_expand
                 then
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton (O_region (Intervals.of_constant () (C_int_interval (o, u)))) flow']
+                  [Eval.singleton (O_region (Itv.of_constant () (C_int_interval (o, u)))) flow']
                 else
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                   Eval.singleton (O_single o) flow' :: aux (i + 1) (Z.add o step)
@@ -437,7 +437,7 @@ module Domain = struct
     Eval.bind @@ fun o flow ->
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton (mkcell b o t) flow
+      Eval.singleton {b;o;t} flow
 
     | O_out_of_bound ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -452,13 +452,17 @@ module Domain = struct
     panic_at range "expand: evaluation of quantified cells not supported"
 
   (** Evaluate a scalar lval into a cell *)
-  let eval_scalar_cell exp man flow : ('a, cell) evl =
+  let rec eval_scalar_cell exp man flow : ('a, cell primed) evl =
     match ekind exp with
-    | E_var (v, mode) when is_c_scalar_type v.vtyp ->
-      let c = mkcell (V v) (O_single Z.zero) v.vtyp  in
-      Eval.singleton c flow
+    | E_var (v, _)
+    | E_primed { ekind = E_var (v, _) }
+      when is_c_scalar_type exp.etyp ->
+      let c = { b = V v; o = O_single Z.zero; t = v.vtyp } in
+      let pc = primed_from_expr (fun _ -> c) exp in
+      Eval.singleton pc flow
 
-    | E_c_deref(p) ->
+    | E_c_deref(p)
+    | E_primed { ekind = E_c_deref(p)} ->
       man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
       Eval.bind @@ fun p flow ->
 
@@ -469,10 +473,16 @@ module Domain = struct
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, o)) when Stubs.Ast.is_expr_quantified o ->
-          eval_quantified_cell b o t p.erange man flow
+          eval_quantified_cell b o t p.erange man flow |>
+          Eval.bind @@ fun c flow ->
+          let pc = primed_from_expr (fun _ -> c) exp in
+          Eval.singleton pc flow
 
         | E_c_points_to(P_block (b, o)) ->
-          eval_non_quantified_cell b o t p.erange man flow
+          eval_non_quantified_cell b o t p.erange man flow |>
+          Eval.bind @@ fun c flow ->
+          let pc = primed_from_expr (fun _ -> c) exp in
+          Eval.singleton pc flow
 
         | E_c_points_to(P_null) ->
           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -490,7 +500,7 @@ module Domain = struct
           in
           Eval.empty_singleton flow1
 
-        | _ -> assert false
+        | _ -> panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p;
       end
 
     | _ -> debug "%a" pp_expr exp; assert false
@@ -499,21 +509,23 @@ module Domain = struct
   (** Entry-point of evaluations *)
   let eval zone exp man flow =
     match ekind exp with
-    (* 𝔼⟦ v ⟧ *)
+    (* 𝔼⟦ v | *p | v' | ( *p )' ⟧ *)
     | E_var _
-
-    (* 𝔼⟦ *p ⟧ *)
-    | E_c_deref _ when is_c_scalar_type exp.etyp ->
+    | E_primed { ekind = E_var _ }
+    | E_c_deref _
+    | E_primed { ekind = E_c_deref _ }
+      when is_c_scalar_type exp.etyp
+      ->
       eval_scalar_cell exp man flow |>
       Eval.bind_return @@ fun c flow ->
 
-      begin match c.o with
+      begin match PrimedCell.offset c with
         | O_single _ ->
           let flow = add_cell c exp.erange man flow in
-          Eval.singleton (mk_c_cell c exp.erange) flow
+          Eval.singleton (mk_c_primed_cell c exp.erange) flow
 
         | O_region _ ->
-          let l, u = rangeof c.t in
+          let l, u = rangeof (PrimedCell.typ c) in
           Eval.singleton (mk_z_interval l u exp.erange) flow
 
         | _ -> assert false
@@ -532,7 +544,7 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call({ content = SIZE }, p) ->
+    | Stubs.Ast.E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
       Eval.bind_opt @@ fun pe flow ->
 
@@ -545,10 +557,6 @@ module Domain = struct
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
       end
 
-    (* 𝔼⟦ old(e) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call({content = OLD }, e) ->
-      panic_at exp.erange "old not supported"
-
     | _ -> None
 
 
@@ -558,7 +566,7 @@ module Domain = struct
 
   (** Assign an rval to a cell *)
   let assign_cell c rval range man flow =
-    let lval = mk_c_cell c range in
+    let lval = mk_c_primed_cell c range in
     let flow' = Flow.map_domain_env T_cur (add c) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
@@ -587,8 +595,8 @@ module Domain = struct
       a |>
       exist_and_find_cells
         (fun c ->
-           old_apply2 compare_base c.b b = 0 &&
-           pred (zoffset c)
+           compare_base (PrimedCell.base c) b = 0 &&
+           pred (PrimedCell.zoffset c)
         )
     in
     let block = List.map (fun c' -> mk_c_remove_cell c' range) cells in
@@ -636,7 +644,7 @@ module Domain = struct
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> old_apply compare_base c.b (V v) = 0) u in
+      let l = exist_and_find_cells (fun c -> compare_base (PrimedCell.base c) (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
       let mergers = List.map (fun c -> mk_c_remove_cell c stmt.srange) l in
       let to_exec_in_sub = mergers in
@@ -657,10 +665,10 @@ module Domain = struct
       eval_scalar_cell lval man flow |>
       Post.bind_return man @@ fun c flow ->
 
-      begin match c.o with
+      begin match PrimedCell.offset c with
         | O_single _ -> assign_cell c rval stmt.srange man flow
-        | O_region itv -> remove_cells c.b (fun o -> Intervals.mem o itv) stmt.srange man flow
-        | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" pp_cell c
+        | O_region itv -> remove_cells (PrimedCell.base c) (fun o -> Itv.mem o itv) stmt.srange man flow
+        | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" PrimedCell.print c
       end
 
     (* 𝕊⟦ assume ?e ⟧ *)
@@ -672,10 +680,6 @@ module Domain = struct
       man.exec ~zone:Z_c_cell stmt' flow |>
 
       Post.return
-
-    (* 𝕊⟦ assigns a; ⟧ *)
-    | Stubs.Ast.S_stub_assigns _ ->
-      panic_at stmt.srange "expand: stub assigns directive not supported"
 
     | _ -> None
 

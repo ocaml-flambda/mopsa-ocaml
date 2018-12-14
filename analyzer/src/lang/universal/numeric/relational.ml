@@ -71,7 +71,7 @@ struct
    *   in
    *   aux expr (fun x -> x) |> SVar.elements *)
   let var_to_apron (v:var primed) =
-    let name = primed_uniq_vname v in
+    let name = PrimedVar.uniq_vname v in
     Apron.Var.of_string name
 
   let get_interval (v:var primed) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
@@ -79,7 +79,7 @@ struct
     Values.Intervals.Value.of_apron
 
   let is_numerical_var (v: var primed): bool =
-    match primed_vtyp v with
+    match PrimedVar.vtyp v with
     | T_int | T_float _ -> true
     | _ -> false
   let empty_env = Apron.Environment.make [| |] [| |]
@@ -436,13 +436,13 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (fun v -> primed_vtyp v = T_int) lv
+          List.filter (fun v -> PrimedVar.vtyp v = T_int) lv
         )
         (
           Array.of_list @@
           List.map var_to_apron @@
           List.filter (fun v ->
-              match primed_vtyp v with
+              match PrimedVar.vtyp v with
               | T_float _ -> true
               | _ -> false
             ) lv

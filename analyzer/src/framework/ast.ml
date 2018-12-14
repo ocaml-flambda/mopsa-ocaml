@@ -170,20 +170,26 @@ let vtyp v = v.vtyp
 
 let uniq_vname v = v.vname ^ ":" ^ (string_of_int v.vuid)
 
-let primed_uniq_vname (v:var primed) : string =
-  match v with
-  | Unprimed vv -> uniq_vname vv
-  | Primed vv -> uniq_vname vv ^ "'"
-
-let primed_vtyp (v:var primed) : typ =
-  let vv = unprime v in
-  vv.vtyp
-
 module Var =
 struct
   type t = var
   let compare = compare_var
   let print = pp_var
+end
+
+module PrimedVar =
+struct
+  include LiftToPrimed(Var)
+
+  let uniq_vname (v:var primed) : string =
+    match v with
+    | Unprimed vv -> uniq_vname vv
+    | Primed vv -> uniq_vname vv ^ "'"
+
+  let vtyp (v:var primed) : typ =
+    let vv = unprime v in
+    vv.vtyp
+
 end
 
 

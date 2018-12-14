@@ -27,7 +27,7 @@ type builtin =
   | SIZE
   | OFFSET
   | BASE
-  | OLD
+  | PRIMED
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
@@ -125,7 +125,7 @@ type quantifier =
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
-  | E_stub_builtin_call of builtin with_range * expr
+  | E_stub_builtin_call of builtin * expr
   | E_stub_quantified of quantifier * expr * var list (** quantified expression over a set of variables *)
   | E_stub_old of expr (** old value of an assigned object *)
 
@@ -143,20 +143,12 @@ let mk_stub_old e range =
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_assigns of expr                 (** modified target *) *
-                      (expr * expr) option (** modification range *)
-  (** Declare an assignment and create old copies *)
+  (** Remove primed variables of assigned dimensions *)
+  | S_stub_remove_primed of expr                 (** modified target *) *
+                            (expr * expr) option (** modification range *)
 
-  | S_stub_remove_old of expr * (expr * expr) option
-  (** remove old copies of an assigned target *)
-
-
-let mk_stub_assigns target offsets range =
-  mk_stmt (S_stub_assigns (target, offsets)) range
-
-let mk_stub_remove_old target offsets range =
-  mk_stmt (S_stub_remove_old (target, offsets)) range
-
+let mk_stub_remove_primed t o range =
+  mk_stmt (S_stub_remove_primed (t, o)) range
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -171,7 +163,7 @@ let pp_builtin fmt f =
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
+  | PRIMED -> pp_print_string fmt "primed"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
@@ -317,7 +309,7 @@ let () =
         match ekind e with
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
-        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
         | E_stub_quantified(FORALL, ee, _) -> fprintf fmt "∀%a" pp_expr ee
         | E_stub_quantified(EXISTS, ee, _) -> fprintf fmt "∃%a" pp_expr ee
         | E_stub_quantified(MIXED, ee, _) -> fprintf fmt "(∀|∃)%a" pp_expr ee
@@ -333,13 +325,7 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_assigns(t1, o1), S_stub_assigns(t2, o2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
-          ]
-
-        | S_stub_remove_old(t1, o1), S_stub_remove_old(t2, o2) ->
+        | S_stub_remove_primed(t1, o1), S_stub_remove_primed(t2, o2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
             (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
@@ -350,16 +336,14 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
-        | S_stub_remove_old(t, o) -> panic "visitor for S_stub_remove_old not supported"
+        | S_stub_remove_primed(t, o) -> panic "visitor for S_stub_assigns not supported"
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
-        | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
-        | S_stub_remove_old(target, _) -> fprintf fmt "remove old(%a);" pp_expr target
+        | S_stub_remove_primed(t, None) -> fprintf fmt "remove primed %a;" pp_expr t
+        | S_stub_remove_primed(t, Some(a,b)) -> fprintf fmt "remove primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
         | _ -> next fmt s
       );
   }

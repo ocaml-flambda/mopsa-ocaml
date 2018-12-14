@@ -30,7 +30,7 @@ rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
 treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
 abstractTreeAutomaton numerical value treeAst treeAbs
 
-lang.stubs = ast zone alarms old iterator
+lang.stubs = ast zone alarms iterator
 
 lang.c = ast pp visitor zone frontend alarms desugar  memory libs iterators
 lang.c.iterators = program switch goto interproc

@@ -12,10 +12,9 @@ open Mopsa
 open Ast
 open Cell
 open Zone
-open Stubs.Old
 module Itv =  ItvUtils.IntItv
-           
-module CellScalarEquiv = Equiv.Make(Cell)(Stubs.Old.Lift(Var))
+
+module CellScalarEquiv = Equiv.Make(PrimedCell)(PrimedVar)
 
 type ('a, _) Annotation.key +=
   | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
@@ -42,7 +41,7 @@ let get_scalar_or_create flow c =
   try CellScalarEquiv.find_l c annot, flow
   with
   | Not_found ->
-    let v = cell_to_var c in
+    let v = primed_lift cell_to_var c in
     let annot' = CellScalarEquiv.add (c, v) annot in
     let flow' = Flow.set_annot A_cell_scalar annot' flow in
     (v, flow')
@@ -54,7 +53,7 @@ let get_cell flow v =
   | Not_found ->
     Exceptions.panic
       "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
-      (pp_old pp_var) v
+      PrimedVar.print v
       CellScalarEquiv.print annot
 
 let get_scalar_and_remove flow c =
@@ -66,7 +65,7 @@ let get_scalar_and_remove flow c =
     v, flow'
   with
   | Not_found ->
-    let v = cell_to_var c in
+    let v = primed_lift cell_to_var c in
     (v, flow)
 
 
@@ -115,39 +114,59 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_add { ekind = E_c_cell (c, mode) } ->
-      let v, flow = get_scalar_or_create flow c in
-      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+    | S_add (
+        { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
+        as c
+      ) ->
+      let pc = primed_from_cell_expr c in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = mk_primed_var pv ~mode stmt.srange in
       man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
       Post.return
 
-    | S_remove { ekind = E_c_cell (c, mode) } ->
-      let v, flow = get_scalar_and_remove flow c in
-      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+    | S_remove (
+        { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
+        as c
+      ) ->
+      let pc = primed_from_cell_expr c in
+      let pv, flow = get_scalar_and_remove flow pc in
+      let vv = mk_primed_var pv ~mode stmt.srange in
       man.exec ~zone:Z_c_scalar (mk_remove vv stmt.srange) flow |>
       Post.return
 
-    | S_expand ({ ekind = E_c_cell (c, mode) }, cl) ->
-      let v, flow = get_scalar_or_create flow c in
-      let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+    | S_expand (
+        (
+          { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
+          as c
+        ), cl
+      ) ->
+      let pc = primed_from_cell_expr c in
+      let pcl = List.map primed_from_cell_expr cl in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = mk_primed_var pv ~mode stmt.srange in
       let vl, flow =
         let rec doit flow = function
           | [] -> [], flow
-          | { ekind = E_c_cell (c, mode) } :: tl ->
-            let v, flow = get_scalar_or_create flow c in
-            let vv = mk_stub_old (mk_var ~mode) v stmt.srange in
+          | pc :: tl ->
+            let pv, flow = get_scalar_or_create flow pc in
+            let vv = mk_primed_var pv ~mode stmt.srange in
             let vl, flow = doit flow tl in
             vv :: vl, flow
-          | _ -> assert false
         in
-        doit flow cl
+        doit flow pcl
       in
       man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
       Post.return
 
-    | S_assign({ ekind = E_c_cell (c, mode) }, rval)  ->
-      let lval, flow = get_scalar_or_create flow c in
-      let lval' = mk_stub_old (mk_var ~mode) lval stmt.srange in
+    | S_assign(
+        (
+          { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
+          as c
+        ), rval)
+      ->
+      let pc = primed_from_cell_expr c in
+      let lval, flow = get_scalar_or_create flow pc in
+      let lval' = mk_primed_var lval ~mode stmt.srange in
 
       man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) rval flow |>
       Post.bind_opt man @@ fun rval' flow ->
@@ -170,14 +189,14 @@ struct
 
   let rec eval zone exp man flow =
     match ekind exp with
-    | E_c_cell({b = Cur (S s); o = O_single z}, mode) ->
+    | E_c_cell({b = S s; o = O_single z}, mode) ->
       (* Case of a static string literal with a constant offset *)
       (* return the scalar value of the character *)
       let ch = String.get s (Z.to_int z) in
       Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow |>
       Eval.return
 
-    | E_c_cell({b = Cur (S s); o = O_region itv}, mode) ->
+    | E_c_cell({b = S s; o = O_region itv}, mode) ->
       (* Otherwise, return the interval covering characters of the string within itv *)
       itv |> Bot.bot_dfl1
         (* Case of empty interval *)
@@ -205,9 +224,11 @@ struct
       |>
       Eval.return
 
-    | E_c_cell(c, mode) ->
-      let v, flow = get_scalar_or_create flow c in
-      let vv = mk_stub_old (mk_var ~mode) v exp.erange in
+    | E_c_cell(_, mode)
+    | E_primed { ekind = E_c_cell (_, mode) } ->
+      let pc = primed_from_cell_expr exp in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = mk_primed_var pv ~mode exp.erange in
       Eval.singleton vv flow |>
       Eval.return
 

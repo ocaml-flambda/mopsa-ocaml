@@ -145,11 +145,11 @@ let field_type t f =
            (C_print.string_of_type_qual t)
 
 let builtin_type f arg =
-  match f.content with
+  match f with
   | SIZE   -> int_type
   | OFFSET -> int_type
   | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
-  | OLD    -> arg.content.Ast.typ
+  | PRIMED -> arg.content.Ast.typ
   | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
 
 
@@ -416,8 +416,8 @@ let rec visit_expr e prj func =
   Ast.{ kind; typ }
 
 and visit_builtin b =
-  bind_range b @@ function
-  | OLD    -> Ast.OLD
+  match b with
+  | PRIMED -> Ast.PRIMED
   | SIZE   -> Ast.SIZE
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE

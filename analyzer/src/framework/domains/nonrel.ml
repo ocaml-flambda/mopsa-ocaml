@@ -25,7 +25,7 @@ struct
   (** Map with variables as keys. Absent bindings are assumed to point to ⊤. *)
   module VarMap =
     Lattices.Total_map.Make
-      (LiftToPrimed(Var))
+      (PrimedVar)
       (Value)
 
   include VarMap

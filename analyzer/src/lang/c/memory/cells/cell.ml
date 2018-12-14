@@ -15,7 +15,6 @@ open Framework.Visitor
 open Common.Base
 open Ast
 module Itv = Universal.Numeric.Values.Intervals.Value
-open Stubs.Old
 
 
 (** {2 Cell offset} *)
@@ -45,54 +44,75 @@ let pp_offset fmt o =
 
 (** A cell is identified by a base, an offset and a type *)
 type cell = {
-  b: base with_old; (** base of the cell, possibly denoting an old copy *)
-  o: offset;        (** offset of the cell within the base *)
-  t: typ;           (** type of the cell *) 
+  b: base ;      (** base of the cell *)
+  o: offset;     (** offset of the cell within the base *)
+  t: typ;        (** type of the cell *)
 }
-
-(** Create a cell *)
-let mkcell b o t =
-  { b = Cur b; o; t }
-
-(** Create an old cell *)
-let mkocell b o t =
-  { b = Old b; o; t }
 
 (** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [
-    (fun () -> old_apply2 compare_base c1.b c2.b);
+    (fun () -> compare_base c1.b c2.b);
     (fun () -> compare_offset c1.o c2.o);
     (fun () -> compare_typ c1.t c2.t);
   ]
 
 (** Print a cell *)
 let pp_cell fmt c =
-  pp_old (fun fmt b ->
-      Format.fprintf fmt "⟨%a,%a,%a⟩"
-        pp_base b
-        pp_offset c.o
-        pp_typ c.t
-    ) fmt c.b
+  Format.fprintf fmt "⟨%a,%a,%a⟩"
+    pp_base c.b
+    pp_offset c.o
+    pp_typ c.t
 
 (** Create a C scalar variable from a cell *)
-let cell_to_var c : var with_old =
-  old_lift (fun b ->
-      let vname =
-        let () = Format.fprintf Format.str_formatter
-            "{%a:%a:%a}"
-            pp_base b
-            pp_offset c.o
-            Pp.pp_c_type_short c.t
-        in
-        Format.flush_str_formatter ()
-      in
-      {
-        vname;
-        vuid = base_uid b;
-        vtyp = c.t;
-      }
-    ) c.b
+let cell_to_var c : var =
+  let vname =
+    let () = Format.fprintf Format.str_formatter
+        "{%a:%a:%a}"
+        pp_base c.b
+        pp_offset c.o
+        Pp.pp_c_type_short c.t
+    in
+    Format.flush_str_formatter ()
+  in
+  {
+    vname;
+    vuid = base_uid c.b;
+    vtyp = c.t;
+  }
+
+module Cell =
+struct
+  type t = cell
+  let compare = compare_cell
+  let print = pp_cell
+end
+
+
+(** {2 Primed cells} *)
+
+module PrimedCell =
+struct
+  include LiftToPrimed(Cell)
+
+  let base (pc:cell primed) : base =
+    let c = unprime pc in
+    c.b
+
+  let offset (pc:cell primed) : offset =
+    let c = unprime pc in
+    c.o
+
+  let zoffset c =
+    match offset c with
+    | O_single n -> n
+    | _ -> assert false
+
+
+  let typ (pc:cell primed) : typ =
+    let c = unprime pc in
+    c.t
+end
 
 
 (** {2 Cell extensions to the AST} *)
@@ -104,11 +124,21 @@ type expr_kind +=
 let mk_c_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
+let mk_c_primed_cell pcell ?(mode = STRONG) range =
+  mk_primed (mk_c_cell ~mode) pcell range
+
 let mk_c_remove_cell c range =
-  mk_remove (mk_c_cell c range) range
+  mk_remove (mk_c_primed_cell c range) range
 
 let mk_c_add_cell c range =
-  mk_add (mk_c_cell c range) range
+  mk_add (mk_c_primed_cell c range) range
+
+let primed_from_cell_expr (e:expr) : cell primed =
+  primed_from_expr (fun ee ->
+      match ekind ee with
+      | E_c_cell (c, _) -> c
+      | _ -> Exceptions.panic "primed_from_cell_expr: wrong argument %a" pp_expr e
+    ) e
 
 let () =
   register_expr {
@@ -156,10 +186,3 @@ let () =
         | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );
   }
-
-module Cell =
-struct
-  type t = cell
-  let compare = compare_cell
-  let print = pp_cell
-end
