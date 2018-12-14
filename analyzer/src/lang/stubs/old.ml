@@ -43,6 +43,11 @@ let pp_old pp fmt a =
   | Cur aa -> pp fmt aa
   | Old aa -> Format.fprintf fmt "old(%a)" pp aa
 
+let mk_stub_old (f: 'a -> range -> expr) (o: 'a with_old) range : expr =
+  match o with
+  | Cur a -> f a range
+  | Old a -> Ast.mk_stub_old (f a range) range
+
 module Lift
     (M : sig
        type t
