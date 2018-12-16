@@ -49,6 +49,17 @@ type cell = {
   t: typ;        (** type of the cell *)
 }
 
+let cell_base c = c.b
+
+let cell_offset c = c.o
+
+let cell_zoffset c =
+  match c.o with
+  | O_single n -> n
+  | _ -> assert false
+
+let cell_typ c = c.t
+
 (** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [
@@ -81,39 +92,6 @@ let cell_to_var c : var =
     vtyp = c.t;
   }
 
-module Cell =
-struct
-  type t = cell
-  let compare = compare_cell
-  let print = pp_cell
-end
-
-
-(** {2 Primed cells} *)
-
-module PrimedCell =
-struct
-  include LiftToPrimed(Cell)
-
-  let base (pc:cell primed) : base =
-    let c = unprime pc in
-    c.b
-
-  let offset (pc:cell primed) : offset =
-    let c = unprime pc in
-    c.o
-
-  let zoffset c =
-    match offset c with
-    | O_single n -> n
-    | _ -> assert false
-
-
-  let typ (pc:cell primed) : typ =
-    let c = unprime pc in
-    c.t
-end
-
 
 (** {2 Cell extensions to the AST} *)
 
@@ -124,21 +102,41 @@ type expr_kind +=
 let mk_c_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
-let mk_c_primed_cell pcell ?(mode = STRONG) range =
-  mk_primed (mk_c_cell ~mode) pcell range
 
-let mk_c_remove_cell c range =
-  mk_remove (mk_c_primed_cell c range) range
+module Cell =
+struct
+  type t = cell
+  let compare = compare_cell
+  let print = pp_cell
+end
 
-let mk_c_add_cell c range =
-  mk_add (mk_c_primed_cell c range) range
 
-let primed_from_cell_expr (e:expr) : cell primed =
-  primed_from_expr (fun ee ->
-      match ekind ee with
-      | E_c_cell (c, _) -> c
-      | _ -> Exceptions.panic "primed_from_cell_expr: wrong argument %a" pp_expr e
-    ) e
+(** {2 Primed cells} *)
+
+module PrimedCell = MakePrimedExt(
+  struct
+    type t = cell
+
+    type ext = mode
+
+    let compare = compare_cell
+
+    let print = pp_cell
+
+    let match_expr e =
+      match ekind e with
+      | E_c_cell _ -> true
+      | _ -> false
+
+    let from_expr e =
+      match ekind e with
+      | E_c_cell (c, m) -> c, m
+      | _ -> assert false
+
+    let to_expr c mode range = mk_c_cell c ~mode range
+
+  end)
+
 
 let () =
   register_expr {
@@ -183,6 +181,7 @@ let () =
         | E_c_cell _ -> Keep
         | E_var _ when exp.etyp |> is_c_scalar_type -> Process
         | E_c_address_of _ -> Keep
+        | E_primed _ -> Visit
         | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );
   }

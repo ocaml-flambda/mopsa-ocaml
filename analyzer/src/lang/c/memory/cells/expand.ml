@@ -87,10 +87,10 @@ module Domain = struct
         PrimedCell.compare c c' <> 0 &&
         (
           let cell_range c =
-            (PrimedCell.zoffset c, Z.add (PrimedCell.zoffset c) (sizeof_type (PrimedCell.typ c)))
+            (primed_apply cell_zoffset c, Z.add (primed_apply cell_zoffset c) (sizeof_type (primed_apply cell_typ c)))
           in
           let check_overlap (a1, b1) (a2, b2) = Z.lt (Z.max a1 a2) (Z.min b1 b2) in
-          compare_base (PrimedCell.base c) (PrimedCell.base c') = 0 &&
+          compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
       ) cs
@@ -104,98 +104,106 @@ module Domain = struct
   let phi (c: cell primed) (u : t) range : expr option =
     let open Universal.Ast in
     let cs = u in
-    match exist_and_find_cell (fun c' -> PrimedCell.compare c c' = 0) cs  with
-    | Some c -> Some (mk_c_primed_cell c range)
+    match
+      exist_and_find_cell (fun c' -> PrimedCell.compare c c' = 0) cs
+    with
+    | Some c ->
+      debug "case 1";
+      Some (PrimedCell.to_expr c STRONG range)
+
     | None ->
-      begin
-        match exist_and_find_cell
-                (fun c' ->
-                   is_c_int_type (PrimedCell.typ c') && Z.equal (sizeof_type (PrimedCell.typ c')) (sizeof_type (PrimedCell.typ c)) &&
-                   compare_base (PrimedCell.base c) (PrimedCell.base c') = 0 &&
-                   Z.equal (PrimedCell.zoffset c) (PrimedCell.zoffset c')
-                ) cs
-        with
-        | Some (c') -> Some (wrap_expr
-                               (mk_c_primed_cell c' range)
-                               (int_rangeof (PrimedCell.typ c))
-                               range
-                            )
-        | None ->
-          begin
-            match exist_and_find_cell ( fun c' ->
-                let b = Z.sub (PrimedCell.zoffset c) (PrimedCell.zoffset c') in
-                Z.lt b (sizeof_type (PrimedCell.typ c')) &&
-                is_c_int_type (PrimedCell.typ c') &&
-                compare_typ (remove_typedef_qual (PrimedCell.typ c)) (T_c_integer(C_unsigned_char)) = 0
+      match exist_and_find_cell
+              (fun c' ->
+                 is_similarly_primed c c' &&
+                 is_c_int_type (primed_apply cell_typ c') &&
+                 Z.equal (sizeof_type (primed_apply cell_typ c')) (sizeof_type (primed_apply cell_typ c)) &&
+                 compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
+                 Z.equal (primed_apply cell_zoffset c) (primed_apply cell_zoffset c')
               ) cs
-            with
-            | Some (c') ->
-              let b = Z.sub (PrimedCell.zoffset c) (PrimedCell.zoffset c') in
-              let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-              Some (mk_binop (mk_binop (mk_c_primed_cell c' range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
-            | None ->
-              begin
-                let exception NotPossible in
-                try
-                  if is_c_int_type (PrimedCell.typ c) then
-                    begin
-                      let t' = T_c_integer(C_unsigned_char) in
-                      let n = Z.to_int (sizeof_type ((PrimedCell.typ c))) in
-                      let rec aux i l =
-                        if i < n then
-                          let tobein = primed_lift (fun cc -> {b = cc.b ; o = O_single (Z.add (PrimedCell.zoffset c) (Z.of_int i)); t = t'}) c in
-                          match exist_and_find_cell (fun c' ->
-                              PrimedCell.compare c' tobein = 0
-                            ) cs with
-                          | Some (c') ->
-                            aux (i+1) (c' :: l)
-                          | None ->
-                            raise NotPossible
-                        else
-                          List.rev l
-                      in
-                      let ll = aux 0 [] in
-                      let _,e = List.fold_left (fun (time, res) x ->
-                          let res' = mk_binop (mk_binop (mk_z time range) O_mult (mk_c_primed_cell x range) range) O_plus res range in
-                          let time' = Z.mul time (Z.of_int 256) in
-                          time',res'
-                        ) (Z.of_int 1,(mk_int 0 range)) ll
-                      in
-                      Some e
-                    end
-                  else
-                    raise NotPossible
-                with
-                | NotPossible ->
-                  match PrimedCell.base c with
-                  | S s ->
-                    Some (mk_int (String.get s (Z.to_int (PrimedCell.zoffset c)) |> int_of_char) range)
-                  | _ ->
-                    begin
-                      if is_c_scalar_type (PrimedCell.typ c) then
-                        let a,b = rangeof (PrimedCell.typ c) in
-                        Some ( mk_z_interval a b range)
-                      else if is_c_pointer_type (PrimedCell.typ c) then
-                        assert false
-                      else
-                        None
-                    end
-              end
-          end
-      end
+      with
+      | Some (c') ->
+        debug "case 2";
+        Some (wrap_expr
+                (PrimedCell.to_expr c' STRONG range)
+                (int_rangeof (primed_apply cell_typ c))
+                range
+             )
+      | None ->
+        match
+          exist_and_find_cell ( fun c' ->
+              let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
+              is_similarly_primed c c' &&
+              Z.lt b (sizeof_type (primed_apply cell_typ c')) &&
+              is_c_int_type (primed_apply cell_typ c') &&
+              compare_typ (remove_typedef_qual (primed_apply cell_typ c)) (T_c_integer(C_unsigned_char)) = 0
+            ) cs
+        with
+        | Some (c') ->
+          debug "case 3";
+          let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
+          let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
+          Some (mk_binop (mk_binop (PrimedCell.to_expr c' STRONG range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
+
+        | None ->
+          let exception NotPossible in
+          try
+            if is_c_int_type (primed_apply cell_typ c) then
+              let t' = T_c_integer(C_unsigned_char) in
+              let n = Z.to_int (sizeof_type ((primed_apply cell_typ c))) in
+              let rec aux i l =
+                if i < n then
+                  let tobein = primed_lift (fun cc -> {b = cc.b ; o = O_single (Z.add (primed_apply cell_zoffset c) (Z.of_int i)); t = t'}) c in
+                  match
+                    exist_and_find_cell (fun c' ->
+                        PrimedCell.compare c' tobein = 0
+                      ) cs
+                  with
+                  | Some (c') -> aux (i+1) (c' :: l)
+                  | None -> raise NotPossible
+                else
+                  List.rev l
+              in
+              let ll = aux 0 [] in
+              let _,e = List.fold_left (fun (time, res) x ->
+                  let res' = mk_binop (mk_binop (mk_z time range) O_mult (PrimedCell.to_expr x STRONG range) range) O_plus res range in
+                  let time' = Z.mul time (Z.of_int 256) in
+                  time',res'
+                ) (Z.of_int 1,(mk_int 0 range)) ll
+              in
+              debug "case 4";
+              Some e
+            else
+              raise NotPossible
+          with
+          | NotPossible ->
+            match primed_apply cell_base c with
+            | S s ->
+              debug "case 5";
+              Some (mk_int (String.get s (Z.to_int (primed_apply cell_zoffset c)) |> int_of_char) range)
+
+            | _ ->
+              if is_c_scalar_type (primed_apply cell_typ c) then
+                let () = debug "case 6" in
+                let a,b = rangeof (primed_apply cell_typ c) in
+                Some ( mk_z_interval a b range)
+              else if is_c_pointer_type (primed_apply cell_typ c) then
+                assert false
+              else
+                let () = debug "case 7" in
+                None
 
   (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
       abstraction [u] given a manager [subman] on the sub element of
       the stack [s] *)
   let add_cons_cell_subman (subman: ('b, 'b) man) range (c: cell primed) u (s: 'b flow) =
     if mem c u then u, s
-    else if not (is_c_scalar_type (PrimedCell.typ c)) then u, s
-    else if is_c_pointer_type ((PrimedCell.typ c)) then
+    else if not (is_c_scalar_type (primed_apply cell_typ c)) then u, s
+    else if is_c_pointer_type ((primed_apply cell_typ c)) then
       add c u, s
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_primed_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c STRONG range) O_eq e ~etyp:T_int range) range) in
         add c u, subman.exec stmt s
       | None ->
         add c u, s
@@ -204,13 +212,13 @@ module Domain = struct
   let add_cell c range man f  =
     let u = Flow.get_domain_cur man f in
     if mem c u then f
-    else if not (is_c_scalar_type (PrimedCell.typ c)) then f
-    else if is_c_pointer_type ((PrimedCell.typ c)) then
+    else if not (is_c_scalar_type (primed_apply cell_typ c)) then f
+    else if is_c_pointer_type ((primed_apply cell_typ c)) then
       Flow.set_domain_cur (add c u) man f
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (mk_c_primed_cell c range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c STRONG range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add c u) man |>
         man.exec ~zone:(Z_c_cell) stmt
@@ -454,19 +462,19 @@ module Domain = struct
   (** Evaluate a scalar lval into a cell *)
   let rec eval_scalar_cell exp man flow : ('a, cell primed) evl =
     match ekind exp with
-    | E_var (v, _)
-    | E_primed { ekind = E_var (v, _) }
-      when is_c_scalar_type exp.etyp ->
-      let c = { b = V v; o = O_single Z.zero; t = v.vtyp } in
-      let pc = primed_from_expr (fun _ -> c) exp in
+    | var when PrimedVar.match_expr exp &&
+               is_c_scalar_type exp.etyp ->
+      let v = PrimedVar.from_expr exp in
+      let c = { b = V (unprime v); o = O_single Z.zero; t = primed_apply vtyp v } in
+      let pc = if is_primed v then primed c else unprimed c in
       Eval.singleton pc flow
 
-    | E_c_deref(p)
-    | E_primed { ekind = E_c_deref(p)} ->
+    | deref when match_primed_expr (function { ekind = E_c_deref _ } -> true | _ -> false) exp ->
+      let p = primed_expr_apply (function { ekind = E_c_deref p } -> p | _ -> assert false) exp in
+      let t = under_type p.etyp in
+
       man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
       Eval.bind @@ fun p flow ->
-
-      let t = under_type p.etyp in
 
       man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
       Eval.bind @@ fun pe flow ->
@@ -475,13 +483,13 @@ module Domain = struct
         | E_c_points_to(P_block (b, o)) when Stubs.Ast.is_expr_quantified o ->
           eval_quantified_cell b o t p.erange man flow |>
           Eval.bind @@ fun c flow ->
-          let pc = primed_from_expr (fun _ -> c) exp in
+          let pc = if is_primed_expr exp then primed c else unprimed c in
           Eval.singleton pc flow
 
         | E_c_points_to(P_block (b, o)) ->
           eval_non_quantified_cell b o t p.erange man flow |>
           Eval.bind @@ fun c flow ->
-          let pc = primed_from_expr (fun _ -> c) exp in
+          let pc = if is_primed_expr exp then primed c else unprimed c in
           Eval.singleton pc flow
 
         | E_c_points_to(P_null) ->
@@ -510,22 +518,24 @@ module Domain = struct
   let eval zone exp man flow =
     match ekind exp with
     (* 𝔼⟦ v | *p | v' | ( *p )' ⟧ *)
-    | E_var _
-    | E_primed { ekind = E_var _ }
-    | E_c_deref _
-    | E_primed { ekind = E_c_deref _ }
-      when is_c_scalar_type exp.etyp
+    | lval when is_c_scalar_type exp.etyp &&
+                (
+                  match_primed_expr (function
+                      | { ekind = E_var _ | E_c_deref _ } -> true
+                      | _ -> false
+                    ) exp
+                )
       ->
       eval_scalar_cell exp man flow |>
       Eval.bind_return @@ fun c flow ->
 
-      begin match PrimedCell.offset c with
+      begin match primed_apply cell_offset c with
         | O_single _ ->
           let flow = add_cell c exp.erange man flow in
-          Eval.singleton (mk_c_primed_cell c exp.erange) flow
+          Eval.singleton (PrimedCell.to_expr c STRONG exp.erange) flow
 
         | O_region _ ->
-          let l, u = rangeof (PrimedCell.typ c) in
+          let l, u = rangeof (primed_apply cell_typ c) in
           Eval.singleton (mk_z_interval l u exp.erange) flow
 
         | _ -> assert false
@@ -566,7 +576,7 @@ module Domain = struct
 
   (** Assign an rval to a cell *)
   let assign_cell c rval range man flow =
-    let lval = mk_c_primed_cell c range in
+    let lval = PrimedCell.to_expr c STRONG range in
     let flow' = Flow.map_domain_env T_cur (add c) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
@@ -581,11 +591,11 @@ module Domain = struct
 
     let flow'' = Flow.set_domain_env T_cur a' man flow' in
 
-    let block = List.map (fun c' -> mk_c_remove_cell c' range) overlappings in
+    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) overlappings in
 
     man.exec ~zone:Z_c_cell (mk_block block range) flow'' |>
     Post.of_flow |>
-    Post.add_mergers (mk_c_remove_cell c range :: block) ~zone:Z_c_cell
+    Post.add_mergers (mk_remove (PrimedCell.to_expr c STRONG range) range :: block) ~zone:Z_c_cell
 
 
   (** Remove cells identified by an offset membership predicate *)
@@ -595,11 +605,11 @@ module Domain = struct
       a |>
       exist_and_find_cells
         (fun c ->
-           compare_base (PrimedCell.base c) b = 0 &&
-           pred (PrimedCell.zoffset c)
+           compare_base (primed_apply cell_base c) b = 0 &&
+           pred (primed_apply cell_zoffset c)
         )
     in
-    let block = List.map (fun c' -> mk_c_remove_cell c' range) cells in
+    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) cells in
 
     man.exec ~zone:Z_c_cell (mk_block block range) flow |>
     Post.of_flow |>
@@ -633,9 +643,9 @@ module Domain = struct
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
-      man.exec ~zone:Z_c_cell (mk_c_add_cell c stmt.srange) flow |>
+      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) flow |>
       Post.of_flow |>
-      Post.add_merger (mk_c_add_cell c stmt.srange)
+      Post.add_merger (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange)
 
     (* 𝕊⟦ rebase adr -> adr' ⟧ *)
     | S_rebase_addr(adr, adr', mode) ->
@@ -644,9 +654,9 @@ module Domain = struct
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> compare_base (PrimedCell.base c) (V v) = 0) u in
+      let l = exist_and_find_cells (fun c -> compare_base (primed_apply cell_base c) (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
-      let mergers = List.map (fun c -> mk_c_remove_cell c stmt.srange) l in
+      let mergers = List.map (fun c -> mk_remove (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) l in
       let to_exec_in_sub = mergers in
       let flow = Flow.set_domain_cur u' man flow in
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub stmt.srange) flow |>
@@ -665,9 +675,9 @@ module Domain = struct
       eval_scalar_cell lval man flow |>
       Post.bind_return man @@ fun c flow ->
 
-      begin match PrimedCell.offset c with
+      begin match primed_apply cell_offset c with
         | O_single _ -> assign_cell c rval stmt.srange man flow
-        | O_region itv -> remove_cells (PrimedCell.base c) (fun o -> Itv.mem o itv) stmt.srange man flow
+        | O_region itv -> remove_cells (primed_apply cell_base c) (fun o -> Itv.mem o itv) stmt.srange man flow
         | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" PrimedCell.print c
       end
 

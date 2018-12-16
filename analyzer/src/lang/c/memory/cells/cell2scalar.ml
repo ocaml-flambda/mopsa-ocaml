@@ -114,64 +114,54 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_add (
-        { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
-        as c
-      ) ->
-      let pc = primed_from_cell_expr c in
+    | S_add c when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
       let pv, flow = get_scalar_or_create flow pc in
-      let vv = mk_primed_var pv ~mode stmt.srange in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
       man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
       Post.return
 
-    | S_remove (
-        { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
-        as c
-      ) ->
-      let pc = primed_from_cell_expr c in
+    | S_remove c when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
       let pv, flow = get_scalar_and_remove flow pc in
-      let vv = mk_primed_var pv ~mode stmt.srange in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
       man.exec ~zone:Z_c_scalar (mk_remove vv stmt.srange) flow |>
       Post.return
 
-    | S_expand (
-        (
-          { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
-          as c
-        ), cl
-      ) ->
-      let pc = primed_from_cell_expr c in
-      let pcl = List.map primed_from_cell_expr cl in
+    | S_expand (c, cl) when PrimedCell.match_expr c &&
+                            List.for_all PrimedCell.match_expr cl ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pcl = List.map PrimedCell.from_expr cl in
+      let model = List.map PrimedCell.ext_from_expr cl in
       let pv, flow = get_scalar_or_create flow pc in
-      let vv = mk_primed_var pv ~mode stmt.srange in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
       let vl, flow =
         let rec doit flow = function
           | [] -> [], flow
-          | pc :: tl ->
+          | (pc, mode) :: tl ->
             let pv, flow = get_scalar_or_create flow pc in
-            let vv = mk_primed_var pv ~mode stmt.srange in
+            let vv = PrimedVar.to_expr pv mode stmt.srange in
             let vl, flow = doit flow tl in
             vv :: vl, flow
         in
-        doit flow pcl
+        doit flow (List.combine pcl model)
       in
       man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
       Post.return
 
-    | S_assign(
-        (
-          { ekind = E_c_cell (_, mode) | E_primed { ekind = E_c_cell (_, mode) } }
-          as c
-        ), rval)
-      ->
-      let pc = primed_from_cell_expr c in
-      let lval, flow = get_scalar_or_create flow pc in
-      let lval' = mk_primed_var lval ~mode stmt.srange in
+    | S_assign(c, e) when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
 
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) rval flow |>
-      Post.bind_opt man @@ fun rval' flow ->
+      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
+      Post.bind_opt man @@ fun e flow ->
 
-      man.exec ~zone:Z_c_scalar (mk_assign lval' rval' stmt.srange) flow |>
+      man.exec ~zone:Z_c_scalar (mk_assign vv e stmt.srange) flow |>
       Post.return
 
     | S_assume(e) ->
@@ -224,11 +214,11 @@ struct
       |>
       Eval.return
 
-    | E_c_cell(_, mode)
-    | E_primed { ekind = E_c_cell (_, mode) } ->
-      let pc = primed_from_cell_expr exp in
+    | c when PrimedCell.match_expr exp ->
+      let pc = PrimedCell.from_expr exp in
+      let mode = PrimedCell.ext_from_expr exp in
       let pv, flow = get_scalar_or_create flow pc in
-      let vv = mk_primed_var pv ~mode exp.erange in
+      let vv = PrimedVar.to_expr pv mode exp.erange in
       Eval.singleton vv flow |>
       Eval.return
 
