@@ -148,7 +148,7 @@ let builtin_type f arg =
   match f.content with
   | SIZE   -> int_type
   | OFFSET -> int_type
-  | BASE   -> Exceptions.panic "builtin_type(cst_to_ast.ml): type of base(..) not implemented"
+  | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | OLD    -> arg.content.Ast.typ
   | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
 

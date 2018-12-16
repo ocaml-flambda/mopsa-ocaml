@@ -1610,6 +1610,37 @@ void swab (const void *__restrict __from, void *__restrict __to,
 
 #ifdef __USE_MISC
 
+/*$
+ * requires: __length <= 256;
+ * requires: size(__buffer) >= __length;
+ *
+ * case "success":
+ *   assigns: __buffer[0, __length - 1];
+ *   ensures: return == 0;
+ *
+ * case "failure":
+ *   assigns: _errno;
+ *   ensures: return == -1;
+ */
 int getentropy (void *__buffer, size_t __length);
 
 #endif
+
+
+int optind;
+int opterr;
+int optopt;
+
+/*$
+ * // TODO: finish, allow nested quantification
+ * //requires: forall int i in [0, size(__argv) - 1]:
+   //          exists int j in [0, size(__argv[j]) - 1]: __argv[i][j] == 0;
+ * requires: exists int i in [0, size(__shortopts) - 1]: __shortopts[i] == 0;
+ * assigns: optind;
+ * assigns: opterr;
+ * assigns: optopt;
+ *
+ * ensures: return >= -1 and return <= 255;
+ */
+int getopt (int ___argc, char *const *___argv, const char *__shortopts);
+

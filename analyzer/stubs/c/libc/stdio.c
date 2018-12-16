@@ -11,6 +11,7 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+#include <stdarg.h>
 #include <stdio.h>
 #include "mopsa_libc_utils.h"
 
@@ -382,6 +383,15 @@ int sprintf (char *__restrict __s,
 int vfprintf (FILE *__restrict __s, const char *__restrict __format,
               _G_va_list __arg);
 
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __s in File;
+ * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ */
+//int _IO_vfprintf (_IO_FILE *__restrict __s, const char *__restrict __format,
+//                  _IO_va_list __arg);
+
 /*$
  * // TODO: check format, check variable arguments
  *
@@ -526,6 +536,15 @@ int vfscanf (FILE *__restrict __s, const char *__restrict __format,
              _G_va_list __arg);
 
 /*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __s in File;
+ * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * assigns:  _errno;
+ */
+//int _IO_vfscanf (_IO_FILE *__restrict __s, const char *__restrict __format,
+//                 _IO_va_list __arg, int* arg);
+
+/*$
  * // TODO: check format, check variable arguments
  *
  * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
@@ -553,10 +572,18 @@ int vsscanf (const char *__restrict __s,
 int fgetc (FILE *__stream);
 
 /*$
+ * // TODO: internal glibc function, undocumented
  * requires: __stream in File;
  * ensures: (return >= 0 and return <= 255) or return == _EOF;
  */
-int getc (_IO_FILE *__stream);
+int _IO_getc (_IO_FILE *__stream);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ */
+int _IO_peekc_locked (_IO_FILE *__stream);
 
 /*$
  * ensures: (return >= 0 and return <= 255) or return == _EOF;
@@ -598,10 +625,11 @@ int fgetc_unlocked (FILE *__stream);
 int fputc (int __c, FILE *__stream);
 
 /*$
+ * // TODO: internal glibc function, undocumented
  * requires: __stream in File;
  * ensures: (return == (unsigned char) __c) or (return == _EOF);
  */
-int putc (int __c, _IO_FILE *__stream);
+int _IO_putc (int __c, _IO_FILE *__stream);
 
 /*$
  * ensures: (return == (unsigned char) __c) or (return == _EOF);
@@ -913,9 +941,21 @@ void clearerr (FILE *__stream);
 int feof (FILE *__stream);
 
 /*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ */
+int _IO_feof (_IO_FILE *__stream);
+
+/*$
  * requires: __stream in File;
  */
 int ferror (FILE *__stream);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ */
+int _IO_ferror (_IO_FILE *__stream);
 
 #ifdef __USE_MISC
 
@@ -1050,9 +1090,27 @@ char *cuserid (char *__s);
 void flockfile (FILE *__stream);
 
 /*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ */
+void _IO_flockfile (_IO_FILE *__stream);
+
+/*$
  * requires: __stream in File;
  */
 int ftrylockfile (FILE *__stream);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ */
+int _IO_ftrylockfile (_IO_FILE *__stream);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __stream in File;
+ */
+void _IO_funlockfile (_IO_FILE *__stream);
 
 /*$
  * requires: __stream in File;
@@ -1060,3 +1118,58 @@ int ftrylockfile (FILE *__stream);
 void funlockfile (FILE *__stream);
 
 #endif /* POSIX */
+
+
+// glibc internals
+
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+int __underflow (_IO_FILE *__fd);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+int __uflow (_IO_FILE *__fd);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+int __overflow (_IO_FILE *__fd, int arg1);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+__ssize_t _IO_padn (_IO_FILE *__fd, int, __ssize_t __len);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ * requires: size(__ptr) >= __len;
+ * assigns:  __ptr[0, __len - 1];
+ * ensures:  return <= __len;
+ */
+size_t _IO_sgetn (_IO_FILE *__fd, void *__ptr, size_t __len);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+__off64_t _IO_seekoff (_IO_FILE *__fd, __off64_t __off, int arg1, int arg2);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+__off64_t _IO_seekpos (_IO_FILE *__fd, __off64_t __off, int arg1);
+
+/*$
+ * // TODO: internal glibc function, undocumented
+ * requires: __fd in File;
+ */
+void _IO_free_backup_area (_IO_FILE *__fd);
