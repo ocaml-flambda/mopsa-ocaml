@@ -28,7 +28,7 @@ int fcntl (int __fd, int __cmd, ...);
  *   local:   void* fd = new FileDescriptor;
  *   ensures: return == (int)fd;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -43,7 +43,7 @@ int open (const char *__file, int __oflag, ...);
  *   local:   void* fd = new FileDescriptor;
  *   ensures: return == (int)fd;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -59,7 +59,7 @@ int openat (int __fd, const char *__file, int __oflag, ...);
  *   local:   void* fd = new FileDescriptor;
  *   ensures: return == (int)fd;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -77,7 +77,7 @@ static const int _F_TEST = F_TEST;
  * case "success":
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */

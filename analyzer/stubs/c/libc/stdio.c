@@ -258,7 +258,7 @@ FILE *freopen (const char *__restrict __filename,
                const char *__restrict __modes,
                FILE *__restrict __stream);
 
-#ifdef	__USE_POSIX
+#ifdef __USE_POSIX
 
 /*$
  * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
@@ -434,7 +434,7 @@ int vsnprintf (char *__restrict __s, size_t __maxlen,
  *   ensures:  exists int i in [0, size(*__ptr) - 1]: (*__ptr)[i] == 0;
  *   ensures:  return >= 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: *__ptr;
  *   ensures: return == -1;
  */
@@ -454,7 +454,7 @@ int vasprintf (char **__restrict __ptr, const char *__restrict __f,
  *   ensures:  exists int i in [0, size(*__ptr) - 1]: (*__ptr)[i] == 0;
  *   ensures:  return >= 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: *__ptr;
  *   ensures: return == -1;
  */

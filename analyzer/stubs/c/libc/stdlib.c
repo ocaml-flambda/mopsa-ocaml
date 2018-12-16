@@ -1253,7 +1253,7 @@ void setkey (const char *__key);
  *   local:   void* fd = new FileDescriptor;
  *   ensures: return == (int)fd;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -1269,7 +1269,7 @@ int posix_openpt (int __oflag);
  * case "success":
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -1281,7 +1281,7 @@ int grantpt (int __fd);
  * case "success":
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -1297,7 +1297,7 @@ static char _ptsname_buf[1024]; // TODO: fix size
  *   ensures: exists int i in [0, size(_ptsname_buf) - 1]: _ptsname_buf[i] == 0;
  *   ensures: return == (char*)_ptsname_buf;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == _NULL;
  */
@@ -1316,7 +1316,7 @@ char *ptsname (int __fd) ;
  *   ensures: exists int i in [0, __buflen - 1]: __buf[i] == 0;
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return != 0;
  */
@@ -1327,7 +1327,7 @@ int ptsname_r (int __fd, char *__buf, size_t __buflen);
  *   local:   void* fd = new FileDescriptor;
  *   ensures: return == (int)fd;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
