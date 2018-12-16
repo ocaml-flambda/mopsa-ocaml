@@ -249,43 +249,34 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_remove ({ ekind = E_var _ | E_primed { ekind = E_var _ } } as v) ->
+    | S_remove v when PrimedVar.match_expr v  ->
       Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.remove (primed_from_var_expr v)) man flow in
+        let flow' = Flow.map_domain_env T_cur (VarMap.remove (PrimedVar.from_expr v)) man flow in
         Post.of_flow flow'
       )
 
-    | S_add ({ ekind = E_var _ | E_primed { ekind = E_var _ } } as v) ->
+    | S_add v when PrimedVar.match_expr v ->
       Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.add (primed_from_var_expr v) Value.top) man flow in
+        let flow' = Flow.map_domain_env T_cur (VarMap.add (PrimedVar.from_expr v) Value.top) man flow in
         Post.of_flow flow'
       )
 
-    | S_project vars
-      when List.for_all (function
-          | { ekind = E_var _ }
-          | { ekind = E_primed { ekind = E_var _ } } -> true
-          | _ -> false
-        ) vars
-      ->
+    | S_project vars when List.for_all PrimedVar.match_expr vars ->
       Some (
-        let vars = List.map primed_from_var_expr vars in
+        let vars = List.map PrimedVar.from_expr vars in
         let flow' = Flow.map_domain_env T_cur (fun a ->
             VarMap.fold (fun v _ acc ->
-                if List.exists (fun v' -> primed_apply2 compare_var v v' = 0) vars then acc else VarMap.remove v acc
+                if List.exists (fun v' -> PrimedVar.compare v v' = 0) vars then acc else VarMap.remove v acc
               ) a a
           ) man flow
         in
         Post.of_flow flow'
       )
 
-    | S_rename (
-        ({ ekind = E_var _ | E_primed { ekind = E_var _ } } as var1),
-        ({ ekind = E_var _ | E_primed { ekind = E_var _ } } as var2)
-      ) ->
+    | S_rename (var1, var2) when PrimedVar.match_expr var1 && PrimedVar.match_expr var2 ->
       Some (
-        let var1 = primed_from_var_expr var1 in
-        let var2 = primed_from_var_expr var2 in
+        let var1 = PrimedVar.from_expr var1 in
+        let var2 = PrimedVar.from_expr var2 in
 
         let flow' = Flow.map_domain_env T_cur (fun a ->
             let v = VarMap.find var1 a in
@@ -295,21 +286,18 @@ struct
         Post.of_flow flow'
       )
 
-    | S_forget ({ ekind = E_var _ | E_primed { ekind = E_var _ } } as var) ->
-      Flow.map_domain_env T_cur (add (primed_from_var_expr var) Value.top) man flow |>
+    | S_forget var when PrimedVar.match_expr var ->
+      Flow.map_domain_env T_cur (add (PrimedVar.from_expr var) Value.top) man flow |>
       Post.return
 
-    | S_assign
-        (
-          {ekind = E_var(_, mode) | E_primed { ekind = E_var (_, mode)}} as var,
-          e
-        ) ->
+    | S_assign (var, e) when PrimedVar.match_expr var ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
             eval e a |> Channel.bind @@ fun (_,v) ->
-            let a' = VarMap.add (primed_from_var_expr var) v a in
-            let a'' = match mode with
+            let a' = VarMap.add (PrimedVar.from_expr var) v a in
+            let a'' =
+              match PrimedVar.ext_from_expr var with
               | STRONG -> a'
               | WEAK -> join (Flow.get_all_annot flow) a a'
             in
@@ -320,13 +308,13 @@ struct
         Post.add_channels channels
       )
 
-    | S_expand(
-        { ekind = E_var _ | E_primed { ekind = E_var _ } } as var,
-        vl
-      ) ->
-      let vl = List.map primed_from_var_expr vl in
+    | S_expand (var, vl)
+      when PrimedVar.match_expr var &&
+           List.for_all PrimedVar.match_expr vl
+      ->
+      let vl = List.map PrimedVar.from_expr vl in
       let a = Flow.get_domain_env T_cur man flow in
-      let value = find (primed_from_var_expr var) a in
+      let value = find (PrimedVar.from_expr var) a in
       let aa = List.fold_left (fun acc v' ->
           add v' value acc
         ) a vl
