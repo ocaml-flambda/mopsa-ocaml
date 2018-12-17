@@ -55,6 +55,9 @@
 %token FREE PRIMED RETURN SIZE OFFSET BASE
 %token FLOAT_VALID FLOAT_INF FLOAT_NAN
 
+(* Deprecated *)
+%token OLD
+
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
 %token SIGNED UNSIGNED CONST
@@ -345,6 +348,8 @@ set:
   | FLOAT_VALID { FLOAT_VALID }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
+  (* Deprecated *)
+  | OLD    { OLD }
 
 args:
   |                             { [] }

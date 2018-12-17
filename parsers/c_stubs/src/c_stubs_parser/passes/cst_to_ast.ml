@@ -166,6 +166,7 @@ let builtin_type f arg =
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
   | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
+  | OLD    -> arg.content.Ast.typ
 
 
 (** {2 Expressions} *)
@@ -445,6 +446,7 @@ and visit_builtin b =
   | FLOAT_VALID -> Ast.FLOAT_VALID
   | FLOAT_INF   -> Ast.FLOAT_INF
   | FLOAT_NAN   -> Ast.FLOAT_NAN
+  | OLD -> Ast.OLD
 
 
 (** {2 Formulas} *)

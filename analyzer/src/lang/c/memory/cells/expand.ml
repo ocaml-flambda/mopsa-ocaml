@@ -487,10 +487,10 @@ module Domain = struct
         [] o
     in
 
-    (* Compute the under-approximation of the range of ∀ variables *)
+    (* Compute the under-approximation space of the range of ∀ variables *)
     let exception NoUnderApprox in
     try
-      let under = List.map (fun (var, l, u) ->
+      let space = List.map (fun (var, l, u) ->
           let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) l flow in
           let itv1 = Eval.substitute (fun l flow ->
               man.ask (Itv.Q_interval l) flow
@@ -512,33 +512,31 @@ module Domain = struct
             raise (NoUnderApprox)
         ) forall_vars
       in
-      (* Compute some samples from the vector of under-approximations *)
-      let samples =
-        let rec vectors under =
-          match under with
-          | [] -> [[]]
-          | (var, l, u) :: tl ->
-            let after = vectors tl in
 
-            (** Iterate on values in [i, u] and add them to the result vectors *)
-            let rec iter_on_values ret i =
-              if Z.gt i u then ret
-              else iter_on_values (add_sample i after ret) (Z.succ i)
+      (* Compute some samples from the space of under-approximations *)
+      let rec samples space =
+        match space with
+        | [] -> [[]]
+        | (var, l, u) :: tl ->
+          let after = samples tl in
 
-            (** and a sample value i to the result *)
-            and add_sample i after ret =
-              if List.length ret == !opt_expand then
-                ret
-              else
-                match after with
-                | [] -> ret
-                | hd :: tl ->
-                   add_sample i tl (((var, i) :: hd)  :: ret)
-            in
+          (** Iterate on values in [i, u] and add them to the result vectors *)
+          let rec iter_on_space_dim ret i =
+            if Z.gt i u then ret
+            else iter_on_space_dim (add_sample i after ret) (Z.succ i)
 
-            iter_on_values [] l
-        in
-        vectors under
+          (** and a sample value i to the result *)
+          and add_sample i after ret =
+            if List.length ret == !opt_expand then
+              ret
+            else
+              match after with
+              | [] -> ret
+              | hd :: tl ->
+                add_sample i tl (((var, i) :: hd)  :: ret)
+          in
+
+          iter_on_space_dim [] l
       in
       (* Each sample vector is an evaluation of the values of
          quantified variables.  So, for each vector, we substitute the
@@ -546,6 +544,7 @@ module Domain = struct
          cell for this sample.  At the end, we meet all
          evaluations. *)
       let conj =
+        samples space |>
         List.map (fun sample ->
             let o'' = Visitor.map_expr
                 (fun e ->
@@ -561,7 +560,7 @@ module Domain = struct
             in
             debug "offset sample: %a" pp_expr o'';
             eval_non_quantified_cell b o'' t range man flow
-          ) samples
+          )
       in
       Eval.meet_list conj
     with NoUnderApprox ->

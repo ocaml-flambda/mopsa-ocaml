@@ -89,6 +89,8 @@ and builtin =
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
+  (* Deprecated *)
+  | OLD
 
 
 (** {2 Formulas} *)
@@ -185,7 +187,7 @@ let pp_builtin fmt f =
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
-
+  | OLD    -> pp_print_string fmt "old"
 
 let rec pp_expr fmt exp =
   match exp.content.kind with

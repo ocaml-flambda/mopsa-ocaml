@@ -68,6 +68,9 @@ let _ =
      "float_valid", FLOAT_VALID;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
+
+     (* Deprecated *)
+     "old", OLD;
    ]
 
 }
