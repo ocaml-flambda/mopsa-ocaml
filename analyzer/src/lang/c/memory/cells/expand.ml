@@ -616,14 +616,16 @@ module Domain = struct
     Post.add_mergers block ~zone:Z_c_cell
 
 
-  (** Interpret stub assignments. All cells within
-      container [c] and having an offset in the range [offsets] are put
-      to ⊤, and old copies created.
-  *)
-  let stub_assign_cell c offsets t range man flow = panic "prepare_cells_for_stub_assigns not implemented"
-
-  (** Remove old copies of a stub assigned cell *)
-  let remove_old_cells c range man flow = panic "remove_old_cells not implemented"
+  (** Rename an old cell into a new one *)
+  let rename_cell cold cnew range man flow =
+    (* Add the old cell in case it has not been accessed before so
+       that its constraints are added in the sub domain *)
+    add_cell cold range man flow |>
+    (* Remove the old cell and add the new one *)
+    Flow.map_domain_env T_cur (fun a ->
+        remove cold a |>
+        add cnew
+      ) man
 
   (** Entry point of post-condition computation *)
   let rec exec zone stmt man flow =
@@ -689,6 +691,26 @@ module Domain = struct
       let stmt' = {stmt with skind = S_assume e'} in
       man.exec ~zone:Z_c_cell stmt' flow |>
 
+      Post.return
+
+    (* 𝕊⟦ rename(old, new) ⟧ *)
+    | S_rename(eold, enew) when is_c_scalar_type eold.etyp &&
+                                is_c_scalar_type enew.etyp
+      ->
+      man.eval ~zone:(Z_c, Z_under Z_c_cell) eold flow |>
+      Post.bind_opt man @@ fun eold flow ->
+
+      let cold = PrimedCell.from_expr eold in
+
+      man.eval ~zone:(Z_c, Z_under Z_c_cell) enew flow |>
+      Post.bind_opt man @@ fun enew flow ->
+
+      let cnew = PrimedCell.from_expr enew in
+
+      let flow = rename_cell cold cnew stmt.srange man flow in
+
+      let stmt' = {stmt with skind = S_rename(eold, enew)} in
+      man.exec ~zone:Z_c_cell stmt' flow |>
       Post.return
 
     | _ -> None

@@ -253,7 +253,10 @@ struct
     in
     let block2 =
       post.post_assigns |> List.fold_left (fun block a ->
-          mk_stub_remove_primed a.content.assign_target a.content.assign_offset range :: block
+          let t = a.content.assign_target in
+          match a.content.assign_offset with
+          | None -> mk_rename (mk_primed t) t range :: block
+          | Some (a, b) -> mk_stub_rename_primed t a b range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow

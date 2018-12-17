@@ -152,6 +152,23 @@ struct
       man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
       Post.return
 
+    | S_rename(c1, c2) when PrimedCell.match_expr c1 &&
+                            PrimedCell.match_expr c2
+      ->
+      let pc1 = PrimedCell.from_expr c1 in
+      let mode1 = PrimedCell.ext_from_expr c1 in
+      let pv1, flow = get_scalar_and_remove flow pc1 in
+      let vv1 = PrimedVar.to_expr pv1 mode1 stmt.srange in
+
+      let pc2 = PrimedCell.from_expr c2 in
+      let mode2 = PrimedCell.ext_from_expr c2 in
+      let pv2, flow = get_scalar_or_create flow pc2 in
+      let vv2 = PrimedVar.to_expr pv2 mode2 stmt.srange in
+
+      man.exec ~zone:Z_c_scalar (mk_rename vv1 vv2 stmt.srange) flow |>
+      Post.return
+
+
     | S_assign(c, e) when PrimedCell.match_expr c ->
       let pc = PrimedCell.from_expr c in
       let mode = PrimedCell.ext_from_expr c in

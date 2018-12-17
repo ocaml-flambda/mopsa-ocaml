@@ -143,12 +143,13 @@ let mk_stub_old e range =
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  (** Remove primed variables of assigned dimensions *)
-  | S_stub_remove_primed of expr                 (** modified target *) *
-                            (expr * expr) option (** modification range *)
+  (** Rename primed variables of assigned dimensions *)
+  | S_stub_rename_primed of expr  (** modified pointer *) *
+                            expr  (** index lower bound of modified elements *) *
+                            expr  (** index upper bound of modified elements *)
 
-let mk_stub_remove_primed t o range =
-  mk_stmt (S_stub_remove_primed (t, o)) range
+let mk_stub_rename_primed t a b range =
+  mk_stmt (S_stub_rename_primed (t, a, b)) range
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -325,10 +326,11 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_remove_primed(t1, o1), S_stub_remove_primed(t2, o2) ->
+        | S_stub_rename_primed(t1, a1, b1), S_stub_rename_primed(t2, a2, b2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+            (fun () -> compare_expr a1 a2);
+            (fun () -> compare_expr b1 b2)
           ]
 
         | _ -> next s1 s2
@@ -336,14 +338,13 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_remove_primed(t, o) -> panic "visitor for S_stub_assigns not supported"
+        | S_stub_rename_primed(t, a, b) -> panic "visitor for S_stub_rename_primed not supported"
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_remove_primed(t, None) -> fprintf fmt "remove primed %a;" pp_expr t
-        | S_stub_remove_primed(t, Some(a,b)) -> fprintf fmt "remove primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
+        | S_stub_rename_primed(t,a,b) -> fprintf fmt "rename primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
         | _ -> next fmt s
       );
   }

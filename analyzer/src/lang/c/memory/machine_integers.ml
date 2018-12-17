@@ -395,6 +395,17 @@ struct
       Post.of_flow |>
       OptionExt.return
 
+    | S_rename(v1, v2) when is_c_int_type v1.etyp &&
+                            is_c_int_type v2.etyp &&
+                            PrimedVar.match_expr v1 &&
+                            PrimedVar.match_expr v2 ->
+      let v1' = PrimedVar.substitute var_machine_integers v1 in
+      let v2' = PrimedVar.substitute var_machine_integers v2 in
+      man.exec ~zone:Z_u_num (mk_rename v1' v2' stmt.srange) flow |>
+      Post.of_flow |>
+      OptionExt.return
+
+
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Post.bind_opt man @@ fun e' flow ->
