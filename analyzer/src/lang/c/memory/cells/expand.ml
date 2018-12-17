@@ -10,6 +10,7 @@
 
 open Mopsa
 open Universal.Ast
+open Stubs.Ast
 open Ast
 open Zone
 open Common.Base
@@ -295,6 +296,7 @@ module Domain = struct
     ];
     import = [
       (Z_c_scalar, Universal.Zone.Z_u_num);
+      (Z_c, Universal.Zone.Z_u_num);
       (Z_c, Z_under Z_c_cell);
       (Z_c, Z_c_cell_expand);
       (Z_c, Z_c_points_to);
@@ -455,9 +457,118 @@ module Domain = struct
       in
       Eval.empty_singleton flow'
 
-  (** Evaluate a base and a quantified offset expression into a cell *)
+  (** Evaluate a base and a quantified offset expression into a cell
+
+      Existentially quantified variables are replaced by un-quantified
+      variables, since cell evaluation returns a disjunction.
+
+       However, for universally quantified variables, we discritize a
+      number of samples within the under-approximation of the
+      range. For each sample, we replace the variable by its litteral
+      value, and we compute a conjuction of the resulting evaluations
+  *)
   let eval_quantified_cell b o t range man flow : ('a, cell) evl =
-    panic_at range "expand: evaluation of quantified cells not supported"
+    debug "eval_quantified_cell: %a %a" pp_base b pp_expr o;
+    (* Replace ∃ variables with unquantified variables and get the
+       list of ∀ variables *)
+    let forall_vars, o' =
+      Visitor.fold_map_expr
+        (fun acc exp ->
+           match ekind exp with
+           | E_stub_quantified(EXISTS, var, set) ->
+             Keep (acc, { exp with ekind = E_var(var, STRONG) })
+
+           | E_stub_quantified(FORALL, var, S_interval(l, u)) ->
+             Keep ((var, l, u) :: acc, exp)
+
+           | _ -> VisitParts (acc, exp)
+        )
+        (fun acc stmt -> VisitParts (acc, stmt))
+        [] o
+    in
+
+    (* Compute the under-approximation of the range of ∀ variables *)
+    let exception NoUnderApprox in
+    try
+      let under = List.map (fun (var, l, u) ->
+          let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) l flow in
+          let itv1 = Eval.substitute (fun l flow ->
+              man.ask (Itv.Q_interval l) flow
+            ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl1
+          in
+
+          let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) u flow in
+          let itv2 = Eval.substitute (fun u flow ->
+              man.ask (Itv.Q_interval u) flow
+            ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl2
+          in
+
+          debug "%a in [ %a, %a ]" pp_var var Itv.print itv1 Itv.print itv2;
+          if Itv.is_bounded itv1 && Itv.is_bounded itv2 then
+            let (a,b) = Itv.bounds itv1 in
+            let (c,d) = Itv.bounds itv2 in
+            (var, b, c)
+          else
+            raise (NoUnderApprox)
+        ) forall_vars
+      in
+      (* Compute some samples from the vector of under-approximations *)
+      let samples =
+        let rec vectors under =
+          match under with
+          | [] -> [[]]
+          | (var, l, u) :: tl ->
+            let after = vectors tl in
+
+            (** Iterate on values in [i, u] and add them to the result vectors *)
+            let rec iter_on_values ret i =
+              if Z.gt i u then ret
+              else iter_on_values (add_sample i after ret) (Z.succ i)
+
+            (** and a sample value i to the result *)
+            and add_sample i after ret =
+              if List.length ret == !opt_expand then
+                ret
+              else
+                match after with
+                | [] -> ret
+                | hd :: tl ->
+                   add_sample i tl (((var, i) :: hd)  :: ret)
+            in
+
+            iter_on_values [] l
+        in
+        vectors under
+      in
+      (* Each sample vector is an evaluation of the values of
+         quantified variables.  So, for each vector, we substitute the
+         quantified variable with the its value.  We then compute the
+         cell for this sample.  At the end, we meet all
+         evaluations. *)
+      let conj =
+        List.map (fun sample ->
+            let o'' = Visitor.map_expr
+                (fun e ->
+                   match ekind e with
+                   | E_stub_quantified(FORALL, var, _) ->
+                     let _, i = List.find (fun (var', _) -> compare_var var var' = 0) sample in
+                     Keep { e with ekind = E_constant (C_int i) }
+
+                   | _ -> VisitParts e
+                )
+                (fun s -> VisitParts s)
+                o'
+            in
+            debug "offset sample: %a" pp_expr o'';
+            eval_non_quantified_cell b o'' t range man flow
+          ) samples
+      in
+      Eval.meet_list conj
+    with NoUnderApprox ->
+      (* The under-approximation is empty => return an empty evaluation *)
+      warn "no under approxiamtion";
+      Eval.empty_singleton flow
+
 
   (** Evaluate a scalar lval into a cell *)
   let rec eval_scalar_cell exp man flow : ('a, cell primed) evl =
@@ -480,7 +591,7 @@ module Domain = struct
       Eval.bind @@ fun pe flow ->
 
       begin match ekind pe with
-        | E_c_points_to(P_block (b, o)) when Stubs.Ast.is_expr_quantified o ->
+        | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
           eval_quantified_cell b o t p.erange man flow |>
           Eval.bind @@ fun c flow ->
           let pc = if is_primed_expr exp then primed c else unprimed c in
@@ -554,7 +665,7 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call(SIZE, p) ->
+    | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
       Eval.bind_opt @@ fun pe flow ->
 

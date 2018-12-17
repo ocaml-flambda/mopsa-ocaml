@@ -43,9 +43,10 @@ val fold2 :
     'b * 'c
 
 val substitute :
-    (('a, 'e) evl_case -> 'b) ->
+    ('e -> 'a flow -> 'b) ->
     ('b -> 'b -> 'b) ->
     ('b -> 'b -> 'b) ->
+    ('b) ->
     ('a, 'e) evl ->
     'b
 
