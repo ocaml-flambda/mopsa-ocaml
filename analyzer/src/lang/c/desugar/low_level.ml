@@ -113,6 +113,38 @@ struct
       in
       Eval.singleton exp' flow
 
+    (* 𝔼⟦ &(a[i]) ⟧ = a + i *)
+    | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
+      man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
+      Eval.bind_return @@ fun a flow ->
+
+      man.eval ~zone:(Z_c, Z_c_low_level) i flow |>
+      Eval.bind @@ fun i flow ->
+
+      let exp' = { exp with ekind = E_binop(O_plus, a, i) } in
+      Eval.singleton exp' flow
+
+    (* 𝔼⟦ &(p->f) ⟧ = ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
+    | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
+      man.eval ~zone:(Z_c, Z_c_low_level) p flow |> Eval.bind_return @@ fun p flow ->
+
+      let st = under_pointer_type p.etyp in
+      let t = etyp exp in
+      let align = mk_int (align_byte st i) exp.erange in
+
+      let exp' =
+        mk_c_cast
+          (mk_binop
+             (mk_c_cast p (pointer_type s8) exp.erange)
+             O_plus
+             align
+             exp.erange
+          )
+          (pointer_type t)
+          exp.erange
+      in
+      Eval.singleton exp' flow
+
     (* 𝔼⟦ &*x ⟧ = x *)
     | E_c_address_of { ekind = E_c_deref x } ->
       man.eval ~zone:(Z_c, Z_c_low_level) x flow |>

@@ -68,7 +68,7 @@ let pp_level fmt = function
   | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
 
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "%a  %a in %a@\nDescription: @[%a@]@\nTrace: @[%a@]"
+  Format.fprintf fmt "%a  %a in %a@\n@[%a@]@\nTrace: @[%a@]"
     pp_level alarm.alarm_level
     !pp_title_chain alarm
     Location.pp_range (alarm.alarm_trace |> List.hd |> Location.untag_range)

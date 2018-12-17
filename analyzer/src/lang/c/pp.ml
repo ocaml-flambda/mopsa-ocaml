@@ -46,7 +46,7 @@ let rec pp_c_type_short fmt =
     let qual = String.concat " " l in
     fprintf fmt "%s %a" qual pp_c_type_short t
   | T_c_enum(enum) -> fprintf fmt "e %s" enum.c_enum_org_name
-  | _ -> assert false
+  | t -> panic "pp_c_type_short: unsupported type %a" pp_typ t
 
 
 let () =

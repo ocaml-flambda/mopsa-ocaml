@@ -142,9 +142,9 @@ let () =
       );
     pp_report = (fun next fmt a ->
         match a.alarm_kind with
-        | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s fails" pp_expr cond f
-        | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s may fail" pp_expr cond f
-        | A_panic_test(msg, f) -> Format.fprintf fmt "Panic in %s: %s" f msg
+        | A_fail_assert(cond, f) -> Format.fprintf fmt "Condition %a in %s fails" pp_expr cond f
+        | A_may_assert(cond, f) -> Format.fprintf fmt "Condition %a in %s may fail" pp_expr cond f
+        | A_panic_test(msg, f) -> Format.fprintf fmt "%s: %s" f msg
         | _ -> next fmt a
       );
   };
