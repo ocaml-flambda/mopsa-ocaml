@@ -127,16 +127,12 @@ type expr_kind +=
   | E_stub_return
   | E_stub_builtin_call of builtin * expr
   | E_stub_quantified of quantifier * expr * var list (** quantified expression over a set of variables *)
-  | E_stub_old of expr (** old value of an assigned object *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
 
 let mk_stub_quantified quant exp vars range =
   mk_expr (E_stub_quantified(quant, exp, vars)) range ~etyp:exp.etyp
-
-let mk_stub_old e range =
-  mk_expr (E_stub_old e) range ~etyp:e.etyp
 
 
 (** {2 Statements} *)
@@ -276,9 +272,6 @@ let () =
             (fun () -> Compare.list compare_var vars1 vars2);
           ]
 
-        | E_stub_old e1, E_stub_old e2 ->
-          compare_expr e1 e2
-
         | _ -> next e1 e2
       );
 
@@ -296,13 +289,6 @@ let () =
           { exprs = [ee]; stmts = [] },
           (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee, vars)} | _ -> assert false)
 
-        | E_stub_old ee ->
-          {
-            exprs = [ee];
-            stmts = [];
-          },
-          (function {exprs = [ee]} -> {e with ekind = E_stub_old ee} | _ -> assert false)
-
         | _ -> next e
       );
 
@@ -314,7 +300,6 @@ let () =
         | E_stub_quantified(FORALL, ee, _) -> fprintf fmt "∀%a" pp_expr ee
         | E_stub_quantified(EXISTS, ee, _) -> fprintf fmt "∃%a" pp_expr ee
         | E_stub_quantified(MIXED, ee, _) -> fprintf fmt "(∀|∃)%a" pp_expr ee
-        | E_stub_old(ee) -> fprintf fmt "old(%a)" pp_expr ee
         | _ -> next fmt e
       );
   }
