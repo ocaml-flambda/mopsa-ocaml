@@ -107,6 +107,10 @@ let rec visit_expr (expr:expr with_range) scope =
     let s, scope = visit_expr s scope in
     E_member (s, f), scope
 
+  | E_attribute (o, f) ->
+    let o, scope = visit_expr o scope in
+    E_attribute (o, f), scope
+
   | E_arrow (p, f) ->
     let p, scope = visit_expr p scope in
     E_arrow (p, f), scope

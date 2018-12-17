@@ -159,6 +159,10 @@ let field_type t f =
   | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
            (C_print.string_of_type_qual t)
 
+let attribute_type obj f =
+  Exceptions.warn "attribute_typ: supporting only int attributes";
+  int_type
+
 let builtin_type f arg =
   match f with
   | SIZE   -> int_type
@@ -424,6 +428,10 @@ let rec visit_expr e prj func =
     | E_member(s, f)      ->
       let s = visit_expr s prj func in
       Ast.E_member(s, f), field_type s.content.typ f
+
+    | E_attribute(o, f)      ->
+      let o = visit_expr o prj func in
+      Ast.E_attribute(o, f), attribute_type o.content.typ f
 
     | E_arrow(p, f) ->
       let p = visit_expr p prj func in

@@ -31,6 +31,7 @@ type expr_kind =
 
   | E_subscript of expr with_range * expr with_range
   | E_member    of expr with_range * string
+  | E_attribute of expr with_range * string
   | E_arrow     of expr with_range * string
 
   | E_builtin_call  of builtin * expr with_range
@@ -205,6 +206,7 @@ let rec pp_expr fmt exp =
     else pp_expr fmt e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
+  | E_attribute(s, f) -> fprintf fmt "%a:%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
   | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"

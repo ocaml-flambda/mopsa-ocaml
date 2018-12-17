@@ -85,7 +85,7 @@
 %nonassoc CAST
 %left LBRACK
 %nonassoc UNARY
-%left DOT ARROW
+%left DOT ARROW COLON
 %right PRIME
 
 %start stub
@@ -264,6 +264,7 @@ expr:
   | STAR with_range(expr)                             { E_deref $2 } %prec UNARY
   | with_range(expr) LBRACK with_range(expr) RBRACK   { E_subscript ($1, $3) }
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
+  | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
   | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }

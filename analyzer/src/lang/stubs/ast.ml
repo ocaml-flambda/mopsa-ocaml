@@ -136,9 +136,19 @@ type quant =
 
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
+  (** Call to a stubbed function *)
+
   | E_stub_return
+  (** Returned value of a stub *)
+
   | E_stub_builtin_call of builtin * expr
+  (** Call to a built-in function *)
+
   | E_stub_quantified of quant * var * set (** quantified variable over a set of values *)
+  (** Quantified variable *)
+
+  | E_stub_attribute of expr * string
+  (** Access to an attribute of a resource *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
@@ -297,6 +307,12 @@ let () =
             (fun () -> compare_set set1 set2);
           ]
 
+        | E_stub_attribute(o1, f1), E_stub_attribute(o2, f2) ->
+          Compare.compose [
+            (fun () -> compare_expr o1 o2);
+            (fun () -> compare f1 f2)
+          ]
+
         | _ -> next e1 e2
       );
 
@@ -312,6 +328,10 @@ let () =
 
         | E_stub_quantified _ -> leaf e
 
+        | E_stub_attribute(o, f) ->
+          { exprs = [o]; stmts = [] },
+          (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
+
         | _ -> next e
       );
 
@@ -322,6 +342,7 @@ let () =
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
         | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
         | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
+        | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
         | _ -> next fmt e
       );
   }
