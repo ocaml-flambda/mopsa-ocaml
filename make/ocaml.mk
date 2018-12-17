@@ -23,8 +23,8 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml.dep): $(BUILD)/%.ml.dep: $(BUILD)/%.ml
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli.dep): $(BUILD)/%.mli.dep: $(BUILD)/%.mli
 
 .SECONDEXPANSION:
-$(PACKS:%=$(BUILD)/%.cmx): $(BUILD)/%.cmx : $$(PACK_DEPS_$$@)
-$(PACKS:%=$(BUILD)/%.cmo): $(BUILD)/%.cmo : $$(PACK_DEPS_$$@)
+$(PACKS:%=$(BUILD)/%.cmx): $(BUILD)/%.cmx : $$(PACK_DEPS_$$@) $$(PACK_DIR_$$@)
+$(PACKS:%=$(BUILD)/%.cmo): $(BUILD)/%.cmo : $$(PACK_DEPS_$$@) $$(PACK_DIR_$$@)
 
 $(PACKS:%=$(BUILD)/%.ml): $(BUILD)/%.ml : $(SRC)/%
 	@mkdir -p $(@D)

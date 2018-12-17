@@ -33,7 +33,7 @@ type expr_kind =
   | E_member    of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin with_range * expr with_range
+  | E_builtin_call  of builtin * expr with_range
 
   | E_return
 
@@ -82,7 +82,7 @@ and resource = string
 and var = C_AST.variable
 
 and builtin =
-  | OLD
+  | PRIMED
   | SIZE
   | OFFSET
   | BASE
@@ -178,10 +178,10 @@ let pp_resource fmt resource = pp_print_string fmt resource
 
 let pp_builtin fmt f =
   match f with
+  | PRIMED -> pp_print_string fmt "primed"
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
@@ -204,7 +204,7 @@ let rec pp_expr fmt exp =
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
 and pp_unop fmt =

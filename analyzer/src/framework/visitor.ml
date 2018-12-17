@@ -155,6 +155,18 @@ let expr_vars (e: Ast.expr) : Ast.var list =
     (fun acc s -> VisitParts acc)
     [] e
 
+(** Extract primed variables from an expression *)
+let expr_primed_vars (e: expr) : var primed list =
+  fold_expr
+    (fun acc e ->
+       match ekind e with
+       | E_var(v, m) -> Keep (unprimed v :: acc)
+       | E_primed { ekind = E_var (v, m) } -> Keep (primed v :: acc)
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    [] e
+
 (** Extract variables from a statement *)
 let stmt_vars (s: stmt) : var list =
   fold_stmt

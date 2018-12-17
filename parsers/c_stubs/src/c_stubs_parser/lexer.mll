@@ -58,7 +58,7 @@ let _ =
 
 
      (* Built-ins *)
-     "old",     OLD;
+     "primed", PRIMED;  
      "size",   SIZE;
      "offset", OFFSET;
      "base", BASE;
@@ -136,7 +136,9 @@ rule read =
 
   | "="    { ASSIGN }
 
-  | "{*"   { read_comment lexbuf; read lexbuf }
+  | "`"    { PRIME }
+
+  | "//"   { read_comment lexbuf; read lexbuf }
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
@@ -168,9 +170,8 @@ and read_string buf =
 
 and read_comment = 
   parse
-  | "*}"          { () }
   | [^ '\n' '\r'] { read_comment lexbuf }
-  | newline       { new_line lexbuf; read_comment lexbuf }
+  | newline       { new_line lexbuf; () }
   | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }
 
 and ignore_block_comment = 

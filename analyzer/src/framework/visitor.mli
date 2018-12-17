@@ -67,5 +67,8 @@ val fold_map_stmt :
 val expr_vars : expr -> var list
 (** Extract variables from an expression *)
 
+val expr_primed_vars : expr -> var primed list
+(** Extract primed variables from an expression *)
+
 val stmt_vars : stmt -> var list
 (** Extract variables from a statement *)

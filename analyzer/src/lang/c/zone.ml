@@ -28,6 +28,7 @@ let () =
         | E_constant _
         | E_var _                            -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -67,6 +68,7 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit
@@ -91,6 +93,7 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit

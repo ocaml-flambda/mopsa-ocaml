@@ -121,6 +121,21 @@ let string_type s = C_AST.(T_array((T_integer(SIGNED_CHAR), no_qual), Length_cst
 let char_type = C_AST.(T_integer (Char SIGNED), no_qual)
 let pointer_type t = C_AST.(T_pointer t, no_qual)
 
+let is_int_typ t =
+  match unroll_type t |> fst with
+  | C_AST.T_integer _ -> true
+  | _ -> false
+
+let is_pointer_typ t =
+  match unroll_type t |> fst with
+  | C_AST.T_pointer _ -> true
+  | _ -> false
+
+let is_array_typ t =
+  match unroll_type t |> fst with
+  | C_AST.T_array _ -> true
+  | _ -> false
+
 let pointed_type t =
   match fst (unroll_type t) with
   | C_AST.T_pointer t' -> t'
@@ -145,11 +160,11 @@ let field_type t f =
            (C_print.string_of_type_qual t)
 
 let builtin_type f arg =
-  match f.content with
+  match f with
   | SIZE   -> int_type
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
-  | OLD    -> arg.content.Ast.typ
+  | PRIMED -> arg.content.Ast.typ
   | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
 
 
@@ -254,8 +269,14 @@ let rec promote_expression_type prj (e: Ast.expr with_range) =
 
 let convert_expression_type (e:Ast.expr with_range) t =
   bind_range e @@ fun ee ->
-  if compare ee.typ t = 0 then ee
-  else { kind = E_cast(t, false, e); typ = t }
+  if compare ee.typ t = 0 then
+    ee
+  else
+  if is_int_typ ee.typ && (is_pointer_typ t || is_array_typ t) then
+    (* No cast is added when a pointer is added to an integer *)
+    ee
+  else
+    { kind = E_cast(t, false, e); typ = t }
 
 let int_rank = 
   let open C_AST in
@@ -416,8 +437,8 @@ let rec visit_expr e prj func =
   Ast.{ kind; typ }
 
 and visit_builtin b =
-  bind_range b @@ function
-  | OLD    -> Ast.OLD
+  match b with
+  | PRIMED -> Ast.PRIMED
   | SIZE   -> Ast.SIZE
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE

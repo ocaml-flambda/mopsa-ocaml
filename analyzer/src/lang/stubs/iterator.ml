@@ -220,16 +220,6 @@ struct
            | _ -> OptionExt.option_neutral2 (man.join annot) env1 env2
         ) man flow1 flow2
 
-  (** Execute the `assigns` section *)
-  let exec_assigns a man flow =
-    let stmt =
-      mk_stub_assigns
-        a.content.assign_target
-        a.content.assign_offset
-        a.range
-    in
-    man.exec stmt flow
-
   (** Execute the `local` section *)
   let exec_local l man flow =
     match l.content.lval with
@@ -263,15 +253,16 @@ struct
     in
     let block2 =
       post.post_assigns |> List.fold_left (fun block a ->
-          mk_stub_remove_old a.content.assign_target a.content.assign_offset range :: block
+          let t = a.content.assign_target in
+          match a.content.assign_offset with
+          | None -> mk_rename (mk_primed t) t range :: block
+          | Some (a, b) -> mk_stub_rename_primed t a b range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow
 
   (** Compute a post-condition *)
   let exec_post post return range man flow =
-    (* Execute `assigns` section *)
-    let flow = List.fold_left (fun flow a -> exec_assigns a man flow) flow post.post_assigns in
     (* Execute `local` section *)
     let flow = List.fold_left (fun flow l -> exec_local l man flow) flow post.post_local in
     (* Execute `ensures` section *)

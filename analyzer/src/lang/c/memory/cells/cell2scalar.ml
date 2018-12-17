@@ -12,8 +12,9 @@ open Mopsa
 open Ast
 open Cell
 open Zone
+module Itv =  ItvUtils.IntItv
 
-module CellScalarEquiv = Equiv.Make(Cell)(Var)
+module CellScalarEquiv = Equiv.Make(PrimedCell)(PrimedVar)
 
 type ('a, _) Annotation.key +=
   | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
@@ -40,7 +41,7 @@ let get_scalar_or_create flow c =
   try CellScalarEquiv.find_l c annot, flow
   with
   | Not_found ->
-    let v = cell_to_var c in
+    let v = primed_lift cell_to_var c in
     let annot' = CellScalarEquiv.add (c, v) annot in
     let flow' = Flow.set_annot A_cell_scalar annot' flow in
     (v, flow')
@@ -52,7 +53,7 @@ let get_cell flow v =
   | Not_found ->
     Exceptions.panic
       "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
-      pp_var v
+      PrimedVar.print v
       CellScalarEquiv.print annot
 
 let get_scalar_and_remove flow c =
@@ -64,7 +65,7 @@ let get_scalar_and_remove flow c =
     v, flow'
   with
   | Not_found ->
-    let v = cell_to_var c in
+    let v = primed_lift cell_to_var c in
     (v, flow)
 
 
@@ -113,42 +114,71 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_c_add_cell c ->
-      let v, flow = get_scalar_or_create flow c in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_add_var v}) flow |>
+    | S_add c when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
+      man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
       Post.return
 
-    | S_c_remove_cell c ->
-      let v, flow = get_scalar_and_remove flow c in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_remove_var v}) flow |>
+    | S_remove c when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pv, flow = get_scalar_and_remove flow pc in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
+      man.exec ~zone:Z_c_scalar (mk_remove vv stmt.srange) flow |>
       Post.return
 
-    | S_c_expand_cell (c, cl) ->
-      let v, flow = get_scalar_or_create flow c in
+    | S_expand (c, cl) when PrimedCell.match_expr c &&
+                            List.for_all PrimedCell.match_expr cl ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pcl = List.map PrimedCell.from_expr cl in
+      let model = List.map PrimedCell.ext_from_expr cl in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
       let vl, flow =
         let rec doit flow = function
-          | [] -> assert false
-          | [c] ->
-            let v, flow = get_scalar_or_create flow c in
-            [v], flow
-          | c :: tl ->
-            let v, flow = get_scalar_or_create flow c in
+          | [] -> [], flow
+          | (pc, mode) :: tl ->
+            let pv, flow = get_scalar_or_create flow pc in
+            let vv = PrimedVar.to_expr pv mode stmt.srange in
             let vl, flow = doit flow tl in
-            v :: vl, flow
+            vv :: vl, flow
         in
-        doit flow cl
+        doit flow (List.combine pcl model)
       in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (v, vl)}) flow |>
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
       Post.return
 
-    | S_assign({ ekind = E_c_cell _ } as lval, rval)  ->
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) lval flow |>
-      Post.bind_opt man @@ fun lval' flow ->
+    | S_rename(c1, c2) when PrimedCell.match_expr c1 &&
+                            PrimedCell.match_expr c2
+      ->
+      let pc1 = PrimedCell.from_expr c1 in
+      let mode1 = PrimedCell.ext_from_expr c1 in
+      let pv1, flow = get_scalar_and_remove flow pc1 in
+      let vv1 = PrimedVar.to_expr pv1 mode1 stmt.srange in
 
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) rval flow |>
-      Post.bind_opt man @@ fun rval' flow ->
+      let pc2 = PrimedCell.from_expr c2 in
+      let mode2 = PrimedCell.ext_from_expr c2 in
+      let pv2, flow = get_scalar_or_create flow pc2 in
+      let vv2 = PrimedVar.to_expr pv2 mode2 stmt.srange in
 
-      man.exec ~zone:Z_c_scalar (mk_assign lval' rval' stmt.srange) flow |>
+      man.exec ~zone:Z_c_scalar (mk_rename vv1 vv2 stmt.srange) flow |>
+      Post.return
+
+
+    | S_assign(c, e) when PrimedCell.match_expr c ->
+      let pc = PrimedCell.from_expr c in
+      let mode = PrimedCell.ext_from_expr c in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = PrimedVar.to_expr pv mode stmt.srange in
+
+      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
+      Post.bind_opt man @@ fun e flow ->
+
+      man.exec ~zone:Z_c_scalar (mk_assign vv e stmt.srange) flow |>
       Post.return
 
     | S_assume(e) ->
@@ -173,27 +203,40 @@ struct
       Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow |>
       Eval.return
 
-    | E_c_cell({b = S s; o = _}, mode) ->
-      (* Otherwise, return the interval covering all characters of the string *)
-      let len = String.length s in
-      let at i = String.get s i |> int_of_char in
-      let rec aux i a b =
-        if i = 0
-        then aux (i + 1) (at 0) (at 0)
-        else if i = len
-        then a, b
-        else
-          let a', b' = aux (i + 1) a b in
-          min a a', max b b'
-      in
-      let min, max = aux 0 0 0 in
-      Eval.singleton (Universal.Ast.mk_int_interval min max exp.erange) flow |>
+    | E_c_cell({b = S s; o = O_region itv}, mode) ->
+      (* Otherwise, return the interval covering characters of the string within itv *)
+      itv |> Bot.bot_dfl1
+        (* Case of empty interval *)
+        (Eval.empty_singleton flow)
+
+        (* Otherwise, iterate over the values of itv *)
+        (fun (imin, imax) ->
+           let imin, imax =
+             match imin, imax with
+             | ItvUtils.IntBound.Finite imin, ItvUtils.IntBound.Finite imax -> imin, imax
+             | _ -> assert false
+           in
+           let at i = String.get s (Z.to_int i) |> int_of_char |> Z.of_int in
+           let cst n = (n,n) in
+           let add n (a,b) = (Z.min n a), (Z.max n b) in
+
+           let rec aux i =
+             if Z.equal i imax
+             then cst (at i)
+             else add (at i) (aux (Z.succ i))
+           in
+           let vmin, vmax = aux imin in
+           Eval.singleton (Universal.Ast.mk_z_interval vmin vmax exp.erange) flow
+        )
+      |>
       Eval.return
 
-    | E_c_cell(c, mode) ->
-      let v, flow = get_scalar_or_create flow c in
-      let exp = mk_var v exp.erange ~mode in
-      Eval.singleton exp flow |>
+    | c when PrimedCell.match_expr exp ->
+      let pc = PrimedCell.from_expr exp in
+      let mode = PrimedCell.ext_from_expr exp in
+      let pv, flow = get_scalar_or_create flow pc in
+      let vv = PrimedVar.to_expr pv mode exp.erange in
+      Eval.singleton vv flow |>
       Eval.return
 
     | _ -> None

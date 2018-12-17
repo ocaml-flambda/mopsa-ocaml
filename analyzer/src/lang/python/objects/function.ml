@@ -143,7 +143,7 @@ module Domain =
 
                      let ret_var = mk_tmp ~vtyp:T_any () in
                      let fundec = {
-                         fun_name = Var.var_uniq_name (pyfundec.py_func_var);
+                         fun_name = uniq_vname (pyfundec.py_func_var);
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;

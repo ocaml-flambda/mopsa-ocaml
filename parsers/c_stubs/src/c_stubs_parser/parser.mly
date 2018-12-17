@@ -44,6 +44,7 @@
 %token LPAR RPAR
 %token LBRACK RBRACK
 %token COLON SEMICOL DOT COMMA
+%token PRIME
 %token BEGIN END
 %token EOF
 
@@ -51,7 +52,7 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE OLD RETURN SIZE OFFSET BASE
+%token FREE PRIMED RETURN SIZE OFFSET BASE
 %token FLOAT_VALID FLOAT_INF FLOAT_NAN
 
 (* Types *)
@@ -82,6 +83,7 @@
 %left LBRACK
 %nonassoc UNARY
 %left DOT ARROW
+%right PRIME
 
 %start stub
 
@@ -261,7 +263,8 @@ expr:
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
-  | with_range(builtin) LPAR with_range(expr) RPAR    { E_builtin_call ($1, $3) }
+  | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
+  | with_range(expr) PRIME                            { E_builtin_call (PRIMED, $1) }
 
 
 (* C types *)
@@ -338,7 +341,7 @@ set:
   | SIZE   { SIZE }
   | OFFSET { OFFSET }
   | BASE   { BASE }
-  | OLD    { OLD }
+  | PRIMED { PRIMED }
   | FLOAT_VALID { FLOAT_VALID }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }

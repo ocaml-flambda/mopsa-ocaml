@@ -25,12 +25,8 @@ struct
   (** Map with variables as keys. Absent bindings are assumed to point to ⊤. *)
   module VarMap =
     Lattices.Total_map.Make
-      (struct
-        type t = var
-        let compare = compare_var
-        let print = pp_var
-      end)
-    (Value)
+      (PrimedVar)
+      (Value)
 
   include VarMap
 
@@ -55,7 +51,7 @@ struct
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
-    | A_var of var * Value.t
+    | A_var of var primed * Value.t
     | A_cst of Ast.typ * constant * Value.t
     | A_unop of Ast.typ * operator * aexpr * Value.t
     | A_binop of Ast.typ * operator * aexpr * Value.t * aexpr * Value.t
@@ -68,8 +64,13 @@ struct
     match ekind e with
 
     | E_var(var, _) ->
-      let v = VarMap.find var a in
-      (A_var (var, v), v) |>
+      let v = VarMap.find (unprimed var) a in
+      (A_var (unprimed var, v), v) |>
+      Channel.return
+
+    | E_primed { ekind = E_var(var, _) } ->
+      let v = VarMap.find (primed var) a in
+      (A_var (primed var, v), v) |>
       Channel.return
 
     | E_constant(c) ->
@@ -101,8 +102,12 @@ struct
     match ekind e with
 
     | E_var(var, _) ->
-      let v = VarMap.find var a in
-      Channel.return (A_var (var, v), v)
+      let v = VarMap.find (unprimed var) a in
+      Channel.return (A_var (unprimed var, v), v)
+
+    | E_primed { ekind = E_var(var, _) } ->
+      let v = VarMap.find (primed var) a in
+      Channel.return (A_var (primed var, v), v)
 
     | E_constant(c) ->
       let t = etyp e in
@@ -194,9 +199,15 @@ struct
         Channel.return
 
       | E_var(var, _) ->
-        let v = find var a in
+        let v = find (unprimed var) a in
         Value.filter (var.vtyp) v r |> Channel.bind @@ fun w ->
-        (if Value.is_bottom w then bottom else add var w a) |>
+        (if Value.is_bottom w then bottom else add (unprimed var) w a) |>
+        Channel.return
+
+      | E_primed { ekind = E_var(var, _) } ->
+        let v = find (primed var) a in
+        Value.filter (var.vtyp) v r |> Channel.bind @@ fun w ->
+        (if Value.is_bottom w then bottom else add (primed var) w a) |>
         Channel.return
 
       (* arithmetic comparison part, handled by Value *)
@@ -238,31 +249,35 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_remove_var v ->
+    | S_remove v when PrimedVar.match_expr v  ->
       Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.remove v) man flow in
+        let flow' = Flow.map_domain_env T_cur (VarMap.remove (PrimedVar.from_expr v)) man flow in
         Post.of_flow flow'
       )
 
-    | S_add_var v ->
+    | S_add v when PrimedVar.match_expr v ->
       Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.add v Value.top) man flow in
+        let flow' = Flow.map_domain_env T_cur (VarMap.add (PrimedVar.from_expr v) Value.top) man flow in
         Post.of_flow flow'
       )
 
-    | S_project_vars vars ->
+    | S_project vars when List.for_all PrimedVar.match_expr vars ->
       Some (
+        let vars = List.map PrimedVar.from_expr vars in
         let flow' = Flow.map_domain_env T_cur (fun a ->
             VarMap.fold (fun v _ acc ->
-                if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
+                if List.exists (fun v' -> PrimedVar.compare v v' = 0) vars then acc else VarMap.remove v acc
               ) a a
           ) man flow
         in
         Post.of_flow flow'
       )
 
-    | S_rename_var (var1, var2) ->
+    | S_rename (var1, var2) when PrimedVar.match_expr var1 && PrimedVar.match_expr var2 ->
       Some (
+        let var1 = PrimedVar.from_expr var1 in
+        let var2 = PrimedVar.from_expr var2 in
+
         let flow' = Flow.map_domain_env T_cur (fun a ->
             let v = VarMap.find var1 a in
             VarMap.remove var1 a |> VarMap.add var2 v
@@ -271,14 +286,18 @@ struct
         Post.of_flow flow'
       )
 
-    (* FIXME: No check on weak variables in rhs *)
-    | S_assign({ekind = E_var(var, mode)}, e) ->
+    | S_forget var when PrimedVar.match_expr var ->
+      Flow.map_domain_env T_cur (add (PrimedVar.from_expr var) Value.top) man flow |>
+      Post.return
+
+    | S_assign (var, e) when PrimedVar.match_expr var ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
             eval e a |> Channel.bind @@ fun (_,v) ->
-            let a' = VarMap.add var v a in
-            let a'' = match mode with
+            let a' = VarMap.add (PrimedVar.from_expr var) v a in
+            let a'' =
+              match PrimedVar.ext_from_expr var with
               | STRONG -> a'
               | WEAK -> join (Flow.get_all_annot flow) a a'
             in
@@ -289,9 +308,13 @@ struct
         Post.add_channels channels
       )
 
-    | S_expand(v, vl) ->
+    | S_expand (var, vl)
+      when PrimedVar.match_expr var &&
+           List.for_all PrimedVar.match_expr vl
+      ->
+      let vl = List.map PrimedVar.from_expr vl in
       let a = Flow.get_domain_env T_cur man flow in
-      let value = find v a in
+      let value = find (PrimedVar.from_expr var) a in
       let aa = List.fold_left (fun acc v' ->
           add v' value acc
         ) a vl
@@ -299,6 +322,7 @@ struct
       Flow.set_domain_env T_cur aa man flow |>
       Post.return
 
+    (* FIXME: No check on weak variables in rhs *)
     | S_assume e ->
       Some (
         man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->

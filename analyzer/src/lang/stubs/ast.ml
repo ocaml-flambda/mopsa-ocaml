@@ -27,7 +27,7 @@ type builtin =
   | SIZE
   | OFFSET
   | BASE
-  | OLD
+  | PRIMED
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
@@ -125,8 +125,9 @@ type quantifier =
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
-  | E_stub_builtin_call of builtin with_range * expr
+  | E_stub_builtin_call of builtin * expr
   | E_stub_quantified of quantifier * expr * var list (** quantified expression over a set of variables *)
+  | E_stub_old of expr (** old value of an assigned object *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
@@ -134,25 +135,21 @@ let mk_stub_call stub args range =
 let mk_stub_quantified quant exp vars range =
   mk_expr (E_stub_quantified(quant, exp, vars)) range ~etyp:exp.etyp
 
+let mk_stub_old e range =
+  mk_expr (E_stub_old e) range ~etyp:e.etyp
+
 
 (** {2 Statements} *)
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_assigns of expr                 (** modified target *) *
-                      (expr * expr) option (** modification range *)
-  (** Declare an assignment and create old copies *)
+  (** Rename primed variables of assigned dimensions *)
+  | S_stub_rename_primed of expr  (** modified pointer *) *
+                            expr  (** index lower bound of modified elements *) *
+                            expr  (** index upper bound of modified elements *)
 
-  | S_stub_remove_old of expr * (expr * expr) option
-  (** remove old copies of an assigned target *)
-
-
-let mk_stub_assigns target offsets range =
-  mk_stmt (S_stub_assigns (target, offsets)) range
-
-let mk_stub_remove_old target offsets range =
-  mk_stmt (S_stub_remove_old (target, offsets)) range
-
+let mk_stub_rename_primed t a b range =
+  mk_stmt (S_stub_rename_primed (t, a, b)) range
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -167,7 +164,7 @@ let pp_builtin fmt f =
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
+  | PRIMED -> pp_print_string fmt "primed"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
@@ -279,6 +276,9 @@ let () =
             (fun () -> Compare.list compare_var vars1 vars2);
           ]
 
+        | E_stub_old e1, E_stub_old e2 ->
+          compare_expr e1 e2
+
         | _ -> next e1 e2
       );
 
@@ -296,6 +296,13 @@ let () =
           { exprs = [ee]; stmts = [] },
           (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee, vars)} | _ -> assert false)
 
+        | E_stub_old ee ->
+          {
+            exprs = [ee];
+            stmts = [];
+          },
+          (function {exprs = [ee]} -> {e with ekind = E_stub_old ee} | _ -> assert false)
+
         | _ -> next e
       );
 
@@ -303,10 +310,11 @@ let () =
         match ekind e with
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
-        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
         | E_stub_quantified(FORALL, ee, _) -> fprintf fmt "∀%a" pp_expr ee
         | E_stub_quantified(EXISTS, ee, _) -> fprintf fmt "∃%a" pp_expr ee
         | E_stub_quantified(MIXED, ee, _) -> fprintf fmt "(∀|∃)%a" pp_expr ee
+        | E_stub_old(ee) -> fprintf fmt "old(%a)" pp_expr ee
         | _ -> next fmt e
       );
   }
@@ -318,16 +326,11 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_assigns(t1, o1), S_stub_assigns(t2, o2) ->
+        | S_stub_rename_primed(t1, a1, b1), S_stub_rename_primed(t2, a2, b2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
-          ]
-
-        | S_stub_remove_old(t1, o1), S_stub_remove_old(t2, o2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+            (fun () -> compare_expr a1 a2);
+            (fun () -> compare_expr b1 b2)
           ]
 
         | _ -> next s1 s2
@@ -335,16 +338,13 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
-        | S_stub_remove_old(t, o) -> panic "visitor for S_stub_remove_old not supported"
+        | S_stub_rename_primed(t, a, b) -> panic "visitor for S_stub_rename_primed not supported"
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
-        | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
-        | S_stub_remove_old(target, _) -> fprintf fmt "remove old(%a);" pp_expr target
+        | S_stub_rename_primed(t,a,b) -> fprintf fmt "rename primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
         | _ -> next fmt s
       );
   }

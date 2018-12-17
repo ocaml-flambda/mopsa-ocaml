@@ -56,7 +56,7 @@ struct
     else
       try
         let ret = List.assoc (zone, exp, flow) !eval_cache in
-        debug "eval from cache";
+        debug "eval from cache:@\n @[%a@]" (OptionExt.print (Eval.print ~pp:pp_expr)) ret;
         ret
       with Not_found ->
         let evals = f exp man flow in
