@@ -7,7 +7,7 @@
  * requires: l in [0, size(p) - 1] and
  *           u in [0, size(p) - 1];
  * assigns: p[l, u];
- * ensures: forall int i in [l, u]: p[i] == 0;
+ * ensures: forall int i in [l, u]: (p[i])` == 0;
  */
 void reset_region(int*p, int l, int u) {}
 
@@ -26,7 +26,7 @@ void test_assign_int() {
 /*$
  * requires: n in [0, size(p)];
  * assigns: ((char*)p)[0, n - 1];
- * ensures: forall int i in [0, n - 1]: ((char*)p)[i] == c;
+ * ensures: forall int i in [0, n - 1]: (((char*) p)[i])` == c;
  */
 void mymemset(void*p, char c, unsigned int n) {}
 

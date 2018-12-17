@@ -151,7 +151,7 @@ struct
       visit_expr_in_formula
         (fun e ->
            match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 -> Keep { e with ekind = E_stub_quantified (q, e, [vv]) }
+           | E_var (vv, _) when compare_var v vv = 0 -> Keep { e with ekind = E_stub_quantified (q, v, s) }
            | _ -> VisitParts e
         )
         f
@@ -167,7 +167,6 @@ struct
           match q with
           | FORALL -> with_range (F_exists (v, s, ff)) range
           | EXISTS -> with_range (F_forall (v, s, ff)) range
-          | MIXED  -> assert false
         in
         let ftrue, _ = eval_formula f ~negate:false man flow in
         Some ftrue
