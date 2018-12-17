@@ -12,10 +12,12 @@
 void reset_region(int*p, int l, int u) {}
 
 void test_assign_int() {
-  int a[5] = {1, 2, 3, 4, 5};
-
-  reset_region(a, 3, 4);
-  _mopsa_assert(a[0] == 1);
+  int a[10];
+  a[0] = 100;
+  a[3] = 100;
+  a[5] = 100;
+  reset_region(a, 3, 9);
+  _mopsa_assert(a[0] == 100);
   _mopsa_assert(a[3] == 0);
 }
 

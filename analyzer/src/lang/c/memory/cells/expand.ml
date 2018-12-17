@@ -384,6 +384,7 @@ module Domain = struct
   (** Evaluation of C expressions *)
   (** =========================== *)
 
+
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
     (* Try the static case *)
@@ -438,6 +439,7 @@ module Domain = struct
         man flow
 
 
+
   (** Evaluation of cells *)
   (** =================== *)
 
@@ -456,6 +458,8 @@ module Domain = struct
                   Flow.set T_cur man.bottom man
       in
       Eval.empty_singleton flow'
+
+
 
   (** Evaluate a base and a quantified offset expression into a cell
 
@@ -569,6 +573,8 @@ module Domain = struct
       Eval.empty_singleton flow
 
 
+
+
   (** Evaluate a scalar lval into a cell *)
   let rec eval_scalar_cell exp man flow : ('a, cell primed) evl =
     match ekind exp with
@@ -622,6 +628,7 @@ module Domain = struct
       end
 
     | _ -> debug "%a" pp_expr exp; assert false
+
 
 
   (** Entry-point of evaluations *)
@@ -703,39 +710,97 @@ module Domain = struct
 
     let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) overlappings in
 
-    man.exec ~zone:Z_c_cell (mk_block block range) flow'' |>
-    Post.of_flow |>
-    Post.add_mergers (mk_remove (PrimedCell.to_expr c STRONG range) range :: block) ~zone:Z_c_cell
+    man.exec ~zone:Z_c_cell (mk_block block range) flow''
 
 
-  (** Remove cells identified by an offset membership predicate *)
-  let remove_cells b pred range man flow =
+
+  (** Remove cells identified by a membership predicate *)
+  let remove_cells pred range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let cells =
-      a |>
-      exist_and_find_cells
-        (fun c ->
-           compare_base (primed_apply cell_base c) b = 0 &&
-           pred (primed_apply cell_zoffset c)
-        )
-    in
+    let cells = exist_and_find_cells pred a in
     let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) cells in
+    man.exec ~zone:Z_c_cell (mk_block block range) flow
 
-    man.exec ~zone:Z_c_cell (mk_block block range) flow |>
-    Post.of_flow |>
-    Post.add_mergers block ~zone:Z_c_cell
 
 
   (** Rename an old cell into a new one *)
   let rename_cell cold cnew range man flow =
-    (* Add the old cell in case it has not been accessed before so
-       that its constraints are added in the sub domain *)
-    add_cell cold range man flow |>
-    (* Remove the old cell and add the new one *)
-    Flow.map_domain_env T_cur (fun a ->
-        remove cold a |>
-        add cnew
-      ) man
+    debug "rename %a into %a" PrimedCell.print cold PrimedCell.print cnew;
+    let flow' =
+      (* Add the old cell in case it has not been accessed before so
+         that its constraints are added in the sub domain *)
+      add_cell cold range man flow |>
+      (* Remove the old cell and add the new one *)
+      Flow.map_domain_env T_cur (fun a ->
+          remove cold a |>
+          add cnew
+        ) man
+    in
+    let stmt' = mk_rename
+        (PrimedCell.to_expr cold STRONG range) (* FIXME: always STRONG ? *)
+        (PrimedCell.to_expr cnew STRONG range)
+        range
+    in
+    man.exec ~zone:Z_c_cell stmt' flow'
+
+
+
+  (** Rename primed cells that have been declared as assigned in a stub *)
+  let rename_stub_primed_cells pt l t u range man flow =
+    let base, offset =
+      match ekind pt with
+      | E_c_points_to (P_block(b, o)) -> b, o
+      | _ -> assert false
+    in
+
+    let a = Flow.get_domain_env T_cur man flow in
+
+    let cells = filter (fun c ->
+        compare_base base (primed_apply cell_base c) = 0
+      ) a
+    in
+
+    (* For primed cells, just rename to an unprimed cell *)
+    let flow = fold (fun c flow ->
+        if is_primed c
+        then rename_cell c (unprimed (unprime c)) range man flow
+        else flow
+      ) cells flow
+    in
+
+    (* Compute the interval of the assigned cells *)
+    let itv =
+      let elem = sizeof_type t in
+
+      let mk_offset_bound bound =
+        mk_binop offset O_plus (
+          mk_binop bound O_mult (mk_z elem range) range ~etyp:T_int
+        ) range ~etyp:T_int
+      in
+
+      let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound l) flow in
+      let itv1 = Eval.substitute (fun l flow ->
+          man.ask (Itv.Q_interval l) flow
+        ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl1
+      in
+
+      let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound u) flow in
+      let itv2 = Eval.substitute (fun u flow ->
+          man.ask (Itv.Q_interval u) flow
+        ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl2
+      in
+
+      Itv.join () itv1 itv2
+
+    in
+
+    (* Remove remaining cells that have an offset within the assigned interval *)
+    remove_cells (fun c ->
+        mem c cells &&
+        not (mem (primed (unprime c)) cells) &&
+        Itv.mem (primed_apply cell_zoffset c) itv
+      ) range man flow
+
 
   (** Entry point of post-condition computation *)
   let rec exec zone stmt man flow =
@@ -785,13 +850,23 @@ module Domain = struct
       Post.bind_opt man @@ fun lval flow ->
 
       eval_scalar_cell lval man flow |>
-      Post.bind_return man @@ fun c flow ->
+      Post.bind_opt man @@ fun c flow ->
 
-      begin match primed_apply cell_offset c with
-        | O_single _ -> assign_cell c rval stmt.srange man flow
-        | O_region itv -> remove_cells (primed_apply cell_base c) (fun o -> Itv.mem o itv) stmt.srange man flow
+      let flow =
+        match primed_apply cell_offset c with
+        | O_single _ ->
+          assign_cell c rval stmt.srange man flow
+
+        | O_region itv ->
+          remove_cells (fun c' ->
+              compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
+              Itv.mem (primed_apply cell_zoffset c') itv
+            ) stmt.srange man flow
+
         | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" PrimedCell.print c
-      end
+      in
+
+      Post.return flow
 
     (* 𝕊⟦ assume ?e ⟧ *)
     | S_assume(e) ->
@@ -817,10 +892,17 @@ module Domain = struct
 
       let cnew = PrimedCell.from_expr enew in
 
-      let flow = rename_cell cold cnew stmt.srange man flow in
+      rename_cell cold cnew stmt.srange man flow |>
+      Post.return
 
-      let stmt' = {stmt with skind = S_rename(eold, enew)} in
-      man.exec ~zone:Z_c_cell stmt' flow |>
+    | S_stub_rename_primed(p, l, u) ->
+      man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
+      Post.bind_opt man @@ fun p flow ->
+
+      man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
+      Post.bind_opt man @@ fun pe flow ->
+
+      rename_stub_primed_cells pe l (under_type p.etyp) u stmt.srange man flow  |>
       Post.return
 
     | _ -> None
