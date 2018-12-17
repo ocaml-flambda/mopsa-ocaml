@@ -30,6 +30,7 @@ let () =
         | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_stub_quantified _
+        | E_stub_builtin_call _
         | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
@@ -71,6 +72,7 @@ let () =
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_stub_quantified _
+        | E_stub_builtin_call _
         | E_primed _
         | E_unop _
         | E_binop _
@@ -97,6 +99,7 @@ let () =
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
         | E_stub_quantified _
+        | E_stub_builtin_call _
         | E_primed _
         | E_unop _
         | E_binop _
