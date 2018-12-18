@@ -643,6 +643,7 @@ module Domain =
                match ekind eobj, ekind eattr with
                | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
                   let cur = Flow.get_domain_cur man flow in
+                  (* FIXME: split the case of unions? *)
                   let dt, df = Typingdomain.filter_inst cur tid (Typingdomain.Class (cls, b)) in
                   let flowt = Flow.set_domain_cur dt man flow and
                       flowf = Flow.set_domain_cur df man flow in
@@ -972,11 +973,11 @@ module Domain =
                        let cur = {cur with d3; pos_d3} in
                        let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
                        let flow = Flow.set_domain_cur cur man flow in
-                       match ekind @@ List.hd args with
-                       | E_var _ ->
+                       (* match ekind @@ List.hd args with
+                        * | E_var _ -> *)
                           man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
                             Eval.singleton (mk_py_none range)
-                       | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                       (* | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args) *)
                    )
                    ~felse:tyerror
                    man flow
@@ -1021,7 +1022,7 @@ module Domain =
                            | E_var _ ->
                               man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
                                 Eval.singleton (mk_py_none range)
-                           | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                           | _ -> Exceptions.panic "list.extend on non-variable: todo...%a@\n" pp_expr (List.hd args)
                        )
                        ~felse:tyerror
                        man flow
@@ -1050,7 +1051,10 @@ module Domain =
              )
          |> OptionExt.return
 
-
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__setitem__")}, _)}, args, []) ->
+         (* args = list, el, value *)
+         (* transformer ça en Weak Update list = el ? *)
+         Exceptions.panic "list.__setitem__ not implemented@\n"
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
        *    Eval.eval_list args man.eval flow |>
@@ -1748,29 +1752,34 @@ module Domain =
                  let open Typingdomain in
                  let li, ty = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
                  let cur = Flow.get_domain_cur man flow in
+                 let li, cur = match ekind li with
+                   | E_type_partition i ->
+                      begin match TypeIdMap.find i cur.d2 with
+                      | List x ->
+                         let rec process x = match x with
+                           | Instance {classn} -> classn, cur
+                           | List _ -> let x, y = Addr.builtin_cl_and_mro "list" in Class (x, y), cur
+                           | Dict _ -> let x, y = Addr.builtin_cl_and_mro "dict" in Class (x, y), cur
+                           | Typevar a ->
+                              let mtys = TypeVarMap.find a cur.d3 in
+                              let new_d3 = TypeVarMap.add a (Monotypeset.map (fun x -> mono_cast (fst @@ process (poly_cast x))) mtys) cur.d3 in
+                              let d = {cur with d3 = new_d3} in
+                              x, d
+                           | _ -> Exceptions.panic "todo, assertlistof %a@\n@\n" pp_polytype x in
+                         let ty, cur = process x in
+                         List ty, cur
+                      | _ -> assert false end
+                   | _ -> assert false in
                  let ty = match ekind ty with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | E_py_object (addr, _) ->
                       begin match addr.addr_kind with
-                          | A_py_class (c, mro) -> Instance {classn=(Class (c, mro)); uattrs=StringMap.empty; oattrs=StringMap.empty}
-                          (* | A_py_class (c, mro) -> Typingdomain.Class (c, mro)
-                           * | A_py_module m ->         Typingdomain.Module m
-                           * | A_py_function f ->       Typingdomain.Function f
-                           * | A_py_method (func, self) ->
-                           *    let func = match (fst func).addr_kind with
-                           *      | A_py_function f -> f
-                           *      | _ -> assert false in
-                           *    let self = match ekind self with
-                           *      | E_type_partition i -> i
-                           *      | _ -> assert false in
-                           *    Typingdomain.Method (func, self) *)
-                          | _ -> Exceptions.panic "ni@\n"
+                      | A_py_class (c, mro) -> Class (c, mro)
+                      | _ -> assert false
                       end
                    | _ -> assert false in
-                 let li = match ekind li with
-                   | E_type_partition i -> TypeIdMap.find i cur.d2
-                   | _ -> assert false in
-                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range flow
+                 debug "list_of_leq? li=%a ty=%a d3=%a@\n" pp_polytype li pp_polytype (List ty) pp_d3 cur.d3;
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range (Flow.set_domain_cur cur man flow)
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
