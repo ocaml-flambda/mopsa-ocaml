@@ -27,7 +27,7 @@ type builtin =
   | SIZE
   | OFFSET
   | BASE
-  | OLD
+  | PRIMED
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
@@ -50,6 +50,18 @@ and resource = string (* FIXME: add an uid *)
 
 let mk_stub_and f1 f2 range =
   with_range (F_binop (AND, f1, f2)) range
+
+let compare_set set1 set2 =
+  match set1, set2 with
+  | S_interval(l1, u1), S_interval(l2, u2) ->
+    Compare.compose [
+      (fun () -> compare_expr l1 l2);
+      (fun () -> compare_expr u1 u2)
+    ]
+
+  | S_resource res1, S_resource res2 -> Pervasives.compare res1 res2
+
+  | _ -> Pervasives.compare set1 set2
 
 (** {2 Stubs} *)
 (*  =-=-=-=-= *)
@@ -117,42 +129,48 @@ and assigns = {
 (** {2 Expressions} *)
 (*  =-=-=-=-=-=-=-= *)
 
-type quantifier =
+(** Quantifiers *)
+type quant =
   | FORALL
   | EXISTS
-  | MIXED
 
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
   | E_stub_return
-  | E_stub_builtin_call of builtin with_range * expr
-  | E_stub_quantified of quantifier * expr * var list (** quantified expression over a set of variables *)
+  | E_stub_builtin_call of builtin * expr
+  | E_stub_quantified of quant * var * set (** quantified variable over a set of values *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
 
-let mk_stub_quantified quant exp vars range =
-  mk_expr (E_stub_quantified(quant, exp, vars)) range ~etyp:exp.etyp
+let mk_stub_quantified quant v s range =
+  mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp
+
+
+(** Check whether an expression is quantified? *)
+let is_expr_quantified e =
+  Visitor.fold_expr
+    (fun acc e ->
+       match ekind e with
+       | E_stub_quantified _ -> Keep true
+       | _ -> VisitParts acc
+    )
+    (fun acc s -> VisitParts acc)
+    false
+    e
 
 
 (** {2 Statements} *)
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
-  | S_stub_assigns of expr                 (** modified target *) *
-                      (expr * expr) option (** modification range *)
-  (** Declare an assignment and create old copies *)
+  (** Rename primed variables of assigned dimensions *)
+  | S_stub_rename_primed of expr  (** modified pointer *) *
+                            expr  (** index lower bound of modified elements *) *
+                            expr  (** index upper bound of modified elements *)
 
-  | S_stub_remove_old of expr * (expr * expr) option
-  (** remove old copies of an assigned target *)
-
-
-let mk_stub_assigns target offsets range =
-  mk_stmt (S_stub_assigns (target, offsets)) range
-
-let mk_stub_remove_old target offsets range =
-  mk_stmt (S_stub_remove_old (target, offsets)) range
-
+let mk_stub_rename_primed t a b range =
+  mk_stmt (S_stub_rename_primed (t, a, b)) range
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -167,7 +185,7 @@ let pp_builtin fmt f =
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
+  | PRIMED -> pp_print_string fmt "primed"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
@@ -272,11 +290,11 @@ let () =
             (fun () -> compare_expr arg1 arg2)
           ]
 
-        | E_stub_quantified(q1, ee1, vars1), E_stub_quantified(q2, ee2, vars2) ->
+        | E_stub_quantified(q1, v1, set1), E_stub_quantified(q2, v2, set2) ->
           Compare.compose [
             (fun () -> compare q1 q2);
-            (fun () -> compare_expr ee1 ee2);
-            (fun () -> Compare.list compare_var vars1 vars2);
+            (fun () -> compare_var v1 v2);
+            (fun () -> compare_set set1 set2);
           ]
 
         | _ -> next e1 e2
@@ -292,9 +310,7 @@ let () =
           { exprs = [arg]; stmts = [] },
           (function {exprs = [args]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
-        | E_stub_quantified(q, ee, vars) ->
-          { exprs = [ee]; stmts = [] },
-          (function {exprs = [ee]} -> {e with ekind = E_stub_quantified(q, ee, vars)} | _ -> assert false)
+        | E_stub_quantified _ -> leaf e
 
         | _ -> next e
       );
@@ -303,10 +319,9 @@ let () =
         match ekind e with
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_args pp_expr) args
         | E_stub_return -> pp_print_string fmt "return"
-        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
-        | E_stub_quantified(FORALL, ee, _) -> fprintf fmt "∀%a" pp_expr ee
-        | E_stub_quantified(EXISTS, ee, _) -> fprintf fmt "∃%a" pp_expr ee
-        | E_stub_quantified(MIXED, ee, _) -> fprintf fmt "(∀|∃)%a" pp_expr ee
+        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+        | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
+        | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
         | _ -> next fmt e
       );
   }
@@ -318,16 +333,11 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_assigns(t1, o1), S_stub_assigns(t2, o2) ->
+        | S_stub_rename_primed(t1, a1, b1), S_stub_rename_primed(t2, a2, b2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
-          ]
-
-        | S_stub_remove_old(t1, o1), S_stub_remove_old(t2, o2) ->
-          Compare.compose [
-            (fun () -> compare_expr t1 t2);
-            (fun () -> Compare.option (Compare.pair compare_expr compare_expr) o1 o2)
+            (fun () -> compare_expr a1 a2);
+            (fun () -> compare_expr b1 b2)
           ]
 
         | _ -> next s1 s2
@@ -335,16 +345,13 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_assigns(t, o) -> panic "visitor for S_stub_assigns not supported"
-        | S_stub_remove_old(t, o) -> panic "visitor for S_stub_remove_old not supported"
+        | S_stub_rename_primed(t, a, b) -> panic "visitor for S_stub_rename_primed not supported"
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_assigns(t, None) -> fprintf fmt "assigns: %a;" pp_expr t
-        | S_stub_assigns(t, Some(a,b)) -> fprintf fmt "assigns: %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
-        | S_stub_remove_old(target, _) -> fprintf fmt "remove old(%a);" pp_expr target
+        | S_stub_rename_primed(t,a,b) -> fprintf fmt "rename primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
         | _ -> next fmt s
       );
   }
@@ -364,54 +371,3 @@ let rec visit_expr_in_formula expr_visitor f =
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
   | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
-
-
-(** {2 Utility functions} *)
-(** =-=-=-=-=-=-=-=-=-=-= *)
-
-(** Check whether an expression is quantified? *)
-let is_expr_quantified e =
-  Visitor.fold_expr
-    (fun acc e ->
-       match ekind e with
-       | E_stub_quantified _ -> Keep true
-       | _ -> VisitParts acc
-    )
-    (fun acc s -> VisitParts acc)
-    false
-    e
-
-(** Remove quantifiers from an expression.
-    Note: only top-level quantifiers are processed.
-*)
-let unquantify_expr e : quantifier * var list * expr =
-
-  (* Unify two quantifiers *)
-  let unify_quant oq1 oq2 =
-    OptionExt.option_neutral2 (fun q1 q2 ->
-        match q1, q2 with
-        | FORALL, FORALL -> FORALL
-        | EXISTS, EXISTS -> EXISTS
-        | _ -> MIXED
-      ) oq1 oq2
-  in
-
-  (* Visit the expression *)
-  let (oq, vl), e' =
-    Visitor.fold_map_expr
-      (fun (acc1, acc2) ee ->
-         match ekind ee with
-         | E_stub_quantified(q, eee, vl) ->
-           Keep (
-             (unify_quant (Some q) acc1, vl @ acc2),
-             eee
-           )
-         | _ -> VisitParts ((acc1, acc2), ee)
-      )
-      (fun acc s -> VisitParts (acc, s))
-      (None, [])
-      e
-  in
-  match oq with
-  | Some q -> q, vl, e'
-  | None -> panic "unquantify_expr: no quantifier found"

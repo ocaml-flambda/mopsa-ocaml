@@ -26,7 +26,6 @@ build_job:
 
 .test-c:
   stage: test
-  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
@@ -61,64 +60,69 @@ build_job:
     - eval `opam config env`
     - $MOPSA_PYTY benchmarks/pytypes/typpete/$PY_FILE
 
-test-c 1/12:
+test-c 1/13:
   variables:
     C_FILE: 'array_tests.c'
   extends: .test-c
 
-test-c 2/12:
+test-c 2/13:
   variables:
     C_FILE: 'enum_tests.c'
   extends: .test-c
 
-test-c 3/12:
+test-c 3/13:
   variables:
     C_FILE: 'for_tests.c'
   extends: .test-c
 
-test-c 4/12:
+test-c 4/13:
   variables:
     C_FILE: 'function_tests.c'
   extends: .test-c
 
-test-c 5/12:
+test-c 5/13:
   variables:
     C_FILE: 'goto_tests.c'
   extends: .test-c
 
-test-c 6/12:
+test-c 6/13:
   variables:
     C_FILE: 'int_tests.c'
   extends: .test-c
 
-test-c 7/12:
+test-c 7/13:
   variables:
-    C_FILE: 'malloc_tests.c'
+    C_FILE: 'stubs/assigns_tests.c'
   extends: .test-c
 
-test-c 8/12:
+test-c 8/13:
   variables:
     C_FILE: 'pointer_tests.c'
   extends: .test-c
 
-test-c 9/12:
+test-c 9/13:
   variables:
     C_FILE: 'string_tests.c'
   extends: .test-c
 
-test-c 10/12:
+test-c 10/13:
   variables:
     C_FILE: 'struct_tests.c'
   extends: .test-c
 
-test-c 11/12:
+test-c 11/13:
   variables:
     C_FILE: 'switch_tests.c'
   extends: .test-c
 
-test-c 12/12:
+test-c 12/13:
   variables:
     C_FILE: 'union_tests.c'
+  extends: .test-c
+
+test-c 13/13:
+  variables:
+    C_FILE: 'stubs/forall_tests.c'
   extends: .test-c
 
 test-u 1/1:

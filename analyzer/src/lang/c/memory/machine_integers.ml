@@ -320,14 +320,11 @@ struct
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> OptionExt.return
 
-    | E_var(v, mode) ->
+    | v when PrimedVar.match_expr exp ->
       let () = debug "case 8" in
-      Eval.singleton
-        {exp with
-         ekind = E_var({v with vtyp = to_universal_type v.vtyp}, mode);
-         etyp = to_universal_type (etyp exp)}
-        flow
-      |> OptionExt.return
+      let exp' = PrimedVar.substitute var_machine_integers exp in
+      Eval.singleton exp' flow |>
+      Eval.return
 
     | _ ->
       None
@@ -375,24 +372,39 @@ struct
       Post.of_flow |>
       OptionExt.return
 
-    | S_add_var v when is_c_int_type v.vtyp ->
-      let v' = {v with vtyp = to_universal_type v.vtyp} in
-      man.exec ~zone:Z_u_num (mk_add_var v' stmt.srange) flow |>
+    | S_add v when is_c_int_type v.etyp &&
+                   PrimedVar.match_expr v ->
+      let v' = PrimedVar.substitute var_machine_integers v in
+      man.exec ~zone:Z_u_num (mk_add v' stmt.srange) flow |>
       Post.of_flow |>
       OptionExt.return
 
-    | S_expand(v, vl) when is_c_int_type v.vtyp ->
-      let v' = {v with vtyp = to_universal_type v.vtyp} in
-      let vl' = List.map (fun v -> {v with vtyp = to_universal_type v.vtyp}) vl in
+    | S_expand(v, vl) when is_c_int_type v.etyp &&
+                           PrimedVar.match_expr v &&
+                           List.for_all PrimedVar.match_expr vl ->
+      let v' = PrimedVar.substitute var_machine_integers v in
+      let vl' = List.map (PrimedVar.substitute var_machine_integers) vl in
       man.exec ~zone:Z_u_num (mk_expand v' vl' stmt.srange) flow |>
       Post.of_flow |>
       OptionExt.return
 
-    | S_remove_var v when is_c_int_type v.vtyp ->
-      let v' = {v with vtyp = to_universal_type v.vtyp} in
-      man.exec ~zone:Z_u_num (mk_remove_var v' stmt.srange) flow |>
+    | S_remove v when is_c_int_type v.etyp &&
+                      PrimedVar.match_expr v ->
+      let v' = PrimedVar.substitute var_machine_integers v in
+      man.exec ~zone:Z_u_num (mk_remove v' stmt.srange) flow |>
       Post.of_flow |>
       OptionExt.return
+
+    | S_rename(v1, v2) when is_c_int_type v1.etyp &&
+                            is_c_int_type v2.etyp &&
+                            PrimedVar.match_expr v1 &&
+                            PrimedVar.match_expr v2 ->
+      let v1' = PrimedVar.substitute var_machine_integers v1 in
+      let v2' = PrimedVar.substitute var_machine_integers v2 in
+      man.exec ~zone:Z_u_num (mk_rename v1' v2' stmt.srange) flow |>
+      Post.of_flow |>
+      OptionExt.return
+
 
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
@@ -403,6 +415,7 @@ struct
       OptionExt.return
 
     | _ -> None
+
 
   let ask _ _ _ =
     None

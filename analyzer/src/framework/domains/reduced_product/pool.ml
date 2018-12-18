@@ -11,6 +11,7 @@
 open Manager
 open Domain
 open Value
+open Ast
 
 (** {2 Pool of abstract domains} *)
 (** **************************** *)
@@ -25,10 +26,10 @@ type 'a domain_pool =
     Instead, the product is first written as a DNF, and reduction operators are 
     applied on each sub-conjunction individually. 
 *)
-type 'a evl_conj = ('a, Ast.expr) evl_case option list
+type 'a evl_conj = ('a, expr) evl_case option list
 
 (** Transform a conjunction into an evaluation *)
-let conj_to_evl (c: 'a evl_conj) : ('a, Ast.expr) evl option =
+let conj_to_evl (c: 'a evl_conj) : ('a, expr) evl option =
   match List.partition (function None -> true | _ -> false) c with
   | _, [] -> None
   | _, l ->
@@ -56,10 +57,10 @@ type ('a, 'd) domain_man = {
   fold : 'b. 'b fold_fun -> 'b -> 'b;
 
   (** Get the evaluation of a member domain *)
-  get_eval : 't. 't domain -> 'a evl_conj -> (Ast.expr option * 'a flow) option;
+  get_eval : 't. 't domain -> 'a evl_conj -> (expr option * 'a flow) option;
 
   (** Change the evaluation of a member domain *)
-  set_eval : 't. 't domain -> Ast.expr -> 'a flow -> 'a evl_conj -> 'a evl_conj;
+  set_eval : 't. 't domain -> expr -> 'a flow -> 'a evl_conj -> 'a evl_conj;
 
   (** Remove the evaluation of a member domains *)
   remove_eval : 't. 't domain -> 'a evl_conj -> 'a evl_conj;
@@ -85,8 +86,8 @@ type 'v value_man = {
     abstract elements of a member non-relational abstract domains *)
 type ('a, 'v) nonrel_man = {
   pool : 'v value_pool;
-  get_var_value : 't. 't value -> Ast.var -> 'a -> 't;
-  set_var_value : 't. 't value -> Ast.var -> 't -> 'a -> 'a;
+  get_var_value : 't. 't value -> var primed -> 'a -> 't;
+  set_var_value : 't. 't value -> var primed -> 't -> 'a -> 'a;
 }
 
 

@@ -7,14 +7,14 @@
 (****************************************************************************)
 
 (** Cells are contiguous memory blocks identified by a base storage
-   variable, a numeric offset and a type.  *)
+   region (a variable, a string literal or a dynamically allocated
+   memory block), a numeric offset and a type.  *)
 
 open Mopsa
 open Framework.Visitor
 open Common.Base
 open Ast
 module Itv = Universal.Numeric.Values.Intervals.Value
-
 
 
 (** {2 Cell offset} *)
@@ -24,7 +24,6 @@ module Itv = Universal.Numeric.Values.Intervals.Value
 type offset =
   | O_single of Z.t     (** Integer offset of a single cell *)
   | O_region of Itv.t   (** Interval offset covering a contiguous region of cells*)
-  | O_all               (** Offsets of all cells within a base *)
   | O_out_of_bound      (** Offsets out-of-bound of the allocated size of a base *)
 
 let compare_offset o1 o2 =
@@ -37,8 +36,7 @@ let pp_offset fmt o =
   match o with
   | O_single n -> Z.pp_print fmt n
   | O_region itv -> Itv.print fmt itv
-  | O_all -> Format.fprintf fmt "⋆"
-  | O_out_of_bound -> Format.fprintf fmt "🛇"
+  | O_out_of_bound -> Format.fprintf fmt "⚠"
 
 
 (** {2 Cells} *)
@@ -46,11 +44,23 @@ let pp_offset fmt o =
 
 (** A cell is identified by a base, an offset and a type *)
 type cell = {
-  b: base;
-  o: offset;
-  t: typ;
+  b: base ;      (** base of the cell *)
+  o: offset;     (** offset of the cell within the base *)
+  t: typ;        (** type of the cell *)
 }
 
+let cell_base c = c.b
+
+let cell_offset c = c.o
+
+let cell_zoffset c =
+  match c.o with
+  | O_single n -> n
+  | _ -> assert false
+
+let cell_typ c = c.t
+
+(** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [
     (fun () -> compare_base c1.b c2.b);
@@ -58,13 +68,15 @@ let compare_cell c1 c2 =
     (fun () -> compare_typ c1.t c2.t);
   ]
 
+(** Print a cell *)
 let pp_cell fmt c =
   Format.fprintf fmt "⟨%a,%a,%a⟩"
     pp_base c.b
     pp_offset c.o
     pp_typ c.t
-  
-let cell_to_var c =
+
+(** Create a C scalar variable from a cell *)
+let cell_to_var c : var =
   let vname =
     let () = Format.fprintf Format.str_formatter
         "{%a:%a:%a}"
@@ -86,19 +98,45 @@ let cell_to_var c =
 type expr_kind +=
   | E_c_cell of cell * mode (* Expression representing a cell *)
 
-type stmt_kind +=
-  | S_c_add_cell    of cell (* Add a cell as a new dimension *)
-  | S_c_remove_cell of cell (* Ask for the removing of a cell *)
-  | S_c_expand_cell of cell * cell list (* Expand a cell into a set of cells *)
-
+(** Create a cell expression *)
 let mk_c_cell c ?(mode = STRONG) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
-let mk_c_remove_cell c range =
-  mk_stmt (S_c_remove_cell c) range
 
-let mk_c_add_cell c range =
-  mk_stmt (S_c_add_cell c) range
+module Cell =
+struct
+  type t = cell
+  let compare = compare_cell
+  let print = pp_cell
+end
+
+
+(** {2 Primed cells} *)
+
+module PrimedCell = MakePrimedExt(
+  struct
+    type t = cell
+
+    type ext = mode
+
+    let compare = compare_cell
+
+    let print = pp_cell
+
+    let match_expr e =
+      match ekind e with
+      | E_c_cell _ -> true
+      | _ -> false
+
+    let from_expr e =
+      match ekind e with
+      | E_c_cell (c, m) -> c, m
+      | _ -> assert false
+
+    let to_expr c mode range = mk_c_cell c ~mode range
+
+  end)
+
 
 let () =
   register_expr {
@@ -122,48 +160,8 @@ let () =
         | E_c_cell _ -> leaf e
         | _ -> next e
       )
-   };
+   }
 
-  register_stmt {
-    compare = (fun next stmt1 stmt2 ->
-        match skind stmt1, skind stmt2 with
-        | S_c_add_cell c1, S_c_add_cell c2 -> compare_cell c1 c2
-
-        | S_c_remove_cell c1, S_c_remove_cell c2 -> compare_cell c1 c2
-
-        | S_c_expand_cell (c1, cl1), S_c_expand_cell (c2, cl2) ->
-          Compare.compose [
-            (fun () -> compare_cell c1 c2);
-            (fun () -> Compare.list compare_cell cl1 cl2)
-          ]
-
-        | _ -> next stmt1 stmt2
-      );
-    print = (fun next fmt stmt ->
-        match skind stmt with
-        | S_c_add_cell c ->
-          Format.fprintf fmt "S_c_add_cell(%a)" pp_cell c
-
-        | S_c_remove_cell c ->
-          Format.fprintf fmt "S_c_remove_cell(%a)" pp_cell c
-
-        | S_c_expand_cell(c, cl) ->
-          Format.fprintf fmt "expand(%a,{%a})"
-            pp_cell c
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-               pp_cell) cl
-
-        | _ -> next fmt stmt
-      );
-    visit = (fun next stmt ->
-        match skind stmt with
-        | S_c_add_cell c    -> leaf stmt
-        | S_c_remove_cell c -> leaf stmt
-        | S_c_expand_cell _ -> leaf stmt
-        | _ -> next stmt
-      )
-  }
 
 (* Cell zoning *)
 (* =========== *)
@@ -183,13 +181,8 @@ let () =
         | E_c_cell _ -> Keep
         | E_var _ when exp.etyp |> is_c_scalar_type -> Process
         | E_c_address_of _ -> Keep
+        | E_primed _ -> Visit
+        | Stubs.Ast.E_stub_quantified _ -> Visit
         | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );
   }
-
-module Cell =
-struct
-  type t = cell
-  let compare = compare_cell
-  let print = pp_cell
-end

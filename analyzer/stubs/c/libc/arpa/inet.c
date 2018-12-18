@@ -103,7 +103,7 @@ int inet_pton (int __af,
  *   ensures: exists int i in [0, __len - 1]: __buf[i] == 0;
  *   ensures:  return == __buf;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == _NULL; 
  */
@@ -130,7 +130,7 @@ int inet_aton (const char *__cp, struct in_addr *__inp);
  *   ensures:  exists int i in [0, __len - 1]: __buf[i] == 0;
  *   ensures:  return == __buf;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == _NULL;
  */
@@ -145,7 +145,7 @@ char *inet_neta (in_addr_t __net, char *__buf, size_t __len);
  *   ensures:  exists int i in [0, __len - 1]: __buf[i] == 0;
  *   ensures:  return == __buf;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == _NULL;
  */
@@ -161,7 +161,7 @@ char *inet_net_ntop (int __af, const void *__cp, int __bits,
  *   assigns:  __buf[0, return - 1];
  *   ensures:  return >= 0 and return <= __len;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */

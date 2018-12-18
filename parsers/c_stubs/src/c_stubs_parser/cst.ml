@@ -86,7 +86,7 @@ and expr =
   | E_member    of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin with_range * expr with_range
+  | E_builtin_call  of builtin * expr with_range
 
   | E_return
 
@@ -166,13 +166,15 @@ and var = {
 }
 
 and builtin =
-  | OLD
+  | PRIMED
   | SIZE
   | OFFSET
   | BASE
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
+  (* Deprecated *)
+  | OLD
 
 
 
@@ -201,10 +203,11 @@ let pp_builtin fmt f =
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
+  | PRIMED -> pp_print_string fmt "primed"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
+  | OLD    -> pp_print_string fmt "old"
 
 let pp_list pp ~is_first sep fmt l =
   if not is_first then
@@ -227,7 +230,7 @@ let rec pp_expr fmt exp =
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
 and pp_unop fmt =

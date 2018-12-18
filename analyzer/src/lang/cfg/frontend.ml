@@ -270,9 +270,9 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
 
   | S_assign _
   | S_assume _
-  | S_rename_var _
-  | S_remove_var _
-  | S_project_vars _
+  | S_rename _
+  | S_remove _
+  | S_project _
   | S_expression _
   | S_rebase_addr _
   | S_simple_assert _

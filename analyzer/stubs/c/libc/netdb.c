@@ -28,7 +28,7 @@ int *__h_errno_location (void);
 
 /*$
  * case "nonull":
- *   assumes:  __str != NULL;
+ *   assumes:  __str != _NULL;
  *   requires: exists int i in [0, size(__str) - 1]: __str[i] == 0;
  */
 void herror (const char *__str);
@@ -63,7 +63,7 @@ static struct hostent _hostent;
  *   ensures: return == &_hostent;
  *
  * case "finished":
- *   ensures: return == NULL;
+ *   ensures: return == _NULL;
  */
 struct hostent *gethostent (void);
 

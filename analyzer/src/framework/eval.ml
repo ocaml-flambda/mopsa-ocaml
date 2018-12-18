@@ -79,12 +79,19 @@ let fold2
   Dnf.fold2 f join meet init evl
 
 let substitute
-    (f: ('a, 'e) evl_case -> 'b)
+    (f: 'e -> 'a flow -> 'b)
     (join: 'b -> 'b -> 'b)
     (meet: 'b -> 'b -> 'b)
+    (empty: 'b)
     (evl: ('a, 'e) evl)
   : 'b =
-  Dnf.substitute f join meet evl
+  Dnf.substitute
+    (fun case ->
+       match case.expr with
+       | Some e -> f e case.flow
+       | None -> empty
+    )
+    join meet evl
 
 
 (* [choose_annot evl] returns any annotation from evaluation flows

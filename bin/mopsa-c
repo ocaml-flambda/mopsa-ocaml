@@ -4,7 +4,7 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 STUBSDIR=${MOPSADIR}/analyzer/stubs/c
 
 CONFIG=-config=${MOPSADIR}/analyzer/configs/c.json
-STUBS=${STUBSDIR}/libc/string.c
+STUBS=
 INCLUDES=-I=${STUBSDIR}/mopsa
 
 ${MOPSADIR}/bin/mopsa -lang=c ${CONFIG} ${INCLUDES} ${STUBS} $@

@@ -9,6 +9,7 @@
 (** Zones for the C language. *)
 
 open Mopsa
+open Stubs.Ast
 open Ast
 
 (** Zones of the C language *)
@@ -28,6 +29,9 @@ let () =
         | E_constant _
         | E_var _                            -> Keep
         (* ------------------------------------------- *)
+        | E_stub_quantified _
+        | E_stub_builtin_call _
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -67,6 +71,9 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_stub_quantified _
+        | E_stub_builtin_call _
+        | E_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit
@@ -91,6 +98,9 @@ let () =
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
+        | E_stub_quantified _
+        | E_stub_builtin_call _
+        | E_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit

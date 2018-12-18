@@ -91,9 +91,58 @@ let pp_typ fmt typ = !typ_pp_chain fmt typ
 
 
 (*==========================================================================*)
-(**                           {2 Variables}                                 *)
+(**                       {2 Primed dimensions}                             *)
 (*==========================================================================*)
 
+(** Primed dimensions are used to differentiate between the value of
+   a dimension in the pre-condition and the post-condition. *)
+type 'a primed =
+  | Primed of 'a
+  | Unprimed of 'a
+
+let primed (a:'a) : 'a primed = Primed a
+
+let unprimed (a:'a) : 'a primed = Unprimed a
+
+let is_primed (a:'a primed) : bool =
+  match a with
+  | Unprimed _ -> false
+  | Primed _ -> true
+
+let is_similarly_primed (a:'a primed) (b:'b primed) : bool =
+  match a, b with
+  | Primed _, Primed _
+  | Unprimed _, Unprimed _ -> true
+  | _ -> false
+
+let unprime (a: 'a primed) : 'a =
+  match a with
+  | Primed aa -> aa
+  | Unprimed aa -> aa
+
+let primed_lift (f: 'a -> 'b) (a: 'a primed) : 'b primed =
+  match a with
+  | Unprimed aa -> Unprimed (f aa)
+  | Primed aa -> Primed (f aa)
+
+let primed_apply (f: 'a -> 'b) (a: 'a primed) : 'b =
+  f (unprime a)
+
+let compare_primed (cmp:'a->'b->int) (a:'a primed) (b:'b primed) : int =
+  match a, b with
+  | Primed aa, Primed bb -> cmp aa bb
+  | Unprimed aa, Unprimed bb -> cmp aa bb
+  | _ -> Pervasives.compare a b
+
+let pp_primed pp fmt a =
+  match a with
+  | Unprimed aa -> pp fmt aa
+  | Primed aa -> Format.fprintf fmt "(%a)'" pp aa
+
+
+(*==========================================================================*)
+(**                           {2 Variables}                                 *)
+(*==========================================================================*)
 
 (** variables *)
 type var = {
@@ -118,6 +167,14 @@ let pp_var fmt v =
 let vtyp v = v.vtyp
 
 let uniq_vname v = v.vname ^ ":" ^ (string_of_int v.vuid)
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print = pp_var
+end
+
 
 (*==========================================================================*)
 (**                            {2 Operators}                                *)
@@ -259,6 +316,9 @@ type expr_kind +=
   | E_binop of operator * expr * expr
   (** binary operator expressions *)
 
+  | E_primed of expr
+  (** Primed version of an expression *)
+
 
 let ekind (e: expr) = e.ekind
 let etyp (e: expr) = e.etyp
@@ -273,17 +333,22 @@ let rec expr_compare_chain : (expr -> expr -> int) ref =
           (fun () -> compare_mode s1 s2)
         ]
       | E_constant c1, E_constant c2 -> compare_constant c1 c2
+
       | E_unop(op1, e1), E_unop(op2, e2) ->
         Compare.compose [
           (fun () -> compare_operator op1 op2);
           (fun () -> compare_expr e1 e2);
         ]
+
       | E_binop(op1, e1, e1'), E_binop(op2, e2, e2') ->
         Compare.compose [
           (fun () -> compare_operator op1 op2);
           (fun () -> compare_expr e1 e2);
           (fun () -> compare_expr e1' e2');
         ]
+
+      | E_primed e1, E_primed e2 -> compare_expr e1 e2
+
       | _ -> Pervasives.compare e1 e2
     )
 
@@ -298,6 +363,7 @@ let rec expr_pp_chain : (Format.formatter -> expr -> unit) ref =
       | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
       | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
       | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
+      | E_primed(e) -> pp_primed pp_expr fmt (primed e)
       | _ -> failwith "Pp: Unknown expression"
     )
 
@@ -328,25 +394,28 @@ type stmt_kind +=
 
   | S_assume of expr (** condition *)
 
-  | S_rename_var of var (** old *) * var (** new *)
-  (** Rename a variable into another*)
+  | S_add of expr
+  (** Add a dimension to the abstract environments. *)
 
-  | S_add_var of var
-  (** Add a variable to the abstract environments. *)
+  | S_remove of expr
+  (** Remove a dimension from the abstract environments. *)
 
-  | S_remove_var of var
-  (** Remove a variable from the abstract environments. *)
+  | S_rename of expr (** old *) * expr (** new *)
+  (** Rename the first dimension into the second one *)
 
-  | S_project_vars of var list
+  | S_forget of expr
+  (** Forget a dimension from the abstract environments. *)
+
+  | S_project of expr list
   (** Project the abstract environments on the given list of variables. *)
 
-  | S_expand of var * var list
-  (** Expands the first variable into the list of variables, the first
-      variable is removed from the environment *)
+  | S_expand of expr * expr list
+  (** Expands the first dimension into the list of dimensions, the first
+      dimension is removed from the environment *)
 
-  | S_fold of var * var list
-  (** Folds the the list of variables into the first variable, the
-      list of variable is then removed from the environment *)
+  | S_fold of expr * expr list
+  (** Folds the the list of dimensions into the first one, the
+      list of dimensions is then removed from the environment *)
 
 
 type stmt = {
@@ -369,33 +438,28 @@ let rec stmt_compare_chain : (stmt -> stmt -> int) ref =
 
       | S_assume(e1), S_assume(e2) -> compare_expr e1 e2
 
-      | S_rename_var(v1, v1'), S_rename_var(v2, v2') ->
+      | S_rename(e1, e1'), S_rename(e2, e2') ->
         Compare.compose [
-          (fun () -> compare_var v1 v2);
-          (fun () -> compare_var v1' v2');
+          (fun () -> compare_expr e1 e2);
+          (fun () -> compare_expr e1' e2');
         ]
 
-      | S_remove_var(v1), S_remove_var(v2) -> compare_var v1 v2
+      | S_remove(e1), S_remove(e2) -> compare_expr e1 e2
 
-      | S_add_var(v1), S_add_var(v2) -> compare_var v1 v2
+      | S_add(e1), S_add(e2) -> compare_expr e1 e2
 
-      | S_project_vars(vl1), S_project_vars(vl2) ->
-        Compare.compose (
-          (fun () -> Pervasives.compare (List.length vl1) (List.length vl2))
-          ::
-          (List.map (fun (v1, v2) -> (fun () -> compare_var v1 v2)) @@ List.combine vl1 vl2)
-        )
-      | S_expand(v, vl), S_expand(v', vl') ->
+      | S_project(el1), S_project(el2) -> Compare.list compare_expr el1 el2
+
+      | S_expand(e, el), S_expand(e', el') ->
         Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list compare_var vl vl')
+          (fun () -> compare_expr e e');
+          (fun () -> Compare.list compare_expr el el')
         ]
 
-      | S_fold(v, vl), S_fold(v', vl') ->
+      | S_fold(e, el), S_fold(e', el') ->
         Compare.compose [
-          (fun () -> compare_var v v');
-          (fun () -> Compare.list
-              compare_var vl vl')
+          (fun () -> compare_expr e e');
+          (fun () -> Compare.list compare_expr el el')
         ]
 
       | _ -> Pervasives.compare s1 s2
@@ -408,18 +472,32 @@ let stmt_pp_chain : (Format.formatter -> stmt -> unit) ref =
   ref (fun fmt stmt ->
       match skind stmt with
       | S_program prog -> pp_program fmt prog
-      | S_expand(v, vl) ->
+
+      | S_remove(e) -> fprintf fmt "remove(%a)" pp_expr e
+
+      | S_add(e) -> fprintf fmt "add(%a)" pp_expr e
+
+      | S_forget(e) -> fprintf fmt "forget(%a)" pp_expr e
+
+      | S_project(el) ->
+        fprintf fmt "project(@[<h>%a@])"
+          (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
+
+      | S_rename(e, e') -> fprintf fmt "rename(%a, %a)" pp_expr e pp_expr e'
+
+      | S_expand(e, el) ->
         fprintf fmt "expand(%a,{%a})"
-          pp_var v
+          pp_expr e
           (pp_print_list
              ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
-      | S_fold(v, vl) ->
+             pp_expr) el
+
+      | S_fold(e, el) ->
         fprintf fmt "fold(%a,{%a})"
-          pp_var v
+          pp_expr e
           (pp_print_list
              ~pp_sep:(fun fmt () -> fprintf fmt ",")
-             pp_var) vl
+             pp_expr) el
 
       | _ -> failwith "Pp: Unknown statement"
     )
@@ -456,7 +534,7 @@ let leaf (x: 'a) : 'a structure =
 
 
 (** Information record of an AST construct with visitors *)
-type 'a info2 = {
+type 'a vinfo = {
   compare : ('a -> 'a -> int) -> 'a -> 'a -> int;
   print   : (formatter -> 'a -> unit) -> formatter -> 'a -> unit;
   visit : ('a -> 'a structure) -> 'a -> 'a structure;
@@ -471,13 +549,16 @@ let expr_visit_chain = ref (fun exp ->
       {exprs = [e]; stmts = []},
       (fun parts -> {exp with ekind = E_unop(unop, List.hd parts.exprs)})
     | E_binop(binop, e1, e2) ->
-        {exprs = [e1; e2]; stmts = []},
-        (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
+      {exprs = [e1; e2]; stmts = []},
+      (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
+    | E_primed e ->
+      {exprs = [e]; stmts = []},
+      (function {exprs = [e]} -> {exp with ekind = E_primed e} | _ -> assert false)
     | _ ->
-      Exceptions.panic "Unknown expression %a" pp_expr exp
+      Exceptions.panic "expr visitor: unknown expression %a" pp_expr exp
   )
 
-let register_expr (info: expr info2) : unit =
+let register_expr (info: expr vinfo) : unit =
   expr_compare_chain := info.compare !expr_compare_chain;
   expr_pp_chain := info.print !expr_pp_chain;
   expr_visit_chain := info.visit !expr_visit_chain;
@@ -509,17 +590,18 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
             | _ -> assert false
           )
 
-      | S_rename_var _
-      | S_add_var _
-      | S_remove_var _
-      | S_project_vars _
+      | S_rename _
+      | S_add _
+      | S_remove _
+      | S_forget _
+      | S_project _
       | S_expand _
       | S_fold _ -> leaf stmt
 
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
 
-let register_stmt (info: stmt info2) : unit =
+let register_stmt (info: stmt vinfo) : unit =
   stmt_compare_chain := info.compare !stmt_compare_chain;
   stmt_pp_chain := info.print !stmt_pp_chain;
   stmt_visit_chain := info.visit !stmt_visit_chain;
@@ -531,7 +613,7 @@ let register_stmt_visitor visitor =
 
 
 (*==========================================================================*)
-(**                       {2 Utility functions}                             *)
+(**                  {2 Utility functions for variables}                    *)
 (*==========================================================================*)
 
 let mkv vname vuid vtyp =
@@ -550,6 +632,12 @@ let mktmp vtyp () =
 let mk_tmp ?(vtyp=T_any) () =
   mktmp vtyp ()
 
+
+
+(*==========================================================================*)
+(**                {2 Utility functions for expressions}                    *)
+(*==========================================================================*)
+
 let mk_expr
     ?(etyp = T_any)
     ekind
@@ -559,6 +647,11 @@ let mk_expr
 
 let mk_var v ?(mode = STRONG) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
+
+let var_mode (e:expr) : mode =
+  match ekind e with
+  | E_var (_, mode) -> mode
+  | _ -> assert false
 
 let mk_binop left op right ?(etyp = T_any) erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange
@@ -572,25 +665,256 @@ let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_not e = mk_unop O_log_not e ~etyp:e.etyp
 
+
+(*==========================================================================*)
+(**                 {2 Utility functions for statements}                    *)
+(*==========================================================================*)
+
 let mk_stmt skind srange = {skind; srange}
 
 let mk_rename v v' =
-  mk_stmt (S_rename_var (v, v'))
+  mk_stmt (S_rename (v, v'))
 
 let mk_assign v e =
   mk_stmt (S_assign (v, e))
 
-let mk_expand v vl range =
-  mk_stmt (S_expand(v, vl)) range
-
 let mk_assume e =
   mk_stmt (S_assume e)
 
-let mk_remove_var v = mk_stmt (S_remove_var v)
+let mk_remove v = mk_stmt (S_remove v)
 
-let mk_add_var v = mk_stmt (S_add_var v)
+let mk_remove_var v range =
+  mk_remove (mk_var v range) range
 
-let mk_project_vars vars = mk_stmt (S_project_vars vars)
+let mk_add v = mk_stmt (S_add v)
+
+let mk_add_var v range =
+  mk_add (mk_var v range) range
+
+let mk_rename e e' range =
+  mk_stmt (S_rename (e, e')) range
+
+let mk_rename_var v v' range =
+  mk_rename (mk_var v range) (mk_var v' range) range
+
+let mk_project vars = mk_stmt (S_project vars)
+
+let mk_project_vars vars range =
+  mk_project (List.map (fun v -> mk_var v range) vars) range
+
+let mk_forget e = mk_stmt (S_forget e)
+
+let mk_forget_var v range = mk_forget (mk_var v range) range
+
+let mk_expand v vl range =
+  mk_stmt (S_expand(v, vl)) range
+
+let mk_expand_var v vl range =
+  mk_expand
+    (mk_var v range)
+    (List.map (fun v' -> mk_var v' range) vl)
+    range
+
+let mk_fold v vl range =
+  mk_stmt (S_fold(v, vl)) range
+
+let mk_fold_var v vl range =
+  mk_fold
+    (mk_var v range)
+    (List.map (fun v' -> mk_var v' range) vl)
+    range
+
+
+
+(*==========================================================================*)
+(**             {2 Utility functions for primed dimensions}                 *)
+(*==========================================================================*)
+
+let mk_primed (e:expr) : expr =
+  mk_expr (E_primed e) e.erange ~etyp:e.etyp
+
+let unprime_expr (e:expr) : expr =
+  match ekind e with
+  | E_primed ee -> ee
+  | _ -> e
+
+let is_primed_expr (e:expr) : bool =
+  match ekind e with
+  | E_primed _ -> true
+  | _ -> false
+
+let match_primed_expr (pred:expr -> bool) (e:expr) : bool =
+  match ekind e with
+  | E_primed ee -> pred ee
+  | _ -> pred e
+
+let primed_expr_lift (f:expr -> 'a) (e:expr) : 'a primed =
+  match ekind e with
+  | E_primed ee -> primed (f ee)
+  | _ -> unprimed (f e)
+
+let primed_expr_apply (f:expr -> 'a) (e:expr) : 'a =
+  match ekind e with
+  | E_primed ee -> f ee
+  | _ -> f e
+
+(** Lift a dimension to a primed dimension *)
+module MakePrimed
+    (Dim : sig
+       type t
+       val match_expr : expr -> bool
+       val to_expr : t -> Location.range -> expr
+       val from_expr : expr -> t
+       val compare : t -> t -> int
+       val print : Format.formatter -> t -> unit
+     end) =
+struct
+  type t = Dim.t primed
+
+  let compare = compare_primed Dim.compare
+
+  let print = pp_primed Dim.print
+
+  let match_expr (e:expr) : bool =
+    match ekind e with
+    | E_primed ee -> Dim.match_expr ee
+    | _ -> Dim.match_expr e
+
+  let to_expr (p:t) range =
+    match p with
+    | Unprimed e -> Dim.to_expr e range
+    | Primed e ->
+      let ee = Dim.to_expr e range in
+      mk_expr (E_primed ee) range ~etyp:ee.etyp
+
+  let from_expr (e:expr) : t =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee -> primed (Dim.from_expr ee)
+    | _ -> unprimed (Dim.from_expr e)
+  
+  let lift (f:Dim.t -> 'a) (p:t) : 'a primed =
+    match p with
+    | Unprimed a -> Unprimed (f a)
+    | Primed a -> Primed (f a)
+
+  let lift_expr (f:expr -> expr) (e:expr) : expr =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee -> mk_primed (f ee)
+    | _ -> f e
+
+  let substitute (f:Dim.t -> Dim.t) (e:expr) : expr =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee ->
+      let d = Dim.from_expr ee in
+      let d' = f d in
+      let ee' = Dim.to_expr d' ee.erange in
+      mk_primed ee' 
+
+    | _ ->
+      let d = Dim.from_expr e in
+      let d' = f d in
+      Dim.to_expr d' e.erange
+
+end
+
+
+(** Lift a dimension with extent information to a primed dimension *)
+module MakePrimedExt
+    (Dim : sig
+       type t
+       type ext
+       val match_expr : expr -> bool
+       val to_expr : t -> ext -> Location.range -> expr
+       val from_expr : expr -> t * ext
+       val compare : t -> t -> int
+       val print : Format.formatter -> t -> unit
+     end) =
+struct
+  type t = Dim.t primed
+
+  let compare = compare_primed Dim.compare
+
+  let print = pp_primed Dim.print
+
+  let match_expr (e:expr) : bool =
+    match ekind e with
+    | E_primed ee -> Dim.match_expr ee
+    | _ -> Dim.match_expr e
+
+  let to_expr (p:t) ext range =
+    match p with
+    | Unprimed e -> Dim.to_expr e ext range
+    | Primed e ->
+      let ee = Dim.to_expr e ext range in
+      mk_expr (E_primed ee) range ~etyp:ee.etyp
+
+  let from_expr (e:expr) : t =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee ->
+      let a, _ = Dim.from_expr ee in
+      primed a
+    | _ ->
+      let a, _ = Dim.from_expr e in
+      unprimed a
+
+  let ext_from_expr (e:expr) : Dim.ext =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee ->
+      let _, ext = Dim.from_expr ee in
+      ext
+    | _ ->
+      let _, ext = Dim.from_expr e in
+      ext
+
+  let lift (f:Dim.t -> 'a) (p:t) : 'a primed =
+    match p with
+    | Unprimed a -> Unprimed (f a)
+    | Primed a -> Primed (f a)
+
+  let lift_expr (f:expr -> expr) (e:expr) : expr =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee -> mk_primed (f ee)
+    | _ -> f e
+
+  let substitute (f:Dim.t -> Dim.t) (e:expr) : expr =
+    match ekind e with
+    | E_primed ee when Dim.match_expr ee ->
+      let d,ext = Dim.from_expr ee in
+      let d' = f d in
+      let ee' = Dim.to_expr d' ext ee.erange in 
+      mk_primed ee' 
+
+    | _ ->
+      let d,ext = Dim.from_expr e in
+      let d' = f d in
+      Dim.to_expr d' ext e.erange
+
+end
+
+
+
+module PrimedVar = MakePrimedExt(
+  struct
+    type t = var
+    type ext = mode
+
+    let compare = compare_var
+
+    let print = pp_var
+
+    let match_expr e =
+      match ekind e with
+      | E_var _ -> true
+      | _ -> false
+
+    let to_expr v mode range = mk_var v ~mode range
+
+    let from_expr e =
+      match ekind e with
+      | E_var (v, m) -> v, m
+      | _ -> assert false
+  end
+  )
 
 (* Utility to negate the comparisons in framework *)
 let negate_comparison = function
