@@ -133,7 +133,7 @@ and local_value =
 
 type assigns = {
   assign_target: expr with_range;
-  assign_offset: (expr with_range * expr with_range) option;  (** offset *)
+  assign_offset: (expr with_range * expr with_range) list option;  (** offset *)
 }
 
 
@@ -288,10 +288,14 @@ let pp_requires fmt requires =
   fprintf fmt "requires: @[%a@];" pp_formula requires.content
 
 let pp_assigns fmt assigns =
-  fprintf fmt "assigns: %a%a;"
+  fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_opt (fun fmt (l, u) ->
-         fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+    (pp_opt (fun fmt l ->
+         (pp_print_list ~pp_sep:(fun fmt () -> ())
+            (fun fmt (l, u) ->
+               fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+            )
+         ) fmt l
        )
     ) assigns.content.assign_offset
 

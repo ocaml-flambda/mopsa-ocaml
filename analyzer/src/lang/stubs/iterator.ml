@@ -255,7 +255,7 @@ struct
           let t = a.content.assign_target in
           match a.content.assign_offset with
           | None -> mk_rename (mk_primed t) t range :: block
-          | Some (a, b) -> mk_stub_rename_primed t a b range :: block
+          | Some offsets -> mk_stub_rename_primed t offsets range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow

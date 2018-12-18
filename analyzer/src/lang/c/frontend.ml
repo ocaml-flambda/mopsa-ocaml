@@ -545,7 +545,7 @@ and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = OptionExt.option_lift1 (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b)) assign.assign_offset;
+    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b))) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =

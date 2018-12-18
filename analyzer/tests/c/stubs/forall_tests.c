@@ -1,7 +1,7 @@
 #include "mopsa.h"
 
-/* Test resetting a region of an array */
-/* *********************************** */
+/* Test the modification of part of an array */
+/* ***************************************** */
 
 /*$
  * requires: l in [0, size(p) - 1] and
@@ -11,7 +11,7 @@
  */
 void reset_region(int*p, int l, int u) {}
 
-void test_assign_int() {
+void test_set_part() {
   int a[10];
   a[0] = 100;
   a[3] = 100;
@@ -22,19 +22,42 @@ void test_assign_int() {
 }
 
 
-/* Test initialize an array with a constant */
-/* **************************************** */
+/* Test the modification of an entire array with a constant */
+/* ******************************************************** */
 
 /*$
  * requires: n in [0, size(p)];
  * assigns: ((char*)p)[0, n - 1];
  * ensures: forall int i in [0, n - 1]: (((char*) p)[i])` == c;
  */
-void mymemset(void*p, char c, unsigned int n) {}
+void set_all(void*p, char c, unsigned int n) {}
 
-void test_memset() {
+void test_set_all() {
   char a[5] = {0, 1, 2, 3, 4};
 
-  mymemset(a, 10, 5);
+  set_all(a, 10, 5);
   _mopsa_assert(a[0] == 10);
+}
+
+
+/* Test the modification of a multi-dimensional array with a constant */
+/* ****************************************************************** */
+
+/*$
+ * requires: m in [0, size(p)] and
+ *           n <= 5;
+ * assigns: p[0, m - 1][0, n - 1];
+ * ensures: forall int i in [0, m - 1]: 
+ *            forall int j in [0, n - 1]:
+ *              (p[i][j])` == c;
+ */
+void set_all2(char p[][5], char c, unsigned int m, unsigned int n) {}
+
+void test_set_all_multi_dim() {
+  char a[5][5] = {{1, 2, 3, 4}};
+
+  _mopsa_print();
+  set_all2(a, 10, 5, 5);
+  _mopsa_print();
+  _mopsa_assert(a[0][0] == 10);
 }

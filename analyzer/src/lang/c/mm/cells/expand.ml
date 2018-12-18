@@ -47,7 +47,9 @@ module Domain = struct
   (* An abstract element is the set of previously expanded cells,
      represented as a powerset lattice.  *)
 
-  include Framework.Lattices.Powerset.Make(PrimedCell)
+  module Cells = Framework.Lattices.Powerset.Make(PrimedCell)
+
+  include Cells
 
   let is_bottom _ = false
 
@@ -444,12 +446,14 @@ module Domain = struct
   (** =================== *)
 
   (** Evaluate a base and an non-quantified offset expression into a cell *)
-  let eval_non_quantified_cell b o t range man flow : ('a, cell) evl =
+  let eval_non_quantified_cell b o t ~is_primed range man flow : ('a, cell primed) evl =
     eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
     Eval.bind @@ fun o flow ->
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton {b;o;t} flow
+      let c = {b;o;t} in
+      let pc = if is_primed then primed c else unprimed c in
+      Eval.singleton pc flow
 
     | O_out_of_bound ->
       let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -471,7 +475,7 @@ module Domain = struct
       range. For each sample, we replace the variable by its litteral
       value, and we compute a conjuction of the resulting evaluations
   *)
-  let eval_quantified_cell b o t range man flow : ('a, cell) evl =
+  let eval_quantified_cell b o t ~is_primed range man flow : ('a, cell primed) evl =
     debug "eval_quantified_cell: %a %a" pp_base b pp_expr o;
     (* Replace ∃ variables with unquantified variables and get the
        list of ∀ variables *)
@@ -563,8 +567,25 @@ module Domain = struct
                 o'
             in
             debug "offset sample: %a" pp_expr o'';
-            eval_non_quantified_cell b o'' t range man flow
+            eval_non_quantified_cell b o'' ~is_primed t range man flow
           )
+      in
+
+      (* We need to add evaluated cells, so that they will not be lost after meet *)
+      let cells = conj |> List.fold_left (fun acc evl ->
+          let c = Eval.substitute
+            (fun c _ -> singleton c)
+            (Cells.join ()) (Cells.meet ()) (Cells.empty)
+            evl
+          in
+          Cells.join () acc c
+        ) Cells.empty
+      in
+      let conj = List.map (fun evl ->
+          Eval.map (fun c flow ->
+              c, Flow.map_domain_env T_cur (Cells.join () cells) man flow
+            ) evl
+        ) conj
       in
       Eval.meet_list conj
     with NoUnderApprox ->
@@ -586,6 +607,7 @@ module Domain = struct
       Eval.singleton pc flow
 
     | deref when match_primed_expr (function { ekind = E_c_deref _ } -> true | _ -> false) exp ->
+      let is_primed = is_primed_expr exp in
       let p = primed_expr_apply (function { ekind = E_c_deref p } -> p | _ -> assert false) exp in
       let t = under_type p.etyp in
 
@@ -597,16 +619,10 @@ module Domain = struct
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
-          eval_quantified_cell b o t p.erange man flow |>
-          Eval.bind @@ fun c flow ->
-          let pc = if is_primed_expr exp then primed c else unprimed c in
-          Eval.singleton pc flow
+          eval_quantified_cell b o t ~is_primed p.erange man flow
 
         | E_c_points_to(P_block (b, o)) ->
-          eval_non_quantified_cell b o t p.erange man flow |>
-          Eval.bind @@ fun c flow ->
-          let pc = if is_primed_expr exp then primed c else unprimed c in
-          Eval.singleton pc flow
+          eval_non_quantified_cell b o t ~is_primed p.erange man flow
 
         | E_c_points_to(P_null) ->
           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
@@ -746,7 +762,7 @@ module Domain = struct
 
 
   (** Rename primed cells that have been declared as assigned in a stub *)
-  let rename_stub_primed_cells pt l t u range man flow =
+  let rename_stub_primed_cells pt offsets t range man flow =
     let base, offset =
       match ekind pt with
       | E_c_points_to (P_block(b, o)) -> b, o
@@ -760,6 +776,8 @@ module Domain = struct
       ) a
     in
 
+    debug "cells = %a" print cells;
+
     (* For primed cells, just rename to an unprimed cell *)
     let flow = fold (fun c flow ->
         if is_primed c
@@ -770,30 +788,45 @@ module Domain = struct
 
     (* Compute the interval of the assigned cells *)
     let itv =
-      let elem = sizeof_type t in
 
-      let mk_offset_bound bound =
-        mk_binop offset O_plus (
-          mk_binop bound O_mult (mk_z elem range) range ~etyp:T_int
+      (* Return the expression of an offset bound *)
+      let mk_offset_bound before bound t =
+        let elem_size = sizeof_type t in
+        mk_binop before O_plus (
+          mk_binop bound O_mult (mk_z elem_size range) range ~etyp:T_int
         ) range ~etyp:T_int
       in
 
-      let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound l) flow in
+      (* Create the expressions for the offset bounds *)
+      let l, u =
+        let rec doit accl accu t =
+          function
+          | [] -> accl, accu
+          | [(l, u)] ->
+            (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+          | (l, u) :: tl ->
+            doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
+
+        in
+        doit offset offset t offsets
+      in
+      debug "l = %a, u = %a" pp_expr l pp_expr u;
+      (* Compute the interval of the bounds *)
+      let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) l flow in
       let itv1 = Eval.substitute (fun l flow ->
           man.ask (Itv.Q_interval l) flow
         ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl1
       in
 
-      let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound u) flow in
+      let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) u flow in
       let itv2 = Eval.substitute (fun u flow ->
           man.ask (Itv.Q_interval u) flow
         ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl2
       in
 
       Itv.join () itv1 itv2
-
     in
-
+    debug "itv = %a" Itv.print itv;
     (* Remove remaining cells that have an offset within the assigned interval *)
     remove_cells (fun c ->
         mem c cells &&
@@ -895,14 +928,14 @@ module Domain = struct
       rename_cell cold cnew stmt.srange man flow |>
       Post.return
 
-    | S_stub_rename_primed(p, l, u) ->
+    | S_stub_rename_primed(p, offsets) ->
       man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
       Post.bind_opt man @@ fun p flow ->
 
       man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
       Post.bind_opt man @@ fun pe flow ->
 
-      rename_stub_primed_cells pe l (under_type p.etyp) u stmt.srange man flow  |>
+      rename_stub_primed_cells pe offsets (under_type p.etyp) stmt.srange man flow  |>
       Post.return
 
     | _ -> None
