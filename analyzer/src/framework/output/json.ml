@@ -38,9 +38,6 @@ let render man alarms time files out =
           `Assoc [
             "title", `String title;
             "range", `String (range_to_string range);
-            "callstack", `List (List.map (fun range ->
-                `String (range_to_string range)
-              ) cs)
           ]
         ) alarms);
     ]
