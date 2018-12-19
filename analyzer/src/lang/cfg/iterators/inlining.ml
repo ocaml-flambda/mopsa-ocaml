@@ -12,7 +12,6 @@
 open Mopsa
 open Universal.Ast
 open Universal.Zone
-open Universal.Iterators.Interproc.Callstack
 open Universal.Iterators.Interproc.Inlining
 open Ast
 
@@ -43,7 +42,7 @@ struct
 
   let init prog man (flow: 'a flow) =
     Some (
-      Flow.set_annot A_call_stack [] flow
+      Flow.set_annot Callstack.A_call_stack [] flow
     )
 
     
@@ -83,9 +82,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Update call stack *)
-      let cs = Flow.get_annot A_call_stack flow0 in
-      let cs' = range :: cs in
-      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
+      let flow1 = Callstack.push range flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>

@@ -44,7 +44,7 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) option;
+  assign_offset : (expr with_range * expr with_range) list option;
 }
 
 and case = {
@@ -84,6 +84,7 @@ and expr =
 
   | E_subscript of expr with_range * expr with_range
   | E_member    of expr with_range * string
+  | E_attribute of expr with_range * string
   | E_arrow     of expr with_range * string
 
   | E_builtin_call  of builtin * expr with_range
@@ -229,6 +230,7 @@ let rec pp_expr fmt exp =
   | E_cast(t, e) -> fprintf fmt "(%a) %a" pp_c_qual_typ t pp_expr e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
+  | E_attribute(s, f) -> fprintf fmt "%a:%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
   | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"
@@ -350,11 +352,14 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_opt (fun fmt (l, u) ->
-         fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+    (pp_opt (fun fmt l ->
+         (pp_print_list ~pp_sep:(fun fmt () -> ())
+            (fun fmt (l, u) ->
+               fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+            )
+         ) fmt l
        )
     ) assigns.content.assign_offset
-
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content

@@ -93,6 +93,7 @@ struct
       | E_cast (t, e) -> E_cast(t, visit_expr e)
       | E_subscript (a, i) -> E_subscript(visit_expr a, visit_expr i)
       | E_member (s, f) -> E_member(visit_expr s, f)
+      | E_attribute (o, f) -> E_attribute(visit_expr o, f)
       | E_arrow (p, f) -> E_arrow(visit_expr p, f)
       | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
     in

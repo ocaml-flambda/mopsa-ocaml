@@ -717,6 +717,7 @@ let mk_c_character c range =
 
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let ul = T_c_integer(C_unsigned_long)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
@@ -733,7 +734,7 @@ let mk_c_call f args range =
   mk_expr (E_c_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
 
 let mk_c_call_stmt f args range =
-  let exp = mk_c_call f args (tag_range range "call") in
+  let exp = mk_c_call f args range in
   mk_stmt (S_expression exp) range
 
 let mk_c_cast e t range =

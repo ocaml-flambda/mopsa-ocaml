@@ -4,9 +4,9 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 framework = ast visitor options query annotation	\
-lattice zone manager flow eval post channel value domain output cache	\
+lattice zone manager flow eval post channel value domain callstack alarm output cache	\
 analyzer lattices domains config
-framework.output = alarm text json factory html
+framework.output = text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
 reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
@@ -17,7 +17,7 @@ lang = universal stubs c python cfg jvm
 lang.universal = ast frontend zone u_stdlib 	\
 iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
-lang.universal.iterators.interproc = callstack inlining
+lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational \
 reductions
@@ -32,13 +32,13 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar  memory libs iterators
+lang.c = ast pp visitor zone frontend alarms desugar mm libs iterators resources
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = low_level record_copy loops
-lang.c.memory = common cells pointers machine_integers
-lang.c.memory.common = base points_to init_visitor
-lang.c.memory.cells = cell expand cell2scalar
-lang.c.memory.pointers = bases nonrel
+lang.c.mm = common cells pointers machine_integers
+lang.c.mm.common = base points_to init_visitor
+lang.c.mm.cells = cell expand cell2scalar
+lang.c.mm.pointers = bases nonrel
 lang.c.libs = c_mopsa
 
 # lang.python = ast addr utils visitor operators pp frontend

@@ -9,6 +9,7 @@
 (** Abstract Syntax Tree for stub specification. *)
 
 open Mopsa
+open Universal.Ast
 open Format
 
 
@@ -123,7 +124,7 @@ and local_value =
 (* Assigned memory regions are declared in the assigns section *)
 and assigns = {
   assign_target: expr;                 (* assigned memory block *)
-  assign_offset: (expr * expr) option; (* range of modified indices *)
+  assign_offset: (expr * expr) list option; (* range of modified indices *)
 }
 
 (** {2 Expressions} *)
@@ -136,9 +137,19 @@ type quant =
 
 type expr_kind +=
   | E_stub_call of stub (** called stub *) * expr list (** arguments *)
+  (** Call to a stubbed function *)
+
   | E_stub_return
+  (** Returned value of a stub *)
+
   | E_stub_builtin_call of builtin * expr
+  (** Call to a built-in function *)
+
   | E_stub_quantified of quant * var * set (** quantified variable over a set of values *)
+  (** Quantified variable *)
+
+  | E_stub_attribute of expr * string
+  (** Access to an attribute of a resource *)
 
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
@@ -166,11 +177,13 @@ let is_expr_quantified e =
 type stmt_kind +=
   (** Rename primed variables of assigned dimensions *)
   | S_stub_rename_primed of expr  (** modified pointer *) *
-                            expr  (** index lower bound of modified elements *) *
-                            expr  (** index upper bound of modified elements *)
+                            (
+                              expr  (** index lower bound *) *
+                              expr  (** index upper bound *)
+                            ) list
 
-let mk_stub_rename_primed t a b range =
-  mk_stmt (S_stub_rename_primed (t, a, b)) range
+let mk_stub_rename_primed t offsets range =
+  mk_stmt (S_stub_rename_primed (t, offsets)) range
 
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
@@ -234,10 +247,12 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns:@ @[<v 2>  %a%a@];"
     pp_expr assigns.content.assign_target
-    (pp_opt (fun fmt (l, u) ->
-         fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-       )
-    ) assigns.content.assign_offset
+    (
+      pp_opt (pp_print_list ~pp_sep:(fun fmt () -> ()) (fun fmt (l, u) ->
+          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+        ))
+    )
+    assigns.content.assign_offset
 
 
 let pp_assumes fmt assumes =
@@ -297,6 +312,12 @@ let () =
             (fun () -> compare_set set1 set2);
           ]
 
+        | E_stub_attribute(o1, f1), E_stub_attribute(o2, f2) ->
+          Compare.compose [
+            (fun () -> compare_expr o1 o2);
+            (fun () -> compare f1 f2)
+          ]
+
         | _ -> next e1 e2
       );
 
@@ -312,6 +333,10 @@ let () =
 
         | E_stub_quantified _ -> leaf e
 
+        | E_stub_attribute(o, f) ->
+          { exprs = [o]; stmts = [] },
+          (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
+
         | _ -> next e
       );
 
@@ -322,6 +347,7 @@ let () =
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
         | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
         | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
+        | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
         | _ -> next fmt e
       );
   }
@@ -333,11 +359,10 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
-        | S_stub_rename_primed(t1, a1, b1), S_stub_rename_primed(t2, a2, b2) ->
+        | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
-            (fun () -> compare_expr a1 a2);
-            (fun () -> compare_expr b1 b2)
+            (fun () -> Compare.list (Compare.pair compare_expr compare_expr) offsets1 offsets2);
           ]
 
         | _ -> next s1 s2
@@ -345,13 +370,23 @@ let () =
 
     visit = (fun next s ->
         match skind s with
-        | S_stub_rename_primed(t, a, b) -> panic "visitor for S_stub_rename_primed not supported"
+        | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
-        | S_stub_rename_primed(t,a,b) -> fprintf fmt "rename primed %a[%a .. %a];" pp_expr t pp_expr a pp_expr b
+        | S_stub_rename_primed(t,offsets) ->
+          fprintf fmt "rename primed %a%a;"
+            pp_expr t
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> ())
+               (fun fmt (a, b) ->
+                  fprintf fmt "[%a .. %a]"
+                    pp_expr a
+                    pp_expr b
+               )
+            ) offsets
         | _ -> next fmt s
       );
   }
@@ -371,3 +406,36 @@ let rec visit_expr_in_formula expr_visitor f =
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
   | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
+
+
+(** {2 Heap addresses for resources} *)
+(** ******************************** *)
+
+type addr_kind +=
+  | A_stub_resource of string (** resource address *)
+
+let () =
+  register_addr {
+    print = (fun next fmt addr ->
+        match akind addr with
+        | A_stub_resource res -> Format.fprintf fmt "@%s:%d" res addr.addr_uid
+        | _ -> next fmt addr
+      );
+    compare = (fun next addr1 addr2 ->
+        match akind addr1, akind addr2 with
+        | A_stub_resource res1, A_stub_resource res2 -> Pervasives.compare res1 res2
+        | _ -> next addr1 addr2
+      );
+  }
+
+let mk_stub_alloc_resource res range =
+  mk_alloc_addr (A_stub_resource res) range
+
+let alloc_stub_resource res range man flow : ('a, addr) evl =
+  man.eval (mk_stub_alloc_resource res range) flow |>
+  Eval.bind @@ fun e flow ->
+
+  match ekind e with
+  | E_addr addr -> Eval.singleton addr flow
+
+  | _ -> assert false

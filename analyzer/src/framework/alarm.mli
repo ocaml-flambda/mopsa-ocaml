@@ -20,7 +20,7 @@ type alarm_level =
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_level : alarm_level;
-  alarm_trace : Location.range list;
+  alarm_trace : Location.range * Callstack.t;
 }
 
 
@@ -43,4 +43,6 @@ type Manager.token += T_alarm of alarm
 
 val alarm_token : alarm -> Manager.token
 
-val mk_alarm :  ?cs:(Location.range list) -> ?level:alarm_level -> alarm_kind -> Location.range -> alarm
+val mk_alarm : alarm_kind ->  ?cs:Callstack.t -> ?level:alarm_level -> Location.range -> alarm
+
+val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow

@@ -545,7 +545,7 @@ and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = OptionExt.option_lift1 (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b)) assign.assign_offset;
+    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b))) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =
@@ -618,6 +618,7 @@ and from_stub_expr ctx exp =
   | E_cast (t, explicit, e) -> E_c_cast(from_stub_expr ctx e, explicit)
   | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
   | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
+  | E_attribute (o, f) -> E_stub_attribute(from_stub_expr ctx o, f)
   | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
   | E_builtin_call (PRIMED, arg) -> E_primed(from_stub_expr ctx arg)
   | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
@@ -632,6 +633,7 @@ and from_stub_builtin f =
   | FLOAT_VALID -> FLOAT_VALID
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
+  | OLD -> panic "old not supported"
 
 and from_stub_log_binop = function
   | AND -> AND

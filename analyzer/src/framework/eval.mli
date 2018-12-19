@@ -80,8 +80,8 @@ val switch :
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) evl -> unit
 
 val map:
-  (('a, 'e) evl_case -> ('a, 'f) evl_case) ->
-  ('a, 'e) evl -> ('a, 'f) evl
+  ('e -> 'a flow -> 'e * 'a flow) ->
+  ('a, 'e) evl -> ('a, 'e) evl
 
 val choose : ('a, 'e) evl -> ('e option * 'a flow) option
 

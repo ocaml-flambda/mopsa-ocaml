@@ -167,7 +167,7 @@ struct
         match List.rev l with
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
-          let stmt' = mk_block q' (tag_range (erange exp) "block'") in
+          let stmt' = mk_block q' (erange exp) in
           let flow' = man.exec ~zone:Z_c stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
           Eval.return

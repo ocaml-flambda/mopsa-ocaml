@@ -85,7 +85,7 @@
 %nonassoc CAST
 %left LBRACK
 %nonassoc UNARY
-%left DOT ARROW
+%left DOT ARROW COLON
 %right PRIME
 
 %start stub
@@ -191,12 +191,19 @@ assigns:
       }
     }
 
-  | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) COMMA with_range(expr) RBRACK SEMICOL
+  | ASSIGNS COLON with_range(expr) assigns_offset_list SEMICOL
     {
       {
 	assign_target = $3;
-	assign_offset = Some ($5, $7);
+	assign_offset = Some $4;
       }
+    }
+
+assigns_offset_list:
+  | { [] }
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK assigns_offset_list
+    {
+      ($2, $4) :: $6
     }
 
 (* Cases section *)
@@ -264,6 +271,7 @@ expr:
   | STAR with_range(expr)                             { E_deref $2 } %prec UNARY
   | with_range(expr) LBRACK with_range(expr) RBRACK   { E_subscript ($1, $3) }
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
+  | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
   | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }

@@ -308,7 +308,7 @@ struct
             | T_alarm a
               when is_c_alarm a
                 && code = alarm_to_code a
-                && line = get_range_line @@ List.hd a.alarm_trace
+                && line = get_range_line @@ fst a.alarm_trace
               ->
               man.join annot acc env
             | _ -> acc
@@ -330,7 +330,7 @@ struct
                        | T_alarm a
                          when is_c_alarm a
                            && code = alarm_to_code a
-                           && line = get_range_line @@ List.hd a.alarm_trace
+                           && line = get_range_line @@ fst a.alarm_trace
                          -> false
                        | _ -> true) man |>
                    Flow.set T_cur cur man

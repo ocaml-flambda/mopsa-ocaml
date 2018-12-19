@@ -47,7 +47,9 @@ module Domain = struct
   (* An abstract element is the set of previously expanded cells,
      represented as a powerset lattice.  *)
 
-  include Framework.Lattices.Powerset.Make(PrimedCell)
+  module Cells = Framework.Lattices.Powerset.Make(PrimedCell)
+
+  include Cells
 
   let is_bottom _ = false
 
@@ -384,21 +386,33 @@ module Domain = struct
   (** Evaluation of C expressions *)
   (** =========================== *)
 
+  let mk_addr_size addr range =
+    mk_expr (E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul
+
+  (** Evaluate the size of a base *)
+  let eval_base_size base range man flow =
+    match base with
+    | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range) flow
+    | S str -> Eval.singleton (mk_int (String.length str + 1) range) flow
+    | A addr -> man.eval (mk_addr_size addr range) flow
 
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
     (* Try the static case *)
-    match expr_to_z offset with
-    | Some z ->
+    match expr_to_z offset, expr_to_z base_size with
+    | Some z, Some base_size ->
       if Z.geq z Z.zero &&
          Z.leq (Z.add z cell_size) base_size
       then Eval.singleton (O_single z) flow
       else Eval.singleton O_out_of_bound flow
 
-    | None ->
-      (* Evaluate the offset in Z_u_num and check the bounds *)
+    | _ ->
+      (* Evaluate the offset and base_size in Z_u_num and check the bounds *)
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) offset flow |>
       Eval.bind @@ fun offset exp ->
+
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) base_size flow |>
+      Eval.bind @@ fun base_size exp ->
 
       (* safety condition: offset ∈ [0, base_size - cell_size] *)
       let range = offset.erange in
@@ -406,7 +420,7 @@ module Domain = struct
         mk_in
           offset
           (mk_zero range)
-          (mk_binop (mk_z base_size range) O_minus (mk_z cell_size range) range ~etyp:T_int)
+          (mk_binop base_size O_minus (mk_z cell_size range) range ~etyp:T_int)
           range
       in
       Eval.assume ~zone:Universal.Zone.Z_u_num cond
@@ -444,19 +458,21 @@ module Domain = struct
   (** =================== *)
 
   (** Evaluate a base and an non-quantified offset expression into a cell *)
-  let eval_non_quantified_cell b o t range man flow : ('a, cell) evl =
-    eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
+  let eval_non_quantified_cell b o t ~is_primed range man flow : ('a, cell primed) evl =
+    eval_base_size b range man flow |>
+    Eval.bind @@ fun base_size flow ->
+
+    eval_cell_offset o (sizeof_type t) base_size man flow |>
     Eval.bind @@ fun o flow ->
+
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton {b;o;t} flow
+      let c = {b;o;t} in
+      let pc = if is_primed then primed c else unprimed c in
+      Eval.singleton pc flow
 
     | O_out_of_bound ->
-      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-      let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
-      let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                  Flow.set T_cur man.bottom man
-      in
+      let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
       Eval.empty_singleton flow'
 
 
@@ -471,7 +487,7 @@ module Domain = struct
       range. For each sample, we replace the variable by its litteral
       value, and we compute a conjuction of the resulting evaluations
   *)
-  let eval_quantified_cell b o t range man flow : ('a, cell) evl =
+  let eval_quantified_cell b o t ~is_primed range man flow : ('a, cell primed) evl =
     debug "eval_quantified_cell: %a %a" pp_base b pp_expr o;
     (* Replace ∃ variables with unquantified variables and get the
        list of ∀ variables *)
@@ -563,8 +579,25 @@ module Domain = struct
                 o'
             in
             debug "offset sample: %a" pp_expr o'';
-            eval_non_quantified_cell b o'' t range man flow
+            eval_non_quantified_cell b o'' ~is_primed t range man flow
           )
+      in
+
+      (* We need to add evaluated cells, so that they will not be lost after meet *)
+      let cells = conj |> List.fold_left (fun acc evl ->
+          let c = Eval.substitute
+            (fun c _ -> singleton c)
+            (Cells.join ()) (Cells.meet ()) (Cells.empty)
+            evl
+          in
+          Cells.join () acc c
+        ) Cells.empty
+      in
+      let conj = List.map (fun evl ->
+          Eval.map (fun c flow ->
+              c, Flow.map_domain_env T_cur (Cells.join () cells) man flow
+            ) evl
+        ) conj
       in
       Eval.meet_list conj
     with NoUnderApprox ->
@@ -586,6 +619,7 @@ module Domain = struct
       Eval.singleton pc flow
 
     | deref when match_primed_expr (function { ekind = E_c_deref _ } -> true | _ -> false) exp ->
+      let is_primed = is_primed_expr exp in
       let p = primed_expr_apply (function { ekind = E_c_deref p } -> p | _ -> assert false) exp in
       let t = under_type p.etyp in
 
@@ -597,32 +631,18 @@ module Domain = struct
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
-          eval_quantified_cell b o t p.erange man flow |>
-          Eval.bind @@ fun c flow ->
-          let pc = if is_primed_expr exp then primed c else unprimed c in
-          Eval.singleton pc flow
+          eval_quantified_cell b o t ~is_primed p.erange man flow
 
         | E_c_points_to(P_block (b, o)) ->
-          eval_non_quantified_cell b o t p.erange man flow |>
-          Eval.bind @@ fun c flow ->
-          let pc = if is_primed_expr exp then primed c else unprimed c in
-          Eval.singleton pc flow
+          eval_non_quantified_cell b o t ~is_primed p.erange man flow
 
         | E_c_points_to(P_null) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.ANullDeref p.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1
+          let flow' = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow in
+          Eval.empty_singleton flow'
 
         | E_c_points_to(P_invalid) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.AInvalidDeref p.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1
+          let flow' = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow in
+          Eval.empty_singleton flow'
 
         | _ -> panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p;
       end
@@ -671,18 +691,20 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | E_stub_builtin_call(SIZE, p) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-      Eval.bind_opt @@ fun pe flow ->
-
-      begin match ekind pe with
-        | E_c_points_to(P_block (b, o)) ->
-          let t = under_type p.etyp in
-          Eval.singleton (mk_z (Z.div (base_size b) (Z.max Z.one (sizeof_type t))) exp.erange) flow |>
-          OptionExt.return
-
-        | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
-      end
+    | E_stub_builtin_call(SIZE, p) -> panic "size not yet implemented"
+      (* man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
+       * Eval.bind_return @@ fun pe flow ->
+       * 
+       * begin match ekind pe with
+       *   | E_c_points_to(P_block (b, o)) ->
+       *     eval_base_size b exp.erange range man flow |>
+       *     Eval.bind @@ fun base_size flow ->
+       * 
+       *     let t = under_type p.etyp in
+       *     Eval.singleton (mk_z (Z.div base_size (Z.max Z.one (sizeof_type t))) exp.erange) flow
+       * 
+       *   | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
+       * end *)
 
     | _ -> None
 
@@ -746,7 +768,7 @@ module Domain = struct
 
 
   (** Rename primed cells that have been declared as assigned in a stub *)
-  let rename_stub_primed_cells pt l t u range man flow =
+  let rename_stub_primed_cells pt offsets t range man flow =
     let base, offset =
       match ekind pt with
       | E_c_points_to (P_block(b, o)) -> b, o
@@ -760,6 +782,8 @@ module Domain = struct
       ) a
     in
 
+    debug "cells = %a" print cells;
+
     (* For primed cells, just rename to an unprimed cell *)
     let flow = fold (fun c flow ->
         if is_primed c
@@ -770,30 +794,45 @@ module Domain = struct
 
     (* Compute the interval of the assigned cells *)
     let itv =
-      let elem = sizeof_type t in
 
-      let mk_offset_bound bound =
-        mk_binop offset O_plus (
-          mk_binop bound O_mult (mk_z elem range) range ~etyp:T_int
+      (* Return the expression of an offset bound *)
+      let mk_offset_bound before bound t =
+        let elem_size = sizeof_type t in
+        mk_binop before O_plus (
+          mk_binop bound O_mult (mk_z elem_size range) range ~etyp:T_int
         ) range ~etyp:T_int
       in
 
-      let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound l) flow in
+      (* Create the expressions for the offset bounds *)
+      let l, u =
+        let rec doit accl accu t =
+          function
+          | [] -> accl, accu
+          | [(l, u)] ->
+            (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+          | (l, u) :: tl ->
+            doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
+
+        in
+        doit offset offset t offsets
+      in
+      debug "l = %a, u = %a" pp_expr l pp_expr u;
+      (* Compute the interval of the bounds *)
+      let evl1 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) l flow in
       let itv1 = Eval.substitute (fun l flow ->
           man.ask (Itv.Q_interval l) flow
         ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl1
       in
 
-      let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) (mk_offset_bound u) flow in
+      let evl2 = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) u flow in
       let itv2 = Eval.substitute (fun u flow ->
           man.ask (Itv.Q_interval u) flow
         ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl2
       in
 
       Itv.join () itv1 itv2
-
     in
-
+    debug "itv = %a" Itv.print itv;
     (* Remove remaining cells that have an offset within the assigned interval *)
     remove_cells (fun c ->
         mem c cells &&
@@ -820,7 +859,9 @@ module Domain = struct
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
-      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) flow |>
+      add_cell c stmt.srange man flow |>
+      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) |>
+
       Post.of_flow |>
       Post.add_merger (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange)
 
@@ -895,14 +936,14 @@ module Domain = struct
       rename_cell cold cnew stmt.srange man flow |>
       Post.return
 
-    | S_stub_rename_primed(p, l, u) ->
+    | S_stub_rename_primed(p, offsets) ->
       man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
       Post.bind_opt man @@ fun p flow ->
 
       man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
       Post.bind_opt man @@ fun pe flow ->
 
-      rename_stub_primed_cells pe l (under_type p.etyp) u stmt.srange man flow  |>
+      rename_stub_primed_cells pe offsets (under_type p.etyp) stmt.srange man flow  |>
       Post.return
 
     | _ -> None

@@ -9,7 +9,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
-open Memory.Common.Points_to
+open Mm.Common.Points_to
 open Ast
 open Zone
 

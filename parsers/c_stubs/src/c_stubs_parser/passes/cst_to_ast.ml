@@ -159,6 +159,10 @@ let field_type t f =
   | _ -> Exceptions.panic "field_type(cst_to_ast.ml): unsupported type %s"
            (C_print.string_of_type_qual t)
 
+let attribute_type obj f =
+  Exceptions.warn "attribute_typ: supporting only int attributes";
+  int_type
+
 let builtin_type f arg =
   match f with
   | SIZE   -> int_type
@@ -425,6 +429,10 @@ let rec visit_expr e prj func =
       let s = visit_expr s prj func in
       Ast.E_member(s, f), field_type s.content.typ f
 
+    | E_attribute(o, f)      ->
+      let o = visit_expr o prj func in
+      Ast.E_attribute(o, f), attribute_type o.content.typ f
+
     | E_arrow(p, f) ->
       let p = visit_expr p prj func in
       Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
@@ -495,7 +503,7 @@ let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
     assign_target = visit_expr a.Cst.assign_target prj func;
-    assign_offset = visit_option (visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
+    assign_offset = visit_option (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
   }
 
 let visit_ensures ens prj func =

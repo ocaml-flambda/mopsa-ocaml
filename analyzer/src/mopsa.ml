@@ -37,4 +37,6 @@ include Framework.Options
 
 include Exceptions
 
-include Framework.Output.Alarm
+module Callstack = Framework.Callstack
+
+include Framework.Alarm

@@ -7,26 +7,46 @@
 (****************************************************************************)
 
 (** Call stacks are represented as sequences of call sites
-   (ranges). They are saved as annotations into flows. *)
+   (ranges). They are saved as annotations in flows. *)
 
-open Mopsa
+open Location
 
-type cs = range list
+type t = range list
 
-let pp_call_stack =
+let pp_call_stack fmt cs =
   Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
+    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "→")
     pp_range
+    fmt cs
+
+let pp_call_stack_newlines fmt cs =
+  Format.pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+    pp_range
+    fmt cs
+
 
 let compare_call_stack cs cs' =
   Compare.list compare_range cs cs'
 
 type ('a, _) Annotation.key +=
-  | A_call_stack: ('a, cs) Annotation.key
+  | A_call_stack: ('a, t) Annotation.key
+
+let empty : t = []
+
+let get flow : t =
+  Flow.get_annot A_call_stack flow
+
+let set cs flow =
+  Flow.set_annot A_call_stack cs flow
+
+let push range flow =
+  let cs = get flow in
+  set (range :: cs) flow
 
 let () =
   Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (cs, b) eq option =
+      eq = (let f: type a b. (a, b) key -> (t, b) eq option =
               function
               | A_call_stack -> Some Eq
               | _ -> None

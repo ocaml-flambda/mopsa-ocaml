@@ -47,13 +47,19 @@ let iter (f: ('a, 'e) evl_case -> unit) (evl: ('a, 'e) evl) : unit =
   List.iter f
 
 let map
-    (f: ('a, 'e) evl_case -> ('a, 'f) evl_case)
+    (f: 'e -> 'a flow -> 'f * 'a flow)
     (evl: ('a, 'e) evl)
   : ('a, 'f) evl =
-  Dnf.map f evl
+  Dnf.map (fun case ->
+      match case.expr with
+      | None -> case
+      | Some e ->
+        let e', flow' = f e case.flow in
+        { expr = Some e'; flow = flow'; cleaners = [] }
+    ) evl
 
 let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  =
-  map (fun case ->
+  Dnf.map (fun case ->
       {case with cleaners = case.cleaners @ cleaners}
     ) evl
 

@@ -57,7 +57,7 @@ struct
   (** ================= *)
 
   let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Z_u, Z_u]; import = []}
+  let eval_interface = {export = [Z_u_heap, Z_any]; import = []}
 
   (** Initialization *)
   (** ============== *)
@@ -83,7 +83,7 @@ struct
       begin
         let pool = Flow.get_domain_cur man flow in
 
-        let cs = Flow.get_annot Iterators.Interproc.Callstack.A_call_stack flow in
+        let cs = Callstack.get flow in
         let range = erange expr in
         let recent_uid, flow = get_id_flow (cs, range, 0) flow in
         let old_uid, flow = get_id_flow (cs, range, 1) flow in

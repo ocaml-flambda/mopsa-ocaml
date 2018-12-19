@@ -191,6 +191,7 @@ type addr = {
   addr_kind : addr_kind; (** Kind de l'adresse. *)
 }
 
+let akind addr = addr.addr_kind
 
 let addr_compare_chain : (addr -> addr -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)

@@ -9,6 +9,7 @@
 (** Zones for the C language. *)
 
 open Mopsa
+open Universal.Ast
 open Stubs.Ast
 open Ast
 
@@ -27,6 +28,7 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
+        | E_addr _
         | E_var _                            -> Keep
         (* ------------------------------------------- *)
         | E_stub_quantified _
@@ -68,6 +70,7 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
+        | E_addr _
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)
@@ -95,6 +98,7 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
+        | E_addr _
         | E_var _
         | E_c_function _                     -> Keep
         (* ------------------------------------------- *)

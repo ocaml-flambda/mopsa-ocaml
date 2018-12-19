@@ -63,6 +63,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
+
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -174,6 +175,21 @@ struct
 
     ftrue, ffalse
 
+  (* We need to compute a fixpoint of a formula evaluation *)
+  let eval_formula_fixpoint f ~negate man flow =
+    let rec lfp (flow: 'a flow) : 'a flow * 'a flow option =
+      debug "fixpoint iteration";
+      let flow1, nflow1 = eval_formula f ~negate man flow in
+      debug "fixpoint iteration done:@\n input: @[%a@]@\n output: @[%a@]"
+        (Flow.print man) flow
+        (Flow.print man) flow1
+      ;
+      if Flow.subset man flow flow1 then flow1, nflow1
+      else lfp flow1
+    in
+    lfp flow
+
+
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
@@ -191,14 +207,13 @@ struct
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let check_requirement req man flow =
-    let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
+    let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
     match ffalse with
-    | Some f when Flow.is_bottom man f -> ftrue
+    | Some ffalse when Flow.is_bottom man ffalse -> ftrue
 
-    | Some f ->
-      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-      let alarm = mk_alarm (A_stub_invalid_require req) req.range ~cs in
-      Flow.add (alarm_token alarm) (Flow.get T_cur man f) man ftrue
+    | Some ffalse ->
+      raise_alarm (A_stub_invalid_require req) req.range ~bottom:true man ffalse |>
+      Flow.join man ftrue
 
     | _ -> assert false
 
@@ -219,10 +234,16 @@ struct
            | _ -> OptionExt.option_neutral2 (man.join annot) env1 env2
         ) man flow1 flow2
 
+  (** Execute an allocation of a new resource *)
+  let exec_local_new v res range man flow =
+    alloc_stub_resource res range man flow |>
+    Post.bind_flow man @@ fun addr flow ->
+    man.exec (mk_assign (mk_var v range) (mk_addr addr range) range) flow
+
   (** Execute the `local` section *)
   let exec_local l man flow =
     match l.content.lval with
-    | L_new  _ -> panic "allocations not yet supported"
+    | L_new  res -> exec_local_new l.content.lvar res l.range man flow
     | L_call _ -> panic "function calls not yet supported"
 
   let exec_ensures e return man flow =
@@ -240,7 +261,7 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula f ~negate:false man flow |>
+    eval_formula_fixpoint f ~negate:false man flow |>
     fst
 
   (** Remove locals and old copies of assigned variables *)
@@ -255,7 +276,7 @@ struct
           let t = a.content.assign_target in
           match a.content.assign_offset with
           | None -> mk_rename (mk_primed t) t range :: block
-          | Some (a, b) -> mk_stub_rename_primed t a b range :: block
+          | Some offsets -> mk_stub_rename_primed t offsets range :: block
         ) block1
     in
     man.exec (mk_block block2 range) flow

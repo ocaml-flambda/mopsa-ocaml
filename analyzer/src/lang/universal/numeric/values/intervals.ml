@@ -72,6 +72,11 @@ struct
       
     | _ -> top
 
+  let zero = Nb (I.zero)
+  let one = Nb (I.one)
+  let of_z z1 z2 : t = Nb (I.of_z z1 z2)
+  let of_int n1 n2 : t = Nb (I.of_int n1 n2)
+
   let unop _ op a =
     return (
       match op with
