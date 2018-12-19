@@ -124,6 +124,7 @@ test-c 13/13:
   variables:
     C_FILE: 'stubs/forall_tests.c'
   extends: .test-c
+  allow_failure: true
 
 test-u 1/1:
   variables:
