@@ -47,6 +47,13 @@ struct
       let compare = compare_zone2
     end)
 
+  (* Filter paths that pass through [via] zone *)
+  let find_eval_paths_via (src, dst) via map =
+    let paths = EvalMap.find (src, dst) map in
+    List.filter (fun path ->
+        List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
+      ) paths
+
   let eval_graph = Zone.build_eval_graph Domain.eval_interface.export
 
 
@@ -161,7 +168,7 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Out.push_action (Eval({e = exp ; zs = zone}));
     debug "eval:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_expr exp
@@ -180,7 +187,7 @@ struct
       | other_action ->
         (* Try available eval paths in sequence *)
         let paths =
-          try EvalMap.find zone eval_map
+          try find_eval_paths_via zone via eval_map
           with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
         in
         match eval_over_paths paths exp man flow with

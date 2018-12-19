@@ -17,7 +17,7 @@ sig
 
   val exec : ?zone:Zone.zone -> Ast.stmt -> Domain.t flow -> Domain.t flow
 
-  val eval : ?zone:(Zone.zone * Zone.zone) -> Ast.expr -> Domain.t flow -> (Domain.t, Ast.expr) evl
+  val eval : ?zone:(Zone.zone * Zone.zone) -> ?via:Zone.zone -> Ast.expr -> Domain.t flow -> (Domain.t, Ast.expr) evl
 
   val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
 
