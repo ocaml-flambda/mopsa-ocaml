@@ -145,7 +145,11 @@ module Domain = struct
           debug "case 3";
           let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
-          Some (mk_binop (mk_binop (PrimedCell.to_expr c' STRONG range) O_div (mk_z base range) range) O_mod (mk_int 256 range) range)
+          Some (_mod
+                  (div (PrimedCell.to_expr c' STRONG range) (mk_z base range) range)
+                  (mk_int 256 range)
+                  range
+               )
 
         | None ->
           let exception NotPossible in
@@ -168,7 +172,12 @@ module Domain = struct
               in
               let ll = aux 0 [] in
               let _,e = List.fold_left (fun (time, res) x ->
-                  let res' = mk_binop (mk_binop (mk_z time range) O_mult (PrimedCell.to_expr x STRONG range) range) O_plus res range in
+                  let res' =
+                    add
+                      (mul (mk_z time range) (PrimedCell.to_expr x STRONG range) range)
+                      res
+                      range
+                  in
                   let time' = Z.mul time (Z.of_int 256) in
                   time',res'
                 ) (Z.of_int 1,(mk_int 0 range)) ll
@@ -188,7 +197,7 @@ module Domain = struct
               if is_c_scalar_type (primed_apply cell_typ c) then
                 let () = debug "case 6" in
                 let a,b = rangeof (primed_apply cell_typ c) in
-                Some ( mk_z_interval a b range)
+                Some (mk_z_interval a b range)
               else if is_c_pointer_type (primed_apply cell_typ c) then
                 assert false
               else
@@ -302,6 +311,7 @@ module Domain = struct
       (Z_c, Z_under Z_c_cell);
       (Z_c, Z_c_cell_expand);
       (Z_c, Z_c_points_to);
+      (Z_c, Z_c_scalar);
       (Z_c_cell, Z_c_points_to)
     ];
   }
@@ -392,9 +402,9 @@ module Domain = struct
   (** Evaluate the size of a base *)
   let eval_base_size base range man flow =
     match base with
-    | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range) flow
-    | S str -> Eval.singleton (mk_int (String.length str + 1) range) flow
-    | A addr -> man.eval (mk_addr_size addr range) flow
+    | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
+    | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
+    | A addr -> man.eval ~zone:(Z_c, Z_c_scalar) ~via:Z_c_cell_expand (mk_addr_size addr range) flow
 
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
@@ -420,7 +430,7 @@ module Domain = struct
         mk_in
           offset
           (mk_zero range)
-          (mk_binop base_size O_minus (mk_z cell_size range) range ~etyp:T_int)
+          (sub base_size (mk_z cell_size range) range ~typ:T_int)
           range
       in
       Eval.assume ~zone:Universal.Zone.Z_u_num cond
@@ -623,10 +633,7 @@ module Domain = struct
       let p = primed_expr_apply (function { ekind = E_c_deref p } -> p | _ -> assert false) exp in
       let t = under_type p.etyp in
 
-      man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
-      Eval.bind @@ fun p flow ->
-
-      man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
+      man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
       Eval.bind @@ fun pe flow ->
 
       begin match ekind pe with
@@ -673,15 +680,15 @@ module Domain = struct
 
         | O_region _ ->
           let l, u = rangeof (primed_apply cell_typ c) in
-          Eval.singleton (mk_z_interval l u exp.erange) flow
+          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
 
         | _ -> assert false
       end
 
     (* 𝔼⟦ *p ⟧ when p is function pointer*)
     | E_c_deref p when is_c_function_type exp.etyp ->
-      man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |> Eval.bind_return @@ fun pp flow ->
-      man.eval ~zone:(Z_c_cell, Z_c_points_to) pp flow |> Eval.bind @@ fun pe flow ->
+      man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
+      Eval.bind_return @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_fun f) ->
@@ -691,20 +698,21 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | E_stub_builtin_call(SIZE, p) -> panic "size not yet implemented"
-      (* man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-       * Eval.bind_return @@ fun pe flow ->
-       * 
-       * begin match ekind pe with
-       *   | E_c_points_to(P_block (b, o)) ->
-       *     eval_base_size b exp.erange range man flow |>
-       *     Eval.bind @@ fun base_size flow ->
-       * 
-       *     let t = under_type p.etyp in
-       *     Eval.singleton (mk_z (Z.div base_size (Z.max Z.one (sizeof_type t))) exp.erange) flow
-       * 
-       *   | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
-       * end *)
+    | E_stub_builtin_call(SIZE, p) -> 
+      man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
+      Eval.bind_return @@ fun pe flow ->
+      
+      begin match ekind pe with
+        | E_c_points_to(P_block (b, o)) ->
+          eval_base_size b exp.erange man flow |>
+          Eval.bind @@ fun base_size flow ->
+      
+          let t = under_type p.etyp in
+          let exp' = div base_size (of_z (Z.max Z.one (sizeof_type t)) exp.erange) exp.erange in
+          Eval.singleton exp' flow
+      
+        | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
+      end
 
     | _ -> None
 
@@ -798,9 +806,9 @@ module Domain = struct
       (* Return the expression of an offset bound *)
       let mk_offset_bound before bound t =
         let elem_size = sizeof_type t in
-        mk_binop before O_plus (
-          mk_binop bound O_mult (mk_z elem_size range) range ~etyp:T_int
-        ) range ~etyp:T_int
+        Universal.Ast.add before (
+          mul bound (mk_z elem_size range) range ~typ:T_int
+        ) range ~typ:T_int
       in
 
       (* Create the expressions for the offset bounds *)

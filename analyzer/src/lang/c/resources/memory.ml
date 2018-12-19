@@ -98,6 +98,12 @@ struct
       Eval.singleton (mk_var bytes exp.erange) flow |>
       Eval.return
 
+    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr)}) ->
+      (* FIXME: consider weak addresses *)
+      let bytes = mk_bytes_var addr in
+      Eval.singleton (mk_var bytes exp.erange) flow |>
+      Eval.return
+
     | _ -> None
 
 
