@@ -1052,9 +1052,46 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__setitem__")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 3 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let lst, idx, value = match eargs with | [e1;e2;e3] -> e1, e2, e3
+                                                        | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                   man flow
+                   ~fthen:(fun flow ->
+                     Eval.assume (mk_py_isinstance_builtin idx "int" range)
+                       man flow
+                       ~fthen:(fun flow ->
+                         let cur = Flow.get_domain_cur man flow in
+                         let pty_ellist =
+                           let pty_list = match ekind lst with
+                           | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                           | _ -> assert false in
+                           match pty_list with
+                           | List x -> x
+                           | _ -> assert false in
+                         let pty_value = match ekind value with
+                           | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                           | _ -> assert false in
+                         if Typingdomain.polytype_leq (pty_value, cur.d3) (pty_ellist, cur.d3) then
+                           man.eval (mk_py_none range) flow
+                         else
+                           Exceptions.panic "list.__setitem__ not implemented in that case@\n"
+                       (* si x <= value, cas facile *)
+                       (* sinon, il faut faire la weak update *)
+                       )
+                       ~felse:tyerror
+                   )
+                   ~felse:tyerror
+               ) |> OptionExt.return
+         else
+           tyerror flow |> OptionExt.return
          (* args = list, el, value *)
          (* transformer ça en Weak Update list = el ? *)
-         Exceptions.panic "list.__setitem__ not implemented@\n"
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
        *    Eval.eval_list args man.eval flow |>
