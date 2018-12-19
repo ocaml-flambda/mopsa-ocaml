@@ -73,7 +73,7 @@ let pp_cell fmt c =
   Format.fprintf fmt "⟨%a,%a,%a⟩"
     pp_base c.b
     pp_offset c.o
-    pp_typ c.t
+    Pp.pp_c_type_short c.t
 
 (** Create a C scalar variable from a cell *)
 let cell_to_var c : var =

@@ -76,7 +76,7 @@ struct
         | E_c_points_to P_top ->
           (* When the resource is not assigned yet, can we just return an interval ? *)
           let l, u = rangeof exp.etyp in
-          Eval.singleton (mk_z_interval l u exp.erange) flow
+          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
 
         | _ -> assert false
       end

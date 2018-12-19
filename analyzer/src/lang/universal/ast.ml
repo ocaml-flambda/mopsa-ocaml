@@ -401,20 +401,20 @@ let () =
 
 let mk_not e = mk_unop O_log_not e
 
-let mk_int i erange =
-  mk_constant ~etyp:T_int (C_int (Z.of_int i)) erange
+let mk_int i ?(typ=T_int) erange =
+  mk_constant ~etyp:typ (C_int (Z.of_int i)) erange
 
-let mk_z i erange =
-  mk_constant ~etyp:T_int (C_int i) erange
+let mk_z i ?(typ=T_int) erange =
+  mk_constant ~etyp:typ (C_int i) erange
 
 let mk_float ?(prec=F_DOUBLE) f erange =
   mk_constant ~etyp:(T_float prec) (C_float f) erange
 
-let mk_int_interval a b range =
-  mk_constant ~etyp:T_int (C_int_interval (Z.of_int a, Z.of_int b)) range
+let mk_int_interval a b ?(typ=T_int) range =
+  mk_constant ~etyp:typ (C_int_interval (Z.of_int a, Z.of_int b)) range
 
-let mk_z_interval a b range =
-  mk_constant ~etyp:T_int (C_int_interval (a, b)) range
+let mk_z_interval a b ?(typ=T_int) range =
+  mk_constant ~etyp:typ (C_int_interval (a, b)) range
 
 let mk_float_interval ?(prec=F_DOUBLE) a b range =
   mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
@@ -455,6 +455,18 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 
 
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
+
+let zero = mk_zero
+let one = mk_one
+
+let of_z = mk_z
+let of_int = mk_int
+
+let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
+let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
+let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
+let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
+let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
 
 let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true

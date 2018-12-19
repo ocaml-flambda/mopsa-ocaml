@@ -146,16 +146,15 @@ struct
 
   let rec eval zone exp man flow =
     let range = erange exp in
+    debug "eval %a type %a" pp_expr exp pp_typ exp.etyp;
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div && exp |> etyp |> is_c_type ->
       let () = debug "case 1" in
-      eval zone e man flow |>
-      OptionExt.bind @@
-      Eval.bind_opt @@ fun e flow ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+      Eval.bind_return @@ fun e flow ->
 
-      eval zone e' man flow |>
-      OptionExt.bind @@
-      Eval.bind_opt @@ fun e' flow ->
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
+      Eval.bind @@ fun e' flow ->
 
       check_division man range
         (fun tflow ->
@@ -165,8 +164,7 @@ struct
         (fun fflow ->
            let flow' = raise_alarm Alarms.ADivideByZero exp.erange ~bottom:true man fflow in
            Eval.empty_singleton flow'
-        ) e e' flow |>
-      OptionExt.return
+        ) e e' flow
 
     | E_unop(op, e) when is_c_int_op op && exp |> etyp |> is_c_type ->
       let () = debug "case 2" in
@@ -242,21 +240,11 @@ struct
         man flow |>
       OptionExt.return
 
-    | E_c_cast({ekind = E_constant (C_int z)}, _) when exp |> etyp |> is_c_int_type ->
-      let () = debug "case 4" in
-      let r = exp |> etyp |> rangeof in
-      if range_leq (z,z) r then
-        Eval.singleton (mk_z z range) flow
-        |> OptionExt.return
-      else
-        let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man flow in
-        Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
-        |> OptionExt.return
-
-    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
-      let () = debug "case 5" in
-      eval (Z_c_scalar, Z_u_num) e man flow |>
-      OptionExt.lift @@ Eval.bind @@ fun e' flow ->
+    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type ->
+      let () = debug "case 5: %a %a" pp_expr exp pp_typ exp.etyp in
+      man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+      Eval.bind_return @@ fun e' flow ->
+      debug "cast step 2; %a" pp_expr e';
       let t  = etyp exp in
       let t' = etyp e in
       let r = rangeof t in
@@ -310,12 +298,10 @@ struct
       None
 
   and eval_binop op e e' exp man flow =
-    eval (Z_c_scalar, Z_u_num) e man flow |>
-    OptionExt.bind @@
-    Eval.bind_opt @@ fun e flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+    Eval.bind_return @@ fun e flow ->
 
-    eval (Z_c_scalar, Z_u_num) e' man flow |>
-    OptionExt.lift @@
+    man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
     Eval.bind @@ fun e' flow ->
 
     let exp' = {exp with
@@ -327,9 +313,8 @@ struct
 
 
   and eval_unop op e exp man flow =
-    eval (Z_c_scalar, Z_u_num) e man flow |>
-    OptionExt.lift @@
-    Eval.bind @@ fun e flow ->
+    man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
+    Eval.bind_return @@ fun e flow ->
 
     let exp' = {exp with
                 ekind = E_unop(op, e);

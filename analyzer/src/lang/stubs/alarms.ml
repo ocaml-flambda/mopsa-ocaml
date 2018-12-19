@@ -12,30 +12,25 @@ open Mopsa
 open Ast
 
 type alarm_kind +=
-  | A_stub_invalid_require of requires with_range
+  | A_stub_invalid_require
 
 let () =
   register_alarm
     {
-      compare = (fun default a b ->
-          match a.alarm_kind, b.alarm_kind with
-          | A_stub_invalid_require req1, A_stub_invalid_require req2 ->
-            compare_range req1.range req2.range
-          | _ -> default a b
-        );
+      compare = (fun default a b ->default a b);
       pp_token = (fun default fmt a ->
           match a.alarm_kind with
-          | A_stub_invalid_require(req) -> Format.fprintf fmt "stub:req:%a" pp_range req.range
+          | A_stub_invalid_require -> Format.fprintf fmt "stub-req"
           | _ -> default fmt a
         );
       pp_title = (fun default fmt a ->
           match a.alarm_kind with
-          | A_stub_invalid_require req -> Format.fprintf fmt "Invalid stub requirement at %a" pp_range req.range
+          | A_stub_invalid_require -> Format.fprintf fmt "Invalid stub requirement"
           | _ -> default fmt a
         );
       pp_report = (fun default fmt a ->
           match a.alarm_kind with
-          | A_stub_invalid_require req -> Format.fprintf fmt "TODO"
+          | A_stub_invalid_require -> Format.fprintf fmt "TODO"
           | _ -> default fmt a
         )
     };

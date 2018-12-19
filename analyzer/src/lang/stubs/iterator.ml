@@ -212,7 +212,7 @@ struct
     | Some ffalse when Flow.is_bottom man ffalse -> ftrue
 
     | Some ffalse ->
-      raise_alarm (A_stub_invalid_require req) req.range ~bottom:true man ffalse |>
+      raise_alarm A_stub_invalid_require req.range ~bottom:true man ffalse |>
       Flow.join man ftrue
 
     | _ -> assert false

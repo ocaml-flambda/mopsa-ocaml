@@ -198,14 +198,14 @@ struct
         pp_position (erange exp |> get_range_start)
         (Flow.print man) flow
       ;
-      Eval.singleton (mk_int 0 exp.erange) flow |>
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       OptionExt.return
 
 
     | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt flow in
-      Eval.singleton (mk_int 0 exp.erange) flow |>
+      Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
@@ -230,13 +230,13 @@ struct
             | false, false -> mk_int_interval 0 1
             | true, true -> raise BottomFound
           in
-          let stmt = mk_assert (cond exp.erange) exp.erange in
+          let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
           let cur = Flow.get T_cur man flow in
           let flow = Flow.set T_cur man.top man flow |>
                      man.exec stmt |>
                      Flow.set T_cur cur man
           in
-          Eval.singleton (mk_int 0 exp.erange) flow |>
+          Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
           OptionExt.return
         with BottomFound ->
           Eval.empty_singleton flow |>
@@ -260,14 +260,14 @@ struct
           | false, false -> mk_int_interval 0 1
           | true, true -> mk_zero
         in
-        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
         let cur = Flow.get T_cur man flow in
         let flow = Flow.set T_cur man.top man flow in
         let flow = man.exec stmt flow |>
                    Flow.filter (fun tk _ -> match tk with T_alarm _ -> false | _ -> true) man |>
                    Flow.set T_cur cur man
         in
-        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
         OptionExt.return
       end
 
@@ -288,14 +288,14 @@ struct
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
-        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
         let cur = Flow.get T_cur man flow in
         let flow = Flow.set T_cur man.top man flow in
         let flow = man.exec stmt flow |>
                    Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
                    Flow.set T_cur cur man
         in
-        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
         OptionExt.return
       end
 
@@ -321,7 +321,7 @@ struct
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
-        let stmt = mk_assert (cond exp.erange) exp.erange in
+        let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
         let cur = Flow.get T_cur man flow in
         let flow = Flow.set T_cur man.top man flow in
         let flow = man.exec stmt flow |>
@@ -335,7 +335,7 @@ struct
                        | _ -> true) man |>
                    Flow.set T_cur cur man
         in
-        Eval.singleton (mk_int 0 exp.erange) flow |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
         OptionExt.return
       end
 
@@ -353,14 +353,14 @@ struct
           ) man.bottom man flow in
         let cur = Flow.get T_cur man flow in
         let cur' = if man.is_bottom cur then man.top else cur in
-        let cond = if man.is_bottom error_env then mk_zero exp.erange else mk_one exp.erange in
+        let cond = if man.is_bottom error_env then mk_zero ~typ:u8 exp.erange else mk_one ~typ:u8 exp.erange in
         let stmt = mk_assert cond exp.erange in
         let flow' = Flow.set T_cur cur' man flow |>
                     man.exec stmt |>
                     Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
                     Flow.set T_cur cur man
         in
-        Eval.singleton (mk_int 0 exp.erange) flow' |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow' |>
         OptionExt.return
       end
 

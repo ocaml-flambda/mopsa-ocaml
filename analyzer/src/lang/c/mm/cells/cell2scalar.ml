@@ -200,7 +200,7 @@ struct
       (* Case of a static string literal with a constant offset *)
       (* return the scalar value of the character *)
       let ch = String.get s (Z.to_int z) in
-      Eval.singleton (Universal.Ast.mk_int (int_of_char ch) exp.erange) flow |>
+      Eval.singleton (Universal.Ast.mk_int (int_of_char ch) ~typ:exp.etyp exp.erange) flow |>
       Eval.return
 
     | E_c_cell({b = S s; o = O_region itv}, mode) ->
@@ -226,7 +226,7 @@ struct
              else add (at i) (aux (Z.succ i))
            in
            let vmin, vmax = aux imin in
-           Eval.singleton (Universal.Ast.mk_z_interval vmin vmax exp.erange) flow
+           Eval.singleton (Universal.Ast.mk_z_interval vmin vmax ~typ:exp.etyp exp.erange) flow
         )
       |>
       Eval.return
