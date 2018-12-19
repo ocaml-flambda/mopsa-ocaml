@@ -9,6 +9,7 @@
 (** Abstract Syntax Tree for stub specification. *)
 
 open Mopsa
+open Universal.Ast
 open Format
 
 
@@ -409,8 +410,6 @@ let rec visit_expr_in_formula expr_visitor f =
 
 (** {2 Heap addresses for resources} *)
 (** ******************************** *)
-
-open Universal.Ast
 
 type addr_kind +=
   | A_stub_resource of string (** resource address *)

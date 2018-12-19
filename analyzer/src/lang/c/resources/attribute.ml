@@ -64,17 +64,23 @@ struct
     match ekind exp with
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None
-  
+
     | E_stub_attribute(p, attr) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
       Eval.bind_return @@ fun pt flow ->
 
-      let addr = match ekind pt with
-        | E_c_points_to (P_block (A addr, _)) -> addr
+      begin match ekind pt with
+        | E_c_points_to (P_block (A addr, _)) ->
+          man.eval { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) } flow
+
+        | E_c_points_to P_top ->
+          (* When the resource is not assigned yet, can we just return an interval ? *)
+          let l, u = rangeof exp.etyp in
+          Eval.singleton (mk_z_interval l u exp.erange) flow
+
         | _ -> assert false
-      in
-      
-      man.eval { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) } flow
+      end
+
 
     | _ -> None
 

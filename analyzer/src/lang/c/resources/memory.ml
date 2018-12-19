@@ -38,11 +38,17 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {
+    export = [];
+    import = [Z_c]
+  }
 
   let eval_interface = {
     export = [Z_c, Z_c_low_level];
-    import = [Z_c, Z_c_points_to]
+    import = [
+      Z_c, Z_c_points_to;
+      Universal.Zone.Z_u_heap, Z_any
+    ]
   }
 
 
@@ -66,9 +72,24 @@ struct
       Format.flush_str_formatter ()
     in
     mkv vname addr.addr_uid (T_c_integer C_unsigned_long)
-  
+
   let eval zone exp man flow =
     match ekind exp with
+    | E_alloc_addr (A_stub_resource "Memory") ->
+      (* Allocate in the heap *)
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
+      Eval.bind_return @@ fun exp flow ->
+
+      begin match ekind exp with
+      | E_addr addr ->
+        (* Add byte attribute *)
+        let bytes = mk_bytes_var addr in
+        let flow' = man.exec ~zone:Z_c (mk_add_var bytes exp.erange) flow in
+        Eval.singleton exp flow'
+
+      | _ -> assert false
+        end
+
     | E_stub_attribute(
         { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr) },
         "bytes"

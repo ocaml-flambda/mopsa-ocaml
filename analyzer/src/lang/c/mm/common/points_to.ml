@@ -19,12 +19,14 @@ type points_to =
   | P_block of base (** base *) * expr (** offset *)
   | P_null
   | P_invalid
+  | P_top
 
 let pp_points_to fmt = function
   | P_fun f -> Format.fprintf fmt "(fp %a)" pp_var f.Ast.c_func_var
   | P_block(base, offset) -> Format.fprintf fmt "(%a, %a)" pp_base base pp_expr offset
   | P_null -> Format.pp_print_string fmt "NULL"
   | P_invalid -> Format.pp_print_string fmt "Invalid"
+  | P_top -> Format.pp_print_string fmt "⊺"
 
 let compare_points_to p1 p2 =
   match p1, p2 with
@@ -42,6 +44,9 @@ type expr_kind +=
 
 let mk_c_points_to_bloc b o range =
   mk_expr (E_c_points_to (P_block (b, o))) range
+
+let mk_c_points_to_top range =
+  mk_expr (E_c_points_to P_top) range
 
 let mk_c_points_to_null range =
   mk_expr (E_c_points_to P_null) range

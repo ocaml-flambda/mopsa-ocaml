@@ -386,21 +386,33 @@ module Domain = struct
   (** Evaluation of C expressions *)
   (** =========================== *)
 
+  let mk_addr_size addr range =
+    mk_expr (E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul
+
+  (** Evaluate the size of a base *)
+  let eval_base_size base range man flow =
+    match base with
+    | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range) flow
+    | S str -> Eval.singleton (mk_int (String.length str + 1) range) flow
+    | A addr -> man.eval (mk_addr_size addr range) flow
 
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
     (* Try the static case *)
-    match expr_to_z offset with
-    | Some z ->
+    match expr_to_z offset, expr_to_z base_size with
+    | Some z, Some base_size ->
       if Z.geq z Z.zero &&
          Z.leq (Z.add z cell_size) base_size
       then Eval.singleton (O_single z) flow
       else Eval.singleton O_out_of_bound flow
 
-    | None ->
-      (* Evaluate the offset in Z_u_num and check the bounds *)
+    | _ ->
+      (* Evaluate the offset and base_size in Z_u_num and check the bounds *)
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) offset flow |>
       Eval.bind @@ fun offset exp ->
+
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) base_size flow |>
+      Eval.bind @@ fun base_size exp ->
 
       (* safety condition: offset ∈ [0, base_size - cell_size] *)
       let range = offset.erange in
@@ -408,7 +420,7 @@ module Domain = struct
         mk_in
           offset
           (mk_zero range)
-          (mk_binop (mk_z base_size range) O_minus (mk_z cell_size range) range ~etyp:T_int)
+          (mk_binop base_size O_minus (mk_z cell_size range) range ~etyp:T_int)
           range
       in
       Eval.assume ~zone:Universal.Zone.Z_u_num cond
@@ -447,8 +459,12 @@ module Domain = struct
 
   (** Evaluate a base and an non-quantified offset expression into a cell *)
   let eval_non_quantified_cell b o t ~is_primed range man flow : ('a, cell primed) evl =
-    eval_cell_offset o (sizeof_type t) (base_size b) man flow |>
+    eval_base_size b range man flow |>
+    Eval.bind @@ fun base_size flow ->
+
+    eval_cell_offset o (sizeof_type t) base_size man flow |>
     Eval.bind @@ fun o flow ->
+
     match o with
     | O_single _ | O_region _ ->
       let c = {b;o;t} in
@@ -675,18 +691,20 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | E_stub_builtin_call(SIZE, p) ->
-      man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-      Eval.bind_opt @@ fun pe flow ->
-
-      begin match ekind pe with
-        | E_c_points_to(P_block (b, o)) ->
-          let t = under_type p.etyp in
-          Eval.singleton (mk_z (Z.div (base_size b) (Z.max Z.one (sizeof_type t))) exp.erange) flow |>
-          OptionExt.return
-
-        | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
-      end
+    | E_stub_builtin_call(SIZE, p) -> panic "size not yet implemented"
+      (* man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
+       * Eval.bind_return @@ fun pe flow ->
+       * 
+       * begin match ekind pe with
+       *   | E_c_points_to(P_block (b, o)) ->
+       *     eval_base_size b exp.erange range man flow |>
+       *     Eval.bind @@ fun base_size flow ->
+       * 
+       *     let t = under_type p.etyp in
+       *     Eval.singleton (mk_z (Z.div base_size (Z.max Z.one (sizeof_type t))) exp.erange) flow
+       * 
+       *   | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
+       * end *)
 
     | _ -> None
 
@@ -841,7 +859,9 @@ module Domain = struct
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
-      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) flow |>
+      add_cell c stmt.srange man flow |>
+      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) |>
+
       Post.of_flow |>
       Post.add_merger (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange)
 

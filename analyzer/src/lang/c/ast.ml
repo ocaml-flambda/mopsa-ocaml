@@ -717,6 +717,7 @@ let mk_c_character c range =
 
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let ul = T_c_integer(C_unsigned_long)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 

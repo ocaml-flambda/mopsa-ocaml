@@ -57,7 +57,7 @@ struct
   (** ================= *)
 
   let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Z_u_heap, Z_u_heap]; import = []}
+  let eval_interface = {export = [Z_u_heap, Z_any]; import = []}
 
   (** Initialization *)
   (** ============== *)

@@ -194,22 +194,25 @@ struct
       | EQ (p, offset) ->
         let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset exp.erange in
         let bases = NR.find p (Flow.get_domain_env T_cur man flow) in
-        let el = Bases.fold (fun b acc ->
-            match b with
-            | PB_block b ->
-              Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
+        if Bases.is_top bases then
+          Eval.singleton (mk_c_points_to_top exp.erange) flow
+        else
+          let el = Bases.fold (fun b acc ->
+              match b with
+              | PB_block b ->
+                Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
 
-            | PB_fun f ->
-              Eval.singleton (mk_c_points_to_fun f exp.erange) flow :: acc
+              | PB_fun f ->
+                Eval.singleton (mk_c_points_to_fun f exp.erange) flow :: acc
 
-            | PB_null ->
-              Eval.singleton (mk_c_points_to_null exp.erange) flow :: acc
+              | PB_null ->
+                Eval.singleton (mk_c_points_to_null exp.erange) flow :: acc
 
-            | PB_invalid ->
-              Eval.singleton (mk_c_points_to_invalid exp.erange) flow :: acc
-          ) bases []
-        in
-        Eval.join_list el ~empty:(Eval.empty_singleton flow)
+              | PB_invalid ->
+                Eval.singleton (mk_c_points_to_invalid exp.erange) flow :: acc
+            ) bases []
+          in
+          Eval.join_list el ~empty:(Eval.empty_singleton flow)
 
       | FUN f ->
         Eval.singleton (mk_c_points_to_fun f exp.erange) flow
