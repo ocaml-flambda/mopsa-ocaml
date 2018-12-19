@@ -46,10 +46,19 @@ let render man alarms time files out =
 
 
 let panic ?(btrace="<none>") exn files out =
+  let open Exceptions in
+  let error =
+    match exn with
+    | Panic msg -> msg
+    | PanicAt (range, msg) -> msg
+    | SyntaxError(range, msg) -> msg
+    | SyntaxErrorList l -> String.concat ", " (List.map snd l)
+    |  _ -> Printexc.to_string exn
+  in
   let json : json = `Assoc [
       "success", `Bool false;
       "files", `List (List.map (fun f -> `String f) files);
-      "exception", `String (Printexc.to_string exn);
+      "exception", `String error;
       "backtrace", `String btrace;
     ]
   in
