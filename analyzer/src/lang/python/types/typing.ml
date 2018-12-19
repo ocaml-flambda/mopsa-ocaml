@@ -352,6 +352,7 @@ module Domain =
          end
       | _ -> None
 
+    (* constructs smashed type for ls *)
     let summary_constructor man flow range c ls =
       Eval.eval_list ls man.eval flow |>
         Eval.bind (fun list_els flow ->
@@ -966,18 +967,19 @@ module Domain =
                        | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
                        | _ -> assert false in
                      if Typingdomain.polytype_leq (pty_el, cur.d3) (pty_ellist, cur.d3) then
-                       Eval.singleton lst flow
+                       Eval.singleton (mk_py_none range) flow
                      else
-                       let ty, d3, pos_d3 = Typingdomain.join_poly (pty_el, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in
-                       let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype ty in
-                       let cur = {cur with d3; pos_d3} in
-                       let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
+                       let open Typingdomain in
+                       let cur = Flow.get_domain_cur man flow in
+                       let dummy_annot = Flow.get_all_annot flow in
+                       let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_el cur.d3) in
+                       let el_type, cur = get_mtypes cur els_types in
+                       let list_tid, cur = get_type ~local_use:true cur (List el_type) in
+                       (* let ty, d3, pos_d3 = Typingdomain.join_poly (pty_el, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in *)
+                       let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype (List el_type) in
                        let flow = Flow.set_domain_cur cur man flow in
-                       (* match ekind @@ List.hd args with
-                        * | E_var _ -> *)
-                          man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
-                            Eval.singleton (mk_py_none range)
-                       (* | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args) *)
+                       man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                         Eval.singleton (mk_py_none range)
                    )
                    ~felse:tyerror
                    man flow
@@ -1013,16 +1015,15 @@ module Domain =
                          if Typingdomain.polytype_leq (pty_elext, cur.d3) (pty_ellist, cur.d3) then
                            Eval.singleton lst flow
                          else
-                           let ty, d3, pos_d3 = Typingdomain.join_poly (pty_elext, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in
-                           let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype ty in
-                           let cur = {cur with d3; pos_d3} in
-                           let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
+                           let open Typingdomain in
+                           let cur = Flow.get_domain_cur man flow in
+                           let dummy_annot = Flow.get_all_annot flow in
+                           let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_elext cur.d3) in
+                           let el_type, cur = get_mtypes cur els_types in
+                           let list_tid, cur = get_type ~local_use:true cur (List el_type) in
                            let flow = Flow.set_domain_cur cur man flow in
-                           match ekind @@ List.hd args with
-                           | E_var _ ->
-                              man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
-                                Eval.singleton (mk_py_none range)
-                           | _ -> Exceptions.panic "list.extend on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                           man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                             Eval.singleton (mk_py_none range)
                        )
                        ~felse:tyerror
                        man flow
@@ -1080,9 +1081,16 @@ module Domain =
                          if Typingdomain.polytype_leq (pty_value, cur.d3) (pty_ellist, cur.d3) then
                            man.eval (mk_py_none range) flow
                          else
-                           Exceptions.panic "list.__setitem__ not implemented in that case@\n"
-                       (* si x <= value, cas facile *)
-                       (* sinon, il faut faire la weak update *)
+                           (* FIXME: perform weak update in both cases *)
+                           let open Typingdomain in
+                           let cur = Flow.get_domain_cur man flow in
+                           let dummy_annot = Flow.get_all_annot flow in
+                           let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_value cur.d3) in
+                           let el_type, cur = get_mtypes cur els_types in
+                           let list_tid, cur = get_type ~local_use:true cur (List el_type) in
+                           let flow = Flow.set_domain_cur cur man flow in
+                           man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                             man.eval (mk_py_none range)
                        )
                        ~felse:tyerror
                    )
@@ -1419,7 +1427,7 @@ module Domain =
                            | E_var _ ->
                               man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
                                 Eval.singleton (mk_py_none range)
-                           | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                           | _ -> Exceptions.panic "dict.update on non-variable: todo...%a@\n" pp_expr (List.hd args)
                        )
                        ~felse:tyerror
                        man flow

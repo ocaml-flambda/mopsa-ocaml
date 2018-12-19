@@ -362,7 +362,17 @@ let concretize_poly (t:polytype) (d3:d3) : Monotypeset.t =
     r
   in
   let res_poly = Typevarset.fold concretize_tvar vars (Polytypeset.add t (Polytypeset.empty)) in
-  mono_set_cast res_poly
+  let rec flatten_union ty = match ty with
+    | List x -> List.map (fun e -> List e) (flatten_union x)
+    | Iterator (x, d) -> List.map (fun e -> Iterator (e, d)) (flatten_union x)
+    | Generator x -> List.map (fun e -> Generator e) (flatten_union x)
+    | Union l -> List.fold_left (fun acc el -> (flatten_union el) @ acc) [] l
+    | Bot | Top | Class _ | Function _ | Module _ | Typevar  _ | Instance _ -> [ty]
+    | _ -> Exceptions.panic "flatten_union %a@\n" pp_polytype ty in
+  let flattened_union = Polytypeset.fold (fun el acc ->
+                            List.fold_left (fun ptyacc el_l -> Polytypeset.add el_l ptyacc) acc (flatten_union el)
+                          ) res_poly Polytypeset.empty in
+  mono_set_cast flattened_union
 
 let join_classes (c:class_address * py_object list) (c':class_address * py_object list) : (class_address  * py_object list) option =
   (* debug "Join_classes: FIXME@\n"; *)
