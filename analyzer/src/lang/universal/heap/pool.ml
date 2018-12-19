@@ -24,19 +24,20 @@ let get_fresh () =
   rep
 
 module AddrInfo = struct
-  open Iterators.Interproc.Callstack
-  type t = cs * range * int
+  type t = Callstack.t * range * int
+
   (** The following compare function can be modified in order to
      change the granularity of the recency abstraction. *)
-  let compare (cs, r, i) (cs', r', i') = Compare.compose
+  let compare (cs, r, i) (cs', r', i') =
+    Compare.compose
       [
-        (fun () -> compare_call_stack cs cs');
+        (fun () -> Callstack.compare_call_stack cs cs');
         (fun () -> compare_range r r');
         (fun () -> (-) i i')
       ]
   let print fmt (cs, r, i) =
     Format.fprintf fmt "(%a, %a, %a)"
-      pp_call_stack cs
+      Callstack.pp_call_stack cs
       pp_range r
       Format.pp_print_int i
 end

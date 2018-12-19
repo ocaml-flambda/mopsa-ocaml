@@ -106,7 +106,7 @@ module Domain =
                     (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
                     let true_flow =  man.exec (mk_block cleaners range) true_flow in
                     let cur = Flow.get T_cur man true_flow in
-                    let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
+                    let cs = Callstack.get true_flow in
                     let exn = man.ask (Types.Typing.Domain.Q_types exp) true_flow in
                     let a = mk_alarm (APyException {exp with ekind = Types.Typing.E_get_type_partition exn}) range ~cs ~level:ERROR in
                     (* let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in *)
@@ -243,7 +243,7 @@ module Domain =
                                  man
                                  ~fthen:(fun true_flow -> Post.of_flow true_flow)
                                  ~felse:(fun false_flow ->
-                                   let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack false_flow in
+                                   let cs = Callstack.get false_flow in
                                    let a = mk_alarm (APyException exn) range ~cs ~level:ERROR in
                                    Flow.add (T_alarm a) env man false_flow |> Post.of_flow)
                                  true_flow)

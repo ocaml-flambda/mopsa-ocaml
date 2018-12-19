@@ -21,7 +21,7 @@ type alarm_level =
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_level : alarm_level;
-  alarm_trace : Location.range list;
+  alarm_trace : Location.range * Callstack.t;
 }
 
 type alarm_info = {
@@ -52,15 +52,16 @@ let register_alarm info =
 
 let compare_alarm a1 a2 =
   Compare.compose [
-        (fun () -> Compare.list Location.compare_range a1.alarm_trace a2.alarm_trace);
+        (fun () -> Compare.pair Location.compare_range Callstack.compare_call_stack a1.alarm_trace a2.alarm_trace);
         (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
         (fun () -> !compare_chain a1 a2)
       ]
 
 let pp_alarm_token fmt alarm =
-  Format.fprintf fmt "%a:%a"
+  Format.fprintf fmt "%a:%a:%a"
     !pp_token_chain alarm
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ":") Location.pp_range) alarm.alarm_trace
+    Location.pp_range (fst alarm.alarm_trace)
+    Callstack.pp_call_stack (snd alarm.alarm_trace)
 
 let pp_level fmt = function
   | ERROR -> ((Debug.color "red") Format.pp_print_string) fmt "✘"
@@ -71,9 +72,9 @@ let pp_alarm fmt alarm =
   Format.fprintf fmt "%a  %a in %a@\n@[%a@]@\nTrace: @[%a@]"
     pp_level alarm.alarm_level
     !pp_title_chain alarm
-    Location.pp_range (alarm.alarm_trace |> List.hd |> Location.untag_range)
+    Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
     !pp_report_chain alarm
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Location.pp_range) alarm.alarm_trace
+    Callstack.pp_call_stack_newlines (alarm.alarm_trace |> snd)
 
 
 let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm
@@ -82,12 +83,21 @@ type token += T_alarm of alarm
 
 let alarm_token a = T_alarm a
 
-let mk_alarm ?(cs = []) ?(level = WARNING) kind range =
+let mk_alarm kind ?(cs = Callstack.empty) ?(level = WARNING) range =
   {
     alarm_kind = kind;
     alarm_level = level;
-    alarm_trace = range :: cs;
+    alarm_trace = (range, cs);
   }
+
+let raise_alarm akind range ?(level = WARNING) ?(bottom=true) man flow =
+  let cs = Callstack.get flow in
+  let alarm = mk_alarm akind range ~cs in
+  let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow in
+  if bottom then
+    Flow.set T_cur man.bottom man flow'
+  else
+    flow'
 
 
 let () =

@@ -193,12 +193,11 @@ struct
   let check_requirement req man flow =
     let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
     match ffalse with
-    | Some f when Flow.is_bottom man f -> ftrue
+    | Some ffalse when Flow.is_bottom man ffalse -> ftrue
 
-    | Some f ->
-      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-      let alarm = mk_alarm (A_stub_invalid_require req) req.range ~cs in
-      Flow.add (alarm_token alarm) (Flow.get T_cur man f) man ftrue
+    | Some ffalse ->
+      raise_alarm (A_stub_invalid_require req) req.range ~bottom:true man ffalse |>
+      Flow.join man ftrue
 
     | _ -> assert false
 

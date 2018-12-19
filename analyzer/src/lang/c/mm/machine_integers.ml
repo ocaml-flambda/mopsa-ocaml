@@ -163,12 +163,8 @@ struct
            Eval.singleton exp' tflow
         )
         (fun fflow ->
-           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
-           let alarm = mk_alarm Alarms.ADivideByZero exp.erange ~cs in
-           let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
-                       Flow.set T_cur man.bottom man
-           in
-           Eval.empty_singleton flow1
+           let flow' = raise_alarm Alarms.ADivideByZero exp.erange ~bottom:true man fflow in
+           Eval.empty_singleton flow'
         ) e e' flow |>
       OptionExt.return
 
@@ -182,11 +178,7 @@ struct
       check_overflow typ man range
         (fun e tflow -> Eval.singleton e tflow)
         (fun e fflow ->
-           let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
-           let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
-           let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
-                       Flow.set T_cur man.bottom man
-           in
+           let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
            Eval.singleton
              {ekind  = E_unop(O_wrap(rmin, rmax), e);
               etyp   = typ;
@@ -203,11 +195,7 @@ struct
         check_overflow typ man range
           (fun e tflow -> Eval.singleton e tflow)
           (fun e fflow ->
-             let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
-             let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
-             let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
-                         Flow.set T_cur man.bottom man
-             in
+             let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
              Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
                 etyp   = typ;
@@ -261,11 +249,7 @@ struct
         Eval.singleton (mk_z z range) flow
         |> OptionExt.return
       else
-        let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-        let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
-        let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                    Flow.set T_cur man.bottom man
-        in
+        let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man flow in
         Eval.singleton (mk_z (wrap_z z r) (tag_range range "wrapped")) flow1
         |> OptionExt.return
 
@@ -296,11 +280,7 @@ struct
                end
              else
                begin
-                 let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack fflow in
-                 let alarm = mk_alarm Alarms.AIntegerOverflow exp.erange ~cs in
-                 let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man fflow |>
-                             Flow.set T_cur man.bottom man
-                 in
+                 let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
                  Eval.singleton
                    {ekind  = E_unop(O_wrap(rmin, rmax), e);
                     etyp   = to_universal_type t;

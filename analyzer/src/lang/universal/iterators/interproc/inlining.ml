@@ -119,9 +119,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Update call stack *)
-      let cs = Flow.get_annot A_call_stack flow0 in
-      let cs' = range :: cs in
-      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
+      let flow1 = Callstack.push range flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>

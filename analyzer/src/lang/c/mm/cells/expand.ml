@@ -456,11 +456,7 @@ module Domain = struct
       Eval.singleton pc flow
 
     | O_out_of_bound ->
-      let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-      let alarm = mk_alarm Alarms.AOutOfBound range ~cs in
-      let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                  Flow.set T_cur man.bottom man
-      in
+      let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
       Eval.empty_singleton flow'
 
 
@@ -625,20 +621,12 @@ module Domain = struct
           eval_non_quantified_cell b o t ~is_primed p.erange man flow
 
         | E_c_points_to(P_null) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.ANullDeref p.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1
+          let flow' = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow in
+          Eval.empty_singleton flow'
 
         | E_c_points_to(P_invalid) ->
-          let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack flow in
-          let alarm = mk_alarm Alarms.AInvalidDeref p.erange ~cs in
-          let flow1 = Flow.add (alarm_token alarm) (Flow.get T_cur man flow) man flow |>
-                      Flow.set T_cur man.bottom man
-          in
-          Eval.empty_singleton flow1
+          let flow' = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow in
+          Eval.empty_singleton flow'
 
         | _ -> panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p;
       end

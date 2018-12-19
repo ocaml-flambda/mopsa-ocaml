@@ -733,7 +733,7 @@ let mk_c_call f args range =
   mk_expr (E_c_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
 
 let mk_c_call_stmt f args range =
-  let exp = mk_c_call f args (tag_range range "call") in
+  let exp = mk_c_call f args range in
   mk_stmt (S_expression exp) range
 
 let mk_c_cast e t range =

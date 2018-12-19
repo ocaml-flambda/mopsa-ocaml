@@ -205,7 +205,7 @@ struct
       let range = srange stmt in
       let name = try Flow.get_annot A_cur_test flow
                  with Not_found -> Exceptions.panic "Impossible to get unittest annotations. Are you sure the format of unit tests is repected?@\n" in
-      let cs = Flow.get_annot Interproc.Callstack.A_call_stack flow in
+      let cs = Callstack.get flow in
       debug "Expression is %a" pp_expr cond;
       Post.assume
         cond
@@ -259,7 +259,7 @@ struct
         if b = b1 then
           Flow.add (T_safe_assert (name,range)) cur man flow
         else
-          let cs = Flow.get_annot Interproc.Callstack.A_call_stack flow in
+          let cs = Callstack.get flow in
           let a = mk_alarm (A_fail_assert(cond, name)) range ~cs ~level:ERROR in
           Flow.add (T_alarm a) cur man flow
       in
