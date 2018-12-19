@@ -1499,7 +1499,7 @@ module Domain =
                          | E_type_partition tid ->
                             let pty = match Typingdomain.TypeIdMap.find tid cur.d2 with
                               | Typingdomain.FiniteTuple l -> l
-                              | _ -> assert false in pty
+                              | _ -> debug "%d %a@\n" tid Typingdomain.pp_polytype (Typingdomain.TypeIdMap.find tid cur.d2); assert false in pty
                          | _ -> assert false in
                        (* FIXME: no choice but to join all types... *)
                        let merged_types =

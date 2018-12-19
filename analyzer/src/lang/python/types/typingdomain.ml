@@ -366,9 +366,10 @@ let concretize_poly (t:polytype) (d3:d3) : Monotypeset.t =
     | List x -> List.map (fun e -> List e) (flatten_union x)
     | Iterator (x, d) -> List.map (fun e -> Iterator (e, d)) (flatten_union x)
     | Generator x -> List.map (fun e -> Generator e) (flatten_union x)
+    | Set x -> List.map (fun e -> Set e) (flatten_union x)
     | Union l -> List.fold_left (fun acc el -> (flatten_union el) @ acc) [] l
-    | Bot | Top | Class _ | Function _ | Module _ | Typevar  _ | Instance _ -> [ty]
-    | _ -> Exceptions.panic "flatten_union %a@\n" pp_polytype ty in
+    | Bot -> []
+    | _ -> [ty] in
   let flattened_union = Polytypeset.fold (fun el acc ->
                             List.fold_left (fun ptyacc el_l -> Polytypeset.add el_l ptyacc) acc (flatten_union el)
                           ) res_poly Polytypeset.empty in
@@ -1060,6 +1061,9 @@ let get_mtypes (d:domain) (mts:Monotypeset.t) : polytype * domain =
   (* folding on join_poly would work, but would create |ts|-1 type variables and only the last one would be used afterwards  *)
   let f, mts_f = factor_mtypes mts in
   debug "mts = %a@\nmts_f = %a@\n" Monotypeset.print mts Monotypeset.print mts_f;
+  if Monotypeset.cardinal mts_f = 1 then
+    f (poly_cast (Monotypeset.choose mts_f)), d
+  else
   (* let d3 = d.d3 and pos_d3 = d.pos_d3 in
    * let opos = search_d3 mts_f d3 in
    * let pos, d3, pos_d3 = match opos with
@@ -1225,13 +1229,14 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
                 cclass @@ Addr.builtin_cl_and_mro "list"
              | Dict _ ->
                 cclass @@ Addr.builtin_cl_and_mro "dict"
+             | Bot -> Bot
              | _ -> debug "%a@\n" pp_monotype mty; assert false in
            let new_domain = fst @@ filter_inst domain tid mtype in
            debug "new_domain = %a@\n" print new_domain;
            (aux (poly_cast mty) new_domain) @ acc) mtys []
     | Union l ->
        List.fold_left (fun acc el -> aux el d @ acc) [] l
-
+    | Bot -> []
     | _ -> debug "type_of %a@\n" pp_polytype pt; assert false
   in
   let pt = TypeIdMap.find tid d.d2 in
