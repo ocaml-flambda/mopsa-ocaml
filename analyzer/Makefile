@@ -32,7 +32,7 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar mm libs iterators
+lang.c = ast pp visitor zone frontend alarms desugar mm libs iterators resources
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = low_level record_copy loops
 lang.c.mm = common cells pointers machine_integers

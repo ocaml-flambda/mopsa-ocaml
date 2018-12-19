@@ -108,8 +108,8 @@ struct
     | NULL
     | INVALID
 
-  (**Compute the offset of a pointer given its pointer evaluation *)
-  let add_offset ptr o t range =
+  (** Add a pointer evaluation with an offset expression *)
+  let add_offset (ptr:ptr) (o:expr) t range : ptr =
     let size = sizeof_type t in
     let add oo =
       mk_binop oo O_plus (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
@@ -127,7 +127,7 @@ struct
       panic_at range
         "pointers.add_offset: pointer arithmetics on functions not supported"
 
-  (** Get the pointer variable and the offset of a pointer expression *)
+  (** Static evaluation of a pointer base and offset *)
   let rec eval_pointer exp : ptr =
     let open Bases in
     match ekind exp with
@@ -136,6 +136,9 @@ struct
 
     | E_constant(C_c_invalid) ->
       INVALID
+
+    | E_addr addr ->
+      ADDROF(A addr, mk_zero exp.erange)
 
     | E_c_deref { ekind = E_c_address_of e } ->
       eval_pointer e

@@ -34,8 +34,8 @@ module BaseSet = Framework.Lattices.Powerset.Make(
     type t = pb
 
     let print fmt = function
-      | PB_block base -> Format.fprintf fmt "(var: %a)" pp_base base
-      | PB_fun f -> Format.fprintf fmt "(fun: %a)" pp_var f.Ast.c_func_var
+      | PB_block base -> pp_base fmt base
+      | PB_fun f -> pp_var fmt f.Ast.c_func_var
       | PB_null-> Format.pp_print_string fmt "NULL"
       | PB_invalid -> Format.pp_print_string fmt "Invalid"
 

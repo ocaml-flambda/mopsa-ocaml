@@ -405,3 +405,38 @@ let rec visit_expr_in_formula expr_visitor f =
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
   | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
+
+
+(** {2 Heap addresses for resources} *)
+(** ******************************** *)
+
+open Universal.Ast
+
+type addr_kind +=
+  | A_stub_resource of string (** resource address *)
+
+let () =
+  register_addr {
+    print = (fun next fmt addr ->
+        match akind addr with
+        | A_stub_resource res -> Format.fprintf fmt "@%s:%d" res addr.addr_uid
+        | _ -> next fmt addr
+      );
+    compare = (fun next addr1 addr2 ->
+        match akind addr1, akind addr2 with
+        | A_stub_resource res1, A_stub_resource res2 -> Pervasives.compare res1 res2
+        | _ -> next addr1 addr2
+      );
+  }
+
+let mk_stub_alloc_resource res range =
+  mk_alloc_addr (A_stub_resource res) range
+
+let alloc_stub_resource res range man flow : ('a, addr) evl =
+  man.eval (mk_stub_alloc_resource res range) flow |>
+  Eval.bind @@ fun e flow ->
+
+  match ekind e with
+  | E_addr addr -> Eval.singleton addr flow
+
+  | _ -> assert false

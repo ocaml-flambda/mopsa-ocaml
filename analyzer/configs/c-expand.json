@@ -23,6 +23,10 @@
         // C libraries
         "c.libs.mopsa",
 
+	// C stub resources
+	"c.resources.memory",
+	"c.resources.attribute",
+
         // Memory model
         {
             "stack": "universal.heap.recency",

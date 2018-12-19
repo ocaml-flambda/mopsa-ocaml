@@ -6,14 +6,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Manager of the `Memory` resource *)
+(** Evaluation of resource attributes *)
 
 open Mopsa
 open Universal.Ast
 open Stubs.Ast
+open Mm.Common.Points_to
 open Ast
 open Zone
-open Mm.Common.Points_to
 
 
 module Domain =
@@ -23,13 +23,13 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_resources_memory : unit domain
+  type _ domain += D_c_resources_attribute : unit domain
 
-  let id = D_c_resources_memory
-  let name = "c.resources.memory"
+  let id = D_c_resources_attribute
+  let name = "c.resources.attribute"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_resources_memory -> Some Eq
+    | D_c_resources_attribute -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -60,25 +60,23 @@ struct
   (** Evaluation of expressions *)
   (** ========================= *)
 
-  let mk_bytes_var addr =
-    let vname =
-      Format.fprintf Format.str_formatter "%a_bytes" pp_addr addr;
-      Format.flush_str_formatter ()
-    in
-    mkv vname addr.addr_uid (T_c_integer C_unsigned_long)
-  
   let eval zone exp man flow =
     match ekind exp with
-    | E_stub_attribute(
-        { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr) },
-        "bytes"
-      ) ->
-      let bytes = mk_bytes_var addr in
-      Eval.singleton (mk_var bytes exp.erange) flow |>
-      Eval.return
+    | E_stub_attribute({ ekind = E_addr _ }, _) ->
+      None
+  
+    | E_stub_attribute(p, attr) ->
+      man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
+      Eval.bind_return @@ fun pt flow ->
+
+      let addr = match ekind pt with
+        | E_c_points_to (P_block (A addr, _)) -> addr
+        | _ -> assert false
+      in
+      
+      man.eval { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) } flow
 
     | _ -> None
-
 
   let ask _ _ _ = None
 

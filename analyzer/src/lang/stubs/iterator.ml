@@ -219,10 +219,18 @@ struct
            | _ -> OptionExt.option_neutral2 (man.join annot) env1 env2
         ) man flow1 flow2
 
+  (** Execute an allocation of a new resource *)
+  let exec_local_new v res range man flow =
+    alloc_stub_resource res range man flow |>
+    Post.bind_flow man @@ fun addr flow ->
+    man.exec (mk_assign (mk_var v range) (mk_addr addr range) range) flow
+    
+    
+  
   (** Execute the `local` section *)
   let exec_local l man flow =
     match l.content.lval with
-    | L_new  _ -> panic "allocations not yet supported"
+    | L_new  res -> exec_local_new l.content.lvar res l.range man flow
     | L_call _ -> panic "function calls not yet supported"
 
   let exec_ensures e return man flow =
