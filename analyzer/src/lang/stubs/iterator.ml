@@ -63,6 +63,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
+
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -174,6 +175,21 @@ struct
 
     ftrue, ffalse
 
+  (* We need to compute a fixpoint of a formula evaluation *)
+  let eval_formula_fixpoint f ~negate man flow =
+    let rec lfp (flow: 'a flow) : 'a flow * 'a flow option =
+      debug "fixpoint iteration";
+      let flow1, nflow1 = eval_formula f ~negate man flow in
+      debug "fixpoint iteration done:@\n input: @[%a@]@\n output: @[%a@]"
+        (Flow.print man) flow
+        (Flow.print man) flow1
+      ;
+      if Flow.subset man flow flow1 then flow1, nflow1
+      else lfp flow1
+    in
+    lfp flow
+
+
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
@@ -191,7 +207,7 @@ struct
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let check_requirement req man flow =
-    let ftrue, ffalse = eval_formula req.content ~negate:true man flow in
+    let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
     match ffalse with
     | Some ffalse when Flow.is_bottom man ffalse -> ftrue
 
@@ -223,9 +239,7 @@ struct
     alloc_stub_resource res range man flow |>
     Post.bind_flow man @@ fun addr flow ->
     man.exec (mk_assign (mk_var v range) (mk_addr addr range) range) flow
-    
-    
-  
+
   (** Execute the `local` section *)
   let exec_local l man flow =
     match l.content.lval with
@@ -247,7 +261,7 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula f ~negate:false man flow |>
+    eval_formula_fixpoint f ~negate:false man flow |>
     fst
 
   (** Remove locals and old copies of assigned variables *)
