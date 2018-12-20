@@ -152,9 +152,9 @@ let rec visit_formula (formula:formula with_range) scope =
     let params, scope = visit_list visit_expr params scope in
     F_predicate(p, params), scope
 
-  | F_in (v, s) ->
-    let v = Scope.resolve v scope in
-    F_in (v, s), scope
+  | F_in (e, s) ->
+    let e, scope = visit_expr e scope in
+    F_in (e, s), scope
 
   | F_free e ->
     let e, scope = visit_expr e scope in

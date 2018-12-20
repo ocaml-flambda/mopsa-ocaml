@@ -104,7 +104,7 @@ type formula =
   | F_not    of formula with_range
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
-  | F_in     of var * set
+  | F_in     of expr with_range * set
   | F_free   of expr with_range
 
 
@@ -251,7 +251,7 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
-  | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
+  | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
   | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
 and pp_log_binop fmt =

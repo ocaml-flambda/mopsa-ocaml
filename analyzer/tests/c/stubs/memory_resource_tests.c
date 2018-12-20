@@ -13,3 +13,10 @@ void test_new_int() {
   *x = 10;
   _mopsa_assert(*x == 10);
 }
+
+void test_new_int_array() {
+  int *a = (int*)my_malloc(10 * sizeof(int));
+  a[0] = 10;
+  a[9] = 100;
+  _mopsa_assert(a[0] + a[9] == 110);
+}

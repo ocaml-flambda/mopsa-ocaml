@@ -592,7 +592,7 @@ and from_stub_formula ctx f =
   | F_not f -> F_not (from_stub_formula ctx f)
   | F_forall (v, s, f) -> F_forall(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_exists (v, s, f) -> F_exists(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
-  | F_in (v, s) -> F_in(from_var ctx v, from_stub_set ctx s)
+  | F_in (v, s) -> F_in(from_stub_expr ctx v, from_stub_set ctx s)
   | F_free e -> F_free(from_stub_expr ctx e)
 
 and from_stub_set ctx s =

@@ -483,7 +483,7 @@ let rec visit_formula f prj func =
   | F_exists(v, t, s, f') ->
     let v' = visit_var v prj func in
     Ast.F_exists(v', visit_set s prj func, visit_formula f' prj func)
-  | F_in(v, s) -> Ast.F_in(visit_var v prj func, visit_set s prj func)
+  | F_in(e, s) -> Ast.F_in(visit_expr e prj func, visit_set s prj func)
   | F_free(e) -> Ast.F_free(visit_expr e prj func)
   | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
 

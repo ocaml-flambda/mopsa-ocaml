@@ -114,16 +114,16 @@ struct
     | F_forall (v, s, ff) -> eval_quantified_formula FORALL v s ff ~negate f.range man flow
     | F_exists (v, s, ff) -> eval_quantified_formula EXISTS v s ff ~negate f.range man flow
 
-    | F_in (v, S_interval (l, u)) ->
-      let ftrue = man.exec (mk_assume (mk_in (mk_var v f.range) l u f.range) f.range) flow in
+    | F_in (e, S_interval (l, u)) ->
+      let ftrue = man.exec (mk_assume (mk_in e l u f.range) f.range) flow in
       let ffalse =
         if not negate then None
         else Some (
             man.exec (mk_assume (
                 mk_binop
-                  (mk_binop (mk_var v f.range) O_lt l f.range)
+                  (mk_binop e O_lt l f.range)
                   O_log_or
-                  (mk_binop (mk_var v f.range) O_gt u f.range)
+                  (mk_binop e O_gt u f.range)
                   f.range
               ) f.range) flow
           )

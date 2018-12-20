@@ -252,7 +252,7 @@ formula:
   | NOT with_range(formula)                           { F_not $2 }
   | FORALL c_qual_typ var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
   | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
-  | var IN set                                        { F_in ($1, $3) }
+  | with_range(expr) IN set                           { F_in ($1, $3) }
   | FREE with_range(expr)                             { F_free $2 }
   | LPAR formula RPAR                                 { $2 }
 
