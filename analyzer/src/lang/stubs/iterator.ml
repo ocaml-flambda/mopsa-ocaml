@@ -177,17 +177,25 @@ struct
 
   (* We need to compute a fixpoint of a formula evaluation *)
   let eval_formula_fixpoint f ~negate man flow =
-    let rec lfp (flow: 'a flow) : 'a flow * 'a flow option =
+    let rec lfp (flow: 'a flow) (neg: 'a flow option) : 'a flow * 'a flow option =
       debug "fixpoint iteration";
-      let flow1, nflow1 = eval_formula f ~negate man flow in
-      debug "fixpoint iteration done:@\n input: @[%a@]@\n output: @[%a@]"
+      let flow1, neg1 = eval_formula f ~negate man flow in
+      let flow1' = Flow.meet man flow flow1 in
+      let neg1' = (OptionExt.option_neutral2 (Flow.join man) neg neg1) in
+      debug "fixpoint iteration done:@\n input: @[%a@]@\n neg: @[%a@]@\n output: @[%a@]@\n neg': @[%a@]"
         (Flow.print man) flow
-        (Flow.print man) flow1
+        (OptionExt.print (Flow.print man)) neg
+        (Flow.print man) flow1'
+        (OptionExt.print (Flow.print man)) neg1'
       ;
-      if Flow.subset man flow flow1 then flow1, nflow1
-      else lfp (Flow.meet man flow flow1)
+      if Flow.subset man flow flow1' then
+        flow1', neg1'
+      else
+        lfp flow1' neg1'
     in
-    lfp flow
+    (* Unroll one time *)
+    let flow, neg = eval_formula f ~negate man flow in
+    lfp flow neg
 
 
 
@@ -207,9 +215,11 @@ struct
 
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let check_requirement req man flow =
+    debug "check %a" pp_requires req;
     let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man ffalse -> ftrue
+    | Some ffalse when Flow.is_bottom man ffalse ->
+      ftrue
 
     | Some ffalse ->
       raise_alarm A_stub_invalid_require req.range ~bottom:true man ffalse |>
