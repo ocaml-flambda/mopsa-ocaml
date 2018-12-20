@@ -1,5 +1,3 @@
-#include "mopsa.h"
-
 /* Test assignment on an integer scalar */
 /* ************************************* */
 

@@ -1,4 +1,3 @@
-#include "mopsa.h"
 #include <stdlib.h>
 
 /*$

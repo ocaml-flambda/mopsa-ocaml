@@ -1,5 +1,3 @@
-#include "mopsa.h"
-
 /* Test the modification of part of an array */
 /* ***************************************** */
 

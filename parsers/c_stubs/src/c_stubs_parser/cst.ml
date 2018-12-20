@@ -169,6 +169,7 @@ and var = {
 and builtin =
   | PRIMED
   | SIZE
+  | SIZEOF
   | OFFSET
   | BASE
   | FLOAT_VALID
@@ -202,6 +203,7 @@ let pp_resource fmt resource = pp_print_string fmt resource
 let pp_builtin fmt f =
   match f with
   | SIZE   -> pp_print_string fmt "size"
+  | SIZEOF  -> pp_print_string fmt "sizeof"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"

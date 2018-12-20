@@ -166,6 +166,7 @@ let attribute_type obj f =
 let builtin_type f arg =
   match f with
   | SIZE   -> int_type
+  | SIZEOF   -> int_type
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
@@ -437,6 +438,13 @@ let rec visit_expr e prj func =
       let p = visit_expr p prj func in
       Ast.E_arrow(p, f), field_type (pointed_type p.content.typ) f
 
+    | E_builtin_call(SIZEOF,e) ->
+      let e = visit_expr e prj func in
+      let typ, _ = e.content.typ in
+      let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
+      let size = C_utils.sizeof_type target typ in
+      Ast.E_int(size), builtin_type SIZE e
+
     | E_builtin_call(f,a) ->
       let a = visit_expr a prj func in
       Ast.E_builtin_call(visit_builtin f, a), builtin_type f a
@@ -449,6 +457,7 @@ and visit_builtin b =
   match b with
   | PRIMED -> Ast.PRIMED
   | SIZE   -> Ast.SIZE
+  | SIZEOF   -> Exceptions.panic "sizeof not resolved"
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE
   | FLOAT_VALID -> Ast.FLOAT_VALID

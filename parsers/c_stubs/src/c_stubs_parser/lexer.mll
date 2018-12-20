@@ -60,6 +60,7 @@ let _ =
      (* Built-ins *)
      "primed", PRIMED;  
      "size",   SIZE;
+     "sizeof",   SIZEOF;
      "offset", OFFSET;
      "base", BASE;
      "new", NEW;

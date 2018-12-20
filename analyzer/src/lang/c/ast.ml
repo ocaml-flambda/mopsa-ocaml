@@ -468,7 +468,7 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
 let rec sizeof_type (t : typ) : Z.t =
-  let get_target () = 
+  let get_target () =
     Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
   in
   match t with
