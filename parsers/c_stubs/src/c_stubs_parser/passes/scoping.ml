@@ -119,6 +119,15 @@ let rec visit_expr (expr:expr with_range) scope =
     let arg, scope = visit_expr arg scope in
     E_builtin_call (f, arg), scope
 
+let visit_set (set:set) scope =
+  match set with
+  | S_interval(e1, e2) ->
+    let e1, scope = visit_expr e1 scope in
+    let e2, scope = visit_expr e2 scope in
+    S_interval(e1, e2), scope
+
+  | S_resource r -> S_resource r, scope
+
 let rec visit_formula (formula:formula with_range) scope =
   bind_pair_range formula @@ fun formula ->
   match formula with
@@ -140,11 +149,13 @@ let rec visit_formula (formula:formula with_range) scope =
   | F_forall (v, t, s, f) ->
     let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
+    let s, _ = visit_set s scope in
     F_forall (v, t, s, f), scope
 
   | F_exists (v, t, s, f) ->
     let v, scope' = Scope.create v t scope in
     let f, scope' = visit_formula f scope' in
+    let s, _ = visit_set s scope in
     F_exists (v, t, s, f), scope
 
   | F_predicate(p, params) ->
@@ -154,6 +165,7 @@ let rec visit_formula (formula:formula with_range) scope =
 
   | F_in (e, s) ->
     let e, scope = visit_expr e scope in
+    let s, scope = visit_set s scope in
     F_in (e, s), scope
 
   | F_free e ->

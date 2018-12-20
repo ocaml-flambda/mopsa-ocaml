@@ -47,17 +47,37 @@ void test_set_all() {
  * requires: m in [0, size(p)] and
  *           n <= 5;
  * assigns: p[0, m - 1][0, n - 1];
- * ensures: forall int i in [0, m - 1]: 
+ * ensures: forall int i in [0, m - 1]:
  *            forall int j in [0, n - 1]:
  *              (p[i][j])` == c;
  */
-void set_all2(char p[][5], char c, unsigned int m, unsigned int n) {}
+void set_all2(char p[][5], char c, unsigned int m, unsigned int n);
 
 void test_set_all_multi_dim() {
   char a[5][5] = {{1, 2, 3, 4}};
 
-  _mopsa_print();
   set_all2(a, 10, 5, 5);
-  _mopsa_print();
   _mopsa_assert(a[0][0] == 10);
+}
+
+
+/* Test dependencies in embedded quantifications on multi-dimensional arrays */
+/* ************************************************************************* */
+
+/*$
+ * assigns: p[0, 3][0, 3];
+ * ensures: forall int i in [0, 3]:
+ *            forall int j in [0, i]:
+ *              (p[i][j])` == c;
+ */
+void triangle_init(char p[][4], char c);
+
+void test_dependent_forall() {
+  char a[4][4] = {{1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16}};
+
+  triangle_init(a, 100);
+  _mopsa_assert(a[0][0] == 100);
+  // _mopsa_assert(a[0][1] == 2); // FIXME: this assertion can not be verified
+                                  // since the `assigns` section can not express
+                                  // dependencies between modified cells
 }
