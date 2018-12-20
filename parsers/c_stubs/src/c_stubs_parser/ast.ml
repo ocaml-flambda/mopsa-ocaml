@@ -18,7 +18,7 @@ type expr_kind =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
-  | E_char      of char
+  | E_char      of int
 
   | E_var       of var
 
@@ -195,7 +195,10 @@ let rec pp_expr fmt exp =
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
-  | E_char c -> fprintf fmt "'%c'" c
+  | E_char c ->
+    if c >= 32 && c < 127
+    then fprintf fmt "'%c'" (Char.chr c)
+    else fprintf fmt "%d" c
   | E_var v -> pp_var fmt v
   | E_unop (op, e) -> fprintf fmt "%a(%a)" pp_unop op pp_expr e
   | E_binop (op, e1, e2) -> fprintf fmt "(%a) %a (%a)" pp_expr e1 pp_binop op pp_expr e2

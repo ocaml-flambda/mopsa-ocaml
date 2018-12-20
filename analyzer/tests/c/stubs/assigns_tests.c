@@ -14,6 +14,21 @@ void test_assign_int() {
   _mopsa_assert(x == 10);
 }
 
+/* Test assignment on an char */
+/* ************************** */
+
+/*$
+ * assigns: *p;
+ * ensures: (*p)` == 'a';
+ */
+void set_to_a(char*p) {}
+
+void test_assign_char() {
+  char x;
+  set_to_a(&x);
+  _mopsa_assert(x == 'a');
+}
+
 
 /* Test assignment on an integer scalar with a relation */
 /* **************************************************** */

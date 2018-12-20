@@ -19,7 +19,7 @@
 (* Constants *)
 %token <Z.t> INT_CONST
 %token <float> FLOAT_CONST
-%token <char> CHAR_CONST
+%token <int> CHAR_CONST
 %token <string> STRING_CONST
 
 (* Identifiers *)
