@@ -185,7 +185,7 @@ struct
         (Flow.print man) flow1
       ;
       if Flow.subset man flow flow1 then flow1, nflow1
-      else lfp flow1
+      else lfp (Flow.meet man flow flow1)
     in
     lfp flow
 
