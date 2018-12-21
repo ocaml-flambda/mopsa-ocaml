@@ -5,7 +5,7 @@
  * requires: l in [0, size(p) - 1] and
  *           u in [0, size(p) - 1];
  * assigns: p[l, u];
- * ensures: forall int i in [l, u]: (p[i])` == 0;
+ * ensures: forall int i in [l, u]: (p[i])' == 0;
  */
 void reset_region(int*p, int l, int u) {}
 
@@ -26,7 +26,7 @@ void test_set_part() {
 /*$
  * requires: n in [0, size(p)];
  * assigns: ((char*)p)[0, n - 1];
- * ensures: forall int i in [0, n - 1]: (((char*) p)[i])` == c;
+ * ensures: forall int i in [0, n - 1]: (((char*) p)[i])' == c;
  */
 void set_all(void*p, char c, unsigned int n) {}
 
@@ -47,7 +47,7 @@ void test_set_all() {
  * assigns: p[0, m - 1][0, n - 1];
  * ensures: forall int i in [0, m - 1]:
  *            forall int j in [0, n - 1]:
- *              (p[i][j])` == c;
+ *              (p[i][j])' == c;
  */
 void set_all2(char p[][5], char c, unsigned int m, unsigned int n);
 
@@ -66,7 +66,7 @@ void test_set_all_multi_dim() {
  * assigns: p[0, 3][0, 3];
  * ensures: forall int i in [0, 3]:
  *            forall int j in [0, i]:
- *              (p[i][j])` == c;
+ *              (p[i][j])' == c;
  */
 void triangle_init(char p[][4], char c);
 
@@ -76,6 +76,6 @@ void test_dependent_forall() {
   triangle_init(a, 100);
   _mopsa_assert(a[0][0] == 100);
   // _mopsa_assert(a[0][1] == 2); // FIXME: this assertion can not be verified
-                                  // since the `assigns` section can not express
+                                  // since the 'assigns' section can not express
                                   // dependencies between modified cells
 }

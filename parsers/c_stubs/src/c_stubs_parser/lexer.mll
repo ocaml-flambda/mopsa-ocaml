@@ -131,6 +131,8 @@ rule read =
         CHAR_CONST v
     }
 
+  | "'"      { PRIME }
+
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
 
   | '['      { LBRACK }
@@ -166,8 +168,6 @@ rule read =
   | "~"    { BNOT }
 
   | "="    { ASSIGN }
-
-  | "`"    { PRIME }
 
   | "//"   { read_comment lexbuf; read lexbuf }
 

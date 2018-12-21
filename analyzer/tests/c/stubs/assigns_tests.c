@@ -3,7 +3,7 @@
 
 /*$
  * assigns: *p;
- * ensures: (*p)` == v;
+ * ensures: (*p)' == v;
  */
 void set(int*p, int v) {}
 
@@ -19,7 +19,7 @@ void test_assign_int() {
 
 /*$
  * assigns: *p;
- * ensures: (*p)` == 'a';
+ * ensures: (*p)' == 'a';
  */
 void set_to_a(char*p) {}
 
@@ -35,7 +35,7 @@ void test_assign_char() {
 
 /*$
  * assigns: *p;
- * ensures: (*p)` == *p + s;
+ * ensures: (*p)' == *p + s;
  */
 void incr(int*p, int s) {}
 
@@ -52,7 +52,7 @@ void test_assign_int_with_relation() {
 
 /*$
  * assigns: *p;
- * ensures: (*p)` == *p + s;
+ * ensures: (*p)' == *p + s;
  */
 void advance(int**p, int s) {}
 
@@ -71,7 +71,7 @@ void test_assign_ptr() {
 /*$
  * assigns: *p;
  * assigns: *q;
- * ensures: (*p)` == *q and (*q)` == *p;
+ * ensures: (*p)' == *q and (*q)' == *p;
  */
 void swap(int*p, int*q) {}
 
