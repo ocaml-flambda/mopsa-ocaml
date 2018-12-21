@@ -630,6 +630,7 @@ and from_stub_builtin f =
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
+  | PTR_VALID -> PTR_VALID
   | FLOAT_VALID -> FLOAT_VALID
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN

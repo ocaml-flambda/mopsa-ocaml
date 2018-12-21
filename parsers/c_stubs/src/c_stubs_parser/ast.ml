@@ -87,6 +87,7 @@ and builtin =
   | SIZE
   | OFFSET
   | BASE
+  | PTR_VALID
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
@@ -185,6 +186,7 @@ let pp_builtin fmt f =
   | SIZE   -> pp_print_string fmt "size"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
+  | PTR_VALID -> pp_print_string fmt "ptr_valid"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"

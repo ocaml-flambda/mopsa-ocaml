@@ -306,6 +306,7 @@ module Domain = struct
       Z_c_low_level, Z_c_cell_expand
     ];
     import = [
+      (Z_c_low_level, Z_c_cell_expand);
       (Z_c_scalar, Universal.Zone.Z_u_num);
       (Z_c, Universal.Zone.Z_u_num);
       (Z_c, Z_under Z_c_cell);
@@ -395,16 +396,6 @@ module Domain = struct
 
   (** Evaluation of C expressions *)
   (** =========================== *)
-
-  let mk_addr_size addr range =
-    mk_expr (E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul
-
-  (** Evaluate the size of a base *)
-  let eval_base_size base range man flow =
-    match base with
-    | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
-    | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
-    | A addr -> man.eval ~zone:(Z_c, Z_c_scalar) ~via:Z_c_cell_expand (mk_addr_size addr range) flow
 
   (** Evaluate an offset expression into an offset evaluation *)
   let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
@@ -698,21 +689,28 @@ module Domain = struct
       end
 
     (* 𝔼⟦ size(p) ⟧ *)
-    | E_stub_builtin_call(SIZE, p) -> 
+    | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
       Eval.bind_return @@ fun pe flow ->
-      
+
       begin match ekind pe with
         | E_c_points_to(P_block (b, o)) ->
           eval_base_size b exp.erange man flow |>
           Eval.bind @@ fun base_size flow ->
-      
+
           let t = under_type p.etyp in
           let exp' = div base_size (of_z (Z.max Z.one (sizeof_type t)) exp.erange) exp.erange in
           Eval.singleton exp' flow
-      
+
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
       end
+
+    (* 𝔼⟦ valid(p) ⟧ *)
+    | E_stub_builtin_call( PTR_VALID, p) ->
+      man.eval ~zone:(Z_c_low_level, Z_c_cell_expand) p flow |>
+      Eval.bind_return @@ fun p flow ->
+      let exp' = { exp with ekind = E_stub_builtin_call( PTR_VALID, p) } in
+      Eval.singleton exp' flow
 
     | _ -> None
 

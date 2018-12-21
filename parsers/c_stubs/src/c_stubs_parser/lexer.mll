@@ -66,6 +66,8 @@ let _ =
      "new", NEW;
      "free", FREE;
      "return", RETURN;
+     "ptr_valid", PTR_VALID;
+     "valid", PTR_VALID; (* shortcut to ptr_valid *)
      "float_valid", FLOAT_VALID;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;

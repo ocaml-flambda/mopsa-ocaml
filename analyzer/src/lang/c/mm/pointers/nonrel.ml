@@ -361,6 +361,33 @@ struct
 
       eval_pointer_compare exp' man flow
 
+    (* 𝔼⟦ ptr_valid(p) ⟧ *)
+    | Stubs.Ast.E_stub_builtin_call( PTR_VALID, p) ->
+      (* A valid pointer is not NULL nor INVALID and its offset is
+         within [0, sizeof(base) - sizeof(under_type t) [ *)
+
+      (* Evaluate the pointed memory block *)
+      eval_points_to p man flow |>
+      OptionExt.lift @@ Eval.bind @@ fun pt flow ->
+
+      begin match ekind pt with
+        | E_c_points_to(P_block(b, o)) ->
+          (* Evaluate the size of the base *)
+          Common.Base.eval_base_size b exp.erange man flow |>
+          Eval.bind @@ fun size flow ->
+
+          (* Check validity of the offset *)
+          let cond = mk_in o (mk_zero exp.erange) size exp.erange in
+          Eval.singleton cond flow
+
+        | E_c_points_to(P_fun _) -> Eval.singleton (mk_one exp.erange) flow
+
+        | E_c_points_to(P_null | P_invalid) -> Eval.singleton (mk_zero exp.erange) flow
+
+        | E_c_points_to(P_top) -> Eval.singleton (mk_top T_bool exp.erange) flow
+
+        | _ -> panic_at exp.erange "valid(%a) not supported" pp_expr pt
+      end
 
     | E_binop(O_minus, e1, e2)
       when is_c_pointer_type e1.etyp &&

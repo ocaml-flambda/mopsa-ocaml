@@ -29,6 +29,7 @@ type builtin =
   | OFFSET
   | BASE
   | PRIMED
+  | PTR_VALID
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
@@ -199,6 +200,7 @@ let pp_builtin fmt f =
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"
+  | PTR_VALID -> pp_print_string fmt "ptr_valid"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
@@ -329,7 +331,7 @@ let () =
 
         | E_stub_builtin_call(f, arg) ->
           { exprs = [arg]; stmts = [] },
-          (function {exprs = [args]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
+          (function {exprs = [arg]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
 
         | E_stub_quantified _ -> leaf e
 

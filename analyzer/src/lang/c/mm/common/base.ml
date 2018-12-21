@@ -12,6 +12,7 @@ open Framework.Ast
 open Universal.Ast
 open Mopsa
 open Ast
+open Zone
 
 (** lv base *)
 type base =
@@ -40,3 +41,14 @@ let base_size =
   | V v -> sizeof_type v.vtyp
   | S s -> Z.of_int @@ String.length s
   | b -> Exceptions.panic "[base_size]: unknown base %a" pp_base b
+
+(** Evaluate the size of a base *)
+let eval_base_size base ?(via=Z_any) range man flow =
+  match base with
+  | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
+  | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
+  | A addr ->
+    let mk_addr_size addr range =
+      mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul
+    in
+    man.eval ~zone:(Z_c, Z_c_scalar) ~via (mk_addr_size addr range) flow

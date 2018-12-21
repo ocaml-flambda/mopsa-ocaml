@@ -170,7 +170,7 @@ let builtin_type f arg =
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
-  | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
+  | PTR_VALID | FLOAT_VALID | FLOAT_INF | FLOAT_NAN -> bool_type
   | OLD    -> arg.content.Ast.typ
 
 
@@ -460,6 +460,7 @@ and visit_builtin b =
   | SIZEOF   -> Exceptions.panic "sizeof not resolved"
   | OFFSET -> Ast.OFFSET
   | BASE   -> Ast.BASE
+  | PTR_VALID -> Ast.PTR_VALID
   | FLOAT_VALID -> Ast.FLOAT_VALID
   | FLOAT_INF   -> Ast.FLOAT_INF
   | FLOAT_NAN   -> Ast.FLOAT_NAN
