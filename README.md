@@ -11,7 +11,7 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 
 * ocaml (version >= 4.06.0)
 * apron
-* clang (version >= 4.x)
+* clang (version >= 5.x)
 * zarith
 * menhir
 * yojson
@@ -42,7 +42,7 @@ make
 Tested on Fedora 27:
 
 ```bash
-sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-4.0.? llvm-devel-4.0.? gmp-devel mpfr-devel zlib-devel make which
+sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-devel-5.0.? gmp-devel mpfr-devel zlib-devel make which
 opam init
 eval $(opam config env)
 opam install apron ocp-pack-split zarith menhir yojson javalib
