@@ -81,6 +81,15 @@ type comment = {
   }
 (** Raw comment found in the source file. *)
 
+
+(** {2 Macros} *)
+
+type macro = {
+    macro_name: string; (** Macro name *)
+    macro_params: string list; (** List of parameter names *)
+    macro_contents: string list; (** List of source tokens (as string) *)
+  }
+             
              
 
 (** {2 AST} *)

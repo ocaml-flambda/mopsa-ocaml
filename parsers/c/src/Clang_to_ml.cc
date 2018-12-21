@@ -4505,6 +4505,48 @@ CAML_EXPORT value mlclang_get_target_info(value target) {
 
 
 
+
+/* Macro table */
+/************* */
+
+
+CAMLprim value getMacroTable(SourceManager& src, Preprocessor &pp)
+{
+  CAMLparam0();
+  CAMLlocal4(ret,tmp1,tmp2,tmp3);
+
+  ret = Val_false;
+  
+  const IdentifierTable & tbl = pp.getIdentifierTable();
+  for (auto& id : tbl) {
+    const IdentifierInfo* i = id.getValue();
+    if (i->hasMacroDefinition()) {
+      MacroInfo* m = pp.getMacroInfo(i);
+
+      GENERATE_LIST(tmp1, m->params(),
+                    caml_copy_string(child->getName().str().c_str())
+                    );
+
+      GENERATE_LIST(tmp2, m->tokens(),
+                    caml_copy_string((std::string(src.getCharacterData(child.getLocation()), child.getLength())).c_str())
+                    );
+
+      tmp3 = caml_alloc_tuple(3);
+      Store_field(tmp3, 0, caml_copy_string(id.getKey().str().c_str()));
+      Store_field(tmp3, 1, tmp1);
+      Store_field(tmp3, 2, tmp2);
+
+      tmp1 = caml_alloc_tuple(2);
+      Store_field(tmp1, 0, tmp3);
+      Store_field(tmp1, 1, ret);
+      ret = tmp1;
+    }
+  }
+
+  CAMLreturn(ret);
+}
+
+
 /* Parsing */
 /* ******* */
 
@@ -4599,13 +4641,52 @@ CAML_EXPORT value mlclang_parse(value target, value name, value args) {
   ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &pp);
   ASTContext& Context = ci.getASTContext();
   ParseAST(pp, &ci.getASTConsumer(), Context);
+
+  // get disgnostics
   ci.getDiagnosticClient().EndSourceFile();
 
   
-  ret = caml_alloc_tuple(3);
+  /*
+  // get macro table
+  
+  const IdentifierTable & tbl = pp.getIdentifierTable();
+  for (auto& id : tbl) {
+    const IdentifierInfo* i = id.getValue();
+    if (i->hasMacroDefinition()) {
+      MacroInfo* m = pp.getMacroInfo(i);
+
+      GENERATE_LIST(tmp, m->params(),
+                    caml_copy_string(child->getName().str().c_str())
+                    );
+      GENERATE_LIST(tmp, m->tokens(),
+                    caml_copy_string((std::string(src.getCharacterData(child.getLocation()), child.getLength())).c_str())
+                    );
+
+
+      std::cout << id.getKey().str();
+      for (const IdentifierInfo* p : m->params()) {
+        std::cout << " " << p->getName().str();
+      }
+
+
+      
+      std::cout << " = ";
+      for (const Token& t : m->tokens()) {
+        std::string s = std::string(src.getCharacterData(t.getLocation()),
+                                    t.getLength());
+        std::cout << s;
+      }
+      std::cout << std::endl;
+    }
+  }
+*/
+    
+  // return all info
+  ret = caml_alloc_tuple(4);
   Store_field(ret, 0, tmp);
   Store_field(ret, 1, diag->getDiagnostics());
   Store_field(ret, 2, com.getRawCommentList(Context));
-
+  Store_field(ret, 3, getMacroTable(src, pp));
+    
   CAMLreturn(ret);
 }
