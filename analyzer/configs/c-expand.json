@@ -25,7 +25,7 @@
 
 	// C stub resources
 	"c.resources.memory",
-	"c.resources.attribute",
+	"c.resources.common",
 
         // Memory model
         {

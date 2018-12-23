@@ -152,12 +152,17 @@ type expr_kind +=
   | E_stub_attribute of expr * string
   (** Access to an attribute of a resource *)
 
+  | E_stub_resource_mem of expr * resource
+  (** Filter environments in which an instance is in a resource pool *)
+
 let mk_stub_call stub args range =
   mk_expr (E_stub_call (stub, args)) range
 
 let mk_stub_quantified quant v s range =
   mk_expr (E_stub_quantified(quant, v, s)) range ~etyp:v.vtyp
 
+let mk_stub_resource_mem e res range =
+  mk_expr (E_stub_resource_mem (e, res)) ~etyp:T_bool range
 
 (** Check whether an expression is quantified? *)
 let is_expr_quantified e =
@@ -320,6 +325,12 @@ let () =
             (fun () -> compare f1 f2)
           ]
 
+        | E_stub_resource_mem(x1, res1), E_stub_resource_mem(x2, res2) ->
+          Compare.compose [
+            (fun () -> compare_expr x1 x2);
+            (fun () -> compare res1 res2);
+          ]
+
         | _ -> next e1 e2
       );
 
@@ -339,6 +350,10 @@ let () =
           { exprs = [o]; stmts = [] },
           (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
 
+        | E_stub_resource_mem(x, res) ->
+          { exprs = [x]; stmts = []},
+          (function { exprs = [x] } -> { e with ekind = E_stub_resource_mem(x, res) } | _ -> assert false)
+
         | _ -> next e
       );
 
@@ -350,6 +365,7 @@ let () =
         | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
         | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
+        | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
         | _ -> next fmt e
       );
   }

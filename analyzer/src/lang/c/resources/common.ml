@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Evaluation of resource attributes *)
+(** Common transfer functions for resource management *)
 
 open Mopsa
 open Universal.Ast
@@ -23,13 +23,13 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_resources_attribute : unit domain
+  type _ domain += D_c_resources_common : unit domain
 
-  let id = D_c_resources_attribute
-  let name = "c.resources.attribute"
+  let id = D_c_resources_common
+  let name = "c.resources.common"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_resources_attribute -> Some Eq
+    | D_c_resources_common -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -81,7 +81,25 @@ struct
         | _ -> assert false
       end
 
+    | E_stub_resource_mem(p, res) ->
+      man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
+      Eval.bind_return @@ fun pt flow ->
 
+      begin match ekind pt with
+        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
+          if res = res' then
+            Eval.singleton (mk_one exp.erange ~typ:u8) flow
+          else
+            Eval.singleton (mk_zero exp.erange ~typ:u8) flow
+
+        | E_c_points_to P_top ->
+          Eval.singleton (mk_top T_bool exp.erange) flow
+
+        | _ ->
+          Eval.singleton (mk_zero exp.erange ~typ:u8) flow
+      end
+      
+  
     | _ -> None
 
   let ask _ _ _ = None

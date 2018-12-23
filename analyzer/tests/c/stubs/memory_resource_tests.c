@@ -19,3 +19,19 @@ void test_new_int_array() {
   a[9] = 100;
   _mopsa_assert(a[0] + a[9] == 110);
 }
+
+
+
+/*$
+ * requires: p in Memory;
+ * ensures : free(p);
+ */
+void my_free(void*p);
+
+void test_free() {
+  int *p = (int *)my_malloc(sizeof(int));
+  *p = 10;
+  my_free(p);
+  int y = *p;
+  _mopsa_assert_unsafe();
+}

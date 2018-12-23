@@ -130,9 +130,21 @@ struct
       in
       ftrue, ffalse
 
-    | F_in (v, S_resource _ ) -> panic_at f.range "F_in(_, S_resource) not implemented"
+    | F_in (e, S_resource res ) ->
+      let cond = mk_stub_resource_mem e res f.range in
+      let ftrue = man.exec (mk_assume cond f.range) flow in
+      let ffalse =
+        if not negate then None
+        else
+          let cond' = mk_not cond f.range in
+          Some (man.exec (mk_assume cond' f.range) flow)
+      in
+      ftrue, ffalse
 
-    | F_free(e) -> panic_at f.range "F_free(e) not implemented"
+    | F_free(e) ->
+      if negate then panic_at f.range "free can not be negated";
+      let flow' = man.exec (mk_free_addr e f.range) flow in
+      flow', None
 
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula q v s f ~negate range man flow =
