@@ -493,14 +493,6 @@ let is_math_type = function
   | T_int | T_float _ | T_bool -> true
   | _ -> false
 
-
-module Addr =
-struct
-  type t = addr
-  let compare = compare_addr
-  let print = pp_addr
-end
-
 (*==========================================================================*)
 (** {2 Statements} *)
 (*==========================================================================*)
