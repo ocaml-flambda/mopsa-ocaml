@@ -143,7 +143,7 @@ struct
 
     | F_free(e) ->
       if negate then panic_at f.range "free can not be negated";
-      let flow' = man.exec (mk_free_addr e f.range) flow in
+      let flow' = man.exec (mk_stub_free e f.range) flow in
       flow', None
 
   (** Evaluate a quantified formula and its eventual negation *)

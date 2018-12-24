@@ -493,6 +493,14 @@ let is_math_type = function
   | T_int | T_float _ | T_bool -> true
   | _ -> false
 
+
+module Addr =
+struct
+  type t = addr
+  let compare = compare_addr
+  let print = pp_addr
+end
+
 (*==========================================================================*)
 (** {2 Statements} *)
 (*==========================================================================*)
@@ -533,7 +541,7 @@ type stmt_kind +=
   | S_print
   (** Print the abstract flow map at current location *)
 
-  | S_free_addr of expr (** release an address *)
+  | S_free_addr of addr (** release an address *)
 
 
 let () =
@@ -578,8 +586,8 @@ let () =
 
         | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
 
-        | S_free_addr e1, S_free_addr e2 ->
-          compare_expr e1 e2
+        | S_free_addr a1, S_free_addr a2 ->
+          compare_addr a1 a2
 
         | _ -> next s1 s2
       );
@@ -618,7 +626,7 @@ let () =
             | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
           end
         | S_print -> fprintf fmt "print();"
-        | S_free_addr e -> fprintf fmt "free(%a);" pp_expr e
+        | S_free_addr a -> fprintf fmt "free_addr(%a);" pp_addr a
         | _ -> default fmt stmt
       );
 
@@ -674,10 +682,7 @@ let () =
              {stmt with skind = S_unit_tests(tests)}
           )
 
-        | S_free_addr(addr) ->
-          { exprs = [addr]; stmts = [] },
-          (function { exprs = [addr] } -> { stmt with skind = S_free_addr(addr) } | _ -> assert false)
-
+        | S_free_addr _ -> leaf stmt
         | S_print -> leaf stmt
         | S_fold(_, _) -> leaf stmt
         | S_expand(_, _) -> leaf stmt
@@ -711,8 +716,8 @@ let mk_while cond body range =
 let mk_rebase_addr old recent mode range =
   mk_stmt (S_rebase_addr (old, recent, mode)) range
 
-let mk_free_addr e range =
-  mk_stmt (S_free_addr e) range
+let mk_free_addr a range =
+  mk_stmt (S_free_addr a) range
 
 let mk_call fundec args range =
   mk_expr (E_call (

@@ -181,12 +181,18 @@ let is_expr_quantified e =
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
+  | S_stub_free of expr
+  (** Release a resource *)
+
   (** Rename primed variables of assigned dimensions *)
   | S_stub_rename_primed of expr  (** modified pointer *) *
                             (
                               expr  (** index lower bound *) *
                               expr  (** index upper bound *)
                             ) list
+
+let mk_stub_free e range =
+  mk_stmt (S_stub_free e) range
 
 let mk_stub_rename_primed t offsets range =
   mk_stmt (S_stub_rename_primed (t, offsets)) range
@@ -377,6 +383,9 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
+        | S_stub_free(e1), S_stub_free(e2) ->
+          compare_expr e1 e2
+
         | S_stub_rename_primed(t1, offsets1), S_stub_rename_primed(t2, offsets2) ->
           Compare.compose [
             (fun () -> compare_expr t1 t2);
@@ -388,12 +397,19 @@ let () =
 
     visit = (fun next s ->
         match skind s with
+        | S_stub_free e ->
+          { exprs = [e]; stmts = [] },
+          (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
+
         | S_stub_rename_primed(t, offsets) -> panic "visitor for S_stub_rename_primed not supported"
+
         | _ -> next s
       );
 
     print = (fun next fmt s ->
         match skind s with
+        | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
+
         | S_stub_rename_primed(t,offsets) ->
           fprintf fmt "rename primed %a%a;"
             pp_expr t
