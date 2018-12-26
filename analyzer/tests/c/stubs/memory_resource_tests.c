@@ -24,8 +24,7 @@ void test_new_int_array() {
 
 /*$
  * requires: p in Memory;
- * assigns : @p;
- * ensures : free(p) and (@p)' == INVALID;
+ * free: p;
  */
 void my_free(void*p);
 

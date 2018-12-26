@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Concrete syntax trees for C stubs *)
+(** Concrete syntax tree for C stubs *)
 
 open Location
 
@@ -20,6 +20,7 @@ and simple_stub = {
   simple_stub_assigns    : assigns with_range list;
   simple_stub_local      : local with_range list;
   simple_stub_ensures    : ensures with_range list;
+  simple_stub_free        : free with_range list;
 }
 
 and case_stub = {
@@ -48,13 +49,16 @@ and assigns = {
 }
 
 and case = {
-  case_label: string;
-  case_assumes: assumes with_range list;
-  case_requires : requires with_range list;
-  case_assigns  : assigns with_range list;
-  case_local    : local with_range list;
-  case_ensures  : ensures with_range list;
+  case_label     : string;
+  case_assumes   : assumes with_range list;
+  case_requires  : requires with_range list;
+  case_assigns   : assigns with_range list;
+  case_local     : local with_range list;
+  case_ensures   : ensures with_range list;
+  case_free : free with_range list;
 }
+
+and free = expr with_range
 
 and formula =
   | F_expr      of expr with_range
@@ -64,7 +68,6 @@ and formula =
   | F_forall    of var * c_qual_typ * set * formula with_range
   | F_exists    of var * c_qual_typ * set * formula with_range
   | F_in        of expr with_range * set
-  | F_free      of expr with_range
   | F_predicate of var * expr with_range list
 
 and expr =
@@ -317,7 +320,6 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., " ~is_first:true) params
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
-  | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
 and pp_log_binop fmt =
   function
@@ -376,8 +378,11 @@ let pp_assumes fmt (assumes:assumes with_range) =
 let pp_ensures fmt ensures =
   fprintf fmt "ensures  : @[%a@];" pp_formula ensures.content
 
+let pp_free fmt free =
+  fprintf fmt "free : %a;" pp_expr free.content
+  
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a@]"
+  fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a%a@]"
     case.content.case_label
     (pp_list pp_assumes "@\n" ~is_first:true) case.content.case_assumes
     (pp_list pp_local "@\n" ~is_first:
@@ -398,12 +403,19 @@ let pp_case fmt case =
         (List.length case.content.case_requires == 0) &&
         (List.length case.content.case_assigns == 0))
     ) case.content.case_ensures
+    (pp_list pp_free "@\n" ~is_first:(
+        (List.length case.content.case_assumes == 0) &&
+        (List.length case.content.case_local == 0) &&
+        (List.length case.content.case_requires == 0) &&
+        (List.length case.content.case_assigns == 0) &&
+        (List.length case.content.case_ensures == 0))
+    ) case.content.case_free
 
 
 let pp_stub fmt stub =
   match stub.content with
   | S_simple ss ->
-    fprintf fmt "%a%a%a%a%a"
+    fprintf fmt "%a%a%a%a%a%a"
       (pp_list pp_predicate "@\n" ~is_first:true) ss.simple_stub_predicates
       (pp_list pp_requires "@\n" ~is_first:
          (List.length ss.simple_stub_predicates == 0)
@@ -423,6 +435,13 @@ let pp_stub fmt stub =
           (List.length ss.simple_stub_assigns == 0) &&
           (List.length ss.simple_stub_local == 0))
       ) ss.simple_stub_ensures
+      (pp_list pp_free "@\n" ~is_first:(
+          (List.length ss.simple_stub_predicates == 0) &&
+          (List.length ss.simple_stub_requires == 0) &&
+          (List.length ss.simple_stub_assigns == 0) &&
+          (List.length ss.simple_stub_local == 0) &&
+          (List.length ss.simple_stub_ensures == 0))
+      ) ss.simple_stub_free
 
   | S_case ms ->
     fprintf fmt "%a%a%a"

@@ -80,11 +80,7 @@ struct
       (* Remove the bytes attribute before removing the address *)
       let stmt' = mk_remove (mk_bytes_var addr mode stmt.srange) stmt.srange in
       let flow' = man.exec stmt' flow in
-
-      (* Remove the address from the heap *)
-      let stmt'' = mk_free_addr addr stmt.srange in
-      man.exec stmt'' flow' |>
-      Post.return
+      Post.return flow'
 
     | _ -> None
 

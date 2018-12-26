@@ -141,11 +141,6 @@ struct
       in
       ftrue, ffalse
 
-    | F_free(e) ->
-      if negate then panic_at f.range "free can not be negated";
-      let flow' = man.exec (mk_stub_free e f.range) flow in
-      flow', None
-
   (** Evaluate a quantified formula and its eventual negation *)
   and eval_quantified_formula q v s f ~negate range man flow =
     (* Add [v] to the environment *)
@@ -303,10 +298,16 @@ struct
     in
     man.exec (mk_block block2 range) flow
 
+  let exec_free free man flow =
+    let e = free.content in
+    let stmt = mk_stub_free e free.range in
+    man.exec stmt flow
+
   (** Compute a post-condition *)
   let exec_post post return range man flow =
     (* Execute `local` section *)
     let flow = List.fold_left (fun flow l -> exec_local l man flow) flow post.post_local in
+
     (* Execute `ensures` section *)
     let rec doit = function
       | [] -> flow
@@ -316,6 +317,11 @@ struct
         Flow.meet man (doit tl)
     in
     let flow = doit post.post_ensures in
+
+    (* Execute `free` section *)
+    let flow = List.fold_left (fun flow f -> exec_free f man flow) flow post.post_free in
+
+    (* Clean the post-condition *)
     clean_post post return range man flow
 
   (** Execute the body of a stub *)

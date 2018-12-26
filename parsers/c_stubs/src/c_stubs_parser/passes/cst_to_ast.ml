@@ -497,7 +497,6 @@ let rec visit_formula f prj func =
     let v' = visit_var v prj func in
     Ast.F_exists(v', visit_set s prj func, visit_formula f' prj func)
   | F_in(e, s) -> Ast.F_in(visit_expr e prj func, visit_set s prj func)
-  | F_free(e) -> Ast.F_free(visit_expr e prj func)
   | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
 
 
@@ -523,6 +522,10 @@ let visit_ensures ens prj func =
   bind_range ens @@ fun ens ->
   visit_formula ens prj func
 
+let visit_free free prj func =
+  bind_range free @@ fun free ->
+  visit_expr free prj func
+
 let visit_local loc prj func =
   bind_range loc @@ fun loc ->
   let lvar = visit_var loc.lvar prj func in
@@ -542,6 +545,7 @@ let visit_case c prj func =
   let assigns = visit_list visit_assigns c.case_assigns prj func in
   let local = visit_list visit_local c.case_local prj func in
   let ensures = visit_list visit_ensures c.case_ensures prj func in
+  let free = visit_list visit_free c.case_free prj func in
 
   Ast.{
     case_label = c.case_label;
@@ -551,6 +555,7 @@ let visit_case c prj func =
       post_assigns = assigns;
       post_local   = local;
       post_ensures = ensures;
+      post_free    = free;
     }
   }
 
@@ -570,6 +575,7 @@ let doit
     let assigns = visit_list visit_assigns s.simple_stub_assigns prj func  in
     let local = visit_list visit_local s.simple_stub_local prj func  in
     let ensures = visit_list visit_ensures s.simple_stub_ensures prj func in
+    let free = visit_list visit_free s.simple_stub_free prj func in
 
     Ast.{
       stub_requires = requires;
@@ -577,6 +583,7 @@ let doit
           post_assigns = assigns;
           post_local   = local;
           post_ensures = ensures;
+          post_free    = free;
         }
     }
 
