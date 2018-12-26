@@ -88,6 +88,7 @@ type macro = {
     macro_name: string; (** Macro name *)
     macro_params: string list; (** List of parameter names *)
     macro_contents: string list; (** List of source tokens (as string) *)
+    macro_loc: loc; (** Macro location *)
   }
              
              
