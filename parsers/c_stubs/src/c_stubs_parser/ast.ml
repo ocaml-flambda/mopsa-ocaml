@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstract syntax trees for C stubs *)
+(** Abstract syntax tree for C stubs *)
 
 open Location
 
@@ -107,8 +107,6 @@ type formula =
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
   | F_in     of expr with_range * set
-  | F_free   of expr with_range
-
 
 
 (** {2 Pre-condition} *)
@@ -138,6 +136,8 @@ type assigns = {
   assign_offset: (expr with_range * expr with_range) list option;  (** offset *)
 }
 
+type free = expr with_range
+
 
 (** {2 Stubs} *)
 (** ********* *)
@@ -155,6 +155,7 @@ and post = {
   post_assigns  : assigns with_range list;
   post_local    : local with_range list;
   post_ensures  : ensures with_range list;
+  post_free     : free with_range list;
 }
 
 and case = {
@@ -259,7 +260,6 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
-  | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
 and pp_log_binop fmt =
   function
@@ -294,6 +294,9 @@ and pp_local_value fmt v =
 let pp_requires fmt requires =
   fprintf fmt "requires: @[%a@];" pp_formula requires.content
 
+let pp_free fmt free =
+  fprintf fmt "free: %a;" pp_expr free.content
+
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
@@ -313,10 +316,11 @@ let pp_ensures fmt ensures =
   fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
 
 let pp_post fmt post =
-  fprintf fmt "%a%a%a"
+  fprintf fmt "%a%a%a%a"
     (pp_list pp_assigns "@\n") post.post_assigns
     (pp_list pp_local "@\n") post.post_local
     (pp_list pp_ensures "@\n") post.post_ensures
+    (pp_list pp_free "@\n") post.post_free
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"

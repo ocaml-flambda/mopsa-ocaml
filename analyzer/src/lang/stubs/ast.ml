@@ -42,7 +42,6 @@ type formula =
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
   | F_in     of expr * set (* set membership predicate *)
-  | F_free   of expr (* resource release *)
 
 and set =
   | S_interval of expr * expr (* intervals of integers  *)
@@ -91,6 +90,7 @@ and post = {
   post_assigns  : assigns with_range list;
   post_local    : local with_range list;
   post_ensures  : ensures with_range list;
+  post_free     : free with_range list;
 }
 
 (** A stub case consists of a filter on the pre-condition and a
@@ -109,6 +109,9 @@ and case = {
 and requires = formula with_range
 and ensures  = formula with_range
 and assumes  = formula with_range
+
+(* The free section indicates only the expression of the released resource *)
+and free = expr
 
 (* Local variables have values in the post-condition only. *)
 and local = {
@@ -229,7 +232,6 @@ let rec pp_formula fmt f =
   | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
-  | F_free e -> fprintf fmt "free(%a)" pp_expr e
 
 and pp_set fmt =
   function
@@ -274,16 +276,19 @@ let pp_assumes fmt assumes =
 let pp_ensures fmt ensures =
   fprintf fmt "ensures:@ @[<v 2>  %a@];" pp_formula ensures.content
 
+let pp_free fmt free =
+  fprintf fmt "free: %a;" pp_expr free.content
+
 let pp_section pp ?(first=false) fmt l =
   if not first && l != [] then fprintf fmt "@\n";
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp fmt l
 
-
 let pp_post ~first fmt post =
-  fprintf fmt "%a%a%a"
+  fprintf fmt "%a%a%a%a"
     (pp_section pp_assigns ~first) post.post_assigns
     (pp_section pp_local ~first:(first && post.post_assigns == [])) post.post_local
     (pp_section pp_ensures ~first:(first && post.post_assigns == [] && post.post_local == [])) post.post_ensures
+    (pp_section pp_free ~first:(first && post.post_assigns == [] && post.post_local == [] && post.post_ensures == [])) post.post_free
 
 let pp_case fmt case =
   fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
@@ -439,7 +444,6 @@ let rec visit_expr_in_formula expr_visitor f =
   | F_forall (v, s, ff) -> F_forall (v, s, visit_expr_in_formula expr_visitor ff)
   | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
   | F_in (v, s) -> F_in (v, s)
-  | F_free e -> F_free (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
 
 
 (** {2 Heap addresses for resources} *)

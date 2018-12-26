@@ -58,9 +58,7 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_stub_free { ekind = E_addr (addr, _) } ->
-      let stmt' = mk_free_addr addr stmt.srange in
-      man.exec stmt' flow |>
-      Post.return
+      Post.return flow
 
     | S_stub_free p ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
@@ -68,8 +66,11 @@ struct
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr, mode), _)) ->
-          let stmt' = mk_stub_free (mk_addr addr ~mode stmt.srange) stmt.srange in
-          man.exec stmt' flow |>
+          let stmt' = mk_free_addr addr stmt.srange in
+          let flow' = man.exec stmt' flow in
+
+          let stmt'' = mk_stub_free (mk_addr addr ~mode stmt.srange) stmt.srange in
+          man.exec stmt'' flow' |>
           Post.of_flow
 
         | E_c_points_to P_top ->

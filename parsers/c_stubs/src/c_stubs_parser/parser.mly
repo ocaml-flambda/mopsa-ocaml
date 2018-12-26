@@ -96,7 +96,7 @@
 %%
 
 stub:
-  | BEGIN predicate_list requires_list assigns_list local_list ensures_list END EOF
+  | BEGIN predicate_list requires_list assigns_list local_list ensures_list free_list END EOF
     {
       Some (
           with_range
@@ -106,6 +106,7 @@ stub:
                  simple_stub_assigns    = $4;
                  simple_stub_local      = $5;
                  simple_stub_ensures    = $6;
+                 simple_stub_free       = $7;
             })
             (from_lexing_range $startpos $endpos)
         )
@@ -207,13 +208,22 @@ assigns_offset_list:
       ($2, $4) :: $6
     }
 
+(* Free section *)
+free_list:
+  | { [] }
+  | with_range(free) free_list { $1 :: $2 }
+
+free:
+  | FREE COLON with_range(expr) SEMICOL { $3 }
+
+
 (* Cases section *)
 case_list:
   | with_range(case) { [ $1 ] }
   | with_range(case) case_list { $1 :: $2 }
 
 case:
-  | CASE STRING_CONST COLON assumes_list requires_list local_list assigns_list ensures_list
+  | CASE STRING_CONST COLON assumes_list requires_list local_list assigns_list ensures_list free_list
     {
       {
         case_label    = $2;
@@ -222,6 +232,7 @@ case:
         case_local    = $6;
         case_assigns  = $7;
         case_ensures  = $8;
+        case_free  = $9;
       }
     }
 
@@ -254,7 +265,6 @@ formula:
   | FORALL c_qual_typ var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
   | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
   | with_range(expr) IN set                           { F_in ($1, $3) }
-  | FREE with_range(expr)                             { F_free $2 }
   | LPAR formula RPAR                                 { $2 }
 
 (* C expressions *)

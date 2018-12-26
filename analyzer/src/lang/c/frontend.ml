@@ -535,11 +535,16 @@ and from_stub_post ctx post =
     post_assigns = List.map (from_stub_assigns ctx) post.post_assigns;
     post_local   = List.map (from_stub_local ctx) post.post_local;
     post_ensures = List.map (from_stub_ensures ctx) post.post_ensures;
+    post_free    = List.map (from_stub_free ctx) post.post_free;
   }
 
 and from_stub_requires ctx req =
   bind_range req @@ fun req ->
   from_stub_formula ctx req
+
+and from_stub_free ctx free =
+  bind_range free @@ fun free ->
+  from_stub_expr ctx free
 
 and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
@@ -593,7 +598,6 @@ and from_stub_formula ctx f =
   | F_forall (v, s, f) -> F_forall(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_exists (v, s, f) -> F_exists(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_in (v, s) -> F_in(from_stub_expr ctx v, from_stub_set ctx s)
-  | F_free e -> F_free(from_stub_expr ctx e)
 
 and from_stub_set ctx s =
   match s with

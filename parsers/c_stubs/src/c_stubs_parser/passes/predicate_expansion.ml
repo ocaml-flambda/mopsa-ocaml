@@ -74,7 +74,6 @@ struct
       | F_forall(v, t, s, f) -> F_forall(v, t, s, visit_formula f)
       | F_exists(v, t, s, f) -> F_exists(v, t, s, visit_formula f)
       | F_predicate(p, params) -> F_predicate(p, visit_list visit_expr params)
-      | F_free e -> F_free (visit_expr e)
       | F_in _ | F_bool _ -> f
 
     and visit_expr (e:expr with_range) =
@@ -115,7 +114,7 @@ let rec visit_formula f ctx : formula with_range =
   let range = get_range f in
   bind_range f @@ fun f ->
   match f with
-  | F_expr _ | F_bool _ | F_in (_, _) | F_free _ -> f
+  | F_expr _ | F_bool _ | F_in (_, _) -> f
 
   | F_predicate (p, params) ->
     let f = Context.inline p params ctx range in

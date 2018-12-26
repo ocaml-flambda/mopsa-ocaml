@@ -168,10 +168,6 @@ let rec visit_formula (formula:formula with_range) scope =
     let s, scope = visit_set s scope in
     F_in (e, s), scope
 
-  | F_free e ->
-    let e, scope = visit_expr e scope in
-    F_free e, scope
-
 let visit_predicate pred scope = Exceptions.panic "scoping: predicate not expanded"
 
 let visit_requires requires scope =
@@ -197,6 +193,10 @@ let visit_assigns assigns scope =
   in
   { assign_target; assign_offset }, scope
 
+let visit_free free scope =
+  bind_pair_range free @@ fun free ->
+  visit_expr free scope
+
 let visit_local_value lv scope =
   match lv with
   | L_new rc -> lv, scope
@@ -218,6 +218,7 @@ let visit_case c scope =
   let assigns, scope = visit_list visit_assigns c.case_assigns scope in
   let local, scope' = visit_list visit_local c.case_local scope in
   let ensures, scope' = visit_list visit_ensures c.case_ensures scope' in
+  let free, scope' = visit_list visit_free c.case_free scope' in
 
   {
     case_label = c.case_label;
@@ -226,6 +227,7 @@ let visit_case c scope =
     case_assigns = assigns;
     case_local = local;
     case_ensures = ensures;
+    case_free = free;
   }, scope
 
 
@@ -241,6 +243,7 @@ let doit (stub: stub with_range) : stub with_range =
     let assigns, scope = visit_list visit_assigns s.simple_stub_assigns scope in
     let local, scope = visit_list visit_local s.simple_stub_local scope in
     let ensures, scope = visit_list visit_ensures s.simple_stub_ensures scope in
+    let free, scope = visit_list visit_free s.simple_stub_free scope in
 
     S_simple {
       simple_stub_predicates = predicates;
@@ -248,6 +251,7 @@ let doit (stub: stub with_range) : stub with_range =
       simple_stub_assigns = assigns;
       simple_stub_local = local;
       simple_stub_ensures = ensures;
+      simple_stub_free = free;
     }
 
   | S_case s ->
