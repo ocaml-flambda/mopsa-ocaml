@@ -307,7 +307,7 @@ type expr_kind +=
   | E_alloc_addr of addr_kind
 
   (** Head address. *)
-  | E_addr of addr
+  | E_addr of addr * mode
 
   (** Length of array or string *)
   | E_len of expr
@@ -339,7 +339,11 @@ let () =
         | E_alloc_addr(a1), E_alloc_addr(a2) ->
           compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
 
-        | E_addr(a1), E_addr(a2) -> compare_addr a1 a2
+        | E_addr(a1, mode1), E_addr(a2, mode2) ->
+          Compare.compose [
+            (fun () -> compare_addr a1 a2);
+            (fun () -> compare_mode mode1 mode2);
+          ]
 
         | E_len(a1), E_len(a2) -> compare_expr a1 a2
 
@@ -358,7 +362,7 @@ let () =
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
         | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr {addr_uid=(-1); addr_kind=akind}
-        | E_addr addr -> pp_addr fmt addr
+        | E_addr (addr, mode) -> fprintf fmt "%a:%a" pp_addr addr pp_mode mode
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
         | E_tree (TC_symbol(e, l)) ->
@@ -472,7 +476,7 @@ let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
 
-let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
+let mk_addr addr ?(mode=STRONG) range = mk_expr ~etyp:T_addr (E_addr (addr, mode)) range
 
 let mk_alloc_addr addr_kind range =
   mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
@@ -516,9 +520,6 @@ type stmt_kind +=
 
   | S_continue (** Loop continue *)
 
-  | S_rebase_addr of addr (** old *) * addr (** new *) * mode
-  (** Change the address of a previously allocated object *)
-
   | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
   (** Unit tests suite *)
 
@@ -557,13 +558,6 @@ let () =
           Compare.compose [
             (fun () -> compare_expr c1 c2);
             (fun () -> compare_stmt body1 body2)
-          ]
-
-        | S_rebase_addr(a1,a1',m1), S_rebase_addr(a2,a2',m2) ->
-          Compare.compose [
-            (fun () -> compare_addr a1 a2);
-            (fun () -> compare_addr a1' a2');
-            (fun () -> Pervasives.compare m1 m2);
           ]
 
         | S_unit_tests(tl1), S_unit_tests(tl2) ->
@@ -704,9 +698,6 @@ let mk_if cond body orelse range =
 
 let mk_while cond body range =
   mk_stmt (S_while (cond, body)) range
-
-let mk_rebase_addr old recent mode range =
-  mk_stmt (S_rebase_addr (old, recent, mode)) range
 
 let mk_free_addr a range =
   mk_stmt (S_free_addr a) range

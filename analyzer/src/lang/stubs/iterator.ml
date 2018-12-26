@@ -258,9 +258,9 @@ struct
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
-    alloc_stub_resource res range man flow |>
+    man.eval (mk_stub_alloc_resource res range) flow |>
     Post.bind_flow man @@ fun addr flow ->
-    man.exec (mk_assign (mk_var v range) (mk_addr addr range) range) flow
+    man.exec (mk_assign (mk_var v range) addr range) flow
 
   (** Execute the `local` section *)
   let exec_local l man flow =

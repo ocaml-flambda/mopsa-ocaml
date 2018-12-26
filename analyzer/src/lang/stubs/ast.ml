@@ -464,12 +464,3 @@ let () =
 
 let mk_stub_alloc_resource res range =
   mk_alloc_addr (A_stub_resource res) range
-
-let alloc_stub_resource res range man flow : ('a, addr) evl =
-  man.eval (mk_stub_alloc_resource res range) flow |>
-  Eval.bind @@ fun e flow ->
-
-  match ekind e with
-  | E_addr addr -> Eval.singleton addr flow
-
-  | _ -> assert false

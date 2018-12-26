@@ -58,7 +58,7 @@ let eval_alloc man kind range flow =
   man.eval exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | E_addr addr -> Eval.singleton addr flow
+      | E_addr (addr, mode) -> Eval.singleton addr flow (* FIXME: handle weak address *)
       | _ -> panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
     )
 

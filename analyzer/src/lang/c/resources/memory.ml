@@ -39,8 +39,8 @@ struct
   (** ================= *)
 
   let exec_interface = {
-    export = [];
-    import = [Z_c]
+    export = [Z_c];
+    import = []
   }
 
   let eval_interface = {
@@ -57,51 +57,64 @@ struct
 
   let init prog man flow = None
 
-  (** Computation of post-conditions *)
-  (** ============================== *)
 
-  let exec zone stmt man flow  = None
+  (** Byte attribute *)
+  (** ============== *)
 
-
-  (** Evaluation of expressions *)
-  (** ========================= *)
-
-  let mk_bytes_var addr =
+  let mk_bytes_var addr mode range =
     let vname =
       Format.fprintf Format.str_formatter "%a_bytes" pp_addr addr;
       Format.flush_str_formatter ()
     in
-    mkv vname addr.addr_uid (T_c_integer C_unsigned_long)
+    let v = mkv vname addr.addr_uid (T_c_integer C_unsigned_long) in
+    mk_var v ~mode range
+
+
+  (** Computation of post-conditions *)
+  (** ============================== *)
+
+  let exec zone stmt man flow  =
+    match skind stmt with
+    (* 𝕊⟦ free(a) | a ∈ Memory ⟧ *)
+    | S_stub_free ( { ekind = E_addr ({ addr_kind = A_stub_resource "Memory" } as addr, mode) } ) ->
+      (* Remove the bytes attribute before removing the address *)
+      let stmt' = mk_remove (mk_bytes_var addr mode stmt.srange) stmt.srange in
+      let flow' = man.exec stmt' flow in
+
+      (* Remove the address from the heap *)
+      let stmt'' = mk_free_addr addr stmt.srange in
+      man.exec stmt'' flow' |>
+      Post.return
+
+    | _ -> None
+
+  (** Evaluation of expressions *)
+  (** ========================= *)
 
   let eval zone exp man flow =
     match ekind exp with
+    (* 𝔼⟦ new Memory ⟧ *)
     | E_alloc_addr (A_stub_resource "Memory") ->
       (* Allocate in the heap *)
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
       Eval.bind_return @@ fun exp flow ->
 
       begin match ekind exp with
-      | E_addr addr ->
+      | E_addr (addr, mode) ->
         (* Add byte attribute *)
-        let bytes = mk_bytes_var addr in
-        let flow' = man.exec ~zone:Z_c (mk_add_var bytes exp.erange) flow in
+        let bytes = mk_bytes_var addr mode exp.erange in
+        let flow' = man.exec (mk_add bytes exp.erange) flow in
         Eval.singleton exp flow'
 
       | _ -> assert false
         end
 
-    | E_stub_attribute(
-        { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr) },
-        "bytes"
-      ) ->
-      let bytes = mk_bytes_var addr in
-      Eval.singleton (mk_var bytes exp.erange) flow |>
-      Eval.return
-
-    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr)}) ->
-      (* FIXME: consider weak addresses *)
-      let bytes = mk_bytes_var addr in
-      Eval.singleton (mk_var bytes exp.erange) flow |>
+    (* 𝔼⟦ size(a) | a ∈ Memory ⟧ *)
+    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr, mode)})
+    (* 𝔼⟦ a:bytes | a ∈ Memory ⟧ *)
+    | E_stub_attribute({ ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr, mode) }, "bytes") ->
+      let bytes = mk_bytes_var addr mode exp.erange in
+      Eval.singleton bytes flow |>
       Eval.return
 
     | _ -> None

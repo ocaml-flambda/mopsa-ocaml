@@ -20,7 +20,7 @@ open Zone
 let name = "universal.heap.recency"
 let debug fmt = Debug.debug ~channel:name fmt
 
-module Domain : Framework.Domains.Stacked.S =
+module Domain =
 struct
 
   (** Lattice definition *)
@@ -28,17 +28,11 @@ struct
 
   include Pool
 
-  let join annot subman (abs1, sub1) (abs2, sub2) =
-    join annot abs1 abs2, sub1, sub2
+  let is_bottom _ = false
 
-  let meet annot subman (abs1, sub1) (abs2, sub2) =
-    meet annot abs1 abs2, sub1, sub2
-
-  let widen annot subman (abs1, sub1) (abs2, sub2) =
-    widen annot abs1 abs2, true, sub1, sub2
-
-  let subset subman (abs1, sub1) (abs2, sub2) =
-    subset abs1 abs2, sub1, sub2
+  let print fmt pool =
+    Format.fprintf fmt "heap: @[%a@]@\n"
+      Pool.print pool
 
   (** Domain identification *)
   (** ===================== *)
@@ -56,7 +50,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {export = [Z_u_heap]; import = []}
   let eval_interface = {export = [Z_u_heap, Z_any]; import = []}
 
   (** Initialization *)
@@ -68,11 +62,24 @@ struct
       Flow.set_annot KAddr Equiv.empty
     )
 
+
   (** Post-conditions *)
   (** *************** *)
 
   let exec zone stmt man flow =
-    None
+    match skind stmt with
+    (* 𝕊⟦ free(addr); ⟧ *)
+    | S_free_addr addr ->
+      let flow', mode =
+        if is_old addr flow then flow, WEAK
+        else Flow.map_domain_env T_cur (remove addr) man flow, STRONG
+      in
+      let stmt' = mk_remove (mk_addr addr ~mode stmt.srange) stmt.srange in
+      man.exec stmt' flow' |>
+      Post.return
+
+    | _ -> None
+
 
   (** Evaluations *)
   (** *********** *)
@@ -85,31 +92,30 @@ struct
 
         let cs = Callstack.get flow in
         let range = erange expr in
-        let recent_uid, flow = get_id_flow (cs, range, 0) flow in
-        let old_uid, flow = get_id_flow (cs, range, 1) flow in
+        let recent_uid, flow = get_id_flow (cs, range, recent_flag) flow in
+        let old_uid, flow = get_id_flow (cs, range, old_flag) flow in
 
         let recent_addr = {addr_kind; addr_uid = recent_uid} in
         let old_addr = {addr_kind; addr_uid = old_uid} in
 
-        (match Pool.mem_recent recent_addr pool, Pool.mem_old old_addr pool with
-        | false, false ->
+        (match Pool.mem recent_addr pool, Pool.mem old_addr pool with
+        | false, _ ->
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
 
         | true, false ->
           (* Only a previous strong address exists =>
              Rebase the previous strong address with strong updates. *)
-          man.exec (mk_rebase_addr old_addr recent_addr STRONG range) flow
+          Flow.map_domain_cur (add old_addr) man flow |>
+          man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
 
         | true, true ->
           (* Both strong and weak addresses exist =>
              Rebase the previous strong address with weak updates. *)
-          man.exec (mk_rebase_addr old_addr recent_addr WEAK range) flow
+          man.exec ((mk_rename (mk_addr recent_addr range) (mk_addr old_addr ~mode:WEAK range) range)) flow
 
-
-        | false, true ->
-          Exceptions.panic "? case")
-        |> Flow.set_domain_cur (add_recent recent_addr pool) man
+        )
+        |> Flow.map_domain_cur (add recent_addr) man
         |> Eval.singleton (mk_addr recent_addr (tag_range range "mk_recent_addr"))
         |> OptionExt.return
       end
@@ -123,4 +129,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stacked.register_domain (module Domain)
+  Framework.Domain.register_domain (module Domain)

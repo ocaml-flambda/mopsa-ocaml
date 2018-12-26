@@ -38,7 +38,7 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {export = [Z_c]; import = []}
 
   let eval_interface = {
     export = [Z_c, Z_c_low_level];
@@ -51,10 +51,36 @@ struct
 
   let init prog man flow = None
 
+
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let exec zone stmt man flow  = None
+  let exec zone stmt man flow  =
+    match skind stmt with
+    | S_stub_free { ekind = E_addr (addr, _) } ->
+      let stmt' = mk_free_addr addr stmt.srange in
+      man.exec stmt' flow |>
+      Post.return
+
+    | S_stub_free p ->
+      man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
+      Post.bind_return man @@ fun pt flow ->
+
+      begin match ekind pt with
+        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr, mode), _)) ->
+          let stmt' = mk_stub_free (mk_addr addr ~mode stmt.srange) stmt.srange in
+          man.exec stmt' flow |>
+          Post.of_flow
+
+        | E_c_points_to P_top ->
+          panic_at stmt.srange "resources.common: free(⊺) not supported"
+
+        | _ -> assert false
+      end
+
+
+    | _ -> None
+
 
 
   (** Evaluation of expressions *)
@@ -70,13 +96,15 @@ struct
       Eval.bind_return @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A addr, _)) ->
-          man.eval { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) } flow
+        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr, mode), _)) ->
+          let exp' = { exp with ekind = E_stub_attribute(mk_addr addr ~mode exp.erange, attr) }  in
+          man.eval exp' flow
 
         | E_c_points_to P_top ->
           (* When the resource is not assigned yet, can we just return an interval ? *)
           let l, u = rangeof exp.etyp in
-          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
+          let exp' = mk_z_interval l u ~typ:exp.etyp exp.erange in
+          Eval.singleton exp' flow
 
         | _ -> assert false
       end
@@ -86,7 +114,7 @@ struct
       Eval.bind_return @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
+        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource res' }, _), _)) ->
           if res = res' then
             Eval.singleton (mk_one exp.erange ~typ:u8) flow
           else
@@ -98,8 +126,7 @@ struct
         | _ ->
           Eval.singleton (mk_zero exp.erange ~typ:u8) flow
       end
-      
-  
+
     | _ -> None
 
   let ask _ _ _ = None

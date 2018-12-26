@@ -871,10 +871,6 @@ module Domain = struct
       Post.of_flow |>
       Post.add_merger (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange)
 
-    (* 𝕊⟦ rebase adr -> adr' ⟧ *)
-    | S_rebase_addr(adr, adr', mode) ->
-      panic_at stmt.srange "expand: S_rebase_addr not supported"
-
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in

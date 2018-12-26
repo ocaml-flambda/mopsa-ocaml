@@ -274,7 +274,6 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   | S_remove _
   | S_project _
   | S_expression _
-  | S_rebase_addr _
   | S_simple_assert _
   | S_assert _
   | S_print ->

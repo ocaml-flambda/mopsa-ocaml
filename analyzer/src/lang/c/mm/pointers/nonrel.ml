@@ -137,8 +137,8 @@ struct
     | E_constant(C_c_invalid) ->
       INVALID
 
-    | E_addr addr ->
-      ADDROF(A addr, mk_zero exp.erange)
+    | E_addr (addr, mode) ->
+      ADDROF(A (addr, mode), mk_zero exp.erange)
 
     | E_c_deref { ekind = E_c_address_of e } ->
       eval_pointer e
@@ -461,6 +461,25 @@ struct
       let o = mk_offset_var_expr pp range in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 in
       Post.return flow2
+
+    | S_remove { ekind = E_addr (addr, mode) } ->
+      let flow' = Flow.map_domain_env T_cur (fun a ->
+          let a' = NR.map (fun base ->
+              let block = Bases.PB_block (A (addr, mode)) in
+              if not (Bases.mem block base) then
+                base
+              else
+                let base' = Bases.add PB_invalid base in
+                if mode = STRONG then
+                  Bases.remove block base'
+                else
+                  base'
+            ) a
+          in
+          a'
+        ) man flow
+      in
+      Post.return flow'
 
     | S_expand(p, pl) when is_c_pointer_type p.etyp &&
                            PrimedVar.match_expr p &&
