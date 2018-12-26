@@ -22,6 +22,7 @@ let _ =
      (* Constants *)
      "true",     TRUE;
      "false",    FALSE;
+     "INVALID",  INVALID;
 
      (* Sections *)
      "requires", REQUIRES;

@@ -80,7 +80,7 @@ struct
     and visit_expr (e:expr with_range) =
       bind_range e @@ fun e ->
       match e with
-      | E_int _ | E_float _ | E_string _ | E_char _ | E_return -> e
+      | E_int _ | E_float _ | E_string _ | E_char _ | E_return | E_invalid -> e
       | E_var v ->
         begin match find_arg_expr v with
           | None -> e

@@ -120,6 +120,7 @@ let double_type = C_AST.(T_float DOUBLE, no_qual)
 let string_type s = C_AST.(T_array((T_integer(SIGNED_CHAR), no_qual), Length_cst (Z.of_int (1 + String.length s))), no_qual)
 let char_type = C_AST.(T_integer (Char SIGNED), no_qual)
 let pointer_type t = C_AST.(T_pointer t, no_qual)
+let void_type = C_AST.(T_void, no_qual)
 
 let is_int_typ t =
   match unroll_type t |> fst with
@@ -372,6 +373,8 @@ let rec visit_expr e prj func =
     | E_string(s) -> Ast.E_string(s), string_type s
 
     | E_char(c) -> Ast.E_char(c), char_type
+
+    | E_invalid -> Ast.E_invalid, pointed_type void_type
 
     | E_var(v) ->
       let v = visit_var v prj func in

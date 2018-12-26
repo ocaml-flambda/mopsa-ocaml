@@ -19,6 +19,7 @@ type expr_kind =
   | E_float     of float
   | E_string    of string
   | E_char      of int
+  | E_invalid
 
   | E_var       of var
 
@@ -201,6 +202,7 @@ let rec pp_expr fmt exp =
     if c >= 32 && c < 127
     then fprintf fmt "'%c'" (Char.chr c)
     else fprintf fmt "%d" c
+  | E_invalid -> fprintf fmt "INVALID"
   | E_var v -> pp_var fmt v
   | E_unop (op, e) -> fprintf fmt "%a(%a)" pp_unop op pp_expr e
   | E_binop (op, e1, e2) -> fprintf fmt "(%a) %a (%a)" pp_expr e1 pp_binop op pp_expr e2

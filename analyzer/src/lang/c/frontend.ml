@@ -610,6 +610,7 @@ and from_stub_expr ctx exp =
   | E_float f -> E_constant (C_float f)
   | E_string s -> E_constant (C_string s)
   | E_char c -> E_constant (C_c_character (Z.of_int c, Ast.C_char_ascii)) (* FIXME: support other character kinds *)
+  | E_invalid -> E_constant C_c_invalid
   | E_var v -> E_var (from_var ctx v, STRONG)
   | E_unop (op, e) -> E_unop(from_stub_expr_unop op, from_stub_expr ctx e)
   | E_binop (op, e1, e2) -> E_binop(from_stub_expr_binop op, from_stub_expr ctx e1, from_stub_expr ctx e2)

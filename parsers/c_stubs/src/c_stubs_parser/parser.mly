@@ -21,6 +21,7 @@
 %token <float> FLOAT_CONST
 %token <int> CHAR_CONST
 %token <string> STRING_CONST
+%token INVALID
 
 (* Identifiers *)
 %token <string> IDENT
@@ -264,6 +265,7 @@ expr:
   | STRING_CONST                                      { E_string $1}
   | FLOAT_CONST                                       { E_float $1 }
   | CHAR_CONST                                        { E_char $1 }
+  | INVALID                                           { E_invalid }
   | var                                               { E_var $1 }
   | unop with_range(expr)                             { E_unop ($1, $2) } %prec UNARY
   | with_range(expr) binop with_range(expr)           { E_binop ($2, $1, $3) }
