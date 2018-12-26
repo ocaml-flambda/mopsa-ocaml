@@ -6,16 +6,17 @@
 /*                                                                          */
 /****************************************************************************/
 
-
 /*
-  Useful definitions used throughout the libc stubs.
+ * Entry point of the libc
  */
 
-#ifndef MOPSA_LIBC_UTILS_H
-#define MOPSA_LIBC_UTILS_H
-
-extern int _errno;
-
-static const void* _NULL = (void*)0;
-
-#endif /* MOPSA_LIBC_UTILS_H */
+#include "errno.c"
+#include "assert.c"
+#include "stdio.c"
+#include "stdlib.c"
+#include "unistd.c"
+#include "string.c"
+#include "inttypes.c"
+#include "fcntl.c"
+#include "arpa/inet.c"
+#include "netinet/in.c"

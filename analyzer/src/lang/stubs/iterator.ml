@@ -257,11 +257,20 @@ struct
     Post.bind_flow man @@ fun addr flow ->
     man.exec (mk_assign (mk_var v range) addr range) flow
 
+  (** Execute a function call *)
+  (* FIXME: check the purity of f *)
+  let exec_local_call v f args range man flow =
+    man.exec (mk_assign
+                (mk_var v range)
+                (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
+                range
+             ) flow
+
   (** Execute the `local` section *)
   let exec_local l man flow =
     match l.content.lval with
     | L_new  res -> exec_local_new l.content.lvar res l.range man flow
-    | L_call _ -> panic "function calls not yet supported"
+    | L_call (f, args) -> exec_local_call l.content.lvar f args l.range man flow
 
   let exec_ensures e return man flow =
     (* Replace E_stub_return expression with the fresh return variable *)
@@ -272,7 +281,7 @@ struct
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> debug "return found"; Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
              | _ -> VisitParts e
           )
           e.content

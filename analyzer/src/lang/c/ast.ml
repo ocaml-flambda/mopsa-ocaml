@@ -213,8 +213,6 @@ type expr_kind +=
 
   | E_c_builtin_function of string
 
-  | E_c_call of expr (** target *) * expr list (** arguments *)
-
   | E_c_builtin_call of string * expr list
 
   | E_c_arrow_access of expr (** pointer *) * int (** field index *) * string (** field *)
@@ -731,7 +729,7 @@ let mk_c_call f args range =
     c_ftype_variadic = f.c_func_variadic;
   }
   in
-  mk_expr (E_c_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
 
 let mk_c_call_stmt f args range =
   let exp = mk_c_call f args range in

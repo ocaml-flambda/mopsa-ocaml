@@ -10,6 +10,7 @@
 
 open Mopsa
 open Mm.Common.Points_to
+open Universal.Ast
 open Ast
 open Zone
 
@@ -64,7 +65,7 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_call(f, args) ->
+    | E_call(f, args) ->
       begin
         man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
         Eval.bind @@ fun f flow ->

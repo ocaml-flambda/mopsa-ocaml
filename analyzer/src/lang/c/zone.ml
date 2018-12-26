@@ -43,7 +43,7 @@ let () =
         | E_c_function _
         | E_c_builtin_function _
         | E_c_predefined _
-        | E_c_call _
+        | E_call _
         | E_c_builtin_call _
         | E_c_arrow_access _
         | E_c_assign _
