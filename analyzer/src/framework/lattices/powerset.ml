@@ -128,3 +128,82 @@ struct
   let apply (f:Set.t -> 'a) (dfl:'a) (abs:t) : 'a = Top.top_apply f dfl abs
 
 end
+
+
+
+
+
+
+(** Powerset with lower and upper approximations *)
+
+module MakeWithUnder(Elt: ELT) =
+struct
+
+  module Set = Set.Make(Elt)
+  module USet = Make(Elt)
+
+  (* Lower approximation *)
+  type l = Set.t
+
+  (* Upper approximation *)
+  type u = USet.t
+
+  (* Powerset with lower and upper approximation *)
+  type t = l * u
+
+  let empty : t = (Set.empty, USet.empty)
+
+  let bottom : t = empty
+
+  let top : t = (Set.empty, USet.top)
+
+  let is_empty ((l,u):t) : bool =
+    Set.is_empty l &&
+    USet.is_empty u
+
+  let is_bottom = is_empty
+
+  let is_top ((l,u): t) =
+    Set.is_empty l &&
+    USet.is_top u
+
+  let subset ((l1,u1): t) ((l2,u2): t) : bool =
+    Set.subset l1 l2 &&
+    USet.subset u1 u2
+
+  let equal ((l1,u1): t) ((l2,u2): t) : bool =
+    Set.equal l1 l2 &&
+    USet.equal u1 u2
+
+  let join annot ((l1,u1): t) ((l2,u2): t) : t =
+    Set.inter l1 l2,
+    USet.join annot u1 u2
+
+  let meet annot ((l1,u1): t) ((l2,u2): t) : t =
+    Set.union l1 l2,
+    USet.meet annot u1 u2
+
+  let union = join
+
+  let inter = meet
+
+  let widen annot ((l1,u1): t) ((l2,u2): t) : t =
+    Set.inter l1 l2,
+    USet.widen annot u1 u2
+
+  open Format
+  let print fmt ((l,u):t) =
+    let l = Set.elements l in
+    fprintf fmt "@[<h>{";
+    if l = [] then fprintf fmt "∅"
+    else
+      fprintf fmt "@[<h>{%a}@]"
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+           Elt.print
+        ) l
+    ;
+    fprintf fmt ", %a}@]"
+      USet.print u
+
+end

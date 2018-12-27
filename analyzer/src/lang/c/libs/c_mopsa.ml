@@ -35,7 +35,9 @@ let is_builtin_function = function
   | "_mopsa_assert_unsafe"
   | "_mopsa_assert_error"
   | "_mopsa_assert_error_exists"
-  | "_mopsa_assert_error_at_line" -> true
+  | "_mopsa_assert_error_at_line"
+  | "_mopsa_fd_to_int"
+  | "_mopsa_int_to_fd" -> true
   | _ -> false
 
 
