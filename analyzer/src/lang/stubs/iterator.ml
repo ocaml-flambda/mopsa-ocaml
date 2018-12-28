@@ -208,10 +208,10 @@ struct
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
-        List.combine args params |>
-        List.fold_left (fun flow (arg, param) ->
-            man.exec (mk_assign (mk_var param range) arg range) flow
-          ) flow
+    List.combine args params |>
+    List.fold_left (fun flow (arg, param) ->
+        man.exec (mk_assign (mk_var param range) arg range) flow
+      ) flow
 
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
@@ -260,6 +260,7 @@ struct
     | L_new  res -> exec_local_new l.content.lvar res l.range man flow
     | L_call (f, args) -> exec_local_call l.content.lvar f args l.range man flow
 
+
   let exec_ensures e return man flow =
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
@@ -278,8 +279,9 @@ struct
     eval_formula_fixpoint f ~negate:false man flow |>
     fst
 
+
   (** Remove locals and old copies of assigned variables *)
-  let clean_post locals assigns return range man flow =
+  let clean_post locals assigns range man flow =
     let block1 =
       List.fold_left (fun block l ->
           mk_remove_var l.content.lvar range :: block
@@ -294,6 +296,7 @@ struct
         ) block1 assigns
     in
     man.exec (mk_block block2 range) flow
+
 
   let exec_free free man flow =
     let e = free.content in
@@ -315,7 +318,8 @@ struct
   (** Execute the body of a case section *)
   let exec_case case return man flow =
     List.fold_left (fun flow leaf ->
-        exec_leaf leaf return man flow
+        exec_leaf leaf return man flow |>
+        clean_post case.case_locals case.case_assigns case.case_range man
       ) flow case.case_body
 
   
@@ -370,6 +374,9 @@ struct
 
       (* Evaluate the body of the styb *)
       let flow = exec_body stub.stub_body return man flow in
+
+      (* Clean locals and primes *)
+      let flow = clean_post stub.stub_locals stub.stub_assigns stub.stub_range man flow in
 
       (* Remove parameters *)
       let flow = remove_params stub.stub_params exp.erange man flow in

@@ -514,10 +514,12 @@ and from_stub_comment prj ctx f =
 
 and from_stub ctx f stub =
   {
-    stub_name     = f.func_org_name;
+    stub_name     = stub.stub_name;
     stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
-    stub_body     = List.map (from_stub_section ctx) stub.content;
-    stub_range    = stub.range;
+    stub_body     = List.map (from_stub_section ctx) stub.stub_body;
+    stub_range    = stub.stub_range;
+    stub_locals   = List.map (from_stub_local ctx) stub.stub_locals;
+    stub_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
     stub_return_type =
       match f.func_return with
       | (T_void, _) -> None
@@ -542,6 +544,9 @@ and from_stub_case ctx case =
   {
     case_label = case.C_stubs_parser.Ast.case_label;
     case_body  = List.map (from_stub_leaf ctx) case.case_body;
+    case_locals = List.map (from_stub_local ctx) case.case_locals;
+    case_assigns = List.map (from_stub_assigns ctx) case.case_assigns;
+    case_range = case.case_range;
   }
 
 and from_stub_requires ctx req =

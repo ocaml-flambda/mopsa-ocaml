@@ -27,6 +27,14 @@ let rec visit_list visit l prj func =
     let tl' = visit_list visit tl prj func in
     hd' :: tl'
 
+let rec visit_list_ext visit l prj func =
+  match l with
+  | [] -> [], [], []
+  | hd :: tl ->
+    let hd', ext1, ext2 = visit hd prj func in
+    let tl', ext1', ext2' = visit_list_ext visit tl prj func in
+    hd' :: tl', ext1 @ ext1', ext2 @ ext2'
+
 let visit_option visit o prj func =
   match o with
   | None -> None
@@ -496,23 +504,44 @@ let visit_local loc prj func =
 
 let visit_leaf leaf prj func =
   match leaf with
-  | Cst.S_local local -> Ast.S_local (visit_local local prj func)
-  | S_assumes assumes -> S_assumes (visit_assumes assumes prj func)
-  | S_requires requires -> S_requires (visit_requires requires prj func)
-  | S_assigns assigns -> S_assigns (visit_assigns assigns prj func)
-  | S_ensures ensures -> S_ensures (visit_ensures ensures prj func)
-  | S_free free -> S_free (visit_free free prj func)
+  | Cst.S_local local ->
+    let local = visit_local local prj func in
+    Ast.S_local local, [local], []
+
+  | S_assumes assumes ->
+    S_assumes (visit_assumes assumes prj func), [], []
+
+  | S_requires requires ->
+    S_requires (visit_requires requires prj func), [], []
+
+  | S_assigns assigns ->
+    let assigns = visit_assigns assigns prj func in
+    S_assigns assigns, [], [assigns]
+
+  | S_ensures ensures ->
+    S_ensures (visit_ensures ensures prj func), [], []
+
+  | S_free free ->
+    S_free (visit_free free prj func), [], []
     
 let visit_case case prj func =
+  let body, locals, assigns = visit_list_ext visit_leaf case.content.case_body prj func in
   Ast.{
-    case_label = case.Cst.case_label;
-    case_body = visit_list visit_leaf case.case_body prj func;
+    case_label = case.content.case_label;
+    case_body = body;
+    case_locals = locals;
+    case_assigns = assigns;
+    case_range = case.range;
   }
 
 let visit_section sect prj func =
   match sect with
-  | Cst.S_leaf leaf -> Ast.S_leaf (visit_leaf leaf prj func)
-  | S_case case -> S_case (visit_case case prj func)
+  | Cst.S_leaf leaf ->
+    let leaf, locals, assigns = visit_leaf leaf prj func in
+    Ast.S_leaf leaf, locals, assigns
+
+  | S_case case -> S_case (visit_case case prj func), [], []
+
   | S_predicate pred -> Exceptions.panic_at pred.range "cst_to_ast: predicate %a not expanded" pp_var pred.content.predicate_var
 
 (** {2 Entry point} *)
@@ -524,5 +553,12 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
-  bind_range stub @@ fun sects ->
-  visit_list visit_section sects prj func
+  let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
+  Ast.{
+    stub_name = func.C_AST.func_org_name;
+    stub_params = Array.to_list func.C_AST.func_parameters;
+    stub_body = body;
+    stub_locals = locals;
+    stub_assigns = assigns;
+    stub_range = stub.range;
+  }

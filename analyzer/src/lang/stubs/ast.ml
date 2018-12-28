@@ -21,6 +21,8 @@ type stub = {
   stub_name   : string;
   stub_body   : section list;
   stub_params : var list;
+  stub_locals  : local with_range list;
+  stub_assigns : assigns with_range list;
   stub_return_type : typ option;
   stub_range  : range;
 }
@@ -44,6 +46,9 @@ and leaf =
 and case = {
   case_label     : string;
   case_body      : leaf list;
+  case_locals    : local with_range list;
+  case_assigns   : assigns with_range list;
+  case_range     : range;
 }
 
 

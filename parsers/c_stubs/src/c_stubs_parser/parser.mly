@@ -105,7 +105,7 @@ section_list:
   | section section_list { $1 :: $2 }
 
 section:
-  | case_section { S_case $1 }
+  | with_range(case_section) { S_case $1 }
   | leaf_section { S_leaf $1 }
   | with_range(predicate)    { S_predicate $1 }
 

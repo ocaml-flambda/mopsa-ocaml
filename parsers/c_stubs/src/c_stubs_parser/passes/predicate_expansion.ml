@@ -153,7 +153,7 @@ let visit_leaf sec ctx =
   | S_free free         -> sec
 
 let visit_case case ctx =
-  {
+  bind_range case @@ fun case -> {
     case_label = case.case_label;
     case_body = visit_list visit_leaf case.case_body ctx;
   }

@@ -11,12 +11,19 @@
    - predicates are expanded.
    - types and variables are resolved using the context of the Clang parser.
    - calls to sizeof are resolved using Clang's target information.
+   - stubs and cases record their locals and assignments.
 *)
 
 open Location
 
-type stub = section list with_range
-
+type stub = {
+  stub_name    : string;
+  stub_params  : var list;
+  stub_locals  : local with_range list;
+  stub_assigns : assigns with_range list;
+  stub_body    : section list;
+  stub_range   : range;
+}
 
 (** {2 Stub sections} *)
 (** ***************** *)
@@ -36,6 +43,9 @@ and leaf =
 and case = {
   case_label     : string;
   case_body      : leaf list;
+  case_locals    : local with_range list;
+  case_assigns   : assigns with_range list;
+  case_range     : range;
 }
 
 (** {2 Leaf sections} *)
@@ -274,4 +284,4 @@ let pp_sections fmt secs =
     pp_section
     fmt secs
 
-let pp_stub fmt stub = pp_sections fmt stub.content 
+let pp_stub fmt stub = pp_sections fmt stub.stub_body

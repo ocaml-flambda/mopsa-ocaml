@@ -17,7 +17,7 @@ type stub = section list with_range
 
 and section =
   | S_predicate of predicate with_range
-  | S_case      of case
+  | S_case      of case with_range
   | S_leaf      of leaf
 
 and leaf =
@@ -410,7 +410,7 @@ let pp_case fmt case =
 let pp_section fmt sec =
   match sec with
   | S_leaf leaf -> pp_leaf fmt leaf
-  | S_case case -> pp_case fmt case
+  | S_case case -> pp_case fmt case.content
   | S_predicate pred -> pp_predicate fmt pred
 
 let pp_sections fmt secs =

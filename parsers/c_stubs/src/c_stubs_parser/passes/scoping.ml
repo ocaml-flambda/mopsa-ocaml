@@ -238,6 +238,7 @@ let visit_leaf leaf scope =
     S_free free, scope
 
 let visit_case case scope =
+  bind_pair_range case @@ fun case ->
   let body, scope' = visit_list visit_leaf case.case_body scope in
   let case = {
     case_label = case.case_label;
