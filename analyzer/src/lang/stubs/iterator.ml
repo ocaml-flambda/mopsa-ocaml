@@ -220,9 +220,13 @@ struct
       ) flow
 
 
+  (** Evaluate the formula of the `assumes` section *)
+  let exec_assumes assumes man flow =
+    let ftrue, _ = eval_formula_fixpoint assumes.content ~negate:false man flow in
+    ftrue
+  
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
-  let check_requirement req man flow =
-    debug "check %a" pp_requires req;
+  let exec_requires req man flow =
     let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
     match ffalse with
     | Some ffalse when Flow.is_bottom man ffalse ->
@@ -234,22 +238,6 @@ struct
 
     | _ -> assert false
 
-  (** Fold the checks of pre-conditions over a list of requirements *)
-  let rec check_requirements reqs man flow =
-    match reqs with
-    | [] -> flow
-    | [req] -> check_requirement req man flow
-    | hd :: tl ->
-      let flow1 = check_requirement hd man flow in
-      let flow2 = check_requirements tl man flow in
-      (* Meet T_cur and keep all other flows *)
-      let annot = Flow.get_all_annot flow2 in
-      Flow.merge
-        (fun tk env1 env2 ->
-           match tk with
-           | T_cur -> OptionExt.option_lift2 (man.meet annot) env1 env2
-           | _ -> OptionExt.option_neutral2 (man.join annot) env1 env2
-        ) man flow1 flow2
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
@@ -291,19 +279,19 @@ struct
     fst
 
   (** Remove locals and old copies of assigned variables *)
-  let clean_post post return range man flow =
+  let clean_post locals assigns return range man flow =
     let block1 =
-      post.post_local |> List.fold_left (fun block l ->
+      List.fold_left (fun block l ->
           mk_remove_var l.content.lvar range :: block
-        ) []
+        ) [] locals
     in
     let block2 =
-      post.post_assigns |> List.fold_left (fun block a ->
+      List.fold_left (fun block a ->
           let t = a.content.assign_target in
           match a.content.assign_offset with
           | None -> mk_rename (mk_primed t) t range :: block
           | Some offsets -> mk_stub_rename_primed t offsets range :: block
-        ) block1
+        ) block1 assigns
     in
     man.exec (mk_block block2 range) flow
 
@@ -312,32 +300,51 @@ struct
     let stmt = mk_stub_free e free.range in
     man.exec stmt flow
 
-  (** Compute a post-condition *)
-  let exec_post post return range man flow =
-    (* Execute `local` section *)
-    let flow = List.fold_left (fun flow l -> exec_local l man flow) flow post.post_local in
 
-    (* Execute `ensures` section *)
-    let rec doit = function
-      | [] -> flow
-      | [e] -> exec_ensures e return man flow
-      | e :: tl ->
-        exec_ensures e return man flow |>
-        Flow.meet man (doit tl)
-    in
-    let flow = doit post.post_ensures in
+  (** Execute a leaf section *)
+  let exec_leaf leaf return man flow =
+    match leaf with
+    | S_local local -> exec_local local man flow
+    | S_assumes assumes -> exec_assumes assumes man flow
+    | S_requires requires -> exec_requires requires man flow
+    | S_assigns _ -> flow
+    | S_ensures ensures -> exec_ensures ensures return man flow
+    | S_free free -> exec_free free man flow
 
-    (* Execute `free` section *)
-    let flow = List.fold_left (fun flow f -> exec_free f man flow) flow post.post_free in
 
-    (* Clean the post-condition *)
-    clean_post post return range man flow
+  (** Execute the body of a case section *)
+  let exec_case case return man flow =
+    List.fold_left (fun flow leaf ->
+        exec_leaf leaf return man flow
+      ) flow case.case_body
 
+  
   (** Execute the body of a stub *)
   let exec_body body return man flow =
-    match body with
-    | B_post post -> exec_post post return man flow
-    | B_cases cases -> panic "eval_body(B_cases cases) not supported"
+    (* Execute leaf sections *)
+    let flow = List.fold_left (fun flow section ->
+        match section with
+        | S_leaf leaf -> exec_leaf leaf return man flow
+        | _ -> flow
+      ) flow body
+    in
+
+    (* Execute case sections separately *)
+    let flows = List.fold_left (fun flows section ->
+        match section with
+        | S_case case -> exec_case case return man flow :: flows
+        | _ -> flows
+      ) [] body
+    in
+
+    (* Join flows *)
+    match flows with
+    | [] -> flow
+    | hd :: tl ->
+      (* FIXME: when the cases do not define a partitioning, we need
+         to do something else *)
+      List.fold_left (Flow.join man) hd tl
+      
 
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
@@ -349,34 +356,31 @@ struct
       ;
 
       (* Initialize parameters *)
-      let flow1 = init_params args stub.stub_params exp.erange man flow in
-
-      (* Check requirements *)
-      let flow2 = check_requirements stub.stub_requires man flow1 in
+      let flow = init_params args stub.stub_params exp.erange man flow in
 
       (* Create the return variable *)
-      let return, flow3 =
+      let return, flow =
         match stub.stub_return_type with
-        | None -> None, flow2
+        | None -> None, flow
         | Some t ->
           let return = mktmp t () in
-          let flow3 = man.exec (mk_add_var return exp.erange) flow2 in
-          Some return, flow3
+          let flow = man.exec (mk_add_var return exp.erange) flow in
+          Some return, flow
       in
 
       (* Evaluate the body of the styb *)
-      let flow4 = exec_body stub.stub_body return exp.erange man flow3 in
+      let flow = exec_body stub.stub_body return man flow in
 
       (* Remove parameters *)
-      let flow5 = remove_params stub.stub_params exp.erange man flow4 in
+      let flow = remove_params stub.stub_params exp.erange man flow in
 
       begin match return with
         | None ->
-          Eval.empty_singleton flow5 |>
+          Eval.empty_singleton flow |>
           Eval.return
 
         | Some v ->
-          Eval.singleton (mk_var v exp.erange) flow5 ~cleaners:[mk_remove_var v exp.erange] |>
+          Eval.singleton (mk_var v exp.erange) flow ~cleaners:[mk_remove_var v exp.erange] |>
           Eval.return
       end
 

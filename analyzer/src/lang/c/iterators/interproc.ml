@@ -93,7 +93,7 @@ struct
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
         | E_c_points_to (P_fun {c_func_stub = Some stub}) ->
-          let exp' = Stubs.Ast.mk_stub_call stub.content args exp.erange in
+          let exp' = Stubs.Ast.mk_stub_call stub args exp.erange in
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
         | E_c_points_to (P_fun {c_func_body = None; c_func_var}) ->

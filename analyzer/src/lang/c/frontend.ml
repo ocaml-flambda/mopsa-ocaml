@@ -513,29 +513,35 @@ and from_stub_comment prj ctx f =
   | Some stub -> Some (from_stub ctx f stub)
 
 and from_stub ctx f stub =
-  bind_range stub @@ fun stub ->
   {
     stub_name     = f.func_org_name;
-    stub_requires = List.map (from_stub_requires ctx) stub.stub_requires;
     stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
-    stub_body     = from_stub_body ctx stub.stub_body;
+    stub_body     = List.map (from_stub_section ctx) stub.content;
+    stub_range    = stub.range;
     stub_return_type =
       match f.func_return with
       | (T_void, _) -> None
       | t -> Some (from_typ ctx t);
   }
 
-and from_stub_body ctx body =
-  match body with
-  | B_post post -> B_post (from_stub_post ctx post)
-  | B_cases cases -> B_cases (List.map (from_stub_case ctx) cases)
+and from_stub_section ctx section =
+  match section with
+  | S_leaf leaf -> S_leaf (from_stub_leaf ctx leaf)
+  | S_case case -> S_case (from_stub_case ctx case)
 
-and from_stub_post ctx post =
+and from_stub_leaf ctx leaf =
+  match leaf with
+  | S_local local       -> S_local (from_stub_local ctx local)
+  | S_assumes assumes   -> S_assumes (from_stub_assumes ctx assumes)
+  | S_requires requires -> S_requires (from_stub_requires ctx requires)
+  | S_assigns assigns   -> S_assigns (from_stub_assigns ctx assigns)
+  | S_ensures ensures   -> S_ensures (from_stub_ensures ctx ensures)
+  | S_free free         -> S_free (from_stub_free ctx free)
+
+and from_stub_case ctx case =
   {
-    post_assigns = List.map (from_stub_assigns ctx) post.post_assigns;
-    post_local   = List.map (from_stub_local ctx) post.post_local;
-    post_ensures = List.map (from_stub_ensures ctx) post.post_ensures;
-    post_free    = List.map (from_stub_free ctx) post.post_free;
+    case_label = case.C_stubs_parser.Ast.case_label;
+    case_body  = List.map (from_stub_leaf ctx) case.case_body;
   }
 
 and from_stub_requires ctx req =
@@ -550,7 +556,9 @@ and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b))) assign.assign_offset;
+    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) ->
+        (from_stub_expr ctx a, from_stub_expr ctx b)
+      )) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =
@@ -579,15 +587,6 @@ and from_stub_ensures ctx ens =
 and from_stub_assumes ctx asm =
   bind_range asm @@ fun asm ->
   from_stub_formula ctx asm
-
-and from_stub_case ctx case =
-  bind_range case @@ fun case ->
-  {
-    case_label    = case.C_stubs_parser.Ast.case_label;
-    case_assumes  = List.map (from_stub_assumes ctx) case.case_assumes;
-    case_requires = List.map (from_stub_requires ctx) case.case_requires;
-    case_post     = from_stub_post ctx case.case_post;
-  }
 
 and from_stub_formula ctx f =
   bind_range f @@ function
@@ -632,6 +631,7 @@ and from_stub_expr ctx exp =
 and from_stub_builtin f =
   match f with
   | PRIMED -> panic "from_stub_builtin: PRIMED should be translated before"
+  | SIZEOF -> panic "from_stub_builtin: SIZEOF should be resolved before"
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
@@ -647,7 +647,7 @@ and from_stub_log_binop = function
   | IMPLIES -> IMPLIES
 
 and from_stub_expr_binop = function
-  | C_stubs_parser.Ast.ADD -> O_plus
+  | C_stubs_parser.Cst.ADD -> O_plus
   | SUB -> O_minus
   | MUL -> O_mult
   | DIV -> O_div
@@ -667,7 +667,7 @@ and from_stub_expr_binop = function
   | BXOR -> O_bit_xor
 
 and from_stub_expr_unop = function
-  | C_stubs_parser.Ast.PLUS -> O_plus
+  | C_stubs_parser.Cst.PLUS -> O_plus
   | MINUS -> O_minus
   | LNOT -> O_log_not
   | BNOT -> O_bit_invert

@@ -178,32 +178,6 @@ let builtin_type f arg =
 (** {2 Expressions} *)
 (** *************** *)
 
-let visit_unop = function
-  | PLUS  -> Ast.PLUS
-  | MINUS -> Ast.MINUS
-  | LNOT  -> Ast.LNOT
-  | BNOT  -> Ast.BNOT
-
-let visit_binop = function
-  | ADD -> Ast.ADD
-  | SUB -> Ast.SUB
-  | MUL -> Ast.MUL
-  | DIV -> Ast.DIV
-  | MOD -> Ast.MOD
-  | RSHIFT -> Ast.RSHIFT
-  | LSHIFT -> Ast.LSHIFT
-  | LOR -> Ast.LOR
-  | LAND -> Ast.LAND
-  | LT -> Ast.LT
-  | LE -> Ast.LE
-  | GT -> Ast.GT
-  | GE -> Ast.GE
-  | EQ -> Ast.EQ
-  | NEQ -> Ast.NEQ
-  | BOR -> Ast.BOR
-  | BAND -> Ast.BAND
-  | BXOR -> Ast.BXOR
-
 let visit_var v prj func =
   let open C_AST in
   if v.vlocal then
@@ -385,7 +359,7 @@ let rec visit_expr e prj func =
       let e' = promote_expression_type prj e' in
       let ee' =
         with_range
-          Ast.{ kind = E_unop(visit_unop op, e'); typ = e'.content.typ }
+          Ast.{ kind = E_unop(op, e'); typ = e'.content.typ }
           e.range
       in
 
@@ -404,7 +378,7 @@ let rec visit_expr e prj func =
       let e2 = convert_expression_type e2 t in
 
       let ee' = with_range
-          Ast.{ kind = E_binop(visit_binop op, e1, e2); typ = t }
+          Ast.{ kind = E_binop(op, e1, e2); typ = t }
           e.range
       in
       
@@ -450,33 +424,15 @@ let rec visit_expr e prj func =
 
     | E_builtin_call(f,a) ->
       let a = visit_expr a prj func in
-      Ast.E_builtin_call(visit_builtin f, a), builtin_type f a
+      Ast.E_builtin_call(f, a), builtin_type f a
 
     | E_return -> Ast.E_return, func.func_return
   in
   Ast.{ kind; typ }
 
-and visit_builtin b =
-  match b with
-  | PRIMED -> Ast.PRIMED
-  | SIZE   -> Ast.SIZE
-  | SIZEOF   -> Exceptions.panic "sizeof not resolved"
-  | OFFSET -> Ast.OFFSET
-  | BASE   -> Ast.BASE
-  | PTR_VALID -> Ast.PTR_VALID
-  | FLOAT_VALID -> Ast.FLOAT_VALID
-  | FLOAT_INF   -> Ast.FLOAT_INF
-  | FLOAT_NAN   -> Ast.FLOAT_NAN
-  | OLD -> Ast.OLD
-
 
 (** {2 Formulas} *)
 (** ************ *)
-
-let visit_log_binop = function
-  | AND -> Ast.AND
-  | OR  -> Ast.OR
-  | IMPLIES -> Ast.IMPLIES
 
 let visit_set s prj func =
   match s with
@@ -488,7 +444,7 @@ let rec visit_formula f prj func =
   match f with
   | F_expr(e) -> Ast.F_expr (visit_expr e prj func )
   | F_bool(b) -> Ast.F_bool b
-  | F_binop(op, f1, f2) -> Ast.F_binop(visit_log_binop op, visit_formula f1 prj func , visit_formula f2 prj func )
+  | F_binop(op, f1, f2) -> Ast.F_binop(op, visit_formula f1 prj func , visit_formula f2 prj func )
   | F_not f' -> Ast.F_not (visit_formula f' prj func)
   | F_forall(v, t, s, f') ->
     let v' = visit_var v prj func in
@@ -538,26 +494,26 @@ let visit_local loc prj func =
   in
   Ast.{ lvar; lval }
 
-let visit_case c prj func =
-  bind_range c @@ fun c ->
-  let requires = visit_list visit_requires c.case_requires prj func in
-  let assumes = visit_list visit_assumes c.case_assumes prj func in
-  let assigns = visit_list visit_assigns c.case_assigns prj func in
-  let local = visit_list visit_local c.case_local prj func in
-  let ensures = visit_list visit_ensures c.case_ensures prj func in
-  let free = visit_list visit_free c.case_free prj func in
-
+let visit_leaf leaf prj func =
+  match leaf with
+  | Cst.S_local local -> Ast.S_local (visit_local local prj func)
+  | S_assumes assumes -> S_assumes (visit_assumes assumes prj func)
+  | S_requires requires -> S_requires (visit_requires requires prj func)
+  | S_assigns assigns -> S_assigns (visit_assigns assigns prj func)
+  | S_ensures ensures -> S_ensures (visit_ensures ensures prj func)
+  | S_free free -> S_free (visit_free free prj func)
+    
+let visit_case case prj func =
   Ast.{
-    case_label = c.case_label;
-    case_assumes = assumes;
-    case_requires = requires;
-    case_post = {
-      post_assigns = assigns;
-      post_local   = local;
-      post_ensures = ensures;
-      post_free    = free;
-    }
+    case_label = case.Cst.case_label;
+    case_body = visit_list visit_leaf case.case_body prj func;
   }
+
+let visit_section sect prj func =
+  match sect with
+  | Cst.S_leaf leaf -> Ast.S_leaf (visit_leaf leaf prj func)
+  | S_case case -> S_case (visit_case case prj func)
+  | S_predicate pred -> Exceptions.panic_at pred.range "cst_to_ast: predicate %a not expanded" pp_var pred.content.predicate_var
 
 (** {2 Entry point} *)
 (** *************** *)
@@ -565,31 +521,8 @@ let visit_case c prj func =
 let doit
     (prj:C_AST.project)
     (func: C_AST.func)
-    (stub:Cst.stub with_range)
-  : Ast.stub with_range
+    (stub:Cst.stub)
+  : Ast.stub
   =
-  bind_range stub @@ fun stub ->
-  match stub with
-  | S_simple s ->
-    let requires = visit_list visit_requires s.simple_stub_requires prj func in
-    let assigns = visit_list visit_assigns s.simple_stub_assigns prj func  in
-    let local = visit_list visit_local s.simple_stub_local prj func  in
-    let ensures = visit_list visit_ensures s.simple_stub_ensures prj func in
-    let free = visit_list visit_free s.simple_stub_free prj func in
-
-    Ast.{
-      stub_requires = requires;
-      stub_body = B_post {
-          post_assigns = assigns;
-          post_local   = local;
-          post_ensures = ensures;
-          post_free    = free;
-        }
-    }
-
-  | S_case c ->
-    let requires = visit_list visit_requires c.case_stub_requires prj func in
-    Ast.{
-      stub_requires = requires;
-      stub_body = B_cases (visit_list visit_case c.case_stub_cases prj func);
-    }
+  bind_range stub @@ fun sects ->
+  visit_list visit_section sects prj func

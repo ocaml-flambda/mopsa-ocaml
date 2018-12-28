@@ -10,27 +10,37 @@
 
 open Location
 
-type stub =
-  | S_simple of simple_stub
-  | S_case of case_stub
+type stub = section list with_range
 
-and simple_stub = {
-  simple_stub_predicates : predicate with_range list;
-  simple_stub_requires   : requires with_range list;
-  simple_stub_assigns    : assigns with_range list;
-  simple_stub_local      : local with_range list;
-  simple_stub_ensures    : ensures with_range list;
-  simple_stub_free        : free with_range list;
+(** {2 Stub sections} *)
+(** ***************** *)
+
+and section =
+  | S_predicate of predicate with_range
+  | S_case      of case
+  | S_leaf      of leaf
+
+and leaf =
+  | S_local     of local with_range
+  | S_assumes   of assumes with_range
+  | S_requires  of requires with_range
+  | S_assigns   of assigns with_range
+  | S_ensures   of ensures with_range
+  | S_free      of free with_range
+
+and case = {
+  case_label     : string;
+  case_body      : leaf list;
 }
 
-and case_stub = {
-  case_stub_predicates : predicate with_range list;
-  case_stub_requires   : requires with_range list;
-  case_stub_cases      : case with_range list;
-}
+
+(** {2 Stub leaf sections} *)
+(** ********************** *)
 
 and requires = formula with_range
+
 and ensures = formula with_range
+
 and assumes = formula with_range
 
 and local = {
@@ -48,17 +58,16 @@ and assigns = {
   assign_offset : (expr with_range * expr with_range) list option;
 }
 
-and case = {
-  case_label     : string;
-  case_assumes   : assumes with_range list;
-  case_requires  : requires with_range list;
-  case_assigns   : assigns with_range list;
-  case_local     : local with_range list;
-  case_ensures   : ensures with_range list;
-  case_free : free with_range list;
+and free = expr with_range
+
+and predicate = {
+  predicate_var  : var;
+  predicate_args : var list;
+  predicate_body : formula with_range;
 }
 
-and free = expr with_range
+(** {2 Formulas} *)
+(** ************ *)
 
 and formula =
   | F_expr      of expr with_range
@@ -69,6 +78,11 @@ and formula =
   | F_exists    of var * c_qual_typ * set * formula with_range
   | F_in        of expr with_range * set
   | F_predicate of var * expr with_range list
+
+
+
+(** {2 Expressions} *)
+(** *************** *)
 
 and expr =
   | E_int       of Z.t
@@ -94,36 +108,6 @@ and expr =
   | E_builtin_call  of builtin * expr with_range
 
   | E_return
-
-and c_qual_typ = c_typ * bool (** is const ? *)
-
-and c_typ =
-  | T_void
-  | T_char
-  | T_signed_char | T_unsigned_char
-  | T_signed_short | T_unsigned_short
-  | T_signed_int | T_unsigned_int
-  | T_signed_long | T_unsigned_long
-  | T_signed_long_long | T_unsigned_long_long
-  | T_signed_int128 | T_unsigned_int128
-  | T_float | T_double | T_long_double
-  | T_array of c_qual_typ * array_length
-  | T_struct of var
-  | T_union of var
-  | T_typedef of var
-  | T_pointer of c_qual_typ
-  | T_enum of var
-  | T_unknown
-
-and array_length =
-  | A_no_length
-  | A_constant_length of Z.t
-
-and predicate = {
-  predicate_var  : var;
-  predicate_args : var list;
-  predicate_body : formula with_range;
-}
 
 and log_binop =
   | AND
@@ -184,9 +168,38 @@ and builtin =
   | OLD
 
 
+(** {2 Types} *)
+(*  ********* *)
+
+
+and c_qual_typ = c_typ * bool (** is const ? *)
+
+and c_typ =
+  | T_void
+  | T_char
+  | T_signed_char | T_unsigned_char
+  | T_signed_short | T_unsigned_short
+  | T_signed_int | T_unsigned_int
+  | T_signed_long | T_unsigned_long
+  | T_signed_long_long | T_unsigned_long_long
+  | T_signed_int128 | T_unsigned_int128
+  | T_float | T_double | T_long_double
+  | T_array of c_qual_typ * array_length
+  | T_struct of var
+  | T_union of var
+  | T_typedef of var
+  | T_pointer of c_qual_typ
+  | T_enum of var
+  | T_unknown
+
+and array_length =
+  | A_no_length
+  | A_constant_length of Z.t
+
+
 
 (** {2 Utility functions} *)
-(** ************************ *)
+(** ********************* *)
 
 let compare_var v1 v2 =
   Compare.compose [
@@ -194,10 +207,13 @@ let compare_var v1 v2 =
     (fun () -> compare v1.vuid v2.vuid);
   ]
 
+let compare_resource (r1:resource) (r2:resource) = compare r1 r2
+
 let no_qual t = t, false
 
-(** {2 Pretty printer} *)
-(** ****************** *)
+
+(** {2 Pretty printers} *)
+(** ******************* *)
 
 open Format
 
@@ -218,10 +234,7 @@ let pp_builtin fmt f =
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
   | OLD    -> pp_print_string fmt "old"
 
-let pp_list pp ~is_first sep fmt l =
-  if not is_first then
-    fprintf fmt sep
-  ;
+let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
 
 let rec pp_expr fmt exp =
@@ -318,7 +331,7 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, t, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
-  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., " ~is_first:true) params
+  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., ") params
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
 
 and pp_log_binop fmt =
@@ -337,7 +350,6 @@ let pp_opt pp fmt o =
   | None -> ()
   | Some x -> pp fmt x
 
-
 let rec pp_local fmt local =
   let local = get_content local in
   fprintf fmt "local    : %a %a = @[%a@];"
@@ -348,13 +360,13 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | L_new resource -> fprintf fmt "new %a" pp_resource resource
-  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", "  ~is_first:true) args
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", ") args
 
 
 let pp_predicate fmt (predicate:predicate with_range) =
   fprintf fmt "predicate %a(%a): @[%a@];"
     pp_var predicate.content.predicate_var
-    (pp_list pp_var ", "  ~is_first:true) predicate.content.predicate_args
+    (pp_list pp_var ", ") predicate.content.predicate_args
     pp_formula predicate.content.predicate_body
 
 let pp_requires fmt requires =
@@ -380,76 +392,31 @@ let pp_ensures fmt ensures =
 
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
-  
+
+let pp_leaf fmt sec =
+  match sec with
+  | S_local local -> pp_local fmt local
+  | S_assumes assumes -> pp_assumes fmt assumes
+  | S_requires requires -> pp_requires fmt requires
+  | S_assigns assigns -> pp_assigns fmt assigns
+  | S_ensures ensures -> pp_ensures fmt ensures
+  | S_free free -> pp_free fmt free
+
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a%a@]"
-    case.content.case_label
-    (pp_list pp_assumes "@\n" ~is_first:true) case.content.case_assumes
-    (pp_list pp_local "@\n" ~is_first:
-       (List.length case.content.case_assumes == 0)
-    ) case.content.case_local
-    (pp_list pp_requires "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0))
-    ) case.content.case_requires
-    (pp_list pp_assigns "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0) &&
-        (List.length case.content.case_requires == 0))
-    ) case.content.case_assigns
-    (pp_list pp_ensures "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0) &&
-        (List.length case.content.case_requires == 0) &&
-        (List.length case.content.case_assigns == 0))
-    ) case.content.case_ensures
-    (pp_list pp_free "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0) &&
-        (List.length case.content.case_requires == 0) &&
-        (List.length case.content.case_assigns == 0) &&
-        (List.length case.content.case_ensures == 0))
-    ) case.content.case_free
+  fprintf fmt "case \"%s\":@\n  @[<v 2>%a@]"
+    case.case_label
+    (pp_list pp_leaf "@\n") case.case_body
 
+let pp_section fmt sec =
+  match sec with
+  | S_leaf leaf -> pp_leaf fmt leaf
+  | S_case case -> pp_case fmt case
+  | S_predicate pred -> pp_predicate fmt pred
 
-let pp_stub fmt stub =
-  match stub.content with
-  | S_simple ss ->
-    fprintf fmt "%a%a%a%a%a%a"
-      (pp_list pp_predicate "@\n" ~is_first:true) ss.simple_stub_predicates
-      (pp_list pp_requires "@\n" ~is_first:
-         (List.length ss.simple_stub_predicates == 0)
-      ) ss.simple_stub_requires
-      (pp_list pp_assigns "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0))
-      ) ss.simple_stub_assigns
-      (pp_list pp_local "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0) &&
-          (List.length ss.simple_stub_assigns == 0))
-      ) ss.simple_stub_local
-      (pp_list pp_ensures "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0) &&
-          (List.length ss.simple_stub_assigns == 0) &&
-          (List.length ss.simple_stub_local == 0))
-      ) ss.simple_stub_ensures
-      (pp_list pp_free "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0) &&
-          (List.length ss.simple_stub_assigns == 0) &&
-          (List.length ss.simple_stub_local == 0) &&
-          (List.length ss.simple_stub_ensures == 0))
-      ) ss.simple_stub_free
+let pp_sections fmt secs =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    pp_section
+    fmt secs
 
-  | S_case ms ->
-    fprintf fmt "%a%a%a"
-      (pp_list pp_predicate "@\n" ~is_first:true) ms.case_stub_predicates
-      (pp_list pp_requires "@\n" ~is_first:(
-          List.length ms.case_stub_predicates == 0)
-      ) ms.case_stub_requires
-      (pp_list pp_case "@\n" ~is_first:(
-          (List.length ms.case_stub_predicates == 0) &&
-          (List.length ms.case_stub_requires == 0)
-      )) ms.case_stub_cases
+let pp_stub fmt stub = pp_sections fmt stub.content 

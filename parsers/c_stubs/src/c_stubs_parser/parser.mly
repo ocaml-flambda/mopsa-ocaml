@@ -91,56 +91,54 @@
 
 %start stub
 
-%type <Cst.stub Location.with_range option> stub
+%type <Cst.stub option> stub
 
 %%
 
 stub:
-  | BEGIN predicate_list requires_list assigns_list local_list ensures_list free_list END EOF
-    {
-      Some (
-          with_range
-            (S_simple {
-                 simple_stub_predicates = $2;
-                 simple_stub_requires   = $3;
-                 simple_stub_assigns    = $4;
-                 simple_stub_local      = $5;
-                 simple_stub_ensures    = $6;
-                 simple_stub_free       = $7;
-            })
-            (from_lexing_range $startpos $endpos)
-        )
-    }
-
-  | BEGIN predicate_list requires_list case_list END EOF
-    {
-      Some (
-          with_range
-            (S_case {
-                 case_stub_predicates = $2;
-                 case_stub_requires   = $3;
-                 case_stub_cases      = $4;
-            })
-            (from_lexing_range $startpos $endpos)
-        )
-    }
-
+  | BEGIN with_range(section_list) END EOF { Some $2 }
   | EOF { None }
 
-(* Requirements section *)
-requires_list:
+(* Sections *)
+section_list:
   | { [] }
-  | with_range(requires) requires_list { $1 :: $2 }
+  | section section_list { $1 :: $2 }
 
+section:
+  | case_section { S_case $1 }
+  | leaf_section { S_leaf $1 }
+  | with_range(predicate)    { S_predicate $1 }
+
+(* Case section *)
+case_section:
+  | CASE STRING_CONST COLON leaf_section_list SEMICOL
+    {
+      {
+        case_label = $2;
+        case_body  = $4;
+      }
+    }
+
+(* Leaf sections *)
+leaf_section_list:
+  | { [] }
+  | leaf_section leaf_section_list { $1 :: $2 }
+
+leaf_section:
+  | with_range(local)      { S_local $1 }
+  | with_range(assumes)    { S_assumes $1 }
+  | with_range(requires)   { S_requires $1 }
+  | with_range(assigns)    { S_assigns $1 }
+  | with_range(ensures)    { S_ensures $1 }
+  | with_range(free)       { S_free $1 }
+
+
+(* Requirement section *)
 requires:
   | REQUIRES COLON with_range(formula) SEMICOL { $3 }
 
 
-(* Locals section *)
-local_list:
-  | { [] }
-  | with_range(local) local_list { $1 :: $2 }
-
+(* Local section *)
 local:
   | LOCAL COLON c_qual_typ var ASSIGN local_value SEMICOL
     {
@@ -155,11 +153,7 @@ local_value:
   | NEW resource { L_new $2 }
   | with_range(var) LPAR args RPAR { L_call ($1, $3) }
 
-(* Predicates section *)
-predicate_list:
-  | { [] }
-  | with_range(predicate) predicate_list { $1 :: $2 }
-
+(* Predicate section *)
 predicate:
   | PREDICATE var COLON with_range(formula) SEMICOL
     {
@@ -179,11 +173,7 @@ predicate:
       }
     }
 
-(* Assignments section *)
-assigns_list:
-  | { [] }
-  | with_range(assigns) assigns_list { $1 :: $2 }
-
+(* Assignment section *)
 assigns:
   | ASSIGNS COLON with_range(expr) SEMICOL
     {
@@ -209,47 +199,16 @@ assigns_offset_list:
     }
 
 (* Free section *)
-free_list:
-  | { [] }
-  | with_range(free) free_list { $1 :: $2 }
-
 free:
   | FREE COLON with_range(expr) SEMICOL { $3 }
 
 
-(* Cases section *)
-case_list:
-  | with_range(case) { [ $1 ] }
-  | with_range(case) case_list { $1 :: $2 }
-
-case:
-  | CASE STRING_CONST COLON assumes_list requires_list local_list assigns_list ensures_list free_list
-    {
-      {
-        case_label    = $2;
-        case_assumes  = $4;
-        case_requires = $5;
-        case_local    = $6;
-        case_assigns  = $7;
-        case_ensures  = $8;
-        case_free  = $9;
-      }
-    }
-
-(* Assumptions section *)
-assumes_list:
-  | { [] }
-  | with_range(assumes) assumes_list { $1 :: $2 }
-
+(* Assumption section *)
 assumes:
   | ASSUMES COLON with_range(formula) SEMICOL { $3 }
 
 
 (* Ensures section *)
-ensures_list:
-  | { [] }
-  | with_range(ensures) ensures_list { $1 :: $2 }
-
 ensures:
   | ENSURES COLON with_range(formula) SEMICOL { $3 }
 

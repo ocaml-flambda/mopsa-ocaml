@@ -211,56 +211,60 @@ let visit_local local scope =
   let lvar, scope = Scope.create local.lvar local.ltyp scope in
   { lvar; ltyp = local.ltyp; lval }, scope
 
-let visit_case c scope =
-  bind_pair_range c @@ fun c ->
-  let requires, scope = visit_list visit_requires c.case_requires scope in
-  let assumes, scope = visit_list visit_assumes c.case_assumes scope in
-  let assigns, scope = visit_list visit_assigns c.case_assigns scope in
-  let local, scope' = visit_list visit_local c.case_local scope in
-  let ensures, scope' = visit_list visit_ensures c.case_ensures scope' in
-  let free, scope' = visit_list visit_free c.case_free scope' in
+let visit_leaf leaf scope =
+  match leaf with
+  | S_local local ->
+    let local, scope = visit_local local scope in
+    S_local local, scope
 
-  {
-    case_label = c.case_label;
-    case_assumes = assumes;
-    case_requires  = requires;
-    case_assigns = assigns;
-    case_local = local;
-    case_ensures = ensures;
-    case_free = free;
-  }, scope
+  | S_assumes assumes ->
+    let assumes, scope = visit_assumes assumes scope in
+    S_assumes assumes, scope
+
+  | S_requires requires ->
+    let requires, scope = visit_requires requires scope in
+    S_requires requires, scope
+
+  | S_assigns assigns ->
+    let assigns, scope = visit_assigns assigns scope in
+    S_assigns assigns, scope
+
+  | S_ensures ensures ->
+    let ensures, scope = visit_ensures ensures scope in
+    S_ensures ensures, scope
+
+  | S_free free ->
+    let free, scope = visit_free free scope in
+    S_free free, scope
+
+let visit_case case scope =
+  let body, scope' = visit_list visit_leaf case.case_body scope in
+  let case = {
+    case_label = case.case_label;
+    case_body  = body;
+  }
+  in
+  case, scope
+
+let visit_section sect scope =
+  match sect with
+  | S_leaf leaf ->
+    let leaf, scope = visit_leaf leaf scope in
+    S_leaf leaf, scope
+
+  | S_case case ->
+    let case, scope = visit_case case scope in
+    S_case case, scope
+
+  | S_predicate _ ->
+    sect, scope
 
 
 (** {2 Entry point} *)
 (** *************** *)
 
-let doit (stub: stub with_range) : stub with_range =
-  bind_range stub @@ fun stub ->
-  match stub with
-  | S_simple s ->
-    let predicates, scope = visit_list visit_predicate s.simple_stub_predicates Scope.empty in
-    let requires, scope = visit_list visit_requires s.simple_stub_requires scope in
-    let assigns, scope = visit_list visit_assigns s.simple_stub_assigns scope in
-    let local, scope = visit_list visit_local s.simple_stub_local scope in
-    let ensures, scope = visit_list visit_ensures s.simple_stub_ensures scope in
-    let free, scope = visit_list visit_free s.simple_stub_free scope in
-
-    S_simple {
-      simple_stub_predicates = predicates;
-      simple_stub_requires  = requires;
-      simple_stub_assigns = assigns;
-      simple_stub_local = local;
-      simple_stub_ensures = ensures;
-      simple_stub_free = free;
-    }
-
-  | S_case s ->
-    let predicates, scope = visit_list visit_predicate s.case_stub_predicates Scope.empty in
-    let requires, scope = visit_list visit_requires s.case_stub_requires scope in
-    let cases, scope = visit_list visit_case s.case_stub_cases scope in
-
-    S_case {
-      case_stub_predicates = predicates;
-      case_stub_requires  = requires;
-      case_stub_cases = cases;
-    }
+let doit (stub: stub) : stub =
+  bind_range stub @@ fun sections ->
+  let scope = Scope.empty in
+  let stub', _ = visit_list visit_section sections scope in
+  stub'

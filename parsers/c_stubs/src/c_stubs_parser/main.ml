@@ -14,7 +14,7 @@ open Location
 let parse_function_comment
     (func:C_AST.func)
     (prj:C_AST.project)
-  : Ast.stub with_range option
+  : Ast.stub option
   =
   match func.func_com with
   | [] -> None

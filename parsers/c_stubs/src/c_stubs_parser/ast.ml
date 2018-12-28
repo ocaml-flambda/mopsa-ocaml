@@ -6,15 +6,68 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstract syntax tree for C stubs *)
+(** 
+   Abstract syntax tree for C stubs. It is similar to the CST except:
+   - predicates are expanded.
+   - types and variables are resolved using the context of the Clang parser.
+   - calls to sizeof are resolved using Clang's target information.
+*)
 
 open Location
+
+type stub = section list with_range
+
+
+(** {2 Stub sections} *)
+(** ***************** *)
+
+and section =
+  | S_case      of case
+  | S_leaf      of leaf
+
+and leaf =
+  | S_local     of local with_range
+  | S_assumes   of assumes with_range
+  | S_requires  of requires with_range
+  | S_assigns   of assigns with_range
+  | S_ensures   of ensures with_range
+  | S_free      of free with_range
+
+and case = {
+  case_label     : string;
+  case_body      : leaf list;
+}
+
+(** {2 Leaf sections} *)
+(** ********************** *)
+
+and requires = formula with_range
+
+and ensures = formula with_range
+
+and assumes = formula with_range
+
+and local = {
+  lvar : var;
+  lval : local_value;
+}
+
+and local_value =
+  | L_new of resource
+  | L_call of C_AST.func with_range (** function *) * expr with_range list (* arguments *)
+
+and assigns = {
+  assign_target : expr with_range;
+  assign_offset : (expr with_range * expr with_range) list option;
+}
+
+and free = expr with_range
 
 
 (** {2 Expressions} *)
 (** *=*=*=*=*=*=*=* *)
 
-type expr_kind =
+and expr_kind =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
@@ -44,62 +97,27 @@ and expr = {
   typ  : C_AST.type_qual;
 }
 
-and log_binop =
-  | AND
-  | OR
-  | IMPLIES
+and log_binop = Cst.log_binop
 
-and binop =
-  | ADD     (* + *)
-  | SUB     (* - *)
-  | MUL     (* * *)
-  | DIV     (* / *)
-  | MOD     (* % *)
-  | RSHIFT  (* >> *)
-  | LSHIFT  (* << *)
-  | LOR     (* || *)
-  | LAND    (* && *)
-  | LT      (* < *)
-  | LE      (* <= *)
-  | GT      (* > *)
-  | GE      (* >= *)
-  | EQ      (* == *)
-  | NEQ     (* != *)
-  | BOR     (* | *)
-  | BAND    (* & *)
-  | BXOR    (* ^ *)
+and binop = Cst.binop
 
-and unop =
-  | PLUS    (* + *)
-  | MINUS   (* - *)
-  | LNOT    (* ! *)
-  | BNOT    (* ~ *)
+and unop = Cst.unop
 
 and set =
   | S_interval of expr with_range * expr with_range
   | S_resource of resource
 
-and resource = string
+and resource = Cst.resource
 
 and var = C_AST.variable
 
-and builtin =
-  | PRIMED
-  | SIZE
-  | OFFSET
-  | BASE
-  | PTR_VALID
-  | FLOAT_VALID
-  | FLOAT_INF
-  | FLOAT_NAN
-  (* Deprecated *)
-  | OLD
+and builtin = Cst.builtin
 
 
 (** {2 Formulas} *)
 (** ************ *)
 
-type formula =
+and formula =
   | F_expr   of expr with_range
   | F_bool   of bool
   | F_binop  of log_binop * formula with_range * formula with_range
@@ -109,61 +127,8 @@ type formula =
   | F_in     of expr with_range * set
 
 
-(** {2 Pre-condition} *)
-(** ***************** *)
-
-type requires = formula with_range
-type assumes  = formula with_range
-
-
-
-(** {2 Post-condition} *)
-(** ****************** *)
-
-type ensures = formula with_range
-
-type local = {
-    lvar : var;
-    lval : local_value;
-  }
-
-and local_value =
-  | L_new  of resource
-  | L_call of C_AST.func with_range (** function *) * expr with_range list (* arguments *)
-
-type assigns = {
-  assign_target: expr with_range;
-  assign_offset: (expr with_range * expr with_range) list option;  (** offset *)
-}
-
-type free = expr with_range
-
-
-(** {2 Stubs} *)
-(** ********* *)
-
-type stub = {
-  stub_requires: requires with_range list;
-  stub_body: body;
-}
-
-and body =
-  | B_post  of post
-  | B_cases of case with_range list
-
-and post = {
-  post_assigns  : assigns with_range list;
-  post_local    : local with_range list;
-  post_ensures  : ensures with_range list;
-  post_free     : free with_range list;
-}
-
-and case = {
-  case_label    : string;
-  case_assumes  : assumes with_range list;
-  case_requires : requires with_range list;
-  case_post : post;
-}
+(** {2 Utility functions} *)
+(** ********************* *)
 
 
 let compare_var v1 v2 =
@@ -172,27 +137,18 @@ let compare_var v1 v2 =
     (fun () -> compare v1.C_AST.var_uid v2.C_AST.var_uid);
   ]
 
+let compare_resource r1 r2 = Cst.compare_resource r1 r2
 
-(** Pretty printer *)
-(** ============== *)
+(** {2 Pretty printers} *)
+(** ******************* *)
 
 open Format
 
 let pp_var fmt v = pp_print_string fmt v.C_AST.var_org_name
 
-let pp_resource fmt resource = pp_print_string fmt resource
+let pp_resource = Cst.pp_resource
 
-let pp_builtin fmt f =
-  match f with
-  | PRIMED -> pp_print_string fmt "primed"
-  | SIZE   -> pp_print_string fmt "size"
-  | OFFSET -> pp_print_string fmt "offset"
-  | BASE   -> pp_print_string fmt "base"
-  | PTR_VALID -> pp_print_string fmt "ptr_valid"
-  | FLOAT_VALID -> pp_print_string fmt "float_valid"
-  | FLOAT_INF   -> pp_print_string fmt "float_inf"
-  | FLOAT_NAN   -> pp_print_string fmt "float_nan"
-  | OLD    -> pp_print_string fmt "old"
+let pp_builtin = Cst.pp_builtin
 
 let rec pp_expr fmt exp =
   match exp.content.kind with
@@ -219,36 +175,11 @@ let rec pp_expr fmt exp =
   | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
-and pp_unop fmt =
-  function
-  | PLUS    -> pp_print_string fmt "+"
-  | MINUS   -> pp_print_string fmt "-"
-  | LNOT    -> pp_print_string fmt "!"
-  | BNOT    -> pp_print_string fmt "~"
+and pp_unop = Cst.pp_unop
 
-and pp_binop fmt =
-  function
-  | ADD     -> pp_print_string fmt "+"
-  | SUB     -> pp_print_string fmt "-"
-  | MUL     -> pp_print_string fmt "*"
-  | DIV     -> pp_print_string fmt "/"
-  | MOD     -> pp_print_string fmt "%"
-  | RSHIFT  -> pp_print_string fmt ">>"
-  | LSHIFT  -> pp_print_string fmt "<<"
-  | LOR     -> pp_print_string fmt "||"
-  | LAND    -> pp_print_string fmt "&&"
-  | LT      -> pp_print_string fmt "<"
-  | LE      -> pp_print_string fmt "<="
-  | GT      -> pp_print_string fmt ">"
-  | GE      -> pp_print_string fmt ">="
-  | EQ      -> pp_print_string fmt "=="
-  | NEQ     -> pp_print_string fmt "!="
-  | BOR     -> pp_print_string fmt "|"
-  | BAND    -> pp_print_string fmt "&"
-  | BXOR    -> pp_print_string fmt "^"
+and pp_binop = Cst.pp_binop
 
 and pp_c_qual_typ fmt t = Format.pp_print_string fmt (C_print.string_of_type_qual t)
-
 
 let rec pp_formula fmt (f:formula with_range) =
   match f.content with
@@ -261,11 +192,7 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
 
-and pp_log_binop fmt =
-  function
-  | AND -> pp_print_string fmt "and"
-  | OR -> pp_print_string fmt "or"
-  | IMPLIES -> pp_print_string fmt "implies"
+and pp_log_binop = Cst.pp_log_binop
 
 and pp_set fmt =
   function
@@ -281,21 +208,19 @@ let pp_opt pp fmt o =
   | Some x -> pp fmt x
 
 let rec pp_local fmt local =
-  fprintf fmt "local: %a %a = @[%a@];"
-    pp_c_qual_typ local.content.lvar.C_AST.var_type
-    pp_var local.content.lvar
-    pp_local_value local.content.lval
+  let local = get_content local in
+  fprintf fmt "local    : %a %a = @[%a@];"
+    pp_c_qual_typ local.lvar.var_type
+    pp_var local.lvar
+    pp_local_value local.lval
 
 and pp_local_value fmt v =
   match v with
-  | L_new resouce -> fprintf fmt "new %a" pp_resource resouce
+  | L_new resource -> fprintf fmt "new %a" pp_resource resource
   | L_call (f, args) -> fprintf fmt "%s(%a)" f.content.func_org_name (pp_list pp_expr ", ") args
 
 let pp_requires fmt requires =
-  fprintf fmt "requires: @[%a@];" pp_formula requires.content
-
-let pp_free fmt free =
-  fprintf fmt "free: %a;" pp_expr free.content
+  fprintf fmt "requires : @[%a@];" pp_formula requires.content
 
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
@@ -310,31 +235,43 @@ let pp_assigns fmt assigns =
     ) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
-  fprintf fmt "assumes: @[%a@];" pp_formula assumes.content
+  fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures: @[%a@];" pp_formula ensures.content
+  fprintf fmt "ensures  : @[%a@];" pp_formula ensures.content
 
-let pp_post fmt post =
-  fprintf fmt "%a%a%a%a"
-    (pp_list pp_assigns "@\n") post.post_assigns
-    (pp_list pp_local "@\n") post.post_local
-    (pp_list pp_ensures "@\n") post.post_ensures
-    (pp_list pp_free "@\n") post.post_free
+let pp_free fmt free =
+  fprintf fmt "free : %a;" pp_expr free.content
+
+let pp_leaf_section fmt sec =
+  match sec with
+  | S_local local -> pp_local fmt local
+  | S_assumes assumes -> pp_assumes fmt assumes
+  | S_requires requires -> pp_requires fmt requires
+  | S_assigns assigns -> pp_assigns fmt assigns
+  | S_ensures ensures -> pp_ensures fmt ensures
+  | S_free free -> pp_free fmt free
+
+let pp_leaf_sections fmt secs =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    pp_leaf_section
+    fmt secs
 
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[%a%a%a@]"
-    case.content.case_label
-    (pp_list pp_assumes "@\n") case.content.case_assumes
-    (pp_list pp_requires "@\n") case.content.case_requires
-    pp_post case.content.case_post
+  fprintf fmt "case \"%s\":@\n  @[<v 2>%a@]"
+    case.case_label
+    pp_leaf_sections case.case_body
 
-let pp_body fmt body =
-  match body with
-  | B_post post -> pp_post fmt post
-  | B_cases cases  -> (pp_list pp_case "@\n") fmt cases
+let pp_section fmt sec =
+  match sec with
+  | S_leaf leaf -> pp_leaf_section fmt leaf
+  | S_case case -> pp_case fmt case
 
-let pp_stub fmt stub =
-  fprintf fmt "%a%a"
-    (pp_list pp_requires "@\n") stub.stub_requires
-    pp_body stub.stub_body
+let pp_sections fmt secs =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    pp_section
+    fmt secs
+
+let pp_stub fmt stub = pp_sections fmt stub.content 

@@ -194,7 +194,7 @@ type c_fundec = {
   mutable c_func_body: stmt option; (** function body *)
   mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
   mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
-  mutable c_func_stub : Stubs.Ast.stub with_range option; (** stub specification of the function *)
+  mutable c_func_stub : Stubs.Ast.stub option; (** stub specification of the function *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
 }
 (** Function descriptor. *)

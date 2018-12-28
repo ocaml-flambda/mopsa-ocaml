@@ -239,6 +239,7 @@ struct
       ) others AddrSet.empty
 
   let find_addr itv man flow =
+    (* FIXME: return NULL in case itv can be un-allocated*)
     let a = Flow.get_domain_env T_cur man flow in
     let a1 = find_addr_first itv a.first in
     let a2 = find_addr_others itv a.others in
