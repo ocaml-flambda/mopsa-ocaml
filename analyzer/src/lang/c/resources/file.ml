@@ -39,9 +39,11 @@ struct
      states: Free, NotFree and MaybeFree.  For the two last states, we
      add the set of allocated heap addresses.
 
-     For the remaining ids, the domains keeps a set of allocated
-     addresses. Each address is annotated with the interval of
-     possible ids. *)
+     For the remaining ids, the domains keeps a partial map from
+     allocated addresses to an interval over-approximating file
+     ids. To improve precision, an under-approximation of the support
+     of the map (i.e. set of addresses) is used.
+  *)
 
 
   module Addr =
@@ -59,9 +61,8 @@ struct
   (** Map from addresses to intervals *)
   module AddrItvMap = Framework.Lattices.Partial_map.Make(Addr)(Itv)
 
-
-  (* Precise file state *)
-  module PreciseState =
+  (* Availability info of a slot in the file table *)
+  module FileSlot =
   struct
 
     type t =
@@ -140,14 +141,14 @@ struct
       match s with
       | Bot -> Format.fprintf fmt "⊥"
       | Free -> Format.fprintf fmt "⚪"
-      | NotFree a -> Format.fprintf fmt "⚫:%a" pp_set a
-      | MaybeFree a -> Format.fprintf fmt "◐:%a" pp_set a
+      | NotFree a -> Format.fprintf fmt "⚫ : %a" pp_set a
+      | MaybeFree a -> Format.fprintf fmt "◐ : %a" pp_set a
 
 
   end
 
-  (* Approximate file state *)
-  module ApproxState =
+  (* Approximation of the file table *)
+  module FileTable =
   struct
 
     type t = {
@@ -184,22 +185,27 @@ struct
         AddrItvMap.print a.map
         pp_set a.support
 
+    let add addr itv a = {
+      map = AddrItvMap.add addr itv a.map;
+      support = AddrSet.add addr a.support;
+    }
+
   end
 
-  type precise = PreciseState.t
-  type approx = ApproxState.t
+  type slot = FileSlot.t
+  type table = FileTable.t
 
   (* Precision window *)
   let window = 3
 
   type t = {
-    first : precise list;
-    others: approx;
+    first : slot list;
+    others: table;
   }
 
   let init = {
-    first = List.init window (fun _ -> PreciseState.Free);
-    others = ApproxState.empty;
+    first = List.init window (fun _ -> FileSlot.Free);
+    others = FileTable.empty;
   }
 
   let bottom = init
@@ -210,22 +216,22 @@ struct
 
 
   let subset a1 a2 =
-    List.for_all2 PreciseState.subset a1.first a2.first &&
-    ApproxState.subset a2.others a1.others
+    List.for_all2 FileSlot.subset a1.first a2.first &&
+    FileTable.subset a2.others a1.others
 
   let join annot a1 a2 = {
-    first = List.map2 PreciseState.join a1.first a2.first;
-    others = ApproxState.join annot a1.others a2.others;
+    first = List.map2 FileSlot.join a1.first a2.first;
+    others = FileTable.join annot a1.others a2.others;
   }
 
   let meet annot a1 a2 = {
-    first = List.map2 PreciseState.meet a1.first a2.first;
-    others = ApproxState.meet annot a1.others a2.others;
+    first = List.map2 FileSlot.meet a1.first a2.first;
+    others = FileTable.meet annot a1.others a2.others;
   }
 
   let widen annot a1 a2 = {
-    first = List.map2 PreciseState.join a1.first a2.first;
-    others = ApproxState.widen annot a1.others a2.others;
+    first = List.map2 FileSlot.join a1.first a2.first;
+    others = FileTable.widen annot a1.others a2.others;
   }
 
 
@@ -235,11 +241,11 @@ struct
       | [] -> ()
       | hd :: tl ->
         Format.fprintf fmt "%d ↦ %a,@\n%a"
-          i PreciseState.print hd (pp_first (i + 1)) tl
+          i FileSlot.print hd (pp_first (i + 1)) tl
     in
-    Format.fprintf fmt "files: @[%a@\n_ ↦ @[%a@]@]@\n"
+    Format.fprintf fmt "files: @[@[%a@]_ ↦ @[%a@]@]@\n"
       (pp_first 0) a.first
-      ApproxState.print a.others
+      FileTable.print a.others
 
 
   (** Domain identification *)
@@ -269,6 +275,7 @@ struct
     export = [Z_c, Z_c_low_level];
     import = [
       Z_c, Z_c_points_to;
+      Z_c, Universal.Zone.Z_u_num;
       Universal.Zone.Z_u_heap, Z_any
     ]
   }
@@ -285,9 +292,11 @@ struct
   (** File management functions *)
   (** ========================= *)
 
-  (* Insert an address in a precise location. Returns the new state
-     after insertion and a boolean for stopping insertion *)
-  let insert_precise_at addr (s:precise) : precise option * precise option =
+  (** Insert an address in a slot. Returns the new state of the 
+      slot after insertion, or its state when the insertion is 
+      not possible. 
+  *)
+  let insert_slot addr (s:slot) : slot option * slot option =
     match s with
     | Bot         -> None, None
     | Free        -> Some (NotFree (AddrSet.singleton addr)), None
@@ -295,62 +304,170 @@ struct
     | MaybeFree a ->
       Some (NotFree (AddrSet.add addr a)), Some (NotFree a)
 
-  (* Iterate on precise locations and try to insert the address *)
-  let rec iter_insert_precise addr i (s:precise list) =
-    match s with
-    | [] -> [], false
+  (* Iterate on first slot and try to insert the address *)
+  let rec insert_first addr i (first:slot list) =
+    match first with
+    | [] -> [], []
     | hd :: tl ->
-      match insert_precise_at addr hd with
+      match insert_slot addr hd with
       | Some hd', None ->
-        [hd' :: tl, Itv.of_int i i], true
+        [hd' :: tl], []
 
       | None, None ->
-        [], true
+        [], []
 
       | None, Some hd' ->
-        let after, stop = iter_insert_precise addr (i + 1) tl in
-        let l = List.map (fun (tl', itv) -> hd' :: tl', itv) after in
-        l, stop
+        let after_inserted, after_no_place = insert_first addr (i + 1) tl in
+        let no_place = List.map (fun tl' -> hd' :: tl') after_no_place in
+        let inserted = List.map (fun tl' -> hd' :: tl') after_inserted in
+        inserted, no_place
 
       | Some hd', Some hd'' ->
-        let after, stop = iter_insert_precise addr (i + 1) tl in
-        let l = List.map (fun (tl', itv) -> hd'' :: tl', itv) after in
-        (hd' :: tl, Itv.of_int i i) :: l, stop
+        let after_inserted, after_no_place = insert_first addr (i + 1) tl in
+        let no_place = List.map (fun tl' -> hd'' :: tl') after_no_place in
+        let inserted = List.map (fun tl' -> hd'' :: tl') after_inserted in
+        (hd' :: tl) :: inserted, no_place
 
-  let insert_approx addr (s:approx) : approx =
-    assert false
+  (** Insert an address in the remaining part of the file table *)
+  let insert_others addr (t:table) =
+    (* Compute the interval of allocated ids *)
+    let allocated = AddrItvMap.fold (fun _ -> Itv.join ()) t.map Itv.bottom in
 
-  let insert addr range man flow = assert false
-    (* let a = Flow.get_domain_env T_cur man flow in
-     * let cases, stop = iter_insert_precise addr 0 a.first in
-     * 
-     * let evl = List.map (fun (first, itv) ->
-     *     let a' = { a with first } in
-     *     let flow' = Flow.set_domain_env T_cur a' man flow in
-     *     Eval.singleton (mk_interval itv range) flow'
-     *   ) cases
-     * in
-     * 
-     * if stop then
-     *   Eval.join_list evl
-     * else
-     *   let cases = insert_approx addr a.approx in
-     *   let evl = List.map (fun (approx, itv) ->
-     *       let a' = { a with approx } in
-     *       let flow' = Flow.set_domain_env T_cur a' man flow in
-     *       Eval.singleton (mk_interval itv range) flow'
-     *     ) cases
-     *   in *)
+    (* A sound solution is [window, b + 1], where [a, b] = allocated *)
+    let l = Z.of_int window
+    and u = Itv.bounds allocated |> snd
+    in
 
+    let sol0 = Itv.of_z l u in
 
+    (* We can refine this solution by removing the ids of the minimal support *)
+    let m = AddrItvMap.filter (fun addr _ -> AddrSet.mem addr t.support) t.map in
+    let support = AddrItvMap.fold (fun _ itv acc -> itv :: acc) m [] in
+    (* Sort intervals using the lowest bound *)
+    let sorted = List.sort (fun itv1 itv2 ->
+        let a1 = Itv.bounds itv2 |> fst in
+        let a2 = Itv.bounds itv2 |> fst in
+        Z.compare a1 a2
+      ) support
+    in
+    let sol = List.fold_left (fun itv acc ->
+        Itv.binop () O_minus acc itv |>
+        Channel.without_channel
+      ) sol0 sorted
+    in
+    FileTable.add addr sol t
 
+  (** Insert an address in the abstract state and compute the interval of its ids *)
+  let insert addr man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let inserted, no_place = insert_first addr 0 a.first in
+    let annot = Flow.get_all_annot flow in
+    let case1 =
+      match inserted with
+      | hd :: tl ->
+        let first = List.fold_left (List.map2 FileSlot.join) hd tl in
+        let a' = { a with first } in
+        Flow.set_domain_env T_cur a' man flow
 
+      | [] -> Flow.bottom annot
+    in
+    
+    let case2 =
+      match no_place with
+      | hd :: tl ->
+        let first = List.fold_left (List.map2 FileSlot.join) hd tl in
+        let others = insert_others addr a.others in
+        let a' = { first; others } in
+        Flow.set_domain_env T_cur a' man flow
+
+      | _ -> Flow.bottom annot
+    in
+
+    Flow.join man case1 case2
+
+  let find_itv_first addr first =
+    let rec iter i l =
+      match l with
+      | [] -> Itv.bottom
+      | hd :: tl ->
+        match hd with
+        | FileSlot.Bot | Free -> iter (i + 1) tl
+        | NotFree a | MaybeFree a ->
+          let after = iter (i + 1) tl in
+          if AddrSet.mem addr a then Itv.join () (Itv.of_int i i) after
+          else after
+    in
+    iter 0 first
+
+  let find_itv_others addr (others:table) = AddrItvMap.find addr others.map
+
+  let find_itv addr man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let itv1 = find_itv_first addr a.first in
+    let itv2 = find_itv_others addr a.others in
+    Itv.join () itv1 itv2
+
+  let find_addr_first itv first =
+    let rec iter i l =
+      match l with
+      | [] -> AddrSet.empty
+      | hd :: tl ->
+        let after = iter (i + 1) tl in
+        match hd with
+        | FileSlot.Bot | Free -> after
+        | NotFree a | MaybeFree a ->
+          if Itv.mem (Z.of_int i) itv then
+            AddrSet.union a after
+          else
+            after
+    in
+    iter 0 first
+
+  let find_addr_others itv (others:table) =
+    AddrItvMap.fold (fun addr itv' acc ->
+        if Itv.is_bottom (Itv.meet () itv itv') then acc
+        else AddrSet.add addr acc
+      ) others.map AddrSet.empty
+
+  let find_addr itv man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let a1 = find_addr_first itv a.first in
+    let a2 = find_addr_others itv a.others in
+    AddrSet.union a1 a2
+
+  let remove_addr_first addr first =
+    List.map (fun s ->
+        match s with
+        | FileSlot.Bot | Free -> s
+        | NotFree a | MaybeFree a ->
+          let a' = AddrSet.remove addr a in
+          if AddrSet.is_empty a' then
+            Free
+          else
+            MaybeFree a'
+      ) first
+
+  let remove_addr_others addr (others:table) : table = {
+      map = AddrItvMap.remove addr others.map;
+      support = AddrSet.remove addr others.support;
+    }
+
+  let remove_addr addr man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let first = remove_addr_first addr a.first in
+    let others = remove_addr_others addr a.others in
+    let a' = { first; others } in
+    Flow.set_domain_env T_cur a' man flow
 
   (** Computation of post-conditions *)
   (** ============================== *)
 
   let exec zone stmt man flow  =
     match skind stmt with
+    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileDescriptor"} as addr, _)}) ->
+      remove_addr addr man flow |>
+      Post.return
+
     | _ -> None
 
   (** Evaluation of expressions *)
@@ -360,15 +477,49 @@ struct
     match ekind exp with
     (* 𝔼⟦ new FileDescriptor ⟧ *)
     | E_alloc_addr(A_stub_resource "FileDescriptor") ->
-      panic_at exp.erange "new FileDescriptor not implemeneted"
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
+      Eval.bind_return @@ fun exp' flow ->
+
+      let addr, mode =
+        match ekind exp' with
+        | E_addr(addr, mode) -> addr, mode
+        | _ -> assert false
+      in
+
+      let flow' = insert addr man flow in
+      Eval.singleton exp' flow'
 
     (* 𝔼⟦ _mopsa_fd_to_int(fd) ⟧ *)
     | E_c_builtin_call("_mopsa_fd_to_int", [fd]) ->
-      panic_at exp.erange "_mopsa_fd_to_int not implemented"
+      man.eval ~zone:(Z_c, Z_c_points_to) fd flow |>
+      Eval.bind_return @@ fun pt flow ->
+
+      let addr =
+        match ekind pt with
+        | E_c_points_to (P_block (A (addr, mode), _)) -> addr
+        | _ -> assert false
+      in
+
+      let itv = find_itv addr man flow in
+      let l, u = Itv.bounds itv in
+      let exp' = mk_z_interval l u exp.erange in
+
+      Eval.singleton exp' flow
 
     (* 𝔼⟦ _mopsa_int_to_fd(fd) ⟧ *)
-    | E_c_builtin_call("_mopsa_int_to_fd", [fd]) ->
-      panic_at exp.erange "_mopsa_int_to_fd not implemented"
+    | E_c_builtin_call("_mopsa_int_to_fd", [id]) ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) id flow |>
+      Eval.bind_return @@ fun id flow ->
+
+      let itv = man.ask (Itv.Q_interval id) flow in
+      let addrs = find_addr itv man flow in
+
+      let evl = AddrSet.elements addrs |>
+                List.map (fun addr ->
+                    Eval.singleton (mk_addr addr exp.erange) flow
+                  )
+      in
+      Eval.join_list evl
 
     | _ -> None
 
