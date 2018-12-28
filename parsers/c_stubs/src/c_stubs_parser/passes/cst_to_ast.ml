@@ -69,11 +69,15 @@ let find_enum e prj =
   List.find (fun e' -> compare e'.enum_org_name e.vname = 0)
 
 let find_function f prj =
-  let open C_AST in
-  StringMap.bindings prj.proj_funcs |>
-  List.split |>
-  snd |>
-  List.find (fun f' -> compare f'.func_org_name f.vname = 0)
+  try
+    let open C_AST in
+    bind_range f @@ fun f ->
+    StringMap.bindings prj.proj_funcs |>
+    List.split |>
+    snd |>
+    List.find (fun f' -> compare f'.func_org_name f.vname = 0)
+  with Not_found ->
+    Exceptions.panic_at f.range "function %s not found" f.content.vname
   
 let rec unroll_type t =
   let open C_AST in
@@ -497,7 +501,7 @@ let visit_local loc prj func =
     match loc.lval with
     | L_new r -> Ast.L_new r
     | L_call (f, args) ->
-      let f = bind_range f @@ fun f -> find_function f prj in
+      let f = find_function f prj in
       Ast.L_call (f, visit_list visit_expr args prj func)
   in
   Ast.{ lvar; lval }

@@ -1,5 +1,9 @@
 #include <fcntl.h>
 
+extern int _mopsa_fd_to_int(void *fd);
+extern void *_mopsa_int_to_fd(int fd);
+
+
 /*$
  * local: void* fd = new FileDescriptor;
  * local: int n = _mopsa_fd_to_int(fd);
