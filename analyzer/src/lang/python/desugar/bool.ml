@@ -9,9 +9,9 @@
 (** Handling of and/or operators. *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 open Zone
 
 

@@ -9,9 +9,9 @@
 (** Handling of class definition and instantiation. *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 
 module Domain =
@@ -41,7 +41,7 @@ module Domain =
          (* handled in myytypes *)
          (* FIXME: what about the value analysis? *)
          None
-      | E_py_call({ekind = E_py_object cls} as ecls, args, []) when Addr.isclass cls ->
+      | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
          (* Call __new__ *)
          let tmp_inst = mk_tmp () in
          let inst_var = mk_var tmp_inst range in
@@ -85,27 +85,27 @@ module Domain =
              (fun bases flow ->
                let bases' =
                  match bases with
-                 | [] -> [Addr.find_builtin "object"]
+                 | [] -> [find_builtin "object"]
                  | _ -> List.map object_of_expr  bases
                in
                if Libs.Py_mopsa.is_builtin_clsdec cls then
                  let name = Libs.Py_mopsa.builtin_clsdec_name cls in
-                 Addr.create_builtin_class (C_builtin name) name cls bases' range;
+                 create_builtin_class (C_builtin name) name cls bases' range;
                  Post.of_flow flow
                else
                  if Libs.Py_mopsa.is_unsupported_clsdec cls then
                    let name = cls.py_cls_var.vname in
-                   Addr.create_builtin_class (C_unsupported name) name cls bases' range;
+                   create_builtin_class (C_unsupported name) name cls bases' range;
                    Post.of_flow flow
                  else
                    try
-                     let mro = Addr.c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1)}, mk_py_empty range) in
+                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1)}, mk_py_empty range) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))
                        mro;
 
-                     Addr.eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
+                     eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
                        Post.bind man
                          (fun addr flow ->
                            let obj = (addr, mk_py_empty range) in
@@ -114,7 +114,7 @@ module Domain =
                            man.exec cls.py_cls_body flow |>
                              Post.of_flow
                          )
-                   with Addr.C3_lin_failure ->
+                   with C3_lin_failure ->
                      Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;
                      man.exec (Utils.mk_builtin_raise "TypeError" range) flow
                      |> Post.of_flow

@@ -208,6 +208,29 @@ let register_addr (info: addr info) =
   addr_pp_chain := info.print !addr_pp_chain;
   ()
 
+module Addr =
+struct
+  type t = addr
+  let compare = compare_addr
+  let print = pp_addr
+end
+
+module AddrSet =
+struct
+  include SetExt.Make(Addr)
+
+  let print fmt s =
+    if is_empty s then pp_print_string fmt "∅"
+    else
+      let l = elements s in
+      fprintf fmt "@[<h>{";
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+        pp_addr fmt l
+      ;
+      fprintf fmt "}@]"
+end
+
 
 (*================*)
 (** {2 Functions} *)

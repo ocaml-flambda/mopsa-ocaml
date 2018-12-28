@@ -10,9 +10,9 @@
 
 
 open Mopsa
-open Universal.Ast
-open Ast
 open Addr
+open Ast
+open Universal.Ast
 
 module Domain =
   struct
@@ -186,7 +186,7 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, _, _)
-           when Addr.is_builtin_class_function "unittest.TestCase" f ->
+           when is_builtin_class_function "unittest.TestCase" f ->
          panic "unittest.TestCase function %s not implemented" f
 
       | _ -> None

@@ -9,7 +9,6 @@
 (** Inliner of imported packages. *)
 
 open Mopsa
-open Framework.Ast
 open Universal.Ast
 open Ast
 

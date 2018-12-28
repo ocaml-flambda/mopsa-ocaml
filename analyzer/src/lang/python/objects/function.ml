@@ -9,9 +9,9 @@
 (** Definition of python functions and evaluation of their calls. *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 type expr_kind +=
    | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
@@ -133,7 +133,7 @@ module Domain =
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
-                                                   if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+                                                   if is_builtin_name v.vname then (mk_py_object (find_builtin v.vname) range)
                                                    else mk_expr (E_py_undefined false) range
                                                  in
                                                  mk_assign (mk_var v range) e range
@@ -178,7 +178,7 @@ module Domain =
                F_builtin name
              else F_user func
          in
-         Addr.eval_alloc man (A_py_function kind) stmt.srange flow |>
+         eval_alloc man (A_py_function kind) stmt.srange flow |>
            Post.bind man (fun addr flow ->
                let obj = (addr, mk_py_empty range) in
                man.exec

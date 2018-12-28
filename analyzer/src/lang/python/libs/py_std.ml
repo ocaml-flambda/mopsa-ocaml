@@ -9,9 +9,9 @@
 (** Python standard library. *)
 
 open Mopsa
-open Universal.Ast
-open Ast
 open Addr
+open Ast
+open Universal.Ast
 
 
 module Domain =

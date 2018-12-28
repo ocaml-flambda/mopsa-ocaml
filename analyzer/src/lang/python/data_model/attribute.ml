@@ -10,9 +10,9 @@
 
 open Mopsa
 open Framework.Visitor
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 
 type expr_kind +=
@@ -100,7 +100,7 @@ module Domain =
                    Eval.assume
                      (mk_py_isinstance_builtin exp "type" range)
                      ~fthen:(fun flow ->
-                       let mro = Addr.mro (object_of_expr exp) in
+                       let mro = mro (object_of_expr exp) in
                        let rec search_mro flow mro = match mro with
                          | [] ->
                             debug "No attribute found for %a@\n" pp_expr expr;
@@ -118,7 +118,7 @@ module Domain =
                      ~felse:(fun flow ->
                        man.eval (mk_py_type exp range) flow |>
                          Eval.bind (fun class_of_exp flow ->
-                             let mro = Addr.mro (object_of_expr class_of_exp) in
+                             let mro = mro (object_of_expr class_of_exp) in
                              let rec search_mro flow mro = match mro with
                                | [] ->
                                   debug "No attribute found for %a@\n" pp_expr expr;
@@ -160,8 +160,8 @@ module Domain =
                       can do is to search for builtins attributes and
                       resolve them statically *)
                    let oexp = object_of_expr exp in
-                   if Addr.is_builtin oexp && Addr.is_builtin_attribute oexp attr then
-                     let rese = mk_py_object (Addr.find_builtin_attribute oexp attr) range in
+                   if is_builtin oexp && is_builtin_attribute oexp attr then
+                     let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                      Eval.singleton rese flow
                    else
                      Eval.empty_singleton flow
@@ -190,12 +190,12 @@ module Domain =
                    Eval.assume
                      (mk_py_isinstance_builtin eobj "type" range)
                      ~fthen:(fun flow ->
-                       let mro = Addr.mro (object_of_expr eobj) in
+                       let mro = mro (object_of_expr eobj) in
                        search_mro flow mro)
                      ~felse:(fun flow ->
                        man.eval (mk_py_type eobj range) flow |>
                          Eval.bind (fun class_of_exp flow ->
-                             let mro = Addr.mro (object_of_expr class_of_exp) in
+                             let mro = mro (object_of_expr class_of_exp) in
                              search_mro flow mro)
                      )
                      man flow

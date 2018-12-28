@@ -9,10 +9,9 @@
 (** With statement and context managers *)
 
 open Mopsa
-open Framework.Ast
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 module Domain =
   struct
@@ -71,7 +70,7 @@ module Domain =
                               )
                             ] srange)
                          [mk_except
-                            (Some (mk_py_object (Addr.find_builtin "BaseException") srange))
+                            (Some (mk_py_object (find_builtin "BaseException") srange))
                             (Some tmpexn)
                             (mk_block [
                                  (* In case of exception, call __exit__ and give the exception as argument *)

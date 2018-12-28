@@ -1,11 +1,11 @@
 (* TODO: move S_assume and eval of not into t_bool domain? *)
 open Mopsa
 open Ast
-open Universal.Ast
 open Addr
 open Data_model.Attribute
 open MapExt
 open Objects.Function
+open Universal.Ast
 
 type expr_kind +=
    | E_get_type_partition of Typingdomain.polytype
@@ -89,15 +89,15 @@ module Domain =
       let open Typingdomain in
       let bool = builtin_inst "bool" in
       let complex = builtin_inst "complex" in
-      let complex_cls = let a, b= Addr.builtin_cl_and_mro "complex" in Class (a, b) in
+      let complex_cls = let a, b= builtin_cl_and_mro "complex" in Class (a, b) in
       let int = builtin_inst "int" in
       let float = builtin_inst "float" in
       let none = builtin_inst "NoneType" in
       let str = builtin_inst "str" in
-      let str_cls = let a, b = Addr.builtin_cl_and_mro "str" in Class (a, b) in
+      let str_cls = let a, b = builtin_cl_and_mro "str" in Class (a, b) in
       let slice = builtin_inst "slice" in
-      let slice_cls = let a, b = Addr.builtin_cl_and_mro "slice" in Class (a, b) in
-      let dict_cls = let a, b = Addr.builtin_cl_and_mro "dict" in Class (a, b) in
+      let slice_cls = let a, b = builtin_cl_and_mro "slice" in Class (a, b) in
+      let dict_cls = let a, b = builtin_cl_and_mro "dict" in Class (a, b) in
       let lstub_base =
         StringMap.empty |>
           (* TODO: add rewriting for default arguments?... *)
@@ -464,8 +464,8 @@ module Domain =
               * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
              |> OptionExt.return
            with Not_found ->
-             if Addr.is_builtin_name v.vname then
-               let a = Addr.find_builtin v.vname in
+             if is_builtin_name v.vname then
+               let a = find_builtin v.vname in
                let _ = debug "builtin variable@\n" in
                Eval.singleton (mk_py_object a range) flow |> OptionExt.return
              else
@@ -487,7 +487,7 @@ module Domain =
             Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) globals) range) flow
          | E_py_object ({addr_kind = A_py_module _}, _)
            | E_py_object ({addr_kind = A_py_class (C_builtin _, _)}, _) ->
-            Eval.singleton (mk_py_bool (Addr.is_builtin_attribute (object_of_expr e) attr) range) flow
+            Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
             Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
          | E_type_partition i ->
@@ -515,8 +515,8 @@ module Domain =
               | Typevar alpha ->
                  let mtys = TypeVarMap.find alpha cur.d3 in
                  Monotypeset.fold (fun mty acc -> process (poly_cast mty) {cur with d3 = TypeVarMap.add alpha (Monotypeset.singleton mty) cur.d3} @ acc)  mtys []
-              (* let cls = Addr.find_builtin "list" in
-               * Eval.singleton (mk_py_bool (Addr.is_builtin_attribute cls attr) range) flow *)
+              (* let cls = find_builtin "list" in
+               * Eval.singleton (mk_py_bool (is_builtin_attribute cls attr) range) flow *)
               | _ -> Exceptions.panic "ll_hasattr %a@\n" Typingdomain.pp_polytype pt
               end
             in
@@ -535,14 +535,14 @@ module Domain =
          begin
            match ekind e with
            | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
-              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+              Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
               let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
               man.eval (mk_var f range) flow
            | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
-              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+              Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_module (M_user (name, globals))}, _) ->
-           (* Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow *)
+           (* Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow *)
               let v = List.find (fun x -> x.vname = attr) globals in
               man.eval (mk_var v range) flow
            | E_type_partition i ->
@@ -1803,8 +1803,8 @@ module Domain =
                       | List x ->
                          let rec process x = match x with
                            | Instance {classn} -> classn, cur
-                           | List _ -> let x, y = Addr.builtin_cl_and_mro "list" in Class (x, y), cur
-                           | Dict _ -> let x, y = Addr.builtin_cl_and_mro "dict" in Class (x, y), cur
+                           | List _ -> let x, y = builtin_cl_and_mro "list" in Class (x, y), cur
+                           | Dict _ -> let x, y = builtin_cl_and_mro "dict" in Class (x, y), cur
                            | Typevar a ->
                               let mtys = TypeVarMap.find a cur.d3 in
                               let new_d3 = TypeVarMap.add a (Monotypeset.map (fun x -> mono_cast (fst @@ process (poly_cast x))) mtys) cur.d3 in
@@ -1920,7 +1920,7 @@ module Domain =
                          FiniteTuple (List.map (function
                                           | Instance {classn} -> classn
                                           | List _ ->
-                                             let x, y = Addr.builtin_cl_and_mro "list" in
+                                             let x, y = builtin_cl_and_mro "list" in
                                              Class (x, y)
                                           | _ -> Exceptions.panic "otod, assert_tuple_of@\n") t)
                       | _ -> assert false end

@@ -9,9 +9,9 @@
 (** Python data model for subscript access. *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 module Domain =
   struct

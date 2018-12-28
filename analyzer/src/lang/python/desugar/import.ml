@@ -49,12 +49,12 @@ module Domain =
       | S_py_import_from(modul, name, _, vmodul) ->
          let obj, flow = import_module man modul range flow in
          let e =
-           match Addr.kind_of_object obj with
+           match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
               let v = List.find (fun v -> v.vname = name) globals in
               mk_var v range
            | A_py_module(M_builtin m) ->
-              let obj = Addr.find_builtin_attribute obj name in
+              let obj = find_builtin_attribute obj name in
               mk_py_object obj range
            | _ -> assert false
          in
@@ -67,8 +67,8 @@ module Domain =
 
     (** Search for the module in the search path and parse its body *)
     and import_module man name range flow =
-      if Addr.is_builtin_name name then
-          Addr.find_builtin name, flow
+      if is_builtin_name name then
+        find_builtin name, flow
       else
         let dir =
           Framework.Options.(common_options.stubs) |> List.find_opt
@@ -115,7 +115,7 @@ module Domain =
               let name = mk_dot_name base cls.py_cls_var.vname in
               let bases = List.map (fun base ->
                               match ekind base with
-                              | E_var (v, _) -> Addr.find_builtin v.vname
+                              | E_var (v, _) -> find_builtin v.vname
                               | _ -> assert false
                             ) cls.py_cls_bases
               in
@@ -123,7 +123,7 @@ module Domain =
                 if Libs.Py_mopsa.is_unsupported_clsdec cls then C_unsupported name
                 else C_builtin name
               in
-              Addr.create_builtin_class kind name cls bases (srange stmt);
+              create_builtin_class kind name cls bases (srange stmt);
               parse (Some name) cls.py_cls_body
 
            | S_py_function(fundec) ->
@@ -139,12 +139,12 @@ module Domain =
                   addr_uid = 0;
                 }
               in
-              Addr.add_builtin_function (addr, mk_py_empty (srange stmt)) ()
+              add_builtin_function (addr, mk_py_empty (srange stmt)) ()
 
            | S_block(block) ->
               List.iter (parse base) block
 
-           | S_py_import(name, _, _) when Addr.is_builtin_name name -> ()
+           | S_py_import(name, _, _) when is_builtin_name name -> ()
 
            | _ -> panic "stmt %a not supported in %s" Framework.Ast.pp_stmt stmt file
 
@@ -156,7 +156,7 @@ module Domain =
                addr_uid = 0;
              }
            in
-           Addr.add_builtin_module (addr, mk_py_empty (srange stmt)) ()
+           add_builtin_module (addr, mk_py_empty (srange stmt)) ()
          else
            ()
 

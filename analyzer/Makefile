@@ -40,14 +40,15 @@ lang.c.mm.common = base points_to init_visitor
 lang.c.mm.cells = cell expand cell2scalar
 lang.c.mm.pointers = bases nonrel
 lang.c.libs = c_mopsa
+lang.c.resources = common file memory
+lang.c.resources.file = slot table domain
 
 # lang.python = ast addr utils visitor operators pp frontend
 lang.python = ast addr utils visitor operators pp frontend zone		\
-alarms  libs desugar objects data_model types flows program memory
+alarms  libs desugar objects data_model types flows program
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typingdomain typing t_string t_int t_float t_list t_set
-lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
 lang.cfg = ast pp visitor frontend iterator iterators
 lang.cfg.iterators = intraproc inlining

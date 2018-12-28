@@ -9,10 +9,9 @@
 (** None constant. *)
 
 open Mopsa
-open Framework.Ast
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 
 module Domain =
   struct

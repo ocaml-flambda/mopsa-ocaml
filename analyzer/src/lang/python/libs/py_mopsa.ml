@@ -11,10 +11,9 @@
 (** MOPSA Python library. *)
 
 open Mopsa
-open Framework.Ast
-open Universal.Ast
-open Ast
 open Addr
+open Ast
+open Universal.Ast
 open Alarms
 
 let check man cond range flow =

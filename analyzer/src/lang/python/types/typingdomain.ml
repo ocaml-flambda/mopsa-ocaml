@@ -67,8 +67,8 @@ type polytype = typevar pytype
 
 
 let builtin_inst s =
-  let obj = Addr.find_builtin s in
-  match Addr.kind_of_object obj with
+  let obj = find_builtin s in
+  match kind_of_object obj with
   | A_py_class (c, b) ->
      Instance {classn=Class (c, b) ; uattrs=StringMap.empty; oattrs=StringMap.empty}
   | _ -> assert false
@@ -603,12 +603,12 @@ let class_le (c, b:class_address * py_object list) (d, b':class_address * py_obj
    * let dname = match d with
    *   | C_builtin s | C_unsupported s -> s
    *   | C_user s -> s.py_cls_var.vname in
-   * let oc = if Addr.is_builtin_name cname then Addr.find_builtin cname
+   * let oc = if is_builtin_name cname then find_builtin cname
    *          else
    *            (\* TODO: FIXME: mro *\)
    *            {addr_kind=A_py_class (c, b); addr_range=Range_fresh (-1); addr_uid=(-1)}, {ekind=E_py_undefined true; etyp=T_any; erange=Range_fresh (-1)}
    * in
-   * let od = if Addr.is_builtin_name dname then Addr.find_builtin dname
+   * let od = if is_builtin_name dname then find_builtin dname
    *          else
    *                         {addr_kind=A_py_class (d, b'); addr_range=Range_fresh (-1); addr_uid=(-1)}, {ekind=E_py_undefined true; etyp=T_any; erange=Range_fresh (-1)}
    * in
@@ -1080,7 +1080,7 @@ let get_mtypes (d:domain) (mts:Monotypeset.t) : polytype * domain =
 let class_of (d:domain) (t:typeid) : class_address * py_object list =
   match TypeIdMap.find t d.d2 with
   | Instance {classn=Class (c, b)} -> (c, b)
-  | Class _ -> C_builtin "type", [Addr.find_builtin "object"]
+  | Class _ -> C_builtin "type", [find_builtin "object"]
   | _ -> Exceptions.panic "class_of: ni"
 
 let get_polytype (d:domain) (v:pyVar) : polytype =
@@ -1108,7 +1108,7 @@ let get_addr_kind (d:domain) (v:pyVar) : Universal.Ast.addr_kind =
 let rec filter_polyinst (p, d3: polytype * d3) (inst:monotype) : (polytype * d3) * (polytype * d3) =
   let process_builtin str =
     match inst with
-    | Class (d, b) -> if class_le (Addr.builtin_cl_and_mro str) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
+    | Class (d, b) -> if class_le (builtin_cl_and_mro str) (d, b) then (p, d3), (Bot, d3) else (Bot, d3), (p, d3)
     | _ -> assert false in
   (* TODO: remove filter_monoinst? or at least write polymorphic function *)
   let cp x y = (x, y), (x, y) in
@@ -1197,27 +1197,27 @@ let filter_ty_inst (d:domain) (ty:polytype) (inst:monotype) : domain * domain =
   filter_inst d t inst
 
 
-let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list) * domain) list =
+let type_of (d:domain) (tid:typeid) : (class_address * (Ast.py_object list) * domain) list =
   let triplet domain (a, b) = (a, b, domain) in
   let rec aux pt domain = match pt with
     | Instance {classn=Class (c, b)} -> [c, b, domain]
-    | Class _ -> [triplet domain @@ Addr.builtin_cl_and_mro "type"]
-    | List _ -> [triplet domain @@ Addr.builtin_cl_and_mro "list"]
-    | Set _ -> [triplet domain @@ Addr.builtin_cl_and_mro "set"]
-    | Generator _ -> [triplet domain @@ Addr.builtin_cl_and_mro "generator"]
-    | FiniteTuple _ -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple"]
-    | Dict _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict"]
-    | DictKeys _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keys"]
-    | DictValues _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_values"]
-    | DictItems _ -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_items"]
-    | Iterator (List _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "list_iterator"]
-    | Iterator (Set _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "set_iterator"]
-    | Iterator (FiniteTuple _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "tuple_iterator"]
-    | Iterator (Dict _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keyiterator"]
-    | Iterator (DictKeys _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_keyiterator"]
-    | Iterator (DictValues _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_valueiterator"]
-    | Iterator (DictItems _, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "dict_itemiterator"]
-    | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ Addr.builtin_cl_and_mro "str_iterator"]
+    | Class _ -> [triplet domain @@ builtin_cl_and_mro "type"]
+    | List _ -> [triplet domain @@ builtin_cl_and_mro "list"]
+    | Set _ -> [triplet domain @@ builtin_cl_and_mro "set"]
+    | Generator _ -> [triplet domain @@ builtin_cl_and_mro "generator"]
+    | FiniteTuple _ -> [triplet domain @@ builtin_cl_and_mro "tuple"]
+    | Dict _ -> [triplet domain @@ builtin_cl_and_mro "dict"]
+    | DictKeys _ -> [triplet domain @@ builtin_cl_and_mro "dict_keys"]
+    | DictValues _ -> [triplet domain @@ builtin_cl_and_mro "dict_values"]
+    | DictItems _ -> [triplet domain @@ builtin_cl_and_mro "dict_items"]
+    | Iterator (List _, _) -> [triplet domain @@ builtin_cl_and_mro "list_iterator"]
+    | Iterator (Set _, _) -> [triplet domain @@ builtin_cl_and_mro "set_iterator"]
+    | Iterator (FiniteTuple _, _) -> [triplet domain @@ builtin_cl_and_mro "tuple_iterator"]
+    | Iterator (Dict _, _) -> [triplet domain @@ builtin_cl_and_mro "dict_keyiterator"]
+    | Iterator (DictKeys _, _) -> [triplet domain @@ builtin_cl_and_mro "dict_keyiterator"]
+    | Iterator (DictValues _, _) -> [triplet domain @@ builtin_cl_and_mro "dict_valueiterator"]
+    | Iterator (DictItems _, _) -> [triplet domain @@ builtin_cl_and_mro "dict_itemiterator"]
+    | Iterator (Instance {classn=Class (C_builtin "str", _)}, _) -> [triplet domain @@ builtin_cl_and_mro "str_iterator"]
     | Typevar a ->
        let mtys = concretize_poly pt d.d3 in
        let cclass (x, y) = Class (x, y) in
@@ -1226,9 +1226,9 @@ let type_of (d:domain) (tid:typeid) : (Addr.class_address * (Ast.py_object list)
            let mtype = match mty with
              | Instance {classn=c} -> c
              | List _ ->
-                cclass @@ Addr.builtin_cl_and_mro "list"
+                cclass @@ builtin_cl_and_mro "list"
              | Dict _ ->
-                cclass @@ Addr.builtin_cl_and_mro "dict"
+                cclass @@ builtin_cl_and_mro "dict"
              | Bot -> Bot
              | _ -> debug "%a@\n" pp_monotype mty; assert false in
            let new_domain = fst @@ filter_inst domain tid mtype in
@@ -1287,8 +1287,8 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
      else
        (Bot, d3), (p, d3)
   | Instance ({classn=Class (C_builtin c, _); uattrs; oattrs} as inst) ->
-     let cls = Addr.find_builtin c in
-     if Addr.is_builtin_attribute cls attr then
+     let cls = find_builtin c in
+     if is_builtin_attribute cls attr then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) uattrs then
        (p, d3), (Bot, d3)

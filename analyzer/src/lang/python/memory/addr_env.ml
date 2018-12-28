@@ -9,9 +9,9 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
+open Universal.Ast
 open Data_model.Attribute
 
 let name = "python.memory.addr_env"
@@ -130,7 +130,7 @@ struct
                man.eval (mk_py_type e range) flow |>
                  Post.bind man
                    (fun cls flow ->
-                     let t = match kind_of_object (Addr.most_derive_builtin_base (object_of_expr cls)) with
+                     let t = match kind_of_object (most_derive_builtin_base (object_of_expr cls)) with
                        | A_py_class (C_builtin "int", _) -> T_int
                        | A_py_class (C_builtin "float", _) -> (T_float F_DOUBLE) (* FIXME *)
                        | A_py_class (C_builtin "bool", _) -> T_bool
@@ -188,25 +188,25 @@ struct
           let cur' = add v (ASet.singleton a) cur in
           let flow' = Flow.set_domain_cur cur' man flow in
           match a with
-          | PyAddr.Undef_global when Addr.is_builtin_name v.vname ->
-             man.eval (mk_py_object (Addr.find_builtin v.vname) range) flow |> Eval.join acc
+          | PyUndef_global when is_builtin_name v.vname ->
+             man.eval (mk_py_object (find_builtin v.vname) range) flow |> Eval.join acc
 
-          | PyAddr.Undef_local when Addr.is_builtin_name v.vname ->
-             man.eval (mk_py_object (Addr.find_builtin v.vname) range) flow |> Eval.join acc
+          | PyUndef_local when is_builtin_name v.vname ->
+             man.eval (mk_py_object (find_builtin v.vname) range) flow |> Eval.join acc
 
-          | PyAddr.Undef_global ->
+          | PyUndef_global ->
              let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow' in
              Eval.empty_singleton flow |> Eval.join acc
 
-          | PyAddr.Undef_local ->
+          | PyUndef_local ->
              let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow' in
              Eval.empty_singleton flow |> Eval.join acc
 
-          | PyAddr.Def addr ->
+          | PyDef addr ->
              man.eval (mk_py_type (mk_py_object (addr, exp) range) range) flow |>
                Eval.bind
                  (fun cls flow ->
-                   let t = match kind_of_object (Addr.most_derive_builtin_base (object_of_expr cls)) with
+                   let t = match kind_of_object (most_derive_builtin_base (object_of_expr cls)) with
                      | A_py_class (C_builtin "int", _) -> T_int
                      | A_py_class (C_builtin "float", _) -> (T_float F_DOUBLE) (* FIXME *)
                      | A_py_class (C_builtin "bool", _) -> T_bool
@@ -219,7 +219,7 @@ struct
                    let v' = mk_avar ~vtyp:t addr.addr_uid in
                    Eval.singleton (mk_py_object (addr, mk_var v' range) range) flow |> Eval.join acc
                  )
-            (*  let t = Addr.type_of_object (addr, mk_py_empty range) in
+            (*  let t = type_of_object (addr, mk_py_empty range) in
              * let vv = mk_py_value_var v t in
              * Eval.singleton (mk_py_object (addr, mk_var vv range) range) flow |> Eval.join acc *)
         ) aset (*FIXME?*) (Eval.empty_singleton flow)
@@ -232,11 +232,11 @@ struct
              | E_py_object ({addr_kind = A_py_instance (instobj, _)}, _) ->
                 Eval.singleton (mk_py_object instobj range) flow
              | E_py_object ({addr_kind = A_py_class _}, _) ->
-                Eval.singleton (mk_py_object (Addr.find_builtin "type") range) flow
+                Eval.singleton (mk_py_object (find_builtin "type") range) flow
              | E_py_object ({addr_kind = A_py_module _}, _) ->
-                Eval.singleton (mk_py_object (Addr.find_builtin "module") range) flow
+                Eval.singleton (mk_py_object (find_builtin "module") range) flow
              | E_py_object ({addr_kind = A_py_function _}, _) ->
-                Eval.singleton (mk_py_object (Addr.find_builtin "function") range) flow
+                Eval.singleton (mk_py_object (find_builtin "function") range) flow
              | _ -> assert false)
        |> OptionExt.return
 
@@ -247,7 +247,7 @@ struct
        begin match ekind e with
        | E_py_object ({addr_kind = A_py_module _}, _)
          | E_py_object ({addr_kind = A_py_class (C_builtin _, _)}, _) ->
-          Eval.singleton (mk_py_bool (Addr.is_builtin_attribute (object_of_expr e) attr) range) flow
+          Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
        | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
        | _ -> Exceptions.panic "E_py_ll_hasattr on expr %a@\n" pp_expr e
@@ -261,12 +261,12 @@ struct
        begin match ekind e with
        (* FIXME: factoriser avec typing.ml pour certains cas ? *)
        | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
-          Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+          Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
        | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
           let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
           man.eval (mk_var f range) flow
        | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
-          Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+          Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
        | _ -> Exceptions.panic "E_py_ll_getattr(%a, %s): todo" pp_expr e attr
        end
        |> OptionExt.return
