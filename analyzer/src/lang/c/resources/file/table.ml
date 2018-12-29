@@ -6,6 +6,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** 
+   Abstraction of the table of file descriptors. Each allocated file
+   descriptor is mapped to an interval of possible numeric values. 
+*)
+
+
 open Mopsa
 open Universal.Ast
 module Itv = Universal.Numeric.Values.Intervals.Value
@@ -22,6 +28,19 @@ let empty : table = {
   map = AddrItvMap.empty;
   support = AddrSet.empty;
 }
+
+let bottom : table = {
+  map = AddrItvMap.bottom;
+  support = AddrSet.empty;
+}
+
+let top : table = {
+  map = AddrItvMap.top;
+  support = AddrSet.empty;
+}
+
+let is_bottom (t:table) = false (* FIXME: replace by Table.is_bottom after 
+                                   fixing bottom value of partial maps *)
 
 let subset a1 a2 =
   AddrItvMap.subset a1.map a2.map &&
@@ -43,7 +62,7 @@ let widen annot a1 a2 = {
 }
 
 let print fmt a =
-  Format.fprintf fmt "map: @[%a@]@\nsupport: @[%a@]"
+  Format.fprintf fmt "others: @[%a@]@\nsupport: @[%a@]"
     AddrItvMap.print a.map
     AddrSet.print a.support
 
@@ -52,7 +71,7 @@ let add addr itv a = {
   support = AddrSet.add addr a.support;
 }
 
-(** Insert an address in the remaining part of the file table *)
+(** Insert an address in the file table *)
 let insert addr window (t:table) =
   (* Compute the interval of allocated ids *)
   let allocated = AddrItvMap.fold (fun _ -> Itv.join ()) t.map Itv.bottom in

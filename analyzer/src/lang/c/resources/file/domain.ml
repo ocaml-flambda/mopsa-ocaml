@@ -6,7 +6,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Manager of the `FileDescriptor` and `File` resources *)
+(** Manager of the `FileDescriptor` resources *)
+
+(* 
+   UNIX file descriptors are associated to integer identifiers. These
+   ids are generated in a particular way. As described in Single UNIX
+   specification (Sec. 2.14), allocation should return the lowest
+   number available.
+
+   This abstract domain maintains information about previously
+   allocated file descriptors. Since the ids 0, 1 and 2 are used
+   implicitly by many library functions (printf, scanf, etc.), the domain 
+   tries to be more precise for those cases.
+
+   More particularly, it defines a window of precision (interval
+   of integers) where allocated file descriptors have three
+   states: Free, NotFree and MaybeFree. For the two last states, we
+   add the set of allocated heap addresses.
+
+   For the remaining values, the domains keeps a partial map from
+   allocated addresses to an interval over-approximating file ids.
+
+   Example
+   =======
+
+   Consider the following abstract state:
+
+     0 -> NotFree { @0, @1 }
+     1 -> Free
+     _ -> {
+       @2 -> [2, 2]
+       @3 -> [4, 5]
+     }
+
+   represents the state where the file descriptor 0 is allocated to 
+   resources  @0 or @1, and the descriptor 1 is not allocated. For the 
+   remaining descriptors, the partial map gives the possible mappings.
+
+   In order to improve precision an under-approximation of the support 
+   of the  map (i.e. set of addresses) is used. It can forbid giving 
+   some ids when allocating new resources.
+*)
+
 
 open Mopsa
 open Universal.Ast
@@ -18,55 +59,54 @@ module Itv = Universal.Numeric.Values.Intervals.Value
 open Slot
 open Table
 
+
+(** {2 Command-line options} *)
+(** ************************ *)
+
+(** Precision window. The first file descriptors ∈ [0, window) are 
+      abstracted more precisely. *)
+let opt_window = ref 3
+
+let () =
+  register_option (
+    "-filedes-precision",
+    Arg.Set_int opt_window,
+    "number of the first file descriptors represented precisely. (default: 3)"
+  )
+
+
+(** {2 Abstract domain} *)
+(** ******************* *)
+
 module Domain =
 struct
 
   (** Lattice definition *)
   (** ****************** *)
 
-  (** Lattice definition *)
-  (** ****************** *)
-
-  (* UNIX file descriptors are associated to integer
-     identifiers. These ids are generated in a particular way. As
-     described in Single UNIX specification (Sec. 2.14), allocation
-     should return the lowest number available.
-
-     The File abstract domain maintains information about previously
-     allocated file descriptors. Since the ids 0, 1 and 2 are used
-     implicitly by many library functions, the domain tries to be more
-     precise for those cases.
-
-     More particularly, we associate to 0, 1 and 2 three possible
-     states: Free, NotFree and MaybeFree.  For the two last states, we
-     add the set of allocated heap addresses.
-
-     For the remaining ids, the domains keeps a partial map from
-     allocated addresses to an interval over-approximating file
-     ids. To improve precision, an under-approximation of the support
-     of the map (i.e. set of addresses) is used.
-  *)
-
-
-  (* Precision window *)
-  let window = 3
-
   type t = {
     first : slot list;
     others: table;
   }
 
-  let init = {
-    first = List.init window (fun _ -> Slot.Free);
+  let init_state () = {
+    first = List.init !opt_window (fun _ -> Slot.Free);
     others = Table.empty;
   }
 
-  let bottom = init
+  let bottom = {
+    first = [Slot.Bot];
+    others = Table.bottom;
+  }
 
-  let top = init
+  let top = {
+    first = [];
+    others = Table.top;
+  }
 
-  let is_bottom _ = false
-
+  let is_bottom (a:t) =
+    List.exists Slot.is_bottom a.first ||
+    Table.is_bottom a.others
 
   let subset a1 a2 =
     List.for_all2 Slot.subset a1.first a2.first &&
@@ -89,15 +129,18 @@ struct
 
 
   let print fmt a =
-    let rec pp_first i fmt l =
-      match l with
-      | [] -> ()
-      | hd :: tl ->
-        Format.fprintf fmt "%d ↦ %a,@\n%a"
-          i Slot.print hd (pp_first (i + 1)) tl
+    let rec pp_first fmt l =
+      let l' = List.mapi (fun i s -> (i, s)) l in
+      Format.pp_print_list
+        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+        (fun fmt (i, s) ->
+           Format.fprintf fmt "%d ↦ @[<h>%a@]"
+             i Slot.print s
+        )
+        fmt l'
     in
-    Format.fprintf fmt "files: @[@[%a@]_ ↦ @[%a@]@]@\n"
-      (pp_first 0) a.first
+    Format.fprintf fmt "files: @[@[%a@]@\n@[%a@]@]@\n"
+      pp_first a.first
       Table.print a.others
 
 
@@ -138,7 +181,7 @@ struct
   (** ============================== *)
 
   let init prog man flow =
-    Some (Flow.set_domain_env T_cur init man flow)
+    Some (Flow.set_domain_env T_cur (init_state ()) man flow)
 
 
 
@@ -190,7 +233,7 @@ struct
       match no_place with
       | hd :: tl ->
         let first = List.fold_left (List.map2 Slot.join) hd tl in
-        let others = Table.insert addr window a.others in
+        let others = Table.insert addr !opt_window a.others in
         let a' = { first; others } in
         Flow.set_domain_env T_cur a' man flow
 

@@ -23,11 +23,21 @@ void close_(int f);
 void test_open() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   _mopsa_assert(fd >= 0);
+  _mopsa_assert_safe();
 }
 
 void test_close_after_open() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   close_(fd);
+  _mopsa_assert_safe();
   int fdd = open_("/tmp/a.txt", O_RDONLY);
   _mopsa_assert(fd == fdd);
+}
+
+void test_close_after_close() {
+  int fd = open_("/tmp/a.txt", O_RDONLY);
+  close_(fd);
+  _mopsa_assert_safe();
+  close_(fd);
+  _mopsa_assert_unsafe();
 }

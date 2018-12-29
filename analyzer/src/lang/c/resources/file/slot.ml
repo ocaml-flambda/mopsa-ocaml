@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(* Availability info of a slot in the file table *)
+(* Slot for a specific file descriptor *)
 
 open Mopsa
 open Universal.Ast
@@ -17,6 +17,11 @@ type slot =
   | Free
   | NotFree of AddrSet.t
   | MaybeFree of AddrSet.t
+
+let bottom = Bot
+
+let is_bottom s =
+  s = Bot
 
 let subset s1 s2 =
   match s1, s2 with
@@ -62,27 +67,27 @@ let canonize s =
   | _ -> s
 
 let meet s1 s2 =
-  (
-    match s1, s2 with
-    | Bot, _
-    | _, Bot -> Bot
+  match s1, s2 with
+  | Bot, _
+  | _, Bot -> Bot
+    
+  | Free, Free -> Free
 
-    | Free, Free -> Free
+  | Free, MaybeFree _
+  | MaybeFree _, Free -> Free
 
-    | Free, MaybeFree _
-    | MaybeFree _, Free -> Free
+  | NotFree a1, NotFree a2 -> NotFree (AddrSet.inter a1 a2) |>
+                              canonize
 
-    | NotFree a1, NotFree a2 -> NotFree (AddrSet.inter a1 a2)
+  | NotFree _, Free
+  | Free, NotFree _ -> Bot
 
-    | NotFree _, Free
-    | Free, NotFree _ -> Bot
+  | NotFree a1, MaybeFree a2
+  | MaybeFree a1, NotFree a2 -> NotFree (AddrSet.inter a1 a2) |>
+                                canonize
 
-    | NotFree a1, MaybeFree a2
-    | MaybeFree a1, NotFree a2 -> NotFree (AddrSet.inter a1 a2)
-
-    | MaybeFree a1, MaybeFree a2 -> MaybeFree (AddrSet.inter a1 a2)
-  )
-  |> canonize
+  | MaybeFree a1, MaybeFree a2 -> MaybeFree (AddrSet.inter a1 a2) |>
+                                  canonize
 
 let print fmt s =
   match s with
