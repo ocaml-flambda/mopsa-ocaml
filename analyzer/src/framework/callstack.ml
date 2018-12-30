@@ -15,7 +15,7 @@ type t = range list
 
 let pp_call_stack fmt cs =
   Format.pp_print_list
-    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "→")
+    ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " → ")
     pp_range
     fmt cs
 

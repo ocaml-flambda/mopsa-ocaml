@@ -372,6 +372,10 @@ struct
           Some return, flow
       in
 
+      (* Update the callstack *)
+      let cs = Callstack.get flow in
+      let flow = Callstack.push exp.erange flow in
+
       (* Evaluate the body of the styb *)
       let flow = exec_body stub.stub_body return man flow in
 
@@ -380,6 +384,9 @@ struct
 
       (* Remove parameters *)
       let flow = remove_params stub.stub_params exp.erange man flow in
+
+      (* Restore the callstack *)
+      let flow = Callstack.set cs flow in
 
       begin match return with
         | None ->
