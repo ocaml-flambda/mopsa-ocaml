@@ -713,6 +713,7 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
 let s32 = T_c_integer(C_signed_int)
@@ -738,6 +739,10 @@ let mk_c_call_stmt f args range =
 
 let mk_c_cast e t range =
   mk_expr (E_c_cast(e, true)) ~etyp:t range
+
+let mk_c_null range =
+  mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
+
 
 let () =
   register_typ_compare (fun next t1 t2 ->

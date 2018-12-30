@@ -19,13 +19,22 @@ int open_ (const char *file, int oflag, ...);
 void close_(int f);
 
 
-
-void test_open() {
+/* Test that open returns a positive number */
+void test_open_retuns_positive() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   _mopsa_assert(fd >= 0);
   _mopsa_assert_safe();
 }
 
+/* Test that open returns increasing numbers */
+/* void test_open_retuns_increasing_ids() { */
+/*   int fd1 = open_("/tmp/a.txt", O_RDONLY); */
+/*   int fd2 = open_("/tmp/b.txt", O_RDONLY); */
+/*   _mopsa_assert(fd2 > fd1); */
+/* } */
+
+
+/* Test closing a file after opening it */
 void test_close_after_open() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   close_(fd);
@@ -34,6 +43,14 @@ void test_close_after_open() {
   _mopsa_assert(fd == fdd);
 }
 
+/* Test closing a file not already opened */
+void test_close_without_open() {
+  int fd = 20;
+  close_(fd);
+  _mopsa_assert_unsafe();
+}
+
+/* Test closing a file already closes */
 void test_close_after_close() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   close_(fd);

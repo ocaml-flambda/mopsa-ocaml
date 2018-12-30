@@ -60,21 +60,6 @@ open Slot
 open Table
 
 
-(** {2 Command-line options} *)
-(** ************************ *)
-
-(** Precision window. The first file descriptors ∈ [0, window) are 
-      abstracted more precisely. *)
-let opt_window = ref 3
-
-let () =
-  register_option (
-    "-filedes-precision",
-    Arg.Set_int opt_window,
-    "number of the first file descriptors represented precisely. (default: 3)"
-  )
-
-
 (** {2 Abstract domain} *)
 (** ******************* *)
 
@@ -89,13 +74,17 @@ struct
     others: table;
   }
 
-  let init_state () = {
-    first = List.init !opt_window (fun _ -> Slot.Free);
+  (** Precision window. The first file descriptors ∈ [0, window) are 
+      abstracted more precisely. *)
+  let window = 3
+
+  let init_state = {
+    first = List.init window (fun _ -> Slot.Free);
     others = Table.empty;
   }
 
   let bottom = {
-    first = [Slot.Bot];
+    first = List.init window (fun _ -> Slot.Bot);
     others = Table.bottom;
   }
 
@@ -181,122 +170,163 @@ struct
   (** ============================== *)
 
   let init prog man flow =
-    Some (Flow.set_domain_env T_cur (init_state ()) man flow)
+    Some (Flow.set_domain_env T_cur init_state man flow)
 
 
 
-  (** File management functions *)
-  (** ========================= *)
+  (** {2 Insertion of new resources} *)
+  (** ============================= *)
+
+  (* Insert an address in the first slots *)
+  let rec insert_first addr (a:t) : t * t =
+    let rec iter slots =
+      match slots with
+      | [] -> [], []
+      | hd :: tl ->
+        let inserted_here, not_inserted_here = Slot.insert addr hd in
+        if Slot.is_bottom not_inserted_here then
+          inserted_here :: tl, not_inserted_here :: tl
+        else
+          let inserted_after, not_inserted_after = iter tl in
+          inserted_here :: inserted_after, not_inserted_here :: inserted_after
+    in
+    let inserted, not_inserted = iter a.first in
+    { a with first = inserted },
+    { a with first = not_inserted }
 
 
-  (* Iterate on first slot and try to insert the address *)
-  let rec insert_first addr i (first:slot list) =
-    match first with
-    | [] -> [], []
-    | hd :: tl ->
-      match Slot.insert addr hd with
-      | Some hd', None ->
-        [hd' :: tl], []
+  (** Insert an address in the remaining part of the table *)
+  let insert_table addr a : t =
+    {
+      a with
+      others = Table.insert addr window a.others
+    }
 
-      | None, None ->
-        [], []
-
-      | None, Some hd' ->
-        let after_inserted, after_no_place = insert_first addr (i + 1) tl in
-        let no_place = List.map (fun tl' -> hd' :: tl') after_no_place in
-        let inserted = List.map (fun tl' -> hd' :: tl') after_inserted in
-        inserted, no_place
-
-      | Some hd', Some hd'' ->
-        let after_inserted, after_no_place = insert_first addr (i + 1) tl in
-        let no_place = List.map (fun tl' -> hd'' :: tl') after_no_place in
-        let inserted = List.map (fun tl' -> hd'' :: tl') after_inserted in
-        (hd' :: tl) :: inserted, no_place
-
-
-  (** Insert an address in the abstract state and compute the interval of its ids *)
+  (** Insert an address in the table of file descriptors *)
   let insert addr man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let inserted, no_place = insert_first addr 0 a.first in
-    let annot = Flow.get_all_annot flow in
-    let case1 =
-      match inserted with
-      | hd :: tl ->
-        let first = List.fold_left (List.map2 Slot.join) hd tl in
-        let a' = { a with first } in
-        Flow.set_domain_env T_cur a' man flow
+    (* Try to insert the address in the first slots *)
+    let inserted_in_first, no_place_in_first = insert_first addr a in
 
-      | [] -> Flow.bottom annot
+    let a' =
+      if is_bottom no_place_in_first then
+        inserted_in_first
+      else
+        (* In case there is no place in the first slots, insert in the remaining part of the table *)
+        let inserted_in_table = insert_table addr no_place_in_first in
+        let annot = Flow.get_all_annot flow in
+        join annot inserted_in_first inserted_in_table
     in
+
+    Flow.set_domain_env T_cur a' man flow
+
+  
+  (** {2 Evaluation of an address into a numeric value} *)
+  (** ================================================= *)
+  
+  let eval_first_addr_to_int addr range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let rec iter i not_found_before slots =
+      match slots with
+      | [] -> [], []
+      | hd :: tl ->
+        let found_here, not_found_here = Slot.mem addr hd in
+        let cases, not_found_after = iter (i + 1) (not_found_before @ [not_found_here]) tl in
+        let cases' =
+          if Slot.is_bottom found_here then cases
+          else
+            let exp = mk_int i range in
+            let a' = { a with first = not_found_before @ [found_here] @ not_found_after } in
+            let flow' = Flow.set_domain_env T_cur a' man flow in
+            Eval.singleton exp flow' :: cases
+        in
+        cases', not_found_here :: not_found_after
+    in
+    let cases, not_found = iter 0 [] a.first in
+    cases, { a with first = not_found }
     
-    let case2 =
-      match no_place with
-      | hd :: tl ->
-        let first = List.fold_left (List.map2 Slot.join) hd tl in
-        let others = Table.insert addr !opt_window a.others in
-        let a' = { first; others } in
-        Flow.set_domain_env T_cur a' man flow
-
-      | _ -> Flow.bottom annot
-    in
-
-    Flow.join man case1 case2
-
-  let find_itv_first addr first =
-    let rec iter i l =
-      match l with
-      | [] -> Itv.bottom
-      | hd :: tl ->
-        let after = iter (i + 1) tl in
-        if Slot.mem addr hd then Itv.join () (Itv.of_int i i) after
-        else after
-    in
-    iter 0 first
-
-  let find_itv_others addr (others:table) = Table.find_itv addr others
-
-  let find_itv addr man flow =
+  let bounds itv =
+    if Itv.is_bounded itv then
+      Itv.bounds itv
+    else
+      let _, max = rangeof s32 in
+      Z.of_int window, max
+    
+  
+  let eval_table_addr_to_int addr range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let itv1 = find_itv_first addr a.first in
-    let itv2 = find_itv_others addr a.others in
-    Itv.join () itv1 itv2
+    let itv = Table.find addr a.others in
+    if Itv.is_bottom itv then
+      []
+    else
+      let a, b = bounds itv in
+      let exp = mk_z_interval a b range in
+      [Eval.singleton exp flow]
 
-  let find_addr_first itv first =
-    let rec iter i l =
-      match l with
-      | [] -> AddrSet.empty
-      | hd :: tl ->
-        let after = iter (i + 1) tl in
-        match Itv.mem (Z.of_int i) itv, Slot.addr_opt hd with
-        | false, _ -> after
-        | true, None -> after
-        | true, Some a ->
-          AddrSet.union a after
-    in
-    iter 0 first
+  let eval_addr_to_int addr range man flow =
+    let cases1, not_found = eval_first_addr_to_int addr range man flow in
+    let flow' = Flow.set_domain_env T_cur not_found man flow in
+    let cases2 = eval_table_addr_to_int addr range man flow' in
+    Eval.join_list (cases1 @ cases2)
+  
 
-  let find_addr_others itv (others:table) =
-    Table.fold (fun addr itv' acc ->
-        if Itv.is_bottom (Itv.meet () itv itv') then acc
-        else AddrSet.add addr acc
-      ) others AddrSet.empty
+  (** {2 Evaluation of an interval into an address} *)
+  (** ============================================= *)
 
-  let find_addr itv man flow =
-    (* FIXME: return NULL in case itv can be un-allocated*)
+  let eval_int_to_addr i range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let a1 = find_addr_first itv a.first in
-    let a2 = find_addr_others itv a.others in
-    AddrSet.union a1 a2
-
+    let rec eval_first j slots flow =
+      debug "trying %d" j;
+      match slots with
+      | [] -> debug "end of first"; eval_others flow
+      | hd :: tl ->
+        let addrs = Slot.get hd in
+        if addrs = [] then let _ = debug "no addr here" in eval_first (j + 1) tl flow
+        else
+          Eval.assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
+            ~fthen:(fun flow ->
+                List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
+                Eval.join_list
+              )
+            ~felse:(fun flow ->
+                eval_first (j + 1) tl flow
+              )
+            man flow
+    and eval_others flow =
+      debug "eval others";
+      let itv = man.ask (Itv.Q_interval i) flow in
+      let addrs, can_be_null = Table.fold (fun addr itv' (acc, can_be_null) ->
+          let eq = Itv.binop () O_eq itv itv' |> Channel.without_channel in
+          let ne = Itv.binop () O_ne itv itv' |> Channel.without_channel in
+          match Itv.is_bottom eq, Itv.is_bottom ne with
+          | true, true -> acc, can_be_null
+          | false, true -> addr :: acc, can_be_null
+          | true, false -> acc, can_be_null
+          | false, false -> addr :: acc, true
+        ) a.others ([], false)
+      in
+      let case1 = List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs in
+      let case2 =
+        if addrs = [] || can_be_null then [Eval.singleton (mk_c_null range) flow]
+        else []
+      in
+      Eval.join_list (case1 @ case2)
+    in
+    eval_first 0 a.first flow
+            
+    (** {2 Removal of addresses} *)
+  (** ======================== *)
+  
   let remove_addr_first addr first =
-    List.map (Slot.remove_addr addr) first
+    List.map (Slot.remove addr) first
 
   let remove_addr addr man flow =
     let a = Flow.get_domain_env T_cur man flow in
     let first = remove_addr_first addr a.first in
-    let others = Table.remove_addr addr a.others in
+    let others = Table.remove addr a.others in
     let a' = { first; others } in
     Flow.set_domain_env T_cur a' man flow
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -308,6 +338,7 @@ struct
       Post.return
 
     | _ -> None
+
 
   (** Evaluation of expressions *)
   (** ========================= *)
@@ -339,26 +370,13 @@ struct
         | _ -> assert false
       in
 
-      let itv = find_itv addr man flow in
-      let l, u = Itv.bounds itv in
-      let exp' = mk_z_interval l u exp.erange in
+      eval_addr_to_int addr exp.erange man flow
 
-      Eval.singleton exp' flow
-
-    (* 𝔼⟦ _mopsa_int_to_fd(fd) ⟧ *)
-    | E_c_builtin_call("_mopsa_int_to_fd", [id]) ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) id flow |>
-      Eval.bind_return @@ fun id flow ->
-
-      let itv = man.ask (Itv.Q_interval id) flow in
-      let addrs = find_addr itv man flow in
-
-      let evl = AddrSet.elements addrs |>
-                List.map (fun addr ->
-                    Eval.singleton (mk_addr addr exp.erange) flow
-                  )
-      in
-      Eval.join_list evl
+    (* 𝔼⟦ _mopsa_int_to_fd(i) ⟧ *)
+    | E_c_builtin_call("_mopsa_int_to_fd", [i]) ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) i flow |>
+      Eval.bind_return @@ fun i flow ->
+      eval_int_to_addr i exp.erange man flow
 
     | _ -> None
 

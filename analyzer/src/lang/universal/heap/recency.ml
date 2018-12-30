@@ -98,6 +98,8 @@ struct
         let recent_addr = {addr_kind; addr_uid = recent_uid} in
         let old_addr = {addr_kind; addr_uid = old_uid} in
 
+        debug "recent = %a, old = %a" pp_addr recent_addr pp_addr old_addr;
+
         (match Pool.mem recent_addr pool, Pool.mem old_addr pool with
         | false, _ ->
           (* First time we allocate at this site, so no change to the sub-domain. *)

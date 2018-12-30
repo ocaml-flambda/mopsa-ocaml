@@ -201,7 +201,11 @@ let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
 
 let pp_addr fmt a = !addr_pp_chain fmt a
 
-let compare_addr a b = !addr_compare_chain a b
+let compare_addr a b =
+  Compare.compose [
+    (fun () -> compare a.addr_uid b.addr_uid);
+    (fun () -> !addr_compare_chain a b);
+  ]
 
 let register_addr (info: addr info) =
   addr_compare_chain := info.compare !addr_compare_chain;

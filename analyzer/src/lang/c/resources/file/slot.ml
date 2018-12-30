@@ -60,10 +60,14 @@ let join s1 s2 =
 
 let canonize s =
   match s with
-  | MaybeFree a
+  | MaybeFree a ->
+    if AddrSet.is_empty a then Free
+    else s
+
   | NotFree a ->
     if AddrSet.is_empty a then Bot
     else s
+
   | _ -> s
 
 let meet s1 s2 =
@@ -92,35 +96,46 @@ let meet s1 s2 =
 let print fmt s =
   match s with
   | Bot -> Format.fprintf fmt "⊥"
-  | Free -> Format.fprintf fmt "⚪"
-  | NotFree a -> Format.fprintf fmt "⚫ : %a" AddrSet.print a
-  | MaybeFree a -> Format.fprintf fmt "◐ : %a" AddrSet.print a
+  | Free -> Format.fprintf fmt "🔓"
+  | NotFree a -> Format.fprintf fmt "🔒 : %a" AddrSet.print a
+  | MaybeFree a -> Format.fprintf fmt "❓ : %a" AddrSet.print a
 
 
 (** Insert an address in a slot. Returns the new state of the 
     slot after insertion, or its state when the insertion is 
     not possible. 
 *)
-let insert addr (s:slot) : slot option * slot option =
+let insert addr (s:slot) : slot * slot =
   match s with
-  | Bot         -> None, None
-  | Free        -> Some (NotFree (AddrSet.singleton addr)), None
-  | NotFree a   -> None, Some s
+  | Bot         -> Bot, Bot
+  | Free        -> NotFree (AddrSet.singleton addr), Bot
+  | NotFree a   -> Bot, s
+  | MaybeFree a -> NotFree (AddrSet.add addr a), NotFree a
+
+
+(** Check whether [addr] is in the slot. Returns an abstract state when 
+    [addr] is in the slot, and an other abstract state when [addr] is not 
+    in the slot. *)
+let mem addr s : slot * slot =
+  match s with
+  | Bot -> Bot, Bot
+  | Free -> Bot, Free
+  | NotFree a ->
+    if AddrSet.mem addr a then NotFree a, MaybeFree (AddrSet.remove addr a) |> canonize
+    else Bot, NotFree a
   | MaybeFree a ->
-    Some (NotFree (AddrSet.add addr a)), Some (NotFree a)
+    if AddrSet.mem addr a then NotFree a, MaybeFree (AddrSet.remove addr a) |> canonize
+    else Bot, MaybeFree a
 
-let mem addr s =
+let get s : addr list =
   match s with
-  | Bot | Free -> false
-  | NotFree a | MaybeFree a ->
-    AddrSet.mem addr a
+  | Bot -> []
+  | Free -> []
+  | NotFree a -> AddrSet.elements a
+  | MaybeFree a -> AddrSet.elements a
 
-let addr_opt s =
-  match s with
-  | Bot | Free -> None
-  | NotFree a | MaybeFree a -> Some a
-
-let remove_addr addr s =
+(** Remove an address from the slot *)
+let remove addr s =
   match s with
   | Bot | Free -> s
   | NotFree a | MaybeFree a ->

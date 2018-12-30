@@ -100,10 +100,10 @@ let insert addr window (t:table) =
   in
   add addr sol t
 
-let find_itv addr (t:table) =
+let find addr (t:table) =
   AddrItvMap.find addr t.map
 
-let remove_addr addr t = {
+let remove addr t = {
   map = AddrItvMap.remove addr t.map;
   support = AddrSet.remove addr t.support;
 }
