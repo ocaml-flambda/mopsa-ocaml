@@ -184,11 +184,22 @@ struct
       | [] -> [], []
       | hd :: tl ->
         let inserted_here, not_inserted_here = Slot.insert addr hd in
-        if Slot.is_bottom not_inserted_here then
+        match Slot.is_bottom inserted_here,
+              Slot.is_bottom not_inserted_here
+        with
+        | false, true ->
           inserted_here :: tl, not_inserted_here :: tl
-        else
+
+        | true, false ->
           let inserted_after, not_inserted_after = iter tl in
-          inserted_here :: inserted_after, not_inserted_here :: inserted_after
+          hd :: inserted_after, not_inserted_here :: not_inserted_after
+
+        | false, false ->
+          let inserted_after, not_inserted_after = iter tl in
+          inserted_here :: inserted_after, not_inserted_here :: not_inserted_after
+
+        | true, true ->
+          inserted_here :: tl, not_inserted_here :: tl
     in
     let inserted, not_inserted = iter a.first in
     { a with first = inserted },
