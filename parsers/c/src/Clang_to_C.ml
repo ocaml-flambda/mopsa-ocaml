@@ -80,6 +80,7 @@ type context = {
 
     (* comments are stored in a map so that we can remove duplicates *)
     mutable ctx_comments: comment list RangeMap.t;
+    ctx_macros: (string,macro) Hashtbl.t;
   }
 (** Structure used internally during project parsing & linking. *)
 
@@ -104,6 +105,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_names = Hashtbl.create 16;
     ctx_simplify = C_simplify.create_context ();
     ctx_comments = RangeMap.empty;
+    ctx_macros = Hashtbl.create 16;
   }
 
 let new_uid ctx =
@@ -113,7 +115,7 @@ let new_uid ctx =
 
 
     
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
 
   
   (* utilities *)
@@ -1059,6 +1061,16 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       ctx.ctx_comments coms
   in
   ctx.ctx_comments <- c;
+
+  (* add macros *)
+  List.iter (fun macro ->
+      if Hashtbl.mem ctx.ctx_macros macro.C.macro_name then
+        begin
+          let range = C.{ range_begin = macro.macro_loc; range_end = macro.macro_loc } in
+          warning range "macro is defined twice" macro.macro_name
+        end;
+      Hashtbl.add ctx.ctx_macros macro.C.macro_name macro
+    ) macros;
   
   (match out with Some o -> close_out o | None -> ())
    
@@ -1080,5 +1092,6 @@ let link_project ctx =
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
     proj_comments = ctx.ctx_comments;
+    proj_macros = cvt ctx.ctx_macros (fun t -> t.macro_name);
   }
 

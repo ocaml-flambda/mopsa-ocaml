@@ -29,8 +29,10 @@ let parse_function_comment
     let line = com.com_range.range_begin.loc_line in
     let col = com.com_range.range_begin.loc_column in
 
+    let comment' = Passes.Macro_expansion.doit comment prj in
+
     (* Create the lexing buffer *)
-    let buf = Lexing.from_string comment in
+    let buf = Lexing.from_string comment' in
     buf.lex_curr_p <- {
       pos_fname = file;
       pos_lnum = line;

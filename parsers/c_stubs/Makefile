@@ -3,7 +3,7 @@ TARGET_LIBS = mlCStubsParser
 # Packs
 mlCStubsParser = c_stubs_parser
 c_stubs_parser = cst parser lexer ast passes main
-c_stubs_parser.passes = predicate_expansion scoping cst_to_ast
+c_stubs_parser.passes = macro_expansion predicate_expansion scoping cst_to_ast
 
 # Packages
 PKGS = zarith

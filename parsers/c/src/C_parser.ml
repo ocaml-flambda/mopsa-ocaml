@@ -32,7 +32,7 @@ let parse_file
   in
 
   if not is_error then
-    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms
+    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros
   else
     let errors =
       List.map
