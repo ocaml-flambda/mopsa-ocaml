@@ -1066,8 +1066,13 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
   List.iter (fun macro ->
       if Hashtbl.mem ctx.ctx_macros macro.C.macro_name then
         begin
-          let range = C.{ range_begin = macro.macro_loc; range_end = macro.macro_loc } in
-          warning range "macro is defined twice" macro.macro_name
+          let old_macro = Hashtbl.find ctx.ctx_macros macro.C.macro_name in
+          if Compare.list Pervasives.compare
+              macro.macro_contents old_macro.macro_contents
+             != 0
+          then
+            let range = C.{ range_begin = macro.macro_loc; range_end = macro.macro_loc } in
+            warning range "macro is defined twice" macro.macro_name
         end;
       Hashtbl.add ctx.ctx_macros macro.C.macro_name macro
     ) macros;
