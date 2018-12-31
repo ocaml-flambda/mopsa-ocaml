@@ -48,14 +48,10 @@ struct
 
     | S_if(cond, s1, s2) ->
       let range = srange stmt in
-      let flow1 = man.exec (mk_assume cond range) flow |>
-                  man.exec s1
-      in
-      let flow2 = man.exec (mk_assume (mk_not cond range) range) flow |>
-                  man.exec s2
-      in
-      (* FIXME: propagate annotations in flow insensitive way *)
-      let flow' = Flow.join man flow1 flow2 in
+      let block1 = mk_block [mk_assume cond range; s1] range in
+      let block2 = mk_block [mk_assume (mk_not cond range) range; s2] range in
+      let flows = Flow.map_list man.exec flow [block1; block2] in
+      let flow' = Flow.join_list man flows in
       Some (Post.of_flow flow')
 
     | S_print ->

@@ -67,6 +67,11 @@ let join (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   in
   {map; annot}
 
+let join_list man ?(annot=Annotation.empty) l =
+  match l with
+  | [] -> bottom annot
+  | hd :: tl -> List.fold_left (join man) hd tl
+
 let meet (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   (* FIXME: we choose here one annotation, which is correct but too
      coarse. We need to fold the annotation through the two flows *)
@@ -82,6 +87,12 @@ let meet (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
       flow1.map flow2.map
   in
   {map; annot}
+
+let meet_list man ?(annot=Annotation.empty) l =
+  match l with
+  | [] -> bottom annot
+  | hd :: tl -> List.fold_left (meet man) hd tl
+
 
 let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   (* FIXME: we choose here one annotation, which is correct but too
@@ -173,6 +184,24 @@ let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (
   in
   {map; annot}
 
+let map_list (f:'b -> 'a flow -> 'a flow) (flow: 'a flow) (l: 'b list) : 'a flow list =
+  let flows, _ = List.fold_left (fun (acc, annot) x ->
+      let flow' = { flow with annot } in
+      let flow'' = f x flow' in
+      flow'' :: acc, flow''.annot
+    ) ([], flow.annot) l
+  in
+  flows
+
+let map_list_opt (f:'b -> 'a flow -> 'a flow option) (flow:'a flow) (l:'b list) : 'a flow list =
+  let flows, _ = List.fold_left (fun (acc, annot) x ->
+      let flow' = { flow with annot } in
+      match f x flow' with
+      | None -> acc, annot
+      | Some flow'' -> flow'' :: acc, flow''.annot
+    ) ([], flow.annot) l
+  in
+  flows
 
 let set_domain_env (tk: token) (a:'t) (man:('a, 't) man) (flow:'a flow) : 'a flow =
   set tk (man.set a (get tk man flow)) man flow

@@ -40,8 +40,12 @@ val subset : ('a, _) man -> 'a flow -> 'a flow -> bool
 val join : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Abstract union operator *)
 
+val join_list : ('a, _) man -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+
 val meet : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
+
+val meet_list : ('a, _) man -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
 
 val widen : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
 (** Widening operator *)
@@ -69,6 +73,9 @@ val filter    : (token -> 'a -> bool) -> ('a, _) man -> 'a flow -> 'a flow
 (** [filter f man flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 
 val map : (token -> 'a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
+
+val map_list : ('b -> 'a flow -> 'a flow) -> 'a flow -> 'b list -> 'a flow list
+val map_list_opt : ('b -> 'a flow -> 'a flow option) -> 'a flow -> 'b list -> 'a flow list
 
 val map_token : token -> ('a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
 
