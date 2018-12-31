@@ -157,6 +157,9 @@ and from_project prj =
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
+                (* FIXME: var_kind is not yet in the AST! *)
+                (*        So, for the moment, we ignore externals. *)
+                List.filter (fun v -> v.var_kind != Variable_extern) |>
                 List.map (from_var_with_init ctx)
   in
 
@@ -193,6 +196,9 @@ and from_function =
 and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
+    | C_AST.S_local_declaration v when v.var_kind = Variable_extern ->
+      (* FIXME: is it correct to ignore declaration of external variables? *)
+      Universal.Ast.S_block []
     | C_AST.S_local_declaration v ->
       let v, init, range = from_var_with_init fun_ctx v in
       Ast.S_c_local_declaration (v, init)
