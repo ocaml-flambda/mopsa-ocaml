@@ -276,8 +276,8 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula_fixpoint f ~negate:false man flow |>
-    fst
+    let ftrue, _ = eval_formula_fixpoint f ~negate:false man flow in
+    ftrue
 
 
   (** Remove locals and old copies of assigned variables *)
@@ -317,10 +317,15 @@ struct
 
   (** Execute the body of a case section *)
   let exec_case case return man flow =
-    List.fold_left (fun flow leaf ->
-        exec_leaf leaf return man flow |>
-        clean_post case.case_locals case.case_assigns case.case_range man
-      ) flow case.case_body
+    let flow' =
+      (* Execute leaf sections *)
+      List.fold_left (fun flow leaf ->
+          exec_leaf leaf return man flow
+        ) flow case.case_body |>
+      (* Clean case post state *)
+      clean_post case.case_locals case.case_assigns case.case_range man
+    in
+    flow'
 
   
   (** Execute the body of a stub *)
@@ -334,20 +339,20 @@ struct
     in
 
     (* Execute case sections separately *)
-    let flows = List.fold_left (fun flows section ->
+    let flows = Flow.map_list_opt (fun section flow ->
         match section with
-        | S_case case -> exec_case case return man flow :: flows
-        | _ -> flows
-      ) [] body
+        | S_case case -> Some (exec_case case return man flow)
+        | _ -> None
+      ) flow body
     in
 
     (* Join flows *)
     match flows with
     | [] -> flow
-    | hd :: tl ->
+    | _ ->
       (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      List.fold_left (Flow.join man) hd tl
+      Flow.join_list man flows
       
 
   (** Entry point of expression evaluations *)
