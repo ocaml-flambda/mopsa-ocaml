@@ -437,9 +437,9 @@ module Domain =
           *    Eval.singleton (mk_expr (E_type_partition tid) range) flow
           *    (\* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *\) *)
          | A_py_method (func, self) ->
-            man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow
+            man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1); addr_mode=STRONG}, mk_py_empty range) range) flow
          | _ ->
-            let addr = {addr_kind = akind; addr_uid=(-1)} in
+            let addr = {addr_kind = akind; addr_uid=(-1);addr_mode=STRONG} in
             Eval.singleton (mk_addr addr range) flow
          end
          |> OptionExt.return
@@ -451,9 +451,9 @@ module Domain =
              debug "%a@\n" print cur;
              let polytype = Typingdomain.get_polytype cur v in
              let expr = match polytype with
-               | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | Typingdomain.Function f -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
+               | Typingdomain.Function f -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
+               | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
                | _ ->
                   let tid = Typingdomain.typeindex_of_var cur.d1 v in
                   mk_expr (E_type_partition tid) range in
@@ -607,14 +607,14 @@ module Domain =
                  | _ -> debug "type(%a)?@\n" pp_expr e_arg; assert false in
                let proceed (cl, mro, cur) =
                  let flow = Flow.set_domain_cur cur man flow in
-                 let obj = mk_py_object ({addr_kind=A_py_class (cl, mro); addr_uid=(-1)}, mk_expr (ekind exp) range) range in
+                 let obj = mk_py_object ({addr_kind=A_py_class (cl, mro); addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range in
                  Eval.singleton obj flow in
                debug "classes : %d" @@ List.length classes;
                if List.length classes = 1 then
                   proceed (List.hd classes)
                else
                  List.fold_left (fun acc (cl, mro, cur) ->
-                     debug "ADDR: %a@\n" pp_addr {addr_kind=A_py_class (cl, mro); addr_uid=(-1)};
+                     debug "ADDR: %a@\n" pp_addr {addr_kind=A_py_class (cl, mro); addr_uid=(-1); addr_mode = STRONG};
                      Eval.join acc (proceed (cl, mro, cur))) (proceed @@ List.hd classes) (List.tl classes)
              )
          |> OptionExt.return

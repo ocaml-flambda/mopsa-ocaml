@@ -17,22 +17,18 @@ open Zone
 (** lv base *)
 type base =
   | V of var
-  | A of addr * mode
+  | A of addr
   | S of string
 
 let pp_base fmt = function
   | V v -> pp_var fmt v
-  | A (a,mode) -> Format.fprintf fmt "%a:%a" pp_addr a pp_mode mode
+  | A (a) -> pp_addr fmt a
   | S s -> Format.fprintf fmt "\"%s\"" s
 
 let compare_base b b' = match b, b' with
   | V v, V v' -> compare_var v v'
 
-  | A (a,mode), A (a',mode') ->
-    Compare.compose [
-      (fun () -> compare_addr a a');
-      (fun () -> compare_mode mode mode');
-    ]
+  | A a, A a' -> compare_addr a a'
 
   | S s, S s' -> compare s s'
 
@@ -40,7 +36,7 @@ let compare_base b b' = match b, b' with
 
 let base_uid = function
   | V v -> v.vuid
-  | A (a,_) -> a.addr_uid
+  | A a -> a.addr_uid
   | S _ -> Exceptions.panic "base_uid: string literals not supported"
 
 let base_size =
@@ -49,13 +45,17 @@ let base_size =
   | S s -> Z.of_int @@ String.length s
   | A _ -> Exceptions.panic "base_size: addresses not supported"
 
+let base_mode =
+  function
+  | V v -> STRONG
+  | S s -> STRONG
+  | A a -> a.addr_mode
+
 (** Evaluate the size of a base *)
 let eval_base_size base ?(via=Z_any) range man flow =
   match base with
   | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
   | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow
-  | A (addr, _) ->
-    let mk_addr_size addr range =
-      mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul
-    in
-    man.eval ~zone:(Z_c, Z_c_scalar) ~via (mk_addr_size addr range) flow
+  | A addr ->
+    let size_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul in
+    man.eval ~zone:(Z_c, Z_c_scalar) ~via size_expr flow

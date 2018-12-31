@@ -86,6 +86,7 @@ module Domain =
            let addr = {
                addr_kind = A_py_module (M_user(name, globals));
                addr_uid = 0;
+               addr_mode = STRONG;
              }
            in
            let flow' = man.exec body flow in
@@ -137,6 +138,7 @@ module Domain =
               let addr = {
                   addr_kind = A_py_function kind;
                   addr_uid = 0;
+                  addr_mode = STRONG;
                 }
               in
               add_builtin_function (addr, mk_py_empty (srange stmt)) ()
@@ -154,6 +156,7 @@ module Domain =
            let addr = {
                addr_kind = A_py_module(M_builtin name);
                addr_uid = 0;
+               addr_mode = STRONG;
              }
            in
            add_builtin_module (addr, mk_py_empty (srange stmt)) ()

@@ -60,6 +60,10 @@ let cell_zoffset c =
 
 let cell_typ c = c.t
 
+let cell_mode c =
+  let b = cell_base c in
+  base_mode b
+
 (** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [

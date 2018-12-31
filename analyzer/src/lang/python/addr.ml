@@ -58,7 +58,7 @@ let eval_alloc man kind range flow =
   man.eval exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
-      | E_addr (addr, mode) -> Eval.singleton addr flow (* FIXME: handle weak address *)
+      | E_addr (addr) -> Eval.singleton addr flow
       | _ -> panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
     )
 
@@ -505,10 +505,16 @@ and search_c (l: py_object list list) : py_object option =
     None indexed_l
 
 let create_builtin_class kind name cls bases range =
-  let mro = c3_lin ({addr_kind= (A_py_class (kind, bases)); addr_uid=(-1)}, mk_py_empty range) in
+  let mro = c3_lin ({
+      addr_kind= (A_py_class (kind, bases));
+      addr_uid=(-1);
+      addr_mode = STRONG
+    }, mk_py_empty range)
+  in
   let addr = {
       addr_kind = A_py_class(kind, mro);
       addr_uid = 0;
+      addr_mode = STRONG
     }
   in
   add_builtin_class (addr, mk_py_empty range) ()
@@ -519,7 +525,7 @@ let () =
     register_addr {
       print =
         (fun default fmt a ->
-           match a.addr_kind with
+           match a with
            | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
            | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
@@ -530,7 +536,7 @@ let () =
         );
       compare =
         (fun default a1 a2 ->
-           match a1.addr_kind, a2.addr_kind with
+           match a1, a2 with
            | A_py_class (c1, _), A_py_class (c2, _) ->
              begin match c1, c2 with
                | C_builtin s1, C_builtin s2

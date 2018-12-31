@@ -61,13 +61,13 @@ struct
   (** Byte attribute *)
   (** ============== *)
 
-  let mk_bytes_var addr mode range =
+  let mk_bytes_var addr range =
     let vname =
       Format.fprintf Format.str_formatter "%a_bytes" pp_addr addr;
       Format.flush_str_formatter ()
     in
     let v = mkv vname addr.addr_uid (T_c_integer C_unsigned_long) in
-    mk_var v ~mode range
+    mk_var v ~mode:addr.addr_mode range
 
 
   (** Computation of post-conditions *)
@@ -76,9 +76,9 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     (* 𝕊⟦ free(a) | a ∈ Memory ⟧ *)
-    | S_stub_free ( { ekind = E_addr ({ addr_kind = A_stub_resource "Memory" } as addr, mode) } ) ->
+    | S_stub_free ( { ekind = E_addr ({ addr_kind = A_stub_resource "Memory" } as addr) } ) ->
       (* Remove the bytes attribute before removing the address *)
-      let stmt' = mk_remove (mk_bytes_var addr mode stmt.srange) stmt.srange in
+      let stmt' = mk_remove (mk_bytes_var addr stmt.srange) stmt.srange in
       let flow' = man.exec stmt' flow in
       Post.return flow'
 
@@ -96,9 +96,9 @@ struct
       Eval.bind_return @@ fun exp flow ->
 
       begin match ekind exp with
-      | E_addr (addr, mode) ->
+      | E_addr addr ->
         (* Add byte attribute *)
-        let bytes = mk_bytes_var addr mode exp.erange in
+        let bytes = mk_bytes_var addr exp.erange in
         let flow' = man.exec (mk_add bytes exp.erange) flow in
         Eval.singleton exp flow'
 
@@ -106,10 +106,10 @@ struct
         end
 
     (* 𝔼⟦ size(a) | a ∈ Memory ⟧ *)
-    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr, mode)})
     (* 𝔼⟦ a:bytes | a ∈ Memory ⟧ *)
-    | E_stub_attribute({ ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr, mode) }, "bytes") ->
-      let bytes = mk_bytes_var addr mode exp.erange in
+    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr)})
+    | E_stub_attribute({ ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource "Memory" } as addr) }, "bytes") ->
+      let bytes = mk_bytes_var addr exp.erange in
       Eval.singleton bytes flow |>
       Eval.return
 

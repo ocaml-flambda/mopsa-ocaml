@@ -151,15 +151,15 @@ type addr_kind +=
 
 let () =
   register_addr {
-    print = (fun next fmt addr ->
-        match akind addr with
-        | A_stub_resource res -> Format.fprintf fmt "@%s:%d" res addr.addr_uid
-        | _ -> next fmt addr
+    print = (fun next fmt addr_kind ->
+        match addr_kind with
+        | A_stub_resource res -> Format.pp_print_string fmt res
+        | _ -> next fmt addr_kind
       );
-    compare = (fun next addr1 addr2 ->
-        match akind addr1, akind addr2 with
+    compare = (fun next ak1 ak2 ->
+        match ak1, ak2 with
         | A_stub_resource res1, A_stub_resource res2 -> Pervasives.compare res1 res2
-        | _ -> next addr1 addr2
+        | _ -> next ak1 ak2
       );
   }
 

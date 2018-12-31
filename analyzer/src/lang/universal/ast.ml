@@ -188,28 +188,39 @@ type addr_kind = ..
 (** Heap addresses. *)
 type addr = {
   addr_uid  : int;       (** Unique identifier. *)
-  addr_kind : addr_kind; (** Kind de l'adresse. *)
+  addr_kind : addr_kind; (** Kind of the address. *)
+  addr_mode : mode;      (** assignment mode of address (string or weak) *)
 }
 
 let akind addr = addr.addr_kind
 
-let addr_compare_chain : (addr -> addr -> int) ref =
+let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref =
   ref (fun a1 a2 -> compare a1 a2)
 
-let addr_pp_chain : (Format.formatter -> addr -> unit) ref =
-  ref (fun fmt a -> panic "addr_pp_chain: unknown address")
+let addr_kind_pp_chain : (Format.formatter -> addr_kind -> unit) ref =
+  ref (fun fmt a -> panic "addr_kind_pp_chain: unknown address")
 
-let pp_addr fmt a = !addr_pp_chain fmt a
+let pp_addr_kind fmt ak =
+  !addr_kind_pp_chain fmt ak
+
+let pp_addr fmt a =
+  fprintf fmt "@@%a:%d"
+    pp_addr_kind a.addr_kind
+    a.addr_uid
+
+let compare_addr_kind ak1 ak2 =
+  !addr_kind_compare_chain ak1 ak2
 
 let compare_addr a b =
   Compare.compose [
     (fun () -> compare a.addr_uid b.addr_uid);
-    (fun () -> !addr_compare_chain a b);
+    (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
+    (fun () -> compare_mode a.addr_mode b.addr_mode);
   ]
 
-let register_addr (info: addr info) =
-  addr_compare_chain := info.compare !addr_compare_chain;
-  addr_pp_chain := info.print !addr_pp_chain;
+let register_addr (info: addr_kind info) =
+  addr_kind_compare_chain := info.compare !addr_kind_compare_chain;
+  addr_kind_pp_chain := info.print !addr_kind_pp_chain;
   ()
 
 module Addr =
@@ -334,7 +345,7 @@ type expr_kind +=
   | E_alloc_addr of addr_kind
 
   (** Head address. *)
-  | E_addr of addr * mode
+  | E_addr of addr
 
   (** Length of array or string *)
   | E_len of expr
@@ -363,14 +374,11 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(a1), E_alloc_addr(a2) ->
-          compare_addr { addr_kind = a1; addr_uid = 0} {addr_kind = a2; addr_uid = 0}
+        | E_alloc_addr(ak1), E_alloc_addr(ak2) ->
+          compare_addr_kind ak1 ak2
 
-        | E_addr(a1, mode1), E_addr(a2, mode2) ->
-          Compare.compose [
-            (fun () -> compare_addr a1 a2);
-            (fun () -> compare_mode mode1 mode2);
-          ]
+        | E_addr(a1), E_addr(a2) ->
+          compare_addr a1 a2
 
         | E_len(a1), E_len(a2) -> compare_expr a1 a2
 
@@ -388,8 +396,8 @@ let () =
           fprintf fmt "%a(%a)"
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
-        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr {addr_uid=(-1); addr_kind=akind}
-        | E_addr (addr, mode) -> fprintf fmt "%a:%a" pp_addr addr pp_mode mode
+        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
+        | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
         | E_tree (TC_symbol(e, l)) ->
@@ -503,7 +511,7 @@ let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
 
-let mk_addr addr ?(mode=STRONG) range = mk_expr ~etyp:T_addr (E_addr (addr, mode)) range
+let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
 let mk_alloc_addr addr_kind range =
   mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range

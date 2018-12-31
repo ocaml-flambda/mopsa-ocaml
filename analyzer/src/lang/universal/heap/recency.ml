@@ -70,11 +70,11 @@ struct
     match skind stmt with
     (* 𝕊⟦ free(addr); ⟧ *)
     | S_free_addr addr ->
-      let flow', mode =
-        if is_old addr flow then flow, WEAK
-        else Flow.map_domain_env T_cur (remove addr) man flow, STRONG
+      let flow' =
+        if is_old addr flow then flow
+        else Flow.map_domain_env T_cur (remove addr) man flow
       in
-      let stmt' = mk_remove (mk_addr addr ~mode stmt.srange) stmt.srange in
+      let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
       Post.return
 
@@ -87,38 +87,32 @@ struct
   let eval zone expr man flow =
     match ekind expr with
     | E_alloc_addr(addr_kind) ->
-      begin
-        let pool = Flow.get_domain_cur man flow in
+      let pool = Flow.get_domain_cur man flow in
 
-        let cs = Callstack.get flow in
-        let range = erange expr in
-        let recent_uid, flow = get_id_flow (cs, range, recent_flag) flow in
-        let old_uid, flow = get_id_flow (cs, range, old_flag) flow in
+      let cs = Callstack.get flow in
+      let range = erange expr in
+      let recent_uid, flow = get_id_flow (cs, range, recent_flag) flow in
+      let old_uid, flow = get_id_flow (cs, range, old_flag) flow in
 
-        let recent_addr = {addr_kind; addr_uid = recent_uid} in
-        let old_addr = {addr_kind; addr_uid = old_uid} in
+      let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
+      let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
 
-        (match Pool.mem recent_addr pool, Pool.mem old_addr pool with
-        | false, _ ->
+      (* Change the sub-domain *)
+      let flow' =
+        if not (Pool.mem recent_addr pool) then
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
-
-        | true, false ->
-          (* Only a previous strong address exists =>
-             Rebase the previous strong address with strong updates. *)
+        else
+          (* Otherwise, we make the previous recent address as an old one *)
           Flow.map_domain_cur (add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
+      in
 
-        | true, true ->
-          (* Both strong and weak addresses exist =>
-             Rebase the previous strong address with weak updates. *)
-          man.exec ((mk_rename (mk_addr recent_addr range) (mk_addr old_addr ~mode:WEAK range) range)) flow
+      (* Add the recent address *)
+      Flow.map_domain_cur (add recent_addr) man flow' |>
+      Eval.singleton (mk_addr recent_addr range) |>
+      Eval.return
 
-        )
-        |> Flow.map_domain_cur (add recent_addr) man
-        |> Eval.singleton (mk_addr recent_addr (tag_range range "mk_recent_addr"))
-        |> OptionExt.return
-      end
     | _ -> None
 
   (** Queries *)

@@ -112,7 +112,7 @@ module Domain = struct
     with
     | Some c ->
       debug "case 1";
-      Some (PrimedCell.to_expr c STRONG range)
+      Some (PrimedCell.to_expr c (primed_apply cell_mode c) range)
 
     | None ->
       match exist_and_find_cell
@@ -127,7 +127,7 @@ module Domain = struct
       | Some (c') ->
         debug "case 2";
         Some (wrap_expr
-                (PrimedCell.to_expr c' STRONG range)
+                (PrimedCell.to_expr c' (primed_apply cell_mode c') range)
                 (int_rangeof (primed_apply cell_typ c))
                 range
              )
@@ -146,7 +146,7 @@ module Domain = struct
           let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           Some (_mod
-                  (div (PrimedCell.to_expr c' STRONG range) (mk_z base range) range)
+                  (div (PrimedCell.to_expr c' (primed_apply cell_mode c') range) (mk_z base range) range)
                   (mk_int 256 range)
                   range
                )
@@ -174,7 +174,7 @@ module Domain = struct
               let _,e = List.fold_left (fun (time, res) x ->
                   let res' =
                     add
-                      (mul (mk_z time range) (PrimedCell.to_expr x STRONG range) range)
+                      (mul (mk_z time range) (PrimedCell.to_expr x (primed_apply cell_mode x) range) range)
                       res
                       range
                   in
@@ -215,7 +215,7 @@ module Domain = struct
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c STRONG range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range) in
         add c u, subman.exec stmt s
       | None ->
         add c u, s
@@ -230,7 +230,7 @@ module Domain = struct
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c STRONG range) O_eq e ~etyp:T_int range) range) in
+        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range) in
         f |>
         Flow.set_domain_cur (add c u) man |>
         man.exec ~zone:(Z_c_cell) stmt
@@ -667,7 +667,7 @@ module Domain = struct
       begin match primed_apply cell_offset c with
         | O_single _ ->
           let flow = add_cell c exp.erange man flow in
-          Eval.singleton (PrimedCell.to_expr c STRONG exp.erange) flow
+          Eval.singleton (PrimedCell.to_expr c (primed_apply cell_mode c) exp.erange) flow
 
         | O_region _ ->
           let l, u = rangeof (primed_apply cell_typ c) in
@@ -721,7 +721,7 @@ module Domain = struct
 
   (** Assign an rval to a cell *)
   let assign_cell c rval range man flow =
-    let lval = PrimedCell.to_expr c STRONG range in
+    let lval = PrimedCell.to_expr c (primed_apply cell_mode c) range in
     let flow' = Flow.map_domain_env T_cur (add c) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
@@ -736,7 +736,7 @@ module Domain = struct
 
     let flow'' = Flow.set_domain_env T_cur a' man flow' in
 
-    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) overlappings in
+    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' (primed_apply cell_mode c') range) range) overlappings in
 
     man.exec ~zone:Z_c_cell (mk_block block range) flow''
 
@@ -746,7 +746,7 @@ module Domain = struct
   let remove_cells pred range man flow =
     let a = Flow.get_domain_env T_cur man flow in
     let cells = exist_and_find_cells pred a in
-    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' STRONG range) range) cells in
+    let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' (primed_apply cell_mode c') range) range) cells in
     man.exec ~zone:Z_c_cell (mk_block block range) flow
 
 
@@ -765,8 +765,8 @@ module Domain = struct
         ) man
     in
     let stmt' = mk_rename
-        (PrimedCell.to_expr cold STRONG range) (* FIXME: always STRONG ? *)
-        (PrimedCell.to_expr cnew STRONG range)
+        (PrimedCell.to_expr cold (primed_apply cell_mode cold) range)
+        (PrimedCell.to_expr cnew (primed_apply cell_mode cnew) range)
         range
     in
     man.exec ~zone:Z_c_cell stmt' flow'
@@ -866,17 +866,17 @@ module Domain = struct
       Post.bind_return man @@ fun c flow ->
 
       add_cell c stmt.srange man flow |>
-      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) |>
+      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c (primed_apply cell_mode c) stmt.srange) stmt.srange) |>
 
       Post.of_flow |>
-      Post.add_merger (mk_add (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange)
+      Post.add_merger (mk_add (PrimedCell.to_expr c (primed_apply cell_mode c) stmt.srange) stmt.srange)
 
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
       let l = exist_and_find_cells (fun c -> compare_base (primed_apply cell_base c) (V v) = 0) u in
       let u' = List.fold_left (fun acc c -> remove c acc) u l in
-      let mergers = List.map (fun c -> mk_remove (PrimedCell.to_expr c STRONG stmt.srange) stmt.srange) l in
+      let mergers = List.map (fun c -> mk_remove (PrimedCell.to_expr c (primed_apply cell_mode c) stmt.srange) stmt.srange) l in
       let to_exec_in_sub = mergers in
       let flow = Flow.set_domain_cur u' man flow in
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub stmt.srange) flow |>

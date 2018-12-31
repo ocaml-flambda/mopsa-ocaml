@@ -57,7 +57,7 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_stub_free { ekind = E_addr (addr, _) } ->
+    | S_stub_free { ekind = E_addr (addr) } ->
       Post.return flow
 
     | S_stub_free p ->
@@ -65,11 +65,11 @@ struct
       Post.bind_return man @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr, mode), _)) ->
+        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
           let stmt' = mk_free_addr addr stmt.srange in
           let flow' = man.exec stmt' flow in
 
-          let stmt'' = mk_stub_free (mk_addr addr ~mode stmt.srange) stmt.srange in
+          let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
           Post.of_flow
 
@@ -97,8 +97,8 @@ struct
       Eval.bind_return @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr, mode), _)) ->
-          let exp' = { exp with ekind = E_stub_attribute(mk_addr addr ~mode exp.erange, attr) }  in
+        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
+          let exp' = { exp with ekind = E_stub_attribute(mk_addr addr exp.erange, attr) }  in
           man.eval exp' flow
 
         | E_c_points_to P_top ->
@@ -115,7 +115,7 @@ struct
       Eval.bind_return @@ fun pt flow ->
 
       begin match ekind pt with
-        | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource res' }, _), _)) ->
+        | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
           if res = res' then
             Eval.singleton (mk_one exp.erange ~typ:u8) flow
           else

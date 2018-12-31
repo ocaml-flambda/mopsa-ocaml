@@ -344,7 +344,7 @@ struct
 
   let exec zone stmt man flow  =
     match skind stmt with
-    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileDescriptor"} as addr, _)}) ->
+    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileDescriptor"} as addr)}) ->
       remove_addr addr man flow |>
       Post.return
 
@@ -361,9 +361,9 @@ struct
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
       Eval.bind_return @@ fun exp' flow ->
 
-      let addr, mode =
+      let addr =
         match ekind exp' with
-        | E_addr(addr, mode) -> addr, mode
+        | E_addr(addr) -> addr
         | _ -> assert false
       in
 
@@ -377,7 +377,7 @@ struct
 
       let addr =
         match ekind pt with
-        | E_c_points_to (P_block (A (addr, mode), _)) -> addr
+        | E_c_points_to (P_block (A (addr), _)) -> addr
         | _ -> assert false
       in
 
