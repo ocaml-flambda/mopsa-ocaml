@@ -1,23 +1,21 @@
 #include <fcntl.h>
 
-extern int _mopsa_fd_to_int(void *fd);
 extern void *_mopsa_int_to_fd(int fd);
 
 
 /*$
- * local: void* fd = new FileDescriptor;
- * local: int n = _mopsa_fd_to_int(fd);
- * ensures: return == n;
+ * local: int fd = new FileDescriptor;
+ * ensures: return == fd;
  */
 int open_(const char *file, int oflag, ...);
 
 
 /*$
- * local: void* fd = _mopsa_int_to_fd(f);
- * requires: fd in FileDescriptor;
- * free : fd;
+ * requires : fd in FileDescriptor;
+ * local : void * addr = _mopsa_int_to_fd(fd);
+ * free : addr;
  */
-void close_(int f);
+void close_(int fd);
 
 
 /* Test that open returns a positive number */

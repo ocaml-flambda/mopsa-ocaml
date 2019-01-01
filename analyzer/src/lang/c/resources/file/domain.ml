@@ -121,7 +121,7 @@ struct
     let rec pp_first fmt l =
       let l' = List.mapi (fun i s -> (i, s)) l in
       Format.pp_print_list
-        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+        ~pp_sep:(fun fmt () -> Format.fprintf fmt " ,@;")
         (fun fmt (i, s) ->
            Format.fprintf fmt "%d ↦ @[<h>%a@]"
              i Slot.print s
@@ -178,121 +178,81 @@ struct
   (** ============================= *)
 
   (* Insert an address in the first slots *)
-  let rec insert_first addr (a:t) : t * t =
-    let rec iter slots =
+  let rec insert_first addr range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let rec iter i not_inserted_before slots =
       match slots with
       | [] -> [], []
       | hd :: tl ->
+        debug "insert in %d:%a" i Slot.print hd;
         let inserted_here, not_inserted_here = Slot.insert addr hd in
-        match Slot.is_bottom inserted_here,
-              Slot.is_bottom not_inserted_here
-        with
-        | false, true ->
-          inserted_here :: tl, not_inserted_here :: tl
-
-        | true, false ->
-          let inserted_after, not_inserted_after = iter tl in
-          hd :: inserted_after, not_inserted_here :: not_inserted_after
-
-        | false, false ->
-          let inserted_after, not_inserted_after = iter tl in
-          inserted_here :: inserted_after, not_inserted_here :: not_inserted_after
-
-        | true, true ->
-          inserted_here :: tl, not_inserted_here :: tl
-    in
-    let inserted, not_inserted = iter a.first in
-    { a with first = inserted },
-    { a with first = not_inserted }
-
-
-  (** Insert an address in the remaining part of the table *)
-  let insert_table addr a : t =
-    {
-      a with
-      others = Table.insert addr window a.others
-    }
-
-  (** Insert an address in the table of file descriptors *)
-  let insert addr man flow =
-    let a = Flow.get_domain_env T_cur man flow in
-    (* Try to insert the address in the first slots *)
-    let inserted_in_first, no_place_in_first = insert_first addr a in
-
-    let a' =
-      if is_bottom no_place_in_first then
-        inserted_in_first
-      else
-        (* In case there is no place in the first slots, insert in the remaining part of the table *)
-        let inserted_in_table = insert_table addr no_place_in_first in
-        let annot = Flow.get_all_annot flow in
-        join annot inserted_in_first inserted_in_table
-    in
-
-    Flow.set_domain_env T_cur a' man flow
-
-  
-  (** {2 Evaluation of an address into a numeric value} *)
-  (** ================================================= *)
-  
-  let eval_first_addr_to_int addr range man flow =
-    let a = Flow.get_domain_env T_cur man flow in
-    let rec iter i not_found_before slots =
-      match slots with
-      | [] -> [], []
-      | hd :: tl ->
-        let found_here, not_found_here = Slot.mem addr hd in
-        let cases, not_found_after = iter (i + 1) (not_found_before @ [not_found_here]) tl in
+        debug "inserted_here: %a" Slot.print inserted_here;
+        debug "not_inserted_here: %a" Slot.print not_inserted_here;
+        let cases, not_inserted_after =
+          if Slot.is_bottom not_inserted_here then
+            [], tl
+          else
+            iter (i + 1) (not_inserted_before @ [not_inserted_here]) tl
+        in
         let cases' =
-          if Slot.is_bottom found_here then cases
+          if Slot.is_bottom inserted_here then cases
           else
             let exp = mk_int i range in
-            let a' = { a with first = not_found_before @ [found_here] @ not_found_after } in
+            let a' = { a with first = not_inserted_before @ [inserted_here] @ not_inserted_after } in
             let flow' = Flow.set_domain_env T_cur a' man flow in
             Eval.singleton exp flow' :: cases
         in
-        cases', not_found_here :: not_found_after
+        cases', not_inserted_here :: not_inserted_after
     in
-    let cases, not_found = iter 0 [] a.first in
-    cases, { a with first = not_found }
-    
+    let cases, not_inserted = iter 0 [] a.first in
+    cases, { a with first = not_inserted }
+
   let bounds itv =
     if Itv.is_bounded itv then
       Itv.bounds itv
     else
       let _, max = rangeof s32 in
       Z.of_int window, max
-    
+
   
-  let eval_table_addr_to_int addr range man flow =
+  (** Insert an address in the remaining part of the table *)
+  let insert_others addr range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let itv = Table.find addr a.others in
+    let others, itv = Table.insert addr window a.others in
     if Itv.is_bottom itv then
       []
     else
-      let a, b = bounds itv in
-      let exp = mk_z_interval a b range in
+      let l, u = bounds itv in
+      let exp = mk_z_interval l u range in
+      let flow = Flow.set_domain_env T_cur { a with others } man flow in
       [Eval.singleton exp flow]
 
-  let eval_addr_to_int addr range man flow =
-    let cases1, not_found = eval_first_addr_to_int addr range man flow in
-    let flow' = Flow.set_domain_env T_cur not_found man flow in
-    let cases2 = eval_table_addr_to_int addr range man flow' in
-    Eval.join_list (cases1 @ cases2)
+
+  (** Insert an address in the table of file descriptors and return its interval *)
+  let insert addr range man flow =
+    let case1, not_inserted = insert_first addr range man flow in
+    let case2 =
+      if is_bottom not_inserted then
+        []
+      else
+        let flow' = Flow.set_domain_env T_cur not_inserted man flow in
+        insert_others addr range man flow'
+    in
+    Eval.join_list (case1 @ case2)
+
   
+  (** {2 Find the address of a numeric file descriptor} *)
+  (** ================================================= *)
 
-  (** {2 Evaluation of an interval into an address} *)
-  (** ============================================= *)
-
-  let eval_int_to_addr i range man flow =
+  let find i range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let rec eval_first j slots flow =
+    let rec find_first j slots flow =
       debug "trying %d" j;
       match slots with
-      | [] -> debug "end of first"; eval_others flow
+      | [] -> debug "end of first"; find_others flow
       | hd :: tl ->
         let addrs = Slot.get hd in
-        if addrs = [] then let _ = debug "no addr here" in eval_first (j + 1) tl flow
+        if addrs = [] then let _ = debug "no addr here" in find_first (j + 1) tl flow
         else
           Eval.assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
             ~fthen:(fun flow ->
@@ -300,10 +260,10 @@ struct
                 Eval.join_list
               )
             ~felse:(fun flow ->
-                eval_first (j + 1) tl flow
+                find_first (j + 1) tl flow
               )
             man flow
-    and eval_others flow =
+    and find_others flow =
       debug "eval others";
       let itv = man.ask (Itv.Q_interval i) flow in
       let addrs, can_be_null = Table.fold (fun addr itv' (acc, can_be_null) ->
@@ -323,17 +283,15 @@ struct
       in
       Eval.join_list (case1 @ case2)
     in
-    eval_first 0 a.first flow
+    find_first 0 a.first flow
             
-    (** {2 Removal of addresses} *)
+
+  (** {2 Removal of addresses} *)
   (** ======================== *)
   
-  let remove_addr_first addr first =
-    List.map (Slot.remove addr) first
-
-  let remove_addr addr man flow =
+  let remove addr man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let first = remove_addr_first addr a.first in
+    let first = List.map (Slot.remove addr) a.first in
     let others = Table.remove addr a.others in
     let a' = { first; others } in
     Flow.set_domain_env T_cur a' man flow
@@ -345,7 +303,7 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileDescriptor"} as addr)}) ->
-      remove_addr addr man flow |>
+      remove addr man flow |>
       Post.return
 
     | _ -> None
@@ -360,34 +318,29 @@ struct
     | E_alloc_addr(A_stub_resource "FileDescriptor") ->
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
       Eval.bind_return @@ fun exp' flow ->
+      insert (Addr.from_expr exp') exp.erange man flow
 
-      let addr =
-        match ekind exp' with
-        | E_addr(addr) -> addr
-        | _ -> assert false
+    (* 𝔼⟦ n in FileDescriptor ⟧ *)
+    | E_stub_resource_mem(n, "FileDescriptor") ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
+      Eval.bind_return @@ fun n flow ->
+
+      find n exp.erange man flow |>
+      Eval.bind @@ fun addr flow ->
+
+      let exp' =
+        match ekind addr with
+        | E_addr { addr_kind = A_stub_resource "FileDescriptor" } -> mk_one ~typ:u8 exp.erange
+        | _ -> mk_zero ~typ:u8 exp.erange
       in
 
-      let flow' = insert addr man flow in
-      Eval.singleton exp' flow'
+      Eval.singleton exp' flow
 
-    (* 𝔼⟦ _mopsa_fd_to_int(fd) ⟧ *)
-    | E_c_builtin_call("_mopsa_fd_to_int", [fd]) ->
-      man.eval ~zone:(Z_c, Z_c_points_to) fd flow |>
-      Eval.bind_return @@ fun pt flow ->
-
-      let addr =
-        match ekind pt with
-        | E_c_points_to (P_block (A (addr), _)) -> addr
-        | _ -> assert false
-      in
-
-      eval_addr_to_int addr exp.erange man flow
-
-    (* 𝔼⟦ _mopsa_int_to_fd(i) ⟧ *)
-    | E_c_builtin_call("_mopsa_int_to_fd", [i]) ->
-      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) i flow |>
-      Eval.bind_return @@ fun i flow ->
-      eval_int_to_addr i exp.erange man flow
+    (* 𝔼⟦ _mopsa_int_to_fd(n) ⟧ *)
+    | E_c_builtin_call("_mopsa_int_to_fd", [n]) ->
+      man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
+      Eval.bind_return @@ fun n flow ->
+      find n exp.erange man flow
 
     | _ -> None
 

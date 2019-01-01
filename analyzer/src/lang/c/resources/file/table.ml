@@ -98,7 +98,7 @@ let insert addr window (t:table) =
       Channel.without_channel
     ) sol0 sorted
   in
-  add addr sol t
+  add addr sol t, sol
 
 let find addr (t:table) =
   AddrItvMap.find addr t.map

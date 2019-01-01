@@ -223,29 +223,6 @@ let register_addr (info: addr_kind info) =
   addr_kind_pp_chain := info.print !addr_kind_pp_chain;
   ()
 
-module Addr =
-struct
-  type t = addr
-  let compare = compare_addr
-  let print = pp_addr
-end
-
-module AddrSet =
-struct
-  include SetExt.Make(Addr)
-
-  let print fmt s =
-    if is_empty s then pp_print_string fmt "∅"
-    else
-      let l = elements s in
-      fprintf fmt "@[<h>{";
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-        pp_addr fmt l
-      ;
-      fprintf fmt "}@]"
-end
-
 
 (*================*)
 (** {2 Functions} *)
@@ -770,3 +747,30 @@ let rec expr_to_z (e: expr) : Z.t option =
       | _ -> None
     end
   | _ -> None
+
+module Addr =
+struct
+  type t = addr
+  let compare = compare_addr
+  let print = pp_addr
+  let from_expr e =
+    match ekind e with
+    | E_addr addr -> addr
+    | _ -> assert false
+end
+
+module AddrSet =
+struct
+  include SetExt.Make(Addr)
+
+  let print fmt s =
+    if is_empty s then pp_print_string fmt "∅"
+    else
+      let l = elements s in
+      fprintf fmt "@[<h>{";
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+        pp_addr fmt l
+      ;
+      fprintf fmt "}@]"
+end
