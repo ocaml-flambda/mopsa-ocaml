@@ -36,5 +36,6 @@ void* alloc();
 
 void test_case_non_determinism() {
   void *p = alloc();
-  _mopsa_print();
+  _mopsa_assert_exists(p != NULL);
+  _mopsa_assert_exists(p == NULL);
 }
