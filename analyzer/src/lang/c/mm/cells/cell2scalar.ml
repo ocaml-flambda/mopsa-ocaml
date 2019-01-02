@@ -199,9 +199,14 @@ struct
     | E_c_cell({b = S s; o = O_single z}, mode) ->
       (* Case of a static string literal with a constant offset *)
       (* return the scalar value of the character *)
-      let ch = String.get s (Z.to_int z) in
-      Eval.singleton (Universal.Ast.mk_int (int_of_char ch) ~typ:exp.etyp exp.erange) flow |>
-      Eval.return
+      let len = String.length s in
+      if Z.equal z (Z.of_int len) then
+        Eval.singleton (Universal.Ast.mk_zero exp.erange ~typ:exp.etyp) flow |>
+        Eval.return
+      else
+        let ch = String.get s (Z.to_int z) in
+        Eval.singleton (Universal.Ast.mk_int (int_of_char ch) ~typ:exp.etyp exp.erange) flow |>
+        Eval.return
 
     | E_c_cell({b = S s; o = O_region itv}, mode) ->
       (* Otherwise, return the interval covering characters of the string within itv *)

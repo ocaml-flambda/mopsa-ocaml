@@ -190,8 +190,13 @@ module Domain = struct
           | NotPossible ->
             match primed_apply cell_base c with
             | S s ->
-              debug "case 5";
-              Some (mk_int (String.get s (Z.to_int (primed_apply cell_zoffset c)) |> int_of_char) range)
+              debug "case 5 %a" PrimedCell.print c;
+              let o = primed_apply cell_zoffset c in
+              let len = String.length s in
+              if Z.equal o (Z.of_int len) then
+                Some (mk_zero range)
+              else
+                Some (mk_int (String.get s (Z.to_int o) |> int_of_char) range)
 
             | _ ->
               if is_c_scalar_type (primed_apply cell_typ c) then
