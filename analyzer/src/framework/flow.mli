@@ -34,6 +34,9 @@ val top : 'a annot -> 'a flow
 val is_bottom : ('a, _) man -> 'a flow -> bool
 (** Emptiness test *)
 
+val is_top : ('a, _) man -> 'a flow -> bool
+(** top test *)
+
 val subset : ('a, _) man -> 'a flow -> 'a flow -> bool
 (** Inclusion test *)
 

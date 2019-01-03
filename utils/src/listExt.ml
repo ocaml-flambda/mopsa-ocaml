@@ -14,37 +14,37 @@
 include List
 (** Import everything from List *)
 
-          
+
 (** {2 Operations} *)
-          
+
 let rec last = function
   | [] -> invalid_arg "listUtil.last: empty list"
   | [a] -> a
   | a::b -> last b
-(** Last eleemnt of a list. Raises invalid_arg if the list is empty. *)                 
+(** Last eleemnt of a list. Raises invalid_arg if the list is empty. *)
 
 let map_tail f l = rev (rev_map f l)
 (** Tail-recursive version of map. Useful for large lists. *)
 
 let append_tail a b = rev_append (List.rev a) b
 (** Tail-recursive version of append. Useful if the first list is large.. *)
-                                 
+
 let map_merge (f:'a -> 'b list) (l:'a list) : 'b list =
   List.rev
     (List.fold_left (fun acc x -> List.rev_append (f x) acc) [] l)
 (** Maps [e1;e2;...;en] to (f e1)@(f e2)@...@(f en) *)
-    
+
 let map_filter (f:'a -> 'b option) (l: 'a list) : 'b list =
   let rec doit acc l = match l with
     | [] -> rev acc
     | a::r -> doit (match f a with Some x -> x::acc | None -> acc) r
   in
   doit [] l
-(** Applies f to every element of the list and kepp only those that return some value. 
+(** Applies f to every element of the list and kepp only those that return some value.
     The order of the argument list is preserved.
  *)
-       
-                             
+
+
 (** {2 Printing} *)
 
 type list_printer = {
@@ -57,10 +57,10 @@ type list_printer = {
 
 let printer_plain = { print_empty=""; print_begin=""; print_sep=" "; print_end=""; }
 (** Print as a space-sparated list, no delimiters. *)
-                     
+
 let printer_list = { print_empty="[]"; print_begin="["; print_sep=";"; print_end="]"; }
 (** Print as OCaml list: [a;b;c]. *)
-                     
+
 let printer_tuple = { print_empty="()"; print_begin="("; print_sep=","; print_end=")"; }
 (** Print as OCaml tuple: (a,b,c). *)
 
@@ -76,7 +76,7 @@ let print_gen o printer elem ch l =
      List.iter (fun e -> o ch printer.print_sep; elem ch e) rest;
      o ch printer.print_end
 (* internal printing helper *)
-       
+
 let print printer elem ch l =
   print_gen output_string printer elem ch l
 
@@ -98,3 +98,8 @@ let rec compare cmp a b = match a,b with
   | x::s, y::t ->
      let r =  cmp x y in
      if r = 0 then compare cmp s t else r
+
+let rec mem_compare cmp e l = match l with
+  | p::q when cmp p e = 0 -> true
+  | p::q -> mem_compare cmp e q
+  | [] -> false

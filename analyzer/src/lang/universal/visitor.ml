@@ -44,7 +44,9 @@ let () =
       | S_remove_var _
       | S_add_var _
       | S_project_vars _
-      | S_rebase_addr _ -> leaf stmt
+      | S_rebase_addr _
+      | S_cf_part_start _
+      | S_cf_part_merge _ -> leaf stmt
 
       | S_assign(x, e) ->
         {exprs = [e; x]; stmts = []},

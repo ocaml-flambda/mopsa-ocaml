@@ -341,43 +341,51 @@ let is_math_type = function
 (*==========================================================================*)
 
 type stmt_kind +=
-  | S_expression of expr
-  (** Expression statement, useful for calling functions without a return value *)
+   | S_expression of expr
+   (** Expression statement, useful for calling functions without a return value *)
 
-  | S_if of expr (** condition *) * stmt (** then branch *) * stmt (** else branch *)
+   | S_if of expr (** condition *) * stmt (** then branch *) * stmt (** else branch *)
 
-  | S_block of stmt list (** Sequence block of statements *)
+   | S_block of stmt list (** Sequence block of statements *)
 
-  | S_return of expr option (** Function return with an optional return expression *)
+   | S_return of expr option (** Function return with an optional return expression *)
 
-  | S_while of expr (** loop condition *) *
-             stmt (** loop body *)
-  (** While loops *)
+   | S_while of expr (** loop condition *) *
+                  stmt (** loop body *)
+   (** While loops *)
 
 
-  | S_break (** Loop break *)
+   | S_break (** Loop break *)
 
-  | S_continue (** Loop continue *)
+   | S_continue (** Loop continue *)
 
-  | S_rebase_addr of addr (** old *) * addr (** new *) * mode
-  (** Change the address of a previously allocated object *)
+   | S_rebase_addr of addr (** old *) * addr (** new *) * mode
+   (** Change the address of a previously allocated object *)
 
-  | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
-  (** Unit tests suite *)
+   | S_unit_tests of (string * stmt) list (** list of unit tests and their names *)
+   (** Unit tests suite *)
 
-  | S_simple_assert of expr * bool * bool
-  (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
+   | S_simple_assert of expr * bool * bool
+   (** Unit tests simple assertions : S_simple_assert(e,b,b') = b
      is_bottom(assume(b' cond)) where b exp is understood as exp if b
       = true and not exp otherwise *)
 
-  | S_assert of expr
-  (** Unit tests assertions *)
+   | S_assert of expr
+   (** Unit tests assertions *)
 
-  | S_print
-  (** Print the abstract flow map at current location *)
+   | S_print
+   (** Print the abstract flow map at current location *)
 
-  | S_forget of var
-  (** Forgets variable *)
+   | S_forget of var
+   (** Forgets variable *)
+
+   | S_cf_part_start of int
+   (** [S_cf_part_start l] Start a control flow partitioning with label
+     [l] on next statement *)
+
+   | S_cf_part_merge of int
+   (** [S_cf_part_merge l] Merges partitioning with label [l] *)
+
 
 
 let () =
@@ -420,6 +428,8 @@ let () =
         ]
 
       | S_assert(e1), S_assert(e2) -> compare_expr e1 e2
+      | S_cf_part_start l, S_cf_part_start l' -> l - l'
+      | S_cf_part_merge l, S_cf_part_merge l' -> l - l'
       | _ -> next s1 s2
     )
 

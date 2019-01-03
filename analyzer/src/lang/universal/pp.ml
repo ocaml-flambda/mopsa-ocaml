@@ -142,6 +142,8 @@ let () =
           | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
         end
       | S_print -> fprintf fmt "print();"
+      | S_cf_part_start i -> fprintf fmt "cf_part_start(%d)" i
+      | S_cf_part_merge i -> fprintf fmt "cf_part_merge(%d)" i
       | _ -> default fmt stmt
     );
   register_pp_program (fun default fmt prg ->

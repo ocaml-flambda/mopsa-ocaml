@@ -63,7 +63,9 @@ struct
     | "_mopsa_assert_unsafe"
     | "_mopsa_assert_error"
     | "_mopsa_assert_error_exists"
-    | "_mopsa_assert_error_at_line" -> true
+    | "_mopsa_assert_error_at_line"
+    | "_mopsa_cf_part"
+    | "_mopsa_cf_merge" -> true
     | _ -> false
 
   let is_c_alarm a =
