@@ -24,6 +24,11 @@ type 'a fmap = 'a Manager.fmap
 
 type 'a flow = 'a Manager.flow
 
+let make annot fm =
+  { map = Nt fm;
+    annot;
+  }
+
 let bottom annot : 'a flow = {
   map = Nt FlowMap.empty;
   annot;

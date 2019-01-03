@@ -3,8 +3,8 @@ TARGET_NATIVES = mopsa
 # Packs
 mopsa = framework mopsa lang main
 
-framework = ast visitor options query annotation	\
-lattice zone manager flow eval post channel value domain callstack alarm output cache	\
+framework = ast visitor options query annotation lattice zone manager	\
+flow eval post channel value domain callstack alarm output cache			\
 analyzer lattices domains config
 framework.output = text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
@@ -14,9 +14,11 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal stubs c python cfg jvm
 
-lang.universal = ast frontend zone u_stdlib 	\
-iterators heap numeric strings tree # arrays
+lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
+strings tree partitioning # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
+lang.universal.partitioning = cf
+lang.universal.partitioning.cf = cf_partitioning cf_simple_partitioning
 lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational \

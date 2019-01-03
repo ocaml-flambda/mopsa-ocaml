@@ -23,39 +23,47 @@ module SonLabelMap = MapExt.Make(struct type t = son_labels
                                      let print = print_son_labels
                                      let compare = compare_son_labels
                               end)
-
 (** labels of sons in the partitioning tree *)
 
-type part_tpath = (partitioning_location_label * son_labels) list
-let print_part_tpath fmt x =
-  Format.fprintf fmt "%a"
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "·")
-       (fun fmt (x, y) -> Format.fprintf fmt "(%a, %a)"
-                            print_partitioning_location_label x
-                            print_son_labels y
-       )
-    ) x
-let compare_part_tpath =
-  Compare.list (Compare.pair compare_partitioning_location_label compare_son_labels)
-module TPathMap = MapExt.Make(struct type t = part_tpath
-                                     let print = print_part_tpath
-                                     let compare = compare_part_tpath
-                              end)
-(** tree path from the root of the partitioning tree to the flow *)
+module History = Map.Make(
+  struct
+    type t = partitioning_location_label
+    let print = print_partitioning_location_label
+    let compare = compare_partitioning_location_label
+  end
+  )
 
-type ('a, 'b) partition_tree =
-  | Part of 'a * (('a, 'b) partition_tree) list
-  | Env of 'b
-let rec print_partition_tree pa pb fmt x =
-  match x with
-  | Part(a, l) ->
-     Format.fprintf fmt "@[<v 2>%a@,%a@]"
-       pa a
-       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-          (print_partition_tree pa pb)
-       ) l
-  | Env b -> pb b
-(** partitioning tree *)
+type history = son_labels History.t
+let print_history fmt h = Format.fprintf fmt "{%a}"
+    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+       (fun fmt (x, y) -> Format.fprintf fmt "%a ~> %a"
+           print_partitioning_location_label x
+           print_son_labels y
+       )
+    ) (History.bindings h)
+let subset_history a b =
+  History.for_all (fun x y ->
+      try
+        compare_son_labels (History.find x b) y = 0
+      with
+      | Not_found -> false
+    ) a
+let compare_history h h' =
+  if subset_history h h' then
+    begin
+      if subset_history h' h then
+        0
+      else -1
+    end
+  else
+    begin
+      if subset_history h' h then
+        1
+      else -2
+    end
+
+let empty_history = History.empty
+module HistoryMap = Map.Make(struct type t = history let compare = compare_history end)
 
 (*==========================================================================*)
 (**                    {2 Partitioning Annotations}                         *)
@@ -84,77 +92,68 @@ let () =
 
 
 type token +=
-   | T_part of (part_tpath * token)
+   | T_part of (history * token)
 (** tokens used to store partitioned environments *)
 
 let () =
   register_token {
       compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_part (tpath1, tk1), T_part(tpath2, tk2) ->
+        | T_part (h1, tk1), T_part(h2, tk2) ->
            Compare.compose
-             [(fun () -> compare_part_tpath tpath1 tpath2);
+             [(fun () -> compare_history h1 h2);
               (fun () -> compare_token tk1 tk2)]
         | _ -> next tk1 tk2
       );
       print   = (fun next fmt tk ->
         match tk with
-        | T_part(tpath, tk) -> Format.fprintf fmt "part(%a, %a)"
-                                 print_part_tpath tpath
+        | T_part(h, tk) -> Format.fprintf fmt "part(%a, %a)"
+                                 print_history h
                                  pp_token tk
         | _ -> next fmt tk
       );
     }
 
-let partition_flow man (l: partitioning_location_label) part_keys (f: 'a Flow.flow) =
+exception AlreadyExistingPartitioning
+exception NoPartitioning
+let add_history_choice (h: history) (l: partitioning_location_label) (son: son_labels): history =
+  if History.mem l h then
+    raise AlreadyExistingPartitioning
+  else History.add l son h
+
+let partition_flow man (l: partitioning_location_label) (part_keys: son_labels list) (f: 'a Flow.flow) =
   let fmap =
     Flow.fold (fun map tk env ->
         match tk with
-        | T_part (tpath, tk_org) ->
+        | T_part (h, tk_org) ->
            List.fold_left (fun map part_key ->
-               FlowMap.add (T_part((l, part_key) :: tpath, tk_org)) env map
+               FlowMap.add (T_part(add_history_choice h l part_key, tk_org)) env map
              ) map part_keys
         | tk_org ->
            List.fold_left (fun map part_key ->
-               FlowMap.add (T_part((l, part_key) :: [], tk_org)) env map
+               FlowMap.add (T_part(add_history_choice empty_history l part_key, tk_org)) env map
              ) map part_keys
       ) FlowMap.empty man f
   in
   Flow.({f with map = Nt fmap})
 
-let select_tpath (l : partitioning_location_label) part_keys (tpath: part_tpath)
-    : part_tpath option =
-  let rec aux tpath beg =
-    match tpath with
-    | (l', i')::r when compare_partitioning_location_label l l' = 0 ->
-       if ListExt.mem_compare compare_son_labels i' part_keys then
-         Some (List.rev_append beg r)
-       else None
-    | hd::r -> aux r (hd :: beg)
-    | [] -> None
-  in
-  aux tpath []
-
-let remove_partitition_tpath (l : partitioning_location_label) (tpath: part_tpath) =
-  let rec aux tpath beg =
-    match tpath with
-    | (l', i')::r when compare_partitioning_location_label l l' = 0 ->
-       Some (i', List.rev_append beg r)
-    | hd::r -> aux r (hd :: beg)
-    | [] -> None
-  in
-  aux tpath []
+let remove_partitition_history (l : partitioning_location_label) (h: history) =
+  History.remove l h
 
 let select_partition_flow man (l: partitioning_location_label) part_keys (f: 'a Flow.flow) =
   let fmap = Flow.fold (fun map tk env ->
       match tk with
-      | T_part (tpath, tk_org) ->
-         begin
-           match select_tpath l part_keys tpath with
-           | Some tpath' -> FlowMap.add (T_part(tpath', tk_org)) env map
-           | None -> map
+      | T_part (h, tk_org) ->
+        begin
+          try
+            let son = History.find l h in
+            if ListExt.mem_compare compare_son_labels son part_keys then
+              FlowMap.add (T_part(remove_partitition_history l h, tk_org)) env map
+            else map
+          with
+          | Not_found -> raise NoPartitioning
          end
-      | _ -> map
+      | _ -> raise NoPartitioning
     ) FlowMap.empty man f
   in
   Flow.({f with map = Nt fmap})
@@ -162,20 +161,20 @@ let select_partition_flow man (l: partitioning_location_label) part_keys (f: 'a 
 let select_all_partition_flow man (l: partitioning_location_label) (f: 'a Flow.flow) =
   let fmap = Flow.fold (fun (map: 'a FlowMap.t SonLabelMap.t) tk (env: 'a) ->
       match tk with
-      | T_part (tpath, tk_org) ->
-         begin
-           match remove_partitition_tpath l tpath with
-           | Some(i, tp) ->
-              let cur_flow_i = try SonLabelMap.find i map with | Not_found -> FlowMap.empty in
-              SonLabelMap.add i (FlowMap.add (T_part(tp, tk_org)) env cur_flow_i) map
-           | None ->
-              let cur_flow = try SonLabelMap.find (-1) map with | Not_found -> FlowMap.empty in
-              SonLabelMap.add (-1) (FlowMap.add (T_part(tpath, tk_org)) env cur_flow) map
+      | T_part (h, tk_org) ->
+        begin
+          try
+            let i = History.find l h in
+            let h' = History.remove l h in
+            let cur_flow_i = try SonLabelMap.find i map with | Not_found -> FlowMap.empty in
+            SonLabelMap.add i (FlowMap.add (T_part(h', tk_org)) env cur_flow_i) map
+          with
+          | Not_found -> raise NoPartitioning
          end
       | _ ->
-         let cur_flow = try SonLabelMap.find (-1) map with | Not_found -> FlowMap.empty in
-         SonLabelMap.add (-1) (FlowMap.add tk env cur_flow) map
-               ) SonLabelMap.empty man f
+        let cur_flow = try SonLabelMap.find (-1) map with | Not_found -> FlowMap.empty in
+        SonLabelMap.add (-1) (FlowMap.add tk env cur_flow) map
+    ) SonLabelMap.empty man f
   in
   fmap
 
@@ -193,23 +192,23 @@ let is_flow_partitioned man f =
 
 let partitioning_of_flow man f =
   Flow.fold (fun map tk env ->
-      let tp, tk_org =
+      let h, tk_org =
         match tk with
-        | T_part (tp, tk_org) -> tp, tk_org
-        | _ -> [], tk
+        | T_part (h, tk_org) -> h, tk_org
+        | _ -> empty_history, tk
       in
-      let flow_tp =
-        try TPathMap.find tp map with | Not_found -> FlowMap.empty
+      let flow_h =
+        try HistoryMap.find h map with | Not_found -> FlowMap.empty
       in
-      TPathMap.add tp (FlowMap.add tk_org env flow_tp) map
-    ) TPathMap.empty man f
+      HistoryMap.add h (FlowMap.add tk_org env flow_h) map
+    ) HistoryMap.empty man f
 
 let flow_of_partitioning p annot =
   let fmap =
-    TPathMap.fold (fun tp flow acc ->
-        let tpn = tp = [] in
+    HistoryMap.fold (fun h flow acc ->
+        let hn = compare_history h empty_history = 0 in
         FlowMap.fold (fun tk_org env acc' ->
-            let tk = if tpn then tk_org else T_part (tp, tk_org) in
+            let tk = if hn then tk_org else T_part (h, tk_org) in
             FlowMap.add tk env acc'
           ) flow acc
       ) p FlowMap.empty
@@ -302,10 +301,10 @@ module Domain : Framework.Domains.Stateless.S =
 
       | _ when is_flow_partitioned man flow ->
          let part = partitioning_of_flow man flow in
-         let part', annot = TPathMap.fold (fun tp fmap (acc_tpmap, acc_annot) ->
+         let part', annot = HistoryMap.fold (fun h fmap (acc_hmap, acc_annot) ->
                          let flow' = man.exec ~zone:zone stmt Flow.({map = Nt fmap; annot = acc_annot}) in
-                         (TPathMap.add tp Flow.(flow'.map |> Top.detop) acc_tpmap, Flow.get_all_annot flow')
-                       ) part (TPathMap.empty, Flow.get_all_annot flow)
+                         (HistoryMap.add h Flow.(flow'.map |> Top.detop) acc_hmap, Flow.get_all_annot flow')
+                       ) part (HistoryMap.empty, Flow.get_all_annot flow)
          in
          Some (flow_of_partitioning part' annot |> Post.of_flow)
       | _ -> None

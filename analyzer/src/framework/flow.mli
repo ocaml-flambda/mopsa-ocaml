@@ -25,6 +25,8 @@ type token = Manager.token
 type 'a flow = 'a Manager.flow
 (** Flow abstraction *)
 
+val make: 'a annot -> 'a Manager.FlowMap.t -> 'a flow
+
 val bottom : 'a annot -> 'a flow
 (** Empty set of flows *)
 
