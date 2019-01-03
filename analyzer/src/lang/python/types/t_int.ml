@@ -1,8 +1,8 @@
-open Framework.Essentials
+open Mopsa
 open Ast
-open Universal.Ast
 open MapExt
 open Addr
+open Universal.Ast
 (* gérer les appels sur int + constantes *)
 
 module Domain =
@@ -47,21 +47,26 @@ module Domain =
 
          man.eval arg flow |>
            Eval.bind (fun earg flow ->
-               Eval.assume
-                 (mk_py_hasattr earg "__bool__" range)
-                 ~fthen:(fun flow ->
-                   let attr = mk_py_attr earg "__bool__" range in
-                   man.eval (mk_py_call attr [] range) flow
-                 )
+               Eval.assume (mk_py_isinstance_builtin earg "bool" range)
+                 ~fthen:(Eval.singleton earg)
                  ~felse:(fun flow ->
                    Eval.assume
-                     (mk_py_hasattr earg "__len__" range)
+                     (mk_py_hasattr earg "__bool__" range)
                      ~fthen:(fun flow ->
-                       let attr = mk_py_attr earg "__len__" range in
-                       let comp = mk_binop (mk_py_call attr [] range) O_ne (mk_zero range) range in
-                       man.eval comp flow)
+                       let attr = mk_py_attr earg "__bool__" range in
+                       man.eval (mk_py_call attr [] range) flow
+                     )
                      ~felse:(fun flow ->
-                       man.eval (mk_py_true range) flow)
+                       Eval.assume
+                         (mk_py_hasattr earg "__len__" range)
+                         ~fthen:(fun flow ->
+                           let attr = mk_py_attr earg "__len__" range in
+                           let comp = mk_binop (mk_py_call attr [] range) O_ne (mk_zero range) range in
+                           man.eval comp flow)
+                         ~felse:(fun flow ->
+                           man.eval (mk_py_true range) flow)
+                         man flow
+                     )
                      man flow
                  )
                  man flow

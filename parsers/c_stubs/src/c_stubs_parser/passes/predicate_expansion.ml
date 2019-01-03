@@ -74,13 +74,12 @@ struct
       | F_forall(v, t, s, f) -> F_forall(v, t, s, visit_formula f)
       | F_exists(v, t, s, f) -> F_exists(v, t, s, visit_formula f)
       | F_predicate(p, params) -> F_predicate(p, visit_list visit_expr params)
-      | F_free e -> F_free (visit_expr e)
       | F_in _ | F_bool _ -> f
 
     and visit_expr (e:expr with_range) =
       bind_range e @@ fun e ->
       match e with
-      | E_int _ | E_float _ | E_string _ | E_char _ | E_return -> e
+      | E_int _ | E_float _ | E_string _ | E_char _ | E_return | E_invalid -> e
       | E_var v ->
         begin match find_arg_expr v with
           | None -> e
@@ -93,6 +92,7 @@ struct
       | E_cast (t, e) -> E_cast(t, visit_expr e)
       | E_subscript (a, i) -> E_subscript(visit_expr a, visit_expr i)
       | E_member (s, f) -> E_member(visit_expr s, f)
+      | E_attribute (o, f) -> E_attribute(visit_expr o, f)
       | E_arrow (p, f) -> E_arrow(visit_expr p, f)
       | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
     in
@@ -114,7 +114,7 @@ let rec visit_formula f ctx : formula with_range =
   let range = get_range f in
   bind_range f @@ fun f ->
   match f with
-  | F_expr _ | F_bool _ | F_in (_, _) | F_free _ -> f
+  | F_expr _ | F_bool _ | F_in (_, _) -> f
 
   | F_predicate (p, params) ->
     let f = Context.inline p params ctx range in
@@ -143,42 +143,37 @@ let visit_ensures e ctx =
   bind_range e @@ fun e ->
   visit_formula e ctx
 
+let visit_leaf sec ctx =
+  match sec with
+  | S_local local       -> sec
+  | S_assumes assumes   -> S_assumes (visit_assumes assumes ctx)
+  | S_requires requires -> S_requires (visit_requires requires ctx)
+  | S_assigns assings   -> sec
+  | S_ensures ensures   -> S_ensures (visit_ensures ensures ctx)
+  | S_free free         -> sec
+
 let visit_case case ctx =
-  bind_range case @@ fun case ->
-  {
-    case with
-    case_assumes = visit_list visit_assumes case.case_assumes ctx;
-    case_requires = visit_list visit_requires case.case_requires ctx;
-    case_ensures = visit_list visit_ensures case.case_ensures ctx;
+  bind_range case @@ fun case -> {
+    case_label = case.case_label;
+    case_body = visit_list visit_leaf case.case_body ctx;
   }
 
-let rec doit (stub:stub with_range) : stub with_range =
-  bind_range stub @@ fun stub ->
-  match stub with
-  | S_simple s ->
-    let ctx = List.fold_left (fun ctx pred ->
-        update_context pred ctx
-      ) Context.empty s.simple_stub_predicates
-    in
-    let requires = visit_list visit_requires s.simple_stub_requires ctx in
-    let ensures = visit_list visit_requires s.simple_stub_ensures ctx in
-    S_simple {
-      s with
-      simple_stub_predicates = [];
-      simple_stub_requires = requires;
-      simple_stub_ensures = ensures;
-    }
+let build_context secs =
+  let ctx = Context.empty in
+  List.fold_left (fun ctx sec ->
+      match sec with
+      | S_predicate pred -> update_context pred ctx
+      | _ -> ctx
+    ) ctx secs
 
-  | S_case s ->
-    let ctx = List.fold_left (fun ctx pred ->
-        update_context pred ctx
-      ) Context.empty s.case_stub_predicates
-    in
-    let requires = visit_list visit_requires s.case_stub_requires ctx in
-    let cases = visit_list visit_case s.case_stub_cases ctx in
-    S_case {
-      case_stub_predicates = [];
-      case_stub_requires = requires;
-      case_stub_cases = cases;
-    }
+let visit_section sec ctx =
+  match sec with
+  | S_predicate _ -> sec
+  | S_leaf sec' -> S_leaf (visit_leaf sec' ctx)
+  | S_case case -> S_case (visit_case case ctx)
+
+let doit (stub:stub) : stub =
+  bind_range stub @@ fun secs ->
+  let ctx = build_context secs in
+  visit_list visit_section secs ctx
 

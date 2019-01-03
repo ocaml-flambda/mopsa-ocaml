@@ -16,15 +16,17 @@
 	"stubs.iterator",
 
         // C desugar
+        "c.desugar.low_level",
         "c.desugar.loops",
-        "c.desugar.aggregate",
-        "c.desugar.andor",
-        "c.desugar.stmt_expr",
         "c.desugar.record_copy",
 
         // C libraries
         "c.libs.mopsa",
-        "c.libs.c_stdlib",
+
+	// C stub resources
+	"c.resources.memory",
+	"c.resources.file",
+	"c.resources.common",
 
         // Memory model
         {
@@ -34,14 +36,16 @@
                     {
                         "stack": "c.memory.cells.expand",
                         "over" : {
-                            "iter" : [
-                                "c.memory.cells.cell_2_num",
-                                "c.machine_integers",
-                                "universal.numeric.values.intervals"
-                            ]
+                            "stack" : "c.memory.cells.cell_2_scalar",
+			    "over": {
+				"iter": [
+				    "c.memory.cells.pointer",
+                                    "c.machine_integers",
+                                    "universal.numeric.values.intervals"
+				]
+                            }
                         }
-                    },
-                    "c.memory.cells.pointer"
+                    }
                 ]
             }
         }

@@ -1,4 +1,4 @@
-open Framework.Essentials
+open Mopsa
 
 let debug fmt = ToolBox.debug "numerical" fmt
 (* let to_num_var uid v = *)
@@ -49,19 +49,19 @@ let meet_different_support
   in
   let u = ToolBox.fold (fun var abs ->
       man.exec
-        (mk_stmt (S_remove_var var) (mk_fresh_range ()))
+        (mk_remove_var var (mk_fresh_range ()))
         abs
     ) rmu u
   in
   let v = ToolBox.fold (fun var abs ->
     man.exec
-      (mk_stmt (S_remove_var var) (mk_fresh_range ()))
+      (mk_remove_var var (mk_fresh_range ()))
       abs
   ) rmv v
   in
   let v = ToolBox.fold (fun (var, var') abs ->
       man.exec
-        (mk_stmt (S_rename_var(var, var')) (mk_fresh_range ()))
+        (mk_rename_var var var' (mk_fresh_range ()))
         abs
     ) renaming v
   in
@@ -91,7 +91,7 @@ let join_different_support
      de mopsa *)
   let v = ToolBox.fold (fun (var, var') abs ->
       man.exec
-        (mk_stmt (S_rename_var(var, var')) (mk_fresh_range ()))
+        (mk_rename_var var var' (mk_fresh_range ()))
         abs
     ) renaming v
   in
@@ -154,7 +154,7 @@ let widening_different_support
      widening de mopsa *)
   let v = ToolBox.fold (fun (var, var') abs ->
       man.exec
-        (mk_stmt (S_rename_var(var, var')) (mk_fresh_range ()))
+        (mk_rename_var var var' (mk_fresh_range ()))
         abs
     ) renaming v
   in
@@ -259,20 +259,20 @@ let find_foldable_variables (man: ('a, 'b) man) vb (vl: string list) (abs: 'a fl
  *   List.filter (fun cl -> match cl with | p::q::r -> true | _ -> false) (cross lenv []) *)
 
 let fold_var range man (l : var list) (n : var) abs =
-  let abs' = man.exec (mk_stmt (S_fold(n, l)) (tag_range range "fold")) abs in
+  let abs' = man.exec (mk_fold_var n l (tag_range range "fold")) abs in
   abs'
 
 let fold range man (vb: StrVarBind.t) (l : string list) (n : string) abs =
   let v, vb = StrVarBind.get_var n vb in
   let vl, vb = StrVarBind.get_var_list l vb in
-  let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "fold")) abs in
+  let abs' = man.exec (mk_fold_var v vl (tag_range range "fold")) abs in
   abs', vb
 
 let fold_two_vb range man (vb: StrVarBind.t) (vb': StrVarBind.t) (l : string list) (n : string) abs =
   begin
     let v, vb' = StrVarBind.get_var n vb' in
     let vl, vb = StrVarBind.get_var_list l vb in
-    let abs' = man.exec (mk_stmt (S_fold(v, vl)) (tag_range range "fold")) abs in
+    let abs' = man.exec (mk_fold_var v vl (tag_range range "fold")) abs in
     abs', vb, vb'
   end
 
@@ -337,13 +337,13 @@ let env_leq (man: ('b, 'b) man) (u: 'b flow) (v: 'b flow)
   in
   let v = ToolBox.fold (fun var abs ->
       man.exec
-        (mk_stmt (S_remove_var var) (mk_fresh_range ()))
+        (mk_remove_var var (mk_fresh_range ()))
         abs
     ) rmv v
   in
   let v = ToolBox.fold (fun (var, var') abs ->
       man.exec
-        (mk_stmt (S_rename_var(var, var')) (mk_fresh_range ()))
+        (mk_rename_var var var' (mk_fresh_range ()))
         abs
     ) renaming v
   in
@@ -363,15 +363,15 @@ let env_leq_same_num (man: ('a, 'b) man) (flow: 'a flow)
   in
   let flow = ToolBox.fold (fun var abs ->
       man.exec
-        (mk_stmt (S_remove_var var) (mk_fresh_range ()))
+        (mk_remove_var var (mk_fresh_range ()))
         abs
     ) rmv flow
   in
   let flowu, flowv = ToolBox.fold (fun (var_v, var_u) (flowu, flowv) ->
-      let flowu = man.exec (mk_stmt (S_remove_var (var_v)) (mk_fresh_range ())) flowu in
-      let flowv = man.exec (mk_stmt (S_remove_var (var_u)) (mk_fresh_range ())) flowv in
+      let flowu = man.exec (mk_remove_var var_v (mk_fresh_range ())) flowu in
+      let flowv = man.exec (mk_remove_var var_u (mk_fresh_range ())) flowv in
       let flowv = man.exec
-          (mk_stmt (S_rename_var(var_v, var_u)) (mk_fresh_range ()))
+          (mk_rename_var var_v var_u (mk_fresh_range ()))
           flowv
       in
       (flowu, flowv)
@@ -401,11 +401,11 @@ let extend range (man: ('a, 'b) man) vb (s: string) (sl: string list) (abs: 'a f
       (v :: vl, vb)
     ) sl ([], vb)
   in
-  let abs = man.exec (mk_stmt (S_expand(v, vl)) (tag_range range "expand")) abs in
+  let abs = man.exec (mk_expand_var v vl (tag_range range "expand")) abs in
   (abs, vb)
 
 let extend_var range (man: ('a, 'b) man) (v: var) (vl: var list) (abs: 'a flow) =
-  man.exec (mk_stmt (S_expand(v, vl)) (tag_range range "expand")) abs
+  man.exec (mk_expand_var v vl (tag_range range "expand")) abs
 
 (* let extend_stmtl range vb (s: string) (list: string list) =
  *   let v, vb = StrVarBind.get_var s vb in
@@ -424,7 +424,7 @@ let renaming_list range (man: ('a, 'b) man) (vb: StrVarBind.t) (renamer: (string
     ) renamer ([], vb)
   in
   (ToolBox.fold (fun (v, v') abs ->
-      man.exec (mk_stmt (S_rename_var(v, v')) range) abs
+      man.exec (mk_rename_var v v' range) abs
     ) renamer abs, vb)
 
 
@@ -436,17 +436,17 @@ let renaming_list_diff_vb range (man: ('a, 'b) man) (vb: StrVarBind.t) (vb': Str
     ) renamer ([], vb, vb')
   in
   (ToolBox.fold (fun (v, v') abs ->
-      man.exec (mk_stmt (S_rename_var(v, v')) range) abs
+      man.exec (mk_rename_var v v' range) abs
     ) renamer abs, vb, vb')
 
 let renaming_list_var range (man: ('a, 'b) man) (renamer: (var * var) list) (abs: 'a flow) =
   (ToolBox.fold (fun (v, v') abs ->
-      man.exec (mk_stmt (S_rename_var(v, v')) range) abs
+      man.exec (mk_rename_var v v' range) abs
      ) renamer abs)
 
 let forget range (man: ('a, 'b) man) (vb: StrVarBind.t) (s: string) (abs: 'a flow) =
   let v, vb = StrVarBind.get_var s vb in
-  (man.exec (mk_stmt (S_remove_var v) range) abs, vb)
+  (man.exec (mk_remove_var v range) abs, vb)
 
   (* let vos = Apron.Var.of_string
    *

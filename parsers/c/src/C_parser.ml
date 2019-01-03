@@ -23,16 +23,16 @@ let parse_file
                filtered_opts
   in
 
-  let obj, diag, coms = Clang_parser.parse target_options file (Array.of_list opts) in
-
+  let obj, diag, coms, macros = Clang_parser.parse target_options file (Array.of_list opts) in
+  
   let is_error =
     List.exists
       (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false)
-      diag
+       diag
   in
 
   if not is_error then
-    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms
+    Clang_to_C.add_translation_unit ctx (Filename.basename file) obj coms macros
   else
     let errors =
       List.map

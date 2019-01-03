@@ -8,30 +8,9 @@
 
 (** Unit tests iterator. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
-
-(** Stateless annotations
-    =====================
-
-    The current test function being analyzed is stored in the annotations
-*)
-
-type ('a, _) Annotation.key +=
-  | A_cur_test: ('a, string) Annotation.key
-
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (string, b) eq option =
-              function
-              | A_cur_test -> Some Eq
-              | _ -> None
-            in
-            f);
-      print = (fun fmt f -> Format.fprintf fmt "Current test: %s" f);
-    }) ();
-  ()
 
 
 (* Command line options
@@ -73,22 +52,18 @@ let () =
 *)
 
 type token +=
-  | T_safe_assert of string (** name of test function *) * range (* location of the assert statement *)
+  | T_safe_assert of range (* location of the assert statement *)
 
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_safe_assert(f1, r1), T_safe_assert(f2, r2) ->
-          Compare.compose [
-            (fun () -> compare f1 f2);
-            (fun () -> compare_range r1 r2);
-          ]
+        | T_safe_assert(r1), T_safe_assert(r2) -> compare_range r1 r2
         | _ -> next tk1 tk2
       );
     print = (fun next fmt tk ->
         match tk with
-        | T_safe_assert(f, r) -> Format.fprintf fmt "safe@%s:%a" f pp_range r
+        | T_safe_assert(r) -> Format.fprintf fmt "safe@%a" pp_range r
         | _ -> next fmt tk
       );
   };
@@ -105,20 +80,18 @@ let () =
 *)
 
 type alarm_kind +=
-  | A_fail_assert of expr (** condition *)* string (** test function *)
-  | A_may_assert of expr (** condition *)* string (** test function *)
-  | A_panic_test of string (** panic message *) * string (** test function *)
+  | A_fail_assert of expr (** condition *)
+  | A_may_assert of expr (** condition *)
+  | A_panic_test of string (** panic message *) * string (* test function *)
 
 let () =
   register_alarm {
     compare = (fun next a1 a2 ->
         match a1.alarm_kind, a2.alarm_kind with
-        | A_fail_assert(c1, f1), A_fail_assert(c2, f2)
-        | A_may_assert(c1, f1), A_may_assert(c2, f2) ->
-          Compare.compose [
-            (fun () -> compare_expr c1 c2);
-            (fun () -> compare f1 f2)
-          ]
+        | A_fail_assert(c1), A_fail_assert(c2)
+        | A_may_assert(c1), A_may_assert(c2) ->
+          compare_expr c1 c2
+
         | A_panic_test(msg1, f1), A_panic_test(msg2, f2) ->
           Compare.compose [
             (fun () -> compare msg1 msg2);
@@ -128,23 +101,23 @@ let () =
       );
     pp_token = (fun next fmt a ->
         match a.alarm_kind with
-        | A_fail_assert (c, f) -> Format.fprintf fmt "fail@%s" f
-        | A_may_assert  (c, f) -> Format.fprintf fmt "may@%s" f
+        | A_fail_assert (c) -> Format.fprintf fmt "fail"
+        | A_may_assert  (c) -> Format.fprintf fmt "may"
         | A_panic_test (msg, f) -> Format.fprintf fmt "panic@%s" f
         | _ -> next fmt a
       );
     pp_title = (fun next fmt a ->
         match a.alarm_kind with
-        | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion fail"
-        | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion unproven"
+        | A_fail_assert(cond) -> Format.fprintf fmt "Assertion fail"
+        | A_may_assert(cond) -> Format.fprintf fmt "Assertion unproven"
         | A_panic_test(msg, f) -> Format.fprintf fmt "Panic"
         | _ -> next fmt a
       );
     pp_report = (fun next fmt a ->
         match a.alarm_kind with
-        | A_fail_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s fails" pp_expr cond f
-        | A_may_assert(cond, f) -> Format.fprintf fmt "Assertion %a in %s may fail" pp_expr cond f
-        | A_panic_test(msg, f) -> Format.fprintf fmt "Panic in %s: %s" f msg
+        | A_fail_assert(cond) -> Format.fprintf fmt "Condition %a fails" pp_expr cond
+        | A_may_assert(cond) -> Format.fprintf fmt "Condition %a may fail" pp_expr cond
+        | A_panic_test(msg, f) -> Format.fprintf fmt "%s: %s" f msg
         | _ -> next fmt a
       );
   };
@@ -203,18 +176,16 @@ struct
 
     | S_assert(cond) ->
       let range = srange stmt in
-      let name = try Flow.get_annot A_cur_test flow
-                 with Not_found -> Exceptions.panic "Impossible to get unittest annotations. Are you sure the format of unit tests is repected?@\n" in
-      let cs = Flow.get_annot Interproc.Callstack.A_call_stack flow in
+      let cs = Callstack.get flow in
       debug "Expression is %a" pp_expr cond;
       Post.assume
         cond
         ~fthen:(fun safe_flow ->
-            Flow.add (T_safe_assert (name, range)) (Flow.get T_cur man safe_flow) man safe_flow |>
+            Flow.add (T_safe_assert range) (Flow.get T_cur man safe_flow) man safe_flow |>
             Post.of_flow
         )
         ~felse:(fun fail_flow ->
-            let a = mk_alarm (A_fail_assert(cond, name)) range ~cs ~level:ERROR in
+            let a = mk_alarm (A_fail_assert cond) range ~cs ~level:ERROR in
             Flow.add
               (T_alarm a) (Flow.get T_cur man fail_flow)
               man fail_flow |>
@@ -222,7 +193,7 @@ struct
             Post.of_flow
         )
         ~fboth:(fun safe_flow fail_flow ->
-            let a = mk_alarm (A_may_assert(cond, name)) range ~cs ~level:WARNING in
+            let a = mk_alarm (A_may_assert cond) range ~cs ~level:WARNING in
             let flow = Flow.join man safe_flow fail_flow in
             Flow.add
               (T_alarm a) (Flow.get T_cur man flow)
@@ -231,7 +202,7 @@ struct
             Post.of_flow
           )
         ~fnone:(fun flow ->
-            let a = mk_alarm (A_fail_assert(cond, name)) range ~cs ~level:ERROR in
+            let a = mk_alarm (A_fail_assert cond) range ~cs ~level:ERROR in
             Flow.add
               (T_alarm a) man.top
               man flow |>
@@ -243,7 +214,6 @@ struct
 
     | S_simple_assert(cond, b1, b2) ->
       let range = srange stmt in
-      let name = Flow.get_annot A_cur_test flow in
 
       let cond' = if b2 then cond else mk_not cond (tag_range cond.erange "neg") in
 
@@ -257,10 +227,10 @@ struct
 
       let nflow =
         if b = b1 then
-          Flow.add (T_safe_assert (name,range)) cur man flow
+          Flow.add (T_safe_assert range) cur man flow
         else
-          let cs = Flow.get_annot Interproc.Callstack.A_call_stack flow in
-          let a = mk_alarm (A_fail_assert(cond, name)) range ~cs ~level:ERROR in
+          let cs = Callstack.get flow in
+          let a = mk_alarm (A_fail_assert cond) range ~cs ~level:ERROR in
           Flow.add (T_alarm a) cur man flow
       in
       Post.of_flow nflow |>
@@ -281,7 +251,6 @@ struct
     |>
     List.fold_left (fun (acc, nb_ok, nb_fail, nb_may_fail, nb_panic) (name, test) ->
         debug "Executing %s" name;
-        let flow = Flow.set_annot A_cur_test name flow in
         try
           (* Call the function *)
           let flow1 = man.exec test flow in

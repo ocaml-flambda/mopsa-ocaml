@@ -13,7 +13,7 @@
    recent and old allocations.
 *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Ast
 open Ast
 
@@ -23,22 +23,26 @@ let get_fresh () =
   let () = incr uid_ref in
   rep
 
+let recent_flag = 0
+let old_flag = 1
+
 module AddrInfo = struct
-  open Iterators.Interproc.Callstack
-  type t = cs * range * int
+  type t = Callstack.t * range * int
+
   (** The following compare function can be modified in order to
      change the granularity of the recency abstraction. *)
-  let compare (cs, r, i) (cs', r', i') = Compare.compose
+  let compare (cs, r, f) (cs', r', f') =
+    Compare.compose
       [
-        (fun () -> compare_call_stack cs cs');
+        (fun () -> Callstack.compare_call_stack cs cs');
         (fun () -> compare_range r r');
-        (fun () -> (-) i i')
+        (fun () -> (-) f f')
       ]
-  let print fmt (cs, r, i) =
+  let print fmt (cs, r, f) =
     Format.fprintf fmt "(%a, %a, %a)"
-      pp_call_stack cs
+      Callstack.pp_call_stack cs
       pp_range r
-      Format.pp_print_int i
+      Format.pp_print_int f
 end
 
 module AddrUid =
@@ -78,69 +82,25 @@ let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
   let x, e = get_id_equiv info e in
   (x, Flow.set_annot KAddr e f)
 
+let get_addr_flag addr flow =
+  let e = Flow.get_annot KAddr flow in
+  try
+    let _, _, g = Equiv.find_r addr.addr_uid e in
+    g
+  with Not_found ->
+    Exceptions.panic "get_addr_flag: %a not found" pp_addr addr
 
-module AddrSet = Framework.Lattices.Powerset.Make(
+let is_recent addr flow =
+  get_addr_flag addr flow == recent_flag
+
+let is_old addr flow =
+  get_addr_flag addr flow == old_flag
+
+
+include Framework.Lattices.Powerset.Make(
   struct
     type t = addr
     let compare = compare_addr
     let print = pp_addr
   end
   )
-
-
-type t = {
-  recent : AddrSet.t;
-  old : AddrSet.t;
-}
-
-
-(** For a given range and a given address kind, we distinguish the old
-    and recent addresses with a fixed encoding.  *)
-
-let empty = {
-  recent = AddrSet.empty;
-  old = AddrSet.empty;
-}
-
-let bottom = {
-  recent = AddrSet.bottom;
-  old = AddrSet.bottom;
-}
-
-let is_bottom _ = false
-
-let top = {
-  recent = AddrSet.top;
-  old = AddrSet.top;
-}
-
-let is_top abs = AddrSet.is_top abs.recent && AddrSet.is_top abs.old
-
-let subset abs1 abs2 =
-  AddrSet.subset abs1.recent abs2.recent &&
-   AddrSet.subset abs1.old abs2.old
-
-
-let mem_old addr abs = AddrSet.mem addr abs.old
-let mem_recent addr abs = AddrSet.mem addr abs.recent
-
-let add_old (addr: addr) (abs: t) : t = {abs with old = AddrSet.add addr abs.old}
-let add_recent (addr: addr) (abs: t) : t = {abs with recent =AddrSet.add addr abs.recent}
-
-
-let join (annot: 'a annot) abs1 abs2 = {
-  recent = AddrSet.join annot abs1.recent abs2.recent;
-  old = AddrSet.join annot abs1.old abs2.old;
-}
-
-let meet (annot: 'a annot) abs1 abs2 = {
-  recent = AddrSet.meet annot abs1.recent abs2.recent;
-  old = AddrSet.meet annot abs1.old abs2.old;
-}
-
-let widen = join
-
-let print fmt abs =
-  Format.fprintf fmt "recent: @[%a@]@\nold: @[%a@]@\n"
-    AddrSet.print abs.recent
-    AddrSet.print abs.old

@@ -162,6 +162,9 @@ define generate_pack_flags =
  PACK_DEPS_$$(CMX_$(1)) = $$(patsubst %,$$(BUILD)/$(1)/%.cmx,$$(PACK_MODULES_$(1)))
  PACK_DEPS_$$(CMO_$(1)) = $$(patsubst %,$$(BUILD)/$(1)/%.cmo,$$(PACK_MODULES_$(1)))
 
+ PACK_DIR_$$(CMX_$(1)) = $$(SRC)/$(1)
+ PACK_DIR_$$(CMO_$(1)) = $$(SRC)/$(1)
+
  PARENT_PACK_$(1) = $$(patsubst /%,%,$$(patsubst $$(SRC)%,%,$$(shell realpath --relative-to=. $$(SRC)/$(1)/..)))
  OCAMLFLAGS_$$(CMX_$(1)) = \
 	$$(PACK_DEPS_$$(CMX_$(1))) \

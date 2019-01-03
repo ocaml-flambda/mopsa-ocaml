@@ -8,8 +8,7 @@
 
 (** Inliner of imported packages. *)
 
-open Framework.Essentials
-open Framework.Ast
+open Mopsa
 open Universal.Ast
 open Ast
 

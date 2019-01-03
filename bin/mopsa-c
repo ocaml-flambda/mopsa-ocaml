@@ -1,10 +1,10 @@
 #!/bin/bash
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-
 STUBSDIR=${MOPSADIR}/analyzer/stubs/c
 
-CONFIG=-config=${MOPSADIR}/analyzer/configs/c.json
-STUBS=${STUBSDIR}/libc/string.c
-INCLUDES=-I=${STUBSDIR}/mopsa
+CONFIG=${MOPSADIR}/analyzer/configs/c.json
 
-${MOPSADIR}/bin/mopsa -lang=c ${CONFIG} ${INCLUDES} ${STUBS} $@
+FLAGS=-I=${STUBSDIR}/mopsa
+STUBS=
+
+${MOPSADIR}/bin/mopsa -lang=c -config=${CONFIG} ${FLAGS} ${STUBS} $@

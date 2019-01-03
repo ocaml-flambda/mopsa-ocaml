@@ -19,6 +19,11 @@ let print json out =
   in
   to_channel channel json
 
+let range_to_string range =
+  let file = Location.get_range_file range in
+  let line = Location.get_range_line range in
+  file ^ ":" ^ (string_of_int line)
+
 let render man alarms time files out =
   let json : json = `Assoc [
       "success", `Bool true;
@@ -29,15 +34,10 @@ let render man alarms time files out =
             let () = Alarm.pp_alarm_title Format.str_formatter alarm in
             Format.flush_str_formatter ()
           in
-          let trace = alarm.Alarm.alarm_trace in
+          let range, cs = alarm.Alarm.alarm_trace in
           `Assoc [
             "title", `String title;
-            "trace", `List (List.map (fun range ->
-                let file = Location.get_range_file range in
-                let line = Location.get_range_line range in
-                let r = file ^ ":" ^ (string_of_int line) in
-                `String r
-              ) trace)
+            "range", `String (range_to_string range);
           ]
         ) alarms);
     ]
@@ -46,10 +46,19 @@ let render man alarms time files out =
 
 
 let panic ?(btrace="<none>") exn files out =
+  let open Exceptions in
+  let error =
+    match exn with
+    | Panic msg -> msg
+    | PanicAt (range, msg) -> msg
+    | SyntaxError(range, msg) -> msg
+    | SyntaxErrorList l -> String.concat ", " (List.map snd l)
+    |  _ -> Printexc.to_string exn
+  in
   let json : json = `Assoc [
       "success", `Bool false;
       "files", `List (List.map (fun f -> `String f) files);
-      "exception", `String (Printexc.to_string exn);
+      "exception", `String error;
       "backtrace", `String btrace;
     ]
   in

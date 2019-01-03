@@ -100,13 +100,14 @@ struct
         else
           fprintf fmt "@[<v>%a@]"
             (pp_print_list
-               ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+               ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
                (fun fmt (k, v) ->
-                  fprintf fmt "%a ⇀ @[ %a@]" Key.print k Value.print v
+                  fprintf fmt "%a ⇀ @[<h2> %a@]" Key.print k Value.print v
                )
             ) (Map.bindings m)
       ) fmt a
   (** Printing. *)
+
   let find  (k: Key.t) (a: t) =
     try begin
       let m = top_to_exn a in

@@ -1,8 +1,8 @@
-open Framework.Essentials
+open Mopsa
 open Ast
-open Universal.Ast
 open MapExt
 open Addr
+open Universal.Ast
 (* au moins gérer les strings *)
 
 module Domain =
@@ -26,7 +26,7 @@ module Domain =
     let is_str_binop_fun = function
       | "str.__add__"
         | "str.__mod__"
-        | "str.__mul__"
+        (* | "str.__mul__" *)
         | "str.__rmod__"
         | "str.__rmul__" -> true
       | _ -> false

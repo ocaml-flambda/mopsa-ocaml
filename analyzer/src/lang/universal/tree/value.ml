@@ -1,4 +1,4 @@
-open Framework.Essentials
+open Mopsa
 open Numerical
 
 module Uid =
@@ -36,7 +36,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         size    : var;
       }
 
-    let fresh_var = mk_tmp ~vtyp:Ast.T_int
+    let fresh_var = mktmp Ast.T_int
 
     let holify_sigma_algebra (sa: TA.sigma_algebra) =
       if SA.mem_symbol hole_tree sa then
@@ -618,8 +618,8 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         end
 
     let same_height_and_size (man) u u_num v v_num =
-      u_num, man.exec (mk_rename v.height u.height (mk_fresh_range ())) v_num
-      |> man.exec (mk_rename v.size u.size (mk_fresh_range ()))
+      u_num, man.exec (mk_rename_var v.height u.height (mk_fresh_range ())) v_num
+      |> man.exec (mk_rename_var v.size u.size (mk_fresh_range ()))
 
     let same_height_and_size_one_num man u v num =
       Numerical.fold_var (mk_fresh_range ()) man [u.height; v.height] u.height num
@@ -1405,10 +1405,10 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
     let remove_all_nums range man (u: t) flow =
       let u = u |> vb_sanitize in
       StrVarBind.fold (fun (_, v) flow ->
-          man.exec (mk_stmt (S_remove_var v) range) flow
+          man.exec (mk_remove_var v range) flow
         ) u.varbind flow |>
-        man.exec (mk_stmt (S_remove_var u.size) range) |>
-        man.exec (mk_stmt (S_remove_var u.height) range)
+        man.exec (mk_remove_var u.size range) |>
+        man.exec (mk_remove_var u.height range)
 
     let sons range man (u: t) flow j =
       let head_shape = TA.head u.shape in

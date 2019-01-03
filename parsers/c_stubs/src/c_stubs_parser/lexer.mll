@@ -22,6 +22,7 @@ let _ =
      (* Constants *)
      "true",     TRUE;
      "false",    FALSE;
+     "INVALID",  INVALID;
 
      (* Sections *)
      "requires", REQUIRES;
@@ -58,17 +59,33 @@ let _ =
 
 
      (* Built-ins *)
-     "old",     OLD;
+     "primed", PRIMED;  
      "size",   SIZE;
+     "sizeof",   SIZEOF;
      "offset", OFFSET;
      "base", BASE;
      "new", NEW;
      "free", FREE;
      "return", RETURN;
+     "ptr_valid", PTR_VALID;
+     "valid", PTR_VALID; (* shortcut to ptr_valid *)
      "float_valid", FLOAT_VALID;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
+
+     (* Deprecated *)
+     "old", OLD;
    ]
+
+   let char_for_backslash = function
+       | 'n' -> '\010'
+       | 'r' -> '\013'
+       | 'b' -> '\008'
+       | 't' -> '\009'
+       | c   -> c
+
+   let decimal_code  c d u =
+       100 * (Char.code c - 48) + 10 * (Char.code d - 48) + (Char.code u - 48)
 
 }
 
@@ -99,6 +116,23 @@ rule read =
   | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
   | float    { FLOAT_CONST ((*Format.printf "float %s@\n" (Lexing.lexeme lexbuf);*) float_of_string (Lexing.lexeme lexbuf)) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
+
+  (* Char lexer inspired from https://github.com/let-def/ocamllex/blob/master/lexer.mll *)
+  | "'" [^ '\\'] "'"
+    { CHAR_CONST (Char.code(Lexing.lexeme_char lexbuf 1)) }
+  
+  | "'" '\\' ['\\' '\'' '"' 'n' 't' 'b' 'r' ' '] "'"
+    { CHAR_CONST (Char.code(char_for_backslash (Lexing.lexeme_char lexbuf 2))) }
+
+  | "'" '\\' (['0'-'9'] as c) (['0'-'9'] as d) (['0'-'9'] as u) "'"
+    { let v = decimal_code c d u in
+      if v > 255 then
+         raise (SyntaxError ("Illegal escape sequence " ^ Lexing.lexeme lexbuf))
+      else
+        CHAR_CONST v
+    }
+
+  | "'"      { PRIME }
 
   | id as x  { try Hashtbl.find keywords x with Not_found -> IDENT x }
 
@@ -136,7 +170,7 @@ rule read =
 
   | "="    { ASSIGN }
 
-  | "{*"   { read_comment lexbuf; read lexbuf }
+  | "//"   { read_comment lexbuf; read lexbuf }
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
@@ -168,9 +202,8 @@ and read_string buf =
 
 and read_comment = 
   parse
-  | "*}"          { () }
   | [^ '\n' '\r'] { read_comment lexbuf }
-  | newline       { new_line lexbuf; read_comment lexbuf }
+  | newline       { new_line lexbuf; () }
   | _ { raise (SyntaxError ("Illegal string character #2: " ^ Lexing.lexeme lexbuf)) }
 
 and ignore_block_comment = 
@@ -179,4 +212,3 @@ and ignore_block_comment =
   | [^ '\n' '\r'] { ignore_block_comment lexbuf }
   | newline       { new_line lexbuf; ignore_block_comment lexbuf }
   | _ { raise (SyntaxError ("Illegal string character #3: " ^ Lexing.lexeme lexbuf)) }
-

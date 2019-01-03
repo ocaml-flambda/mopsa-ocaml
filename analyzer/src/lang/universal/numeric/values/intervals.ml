@@ -8,7 +8,7 @@
 
 (** Interval abstraction of integer values. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Value
 open Ast
 open Bot
@@ -71,6 +71,11 @@ struct
        (bot_absorb1 FI.to_int_itv) (FI.of_float_bot f f)
       
     | _ -> top
+
+  let zero = Nb (I.zero)
+  let one = Nb (I.one)
+  let of_z z1 z2 : t = Nb (I.of_z z1 z2)
+  let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
   let unop _ op a =
     return (
@@ -248,6 +253,9 @@ struct
         let i = Finite i in
         geq i a && leq i b
       ) itv
+
+  let compare_interval itv1 itv2 =
+    bot_compare (I.compare) itv1 itv2
 end
 
 

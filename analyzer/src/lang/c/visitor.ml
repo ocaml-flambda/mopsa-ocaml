@@ -1,5 +1,4 @@
-open Framework.Ast
-open Framework.Visitor
+open Mopsa
 open Ast
 
 
@@ -65,13 +64,6 @@ let () =
       | E_c_function(f) -> leaf exp
 
       | E_c_builtin_function f -> leaf exp
-
-      | E_c_call(f, args) ->
-        {exprs = f :: args; stmts = []},
-        (function
-          | {exprs = f :: args} -> {exp with ekind = E_c_call(f, args)}
-          | _ -> assert false
-        )
 
       | E_c_builtin_call(f, args) ->
         {exprs = args; stmts = []},

@@ -19,7 +19,7 @@ open Javalib_pack
 open Javalib
 open JBasics
 open JCode
-open Framework.Essentials
+open Mopsa
 open Cfg.Ast
 open Ast
 open Bot

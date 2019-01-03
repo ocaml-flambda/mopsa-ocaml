@@ -9,11 +9,11 @@
 (** Python data model for comparison operators. *)
 
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
 open Operators
+open Universal.Ast
 
 
 module Domain = struct

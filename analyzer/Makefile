@@ -1,12 +1,12 @@
 TARGET_NATIVES = mopsa
 
 # Packs
-mopsa = framework lang main
+mopsa = framework mopsa lang main
 
 framework = ast visitor options query annotation	\
-lattice zone manager flow eval post channel value domain output cache	\
-analyzer lattices essentials domains config
-framework.output = alarm text json factory html
+lattice zone manager flow eval post channel value domain callstack alarm output cache	\
+analyzer lattices domains config
+framework.output = text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
 reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
@@ -14,12 +14,12 @@ framework.domains.reduced_product.products = value_product domain_product
 
 lang = universal stubs c python cfg jvm
 
-lang.universal = ast pp visitor frontend utils zone u_stdlib router	\
+lang.universal = ast frontend zone u_stdlib 	\
 iterators heap numeric strings tree # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
-lang.universal.iterators.interproc = callstack inlining
+lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
-lang.universal.numeric = rounding values relational relational2	\
+lang.universal.numeric = rounding values relational \
 reductions
 lang.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix
@@ -32,20 +32,23 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar libs iterators memory
+lang.c = ast pp visitor zone frontend alarms desugar mm libs iterators resources
 lang.c.iterators = program switch goto interproc
-lang.c.desugar = loops andor aggregate record_copy stmt_expr
-lang.c.memory = base init_visitor cells machine_integers
-lang.c.memory.cells = cell pointer smashing expand cell2num
-lang.c.libs = c_stdlib mopsa
+lang.c.desugar = low_level record_copy loops
+lang.c.mm = common cells pointers machine_integers
+lang.c.mm.common = base points_to init_visitor
+lang.c.mm.cells = cell expand cell2scalar
+lang.c.mm.pointers = bases nonrel
+lang.c.libs = c_mopsa
+lang.c.resources = common file memory
+lang.c.resources.file = slot table domain
 
 # lang.python = ast addr utils visitor operators pp frontend
 lang.python = ast addr utils visitor operators pp frontend zone		\
-alarms flows libs desugar objects data_model types program memory
+alarms  libs desugar objects data_model types flows program
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typingdomain typing t_string t_int t_float t_list t_set
-lang.python.memory = value_dispatcher addr_env py_string py_int py_float
 
 lang.cfg = ast pp visitor frontend iterator iterators
 lang.cfg.iterators = intraproc inlining

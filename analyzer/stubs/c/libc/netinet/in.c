@@ -52,7 +52,7 @@ uint16_t htons (uint16_t __hostshort);
  * case "success":
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */
@@ -69,7 +69,7 @@ int bindresvport (int __sockfd, struct sockaddr_in *__sock_in);
  * case "success":
  *   ensures: return == 0;
  *
- * case "error":
+ * case "failure":
  *   assigns: _errno;
  *   ensures: return == -1;
  */

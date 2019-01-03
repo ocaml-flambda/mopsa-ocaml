@@ -8,11 +8,8 @@
 
 (** AST of the C language. *)
 
-open Framework
-open Framework.Ast
-open Framework.Visitor
+open Mopsa
 open Universal.Ast
-open Framework.Essentials
 
 (*==========================================================================*)
                            (** {2 Types} *)
@@ -197,7 +194,7 @@ type c_fundec = {
   mutable c_func_body: stmt option; (** function body *)
   mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
   mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
-  mutable c_func_stub : Stubs.Ast.stub with_range option; (** stub specification of the function *)
+  mutable c_func_stub : Stubs.Ast.stub option; (** stub specification of the function *)
   c_func_variadic: bool; (** whether the function has a variable number of arguments *)
 }
 (** Function descriptor. *)
@@ -215,8 +212,6 @@ type expr_kind +=
   | E_c_function of c_fundec
 
   | E_c_builtin_function of string
-
-  | E_c_call of expr (** target *) * expr list (** arguments *)
 
   | E_c_builtin_call of string * expr list
 
@@ -471,7 +466,7 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
 let rec sizeof_type (t : typ) : Z.t =
-  let get_target () = 
+  let get_target () =
     Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
   in
   match t with
@@ -718,8 +713,11 @@ let mk_c_subscript_access a i range =
 let mk_c_character c range =
   mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
 
+let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
+let s32 = T_c_integer(C_signed_int)
+let ul = T_c_integer(C_unsigned_long)
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
@@ -733,14 +731,18 @@ let mk_c_call f args range =
     c_ftype_variadic = f.c_func_variadic;
   }
   in
-  mk_expr (E_c_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
+  mk_expr (E_call (mk_expr (E_c_function f) range ~etyp:(T_c_function (Some ftype)), args)) range ~etyp:(f.c_func_return)
 
 let mk_c_call_stmt f args range =
-  let exp = mk_c_call f args (tag_range range "call") in
+  let exp = mk_c_call f args range in
   mk_stmt (S_expression exp) range
 
 let mk_c_cast e t range =
   mk_expr (E_c_cast(e, true)) ~etyp:t range
+
+let mk_c_null range =
+  mk_c_cast (mk_zero ~typ:u8 range) (pointer_type void) range
+
 
 let () =
   register_typ_compare (fun next t1 t2 ->
@@ -816,3 +818,8 @@ let range_cond e_mint rmin rmax range =
    etyp = T_bool;
    erange = tag_range range "wrap_full"
   }
+
+let rec remove_casts e =
+  match ekind e with
+  | E_c_cast (e', _) -> remove_casts e'
+  | _ -> e

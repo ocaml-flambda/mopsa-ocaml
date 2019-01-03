@@ -1,11 +1,9 @@
-#include "mopsa.h"
-
 /* Test assignment on an integer scalar */
 /* ************************************* */
 
 /*$
  * assigns: *p;
- * ensures: *p == v;
+ * ensures: (*p)' == v;
  */
 void set(int*p, int v) {}
 
@@ -16,17 +14,32 @@ void test_assign_int() {
   _mopsa_assert(x == 10);
 }
 
+/* Test assignment on an char */
+/* ************************** */
+
+/*$
+ * assigns: *p;
+ * ensures: (*p)' == 'a';
+ */
+void set_to_a(char*p) {}
+
+void test_assign_char() {
+  char x;
+  set_to_a(&x);
+  _mopsa_assert(x == 'a');
+}
+
 
 /* Test assignment on an integer scalar with a relation */
 /* **************************************************** */
 
 /*$
  * assigns: *p;
- * ensures: *p == old(*p) + s;
+ * ensures: (*p)' == *p + s;
  */
 void incr(int*p, int s) {}
 
-void test_assign_int_with_old() {
+void test_assign_int_with_relation() {
   int x = 1;
 
   incr(&x, 10);
@@ -39,11 +52,11 @@ void test_assign_int_with_old() {
 
 /*$
  * assigns: *p;
- * ensures: *p == old(*p) + s;
+ * ensures: (*p)' == *p + s;
  */
 void advance(int**p, int s) {}
 
-void test_assign_ptr_with_old() {
+void test_assign_ptr() {
   int a [5] = {0, 1, 2, 3, 4};
   int *p = a;
 
@@ -56,10 +69,9 @@ void test_assign_ptr_with_old() {
 /* ******************************* */
 
 /*$
- * requires: p != q;
  * assigns: *p;
  * assigns: *q;
- * ensures: *p == old(*q) and *q == old(*p);
+ * ensures: (*p)' == *q and (*q)' == *p;
  */
 void swap(int*p, int*q) {}
 

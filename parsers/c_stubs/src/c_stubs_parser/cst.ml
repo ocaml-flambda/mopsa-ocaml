@@ -6,30 +6,41 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Concrete syntax trees for C stubs *)
+(** Concrete syntax tree for C stubs *)
 
 open Location
 
-type stub =
-  | S_simple of simple_stub
-  | S_case of case_stub
+type stub = section list with_range
 
-and simple_stub = {
-  simple_stub_predicates : predicate with_range list;
-  simple_stub_requires   : requires with_range list;
-  simple_stub_assigns    : assigns with_range list;
-  simple_stub_local      : local with_range list;
-  simple_stub_ensures    : ensures with_range list;
+(** {2 Stub sections} *)
+(** ***************** *)
+
+and section =
+  | S_predicate of predicate with_range
+  | S_case      of case with_range
+  | S_leaf      of leaf
+
+and leaf =
+  | S_local     of local with_range
+  | S_assumes   of assumes with_range
+  | S_requires  of requires with_range
+  | S_assigns   of assigns with_range
+  | S_ensures   of ensures with_range
+  | S_free      of free with_range
+
+and case = {
+  case_label     : string;
+  case_body      : leaf list;
 }
 
-and case_stub = {
-  case_stub_predicates : predicate with_range list;
-  case_stub_requires   : requires with_range list;
-  case_stub_cases      : case with_range list;
-}
+
+(** {2 Stub leaf sections} *)
+(** ********************** *)
 
 and requires = formula with_range
+
 and ensures = formula with_range
+
 and assumes = formula with_range
 
 and local = {
@@ -44,17 +55,19 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) option;
+  assign_offset : (expr with_range * expr with_range) list option;
 }
 
-and case = {
-  case_label: string;
-  case_assumes: assumes with_range list;
-  case_requires : requires with_range list;
-  case_assigns  : assigns with_range list;
-  case_local    : local with_range list;
-  case_ensures  : ensures with_range list;
+and free = expr with_range
+
+and predicate = {
+  predicate_var  : var;
+  predicate_args : var list;
+  predicate_body : formula with_range;
 }
+
+(** {2 Formulas} *)
+(** ************ *)
 
 and formula =
   | F_expr      of expr with_range
@@ -63,15 +76,20 @@ and formula =
   | F_not       of formula with_range
   | F_forall    of var * c_qual_typ * set * formula with_range
   | F_exists    of var * c_qual_typ * set * formula with_range
-  | F_in        of var * set
-  | F_free      of expr with_range
+  | F_in        of expr with_range * set
   | F_predicate of var * expr with_range list
+
+
+
+(** {2 Expressions} *)
+(** *************** *)
 
 and expr =
   | E_int       of Z.t
   | E_float     of float
   | E_string    of string
-  | E_char      of char
+  | E_char      of int
+  | E_invalid
 
   | E_var       of var
 
@@ -84,41 +102,12 @@ and expr =
 
   | E_subscript of expr with_range * expr with_range
   | E_member    of expr with_range * string
+  | E_attribute of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin with_range * expr with_range
+  | E_builtin_call  of builtin * expr with_range
 
   | E_return
-
-and c_qual_typ = c_typ * bool (** is const ? *)
-
-and c_typ =
-  | T_void
-  | T_char
-  | T_signed_char | T_unsigned_char
-  | T_signed_short | T_unsigned_short
-  | T_signed_int | T_unsigned_int
-  | T_signed_long | T_unsigned_long
-  | T_signed_long_long | T_unsigned_long_long
-  | T_signed_int128 | T_unsigned_int128
-  | T_float | T_double | T_long_double
-  | T_array of c_qual_typ * array_length
-  | T_struct of var
-  | T_union of var
-  | T_typedef of var
-  | T_pointer of c_qual_typ
-  | T_enum of var
-  | T_unknown
-
-and array_length =
-  | A_no_length
-  | A_constant_length of Z.t
-
-and predicate = {
-  predicate_var  : var;
-  predicate_args : var list;
-  predicate_body : formula with_range;
-}
 
 and log_binop =
   | AND
@@ -166,18 +155,51 @@ and var = {
 }
 
 and builtin =
-  | OLD
+  | PRIMED
   | SIZE
+  | SIZEOF
   | OFFSET
   | BASE
+  | PTR_VALID
   | FLOAT_VALID
   | FLOAT_INF
   | FLOAT_NAN
+  (* Deprecated *)
+  | OLD
+
+
+(** {2 Types} *)
+(*  ********* *)
+
+
+and c_qual_typ = c_typ * bool (** is const ? *)
+
+and c_typ =
+  | T_void
+  | T_char
+  | T_signed_char | T_unsigned_char
+  | T_signed_short | T_unsigned_short
+  | T_signed_int | T_unsigned_int
+  | T_signed_long | T_unsigned_long
+  | T_signed_long_long | T_unsigned_long_long
+  | T_signed_int128 | T_unsigned_int128
+  | T_float | T_double | T_long_double
+  | T_array of c_qual_typ * array_length
+  | T_struct of var
+  | T_union of var
+  | T_typedef of var
+  | T_pointer of c_qual_typ
+  | T_enum of var
+  | T_unknown
+
+and array_length =
+  | A_no_length
+  | A_constant_length of Z.t
 
 
 
 (** {2 Utility functions} *)
-(** ************************ *)
+(** ********************* *)
 
 let compare_var v1 v2 =
   Compare.compose [
@@ -185,10 +207,13 @@ let compare_var v1 v2 =
     (fun () -> compare v1.vuid v2.vuid);
   ]
 
+let compare_resource (r1:resource) (r2:resource) = compare r1 r2
+
 let no_qual t = t, false
 
-(** {2 Pretty printer} *)
-(** ****************** *)
+
+(** {2 Pretty printers} *)
+(** ******************* *)
 
 open Format
 
@@ -199,17 +224,17 @@ let pp_resource fmt resource = pp_print_string fmt resource
 let pp_builtin fmt f =
   match f with
   | SIZE   -> pp_print_string fmt "size"
+  | SIZEOF  -> pp_print_string fmt "sizeof"
   | OFFSET -> pp_print_string fmt "offset"
   | BASE   -> pp_print_string fmt "base"
-  | OLD    -> pp_print_string fmt "old"
+  | PRIMED -> pp_print_string fmt "primed"
+  | PTR_VALID -> pp_print_string fmt "ptr_valid"
   | FLOAT_VALID -> pp_print_string fmt "float_valid"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
+  | OLD    -> pp_print_string fmt "old"
 
-let pp_list pp ~is_first sep fmt l =
-  if not is_first then
-    fprintf fmt sep
-  ;
+let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
 
 let rec pp_expr fmt exp =
@@ -217,7 +242,11 @@ let rec pp_expr fmt exp =
   | E_int n -> Z.pp_print fmt n
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
-  | E_char c -> fprintf fmt "'%c'" c
+  | E_char c ->
+    if c >= 32 && c < 127
+    then fprintf fmt "'%c'" (Char.chr c)
+    else fprintf fmt "%d" c
+  | E_invalid -> fprintf fmt "INVALID"
   | E_var v -> pp_var fmt v
   | E_unop (op, e) -> fprintf fmt "%a %a" pp_unop op pp_expr e
   | E_binop (op, e1, e2) -> fprintf fmt "%a %a %a" pp_expr e1 pp_binop op pp_expr e2
@@ -226,8 +255,9 @@ let rec pp_expr fmt exp =
   | E_cast(t, e) -> fprintf fmt "(%a) %a" pp_c_qual_typ t pp_expr e
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
+  | E_attribute(s, f) -> fprintf fmt "%a:%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f.content pp_expr arg
+  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
   | E_return -> pp_print_string fmt "return"
 
 and pp_unop fmt =
@@ -301,9 +331,8 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, t, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
-  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., " ~is_first:true) params
-  | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_var x pp_set set
-  | F_free e -> fprintf fmt "free(%a)" pp_expr e
+  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., ") params
+  | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
 
 and pp_log_binop fmt =
   function
@@ -321,7 +350,6 @@ let pp_opt pp fmt o =
   | None -> ()
   | Some x -> pp fmt x
 
-
 let rec pp_local fmt local =
   let local = get_content local in
   fprintf fmt "local    : %a %a = @[%a@];"
@@ -332,13 +360,13 @@ let rec pp_local fmt local =
 and pp_local_value fmt v =
   match v with
   | L_new resource -> fprintf fmt "new %a" pp_resource resource
-  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", "  ~is_first:true) args
+  | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", ") args
 
 
 let pp_predicate fmt (predicate:predicate with_range) =
   fprintf fmt "predicate %a(%a): @[%a@];"
     pp_var predicate.content.predicate_var
-    (pp_list pp_var ", "  ~is_first:true) predicate.content.predicate_args
+    (pp_list pp_var ", ") predicate.content.predicate_args
     pp_formula predicate.content.predicate_body
 
 let pp_requires fmt requires =
@@ -347,11 +375,14 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_opt (fun fmt (l, u) ->
-         fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+    (pp_opt (fun fmt l ->
+         (pp_print_list ~pp_sep:(fun fmt () -> ())
+            (fun fmt (l, u) ->
+               fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
+            )
+         ) fmt l
        )
     ) assigns.content.assign_offset
-
 
 let pp_assumes fmt (assumes:assumes with_range) =
   fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
@@ -359,61 +390,33 @@ let pp_assumes fmt (assumes:assumes with_range) =
 let pp_ensures fmt ensures =
   fprintf fmt "ensures  : @[%a@];" pp_formula ensures.content
 
+let pp_free fmt free =
+  fprintf fmt "free : %a;" pp_expr free.content
+
+let pp_leaf fmt sec =
+  match sec with
+  | S_local local -> pp_local fmt local
+  | S_assumes assumes -> pp_assumes fmt assumes
+  | S_requires requires -> pp_requires fmt requires
+  | S_assigns assigns -> pp_assigns fmt assigns
+  | S_ensures ensures -> pp_ensures fmt ensures
+  | S_free free -> pp_free fmt free
+
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[%a%a%a%a%a@]"
-    case.content.case_label
-    (pp_list pp_assumes "@\n" ~is_first:true) case.content.case_assumes
-    (pp_list pp_local "@\n" ~is_first:
-       (List.length case.content.case_assumes == 0)
-    ) case.content.case_local
-    (pp_list pp_requires "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0))
-    ) case.content.case_requires
-    (pp_list pp_assigns "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0) &&
-        (List.length case.content.case_requires == 0))
-    ) case.content.case_assigns
-    (pp_list pp_ensures "@\n" ~is_first:(
-        (List.length case.content.case_assumes == 0) &&
-        (List.length case.content.case_local == 0) &&
-        (List.length case.content.case_requires == 0) &&
-        (List.length case.content.case_assigns == 0))
-    ) case.content.case_ensures
+  fprintf fmt "case \"%s\":@\n  @[<v 2>%a@]"
+    case.case_label
+    (pp_list pp_leaf "@\n") case.case_body
 
+let pp_section fmt sec =
+  match sec with
+  | S_leaf leaf -> pp_leaf fmt leaf
+  | S_case case -> pp_case fmt case.content
+  | S_predicate pred -> pp_predicate fmt pred
 
-let pp_stub fmt stub =
-  match stub.content with
-  | S_simple ss ->
-    fprintf fmt "%a%a%a%a%a"
-      (pp_list pp_predicate "@\n" ~is_first:true) ss.simple_stub_predicates
-      (pp_list pp_requires "@\n" ~is_first:
-         (List.length ss.simple_stub_predicates == 0)
-      ) ss.simple_stub_requires
-      (pp_list pp_assigns "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0))
-      ) ss.simple_stub_assigns
-      (pp_list pp_local "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0) &&
-          (List.length ss.simple_stub_assigns == 0))
-      ) ss.simple_stub_local
-      (pp_list pp_ensures "@\n" ~is_first:(
-          (List.length ss.simple_stub_predicates == 0) &&
-          (List.length ss.simple_stub_requires == 0) &&
-          (List.length ss.simple_stub_assigns == 0) &&
-          (List.length ss.simple_stub_local == 0))
-      ) ss.simple_stub_ensures
+let pp_sections fmt secs =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    pp_section
+    fmt secs
 
-  | S_case ms ->
-    fprintf fmt "%a%a%a"
-      (pp_list pp_predicate "@\n" ~is_first:true) ms.case_stub_predicates
-      (pp_list pp_requires "@\n" ~is_first:(
-          List.length ms.case_stub_predicates == 0)
-      ) ms.case_stub_requires
-      (pp_list pp_case "@\n" ~is_first:(
-          (List.length ms.case_stub_predicates == 0) &&
-          (List.length ms.case_stub_requires == 0)
-      )) ms.case_stub_cases
+let pp_stub fmt stub = pp_sections fmt stub.content 

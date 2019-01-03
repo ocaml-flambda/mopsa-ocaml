@@ -29,6 +29,9 @@ module RangeMap = MapExt.Make(struct type t = range let compare = Pervasives.com
 
 type comment = Clang_AST.comment
 (** Comments in file. *)
+
+type macro = Clang_AST.macro
+(** preprocessor macros *)
                 
 type character_kind = Clang_AST.character_kind
 
@@ -393,6 +396,7 @@ type typ =
      proj_funcs: func StringMap.t; (** functions, by unique name *)
 
      proj_comments: comment list RangeMap.t; (** all comments *)
+     proj_macros : macro StringMap.t; (** macros, by name *)
    }
 (** A project is a set of translation units linked together. *)
 

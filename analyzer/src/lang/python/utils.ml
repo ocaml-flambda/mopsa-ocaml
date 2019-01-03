@@ -1,6 +1,4 @@
 open Framework.Ast
-open Universal.Ast
-open Universal.Pp
 open Ast
 
 let debug fmt = Debug.debug ~channel:"python.utils" fmt
@@ -21,13 +19,13 @@ let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
 let mk_hasattr obj attr range =
-  mk_builtin_call "hasattr" [obj; mk_string attr range] range
+  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string attr range] range
 
 let mk_object_hasattr obj attr range =
   mk_hasattr (mk_py_object obj range) attr range
 
 let mk_addr_hasattr obj attr range =
-  mk_hasattr (mk_addr obj range) attr range
+  mk_hasattr (Universal.Ast.mk_addr obj range) attr range
 
 
 let mk_try_stopiteration body except range =
@@ -38,6 +36,6 @@ let mk_try_stopiteration body except range =
        None
        except
     ]
-    (mk_block [] range)
-    (mk_block [] range)
+    (Universal.Ast.mk_block [] range)
+    (Universal.Ast.mk_block [] range)
     range

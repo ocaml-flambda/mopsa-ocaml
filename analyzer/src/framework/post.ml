@@ -107,20 +107,16 @@ let bind_with_cleaners
         | None -> of_flow flow', annot
 
         | Some e ->
-          let post = f e case.cleaners flow' in
-          let flow'' = List.fold_left (fun acc stmt ->
-                           man.exec ~zone stmt acc
-                         ) post.flow [] (*case.cleaners*)
-          in
-          let post' = {post with flow = flow''} in
-          let annot'' = Flow.get_all_annot flow'' in
-          post', annot''
+           let post = f e case.cleaners flow' in
+           post, Flow.get_all_annot post.flow
       )
       (join man) (meet man)
       annot
       evl
   in
   post
+
+let bind_return ?(zone = any_zone) man f evl = bind ~zone man f evl |> OptionExt.return
 
 let bind_flow
     ?(zone = any_zone) (man: ('a, 't) man)

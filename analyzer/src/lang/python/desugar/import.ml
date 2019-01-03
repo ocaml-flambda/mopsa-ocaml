@@ -7,7 +7,7 @@
 (****************************************************************************)
 
 (** Inliner of imported packages. *)
-open Framework.Essentials
+open Mopsa
 open Ast
 open Addr
 open Universal.Ast
@@ -49,12 +49,12 @@ module Domain =
       | S_py_import_from(modul, name, _, vmodul) ->
          let obj, flow = import_module man modul range flow in
          let e =
-           match Addr.kind_of_object obj with
+           match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
               let v = List.find (fun v -> v.vname = name) globals in
               mk_var v range
            | A_py_module(M_builtin m) ->
-              let obj = Addr.find_builtin_attribute obj name in
+              let obj = find_builtin_attribute obj name in
               mk_py_object obj range
            | _ -> assert false
          in
@@ -67,8 +67,8 @@ module Domain =
 
     (** Search for the module in the search path and parse its body *)
     and import_module man name range flow =
-      if Addr.is_builtin_name name then
-          Addr.find_builtin name, flow
+      if is_builtin_name name then
+        find_builtin name, flow
       else
         let dir =
           Framework.Options.(common_options.stubs) |> List.find_opt
@@ -86,6 +86,7 @@ module Domain =
            let addr = {
                addr_kind = A_py_module (M_user(name, globals));
                addr_uid = 0;
+               addr_mode = STRONG;
              }
            in
            let flow' = man.exec body flow in
@@ -115,36 +116,37 @@ module Domain =
               let name = mk_dot_name base cls.py_cls_var.vname in
               let bases = List.map (fun base ->
                               match ekind base with
-                              | E_var (v, _) -> Addr.find_builtin v.vname
+                              | E_var (v, _) -> find_builtin v.vname
                               | _ -> assert false
                             ) cls.py_cls_bases
               in
               let kind =
-                if Libs.Mopsa.is_unsupported_clsdec cls then C_unsupported name
+                if Libs.Py_mopsa.is_unsupported_clsdec cls then C_unsupported name
                 else C_builtin name
               in
-              Addr.create_builtin_class kind name cls bases (srange stmt);
+              create_builtin_class kind name cls bases (srange stmt);
               parse (Some name) cls.py_cls_body
 
            | S_py_function(fundec) ->
               let name = mk_dot_name base fundec.py_func_var.vname in
               let fundec = {fundec with py_func_var = {fundec.py_func_var with vname = name}} in
               let kind =
-                if Libs.Mopsa.is_stub_fundec fundec then F_user fundec else
-                  if Libs.Mopsa.is_unsupported_fundec fundec then F_unsupported name
+                if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
+                  if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name
                   else F_builtin name
               in
               let addr = {
                   addr_kind = A_py_function kind;
                   addr_uid = 0;
+                  addr_mode = STRONG;
                 }
               in
-              Addr.add_builtin_function (addr, mk_py_empty (srange stmt)) ()
+              add_builtin_function (addr, mk_py_empty (srange stmt)) ()
 
            | S_block(block) ->
               List.iter (parse base) block
 
-           | S_py_import(name, _, _) when Addr.is_builtin_name name -> ()
+           | S_py_import(name, _, _) when is_builtin_name name -> ()
 
            | _ -> panic "stmt %a not supported in %s" Framework.Ast.pp_stmt stmt file
 
@@ -154,9 +156,10 @@ module Domain =
            let addr = {
                addr_kind = A_py_module(M_builtin name);
                addr_uid = 0;
+               addr_mode = STRONG;
              }
            in
-           Addr.add_builtin_module (addr, mk_py_empty (srange stmt)) ()
+           add_builtin_module (addr, mk_py_empty (srange stmt)) ()
          else
            ()
 

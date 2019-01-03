@@ -8,10 +8,10 @@
 
 (** Abstraction of exceptions flows. *)
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
+open Universal.Ast
 open Alarms
 
 (* type token +=
@@ -104,11 +104,12 @@ module Domain =
                   ~fthen:(fun true_flow ->
                     debug "True flow, exp is %a@\n" pp_expr exp;
                     (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
-
                     let true_flow =  man.exec (mk_block cleaners range) true_flow in
                     let cur = Flow.get T_cur man true_flow in
-                    let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack true_flow in
-                    let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
+                    let cs = Callstack.get true_flow in
+                    let exn = man.ask (Types.Typing.Domain.Q_types exp) true_flow in
+                    let a = mk_alarm (APyException {exp with ekind = Types.Typing.E_get_type_partition exn}) range ~cs ~level:ERROR in
+                    (* let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in *)
                     let flow' = Flow.add (T_alarm a) cur man true_flow |>
                                   Flow.set T_cur man.bottom man
                     in
@@ -165,6 +166,7 @@ module Domain =
                match tk with
                | T_alarm {alarm_kind = APyException exn} ->
                   (* Evaluate e in env to check if it corresponds to eaddr *)
+                  debug "T_cur now matches tk %a@\n" pp_token tk;
                   let flow = Flow.set T_cur env man flow0 in
                   let flow' =
                     man.eval e flow |>
@@ -172,10 +174,10 @@ module Domain =
                           match ekind e with
                           | E_py_object obj ->
                              Post.assume
-                               (* if Addr.issubclass obj (Addr.find_builtin "BaseException") then *)
+                               (* if issubclass obj (find_builtin "BaseException") then *)
                                (* issubclass cls1 cls2 <-> ???*)
-                               (mk_py_call (mk_py_object (Addr.find_builtin "issubclass") range) [e; mk_py_object (Addr.find_builtin "BaseException") range] range)
-                               man
+                               (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
+                               man flow
                                ~fthen:(fun true_flow ->
                                  Post.assume
                                    (mk_py_isinstance exn e range)
@@ -185,7 +187,7 @@ module Domain =
                                      | None -> Post.of_flow true_flow
                                      | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow |> Post.of_flow)
                                    ~felse:(fun false_flow ->
-                                     (*if not (Addr.isinstance exn obj) then*)
+                                     (*if not (isinstance exn obj) then*)
                                      Flow.set T_cur man.bottom man false_flow |> Post.of_flow
                                    )
                                    true_flow
@@ -193,7 +195,6 @@ module Domain =
                                ~felse:(fun false_flow ->
                                  (* else *)
                                  man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Post.of_flow)
-                               flow
                           | _ -> assert false
                         )
                   in
@@ -232,9 +233,9 @@ module Domain =
                         match ekind e with
                         | E_py_object obj ->
                            Post.assume
-                             (mk_py_call (mk_py_object (Addr.find_builtin "issubclass") range) [e; mk_py_object (Addr.find_builtin "BaseException") range] range)
+                             (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                              man
-                             (* if Addr.issubclass obj (Addr.find_builtin "BaseException") && not (Addr.isinstance exn obj) then
+                             (* if issubclass obj (find_builtin "BaseException") && not (isinstance exn obj) then
                               *   man.flow.add (TExn exn) env flow *)
                              ~fthen:(fun true_flow ->
                                Post.assume
@@ -242,7 +243,7 @@ module Domain =
                                  man
                                  ~fthen:(fun true_flow -> Post.of_flow true_flow)
                                  ~felse:(fun false_flow ->
-                                   let cs = Flow.get_annot Universal.Iterators.Interproc.Callstack.A_call_stack false_flow in
+                                   let cs = Callstack.get false_flow in
                                    let a = mk_alarm (APyException exn) range ~cs ~level:ERROR in
                                    Flow.add (T_alarm a) env man false_flow |> Post.of_flow)
                                  true_flow)

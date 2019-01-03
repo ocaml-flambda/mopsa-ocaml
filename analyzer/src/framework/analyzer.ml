@@ -47,6 +47,13 @@ struct
       let compare = compare_zone2
     end)
 
+  (* Filter paths that pass through [via] zone *)
+  let find_eval_paths_via (src, dst) via map =
+    let paths = EvalMap.find (src, dst) map in
+    List.filter (fun path ->
+        List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
+      ) paths
+
   let eval_graph = Zone.build_eval_graph Domain.eval_interface.export
 
 
@@ -128,6 +135,8 @@ struct
         [[(any_zone, any_zone, [any_zone, any_zone], Domain.eval (any_zone, any_zone))]]
     in
 
+    debug "eval graph:@\n @[%a@]" Zone.pp_graph eval_graph;
+
     (* Iterate over the required zone paths of domain Domain *)
     let required = Domain.eval_interface.import in
     required |>
@@ -142,7 +151,9 @@ struct
               acc
             else
               (* Map each hop to an eval function *)
-              let eval_paths = List.map (fun path ->
+              let () = debug "eval paths for %a" pp_zone2 (src, dst) in
+              let eval_paths = List.mapi (fun i path ->
+                  debug " path #%d: %a" i pp_eval_path path;
                   let rec aux =
                     function
                     | [] -> []
@@ -157,7 +168,7 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (any_zone, any_zone)) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Out.push_action (Eval({e = exp ; zs = zone}));
     debug "eval:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_expr exp
@@ -170,21 +181,25 @@ struct
 
     let ret =
       (* Check whether exp is already in the desired zone *)
-      match Zone.eval exp (snd zone) with
-      | Keep -> Eval.singleton exp flow
+      match sat_zone via (snd zone), Zone.eval exp (snd zone) with
+      | true, Keep -> Eval.singleton exp flow
 
-      | other_action ->
+      | _, other_action ->
         (* Try available eval paths in sequence *)
         let paths =
-          try EvalMap.find zone eval_map
+          try find_eval_paths_via zone via eval_map
           with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
         in
         match eval_over_paths paths exp man flow with
         | Some evl -> evl
         | None ->
           match other_action with
-          | Keep -> assert false (* already done *)
-          | Process -> Eval.singleton exp flow
+          | Keep -> Eval.singleton exp flow
+
+          | Process ->
+            Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
+            Eval.singleton exp flow
+
           | Visit ->
             let open Visitor in
             let parts, builder = split_expr exp in
@@ -192,7 +207,10 @@ struct
             | {exprs; stmts = []} ->
               Eval.eval_list exprs (fun exp flow ->
                   match eval_over_paths paths exp man flow with
-                  | None -> Eval.singleton exp flow
+                  | None ->
+                    Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
+                    Eval.singleton exp flow
+
                   | Some evl -> evl
                 ) flow |>
               Eval.bind @@ fun exprs flow ->
@@ -217,6 +235,8 @@ struct
     match paths with
     | [] -> None
     | path :: tl ->
+      (* let p = List.hd path |> (fun (_, _, path, _) -> path) in
+       * debug "trying eval %a over path %a" pp_expr exp pp_eval_path p; *)
       match eval_over_path path man exp flow with
       | None -> eval_over_paths tl exp man flow
       | ret -> ret
@@ -234,9 +254,12 @@ struct
       eval_over_path tl man
 
   and eval_hop z1 z2 feval man exp flow =
+    (* debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2); *)
     match Zone.eval exp z2 with
-    | Keep -> Eval.singleton exp flow |>
+    | Keep ->
+      Eval.singleton exp flow |>
       OptionExt.return
+
     | other_action ->
       match Cache.eval feval (z1, z2) exp man flow with
       | Some evl -> Some evl
@@ -245,18 +268,20 @@ struct
         | Keep -> assert false
 
         | Process ->
-          debug "no evaluation of %a in zone %a" pp_expr exp pp_zone2 (z1, z2);
+          (* debug "no answer"; *)
           None
 
         | Visit ->
+          (* debug "visiting %a" pp_expr exp; *)
           let open Visitor in
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
             Eval.eval_list_opt exprs (eval_hop z1 z2 feval man) flow |>
             OptionExt.lift @@ Eval.bind @@ fun exprs flow ->
-            let exp = builder {exprs; stmts = []} in
-            Eval.singleton exp flow
+            let exp' = builder {exprs; stmts = []} in
+            (* debug "%a -> %a" pp_expr exp pp_expr exp'; *)
+            Eval.singleton exp' flow
 
           | _ -> None
 

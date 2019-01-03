@@ -8,7 +8,7 @@
 
 (** Inter-procedural iterator by inlining.  *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Zone
 open Callstack
@@ -119,9 +119,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Update call stack *)
-      let cs = Flow.get_annot A_call_stack flow0 in
-      let cs' = range :: cs in
-      let flow1 = Flow.set_annot A_call_stack cs' flow0 in
+      let flow1 = Callstack.push range flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>
@@ -160,7 +158,7 @@ struct
       let flow4 = man.exec ignore_block flow3 in
 
       Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      OptionExt.return
+      Eval.return
 
     | _ -> None
 

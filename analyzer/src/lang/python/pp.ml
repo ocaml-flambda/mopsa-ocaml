@@ -8,7 +8,7 @@
 
 (** Pretty printer of the Python extension to the AST. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 open Format
 
@@ -31,12 +31,12 @@ let pp_py_object fmt (obj: py_object) =
   | (addr, e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Ast.pp_addr addr pp_expr e
 
 let () =
-  register_pp_program (fun default fmt prog ->
+  register_program_pp (fun default fmt prog ->
       match prog with
       | Py_program(globals, body) -> pp_stmt fmt body
       | _ -> default fmt prog
     );
-  register_pp_typ (fun default fmt typ ->
+  register_typ_pp (fun default fmt typ ->
     match typ with
     | T_py_not_implemented -> pp_print_string fmt "notimplemented"
     | T_py_none -> pp_print_string fmt "none"
@@ -44,14 +44,14 @@ let () =
     | T_py_empty -> pp_print_string fmt "empty"
     | _ -> default fmt typ
     );
-  register_pp_constant (fun default fmt -> function
+  register_constant_pp (fun default fmt -> function
       | C_py_none -> pp_print_string fmt "C_py_None"
       | C_py_not_implemented -> pp_print_string fmt "NotImplemented"
       | C_py_imag j -> fprintf fmt "%aj" pp_print_float j
       | C_py_empty -> pp_print_string fmt "empty"
       | c -> default fmt c
     );
-  register_pp_operator (fun default fmt -> function
+  register_operator_pp (fun default fmt -> function
       | O_py_and -> pp_print_string fmt "and"
       | O_py_or -> pp_print_string fmt "or"
       | O_py_floor_div -> pp_print_string fmt "//"
@@ -62,7 +62,7 @@ let () =
       | O_py_mat_mult -> pp_print_string fmt "@"
       | op -> default fmt op
     );
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_py_undefined true -> fprintf fmt "global undef"
       | E_py_undefined false -> fprintf fmt "local undef"
@@ -175,7 +175,7 @@ let () =
       | _ -> default fmt exp
     );
 
-  register_pp_stmt (fun default fmt stmt ->
+  register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
       | Universal.Ast.S_block(l) ->
          if l = [] then

@@ -11,6 +11,11 @@
   Useful definitions used throughout the libc stubs.
  */
 
+#ifndef MOPSA_LIBC_UTILS_H
+#define MOPSA_LIBC_UTILS_H
+
 extern int _errno;
 
 static const void* _NULL = (void*)0;
+
+#endif /* MOPSA_LIBC_UTILS_H */

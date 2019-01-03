@@ -8,12 +8,14 @@ def test_main():
     # typpete is unsound on get: it should return str or NoneType (example
     # with x.get(3.0), which is NOT of type str)
     a = x.get(2.0)
+    if a == None:
+        a = ""
+
     d = x.pop(2.0)
     e = x.popitem()
     x.update(y)
 
-    if a == None:
-        a = ""
+
     f = a[0] + d[0]
     g = e[0]
     h = e[1]

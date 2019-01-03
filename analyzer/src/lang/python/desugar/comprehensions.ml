@@ -12,10 +12,10 @@
    it's a generic, rewriting-based approach that may be helpful *)
 
 
-open Framework.Essentials
-open Framework.Ast
-open Universal.Ast
+open Mopsa
+open Addr
 open Ast
+open Universal.Ast
 
 module Domain =
   struct
@@ -61,8 +61,8 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_list_comprehension (expr, comprehensions) ->
-         let list = Addr.find_builtin "list" in
-         let listappend = mk_py_object (Addr.find_builtin_attribute list "append") range in
+         let list = find_builtin "list" in
+         let listappend = mk_py_object (find_builtin_attribute list "append") range in
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) range) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
@@ -72,8 +72,8 @@ module Domain =
            OptionExt.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
-         let set = Addr.find_builtin "set" in
-         let setadd = mk_py_object (Addr.find_builtin_attribute set "add") range in
+         let set = find_builtin "set" in
+         let setadd = mk_py_object (find_builtin_attribute set "add") range in
          let emptyset = mk_expr (E_py_set []) range in
          let stmt, tmp_acc = unfold_comprehension [expr] comprehensions emptyset setadd range in
          let acc_var = mk_var tmp_acc range in
@@ -84,8 +84,8 @@ module Domain =
            OptionExt.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
-         let dict = Addr.find_builtin "dict" in
-         let dictset = mk_py_object (Addr.find_builtin_attribute dict "__setitem__") range in
+         let dict = find_builtin "dict" in
+         let dictset = mk_py_object (find_builtin_attribute dict "__setitem__") range in
          let emptydict = mk_expr (E_py_dict ([], [])) range in
          let stmt, tmp_acc = unfold_comprehension (key::value::[]) comprehensions emptydict dictset range in
          let acc_var = mk_var tmp_acc range in
@@ -95,6 +95,8 @@ module Domain =
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
            OptionExt.return
 
+      | E_py_generator_comprehension (expr, comprehensions) ->
+         Debug.warn "No desugaring for generator comprehensions@\n"; None
 
       | _ -> None
 

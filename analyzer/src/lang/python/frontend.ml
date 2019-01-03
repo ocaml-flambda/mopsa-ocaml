@@ -9,7 +9,7 @@
 (**
    Python frontend translates the parser's AST into Framework's AST.
 *)
-open Framework.Essentials
+open Mopsa
 open Lexing
 open Py_parser.Cst
 open Py_parser.Ast

@@ -8,9 +8,10 @@
 
 (** Assignments from iterables. *)
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
+open Addr
 open Ast
+open Universal.Ast
 
 module Domain =
   struct
@@ -61,7 +62,7 @@ module Domain =
         mk_try
           block
           [mk_except
-             (Some (mk_py_object (Addr.find_builtin "StopIteration") (tag_range range "stop iter")))
+             (Some (mk_py_object (find_builtin "StopIteration") (tag_range range "stop iter")))
              None
              (Utils.mk_builtin_raise "ValueError" (tag_range range "error raise"))
           ]

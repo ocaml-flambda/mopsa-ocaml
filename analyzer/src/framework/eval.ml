@@ -28,9 +28,9 @@ let empty_singleton flow : ('a, 'e) evl  =
 let join (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
   Dnf.mk_or evl1 evl2
 
-let join_list (l: ('a, 'e) evl list) : ('a, 'e) evl =
+let join_list ?(empty=empty) (l: ('a, 'e) evl list) : ('a, 'e) evl =
   match l with
-  | [] -> []
+  | [] -> empty
   | hd :: tl -> List.fold_left join hd tl
 
 let meet (evl1: ('a, 'e) evl) (evl2: ('a, 'e) evl) : ('a, 'e) evl =
@@ -47,13 +47,19 @@ let iter (f: ('a, 'e) evl_case -> unit) (evl: ('a, 'e) evl) : unit =
   List.iter f
 
 let map
-    (f: ('a, 'e) evl_case -> ('a, 'f) evl_case)
+    (f: 'e -> 'a flow -> 'f * 'a flow)
     (evl: ('a, 'e) evl)
   : ('a, 'f) evl =
-  Dnf.map f evl
+  Dnf.map (fun case ->
+      match case.expr with
+      | None -> case
+      | Some e ->
+        let e', flow' = f e case.flow in
+        { expr = Some e'; flow = flow'; cleaners = [] }
+    ) evl
 
 let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  =
-  map (fun case ->
+  Dnf.map (fun case ->
       {case with cleaners = case.cleaners @ cleaners}
     ) evl
 
@@ -79,12 +85,19 @@ let fold2
   Dnf.fold2 f join meet init evl
 
 let substitute
-    (f: ('a, 'e) evl_case -> 'b)
+    (f: 'e -> 'a flow -> 'b)
     (join: 'b -> 'b -> 'b)
     (meet: 'b -> 'b -> 'b)
+    (empty: 'b)
     (evl: ('a, 'e) evl)
   : 'b =
-  Dnf.substitute f join meet evl
+  Dnf.substitute
+    (fun case ->
+       match case.expr with
+       | Some e -> f e case.flow
+       | None -> empty
+    )
+    join meet evl
 
 
 (* [choose_annot evl] returns any annotation from evaluation flows
@@ -116,6 +129,8 @@ let bind
     (choose_annot evl) evl
   in
   evl
+
+let bind_return f evl = bind f evl |> OptionExt.return
 
 let bind_opt f evl =
   let evl, _ = Dnf.fold2

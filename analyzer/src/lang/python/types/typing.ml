@@ -1,18 +1,18 @@
 (* TODO: move S_assume and eval of not into t_bool domain? *)
-open Framework.Essentials
+open Mopsa
 open Ast
-open Universal.Ast
 open Addr
 open Data_model.Attribute
 open MapExt
 open Objects.Function
+open Universal.Ast
 
 type expr_kind +=
    | E_get_type_partition of Typingdomain.polytype
    | E_type_partition of Typingdomain.typeid
 
 let () =
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_get_type_partition ptype -> Format.fprintf fmt "E_get_tp %a" Typingdomain.pp_polytype ptype
       | E_type_partition tid -> Format.fprintf fmt "TypeId %d" tid
@@ -59,6 +59,9 @@ module Domain =
       | D_python_typing -> Some Eq
       | _ -> None
 
+    type _ Framework.Query.query +=
+       | Q_types : Framework.Ast.expr -> Typingdomain.polytype Framework.Query.query
+
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = { export = [any_zone]; import = [any_zone]; }
@@ -86,15 +89,15 @@ module Domain =
       let open Typingdomain in
       let bool = builtin_inst "bool" in
       let complex = builtin_inst "complex" in
-      let complex_cls = let a, b= Addr.builtin_cl_and_mro "complex" in Class (a, b) in
+      let complex_cls = let a, b= builtin_cl_and_mro "complex" in Class (a, b) in
       let int = builtin_inst "int" in
       let float = builtin_inst "float" in
       let none = builtin_inst "NoneType" in
       let str = builtin_inst "str" in
-      let str_cls = let a, b = Addr.builtin_cl_and_mro "str" in Class (a, b) in
+      let str_cls = let a, b = builtin_cl_and_mro "str" in Class (a, b) in
       let slice = builtin_inst "slice" in
-      let slice_cls = let a, b = Addr.builtin_cl_and_mro "slice" in Class (a, b) in
-      let dict_cls = let a, b = Addr.builtin_cl_and_mro "dict" in Class (a, b) in
+      let slice_cls = let a, b = builtin_cl_and_mro "slice" in Class (a, b) in
+      let dict_cls = let a, b = builtin_cl_and_mro "dict" in Class (a, b) in
       let lstub_base =
         StringMap.empty |>
           (* TODO: add rewriting for default arguments?... *)
@@ -126,6 +129,7 @@ module Domain =
           add_signature "math.expm1" [float] [float] [] |>
           add_signature "math.fabs" [float] [float] [] |>
           add_signature "math.factorial" [int] [int] [] |>
+          add_signature "math.floor" [float] [int] [] |>
           add_signature "math.fmod" [float; float] [float] [] |>
           add_signature "math.frexp" [float] [FiniteTuple [float; int]] [] |>
           add_signature "math.fsum" [List float] [float] [] |> (* add iterator as well *)
@@ -140,6 +144,7 @@ module Domain =
           add_signature "math.lgamma" [float] [float] [] |>
           add_signature "math.log" [float; float] [float] [] |>
           add_signature "math.log1p" [float] [float] [] |>
+          add_signature "math.log10" [float] [float] [] |>
           add_signature "math.log2" [float] [float] [] |>
           add_signature "math.modf" [float] [FiniteTuple [float; float]] [] |>
           add_signature "math.sqrt" [float] [float] [] |>
@@ -151,6 +156,8 @@ module Domain =
           add_signature "str.center" [str; int] [str] [] |>
           add_signature "str.center" [str; int; str] [str] [] |>
           add_signature "str.join" [str; List str] [str] [] |>
+          add_signature "str.join" [str; Generator str] [str] [] |>
+
           add_signature "str.lower" [str] [str] [] |>
           add_signature "str.upper" [str] [str] [] |>
           add_signature "str.split" [str] [List str] [] |>
@@ -166,8 +173,11 @@ module Domain =
           add_signature "str.title" [str] [str] [] |>
           add_signature "str.__new__" [str_cls] [str] [] |>
           add_signature "str.__len__" [str] [int] [] |>
+          add_signature "str.__mul__" [str; int] [str] [] |>
+          add_signature "str.__rmul__" [str; int] [str] [] |>
           add_signature "str.__getitem__" [str; int] [str] [] (* ["IndexError"] *) |>
           add_signature "str.__getitem__" [str; slice] [str] [] |>
+          add_signature "str.__contains__" [str; str] [bool] [] |>
           add_signature "str.isalnum" [str] [bool] [] |>
           add_signature "str.isalpha" [str] [bool] [] |>
           add_signature "str.isdecimal" [str] [bool] [] |>
@@ -188,7 +198,7 @@ module Domain =
           add_signature "list.__iter__" [List (Typevar 0)] [Iterator (List (Typevar 0), -1)] [] |>
           add_signature "list.__mul__" [List (Typevar 0); int] [List (Typevar 0)] [] |>
           add_signature "list.__rmul__" [List (Typevar 0); int] [List (Typevar 0)] [] |>
-
+          add_signature "list.__contains__" [List (Typevar 0); Top] [bool] [] |>
           add_signature "list_iterator.__next__" [Iterator (List (Typevar 0), -1)] [Typevar 0] ["StopIteration"] |>
           (* TODO: add list[bottom] to signal empty list ? *)
 
@@ -215,6 +225,7 @@ module Domain =
           add_signature "dict.__new__" [dict_cls] [Dict (Bot, Bot)] [] |>
           add_signature "dict.__iter__" [Dict (Typevar 0, Typevar 1)] [Iterator (Dict (Typevar 0, Typevar 1), -1)] [] |>
           add_signature "dict.__getitem__" [Dict (Typevar 0, Typevar 1); Top] [Typevar 1] [] (* ["KeyError"] *) |>
+          add_signature "dict.__contains__" [Dict (Typevar 0, Typevar 1); Top] [bool] [] |>
           add_signature "dict_iterator.__next__" [Iterator (Dict (Typevar 0, Typevar 1), -1)] [Typevar 0] ["StopIteration"] |>
           add_signature "dict_values.__iter__" [DictValues (Dict (Typevar 0, Typevar 1))] [Iterator (DictValues (Dict (Typevar 0, Typevar 1)), -1)] [] |>
           add_signature "dict_keys.__iter__" [DictKeys (Dict (Typevar 0, Typevar 1))] [Iterator (DictKeys (Dict (Typevar 0, Typevar 1)), -1)] [] |>
@@ -222,8 +233,13 @@ module Domain =
           add_signature "dict_valueiterator.__next__" [Iterator (DictValues (Dict (Typevar 0, Typevar 1)), -1)] [Typevar 1] ["StopIteration"] |>
           add_signature "dict_keyiterator.__next__" [Iterator (DictKeys (Dict (Typevar 0, Typevar 1)), -1)] [Typevar 0] ["StopIteration"] |>
           add_signature "dict_keyiterator.__next__" [Iterator (Dict (Typevar 0, Typevar 1), -1)] [Typevar 0] ["StopIteration"] |>
-          add_signature "dict_itemiterator.__next__" [Iterator (DictItems (Dict (Typevar 0, Typevar 1)), -1)] [FiniteTuple [Typevar 0; Typevar 1]] ["StopIteration"]
+          add_signature "dict_itemiterator.__next__" [Iterator (DictItems (Dict (Typevar 0, Typevar 1)), -1)] [FiniteTuple [Typevar 0; Typevar 1]] ["StopIteration"] |>
 
+          add_signature "set.__contains__" [Set (Typevar 0); Top] [bool] [] |>
+          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1]; Top] [bool] [] |>
+          add_signature "tuple.__contains__" [FiniteTuple [Typevar 0; Typevar 1; Typevar 2]; Top] [bool] [] |>
+
+          add_signature "int.__bool__" [int] [bool] []
       in
       stub_base := lstub_base;
       debug "stub_base = %a@\n" pp_sb !stub_base;
@@ -300,7 +316,7 @@ module Domain =
       | S_assign({ekind = E_py_attribute(lexpr, attr)}, rval) ->
          Exceptions.panic "lexpr.attr = rval, with lexpr <> E_Var@\n"
 
-      | S_remove_var v ->
+      | S_remove { ekind = E_var (v, _) } ->
          debug "Removing var %a@\n" pp_var v;
          let cur = Flow.get_domain_cur man flow in
          let flow = Flow.set_domain_cur (Typingdomain.rm_var cur v) man flow in
@@ -308,6 +324,10 @@ module Domain =
 
       (* S⟦ ?e ⟧ *)
       | S_assume e ->
+         begin match ekind e with
+         | E_constant (C_top T_bool) | E_constant (C_bool true) -> Post.of_flow flow |> OptionExt.return
+         | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow) |> OptionExt.return
+         | _ ->
          man.eval e flow |>
            Post.bind man
              (fun expr flow ->
@@ -329,9 +349,10 @@ module Domain =
                | _ -> Exceptions.panic "%a" pp_expr e
              )
          |> OptionExt.return
-
+         end
       | _ -> None
 
+    (* constructs smashed type for ls *)
     let summary_constructor man flow range c ls =
       Eval.eval_list ls man.eval flow |>
         Eval.bind (fun list_els flow ->
@@ -363,6 +384,12 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
+      | E_get_type_partition pty ->
+         if is_bottom @@ Flow.get_domain_cur man flow then
+           Eval.empty_singleton flow |> OptionExt.return
+         else
+           return_id_of_type man flow range pty |> OptionExt.return
+
       | E_type_partition i ->
          if is_bottom @@ Flow.get_domain_cur man flow then
            Eval.empty_singleton flow |> OptionExt.return
@@ -410,9 +437,9 @@ module Domain =
           *    Eval.singleton (mk_expr (E_type_partition tid) range) flow
           *    (\* Eval.singleton (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow *\) *)
          | A_py_method (func, self) ->
-            man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1)}, mk_py_empty range) range) flow
+            man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1); addr_mode=STRONG}, mk_py_empty range) range) flow
          | _ ->
-            let addr = {addr_kind = akind; addr_uid=(-1)} in
+            let addr = {addr_kind = akind; addr_uid=(-1);addr_mode=STRONG} in
             Eval.singleton (mk_addr addr range) flow
          end
          |> OptionExt.return
@@ -424,9 +451,9 @@ module Domain =
              debug "%a@\n" print cur;
              let polytype = Typingdomain.get_polytype cur v in
              let expr = match polytype with
-               | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | Typingdomain.Function f -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1)}, mk_expr (ekind exp) range) range
-               | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1)}, mk_expr (ekind exp) range) range
+               | Typingdomain.Class (c, b) -> mk_py_object ({addr_kind=A_py_class (c, b); addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
+               | Typingdomain.Function f -> mk_py_object ({addr_kind=A_py_function f; addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
+               | Typingdomain.Module m -> mk_py_object ({addr_kind=A_py_module m; addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range
                | _ ->
                   let tid = Typingdomain.typeindex_of_var cur.d1 v in
                   mk_expr (E_type_partition tid) range in
@@ -437,8 +464,8 @@ module Domain =
               * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
              |> OptionExt.return
            with Not_found ->
-             if Addr.is_builtin_name v.vname then
-               let a = Addr.find_builtin v.vname in
+             if is_builtin_name v.vname then
+               let a = find_builtin v.vname in
                let _ = debug "builtin variable@\n" in
                Eval.singleton (mk_py_object a range) flow |> OptionExt.return
              else
@@ -460,36 +487,41 @@ module Domain =
             Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) globals) range) flow
          | E_py_object ({addr_kind = A_py_module _}, _)
            | E_py_object ({addr_kind = A_py_class (C_builtin _, _)}, _) ->
-            Eval.singleton (mk_py_bool (Addr.is_builtin_attribute (object_of_expr e) attr) range) flow
+            Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
             Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
          | E_type_partition i ->
             let cur = Flow.get_domain_cur man flow in
             debug "cur=%a@\n" print cur;
-            let pt = Typingdomain.TypeIdMap.find i cur.d2 in
-            begin match pt with
-            | Typingdomain.Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
-               Eval.singleton (mk_py_true range) flow
-            | Typingdomain.Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
-               Eval.singleton (mk_py_false range) flow
-            | Typingdomain.Instance {classn; uattrs; oattrs} ->
-               let cur = Flow.get_domain_cur man flow in
-               let dt, df = Typingdomain.filter_attr cur i attr in
-               let flowt = Flow.set_domain_cur dt man flow in
-               let flowf = Flow.set_domain_cur df man flow in
-               (* debug "Bad hasattr on partition %d, initial domain: %a@\n spliting in two cases: %a and %a@\n" i print cur print dt print df; *)
-               Eval.join
-                 (Eval.singleton (mk_py_true range) flowt)
-                 (Eval.singleton (mk_py_false range) flowf)
-            | Typingdomain.Iterator (x, _) ->
-               (* FIXME: should be the type(Iterator _) that has this attribute, I think *)
-               Eval.singleton (mk_py_bool (attr = "next") range) flow
-            | Typingdomain.List _ | Typingdomain.Set _ | Typingdomain.Dict _ ->
-               Eval.singleton (mk_py_false range) flow
-               (* let cls = Addr.find_builtin "list" in
-                * Eval.singleton (mk_py_bool (Addr.is_builtin_attribute cls attr) range) flow *)
-            | _ -> Exceptions.panic "ll_hasattr"
-            end
+            let open Typingdomain in
+            let pt = TypeIdMap.find i cur.d2 in
+            let rec process pt cur =
+              begin match pt with
+              | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
+                 [Eval.singleton (mk_py_true range) flow]
+              | Instance {classn; uattrs; oattrs} when not (StringMap.exists (fun k _ -> k = attr) uattrs || StringMap.exists (fun k _ -> k = attr) oattrs) ->
+                 [Eval.singleton (mk_py_false range) flow]
+              | Instance {classn; uattrs; oattrs} ->
+                 let dt, df = filter_attr cur i attr in
+                 let flowt = Flow.set_domain_cur dt man flow in
+                 let flowf = Flow.set_domain_cur df man flow in
+                 (* debug "Bad hasattr on partition %d, initial domain: %a@\n spliting in two cases: %a and %a@\n" i print cur print dt print df; *)
+                 [Eval.singleton (mk_py_true range) flowt; Eval.singleton (mk_py_false range) flowf]
+              | Iterator (x, _) ->
+                 (* FIXME: should be the type(Iterator _) that has this attribute, I think *)
+                 [Eval.singleton (mk_py_bool (attr = "next") range) flow]
+              | List _ | Set _ | Dict _ ->
+                 [Eval.singleton (mk_py_false range) flow]
+              | Typevar alpha ->
+                 let mtys = TypeVarMap.find alpha cur.d3 in
+                 Monotypeset.fold (fun mty acc -> process (poly_cast mty) {cur with d3 = TypeVarMap.add alpha (Monotypeset.singleton mty) cur.d3} @ acc)  mtys []
+              (* let cls = find_builtin "list" in
+               * Eval.singleton (mk_py_bool (is_builtin_attribute cls attr) range) flow *)
+              | _ -> Exceptions.panic "ll_hasattr %a@\n" Typingdomain.pp_polytype pt
+              end
+            in
+            let cur = Flow.get_domain_cur man flow in
+            Eval.join_list (process pt cur)
          | _ ->
             Eval.empty_singleton flow
          end
@@ -503,14 +535,14 @@ module Domain =
          begin
            match ekind e with
            | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
-              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+              Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
               let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
               man.eval (mk_var f range) flow
            | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
-              Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow
+              Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_module (M_user (name, globals))}, _) ->
-           (* Eval.singleton (mk_py_object (Addr.find_builtin_attribute (object_of_expr e) attr) range) flow *)
+           (* Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow *)
               let v = List.find (fun x -> x.vname = attr) globals in
               man.eval (mk_var v range) flow
            | E_type_partition i ->
@@ -575,14 +607,14 @@ module Domain =
                  | _ -> debug "type(%a)?@\n" pp_expr e_arg; assert false in
                let proceed (cl, mro, cur) =
                  let flow = Flow.set_domain_cur cur man flow in
-                 let obj = mk_py_object ({addr_kind=A_py_class (cl, mro); addr_uid=(-1)}, mk_expr (ekind exp) range) range in
+                 let obj = mk_py_object ({addr_kind=A_py_class (cl, mro); addr_uid=(-1); addr_mode = STRONG}, mk_expr (ekind exp) range) range in
                  Eval.singleton obj flow in
                debug "classes : %d" @@ List.length classes;
                if List.length classes = 1 then
                   proceed (List.hd classes)
                else
                  List.fold_left (fun acc (cl, mro, cur) ->
-                     debug "ADDR: %a@\n" pp_addr {addr_kind=A_py_class (cl, mro); addr_uid=(-1)};
+                     debug "ADDR: %a@\n" pp_addr {addr_kind=A_py_class (cl, mro); addr_uid=(-1); addr_mode = STRONG};
                      Eval.join acc (proceed (cl, mro, cur))) (proceed @@ List.hd classes) (List.tl classes)
              )
          |> OptionExt.return
@@ -612,6 +644,7 @@ module Domain =
                match ekind eobj, ekind eattr with
                | E_type_partition tid, E_py_object ({addr_kind = A_py_class (cls, b)}, _) ->
                   let cur = Flow.get_domain_cur man flow in
+                  (* FIXME: split the case of unions? *)
                   let dt, df = Typingdomain.filter_inst cur tid (Typingdomain.Class (cls, b)) in
                   let flowt = Flow.set_domain_cur dt man flow and
                       flowf = Flow.set_domain_cur df man flow in
@@ -742,6 +775,41 @@ module Domain =
              )
          |> OptionExt.return
 
+      (* generators *)
+      | E_py_generator_comprehension (expr, comprehensions) ->
+         let rec unfold_pseudolc to_clean stmt_acc aux_compr = match aux_compr with
+           | [] -> to_clean, List.rev stmt_acc
+           | (target, iter, conds)::tl ->
+              let i_tmp = mk_tmp () in
+              let i_var = mk_var i_tmp range in
+              let s1 = mk_assign i_var (Utils.mk_builtin_call "iter" [iter] range) range in
+              let s2 = mk_assign target (Utils.mk_builtin_call "next" [i_var] range) range in
+              let b_tmp = mk_tmp () in
+              let b_var = mk_var b_tmp range in
+              let inline_conds = List.fold_left (fun acc cond -> mk_expr (E_py_if (cond, acc, mk_py_false range)) range) (mk_py_true range) (List.rev conds) in
+              (* FIXME: enforce that s3 is bool? *)
+              let s3 = mk_assign b_var inline_conds range in
+              let target_var = match ekind target with
+                | E_var (v, _) -> v
+                | _ -> assert false in
+              unfold_pseudolc (i_tmp::b_tmp::target_var::to_clean) (s3::s2::s1::stmt_acc) tl in
+         let to_clean, stmt_list = unfold_pseudolc [] [] comprehensions in
+         let stmt = mk_block stmt_list range in
+         let cleaners = List.map (fun x -> mk_remove_var x range) to_clean in
+         let empty_stmt = mk_block [] range in
+         debug "Generator Comprehension: Rewriting %a into @[@\nexec:@[@\n%a@]@\neval:@[@\n%a@]@\ncleaners:@[@\n%a@]@]@\n" pp_expr exp pp_stmt stmt pp_expr expr pp_stmt (mk_block cleaners range);
+         man.exec (Utils.mk_try_stopiteration stmt empty_stmt range) flow |>
+           man.eval expr |>
+           Eval.bind (fun expr flow ->
+               let cur = Flow.get_domain_cur man flow in
+               let ty_in_gen = match ekind expr with
+                 | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                 | _ -> assert false in
+               return_id_of_type man flow range (Typingdomain.Generator ty_in_gen)
+             ) |>
+           Eval.add_cleaners cleaners |>
+           OptionExt.return
+
       (* stubs *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin fname)}, _)}, args, []) when StringMap.mem fname !stub_base ->
          (* TODO: the filtering does not work for Iterator[...] I think, as it checks instances but not recursively? *)
@@ -762,8 +830,9 @@ module Domain =
              let vars = List.fold_left (fun acc el -> Typevarset.union acc (collect_vars el)) Typevarset.empty in_signature in
              let empty_d3 = Typevarset.fold (fun var acc -> TypeVarMap.add var (Monotypeset.add Top Monotypeset.empty) acc) vars TypeVarMap.empty in
              List.fold_left2 (fun acc in_ty sign_ty ->
-                 debug "leq? %a[%a] %a[%a]@\n" pp_polytype in_ty pp_d3 domain.d3 pp_polytype sign_ty pp_d3 empty_d3;
-                 acc && polytype_leq (in_ty, domain.d3) (sign_ty, empty_d3)) true in_types in_signature in
+                 let r = polytype_leq (in_ty, domain.d3) (sign_ty, empty_d3) in
+                 debug "leq? %a[%a] %a[%a]@\nresult is %b@\n" pp_polytype in_ty pp_d3 domain.d3 pp_polytype sign_ty pp_d3 empty_d3 r;
+                 acc && r) true in_types in_signature in
            Eval.eval_list args man.eval flow |>
              Eval.bind (fun eargs flow ->
                  let cur = Flow.get_domain_cur man flow in
@@ -786,7 +855,7 @@ module Domain =
                                                             | _ -> debug "typing/stubs %a@\n" Universal.Ast.pp_addr addr;
                                                                    Exceptions.panic "ni"
                                                         end
-                                                     | _ -> assert false) eargs in
+                                                     | _ -> debug "%a@\n" pp_expr exp; assert false) eargs in
                  let f_signatures = List.filter (fun x -> is_compatible_signature in_types x.in_args cur) f_signatures in
                  (* fun fact, we don't do the isinstance checks, but lower-level things *)
                  debug "f_signatures has size %d@\n" (List.length f_signatures);
@@ -799,18 +868,23 @@ module Domain =
                      let vars = List.fold_left (fun acc el -> Typevarset.union acc (collect_vars el)) Typevarset.empty sign.in_args in
                      let empty_d3 = Typevarset.fold (fun var acc -> TypeVarMap.add var (Monotypeset.add Top Monotypeset.empty) acc) vars TypeVarMap.empty in
                      let eval_ret =
-                       begin match collect_constraints in_types cur.d3 sign.in_args empty_d3 (Some (IntMap.empty, TypeVarMap.empty)) with
-                       | None -> debug "collect_constraints: None!@\n"; assert false (* [] *)
-                       | Some (cstrs, d3) ->
-                          debug "constraints found@\n";
-                          (* FIXME: use d3, or remove it? *)
-                          (* TODO: change output to be a singleton for both stubs and summaries... *)
-                          let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
-                          let output = subst_ctrs output cstrs in
-                          debug "output_ty = %a@\n" pp_polytype output;
-                          let tid, ncur = get_type ~local_use:true cur output in
-                          let flow_ret = Flow.set_domain_cur ncur man flow in
-                          [Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret] end in
+                       let cstrs = collect_constraints in_types cur.d3 sign.in_args empty_d3 [IntMap.empty, cur.d3 (*cur.d3?*) (*TypeVarMap.empty*)] in
+                       if cstrs = [] then let () = debug "collect_constraints: None!@\n" in assert false
+                       else
+                         List.map (fun (cstrs, d3) ->
+                       (* begin match collect_constraints in_types cur.d3 sign.in_args empty_d3 [IntMap.empty, (\* cur.d3 ? *\) TypeVarMap.empty] with
+                        * | None -> debug "collect_constraints: None!@\n"; assert false (\* [] *\)
+                        * | Some (cstrs, d3) -> *)
+                             debug "constraints found: %a@\n" (IntMap.fprint map_printer_endl (fun fmt k -> Format.fprintf fmt "(%d)" k) pp_polytype) cstrs;
+                             (* FIXME: use d3, or remove it? *)
+                             (* TODO: change output to be a singleton for both stubs and summaries... *)
+                             let output = assert ((List.length sign.out_args) = 1); List.hd sign.out_args in
+                             let output = subst_ctrs output cstrs in
+                             debug "output_ty = %a, d3=%a@\n" pp_polytype output pp_d3 d3;
+                             let tid, ncur = get_type ~local_use:true cur output in
+                             let flow_ret = Flow.set_domain_cur {ncur with d3} man flow in
+                             Eval.singleton (mk_expr (E_type_partition tid) range) flow_ret) cstrs
+                     in
                      let eval_exns = List.map (fun exn -> man.exec (Utils.mk_builtin_raise exn range) flow |> Eval.empty_singleton) sign.possible_exn in
                      eval_ret @ eval_exns in
                    let evals = List.fold_left (fun acc sign -> (process_sign sign) @ acc) [] f_signatures in
@@ -893,18 +967,19 @@ module Domain =
                        | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
                        | _ -> assert false in
                      if Typingdomain.polytype_leq (pty_el, cur.d3) (pty_ellist, cur.d3) then
-                       Eval.singleton lst flow
+                       Eval.singleton (mk_py_none range) flow
                      else
-                       let ty, d3, pos_d3 = Typingdomain.join_poly (pty_el, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in
-                       let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype ty in
-                       let cur = {cur with d3; pos_d3} in
-                       let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
+                       let open Typingdomain in
+                       let cur = Flow.get_domain_cur man flow in
+                       let dummy_annot = Flow.get_all_annot flow in
+                       let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_el cur.d3) in
+                       let el_type, cur = get_mtypes cur els_types in
+                       let list_tid, cur = get_type ~local_use:true cur (List el_type) in
+                       (* let ty, d3, pos_d3 = Typingdomain.join_poly (pty_el, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in *)
+                       let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype (List el_type) in
                        let flow = Flow.set_domain_cur cur man flow in
-                       match ekind @@ List.hd args with
-                       | E_var _ ->
-                          man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
-                            Eval.singleton (mk_py_none range)
-                       | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                       man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                         Eval.singleton (mk_py_none range)
                    )
                    ~felse:tyerror
                    man flow
@@ -940,16 +1015,15 @@ module Domain =
                          if Typingdomain.polytype_leq (pty_elext, cur.d3) (pty_ellist, cur.d3) then
                            Eval.singleton lst flow
                          else
-                           let ty, d3, pos_d3 = Typingdomain.join_poly (pty_elext, cur.d3) (pty_ellist, cur.d3) cur.d3 cur.pos_d3 in
-                           let () = debug "Result of the merge is %a@\n" Typingdomain.pp_polytype ty in
-                           let cur = {cur with d3; pos_d3} in
-                           let list_tid, cur = Typingdomain.get_type ~local_use:true cur (List ty) in
+                           let open Typingdomain in
+                           let cur = Flow.get_domain_cur man flow in
+                           let dummy_annot = Flow.get_all_annot flow in
+                           let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_elext cur.d3) in
+                           let el_type, cur = get_mtypes cur els_types in
+                           let list_tid, cur = get_type ~local_use:true cur (List el_type) in
                            let flow = Flow.set_domain_cur cur man flow in
-                           match ekind @@ List.hd args with
-                           | E_var _ ->
-                              man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
-                                Eval.singleton (mk_py_none range)
-                           | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                           man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                             Eval.singleton (mk_py_none range)
                        )
                        ~felse:tyerror
                        man flow
@@ -978,7 +1052,54 @@ module Domain =
              )
          |> OptionExt.return
 
-
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__setitem__")}, _)}, args, []) ->
+         let tyerror = fun flow ->
+           man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+             Eval.empty_singleton in
+         if List.length args = 3 then
+           Eval.eval_list args man.eval flow |>
+             Eval.bind (fun eargs flow ->
+                 let lst, idx, value = match eargs with | [e1;e2;e3] -> e1, e2, e3
+                                                        | _ -> assert false in
+                 Eval.assume (mk_py_isinstance_builtin lst "list" range)
+                   man flow
+                   ~fthen:(fun flow ->
+                     Eval.assume (mk_py_isinstance_builtin idx "int" range)
+                       man flow
+                       ~fthen:(fun flow ->
+                         let cur = Flow.get_domain_cur man flow in
+                         let pty_ellist =
+                           let pty_list = match ekind lst with
+                           | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                           | _ -> assert false in
+                           match pty_list with
+                           | List x -> x
+                           | _ -> assert false in
+                         let pty_value = match ekind value with
+                           | E_type_partition i -> Typingdomain.TypeIdMap.find i cur.d2
+                           | _ -> assert false in
+                         if Typingdomain.polytype_leq (pty_value, cur.d3) (pty_ellist, cur.d3) then
+                           man.eval (mk_py_none range) flow
+                         else
+                           (* FIXME: perform weak update in both cases *)
+                           let open Typingdomain in
+                           let cur = Flow.get_domain_cur man flow in
+                           let dummy_annot = Flow.get_all_annot flow in
+                           let els_types = Monotypeset.union dummy_annot (concretize_poly pty_ellist cur.d3) (concretize_poly pty_value cur.d3) in
+                           let el_type, cur = get_mtypes cur els_types in
+                           let list_tid, cur = get_type ~local_use:true cur (List el_type) in
+                           let flow = Flow.set_domain_cur cur man flow in
+                           man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
+                             man.eval (mk_py_none range)
+                       )
+                       ~felse:tyerror
+                   )
+                   ~felse:tyerror
+               ) |> OptionExt.return
+         else
+           tyerror flow |> OptionExt.return
+         (* args = list, el, value *)
+         (* transformer ça en Weak Update list = el ? *)
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, args, []) ->
        *    Eval.eval_list args man.eval flow |>
@@ -1306,7 +1427,7 @@ module Domain =
                            | E_var _ ->
                               man.exec (mk_assign (List.hd args) (mk_expr (E_type_partition list_tid) range) range) flow |>
                                 Eval.singleton (mk_py_none range)
-                           | _ -> Exceptions.panic "list.append on non-variable: todo...%a@\n" pp_expr (List.hd args)
+                           | _ -> Exceptions.panic "dict.update on non-variable: todo...%a@\n" pp_expr (List.hd args)
                        )
                        ~felse:tyerror
                        man flow
@@ -1378,7 +1499,7 @@ module Domain =
                          | E_type_partition tid ->
                             let pty = match Typingdomain.TypeIdMap.find tid cur.d2 with
                               | Typingdomain.FiniteTuple l -> l
-                              | _ -> assert false in pty
+                              | _ -> debug "%d %a@\n" tid Typingdomain.pp_polytype (Typingdomain.TypeIdMap.find tid cur.d2); assert false in pty
                          | _ -> assert false in
                        (* FIXME: no choice but to join all types... *)
                        let merged_types =
@@ -1676,29 +1797,34 @@ module Domain =
                  let open Typingdomain in
                  let li, ty = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
                  let cur = Flow.get_domain_cur man flow in
+                 let li, cur = match ekind li with
+                   | E_type_partition i ->
+                      begin match TypeIdMap.find i cur.d2 with
+                      | List x ->
+                         let rec process x = match x with
+                           | Instance {classn} -> classn, cur
+                           | List _ -> let x, y = builtin_cl_and_mro "list" in Class (x, y), cur
+                           | Dict _ -> let x, y = builtin_cl_and_mro "dict" in Class (x, y), cur
+                           | Typevar a ->
+                              let mtys = TypeVarMap.find a cur.d3 in
+                              let new_d3 = TypeVarMap.add a (Monotypeset.map (fun x -> mono_cast (fst @@ process (poly_cast x))) mtys) cur.d3 in
+                              let d = {cur with d3 = new_d3} in
+                              x, d
+                           | _ -> Exceptions.panic "todo, assertlistof %a@\n@\n" pp_polytype x in
+                         let ty, cur = process x in
+                         List ty, cur
+                      | _ -> assert false end
+                   | _ -> assert false in
                  let ty = match ekind ty with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | E_py_object (addr, _) ->
                       begin match addr.addr_kind with
-                          | A_py_class (c, mro) -> Instance {classn=(Class (c, mro)); uattrs=StringMap.empty; oattrs=StringMap.empty}
-                          (* | A_py_class (c, mro) -> Typingdomain.Class (c, mro)
-                           * | A_py_module m ->         Typingdomain.Module m
-                           * | A_py_function f ->       Typingdomain.Function f
-                           * | A_py_method (func, self) ->
-                           *    let func = match (fst func).addr_kind with
-                           *      | A_py_function f -> f
-                           *      | _ -> assert false in
-                           *    let self = match ekind self with
-                           *      | E_type_partition i -> i
-                           *      | _ -> assert false in
-                           *    Typingdomain.Method (func, self) *)
-                          | _ -> Exceptions.panic "ni@\n"
+                      | A_py_class (c, mro) -> Class (c, mro)
+                      | _ -> assert false
                       end
                    | _ -> assert false in
-                 let li = match ekind li with
-                   | E_type_partition i -> TypeIdMap.find i cur.d2
-                   | _ -> assert false in
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range flow
+                 debug "list_of_leq? li=%a ty=%a d3=%a@\n" pp_polytype li pp_polytype (List ty) pp_d3 cur.d3;
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (List ty, cur.d3)) range) range (Flow.set_domain_cur cur man flow)
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1735,7 +1861,7 @@ module Domain =
                  let li = match ekind li with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (Set ty, cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (li, cur.d3) (Set ty, cur.d3)) range) range flow
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1773,8 +1899,8 @@ module Domain =
                  let dict = match ekind dict with
                    | E_type_partition i -> TypeIdMap.find i cur.d2
                    | _ -> assert false in
-                 debug "assert_dict_of %a [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) pp_polytype dict pp_d3 cur.d3 pp_polytype (Dict (ty_k, ty_v));
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) range flow
+                 debug "assert_dict_of %a [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) pp_polytype dict pp_d3 cur.d3 pp_polytype (Dict (ty_k, ty_v)) pp_d3 cur.d3;
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (dict, cur.d3) (Dict (ty_k, ty_v), cur.d3)) range) range flow
                )
            |> OptionExt.return
          else tyerror flow |> OptionExt.return
@@ -1794,7 +1920,7 @@ module Domain =
                          FiniteTuple (List.map (function
                                           | Instance {classn} -> classn
                                           | List _ ->
-                                             let x, y = Addr.builtin_cl_and_mro "list" in
+                                             let x, y = builtin_cl_and_mro "list" in
                                              Class (x, y)
                                           | _ -> Exceptions.panic "otod, assert_tuple_of@\n") t)
                       | _ -> assert false end
@@ -1806,7 +1932,7 @@ module Domain =
                       | _ -> assert false end
                    | _ -> assert false in
                  debug "assert_tuple of %a: [%a[%a] <=? %a[%a]]@\n" pp_expr (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) pp_polytype ty_var pp_d3 cur.d3 pp_polytype ty_classes pp_d3 cur.d3;
-                 Libs.Mopsa.check man (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) range flow
+                 Libs.Py_mopsa.check man (mk_py_bool (polytype_leq (ty_var, cur.d3) (ty_classes, cur.d3)) range) range flow
                ) |> OptionExt.return
          else tyerror flow |> OptionExt.return
 
@@ -1890,7 +2016,22 @@ module Domain =
          None
 
 
-    let ask query man flow = None
+    let is_type_query : type r. r Framework.Query.query -> bool =
+      function
+      | Q_types _ -> true
+      | _ -> false
+
+    let ask : type r. r Framework.Query.query -> ('a, t) man -> 'a flow -> r option =
+      fun query man flow ->
+      match query with
+      | Q_types t ->
+         let cur = Flow.get_domain_cur man flow in
+         let tid = match ekind t with
+           | E_type_partition i -> i
+           | _ -> assert false in
+         Some (Typingdomain.TypeIdMap.find tid cur.d2)
+      | _ -> None
+
   end
 
 let () = register_domain (module Domain)

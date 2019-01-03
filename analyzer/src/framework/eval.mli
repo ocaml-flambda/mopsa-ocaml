@@ -18,7 +18,7 @@ val empty_singleton : 'a flow -> ('a, 'e) evl
 
 val join : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
-val join_list : ('a, 'e) evl list -> ('a, 'e) evl
+val join_list : ?empty:(('a, 'e) evl) -> ('a, 'e) evl list -> ('a, 'e) evl
 
 val meet : ('a, 'e) evl  -> ('a, 'e) evl  -> ('a, 'e) evl
 
@@ -43,15 +43,18 @@ val fold2 :
     'b * 'c
 
 val substitute :
-    (('a, 'e) evl_case -> 'b) ->
+    ('e -> 'a flow -> 'b) ->
     ('b -> 'b -> 'b) ->
     ('b -> 'b -> 'b) ->
+    ('b) ->
     ('a, 'e) evl ->
     'b
 
 val iter : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
 
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
+
+val bind_return : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl option
 
 val bind_opt : ('e -> 'a flow -> ('a, 'f) evl option) -> ('a, 'e) evl -> ('a, 'f) evl option
 
@@ -77,8 +80,8 @@ val switch :
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) evl -> unit
 
 val map:
-  (('a, 'e) evl_case -> ('a, 'f) evl_case) ->
-  ('a, 'e) evl -> ('a, 'f) evl
+  ('e -> 'a flow -> 'e * 'a flow) ->
+  ('a, 'e) evl -> ('a, 'e) evl
 
 val choose : ('a, 'e) evl -> ('e option * 'a flow) option
 

@@ -8,11 +8,10 @@
 
 (** None constant. *)
 
-open Framework.Essentials
-open Framework.Ast
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
+open Universal.Ast
 
 module Domain =
   struct

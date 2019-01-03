@@ -19,8 +19,9 @@
 (* Constants *)
 %token <Z.t> INT_CONST
 %token <float> FLOAT_CONST
-%token <char> CHAR_CONST
+%token <int> CHAR_CONST
 %token <string> STRING_CONST
+%token INVALID
 
 (* Identifiers *)
 %token <string> IDENT
@@ -36,7 +37,7 @@
 %token LAND LOR
 %token BAND BOR
 %token LNOT BNOT
-%token ARROW ADDROF STAR
+%token ARROW STAR
 %token GT GE LT LE EQ NEQ
 %token RSHIFT LSHIFT BXOR
 
@@ -44,6 +45,7 @@
 %token LPAR RPAR
 %token LBRACK RBRACK
 %token COLON SEMICOL DOT COMMA
+%token PRIME
 %token BEGIN END
 %token EOF
 
@@ -51,8 +53,11 @@
 %token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE OLD RETURN SIZE OFFSET BASE
+%token FREE PRIMED RETURN SIZE SIZEOF OFFSET BASE PTR_VALID
 %token FLOAT_VALID FLOAT_INF FLOAT_NAN
+
+(* Deprecated *)
+%token OLD
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
@@ -81,59 +86,59 @@
 %nonassoc CAST
 %left LBRACK
 %nonassoc UNARY
-%left DOT ARROW
+%left DOT ARROW COLON
+%right PRIME
 
 %start stub
 
-%type <Cst.stub Location.with_range option> stub
+%type <Cst.stub option> stub
 
 %%
 
 stub:
-  | BEGIN predicate_list requires_list assigns_list local_list ensures_list END EOF
-    {
-      Some (
-          with_range
-            (S_simple {
-                 simple_stub_predicates = $2;
-                 simple_stub_requires   = $3;
-                 simple_stub_assigns    = $4;
-                 simple_stub_local      = $5;
-                 simple_stub_ensures    = $6;
-            })
-            (from_lexing_range $startpos $endpos)
-        )
-    }
-
-  | BEGIN predicate_list requires_list case_list END EOF
-    {
-      Some (
-          with_range
-            (S_case {
-                 case_stub_predicates = $2;
-                 case_stub_requires   = $3;
-                 case_stub_cases      = $4;
-            })
-            (from_lexing_range $startpos $endpos)
-        )
-    }
-
+  | BEGIN with_range(section_list) END EOF { Some $2 }
   | EOF { None }
 
-(* Requirements section *)
-requires_list:
+(* Sections *)
+section_list:
   | { [] }
-  | with_range(requires) requires_list { $1 :: $2 }
+  | section section_list { $1 :: $2 }
 
+section:
+  | with_range(case_section) { S_case $1 }
+  | leaf_section { S_leaf $1 }
+  | with_range(predicate)    { S_predicate $1 }
+
+(* Case section *)
+case_section:
+  | CASE STRING_CONST COLON leaf_section_list SEMICOL
+    {
+      {
+        case_label = $2;
+        case_body  = $4;
+      }
+    }
+
+(* Leaf sections *)
+leaf_section_list:
+  | { [] }
+  | leaf_section leaf_section_list { $1 :: $2 }
+
+leaf_section:
+  | with_range(local)      { S_local $1 }
+  | with_range(assumes)    { S_assumes $1 }
+  | with_range(requires)   { S_requires $1 }
+  | with_range(assigns)    { S_assigns $1 }
+  | with_range(ensures)    { S_ensures $1 }
+  | with_range(free)       { S_free $1 }
+
+
+(* Requirement section *)
 requires:
   | REQUIRES COLON with_range(formula) SEMICOL { $3 }
 
 
-(* Locals section *)
-local_list:
-  | { [] }
-  | with_range(local) local_list { $1 :: $2 }
-
+(* Local section *)
 local:
   | LOCAL COLON c_qual_typ var ASSIGN local_value SEMICOL
     {
@@ -148,11 +153,7 @@ local_value:
   | NEW resource { L_new $2 }
   | with_range(var) LPAR args RPAR { L_call ($1, $3) }
 
-(* Predicates section *)
-predicate_list:
-  | { [] }
-  | with_range(predicate) predicate_list { $1 :: $2 }
-
+(* Predicate section *)
 predicate:
   | PREDICATE var COLON with_range(formula) SEMICOL
     {
@@ -172,11 +173,7 @@ predicate:
       }
     }
 
-(* Assignments section *)
-assigns_list:
-  | { [] }
-  | with_range(assigns) assigns_list { $1 :: $2 }
-
+(* Assignment section *)
 assigns:
   | ASSIGNS COLON with_range(expr) SEMICOL
     {
@@ -186,46 +183,32 @@ assigns:
       }
     }
 
-  | ASSIGNS COLON with_range(expr) LBRACK with_range(expr) COMMA with_range(expr) RBRACK SEMICOL
+  | ASSIGNS COLON with_range(expr) assigns_offset_list SEMICOL
     {
       {
 	assign_target = $3;
-	assign_offset = Some ($5, $7);
+	assign_offset = Some $4;
       }
     }
 
-(* Cases section *)
-case_list:
-  | with_range(case) { [ $1 ] }
-  | with_range(case) case_list { $1 :: $2 }
-
-case:
-  | CASE STRING_CONST COLON assumes_list requires_list local_list assigns_list ensures_list
-    {
-      {
-        case_label    = $2;
-        case_assumes  = $4;
-        case_requires = $5;
-        case_local    = $6;
-        case_assigns  = $7;
-        case_ensures  = $8;
-      }
-    }
-
-(* Assumptions section *)
-assumes_list:
+assigns_offset_list:
   | { [] }
-  | with_range(assumes) assumes_list { $1 :: $2 }
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK assigns_offset_list
+    {
+      ($2, $4) :: $6
+    }
 
+(* Free section *)
+free:
+  | FREE COLON with_range(expr) SEMICOL { $3 }
+
+
+(* Assumption section *)
 assumes:
   | ASSUMES COLON with_range(formula) SEMICOL { $3 }
 
 
 (* Ensures section *)
-ensures_list:
-  | { [] }
-  | with_range(ensures) ensures_list { $1 :: $2 }
-
 ensures:
   | ENSURES COLON with_range(formula) SEMICOL { $3 }
 
@@ -240,8 +223,7 @@ formula:
   | NOT with_range(formula)                           { F_not $2 }
   | FORALL c_qual_typ var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
   | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
-  | var IN set                                        { F_in ($1, $3) }
-  | FREE with_range(expr)                             { F_free $2 }
+  | with_range(expr) IN set                           { F_in ($1, $3) }
   | LPAR formula RPAR                                 { $2 }
 
 (* C expressions *)
@@ -252,6 +234,7 @@ expr:
   | STRING_CONST                                      { E_string $1}
   | FLOAT_CONST                                       { E_float $1 }
   | CHAR_CONST                                        { E_char $1 }
+  | INVALID                                           { E_invalid }
   | var                                               { E_var $1 }
   | unop with_range(expr)                             { E_unop ($1, $2) } %prec UNARY
   | with_range(expr) binop with_range(expr)           { E_binop ($2, $1, $3) }
@@ -259,9 +242,11 @@ expr:
   | STAR with_range(expr)                             { E_deref $2 } %prec UNARY
   | with_range(expr) LBRACK with_range(expr) RBRACK   { E_subscript ($1, $3) }
   | with_range(expr) DOT IDENT                        { E_member ($1, $3) }
+  | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
-  | with_range(builtin) LPAR with_range(expr) RPAR    { E_builtin_call ($1, $3) }
+  | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
+  | with_range(expr) PRIME                            { E_builtin_call (PRIMED, $1) }
 
 
 (* C types *)
@@ -336,16 +321,20 @@ set:
 
 %inline builtin:
   | SIZE   { SIZE }
+  | SIZEOF   { SIZEOF }
   | OFFSET { OFFSET }
   | BASE   { BASE }
-  | OLD    { OLD }
+  | PRIMED { PRIMED }
+  | PTR_VALID { PTR_VALID }
   | FLOAT_VALID { FLOAT_VALID }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
+  (* Deprecated *)
+  | OLD    { OLD }
 
 args:
   |                             { [] }
-  | with_range(expr) COLON args { $1 :: $3 }
+  | with_range(expr) COMMA args { $1 :: $3 }
   | with_range(expr)            { [ $1 ] }
 
 var_list:

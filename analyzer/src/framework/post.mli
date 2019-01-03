@@ -52,6 +52,10 @@ val bind_with_cleaners :
   ?zone:Zone.zone -> ('a, _) man ->
   ('e -> Ast.stmt list -> 'a flow -> 'a post) -> ('a, 'e) evl -> 'a post
 
+val bind_return :
+  ?zone:Zone.zone -> ('a, _) man ->
+  ('e -> 'a flow -> 'a post) -> ('a, 'e) evl -> 'a post option
+
 val bind_opt :
   ?zone:Zone.zone -> ('a, _) man ->
   ('e -> 'a flow -> 'a post option) -> ('a, 'e) evl -> 'a post option

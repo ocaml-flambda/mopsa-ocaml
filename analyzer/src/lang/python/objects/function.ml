@@ -8,23 +8,23 @@
 
 (** Definition of python functions and evaluation of their calls. *)
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
+open Universal.Ast
 
 type expr_kind +=
    | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
 
 let () =
-  register_pp_expr (fun default fmt exp ->
+  register_expr_pp (fun default fmt exp ->
       match ekind exp with
       | E_py_sum_call (f, args) ->
          Format.fprintf fmt "{py_sum_call}%a(%a)"
            pp_expr f
            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
       | _ -> default fmt exp);
-  Visitor.register_expr_visitor (fun default exp ->
+  register_expr_visitor (fun default exp ->
       match ekind exp with
       | E_py_sum_call(f, args) ->
          {exprs = f :: args; stmts = []},
@@ -133,7 +133,7 @@ module Domain =
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
-                                                   if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+                                                   if is_builtin_name v.vname then (mk_py_object (find_builtin v.vname) range)
                                                    else mk_expr (E_py_undefined false) range
                                                  in
                                                  mk_assign (mk_var v range) e range
@@ -143,7 +143,7 @@ module Domain =
 
                      let ret_var = mk_tmp ~vtyp:T_any () in
                      let fundec = {
-                         fun_name = Var.var_uniq_name (pyfundec.py_func_var);
+                         fun_name = uniq_vname (pyfundec.py_func_var);
                          fun_parameters = pyfundec.py_func_parameters;
                          fun_locvars = pyfundec.py_func_locals;
                          fun_body = pyfundec.py_func_body;
@@ -172,13 +172,13 @@ module Domain =
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
-             if Libs.Mopsa.is_builtin_fundec func then
-               let name = Libs.Mopsa.builtin_fundec_name func in
+           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
+             if Libs.Py_mopsa.is_builtin_fundec func then
+               let name = Libs.Py_mopsa.builtin_fundec_name func in
                F_builtin name
              else F_user func
          in
-         Addr.eval_alloc man (A_py_function kind) stmt.srange flow |>
+         eval_alloc man (A_py_function kind) stmt.srange flow |>
            Post.bind man (fun addr flow ->
                let obj = (addr, mk_py_empty range) in
                man.exec

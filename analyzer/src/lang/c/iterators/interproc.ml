@@ -8,8 +8,11 @@
 
 (** Abstraction of C function calls *)
 
-open Framework.Essentials
+open Mopsa
+open Mm.Common.Points_to
+open Universal.Ast
 open Ast
+open Zone
 
 
 module Domain =
@@ -37,9 +40,9 @@ struct
   let exec_interface = {export = []; import = []}
 
   let eval_interface = {
-    export = [Zone.Z_c, Zone.Z_c_scalar];
+    export = [Z_c, Z_c_low_level];
     import = [
-      Zone.Z_c, Zone.Z_c_points_to_fun;
+      Z_c, Z_c_points_to;
       Universal.Zone.Z_u, any_zone;
       Stubs.Zone.Z_stubs, Z_any
     ]
@@ -62,28 +65,21 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_call(f, args) ->
+    | E_call(f, args) ->
       begin
-        man.eval ~zone:(Zone.Z_c, Zone.Z_c_points_to_fun) f flow |>
+        man.eval ~zone:(Zone.Z_c, Z_c_points_to) f flow |>
         Eval.bind @@ fun f flow ->
 
         match ekind f with
-        | E_c_builtin_function(name) ->
-          let () = debug "builtin : %a" pp_expr f in
-          let exp' = {exp with ekind = E_c_builtin_call(name, args)} in
-          man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) exp' flow
+        | E_c_points_to (P_fun f) when Libs.C_mopsa.is_builtin_function f.c_func_var.vname ->
+          let exp' = {exp with ekind = E_c_builtin_call(f.c_func_var.vname, args)} in
+          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
-        | E_c_function (
-            {
-              c_func_body = Some body;
-              c_func_stub = None
-            } as fundec
-          ) ->
-          debug "call to %a, body @[%a@]" pp_var fundec.c_func_var pp_stmt body;
+        | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
           let open Universal.Ast in
-          let ret_var = mk_tmp ~vtyp:fundec.c_func_return () in
+          let ret_var = mktmp fundec.c_func_return () in
           let fundec' = {
-            fun_name = get_var_uniq_name fundec.c_func_var;
+            fun_name = uniq_vname fundec.c_func_var;
             fun_parameters = fundec.c_func_parameters;
             fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
@@ -96,24 +92,17 @@ struct
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
-        | E_c_function {c_func_stub = Some stub} ->
-          let exp' = Stubs.Ast.mk_stub_call stub.content args exp.erange in
+        | E_c_points_to (P_fun {c_func_stub = Some stub}) ->
+          let exp' = Stubs.Ast.mk_stub_call stub args exp.erange in
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-        | E_c_function {c_func_body = None; c_func_var} ->
+        | E_c_points_to (P_fun {c_func_body = None; c_func_var}) ->
           panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var
 
         | _ -> assert false
       end |>
       OptionExt.return
 
-    | E_c_cast(e, _)
-      when (exp |> etyp |> is_c_pointer_type)
-        && (exp |> etyp |> under_pointer_type |> is_c_function_type)
-      ->
-      let t' = exp |> etyp |> under_pointer_type in
-      man.eval ~zone:(Zone.Z_c, Zone.Z_c_scalar) {e with etyp = t'} flow |>
-      OptionExt.return
 
     | _ -> None
 

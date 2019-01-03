@@ -8,12 +8,13 @@
 
 (** Zones for the Universal language. *)
 
-open Framework.Essentials
+open Mopsa
 open Ast
 
 type zone +=
   | Z_u
   | Z_u_num
+  | Z_u_heap
   | Z_u_string
   | Z_u_tree
 
@@ -29,9 +30,11 @@ let () =
         | E_function _
         | E_array _
         | E_subscript _
+        | E_alloc_addr _
         | E_addr _
         | E_len _                            -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -53,8 +56,23 @@ let () =
           when is_numeric_type (etyp exp)
           -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
+        (* ------------------------------------------- *)
+        | _                                  -> Process
+      );
+  };
+
+  register_zone {
+    zone = Z_u_heap;
+    subset = Some Z_u;
+    name = "U/Heap";
+    eval = (fun exp ->
+        match ekind exp with
+        (* ------------------------------------------- *)
+        | E_alloc_addr _
+        | E_addr _                           -> Keep
         (* ------------------------------------------- *)
         | _                                  -> Process
       );
@@ -74,6 +92,7 @@ let () =
         | E_addr _
         | E_len _                            -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -95,6 +114,7 @@ let () =
         | E_addr _
         | E_len _                            -> Keep
         (* ------------------------------------------- *)
+        | E_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -103,23 +123,3 @@ let () =
   };
 
   ()
-
-(* let () =
- *   register_zone {
- *       subset = (fun next z1 z2 ->
- *           match z1, z2 with
- *             | Z_u_num, Z_u -> true
- *             | Z_u_string, Z_u -> true
- *             | Z_u_tree, Z_u -> true
- *             | _ -> next z1 z2
- *         );
- *       print = (fun next fmt z ->
- *           match z with
- *           | Z_u -> Format.fprintf fmt "universal"
- *           | Z_u_num -> Format.fprintf fmt "universal/num"
- *           | Z_u_string -> Format.fprintf fmt "universal/string"
- *           | Z_u_tree -> Format.fprintf fmt "universal/tree"
- *           | _ -> next fmt z
- *         );
- *     }
- * >>>>>>> mopsa-v2-universal-w-tree *)

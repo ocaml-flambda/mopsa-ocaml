@@ -101,12 +101,9 @@ void test_address_of_array() {
 
 void test_address_of_multi_array() {
   int a[5][5];
-  int *p, *q;
-  p = &a[0];
-  *p = 10;
-  _mopsa_assert(a[0][0] == 10);
-  q = &a[0][0];
-  *q = 20;
+  int *p;
+  p = &a[0][0];
+  *p = 20;
   _mopsa_assert(a[0][0] == 20);
 }
 

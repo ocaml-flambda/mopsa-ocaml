@@ -41,10 +41,7 @@ struct
     if Options.(common_options.cache) == 0 then
       ff ()
     else
-      try
-        let ret = List.assoc (zone, stmt, flow) !exec_cache in
-        debug "exec from cache";
-        ret
+      try List.assoc (zone, stmt, flow) !exec_cache
       with Not_found ->
         let flow' = ff () in
         add_to_cache exec_cache ((zone, stmt, flow), flow');
@@ -54,10 +51,7 @@ struct
     if Options.(common_options.cache) == 0
     then f exp man flow
     else
-      try
-        let ret = List.assoc (zone, exp, flow) !eval_cache in
-        debug "eval from cache";
-        ret
+      try List.assoc (zone, exp, flow) !eval_cache
       with Not_found ->
         let evals = f exp man flow in
         add_to_cache eval_cache ((zone, exp, flow), evals);

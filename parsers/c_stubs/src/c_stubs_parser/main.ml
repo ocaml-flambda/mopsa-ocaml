@@ -14,7 +14,7 @@ open Location
 let parse_function_comment
     (func:C_AST.func)
     (prj:C_AST.project)
-  : Ast.stub with_range option
+  : Ast.stub option
   =
   match func.func_com with
   | [] -> None
@@ -29,8 +29,10 @@ let parse_function_comment
     let line = com.com_range.range_begin.loc_line in
     let col = com.com_range.range_begin.loc_column in
 
+    let comment' = Passes.Macro_expansion.doit comment prj in
+
     (* Create the lexing buffer *)
-    let buf = Lexing.from_string comment in
+    let buf = Lexing.from_string comment' in
     buf.lex_curr_p <- {
       pos_fname = file;
       pos_lnum = line;

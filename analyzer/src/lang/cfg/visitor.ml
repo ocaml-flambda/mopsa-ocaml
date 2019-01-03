@@ -9,7 +9,7 @@
 
 (** Visitors for CFG. *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Visitor
 open Universal.Ast
 open Ast

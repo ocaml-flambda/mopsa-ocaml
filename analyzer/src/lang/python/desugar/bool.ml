@@ -8,10 +8,10 @@
 
 (** Handling of and/or operators. *)
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
+open Universal.Ast
 open Zone
 
 

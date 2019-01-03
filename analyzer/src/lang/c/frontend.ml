@@ -10,7 +10,7 @@
 
 
 open C_AST
-open Framework.Essentials
+open Mopsa
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -157,6 +157,9 @@ and from_project prj =
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
+                (* FIXME: var_kind is not yet in the AST! *)
+                (*        So, for the moment, we ignore externals. *)
+                List.filter (fun v -> v.var_kind != Variable_extern) |>
                 List.map (from_var_with_init ctx)
   in
 
@@ -193,6 +196,9 @@ and from_function =
 and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
+    | C_AST.S_local_declaration v when v.var_kind = Variable_extern ->
+      (* FIXME: is it correct to ignore declaration of external variables? *)
+      Universal.Ast.S_block []
     | C_AST.S_local_declaration v ->
       let v, init, range = from_var_with_init fun_ctx v in
       Ast.S_c_local_declaration (v, init)
@@ -245,7 +251,7 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
       Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
     | C_AST.E_variable v -> E_var (from_var fun_ctx v, STRONG)
     | C_AST.E_function f -> Ast.E_c_function (find_function_in_context fun_ctx f)
-    | C_AST.E_call (f, args) -> Ast.E_c_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
+    | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
     | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr fun_ctx e)
     | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr fun_ctx e1, from_expr fun_ctx e2)
     | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, true)
@@ -513,39 +519,57 @@ and from_stub_comment prj ctx f =
   | Some stub -> Some (from_stub ctx f stub)
 
 and from_stub ctx f stub =
-  bind_range stub @@ fun stub ->
   {
-    stub_name     = f.func_org_name;
-    stub_requires = List.map (from_stub_requires ctx) stub.stub_requires;
+    stub_name     = stub.stub_name;
     stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
-    stub_body     = from_stub_body ctx stub.stub_body;
+    stub_body     = List.map (from_stub_section ctx) stub.stub_body;
+    stub_range    = stub.stub_range;
+    stub_locals   = List.map (from_stub_local ctx) stub.stub_locals;
+    stub_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
     stub_return_type =
       match f.func_return with
       | (T_void, _) -> None
       | t -> Some (from_typ ctx t);
   }
 
-and from_stub_body ctx body =
-  match body with
-  | B_post post -> B_post (from_stub_post ctx post)
-  | B_cases cases -> B_cases (List.map (from_stub_case ctx) cases)
+and from_stub_section ctx section =
+  match section with
+  | S_leaf leaf -> S_leaf (from_stub_leaf ctx leaf)
+  | S_case case -> S_case (from_stub_case ctx case)
 
-and from_stub_post ctx post =
+and from_stub_leaf ctx leaf =
+  match leaf with
+  | S_local local       -> S_local (from_stub_local ctx local)
+  | S_assumes assumes   -> S_assumes (from_stub_assumes ctx assumes)
+  | S_requires requires -> S_requires (from_stub_requires ctx requires)
+  | S_assigns assigns   -> S_assigns (from_stub_assigns ctx assigns)
+  | S_ensures ensures   -> S_ensures (from_stub_ensures ctx ensures)
+  | S_free free         -> S_free (from_stub_free ctx free)
+
+and from_stub_case ctx case =
   {
-    post_assigns = List.map (from_stub_assigns ctx) post.post_assigns;
-    post_local   = List.map (from_stub_local ctx) post.post_local;
-    post_ensures = List.map (from_stub_ensures ctx) post.post_ensures;
+    case_label = case.C_stubs_parser.Ast.case_label;
+    case_body  = List.map (from_stub_leaf ctx) case.case_body;
+    case_locals = List.map (from_stub_local ctx) case.case_locals;
+    case_assigns = List.map (from_stub_assigns ctx) case.case_assigns;
+    case_range = case.case_range;
   }
 
 and from_stub_requires ctx req =
   bind_range req @@ fun req ->
   from_stub_formula ctx req
 
+and from_stub_free ctx free =
+  bind_range free @@ fun free ->
+  from_stub_expr ctx free
+
 and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = OptionExt.option_lift1 (fun (a, b) -> (from_stub_expr ctx a, from_stub_expr ctx b)) assign.assign_offset;
+    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) ->
+        (from_stub_expr ctx a, from_stub_expr ctx b)
+      )) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =
@@ -575,15 +599,6 @@ and from_stub_assumes ctx asm =
   bind_range asm @@ fun asm ->
   from_stub_formula ctx asm
 
-and from_stub_case ctx case =
-  bind_range case @@ fun case ->
-  {
-    case_label    = case.C_stubs_parser.Ast.case_label;
-    case_assumes  = List.map (from_stub_assumes ctx) case.case_assumes;
-    case_requires = List.map (from_stub_requires ctx) case.case_requires;
-    case_post     = from_stub_post ctx case.case_post;
-  }
-
 and from_stub_formula ctx f =
   bind_range f @@ function
   | F_expr e -> F_expr (from_stub_expr ctx e)
@@ -592,8 +607,7 @@ and from_stub_formula ctx f =
   | F_not f -> F_not (from_stub_formula ctx f)
   | F_forall (v, s, f) -> F_forall(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_exists (v, s, f) -> F_exists(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
-  | F_in (v, s) -> F_in(from_var ctx v, from_stub_set ctx s)
-  | F_free e -> F_free(from_stub_expr ctx e)
+  | F_in (v, s) -> F_in(from_stub_expr ctx v, from_stub_set ctx s)
 
 and from_stub_set ctx s =
   match s with
@@ -609,7 +623,8 @@ and from_stub_expr ctx exp =
   | E_int n -> E_constant (C_int n)
   | E_float f -> E_constant (C_float f)
   | E_string s -> E_constant (C_string s)
-  | E_char c -> E_constant (C_c_character (Z.of_int (int_of_char c), Ast.C_char_ascii)) (* FIXME: support other character kinds *)
+  | E_char c -> E_constant (C_c_character (Z.of_int c, Ast.C_char_ascii)) (* FIXME: support other character kinds *)
+  | E_invalid -> E_constant C_c_invalid
   | E_var v -> E_var (from_var ctx v, STRONG)
   | E_unop (op, e) -> E_unop(from_stub_expr_unop op, from_stub_expr ctx e)
   | E_binop (op, e1, e2) -> E_binop(from_stub_expr_binop op, from_stub_expr ctx e1, from_stub_expr ctx e2)
@@ -618,19 +633,24 @@ and from_stub_expr ctx exp =
   | E_cast (t, explicit, e) -> E_c_cast(from_stub_expr ctx e, explicit)
   | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
   | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
+  | E_attribute (o, f) -> E_stub_attribute(from_stub_expr ctx o, f)
   | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
+  | E_builtin_call (PRIMED, arg) -> E_primed(from_stub_expr ctx arg)
   | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
   | E_return -> E_stub_return
 
 and from_stub_builtin f =
-  bind_range f @@ function
-  | OLD -> OLD
+  match f with
+  | PRIMED -> panic "from_stub_builtin: PRIMED should be translated before"
+  | SIZEOF -> panic "from_stub_builtin: SIZEOF should be resolved before"
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
+  | PTR_VALID -> PTR_VALID
   | FLOAT_VALID -> FLOAT_VALID
   | FLOAT_INF -> FLOAT_INF
   | FLOAT_NAN -> FLOAT_NAN
+  | OLD -> panic "old not supported"
 
 and from_stub_log_binop = function
   | AND -> AND
@@ -638,7 +658,7 @@ and from_stub_log_binop = function
   | IMPLIES -> IMPLIES
 
 and from_stub_expr_binop = function
-  | C_stubs_parser.Ast.ADD -> O_plus
+  | C_stubs_parser.Cst.ADD -> O_plus
   | SUB -> O_minus
   | MUL -> O_mult
   | DIV -> O_div
@@ -658,7 +678,7 @@ and from_stub_expr_binop = function
   | BXOR -> O_bit_xor
 
 and from_stub_expr_unop = function
-  | C_stubs_parser.Ast.PLUS -> O_plus
+  | C_stubs_parser.Cst.PLUS -> O_plus
   | MINUS -> O_minus
   | LNOT -> O_log_not
   | BNOT -> O_bit_invert

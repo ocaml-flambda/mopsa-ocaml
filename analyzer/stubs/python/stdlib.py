@@ -389,6 +389,7 @@ class set_iterator(object):
 class tuple(object):
     def __init__(self): pass
     def __iter__(self): pass
+    def __contains__(self): pass
     def __getitem__(self, k): pass
 
 class tuple_iterator(object):
@@ -555,6 +556,7 @@ def repr(obj): pass
 def round(n): pass
 def setattr(obj, attr, val): pass
 def sorted(itr): pass
+def reversed(itr): pass
 def sum(itr): pass
 def vars(obj): pass
 def __import__(modl): pass

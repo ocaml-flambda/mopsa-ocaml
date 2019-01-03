@@ -11,13 +11,14 @@
    variables __name__, __main__, __file__, and collects unit-testing
    functions if required *)
 
-open Framework.Essentials
+open Mopsa
 open Framework.Domains.Stateless
 open Framework.Domains
 open Framework.Manager
 open Framework.Flow
-open Universal.Ast
+open Addr
 open Ast
+open Universal.Ast
 
 
 module Domain =
@@ -47,7 +48,7 @@ struct
         (List.mapi (fun i v ->
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
-               if Addr.is_builtin_name v.vname then (mk_py_object (Addr.find_builtin v.vname) range)
+               if is_builtin_name v.vname then (mk_py_object (find_builtin v.vname) range)
                else mk_expr (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range

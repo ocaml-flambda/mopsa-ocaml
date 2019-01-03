@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Framework.Essentials
+open Mopsa
 
 type alarm_kind +=
    | APyException of expr

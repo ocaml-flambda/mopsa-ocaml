@@ -8,10 +8,10 @@
 
 (** Python data model for subscript access. *)
 
-open Framework.Essentials
-open Universal.Ast
+open Mopsa
 open Ast
 open Addr
+open Universal.Ast
 
 module Domain =
   struct
