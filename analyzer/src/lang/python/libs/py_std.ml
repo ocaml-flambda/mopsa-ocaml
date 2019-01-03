@@ -137,9 +137,9 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sum")}, _)}, [ els; start ], [])  ->
       (* let's desugar sum into tmp = 0; for x in els: tmp = tmp + x; tmp *)
-         let counter = mk_tmp () in
+         let counter = mktmp () in
          let counter_var = mk_var counter range in
-         let target = mk_tmp () in
+         let target = mktmp () in
          let target_var = mk_var target range in
          let assign = mk_assign counter_var (mk_constant T_int (C_int (Z.of_int 0)) range) range in
          let pass = mk_block [] range in

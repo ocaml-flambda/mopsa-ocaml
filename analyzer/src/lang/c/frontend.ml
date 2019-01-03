@@ -51,14 +51,15 @@ type ctx = {
     ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
     (* cache the translation of all named types;
        this is required for records defining recursive data-types
-     *)
+    *)
+    ctx_prj : C_AST.project;
   }
 
 
 let find_function_in_context fun_ctx (f: C_AST.func) =
   try
     List.find (fun c_fun ->
-        c_fun.c_func_var.vuid = f.func_uid
+        c_fun.c_func_uid = f.func_uid
       ) fun_ctx.ctx_fun
   with
   | Not_found -> Exceptions.panic "Could not find function %s in function context" f.func_unique_name
@@ -125,47 +126,37 @@ and parse_file (opts: string list) (file: string) ctx =
 
 
 and from_project prj =
-  debug "%a" (fun fmt prj -> C_print.print_project stdout prj) prj;
-
   let funcs_and_origins =
     StringMap.bindings prj.proj_funcs |>
     List.map snd |>
-    List.map from_function
+    List.map(fun f -> from_function f, f)
   in
   let funcs = List.map fst funcs_and_origins in
   let ctx = {
       ctx_fun = funcs;
       ctx_type = Hashtbl.create 16;
+      ctx_prj = prj;
     }
   in
   List.iter (fun (f, o) ->
-      let typ = T_c_function (Some {
-          c_ftype_return = from_typ ctx o.func_return;
-          c_ftype_params = Array.to_list o.func_parameters |>
-                           List.map (fun p -> from_typ ctx p.var_type);
-          c_ftype_variadic = o.func_variadic;
-        })
-      in
-      f.c_func_var <- from_var_name o.func_org_name o.func_uid typ;
+      f.c_func_uid <- o.func_uid;
+      f.c_func_org_name <- o.func_org_name;
+      f.c_func_unique_name <- o.func_unique_name;
       f.c_func_return <- from_typ ctx o.func_return;
       f.c_func_parameters <- Array.to_list o.func_parameters |> List.map (from_var ctx);
-      f.c_func_static_vars <- List.map (from_var_with_init ctx) o.func_static_vars;
-      f.c_func_local_vars <- List.map (from_var_with_init ctx) o.func_local_vars;
+      f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
+      f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      f.c_func_stub <- from_stub_comment prj ctx o
+      f.c_func_stub <- from_stub_comment ctx o
     ) funcs_and_origins;
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
-                (* FIXME: var_kind is not yet in the AST! *)
-                (*        So, for the moment, we ignore externals. *)
-                List.filter (fun v -> v.var_kind != Variable_extern) |>
-                List.map (from_var_with_init ctx)
+                List.map (from_var ctx)
   in
 
 
-  Ast.C_program (globals, funcs);
-
+  Ast.C_program { c_globals = globals; c_functions = funcs }
 
 
 
@@ -175,7 +166,9 @@ and from_project prj =
 and from_function =
   fun func ->
     {
-      c_func_var = from_var_name func.func_org_name func.func_uid T_any;
+      c_func_org_name = func.func_org_name;
+      c_func_unique_name = func.func_unique_name;
+      c_func_uid = func.func_uid;
       c_func_is_static = func.func_is_static;
       c_func_return = T_any;
       c_func_parameters = [];
@@ -185,9 +178,7 @@ and from_function =
       c_func_variadic = func.func_variadic;
       c_func_stub = None;
       c_func_range = from_range func.func_range;
-    }, func
-
-
+    }
 
 
 (** {2 Statements} *)
@@ -196,12 +187,9 @@ and from_function =
 and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
-    | C_AST.S_local_declaration v when v.var_kind = Variable_extern ->
-      (* FIXME: is it correct to ignore declaration of external variables? *)
-      Universal.Ast.S_block []
     | C_AST.S_local_declaration v ->
-      let v, init, range = from_var_with_init fun_ctx v in
-      Ast.S_c_local_declaration (v, init)
+      let v = from_var fun_ctx v in
+      Ast.S_c_declaration v
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr fun_ctx e)
     | C_AST.S_block block -> from_block fun_ctx srange block |> Framework.Ast.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr fun_ctx cond, from_block fun_ctx srange body, from_block fun_ctx srange orelse)
@@ -315,29 +303,55 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
 (** {2 Variables} *)
 (** ============= *)
 
-and from_var_with_init (fun_ctx) (v: C_AST.variable) : var * Ast.c_init option * range =
-  from_var fun_ctx v, from_init_option fun_ctx v.var_init, from_range v.var_range
-
 and from_var fun_ctx (v: C_AST.variable) : var =
-  from_var_name v.var_org_name v.var_uid (from_typ fun_ctx v.var_type)
-
-and from_var_name (org_name: string) (uid: int) (typ: Framework.Ast.typ) : var =
   {
-    vname = org_name;
-    vuid = uid;
-    vtyp = typ;
+    org_vname = v.var_org_name;
+    uniq_vname = v.var_unique_name;
+    vkind = V_c {
+        var_scope = from_var_scope fun_ctx v.var_kind;
+        var_init = from_var_init fun_ctx v;
+        var_range = from_range v.var_range;
+    };
+    vuid = v.var_uid;
+    vtyp = from_typ fun_ctx v.var_type;
   }
 
-and from_init_option fun_ctx init = match init with
-  | None -> None
-  | Some i -> Some (from_init fun_ctx i)
+and from_var_scope fun_ctx = function
+  | C_AST.Variable_global -> Ast.Variable_global
+  | Variable_extern -> Variable_extern
+  | Variable_local f -> Variable_local (from_function f)
+  | C_AST.Variable_parameter f -> Variable_parameter (from_function f)
+  | C_AST.Variable_file_static tu -> Variable_file_static tu.tu_name
+  | C_AST.Variable_func_static f -> Variable_func_static (from_function f)
 
-and from_init fun_ctx init = match init with
+and from_var_init fun_ctx v =
+  match v.var_init with
+  | Some i -> Some (from_init fun_ctx i)
+  | None -> from_init_stub fun_ctx v
+
+and from_init_option fun_ctx init =
+  match init with
+  | Some i -> Some (from_init fun_ctx i)
+  | None -> None
+
+and from_init fun_ctx init =
+  match init with
   | I_init_expr e -> C_init_expr (from_expr fun_ctx e)
   | I_init_list(il, i) -> C_init_list (List.map (from_init fun_ctx) il, from_init_option fun_ctx i)
   | I_init_implicit t -> C_init_implicit (from_typ fun_ctx t)
 
-
+and from_init_stub ctx v =
+  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj with
+  | None -> None
+  | Some stub ->
+    let stub =   {
+      stub_init_body     = List.map (from_stub_section ctx) stub.stub_body;
+      stub_init_locals   = List.map (from_stub_local ctx) stub.stub_locals;
+      stub_init_range    = stub.stub_range;
+    }
+    in
+    Some (C_init_stub stub)
+    
 
 
 (** {2 Types} *)
@@ -513,20 +527,20 @@ and from_range (range:C_AST.range) =
 (** {2 Stubs annotations} *)
 (** ===================== *)
 
-and from_stub_comment prj ctx f =
-  match C_stubs_parser.Main.parse_function_comment f prj with
+and from_stub_comment ctx f =
+  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj with
   | None -> None
-  | Some stub -> Some (from_stub ctx f stub)
+  | Some stub -> Some (from_stub_func ctx f stub)
 
-and from_stub ctx f stub =
+and from_stub_func ctx f stub =
   {
-    stub_name     = stub.stub_name;
-    stub_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
-    stub_body     = List.map (from_stub_section ctx) stub.stub_body;
-    stub_range    = stub.stub_range;
-    stub_locals   = List.map (from_stub_local ctx) stub.stub_locals;
-    stub_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
-    stub_return_type =
+    stub_func_name     = stub.stub_name;
+    stub_func_params   = List.map (from_var ctx) (Array.to_list f.func_parameters);
+    stub_func_body     = List.map (from_stub_section ctx) stub.stub_body;
+    stub_func_range    = stub.stub_range;
+    stub_func_locals   = List.map (from_stub_local ctx) stub.stub_locals;
+    stub_func_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
+    stub_func_return_type =
       match f.func_return with
       | (T_void, _) -> None
       | t -> Some (from_typ ctx t);

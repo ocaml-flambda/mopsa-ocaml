@@ -51,7 +51,7 @@ module Domain =
          let e =
            match kind_of_object obj with
            | A_py_module(M_user(_, globals)) ->
-              let v = List.find (fun v -> v.vname = name) globals in
+              let v = List.find (fun v -> v.org_vname = name) globals in
               mk_var v range
            | A_py_module(M_builtin m) ->
               let obj = find_builtin_attribute obj name in
@@ -113,10 +113,10 @@ module Domain =
          let rec parse base stmt =
            match skind stmt with
            | S_py_class(cls) ->
-              let name = mk_dot_name base cls.py_cls_var.vname in
+              let name = mk_dot_name base cls.py_cls_var.org_vname in
               let bases = List.map (fun base ->
                               match ekind base with
-                              | E_var (v, _) -> find_builtin v.vname
+                              | E_var (v, _) -> find_builtin v.org_vname
                               | _ -> assert false
                             ) cls.py_cls_bases
               in
@@ -128,8 +128,8 @@ module Domain =
               parse (Some name) cls.py_cls_body
 
            | S_py_function(fundec) ->
-              let name = mk_dot_name base fundec.py_func_var.vname in
-              let fundec = {fundec with py_func_var = {fundec.py_func_var with vname = name}} in
+              let name = mk_dot_name base fundec.py_func_var.org_vname in
+              let fundec = {fundec with py_func_var = {fundec.py_func_var with org_vname = name}} in
               let kind =
                 if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
                   if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name

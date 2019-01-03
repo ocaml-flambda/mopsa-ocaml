@@ -35,14 +35,14 @@ module BaseSet = Framework.Lattices.Powerset.Make(
 
     let print fmt = function
       | PB_block base -> pp_base fmt base
-      | PB_fun f -> pp_var fmt f.Ast.c_func_var
+      | PB_fun f -> Format.pp_print_string fmt f.Ast.c_func_org_name
       | PB_null-> Format.pp_print_string fmt "NULL"
       | PB_invalid -> Format.pp_print_string fmt "Invalid"
 
     let compare p1 p2 =
       match p1, p2 with
       | PB_block b1, PB_block b2 -> compare_base b1 b2
-      | PB_fun f1, PB_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
+      | PB_fun f1, PB_fun f2 -> compare f1.Ast.c_func_unique_name f2.Ast.c_func_unique_name
       | _, _ -> Pervasives.compare p1 p2
   end
   )

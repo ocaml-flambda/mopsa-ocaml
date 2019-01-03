@@ -66,7 +66,8 @@ struct
       Format.fprintf Format.str_formatter "%a_bytes" pp_addr addr;
       Format.flush_str_formatter ()
     in
-    let v = mkv vname addr.addr_uid (T_c_integer C_unsigned_long) in
+    let uniq =  vname ^ ":" ^ (string_of_int addr.addr_uid) in
+    let v = mkv vname uniq (addr.addr_uid) (T_c_integer C_unsigned_long) in
     mk_var v ~mode:addr.addr_mode range
 
 

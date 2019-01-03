@@ -17,16 +17,23 @@ open Universal.Ast
 open Format
 
 
-type stub = {
-  stub_name   : string;
-  stub_body   : section list;
-  stub_params : var list;
-  stub_locals  : local with_range list;
-  stub_assigns : assigns with_range list;
-  stub_return_type : typ option;
-  stub_range  : range;
+(** Stub for a function *)
+type stub_func = {
+  stub_func_name   : string;
+  stub_func_body   : section list;
+  stub_func_params : var list;
+  stub_func_locals  : local with_range list;
+  stub_func_assigns : assigns with_range list;
+  stub_func_return_type : typ option;
+  stub_func_range  : range;
 }
 
+(** Stub for a variable initialization *)
+and stub_init = {
+  stub_init_body : section list;
+  stub_init_locals : local with_range list;
+  stub_init_range : range;
+}
 
 (** {2 Stub sections} *)
 (** ***************** *)
@@ -109,7 +116,7 @@ type quant =
   | EXISTS
 
 type expr_kind +=
-  | E_stub_call of stub (** called stub *) * expr list (** arguments *)
+  | E_stub_call of stub_func (** called stub *) * expr list (** arguments *)
   (** Call to a stubbed function *)
 
   | E_stub_return
@@ -132,6 +139,9 @@ type expr_kind +=
 (*  =-=-=-=-=-=-=- *)
 
 type stmt_kind +=
+  | S_stub_init of var * stub_init
+  (** Initialization of a variable with a stub *)
+
   | S_stub_free of expr
   (** Release a resource *)
 
@@ -188,6 +198,8 @@ let is_expr_quantified e =
     false
     e
 
+let mk_stub_init var stub range =
+  mk_stmt (S_stub_init (var, stub)) range
 
 let mk_stub_free e range =
   mk_stmt (S_stub_free e) range
@@ -325,7 +337,9 @@ let pp_sections fmt secs =
     pp_section
     fmt secs
 
-let pp_stub fmt stub = pp_sections fmt stub.stub_body
+let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
+
+let pp_stub_init fmt stub = pp_sections fmt stub.stub_init_body
 
 
 (** {2 Registration of expressions} *)
@@ -390,7 +404,7 @@ let () =
 
     print   = (fun next fmt e ->
         match ekind e with
-        | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_name (pp_list pp_expr ", ") args
+        | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_func_name (pp_list pp_expr ", ") args
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
         | E_stub_quantified(FORALL, v, _) -> fprintf fmt "∀%a" pp_var v
@@ -408,6 +422,12 @@ let () =
   register_stmt {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
+        | S_stub_init (v1, stub1), S_stub_init (v2, stub2) ->
+          Compare.compose [
+            (fun () -> compare_var v1 v2);
+            (fun () -> panic "compare for stubs not supported")
+          ]
+
         | S_stub_free(e1), S_stub_free(e2) ->
           compare_expr e1 e2
 
@@ -422,6 +442,8 @@ let () =
 
     visit = (fun next s ->
         match skind s with
+        | S_stub_init _ -> panic "visitor for S_stub_init not supported"
+
         | S_stub_free e ->
           { exprs = [e]; stmts = [] },
           (function { exprs = [e] } -> { s with skind = S_stub_free e } | _ -> assert false)
@@ -433,6 +455,11 @@ let () =
 
     print = (fun next fmt s ->
         match skind s with
+        | S_stub_init (v, stub) ->
+          fprintf fmt "init %a:@\n  @[%a@]"
+            pp_var v
+            pp_sections stub.stub_init_body
+
         | S_stub_free e -> fprintf fmt "free(%a);" pp_expr e
 
         | S_stub_rename_primed(t,offsets) ->

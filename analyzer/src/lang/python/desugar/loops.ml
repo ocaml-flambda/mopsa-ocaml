@@ -62,7 +62,7 @@ module Domain =
             not iterable), and is not an AttributeError stating that
             __iter__ does not exist *)
          (* same for next *)
-         let tmp = mk_tmp () in
+         let tmp = mktmp () in
          (* Post.bind man (fun iter flow -> *)
          let l_else =
            match skind orelse with

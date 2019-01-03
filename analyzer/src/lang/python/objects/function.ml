@@ -133,7 +133,7 @@ module Domain =
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
-                                                   if is_builtin_name v.vname then (mk_py_object (find_builtin v.vname) range)
+                                                   if is_builtin_name v.org_vname then (mk_py_object (find_builtin v.org_vname) range)
                                                    else mk_expr (E_py_undefined false) range
                                                  in
                                                  mk_assign (mk_var v range) e range
@@ -141,7 +141,7 @@ module Domain =
                                   flow
                      in
 
-                     let ret_var = mk_tmp ~vtyp:T_any () in
+                     let ret_var = mktmp () in
                      let fundec = {
                          fun_name = uniq_vname (pyfundec.py_func_var);
                          fun_parameters = pyfundec.py_func_parameters;
@@ -172,7 +172,7 @@ module Domain =
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.vname else
+           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported func.py_func_var.org_vname else
              if Libs.Py_mopsa.is_builtin_fundec func then
                let name = Libs.Py_mopsa.builtin_fundec_name func in
                F_builtin name

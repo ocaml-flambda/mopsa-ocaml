@@ -79,21 +79,41 @@ let pp_cell fmt c =
     pp_offset c.o
     Pp.pp_c_type_short c.t
 
-(** Create a C scalar variable from a cell *)
-let cell_to_var c : var =
+
+(** {2 Cell variables} *)
+(** ****************** *)
+
+type var_kind +=
+  | V_c_cell of cell
+  (** Cell variable *)
+
+
+let () =
+  register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_c_cell c -> pp_cell fmt c
+        | _ -> next fmt v
+      );
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_c_cell c1, V_c_cell c2 -> compare_cell c1 c2
+        | _ -> next v1 v2
+      );
+  }
+
+let cell_to_var c =
   let vname =
-    let () = Format.fprintf Format.str_formatter
-        "{%a:%a:%a}"
-        pp_base c.b
-        pp_offset c.o
-        Pp.pp_c_type_short c.t
-    in
+    let () = pp_cell Format.str_formatter  c in
     Format.flush_str_formatter ()
   in
+  let uid = base_uid c.b in
   {
-    vname;
-    vuid = base_uid c.b;
+    org_vname = vname;
+    uniq_vname = vname ^ ":" ^ (string_of_int uid);
     vtyp = c.t;
+    vuid = uid;
+    vkind = V_c_cell c;
   }
 
 

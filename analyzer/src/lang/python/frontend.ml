@@ -34,12 +34,7 @@ and parse_file (filename: string) =
 (** Create a Universal.var variable from Py_parser.Ast.var *)
 and from_var v =
   let open Framework.Ast in
-  {
-    vname = v.name;
-    vuid = v.uid;
-    vtyp = T_any;
-    (* FIXME: vkind = V_orig;*)
-  }
+  mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) v.uid T_any
 
 (** Translate a Python program into a Framework.Ast.stmt *)
 and from_program filename (p: Py_parser.Ast.program) : Framework.Ast.program =

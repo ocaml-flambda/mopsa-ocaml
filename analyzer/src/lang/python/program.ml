@@ -48,7 +48,7 @@ struct
         (List.mapi (fun i v ->
              let e =
                (* Initialize globals with the same name of a builtin with its address *)
-               if is_builtin_name v.vname then (mk_py_object (find_builtin v.vname) range)
+               if is_builtin_name v.org_vname then (mk_py_object (find_builtin v.org_vname) range)
                else mk_expr (E_py_undefined true) range
              in
              mk_assign (mk_var v range) e range
@@ -59,13 +59,7 @@ struct
     let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let v = {
-      vname = "__name__";
-      vuid = 0;
-      vtyp = T_any;
-      (* vkind = V_orig; *)
-    }
-    in
+    let v = mkv "__name__" "__name__" 0 T_any in
     let stmt =
       mk_assign
         (mk_var v range)
@@ -75,13 +69,7 @@ struct
     let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let v = {
-      vname = "__file__";
-      vuid = 0;
-      vtyp = T_any;
-      (* vkind = V_orig; *)
-    }
-    in
+    let v = mkv "__file__" "__file__" 0 T_any in
     let stmt =
         mk_assign
           (mk_var v range)
@@ -93,7 +81,7 @@ struct
     flow3
 
 
-  let get_function_name fundec = fundec.py_func_var.vname
+  let get_function_name fundec = fundec.py_func_var.org_vname
 
   let is_test fundec =
     let name = get_function_name fundec in
@@ -115,7 +103,7 @@ struct
   let mk_py_unit_tests tests range =
     let tests =
       tests |> List.map (fun test ->
-          (test.py_func_var.vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
+          (test.py_func_var.org_vname, {skind = S_expression (mk_py_call (mk_var test.py_func_var range) [] range); srange = range})
         )
     in
     mk_stmt (Universal.Ast.S_unit_tests (tests)) range

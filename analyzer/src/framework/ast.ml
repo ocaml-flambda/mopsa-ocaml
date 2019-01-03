@@ -109,11 +109,16 @@ let is_primed (a:'a primed) : bool =
   | Unprimed _ -> false
   | Primed _ -> true
 
-let is_similarly_primed (a:'a primed) (b:'b primed) : bool =
+let is_primed_as (a:'a primed) (b:'b primed) : bool =
   match a, b with
   | Primed _, Primed _
   | Unprimed _, Unprimed _ -> true
   | _ -> false
+
+let prime_as (a:'a) (b:'b primed) : 'a primed =
+  match b with
+  | Primed _ -> Primed a
+  | Unprimed _ -> Unprimed a
 
 let unprime (a: 'a primed) : 'a =
   match a with
@@ -144,29 +149,51 @@ let pp_primed pp fmt a =
 (**                           {2 Variables}                                 *)
 (*==========================================================================*)
 
-(** variables *)
+(** Languages can extend this type to add extra information on variables *)
+type var_kind = ..
+
+type var_kind +=
+  | V_common     (** common variable kind without extra information *)
+
+  (** variables *)
 type var = {
-  vname : string;
+  org_vname  : string; (** original name of the variable *)
+  uniq_vname : string; (** unique name of the variable *)
   vuid  : int;         (** unique identifier. *)
   vtyp  : typ;         (** type of the variable. *)
+  vkind : var_kind;    (** language-dependent info on the variable *)
 }
+
+let var_compare_chain =
+  ref (fun v1 v2 -> Pervasives.compare v1 v2)
+
+let var_pp_chain =
+  ref (fun fmt v ->
+      match v.vkind with
+      | V_common -> Format.pp_print_string fmt v.org_vname
+      | _ -> Exceptions.panic "pp_var: unknown variable kind"
+    )
+
+let register_var info =
+  var_compare_chain   := info.compare !var_compare_chain;
+  var_pp_chain        := info.print !var_pp_chain;
+  ()
 
 let compare_var v1 v2 =
   Compare.compose [
-    (fun () -> compare v1.vname v2.vname);
     (fun () -> compare v1.vuid v2.vuid);
     (fun () -> compare_typ v1.vtyp v2.vtyp);
+    (fun () -> compare v1.uniq_vname v2.uniq_vname);
+    (fun () -> !var_compare_chain v1 v2);
   ]
 
-let pp_var fmt v =
-  if v.vname = "$tmp" then
-    Format.fprintf fmt "%s_%d" v.vname v.vuid
-  else
-    pp_print_string fmt v.vname
+let pp_var fmt v = !var_pp_chain fmt v
 
 let vtyp v = v.vtyp
-
-let uniq_vname v = v.vname ^ ":" ^ (string_of_int v.vuid)
+let vuid v = v.vuid
+let vkind v = v.vkind
+let uniq_vname v = v.uniq_vname
+let org_vname v = v.org_vname
 
 module Var =
 struct
@@ -616,22 +643,21 @@ let register_stmt_visitor visitor =
 (**                  {2 Utility functions for variables}                    *)
 (*==========================================================================*)
 
-let mkv vname vuid vtyp =
-  {vname; vuid; vtyp}
+let mkv orig uniq ?(vkind=V_common) vuid vtyp =
+  {org_vname = orig; uniq_vname = uniq; vuid; vtyp; vkind}
 
 let vcounter = ref 0
 
-let mkfresh f vtyp () =
+let mkfresh ?(vkind=V_common) funiq vtyp () =
   incr vcounter;
-  mkv (f !vcounter) !vcounter vtyp
+  let uniq = funiq !vcounter in
+  mkv uniq uniq ~vkind !vcounter vtyp
 
-let mktmp vtyp () =
-  mkfresh (fun _ -> "$tmp") vtyp ()
-
-(** deprecated function; use mktmp instead *)
-let mk_tmp ?(vtyp=T_any) () =
-  mktmp vtyp ()
-
+let mktmp ?(typ=T_any) () =
+  mkfresh (fun uid ->
+      let vname = "$tmp" ^ (string_of_int uid) in
+      vname
+    ) typ ()
 
 
 (*==========================================================================*)

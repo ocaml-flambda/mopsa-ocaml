@@ -71,17 +71,17 @@ struct
         Eval.bind @@ fun f flow ->
 
         match ekind f with
-        | E_c_points_to (P_fun f) when Libs.C_mopsa.is_builtin_function f.c_func_var.vname ->
-          let exp' = {exp with ekind = E_c_builtin_call(f.c_func_var.vname, args)} in
+        | E_c_points_to (P_fun f) when Libs.C_mopsa.is_builtin_function f.c_func_org_name ->
+          let exp' = {exp with ekind = E_c_builtin_call(f.c_func_org_name, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
         | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
           let open Universal.Ast in
-          let ret_var = mktmp fundec.c_func_return () in
+          let ret_var = mktmp ~typ:fundec.c_func_return () in
           let fundec' = {
-            fun_name = uniq_vname fundec.c_func_var;
+            fun_name = fundec.c_func_unique_name;
             fun_parameters = fundec.c_func_parameters;
-            fun_locvars = List.map (fun (v, _, _) -> v) fundec.c_func_local_vars;
+            fun_locvars = fundec.c_func_local_vars;
             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
             fun_return_type = Some fundec.c_func_return;
             fun_return_var = ret_var;
@@ -96,8 +96,8 @@ struct
           let exp' = Stubs.Ast.mk_stub_call stub args exp.erange in
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
-        | E_c_points_to (P_fun {c_func_body = None; c_func_var}) ->
-          panic_at (erange exp) "no implementation found for function %a" pp_var c_func_var
+        | E_c_points_to (P_fun {c_func_body = None; c_func_org_name}) ->
+          panic_at (erange exp) "no implementation found for function %s" c_func_org_name
 
         | _ -> assert false
       end |>

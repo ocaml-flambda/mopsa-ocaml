@@ -22,7 +22,7 @@ type points_to =
   | P_top
 
 let pp_points_to fmt = function
-  | P_fun f -> Format.fprintf fmt "(fp %a)" pp_var f.Ast.c_func_var
+  | P_fun f -> Format.fprintf fmt "(fp %s)" f.Ast.c_func_org_name
   | P_block(base, offset) -> Format.fprintf fmt "(%a, %a)" pp_base base pp_expr offset
   | P_null -> Format.pp_print_string fmt "NULL"
   | P_invalid -> Format.pp_print_string fmt "Invalid"
@@ -30,7 +30,7 @@ let pp_points_to fmt = function
 
 let compare_points_to p1 p2 =
   match p1, p2 with
-  | P_fun f1, P_fun f2 -> compare_var f1.Ast.c_func_var f2.Ast.c_func_var
+  | P_fun f1, P_fun f2 -> compare f1.Ast.c_func_unique_name f2.Ast.c_func_unique_name
   | P_block (b1, o1), P_block (b2, o2) ->
     Compare.compose [
       (fun () -> compare_base b1 b2);

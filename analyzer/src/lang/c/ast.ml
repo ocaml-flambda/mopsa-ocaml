@@ -11,6 +11,7 @@
 open Mopsa
 open Universal.Ast
 
+
 (*==========================================================================*)
                            (** {2 Types} *)
 (*==========================================================================*)
@@ -143,9 +144,77 @@ type typ +=
   (** Qualified type. *)
 
 
-(*==========================================================================*)
-                           (** {2 Expressions} *)
-(*==========================================================================*)
+(** {2 Function descriptor} *)
+(** *********************** *)
+
+type c_fundec = {
+  mutable c_func_uid: int; (** unique identifier *)
+  mutable c_func_org_name: string; (** original name *)
+  mutable c_func_unique_name: string; (** unique name for globals and statics *)
+  c_func_is_static: bool;
+  mutable c_func_return: typ; (** type of returned value *)
+  mutable c_func_parameters: var list; (** function parameters *)
+  mutable c_func_body: stmt option; (** function body *)
+  mutable c_func_static_vars: var list; (** static variables declared in the function *)
+  mutable c_func_local_vars: var list; (** local variables declared in the function (exclusing parameters) *)
+  mutable c_func_variadic: bool; (** whether the has a variable number of arguments *)
+  mutable c_func_range: range;
+  mutable c_func_stub: Stubs.Ast.stub_func option; (** stub comment *)
+}
+(** Function descriptor. *)
+
+
+
+(** {2 C variables} *)
+(*  *************** *)
+
+type c_var_scope =
+  | Variable_global (** global shared among translation units *)
+  | Variable_extern (** declared but not defined *)
+  | Variable_local of c_fundec (** local to a function *)
+  | Variable_parameter of c_fundec (** formal argument *)
+  | Variable_file_static of string (** restricted to a translation unit *)
+  | Variable_func_static of c_fundec (** restricted to a function *)
+  | Variable_dynamic (** dynamically allocated variable *)
+
+
+(** Variable initialization. *)
+type c_var_init =
+  | C_init_expr of expr
+  | C_init_list of c_var_init list (** specified elements *) * c_var_init option (** filler *)
+  | C_init_implicit of typ
+  | C_init_stub of Stubs.Ast.stub_init
+
+
+type c_var = {
+  var_scope: c_var_scope; (** life-time scope of the variable *)
+  var_init: c_var_init option; (** initialization *)
+  var_range: range; (** declaration range *)
+}
+
+type var_kind +=
+  | V_c of c_var
+  (** C variable *)
+
+let () =
+  register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_c _ -> Format.pp_print_string fmt v.org_vname
+        | _ -> next fmt v
+      );
+
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_c _, V_c _ -> compare v1.uniq_vname v2.uniq_vname
+        | _ -> next v1 v2
+      );
+  }
+
+
+
+(** {2 C expressions} *)
+(*  ***************** *)
 
 type operator +=
   | O_c_and
@@ -178,26 +247,6 @@ type constant +=
   | C_c_invalid
   (** Invalid pointer value *)
 
-
-type c_init =
-  | C_init_expr of expr
-  | C_init_list of c_init list (** specified elements *) * c_init option (** filler *)
-  | C_init_implicit of typ
-(** Variable initialization. *)
-
-type c_fundec = {
-  mutable c_func_var: var; (** function name variable with unique identifier *)
-  c_func_is_static: bool;
-  c_func_range: range; (** range of the function *)
-  mutable c_func_return: typ; (** type of returned value *)
-  mutable c_func_parameters: var list; (** function parameters *)
-  mutable c_func_body: stmt option; (** function body *)
-  mutable c_func_static_vars: (var * c_init option * range) list; (** static variables declared in the function and their initialization *)
-  mutable c_func_local_vars: (var * c_init option * range) list; (** local variables declared in the function (exclusing parameters) and their initialization *)
-  mutable c_func_stub : Stubs.Ast.stub option; (** stub specification of the function *)
-  c_func_variadic: bool; (** whether the function has a variable number of arguments *)
-}
-(** Function descriptor. *)
 
 type expr_kind +=
   | E_c_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
@@ -257,11 +306,8 @@ type stmt_kind +=
   | S_c_goto_stab of stmt
   (** stabilization point for goto statement *)
 
-  | S_c_global_declaration of var * c_init option
-  (** declaration of a global variable with optional initialization *)
-
-  | S_c_local_declaration of var * c_init option
-  (** declaration of a local variable with optional initialization *)
+  | S_c_declaration of var
+  (** declaration of a variable *)
 
   | S_c_do_while of
       stmt (** body *) *
@@ -292,11 +338,13 @@ type stmt_kind +=
   (** default case of switch statements. *)
 
 
+type c_program = {
+  c_globals : var list;        (** global variables of the program *)
+  c_functions : c_fundec list; (** functions of the program *)
+}
+
 type program +=
-  | C_program of
-      (var * c_init option * range) list (** global variables *) *
-      c_fundec list (** functions *)
-(** A complete C program. *)
+  | C_program of c_program
 
 
 (*==========================================================================*)

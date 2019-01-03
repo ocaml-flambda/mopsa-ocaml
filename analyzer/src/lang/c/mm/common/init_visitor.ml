@@ -16,11 +16,11 @@ let debug fmt = Debug.debug ~channel:"c.memory.init" fmt
 
 type record_init =
   | Expr of expr
-  | Parts of c_init option list
+  | Parts of c_var_init option list
 
 type 'a visitor = {
   scalar : expr -> expr -> range -> 'a flow -> 'a flow;
-  array  : expr -> bool -> c_init option list -> range -> 'a flow -> 'a flow;
+  array  : expr -> bool -> c_var_init option list -> range -> 'a flow -> 'a flow;
   record  : expr -> bool -> record_init -> range -> 'a flow -> 'a flow;
 }
 
@@ -120,7 +120,7 @@ and init_record visitor s is_global init range flow =
   visitor.record s is_global el range flow
 
 
-and init_expr visitor e is_global (init: c_init option) (range: range) flow =
+and init_expr visitor e is_global (init: c_var_init option) (range: range) flow =
   if is_c_scalar_type e.etyp then init_scalar visitor e is_global init range flow else
   if is_c_array_type e.etyp then  init_array visitor e is_global init range flow else
   if is_c_record_type e.etyp then init_record visitor e is_global init range flow else

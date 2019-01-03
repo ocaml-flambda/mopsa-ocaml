@@ -464,8 +464,8 @@ module Domain =
               * Eval.singleton (mk_py_object (a, mk_expr (ekind exp) range) range) flow *)
              |> OptionExt.return
            with Not_found ->
-             if is_builtin_name v.vname then
-               let a = find_builtin v.vname in
+             if is_builtin_name v.org_vname then
+               let a = find_builtin v.org_vname in
                let _ = debug "builtin variable@\n" in
                Eval.singleton (mk_py_object a range) flow |> OptionExt.return
              else
@@ -484,12 +484,12 @@ module Domain =
       (* FIXME? as this is not a builtin constructor, we assume e is already evaluated *)
          begin match ekind e with
          | E_py_object ({addr_kind = A_py_module (M_user(name, globals))}, _) ->
-            Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) globals) range) flow
+            Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) globals) range) flow
          | E_py_object ({addr_kind = A_py_module _}, _)
            | E_py_object ({addr_kind = A_py_class (C_builtin _, _)}, _) ->
             Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
          | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
-            Eval.singleton (mk_py_bool (List.exists (fun v -> v.vname = attr) c.py_cls_static_attributes) range) flow
+            Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes) range) flow
          | E_type_partition i ->
             let cur = Flow.get_domain_cur man flow in
             debug "cur=%a@\n" print cur;
@@ -537,13 +537,13 @@ module Domain =
            | E_py_object ({addr_kind = A_py_class (C_builtin c, b)}, _) ->
               Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_class (C_user c, b)}, _) ->
-              let f = List.find (fun x -> x.vname = attr) c.py_cls_static_attributes in
+              let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
               man.eval (mk_var f range) flow
            | E_py_object ({addr_kind = A_py_module (M_builtin m)}, _) ->
               Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
            | E_py_object ({addr_kind = A_py_module (M_user (name, globals))}, _) ->
            (* Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow *)
-              let v = List.find (fun x -> x.vname = attr) globals in
+              let v = List.find (fun x -> x.org_vname = attr) globals in
               man.eval (mk_var v range) flow
            | E_type_partition i ->
               let cur = Flow.get_domain_cur man flow in
@@ -780,11 +780,11 @@ module Domain =
          let rec unfold_pseudolc to_clean stmt_acc aux_compr = match aux_compr with
            | [] -> to_clean, List.rev stmt_acc
            | (target, iter, conds)::tl ->
-              let i_tmp = mk_tmp () in
+              let i_tmp = mktmp () in
               let i_var = mk_var i_tmp range in
               let s1 = mk_assign i_var (Utils.mk_builtin_call "iter" [iter] range) range in
               let s2 = mk_assign target (Utils.mk_builtin_call "next" [i_var] range) range in
-              let b_tmp = mk_tmp () in
+              let b_tmp = mktmp () in
               let b_var = mk_var b_tmp range in
               let inline_conds = List.fold_left (fun acc cond -> mk_expr (E_py_if (cond, acc, mk_py_false range)) range) (mk_py_true range) (List.rev conds) in
               (* FIXME: enforce that s3 is bool? *)

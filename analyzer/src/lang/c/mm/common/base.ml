@@ -51,6 +51,17 @@ let base_mode =
   | S s -> STRONG
   | A a -> a.addr_mode
 
+let base_scope =
+  function
+  | V { vkind = V_c {var_scope} } -> var_scope
+  | _ -> assert false
+
+let base_range =
+  function
+  | V { vkind = V_c {var_range} } -> var_range
+  | _ -> assert false
+
+
 (** Evaluate the size of a base *)
 let eval_base_size base ?(via=Z_any) range man flow =
   match base with

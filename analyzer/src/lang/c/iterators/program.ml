@@ -68,16 +68,16 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_program(C_program(globals, functions))
+    | S_program(C_program {c_globals; c_functions})
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals globals man flow in
+      let flow1 = init_globals c_globals (srange stmt) man flow in
       (* Find entry function *)
       let entry =
         try
           List.find (function
-                {c_func_var} -> c_func_var.vname = !opt_entry_function
-            ) functions
+                {c_func_org_name} -> c_func_org_name = !opt_entry_function
+            ) c_functions
         with Not_found ->
           Exceptions.panic "entry function %s not found" !opt_entry_function
       in
@@ -86,17 +86,13 @@ struct
       man.exec ~zone:Zone.Z_c stmt flow1 |>
       Post.return
 
-    | S_program(C_program(globals, functions))
+    | S_program(C_program{ c_globals; c_functions })
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      let flow1 = init_globals globals man flow in
-
-      let get_function_name fundec =
-        fundec.c_func_var.vname
-      in
+      let flow1 = init_globals c_globals (srange stmt) man flow in
 
       let is_test fundec =
-        let name = get_function_name fundec in
+        let name = fundec.c_func_org_name in
         if String.length name < 5 then false
         else String.sub name 0 4 = "test"
       in
@@ -108,7 +104,7 @@ struct
       let mk_c_unit_tests tests =
         let tests =
           tests |> List.map (fun test ->
-              let name = test.c_func_var.vname in
+              let name = test.c_func_org_name in
               let stmt = mk_c_call_stmt test [] test.c_func_range in
               (name, stmt)
             )
@@ -116,17 +112,17 @@ struct
         mk_stmt (Universal.Ast.S_unit_tests tests) (srange stmt)
       in
 
-      let tests = get_test_functions functions in
+      let tests = get_test_functions c_functions in
       let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
       Post.return
 
     | _ -> None
 
-  and init_globals globals man flow =
+  and init_globals globals range man flow =
     globals |>
-    List.fold_left (fun flow (v, init, range) ->
-        let stmt = mk_stmt (S_c_global_declaration (v, init)) range in
+    List.fold_left (fun flow v ->
+        let stmt = mk_stmt (S_c_declaration v) range in
         man.exec stmt flow
       ) flow
 

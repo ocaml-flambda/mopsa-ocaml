@@ -46,12 +46,6 @@ struct
   let init prog man flow = None
 
 
-  (** Computation of post-conditions *)
-  (** ============================== *)
-
-  let exec zone stmt man flow = None
-
-
   (** Evaluation of expressions *)
   (** ========================= *)
 
@@ -360,19 +354,19 @@ struct
     match ekind exp with
     | E_stub_call (stub, args) ->
       debug "call to stub %s:@\n @[%a@]"
-        stub.stub_name
-        pp_stub stub
+        stub.stub_func_name
+        pp_stub_func stub
       ;
 
       (* Initialize parameters *)
-      let flow = init_params args stub.stub_params exp.erange man flow in
+      let flow = init_params args stub.stub_func_params exp.erange man flow in
 
       (* Create the return variable *)
       let return, flow =
-        match stub.stub_return_type with
+        match stub.stub_func_return_type with
         | None -> None, flow
         | Some t ->
-          let return = mktmp t () in
+          let return = mktmp ~typ:t () in
           let flow = man.exec (mk_add_var return exp.erange) flow in
           Some return, flow
       in
@@ -382,13 +376,13 @@ struct
       let flow = Callstack.push exp.erange flow in
 
       (* Evaluate the body of the styb *)
-      let flow = exec_body stub.stub_body return man flow in
+      let flow = exec_body stub.stub_func_body return man flow in
 
       (* Clean locals and primes *)
-      let flow = clean_post stub.stub_locals stub.stub_assigns stub.stub_range man flow in
+      let flow = clean_post stub.stub_func_locals stub.stub_func_assigns stub.stub_func_range man flow in
 
       (* Remove parameters *)
-      let flow = remove_params stub.stub_params exp.erange man flow in
+      let flow = remove_params stub.stub_func_params exp.erange man flow in
 
       (* Restore the callstack *)
       let flow = Callstack.set cs flow in
@@ -406,6 +400,23 @@ struct
     | _ -> None
 
 
+  (** Computation of post-conditions *)
+  (** ============================== *)
+
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_stub_init (v, stub) ->
+      (* Evaluate the body of the styb *)
+      let flow = exec_body stub.stub_init_body (Some v) man flow in
+
+      (* Clean locals and primes *)
+      let flow = clean_post stub.stub_init_locals [] stub.stub_init_range man flow in
+
+      Post.return flow
+
+    | _ -> None
+
+  
   (** Handler of queries *)
   (** ================== *)
 
