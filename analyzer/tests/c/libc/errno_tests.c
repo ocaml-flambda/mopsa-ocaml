@@ -7,16 +7,12 @@
 /****************************************************************************/
 
 /*
- * Entry point of the libc
+ * Tests for functions in errno.h
  */
 
-#include "errno.c"
-/* #include "assert.c" */
-/* #include "stdio.c" */
-/* #include "stdlib.c" */
-/* #include "unistd.c" */
-/* #include "string.c" */
-/* #include "inttypes.c" */
-/* #include "fcntl.c" */
-/* #include "arpa/inet.c" */
-/* #include "netinet/in.c" */
+#include <errno.h>
+#include <stddef.h>
+
+void test_errno_location_returns_non_null() {
+  _mopsa_assert(__errno_location() != NULL);
+}

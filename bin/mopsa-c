@@ -5,6 +5,6 @@ STUBSDIR=${MOPSADIR}/analyzer/stubs/c
 CONFIG=${MOPSADIR}/analyzer/configs/c.json
 
 FLAGS=-I=${STUBSDIR}/mopsa
-STUBS=
+STUBS=${STUBSDIR}/libc/libc.c
 
 ${MOPSADIR}/bin/mopsa -lang=c -config=${CONFIG} ${FLAGS} ${STUBS} $@
