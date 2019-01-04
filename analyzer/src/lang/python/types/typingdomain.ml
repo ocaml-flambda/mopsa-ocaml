@@ -1249,7 +1249,7 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
   match p with
   | Bot | Top -> cp p d3
   | Module (M_user (m, defs)) ->
-     if List.exists (fun x -> x.vname = attr) defs then
+     if List.exists (fun x -> x.org_vname = attr) defs then
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
@@ -1268,14 +1268,14 @@ let rec filter_polyattr (p, d3: polytype * d3) (attr:string) : (polytype * d3) *
     | Method _ -> Exceptions.panic "ni"
   | Class (C_user c, _) ->
      let attrs = c.py_cls_static_attributes in
-     if List.exists (fun x -> x.vname = attr) attrs then
+     if List.exists (fun x -> x.org_vname = attr) attrs then
        (p, d3), (Bot, d3)
      else
        (Bot, d3), (p, d3)
   | Class _ -> Exceptions.panic "filter_polyattr on unsupported or builtin class"
   | Instance ({classn=Class (C_user c, _); uattrs; oattrs} as inst) ->
      let attrs = c.py_cls_static_attributes in
-     if List.exists (fun x -> x.vname = attr) attrs then
+     if List.exists (fun x -> x.org_vname = attr) attrs then
        (p, d3), (Bot, d3)
      else if StringMap.exists (fun k v -> k = attr) uattrs then
        (p, d3), (Bot, d3)

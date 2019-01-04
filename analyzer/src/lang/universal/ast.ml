@@ -11,9 +11,9 @@
 open Mopsa
 open Format
 
-(*============*)
-(** {2 Types} *)
-(*============*)
+
+(** {2 Universal types} *)
+(*  ******************* *)
 
 type float_prec =
   | F_SINGLE      (** IEEE single-precision 32-bit *)
@@ -68,10 +68,8 @@ let () =
   }
 
 
-(*================*)
-(** {2 Constants} *)
-(*================*)
-
+(** {2 Universal constants} *)
+(*  *********************** *)
 
 type constant +=
   | C_unit
@@ -116,10 +114,8 @@ let () =
   }
 
 
-(*================*)
-(** {2 Operators} *)
-(*================*)
-
+(** {2 Universal operators} *)
+(*  *********************** *)
 
 type operator +=
   (* Unary operators *)
@@ -178,9 +174,8 @@ let () =
 
 
 
-(*  ~-~-~-~-~-~-~-~-~- *)
-(** {2 Heap addresses} *)
-(*  ~-~-~-~-~-~-~-~-~- *)
+(** {2 Universal heap} *)
+(*  ****************** *)
 
 (** Kind of heap addresses, used to store extra information. *)
 type addr_kind = ..
@@ -224,9 +219,8 @@ let register_addr (info: addr_kind info) =
   ()
 
 
-(*================*)
-(** {2 Functions} *)
-(*================*)
+(** {2 Universal functions} *)
+(*  *********************** *)
 
 
 (** Function definition *)
@@ -255,9 +249,9 @@ let compare_fun_expr x y = match x, y with
   | Builtin a, Builtin b -> Pervasives.compare a b
   | _ -> 1
 
-(*===============*)
-(** {2 Programs} *)
-(*===============*)
+
+(** {2 Universal program} *)
+(*  ********************* *)
 
 type program +=
   | P_universal of {
@@ -298,9 +292,9 @@ let () =
   }
 
 
-(*==========================================================================*)
-(** {2 Expressions} *)
-(*==========================================================================*)
+(** {2 Universal expressions} *)
+(*  ************************* *)
+
 type tc =
   | TC_int of expr
   | TC_symbol of expr * expr list
@@ -411,107 +405,9 @@ let () =
       );
   }
 
-(*==========================================================================*)
-(** {2 Utility functions} *)
-(*==========================================================================*)
 
-let mk_not e = mk_unop O_log_not e
-
-let mk_int i ?(typ=T_int) erange =
-  mk_constant ~etyp:typ (C_int (Z.of_int i)) erange
-
-let mk_z i ?(typ=T_int) erange =
-  mk_constant ~etyp:typ (C_int i) erange
-
-let mk_float ?(prec=F_DOUBLE) f erange =
-  mk_constant ~etyp:(T_float prec) (C_float f) erange
-
-let mk_int_interval a b ?(typ=T_int) range =
-  mk_constant ~etyp:typ (C_int_interval (Z.of_int a, Z.of_int b)) range
-
-let mk_z_interval a b ?(typ=T_int) range =
-  mk_constant ~etyp:typ (C_int_interval (a, b)) range
-
-let mk_float_interval ?(prec=F_DOUBLE) a b range =
-  mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
-
-let mk_string s =
-  mk_constant ~etyp:T_string (C_string s)
-
-let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
-  match strict, left_strict, right_strict with
-  | true, _, _
-  | false, true, true ->
-    mk_binop
-      (mk_binop e1 O_lt v erange)
-      O_log_and
-      (mk_binop v O_lt e2 erange)
-      erange
-
-  | false, true, false ->
-    mk_binop
-      (mk_binop e1 O_lt v erange)
-      O_log_and
-      (mk_binop v O_le e2 erange)
-      erange
-
-  | false, false, true ->
-    mk_binop
-      (mk_binop e1 O_le v erange)
-      O_log_and
-      (mk_binop v O_lt e2 erange)
-      erange
-
-  | false, false, false ->
-    mk_binop
-      (mk_binop e1 O_le v erange)
-      O_log_and
-      (mk_binop v O_le e2 erange)
-      erange
-
-let mk_zero = mk_int 0
-let mk_one = mk_int 1
-
-let zero = mk_zero
-let one = mk_one
-
-let of_z = mk_z
-let of_int = mk_int
-
-let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
-let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
-let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
-let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
-let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
-
-let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
-let mk_true = mk_bool true
-let mk_false = mk_bool false
-
-let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
-
-let mk_alloc_addr addr_kind range =
-  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
-
-let is_int_type = function
-  | T_int -> true
-  | _ -> false
-
-let is_float_type = function
-  | T_float _ -> true
-  | _ -> false
-
-let is_numeric_type = function
-  | T_int | T_float _ -> true
-  | _ -> false
-
-let is_math_type = function
-  | T_int | T_float _ | T_bool -> true
-  | _ -> false
-
-(*==========================================================================*)
-(** {2 Statements} *)
-(*==========================================================================*)
+(** {2 Universal statements} *)
+(*  ************************ *)
 
 type stmt_kind +=
    | S_expression of expr
@@ -702,6 +598,105 @@ let () =
         | _ -> default stmt
       );
   }
+
+
+(** {2 Utility functions} *)
+(*  ********************* *)
+
+let mk_not e = mk_unop O_log_not e
+
+let mk_int i ?(typ=T_int) erange =
+  mk_constant ~etyp:typ (C_int (Z.of_int i)) erange
+
+let mk_z i ?(typ=T_int) erange =
+  mk_constant ~etyp:typ (C_int i) erange
+
+let mk_float ?(prec=F_DOUBLE) f erange =
+  mk_constant ~etyp:(T_float prec) (C_float f) erange
+
+let mk_int_interval a b ?(typ=T_int) range =
+  mk_constant ~etyp:typ (C_int_interval (Z.of_int a, Z.of_int b)) range
+
+let mk_z_interval a b ?(typ=T_int) range =
+  mk_constant ~etyp:typ (C_int_interval (a, b)) range
+
+let mk_float_interval ?(prec=F_DOUBLE) a b range =
+  mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
+
+let mk_string s =
+  mk_constant ~etyp:T_string (C_string s)
+
+let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) v e1 e2 erange =
+  match strict, left_strict, right_strict with
+  | true, _, _
+  | false, true, true ->
+    mk_binop
+      (mk_binop e1 O_lt v erange)
+      O_log_and
+      (mk_binop v O_lt e2 erange)
+      erange
+
+  | false, true, false ->
+    mk_binop
+      (mk_binop e1 O_lt v erange)
+      O_log_and
+      (mk_binop v O_le e2 erange)
+      erange
+
+  | false, false, true ->
+    mk_binop
+      (mk_binop e1 O_le v erange)
+      O_log_and
+      (mk_binop v O_lt e2 erange)
+      erange
+
+  | false, false, false ->
+    mk_binop
+      (mk_binop e1 O_le v erange)
+      O_log_and
+      (mk_binop v O_le e2 erange)
+      erange
+
+let mk_zero = mk_int 0
+let mk_one = mk_int 1
+
+let zero = mk_zero
+let one = mk_one
+
+let of_z = mk_z
+let of_int = mk_int
+
+let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
+let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
+let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
+let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
+let _mod e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+
+let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
+let mk_true = mk_bool true
+let mk_false = mk_bool false
+
+let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
+
+let mk_alloc_addr addr_kind range =
+  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
+
+let is_int_type = function
+  | T_int -> true
+  | _ -> false
+
+let is_float_type = function
+  | T_float _ -> true
+  | _ -> false
+
+let is_numeric_type = function
+  | T_int | T_float _ -> true
+  | _ -> false
+
+let is_math_type = function
+  | T_int | T_float _ | T_bool -> true
+  | _ -> false
+
 
 let mk_assert e range =
   mk_stmt (S_assert e) range

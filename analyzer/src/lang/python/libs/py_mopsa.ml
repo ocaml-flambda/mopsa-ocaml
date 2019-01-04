@@ -75,7 +75,7 @@ module Domain =
            match ekind l, ekind u with
            | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_z_interval l u range) flow
            | _ ->
-              let tmp = mk_tmp () in
+              let tmp = mktmp () in
               let l = Utils.mk_builtin_call "int" [l] range in
               let u = Utils.mk_builtin_call "int" [u] range in
               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
@@ -93,7 +93,7 @@ module Domain =
            | E_constant (C_int l), E_constant (C_float u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) u range) flow
            | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_float_interval (Z.to_float l) (Z.to_float u) range) flow
            | _ ->
-              let tmp = mk_tmp () in
+              let tmp = mktmp () in
               let l = Utils.mk_builtin_call "float" [l] range in
               let u = Utils.mk_builtin_call "float" [u] range in
               (* FIXME: T_float *)
@@ -269,32 +269,32 @@ module Domain =
 
 
 let is_stub_fundec = function
-  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "stub")}]} -> true
+  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "stub")}]} -> true
   | _ -> false
 
 let is_builtin_fundec = function
-  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
+  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
   | _ -> false
 
 let is_builtin_clsdec = function
-  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, _, [])}]} -> true
   | _ -> false
 
 let is_unsupported_fundec = function
-  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "unsupported")}]} -> true
+  | {py_func_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "unsupported")}]} -> true
   | _ -> false
 
 let is_unsupported_clsdec = function
-  | {py_cls_decors = [{ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "unsupported")}]} -> true
+  | {py_cls_decors = [{ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "unsupported")}]} -> true
   | _ -> false
 
 
 let builtin_fundec_name = function
-  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
+  | {py_func_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
   | _ -> raise Not_found
 
 let builtin_clsdec_name = function
-  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
+  | {py_cls_decors = [{ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {org_vname = "mopsa"}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], [])}]} -> name
   | _ -> raise Not_found
 
 

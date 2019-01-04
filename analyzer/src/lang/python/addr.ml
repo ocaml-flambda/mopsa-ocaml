@@ -102,8 +102,8 @@ let object_name obj =
   | A_py_function(F_builtin name) | A_py_function(F_unsupported name)
   | A_py_module(M_builtin name) | A_py_module(M_user (name, _))
     -> name
-  | A_py_function(F_user f) -> f.py_func_var.vname
-  | A_py_class(C_user c, _) -> c.py_cls_var.vname
+  | A_py_function(F_user f) -> f.py_func_var.org_vname
+  | A_py_class(C_user c, _) -> c.py_cls_var.org_vname
   | _ -> panic "builtin_name: %a is not a builtin" pp_addr (addr_of_object obj)
 
 let add_builtin_class obj () =
@@ -153,7 +153,7 @@ let find_builtin_attribute base attr =
     | A_py_class(C_builtin name, _) | A_py_module(M_builtin name) | A_py_module(M_user (name, _)) ->
       find_builtin (mk_dot_name (Some name) attr)
     | A_py_class(C_user cls, _) ->
-      let name = cls.py_cls_var.vname in
+      let name = cls.py_cls_var.org_vname in
       find_builtin (mk_dot_name (Some name) attr)
     | _ -> assert false
 
@@ -291,16 +291,12 @@ let mk_py_float_interval l u range =
 
 let mk_attribute_var obj attr range =
   let addr = addr_of_object obj in
-  let v = {
-      vname = (
-        let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
-        let name = Format.flush_str_formatter () in
-        name
-      );
-      vuid = 0;
-      vtyp = T_any;
-    }
+  let vname =
+    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
+    Format.flush_str_formatter ()
   in
+  let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
+  let v = mkv vname uniq addr.addr_uid T_any in
   mk_var v range
 
 let mk_py_hasattr e attr range =

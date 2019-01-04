@@ -36,7 +36,7 @@ module Make(S: SIG.STATE)(A: SIG.COMPARABLE_WITNESS) (* : Framework.Domains.Stac
         size    : var;
       }
 
-    let fresh_var = mktmp Ast.T_int
+    let fresh_var = mktmp ~typ:Ast.T_int
 
     let holify_sigma_algebra (sa: TA.sigma_algebra) =
       if SA.mem_symbol hole_tree sa then

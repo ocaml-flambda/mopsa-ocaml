@@ -9,6 +9,7 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
+  | C_init_stub stub -> fprintf fmt "/*$@\n  @[%a@]@\n */" Stubs.Ast.pp_stub_init stub
 
 let rec pp_c_type_short fmt =
   function
@@ -119,7 +120,7 @@ let () =
       | E_c_conditional(cond, body, orelse) -> assert false
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
-      | E_c_function(f) -> pp_var fmt f.c_func_var
+      | E_c_function(f) -> pp_print_string fmt f.c_func_org_name
       | E_c_builtin_function(f) -> fprintf fmt "builtin %s" f
       | E_c_builtin_call(f, args) -> fprintf fmt "builtin %s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | E_c_arrow_access(p, idx, fld) -> fprintf fmt "%a->%s" pp_expr p fld
@@ -138,10 +139,17 @@ let () =
     );
   register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
-      | S_c_global_declaration (v, None)
-      | S_c_local_declaration (v, None) -> fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
-      | S_c_global_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
-      | S_c_local_declaration (v, Some init) -> fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
+      | S_c_declaration v ->
+        begin match vkind v with
+          | V_c { var_init = None } ->
+            fprintf fmt "%a %a;" pp_typ v.vtyp pp_var v
+
+          | V_c { var_init = Some init } ->
+            fprintf fmt "%a %a = %a;" pp_typ v.vtyp pp_var v pp_c_init init
+
+          | _ -> assert false
+        end
+
       | S_c_for (init,cond,it,stmts) ->
         fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init
@@ -165,16 +173,16 @@ let () =
     );
   register_program_pp (fun default fmt prg ->
       match prg with
-      | Ast.C_program (globals, funcs) ->
+      | Ast.C_program prog ->
         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
           (fun fmt f ->
-             fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+             fprintf fmt "%a %s(%a) {@\n@[<v 2>  %a@]@\n}"
                pp_typ f.c_func_return
-               pp_var f.c_func_var
+               f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
                (OptionExt.print pp_stmt) f.c_func_body
           )
-          fmt funcs
+          fmt prog.c_functions
 
       | _ -> default fmt prg
     );

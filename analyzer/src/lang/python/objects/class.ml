@@ -43,7 +43,7 @@ module Domain =
          None
       | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
          (* Call __new__ *)
-         let tmp_inst = mk_tmp () in
+         let tmp_inst = mktmp () in
          let inst_var = mk_var tmp_inst range in
          debug "tmp inst var = %a@\n" pp_expr inst_var;
          let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
@@ -94,7 +94,7 @@ module Domain =
                  Post.of_flow flow
                else
                  if Libs.Py_mopsa.is_unsupported_clsdec cls then
-                   let name = cls.py_cls_var.vname in
+                   let name = cls.py_cls_var.org_vname in
                    create_builtin_class (C_unsupported name) name cls bases' range;
                    Post.of_flow flow
                  else

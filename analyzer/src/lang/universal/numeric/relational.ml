@@ -203,7 +203,7 @@ struct
                PrimedVar.ext_from_expr exp = WEAK
       ->
       let x = PrimedVar.from_expr exp in
-      let x' = mktmp exp.etyp () in
+      let x' = mktmp ~typ:exp.etyp () in
       let x_apr = var_to_apron x in
       let x_apr' = var_to_apron (unprimed x') in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in

@@ -52,8 +52,8 @@ module Domain =
                      in
 
                      (* Execute body *)
-                     let tmpexn = mk_tmp () in
-                     let tmpret = mk_tmp () in
+                     let tmpexn = mktmp () in
+                     let tmpret = mktmp () in
                      let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
                      let stmt =
                        mk_try

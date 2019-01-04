@@ -2,8 +2,8 @@
 #define _MOPSA_H
 
 // Abstract values
-extern long int _mopsa_rand_int(long int, long int);
-extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int, unsigned long int);
+extern long int _mopsa_rand_int(long int l, long int u);
+extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int l, unsigned long int u);
 
 extern char _mopsa_range_char();
 extern unsigned char _mopsa_range_unsigned_char();
@@ -18,7 +18,7 @@ extern unsigned long _mopsa_range_unsigned_long_long();
 
 
 // Raise Framework.Manager.Panic exception with a given message
-extern void _mopsa_panic(const char*);
+extern void _mopsa_panic(const char* msg);
 
 // Printing
 extern void _mopsa_print();

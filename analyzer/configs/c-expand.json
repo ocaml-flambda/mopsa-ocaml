@@ -19,6 +19,7 @@
         "c.desugar.low_level",
         "c.desugar.loops",
         "c.desugar.record_copy",
+        "c.desugar.stub_init",
 
         // C libraries
         "c.libs.mopsa",

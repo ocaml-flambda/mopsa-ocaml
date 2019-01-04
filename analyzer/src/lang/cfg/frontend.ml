@@ -64,7 +64,7 @@ let extract_calls_expr (e:expr) : (var * range) list * stmt list * expr =
     (* extract top-level call *)
     match ekind e with
     | E_call (f, args) ->
-       let tmp = mk_tmp ~vtyp:(etyp e) () in
+       let tmp = mktmp ~typ:(etyp e) () in
        let v = mk_var tmp (erange e) in
        let assign = mk_assign v e (erange e) in
        ((tmp,erange e)::tmps, assign::assigns), v

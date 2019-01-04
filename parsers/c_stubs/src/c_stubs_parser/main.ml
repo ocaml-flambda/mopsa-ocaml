@@ -63,3 +63,28 @@ let parse_function_comment
     | Parser.Error ->
       let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
       Exceptions.unnamed_syntax_error range
+
+
+(** Parse the stub specification from comments of a variable *)
+let parse_var_comment
+  var
+  (prj:C_AST.project)
+  : Ast.stub option
+  =
+  (* Create a dummy init function *)
+  let func = C_AST.{
+    func_uid = 0;
+    func_org_name = "$init";
+    func_unique_name = "$init";
+    func_is_static = false;
+    func_return = var.var_type;
+    func_parameters = [||];
+    func_body = None;
+    func_static_vars = [];
+    func_local_vars = [];
+    func_variadic = false;
+    func_range = var.var_range;
+    func_com = var.var_com;
+  }
+  in
+  parse_function_comment func prj

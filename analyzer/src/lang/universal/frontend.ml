@@ -51,7 +51,8 @@ let from_extent (e: extent) : Location.range = e
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context): FA.var =
   try
     let (id, typ) = MS.find v var_ctx in
-    mkv v id typ
+    let uniq = v ^ (string_of_int id) in
+    mkv v uniq id typ
   with
   | Not_found ->
     Exceptions.panic_at ext
@@ -504,7 +505,7 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.option_lift1 from_typ f.return_type in
-  let ret_var = mk_tmp ~vtyp:(OptionExt.option_dfl T_int typ) () in
+  let ret_var = mktmp ~typ:(OptionExt.option_dfl T_int typ) () in
   {
     fun_name = f.funname;
     fun_range = from_extent f.range;

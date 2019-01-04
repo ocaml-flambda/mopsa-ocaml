@@ -89,12 +89,10 @@ struct
 
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var primed) : var primed =
-    primed_lift (fun pp ->
-        {
-          vname = pp.vname ^ "_offset";
-          vuid = pp.vuid;
-          vtyp = T_int
-        }
+    primed_lift (fun ptr ->
+        let vname = ptr.org_vname ^ "_offset" in
+        let uniq = vname ^ ":" ^ (string_of_int ptr.vuid) in
+        mkv vname uniq ptr.vuid T_int
       ) p
 
   let mk_offset_var_expr (p:var primed) range : expr =
@@ -412,7 +410,7 @@ struct
   let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_c_local_declaration(p, None) when is_c_pointer_type p.vtyp ->
+    | S_c_declaration(p) when is_c_pointer_type p.vtyp ->
       let flow' = Flow.map_domain_env T_cur (
           NR.add (unprimed p) Bases.null
         ) man flow

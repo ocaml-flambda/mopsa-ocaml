@@ -21,7 +21,7 @@ let get_var (s: string) (vb: Aux.t) =
     (Aux.find_l s vb, vb)
   with
   | Not_found ->
-    let v = mktmp Ast.T_int () in
+    let v = mktmp ~typ:Ast.T_int () in
     (v, Aux.add (s, v) vb)
 
 let get_var_list (s: string list) (vb: Aux.t) =

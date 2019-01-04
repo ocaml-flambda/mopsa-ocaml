@@ -9,6 +9,7 @@ let rec exprs_in_init = function
     let el1 = l |> List.fold_left (fun acc init -> acc @ exprs_in_init init) [] in
     let el2 = exprs_in_init_option filler in
     el1 @ el2
+  | C_init_stub stub -> []
 
 and exprs_in_init_option = function
   | None -> []
@@ -155,15 +156,20 @@ let () =
 
   register_stmt_visitor (fun default stmt ->
       match skind stmt with
-      | S_program(C_program(globals, funcs)) ->
+      | S_program(C_program _) ->
         Exceptions.panic "visitor of C_program not yet implemented"
 
-      | S_c_local_declaration(v, init) ->
+      | S_c_declaration(v) ->
+        let vv, init = match vkind v with
+          | V_c ({ var_init } as vv) -> vv, var_init
+          | _ -> assert false
+        in
         let exprs = exprs_in_init_option init in
         {exprs; stmts = []},
         (function {exprs} ->
            let init, _ = init_option_from_exprs exprs init in
-           {stmt with skind = S_c_local_declaration(v, init)}
+           let v = { v with vkind = V_c { vv with var_init = init } } in
+           {stmt with skind = S_c_declaration v}
         )
 
 

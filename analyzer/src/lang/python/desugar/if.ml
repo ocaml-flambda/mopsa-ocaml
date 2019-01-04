@@ -34,7 +34,7 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       | E_py_if(test, body, orelse) ->
-         let tmp = mk_tmp () in
+         let tmp = mktmp () in
          let flow = man.exec
                       (mk_if
                          test

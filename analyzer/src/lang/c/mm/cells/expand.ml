@@ -117,7 +117,7 @@ module Domain = struct
     | None ->
       match exist_and_find_cell
               (fun c' ->
-                 is_similarly_primed c c' &&
+                 is_primed_as c c' &&
                  is_c_int_type (primed_apply cell_typ c') &&
                  Z.equal (sizeof_type (primed_apply cell_typ c')) (sizeof_type (primed_apply cell_typ c)) &&
                  compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
@@ -135,7 +135,7 @@ module Domain = struct
         match
           exist_and_find_cell ( fun c' ->
               let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
-              is_similarly_primed c c' &&
+              is_primed_as c c' &&
               Z.lt b (sizeof_type (primed_apply cell_typ c')) &&
               is_c_int_type (primed_apply cell_typ c') &&
               compare_typ (remove_typedef_qual (primed_apply cell_typ c)) (T_c_integer(C_unsigned_char)) = 0
@@ -856,12 +856,17 @@ module Domain = struct
   let rec exec zone stmt man flow =
     match skind stmt with
     (* 𝕊⟦ t v = e; ⟧ when v is a global variable *)
-    | S_c_global_declaration(v, init) ->
+    | S_c_declaration({vkind = V_c {var_scope = Variable_extern
+                                               | Variable_global
+                                               | Variable_file_static _
+                                               | Variable_func_static _;
+                                     var_init = init}} as v)
+      ->
       Common.Init_visitor.init_global (init_visitor man) v init stmt.srange flow |>
       Post.return
 
     (* 𝕊⟦ t v = e; ⟧ when v is a local variable *)
-    | S_c_local_declaration(v, init) ->
+    | S_c_declaration({vkind = V_c {var_scope = Variable_local _; var_init = init}} as v) ->
       Common.Init_visitor.init_local (init_visitor man) v init stmt.srange flow |>
       Post.return
 

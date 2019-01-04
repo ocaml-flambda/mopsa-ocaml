@@ -65,7 +65,7 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_c_local_declaration(v, Some (C_init_expr rval))
+    | S_c_declaration ({ vkind = V_c { var_init = Some (C_init_expr rval) } } as v)
       when v.vtyp |> remove_typedef_qual |> is_c_record_type  ->
       exec zone (mk_assign (mk_var v stmt.srange) rval stmt.srange) man flow
 

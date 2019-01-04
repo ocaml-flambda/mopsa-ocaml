@@ -34,7 +34,7 @@ module Domain =
     let eval_interface = {export = [Framework.Zone.Z_any, Framework.Zone.Z_any]; import = []}
 
     let unfold_comprehension expr comprehensions base append range =
-         let tmp_acc = mk_tmp () in
+         let tmp_acc = mktmp () in
          let acc_var = mk_var tmp_acc range in
          let rec unfold_lc aux_compr = match aux_compr with
            | [] ->
