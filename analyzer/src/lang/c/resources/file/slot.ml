@@ -139,8 +139,9 @@ let remove addr s =
   match s with
   | Bot | Free -> s
   | NotFree a | MaybeFree a ->
-    let a' = AddrSet.remove addr a in
-    if AddrSet.is_empty a' then
-      Free
+    if not (AddrSet.mem addr a) then s
     else
-      MaybeFree a'
+      let a' = AddrSet.remove addr a in
+      if AddrSet.is_empty a' then Free
+      else MaybeFree a'
+
