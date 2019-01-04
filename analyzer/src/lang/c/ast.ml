@@ -175,7 +175,6 @@ type c_var_scope =
   | Variable_parameter of c_fundec (** formal argument *)
   | Variable_file_static of string (** restricted to a translation unit *)
   | Variable_func_static of c_fundec (** restricted to a function *)
-  | Variable_dynamic (** dynamically allocated variable *)
 
 
 (** Variable initialization. *)
@@ -188,7 +187,7 @@ type c_var_init =
 
 type c_var = {
   var_scope: c_var_scope; (** life-time scope of the variable *)
-  var_init: c_var_init option; (** initialization *)
+  mutable var_init: c_var_init option; (** initialization *)
   var_range: range; (** declaration range *)
 }
 

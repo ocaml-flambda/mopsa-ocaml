@@ -46,24 +46,22 @@ let () =
 type type_space = TS_TYPEDEF | TS_RECORD | TS_ENUM
 
 type ctx = {
-    ctx_fun: Ast.c_fundec list;
+  ctx_prj : C_AST.project; (* project descriptor *)
 
-    ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
-    (* cache the translation of all named types;
+  ctx_fun: Ast.c_fundec StringMap.t; (* cache of functions of the project *)
+
+  ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
+  (* cache the translation of all named types;
        this is required for records defining recursive data-types
-    *)
-    ctx_prj : C_AST.project;
-  }
+  *)
+
+  ctx_vars: (string,Framework.Ast.var*C_AST.variable) Hashtbl.t; (* cache of variables of the project *)
+}
 
 
-let find_function_in_context fun_ctx (f: C_AST.func) =
-  try
-    List.find (fun c_fun ->
-        c_fun.c_func_uid = f.func_uid
-      ) fun_ctx.ctx_fun
-  with
-  | Not_found -> Exceptions.panic "Could not find function %s in function context" f.func_unique_name
-
+let find_function_in_context ctx (f: C_AST.func) =
+  try StringMap.find f.func_unique_name ctx.ctx_fun
+  with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
 
 
 (** {2 Entry} *)
@@ -131,11 +129,15 @@ and from_project prj =
     List.map snd |>
     List.map(fun f -> from_function f, f)
   in
-  let funcs = List.map fst funcs_and_origins in
+  let funcs = List.fold_left (fun map (f, o) ->
+      StringMap.add o.func_unique_name f map
+    ) StringMap.empty funcs_and_origins
+  in
   let ctx = {
       ctx_fun = funcs;
       ctx_type = Hashtbl.create 16;
       ctx_prj = prj;
+      ctx_vars = Hashtbl.create 16;
     }
   in
   List.iter (fun (f, o) ->
@@ -150,13 +152,20 @@ and from_project prj =
       f.c_func_stub <- from_stub_comment ctx o
     ) funcs_and_origins;
 
+  Hashtbl.iter (fun _ (v, o) ->
+      match vkind v with
+      | V_c vv ->
+        vv.var_init <- from_var_init ctx o
+      | _ -> assert false
+    ) ctx.ctx_vars;
+
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
                 List.map (from_var ctx)
   in
 
 
-  Ast.C_program { c_globals = globals; c_functions = funcs }
+  Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
 
 
 
@@ -184,42 +193,42 @@ and from_function =
 (** {2 Statements} *)
 (** ============== *)
 
-and from_stmt fun_ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
+and from_stmt ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   let srange = from_range range in
   let skind = match skind with
     | C_AST.S_local_declaration v ->
-      let v = from_var fun_ctx v in
+      let v = from_var ctx v in
       Ast.S_c_declaration v
-    | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr fun_ctx e)
-    | C_AST.S_block block -> from_block fun_ctx srange block |> Framework.Ast.skind
-    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr fun_ctx cond, from_block fun_ctx srange body, from_block fun_ctx srange orelse)
-    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr fun_ctx cond, from_block fun_ctx srange body)
-    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block fun_ctx srange body, from_expr fun_ctx cond)
-    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block fun_ctx srange init, from_expr_option fun_ctx test, from_expr_option fun_ctx increm, from_block fun_ctx srange body)
+    | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
+    | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.skind
+    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
+    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
+    | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)
+    | C_AST.S_for (init, test, increm, body) -> Ast.S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
     | C_AST.S_jump (C_AST.S_goto label) -> S_c_goto label
     | C_AST.S_jump (C_AST.S_break) -> Universal.Ast.S_break
     | C_AST.S_jump (C_AST.S_continue) -> Universal.Ast.S_continue
     | C_AST.S_jump (C_AST.S_return None) -> Universal.Ast.S_return None
-    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr fun_ctx e))
-    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr fun_ctx cond, from_block fun_ctx srange body)
-    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr fun_ctx e)
+    | C_AST.S_jump (C_AST.S_return (Some e)) -> Universal.Ast.S_return (Some (from_expr ctx e))
+    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx srange body)
+    | C_AST.S_target(C_AST.S_case(e)) -> Ast.S_c_switch_case(from_expr ctx e)
     | C_AST.S_target(C_AST.S_default) -> Ast.S_c_switch_default
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
   in
   {skind; srange}
 
-and from_block fun_ctx range (block: C_AST.block) : Framework.Ast.stmt =
-  mk_block (List.map (from_stmt fun_ctx) block) range
+and from_block ctx range (block: C_AST.block) : Framework.Ast.stmt =
+  mk_block (List.map (from_stmt ctx) block) range
 
-and from_block_option fun_ctx (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
+and from_block_option ctx (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
   match block with
   | None -> mk_nop range
-  | Some stmtl -> from_block fun_ctx range stmtl
+  | Some stmtl -> from_block ctx range stmtl
 
-and from_body_option (fun_ctx) (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+and from_body_option (ctx) (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
   match block with
   | None -> None
-  | Some stmtl -> Some (from_block fun_ctx range stmtl)
+  | Some stmtl -> Some (from_block ctx range stmtl)
 
 
 
@@ -227,9 +236,9 @@ and from_body_option (fun_ctx) (range: Location.range) (block: C_AST.block optio
 (** {2 Expressions} *)
 (** =============== *)
 
-and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
+and from_expr ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
   let erange = from_range range in
-  let etyp = from_typ fun_ctx tc in
+  let etyp = from_typ ctx tc in
   let ekind =
     match ekind with
     | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
@@ -237,20 +246,20 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
     | C_AST.E_string_literal (s, k) ->
       Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
-    | C_AST.E_variable v -> E_var (from_var fun_ctx v, STRONG)
-    | C_AST.E_function f -> Ast.E_c_function (find_function_in_context fun_ctx f)
-    | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr fun_ctx f, Array.map (from_expr fun_ctx) args |> Array.to_list)
-    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr fun_ctx e)
-    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr fun_ctx e1, from_expr fun_ctx e2)
-    | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, true)
-    | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr fun_ctx e, false)
-    | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr fun_ctx lval, from_expr fun_ctx rval)
-    | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr fun_ctx e)
-    | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr fun_ctx p)
-    | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr fun_ctx a, from_expr fun_ctx i)
-    | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr fun_ctx r, i, f)
-    | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr fun_ctx r, i, f)
-    | C_AST.E_statement s -> Ast.E_c_statement (from_block fun_ctx erange s)
+    | C_AST.E_variable v -> E_var (from_var ctx v, STRONG)
+    | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx f)
+    | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr ctx f, Array.map (from_expr ctx) args |> Array.to_list)
+    | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr ctx e)
+    | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr ctx e1, from_expr ctx e2)
+    | C_AST.E_cast (e,C_AST.EXPLICIT) -> Ast.E_c_cast(from_expr ctx e, true)
+    | C_AST.E_cast (e,C_AST.IMPLICIT) -> Ast.E_c_cast(from_expr ctx e, false)
+    | C_AST.E_assign (lval, rval) -> Ast.E_c_assign(from_expr ctx lval, from_expr ctx rval)
+    | C_AST.E_address_of(e) -> Ast.E_c_address_of(from_expr ctx e)
+    | C_AST.E_deref(p) -> Ast.E_c_deref(from_expr ctx p)
+    | C_AST.E_array_subscript (a, i) -> Ast.E_c_array_subscript(from_expr ctx a, from_expr ctx i)
+    | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr ctx r, i, f)
+    | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr ctx r, i, f)
+    | C_AST.E_statement s -> Ast.E_c_statement (from_block ctx erange s)
 
     | C_AST.E_conditional (_,_,_) -> Exceptions.panic_at erange "E_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
@@ -263,9 +272,9 @@ and from_expr fun_ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
   in
   {ekind; erange; etyp}
 
-and from_expr_option fun_ctx : C_AST.expr option -> Framework.Ast.expr option = function
+and from_expr_option ctx : C_AST.expr option -> Framework.Ast.expr option = function
   | None -> None
-  | Some e -> Some (from_expr fun_ctx e)
+  | Some e -> Some (from_expr ctx e)
 
 and from_unary_operator op t = match op with
   | C_AST.NEG -> O_minus
@@ -303,20 +312,25 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
 (** {2 Variables} *)
 (** ============= *)
 
-and from_var fun_ctx (v: C_AST.variable) : var =
-  {
-    org_vname = v.var_org_name;
-    uniq_vname = v.var_unique_name;
-    vkind = V_c {
-        var_scope = from_var_scope fun_ctx v.var_kind;
-        var_init = from_var_init fun_ctx v;
-        var_range = from_range v.var_range;
-    };
-    vuid = v.var_uid;
-    vtyp = from_typ fun_ctx v.var_type;
-  }
+and from_var ctx (v: C_AST.variable) : var =
+  try Hashtbl.find ctx.ctx_vars v.var_unique_name |> fst
+  with Not_found ->
+    let v' = {
+      org_vname = v.var_org_name;
+      uniq_vname = v.var_unique_name;
+      vkind = V_c {
+          var_scope = from_var_scope ctx v.var_kind;
+          var_init = None;
+          var_range = from_range v.var_range;
+        };
+      vuid = v.var_uid;
+      vtyp = from_typ ctx v.var_type;
+    }
+    in
+    Hashtbl.add ctx.ctx_vars v.var_unique_name (v', v);
+    v'
 
-and from_var_scope fun_ctx = function
+and from_var_scope ctx = function
   | C_AST.Variable_global -> Ast.Variable_global
   | Variable_extern -> Variable_extern
   | Variable_local f -> Variable_local (from_function f)
@@ -324,21 +338,21 @@ and from_var_scope fun_ctx = function
   | C_AST.Variable_file_static tu -> Variable_file_static tu.tu_name
   | C_AST.Variable_func_static f -> Variable_func_static (from_function f)
 
-and from_var_init fun_ctx v =
+and from_var_init ctx v =
   match v.var_init with
-  | Some i -> Some (from_init fun_ctx i)
-  | None -> from_init_stub fun_ctx v
+  | Some i -> Some (from_init ctx i)
+  | None -> from_init_stub ctx v
 
-and from_init_option fun_ctx init =
+and from_init_option ctx init =
   match init with
-  | Some i -> Some (from_init fun_ctx i)
+  | Some i -> Some (from_init ctx i)
   | None -> None
 
-and from_init fun_ctx init =
+and from_init ctx init =
   match init with
-  | I_init_expr e -> C_init_expr (from_expr fun_ctx e)
-  | I_init_list(il, i) -> C_init_list (List.map (from_init fun_ctx) il, from_init_option fun_ctx i)
-  | I_init_implicit t -> C_init_implicit (from_typ fun_ctx t)
+  | I_init_expr e -> C_init_expr (from_expr ctx e)
+  | I_init_list(il, i) -> C_init_list (List.map (from_init ctx) il, from_init_option ctx i)
+  | I_init_implicit t -> C_init_implicit (from_typ ctx t)
 
 and from_init_stub ctx v =
   match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj with
@@ -357,21 +371,21 @@ and from_init_stub ctx v =
 (** {2 Types} *)
 (** ========= *)
 
-and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
+and from_typ ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
   let typ, qual = tc in
   let typ' = match typ with
     | C_AST.T_void -> Ast.T_c_void
     | C_AST.T_bool -> Universal.Ast.T_bool
     | C_AST.T_integer t -> Ast.T_c_integer (from_integer_type t)
     | C_AST.T_float t -> Ast.T_c_float (from_float_type t)
-    | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ fun_ctx t)
-    | C_AST.T_array (t,l) -> Ast.T_c_array (from_typ fun_ctx t, from_array_length fun_ctx l)
+    | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ ctx t)
+    | C_AST.T_array (t,l) -> Ast.T_c_array (from_typ ctx t, from_array_length ctx l)
     | C_AST.T_function None -> Ast.T_c_function None
-    | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type fun_ctx t))
+    | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type ctx t))
     | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
     | C_AST.T_typedef t ->
-       if Hashtbl.mem fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
-       then Hashtbl.find fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+       if Hashtbl.mem ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+       then Hashtbl.find ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
        else
          let x = {
              c_typedef_org_name = t.typedef_org_name;
@@ -381,12 +395,12 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
            }
          in
          let y = Ast.T_c_typedef x in
-         Hashtbl.add fun_ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) y;
-         x.c_typedef_def <-  from_typ fun_ctx t.typedef_def;
+         Hashtbl.add ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) y;
+         x.c_typedef_def <-  from_typ ctx t.typedef_def;
          y
     | C_AST.T_record r ->
-       if Hashtbl.mem fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
-       then Hashtbl.find fun_ctx.ctx_type (TS_RECORD,r.record_unique_name)
+       if Hashtbl.mem ctx.ctx_type (TS_RECORD,r.record_unique_name)
+       then Hashtbl.find ctx.ctx_type (TS_RECORD,r.record_unique_name)
        else
          let x = {
              c_record_kind =
@@ -401,7 +415,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
            }
          in
          let y = Ast.T_c_record x in
-         Hashtbl.add fun_ctx.ctx_type (TS_RECORD,r.record_unique_name) y;
+         Hashtbl.add ctx.ctx_type (TS_RECORD,r.record_unique_name) y;
          x.c_record_fields <-
            List.map
              (fun f -> {
@@ -409,15 +423,15 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
                   c_field_name = f.field_name;
                   c_field_offset = f.field_offset;
                   c_field_bit_offset = f.field_bit_offset;
-                  c_field_type = from_typ fun_ctx f.field_type;
+                  c_field_type = from_typ ctx f.field_type;
                   c_field_range = from_range f.field_range;
                   c_field_index = f.field_index;
              })
              (Array.to_list r.record_fields);
          y
     | C_AST.T_enum e ->
-       if Hashtbl.mem fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
-       then Hashtbl.find fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+       if Hashtbl.mem ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+       then Hashtbl.find ctx.ctx_type (TS_ENUM,e.enum_unique_name)
        else
          let x =
            Ast.T_c_enum {
@@ -436,7 +450,7 @@ and from_typ fun_ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
                c_enum_range = from_range e.enum_range;
              }
          in
-         Hashtbl.add fun_ctx.ctx_type (TS_ENUM,e.enum_unique_name) x;
+         Hashtbl.add ctx.ctx_type (TS_ENUM,e.enum_unique_name) x;
          x
     | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
     | C_AST.T_complex _ -> failwith "C_AST.T_complex not supported"
@@ -467,15 +481,15 @@ and from_float_type : C_AST.float_type -> Ast.c_float_type = function
   | C_AST.DOUBLE -> Ast.C_double
   | C_AST.LONG_DOUBLE -> Ast.C_long_double
 
-and from_array_length fun_ctx al = match al with
+and from_array_length ctx al = match al with
   | C_AST.No_length -> Ast.C_array_no_length
   | C_AST.Length_cst n -> Ast.C_array_length_cst n
-  | C_AST.Length_expr e -> Ast.C_array_length_expr (from_expr fun_ctx e)
+  | C_AST.Length_expr e -> Ast.C_array_length_expr (from_expr ctx e)
 
-and from_function_type fun_ctx f =
+and from_function_type ctx f =
   {
-    c_ftype_return = from_typ fun_ctx f.ftype_return;
-    c_ftype_params = List.map (from_typ fun_ctx) f.ftype_params;
+    c_ftype_return = from_typ ctx f.ftype_return;
+    c_ftype_params = List.map (from_typ ctx) f.ftype_params;
     c_ftype_variadic = f.ftype_variadic;
   }
 
