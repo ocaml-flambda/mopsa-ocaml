@@ -24,7 +24,12 @@ type 'a info = {
 (**                           {2 Programs}                                  *)
 (*==========================================================================*)
 
-type program = ..
+type prog_kind = ..
+
+type program = {
+  prog_kind : prog_kind;
+  prog_range : Location.range;
+}
 
 let program_pp_chain : (formatter -> program -> unit) ref =
   ref (fun fmt prg ->

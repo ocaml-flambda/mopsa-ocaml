@@ -529,7 +529,7 @@ let add_body (fl: fun_context) (f: string) (b: stmt): unit =
   with
   | Not_found -> Exceptions.panic "[Universal.frontend] should not happen"
 
-let from_prog (p: U_ast.prog) : FA.program =
+let from_prog (p: U_ast.prog) : FA.prog_kind =
   let ext = snd (p.main) in
   let var_ctx, init, gvars = var_ctx_init_of_declaration p.gvars MS.empty None None in
   let fun_ctx, var_ctx_map = fun_ctx_of_global p.funs var_ctx in
@@ -552,6 +552,10 @@ let rec parse_program (files: string list): Framework.Ast.program =
   match files with
   | [filename] ->
     let ast = U_file_parser.parse_file filename in
-    from_prog ast
+    {
+      prog_kind = from_prog ast;
+      prog_range = mk_program_range [filename];
+    }
+
   | _ ->
     Exceptions.panic "only one file supported for universal"

@@ -24,7 +24,7 @@
         // C libraries
         "c.libs.mopsa",
 
-	// C stub resources
+	// C resources
 	"c.resources.memory",
 	"c.resources.file",
 	"c.resources.common",

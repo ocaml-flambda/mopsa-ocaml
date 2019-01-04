@@ -416,5 +416,8 @@ let parse_program files =
       m := MapExt.StringMap.add cls.c_uid cls !m
   in
   List.iter parse_file files;
-  Java_program { p_classes = !m; }
+  {
+    prog_kind = Java_program { p_classes = !m; };
+    prog_range = mk_program_range files;
+  }
   

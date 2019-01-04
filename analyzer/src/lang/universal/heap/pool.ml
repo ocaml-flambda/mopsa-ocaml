@@ -17,6 +17,8 @@ open Mopsa
 open Framework.Ast
 open Ast
 
+let debug fmt = Debug.debug ~channel:"universal.heap.pool" fmt
+
 let uid_ref = ref 0
 let get_fresh () =
   let rep = !uid_ref in

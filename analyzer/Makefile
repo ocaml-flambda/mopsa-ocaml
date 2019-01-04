@@ -4,7 +4,7 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 framework = ast visitor options query annotation lattice zone manager	\
-flow eval post channel value domain callstack alarm output cache			\
+flow eval post channel value domain callstack alarm output cache \
 analyzer lattices domains config
 framework.output = text json factory html
 framework.domains = stateless iter nonrel leaf functor stacked	\
@@ -28,8 +28,8 @@ integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences	\
 implicit_assume_relation intervals_broadcast
 lang.universal.tree = toolBox tools strVarBind SIG mapper mRelation	\
-rewrite enumerator enumeratorOneFixed unionFind regularAlgebra			\
-treeAlgebra abstractRegularAutomaton regExp regexpPartition					\
+rewrite enumerator enumeratorOneFixed unionFind regularAlgebra	\
+treeAlgebra abstractRegularAutomaton regExp regexpPartition	\
 abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator

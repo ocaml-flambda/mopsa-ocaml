@@ -68,7 +68,7 @@ struct
 
   let rec exec zone stmt man flow =
     match skind stmt with
-    | S_program(C_program {c_globals; c_functions})
+    | S_program { prog_kind = C_program {c_globals; c_functions} }
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals c_globals (srange stmt) man flow in
@@ -86,7 +86,7 @@ struct
       man.exec ~zone:Zone.Z_c stmt flow1 |>
       Post.return
 
-    | S_program(C_program{ c_globals; c_functions })
+    | S_program { prog_kind = C_program{ c_globals; c_functions } }
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals c_globals (srange stmt) man flow in

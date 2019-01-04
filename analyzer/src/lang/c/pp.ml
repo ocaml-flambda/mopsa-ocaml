@@ -172,7 +172,7 @@ let () =
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->
-      match prg with
+      match prg.prog_kind with
       | Ast.C_program prog ->
         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
           (fun fmt f ->

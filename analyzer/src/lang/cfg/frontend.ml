@@ -329,13 +329,15 @@ let convert_fundec (f:fundec) =
 
 (** Converts a full universal program. *)  
 let convert_program (p:program) = 
-  match p with
+  match p.prog_kind with
   | P_universal u ->
      List.iter convert_fundec u.universal_fundecs;
-     P_universal
-       { u with
-         universal_main = convert_stmt ~name:"__main__" u.universal_main;
-       }
+     { p with
+       prog_kind = P_universal
+           { u with
+             universal_main = convert_stmt ~name:"__main__" u.universal_main;
+           }
+     }
 
   | _ ->        
      Exceptions.panic "cannot convert program to CFG"

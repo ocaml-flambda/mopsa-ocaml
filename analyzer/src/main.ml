@@ -73,7 +73,6 @@ let () =
   exit @@ iter_sources (fun files ->
       try
         let prog = parse_program files in
-        Debug.info "@[<v>Parsed program:@,%a@]" Mopsa.pp_program prog;
         let config = get_config_path () in
 
         let domain = Config.parse config in
@@ -88,7 +87,7 @@ let () =
         let flow = Analyzer.init prog in
         Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
         let stmt =
-          Ast.mk_stmt (Ast.S_program prog) (Location.mk_program_range files)
+          Ast.mk_stmt (Ast.S_program prog) prog.prog_range
         in
 
         Debug.info "Starting the analysis ...";

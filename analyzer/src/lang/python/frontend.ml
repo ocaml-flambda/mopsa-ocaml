@@ -22,8 +22,10 @@ let rec parse_program (files: string list) : Framework.Ast.program =
   match files with
   | [filename] ->
     let ast = Py_parser.Main.parse_file filename in
-    (* Start the translation of the AST *)
-    from_program filename ast
+    {
+      prog_kind = from_program filename ast;
+      prog_range = mk_program_range [filename];
+    }
 
   | _ -> assert false
 
@@ -37,7 +39,7 @@ and from_var v =
   mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) v.uid T_any
 
 (** Translate a Python program into a Framework.Ast.stmt *)
-and from_program filename (p: Py_parser.Ast.program) : Framework.Ast.program =
+and from_program filename (p: Py_parser.Ast.program) : Framework.Ast.prog_kind =
   let body = from_stmt p.prog_body in
   let globals = List.map from_var p.prog_globals in
   Ast.Py_program (globals, body)

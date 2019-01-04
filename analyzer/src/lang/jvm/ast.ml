@@ -125,7 +125,7 @@ type j_program = {
     mutable p_classes: j_class MapExt.StringMap.t;
   }
             
-type program +=
+type prog_kind +=
    | Java_program of j_program
 
    

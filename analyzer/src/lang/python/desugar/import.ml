@@ -82,7 +82,11 @@ module Domain =
         | Some dir ->
            let filename = dir ^ "/" ^ name ^ ".py" in
            let prog = Frontend.parse_program [filename] in
-           let globals, body = match prog with Py_program(body, globals) -> body, globals | _ -> assert false in
+           let globals, body =
+             match prog.prog_kind with
+             | Py_program(body, globals) -> body, globals
+             | _ -> assert false
+           in
            let addr = {
                addr_kind = A_py_module (M_user(name, globals));
                addr_uid = 0;

@@ -33,7 +33,7 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_program (P_universal{universal_main}) ->
+    | S_program { prog_kind = P_universal{universal_main} } ->
       Some (
         man.exec universal_main flow |>
         Post.of_flow

@@ -253,7 +253,7 @@ let compare_fun_expr x y = match x, y with
 (** {2 Universal program} *)
 (*  ********************* *)
 
-type program +=
+type prog_kind +=
   | P_universal of {
       universal_gvars   : var list;
       universal_fundecs : fundec list;
@@ -264,7 +264,7 @@ let () =
   register_program {
     compare = (fun next -> next);
     print   = (fun default fmt prg ->
-        match prg with
+        match prg.prog_kind with
         | P_universal (u_prog) ->
           Format.fprintf fmt "@[<v>%a@,%a@]"
             (

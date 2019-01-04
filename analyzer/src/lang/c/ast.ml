@@ -342,7 +342,7 @@ type c_program = {
   c_functions : c_fundec list; (** functions of the program *)
 }
 
-type program +=
+type prog_kind +=
   | C_program of c_program
 
 

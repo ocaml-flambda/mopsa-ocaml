@@ -286,7 +286,7 @@ type stmt_kind +=
                            (** {2 Programs} *)
 (*==========================================================================*)
 
-type Framework.Ast.program +=
+type prog_kind +=
   | Py_program of
       var list (** global variables *) *
       stmt (** body *)

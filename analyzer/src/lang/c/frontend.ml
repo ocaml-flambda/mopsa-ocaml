@@ -80,7 +80,10 @@ let rec parse_program (files: string list) =
        | x -> Exceptions.panic "Unknown C extension %s" x
     ) files;
   let prj = Clang_to_C.link_project ctx in
-  from_project prj
+  {
+    prog_kind = from_project prj;
+    prog_range = mk_program_range files;
+  }
 
 and parse_db (dbfile: string) ctx : unit =
   let open Clang_parser in
