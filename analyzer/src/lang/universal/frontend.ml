@@ -180,16 +180,12 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                       "type of %a incompatible with declared function"
                       U_ast_printer.print_expr e
                 ) args fundec.fun_parameters in
-              (* <<<<<<< HEAD *)
-              (* void function return an (unitialized) int *)
               let rettyp =
                 match fundec.fun_return_type with
                 | None -> T_int
                 | Some t -> t
               in
               (mk_expr ~etyp:rettyp (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range)
-              (* ======= *)
-              (* (mk_expr ~etyp:(fundec.T.fun_return_type) (E_call(mk_expr (E_function (User_defined fundec)) range, el)) range) *)
             else
               Exceptions.panic_at ext
                 "%s number of arguments incompatible with call"
@@ -319,22 +315,8 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
       | AST_identifier _ ->
         let e1 = from_expr e1 ext1 var_ctx fun_ctx in
         let e2 = from_expr e2 ext2 var_ctx fun_ctx in
-(* <<<<<<< HEAD *)
         let e2 = to_typ (etyp e1) e2 in
         mk_assign e1 e2 range
-(* =======
- *         if (compare_typ (etyp e1) (etyp e2) = 0) then
- *           mk_assign e1 e2 range
- *         else
- *           Exceptions.panic "%a (at %s) has type %a and %a (at %s) has type \
- *                       %a, could not translate assignement"
- *             U_ast_printer.print_expr e1o
- *             (U_ast_printer.string_of_extent ext1)
- *             pp_typ (etyp e1)
- *             U_ast_printer.print_expr e2o
- *             (U_ast_printer.string_of_extent ext2)
- *             pp_typ (etyp e2)
- * >>>>>>> mopsa-v2-universal-w-tree *)
       | _ ->
         Exceptions.panic_at ext "%a not considered a left-value for now "
           U_ast_printer.print_expr e1o
@@ -419,10 +401,15 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
   | AST_print ->
     mk_stmt S_print range
 
-  | AST_expr(e, ext) ->
-     let e' = from_expr e ext var_ctx fun_ctx in
-     mk_expr_stmt e' range
+  | AST_expr(AST_fun_call(("__mopsa_cf_part_start", _), [AST_int_const (s, _ ), _]), _) ->
+    mk_stmt (S_cf_part_start (int_of_string s)) range
 
+  | AST_expr(AST_fun_call(("__mopsa_cf_part_merge", _), [AST_int_const (s, _ ), _]), _) ->
+    mk_stmt (S_cf_part_merge (int_of_string s)) range
+
+  | AST_expr(e, ext) ->
+    let e' = from_expr e ext var_ctx fun_ctx in
+    mk_expr_stmt e' range
 
 let rec check_declaration_list (dl : U_ast.declaration ext list) =
   match dl with

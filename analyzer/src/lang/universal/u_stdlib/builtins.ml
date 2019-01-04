@@ -25,9 +25,9 @@ struct
     }
 
   let exec (_: Framework.Zone.zone) (stmt: Framework.Ast.stmt) (man: ('a, unit) man) (flow: 'a flow) =
-    let () = debug "I was asked: %a" pp_stmt stmt in
     match skind stmt with
-    | S_assign(_, {ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])}) ->
+    | S_assign(_, {ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])})
+    | S_expression({ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])}) ->
       man.exec (mk_assume e (srange stmt)) flow |> Post.of_flow |> OptionExt.return
     | _ -> None
 
@@ -39,4 +39,4 @@ struct
 end
 
 let () =
-    Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Domains.Stateless.register_domain (module Domain)
