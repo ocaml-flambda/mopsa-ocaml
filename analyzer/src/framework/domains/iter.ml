@@ -68,14 +68,15 @@ struct
   }
 
   let init prog man flow =
-    let flow', b = match Head.init prog (head_man man) flow with
-      | None -> flow, false
-      | Some flow' -> flow', true
+    let flow', cb, b =
+      match Head.init prog (head_man man) flow with
+      | None -> flow, [], false
+      | Some flowcb -> flowcb.flow, flowcb.callbacks, true
     in
     match Tail.init prog (tail_man man) flow', b with
     | None, false -> None
-    | None, true -> Some flow'
-    | x, _ -> x
+    | None, true -> Some { flow = flow'; callbacks = cb }
+    | Some x , _ -> Some { flow = x.flow; callbacks = cb @ x.callbacks }
 
   let exec_interface = Domain.{
     import = Head.exec_interface.import @ Tail.exec_interface.import;

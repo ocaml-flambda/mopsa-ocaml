@@ -48,7 +48,7 @@ sig
   val identify : 'a domain -> (t, 'a) eq option
 
   (** Initialization of the domain's abstract element *)
-  val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow option
+  val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow_callback option
 
   (** Interface of the [exec] transfer function *)
   val exec_interface : Zone.zone interface

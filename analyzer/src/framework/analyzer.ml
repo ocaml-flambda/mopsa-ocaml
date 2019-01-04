@@ -67,7 +67,14 @@ struct
     in
     match Domain.init prog man flow0 with
     | None -> flow0
-    | Some flow -> flow
+    | Some flow ->
+      let rec call_callbacks flow callbacks =
+        match callbacks with
+        | [] -> flow
+        | hd :: tl ->
+          call_callbacks (hd flow) tl
+      in
+      call_callbacks flow.flow flow.callbacks
 
 
   (*==========================================================================*)

@@ -359,7 +359,7 @@ struct
   (* ************** *)
 
   let init prog man flow =
-    let rec aux: type b. b domain_pool -> 'a flow option -> ('a, b * Over.t) man -> 'a flow -> 'a flow option =
+    let rec aux: type b. b domain_pool -> 'a flow_callback option -> ('a, b * Over.t) man -> 'a flow -> 'a flow_callback option =
       fun pool ret man flow ->
         match pool with
         | Nil -> ret
@@ -367,7 +367,10 @@ struct
           let module D = (val hd) in
           match D.init prog (head_man man) flow with
           | None -> aux tl ret (tail_man man) flow
-          | Some flow' -> aux tl (Some flow') (tail_man man) flow'
+          | Some flow' ->
+            aux tl (Some flow') (tail_man man) flow'.flow |>
+            OptionExt.lift (fun ret' -> { ret' with callbacks = flow'.callbacks @ ret'.callbacks })
+            
     in
     aux Config.pool None man flow
 

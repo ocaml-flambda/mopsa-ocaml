@@ -106,7 +106,6 @@ let token_to_string = function
 let rec visit_macros lexbuf found out macros =
   let token = Lexer.read lexbuf in
   let lexeme = token_to_string token in
-  debug "lexeme %s" lexeme;
   match token with
   | Parser.EOF ->
     found

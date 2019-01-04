@@ -245,3 +245,6 @@ let rm_annot k flow =
   get_all_annot flow
   |> Annotation.remove k
   |> fun annot -> set_all_annot annot flow
+
+let without_callbacks flow =
+  { flow; callbacks = [] }

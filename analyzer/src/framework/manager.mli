@@ -49,6 +49,12 @@ type 'a flow = {
 }
 (** An abstract flow is a flow map augmented with an annotation *)
 
+type 'a flow_callback = {
+  flow: 'a flow;
+  callbacks: ('a flow -> 'a flow) list;
+}
+(** Callback to a flow transfer function *)
+
 (*==========================================================================*)
 (**                          {2 Evaluations}                                *)
 (*==========================================================================*)

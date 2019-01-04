@@ -12,6 +12,7 @@
 open Manager
 open Domain
 open Post
+open Callback
 
 module type S =
 sig
@@ -46,7 +47,9 @@ struct
   let id = D.id
   let identify = D.identify
 
-  let init = D.init
+  let init prog man flow =
+    D.init prog man flow |>
+    OptionExt.lift Flow.without_callbacks
 
   let exec_interface = D.exec_interface
   let eval_interface = D.eval_interface

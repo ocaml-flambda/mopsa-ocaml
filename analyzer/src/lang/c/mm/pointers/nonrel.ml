@@ -81,6 +81,7 @@ struct
 
   let init prog man flow =
     Flow.set_domain_env T_cur NR.top man flow |>
+    Flow.without_callbacks |>
     OptionExt.return
 
 

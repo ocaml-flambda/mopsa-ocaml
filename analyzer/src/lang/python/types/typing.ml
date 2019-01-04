@@ -243,7 +243,7 @@ module Domain =
       in
       stub_base := lstub_base;
       debug "stub_base = %a@\n" pp_sb !stub_base;
-      Flow.set_domain_env T_cur top man flow |> OptionExt.return
+      Flow.set_domain_env T_cur top man flow |> Flow.without_callbacks |> OptionExt.return
 
     let exec zone stmt man flow =
       debug "exec %a@\n" pp_stmt stmt;

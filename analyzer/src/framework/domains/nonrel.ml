@@ -235,7 +235,7 @@ struct
 
 
   let init prog man flow =
-    Some (Flow.set_domain_env T_cur top man flow)
+    Some { flow = Flow.set_domain_env T_cur top man flow; callbacks = [] }
 
   let exec_interface = Domain.{
     import = [];

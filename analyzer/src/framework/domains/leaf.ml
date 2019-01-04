@@ -42,7 +42,10 @@ struct
 
   let init prog man flow =
     Some (
-      Flow.set_domain_env T_cur (D.init prog) man flow
+      {
+        flow = Flow.set_domain_env T_cur (D.init prog) man flow;
+        callbacks = []
+      }
     )
 
   let exec_interface = {

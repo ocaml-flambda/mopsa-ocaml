@@ -141,3 +141,5 @@ val rm_annot  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
 (** [rm annot key flow] removes the key binding with key [key] in the
    annotations attached to flow [flow], does not fail if [key] was not
    present *)
+
+val without_callbacks : 'a flow -> 'a flow_callback

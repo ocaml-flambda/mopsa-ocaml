@@ -122,14 +122,15 @@ struct
   (* ============== *)
 
   let init prog man flow =
-    let flow', b = match D1.init prog (man1 man) flow with
-      | None -> flow, false
-      | Some flow' -> flow', true
+    let flow', cb, b =
+      match D1.init prog (man1 man) flow with
+      | None -> flow, [], false
+      | Some flowcb -> flowcb.flow, flowcb.callbacks, true
     in
     match D2.init prog (man2 man) flow', b with
     | None, false -> None
-    | None, true -> Some flow'
-    | x, _ -> x
+    | None, true -> Some { flow = flow'; callbacks = cb }
+    | Some x , _ -> Some { flow = x.flow; callbacks = cb @ x.callbacks }
 
 
   (* Computation of post-conditions *)

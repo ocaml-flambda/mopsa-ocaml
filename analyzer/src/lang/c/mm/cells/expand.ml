@@ -395,7 +395,8 @@ module Domain = struct
 
   let init prog man flow =
     Some (
-      Flow.set_domain_cur empty man flow
+      Flow.set_domain_cur empty man flow |>
+      Flow.without_callbacks
     )
 
 
