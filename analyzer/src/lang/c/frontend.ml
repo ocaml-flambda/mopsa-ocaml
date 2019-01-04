@@ -55,7 +55,7 @@ type ctx = {
        this is required for records defining recursive data-types
   *)
 
-  ctx_vars: (string,Framework.Ast.var*C_AST.variable) Hashtbl.t; (* cache of variables of the project *)
+  ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t; (* cache of variables of the project *)
 }
 
 
@@ -313,7 +313,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
 (** ============= *)
 
 and from_var ctx (v: C_AST.variable) : var =
-  try Hashtbl.find ctx.ctx_vars v.var_unique_name |> fst
+  try Hashtbl.find ctx.ctx_vars v.var_uid |> fst
   with Not_found ->
     let v' = {
       org_vname = v.var_org_name;
@@ -327,7 +327,7 @@ and from_var ctx (v: C_AST.variable) : var =
       vtyp = from_typ ctx v.var_type;
     }
     in
-    Hashtbl.add ctx.ctx_vars v.var_unique_name (v', v);
+    Hashtbl.add ctx.ctx_vars v.var_uid (v', v);
     v'
 
 and from_var_scope ctx = function
