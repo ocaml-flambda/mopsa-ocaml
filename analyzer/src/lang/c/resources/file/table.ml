@@ -16,6 +16,8 @@ open Mopsa
 open Universal.Ast
 module Itv = Universal.Numeric.Values.Intervals.Value
 
+let debug fmt = Debug.debug ~channel:"c.resources.file.table" fmt
+
 (** Map from addresses to intervals *)
 module AddrItvMap = Framework.Lattices.Partial_map.Make(Addr)(Itv)
 
@@ -76,32 +78,44 @@ let insert addr window (t:table) =
   (* Compute the interval of allocated ids *)
   let allocated = AddrItvMap.fold (fun _ -> Itv.join ()) t.map Itv.bottom in
 
-  (* A sound solution is [window, b + 1], where [a, b] = allocated *)
-  let l = Z.of_int window
-  and u = Itv.bounds allocated |> snd
-  in
+  if Itv.is_bottom allocated then
+    let itv = Itv.of_int window window in
+    add addr itv t, itv
+  else
+    (* A sound solution is [window, b + 1], where [a, b] = allocated *)
+    let l = Z.of_int window
+    and u = Itv.bounds allocated |> snd |> Z.succ
+    in
 
-  let sol0 = Itv.of_z l u in
+    let itv0 = Itv.of_z l u in
 
-  (* We can refine this solution by removing the ids of the minimal support *)
-  let m = AddrItvMap.filter (fun addr _ -> AddrSet.mem addr t.support) t.map in
-  let support = AddrItvMap.fold (fun _ itv acc -> itv :: acc) m [] in
-  (* Sort intervals using the lowest bound *)
-  let sorted = List.sort (fun itv1 itv2 ->
-      let a1 = Itv.bounds itv2 |> fst in
-      let a2 = Itv.bounds itv2 |> fst in
-      Z.compare a1 a2
-    ) support
-  in
-  let sol = List.fold_left (fun itv acc ->
-      Itv.binop () O_minus acc itv |>
-      Channel.without_channel
-    ) sol0 sorted
-  in
-  add addr sol t, sol
+    (* We can refine this solution by removing the ids of the minimal support *)
+    let minmap = AddrItvMap.filter (fun addr _ -> AddrSet.mem addr t.support) t.map in
+    let minitv = AddrItvMap.fold (fun _ itv acc -> itv :: acc) minmap [] in
+    (* Sort intervals using the lowest bound *)
+    let sorted = List.sort (fun itv1 itv2 ->
+        let a1 = Itv.bounds itv2 |> fst in
+        let a2 = Itv.bounds itv2 |> fst in
+        Z.compare a1 a2
+      ) minitv
+    in
+    let itv = List.fold_left (fun acc itv ->
+        Itv.compare () O_ne acc itv true |>
+        Channel.without_channel |>
+        fst
+      ) itv0 sorted
+    in
+    add addr itv t, itv
 
-let find addr (t:table) =
-  AddrItvMap.find addr t.map
+let filter f (t:table) : table =
+  let map = AddrItvMap.filter f t.map in
+  let support = AddrSet.filter (fun addr -> AddrItvMap.mem addr map) t.support in
+  { map; support }
+
+let pool t =
+  AddrItvMap.bindings t.map |>
+  List.split |>
+  fst
 
 let remove addr t = {
   map = AddrItvMap.remove addr t.map;
@@ -110,3 +124,6 @@ let remove addr t = {
 
 let fold f t x =
   AddrItvMap.fold f t.map x
+
+let for_all f t =
+  AddrItvMap.for_all f t.map

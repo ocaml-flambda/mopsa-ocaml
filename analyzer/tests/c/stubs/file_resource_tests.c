@@ -43,13 +43,12 @@ void test_close_after_open() {
 
 
 /* Test redirecting a file descriptor */
-void test_redirect() {
-  int fd1 = open_("/tmp/a.txt", O_RDONLY);
-  close_(fd1);
+void test_close_stdin_before_open() {
+  close_(0);
   _mopsa_assert_safe();
 
-  int fd2 = open_("/tmp/b.txt", O_RDONLY);
-  _mopsa_assert(fd1 == fd2);
+  int fd = open_("/tmp/b.txt", O_RDONLY);
+  _mopsa_assert(fd == 0);
 }
 
 

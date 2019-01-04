@@ -78,11 +78,6 @@ struct
       abstracted more precisely. *)
   let window = 3
 
-  let init_state = {
-    first = List.init window (fun _ -> Slot.Free);
-    others = Table.empty;
-  }
-
   let bottom = {
     first = List.init window (fun _ -> Slot.Bot);
     others = Table.bottom;
@@ -169,9 +164,45 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow =
-    Some (Flow.set_domain_env T_cur init_state man flow)
+  let stdno_to_string n =
+    if n = 0 then "stdin" else
+    if n = 1 then "stdout" else
+    if n = 2 then "stderr"
+    else panic "stdno_to_string: invalid argument %d" n
 
+  let init prog man flow =
+    Some (
+      {
+        flow;
+        (* Need a callback to evaluate heap allocation *)
+        callbacks = [(fun flow ->
+            (* generic allocation function *)
+            let allocate_std n flow =
+              let range = tag_range prog.prog_range "alloc_%s" (stdno_to_string n) in
+              man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_stub_resource "FileDescriptor") range) flow |>
+              Eval.bind @@ fun alloc flow ->
+              match ekind alloc with
+              | E_addr addr -> Eval.singleton addr flow
+              | _ -> assert false
+            in
+            (* allocate stdin, stdout and stderr *)
+            allocate_std 0 flow |> Post.bind_flow man @@ fun stdin_addr flow ->
+            allocate_std 1 flow |> Post.bind_flow man @@ fun stdout_addr flow ->
+            allocate_std 2 flow |> Post.bind_flow man @@ fun stderr_addr flow ->
+
+            let init_state = {
+              first = [
+                NotFree (AddrSet.singleton stdin_addr);
+                NotFree (AddrSet.singleton stdout_addr);
+                NotFree (AddrSet.singleton stderr_addr);
+              ];
+              others = Table.empty;
+            }
+            in
+            Flow.set_domain_env T_cur init_state man flow
+          )]
+      }
+    )
 
 
   (** {2 Insertion of new resources} *)
@@ -184,10 +215,7 @@ struct
       match slots with
       | [] -> [], []
       | hd :: tl ->
-        debug "insert in %d:%a" i Slot.print hd;
         let inserted_here, not_inserted_here = Slot.insert addr hd in
-        debug "inserted_here: %a" Slot.print inserted_here;
-        debug "not_inserted_here: %a" Slot.print not_inserted_here;
         let cases, not_inserted_after =
           if Slot.is_bottom not_inserted_here then
             [], tl
@@ -247,12 +275,11 @@ struct
   let find i range man flow =
     let a = Flow.get_domain_env T_cur man flow in
     let rec find_first j slots flow =
-      debug "trying %d" j;
       match slots with
-      | [] -> debug "end of first"; find_others flow
+      | [] -> find_others flow
       | hd :: tl ->
         let addrs = Slot.get hd in
-        if addrs = [] then let _ = debug "no addr here" in find_first (j + 1) tl flow
+        if addrs = [] then find_first (j + 1) tl flow
         else
           Eval.assume (mk_binop i O_eq (mk_int j range) range) ~zone:Universal.Zone.Z_u_num
             ~fthen:(fun flow ->
@@ -264,24 +291,35 @@ struct
               )
             man flow
     and find_others flow =
-      debug "eval others";
+      let a = Flow.get_domain_env T_cur man flow in
       let itv = man.ask (Itv.Q_interval i) flow in
-      let addrs, can_be_null = Table.fold (fun addr itv' (acc, can_be_null) ->
-          let eq = Itv.binop () O_eq itv itv' |> Channel.without_channel in
-          let ne = Itv.binop () O_ne itv itv' |> Channel.without_channel in
-          match Itv.is_bottom eq, Itv.is_bottom ne with
-          | true, true -> acc, can_be_null
-          | false, true -> addr :: acc, can_be_null
-          | true, false -> acc, can_be_null
-          | false, false -> addr :: acc, true
-        ) a.others ([], false)
+
+      (* First case: return addresses having a descriptor interval
+         intersecting with the target interval *)
+      let case1 =
+        Table.filter (fun addr itv' ->
+            not @@ Itv.is_bottom (Itv.meet () itv itv')
+          ) a.others |>
+        Table.pool |>
+        (* FIXME: improve partitioning by filtering the flow *)
+        List.map (fun addr -> Eval.singleton (mk_addr addr range) flow)
       in
-      let case1 = List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs in
+
+      (* Second case: return NULL when all intervals may differ from the target interval *)
       let case2 =
-        if addrs = [] || can_be_null then [Eval.singleton (mk_c_null range) flow]
-        else []
+        if Table.for_all (fun _ itv' ->
+            let itv1, itv2 = Itv.compare () O_ne itv itv' true |>
+                             Channel.without_channel
+            in
+            not @@ Itv.is_bottom itv1 &&
+            not @@ Itv.is_bottom itv2
+          ) a.others
+        then
+          [Eval.singleton (mk_c_null range) flow]
+        else
+          []
       in
-      Eval.join_list (case1 @ case2)
+      Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
     in
     find_first 0 a.first flow
             
