@@ -158,8 +158,12 @@ let visit_case case ctx =
     case_body = visit_list visit_leaf case.case_body ctx;
   }
 
-let build_context secs =
+let build_context secs preds =
   let ctx = Context.empty in
+  let ctx = List.fold_left (fun ctx pred ->
+      update_context pred ctx
+    ) ctx preds
+  in
   List.fold_left (fun ctx sec ->
       match sec with
       | S_predicate pred -> update_context pred ctx
@@ -172,8 +176,8 @@ let visit_section sec ctx =
   | S_leaf sec' -> S_leaf (visit_leaf sec' ctx)
   | S_case case -> S_case (visit_case case ctx)
 
-let doit (stub:stub) : stub =
+let doit (stub:stub) (preds:predicate with_range list): stub =
   bind_range stub @@ fun secs ->
-  let ctx = build_context secs in
+  let ctx = build_context secs preds in
   visit_list visit_section secs ctx
 

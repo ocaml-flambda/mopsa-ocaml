@@ -14,6 +14,7 @@ open Location
 let parse_function_comment
     (func:C_AST.func)
     (prj:C_AST.project)
+    (preds: Cst.predicate with_range list)
   : Ast.stub option
   =
   match func.func_com with
@@ -47,7 +48,7 @@ let parse_function_comment
       | None -> None
       | Some cst ->
         (* Remove predicates *)
-        let cst1 = Passes.Predicate_expansion.doit cst in
+        let cst1 = Passes.Predicate_expansion.doit cst preds in
 
         (* Resolve scoping of variables *)
         let cst2 = Passes.Scoping.doit cst1 in
@@ -69,6 +70,7 @@ let parse_function_comment
 let parse_var_comment
   var
   (prj:C_AST.project)
+  (preds:Cst.predicate with_range list)
   : Ast.stub option
   =
   (* Create a dummy init function *)
@@ -87,4 +89,57 @@ let parse_var_comment
     func_com = var.var_com;
   }
   in
-  parse_function_comment func prj
+  parse_function_comment func prj preds
+
+
+(** Check whether a comment is a global predicate *)
+let is_global_predicate com =
+  match com with
+  | [com] ->    
+    let comment = com.Clang_AST.com_text |>
+                  String.trim
+    in
+    let lexeme = "/*$$" in
+    let start = String.sub comment 0 (String.length lexeme) in
+    start = lexeme
+
+  | _ -> false
+
+(** Parse comment specifying a global predicate *)
+let parse_global_predicate_comment com =
+  match com with
+  | [] -> []
+  | _ :: _ :: _ -> []
+  | [com] ->
+    let comment = com.Clang_AST.com_text in
+    let file = com.com_range.range_begin.loc_file in
+    let line = com.com_range.range_begin.loc_line in
+    let col = com.com_range.range_begin.loc_column in
+
+    (* Create the lexing buffer *)
+    let buf = Lexing.from_string comment in
+    buf.lex_curr_p <- {
+      pos_fname = file;
+      pos_lnum = line;
+      pos_bol = 0;
+      pos_cnum = col;
+    };
+
+    (* Parse the comment *)
+    try
+      let cst = Parser.stub Lexer.read buf in
+      OptionExt.option_dfl1 [] (fun cst ->
+          List.fold_left (fun acc section ->
+              match section with
+              | Cst.S_predicate pred -> pred :: acc
+              | _ -> acc
+            ) [] cst.content
+        ) cst
+    with
+    | Lexer.SyntaxError s ->
+      let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
+      Exceptions.syntax_error range "%s" s
+
+    | Parser.Error ->
+      let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
+      Exceptions.unnamed_syntax_error range

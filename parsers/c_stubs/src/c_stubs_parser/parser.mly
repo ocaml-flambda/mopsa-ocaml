@@ -164,12 +164,12 @@ predicate:
       }
     }
 
-  | PREDICATE var LPAR var_list COLON with_range(formula) SEMICOL
+  | PREDICATE var LPAR var_list RPAR COLON with_range(formula) SEMICOL
     {
       {
         predicate_var = $2;
         predicate_args = $4;
-        predicate_body = $6;
+        predicate_body = $7;
       }
     }
 
@@ -192,11 +192,10 @@ assigns:
     }
 
 assigns_offset_list:
-  | { [] }
+  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK
+    { [($2, $4)] }
   | LBRACK with_range(expr) COMMA with_range(expr) RBRACK assigns_offset_list
-    {
-      ($2, $4) :: $6
-    }
+    { ($2, $4) :: $6 }
 
 (* Free section *)
 free:
@@ -225,6 +224,7 @@ formula:
   | EXISTS c_qual_typ var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
   | with_range(expr) IN set                           { F_in ($1, $3) }
   | LPAR formula RPAR                                 { $2 }
+  | var LPAR args RPAR                                { F_predicate ($1, $3) }
 
 (* C expressions *)
 expr:
@@ -339,6 +339,7 @@ args:
 
 var_list:
   |                    { [] }
+  | var                { [$1] }
   | var COLON var_list { $1 :: $3 }
 
 

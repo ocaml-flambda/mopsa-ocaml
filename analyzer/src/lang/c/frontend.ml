@@ -46,16 +46,22 @@ let () =
 type type_space = TS_TYPEDEF | TS_RECORD | TS_ENUM
 
 type ctx = {
-  ctx_prj : C_AST.project; (* project descriptor *)
+  ctx_prj : C_AST.project;
+  (* project descriptor *)
 
-  ctx_fun: Ast.c_fundec StringMap.t; (* cache of functions of the project *)
+  ctx_fun: Ast.c_fundec StringMap.t;
+  (* cache of functions of the project *)
 
   ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
   (* cache the translation of all named types;
-       this is required for records defining recursive data-types
+     this is required for records defining recursive data-types 
   *)
 
-  ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t; (* cache of variables of the project *)
+  ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t;
+  (* cache of variables of the project *)
+
+  ctx_global_preds: C_stubs_parser.Cst.predicate with_range list;
+  (* list of global stub predicates *)
 }
 
 
@@ -136,11 +142,13 @@ and from_project prj =
       StringMap.add o.func_unique_name f map
     ) StringMap.empty funcs_and_origins
   in
+  let preds = from_stub_global_predicates prj.proj_comments in
   let ctx = {
       ctx_fun = funcs;
       ctx_type = Hashtbl.create 16;
       ctx_prj = prj;
       ctx_vars = Hashtbl.create 16;
+      ctx_global_preds = preds;
     }
   in
   List.iter (fun (f, o) ->
@@ -358,7 +366,7 @@ and from_init ctx init =
   | I_init_implicit t -> C_init_implicit (from_typ ctx t)
 
 and from_init_stub ctx v =
-  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj with
+  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj ctx.ctx_global_preds with
   | None -> None
   | Some stub ->
     let stub =   {
@@ -545,7 +553,7 @@ and from_range (range:C_AST.range) =
 (** ===================== *)
 
 and from_stub_comment ctx f =
-  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj with
+  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj ctx.ctx_global_preds with
   | None -> None
   | Some stub -> Some (from_stub_func ctx f stub)
 
@@ -713,3 +721,12 @@ and from_stub_expr_unop = function
   | MINUS -> O_minus
   | LNOT -> O_log_not
   | BNOT -> O_bit_invert
+
+and from_stub_global_predicates com_map =
+  let com_map = C_AST.RangeMap.filter (fun range com ->
+      C_stubs_parser.Main.is_global_predicate com
+    ) com_map
+  in
+  C_AST.RangeMap.fold (fun range com acc ->
+      C_stubs_parser.Main.parse_global_predicate_comment com @ acc
+    ) com_map []

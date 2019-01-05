@@ -104,7 +104,7 @@ let newline = '\r' | '\n' | "\r\n"
                  
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
-let begin_delimeter = "/*$"
+let begin_delimeter = "/*$" | "/*$$"
 let end_delimeter = "*/"
 
 let line_comment = "//" [^ '\n' '\r']*
