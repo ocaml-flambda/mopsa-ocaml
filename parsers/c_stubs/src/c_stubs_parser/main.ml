@@ -10,6 +10,8 @@
 
 open Location
 
+let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
+
 (** Parse the stub specification from comments of a function *)
 let parse_function_comment
     (func:C_AST.func)

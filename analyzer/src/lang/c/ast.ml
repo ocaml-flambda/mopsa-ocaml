@@ -830,17 +830,7 @@ let () =
         end
       | T_c_builtin_fn, T_c_builtin_fn -> 0
       | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
-      | T_c_record r1, T_c_record r2 ->
-        Compare.compose ([
-          (fun () -> compare r1.c_record_kind r2.c_record_kind);
-          (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
-          (fun () -> compare (List.length r1.c_record_fields) (List.length r2.c_record_fields);
-          )
-        ] @ (
-          List.map2 (fun f1 f2 ->
-              (fun () -> compare_typ f1.c_field_type f2.c_field_type)
-            ) r1.c_record_fields r2.c_record_fields
-        ))
+      | T_c_record r1, T_c_record r2 -> compare r1.c_record_unique_name r2.c_record_unique_name
       | T_c_enum e1, T_c_enum e2 -> compare e1.c_enum_unique_name e2.c_enum_unique_name
       | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
         Compare.compose [
