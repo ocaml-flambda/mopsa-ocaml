@@ -1,15 +1,15 @@
 #include <stddef.h>
 
 /*$
- * case "positive":
+ * case "positive" {
  *   assumes: x >= 0;
  *   ensures: return == 1;
- * ;
+ * }
  *
- * case "negative":
+ * case "negative" {
  *   assumes: x < 0;
  *   ensures: return == 0;
- * ;
+ * }
  */
 unsigned int is_positive(int x);
 
@@ -23,14 +23,14 @@ void test_case_disjunction() {
 }
 
 /*$
- * case "safe":
+ * case "safe" {
  *   local : void* addr = new SomeResource;
  *   ensures: return == addr;
- * ;
+ * }
  *
- * case "no space":
+ * case "no space" {
  *   ensures: return == NULL;
- * ;
+ * }
  */
 void* alloc();
 

@@ -42,9 +42,4 @@ extern void _mopsa_assert_error_exists(int error);
 extern void _mopsa_assert_error_at_line(int error, int line);
 
 
-// File related functions
-extern int _mopsa_fd_to_int(void *fd);
-extern void *_mopsa_int_to_fd(int fd);
-
-
 #endif //_MOPSA_H

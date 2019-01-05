@@ -12,7 +12,7 @@
 
 #include "errno.c"
 /* #include "assert.c" */
-/* #include "stdio.c" */
+#include "stdio.c"
 /* #include "stdlib.c" */
 /* #include "unistd.c" */
 /* #include "string.c" */

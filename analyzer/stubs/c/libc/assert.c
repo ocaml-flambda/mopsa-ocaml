@@ -16,25 +16,25 @@
 
 
 /*$
- * requires: exists int i in [0, size(__assertion) - 1]: __assertion[i] == 0;
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
- * requires: exists int i in [0, size(__function) - 1]: __function[i] == 0;
- * ensures: 1 == 0;
+ * requires: valid_string(__assertion);
+ * requires: valid_string(__file);
+ * requires: valid_string(__function);
+ * ensures : 1  = 0;
  */
 void __assert_fail (const char *__assertion, const char *__file,
                     unsigned int __line, const char *__function);
 
 /*$
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
- * requires: exists int i in [0, size(__function) - 1]: __function[i] == 0;
+ * requires: valid_string(__file);
+ * requires: valid_string(__function);
  * ensures: 1 == 0;
  */
 void __assert_perror_fail (int __errnum, const char *__file,
                            unsigned int __line, const char *__function);
 
 /*$
- * requires: exists int i in [0, size(__assertion) - 1]: __assertion[i] == 0;
- * requires: exists int i in [0, size(__file) - 1]: __file[i] == 0;
+ * requires: valid_string(__assertion);
+ * requires: valid_string(__file);
  * ensures: 1 == 0;
  */
 void __assert (const char *__assertion, const char *__file, int __line);

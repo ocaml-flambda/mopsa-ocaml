@@ -16,149 +16,144 @@
 #include "mopsa_libc_utils.h"
 
 
-/* Utilities */
-
-static const int _EOF = EOF;
-static const size_t _sizeof_FILE = sizeof(FILE);
-static const size_t _BUFSIZ = BUFSIZ;
-static const size_t _L_tmpnam = L_tmpnam;
-static const size_t _L_ctermid = L_ctermid;
-
-# if !defined __USE_XOPEN2K || defined __USE_GNU
-static const size_t _L_cuserid = L_cuserid;
-#endif
-
+/*$
+ * local:   struct _IO_FILE* addr = new File;
+ * ensures: stdin == addr;
+ * ensures: stdin->_fileno == 0;
+ */
+struct _IO_FILE *stdin;
 
 /*$
- * // Helper function
- * local:   int fd = new FileDescriptor;
- * local:   FILE* f = new File;
- * ensures: size(f) == _sizeof_FILE;
- * ensures: f->_fileno == fd;
- * ensures: return == f;
+ * local:   struct _IO_FILE* addr = new File;
+ * ensures: stdout == addr;
+ * ensures: stdout->_fileno == 1;
  */
-static FILE* _alloc_FILE();
-
-
-
-/* Stubs */
-
-
-struct _IO_FILE *stdin;
 struct _IO_FILE *stdout;
+
+/*$
+ * local:   struct _IO_FILE* addr = new File;
+ * ensures: stderr == addr;
+ * ensures: stderr->_fileno == 2;
+ */
 struct _IO_FILE *stderr;
 
 /*$
- * // TODO: ensure that _stdio_init is called
- * local: void* _stdin  = _alloc_FILE();
- * local: void* _stdout = _alloc_FILE();
- * local: void* _stderr = _alloc_FILE();
- * ensures: stdin  == _stdin;
- * ensures: stdout == _stdout;
- * ensures: stderr == _stderr;
- * ensures: stdin ->_fileno == 0;
- * ensures: stdout->_fileno == 1;
- * ensures: stderr->_fileno == 2;
+ * local: FILE* f = new File;
+ * local: int fd = new FileDescriptor;
+ * ensures: f->_fileno == fd;
+ * ensures: return == f;
  */
-static void _stdio_init();
-
-
+FILE* _alloc_FILE();
 
 const char *const sys_errlist[128]; // TODO: actual size
 
 /*$
- * requires: exists int i in [0, size(__filename) - 1]: __filename[i] == 0;
+ * requires: valid_string(__filename);
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int remove (const char *__filename);
 
 /*$
- * requires: exists int i in [0, size(__old) - 1]: __old[i] == 0;
- * requires: exists int i in [0, size(__new) - 1]: __new[i] == 0;
+ * requires: valid_string(__old);
+ * requires: valid_string(__new);
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int rename (const char *__old, const char *__new);
+
 
 #ifdef __USE_ATFILE
 
 /*$
- * requires: exists int i in [0, size(__old) - 1]: __old[i] == 0;
- * requires: exists int i in [0, size(__new) - 1]: __new[i] == 0;
+ * requires: valid_string(__old);
+ * requires: valid_string(__new);
  * requires: __oldfd in FileDescriptor;
  * requires: __newfd in FileDescriptor;
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int renameat (int __oldfd, const char *__old, int __newfd, const char *__new);
 
 #endif
 
 /*$
- * case "success":
+ * case "success" {
  *   local:   FILE* f = _alloc_FILE();
  *   ensures: return == f;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *tmpfile (void);
 
 static char _tmpnam_buf[L_tmpnam];
 
 /*$
- * //warn: "avoid using this function";
+ * warn: "avoid using function tmpnam";
  *
- * requires: __s != _NULL implies size(__s) >= _L_tmpnam;
+ * requires: __s != NULL implies size(__s) >= L_tmpnam;
  *
- * case "use_s":
- *   assumes: __s != _NULL;
- *   assigns: __s[0, _L_tmpnam - 1];
- *   ensures: exists int i in [0, _L_tmpnam - 1]: __s[i] == 0;
+ * case "use_s" {
+ *   assumes: __s != NULL;
+ *   assigns: __s[0, L_tmpnam - 1];
+ *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
+ * }
  * 
- * case "use_static":
- *   assumes: __s == _NULL;
+ * case "use_static" {
+ *   assumes: __s == NULL;
  *   assigns: _tmpnam_buf[0, size(_tmpnam_buf) - 1];
- *   ensures: exists int i in [0, size(_tmpnam_buf) - 1]: _tmpnam_buf[i] == 0;
+ *   ensures: valid_primed_string(_tmpnam_buf);
  *   ensures: return == _tmpnam_buf;
+ * }
  *
- * case "failure":
- *   ensures: return == _NULL;
+ * case "failure" {
+ *   ensures: return == NULL;
+ * }
  */
 char *tmpnam (char *__s);
 
 #ifdef __USE_MISC
 
 /*$
- * //warn: "avoid using this function";
+ * warn: "avoid using function tmpnam_r";
  *
- * requires: size(__s) >= _L_tmpnam;
+ * requires: size(__s) >= L_tmpnam;
  *
- * case "success":
- *   assigns: __s[0, _L_tmpnam - 1];
- *   ensures: exists int i in [0, _L_tmpnam - 1]: __s[i] == 0;
+ * case "success" {
+ *   assigns: __s[0, L_tmpnam - 1];
+ *   ensures: valid_primed_substring(__s, L_tmpnam);
  *   ensures: return == __s;
+ * }
  *
- * case "failure":
- *   ensures: return == _NULL;
+ * case "failure" {
+ *   ensures: return == NULL;
+ * }
  */
 char *tmpnam_r (char *__s);
 
@@ -168,7 +163,7 @@ char *tmpnam_r (char *__s);
 #if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
- * //warn: "obsolete function, do not call"
+ * warn: "tempnam is obsolete, do not call";
  */
 char *tempnam (const char *__dir, const char *__pfx);
 
@@ -176,36 +171,45 @@ char *tempnam (const char *__dir, const char *__pfx);
 
 /*$
  * requires: __stream in File;
- * //TODO: requires: __stream->_fileno in FileDescriptor;
+ * requires: __stream->_fileno in FileDescriptor;
  *
- * case "success":
- *   ensures:  free __stream->_fileno;
- *   ensures:  free __stream;
+ * case "success" {
+ *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
  *   ensures: return == 0;
+ *   free:    __stream;
+ *   free:    addr;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _EOF;
+ *   ensures: return == EOF;
+ * }
  */
 int fclose (FILE *__stream);
 
 /*$
- * requires: __stream != _NULL implies __stream in File;
- * //TODO: requires: stream != _NULL implies__stream->_fileno in FileDescriptor;
+ * requires: __stream != NULL implies (
+ *             __stream in File and
+ *             __stream->_fileno in FileDescriptor
+ *           );
  *
- * case "success":
- *   assumes:  __stream != _NULL;
- *   ensures:  free __stream->_fileno;
- *   ensures:  free __stream;
+ * case "success" {
+ *   assumes:  __stream != NULL;
+ *   local:   void* addr = _mopsa_int_to_fd(__stream->_fileno);
  *   ensures: return == 0;
+ *   free:    __stream;
+ *   free:    addr;
+ * }
  *
- * case "flushall":
- *   assumes: __stream == _NULL;
+ * case "flushall" {
+ *   assumes: __stream == NULL;
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _EOF;
+ *   ensures: return == EOF;
+ * }
  */
 int fflush (FILE *__stream);
 
@@ -222,93 +226,104 @@ int fflush_unlocked (FILE *__stream);
 // TODO: not implemented fcloseall
 
 /*$
- * // TODO: validate characters in __modes
+ * warn: "fopen: characters in argument __modes are not validated";
  *
- * requires: exists int i in [0, size(__filename) - 1]: __filename[i] == 0;
- * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
+ * requires: valid_string(__filename);
+ * requires: valid_string(__modes);
  *
- * case "success":
- *   local: FILE* r = _alloc_FILE();
+ * case "success" {
+ *   local:   FILE* r = _alloc_FILE();
  *   ensures: return == r;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *fopen (const char *__restrict __filename,
              const char *__restrict __modes);
 
 /*$
- * // TODO: validate characters in __modes
+ * warn: "freopen: characters in argument __modes are not validated";
  *
- * requires: exists int i in [0, size(__filename) - 1]: __filename[i] == 0;
- * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
+ * requires: valid_string(__filename);
+ * requires: valid_string(__modes);
  * requires: __stream in File;
  *
- * case "success":
+ * case "success" {
  *   local:   int fd = new FileDescriptor;
  *   assigns: __stream->_fileno;
- *   ensures: __stream->_fileno == fd;
+ *   ensures: (__stream->_fileno)' == fd;
  *   ensures: return == __stream;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *freopen (const char *__restrict __filename,
                const char *__restrict __modes,
                FILE *__restrict __stream);
 
+
 #ifdef __USE_POSIX
 
 /*$
- * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
+ * requires: valid_string(__modes);
  * requires: __fd in FileDescriptor;
  *
- * case "success":
+ * case "success" {
  *   local:   FILE* f = new File;
- *   ensures: size(f) == _sizeof_FILE;
  *   ensures: f->_fileno == __fd;
  *   ensures: return == f;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *fdopen (int __fd, const char *__modes);
 
 #endif
 
+
 // TODO: omitted __USE_GNU fopencookie
 
-#if defined __USE_XOPEN2K8 || __GLIBC_USE (LIB_EXT2)
+#ifdef __USE_XOPEN2K8
 
 /*$
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
  *
- * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
- * requires: __s != _NULL implies size(__s) >= __len;
+ * requires: valid_string(__modes);
+ * requires: __s != NULL implies size(__s) >= __len;
  *
- * case "success":
+ * case "success" {
  *   local: FILE* r = _alloc_FILE();
  *   ensures: return == r;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *fmemopen (void *__s, size_t __len, const char *__modes);
 
 /*$
  * // TODO: *__bufloc and __sizeloc become volatile
  *
- * case "success":
+ * case "success" {
  *   local: FILE* r = _alloc_FILE();
  *   ensures: return == r;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
 
@@ -318,7 +333,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != _NULL implies size(__buf) >= _BUFSIZ;
+ * requires: __buf != NULL implies size(__buf) >= BUFSIZ;
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 
@@ -326,15 +341,17 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != _NULL implies size(__buf) >= __n;
- * requires: __modes >= 0 and __modes <= 2;
+ * requires: __buf != NULL implies size(__buf) >= __n;
+ * requires: __modes in [0, 2];
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return != 0;
+ * }
  */
 int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
              int __modes, size_t __n);
@@ -345,7 +362,7 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
  * // TODO: __buf becomes volatile
  *
  * requires: __stream in File;
- * requires: __buf != _NULL implies size(__buf) >= __size;
+ * requires: __buf != NULL implies size(__buf) >= __size;
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
@@ -361,7 +378,7 @@ void setlinebuf (FILE *__stream);
  * // TODO: check format, check variable arguments
  *
  * requires: __stream in File;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int fprintf (FILE *__restrict __stream,
              const char *__restrict __format, ...);
@@ -369,7 +386,7 @@ int fprintf (FILE *__restrict __stream,
 /*$
  * // TODO: check format, check variable arguments, check size of __s
  *
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int sprintf (char *__restrict __s,
              const char *__restrict __format, ...);
@@ -378,7 +395,7 @@ int sprintf (char *__restrict __s,
  * // TODO: check format, check variable arguments
  *
  * requires: __s in File;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int vfprintf (FILE *__restrict __s, const char *__restrict __format,
               _G_va_list __arg);
@@ -395,14 +412,14 @@ int vfprintf (FILE *__restrict __s, const char *__restrict __format,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int vprintf (const char *__restrict __format, _G_va_list __arg);
 
 /*$
  * // TODO: check format, check variable arguments, check size of __s
  *
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int vsprintf (char *__restrict __s, const char *__restrict __format,
               _G_va_list __arg);
@@ -413,7 +430,7 @@ int vsprintf (char *__restrict __s, const char *__restrict __format,
  * // TODO: check format, check variable arguments
  *
  * requires: size(__s) >= __maxlen;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int snprintf (char *__restrict __s, size_t __maxlen,
               const char *__restrict __format, ...);;
@@ -422,31 +439,33 @@ int snprintf (char *__restrict __s, size_t __maxlen,
  * // TODO: check format, check variable arguments
  *
  * requires: size(__s) >= __maxlen;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  */
 int vsnprintf (char *__restrict __s, size_t __maxlen,
                const char *__restrict __format, _G_va_list __arg);
 
 #endif
 
-#if __GLIBC_USE (LIB_EXT2)
+#ifdef __USE_GNU
 
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__f) - 1]: __f[i] == 0;
+ * requires: valid_string(__f);
  *
- * case "success":
+ * case "success" {
  *   local:    char* r = new Memory;
  *   assigns:  *__ptr;
- *   ensures:  *__ptr == r;
- *   ensures:  size(*__ptr) > 0;
- *   ensures:  exists int i in [0, size(*__ptr) - 1]: (*__ptr)[i] == 0;
+ *   ensures:  size(r) > 0;
+ *   ensures:  valid_string(r);
+ *   ensures:  (*__ptr)' == r;
  *   ensures:  return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: *__ptr;
  *   ensures: return == -1;
+ * }
  */
 int vasprintf (char **__restrict __ptr, const char *__restrict __f,
                _G_va_list __arg);
@@ -454,19 +473,21 @@ int vasprintf (char **__restrict __ptr, const char *__restrict __f,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__fmt) - 1]: __fmt[i] == 0;
+ * requires: valid_string(__fmt);
  *
- * case "success":
+ * case "success" {
  *   local:    char* r = new Memory;
  *   assigns:  *__ptr;
- *   ensures:  *__ptr == r;
- *   ensures:  size(*__ptr) > 0;
- *   ensures:  exists int i in [0, size(*__ptr) - 1]: (*__ptr)[i] == 0;
+ *   ensures:  size(r) > 0;
+ *   ensures:  valid_string(r);
+ *   ensures:  (*__ptr)' == r;
  *   ensures:  return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: *__ptr;
  *   ensures: return == -1;
+ * }
  */
 int asprintf (char **__restrict __ptr,
               const char *__restrict __fmt, ...);
@@ -488,7 +509,7 @@ int vdprintf (int __fd, const char *__restrict __fmt,
  * // TODO: check format, check variable arguments
  *
  * requires: __fd in FileDescriptor;
- * requires: exists int i in [0, size(__fmt) - 1]: __fmt[i] == 0;
+ * requires: valid_string(__fmt);
  */
 int dprintf (int __fd, const char *__restrict __fmt, ...);
 
@@ -498,7 +519,7 @@ int dprintf (int __fd, const char *__restrict __fmt, ...);
  * // TODO: check format, check variable arguments
  *
  * requires: __stream in File;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int fscanf (FILE *__restrict __stream,
@@ -507,7 +528,7 @@ int fscanf (FILE *__restrict __stream,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int scanf (const char *__restrict __format, ...);
@@ -515,8 +536,8 @@ int scanf (const char *__restrict __format, ...);
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__s);
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int sscanf (const char *__restrict __s,
@@ -529,7 +550,7 @@ int sscanf (const char *__restrict __s,
  * // TODO: check format, check variable arguments
  *
  * requires: __s in File;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int vfscanf (FILE *__restrict __s, const char *__restrict __format,
@@ -547,7 +568,7 @@ int vfscanf (FILE *__restrict __s, const char *__restrict __format,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int vscanf (const char *__restrict __format, _G_va_list __arg);
@@ -555,8 +576,8 @@ int vscanf (const char *__restrict __format, _G_va_list __arg);
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
- * requires: exists int i in [0, size(__format) - 1]: __format[i] == 0;
+ * requires: valid_string(__s);
+ * requires: valid_string(__format);
  * assigns:  _errno;
  */
 int vsscanf (const char *__restrict __s,
@@ -567,52 +588,55 @@ int vsscanf (const char *__restrict __s,
 
 /*$
  * requires: __stream in File;
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int fgetc (FILE *__stream);
 
 /*$
  * // TODO: internal glibc function, undocumented
  * requires: __stream in File;
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int _IO_getc (_IO_FILE *__stream);
 
 /*$
  * // TODO: internal glibc function, undocumented
  * requires: __stream in File;
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int _IO_peekc_locked (_IO_FILE *__stream);
 
 /*$
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int getchar (void);
+
 
 #ifdef __USE_POSIX199506
 
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int getc_unlocked (FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int getchar_unlocked (void);
 
 #endif /* Use POSIX.  */
+
+
 
 #ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * ensures: (return >= 0 and return <= 255) or return == _EOF;
+ * ensures: return in [0, 255] or return == EOF;
  */
 int fgetc_unlocked (FILE *__stream);
 
@@ -620,45 +644,47 @@ int fgetc_unlocked (FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int fputc (int __c, FILE *__stream);
 
 /*$
  * // TODO: internal glibc function, undocumented
  * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int _IO_putc (int __c, _IO_FILE *__stream);
 
 /*$
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putchar (int __c);
+
 
 #ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
 #endif /* Use MISC.  */
+
 
 #ifdef __USE_POSIX199506
 
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putc_unlocked (int __c, FILE *__stream);
 
 /*$
  * // TODO: not thread-safe
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int putchar_unlocked (int __c);
 
@@ -674,7 +700,7 @@ int getw (FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * ensures:  (return == 0) or (return == _EOF);
+ * ensures:  (return == 0) or (return == EOF);
  */
 int putw (int __w, FILE *__stream);
 
@@ -682,28 +708,29 @@ int putw (int __w, FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires:  size(__s) >= __n;
- * assigns:   __s[0, size(__s) - 1];
- * ensures:   exists int i in [0, size(__s) - 1]: __s[i] == 0;
- * ensures:   (return == __s) or (return == _NULL);
+ * requires: size(__s) >= __n;
+ * assigns:  __s[0, size(__s) - 1];
+ * ensures:  valid_primed_string(__s);
+ * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
 
 /*$
- * //warn: "dangerous function, do not use";
- * ensures: (return == __s) or (return == _NULL);
+ * warn: "gets: dangerous function, do not use";
+ * ensures: (return == __s) or (return == NULL);
  */
 char *gets (char *__s);
+
 
 #ifdef __USE_GNU
 
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires:  size(__s) >= __n;
- * assigns:   __s[0, size(__s) - 1];
- * ensures:   exists int i in [0, size(__s) - 1]: __s[i] == 0;
- * ensures:   (return == __s) or (return == _NULL);
+ * requires: size(__s) >= __n;
+ * assigns:  __s[0, size(__s) - 1];
+ * ensures:  valid_primed_string(__s);
+ * ensures:  (return == __s) or (return == NULL);
  */
 char *fgets_unlocked (char *__restrict __s, int __n,
                       FILE *__restrict __stream);
@@ -711,42 +738,45 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 #endif
 
 
-#if defined __USE_XOPEN2K8 || __GLIBC_USE (LIB_EXT2)
+#ifdef __USE_XOPEN2K8
 
 /*$
  * requires: __stream in File;
- * requires: *__lineptr != _NULL implies size(*__lineptr) >= *__n;
+ * requires: *__lineptr != NULL implies size(*__lineptr) >= *__n;
  * 
- * case "realloc":
- *   assumes:  *__lineptr != _NULL;
- * //TODO:   requires: *__lineptr in Memory;
+ * case "realloc" {
+ *   assumes:  *__lineptr != NULL;
+ *   requires: *__lineptr in Memory;
+ *   local:    char* r = new Memory;
+ *   assigns:  *__lineptr;
+ *   assigns:  *__n;
+ *   free:     *__lineptr;
+ *   ensures:  size(r) == (*__n)';
+ *   ensures:  (*__lineptr)' == r;
+ *   ensures:  return >= 0;
+ * }
+ *
+ * case "alloc" {
+ *   assumes: *__lineptr == NULL;
  *   local:   char* r = new Memory;
  *   assigns: *__lineptr;
  *   assigns: *__n;
- *   ensures: free old(*__lineptr);
- *   ensures: size(*__lineptr) == *__n;
- *   ensures: *__lineptr == r;
+ *   ensures: size(r) == (*__n)';
+ *   ensures: (*__lineptr)' == r;
  *   ensures: return >= 0;
+ * }
  *
- * case "alloc":
- *   assumes: *__lineptr == _NULL;
- *   local:   char* r = new Memory;
- *   assigns: *__lineptr;
- *   assigns: *__n;
- *   ensures: size(*__lineptr) == *__n;
- *   ensures: *__lineptr == r;
- *   ensures: return >= 0;
- *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 ssize_t getdelim (char **__restrict __lineptr,
                   size_t *__restrict __n, int __delimiter,
                   FILE *__restrict __stream);
 
 /*$
- * local: ssize_t r  = getdelim(__lineptr, __n, 10, __stream);
+ * local:   size_t r  = getdelim(__lineptr, __n, '\n', __stream);
  * ensures: return == r;
  */
 ssize_t getline (char **__restrict __lineptr,
@@ -757,32 +787,36 @@ ssize_t getline (char **__restrict __lineptr,
 
 /*$
  * requires: __stream in File;
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
+ * requires: valid_string(__s);
  *
- * case "success":
+ * case "success" {
  *   ensures: return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _EOF;
+ *   ensures: return == EOF;
+ * }
  */
 int fputs (const char *__restrict __s, FILE *__restrict __stream);
 
 /*$
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
+ * requires: valid_string(__s);
  *
- * case "success":
+ * case "success" {
  *   ensures: return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _EOF;
+ *   ensures: return == EOF;
+ * }
  */
 int puts (const char *__s);
 
 /*$
  * requires: __stream in File;
- * ensures: (return == (unsigned char) __c) or (return == _EOF);
+ * ensures: (return == (unsigned char) __c) or (return == EOF);
  */
 int ungetc (int __c, FILE *__stream);
 
@@ -790,7 +824,7 @@ int ungetc (int __c, FILE *__stream);
  * requires: __stream in File;
  * requires: size(__ptr) >= __size * __n;
  * assigns:  __ptr[0, __size * __n - 1];
- * ensures:  return >= 0 and return <= __n;
+ * ensures:  return in [0, __n];
  */
 size_t fread (void *__restrict __ptr, size_t __size,
               size_t __n, FILE *__restrict __stream);
@@ -798,7 +832,7 @@ size_t fread (void *__restrict __ptr, size_t __size,
 /*$
  * requires: __s in File;
  * requires: size(__ptr) >= __size * __n;
- * ensures:  return >= 0 and return <= __n;
+ * ensures:  return in [0, __n];
  */
 size_t fwrite (const void *__restrict __ptr, size_t __size,
                size_t __n, FILE *__restrict __s);
@@ -808,14 +842,16 @@ size_t fwrite (const void *__restrict __ptr, size_t __size,
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
+ * requires: valid_string(__s);
  *
- * case "success":
+ * case "success" {
  *   ensures: return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _EOF;
+ *   ensures: return == EOF;
+ * }
  */
 int fputs_unlocked (const char *__restrict __s,
                     FILE *__restrict __stream);
@@ -829,7 +865,7 @@ int fputs_unlocked (const char *__restrict __s,
  * requires: __stream in File;
  * requires: size(__ptr) >= __size * __n;
  * assigns:  __ptr[0, __size * __n - 1];
- * ensures:  return >= 0 and return <= __n;
+ * ensures:  return in [0, __n];
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
                        size_t __n, FILE *__restrict __stream);
@@ -838,7 +874,7 @@ size_t fread_unlocked (void *__restrict __ptr, size_t __size,
  * // TODO: not thread-safe
  * requires: __stream in File;
  * requires: size(__ptr) >= __size * __n;
- * ensures:  return >= 0 and return <= __n;
+ * ensures:  return in [0, __n];
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
                         size_t __n, FILE *__restrict __stream);
@@ -847,26 +883,30 @@ size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
 
 /*$
  * requires: __stream in File;
- * requires: __whence >= 0 and __whence <= 2;
+ * requires: __whence in [0, 2];
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int fseek (FILE *__stream, long int __off, int __whence);
 
 /*$
  * requires: __stream in File;
  *
- * case "success":
+ * case "success" {
  *   ensures: return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 long int ftell (FILE *__stream);
 
@@ -879,26 +919,30 @@ void rewind (FILE *__stream);
 
 /*$
  * requires: __stream in File;
- * requires: __whence >= 0 and __whence <= 2;
+ * requires: __whence in [0, 2];
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int fseeko (FILE *__stream, __off_t __off, int __whence);
 
 /*$
  * requires: __stream in File;
  *
- * case "success":
+ * case "success" {
  *   ensures: return >= 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 __off_t ftello (FILE *__stream);
 
@@ -907,26 +951,30 @@ __off_t ftello (FILE *__stream);
 /*$
  * requires: __stream in File;
  *
- * case "success":
+ * case "success" {
  *   assigns: *__pos;
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: __stream in File;
- * // TODO: requires: size(__pos) >= sizeof(fpos_t);
+ * // TODO requires: size(__pos) >= sizeof(fpos_t);
  *
- * case "success":
+ * case "success" {
  *   ensures: return == 0;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
  *   ensures: return == -1;
+ * }
  */
 int fsetpos (FILE *__stream, const fpos_t *__pos);
 
@@ -980,7 +1028,7 @@ int ferror_unlocked (FILE *__stream);
 #endif
 
 /*$
- * requires: exists int i in [0, size(__s) - 1]: __s[i] == 0;
+ * requires: valid_string(__s);
  */
 void perror (const char *__s);
 
@@ -1009,23 +1057,25 @@ int fileno_unlocked (FILE *__stream);
 #ifdef __USE_POSIX2
 
 /*$
- * requires: exists int i in [0, size(__command) - 1]: __command[i] == 0;
- * requires: exists int i in [0, size(__modes) - 1]: __modes[i] == 0;
+ * requires: valid_string(__command);
+ * requires: valid_string(__modes);
  *
- * case "success":
+ * case "success" {
  *   local:   FILE* f = _alloc_FILE();
  *   ensures: return == f;
+ * }
  *
- * case "failure":
+ * case "failure" {
  *   assigns: _errno;
- *   ensures: return == _NULL;
+ *   ensures: return == NULL;
+ * }
  */
 FILE *popen (const char *__command, const char *__modes);
 
 /*$
  * requires: __stream in File;
  * assigns:  _errno;
- * ensures:  free __stream;
+ * free:     __stream;
  */
 int pclose (FILE *__stream);
 
@@ -1037,19 +1087,21 @@ int pclose (FILE *__stream);
 static char _ctermid_buf[L_ctermid];
 
 /*$
- * requires: __s != _NULL implies size(__s) >= _L_ctermid;
+ * requires: __s != NULL implies size(__s) >= L_ctermid;
  *
- * case "buf":
- *   assumes: __s != _NULL;
- *   assigns: __s[0, _L_ctermid - 1];
- *   ensures: exists int i in [0, _L_ctermid - 1]: __s[i] == 0;
+ * case "buf" {
+ *   assumes: __s != NULL;
+ *   assigns: __s[0, L_ctermid - 1];
+ *   ensures: valid_primed_substring(__s, L_ctermid);
  *   ensures: return == __s;
+ * }
  *
- * case "nobuf":
- *   assumes: __s == _NULL;
- *   assigns: _ctermid_buf[0, _L_ctermid - 1];
- *   ensures: exists int i in [0, _L_ctermid - 1]: _ctermid_buf[i] == 0;
+ * case "nobuf" {
+ *   assumes: __s == NULL;
+ *   assigns: _ctermid_buf[0, L_ctermid - 1];
+ *   ensures: valid_primed_substring(_ctermid_buf, L_ctermid);
  *   ensures: return == &_ctermid_buf[0];
+ * }
  */
 char *ctermid (char *__s);
 
@@ -1061,19 +1113,21 @@ char *ctermid (char *__s);
 static char _cuserid_buf[L_cuserid];
 
 /*$
- * requires: __s != _NULL implies size(__s) >= _L_cuserid;
+ * requires: __s != NULL implies size(__s) >= L_cuserid;
  *
- * case "buf":
- *   assumes: __s != _NULL;
- *   assigns: __s[0, _L_cuserid - 1];
- *   ensures: exists int i in [0, _L_cuserid - 1]: __s[i] == 0;
+ * case "buf" {
+ *   assumes: __s != NULL;
+ *   assigns: __s[0, L_cuserid - 1];
+ *   ensures: valid_primed_substrint(__s, L_cuserid);
  *   ensures: return == __s;
+ * }
  *
- * case "nobuf":
- *   assumes: __s == _NULL;
- *   assigns: _cuserid_buf[0, _L_cuserid - 1];
- *   ensures: exists int i in [0, _L_cuserid - 1]: _cuserid_buf[i] == 0;
+ * case "nobuf" {
+ *   assumes: __s == NULL;
+ *   assigns: _cuserid_buf[0, L_cuserid - 1];
+ *   ensures: valid_primed_substring(_cuserid_buf, L_cuserid);
  *   ensures: return == &_cuserid_buf[0];
+ * }
  */
 char *cuserid (char *__s);
 
