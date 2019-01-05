@@ -80,10 +80,11 @@ struct
         | F_expr e -> F_expr (visit_expr e)
         | F_binop (op, f1, f2) -> F_binop(op, visit_formula f1, visit_formula f2)
         | F_not f -> F_not (visit_formula f)
-        | F_forall(v, t, s, f) -> F_forall(v, t, s, visit_formula f)
-        | F_exists(v, t, s, f) -> F_exists(v, t, s, visit_formula f)
+        | F_forall(v, t, s, f) -> F_forall(v, t, visit_set s, visit_formula f)
+        | F_exists(v, t, s, f) -> F_exists(v, t, visit_set s, visit_formula f)
         | F_predicate(p, params) -> F_predicate(p, visit_list visit_expr params)
-        | F_in _ | F_bool _ -> f
+        | F_in (e, s) -> F_in (visit_expr e, visit_set s)
+        | F_bool _ -> f
 
       and visit_expr (e:expr with_range) =
         bind_range e @@ fun e ->
@@ -104,9 +105,16 @@ struct
         | E_attribute (o, f) -> E_attribute(visit_expr o, f)
         | E_arrow (p, f) -> E_arrow(visit_expr p, f)
         | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
+
+      and visit_set s =
+        match s with
+        | S_interval (e1, e2) -> S_interval (visit_expr e1, visit_expr e2)
+        | S_resource r -> S_resource r
+
       in
 
       visit_formula (with_range body range)
+
 
 end
 
@@ -160,6 +168,7 @@ let visit_leaf sec ctx =
   | S_assigns assings   -> sec
   | S_ensures ensures   -> S_ensures (visit_ensures ensures ctx)
   | S_free free         -> sec
+  | S_warn warn         -> sec
 
 let visit_case case ctx =
   bind_range case @@ fun case -> {

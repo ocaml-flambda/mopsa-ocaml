@@ -39,6 +39,7 @@ and leaf =
   | S_assigns   of assigns with_range
   | S_ensures   of ensures with_range
   | S_free      of free with_range
+  | S_warn      of warn with_range
 
 and case = {
   case_label     : string;
@@ -73,6 +74,7 @@ and assigns = {
 
 and free = expr with_range
 
+and warn = string
 
 (** {2 Expressions} *)
 (** *=*=*=*=*=*=*=* *)
@@ -253,6 +255,9 @@ let pp_ensures fmt ensures =
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
 
+let pp_warn fmt warn =
+  fprintf fmt "warn: \"%s\";" warn.content
+
 let pp_leaf_section fmt sec =
   match sec with
   | S_local local -> pp_local fmt local
@@ -261,6 +266,7 @@ let pp_leaf_section fmt sec =
   | S_assigns assigns -> pp_assigns fmt assigns
   | S_ensures ensures -> pp_ensures fmt ensures
   | S_free free -> pp_free fmt free
+  | S_warn warn  -> pp_warn fmt warn
 
 let pp_leaf_sections fmt secs =
   pp_print_list

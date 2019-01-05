@@ -32,6 +32,7 @@ let _ =
      "case", CASE;
      "ensures", ENSURES;
      "predicate", PREDICATE;
+     "warn", WARN;
 
      (* Operators *)
      "and",  AND;

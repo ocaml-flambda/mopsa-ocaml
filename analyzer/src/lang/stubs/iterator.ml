@@ -307,6 +307,9 @@ struct
     | S_assigns _ -> flow
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
+    | S_warn warn ->
+      Exceptions.warn_at warn.range "%s" warn.content;
+      flow
 
 
   (** Execute the body of a case section *)

@@ -51,7 +51,7 @@
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE PRIMED RETURN SIZE SIZEOF OFFSET BASE PTR_VALID
@@ -132,6 +132,7 @@ leaf_section:
   | with_range(assigns)    { S_assigns $1 }
   | with_range(ensures)    { S_ensures $1 }
   | with_range(free)       { S_free $1 }
+  | with_range(warn)       { S_warn $1 }
 
 
 (* Requirement section *)
@@ -211,6 +212,10 @@ assumes:
 (* Ensures section *)
 ensures:
   | ENSURES COLON with_range(formula) SEMICOL { $3 }
+
+(* Warning section *)
+warn:
+  | WARN COLON STRING_CONST SEMICOL { $3 }
 
 
 (* Logic formula *)

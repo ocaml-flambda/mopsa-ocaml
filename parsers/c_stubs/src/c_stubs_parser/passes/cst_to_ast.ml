@@ -190,7 +190,7 @@ let builtin_type f arg =
 (** {2 Expressions} *)
 (** *************** *)
 
-let visit_var v prj func =
+let visit_var v range prj func =
   let open C_AST in
   if v.vlocal then
     {
@@ -221,7 +221,7 @@ let visit_var v prj func =
                (StringMap.bindings prj.proj_vars |> List.split |> snd)
     in
     try List.find (fun v' -> compare v'.var_org_name v.vname = 0) vars
-    with Not_found -> Exceptions.panic "cst_to_ast: variable %a not found" pp_var v
+    with Not_found -> Exceptions.panic_at range "undeclared variable %a" pp_var v
 
 let rec promote_expression_type prj (e: Ast.expr with_range) =
   (* Integer promotions (C99 6.3.1.1) *)
@@ -363,7 +363,7 @@ let rec visit_expr e prj func =
     | E_invalid -> Ast.E_invalid, pointed_type void_type
 
     | E_var(v) ->
-      let v = visit_var v prj func in
+      let v = visit_var v e.range prj func in
       Ast.E_var v, v.var_type
 
     | E_unop(op, e')      ->
@@ -452,17 +452,17 @@ let visit_set s prj func =
   | S_resource(r) -> Ast.S_resource(r)
 
 let rec visit_formula f prj func =
-  bind_range f @@ fun f ->
-  match f with
+  bind_range f @@ fun ff ->
+  match ff with
   | F_expr(e) -> Ast.F_expr (visit_expr e prj func )
   | F_bool(b) -> Ast.F_bool b
   | F_binop(op, f1, f2) -> Ast.F_binop(op, visit_formula f1 prj func , visit_formula f2 prj func )
   | F_not f' -> Ast.F_not (visit_formula f' prj func)
   | F_forall(v, t, s, f') ->
-    let v' = visit_var v prj func in
+    let v' = visit_var v f.range prj func in
     Ast.F_forall(v', visit_set s prj func, visit_formula f' prj func)
   | F_exists(v, t, s, f') ->
-    let v' = visit_var v prj func in
+    let v' = visit_var v f.range prj func in
     Ast.F_exists(v', visit_set s prj func, visit_formula f' prj func)
   | F_in(e, s) -> Ast.F_in(visit_expr e prj func, visit_set s prj func)
   | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
@@ -495,10 +495,10 @@ let visit_free free prj func =
   visit_expr free prj func
 
 let visit_local loc prj func =
-  bind_range loc @@ fun loc ->
-  let lvar = visit_var loc.lvar prj func in
+  bind_range loc @@ fun l ->
+  let lvar = visit_var l.lvar loc.range prj func in
   let lval =
-    match loc.lval with
+    match l.lval with
     | L_new r -> Ast.L_new r
     | L_call (f, args) ->
       let f = find_function f prj in
@@ -527,7 +527,10 @@ let visit_leaf leaf prj func =
 
   | S_free free ->
     S_free (visit_free free prj func), [], []
-    
+
+  | S_warn warn ->
+    S_warn warn, [], []
+
 let visit_case case prj func =
   let body, locals, assigns = visit_list_ext visit_leaf case.content.case_body prj func in
   Ast.{
@@ -546,7 +549,7 @@ let visit_section sect prj func =
 
   | S_case case -> S_case (visit_case case prj func), [], []
 
-  | S_predicate pred -> Exceptions.panic_at pred.range "cst_to_ast: predicate %a not expanded" pp_var pred.content.predicate_var
+  | S_predicate pred -> Exceptions.panic_at pred.range "predicate %a not expanded" pp_var pred.content.predicate_var
 
 (** {2 Entry point} *)
 (** *************** *)

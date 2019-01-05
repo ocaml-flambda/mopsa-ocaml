@@ -70,7 +70,7 @@ let parse_function_comment
 
 (** Parse the stub specification from comments of a variable *)
 let parse_var_comment
-  var
+  (var:C_AST.variable)
   (prj:C_AST.project)
   (preds:Cst.predicate with_range list)
   : Ast.stub option

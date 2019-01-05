@@ -72,6 +72,7 @@ let token_to_string = function
   | ASSUMES -> "assumes"
   | ENSURES -> "ensures"
   | PREDICATE -> "predicate"
+  | WARN -> "warn"
   | TRUE -> "true"
   | FALSE -> "false"
   | FORALL -> "forall"

@@ -163,18 +163,17 @@ and from_project prj =
       f.c_func_stub <- from_stub_comment ctx o
     ) funcs_and_origins;
 
+  let globals = StringMap.bindings prj.proj_vars |>
+                List.map snd |>
+                List.map (from_var ctx)
+  in
+
   Hashtbl.iter (fun _ (v, o) ->
       match vkind v with
       | V_c vv ->
         vv.var_init <- from_var_init ctx o
       | _ -> assert false
     ) ctx.ctx_vars;
-
-  let globals = StringMap.bindings prj.proj_vars |>
-                List.map snd |>
-                List.map (from_var ctx)
-  in
-
 
   Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
 
@@ -584,6 +583,7 @@ and from_stub_leaf ctx leaf =
   | S_assigns assigns   -> S_assigns (from_stub_assigns ctx assigns)
   | S_ensures ensures   -> S_ensures (from_stub_ensures ctx ensures)
   | S_free free         -> S_free (from_stub_free ctx free)
+  | S_warn warn         -> S_warn warn
 
 and from_stub_case ctx case =
   {
