@@ -44,6 +44,7 @@
 (* Delimiters *)
 %token LPAR RPAR
 %token LBRACK RBRACK
+%token LBRACE RBRACE
 %token COLON SEMICOL DOT COMMA
 %token PRIME
 %token BEGIN END
@@ -111,7 +112,7 @@ section:
 
 (* Case section *)
 case_section:
-  | CASE STRING_CONST COLON leaf_section_list SEMICOL
+  | CASE STRING_CONST LBRACE leaf_section_list RBRACE
     {
       {
         case_label = $2;
@@ -340,7 +341,7 @@ args:
 var_list:
   |                    { [] }
   | var                { [$1] }
-  | var COLON var_list { $1 :: $3 }
+  | var COMMA var_list { $1 :: $3 }
 
 
 resource:

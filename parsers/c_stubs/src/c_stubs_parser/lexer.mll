@@ -140,6 +140,8 @@ rule read =
   | ']'      { RBRACK }
   | "("      { LPAR }
   | ")"      { RPAR }
+  | '{'      { LBRACE }
+  | '}'      { RBRACE }
   | ':'      { COLON }
   | ';'      { SEMICOL }
   | ','      { COMMA }

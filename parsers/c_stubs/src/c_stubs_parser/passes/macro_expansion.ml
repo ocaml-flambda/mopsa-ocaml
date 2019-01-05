@@ -55,6 +55,8 @@ let token_to_string = function
   | RPAR -> ")"
   | LBRACK -> "["
   | RBRACK -> "]"
+  | LBRACE -> "{"
+  | RBRACE -> "}"
   | COLON -> ":"
   | SEMICOL -> ";"
   | DOT -> "."
