@@ -14,6 +14,9 @@ open Location
 open Cst
 
 
+let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.predicate_expansion" fmt
+
+
 (** {2 Inlining context} *)
 (** -------------------- *)
 
@@ -24,81 +27,87 @@ struct
   module PredMap = Map.Make
       (
       struct
-        type t = predicate
-        let compare p1 p2 = compare_var p1.predicate_var p2.predicate_var
+        type t = var
+        let compare = compare_var
       end
       )
 
-  type t = formula PredMap.t
+  type t = (predicate * formula) PredMap.t
 
   let empty : t = PredMap.empty
 
   let add (pred:predicate) (body:formula) (ctx:t) : t =
-    PredMap.add pred body ctx
+    PredMap.add pred.predicate_var (pred, body) ctx
+
+  let cardinal (ctx:t) : int =
+    PredMap.cardinal ctx
 
   let inline (pred:var) (params:expr with_range list) (ctx:t) range : formula with_range =
-    (* We need to find the predicate record containing the names of the arguments *)
-    let pred, body = PredMap.find_first (fun p -> compare_var p.predicate_var pred = 0) ctx in
+    if not (PredMap.mem pred ctx) then
+      Exceptions.panic_at range "undeclared predicate %a" pp_var pred
+    else
+      (* We need to find the predicate record containing the names of the arguments *)
+      let pred, body = PredMap.find pred ctx in
 
-    (* Combine arguments and call parameters *)
-    let args = List.map get_content params |>
-               List.combine pred.predicate_args
-    in
-    let find_arg_expr arg =
-      let rec iter =
-        function
-        | [] -> None
-        | (v,e) :: tl ->
-          if compare_var arg v = 0 then Some e
-          else iter tl
+      (* Combine arguments and call parameters *)
+      let args = List.map get_content params |>
+                 List.combine pred.predicate_args
       in
-      iter args
-    in
+      let find_arg_expr arg =
+        let rec iter =
+          function
+          | [] -> None
+          | (v,e) :: tl ->
+            if compare_var arg v = 0 then Some e
+            else iter tl
+        in
+        iter args
+      in
 
-    (* Replace occurrences of args in body by params *)
-    let rec visit_list visit l =
-      match l with
-      | [] -> []
-      | hd :: tl ->
-        let hd' = visit hd in
-        let tl' = visit_list visit tl in
-        hd' :: tl'
-    in
+      (* Replace occurrences of args in body by params *)
+      let rec visit_list visit l =
+        match l with
+        | [] -> []
+        | hd :: tl ->
+          let hd' = visit hd in
+          let tl' = visit_list visit tl in
+          hd' :: tl'
+      in
 
-    let rec visit_formula f =
-      bind_range f @@ fun f ->
-      match f with
-      | F_expr e -> F_expr (visit_expr e)
-      | F_binop (op, f1, f2) -> F_binop(op, visit_formula f1, visit_formula f2)
-      | F_not f -> F_not (visit_formula f)
-      | F_forall(v, t, s, f) -> F_forall(v, t, s, visit_formula f)
-      | F_exists(v, t, s, f) -> F_exists(v, t, s, visit_formula f)
-      | F_predicate(p, params) -> F_predicate(p, visit_list visit_expr params)
-      | F_in _ | F_bool _ -> f
+      let rec visit_formula f =
+        bind_range f @@ fun f ->
+        match f with
+        | F_expr e -> F_expr (visit_expr e)
+        | F_binop (op, f1, f2) -> F_binop(op, visit_formula f1, visit_formula f2)
+        | F_not f -> F_not (visit_formula f)
+        | F_forall(v, t, s, f) -> F_forall(v, t, s, visit_formula f)
+        | F_exists(v, t, s, f) -> F_exists(v, t, s, visit_formula f)
+        | F_predicate(p, params) -> F_predicate(p, visit_list visit_expr params)
+        | F_in _ | F_bool _ -> f
 
-    and visit_expr (e:expr with_range) =
-      bind_range e @@ fun e ->
-      match e with
-      | E_int _ | E_float _ | E_string _ | E_char _ | E_return | E_invalid -> e
-      | E_var v ->
-        begin match find_arg_expr v with
-          | None -> e
-          | Some e -> e
-        end
-      | E_unop(op, e) -> E_unop(op, visit_expr e)
-      | E_binop (op, e1, e2) -> E_binop(op, visit_expr e1, visit_expr e2)
-      | E_addr_of e -> E_addr_of (visit_expr e)
-      | E_deref e -> E_deref (visit_expr e)
-      | E_cast (t, e) -> E_cast(t, visit_expr e)
-      | E_subscript (a, i) -> E_subscript(visit_expr a, visit_expr i)
-      | E_member (s, f) -> E_member(visit_expr s, f)
-      | E_attribute (o, f) -> E_attribute(visit_expr o, f)
-      | E_arrow (p, f) -> E_arrow(visit_expr p, f)
-      | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
-    in
+      and visit_expr (e:expr with_range) =
+        bind_range e @@ fun e ->
+        match e with
+        | E_int _ | E_float _ | E_string _ | E_char _ | E_return | E_invalid -> e
+        | E_var v ->
+          begin match find_arg_expr v with
+            | None -> e
+            | Some e -> e
+          end
+        | E_unop(op, e) -> E_unop(op, visit_expr e)
+        | E_binop (op, e1, e2) -> E_binop(op, visit_expr e1, visit_expr e2)
+        | E_addr_of e -> E_addr_of (visit_expr e)
+        | E_deref e -> E_deref (visit_expr e)
+        | E_cast (t, e) -> E_cast(t, visit_expr e)
+        | E_subscript (a, i) -> E_subscript(visit_expr a, visit_expr i)
+        | E_member (s, f) -> E_member(visit_expr s, f)
+        | E_attribute (o, f) -> E_attribute(visit_expr o, f)
+        | E_arrow (p, f) -> E_arrow(visit_expr p, f)
+        | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
+      in
 
-    visit_formula (with_range body range)
-    
+      visit_formula (with_range body range)
+
 end
 
 (** Generic visitor on lists *)
