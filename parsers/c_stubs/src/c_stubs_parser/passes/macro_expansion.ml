@@ -144,5 +144,4 @@ let doit stub prj =
   let out = Buffer.create (String.length stub) in
   let macros_found = visit_macros lexbuf false out macros in
   let stub' = if macros_found then Buffer.contents out else stub in
-  debug "%s" stub';
   stub'
