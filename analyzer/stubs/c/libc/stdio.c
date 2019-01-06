@@ -19,6 +19,7 @@
 /*$
  * local:   struct _IO_FILE* addr = new File;
  * ensures: stdin == addr;
+ * ensures: size(stdin) == sizeof(struct _IO_FILE);
  * ensures: stdin->_fileno == 0;
  */
 struct _IO_FILE *stdin;
@@ -26,6 +27,7 @@ struct _IO_FILE *stdin;
 /*$
  * local:   struct _IO_FILE* addr = new File;
  * ensures: stdout == addr;
+ * ensures: size(stdout) == sizeof(struct _IO_FILE);
  * ensures: stdout->_fileno == 1;
  */
 struct _IO_FILE *stdout;
@@ -33,6 +35,7 @@ struct _IO_FILE *stdout;
 /*$
  * local:   struct _IO_FILE* addr = new File;
  * ensures: stderr == addr;
+ * ensures: size(stderr) == sizeof(struct _IO_FILE);
  * ensures: stderr->_fileno == 2;
  */
 struct _IO_FILE *stderr;
@@ -41,6 +44,7 @@ struct _IO_FILE *stderr;
  * local: FILE* f = new File;
  * local: int fd = new FileDescriptor;
  * ensures: f->_fileno == fd;
+ * ensures: size(f) == sizeof(FILE);
  * ensures: return == f;
  */
 FILE* _alloc_FILE();
@@ -277,6 +281,7 @@ FILE *freopen (const char *__restrict __filename,
  * case "success" {
  *   local:   FILE* f = new File;
  *   ensures: f->_fileno == __fd;
+ *   ensures: size(f) == sizeof(FILE);
  *   ensures: return == f;
  * }
  *

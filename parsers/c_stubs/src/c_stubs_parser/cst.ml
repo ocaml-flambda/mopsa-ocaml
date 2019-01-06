@@ -109,6 +109,8 @@ and expr =
   | E_arrow     of expr with_range * string
 
   | E_builtin_call  of builtin * expr with_range
+
+  | E_sizeof_var    of var with_range
   | E_sizeof_type   of c_qual_typ with_range
   | E_sizeof_expr   of expr with_range
 
@@ -261,6 +263,7 @@ let rec pp_expr fmt exp =
   | E_attribute(s, f) -> fprintf fmt "%a:%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
   | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+  | E_sizeof_var v -> fprintf fmt "sizeof(%a)" pp_var v.content
   | E_sizeof_type t -> fprintf fmt "sizeof(%a)" pp_c_qual_typ t.content
   | E_sizeof_expr e -> fprintf fmt "sizeof(%a)" pp_expr e
   | E_return -> pp_print_string fmt "return"

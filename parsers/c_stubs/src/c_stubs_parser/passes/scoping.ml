@@ -39,6 +39,9 @@ struct
     in
     v', s'
 
+  let mem v s =
+    exists (fun v' -> v'.vname = v.vname) s
+
   let resolve v s =
     filter (fun v' -> v'.vname = v.vname) s |>
     elements |>
@@ -118,6 +121,15 @@ let rec visit_expr (expr:expr with_range) scope =
   | E_builtin_call (f, arg) ->
     let arg, scope = visit_expr arg scope in
     E_builtin_call (f, arg), scope
+
+  | E_sizeof_var v ->
+    (* If the variable is in the scope, then we are sure this a sizeof on a expression *)
+    if Scope.mem v.content scope then
+      let vv = bind_range v (fun v -> E_var (Scope.resolve v scope)) in
+      E_sizeof_expr vv, scope
+    else
+      (* Otherwise, we wait for the Cst_to_ast pass to resolve it using project info *)
+      E_sizeof_var v, scope
 
   | E_sizeof_type t ->
     E_sizeof_type t, scope

@@ -24,24 +24,38 @@ struct point {
 /*$
  * ensures: return == sizeof(*x);
  */
-int sizeof_struct(struct point *x);
+int sizeof_struct_expr(struct point *x);
 
-void test_sizeof_struct() {
+void test_sizeof_struct_expr() {
   struct point p;
-  int s = sizeof_struct(&p);
+  int s = sizeof_struct_expr(&p);
   _mopsa_assert(s == sizeof(p));
 }
 
 /*$
  * ensures: return == sizeof(struct point);
  */
-int sizeof_struct2(struct point *x);
+int sizeof_struct_type(struct point *x);
 
-void test_sizeof_struct2() {
+void test_sizeof_struct_type() {
   struct point p;
-  int s = sizeof_struct2(&p);
+  int s = sizeof_struct_type(&p);
   _mopsa_assert(s == sizeof(struct point));
 }
+
+typedef struct point point_t;
+
+/*$
+ * ensures: return == sizeof(point_t);
+ */
+int sizeof_struct_typedef(point_t *x);
+
+void test_sizeof_struct_typedef() {
+  point_t p;
+  int s = sizeof_struct_typedef(&p);
+  _mopsa_assert(s == sizeof(point_t));
+}
+
 
 
 

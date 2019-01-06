@@ -251,6 +251,7 @@ expr:
   | with_range(expr) COLON IDENT                      { E_attribute ($1, $3) }
   | with_range(expr) ARROW IDENT                      { E_arrow ($1, $3) }
   | RETURN                                            { E_return }
+  | SIZEOF LPAR with_range(var) RPAR                  { E_sizeof_var $3 }
   | SIZEOF LPAR with_range(c_qual_typ) RPAR           { E_sizeof_type $3 }
   | SIZEOF LPAR with_range(expr) RPAR                 { E_sizeof_expr $3 }
   | builtin LPAR with_range(expr) RPAR                { E_builtin_call ($1, $3) }
