@@ -21,7 +21,7 @@ let debug fmt = Debug.debug ~channel:"c_stubs_parser.passes.scoping" fmt
 module Scope =
 struct
 
-  include SetExt.Make(struct type t = var let compare = compare_var end)
+  include SetExt.Make(struct type t = var let compare v1 v2 = compare v1.vname v2.vname end)
 
   let uid_counter = ref 1000
 
@@ -34,21 +34,15 @@ struct
       vrange = v.vrange;
       vtyp = t;
     } in
-    let s' = filter (fun v' -> v'.vname != v.vname ) s |>
+    let s' = remove v' s |>
              add v'
     in
     v', s'
 
-  let mem v s =
-    exists (fun v' -> v'.vname = v.vname) s
-
   let resolve v s =
-    filter (fun v' -> v'.vname = v.vname) s |>
-    elements |>
-    function
-    | [v] -> v
-    | [] -> v
-    | _ -> Exceptions.panic "Too many variables %a in scope" pp_var v
+    match find_opt v s with
+    | None -> v
+    | Some vv -> vv
 
 end
 
@@ -70,8 +64,8 @@ let visit_option f o scope =
     let x, scope = f x scope in
     Some x, scope
 
-let rec visit_expr (expr:expr with_range) scope =
-  bind_pair_range expr @@ fun expr ->
+let rec visit_expr (e:expr with_range) scope =
+  bind_pair_range e @@ fun expr ->
   match expr with
   | E_int _ | E_float _ | E_invalid
   | E_string _ | E_char _ | E_return ->
@@ -147,8 +141,8 @@ let visit_set (set:set) scope =
 
   | S_resource r -> S_resource r, scope
 
-let rec visit_formula (formula:formula with_range) scope =
-  bind_pair_range formula @@ fun formula ->
+let rec visit_formula (f:formula with_range) scope =
+  bind_pair_range f @@ fun formula ->
   match formula with
   | F_expr e ->
     let e, scope = visit_expr e scope in
@@ -220,7 +214,7 @@ let visit_local_value lv scope =
   match lv with
   | L_new rc -> lv, scope
   | L_call (f, args) ->
-    let f = bind_range f @@ fun f -> Scope.resolve f scope in
+    let f = bind_range f @@ fun ff -> Scope.resolve ff scope in
     let args, scope = visit_list visit_expr args scope in
     L_call (f, args), scope
 
