@@ -16,23 +16,32 @@ void test_sizeof_int() {
 }
 
 
-typedef struct {
+struct point {
   int x;
   int y;
-} point;
+};
 
 /*$
  * ensures: return == sizeof(*x);
  */
-int sizeof_struct(point *x);
+int sizeof_struct(struct point *x);
 
 void test_sizeof_struct() {
-  point p;
+  struct point p;
   int s = sizeof_struct(&p);
-  _mopsa_print();
   _mopsa_assert(s == sizeof(p));
 }
 
+/*$
+ * ensures: return == sizeof(struct point);
+ */
+int sizeof_struct2(struct point *x);
+
+void test_sizeof_struct2() {
+  struct point p;
+  int s = sizeof_struct2(&p);
+  _mopsa_assert(s == sizeof(struct point));
+}
 
 
 

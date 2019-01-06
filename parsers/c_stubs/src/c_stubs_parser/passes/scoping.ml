@@ -119,6 +119,13 @@ let rec visit_expr (expr:expr with_range) scope =
     let arg, scope = visit_expr arg scope in
     E_builtin_call (f, arg), scope
 
+  | E_sizeof_type t ->
+    E_sizeof_type t, scope
+
+  | E_sizeof_expr e ->
+    let e, scope = visit_expr e scope in
+    E_sizeof_expr e, scope
+
 let visit_set (set:set) scope =
   match set with
   | S_interval(e1, e2) ->

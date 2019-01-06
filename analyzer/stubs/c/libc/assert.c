@@ -19,7 +19,7 @@
  * requires: valid_string(__assertion);
  * requires: valid_string(__file);
  * requires: valid_string(__function);
- * ensures : 1  = 0;
+ * ensures : 1 == 0;
  */
 void __assert_fail (const char *__assertion, const char *__file,
                     unsigned int __line, const char *__function);

@@ -105,6 +105,8 @@ struct
         | E_attribute (o, f) -> E_attribute(visit_expr o, f)
         | E_arrow (p, f) -> E_arrow(visit_expr p, f)
         | E_builtin_call (f, e) -> E_builtin_call(f, visit_expr e)
+        | E_sizeof_expr e -> E_sizeof_expr(visit_expr e)
+        | E_sizeof_type t -> E_sizeof_type t
 
       and visit_set s =
         match s with

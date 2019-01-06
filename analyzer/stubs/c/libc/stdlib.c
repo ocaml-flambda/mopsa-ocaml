@@ -16,12 +16,6 @@
 #include "mopsa_libc_utils.h"
 
 
-/* Utilities */
-
-static const size_t _MB_LEN_MAX = MB_LEN_MAX;
-
-static const size_t _PATH_MAX = PATH_MAX;
-
 /*$
  * local: char* r = new Memory;
  * ensures: return == r;

@@ -681,7 +681,6 @@ and from_stub_expr ctx exp =
 and from_stub_builtin f =
   match f with
   | PRIMED -> panic "from_stub_builtin: PRIMED should be translated before"
-  | SIZEOF -> panic "from_stub_builtin: SIZEOF should be resolved before"
   | SIZE -> SIZE
   | OFFSET -> OFFSET
   | BASE -> BASE
