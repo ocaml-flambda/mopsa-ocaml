@@ -88,7 +88,7 @@ and formula =
 (** *************** *)
 
 and expr =
-  | E_int       of Z.t
+  | E_int       of Z.t * int_suffix
   | E_float     of float
   | E_string    of string
   | E_char      of int
@@ -115,6 +115,14 @@ and expr =
   | E_sizeof_expr   of expr with_range
 
   | E_return
+
+and int_suffix =
+  | NO_SUFFIX
+  | LONG
+  | UNSIGNED_LONG
+  | LONG_LONG
+  | UNSIGNED_LONG_LONG
+    
 
 and log_binop =
   | AND
@@ -244,7 +252,7 @@ let pp_list pp sep fmt l =
 
 let rec pp_expr fmt exp =
   match get_content exp with
-  | E_int n -> Z.pp_print fmt n
+  | E_int (n, suffix) -> fprintf fmt "%a%a" Z.pp_print n pp_int_suffix suffix
   | E_float f -> pp_print_float fmt f
   | E_string s -> fprintf fmt "\"%s\"" s
   | E_char c ->
@@ -267,6 +275,14 @@ let rec pp_expr fmt exp =
   | E_sizeof_type t -> fprintf fmt "sizeof(%a)" pp_c_qual_typ t.content
   | E_sizeof_expr e -> fprintf fmt "sizeof(%a)" pp_expr e
   | E_return -> pp_print_string fmt "return"
+
+and pp_int_suffix fmt =
+  function
+  | NO_SUFFIX -> ()
+  | LONG -> fprintf fmt "L"
+  | UNSIGNED_LONG -> fprintf fmt "UL"
+  | LONG_LONG -> fprintf fmt "LL"
+  | UNSIGNED_LONG_LONG -> fprintf fmt "ULL"
 
 and pp_unop fmt =
   function

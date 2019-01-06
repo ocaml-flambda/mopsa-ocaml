@@ -129,6 +129,10 @@ let int_type = C_AST.(T_integer SIGNED_INT, no_qual)
 let bool_type = C_AST.(T_bool, no_qual)
 let float_type = C_AST.(T_float FLOAT, no_qual)
 let double_type = C_AST.(T_float DOUBLE, no_qual)
+let long_type = C_AST.(T_integer SIGNED_LONG, no_qual)
+let unsigned_long_type = C_AST.(T_integer UNSIGNED_LONG, no_qual)
+let long_long_type = C_AST.(T_integer SIGNED_LONG_LONG, no_qual)
+let unsigned_long_long_type = C_AST.(T_integer UNSIGNED_LONG_LONG, no_qual)
 let string_type s = C_AST.(T_array((T_integer(SIGNED_CHAR), no_qual), Length_cst (Z.of_int (1 + String.length s))), no_qual)
 let char_type = C_AST.(T_integer (Char SIGNED), no_qual)
 let pointer_type t = C_AST.(T_pointer t, no_qual)
@@ -351,7 +355,15 @@ let binop_type prj t1 t2 =
 let rec visit_expr e prj func =
   bind_range e @@ fun ee ->
   let kind, typ = match ee with
-    | E_int(n) -> Ast.E_int(n), int_type
+    | E_int(n, NO_SUFFIX) -> Ast.E_int(n), int_type
+
+    | E_int(n, LONG) -> Ast.E_int(n), long_type
+
+    | E_int(n, UNSIGNED_LONG) -> Ast.E_int(n), unsigned_long_type
+
+    | E_int(n, LONG_LONG) -> Ast.E_int(n), long_long_type
+
+    | E_int(n, UNSIGNED_LONG_LONG) -> Ast.E_int(n), unsigned_long_long_type
 
     | E_float(f) -> Ast.E_float(f), float_type
 

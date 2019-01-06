@@ -12,7 +12,11 @@ let debug fmt = Debug.debug ~channel:"c_stubs.passes.macro_expansion" fmt
 
 
 let token_to_string = function
-  | Parser.INT_CONST(n) -> Z.to_string n
+  | Parser.INT_CONST(n,NO_SUFFIX) -> Z.to_string n
+  | Parser.INT_CONST(n,LONG) -> Z.to_string n ^ "L"
+  | Parser.INT_CONST(n,UNSIGNED_LONG) -> Z.to_string n ^ "UL"
+  | Parser.INT_CONST(n,LONG_LONG) -> Z.to_string n ^ "LL"
+  | Parser.INT_CONST(n,UNSIGNED_LONG_LONG) -> Z.to_string n ^ "ULL"
   | FLOAT_CONST f -> string_of_float f
   | CHAR_CONST n ->
     let s =
@@ -140,4 +144,5 @@ let doit stub prj =
   let out = Buffer.create (String.length stub) in
   let macros_found = visit_macros lexbuf false out macros in
   let stub' = if macros_found then Buffer.contents out else stub in
+  debug "%s" stub';
   stub'

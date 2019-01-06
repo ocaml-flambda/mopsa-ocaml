@@ -85,12 +85,23 @@ let _ =
        | 't' -> '\009'
        | c   -> c
 
-   let decimal_code  c d u =
+   let decimal_code c d u =
        100 * (Char.code c - 48) + 10 * (Char.code d - 48) + (Char.code u - 48)
 
+   (* Return the integer constant in a C string literal *)
+   let z_of_int_literal n =
+       if Str.string_match (Str.regexp "\\(-?[0-9]+\\).*") n 0 then
+              Z.of_string (Str.matched_group 1 n)
+       else
+	      assert false
 }
 
 let int = '-'? ['0'-'9'] ['0'-'9']*
+
+let long_suffix = 'l' | 'L'
+let unsigned_long_suffix = "ul" | "UL"
+let long_long_suffix = "ll" | "LL"
+let unsigned_long_long_suffix = "ull" | "ULL"
 
 let digit = ['0' - '9']
 let digitpart = digit (['_'] | digit)*
@@ -112,10 +123,17 @@ let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | white    { read lexbuf }
+  | white                 { read lexbuf }
   | newline (white* "*")? { new_line lexbuf; read lexbuf }  
-  | int      { INT_CONST (Z.of_string (Lexing.lexeme lexbuf)) }
-  | float    { FLOAT_CONST ((*Format.printf "float %s@\n" (Lexing.lexeme lexbuf);*) float_of_string (Lexing.lexeme lexbuf)) }
+
+  | int unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
+  | int unsigned_long_long_suffix  { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG_LONG) }
+  | int long_long_suffix           { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG_LONG) }
+  | int long_suffix                { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), LONG) }
+  | int                            { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), NO_SUFFIX) }
+
+  | float    { FLOAT_CONST (float_of_string (Lexing.lexeme lexbuf)) }
+
   | '"'      { read_string (Buffer.create 17) lexbuf }
 
   (* Char lexer inspired from https://github.com/let-def/ocamllex/blob/master/lexer.mll *)
@@ -177,6 +195,7 @@ rule read =
 
   | begin_delimeter  { BEGIN }
   | end_delimeter    { END }
+
   | newline white* end_delimeter    { new_line lexbuf; END }
   
   | line_comment  { read lexbuf }

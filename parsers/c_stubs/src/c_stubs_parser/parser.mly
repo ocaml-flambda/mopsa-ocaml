@@ -17,7 +17,7 @@
 %}
 
 (* Constants *)
-%token <Z.t> INT_CONST
+%token <Z.t * Cst.int_suffix> INT_CONST
 %token <float> FLOAT_CONST
 %token <int> CHAR_CONST
 %token <string> STRING_CONST
@@ -236,7 +236,7 @@ formula:
 expr:
   | LPAR c_qual_typ RPAR with_range(expr)             { E_cast ($2, $4) } %prec CAST
   | LPAR expr RPAR                                    { $2 } (* FIXME: conflict between `(id) e` and `(id + e) *)
-  | INT_CONST                                         { E_int $1 }
+  | INT_CONST                                         { E_int (fst $1, snd $1) }
   | STRING_CONST                                      { E_string $1}
   | FLOAT_CONST                                       { E_float $1 }
   | CHAR_CONST                                        { E_char $1 }
