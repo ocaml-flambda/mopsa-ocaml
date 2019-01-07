@@ -78,7 +78,7 @@ let find_function f prj =
     List.find (fun f' -> compare f'.func_org_name f.vname = 0)
   with Not_found ->
     Exceptions.panic_at f.range "function %s not found" f.content.vname
-  
+
 let rec unroll_type t =
   let open C_AST in
   match fst t with

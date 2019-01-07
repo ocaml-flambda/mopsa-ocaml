@@ -23,7 +23,7 @@ struct
 
   include SetExt.Make(struct type t = var let compare v1 v2 = compare v1.vname v2.vname end)
 
-  let uid_counter = ref 1000
+  let uid_counter = ref 100000
 
   let create v t s =
     incr uid_counter;
