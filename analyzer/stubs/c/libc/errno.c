@@ -22,8 +22,21 @@ int _errno;
 int *__errno_location (void);
 
 #ifdef __USE_GNU
-// TODO: non-deterministic string
-const char *program_invocation_name = "program_invocation_name";
-const char *program_invocation_short_name = "program_invocation_short_name";
-#endif
 
+/*$
+ * local: char* addr = ReadOnlyString;
+ * ensures: size(addr) > 1;
+ * ensures: valid_string(addr);
+ * ensures: program_invocation_name == addr;
+ */
+const char *program_invocation_name;
+
+/*$
+ * local: char* addr = ReadOnlyString;
+ * ensures: size(addr) > 1;
+ * ensures: valid_string(addr);
+ * ensures: program_invocation_short_name;
+ */
+const char *program_invocation_short_name;
+
+#endif
