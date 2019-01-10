@@ -13,6 +13,7 @@
 #include "errno.c"
 #include "assert.c"
 #include "stdio.c"
+#include "stdio_ext.c"
 #include "stdlib.c"
 #include "unistd.c"
 #include "string.c"
