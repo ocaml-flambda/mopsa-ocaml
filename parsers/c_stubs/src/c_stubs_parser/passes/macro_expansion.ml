@@ -109,25 +109,35 @@ let token_to_string = function
   | UNION  -> "union"
   | ENUM  -> "enum"
 
+let is_macro id macros =
+  MapExt.StringMap.mem id macros
 
-let rec visit_macros lexbuf found out macros =
+let is_enum id enums =
+  MapExt.StringMap.mem id enums
+
+let rec visit_macros lexbuf found out macros enums =
   let token = Lexer.read lexbuf in
   let lexeme = token_to_string token in
   match token with
   | Parser.EOF ->
     found
 
-  | Parser.IDENT(id)
-    when MapExt.StringMap.mem id macros ->
+  | Parser.IDENT(id) when is_enum id enums ->
+    let value = MapExt.StringMap.find id enums in
+    Buffer.add_string out (Z.to_string value ^ " ");
+    let _ = visit_macros lexbuf true out macros enums in
+    true
+
+  | Parser.IDENT(id) when is_macro id macros ->
     let content = MapExt.StringMap.find id macros in
     let lexbuf' = Lexing.from_string content in
-    let _ = visit_macros lexbuf' true out macros in
-    let _ = visit_macros lexbuf true out macros in
+    let _ = visit_macros lexbuf' true out macros enums in
+    let _ = visit_macros lexbuf true out macros enums in
     true
 
   | _ ->
     Buffer.add_string out (lexeme ^ " ");
-    visit_macros lexbuf found out macros
+    visit_macros lexbuf found out macros enums
 
 
 let doit stub prj =
@@ -140,8 +150,17 @@ let doit stub prj =
         acc
     ) prj.C_AST.proj_macros MapExt.StringMap.empty
   in
+
+  (* Create an enum lookup table *)
+  let enums = C_AST.StringMap.fold (fun _ enum acc ->
+      enum.C_AST.enum_values |> List.fold_left (fun acc v ->
+          MapExt.StringMap.add v.C_AST.enum_val_org_name v.C_AST.enum_val_value acc
+        ) acc
+    ) prj.C_AST.proj_enums MapExt.StringMap.empty
+  in
+
   let lexbuf = Lexing.from_string stub in
   let out = Buffer.create (String.length stub) in
-  let macros_found = visit_macros lexbuf false out macros in
+  let macros_found = visit_macros lexbuf false out macros enums in
   let stub' = if macros_found then Buffer.contents out else stub in
   stub'
