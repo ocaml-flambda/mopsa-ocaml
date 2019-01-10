@@ -49,21 +49,6 @@ type cell = {
   t: typ;        (** type of the cell *)
 }
 
-let cell_base c = c.b
-
-let cell_offset c = c.o
-
-let cell_zoffset c =
-  match c.o with
-  | O_single n -> n
-  | _ -> assert false
-
-let cell_typ c = c.t
-
-let cell_mode c =
-  let b = cell_base c in
-  base_mode b
-
 (** Compare two cells *)
 let compare_cell c1 c2 =
   Compare.compose [
@@ -78,6 +63,28 @@ let pp_cell fmt c =
     pp_base c.b
     pp_offset c.o
     Pp.pp_c_type_short c.t
+
+
+let cell_base c = c.b
+
+let cell_offset c = c.o
+
+let cell_zoffset c =
+  match c.o with
+  | O_single n -> n
+  | _ -> assert false
+
+let is_cell_single_offset c =
+  match c.o with
+  | O_single _ -> true
+  | _ -> false
+
+
+let cell_typ c = c.t
+
+let cell_mode c =
+  let b = cell_base c in
+  base_mode b
 
 
 (** {2 Cell variables} *)

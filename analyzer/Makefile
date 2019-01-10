@@ -34,15 +34,15 @@ abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar mm libs iterators resources
+lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
 lang.c.iterators = program switch goto interproc
 lang.c.desugar = low_level record_copy loops stub_init
-lang.c.mm = common cells pointers machine_integers
-lang.c.mm.common = base points_to init_visitor
-lang.c.mm.cells = cell expand cell2scalar
-lang.c.mm.pointers = bases nonrel
+lang.c.memory = common cells pointers machine_integers
+lang.c.memory.common = base points_to init_visitor
+lang.c.memory.cells = cell expand cell2scalar
+lang.c.memory.pointers = bases nonrel
 lang.c.libs = c_mopsa
-lang.c.resources = common file memory
+lang.c.resources = common file
 lang.c.resources.file = slot table domain
 
 # lang.python = ast addr utils visitor operators pp frontend

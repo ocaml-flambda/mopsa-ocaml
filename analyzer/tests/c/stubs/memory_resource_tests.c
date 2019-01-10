@@ -2,8 +2,8 @@
 
 /*$
  * local   : void *addr = new Memory;
- * ensures : return == addr and
- *           return:bytes == n;
+ * ensures : size(addr) == n and
+ *           return == addr;
  */
 void *malloc_(size_t n);
 
@@ -18,6 +18,8 @@ void test_new_int_array() {
   a[0] = 10;
   a[9] = 100;
   _mopsa_assert(a[0] + a[9] == 110);
+  int x = a[10];
+  _mopsa_assert_unsafe();
 }
 
 

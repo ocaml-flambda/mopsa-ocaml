@@ -54,7 +54,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 open Zone
-open Mm.Common.Points_to
+open Memory.Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Value
 open Slot
 open Table

@@ -11,7 +11,7 @@
 open Mopsa
 open Universal.Ast
 open Stubs.Ast
-open Mm.Common.Points_to
+open Memory.Common.Points_to
 open Ast
 open Zone
 
@@ -51,6 +51,17 @@ struct
 
   let init prog man flow = None
 
+  (** Byte attribute *)
+  (** ============== *)
+
+  let mk_bytes_var addr range =
+    let vname =
+      Format.fprintf Format.str_formatter "%a_bytes" pp_addr addr;
+      Format.flush_str_formatter ()
+    in
+    let uniq =  vname ^ ":" ^ (string_of_int addr.addr_uid) in
+    let v = mkv vname uniq (addr.addr_uid) (T_c_integer C_unsigned_long) in
+    mk_var v ~mode:addr.addr_mode range
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -66,8 +77,12 @@ struct
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
-          let stmt' = mk_free_addr addr stmt.srange in
+          (* Remove the bytes attribute before removing the address *)
+          let stmt' = mk_remove (mk_bytes_var addr stmt.srange) stmt.srange in
           let flow' = man.exec stmt' flow in
+
+          let stmt' = mk_free_addr addr stmt.srange in
+          let flow' = man.exec stmt' flow' in
 
           let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
@@ -89,6 +104,28 @@ struct
 
   let eval zone exp man flow =
     match ekind exp with
+    (* 𝔼⟦ new Resource ⟧ *)
+    | E_alloc_addr (A_stub_resource _) ->
+      (* Allocate in the heap *)
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
+      Eval.bind_return @@ fun exp flow ->
+
+      begin match ekind exp with
+      | E_addr addr ->
+        (* Add byte attribute *)
+        let bytes = mk_bytes_var addr exp.erange in
+        let flow' = man.exec (mk_add bytes exp.erange) flow in
+        Eval.singleton exp flow'
+
+      | _ -> assert false
+        end
+
+    (* 𝔼⟦ size(@resource) ⟧ *)
+    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource _ } as addr)}) ->
+      let bytes = mk_bytes_var addr exp.erange in
+      Eval.singleton bytes flow |>
+      Eval.return
+
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None
 
