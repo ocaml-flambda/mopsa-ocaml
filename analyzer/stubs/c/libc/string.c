@@ -294,7 +294,7 @@ size_t strxfrm (char *__restrict __dest,
  * requires: valid_string(__s2);
  * assigns:  _errno;
  */
-int strcoll_l (const char *__s1, const char *__s2, locale_t __l);
+int strcoll_l (const char *__s1, const char *__s2, __locale_t __l);
 
 /*$
  * requires: valid_string(__src);
@@ -302,8 +302,7 @@ int strcoll_l (const char *__s1, const char *__s2, locale_t __l);
  * assigns: _errno;
  * ensures: return < __n implies (__dest[return])' == 0;
  */
-size_t strxfrm_l (char *__dest, const char *__src, size_t __n,
-                  locale_t __l);
+size_t strxfrm_l (char *__dest, const char *__src, size_t __n, __locale_t __l);
 
 #endif
 
@@ -463,7 +462,7 @@ char *strerror_r (int __errnum, char *__buf, size_t __buflen);
 
 #ifdef __USE_XOPEN2K8
 
-char *strerror_l (int __errnum, locale_t __l);
+char *strerror_l (int __errnum, __locale_t __l);
 
 #endif
 
