@@ -105,7 +105,6 @@ module Domain = struct
 
   (** [phi c u] collects constraints over cell [c] found in [u] *)
   let phi (c: cell primed) (u : t) range : expr option =
-    let open Universal.Ast in
     let cs = u in
     match
       exist_and_find_cell (fun c' -> PrimedCell.compare c c' = 0) cs
@@ -136,6 +135,7 @@ module Domain = struct
           exist_and_find_cell ( fun c' ->
               let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
               is_primed_as c c' &&
+              compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
               Z.lt b (sizeof_type (primed_apply cell_typ c')) &&
               is_c_int_type (primed_apply cell_typ c') &&
               compare_typ (remove_typedef_qual (primed_apply cell_typ c)) (T_c_integer(C_unsigned_char)) = 0
@@ -173,7 +173,7 @@ module Domain = struct
               let ll = aux 0 [] in
               let _,e = List.fold_left (fun (time, res) x ->
                   let res' =
-                    add
+                    Universal.Ast.add
                       (mul (mk_z time range) (PrimedCell.to_expr x (primed_apply cell_mode x) range) range)
                       res
                       range
