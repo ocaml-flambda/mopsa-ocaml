@@ -17,6 +17,7 @@
 #include "stdlib.c"
 #include "unistd.c"
 #include "string.c"
+#include "getopt.c"
 /* #include "inttypes.c" */
 /* #include "fcntl.c" */
 /* #include "arpa/inet.c" */

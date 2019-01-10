@@ -1780,21 +1780,3 @@ void swab (const void *__restrict __from, void *__restrict __to,
 int getentropy (void *__buffer, size_t __length);
 
 #endif
-
-
-int optind;
-int opterr;
-int optopt;
-
-/*$
- * requires: forall int i in [0, size(___argv) - 1]:
- *             valid_string(___argv[i]);
- * requires: valid_string(__shortopts);
- * assigns: optind;
- * assigns: opterr;
- * assigns: optopt;
- *
- * ensures: return in [-1, 255];
- */
-int getopt (int ___argc, char *const *___argv, const char *__shortopts);
-
