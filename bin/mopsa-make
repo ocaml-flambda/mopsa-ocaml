@@ -1,6 +1,62 @@
 #!/bin/bash
+
+function usage() {
+    echo "Mopsa wrapper for make"
+    echo "Usage: mopsa-make [options] [target]"
+    echo "Options:"
+    echo " -h, --help                           display this message"
+    echo " -C DIRECTORY, --directory DIRECTORY  change directory to DIRECTORY before compiling."
+    echo " -o DB, --db DB                       save build database in DB. (default: mopsa.db)"
+}
+
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-dbfile=$(mktemp /tmp/mopsaXXXXX.db)
-PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${dbfile} make -C $1
-${MOPSADIR}/scripts/mopsa-c ${dbfile}
-rm ${dbfile}
+
+OPTIND=1
+
+opts=$(getopt --longoptions "help,directory:,db:" --options "hC:o:" -- "$@")
+
+DIRECTORY="."
+DB="mopsa.db"
+
+eval set --$opts
+
+while true; do
+    case "$1" in
+        -h | --help)
+            usage ; exit ; shift
+            ;;
+        -C | --directory )
+            DIRECTORY="$2"; shift 2;
+            ;;
+        -o | --db)
+            DB="$2"; shift 2
+            ;;
+        -- )
+            TARGET="$2"; shift 2;
+            break
+            ;;
+        * )
+            break
+            ;;
+    esac
+done
+
+if [ ! -d "${DIRECTORY}" ] ; then
+    echo "${DIRECTORY} is not a directory";
+    exit 1
+fi
+
+
+if [[ "${TARGET}" == "clean" ]]; then
+    make -C ${DIRECTORY} ${TARGET}
+else
+    if [[ "${TARGET}" == "" ]]; then
+        TARGET="all"
+    fi
+    PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${TARGET}
+    ERROR=$?
+    if [[ ${ERROR} -eq 0 ]]; then
+        echo "${MOPSADIR}/bin/mopsa-c -make-target=${TARGET} ${DB}"
+        ${MOPSADIR}/bin/mopsa-c -make-target=${TARGET} ${DB}
+    fi
+fi

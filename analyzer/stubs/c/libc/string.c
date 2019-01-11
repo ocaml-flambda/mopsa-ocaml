@@ -290,7 +290,7 @@ size_t strxfrm (char *__restrict __dest,
 #ifdef __USE_XOPEN2K8
 
 
-// type __locale_t has been renamed local_t starting from glibv 2.26
+// type __locale_t has been renamed local_t starting from glibc 2.26
 #if __GLIBC_MINOR__ < 26
 
 /*$
@@ -485,7 +485,15 @@ char *strerror_r (int __errnum, char *__buf, size_t __buflen);
 
 #ifdef __USE_XOPEN2K8
 
+#if __GLIBC_MINOR__ < 26
+
 char *strerror_l (int __errnum, __locale_t __l);
+
+#else
+
+char *strerror_l (int __errnum, locale_t __l);
+
+#endif
 
 #endif
 

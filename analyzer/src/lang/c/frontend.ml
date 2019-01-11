@@ -26,17 +26,26 @@ let debug fmt =
 let c_opts = ref []
 (** Extra options to pass to clang when parsing  *)
 
+let opt_make_target = ref "all"
+(** Name of the target binary to analyze *)
+
 let () =
   register_option (
-      "-I",
-      Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]),
-      " add the directory to the search path for include files in C analysis"
-    );
+    "-I",
+    Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]),
+    " add the directory to the search path for include files in C analysis"
+  );
   register_option (
-      "-ccopt",
-      Arg.String (fun l -> c_opts := !c_opts @ [l]),
-      " pass the option to the Clang frontend"
-    )
+    "-ccopt",
+    Arg.String (fun l -> c_opts := !c_opts @ [l]),
+    " pass the option to the Clang frontend"
+  );
+  register_option (
+    "-make-target",
+    Arg.String (fun t -> opt_make_target := t),
+    " target of the Makefile to analyze. (default: all)"
+  )
+
 
 
 
@@ -86,10 +95,11 @@ let rec parse_program (files: string list) =
   let ctx = Clang_to_C.create_context "project" target in
   List.iter
     (fun file ->
-       match Filename.extension file with
-       | ".c" | ".h" -> parse_file !c_opts file ctx
-       | ".db" -> parse_db file ctx
-       | x -> Exceptions.panic "Unknown C extension %s" x
+       match file, Filename.extension file with
+       | _, ".c"
+       | _, ".h" -> parse_file !c_opts file ctx
+       | _, ".db" | ".db", _ -> parse_db file ctx
+       | _, x -> Exceptions.panic "Unknown C extension %s" x
     ) files;
   let prj = Clang_to_C.link_project ctx in
   {
@@ -103,31 +113,37 @@ and parse_db (dbfile: string) ctx : unit =
   let open Build_DB in
   let db = load_db dbfile in
   let execs = get_executables db in
-  match execs with
-  | [exec] ->
-    let srcs = get_executable_sources db exec in
-    let i = ref 0 in
-    List.iter
-      (fun src ->
-         incr i;
-         match src.source_kind with
-         | SOURCE_C | SOURCE_CXX ->
-           let cwd = Sys.getcwd() in
-           Sys.chdir src.source_cwd;
-           (try
-              (* parse file in the original compilation directory *)
-              parse_file src.source_opts src.source_path ctx;
-              Sys.chdir cwd;
-            with x ->
-              (* make sure we get back to cwd in all cases *)
-              Sys.chdir cwd;
-              raise x
-           )
-         | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
-      ) srcs
+  let exec =
+    if not (!opt_make_target = "all") then
+      if List.mem !opt_make_target execs then !opt_make_target
+      else panic "target %s not found" !opt_make_target
+    else
+    if List.length execs = 1 then
+      List.hd execs
+    else
+      panic "Analysis of all targets of a Makefile not supported"
+  in
+  let srcs = get_executable_sources db exec in
+  let i = ref 0 in
+  List.iter
+    (fun src ->
+       incr i;
+       match src.source_kind with
+       | SOURCE_C | SOURCE_CXX ->
+         let cwd = Sys.getcwd() in
+         Sys.chdir src.source_cwd;
+         (try
+            (* parse file in the original compilation directory *)
+            parse_file src.source_opts src.source_path ctx;
+            Sys.chdir cwd;
+          with x ->
+            (* make sure we get back to cwd in all cases *)
+            Sys.chdir cwd;
+            raise x
+         )
+       | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
+    ) srcs
 
-  | l ->
-    assert false
 
 and parse_file (opts: string list) (file: string) ctx =
   let opts =
