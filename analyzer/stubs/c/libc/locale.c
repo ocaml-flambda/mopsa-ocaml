@@ -64,6 +64,10 @@ struct lconv *localeconv (void);
 
 #ifdef	__USE_XOPEN2K8
 
+
+// type __locale_t has been renamed local_t starting from glibv 2.26
+#if __GLIBC_MINOR__ < 26
+
 /*$
  * warn: "unsupported stub";
  */
@@ -83,6 +87,33 @@ void freelocale (__locale_t __dataset);
  * warn: "unsupported stub";
  */
 __locale_t uselocale (__locale_t __dataset);
+
+
+#else // __GLIBC_MINOR__ >= 26
+
+/*$
+ * warn: "unsupported stub";
+ */
+locale_t newlocale (int __category_mask, const char *__locale, locale_t __base);
+
+/*$
+ * warn: "unsupported stub";
+ */
+locale_t duplocale (locale_t __dataset);
+
+/*$
+ * warn: "unsupported stub";
+ */
+void freelocale (locale_t __dataset);
+
+/*$
+ * warn: "unsupported stub";
+ */
+locale_t uselocale (locale_t __dataset);
+
+
+
+#endif // __GLIBC_MINOR__ < 26
 
 
 #endif

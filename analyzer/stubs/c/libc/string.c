@@ -289,6 +289,10 @@ size_t strxfrm (char *__restrict __dest,
 
 #ifdef __USE_XOPEN2K8
 
+
+// type __locale_t has been renamed local_t starting from glibv 2.26
+#if __GLIBC_MINOR__ < 26
+
 /*$
  * requires: valid_string(__s1);
  * requires: valid_string(__s2);
@@ -303,6 +307,25 @@ int strcoll_l (const char *__s1, const char *__s2, __locale_t __l);
  * ensures: return < __n implies (__dest[return])' == 0;
  */
 size_t strxfrm_l (char *__dest, const char *__src, size_t __n, __locale_t __l);
+
+#else
+
+/*$
+ * requires: valid_string(__s1);
+ * requires: valid_string(__s2);
+ * assigns:  _errno;
+ */
+int strcoll_l (const char *__s1, const char *__s2, locale_t __l);
+
+/*$
+ * requires: valid_string(__src);
+ * assigns: __dest[0, __n - 1];
+ * assigns: _errno;
+ * ensures: return < __n implies (__dest[return])' == 0;
+ */
+size_t strxfrm_l (char *__dest, const char *__src, size_t __n, locale_t __l);
+
+#endif
 
 #endif
 
