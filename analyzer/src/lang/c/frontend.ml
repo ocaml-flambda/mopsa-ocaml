@@ -62,6 +62,12 @@ type ctx = {
 
   ctx_global_preds: C_stubs_parser.Cst.predicate with_range list;
   (* list of global stub predicates *)
+
+  ctx_macros: string MapExt.StringMap.t;
+  (* cache of (parameter-less) macros of the project *)
+
+  ctx_enums: Z.t MapExt.StringMap.t;
+  (* cache of enum values of the project *)
 }
 
 
@@ -149,6 +155,19 @@ and from_project prj =
       ctx_prj = prj;
       ctx_vars = Hashtbl.create 16;
       ctx_global_preds = preds;
+      ctx_macros = StringMap.fold (fun name macro acc ->
+          if macro.Clang_AST.macro_params = [] then
+            let content = String.concat " " macro.Clang_AST.macro_contents in
+            MapExt.StringMap.add name content acc
+          else
+            acc
+        ) prj.proj_macros MapExt.StringMap.empty
+      ;
+      ctx_enums = StringMap.fold (fun _ enum acc ->
+          enum.enum_values |> List.fold_left (fun acc v ->
+              MapExt.StringMap.add v.enum_val_org_name v.enum_val_value acc
+            ) acc
+        ) prj.proj_enums MapExt.StringMap.empty;
     }
   in
   List.iter (fun (f, o) ->
@@ -365,7 +384,7 @@ and from_init ctx init =
   | I_init_implicit t -> C_init_implicit (from_typ ctx t)
 
 and from_init_stub ctx v =
-  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj ctx.ctx_global_preds with
+  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj ctx.ctx_macros ctx.ctx_enums ctx.ctx_global_preds with
   | None -> None
   | Some stub ->
     let stub =   {
@@ -552,7 +571,7 @@ and from_range (range:C_AST.range) =
 (** ===================== *)
 
 and from_stub_comment ctx f =
-  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj ctx.ctx_global_preds with
+  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj ctx.ctx_macros ctx.ctx_enums ctx.ctx_global_preds with
   | None -> None
   | Some stub -> Some (from_stub_func ctx f stub)
 

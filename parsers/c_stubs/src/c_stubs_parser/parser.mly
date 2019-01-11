@@ -90,15 +90,20 @@
 %left DOT ARROW COLON
 %right PRIME
 
-%start stub
+%start parse_stub
+%start parse_expr
 
-%type <Cst.stub option> stub
+%type <Cst.stub option> parse_stub
+%type <Cst.expr> parse_expr
 
 %%
 
-stub:
+parse_stub:
   | BEGIN with_range(section_list) END EOF { Some $2 }
   | EOF { None }
+
+parse_expr:
+  | expr EOF { $1 }
 
 (* Sections *)
 section_list:

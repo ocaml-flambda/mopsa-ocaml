@@ -12,30 +12,39 @@ open Location
 
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
 
+(** Check whether a comment is a stub comment *)
+let is_stub_comment com =
+  match com with
+  | [com] ->
+    let comment = com.Clang_AST.com_text |>
+                  String.trim
+    in
+    let lexeme = "/*$" in
+    let start = String.sub comment 0 (String.length lexeme) in
+    start = lexeme
+
+  | _ -> false
+
+
 (** Parse the stub specification from comments of a function *)
 let parse_function_comment
     (func:C_AST.func)
     (prj:C_AST.project)
+    (macros:string MapExt.StringMap.t)
+    (enums:Z.t MapExt.StringMap.t)
     (preds: Cst.predicate with_range list)
   : Ast.stub option
   =
-  match func.func_com with
-  | [] -> None
-
-  | _ :: _ :: _ ->
-    Exceptions.warn "c_stubs.main: %s: functions with several comments not supported" func.func_org_name;
-    None
-
-  | [com] ->
+  if not (is_stub_comment func.func_com) then None
+  else
+    let com = List.hd func.func_com in
     let comment = com.com_text in
     let file = com.com_range.range_begin.loc_file in
     let line = com.com_range.range_begin.loc_line in
     let col = com.com_range.range_begin.loc_column in
 
-    let comment' = Passes.Macro_expansion.doit comment prj in
-
     (* Create the lexing buffer *)
-    let buf = Lexing.from_string comment' in
+    let buf = Lexing.from_string comment in
     buf.lex_curr_p <- {
       pos_fname = file;
       pos_lnum = line;
@@ -45,18 +54,20 @@ let parse_function_comment
 
     (* Parse the comment *)
     try
-      let cst = Parser.stub Lexer.read buf in
+      let cst = Parser.parse_stub Lexer.read buf in
       match cst with
       | None -> None
       | Some cst ->
         (* Remove predicates *)
         let cst1 = Passes.Predicate_expansion.doit cst preds in
 
+        let cst2 = Passes.Macro_expansion.doit cst1 macros enums in
+
         (* Resolve scoping of variables *)
-        let cst2 = Passes.Scoping.doit cst1 in
+        let cst3 = Passes.Scoping.doit cst2 in
 
         (* Translate CST into AST *)
-        let ast = Passes.Cst_to_ast.doit prj func cst2 in
+        let ast = Passes.Cst_to_ast.doit prj func cst3 in
         Some ast
     with
     | Lexer.SyntaxError s ->
@@ -72,6 +83,8 @@ let parse_function_comment
 let parse_var_comment
   (var:C_AST.variable)
   (prj:C_AST.project)
+  (macros:string MapExt.StringMap.t)
+  (enums:Z.t MapExt.StringMap.t)
   (preds:Cst.predicate with_range list)
   : Ast.stub option
   =
@@ -91,7 +104,7 @@ let parse_var_comment
     func_com = var.var_com;
   }
   in
-  parse_function_comment func prj preds
+  parse_function_comment func prj macros enums preds
 
 
 (** Check whether a comment is a global predicate *)
@@ -129,7 +142,7 @@ let parse_global_predicate_comment com =
 
     (* Parse the comment *)
     try
-      let cst = Parser.stub Lexer.read buf in
+      let cst = Parser.parse_stub Lexer.read buf in
       OptionExt.option_dfl1 [] (fun cst ->
           List.fold_left (fun acc section ->
               match section with
