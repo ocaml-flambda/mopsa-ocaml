@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>MOPSA</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/main.css">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+  </head>
+  <body>
+
+    <nav class="navbar navbar-expand navbar-light shadow p-3 mb-2">
+      <a class="navbar-brand" href="#">
+        <span style="font-variant:small-caps; font-size:18px; font-weight:bold">Mopsa</span> <span style="font-family:monospace; font-size:14px">v1.2</span>
+      </a>
+      <ul class="navbar-nav">
+        <li class="nav-item px-2"><button type="button" class="btn btn-primary" id="newFileButton"><i class="far fa-file"></i> New</button></li>
+        <li class="nav-item px-2"><button type="button" class="btn btn-danger" id="removeFileButton" disabled><i class="far fa-trash-alt"></i> Delete</button></li>
+        <li class="nav-item px-2"><button type="button" class="btn btn-info" title="Analyze file" id="analyzeButton" disabled><i class="fas fa-bug"></i> Analyze</button></li>
+      </ul>
+    </nav>    
+
+    <div class="container-fluid " style="height:88%">
+      <div class="row h-100">
+        <div class="col border m-2 p-0 rounded" style="overflow-y:auto; border-width:2px !important;">
+	  <div class="list-group list-group-flush p-0 m-0" id="files-panel">
+	  </div>
+        </div>
+        <div class="col-10 p-0 border m-2 rounded" style="border-width:2px !important;" id="editor"></div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="newFileModal" tabindex="-1" role="dialog" aria-labelledby="newFileModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+	  <div class="modal-header">
+            <h5 class="modal-title" id="newFileModalLabel">New file</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+	  </div>
+	  <div class="modal-body">
+            <label for="newFileName" class="col-form-label">File name:</label>
+            <input type="text" class="form-control" id="newFileName">
+	  </div>
+	  <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="newFileCreate">Create</button>
+	  </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="monaco-editor/min/vs/loader.js"></script>
+    <script src="js/main.js"></script>
+
+  </body>
+</html> 
