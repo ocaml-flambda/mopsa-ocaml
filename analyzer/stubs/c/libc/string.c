@@ -23,22 +23,22 @@
  */
 
 /*$
- * requires: no_overlap(__src, __dest, __n);
- * requires: size(__src) >= __n;
- * requires: size(__dest) >= __n;
- * assigns: ((unsigned char*)__dest)[0, __n - 1];
- * ensures: forall int i in [0, __n - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
+ * requires: no_overlap(__src, __dest, __len);
+ * requires: size(__src) >= __len;
+ * requires: size(__dest) >= __len;
+ * assigns: ((unsigned char*)__dest)[0, __len - 1];
+ * ensures: forall int i in [0, __len - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
  */
 void *memcpy (void *__restrict __dest, const void *__restrict __src,
-              size_t __n);
+              size_t __len);
 
 /*$
- * requires: size(__src) >= __n;
- * requires: size(__dest) >= __n;
- * assigns: ((unsigned char*)__dest)[0, __n - 1];
- * ensures: forall int i in [0, __n - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
+ * requires: size(__src) >= __len;
+ * requires: size(__dest) >= __len;
+ * assigns: ((unsigned char*)__dest)[0, __len - 1];
+ * ensures: forall int i in [0, __len - 1]: ((unsigned char*)__dest[i])' == (unsigned char*)__src[i];
  */
-void *memmove (void *__dest, const void *__src, size_t __n);
+void *memmove (void *__dest, const void *__src, size_t __len);
 
 
 #if defined __USE_MISC || defined __USE_XOPEN
@@ -76,12 +76,12 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
 #endif /* Misc || X/Open.  */
 
 /*$
- * requires: size(__s) >= __n;
- * assigns: ((unsigned char*)__s)[0, __n - 1];
- * ensures: forall int i in [0, __n - 1]: ((unsigned char*)__s[i])' == __c;
- * ensures: return == __s;
+ * requires: size(__dest) >= __len;
+ * assigns: ((unsigned char*)__dest)[0, __len - 1];
+ * ensures: forall int i in [0, __len - 1]: ((unsigned char*)__dest[i])' == __ch;
+ * ensures: return == __dest;
  */
-void *memset (void *__s, int __c, size_t __n);
+void *memset (void *__dest, int __ch, size_t __len);
 
 /*$
  * requires: size(__s1) >= __n;
@@ -160,24 +160,24 @@ char *strcpy (char *__restrict __dest, const char *__restrict __src);
  * local: size_t src_len = strlen(__src);
  * requires: no_overlap(__src, __dest, src_len);
  * requires: size(__dest) >= src_len or 
- *           size(__dest) >= __n;
+ *           size(__dest) >= __len;
  *
  * case "zero" {
- *   assumes: __n > src_len + 1;
+ *   assumes: __len > src_len + 1;
  *   assigns: __dest[0, src_len];
  *   ensures: forall int i in [0, src_len]: (__dest[i])' == __src[i];
  *   ensures: return == __dest;
  * }
  * 
  * case "nozero" {
- *   assumes: __n <= src_len + 1;
- *   assigns: __dest[0, __n];
- *   ensures: forall int i in [0, __n - 1]: (__dest[i])' == __src[i];
+ *   assumes: __len <= src_len + 1;
+ *   assigns: __dest[0, __len];
+ *   ensures: forall int i in [0, __len - 1]: (__dest[i])' == __src[i];
  *   ensures: return == __dest;
  * }
  */
 char *strncpy (char *__restrict __dest,
-               const char *__restrict __src, size_t __n);
+               const char *__restrict __src, size_t __len);
 
 /*$
  * local: size_t src_len = strlen(__src);
@@ -196,10 +196,10 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  * local: size_t dest_len = strlen(__dest);
  * requires: no_overlap(__src, __dest, src_len);
  * requires: size(__dest) >= src_len + dest_len + 1 or
- *           size(__dest) >= __n + dest_len + 1;
+ *           size(__dest) >= __len + dest_len + 1;
  * 
  * case "zero-found" {
- *   assumes: __n > src_len + 1;
+ *   assumes: __len > src_len + 1;
  *   assigns: __dest[0, src_len + dest_len + 1];
  *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
  *   ensures: forall int i in [0, src_len]: (__dest[i + dest_len])' == __src[i];
@@ -207,16 +207,16 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  * }
  *
  * case "zero-not-found" {
- *   assumes: __n <= src_len + 1;
- *   assigns: __dest[0, __n + dest_len + 1];
+ *   assumes: __len <= src_len + 1;
+ *   assigns: __dest[0, __len + dest_len + 1];
  *   ensures: forall int i in [0, dest_len - 1]: (__dest[i])' == __dest[i];
- *   ensures: forall int i in [0, __n - 1]: (__dest[i + dest_len])' == __src[i];
- *   ensures: (__dest[dest_len + __n])' == 0;
+ *   ensures: forall int i in [0, __len - 1]: (__dest[i + dest_len])' == __src[i];
+ *   ensures: (__dest[dest_len + __len])' == 0;
  *   ensures: return == __dest;
  * }
  */
 char *strncat (char *__restrict __dest, const char *__restrict __src,
-               size_t __n);
+               size_t __len);
 
 /*$
  * local: size_t len1 = strlen(__s1);

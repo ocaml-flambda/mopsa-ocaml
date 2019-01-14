@@ -1213,40 +1213,40 @@ int mbtowc (wchar_t *__restrict __pwc,
 int wctomb (char *__s, wchar_t __wchar);
 
 /*$
- * requires: __pwcs != NULL implies size(__pwcs) >= __n;
- * requires: valid_string(__s);
+ * requires: __dst != NULL implies size(__dst) >= __len;
+ * requires: valid_string(__src);
  *
  * case "copy" {
- *   assumes: __pwcs != NULL;
- *   assigns: __pwcs[0, __n - 1];
+ *   assumes: __dst != NULL;
+ *   assigns: __dst[0, __len - 1];
  * }
  *
  * case "count" {
- *   assumes: __pwcs == NULL;
+ *   assumes: __dst == NULL;
  * }
  *
- * // can return (size_t)-1, or a value less than __n
+ * // can return (size_t)-1, or a value less than __len
  */
-size_t mbstowcs (wchar_t *__restrict  __pwcs,
-                 const char *__restrict __s, size_t __n);
+size_t mbstowcs (wchar_t *__restrict  __dst,
+                 const char *__restrict __src, size_t __len);
 
 /*$
- * requires: __s != NULL implies size(__s) >= __n;
- * requires: valid_string(__pwcs);
+ * requires: __dst != NULL implies size(__dst) >= __len;
+ * requires: valid_string(__src);
  *
  * case "copy" {
- *   assumes: __s != NULL;
- *   assigns: __s[0, __n - 1];
+ *   assumes: __dst != NULL;
+ *   assigns: __dst[0, __len - 1];
  * }
  *
  * case "count" {
- *   assumes: __s == NULL;
+ *   assumes: __dst == NULL;
  * }
  *
- * // can return (size_t)-1, or a value less than __n
+ * // can return (size_t)-1, or a value less than __len
  */
-size_t wcstombs (char *__restrict __s,
-                 const wchar_t *__restrict __pwcs, size_t __n);
+size_t wcstombs (char *__restrict __dst,
+                 const wchar_t *__restrict __src, size_t __len);
 
 #ifdef __USE_MISC
 

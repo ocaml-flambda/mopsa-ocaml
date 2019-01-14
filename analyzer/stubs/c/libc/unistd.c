@@ -1245,11 +1245,11 @@ char *getlogin (void);
 #ifdef __USE_POSIX199506
 
 /*$
- * requires: size(__name) >= __name_len;
+ * requires: size(__buf) >= __buflen;
  *
  * case "success" {
- *   assigns: __name[0, __name_len - 1];
- *   ensures: valid_primed_substring(__name, __name_len);
+ *   assigns: __buf[0, __buflen - 1];
+ *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == 0;
  * }
  *
@@ -1258,7 +1258,7 @@ char *getlogin (void);
  *   ensures: return == -1;
  * }
  */
-int getlogin_r (char *__name, size_t __name_len);
+int getlogin_r (char *__buf, size_t __buflen);
 
 #endif
 
@@ -1284,11 +1284,11 @@ int setlogin (const char *__name);
 #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K
 
 /*$
- * requires: size(__name) >= __len;
+ * requires: size(__buf) >= __buflen;
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __name[0, __len - 1];
+ *   assigns: __buf[0, __buflen - 1];
  *   ensures: return == 0;
  * }
  *
@@ -1297,7 +1297,7 @@ int setlogin (const char *__name);
  *   ensures: return == -1;
  * }
  */
-int gethostname (char *__name, size_t __len);
+int gethostbuf (char *__buf, size_t __buflen);
 
 #endif
 
@@ -1332,11 +1332,11 @@ int sethostname (const char *__name, size_t __len);
 int sethostid (long int __id);
 
 /*$
- * requires: size(__name) >= __len;
+ * requires: size(__buf) >= __buflen;
  *
  * case "success" {
  *   // NOTE: 0 added only if the buffer is large enugh, which we cannot assume
- *   assigns: __name[0, __len - 1];
+ *   assigns: __buf[0, __buflen - 1];
  *   ensures: return == 0;
  * }
  *
@@ -1345,7 +1345,7 @@ int sethostid (long int __id);
  *   ensures: return == -1;
  * }
  */
-int getdomainname (char *__name, size_t __len);
+int getdomainname (char *__buf, size_t __buflen);
 
 /*$
  * requires: size(__name) >= __len;

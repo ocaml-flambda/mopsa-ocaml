@@ -399,10 +399,10 @@ int sprintf (char *__restrict __s,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: __s in File;
- * requires: valid_string(__format);
+ * requires: __stream in File;
+ * requires: valid_string(__fmt);
  */
-int vfprintf (FILE *__restrict __s, const char *__restrict __format,
+int vfprintf (FILE *__restrict __stream, const char *__restrict __fmt,
               _G_va_list __arg);
 
 
@@ -417,17 +417,17 @@ int vfprintf (FILE *__restrict __s, const char *__restrict __format,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: valid_string(__format);
+ * requires: valid_string(__fmt);
  */
-int vprintf (const char *__restrict __format, _G_va_list __arg);
+int vprintf (const char *__restrict __fmt, _G_va_list __ap);
 
 /*$
  * // TODO: check format, check variable arguments, check size of __s
  *
- * requires: valid_string(__format);
+ * requires: valid_string(__fmt);
  */
-int vsprintf (char *__restrict __s, const char *__restrict __format,
-              _G_va_list __arg);
+int vsprintf (char *__restrict __s, const char *__restrict __fmt,
+              _G_va_list __ap);
 
 #if defined __USE_ISOC99 || defined __USE_UNIX98
 
@@ -443,11 +443,11 @@ int snprintf (char *__restrict __s, size_t __maxlen,
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: size(__s) >= __maxlen;
- * requires: valid_string(__format);
+ * requires: size(__s) >= __n;
+ * requires: valid_string(__fmt);
  */
-int vsnprintf (char *__restrict __s, size_t __maxlen,
-               const char *__restrict __format, _G_va_list __arg);
+int vsnprintf (char *__restrict __s, size_t __n,
+               const char *__restrict __fmt, _G_va_list __ap);
 
 #endif
 
@@ -621,10 +621,10 @@ int getchar (void);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
+ * requires: __fp in File;
  * ensures: return in [0, 255] or return == EOF;
  */
-int getc_unlocked (FILE *__stream);
+int getc_unlocked (FILE *__fp);
 
 /*$
  * // TODO: not thread-safe
@@ -640,10 +640,10 @@ int getchar_unlocked (void);
 
 /*$
  * // TODO: not thread-safe
- * requires: __stream in File;
+ * requires: __fp in File;
  * ensures: return in [0, 255] or return == EOF;
  */
-int fgetc_unlocked (FILE *__stream);
+int fgetc_unlocked (FILE *__fp);
 
 #endif /* Use MISC.  */
 
