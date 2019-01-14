@@ -114,8 +114,13 @@ and parse_db (dbfile: string) ctx : unit =
   let db = load_db dbfile in
   let execs = get_executables db in
   let exec =
+    (* No need for target selection if there is only one binary *)
     if List.length execs = 1 then List.hd execs else
-    if List.mem !opt_make_target execs then !opt_make_target
+    if List.mem !opt_make_target execs then !opt_make_target else
+    if String.length !opt_make_target = 0 then
+      panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
+        execs
     else panic "binary target %s not found" !opt_make_target
   in
   let srcs = get_executable_sources db exec in
@@ -141,6 +146,7 @@ and parse_db (dbfile: string) ctx : unit =
 
 
 and parse_file (opts: string list) (file: string) ctx =
+  debug "parsing file %s" file;
   let opts =
     List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
     (@) opts
@@ -150,6 +156,7 @@ and parse_file (opts: string list) (file: string) ctx =
 
 
 and from_project prj =
+  C_print.print_project stdout prj;
   let funcs_and_origins =
     StringMap.bindings prj.proj_funcs |>
     List.map snd |>
@@ -182,6 +189,7 @@ and from_project prj =
     }
   in
   List.iter (fun (f, o) ->
+      debug "parsing function %s" o.func_org_name;
       f.c_func_uid <- o.func_uid;
       f.c_func_org_name <- o.func_org_name;
       f.c_func_unique_name <- o.func_unique_name;
@@ -284,8 +292,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_integer_literal n -> Universal.Ast.(E_constant (C_int n))
     | C_AST.E_float_literal f -> Universal.Ast.(E_constant (C_float (float_of_string f)))
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
-    | C_AST.E_string_literal (s, k) ->
-      Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
+    | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
     | C_AST.E_variable v -> E_var (from_var ctx v, STRONG)
     | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx f)
     | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr ctx f, Array.map (from_expr ctx) args |> Array.to_list)
@@ -300,14 +307,14 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
     | C_AST.E_member_access (r, i, f) -> Ast.E_c_member_access(from_expr ctx r, i, f)
     | C_AST.E_arrow_access (r, i, f) -> Ast.E_c_arrow_access(from_expr ctx r, i, f)
     | C_AST.E_statement s -> Ast.E_c_statement (from_block ctx erange s)
+    | C_AST.E_predefined s -> Universal.Ast.(E_constant (C_c_string (s, Ast.C_char_ascii)))
+    | C_AST.E_var_args e -> Ast.E_c_var_args (from_expr ctx e)
+    | C_AST.E_conditional (cond,e1,e2) -> Ast.E_c_conditional(from_expr ctx cond, from_expr ctx e1, from_expr ctx e2)
 
-    | C_AST.E_conditional (_,_,_) -> Exceptions.panic_at erange "E_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
     | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
-    | C_AST.E_predefined _ -> Exceptions.panic_at erange "E_predefined not supported"
-    | C_AST.E_var_args _ -> Exceptions.panic_at erange "E_var_args not supported"
     | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
   in
   {ekind; erange; etyp}
@@ -413,92 +420,95 @@ and from_init_stub ctx v =
 
 and from_typ ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
   let typ, qual = tc in
-  let typ' = match typ with
-    | C_AST.T_void -> Ast.T_c_void
-    | C_AST.T_bool -> Universal.Ast.T_bool
-    | C_AST.T_integer t -> Ast.T_c_integer (from_integer_type t)
-    | C_AST.T_float t -> Ast.T_c_float (from_float_type t)
-    | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ ctx t)
-    | C_AST.T_array (t,l) -> Ast.T_c_array (from_typ ctx t, from_array_length ctx l)
-    | C_AST.T_function None -> Ast.T_c_function None
-    | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type ctx t))
-    | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
-    | C_AST.T_typedef t ->
-       if Hashtbl.mem ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
-       then Hashtbl.find ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
-       else
-         let x = {
-             c_typedef_org_name = t.typedef_org_name;
-             c_typedef_unique_name = t.typedef_unique_name;
-             c_typedef_def =  Ast.T_c_void;
-             c_typedef_range = from_range t.typedef_range;
-           }
-         in
-         let y = Ast.T_c_typedef x in
-         Hashtbl.add ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) y;
-         x.c_typedef_def <-  from_typ ctx t.typedef_def;
-         y
-    | C_AST.T_record r ->
-       if Hashtbl.mem ctx.ctx_type (TS_RECORD,r.record_unique_name)
-       then Hashtbl.find ctx.ctx_type (TS_RECORD,r.record_unique_name)
-       else
-         let x = {
-             c_record_kind =
-               (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
-             c_record_org_name = r.record_org_name;
-             c_record_unique_name = r.record_unique_name;
-             c_record_defined = r.record_defined;
-             c_record_sizeof = r.record_sizeof;
-             c_record_alignof = r.record_alignof;
-             c_record_fields = [];
-             c_record_range = from_range r.record_range;
-           }
-         in
-         let y = Ast.T_c_record x in
-         Hashtbl.add ctx.ctx_type (TS_RECORD,r.record_unique_name) y;
-         x.c_record_fields <-
-           List.map
-             (fun f -> {
-                  c_field_org_name = f.field_org_name;
-                  c_field_name = f.field_name;
-                  c_field_offset = f.field_offset;
-                  c_field_bit_offset = f.field_bit_offset;
-                  c_field_type = from_typ ctx f.field_type;
-                  c_field_range = from_range f.field_range;
-                  c_field_index = f.field_index;
-             })
-             (Array.to_list r.record_fields);
-         y
-    | C_AST.T_enum e ->
-       if Hashtbl.mem ctx.ctx_type (TS_ENUM,e.enum_unique_name)
-       then Hashtbl.find ctx.ctx_type (TS_ENUM,e.enum_unique_name)
-       else
-         let x =
-           Ast.T_c_enum {
-               c_enum_org_name = e.enum_org_name;
-               c_enum_unique_name = e.enum_unique_name;
-               c_enum_defined = e.enum_defined;
-               c_enum_values =
-                 List.map
-                   (fun v -> {
-                        c_enum_val_org_name = v.enum_val_org_name;
-                        c_enum_val_unique_name = v.enum_val_unique_name;
-                        c_enum_val_value = v.enum_val_value;
-                        c_enum_val_range = from_range v.enum_val_range;
-                   }) e.enum_values;
-               c_enum_integer_type = from_integer_type e.enum_integer_type;
-               c_enum_range = from_range e.enum_range;
-             }
-         in
-         Hashtbl.add ctx.ctx_type (TS_ENUM,e.enum_unique_name) x;
-         x
-    | C_AST.T_bitfield (_,_) -> failwith "C_AST.T_bitfield not supported"
-    | C_AST.T_complex _ -> failwith "C_AST.T_complex not supported"
-  in
+  let typ' = from_unqual_typ ctx typ in
   if qual.C_AST.qual_is_const then
     T_c_qualified({c_qual_is_const = true; c_qual_is_restrict = false; c_qual_is_volatile = false}, typ')
   else
     typ'
+
+and from_unqual_typ ctx (tc: C_AST.typ) : Framework.Ast.typ =
+  match tc with
+  | C_AST.T_void -> Ast.T_c_void
+  | C_AST.T_bool -> Universal.Ast.T_bool
+  | C_AST.T_integer t -> Ast.T_c_integer (from_integer_type t)
+  | C_AST.T_float t -> Ast.T_c_float (from_float_type t)
+  | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ ctx t)
+  | C_AST.T_array (t,l) -> Ast.T_c_array (from_typ ctx t, from_array_length ctx l)
+  | C_AST.T_function None -> Ast.T_c_function None
+  | C_AST.T_function (Some t) -> Ast.T_c_function (Some (from_function_type ctx t))
+  | C_AST.T_builtin_fn -> Ast.T_c_builtin_fn
+  | C_AST.T_typedef t ->
+    if Hashtbl.mem ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+    then Hashtbl.find ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name)
+    else
+      let x = {
+        c_typedef_org_name = t.typedef_org_name;
+        c_typedef_unique_name = t.typedef_unique_name;
+        c_typedef_def =  Ast.T_c_void;
+        c_typedef_range = from_range t.typedef_range;
+      }
+      in
+      let y = Ast.T_c_typedef x in
+      Hashtbl.add ctx.ctx_type (TS_TYPEDEF,t.typedef_unique_name) y;
+      x.c_typedef_def <-  from_typ ctx t.typedef_def;
+      y
+  | C_AST.T_record r ->
+    if Hashtbl.mem ctx.ctx_type (TS_RECORD,r.record_unique_name)
+    then Hashtbl.find ctx.ctx_type (TS_RECORD,r.record_unique_name)
+    else
+      let x = {
+        c_record_kind =
+          (match r.record_kind with C_AST.STRUCT -> C_struct | C_AST.UNION -> C_union);
+        c_record_org_name = r.record_org_name;
+        c_record_unique_name = r.record_unique_name;
+        c_record_defined = r.record_defined;
+        c_record_sizeof = r.record_sizeof;
+        c_record_alignof = r.record_alignof;
+        c_record_fields = [];
+        c_record_range = from_range r.record_range;
+      }
+      in
+      let y = Ast.T_c_record x in
+      Hashtbl.add ctx.ctx_type (TS_RECORD,r.record_unique_name) y;
+      x.c_record_fields <-
+        List.map
+          (fun f -> {
+               c_field_org_name = f.field_org_name;
+               c_field_name = f.field_name;
+               c_field_offset = f.field_offset;
+               c_field_bit_offset = f.field_bit_offset;
+               c_field_type = from_typ ctx f.field_type;
+               c_field_range = from_range f.field_range;
+               c_field_index = f.field_index;
+             })
+          (Array.to_list r.record_fields);
+      y
+  | C_AST.T_enum e ->
+    if Hashtbl.mem ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+    then Hashtbl.find ctx.ctx_type (TS_ENUM,e.enum_unique_name)
+    else
+      let x =
+        Ast.T_c_enum {
+          c_enum_org_name = e.enum_org_name;
+          c_enum_unique_name = e.enum_unique_name;
+          c_enum_defined = e.enum_defined;
+          c_enum_values =
+            List.map
+              (fun v -> {
+                   c_enum_val_org_name = v.enum_val_org_name;
+                   c_enum_val_unique_name = v.enum_val_unique_name;
+                   c_enum_val_value = v.enum_val_value;
+                   c_enum_val_range = from_range v.enum_val_range;
+                 }) e.enum_values;
+          c_enum_integer_type = from_integer_type e.enum_integer_type;
+          c_enum_range = from_range e.enum_range;
+        }
+      in
+      Hashtbl.add ctx.ctx_type (TS_ENUM,e.enum_unique_name) x;
+      x
+  | C_AST.T_bitfield (t,n) -> Ast.T_c_bitfield (from_unqual_typ ctx t, n)
+  | C_AST.T_complex _ -> failwith "C_AST.T_complex not supported"
+
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
   | C_AST.Char SIGNED -> Ast.C_signed_char
