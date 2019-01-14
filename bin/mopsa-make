@@ -2,10 +2,11 @@
 
 function usage() {
     echo "Mopsa wrapper for make"
-    echo "Usage: mopsa-make [options] [target]"
+    echo "Usage: mopsa-make [options] [make-target]"
     echo "Options:"
     echo " -h, --help                           display this message"
     echo " -C DIRECTORY, --directory DIRECTORY  change directory to DIRECTORY before compiling."
+    echo " -t TARGET, --target                  the target of the analysis. (default: [make-target])"
     echo " -o DB, --db DB                       save build database in DB. (default: mopsa.db)"
 }
 
@@ -13,7 +14,7 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 
 OPTIND=1
 
-opts=$(getopt --longoptions "help,directory:,db:" --options "hC:o:" -- "$@")
+opts=$(getopt --longoptions "help,directory:,target:,db:" --options "hC:t:o:" -- "$@")
 
 DIRECTORY="."
 DB="mopsa.db"
@@ -28,11 +29,14 @@ while true; do
         -C | --directory )
             DIRECTORY="$2"; shift 2;
             ;;
+        -t | --target )
+            MOPSA_TARGET="$2"; shift 2;
+            ;;
         -o | --db)
             DB="$2"; shift 2
             ;;
         -- )
-            TARGET="$2"; shift 2;
+            MAKE_TARGET="$2"; shift 2;
             break
             ;;
         * )
@@ -46,17 +50,16 @@ if [ ! -d "${DIRECTORY}" ] ; then
     exit 1
 fi
 
-
-if [[ "${TARGET}" == "clean" ]]; then
-    make -C ${DIRECTORY} ${TARGET}
+if [[ "${MAKE_TARGET}" == "clean" ]]; then
+    make -C ${DIRECTORY} ${MAKE_TARGET}
 else
-    if [[ "${TARGET}" == "" ]]; then
-        TARGET="all"
+    if [[ "${MOPSA_TARGET}" == "" ]]; then
+        MOPSA_TARGET=${MAKE_TARGET}
     fi
-    PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${TARGET}
+    PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
     ERROR=$?
     if [[ ${ERROR} -eq 0 ]]; then
-        echo "${MOPSADIR}/bin/mopsa-c -make-target=${TARGET} ${DB}"
-        ${MOPSADIR}/bin/mopsa-c -make-target=${TARGET} ${DB}
+        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} ${DB}"
+        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} ${DB}
     fi
 fi

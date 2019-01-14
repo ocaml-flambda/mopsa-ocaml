@@ -26,7 +26,7 @@ let debug fmt =
 let c_opts = ref []
 (** Extra options to pass to clang when parsing  *)
 
-let opt_make_target = ref "all"
+let opt_make_target = ref ""
 (** Name of the target binary to analyze *)
 
 let () =
@@ -43,7 +43,7 @@ let () =
   register_option (
     "-make-target",
     Arg.String (fun t -> opt_make_target := t),
-    " target of the Makefile to analyze. (default: all)"
+    " binary target to analyze. Used only when the Makefile builds multiple targets."
   )
 
 
@@ -114,14 +114,9 @@ and parse_db (dbfile: string) ctx : unit =
   let db = load_db dbfile in
   let execs = get_executables db in
   let exec =
-    if not (!opt_make_target = "all") then
-      if List.mem !opt_make_target execs then !opt_make_target
-      else panic "target %s not found" !opt_make_target
-    else
-    if List.length execs = 1 then
-      List.hd execs
-    else
-      panic "Analysis of all targets of a Makefile not supported"
+    if List.length execs = 1 then List.hd execs else
+    if List.mem !opt_make_target execs then !opt_make_target
+    else panic "binary target %s not found" !opt_make_target
   in
   let srcs = get_executable_sources db exec in
   let i = ref 0 in
