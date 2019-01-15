@@ -27,15 +27,17 @@ exception Panic of string
 exception PanicAt of Location.range * string
 
 (** Raise a panic exception using a formatted string *)
-let panic fmt =
+let panic ?(loc="") fmt =
   Format.kasprintf (fun str ->
-      warn "panic: %s" str;
+      if loc = "" then warn "panic: %s" str
+      else warn "panic raised in %s: %s" loc str;
       raise (Panic str)
     ) fmt
 
-let panic_at range fmt =
+let panic_at ?(loc="") range fmt =
   Format.kasprintf (fun str ->
-      warn_at range "panic: %s" str;
+      if loc = "" then warn_at range "panic: %s" str
+      else warn_at range "panic raised in %s: %s" loc str;
       raise (PanicAt (range, str))
     ) fmt
 
