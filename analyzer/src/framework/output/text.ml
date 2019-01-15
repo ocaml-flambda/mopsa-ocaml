@@ -46,20 +46,27 @@ let panic ?btrace exn files out =
   print "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with
-    | Exceptions.Panic msg -> print "Panic: %s@." msg
-    | Exceptions.PanicAt (range, msg) -> print "Panic in %a: %s@." Location.pp_range range msg
-    | Exceptions.SyntaxError (range, msg) -> print "Syntax error in %a: %s@." Location.pp_range range msg
-    | Exceptions.UnnamedSyntaxError range -> print "Syntax error in %a@." Location.pp_range range
+    | Exceptions.Panic (msg, "") -> print "panic: %s@." msg
+    | Exceptions.Panic (msg, loc) -> print "panic raised in %s: %s@." loc msg
+
+    | Exceptions.PanicAt (range, msg, "") -> print "panic in %a: %s@." Location.pp_range range msg
+    | Exceptions.PanicAt (range, msg, loc) -> print "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+
+    | Exceptions.SyntaxError (range, msg) -> print "syntax error in %a: %s@." Location.pp_range range msg
+    | Exceptions.UnnamedSyntaxError range -> print "syntax error in %a@." Location.pp_range range
+
     | Exceptions.SyntaxErrorList l ->
       print "Syntax errors:@\n  @[%a@]@."
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
            (fun fmt (range, msg) -> fprintf fmt "%a: %s" Location.pp_range range msg
            )
         ) l
+
     | Exceptions.UnnamedSyntaxErrorList l ->
       print "Syntax errors:@\n  @[%a@]@."
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") Location.pp_range)
         l
+
     | _ -> print "Uncaught exception: %s@." (Printexc.to_string exn)
   in
   let () =

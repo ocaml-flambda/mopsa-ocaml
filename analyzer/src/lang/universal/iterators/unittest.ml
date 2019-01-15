@@ -82,7 +82,7 @@ let () =
 type alarm_kind +=
   | A_fail_assert of expr (** condition *)
   | A_may_assert of expr (** condition *)
-  | A_panic_test of string (** panic message *) * string (* test function *)
+  | A_panic_test of string (** panic message *) * string (* test function *) * string (** OCaml loc *)
 
 let () =
   register_alarm {
@@ -92,7 +92,7 @@ let () =
         | A_may_assert(c1), A_may_assert(c2) ->
           compare_expr c1 c2
 
-        | A_panic_test(msg1, f1), A_panic_test(msg2, f2) ->
+        | A_panic_test(msg1, f1, loc1), A_panic_test(msg2, f2, loc2) ->
           Compare.compose [
             (fun () -> compare msg1 msg2);
             (fun () -> compare f1 f2)
@@ -103,21 +103,22 @@ let () =
         match a.alarm_kind with
         | A_fail_assert (c) -> Format.fprintf fmt "fail"
         | A_may_assert  (c) -> Format.fprintf fmt "may"
-        | A_panic_test (msg, f) -> Format.fprintf fmt "panic@%s" f
+        | A_panic_test (msg, f, loc) -> Format.fprintf fmt "panic@%s" f
         | _ -> next fmt a
       );
     pp_title = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert(cond) -> Format.fprintf fmt "Assertion fail"
         | A_may_assert(cond) -> Format.fprintf fmt "Assertion unproven"
-        | A_panic_test(msg, f) -> Format.fprintf fmt "Panic"
+        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "Panic"
         | _ -> next fmt a
       );
     pp_report = (fun next fmt a ->
         match a.alarm_kind with
         | A_fail_assert(cond) -> Format.fprintf fmt "Condition %a fails" pp_expr cond
         | A_may_assert(cond) -> Format.fprintf fmt "Condition %a may fail" pp_expr cond
-        | A_panic_test(msg, f) -> Format.fprintf fmt "%s: %s" f msg
+        | A_panic_test(msg, f, "") -> Format.fprintf fmt "%s: %s" f msg
+        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "%s: %s raised in %s" f msg loc
         | _ -> next fmt a
       );
   };
@@ -274,13 +275,13 @@ struct
           nb_may_fail + may_fail,
           nb_panic
         with
-        | Exceptions.Panic (msg) ->
-          let a = mk_alarm (A_panic_test (msg, name)) test.srange ~level:PANIC in
+        | Exceptions.Panic (msg, loc) ->
+          let a = mk_alarm (A_panic_test (msg, name, loc)) test.srange ~level:PANIC in
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
           Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
-        | Exceptions.PanicAt (range, msg) ->
-          let a = mk_alarm (A_panic_test (msg, name)) range ~level:PANIC in
+        | Exceptions.PanicAt (range, msg, loc) ->
+          let a = mk_alarm (A_panic_test (msg, name, loc)) range ~level:PANIC in
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
           Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 

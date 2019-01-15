@@ -49,8 +49,8 @@ let panic ?(btrace="<none>") exn files out =
   let open Exceptions in
   let error =
     match exn with
-    | Panic msg -> msg
-    | PanicAt (range, msg) -> msg
+    | Panic (msg, loc) -> msg
+    | PanicAt (range, msg, loc) -> msg
     | SyntaxError(range, msg) -> msg
     | SyntaxErrorList l -> String.concat ", " (List.map snd l)
     |  _ -> Printexc.to_string exn

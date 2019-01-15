@@ -518,28 +518,36 @@ let target_info = Clang_parser.get_target_info (Clang_parser.get_default_target_
 let rec sizeof_type (t : typ) : Z.t =
   match t with
   | T_c_void -> C_utils.sizeof_type target_info C_AST.T_void
+
   | T_c_bool -> C_utils.sizeof_type target_info C_AST.T_bool
+
   | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int target_info |> Z.of_int
+
   | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float target_info |> Z.of_int
+
   | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type target_info
+
   | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
-  | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
-     Exceptions.panic "sizeof_type: %a has no length information" pp_typ t
-  | T_c_bitfield(t, size) ->
-     Exceptions.panic "sizeof_type: %a is a bitfield" pp_typ t
-  | T_c_function _ | T_c_builtin_fn ->
-     Exceptions.panic "sizeof_type: %a is a function" pp_typ t
+
+  | T_c_array (_, (C_array_no_length | C_array_length_expr _)) -> panic ~loc:__LOC__ "%a has no length information" pp_typ t
+
+  | T_c_bitfield(t, size) -> panic ~loc:__LOC__ "%a is a bitfield" pp_typ t
+
+  | T_c_function _ | T_c_builtin_fn -> panic ~loc:__LOC__ "%a is a function" pp_typ t
+
   | T_c_typedef td -> sizeof_type td.c_typedef_def
+
   | T_c_record r ->
-     if not r.c_record_defined then
-       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
+     if not r.c_record_defined then panic ~loc:__LOC__ " %a is undefined" pp_typ t;
      r.c_record_sizeof
+
   | T_c_enum e ->
-     if not e.c_enum_defined then
-       Exceptions.panic "sizeof_type: %a is undefined" pp_typ t;
+     if not e.c_enum_defined then panic ~loc:__LOC__ "%a is undefined" pp_typ t;
      sizeof_type (T_c_integer e.c_enum_integer_type)
+
   | T_c_qualified (_,t) -> sizeof_type t
-  | t -> Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
+
+  | t -> panic ~loc:__LOC__ "%a not a C type" pp_typ t
 
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
@@ -578,11 +586,12 @@ let rec remove_typedef_qual = function
   | T_c_qualified(_, t) -> remove_typedef_qual t
   | T_c_typedef(td) -> remove_typedef_qual (td.c_typedef_def)
   | t -> t
-    
+
 (** [is_signed t] whether [t] is signed *)
 let rec is_signed (t : typ) : bool=
   match remove_typedef_qual t with
   | T_c_bool -> true
+
   | T_c_integer it ->
      begin
        match it with
@@ -592,7 +601,8 @@ let rec is_signed (t : typ) : bool=
      end
 
   | T_c_enum e -> is_signed (T_c_integer e.c_enum_integer_type)
-  | _ -> Exceptions.panic "[is_signed] not an integer type %a" pp_typ t
+
+  | _ -> panic ~loc:__LOC__ "%a is not an integer type" pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
 let rangeof (t : typ) =
@@ -808,7 +818,7 @@ let () =
           (fun () -> compare_typ t1 t2);
           (fun () -> match l1, l2 with
              | C_array_length_cst n1, C_array_length_cst n2 -> Z.compare n1 n2
-             | C_array_length_expr e1, C_array_length_expr e2 -> Exceptions.panic "type compare on arrays with expr length not supported"
+             | C_array_length_expr e1, C_array_length_expr e2 -> panic ~loc:__LOC__ "type compare on arrays with expr length not supported"
              | C_array_no_length, C_array_no_length -> 0
              | _ -> compare l1 l2
           )

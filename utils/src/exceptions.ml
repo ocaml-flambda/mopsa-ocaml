@@ -23,22 +23,22 @@ let warn_at range fmt =
 (** {2 Panic exceptions} *)
 (** =-=-=-=-=-=-=-=-=-=- *)
 
-exception Panic of string
-exception PanicAt of Location.range * string
+exception Panic of string (** message *) * string (** OCaml line of code *)
+exception PanicAt of Location.range * string (** message *) * string (** OCaml line of code *)
 
 (** Raise a panic exception using a formatted string *)
 let panic ?(loc="") fmt =
   Format.kasprintf (fun str ->
       if loc = "" then warn "panic: %s" str
       else warn "panic raised in %s: %s" loc str;
-      raise (Panic str)
+      raise (Panic (str, loc))
     ) fmt
 
 let panic_at ?(loc="") range fmt =
   Format.kasprintf (fun str ->
       if loc = "" then warn_at range "panic: %s" str
       else warn_at range "panic raised in %s: %s" loc str;
-      raise (PanicAt (range, str))
+      raise (PanicAt (range, str, loc))
     ) fmt
 
 
