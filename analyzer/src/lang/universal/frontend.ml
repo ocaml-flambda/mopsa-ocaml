@@ -39,10 +39,6 @@ type fun_context = (T.fundec) MS.t
 
 let builtin_functions =
   [
-    {name = "subtree"; args = [Some T_tree; Some T_int]; output = T_tree};
-    {name = "is_symbol"; args = [Some T_tree]; output = T_bool};
-    {name = "read_int"; args = [Some T_tree]; output = T_int};
-    {name = "read_symbol"; args = [Some T_tree]; output = T_string};
     {name = "mopsa_assume"; args = [None]; output = T_unit};
   ]
 
@@ -66,7 +62,6 @@ let rec from_typ (typ: U_ast.typ) : FA.typ =
   | AST_ARRAY t -> T_array (from_typ t)
   | AST_STRING  -> T_string
   | AST_CHAR    -> T_char
-  | AST_TREE    -> T_tree
 
 (* find a common type for the arguments of binary operations *)
 let unify_typ (x:FA.typ) (y:FA.typ) : FA.typ =
@@ -285,22 +280,6 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
                U_ast_printer.print_expr e
                (pp_typ) (etyp e1)
     end
-  | AST_tree tc ->
-    from_tree_constructor tc ext var_ctx fun_ctx
-
-and from_tree_constructor (tc: U.tree_constructor) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option) =
-  let range = from_extent ext in
-  match tc with
-  | Int(e, ext) ->
-    {ekind = E_tree (TC_int (from_expr e ext var_ctx fun_ctx));
-     etyp  = T_tree;
-     erange =range;
-    }
-  | Symbol((e, ext'), l) ->
-    {ekind = E_tree (TC_symbol(from_expr e ext' var_ctx fun_ctx, List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) l));
-     etyp  = T_tree;
-     erange =range;
-    }
 
 let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun_context option): FA.stmt =
   let range = from_extent ext in

@@ -21,7 +21,6 @@ let _ =
      "real",   TOK_REAL;
      "string", TOK_STRING;
      "char",   TOK_CHAR;
-     "tree",   TOK_TREE;
      "array",  TOK_ARRAY;
 
      (* constants *)
@@ -43,9 +42,6 @@ let _ =
      (* special statements *)
      "assert", TOK_ASSERT;
      "print",  TOK_PRINT;
-
-     (* special expression *)
-     "Tree", TOK_TREE_CONST;
    ]
 
 }

@@ -27,7 +27,6 @@ type typ +=
   | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
   | T_addr (** Heap addresses. *)
-  | T_tree (** Tree type *)
   | T_array of typ (** Array of [typ] *)
   | T_unit (** Unit type *)
   | T_char
@@ -61,7 +60,6 @@ let () =
         | T_string -> pp_print_string fmt "string"
         | T_addr -> pp_print_string fmt "addr"
         | T_char -> pp_print_string fmt "char"
-        | T_tree -> pp_print_string fmt "tree"
         | T_array t -> Format.fprintf fmt "[%a]" pp_typ t
         | _ -> default fmt typ
       );
@@ -321,8 +319,6 @@ type expr_kind +=
   (** Length of array or string *)
   | E_len of expr
 
-  (** Tree construction *)
-  | E_tree of tc
 
 let () =
   register_expr {
@@ -370,14 +366,6 @@ let () =
         | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
-        | E_tree (TC_int e) -> Format.fprintf fmt "Tree(%a)" pp_expr e
-        | E_tree (TC_symbol(e, l)) ->
-          Format.fprintf fmt "Tree(%a,{%a})"
-            pp_expr e
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",")
-               pp_expr
-            ) l
         | _ -> default fmt exp
       );
 

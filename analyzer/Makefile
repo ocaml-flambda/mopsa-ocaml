@@ -15,7 +15,7 @@ framework.domains.reduced_product.products = value_product domain_product
 lang = universal stubs c python
 
 lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
-strings tree partitioning # arrays
+strings partitioning # arrays
 lang.universal.iterators = program intraproc interproc unittest loops
 lang.universal.partitioning = cf
 lang.universal.partitioning.cf = cf_partitioning cf_simple_partitioning
@@ -27,10 +27,6 @@ lang.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences	\
 implicit_assume_relation intervals_broadcast
-lang.universal.tree = toolBox tools strVarBind SIG mapper mRelation	\
-rewrite enumerator enumeratorOneFixed unionFind regularAlgebra	\
-treeAlgebra abstractRegularAutomaton regExp regexpPartition	\
-abstractTreeAutomaton numerical value treeAst treeAbs
 
 lang.stubs = ast zone alarms iterator
 
