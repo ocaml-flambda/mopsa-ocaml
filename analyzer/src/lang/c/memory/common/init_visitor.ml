@@ -88,9 +88,9 @@ and init_union visitor u is_global init range flow =
 
 and init_record visitor s is_global init range flow =
   let n =
-    match remove_typedef s.etyp |> remove_qual with
+    match remove_typedef_qual s.etyp with
     | T_c_record{c_record_fields} -> List.length c_record_fields
-    | _ -> assert false
+    | t -> panic_at ~loc:__LOC__ range "type %a is not a record" pp_typ t
   in
   let el =
     match init with
