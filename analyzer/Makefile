@@ -12,7 +12,7 @@ reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal stubs c python cfg jvm
+lang = universal stubs c python
 
 lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
 strings tree partitioning # arrays
@@ -45,22 +45,15 @@ lang.c.libs = c_mopsa
 lang.c.resources = common file
 lang.c.resources.file = slot table domain
 
-# lang.python = ast addr utils visitor operators pp frontend
 lang.python = ast addr utils visitor operators pp frontend zone		\
 alarms  libs desugar objects data_model types flows program
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typingdomain typing t_string t_int t_float t_list t_set
 
-lang.cfg = ast pp visitor frontend iterator iterators
-lang.cfg.iterators = intraproc inlining
-
-lang.jvm = ast precheck frontend iterators
-lang.jvm.iterators = stack_typing program
-
 
 # Packages
-PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith javalib
+PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 
 # MOPSA
 MOPSAROOT = ..
