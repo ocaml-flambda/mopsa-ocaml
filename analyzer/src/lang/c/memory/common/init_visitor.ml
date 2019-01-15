@@ -122,7 +122,7 @@ and init_expr visitor e is_global (init: c_var_init option) (range: range) flow 
   if is_c_scalar_type e.etyp then init_scalar visitor e is_global init range flow else
   if is_c_array_type e.etyp then  init_array visitor e is_global init range flow else
   if is_c_record_type e.etyp then init_record visitor e is_global init range flow
-  else panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (OptionExt.none_to_exn init)
+  else panic_at ~loc:__LOC__ range "init %a of type %a not supported" (OptionExt.print Pp.pp_c_init) init pp_typ e.etyp
 
 
 let init_global visitor v init range flow =

@@ -705,7 +705,11 @@ module Domain = struct
           Eval.bind @@ fun base_size flow ->
 
           let t = under_type p.etyp in
-          let exp' = div base_size (of_z (Z.max Z.one (sizeof_type t)) exp.erange) exp.erange in
+          let exp' =
+            (* Pointer to void => return size in bytes *)
+            if t = T_c_void then base_size
+            else div base_size (of_z (sizeof_type t) exp.erange) exp.erange
+          in
           Eval.singleton exp' flow
 
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
