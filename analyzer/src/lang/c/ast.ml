@@ -112,6 +112,7 @@ type typ +=
   | T_c_void
   (** Void type. *)
 
+  | T_c_bool
   | T_c_integer of c_integer_type
   | T_c_float of c_float_type
   | T_c_pointer of typ
@@ -511,16 +512,16 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
                   (** {2 Sizes and alignments} *)
 (*==========================================================================*)
 
+let target_info = Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
+
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
 let rec sizeof_type (t : typ) : Z.t =
-  let get_target () =
-    Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
-  in
   match t with
-  | T_c_void -> Z.zero
-  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int (get_target()) |> Z.of_int
-  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float (get_target()) |> Z.of_int
-  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type (get_target())
+  | T_c_void -> C_utils.sizeof_type target_info C_AST.T_void
+  | T_c_bool -> C_utils.sizeof_type target_info C_AST.T_bool
+  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int target_info |> Z.of_int
+  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float target_info |> Z.of_int
+  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type target_info
   | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
   | T_c_array (_, (C_array_no_length | C_array_length_expr _)) ->
      Exceptions.panic "sizeof_type: %a has no length information" pp_typ t
@@ -543,8 +544,7 @@ let rec sizeof_type (t : typ) : Z.t =
 let sizeof_expr (t:typ) range : expr =
   let rec doit t =
     match t with
-    | T_c_void -> invalid_arg "sizeof_expr: size of void"
-    | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
+    | T_c_void | T_c_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
        mk_z (sizeof_type t) range
     | T_c_array (t,l) ->
        let len = match l with
@@ -582,6 +582,7 @@ let rec remove_typedef_qual = function
 (** [is_signed t] whether [t] is signed *)
 let rec is_signed (t : typ) : bool=
   match remove_typedef_qual t with
+  | T_c_bool -> true
   | T_c_integer it ->
      begin
        match it with
@@ -646,6 +647,8 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
 (** [is_c_int_type t] wheter [t] is an integer type *)
 let is_c_int_type ( t : typ) =
   match remove_typedef_qual t with
+  | T_c_bool -> true
+  | T_c_enum _ -> true
   | T_c_integer _ -> true
   | _ -> false
 
@@ -673,7 +676,7 @@ let is_c_union_type (t : typ) =
 (** [is_c_scalar_type t] wheter [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =
   match remove_typedef_qual t with
-  | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
+  | T_c_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
   | T_c_bitfield _ -> true
   | T_c_enum _ -> true
   | _ -> false
@@ -731,6 +734,7 @@ let align_byte t i =
 
 let is_c_type = function
   | T_c_void
+  | T_c_bool
   | T_c_integer _
   | T_c_float _
   | T_c_pointer _
@@ -795,6 +799,7 @@ let () =
   register_typ_compare (fun next t1 t2 ->
       match remove_typedef t1, remove_typedef t2 with
       | T_c_void, T_c_void -> 0
+      | T_c_bool, T_c_bool -> 0
       | T_c_integer i1, T_c_integer i2 -> compare i1 i2
       | T_c_float f1, T_c_float f2 -> compare f1 f2
       | T_c_pointer t1, T_c_pointer t2 -> compare_typ t1 t2

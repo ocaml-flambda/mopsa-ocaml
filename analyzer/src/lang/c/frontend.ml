@@ -428,7 +428,7 @@ and from_typ ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
 and from_unqual_typ ctx (tc: C_AST.typ) : Framework.Ast.typ =
   match tc with
   | C_AST.T_void -> Ast.T_c_void
-  | C_AST.T_bool -> Universal.Ast.T_bool
+  | C_AST.T_bool -> Ast.T_c_bool
   | C_AST.T_integer t -> Ast.T_c_integer (from_integer_type t)
   | C_AST.T_float t -> Ast.T_c_float (from_float_type t)
   | C_AST.T_pointer t -> Ast.T_c_pointer (from_typ ctx t)

@@ -91,21 +91,17 @@ let check_division man range f1 f2 e e' flow =
   fast_check ()
 
 let to_universal_type t =
-  if is_c_scalar_type t then
-    if is_c_int_type t then
-      T_int
-    else if is_c_float_type t then
-      match get_c_float_type t with
-      | C_float -> T_float F_SINGLE
-      | C_double -> T_float F_DOUBLE
-      | C_long_double -> T_float F_LONG_DOUBLE
-    else Exceptions.panic "[to_universal_type] in machine_integers called \
-                     on non int nor float type ; %a" pp_typ t
-  else
-    match t with
-    | T_int | T_float _ | T_bool | T_any | T_c_void -> t
-    | _ -> Exceptions.panic "[to_universal_type] in machine_integers called \
-                       on non scalar type ; %a" pp_typ t
+  match t with
+  | T_bool | T_int | T_float _ | T_any -> t
+  | _ ->
+    match remove_typedef_qual t with
+    | T_c_bool -> T_bool
+    | T_c_integer _ -> T_int
+    | T_c_enum _ -> T_int
+    | T_c_float C_float -> T_float F_SINGLE
+    | T_c_float C_double -> T_float F_DOUBLE
+    | T_c_float C_long_double -> T_float F_LONG_DOUBLE
+    | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
 let var_machine_integers v =
   {v with vtyp = to_universal_type v.vtyp}

@@ -13,7 +13,8 @@ let rec pp_c_init fmt = function
 
 let rec pp_c_type_short fmt =
   function
-  | T_c_void -> pp_print_string fmt "void" 
+  | T_c_void -> pp_print_string fmt "void"
+  | T_c_bool -> pp_print_string fmt "b"
   | T_c_integer(C_signed_char) -> pp_print_string fmt "s8"
   | T_c_integer(C_unsigned_char) -> pp_print_string fmt "u8"
   | T_c_integer(C_signed_short) -> pp_print_string fmt "s16"
@@ -54,6 +55,8 @@ let () =
   register_typ_pp (fun default fmt typ ->
       match typ with
       | T_c_void -> pp_print_string fmt "void"
+
+      | T_c_bool -> pp_print_string fmt "bool"
 
       | T_c_integer(C_signed_char) -> pp_print_string fmt "signed char"
       | T_c_integer(C_unsigned_char) -> pp_print_string fmt "unsigned char"
@@ -121,7 +124,7 @@ let () =
     );
   register_expr_pp (fun default fmt expr ->
       match ekind expr with
-      | E_c_conditional(cond, body, orelse) -> assert false
+      | E_c_conditional(cond, body, orelse) -> fprintf fmt "%a ? %a : %a" pp_expr cond pp_expr body pp_expr orelse
       | E_c_array_subscript(arr, idx) -> fprintf fmt "%a[%a]" pp_expr arr pp_expr idx
       | E_c_member_access(rcd, idx, fld) -> fprintf fmt "%a.%s" pp_expr rcd fld
       | E_c_function(f) -> pp_print_string fmt f.c_func_org_name
