@@ -66,7 +66,22 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
-  let rec exec zone stmt man flow =
+  (** Initialize global variables *)
+  let init_globals globals range man flow =
+    globals |>
+    List.fold_left (fun flow v ->
+        let cvar =
+          match v.vkind with
+          | V_c cvar -> cvar
+          | _ -> assert false
+        in
+        if cvar.var_scope = Variable_extern then flow
+        else
+          let stmt = mk_stmt (S_c_declaration v) cvar.var_range in
+          man.exec stmt flow
+      ) flow
+
+  let exec zone stmt man flow =
     match skind stmt with
     | S_program { prog_kind = C_program {c_globals; c_functions} }
       when not !Universal.Iterators.Unittest.unittest_flag ->
@@ -119,12 +134,6 @@ struct
 
     | _ -> None
 
-  and init_globals globals range man flow =
-    globals |>
-    List.fold_left (fun flow v ->
-        let stmt = mk_stmt (S_c_declaration v) range in
-        man.exec stmt flow
-      ) flow
 
   (** Evaluation of expressions *)
   (** ========================= *)
