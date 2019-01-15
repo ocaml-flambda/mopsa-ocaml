@@ -91,8 +91,8 @@ let parse_var_comment
   (* Create a dummy init function *)
   let func = C_AST.{
     func_uid = 0;
-    func_org_name = "$init";
-    func_unique_name = "$init";
+    func_org_name = "$init_" ^ var.var_org_name;
+    func_unique_name = "$init_" ^ var.var_unique_name;
     func_is_static = false;
     func_return = var.var_type;
     func_parameters = [||];

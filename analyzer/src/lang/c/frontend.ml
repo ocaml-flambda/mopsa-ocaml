@@ -156,7 +156,6 @@ and parse_file (opts: string list) (file: string) ctx =
 
 
 and from_project prj =
-  C_print.print_project stdout prj;
   let funcs_and_origins =
     StringMap.bindings prj.proj_funcs |>
     List.map snd |>

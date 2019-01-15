@@ -6,7 +6,8 @@ function usage() {
     echo "Options:"
     echo " -h, --help                           display this message"
     echo " -C DIRECTORY, --directory DIRECTORY  change directory to DIRECTORY before compiling."
-    echo " -t TARGET, --target                  the target of the analysis. (default: [make-target])"
+    echo " -t TARGET, --target TARGET           analyze binary TARGET. (default: [make-target])"
+    echo " -d DEBUG, --debug DEBUG              activate then debug channels DEBUG during the analysis. (default: none)"
     echo " -o DB, --db DB                       save build database in DB. (default: mopsa.db)"
 }
 
@@ -14,10 +15,11 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 
 OPTIND=1
 
-opts=$(getopt --longoptions "help,directory:,target:,db:" --options "hC:t:o:" -- "$@")
+opts=$(getopt --longoptions "help,directory:,target:,debug:,db:" --options "hC:t:d:o:" -- "$@")
 
 DIRECTORY="."
 DB="mopsa.db"
+DEBUG=""
 
 eval set --$opts
 
@@ -31,6 +33,9 @@ while true; do
             ;;
         -t | --target )
             MOPSA_TARGET="$2"; shift 2;
+            ;;
+        -d | --debug)
+            DEBUG="$2"; shift 2
             ;;
         -o | --db)
             DB="$2"; shift 2
@@ -59,7 +64,7 @@ else
     PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
     ERROR=$?
     if [[ ${ERROR} -eq 0 ]]; then
-        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} ${DB}"
-        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} ${DB}
+        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${DB}"
+        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${DB}
     fi
 fi
