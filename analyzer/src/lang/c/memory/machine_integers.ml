@@ -16,9 +16,6 @@ open Universal.Zone
 
 module Itv_Value = Universal.Numeric.Values.Intervals.Value
 
-let name = "c.machine_integers"
-let debug fmt = Debug.debug ~channel:name fmt
-
 let range_leq (a,b) (c,d) =
   Z.leq c a && Z.leq b d
 
@@ -118,13 +115,13 @@ struct
 
   type _ domain += D_c_machine_integers : unit domain
   let id = D_c_machine_integers
-  let name = name
+  let name = "c.machine_integers"
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_c_machine_integers -> Some Eq
     | _ -> None
 
-  let debug fmt = debug fmt
+  let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)

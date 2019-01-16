@@ -875,3 +875,11 @@ let rec remove_casts e =
   match ekind e with
   | E_c_cast (e', _) -> remove_casts e'
   | _ -> e
+
+(** Get the float precision from a C type *)
+let float_precision_of_c_typ t =
+  match remove_typedef_qual t with
+  | T_c_float C_float -> F_SINGLE
+  | T_c_float C_double -> F_DOUBLE
+  | T_c_float C_long_double -> F_LONG_DOUBLE
+  | t -> panic ~loc:__LOC__ "float_precision_of_c_typ called on a non-float type %a" pp_typ t

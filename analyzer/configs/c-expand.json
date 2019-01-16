@@ -41,7 +41,7 @@
 				"iter": [
 				    "c.memory.cells.pointer",
                                     "c.machine_integers",
-                                    "universal.numeric.values.intervals"
+                                    "universal.numeric.values.integer_float_mix"
 				]
                             }
                         }
