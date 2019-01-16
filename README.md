@@ -20,7 +20,6 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 * mpfr
 * camlidl
 * zlib
-* javalib
 
 ## Installation 
 
@@ -28,11 +27,11 @@ For the moment, MOPSA can analyze only programs written in C and Python.
 
 Tested on Ubuntu 16.04:
 
-```bash
+```shell
 sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
 opam init
 eval `opam config env`
-opam install apron ocp-pack-split zarith menhir yojson javalib
+opam install apron ocp-pack-split zarith menhir yojson
 make
 
 ```
@@ -41,11 +40,11 @@ make
 
 Tested on Fedora 27:
 
-```bash
+```shell
 sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-devel-5.0.? gmp-devel mpfr-devel zlib-devel make which
 opam init
 eval $(opam config env)
-opam install apron ocp-pack-split zarith menhir yojson javalib
+opam install apron ocp-pack-split zarith menhir yojson
 make
 
 ```
@@ -53,7 +52,7 @@ make
 
 ## Usage
 
-```bash
+```shell
 ./scripts/mopsa-c foo.c
 ./scripts/mopsa-python -debug=python.flows._ foo.py
 ./scripts/mopsa-c -unittest -debug=_unittest_summary analyzer/tests/c/int_tests.c
