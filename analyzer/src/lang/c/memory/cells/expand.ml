@@ -209,7 +209,7 @@ module Domain = struct
                 Some (mk_z_interval a b range)
               else if is_c_float_type (primed_apply cell_typ c) then
                 let () = debug "case 7" in
-                let prec = float_precision_of_c_typ (primed_apply cell_typ c) in
+                let prec = get_c_float_precision (primed_apply cell_typ c) in
                 Some (mk_top (T_float prec) range)
               else if is_c_pointer_type (primed_apply cell_typ c) then
                 panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" PrimedCell.print c

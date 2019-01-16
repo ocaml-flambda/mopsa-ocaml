@@ -654,18 +654,53 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
 
 
 
-(** [is_c_int_type t] wheter [t] is an integer type *)
+(** [is_c_int_type t] tests whether [t] is an integer type *)
 let is_c_int_type ( t : typ) =
+  t = T_any ||
   match remove_typedef_qual t with
   | T_c_bool -> true
   | T_c_enum _ -> true
   | T_c_integer _ -> true
   | _ -> false
 
+(** [is_c_int_type t] tests whether [t] is a floating point type *)
 let is_c_float_type ( t : typ) =
+  t = T_any ||
   match remove_typedef_qual t with
   | T_c_float _ -> true
   | _ -> false
+
+let get_c_float_type ( t : typ) =
+  match remove_typedef_qual t with
+  | T_c_float t -> t
+  | _ -> panic ~loc:__LOC__ "get_c_float_type called on a non-float type %a" pp_typ t
+
+(** Get the float precision from a C type *)
+let get_c_float_precision t =
+  match get_c_float_type t with
+  | C_float -> F_SINGLE
+  | C_double -> F_DOUBLE
+  | C_long_double -> F_LONG_DOUBLE
+
+
+(** [is_c_int_type t] tests whether [t] is a numeric type *)
+let is_c_num_type (t:typ) =
+  is_c_int_type t || is_c_float_type t
+
+(** [is_c_scalar_type t] tests whether [t] is a scalar type *)
+let is_c_scalar_type ( t : typ) =
+  match remove_typedef_qual t with
+  | T_c_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
+  | T_c_bitfield _ -> true
+  | T_c_enum _ -> true
+  | _ -> false
+
+(** [is_c_pointer t] tests whether [t] is a pointer *)
+let rec is_c_pointer_type ( t : typ) =
+  match remove_typedef_qual t with
+  | T_c_pointer _ -> true
+  | _ -> false
+
 
 let is_c_record_type ( t : typ) =
   match remove_typedef_qual t with
@@ -680,21 +715,6 @@ let is_c_struct_type (t : typ) =
 let is_c_union_type (t : typ) =
   match remove_typedef_qual t with
   | T_c_record({c_record_kind = C_union}) -> true
-  | _ -> false
-
-
-(** [is_c_scalar_type t] wheter [t] is a scalar type *)
-let is_c_scalar_type ( t : typ) =
-  match remove_typedef_qual t with
-  | T_c_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ -> true
-  | T_c_bitfield _ -> true
-  | T_c_enum _ -> true
-  | _ -> false
-
-(** [is_c_pointer t] wheter [t] is a pointer *)
-let rec is_c_pointer_type ( t : typ) =
-  match remove_typedef_qual t with
-  | T_c_pointer _ -> true
   | _ -> false
 
 let rec is_c_array_type (t: typ) =
@@ -727,11 +747,6 @@ let under_type (t: typ) : typ =
   | T_c_pointer _ -> under_pointer_type t
   | _ -> failwith "[under_type] called with a non array/pointer argument"
 
-let get_c_float_type ( t : typ) =
-  match remove_typedef_qual t with
-  | T_c_float t -> t
-  | _ -> failwith "[get_c_float_type] called with a non-float type"
-       
 let get_array_constant_length t =
   match remove_typedef_qual t with
   | T_c_array(_, C_array_length_cst n) -> Z.to_int n
@@ -875,11 +890,3 @@ let rec remove_casts e =
   match ekind e with
   | E_c_cast (e', _) -> remove_casts e'
   | _ -> e
-
-(** Get the float precision from a C type *)
-let float_precision_of_c_typ t =
-  match remove_typedef_qual t with
-  | T_c_float C_float -> F_SINGLE
-  | T_c_float C_double -> F_DOUBLE
-  | T_c_float C_long_double -> F_LONG_DOUBLE
-  | t -> panic ~loc:__LOC__ "float_precision_of_c_typ called on a non-float type %a" pp_typ t

@@ -40,7 +40,7 @@
 			    "over": {
 				"iter": [
 				    "c.memory.cells.pointer",
-                                    "c.machine_integers",
+                                    "c.machine_numbers",
                                     "universal.numeric.values.integer_float_mix"
 				]
                             }

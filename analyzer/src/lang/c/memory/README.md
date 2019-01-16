@@ -3,7 +3,7 @@ Abstract Memory Models
 
 This folder contains abstract memory models for C, with some common utility modules.
 
-* `Machine_integers` implements the modular arithmetics of machine integers. It performs checks for overflows and divisions by zero. Computations are then translated into mathematical arithmetics, using domains in the zone `Z_u_num`.
+* `Machine_numbers` is a border-zone domain translating C numbers (integers and floats) into Universal numbers. It performs checks for overflows and divisions by zero.
 
 * `Pointers` is a non-relational abstract domains for managing pointer bases and offsets.
 
@@ -15,4 +15,4 @@ This folder contains abstract memory models for C, with some common utility modu
 	
 	* `Cells.Cell2Scalar` translates cell statements and expressions into C scalar ones.
 
-[1]: ?
+[1]: "Field-sensitive value analysis of embedded C programs with union types and pointer arithmetics". Antoine Miné. In LCTES'06, 54–63, 2006. ACM.
