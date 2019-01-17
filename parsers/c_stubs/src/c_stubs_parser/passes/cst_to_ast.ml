@@ -182,7 +182,7 @@ let attribute_type obj f =
 
 let builtin_type f arg =
   match f with
-  | SIZE   -> int_type
+  | SIZE   -> unsigned_long_type
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ

@@ -81,25 +81,60 @@ struct
           man.exec stmt flow
       ) flow
 
+  let find_function f functions =
+    List.find (function
+          {c_func_org_name} -> c_func_org_name = f
+      ) functions
+
+  let find_global v globals =
+    List.find (fun v' -> v'.org_vname = v) globals
+
+  let call f args man flow =
+    let stmt = mk_c_call_stmt f args f.c_func_range in
+    man.exec ~zone:Zone.Z_c stmt flow
+
+  (** Initialize argc and argv and execute the body of main *)
+  let exec_main main globals functions man flow =
+    if main.c_func_parameters = [] then
+      (* main takes no argument => just call its body *)
+      let stmt = mk_c_call_stmt main [] main.c_func_range in
+      man.exec ~zone:Zone.Z_c stmt flow
+    else
+      (* initialize argc and argv *)
+      let f = find_function "_mopsa_main" functions in
+      let flow = call f [] man flow in
+
+      (* call main with argc and argv *)
+      let argc = find_global "_argc" globals in
+      let argv = find_global "_argv" globals in
+
+      call main [
+        mk_var argc main.c_func_range;
+        mk_var argv main.c_func_range
+      ] man flow
+
   let exec zone stmt man flow =
     match skind stmt with
     | S_program { prog_kind = C_program {c_globals; c_functions} }
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
       let flow1 = init_globals c_globals (srange stmt) man flow in
+
       (* Find entry function *)
       let entry =
-        try
-          List.find (function
-                {c_func_org_name} -> c_func_org_name = !opt_entry_function
-            ) c_functions
+        try find_function !opt_entry_function c_functions
         with Not_found ->
-          Exceptions.panic "entry function %s not found" !opt_entry_function
+          panic "entry function %s not found" !opt_entry_function
       in
-      (* Execute body of entry function *)
-      let stmt = mk_c_call_stmt entry [] (srange stmt) in
-      man.exec ~zone:Zone.Z_c stmt flow1 |>
-      Post.return
+
+      (* Special processing for main for initializing argc and argv*)
+      if !opt_entry_function = "main" then
+        exec_main entry c_globals c_functions man flow1 |>
+        Post.return
+      else
+        (* Otherwise execute the body *)
+        call entry [] man flow1 |>
+        Post.return
 
     | S_program { prog_kind = C_program{ c_globals; c_functions } }
       when !Universal.Iterators.Unittest.unittest_flag ->
