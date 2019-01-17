@@ -969,6 +969,29 @@ module Domain = struct
       rename_stub_primed_cells pe offsets (under_type p.etyp) stmt.srange man flow  |>
       Post.return
 
+    (* 𝕊⟦ rename(@1, @2) ⟧ *)
+    | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
+      (* For each cell in base @1, create a similar one in base @2 and
+         copy its content *)
+      let a = Flow.get_domain_env T_cur man flow in
+      let flow = fold (fun c flow ->
+          let base = primed_apply cell_base c in
+          if compare_base base (A addr1) != 0 then
+            flow
+          else
+            (* create a similar cell in @2 *)
+            let c' =
+              prime_as {
+                b = A addr2;
+                o = primed_apply cell_offset c;
+                t = primed_apply cell_typ c;
+              } c
+            in
+            rename_cell c c' stmt.srange man flow
+        ) a flow
+      in
+      Post.return flow
+
     | _ -> None
 
 

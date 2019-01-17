@@ -95,6 +95,8 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+      debug "calling function %s" f.fun_name;
+
       (* Clear all return flows *)
       let flow0 = Flow.filter (fun tk env ->
           match tk with

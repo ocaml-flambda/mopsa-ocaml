@@ -174,7 +174,7 @@ struct
            let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
            Eval.singleton
              {ekind  = E_unop(O_wrap(rmin, rmax), e);
-              etyp   = typ;
+              etyp   = to_universal_type typ;
               erange = tag_range range "wrap"} flow1
         )
 
@@ -193,7 +193,7 @@ struct
              let flow1 = raise_alarm Alarms.AIntegerOverflow exp.erange ~bottom:false man fflow in
              Eval.singleton
                {ekind  = E_unop(O_wrap(rmin, rmax), e);
-                etyp   = typ;
+                etyp   = to_universal_type typ;
                 erange = tag_range range "wrap"} flow1
           )
 

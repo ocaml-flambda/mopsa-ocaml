@@ -1,6 +1,9 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
+// main entry point of analyzed programs, where argc and argv are initialized
+extern void _mopsa_main();
+
 // Abstract values
 extern int _mopsa_rand();
 extern long int _mopsa_rand_int(long int l, long int u);

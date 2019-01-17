@@ -34,5 +34,3 @@ void *s;
 void test_init_resource() {
   _mopsa_assert(s != NULL);
 }
-
-
