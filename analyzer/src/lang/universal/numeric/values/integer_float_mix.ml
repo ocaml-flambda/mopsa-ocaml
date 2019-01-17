@@ -207,7 +207,10 @@ struct
     else if is_float_type t then
       FV.bwd_unop t op (to_float a) (to_float r) |> return_float
     else
-      panic "unhandled operator" pp_operator op
+      panic "bwd_unop called on unsupported operator %a of type %a"
+        ~loc:__LOC__
+        pp_operator op
+        pp_typ t
 
   let bwd_binop t op a1 a2 r =
     if is_int_type t then
@@ -217,15 +220,23 @@ struct
       FV.bwd_binop t op (to_float a1) (to_float a2) (to_float r)
       |> return_float_pair
     else
-      panic "unhandled operator" pp_operator op
-           
+      panic "bwd_binop called on unsupported operator %a of type %a"
+        ~loc:__LOC__
+        pp_operator op
+        pp_typ t
+
+
   let compare t op a1 a2 r =
     if is_int_type t then
       IV.compare t op (to_int a1) (to_int a2) r |> return_int_pair
     else if is_float_type t then
       FV.compare t op (to_float a1) (to_float a2) r |> return_float_pair
     else
-      panic "unhandled operator" pp_operator op
+      panic "compare called on unsupported operator %a of type %a"
+        ~loc:__LOC__
+        pp_operator op
+        pp_typ t
+
 
 
   (** Queries *)

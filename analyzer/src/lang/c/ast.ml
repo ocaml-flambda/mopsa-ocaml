@@ -656,7 +656,6 @@ let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
 
 (** [is_c_int_type t] tests whether [t] is an integer type *)
 let is_c_int_type ( t : typ) =
-  t = T_any ||
   match remove_typedef_qual t with
   | T_c_bool -> true
   | T_c_enum _ -> true
@@ -665,7 +664,6 @@ let is_c_int_type ( t : typ) =
 
 (** [is_c_int_type t] tests whether [t] is a floating point type *)
 let is_c_float_type ( t : typ) =
-  t = T_any ||
   match remove_typedef_qual t with
   | T_c_float _ -> true
   | _ -> false

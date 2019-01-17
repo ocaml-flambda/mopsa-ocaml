@@ -20,6 +20,7 @@
         "c.desugar.loops",
         "c.desugar.record_copy",
         "c.desugar.stub_init",
+        "c.desugar.cond_expr",
 
         // C libraries
         "c.libs.mopsa",
