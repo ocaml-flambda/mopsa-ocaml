@@ -179,6 +179,9 @@ struct
              is_c_pointer_type exp.etyp ->
       EQ (PrimedVar.from_expr exp, mk_zero exp.erange)
 
+    | x when is_c_int_type exp.etyp ->
+      ADDROF(Common.Base.Z, exp)
+
     | _ -> panic_at exp.erange "eval_base_offset: %a not supported" pp_expr exp
 
 

@@ -26,3 +26,5 @@ sig
   val output_actions : unit -> unit
 
 end
+
+val progress: ('a, Format.formatter, unit, unit) format4 -> 'a
