@@ -39,6 +39,7 @@ let get_config_path () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program files =
+  Framework.Analyzer.progress "parsing";
   match Options.(common_options.lang) with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
@@ -81,19 +82,17 @@ let () =
 
         let t = Timing.start () in
 
-        Debug.info "Computing initial environments ...";
+        Framework.Analyzer.progress "computing initial environments";
         let flow = Analyzer.init prog in
-        Debug.info "Initial environments:@\n%a" (Flow.print Analyzer.man) flow;
         let stmt =
           Ast.mk_stmt (Ast.S_program prog) prog.prog_range
         in
 
-        Debug.info "Starting the analysis ...";
+        Framework.Analyzer.progress "starting the analysis";
 
         let res = Analyzer.exec stmt flow in
         let t = Timing.stop t in
 
-        Debug.info "Outputing actions ...";
         let () = Analyzer.output_actions () in
         Output.Factory.render Analyzer.man res t files
 

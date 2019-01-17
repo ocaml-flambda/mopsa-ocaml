@@ -182,3 +182,16 @@ void test_pointer_to_pointer_assign() {
   f = g;
   _mopsa_assert((f)(5) == 10);
 }
+
+void test_pointer_with_int_value() {
+  int *p = 1;
+  _mopsa_assert_safe();
+}
+
+void test_compare_pointers_with_int_values() {
+  int *p = 1;
+  int *q = 2;
+  int *r = 1;
+  _mopsa_assert(p != q);
+  _mopsa_assert(p == r);
+}

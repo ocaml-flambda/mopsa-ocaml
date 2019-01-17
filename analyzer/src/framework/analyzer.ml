@@ -20,6 +20,8 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
+let progress fmt = Debug.debug ~channel:"framework.progress" fmt
+
 (**
    Functor to create an [Analyzer] module from an top-level abstract domain.
 *)
@@ -102,6 +104,7 @@ struct
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
     Out.push_action (Exec({s = stmt; z= zone}));
+    progress "analyzing %a" Location.pp_range (Location.untag_range stmt.srange);
     debug "exec:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_stmt stmt
       Location.pp_range stmt.srange

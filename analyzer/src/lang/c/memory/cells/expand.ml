@@ -637,6 +637,9 @@ module Domain = struct
       Eval.bind @@ fun pe flow ->
 
       begin match ekind pe with
+        | E_c_points_to(P_block (Common.Base.Z, o)) ->
+          panic_at exp.erange ~loc:__LOC__ "dereference of absolute pointers not supported"
+
         | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
           eval_quantified_cell b o t ~is_primed p.erange man flow
 
