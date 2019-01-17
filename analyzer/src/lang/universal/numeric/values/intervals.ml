@@ -87,6 +87,7 @@ struct
         let rep =  bot_lift1 (fun itv -> I.wrap itv l u) a in
         let () = debug "O_wrap done : %a [%a-%a] : %a" print a Z.pp_print l Z.pp_print u print rep in
         rep
+      | O_bit_invert -> bot_lift1 I.bit_not a
       | _ -> top
     )
 
@@ -122,6 +123,7 @@ struct
         let aa = match op with
           | O_minus  -> bot_to_exn (I.bwd_neg a r)
           | O_wrap(l,u) -> bot_to_exn (I.bwd_wrap a (l,u) r)
+          | O_bit_invert -> bot_to_exn (I.bwd_bit_not a r)
           | _ ->
             let () = Exceptions.panic "following backward %a unary operator is not yet implemented"
                 Framework.Ast.pp_operator op in
