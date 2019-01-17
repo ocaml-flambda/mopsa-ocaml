@@ -671,6 +671,7 @@ let mk_alloc_addr addr_kind range =
 
 let is_int_type = function
   | T_int -> true
+  | T_bool -> true
   | _ -> false
 
 let is_float_type = function
