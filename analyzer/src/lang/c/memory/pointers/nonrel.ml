@@ -191,7 +191,7 @@ struct
         Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
 
       | EQ (p, offset) ->
-        let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset exp.erange in
+        let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
         let bases = NR.find p (Flow.get_domain_env T_cur man flow) in
         if Bases.is_top bases then
           Eval.singleton (mk_c_points_to_top exp.erange) flow
@@ -375,6 +375,9 @@ struct
           Common.Base.eval_base_size b exp.erange man flow |>
           Eval.bind @@ fun size flow ->
 
+          man.eval size ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
+          Eval.bind @@ fun size flow ->
+
           (* Check validity of the offset *)
           let cond = mk_in o (mk_zero exp.erange) size exp.erange in
           Eval.singleton cond flow
@@ -432,7 +435,7 @@ struct
         | EQ (q, offset) ->
           let flow' = Flow.map_domain_env T_cur (fun a -> NR.add pp (NR.find q a) a) man flow in
           let qo = mk_offset_var_expr q range in
-          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_binop qo O_plus offset range) range) flow'
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_binop qo O_plus offset ~etyp:T_int range) range) flow'
 
         | FUN f ->
           Flow.map_domain_env T_cur (NR.add pp (Bases.bfun f)) man flow

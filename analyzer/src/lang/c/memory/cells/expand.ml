@@ -44,6 +44,10 @@ let () =
 
 module Domain = struct
 
+  let name = "c.memory.cells.expand"
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
   (* An abstract element is the set of previously expanded cells,
      represented as a powerset lattice.  *)
 
@@ -199,14 +203,18 @@ module Domain = struct
                 Some (mk_int (String.get s (Z.to_int o) |> int_of_char) range)
 
             | _ ->
-              if is_c_scalar_type (primed_apply cell_typ c) then
+              if is_c_int_type (primed_apply cell_typ c) then
                 let () = debug "case 6" in
                 let a,b = rangeof (primed_apply cell_typ c) in
                 Some (mk_z_interval a b range)
-              else if is_c_pointer_type (primed_apply cell_typ c) then
-                assert false
-              else
+              else if is_c_float_type (primed_apply cell_typ c) then
                 let () = debug "case 7" in
+                let prec = get_c_float_precision (primed_apply cell_typ c) in
+                Some (mk_top (T_float prec) range)
+              else if is_c_pointer_type (primed_apply cell_typ c) then
+                panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" PrimedCell.print c
+              else
+                let () = debug "case 8" in
                 None
 
   (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
@@ -284,8 +292,6 @@ module Domain = struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.memory.cells.expand"
-
   type _ domain += D_c_cell_expand : t domain
   let id = D_c_cell_expand
 
@@ -293,9 +299,6 @@ module Domain = struct
     function
     | D_c_cell_expand -> Some Eq
     | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
-
 
 
   (** Zoning interface *)

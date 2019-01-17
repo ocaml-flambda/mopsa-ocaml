@@ -25,6 +25,7 @@ let is_builtin_function = function
   | "_mopsa_range_unsigned_long_long"
   | "_mopsa_set_debug_channels"
   | "_mopsa_range"
+  | "_mopsa_rand"
   | "_mopsa_rand_int"
   | "_mopsa_rand_unsigned_long"
   | "_mopsa_panic"
@@ -152,6 +153,11 @@ struct
 
     | E_c_builtin_call("_mopsa_range_unsigned_long_long", []) ->
       rand_int Ast.C_unsigned_long_long exp.erange man flow |>
+      OptionExt.return
+
+    | E_c_builtin_call("_mopsa_rand", []) ->
+      let exp' = mk_int_interval 0 1 ~typ:(T_c_integer C_signed_int) exp.erange in
+      Eval.singleton exp' flow |>
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->

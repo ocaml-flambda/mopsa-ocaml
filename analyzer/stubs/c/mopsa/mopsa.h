@@ -2,6 +2,7 @@
 #define _MOPSA_H
 
 // Abstract values
+extern int _mopsa_rand();
 extern long int _mopsa_rand_int(long int l, long int u);
 extern unsigned long int _mopsa_rand_unsigned_long(unsigned long int l, unsigned long int u);
 
