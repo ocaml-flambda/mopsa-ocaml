@@ -58,7 +58,7 @@ module Domain = struct
   let is_bottom _ = false
 
   let print fmt c =
-    Format.fprintf fmt "expand cells: @[%a@]@\n"
+    Format.fprintf fmt "cells: @[%a@]@\n"
       print c
 
   (** Get the integer offset of a cell *)
@@ -228,8 +228,10 @@ module Domain = struct
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range) in
-        add c u, subman.exec stmt s
+        add c u,
+        subman.exec
+          (mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range)
+          s
       | None ->
         add c u, s
 
@@ -239,23 +241,32 @@ module Domain = struct
     if mem c u then f
     else if not (is_c_scalar_type (primed_apply cell_typ c)) then f
     else if is_c_pointer_type ((primed_apply cell_typ c)) then
-      Flow.set_domain_cur (add c u) man f
+      Flow.set_domain_cur (add c u) man f |>
+      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG range) range)
     else
       match phi c u range with
       | Some e ->
-        let stmt = Universal.Ast.(mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range) in
-        f |>
-        Flow.set_domain_cur (add c u) man |>
+        let stmt = mk_block [
+            mk_add (PrimedCell.to_expr c STRONG range) range;
+            mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range
+          ] range
+        in
+        Flow.set_domain_cur (add c u) man f |>
         man.exec ~zone:(Z_c_cell) stmt
       | None ->
         Flow.set_domain_cur (add c u) man f
+
+  let add_cells cells range man flow =
+    Cells.fold (fun c flow ->
+        add_cell c range man flow
+      ) cells flow
 
 
   (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
   let unify (subman: ('b, 'b) man) ((u : t), (s: 'b flow)) ((u' : t), (s': 'b flow)) =
     let range = mk_fresh_range () in
-    if is_empty u || is_empty u'
-    then (u, s), (u', s')
+    if is_empty u then (u', s), (u', s') else
+    if is_empty u' then (u, s), (u, s')
     else
       let diff' = diff u u' in
       let diff = diff u' u in
@@ -339,12 +350,17 @@ module Domain = struct
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
-          man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-          Post.bind_flow man @@ fun e flow ->
-
           let flow = add_cell (unprimed c) range man flow in
-          let stmt = mk_assign (mk_c_cell c range) e range in
-          man.exec ~zone:Z_c_cell stmt flow
+          match e with
+          | Some e ->
+            man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
+            Post.bind_flow man @@ fun e flow ->
+
+            let stmt = mk_assign (mk_c_cell c range) e range in
+            man.exec ~zone:Z_c_cell stmt flow
+
+          | None ->
+            flow
         );
 
       (* Initialization of arrays *)
@@ -605,7 +621,7 @@ module Domain = struct
       in
       let conj = List.map (fun evl ->
           Eval.map (fun c flow ->
-              c, Flow.map_domain_env T_cur (Cells.join () cells) man flow
+              c, add_cells cells range man flow
             ) evl
         ) conj
       in
