@@ -28,6 +28,7 @@ let () =
     " maximal number of expanded cells (default: 1)"
   )
 
+
 (** Zoning *)
 
 type zone +=
@@ -44,53 +45,129 @@ let () =
 
 module Domain = struct
 
-  let name = "c.memory.cells.expand"
+  (** {2 Abstract elements} *)
+  (** ===================== *)
 
-  let debug fmt = Debug.debug ~channel:name fmt
+  (** This domain maintains the set of previously created cells and
+      the bases of dimensions that are present in the underlying
+      partial maps.
+  *)
 
-  (* An abstract element is the set of previously expanded cells,
-     represented as a powerset lattice.  *)
-
+  (** Set of previously created cells. *)
   module Cells = Framework.Lattices.Powerset.Make(PrimedCell)
 
-  include Cells
+  (** Bases of underlying dimensions *)
+  module Bases = Framework.Lattices.Powerset.Make(Base)
+
+  (** Abstract element *)
+  type t = {
+    cells: Cells.t;
+    bases: Bases.t;
+  }
+
+  (** Bottom values are not useful here *)
+  let bottom = {
+    cells = Cells.bottom;
+    bases = Bases.bottom;
+  }
 
   let is_bottom _ = false
 
-  let print fmt c =
-    Format.fprintf fmt "cells: @[%a@]@\n"
-      print c
+  let top = {
+    cells = Cells.top;
+    bases = Bases.top;
+  }
 
-  (** Get the integer offset of a cell *)
-  let zoffset c =
-    match c.o with
-    | O_single n -> n
-    | _ -> assert false
+  (** Empty support *)
+  let empty = {
+    cells = Cells.empty;
+    bases = Bases.empty;
+  }
+
+  (** Pretty printer *)
+  let print fmt a =
+    Format.fprintf fmt "cells: @[%a@]@\nbases: @[%a@]"
+      Cells.print a.cells
+      Bases.print a.bases
 
 
-  let exist_and_find_cell (f:cell primed-> bool) (cs:t) =
-    apply (fun r ->
+  (** {2 Domain identification} *)
+  (** ========================= *)
+  let name = "c.memory.cells.expand"
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  type _ domain += D_c_cell_expand : t domain
+  let id = D_c_cell_expand
+
+  let identify : type a. a domain -> (t, a) eq option =
+    function
+    | D_c_cell_expand -> Some Eq
+    | _ -> None
+
+
+  (** {2 Zoning interface} *)
+  (** ==================== *)
+
+  let exec_interface = {
+    export = [Z_c];
+    import = [Z_c_cell];
+  }
+
+  let eval_interface = {
+    export = [
+      Z_c_low_level, Z_c_cell_expand
+    ];
+    import = [
+      (Z_c_low_level, Z_c_cell_expand);
+      (Z_c_scalar, Universal.Zone.Z_u_num);
+      (Z_c, Universal.Zone.Z_u_num);
+      (Z_c, Z_under Z_c_cell);
+      (Z_c, Z_c_cell_expand);
+      (Z_c, Z_c_points_to);
+      (Z_c, Z_c_scalar);
+      (Z_c_cell, Z_c_points_to)
+    ];
+  }
+
+
+  (** {2 Utility functions for cells} *)
+  (** =============================== *)
+
+  (** [find_cell_opt f a] finds the cell in [a.cells] verifying
+      predicate [f]. None is returned if such cells is not found. *)
+  let find_cell_opt (f:cell primed-> bool) (a:t) =
+    Cells.apply (fun r ->
         let exception Found of cell primed in
         try
-          let () = Set.iter (fun c ->
+          let () = Cells.Set.iter (fun c ->
               if f c then raise (Found(c))
             ) r in
           None
         with
         | Found (c) -> Some (c)
       )
-      None cs
+      None a.cells
 
-  let exist_and_find_cells f (cs:t) =
-    apply (fun r ->
-        Set.filter f r |>
-        Set.elements
+  (** [find_cells f a] returns the list of cells in [a.cells] verifying
+      predicate [f]. *)
+  let find_cells f (a:t) =
+    Cells.apply (fun r ->
+        Cells.Set.filter f r |>
+        Cells.Set.elements
       )
       []
-      cs
+      a.cells
 
-  let get_overlappings c cs =
-    exist_and_find_cells (fun c' ->
+  (** [zoffset c] returns the integer offset of a cell *)
+  let zoffset c =
+    match c.o with
+    | O_single n -> n
+    | _ -> assert false
+
+  (** [get_overlappings c a] returns the list of cells in [a.cells]
+      that overlap with [c]. *)
+  let get_overlappings c a =
+    find_cells (fun c' ->
         PrimedCell.compare c c' <> 0 &&
         (
           let cell_range c =
@@ -100,32 +177,28 @@ module Domain = struct
           compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
           check_overlap (cell_range c) (cell_range c')
         )
-      ) cs
+      ) a
 
 
+  (** {2 Unification of cells} *)
+  (** ======================== *)
 
-  (** Cell unification *)
-  (** ================ *)
-
-  (** [phi c u] collects constraints over cell [c] found in [u] *)
-  let phi (c: cell primed) (u : t) range : expr option =
-    let cs = u in
-    match
-      exist_and_find_cell (fun c' -> PrimedCell.compare c c' = 0) cs
-    with
+  (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
+  let phi (c:cell primed) (a:t) range : expr option =
+    match find_cell_opt (fun c' -> PrimedCell.compare c c' = 0) a with
     | Some c ->
       debug "case 1";
       Some (PrimedCell.to_expr c (primed_apply cell_mode c) range)
 
     | None ->
-      match exist_and_find_cell
+      match find_cell_opt
               (fun c' ->
                  is_primed_as c c' &&
                  is_c_int_type (primed_apply cell_typ c') &&
                  Z.equal (sizeof_type (primed_apply cell_typ c')) (sizeof_type (primed_apply cell_typ c)) &&
                  compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
                  Z.equal (primed_apply cell_zoffset c) (primed_apply cell_zoffset c')
-              ) cs
+              ) a
       with
       | Some (c') ->
         debug "case 2";
@@ -136,14 +209,14 @@ module Domain = struct
              )
       | None ->
         match
-          exist_and_find_cell ( fun c' ->
+          find_cell_opt ( fun c' ->
               let b = Z.sub (primed_apply cell_zoffset c) (primed_apply cell_zoffset c') in
               is_primed_as c c' &&
               compare_base (primed_apply cell_base c) (primed_apply cell_base c') = 0 &&
               Z.lt b (sizeof_type (primed_apply cell_typ c')) &&
               is_c_int_type (primed_apply cell_typ c') &&
               compare_typ (remove_typedef_qual (primed_apply cell_typ c)) (T_c_integer(C_unsigned_char)) = 0
-            ) cs
+            ) a
         with
         | Some (c') ->
           debug "case 3";
@@ -163,12 +236,15 @@ module Domain = struct
               let n = Z.to_int (sizeof_type ((primed_apply cell_typ c))) in
               let rec aux i l =
                 if i < n then
-                  let tobein = primed_lift (fun cc -> {b = cc.b ; o = O_single (Z.add (primed_apply cell_zoffset c) (Z.of_int i)); t = t'}) c in
-                  match
-                    exist_and_find_cell (fun c' ->
-                        PrimedCell.compare c' tobein = 0
-                      ) cs
-                  with
+                  let tobein = primed_lift (fun cc ->
+                      {
+                        b = cc.b ;
+                        o = O_single (Z.add (primed_apply cell_zoffset c) (Z.of_int i));
+                        t = t'
+                      }
+                    ) c
+                  in
+                  match find_cell_opt (fun c' -> PrimedCell.compare c' tobein = 0) a with
                   | Some (c') -> aux (i+1) (c' :: l)
                   | None -> raise NotPossible
                 else
@@ -177,7 +253,7 @@ module Domain = struct
               let ll = aux 0 [] in
               let _,e = List.fold_left (fun (time, res) x ->
                   let res' =
-                    Universal.Ast.add
+                    add
                       (mul (mk_z time range) (PrimedCell.to_expr x (primed_apply cell_mode x) range) range)
                       res
                       range
@@ -217,124 +293,87 @@ module Domain = struct
                 let () = debug "case 8" in
                 None
 
-  (** [add_cons_cell_subman subman range c u s] adds a cell [c] to the
-      abstraction [u] given a manager [subman] on the sub element of
-      the stack [s] *)
-  let add_cons_cell_subman (subman: ('b, 'b) man) range (c: cell primed) u (s: 'b flow) =
-    if mem c u then u, s
-    else if not (is_c_scalar_type (primed_apply cell_typ c)) then u, s
-    else if is_c_pointer_type ((primed_apply cell_typ c)) then
-      add c u, s
+  (** [constrain_cell c a range man f] add numerical constraints of [c] in [a] to flow [f] *)
+  let constrain_cell c a range man f  =
+    if Cells.mem c a.cells then f else
+    if not (is_c_scalar_type (primed_apply cell_typ c)) then f else
+    if not (Bases.mem (primed_apply cell_base c) a.bases) then f
     else
-      match phi c u range with
-      | Some e ->
-        add c u,
-        subman.exec
-          (mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range)
-          s
-      | None ->
-        add c u, s
+      let f' = man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG range) range) f in
+      if is_c_pointer_type ((primed_apply cell_typ c)) then f'
+      else
+        match phi c a range with
+        | Some e ->
+          let stmt = mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range in
+          man.exec ~zone:(Z_c_cell) stmt f'
 
-  (** [add_cell c range man flow] adds a cell and its numerical constraints *)
-  let add_cell c range man f  =
-    let u = Flow.get_domain_cur man f in
-    if mem c u then f
-    else if not (is_c_scalar_type (primed_apply cell_typ c)) then f
-    else if is_c_pointer_type ((primed_apply cell_typ c)) then
-      Flow.set_domain_cur (add c u) man f |>
-      man.exec ~zone:Z_c_cell (mk_add (PrimedCell.to_expr c STRONG range) range)
-    else
-      match phi c u range with
-      | Some e ->
-        let stmt = mk_block [
-            mk_add (PrimedCell.to_expr c STRONG range) range;
-            mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range
-          ] range
-        in
-        Flow.set_domain_cur (add c u) man f |>
-        man.exec ~zone:(Z_c_cell) stmt
-      | None ->
-        Flow.set_domain_cur (add c u) man f
+        | None ->
+          f'
 
+  (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
+  let add_cell c range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    let a' = {
+      cells = Cells.add c a.cells;
+      bases = Bases.add (primed_apply cell_base c) a.bases;
+    }
+    in
+    let flow' = constrain_cell c a' range man flow in
+    Flow.set_domain_env T_cur a' man flow'
+
+  (** [add_cells cells range man flow] adds a set of cells and their constraints to the [flow] *)
   let add_cells cells range man flow =
     Cells.fold (fun c flow ->
         add_cell c range man flow
       ) cells flow
 
 
-  (** [unify u u'] finds non-common cells in [u] and [u'] and adds them. *)
-  let unify (subman: ('b, 'b) man) ((u : t), (s: 'b flow)) ((u' : t), (s': 'b flow)) =
+  (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
+  let unify (subman: ('b, 'b) man) (a:t) (s: 'b flow) (a':t) (s': 'b flow) =
     let range = mk_fresh_range () in
-    if is_empty u then (u', s), (u', s') else
-    if is_empty u' then (u, s), (u, s')
+    if Cells.is_empty a.cells then s, s' else
+    if Cells.is_empty a'.cells then s, s'
     else
-      let diff' = diff u u' in
-      let diff = diff u' u in
       try
-        fold (fun c (u, s) ->
-            add_cons_cell_subman subman range c u  s
-          ) diff (u, s)
+        let diff' = Cells.diff a.cells a'.cells in
+        let diff = Cells.diff a'.cells a.cells in
+        Cells.fold (fun c s ->
+            constrain_cell c a range subman s
+          ) diff s
         ,
-        fold (fun c (u', s') ->
-            add_cons_cell_subman subman range c u' s'
-          ) diff' (u', s')
+        Cells.fold (fun c s' ->
+            constrain_cell c a' range subman s'
+          ) diff' s'
       with Top.Found_TOP ->
-        (top, Flow.top (Flow.get_all_annot s)), (top, Flow.top (Flow.get_all_annot s'))
+        Flow.top (Flow.get_all_annot s), Flow.top (Flow.get_all_annot s')
 
 
   let subset (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    let (_, s), (_, s') = unify subman (u, s) (u', s') in
+    let  s, s' = unify subman u s u' s' in
     (true, s, s')
 
   let join annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    let (u, s), (_, s') = unify subman (u, s) (u', s') in
-    (u, s, s')
+    let s, s' = unify subman u s u' s' in
+    let a = {
+      cells = Cells.join () u.cells u'.cells;
+      bases = Bases.join () u.bases u'.bases;
+    }
+    in
+    (a, s, s')
 
   let meet annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    let u = meet annot u u' in
-    (u, s, s')
+    let s, s' = unify subman u s u' s' in
+    let a = {
+      cells = Cells.meet () u.cells u'.cells;
+      bases = Bases.meet () u.bases u'.bases;
+    }
+    in
+    (a, s, s')
 
   let widen annot subman (u,s) (u', s') =
     let (u, s, s') = join annot subman (u,s) (u',s') in
     (u, true, s, s')
 
-
-
-  (** Domain identification *)
-  (** ===================== *)
-
-  type _ domain += D_c_cell_expand : t domain
-  let id = D_c_cell_expand
-
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_c_cell_expand -> Some Eq
-    | _ -> None
-
-
-  (** Zoning interface *)
-  (** ================ *)
-
-  let exec_interface = {
-    export = [Z_c];
-    import = [Z_c_cell];
-  }
-
-  let eval_interface = {
-    export = [
-      Z_c_low_level, Z_c_cell_expand
-    ];
-    import = [
-      (Z_c_low_level, Z_c_cell_expand);
-      (Z_c_scalar, Universal.Zone.Z_u_num);
-      (Z_c, Universal.Zone.Z_u_num);
-      (Z_c, Z_under Z_c_cell);
-      (Z_c, Z_c_cell_expand);
-      (Z_c, Z_c_points_to);
-      (Z_c, Z_c_scalar);
-      (Z_c_cell, Z_c_points_to)
-    ];
-  }
 
 
   (** Initialization *)
@@ -609,22 +648,6 @@ module Domain = struct
           )
       in
 
-      (* We need to add evaluated cells, so that they will not be lost after meet *)
-      let cells = conj |> List.fold_left (fun acc evl ->
-          let c = Eval.substitute
-            (fun c _ -> singleton c)
-            (Cells.join ()) (Cells.meet ()) (Cells.empty)
-            evl
-          in
-          Cells.join () acc c
-        ) Cells.empty
-      in
-      let conj = List.map (fun evl ->
-          Eval.map (fun c flow ->
-              c, add_cells cells range man flow
-            ) evl
-        ) conj
-      in
       Eval.meet_list conj
     with NoUnderApprox ->
       (* The under-approximation is empty => return an empty evaluation *)
@@ -754,7 +777,7 @@ module Domain = struct
   (** Assign an rval to a cell *)
   let assign_cell c rval range man flow =
     let lval = PrimedCell.to_expr c (primed_apply cell_mode c) range in
-    let flow' = Flow.map_domain_env T_cur (add c) man flow |>
+    let flow' = Flow.map_domain_env T_cur (fun a -> { a with cells = Cells.add c a.cells}) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
 
@@ -763,7 +786,7 @@ module Domain = struct
 
     let a' =
       overlappings |>
-      List.fold_left (fun a c' -> remove c' a) a
+      List.fold_left (fun a c' -> {a with cells = Cells.remove c' a.cells}) a
     in
 
     let flow'' = Flow.set_domain_env T_cur a' man flow' in
@@ -777,7 +800,7 @@ module Domain = struct
   (** Remove cells identified by a membership predicate *)
   let remove_cells pred range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let cells = exist_and_find_cells pred a in
+    let cells = find_cells pred a in
     let block = List.map (fun c' -> mk_remove (PrimedCell.to_expr c' (primed_apply cell_mode c') range) range) cells in
     man.exec ~zone:Z_c_cell (mk_block block range) flow
 
@@ -792,8 +815,9 @@ module Domain = struct
       add_cell cold range man flow |>
       (* Remove the old cell and add the new one *)
       Flow.map_domain_env T_cur (fun a ->
-          remove cold a |>
-          add cnew
+          { a with cells = Cells.remove cold a.cells |>
+                           Cells.add cnew
+          }
         ) man
     in
     let stmt' = mk_rename
@@ -815,15 +839,15 @@ module Domain = struct
 
     let a = Flow.get_domain_env T_cur man flow in
 
-    let cells = filter (fun c ->
+    let cells = Cells.filter (fun c ->
         compare_base base (primed_apply cell_base c) = 0
-      ) a
+      ) a.cells
     in
 
-    debug "cells = %a" print cells;
+    debug "cells = %a" Cells.print cells;
 
     (* For primed cells, just rename to an unprimed cell *)
-    let flow = fold (fun c flow ->
+    let flow = Cells.fold (fun c flow ->
         if is_primed c
         then rename_cell c (unprimed (unprime c)) range man flow
         else flow
@@ -832,7 +856,6 @@ module Domain = struct
 
     (* Compute the interval of the assigned cells *)
     let itv =
-
       (* Return the expression of an offset bound *)
       let mk_offset_bound before bound t =
         let elem_size = sizeof_type t in
@@ -873,8 +896,8 @@ module Domain = struct
     debug "itv = %a" Itv.print itv;
     (* Remove remaining cells that have an offset within the assigned interval *)
     remove_cells (fun c ->
-        mem c cells &&
-        not (mem (primed (unprime c)) cells) &&
+        Cells.mem c cells &&
+        not (Cells.mem (primed (unprime c)) cells) &&
         Itv.mem (primed_apply cell_zoffset c) itv
       ) range man flow
 
@@ -911,11 +934,12 @@ module Domain = struct
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = Flow.get_domain_cur man flow in
-      let l = exist_and_find_cells (fun c -> compare_base (primed_apply cell_base c) (V v) = 0) u in
-      let u' = List.fold_left (fun acc c -> remove c acc) u l in
+      let l = find_cells (fun c -> compare_base (primed_apply cell_base c) (V v) = 0) u in
+      let u = List.fold_left (fun u c -> { u with cells = Cells.remove c u.cells }) u l in
+      let u = { u with bases = Bases.remove (V v) u.bases } in
       let mergers = List.map (fun c -> mk_remove (PrimedCell.to_expr c (primed_apply cell_mode c) stmt.srange) stmt.srange) l in
       let to_exec_in_sub = mergers in
-      let flow = Flow.set_domain_cur u' man flow in
+      let flow = Flow.set_domain_cur u man flow in
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub stmt.srange) flow |>
       Post.of_flow |>
       Post.add_mergers mergers |>
@@ -990,7 +1014,7 @@ module Domain = struct
       (* For each cell in base @1, create a similar one in base @2 and
          copy its content *)
       let a = Flow.get_domain_env T_cur man flow in
-      let flow = fold (fun c flow ->
+      let flow = Cells.fold (fun c flow ->
           let base = primed_apply cell_base c in
           if compare_base base (A addr1) != 0 then
             flow
@@ -1004,7 +1028,7 @@ module Domain = struct
               } c
             in
             rename_cell c c' stmt.srange man flow
-        ) a flow
+        ) a.cells flow
       in
       Post.return flow
 

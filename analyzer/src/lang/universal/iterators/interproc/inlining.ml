@@ -139,7 +139,7 @@ struct
 
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
-              (* man.exec (mk_add_var ret (tag_range range "adding ret")) |> *)
+              man.exec (mk_add_var ret range) |>
               man.exec (mk_assign (mk_var ret range) e range) |>
               Flow.join man acc
 

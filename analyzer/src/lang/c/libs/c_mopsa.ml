@@ -165,13 +165,16 @@ struct
       let typ = T_c_integer(C_signed_long) in
       let tmp = mktmp ~typ () in
       let v = mk_var tmp erange in
-      let flow = man.exec (mk_assume (
-          mk_binop
-            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
-            O_log_and
-            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
-            erange
-        ) erange) flow
+      let flow = man.exec (mk_block [
+          mk_add_var tmp erange;
+          mk_assume (
+            mk_binop
+              (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+              O_log_and
+              (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+              erange
+          ) erange
+        ] erange) flow
       in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       OptionExt.return
@@ -181,13 +184,17 @@ struct
       let typ = T_c_integer(C_unsigned_long) in
       let tmp = mktmp ~typ () in
       let v = mk_var tmp erange in
-      let flow = man.exec (mk_assume (
-          mk_binop
-            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
-            O_log_and
-            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
-            erange
-        ) erange) flow in
+      let flow = man.exec (mk_block [
+          mk_add_var tmp erange;
+          mk_assume (
+            mk_binop
+              (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+              O_log_and
+              (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+              erange
+          ) erange
+        ] erange) flow
+      in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       OptionExt.return
 
