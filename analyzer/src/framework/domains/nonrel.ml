@@ -39,13 +39,6 @@ struct
     | D_nonrel -> Some Eq
     | _ -> None
 
-  let add v vv (a:t) : t =
-    if Value.is_bottom vv then bottom else add v vv a
-
-  let find v (a:t) : Value.t =
-    if not (is_bottom a || mem v a) then Exceptions.panic ~loc:__LOC__ "find: variable %a not in map" PrimedVar.print v;
-    find v a
-
   let print fmt a =
     Format.fprintf fmt "%s:@ @[   %a@]@\n" (snd @@ Value.name) VarMap.print a
 
