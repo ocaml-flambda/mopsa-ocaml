@@ -6,54 +6,63 @@ This document describes the branching model followed in MOPSA and how contributi
 
 Branch Naming Convention
 ------------------------
-The repository of MOPSA is organized into several branches: 
+The repository of MOPSA has two protected and stable branches: 
 - There is one stable branch `master` containing the latest public release of MOPSA.
 - The development branch `dev` contains the latest stable features of the analyzer that are planned for the next release.
-- For each supported language `<lang>`, there is one development branch `<lang>/dev` containing stable features for that language.
-- Features are maintained in (timely limited) branches `feature/<feature name>` or `<lang>/feature/<feature name>`. The former is for features for the common parts of the analyzer (the framework and the Universal language), and the latter is for language-specific features.
-- Issue branches can follow a similar naming convention `issue/<issue id>` and `<lang>/issue/<issue id>`.
 
+For each sub-project `<project>` (a supported language, the web interface, a parser, etc.), there is one development branch `<project>/dev` containing stable features. Ongoing features are maintained in (timely limited) branches `<project>/feature/<feature name>`.
+
+To contribute to MOPSA, it is adviced to fork https://gitlab.com/mopsa/mopsa in a separate repository. Branch names should follow the same conventions described above
 
 Feature Branches
 ----------------
-To work on a feature for some language, we create a new branch:
+To work on a feature for some sub-project, create a new branch:
 ```shell
 $ git checkout -b c/feature/handle-union-assignment
 ```
 
-After committing code and testing it, we can merge into the language `dev` branch:
+After committing code and testing it, merge into the sub-project's `dev` branch:
 ```shell
 $ git checkout c/dev
+$ git pull origin c/dev
 $ git merge --no-ff c/feature/handle-union-assignment
 $ git push origin c/dev
 $ git branch -d c/feature/handle-union-assignment
 $ git push origin :c/feature/handle-union-assignment
 ```
 
-Sometimes, one would like to clean the commit history of feature branch before merging into `<lang>/dev`. This can be done using `git rebase -i` **before** checking out `<lang>/dev` and merging into it.
+Sometimes, one would like to clean the commit history of feature branch before merging into `<project>/dev`. This can be done using `git rebase -i` **before** checking out `<project>/dev` and merging into it.
+
+
+External Contributions
+----------------------
+To integrate your new features into the upstream project branch `<project>/dev`, create a merge request using GitLab web interface and select `mopsa/mopsa/<project>/dev` as the target branch. Ensure to `git pull upstream/web/dev` in order to synchronize with the latest updates from upstream before merging.
 
 
 The Development Branch `dev`
 ---------------------------
-When features in a language branch are stable enough and planned for the next release, they are merged into the main `dev` branch:
+When features in a project branch are stable enough and planned for the next release, they are merged into the main `dev` branch:
 ```shell
 $ git checkout dev
+$ git pull origin dev
 $ git merge --no-ff python/dev
 $ git push origin dev
 ```
 
-The flag --no-ff ensures that a new commit is always created when merging. In case `<lang>/dev` contains advanced feature not yet completely stable, one could merge specific stable commits:
+The flag --no-ff ensures that a new commit is always created when merging. In case `<project>/dev` contains advanced feature not yet completely stable, one could merge specific stable commits:
 ```shell
 $ git checkout dev
+$ git pull origin dev
 $ git cherry-pick <commit hash>
+$ git push origin dev
 ```
 
-After updating `dev`, all existing `<lang>/dev` should pull these changes to remain up to date:
+After updating `dev`, **all existing** `<project>/dev` should pull these changes to remain up to date:
 ```shell
 $ git checkout c/dev
-$ git merge dev
+$ git pull origin dev
 $ git checkout python/dev
-$ git merge dev
+$ git pull origin dev
 ```
 
 Note here that we fast forward the merges in order to have a cleaner commit history.
