@@ -47,7 +47,11 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration ({ vkind = V_c {var_init = Some (C_init_stub stub); var_range} } as v)->
-      let stmt' = Stubs.Ast.mk_stub_init v stub var_range in
+      let stmt' = Universal.Ast.mk_block [
+          mk_add_var v stmt.srange;
+          Stubs.Ast.mk_stub_init v stub var_range
+        ] stmt.srange
+      in
       man.exec stmt' flow |>
       Post.return
 

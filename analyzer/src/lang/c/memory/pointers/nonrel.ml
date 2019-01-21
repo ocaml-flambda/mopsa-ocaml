@@ -21,25 +21,9 @@ struct
   (** Domain lattice *)
   (** ============== *)
 
-  module NR = Framework.Domains.Nonrel.Make(Framework.Value.LiftSimpleValue(Bases))
-
-  type t = NR.t
-
-  let bottom = NR.bottom
-
-  let top = NR.top
-
-  let is_bottom = NR.is_bottom
-
-  let subset = NR.subset
-
-  let join = NR.join
-
-  let meet = NR.meet
-
-  let widen = NR.widen
-
-  let print = NR.print
+  (** An abstract element is a partial map from pointer variables
+      to a set of bases *)
+  include Framework.Domains.Nonrel.Make(Framework.Value.LiftSimpleValue(Bases))
 
 
   (** Domain identification *)
@@ -80,7 +64,7 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    Flow.set_domain_env T_cur NR.top man flow |>
+    Flow.set_domain_env T_cur empty man flow |>
     Flow.without_callbacks |>
     OptionExt.return
 
@@ -195,7 +179,7 @@ struct
 
       | EQ (p, offset) ->
         let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
-        let bases = NR.find p (Flow.get_domain_env T_cur man flow) in
+        let bases = find p (Flow.get_domain_env T_cur man flow) in
         if Bases.is_top bases then
           Eval.singleton (mk_c_points_to_top exp.erange) flow
         else
@@ -236,13 +220,15 @@ struct
 
       | EQ(q, o) ->
         let b = Flow.get_domain_env T_cur man flow |>
-                NR.find q
+                find q
         in
-        b, Some o, Some q
+        b, (if Bases.mem_block b then Some o else None), Some q
 
-      | NULL -> Bases.null, None, None
+      | NULL ->
+        Bases.null, None, None
 
-      | INVALID -> Bases.invalid, None, None
+      | INVALID ->
+        Bases.invalid, None, None
 
       | FUN _ -> panic_at exp.erange "eval_pointer_compare: function pointers not supported"
     in
@@ -251,7 +237,7 @@ struct
     let set_base v b man flow =
       match v with
       | None -> flow
-      | Some vv -> Flow.map_domain_env T_cur (NR.add vv b) man flow
+      | Some vv -> Flow.map_domain_env T_cur (add vv b) man flow
     in
 
     (* Offset conditions of two equal pointers *)
@@ -299,8 +285,26 @@ struct
                   set_base v2 b2' man
       in
 
-      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (offsets_cond O_eq v1 o1 v2 o2) flow' |>
-      Eval.return
+      (* Refine offsets in case p or q may point to a block *)
+      if Bases.mem_block b1' && Bases.mem_block b2' then
+        man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (offsets_cond O_eq v1 o1 v2 o2) flow' |>
+        Eval.return
+      else
+        (* Remove offsets in other case *)
+        let remove_offset v b range man flow =
+          match v with
+          | None -> flow
+          | Some vv ->
+            if Bases.mem_block b then
+              man.exec (mk_remove (mk_offset_var_expr vv exp.erange) exp.erange) flow
+            else
+              flow
+        in
+        let flow' = remove_offset v1 b1 exp.erange man flow' |>
+                    remove_offset v2 b2 exp.erange man
+        in
+        Eval.singleton (mk_one exp.erange) flow' |>
+        Eval.return
 
     (* 𝔼⟦ p != q ⟧ *)
     (* 𝔼⟦ !(p == q) ⟧ *)
@@ -419,7 +423,7 @@ struct
     match skind stmt with
     | S_c_declaration(p) when is_c_pointer_type p.vtyp ->
       let flow' = Flow.map_domain_env T_cur (
-          NR.add (unprimed p) Bases.null
+          add (unprimed p) Bases.null
         ) man flow
       in
       Post.return flow'
@@ -432,37 +436,44 @@ struct
       let flow' =
         match ptr with
         | ADDROF (b, offset) ->
-          let flow' = Flow.map_domain_env T_cur (NR.add pp (Bases.block b)) man flow in
+          let flow' = Flow.map_domain_env T_cur (add pp (Bases.block b)) man flow in
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
         | EQ (q, offset) ->
-          let flow' = Flow.map_domain_env T_cur (fun a -> NR.add pp (NR.find q a) a) man flow in
-          let qo = mk_offset_var_expr q range in
-          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_binop qo O_plus offset ~etyp:T_int range) range) flow'
+          let flow' = Flow.map_domain_env T_cur (fun a -> add pp (find q a) a) man flow in
+          (* Assign offset only if q points to a block *)
+          if Flow.test_domain_env T_cur (fun a -> find q a |> Bases.mem_block) man flow then
+            let qo = mk_offset_var_expr q range in
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_binop qo O_plus offset ~etyp:T_int range) range) flow'
+          else
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
 
         | FUN f ->
-          Flow.map_domain_env T_cur (NR.add pp (Bases.bfun f)) man flow
+          Flow.map_domain_env T_cur (add pp (Bases.bfun f)) man flow |>
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
         | INVALID ->
-          Flow.map_domain_env T_cur (NR.add pp Bases.invalid) man flow
+          Flow.map_domain_env T_cur (add pp Bases.invalid) man flow  |>
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
 
         | NULL ->
-          Flow.map_domain_env T_cur (NR.add pp Bases.null) man flow
+          Flow.map_domain_env T_cur (add pp Bases.null) man flow |>
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
       in
       Post.return flow'
 
     | S_add p when is_c_pointer_type p.etyp &&
                    PrimedVar.match_expr p ->
       let pp = PrimedVar.from_expr p in
-      let flow1 = Flow.map_domain_env T_cur (NR.add pp Bases.top) man flow in
       let o = mk_offset_var_expr pp range in
-      let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add o range) flow1 in
-      Post.return flow2
+      Flow.map_domain_env T_cur (add pp Bases.top) man flow |>
+      man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
+      Post.return
 
     | S_remove p when is_c_pointer_type p.etyp &&
                       PrimedVar.match_expr p ->
       let pp = PrimedVar.from_expr p in
-      let flow1 = Flow.map_domain_env T_cur (NR.remove pp) man flow in
+      let flow1 = Flow.map_domain_env T_cur (remove pp) man flow in
       let o = mk_offset_var_expr pp range in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 in
       Post.return flow2
@@ -470,7 +481,7 @@ struct
     | S_remove { ekind = E_addr addr } ->
       let block = Bases.PB_block (A addr) in
       let flow' = Flow.map_domain_env T_cur (fun a ->
-          let a' = NR.map (fun base ->
+          let a' = map (fun base ->
               if not (Bases.mem block base) then
                 base
               else
@@ -492,12 +503,12 @@ struct
       let pp = PrimedVar.from_expr p in
       let ppl = List.map PrimedVar.from_expr pl in
       let a = Flow.get_domain_env T_cur man flow in
-      let pt = NR.find pp a in
+      let pt = find pp a in
       let o = mk_offset_var_expr pp range in
       let ool, flow =
         ppl |> List.fold_left (fun (ool, flow) pp' ->
             let oo = mk_offset_var_expr pp' range in
-            oo :: ool, Flow.map_domain_env T_cur (NR.add pp' pt) man flow
+            oo :: ool, Flow.map_domain_env T_cur (add pp' pt) man flow
           ) ([],flow)
       in
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_expand o ool range) flow |>
@@ -510,9 +521,9 @@ struct
       let pp1 = PrimedVar.from_expr p1 in
       let pp2 = PrimedVar.from_expr p2 in
       let flow1 = Flow.map_domain_env T_cur (fun a ->
-          let b1 = NR.find pp1 a in
-          let a' = NR.add pp2 b1 a |>
-                   NR.remove pp1
+          let b1 = find pp1 a in
+          let a' = add pp2 b1 a |>
+                   remove pp1
           in
           a'
         ) man flow

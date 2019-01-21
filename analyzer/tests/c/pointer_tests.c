@@ -1,6 +1,15 @@
 #include "mopsa.h"
 #include <stddef.h>
 
+/*
+ * Pointers to scalars
+ */
+
+void test_pointer_with_int_value() {
+  int *p = 1;
+  _mopsa_assert_safe();
+}
+
 void test_deref_in_rval() {
   int i = 10;
   int* p = &i;
@@ -63,6 +72,18 @@ void test_null_deref() {
   _mopsa_assert_error(NULL_DEREF);
 }
 
+void test_compare_pointers_with_int_values() {
+  int *p = 1;
+  int *q = 2;
+  int *r = 1;
+  _mopsa_assert(p != q);
+  _mopsa_assert(p == r);
+}
+
+/*
+ * Pointers to arrays
+ */
+
 void test_array_deref() {
   int a[10];
   a[0] = 10;
@@ -116,6 +137,18 @@ void test_pointer_increment() {
   _mopsa_assert(a[1] == 20);
 }
 
+void test_castint() {
+  char a[10];
+  a[0] = 0;
+  a[1] = 0;
+  ((int *) a)[1] = 1;
+  _mopsa_assert(a[1] == 0);
+}
+
+/*
+ * Pointers to records
+ */
+
 typedef struct {
   int x;
   int y;
@@ -145,15 +178,10 @@ void test_arrow_on_array_of_struct() {
   _mopsa_assert(a[0].x == 1);
 }
 
-void test_castint() {
-  char a[10];
-  a[0] = 0;
-  a[1] = 0;
-  ((int *) a)[1] = 1;
-  _mopsa_assert(a[1] == 0);
-}
 
-
+/*
+ * Pointers to functions
+ */
 
 int incr(int x) {
   return (x+1);
@@ -163,35 +191,22 @@ int ddouble(int x) {
   return 2 * x;
 }
 
-void test_call_by_deref() {
+void test_call_function_pointer_by_deref() {
   int (*f)(int);
   f = incr;
   _mopsa_assert((*f)(0) == 1);
 }
 
-void test_call_as_function() {
+void test_call_function_pointer_as_function() {
   int (*f)(int);
   f = incr;
   _mopsa_assert(f(0) == 1);
 }
 
-void test_pointer_to_pointer_assign() {
+void test_pointer_function_assignment() {
   int (*f)(int);
   void* g;
   g = (void*) ddouble;
   f = g;
   _mopsa_assert((f)(5) == 10);
-}
-
-void test_pointer_with_int_value() {
-  int *p = 1;
-  _mopsa_assert_safe();
-}
-
-void test_compare_pointers_with_int_values() {
-  int *p = 1;
-  int *q = 2;
-  int *r = 1;
-  _mopsa_assert(p != q);
-  _mopsa_assert(p == r);
 }

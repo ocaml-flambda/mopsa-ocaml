@@ -65,9 +65,7 @@ struct
 
     | F_binop (AND, f1, f2) ->
       let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
-      let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
-
-      let ftrue = Flow.meet man ftrue1 ftrue2 in
+      let ftrue, ffalse2 = eval_formula f2 ~negate man ftrue1 in
 
       let ffalse =
         match negate, ffalse1, ffalse2 with
