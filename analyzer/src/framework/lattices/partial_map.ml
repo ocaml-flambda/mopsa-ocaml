@@ -41,11 +41,11 @@ struct
     | Top
     (** all possible partial maps *)
 
-  let bottom = Bot
+  let bottom : t = Bot
 
-  let top = Top
+  let top : t = Top
 
-  let is_bottom a =
+  let is_bottom (a:t) : bool =
     match a with
     | Bot -> true
     | Top -> false
@@ -53,7 +53,7 @@ struct
       Map.cardinal m > 0 &&
       Map.exists (fun k v -> Value.is_bottom v) m
 
-  let empty = Finite Map.empty (* Note: an empty map is different than an empty set of maps *)
+  let empty : t = Finite Map.empty (* Note: an empty map is different than an empty set of maps *)
 
   let subset  (a1:t) (a2:t) : bool =
     match a1, a2 with
@@ -126,7 +126,7 @@ struct
         ) (Map.bindings m)
   (** Printing. *)
 
-  let find (k: Key.t) (a: t) =
+  let find (k: Key.t) (a: t) : Value.t =
     match a with
     | Bot -> Value.bottom
     | Top -> Value.top
@@ -140,7 +140,7 @@ struct
     | Top -> Top
     | Finite m -> Finite (Map.remove k m)
 
-  let add (k: Key.t) (v: Value.t) (a: t) =
+  let add (k: Key.t) (v: Value.t) (a: t) : t =
     if Value.is_bottom v then Bot
     else
       match a with
@@ -148,10 +148,10 @@ struct
       | Top -> Top
       | Finite m -> Finite (Map.add k v m)
 
-  let singleton k v =
+  let singleton (k:Key.t) (v:Value.t) : t =
     add k v empty
 
-  let filter (f : Key.t -> Value.t -> bool) (a : t) =
+  let filter (f : Key.t -> Value.t -> bool) (a : t) : t =
     match a with
     | Bot -> Bot
     | Top -> Top
@@ -169,7 +169,7 @@ struct
     | Top -> d
     | Finite m -> Map.fold f m x
 
-  let mem (x:Key.t) (a:t) =
+  let mem (x:Key.t) (a:t) : bool =
     match a with
     | Bot -> false
     | Top -> true
@@ -198,19 +198,19 @@ struct
       |>
       canonize
 
-  let bindings a =
+  let bindings (a:t) : (Key.t * Value.t) list =
     match a with
     | Bot -> []
     | Top -> raise Top.Found_TOP
     | Finite m -> Map.bindings m
 
-  let for_all f a =
+  let for_all (f:Key.t -> Value.t -> bool) (a:t) : bool =
     match a with
     | Bot -> true
     | Top -> raise Top.Found_TOP
     | Finite m -> Map.for_all f m
 
-  let exists f a =
+  let exists (f:Key.t -> Value.t -> bool) (a:t) : bool =
     match a with
     | Bot -> false
     | Top -> raise Top.Found_TOP

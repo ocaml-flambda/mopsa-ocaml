@@ -94,9 +94,9 @@ module Domain = struct
 
   (** Pretty printer *)
   let print fmt a =
-    Format.fprintf fmt "cells: @[%a@]@\nbases: @[%a@]"
-      Cells.print a.cells
+    Format.fprintf fmt "bases: @[%a@]@\ncells: @[%a@]@\n"
       Bases.print a.bases
+      Cells.print a.cells
 
 
   (** {2 Domain identification} *)
@@ -311,7 +311,7 @@ module Domain = struct
       else
         match phi c a range with
         | Some e ->
-          let stmt = mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:T_int range) range in
+          let stmt = mk_assume (mk_binop (PrimedCell.to_expr c (primed_apply cell_mode c) range) O_eq e ~etyp:u8 range) range in
           man.exec ~zone:(Z_c_cell) stmt f'
 
         | None ->
@@ -319,14 +319,18 @@ module Domain = struct
 
   (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
   let add_cell c range man flow =
+    debug "add_cell %a" PrimedCell.print c;
     let a = Flow.get_domain_env T_cur man flow in
     let a' = {
-      cells = Cells.add c a.cells;
-      bases = Bases.add (primed_apply cell_base c) a.bases;
+      a with bases = Bases.add (primed_apply cell_base c) a.bases;
     }
     in
     let flow' = constrain_cell c a' range man flow in
-    Flow.set_domain_env T_cur a' man flow'
+    let a'' = {
+      a' with cells = Cells.add c a'.cells
+    }
+    in
+    Flow.set_domain_env T_cur a'' man flow'
 
   (** [add_cells cells range man flow] adds a set of cells and their constraints to the [flow] *)
   let add_cells cells range man flow =
@@ -334,6 +338,11 @@ module Domain = struct
         add_cell c range man flow
       ) cells flow
 
+  (** [add_base base man flow] adds a new base to the support *)
+  let add_base base man flow =
+    Flow.map_domain_env T_cur (fun a ->
+        { a with bases = Bases.add base a.bases }
+      ) man flow
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
   let unify (subman: ('b, 'b) man) (a:t) (s: 'b flow) (a':t) (s': 'b flow) =
@@ -703,7 +712,7 @@ module Domain = struct
         | _ -> panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p;
       end
 
-    | _ -> debug "%a" pp_expr exp; assert false
+    | _ -> panic_at exp.erange ~loc:__LOC__ "eval_scalar_cell called on a non-scalar expression %a" pp_expr exp
 
 
 
@@ -721,7 +730,7 @@ module Domain = struct
       ->
       eval_scalar_cell exp man flow |>
       Eval.bind_return @@ fun c flow ->
-
+      debug "scalar cell evaluated into %a" PrimedCell.print c;
       begin match primed_apply cell_offset c with
         | O_single _ ->
           let flow = add_cell c exp.erange man flow in
@@ -919,16 +928,18 @@ module Domain = struct
                                                | Variable_func_static _;
                                      var_init = init}} as v)
       ->
-      Common.Init_visitor.init_global (init_visitor man) v init stmt.srange flow |>
+      add_base (V v) man flow |>
+      Common.Init_visitor.init_global (init_visitor man) v init stmt.srange |>
       Post.return
 
     (* 𝕊⟦ t v = e; ⟧ when v is a local variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_local _; var_init = init}} as v) ->
-      Common.Init_visitor.init_local (init_visitor man) v init stmt.srange flow |>
+      add_base (V v) man flow |>
+      Common.Init_visitor.init_local (init_visitor man) v init stmt.srange |>
       Post.return
 
-    (* 𝕊⟦ add v ⟧ *)
-    | S_add { ekind = E_var (v, _) } when is_c_type v.vtyp ->
+    (* 𝕊⟦ add v ⟧ when v is a scalar *)
+    | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
       Post.bind_return man @@ fun c flow ->
 
@@ -937,6 +948,11 @@ module Domain = struct
 
       Post.of_flow |>
       Post.add_merger (mk_add (PrimedCell.to_expr c (primed_apply cell_mode c) stmt.srange) stmt.srange)
+
+    (* 𝕊⟦ add v ⟧ when v is not a scalar *)
+    | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
+      add_base (V v) man flow |>
+      Post.return
 
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
