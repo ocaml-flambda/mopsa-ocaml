@@ -116,6 +116,14 @@ val map_domain_cur : ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
 (** [map_domain_cur f man flow] is equivalent to [set_domain_cur (f
    (get_domain_cur tk man flow)) man flow] *)
 
+val test_domain_env : token -> ('t -> bool) -> ('a, 't) man -> 'a flow -> bool
+(** [test_domain_cur tk f man flow] checks whether environment at
+    token [tk] verifies predicate [f] *)
+
+val test_domain_cur : ('t -> bool) -> ('a, 't) man -> 'a flow -> bool
+(** [test_domain_cur f man flow] is equivalent to 
+    [test_domain_env T_cur f man flow] *)
+
 val get_all_annot : 'a flow -> 'a annot
 (** [get_all_annot flow] retrieves the annotation pool from [flow] *)
 
