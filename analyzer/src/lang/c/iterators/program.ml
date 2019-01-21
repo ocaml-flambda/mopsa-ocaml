@@ -126,7 +126,7 @@ struct
         with Not_found ->
           panic "entry function %s not found" !opt_entry_function
       in
-
+      debug "entering %s" !opt_entry_function;
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         exec_main entry c_globals c_functions man flow1 |>

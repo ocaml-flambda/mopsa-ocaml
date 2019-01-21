@@ -17,6 +17,7 @@ type slot =
   | Free
   | NotFree of AddrSet.t
   | MaybeFree of AddrSet.t
+  | Top
 
 let bottom = Bot
 
@@ -27,6 +28,9 @@ let subset s1 s2 =
   match s1, s2 with
   | Bot, _ -> true
   | _, Bot -> false
+
+  | _, Top -> true
+  | Top, _ -> false
 
   | Free, Free
   | Free, MaybeFree _ -> true
@@ -42,6 +46,9 @@ let join s1 s2 =
   match s1, s2 with
   | Bot, s
   | s, Bot -> s
+
+  | Top, _
+  | _, Top -> Top
 
   | Free, Free -> Free
 
@@ -74,7 +81,10 @@ let meet s1 s2 =
   match s1, s2 with
   | Bot, _
   | _, Bot -> Bot
-    
+
+  | Top, s
+  | s, Top -> s
+
   | Free, Free -> Free
 
   | Free, MaybeFree _
@@ -96,29 +106,32 @@ let meet s1 s2 =
 let print fmt s =
   match s with
   | Bot -> Format.fprintf fmt "⊥"
+  | Top -> Format.fprintf fmt "⊤"
   | Free -> Format.fprintf fmt "🔓"
   | NotFree a -> Format.fprintf fmt "🔒 : %a" AddrSet.print a
   | MaybeFree a -> Format.fprintf fmt "❓ : %a" AddrSet.print a
 
 
-(** Insert an address in a slot. Returns the new state of the 
-    slot after insertion, or its state when the insertion is 
-    not possible. 
+(** Insert an address in a slot. Returns the new state of the
+    slot after insertion, or its state when the insertion is
+    not possible.
 *)
 let insert addr (s:slot) : slot * slot =
   match s with
   | Bot         -> Bot, Bot
+  | Top         -> Top, Top
   | Free        -> NotFree (AddrSet.singleton addr), Bot
   | NotFree a   -> Bot, s
   | MaybeFree a -> NotFree (AddrSet.add addr a), NotFree a
 
 
-(** Check whether [addr] is in the slot. Returns an abstract state when 
-    [addr] is in the slot, and an other abstract state when [addr] is not 
+(** Check whether [addr] is in the slot. Returns an abstract state when
+    [addr] is in the slot, and another abstract state when [addr] is not
     in the slot. *)
 let mem addr s : slot * slot =
   match s with
   | Bot -> Bot, Bot
+  | Top -> Top, Top
   | Free -> Bot, Free
   | NotFree a ->
     if AddrSet.mem addr a then NotFree a, MaybeFree (AddrSet.remove addr a) |> canonize
@@ -130,6 +143,7 @@ let mem addr s : slot * slot =
 let get s : addr list =
   match s with
   | Bot -> []
+  | Top -> raise Top.Found_TOP
   | Free -> []
   | NotFree a -> AddrSet.elements a
   | MaybeFree a -> AddrSet.elements a
@@ -138,10 +152,10 @@ let get s : addr list =
 let remove addr s =
   match s with
   | Bot | Free -> s
+  | Top -> Top
   | NotFree a | MaybeFree a ->
     if not (AddrSet.mem addr a) then s
     else
       let a' = AddrSet.remove addr a in
       if AddrSet.is_empty a' then Free
       else MaybeFree a'
-

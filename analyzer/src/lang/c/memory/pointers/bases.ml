@@ -72,6 +72,10 @@ let block b = singleton (PB_block b)
 
 let bfun f = singleton (PB_fun f)
 
+let mem_block v =
+  if is_top v then true
+  else exists (function PB_block _ -> true | _ -> false) v
+
 let of_constant _ c =
   match c with
   | C_int n when Z.equal n Z.zero -> null
