@@ -18,6 +18,10 @@ open Common.Points_to
 open Cell
 module Itv = Universal.Numeric.Values.Intervals.Value
 
+
+(** {2 Command-line arguments} *)
+(** ************************** *)
+
 (** Maximal number of expanded cells when dereferencing a pointer *)
 let opt_expand = ref 1
 
@@ -29,7 +33,8 @@ let () =
   )
 
 
-(** Zoning *)
+(** {2 Zoning of expanded cells} *)
+(** **************************** *)
 
 type zone +=
   | Z_c_cell_expand
@@ -51,6 +56,9 @@ module Domain = struct
   (** This domain maintains the set of previously created cells and
       the bases of dimensions that are present in the underlying
       partial maps.
+
+      The set of bases is necessary for unification because the domain
+      may not keep all cells previously created.
   *)
 
   (** Set of previously created cells. *)
@@ -93,6 +101,7 @@ module Domain = struct
 
   (** {2 Domain identification} *)
   (** ========================= *)
+
   let name = "c.memory.cells.expand"
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -118,14 +127,12 @@ module Domain = struct
       Z_c_low_level, Z_c_cell_expand
     ];
     import = [
-      (Z_c_low_level, Z_c_cell_expand);
-      (Z_c_scalar, Universal.Zone.Z_u_num);
-      (Z_c, Universal.Zone.Z_u_num);
-      (Z_c, Z_under Z_c_cell);
-      (Z_c, Z_c_cell_expand);
-      (Z_c, Z_c_points_to);
-      (Z_c, Z_c_scalar);
-      (Z_c_cell, Z_c_points_to)
+      (Z_c_low_level, Z_c_cell_expand);     (* for lvals *)
+      (Z_c, Z_c_scalar);                    (* for base size *)
+      (Z_c_scalar, Universal.Zone.Z_u_num); (* for offsets *)
+      (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
+      (Z_c, Z_under Z_c_cell);              (* for rvals *)
+      (Z_c, Z_c_points_to);                 (* for pointers *)
     ];
   }
 
@@ -1000,10 +1007,7 @@ module Domain = struct
       Post.return
 
     | S_stub_rename_primed(p, offsets) ->
-      man.eval ~zone:(Z_c, Z_c_cell_expand) p flow |>
-      Post.bind_opt man @@ fun p flow ->
-
-      man.eval ~zone:(Z_c_cell, Z_c_points_to) p flow |>
+      man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
       Post.bind_opt man @@ fun pe flow ->
 
       rename_stub_primed_cells pe offsets (under_type p.etyp) stmt.srange man flow  |>
