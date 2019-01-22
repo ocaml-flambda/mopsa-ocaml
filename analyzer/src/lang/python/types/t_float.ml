@@ -22,12 +22,6 @@ module Domain =
 
     let init _ _ _ = None
 
-    let return_id_of_type man flow range ptype =
-      let cur = Flow.get_domain_cur man flow in
-      let tid, ncur = Typingdomain.get_type cur ptype in
-      let flow = Flow.set_domain_cur ncur man flow in
-      Eval.singleton (mk_expr (Typing.E_type_partition tid) range) flow |> OptionExt.return
-
     let is_arith_unop_fun = function
       | "float.__pos__"
         | "float.__neg__" -> true

@@ -13,6 +13,7 @@ open Framework.Zone
 type zone +=
    | Z_py
    | Z_py_value
+   | Z_py_addr
 
 let () =
   register_zone {
@@ -22,8 +23,14 @@ let () =
     eval = (fun exp -> Process);
     };
   register_zone {
-      zone = Z_py_value;
-      name = "Z_py_value";
-      subset = Some Z_py;
-      eval = (fun exp -> Process);
-    }
+    zone = Z_py_addr;
+    name = "Z_py_addr";
+    subset = Some Z_py;
+    eval = (fun exp -> Process);
+    };
+  register_zone {
+    zone = Z_py_value;
+    name = "Z_py_value";
+    subset = Some Z_py;
+    eval = (fun exp -> Process);
+  }
