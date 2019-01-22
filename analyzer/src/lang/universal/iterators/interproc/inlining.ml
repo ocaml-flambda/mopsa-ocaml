@@ -95,6 +95,8 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_call({ekind = E_function (User_defined f)}, args) ->
+      debug "calling function %s" f.fun_name;
+
       (* Clear all return flows *)
       let flow0 = Flow.filter (fun tk env ->
           match tk with
@@ -137,7 +139,7 @@ struct
 
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
-              (* man.exec (mk_add_var ret (tag_range range "adding ret")) |> *)
+              man.exec (mk_add_var ret range) |>
               man.exec (mk_assign (mk_var ret range) e range) |>
               Flow.join man acc
 

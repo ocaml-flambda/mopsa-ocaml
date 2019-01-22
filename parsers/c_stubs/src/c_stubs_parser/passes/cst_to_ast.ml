@@ -182,7 +182,7 @@ let attribute_type obj f =
 
 let builtin_type f arg =
   match f with
-  | SIZE   -> int_type
+  | SIZE   -> unsigned_long_type
   | OFFSET -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
   | PRIMED -> arg.content.Ast.typ
@@ -604,14 +604,6 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
-  debug "CST to AST:@\n fun %s@\n @[%a@]@\n params: @[<h 1>%a@]"
-    func.C_AST.func_org_name
-    Cst.pp_stub stub
-    (Format.pp_print_list
-       ~pp_sep:(fun fmt () -> Format.fprintf fmt "@ ")
-       (fun fmt v -> Format.pp_print_string fmt v.C_AST.var_org_name)
-    ) (Array.to_list func.C_AST.func_parameters)
-  ;
   let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
   Ast.{
     stub_name = func.C_AST.func_org_name;

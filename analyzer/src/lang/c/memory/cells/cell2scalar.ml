@@ -116,11 +116,15 @@ struct
     match skind stmt with
     | S_add c when PrimedCell.match_expr c ->
       let pc = PrimedCell.from_expr c in
-      let mode = PrimedCell.ext_from_expr c in
-      let pv, flow = get_scalar_or_create flow pc in
-      let vv = PrimedVar.to_expr pv mode stmt.srange in
-      man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
-      Post.return
+      begin match primed_apply cell_base pc with
+        | S _ -> Post.return flow
+        | _ ->
+          let mode = PrimedCell.ext_from_expr c in
+          let pv, flow = get_scalar_or_create flow pc in
+          let vv = PrimedVar.to_expr pv mode stmt.srange in
+          man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
+          Post.return
+      end
 
     | S_remove c when PrimedCell.match_expr c ->
       let pc = PrimedCell.from_expr c in

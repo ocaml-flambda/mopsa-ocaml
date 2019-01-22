@@ -25,6 +25,7 @@ let is_builtin_function = function
   | "_mopsa_range_unsigned_long_long"
   | "_mopsa_set_debug_channels"
   | "_mopsa_range"
+  | "_mopsa_rand"
   | "_mopsa_rand_int"
   | "_mopsa_rand_unsigned_long"
   | "_mopsa_panic"
@@ -154,18 +155,26 @@ struct
       rand_int Ast.C_unsigned_long_long exp.erange man flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_mopsa_rand", []) ->
+      let exp' = mk_int_interval 0 1 ~typ:(T_c_integer C_signed_int) exp.erange in
+      Eval.singleton exp' flow |>
+      OptionExt.return
+
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
       let typ = T_c_integer(C_signed_long) in
       let tmp = mktmp ~typ () in
       let v = mk_var tmp erange in
-      let flow = man.exec (mk_assume (
-          mk_binop
-            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
-            O_log_and
-            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
-            erange
-        ) erange) flow
+      let flow = man.exec (mk_block [
+          mk_add_var tmp erange;
+          mk_assume (
+            mk_binop
+              (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+              O_log_and
+              (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+              erange
+          ) erange
+        ] erange) flow
       in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       OptionExt.return
@@ -175,13 +184,17 @@ struct
       let typ = T_c_integer(C_unsigned_long) in
       let tmp = mktmp ~typ () in
       let v = mk_var tmp erange in
-      let flow = man.exec (mk_assume (
-          mk_binop
-            (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
-            O_log_and
-            (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
-            erange
-        ) erange) flow in
+      let flow = man.exec (mk_block [
+          mk_add_var tmp erange;
+          mk_assume (
+            mk_binop
+              (mk_binop a O_le v (tag_range erange "in1") ~etyp:typ)
+              O_log_and
+              (mk_binop v O_le b (tag_range erange "in2") ~etyp:typ)
+              erange
+          ) erange
+        ] erange) flow
+      in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
       OptionExt.return
 

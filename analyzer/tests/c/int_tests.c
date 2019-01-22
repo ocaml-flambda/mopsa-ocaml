@@ -29,6 +29,12 @@ void test_mod() {
   _mopsa_assert(i % j == 1);
 }
 
+void test_bit_not() {
+  int i = 10;
+  int j = ~i;
+  _mopsa_assert(j == -11);
+}
+
 int glob;
 
 void test_global_init_with_zero() {

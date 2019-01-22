@@ -146,7 +146,7 @@ and parse_db (dbfile: string) ctx : unit =
 
 
 and parse_file (opts: string list) (file: string) ctx =
-  debug "parsing file %s" file;
+  Framework.Analyzer.progress "parsing file %s" file;
   let opts =
     List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
     (@) opts

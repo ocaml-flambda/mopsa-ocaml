@@ -22,9 +22,9 @@ struct
                           (** {2 Lattice structure} *)
   (*==========================================================================*)
 
-  (** Map with variables as keys. Absent bindings are assumed to point to ⊤. *)
+  (** Map with variables as keys. Absent bindings are assumed to point to ⊥. *)
   module VarMap =
-    Lattices.Total_map.Make
+    Lattices.Partial_map.Make
       (PrimedVar)
       (Value)
 
@@ -39,9 +39,8 @@ struct
     | D_nonrel -> Some Eq
     | _ -> None
 
-
   let print fmt a =
-    Format.fprintf fmt "%s: @[%a@]@\n" (snd @@ Value.name) VarMap.print a
+    Format.fprintf fmt "%s:@ @[   %a@]@\n" (snd @@ Value.name) VarMap.print a
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -235,7 +234,7 @@ struct
 
 
   let init prog man flow =
-    Some { flow = Flow.set_domain_env T_cur top man flow; callbacks = [] }
+    Some { flow = Flow.set_domain_env T_cur empty man flow; callbacks = [] }
 
   let exec_interface = Domain.{
     import = [];

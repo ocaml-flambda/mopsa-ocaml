@@ -229,6 +229,15 @@ let map_domain_cur (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
 let is_cur_bottom (man : ('a, 't) man) (flow :'a flow) : bool =
   man.is_bottom (get T_cur man flow)
 
+
+let test_domain_env (tk:token) (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
+  get_domain_env tk man flow |>
+  f
+
+let test_domain_cur (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
+  test_domain_env T_cur f man flow
+
+
 let get_all_annot flow = flow.annot
 let set_all_annot annot flow = {flow with annot}
 let map_all_annot f flow = set_all_annot (f @@ get_all_annot flow) flow
