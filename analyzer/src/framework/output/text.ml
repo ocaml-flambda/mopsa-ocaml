@@ -80,7 +80,16 @@ let help (args:(Arg.key * Arg.spec * Arg.doc) list) out =
   let print fmt = get_printer out fmt in
   print "Options:@.";
   List.iter (fun (key,spec,doc) ->
-      print "  %s %s@." key doc
+      match spec with
+      | Arg.Symbol(l,_) ->
+        print "  %s={%a} %s@."
+          key
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+             pp_print_string
+          ) l
+          doc
+      | _ -> print "  %s %s@." key doc
     ) args
 
 let list_domains (domains:string list) out =
