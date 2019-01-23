@@ -119,13 +119,13 @@ struct
               | E_py_undefined false ->
                 assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
 
-              | E_addr a ->
-                assign_addr man v (PyAddr.Def a) mode flow |> Post.of_flow
+              (* | E_addr a ->
+               *   assign_addr man v (PyAddr.Def a) mode flow |> Post.of_flow *)
 
-              | E_py_object ({addr_kind = A_py_class (c, b)} as addr, expr) ->
+              | E_py_object (addr, expr) ->
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.of_flow
 
-            | _ -> debug "%a@\n" pp_expr e; assert false
+              | _ -> debug "%a@\n" pp_expr e; assert false
           )
       |> OptionExt.return
 
@@ -187,7 +187,7 @@ struct
             Eval.empty_singleton flow :: acc
 
           | Def addr ->
-            man.eval (mk_addr addr range) flow :: acc
+            man.eval (mk_py_object (addr, exp) range) flow :: acc
 
         ) aset []
       |> Eval.join_list |> OptionExt.return
