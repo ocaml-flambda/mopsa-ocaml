@@ -12,6 +12,24 @@ open Yojson.Basic
 open Yojson.Basic.Util
 
 
+(** {2 Configuration file} *)
+(** ********************** *)
+
+(** Return the path of the configuration file *)
+let resolve_config_file config =
+  if Sys.file_exists config && not (Sys.is_directory config) then config
+  else
+    let config' = "configs/" ^ config in
+    if Sys.file_exists config' && not (Sys.is_directory config') then config'
+    else
+      let config'' = "analyzer/" ^ config' in
+      if Sys.file_exists config'' && not (Sys.is_directory config'') then config''
+      else Exceptions.panic "Unable to find configuration file %s" config
+
+
+(** {2 Domain builders} *)
+(** ******************* *)
+
 let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
@@ -93,7 +111,65 @@ and build_stack assoc =
   let module D = Domains.Stacked.Make(D1)(D2) in
   (module D : Domain.DOMAIN)
 
+(** {2 Toplevel attributes} *)
+(** *********************** *)
 
-let parse (file: string) : (module Domain.DOMAIN) =
+let get_language json =
+  match json with
+  | `Assoc(obj) when List.mem_assoc "language" obj ->
+    List.assoc "language" obj |> to_string
+  | _ -> Exceptions.panic "language declaration not found in configuration file"
+
+let get_domain json =
+  match json with
+  | `Assoc(obj) when List.mem_assoc "domain" obj ->
+    List.assoc "domain" obj
+  | _ -> Exceptions.panic "domain declaration not found in configuration file"
+
+
+(** {2 Entry points} *)
+(** **************** *)
+
+let parse (config: string) : string * (module Domain.DOMAIN) =
+  let file = resolve_config_file config in
   let json = Yojson.Basic.from_file file in
-  build_domain json
+  let language = get_language json in
+  let domain = get_domain json in
+  language, build_domain domain
+
+let language (config:string) : string =
+  let file = resolve_config_file config in
+  let json = Yojson.Basic.from_file file in
+  get_language json
+
+let domains (config:string) : string list =
+  let file = resolve_config_file config in
+  let json = Yojson.Basic.from_file file in
+  let rec iter = function
+    | `String(name) -> [name]
+
+    | `Assoc(obj) when List.mem_assoc "iter" obj ->
+      List.assoc "iter" obj |>
+      to_list |>
+      List.fold_left (fun acc obj ->
+          iter obj @ acc
+        ) []
+
+    | `Assoc(obj) when List.mem_assoc "product" obj ->
+      List.assoc "product" obj |>
+      to_list |>
+      List.fold_left (fun acc obj ->
+          iter obj @ acc
+        ) []
+
+    | `Assoc(obj) when List.mem_assoc "functor" obj ->
+      iter (List.assoc "functor" obj) @
+      iter (List.assoc "arg" obj)
+
+    | `Assoc(obj) when List.mem_assoc "stack" obj ->
+      iter (List.assoc "stack" obj) @
+      iter (List.assoc "over" obj)
+
+    | _ -> assert false
+  in
+  iter (get_domain json)

@@ -23,6 +23,4 @@ sig
 
   val man : (Domain.t, Domain.t) man
 
-  val output_actions : unit -> unit
-
 end

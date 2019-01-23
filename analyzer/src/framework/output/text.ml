@@ -40,7 +40,6 @@ let render man alarms time files out =
       ) alarms
 
 
-
 let panic ?btrace exn files out =
   let print fmt = get_printer out fmt in
   print "%a@." (Debug.color_str "red") "Analysis aborted";
@@ -75,3 +74,16 @@ let panic ?btrace exn files out =
     | _ -> ()
   in
   ()
+
+
+let help (args:(Arg.key * Arg.spec * Arg.doc) list) out =
+  let print fmt = get_printer out fmt in
+  print "Options:@.";
+  List.iter (fun (key,spec,doc) ->
+      print "  %s %s@." key doc
+    ) args
+
+let list_domains (domains:string list) out =
+  let print fmt = get_printer out fmt in
+  print "Domains:@.";
+  List.iter (fun d -> print "  %s@." d) domains

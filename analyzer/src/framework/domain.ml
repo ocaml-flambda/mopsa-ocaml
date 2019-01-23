@@ -98,3 +98,9 @@ let mem_domain name =
       let module D = (val d : DOMAIN) in
       D.name = name
     ) !domains
+
+let names () =
+  List.map (fun d ->
+      let module D = (val d : DOMAIN) in
+      D.name
+    ) !domains

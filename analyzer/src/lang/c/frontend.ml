@@ -30,21 +30,22 @@ let opt_make_target = ref ""
 (** Name of the target binary to analyze *)
 
 let () =
-  register_option (
-    "-I",
-    Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]),
-    " add the directory to the search path for include files in C analysis"
-  );
-  register_option (
-    "-ccopt",
-    Arg.String (fun l -> c_opts := !c_opts @ [l]),
-    " pass the option to the Clang frontend"
-  );
-  register_option (
-    "-make-target",
-    Arg.String (fun t -> opt_make_target := t),
-    " binary target to analyze. Used only when the Makefile builds multiple targets."
-  )
+  register_language_option "c" {
+    key = "-I";
+    doc = " add the directory to the search path for include files in C analysis";
+    spec = Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]);
+  };
+  register_language_option "c" {
+    key = "-ccopt";
+    doc = " pass the option to the Clang frontend";
+    spec = Arg.String (fun l -> c_opts := !c_opts @ [l]);
+  };
+  register_language_option "c" {
+    key = "-make-target";
+    doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
+    spec = Arg.Set_string opt_make_target;
+  };
+  ()
 
 
 
@@ -147,13 +148,7 @@ and parse_db (dbfile: string) ctx : unit =
 
 and parse_file (opts: string list) (file: string) ctx =
   debug "parsing file %s" file;
-  let opts =
-    List.map (fun stub -> "-I" ^ stub) Framework.Options.(common_options.stubs) |>
-    (@) opts
-  in
-
   C_parser.parse_file file opts ctx
-
 
 and from_project prj =
   let funcs_and_origins =

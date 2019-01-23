@@ -10,6 +10,7 @@
 
 open Mopsa
 
+let name = "universal.numeric.rounding"
 
 (****************************************************************************)
 (**                      {2 Command line options}                           *)
@@ -18,15 +19,18 @@ open Mopsa
 let opt_float_rounding = ref Apron.Texpr1.Near
 
 let () =
-  register_option (
-    "-float-rounding-mode",
-    Arg.String (function
-        | "near" -> opt_float_rounding := Apron.Texpr1.Near
-        | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
-        | "up"   -> opt_float_rounding := Apron.Texpr1.Up
-        | "down" -> opt_float_rounding := Apron.Texpr1.Down
-        | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Exceptions.panic "Unknown rounding mode %s" x
-      ),
-    "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
-  )
+  register_standalone_option name {
+    key = "-float-rounding-mode";
+    spec = Arg.Symbol (
+        ["near"; "zero"; "up"; "down"; "rnd"],
+        (function
+          | "near" -> opt_float_rounding := Apron.Texpr1.Near
+          | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
+          | "up"   -> opt_float_rounding := Apron.Texpr1.Up
+          | "down" -> opt_float_rounding := Apron.Texpr1.Down
+          | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
+          | x -> Exceptions.panic "unknown rounding mode %s" x
+        )
+      );
+    doc = "rounding mode of floating-point computations. (default: near)";
+  }

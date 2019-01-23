@@ -25,8 +25,6 @@ type token +=
 (**                        {2 Abstract domain}                              *)
 (*==========================================================================*)
 
-(* goto number of iteration before widening *)
-let goto_wid_param = ref 3
 
 module Domain : Framework.Domains.Stateless.S =
 struct
@@ -117,9 +115,6 @@ end
 
 let () =
   Framework.Domains.Stateless.register_domain (module Domain);
-  Framework.Options.register_option ("-goto-wid",
-                                     Arg.Int (fun i -> goto_wid_param := i),
-                                     "Number of iteration allowed for wideining iteration");
   register_token
     { print = (fun next fmt -> function
           | T_goto str -> Format.fprintf fmt "goto %s" str

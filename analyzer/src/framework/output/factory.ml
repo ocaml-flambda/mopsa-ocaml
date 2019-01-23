@@ -20,25 +20,6 @@ type format =
 let opt_format = ref F_text
 let opt_file = ref None
 
-let () =
-  Options.register_option (
-    "-format",
-    Arg.String (fun s ->
-        match s with
-        | "text" -> opt_format := F_text
-        | "json" -> opt_format := F_json
-        | _ -> Exceptions.panic "Unknown output format %s" s
-      ),
-    " display format of the results. Possible values: text or json (default: text)."
-  );
-
-  Options.register_option (
-    "-output",
-    Arg.String (fun s -> opt_file := Some s),
-    " path where results are stored."
-  )
-
-
 
 (* Result rendering *)
 (* ---------------- *)
@@ -61,3 +42,14 @@ let panic ?btrace exn files =
   match !opt_format with
   | F_text -> Text.panic ?btrace exn files !opt_file
   | F_json -> Json.panic ?btrace exn files !opt_file
+
+let help (args:(Arg.key * Arg.spec * Arg.doc) list) =
+  match !opt_format with
+  | F_text -> Text.help args !opt_file
+  | F_json -> Json.help args !opt_file
+
+let list_domains (domains:string list) =
+  match !opt_format with
+  | F_text -> Text.list_domains domains !opt_file
+  | F_json -> Json.list_domains domains !opt_file
+

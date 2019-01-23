@@ -18,15 +18,6 @@ open Common.Points_to
 open Cell
 module Itv = Universal.Numeric.Values.Intervals.Value
 
-(** Maximal number of expanded cells when dereferencing a pointer *)
-let opt_expand = ref 1
-
-let () =
-  Framework.Options.register_option (
-    "-cell-expand",
-    Arg.Set_int opt_expand,
-    " maximal number of expanded cells (default: 1)"
-  )
 
 (** Zoning *)
 
@@ -296,6 +287,19 @@ module Domain = struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+
+  (** Command-line options *)
+  (** ******************** *)
+
+  (** Maximal number of expanded cells when dereferencing a pointer *)
+  let opt_expand = ref 1
+
+  let () =
+    register_domain_option name {
+      key = "-cell-expand";
+      doc = " maximal number of expanded cells (default: 1)";
+      spec = Arg.Set_int opt_expand;
+    }
 
 
   (** Zoning interface *)

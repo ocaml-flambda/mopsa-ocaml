@@ -63,3 +63,39 @@ let panic ?(btrace="<none>") exn files out =
     ]
   in
   print json out
+
+let help (args:(Arg.key * Arg.spec * Arg.doc) list) out =
+  let json : json = `List (
+      args |>
+      List.map (fun (key,spec,doc) ->
+          `Assoc [
+            "key", `String key;
+            "doc", `String doc;
+            "type", `String (
+              match spec with
+              | Arg.Bool _ -> "bool"
+              | Arg.Set _ -> "set"
+              | Arg.Clear _ -> "clear"
+              | Arg.Unit _ -> "unit"
+              | Arg.String _ -> "string"
+              | Arg.Set_string _ -> "string"
+              | Arg.Int _ -> "int"
+              | Arg.Set_int _ -> "int"
+              | Arg.Float _ -> "float"
+              | Arg.Set_float _ -> "float"
+              | Arg.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
+              | _ -> Exceptions.panic ~loc:__LOC__ "unsupported option"
+            )
+          ]
+        )
+    )
+  in
+  print json out
+
+let list_domains (domains:string list) out =
+  let json : json = `List (
+      domains |>
+      List.map (fun d -> `String d)
+    )
+  in
+  print json out

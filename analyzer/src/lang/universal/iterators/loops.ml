@@ -14,6 +14,8 @@ open Framework.Domains.Stateless
 open Ast
 open Zone
 
+let name = "universal.iterators.loops"
+
 (*==========================================================================*)
 (**                         {2 Loops flow token}                            *)
 (*==========================================================================*)
@@ -47,12 +49,16 @@ let opt_loop_unrolling : int ref = ref 1
 (** Number of unrolling iterations before joining the environments. *)
 
 let () =
-  register_option (
-    "-widening-delay", Arg.Set_int opt_loop_widening_delay, " number of iterations before applying a widening (default: 0)"
-  );
-  register_option (
-    "-loop-unrolling", Arg.Set_int opt_loop_unrolling, " number of unrolling iterations before joining the environments (default: 1)"
-  )
+  register_domain_option name {
+    key = "-widening-delay";
+    doc = " number of iterations before applying a widening (default: 0)";
+    spec = Arg.Set_int opt_loop_widening_delay;
+  };
+  register_domain_option name {
+    key = "-loop-unrolling";
+    doc = " number of unrolling iterations before joining the environments (default: 1)";
+    spec = Arg.Set_int opt_loop_unrolling;
+  }
 
 (*==========================================================================*)
 (**                            {2 Domain}                                   *)
@@ -64,7 +70,7 @@ struct
   type _ domain += D_universal_loops : unit domain
 
   let id = D_universal_loops
-  let name = "universal.iterators.loops"
+  let name = name
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_universal_loops -> Some Eq
