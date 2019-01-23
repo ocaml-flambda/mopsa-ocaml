@@ -77,7 +77,7 @@ module Domain =
 struct
 
   module ASet = Framework.Lattices.Powerset.Make(PyAddr)
-  module AMap = Framework.Lattices.Total_map.Make
+  module AMap = Framework.Lattices.Partial_map.Make
       (struct type t = var let compare = compare_var let print = Framework.Ast.pp_var end)
       (ASet)
 
@@ -93,14 +93,14 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = { export = [Zone.Z_py]; import = [any_zone]; }
+  let exec_interface = { export = [Zone.Z_py]; import = [Zone.Z_py_types]; }
   let eval_interface = { export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_addr]; }
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow =
-    Flow.set_domain_cur top man flow
+    Flow.set_domain_cur empty man flow
     |> Flow.without_callbacks
     |> OptionExt.return
 
@@ -113,9 +113,18 @@ struct
         Post.bind man
           (fun e flow ->
             match ekind e with
-            | E_py_undefined true -> assign_addr man v PyAddr.Undef_global mode flow |> Post.of_flow
-            | E_py_undefined false -> assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
-            | E_py_object (addr, expr) -> debug "obj @ %a@\n" pp_addr addr; assert false
+              | E_py_undefined true ->
+                assign_addr man v PyAddr.Undef_global mode flow |> Post.of_flow
+
+              | E_py_undefined false ->
+                assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
+
+              | E_addr a ->
+                assign_addr man v (PyAddr.Def a) mode flow |> Post.of_flow
+
+              | E_py_object ({addr_kind = A_py_class (c, b)} as addr, expr) ->
+                assign_addr man v (PyAddr.Def addr) mode flow |> Post.of_flow
+
             | _ -> debug "%a@\n" pp_expr e; assert false
           )
       |> OptionExt.return
@@ -136,6 +145,13 @@ struct
                 Exceptions.panic_at range "todo addr_env/assume")
        |> OptionExt.return
 
+    | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+      let cur = Flow.get_domain_cur man flow in
+      let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
+      debug "ncur = %a@\n" print ncur;
+      let flow = Flow.set_domain_cur ncur man flow in
+      man.exec ~zone:Zone.Z_py_types stmt flow |> Post.return
+
     | _ -> None
 
   and assign_addr man v av mode flow =
@@ -147,7 +163,36 @@ struct
     Flow.set_domain_cur (add v aset cur) man flow
 
 
-  let eval zs exp man flow = None
+  let eval zs exp man flow =
+    let range = erange exp in
+    match ekind exp with
+    | E_var (v, mode) ->
+      let cur = Flow.get_domain_cur man flow in
+      let aset = AMap.find v cur in
+      ASet.fold (fun a acc ->
+          let flow = Flow.set_domain_cur (AMap.add v (ASet.singleton a) cur) man flow in
+          match a with
+          | Undef_global when is_builtin_name v.org_vname ->
+            (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+
+          | Undef_local when is_builtin_name v.org_vname ->
+            (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+
+          | Undef_global ->
+            let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
+            Eval.empty_singleton flow :: acc
+
+          | Undef_local ->
+            let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
+            Eval.empty_singleton flow :: acc
+
+          | Def addr ->
+            man.eval (mk_addr addr range) flow :: acc
+
+        ) aset []
+      |> Eval.join_list |> OptionExt.return
+
+    | _ -> None
 
   let ask _ _ _ = None
 

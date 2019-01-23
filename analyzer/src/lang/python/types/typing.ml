@@ -7,6 +7,7 @@ open MapExt
 open Objects.Function
 open Universal.Ast
 
+
 module Domain =
 struct
 
@@ -22,10 +23,25 @@ struct
     (* | Union of addr list *)
     | Typevar of int
 
-  and pytypeinst = {classn: addr; uattrs: addr StringMap.t; oattrs: addr StringMap.t}
+  and pytypeinst = {classn: polytype (* TODO: polytype or addr? *); uattrs: addr StringMap.t; oattrs: addr StringMap.t}
 
+  type addr_kind +=
+    | A_py_instance (*of  class_address*)
 
-  let compare_polytype t1 t2 =
+  let () =
+    Format.(register_addr {
+        print = (fun default fmt a ->
+            match a with
+            | A_py_instance (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
+              -> fprintf fmt "inst"
+            | _ -> default fmt a);
+        compare = (fun default a1 a2 ->
+            match a1, a2 with
+            (* | A_py_instance c1, A_py_instance c2 ->
+             *   compare_addr_kind (A_py_class (c1, [])) (A_py_class (c2, [])) *)
+            | _ -> default a1 a2);})
+
+  let rec compare_polytype t1 t2 =
     match t1, t2 with
     | Class (ca, objs), Class (ca', objs') ->
       compare_addr_kind (A_py_class (ca, objs)) (A_py_class (ca', objs'))
@@ -35,7 +51,8 @@ struct
       compare_addr_kind (A_py_module m1) (A_py_module m2)
     | Instance i1, Instance i2 ->
       Compare.compose [
-        (fun () -> compare_addr i1.classn i2.classn);
+        (* (fun () -> compare_addr i1.classn i2.classn); *)
+        (fun () -> compare_polytype i1.classn i2.classn);
         (fun () -> StringMap.compare compare_addr i1.uattrs i2.uattrs);
         (fun () -> StringMap.compare compare_addr i1.oattrs i2.oattrs)
       ]
@@ -51,7 +68,7 @@ struct
                                 print_sep = ";";
                                 print_end = "}"; }
 
-  let pp_polytype fmt t =
+  let rec pp_polytype fmt t =
     match t with
     | Bot -> Format.fprintf fmt "⊥"
     | Top -> Format.fprintf fmt "⊤"
@@ -63,12 +80,13 @@ struct
 
     | Instance {classn; uattrs; oattrs} ->
      if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
-       Format.fprintf fmt "Instance[%a]" pp_addr classn
+       Format.fprintf fmt "Instance[%a]" pp_polytype classn
      else
        let pp_attrs = (StringMap.fprint map_printer Format.pp_print_string pp_addr) in
-       Format.fprintf fmt "Instance[%a, %a, %a]" pp_addr classn pp_attrs uattrs pp_attrs oattrs
+       Format.fprintf fmt "Instance[%a, %a, %a]" pp_polytype classn pp_attrs uattrs pp_attrs oattrs
 
     (* | Union l -> Format.fprintf fmt "Union[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_addr) l *)
+
     | Typevar t -> Format.fprintf fmt "α(%d)" t
 
   module Polytypeset = Framework.Lattices.Powerset.Make
@@ -78,7 +96,7 @@ struct
         let print = pp_polytype
       end)
 
-  module TMap = Framework.Lattices.Total_map.Make
+  module TMap = Framework.Lattices.Partial_map.Make
       (struct
         type t = addr
         let compare = compare_addr
@@ -88,15 +106,13 @@ struct
 
   type typevar = int
 
-
-  module TypeVarMap = Framework.Lattices.Total_map.Make
+  module TypeVarMap = Framework.Lattices.Partial_map.Make
       (struct
         type t = typevar
         let compare = compare
         let print fmt d = Format.fprintf fmt "%d@\n" d
       end)
       (Polytypeset)
-
 
   type t = {abs_heap: TMap.t;
             typevar_env: TypeVarMap.t}
@@ -114,7 +130,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [any_zone]; import = [any_zone]}
+  let exec_interface = {export = [any_zone]; import = [Zone.Z_py_types]}
   let eval_interface = {export = [Zone.Z_py, Zone.Z_py_addr]; import = [Universal.Zone.Z_u_heap, Z_any]}
 
   let join _ = Exceptions.panic "todo join "
@@ -135,8 +151,7 @@ struct
   let widen _ _  = Exceptions.panic "todo widen"
   let top = {abs_heap = TMap.top; typevar_env = TypeVarMap.top}
   let bottom = (* FIXME *) {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
-  let is_top {abs_heap; typevar_env} = TMap.is_top abs_heap && TypeVarMap.is_top typevar_env
-  let is_bottom _  = Exceptions.panic "todo is_bottom"
+  let is_bottom {abs_heap; typevar_env} = TMap.is_bottom abs_heap && TypeVarMap.is_bottom typevar_env
 
   let pp_absheap = TMap.print
 
@@ -148,17 +163,35 @@ struct
       pp_typevar_env typevar_env
 
   let init progr man flow =
-    Flow.set_domain_env T_cur top man flow |> Flow.without_callbacks |> OptionExt.return
+    Flow.set_domain_env T_cur {abs_heap = TMap.empty; typevar_env = TypeVarMap.empty} man flow |> Flow.without_callbacks |> OptionExt.return
 
   let exec zone stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     match skind stmt with
+    | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
+      (* TODO: le faire autrepart (addr_env), /!\ zones *)
+      let cur = Flow.get_domain_cur man flow in
+      let abs_heap = TMap.rename a a' cur.abs_heap in
+      debug "abs_heap = %a@\n" pp_absheap abs_heap;
+      Flow.set_domain_cur {cur with abs_heap} man flow |> Post.return
+
     | _ -> None
 
   let eval zs exp man flow =
     debug "eval %a@\n" pp_expr exp;
     let range = erange exp in
     match ekind exp with
+    | E_addr addr ->
+      let cur = Flow.get_domain_cur man flow in
+      Polytypeset.fold (fun pty acc ->
+          let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
+          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+          match pty with
+            | Class (c, b) ->
+              Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, exp) range) flow :: acc
+
+            | _ -> Exceptions.panic_at range "%a@\n" pp_polytype pty) (TMap.find addr cur.abs_heap) []
+      |> Eval.join_list |> OptionExt.return
     (* | E_constant (C_top T_bool)
      *   | E_constant (C_bool _ ) ->
      *    return_id_of_type man flow range (Typingdomain.builtin_inst "bool") |> OptionExt.return
@@ -170,11 +203,30 @@ struct
      * | E_constant (C_top (T_float _))
      *   | E_constant (C_float _) ->
      *    return_id_of_type man flow range (Typingdomain.builtin_inst "float") |> OptionExt.return
-     *
-     * | E_constant (C_top T_string)
-     *   | E_constant (C_string _) ->
-     *    return_id_of_type man flow range (Typingdomain.builtin_inst "str") |> OptionExt.return
-     *
+     **)
+    | E_constant (C_top T_string)
+    | E_constant (C_string _) ->
+      (* allocate addr, and map this addr to inst "str" *)
+      let str_cls, str_mro =
+        let obj = find_builtin "str" in
+        match kind_of_object obj with
+        | A_py_class (c, b) -> c, b
+        | _  -> assert false in
+      man.eval (mk_alloc_addr (A_py_instance (*str_cls*)) range) flow |>
+      Eval.bind (fun eaddr flow ->
+          let addr = match ekind eaddr with
+            | E_addr a -> a
+            | _ -> assert false in
+          let cur = Flow.get_domain_cur man flow in
+          let str_inst = (Polytypeset.singleton (Instance {classn=Class (str_cls, str_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
+          let abs_heap = TMap.add addr str_inst cur.abs_heap in
+          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+          Eval.singleton eaddr flow
+          (* Eval.singleton (mk_py_object (addr, exp) range) flow *)
+        )
+      |> OptionExt.return
+
+    (*
      * | E_py_bytes _ ->
      *    return_id_of_type man flow range (Typingdomain.builtin_inst "bytes") |> OptionExt.return
      *
@@ -186,8 +238,13 @@ struct
      *    let builtin_none = Typingdomain.builtin_inst "NoneType" in
      *    return_id_of_type man flow range builtin_none |> OptionExt.return *)
 
-    | E_alloc_addr akind ->
-      Exceptions.panic "E_alloc_addr"
+    (* Je pense pas avoir besoin de ça finalement *)
+    (* | E_py_object ({addr_kind = A_py_class (c, b)} as addr, expr) ->
+     *   let cur = Flow.get_domain_cur man flow in
+     *   let abs_heap = TMap.add addr (Polytypeset.singleton (Class (c, b))) cur.abs_heap in
+     *   let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+     *   Eval.singleton (mk_addr addr range) flow |> OptionExt.return *)
+
     (* begin match akind with
      * | A_py_method (func, self) ->
      *    man.eval (mk_py_object ({addr_kind = akind; addr_uid = (-1); addr_mode=STRONG}, mk_py_empty range) range) flow
