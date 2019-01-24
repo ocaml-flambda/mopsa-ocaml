@@ -147,10 +147,16 @@ struct
     | S_assume e ->
        man.eval e flow |>
          Post.bind man (fun expr flow ->
-             match ekind expr with
-             | E_constant (C_bool true) -> Post.of_flow flow
-             | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
-             | _ ->
+           match ekind expr with
+           (* FIXME: same things for true and Top ? *)
+           | E_constant (C_top T_bool)
+           | E_constant (C_bool true)
+           | E_py_object ({addr_uid = -3}, _)
+           | E_py_object ({addr_uid = -1}, _)
+             -> Post.of_flow flow
+           | E_py_object ({addr_uid = -2}, _)
+           | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
+           | _ ->
                 Exceptions.panic_at range "todo addr_env/assume")
        |> OptionExt.return
 
