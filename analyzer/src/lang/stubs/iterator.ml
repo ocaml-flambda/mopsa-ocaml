@@ -57,7 +57,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-
+    debug "eval formula %a@\n%a" pp_formula f (Flow.print man) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -138,20 +138,25 @@ struct
     (* Add [v] to the environment *)
     let flow = man.exec (mk_add_var v range) flow in
 
-    (* Initialize its value *)
+    (* Constrain the range of [v] in case of ∃ *)
     let flow =
-      match s with
-      | S_interval (l, u) -> man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
-                             man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
-      | S_resource _ -> panic_at range "quantified resource instances not supported"
+      match s, q with
+      | S_interval (l, u), EXISTS ->
+        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
+        man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+
+      | _ -> flow
     in
+
 
     (* Replace [v] in [ff] with a quantified expression *)
     let ff1 =
       visit_expr_in_formula
         (fun e ->
            match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 -> Keep { e with ekind = E_stub_quantified (q, v, s) }
+           | E_var (vv, _) when compare_var v vv = 0 ->
+             Keep { e with ekind = E_stub_quantified (q, v, s) }
+
            | _ -> VisitParts e
         )
         f
@@ -159,16 +164,37 @@ struct
 
     let ftrue, _ = eval_formula ff1 ~negate:false man flow in
 
+    let remove_quant_var flow =
+      man.exec (mk_remove_var v range) flow
+    in
+
+    let ftrue = remove_quant_var ftrue in
+
     let ffalse =
       if not negate then None
       else
-        let ff = with_range (F_not f) f.range in
+        let ff = with_range (F_not ff1) f.range in
+        let flip_var_quant f =
+          visit_expr_in_formula
+            (fun e ->
+               match ekind e with
+               | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
+                 VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+
+               | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+                 VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
+
+               | _ -> VisitParts e
+            )
+            f
+        in
         let f =
           match q with
-          | FORALL -> with_range (F_exists (v, s, ff)) range
-          | EXISTS -> with_range (F_forall (v, s, ff)) range
+          | FORALL -> with_range (F_exists (v, s, flip_var_quant ff)) range
+          | EXISTS -> with_range (F_forall (v, s, flip_var_quant ff)) range
         in
         let ftrue, _ = eval_formula f ~negate:false man flow in
+        let ftrue = remove_quant_var ftrue in
         Some ftrue
     in
 
@@ -176,6 +202,7 @@ struct
 
   (* We need to compute a fixpoint of a formula evaluation *)
   let eval_formula_fixpoint f ~negate man flow =
+    debug "eval formula fixpoint %a" pp_formula f;
     let rec lfp (flow: 'a flow) (neg: 'a flow option) : 'a flow * 'a flow option =
       debug "fixpoint iteration";
       let flow1, neg1 = eval_formula f ~negate man flow in
@@ -254,15 +281,17 @@ struct
 
 
   let exec_ensures e return man flow =
+    debug "exec %a" pp_ensures e;
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
-      | None -> e.content
+      | None -> debug "none"; e.content
       | Some v ->
+        debug "replace return with %a" pp_var v;
         visit_expr_in_formula
           (fun e ->
              match ekind e with
-             | E_stub_return -> Keep { e with ekind = E_var (v, STRONG) }
+             | E_stub_return -> debug "real replace";Keep { e with ekind = E_var (v, STRONG) }
              | _ -> VisitParts e
           )
           e.content
@@ -282,9 +311,7 @@ struct
     let block2 =
       List.fold_left (fun block a ->
           let t = a.content.assign_target in
-          match a.content.assign_offset with
-          | None -> mk_rename (mk_primed t) t range :: block
-          | Some offsets -> mk_stub_rename_primed t offsets range :: block
+          mk_stub_rename_primed t a.content.assign_offset range :: block
         ) block1 assigns
     in
     man.exec (mk_block block2 range) flow

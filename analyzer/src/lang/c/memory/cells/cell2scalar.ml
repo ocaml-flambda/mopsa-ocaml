@@ -14,7 +14,7 @@ open Cell
 open Zone
 module Itv =  ItvUtils.IntItv
 
-module CellScalarEquiv = Equiv.Make(PrimedCell)(PrimedVar)
+module CellScalarEquiv = Equiv.Make(Cell)(Var)
 
 type ('a, _) Annotation.key +=
   | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
@@ -41,7 +41,7 @@ let get_scalar_or_create flow c =
   try CellScalarEquiv.find_l c annot, flow
   with
   | Not_found ->
-    let v = primed_lift cell_to_var c in
+    let v = cell_to_var c in
     let annot' = CellScalarEquiv.add (c, v) annot in
     let flow' = Flow.set_annot A_cell_scalar annot' flow in
     (v, flow')
@@ -53,7 +53,7 @@ let get_cell flow v =
   | Not_found ->
     Exceptions.panic
       "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
-      PrimedVar.print v
+      pp_var v
       CellScalarEquiv.print annot
 
 let get_scalar_and_remove flow c =
@@ -65,7 +65,7 @@ let get_scalar_and_remove flow c =
     v, flow'
   with
   | Not_found ->
-    let v = primed_lift cell_to_var c in
+    let v = cell_to_var c in
     (v, flow)
 
 
@@ -112,77 +112,59 @@ struct
   (** Post-conditions *)
   (** *************** *)
 
+  let cell_expr_to_var exp flow =
+    match ekind exp with
+    | E_c_cell (c, mode) ->
+      let v, flow = get_scalar_or_create flow c in
+      mk_var v ~mode exp.erange, flow
+
+    | _ -> assert false
+
+
   let exec zone stmt man flow =
     match skind stmt with
-    | S_add c when PrimedCell.match_expr c ->
-      let pc = PrimedCell.from_expr c in
-      begin match primed_apply cell_base pc with
+    | S_add ({ ekind = E_c_cell (c, _) } as e)->
+      begin match cell_base c with
         | S _ -> Post.return flow
         | _ ->
-          let mode = PrimedCell.ext_from_expr c in
-          let pv, flow = get_scalar_or_create flow pc in
-          let vv = PrimedVar.to_expr pv mode stmt.srange in
-          man.exec ~zone:Z_c_scalar (mk_add vv stmt.srange) flow |>
+          let v, flow = cell_expr_to_var e flow in
+          man.exec ~zone:Z_c_scalar (mk_add v stmt.srange) flow |>
           Post.return
       end
 
-    | S_remove c when PrimedCell.match_expr c ->
-      let pc = PrimedCell.from_expr c in
-      let mode = PrimedCell.ext_from_expr c in
-      let pv, flow = get_scalar_and_remove flow pc in
-      let vv = PrimedVar.to_expr pv mode stmt.srange in
-      man.exec ~zone:Z_c_scalar (mk_remove vv stmt.srange) flow |>
+    | S_remove ({ ekind = E_c_cell _ } as e) ->
+      let v, flow = cell_expr_to_var e flow in
+      man.exec ~zone:Z_c_scalar (mk_remove v stmt.srange) flow |>
       Post.return
 
-    | S_expand (c, cl) when PrimedCell.match_expr c &&
-                            List.for_all PrimedCell.match_expr cl ->
-      let pc = PrimedCell.from_expr c in
-      let mode = PrimedCell.ext_from_expr c in
-      let pcl = List.map PrimedCell.from_expr cl in
-      let model = List.map PrimedCell.ext_from_expr cl in
-      let pv, flow = get_scalar_or_create flow pc in
-      let vv = PrimedVar.to_expr pv mode stmt.srange in
+    | S_expand (({ekind = E_c_cell _} as e), cl) ->
+      let v, flow = cell_expr_to_var e flow in
       let vl, flow =
         let rec doit flow = function
           | [] -> [], flow
-          | (pc, mode) :: tl ->
-            let pv, flow = get_scalar_or_create flow pc in
-            let vv = PrimedVar.to_expr pv mode stmt.srange in
+          | ee :: tl ->
+            let v, flow = cell_expr_to_var ee flow in
             let vl, flow = doit flow tl in
-            vv :: vl, flow
+            v :: vl, flow
         in
-        doit flow (List.combine pcl model)
+        doit flow cl
       in
-      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (vv, vl)}) flow |>
+      man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (v, vl)}) flow |>
       Post.return
 
-    | S_rename(c1, c2) when PrimedCell.match_expr c1 &&
-                            PrimedCell.match_expr c2
-      ->
-      let pc1 = PrimedCell.from_expr c1 in
-      let mode1 = PrimedCell.ext_from_expr c1 in
-      let pv1, flow = get_scalar_and_remove flow pc1 in
-      let vv1 = PrimedVar.to_expr pv1 mode1 stmt.srange in
-
-      let pc2 = PrimedCell.from_expr c2 in
-      let mode2 = PrimedCell.ext_from_expr c2 in
-      let pv2, flow = get_scalar_or_create flow pc2 in
-      let vv2 = PrimedVar.to_expr pv2 mode2 stmt.srange in
-
-      man.exec ~zone:Z_c_scalar (mk_rename vv1 vv2 stmt.srange) flow |>
+    | S_rename(({ekind = E_c_cell _} as c1), ({ekind = E_c_cell _} as c2)) ->
+      let v1, flow = cell_expr_to_var c1 flow in
+      let v2, flow = cell_expr_to_var c2 flow in
+      man.exec ~zone:Z_c_scalar (mk_rename v1 v2 stmt.srange) flow |>
       Post.return
 
 
-    | S_assign(c, e) when PrimedCell.match_expr c ->
-      let pc = PrimedCell.from_expr c in
-      let mode = PrimedCell.ext_from_expr c in
-      let pv, flow = get_scalar_or_create flow pc in
-      let vv = PrimedVar.to_expr pv mode stmt.srange in
-
+    | S_assign({ekind = E_c_cell _} as c, e) ->
+      let v, flow = cell_expr_to_var c flow in
       man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
       Post.bind_opt man @@ fun e flow ->
 
-      man.exec ~zone:Z_c_scalar (mk_assign vv e stmt.srange) flow |>
+      man.exec ~zone:Z_c_scalar (mk_assign v e stmt.srange) flow |>
       Post.return
 
     | S_assume(e) ->
@@ -240,12 +222,9 @@ struct
       |>
       Eval.return
 
-    | c when PrimedCell.match_expr exp ->
-      let pc = PrimedCell.from_expr exp in
-      let mode = PrimedCell.ext_from_expr exp in
-      let pv, flow = get_scalar_or_create flow pc in
-      let vv = PrimedVar.to_expr pv mode exp.erange in
-      Eval.singleton vv flow |>
+    | E_c_cell _ ->
+      let v, flow = cell_expr_to_var exp flow in
+      Eval.singleton v flow |>
       Eval.return
 
     | _ -> None

@@ -162,10 +162,10 @@ let visit_local macros enums local =
 let visit_assigns macros enums assigns =
   bind_range assigns @@ fun assigns -> {
     assign_target = visit_expr macros enums assigns.assign_target;
-    assign_offset = OptionExt.lift (List.map (fun (a, b) ->
+    assign_offset = List.map (fun (a, b) ->
         (visit_expr macros enums a),
         (visit_expr macros enums b)
-      )) assigns.assign_offset;
+      ) assigns.assign_offset;
   }
 
 let visit_leaf macros enums leaf =

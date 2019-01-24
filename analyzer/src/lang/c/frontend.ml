@@ -645,9 +645,9 @@ and from_stub_assigns ctx assign =
   bind_range assign @@ fun assign ->
   {
     assign_target = from_stub_expr ctx assign.assign_target;
-    assign_offset = OptionExt.option_lift1 (List.map (fun (a, b) ->
+    assign_offset = List.map (fun (a, b) ->
         (from_stub_expr ctx a, from_stub_expr ctx b)
-      )) assign.assign_offset;
+      ) assign.assign_offset;
   }
 
 and from_stub_local ctx loc =
@@ -713,7 +713,7 @@ and from_stub_expr ctx exp =
   | E_member (s, f) -> E_c_member_access(from_stub_expr ctx s, find_field_index s.content.typ f, f)
   | E_attribute (o, f) -> E_stub_attribute(from_stub_expr ctx o, f)
   | E_arrow (p, f) -> E_c_arrow_access(from_stub_expr ctx p, find_field_index (under_type p.content.typ) f, f)
-  | E_builtin_call (PRIMED, arg) -> E_primed(from_stub_expr ctx arg)
+  | E_builtin_call (PRIMED, arg) -> E_stub_primed(from_stub_expr ctx arg)
   | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
   | E_return -> E_stub_return
 

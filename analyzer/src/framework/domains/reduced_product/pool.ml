@@ -86,8 +86,8 @@ type 'v value_man = {
     abstract elements of a member non-relational abstract domains *)
 type ('a, 'v) nonrel_man = {
   pool : 'v value_pool;
-  get_var_value : 't. 't value -> var primed -> 'a -> 't;
-  set_var_value : 't. 't value -> var primed -> 't -> 'a -> 'a;
+  get_var_value : 't. 't value -> var -> 'a -> 't;
+  set_var_value : 't. 't value -> var -> 't -> 'a -> 'a;
 }
 
 

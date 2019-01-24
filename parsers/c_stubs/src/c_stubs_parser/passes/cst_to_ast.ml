@@ -527,7 +527,7 @@ let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
     assign_target = visit_expr a.Cst.assign_target prj func;
-    assign_offset = visit_option (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
+    assign_offset = (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
   }
 
 let visit_ensures ens prj func =
