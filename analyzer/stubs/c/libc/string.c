@@ -417,6 +417,23 @@ char *strchr (const char *__s, int __c);
 char *strrchr (const char *__s, int __c);
 
 
+/*$
+ * requires: valid_string(__s);
+ * ensures: return in [0, size(__s) - 1];
+ * ensures: __s[return] == 0;
+ * ensures: forall signed int i in [0, (signed int)return - 1]: __s[i] != 0;
+ */
+size_t strlen (const char *__s);
+
+
+#ifdef	__USE_XOPEN2K8
+
+size_t strnlen (const char *__string, size_t __maxlen);
+
+#endif
+
+
+
 #ifdef __USE_GNU
 
 char *strchrnul (const char *__s, int __c);
@@ -463,13 +480,6 @@ void *mempcpy (void *__restrict __dest,
 
 #endif
 
-size_t strlen (const char *__s);
-
-#ifdef	__USE_XOPEN2K8
-
-size_t strnlen (const char *__string, size_t __maxlen);
-
-#endif
 
 char *strerror (int __errnum);
 

@@ -212,16 +212,23 @@ let mk_stub_rename_primed t offsets range =
 
 
 (** Visit expressions present in a formula *)
-let rec visit_expr_in_formula expr_visitor f =
+let rec visit_expr_in_formula visitor f =
   bind_range f @@ fun f ->
   match f with
-  | F_expr e -> F_expr (Visitor.map_expr expr_visitor (fun stmt -> Keep stmt) e)
-  | F_binop (op, f1, f2) -> F_binop (op, visit_expr_in_formula expr_visitor f1, visit_expr_in_formula expr_visitor f2)
-  | F_not ff -> F_not (visit_expr_in_formula expr_visitor ff)
-  | F_forall (v, s, ff) -> F_forall (v, s, visit_expr_in_formula expr_visitor ff)
-  | F_exists (v, s, ff) -> F_exists (v, s, visit_expr_in_formula expr_visitor ff)
-  | F_in (v, s) -> F_in (v, s)
+  | F_expr e -> F_expr (visit_expr visitor e)
+  | F_binop (op, f1, f2) -> F_binop (op, visit_expr_in_formula visitor f1, visit_expr_in_formula visitor f2)
+  | F_not ff -> F_not (visit_expr_in_formula visitor ff)
+  | F_forall (v, s, ff) -> F_forall (v, visit_set visitor s, visit_expr_in_formula visitor ff)
+  | F_exists (v, s, ff) -> F_exists (v, visit_set visitor s, visit_expr_in_formula visitor ff)
+  | F_in (e, s) -> F_in (visit_expr visitor e, visit_set visitor s)
 
+and visit_set visitor s =
+  match s with
+  | S_interval (e1, e2) -> S_interval (visit_expr visitor e1, visit_expr visitor e2)
+  | S_resource r -> S_resource r
+
+and visit_expr visitor e =
+  Visitor.map_expr visitor (fun stmt -> Keep stmt) e
 
 let mk_stub_alloc_resource res range =
   mk_alloc_addr (A_stub_resource res) range

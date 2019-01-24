@@ -604,6 +604,7 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
+  debug "convert to ast:@\n%a" Cst.pp_stub stub;
   let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
   Ast.{
     stub_name = func.C_AST.func_org_name;
