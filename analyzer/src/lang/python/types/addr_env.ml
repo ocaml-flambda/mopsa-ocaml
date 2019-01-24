@@ -129,6 +129,15 @@ struct
           )
       |> OptionExt.return
 
+    | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
+      Eval.eval_list [lval; rval] man.eval flow |>
+      Post.bind man (fun args flow ->
+          let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
+          man.exec ~zone:Zone.Z_py_types (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.of_flow
+        )
+      |> OptionExt.return
+
+
     | S_remove { ekind = E_var (v, _) } ->
       let flow = Flow.map_domain_cur (remove v) man flow in
       (* let v' = mk_py_value_var v T_any in

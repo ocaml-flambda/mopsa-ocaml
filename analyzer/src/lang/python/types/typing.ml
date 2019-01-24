@@ -186,6 +186,25 @@ struct
 
     | S_add _ -> Post.return flow
 
+    | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
+      begin match ekind lval, ekind rval with
+        | E_py_object (alval, _), E_py_object (arval, _) ->
+          (* FIXME: weak vs strong updates? *)
+          let cur = Flow.get_domain_cur man flow in
+          Polytypeset.fold (fun old_inst acc ->
+              let old_inst = match old_inst with
+                | Instance i -> i
+                | _ -> assert false in
+              let new_inst = Instance {classn=old_inst.classn;
+                                       uattrs=StringMap.add attr arval old_inst.uattrs;
+                                       oattrs=old_inst.oattrs} in
+              let abs_heap = TMap.add alval (Polytypeset.singleton new_inst) cur.abs_heap in
+              Flow.set_domain_cur {cur with abs_heap} man flow :: acc) (TMap.find alval cur.abs_heap) []
+          |> Flow.join_list man |> Post.return
+
+        | _ -> assert false
+      end
+
     | _ -> None
 
   let allocate_builtin exp man range flow bltin =
