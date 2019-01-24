@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Initialize variable with stubs. *)
+(** Desugar conditional expressions `cond?e1:e2`. *)
 
 open Mopsa
 open Ast
@@ -21,21 +21,23 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_stub_init : unit domain
-  let id = D_c_desugar_stub_init
-  let name = "c.desugar.stub_init"
+  type _ domain += D_c_desugar_cond_expr : unit domain
+  let id = D_c_desugar_cond_expr
+  let name = "c.desugar.cond_expr"
   let identify : type a. a domain -> (unit, a) eq option =
     function
-    | D_c_desugar_stub_init -> Some Eq
+    | D_c_desugar_cond_expr -> Some Eq
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c]; import = []}
-  let eval_interface = {export = []; import = []}
+  let exec_interface = {export = []; import = []}
+  let eval_interface = {export = [Z_c, Z_c_low_level]; import = [Z_c, Z_c_low_level]}
+
 
   (** Initialization *)
   (** ============== *)
@@ -44,20 +46,33 @@ struct
     None
 
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_c_declaration ({ vkind = V_c {var_init = Some (C_init_stub stub); var_range} } as v)->
-      let stmt' = Universal.Ast.mk_block [
-          mk_add_var v stmt.srange;
-          Stubs.Ast.mk_stub_init v stub var_range
-        ] stmt.srange
-      in
-      man.exec stmt' flow |>
-      Post.return
+  (** Post-condition computation *)
+  (** ========================== *)
+
+  let exec zone stmt man flow = None
+
+
+  (** Evaluation of expressions *)
+  (** ========================= *)
+
+  let eval zone exp man flow  =
+    match ekind exp with
+    | E_c_conditional(cond, e1, e2) ->
+      Eval.assume cond
+        ~fthen:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
+          )
+        ~felse:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
+          )
+        man flow |>
+      Eval.return
 
     | _ -> None
 
-  let eval _ _ _ _  = None
+
+  (** Query handler *)
+  (** ============= *)
 
   let ask _ _ _  = None
 

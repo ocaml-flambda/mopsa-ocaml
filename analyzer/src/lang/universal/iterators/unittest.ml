@@ -122,7 +122,7 @@ let () =
         | A_fail_assert(cond) -> Format.fprintf fmt "Condition %a fails" pp_expr cond
         | A_may_assert(cond) -> Format.fprintf fmt "Condition %a may fail" pp_expr cond
         | A_panic_test(msg, f, "") -> Format.fprintf fmt "%s: %s" f msg
-        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "%s: %s raised in %s" f msg loc
+        | A_panic_test(msg, f, loc) -> Format.fprintf fmt "%s: %s" loc msg
         | _ -> next fmt a
       );
   };

@@ -65,7 +65,7 @@ void test_array_out_of_bound_with_constant_index() {
   _mopsa_assert_error(OUT_OF_BOUND);
 }
 
-void test_array_safe_acces_with_constant() {
+void test_array_safe_access_with_constant() {
   int a[100];
   int j = 99;
   int x = a[j];
@@ -74,31 +74,31 @@ void test_array_safe_acces_with_constant() {
 
 
 /*********************************************/
-/* Out-of-bound checks with a interval index */
+/* Out-of-bound checks with an interval index */
 /*********************************************/
 
-void test_array_safe_acces_with_range() {
+void test_array_safe_access_with_range() {
   int a[100];
   int j = _mopsa_rand_int(0, 10);
   int x = a[j];
   _mopsa_assert_safe();
 }
 
-void test_array_out_of_bound_acces_with_range() {
+void test_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_rand_int(100, 200);
   int x = a[j];
   _mopsa_assert_error(OUT_OF_BOUND);
 }
 
-void test_may_array_out_of_bound_acces_with_range() {
+void test_may_array_out_of_bound_access_with_range() {
   int a[100];
   int j = _mopsa_rand_int(10, 200);
   int x = a[j];
   _mopsa_assert_error_exists(OUT_OF_BOUND);
 }
 
-void test_array_safe_acces_with_range_in_lval() {
+void test_array_safe_access_with_range_in_lval() {
   int a[100];
   int j = _mopsa_rand_int(10, 20);
   a[j] = 10;

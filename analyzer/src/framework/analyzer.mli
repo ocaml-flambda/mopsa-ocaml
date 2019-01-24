@@ -24,3 +24,5 @@ sig
   val man : (Domain.t, Domain.t) man
 
 end
+
+val progress: ('a, Format.formatter, unit, unit) format4 -> 'a

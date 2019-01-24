@@ -51,7 +51,7 @@ let _ =
      "long", LONG;     
      "double", DOUBLE;
      "float", FLOAT;
-     "signed", UNSIGNED;
+     "signed", SIGNED;
      "unsigned", UNSIGNED;
      "const", CONST;
      "struct", STRUCT;

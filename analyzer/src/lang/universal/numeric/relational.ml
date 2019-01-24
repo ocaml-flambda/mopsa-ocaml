@@ -38,16 +38,16 @@ module PolyMan = struct type t = Polka.strict Polka.t let name = "polyhedra" let
 module ApronTransformer(ApronManager : APRONMANAGER) =
 struct
 
-  let var_to_apron (v:var primed) =
-    let name = primed_apply uniq_vname v in
+  let var_to_apron (v:var) =
+    let name = uniq_vname v in
     Apron.Var.of_string name
 
-  let get_interval (v:var primed) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
+  let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) : (Values.Intervals.Value.t) =
     Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
     Values.Intervals.Value.of_apron
 
-  let is_numerical_var (v: var primed): bool =
-    match primed_apply vtyp v with
+  let is_numerical_var (v: var): bool =
+    match vtyp v with
     | T_int | T_float _ -> true
     | _ -> false
   let empty_env = Apron.Environment.make [| |] [| |]
@@ -161,19 +161,13 @@ struct
 
     | E_constant(C_float f) -> Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)), abs, l
 
-    | var when PrimedVar.match_expr exp &&
-               PrimedVar.ext_from_expr exp = STRONG
-      ->
-      let x = PrimedVar.from_expr exp in
+    | E_var (x, STRONG) ->
       Apron.Texpr1.Var(var_to_apron x), abs, l
 
-    | var when PrimedVar.match_expr exp &&
-               PrimedVar.ext_from_expr exp = WEAK
-      ->
-      let x = PrimedVar.from_expr exp in
+    | E_var (x, WEAK) ->
       let x' = mktmp ~typ:exp.etyp () in
       let x_apr = var_to_apron x in
-      let x_apr' = var_to_apron (unprimed x') in
+      let x_apr' = var_to_apron x' in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
       (Apron.Texpr1.Var x_apr, abs, x_apr' :: l)
 
@@ -252,8 +246,8 @@ struct
 
     | E_constant(C_float f) -> Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f))
 
-    | var when PrimedVar.match_expr exp ->
-      Apron.Texpr1.Var(var_to_apron (PrimedVar.from_expr exp))
+    | E_var (v, _) ->
+      Apron.Texpr1.Var(var_to_apron v)
 
     | E_binop(binop, e1, e2) ->
       let binop' = binop_to_apron binop in
@@ -412,13 +406,13 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (fun v -> primed_apply vtyp v = T_int) lv
+          List.filter (fun v -> vtyp v = T_int) lv
         )
         (
           Array.of_list @@
           List.map var_to_apron @@
           List.filter (fun v ->
-              match primed_apply vtyp v with
+              match vtyp v with
               | T_float _ -> true
               | _ -> false
             ) lv
@@ -474,28 +468,30 @@ struct
   let rec exec stmt a =
     let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
-    | S_remove var when PrimedVar.match_expr var ->
+    | S_remove { ekind = E_var (var, _) } ->
       let env = Apron.Abstract1.env a in
       let vars =
-        List.filter (fun v -> is_env_var v a) [PrimedVar.from_expr var] |>
+        List.filter (fun v -> is_env_var v a) [var] |>
         List.map var_to_apron
       in
       let env = Apron.Environment.remove env (Array.of_list vars) in
       Apron.Abstract1.change_environment ApronManager.man a env true |>
       return
 
-    | S_rename (var1, var2) when PrimedVar.match_expr var1 &&
-                                 PrimedVar.match_expr var2 ->
-      let var1 = PrimedVar.from_expr var1 in
-      let var2 = PrimedVar.from_expr var2 in
-
+    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       Apron.Abstract1.rename_array ApronManager.man a
         [| var_to_apron var1  |]
         [| var_to_apron var2 |] |>
       return
 
-    | S_project vars when List.for_all PrimedVar.match_expr vars ->
-      let vars = List.map PrimedVar.from_expr vars in
+    | S_project vars
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
+      ->
+      let vars = List.map (function
+          | { ekind = E_var (v, _) } -> v
+          | _ -> assert false
+        ) vars
+      in
       let env = Apron.Abstract1.env a in
       let vars = List.map var_to_apron vars in
       let old_vars1, old_vars2 = Apron.Environment.vars env in
@@ -505,66 +501,62 @@ struct
       Apron.Abstract1.change_environment ApronManager.man a new_env true |>
       return
 
-    | S_assign(var, e) when PrimedVar.match_expr var &&
-                            PrimedVar.ext_from_expr var = STRONG ->
-      let pvar = PrimedVar.from_expr var in
-      let a = add_missing_vars a (pvar :: (Visitor.expr_primed_vars e)) in
+    | S_assign({ ekind = E_var (var, STRONG) }, e) ->
+      let a = add_missing_vars a (var :: (Visitor.expr_vars e)) in
       let e, a, l = strongify_rhs e a [] in
       begin try
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv e in
-          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron pvar) texp None |>
+          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron var) texp None |>
           remove_tmp l |>
           return
         with UnsupportedExpression ->
-          exec (mk_remove var stmt.srange) a
+          exec (mk_remove_var var stmt.srange) a
       end
 
-    | S_assign(var, e) when PrimedVar.match_expr var &&
-                            PrimedVar.ext_from_expr var = WEAK ->
-      let var' =
-        match ekind var with
-        | E_var(v, WEAK) -> { var with ekind = E_var(v, STRONG) }
-        | E_primed ({ ekind = E_var (vv, WEAK)} as v) -> { var with ekind = E_primed { v with ekind = E_var (vv, STRONG)} }
-        | _ -> assert false
-      in
-
-      exec {stmt with skind = S_assign(var', e)} a |>
+    | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
+      let lval' = { lval with ekind = E_var(var, STRONG) } in
+      exec {stmt with skind = S_assign(lval', e)} a |>
       bind @@ fun a' ->
       join () a a' |>
       return
 
-    | S_fold(var, vl) when PrimedVar.match_expr var &&
-                           List.for_all PrimedVar.match_expr vl ->
+    | S_fold( {ekind = E_var (v, _)}, vl)
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl ->
       begin
-        let pv = PrimedVar.from_expr var in
-        let pvl = List.map PrimedVar.from_expr vl in
+        let vl = List.map (function
+            | { ekind = E_var (v, _) } -> v
+            | _ -> assert false
+          ) vl
+        in
         debug "Starting fold";
-        match pvl with
+        match vl with
         | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
           let abs = Apron.Abstract1.fold ApronManager.man a
-              (List.map var_to_apron pvl |> Array.of_list) in
+              (List.map var_to_apron vl |> Array.of_list) in
           let abs = Apron.Abstract1.rename_array ApronManager.man abs
-              [|var_to_apron p|] [|var_to_apron pv|] in
+              [|var_to_apron p|] [|var_to_apron v|] in
           abs |> return
       end
 
-    | S_expand(var, vl) when PrimedVar.match_expr var &&
-                             List.for_all PrimedVar.match_expr vl ->
-      begin
-        let pv = PrimedVar.from_expr var in
-        let pvl = List.map PrimedVar.from_expr vl in
-        debug "Starting expand";
-        let abs = Apron.Abstract1.expand ApronManager.man a
-            (var_to_apron pv) (List.map var_to_apron pvl |> Array.of_list) in
-        let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron pv|] in
-        let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
-        abs |> return
-      end
+    | S_expand({ekind = E_var (v, _)}, vl)
+      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      ->
+      let vl = List.map (function
+          | { ekind = E_var (v, _) } -> v
+          | _ -> assert false
+        ) vl
+      in
+      debug "Starting expand";
+      let abs = Apron.Abstract1.expand ApronManager.man a
+          (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
+      let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
+      let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
+      abs |> return
 
     | S_assume(e) -> begin
-        let a = add_missing_vars a (Visitor.expr_primed_vars e) in
+        let a = add_missing_vars a (Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
         let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
@@ -599,7 +591,7 @@ struct
     | _ -> return top
 
   and satisfy (abs: t) (e: expr): bool =
-    let a = add_missing_vars abs (Framework.Visitor.expr_primed_vars e) in
+    let a = add_missing_vars abs (Framework.Visitor.expr_vars e) in
     let env = Apron.Abstract1.env a in
     bexp_to_apron e
     |> Dnf.substitute

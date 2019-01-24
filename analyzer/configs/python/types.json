@@ -1,44 +1,47 @@
 {
-    "iter": [
-        "python.program",
+    "language": "python",
+    "domain": {
+	"iter": [
+            "python.program",
 
-        "python.desugar.bool",
-        "python.desugar.import",
-        "python.desugar.assert",
-        "python.desugar.if",
-        "python.desugar.iterable_assign",
-        "python.desugar.with",
-        "python.desugar.comprehensions",
-        "python.desugar.loops",
+            "python.desugar.bool",
+            "python.desugar.import",
+            "python.desugar.assert",
+            "python.desugar.if",
+            "python.desugar.iterable_assign",
+            "python.desugar.with",
+            "python.desugar.comprehensions",
+            "python.desugar.loops",
 
-        "python.flows.exceptions",
+            "python.flows.exceptions",
 
-        "universal.iterators.intraproc",
-        "universal.iterators.interproc.inlining",
-        "universal.iterators.loops",
-        "universal.iterators.unittest",
+            "universal.iterators.intraproc",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.loops",
+            "universal.iterators.unittest",
 
-        "python.libs.mopsa",
-        "python.libs.stdlib",
-        "python.libs.math",
-        "python.libs.unittest",
+            "python.libs.mopsa",
+            "python.libs.stdlib",
+            "python.libs.math",
+            "python.libs.unittest",
 
-        "python.objects.class",
-        "python.objects.function",
-        // "python.objects.nones",
+            "python.objects.class",
+            "python.objects.function",
+            // "python.objects.nones",
 
-        "python.data_model.attribute",
-        "python.data_model.subscript",
-        "python.data_model.arith_ops",
-        "python.data_model.compare_ops",
-        "python.data_model.aug_assign",
-        "python.data_model.callable",
+            "python.data_model.attribute",
+            "python.data_model.subscript",
+            "python.data_model.arith_ops",
+            "python.data_model.compare_ops",
+            "python.data_model.aug_assign",
+            "python.data_model.callable",
 
-        "python.types.t_string",
-        "python.types.t_int",
-        "python.types.t_float",
-        "python.types.t_list",
-        "python.types.t_set",
-        "python.types.typing"
-    ]
+            "python.types.t_string",
+            "python.types.t_int",
+            "python.types.t_float",
+            "python.types.t_list",
+            "python.types.t_set",
+            "python.types.typing"
+	]
+    }
 }

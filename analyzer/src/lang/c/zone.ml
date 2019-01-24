@@ -33,7 +33,7 @@ let () =
         (* ------------------------------------------- *)
         | E_stub_quantified _
         | E_stub_builtin_call _
-        | E_primed _
+        | E_stub_primed _
         | E_unop _
         | E_binop _                          -> Visit
         (* ------------------------------------------- *)
@@ -76,7 +76,7 @@ let () =
         (* ------------------------------------------- *)
         | E_stub_quantified _
         | E_stub_builtin_call _
-        | E_primed _
+        | E_stub_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit
@@ -104,7 +104,6 @@ let () =
         (* ------------------------------------------- *)
         | E_stub_quantified _
         | E_stub_builtin_call _
-        | E_primed _
         | E_unop _
         | E_binop _
         | E_c_cast _                         -> Visit

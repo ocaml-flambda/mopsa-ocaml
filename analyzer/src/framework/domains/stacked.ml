@@ -55,7 +55,23 @@ let lift_widen_to_flow man f =
 module Make(D1: S)(D2: Domain.DOMAIN) : Domain.DOMAIN =
 struct
 
-  module LocalAnalyzer = Analyzer.Make(D2)
+  (** Create the sub-tree covering D2.
+     Note that imported zones of D1 must be added to this local
+     analyzer, because D1 -- during unification -- may used them. *)
+  module SubTree =
+  struct
+    include D2
+    let exec_interface = {
+      export = D2.exec_interface.export;
+      import = D1.exec_interface.import @ D2.exec_interface.import;
+    }
+    let eval_interface = {
+      export = D2.eval_interface.export;
+      import = D1.eval_interface.import @ D2.eval_interface.import;
+    }
+  end
+
+  module SubTreeAnalyzer = Analyzer.Make(SubTree)
 
   (* Lattice operators *)
   (* ================= *)
@@ -69,21 +85,21 @@ struct
   let is_bottom (a,b) = D1.is_bottom a || D2.is_bottom b
 
   let join annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.join annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2 in
+    let a, b1', b2' = lift_to_flow SubTreeAnalyzer.man (fun b1 b2 -> D1.join annot SubTreeAnalyzer.man (a1, b1) (a2, b2)) b1 b2 in
     a, D2.join annot b1' b2'
 
   let meet annot (a1, b1) (a2, b2) =
-    let a, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.meet annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
+    let a, b1', b2' = lift_to_flow SubTreeAnalyzer.man (fun b1 b2 -> D1.meet annot SubTreeAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
     a, D2.meet annot b1' b2'
 
   let widen annot (a1, b1) (a2, b2) =
     let a, is_stable, b1', b2' =
-      lift_widen_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.widen annot LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2
+      lift_widen_to_flow SubTreeAnalyzer.man (fun b1 b2 -> D1.widen annot SubTreeAnalyzer.man (a1, b1) (a2, b2)) b1 b2
     in
     a, if is_stable then D2.widen annot b1' b2' else D2.join annot b1' b2'
 
   let subset (a1, b1) (a2, b2) =
-    let b, b1', b2' = lift_to_flow LocalAnalyzer.man (fun b1 b2 -> D1.subset LocalAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
+    let b, b1', b2' = lift_to_flow SubTreeAnalyzer.man (fun b1 b2 -> D1.subset SubTreeAnalyzer.man (a1, b1) (a2, b2)) b1 b2  in
     b && (D2.subset b1' b2')
 
   let print fmt (a, b) =

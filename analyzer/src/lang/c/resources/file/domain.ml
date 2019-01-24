@@ -8,7 +8,7 @@
 
 (** Manager of the `FileDescriptor` resources *)
 
-(* 
+(*
    UNIX file descriptors are associated to integer identifiers. These
    ids are generated in a particular way. As described in Single UNIX
    specification (Sec. 2.14), allocation should return the lowest
@@ -16,7 +16,7 @@
 
    This abstract domain maintains information about previously
    allocated file descriptors. Since the ids 0, 1 and 2 are used
-   implicitly by many library functions (printf, scanf, etc.), the domain 
+   implicitly by many library functions (printf, scanf, etc.), the domain
    tries to be more precise for those cases.
 
    More particularly, it defines a window of precision (interval
@@ -39,12 +39,12 @@
        @3 -> [4, 5]
      }
 
-   represents the state where the file descriptor 0 is allocated to 
-   resources  @0 or @1, and the descriptor 1 is not allocated. For the 
+   represents the state where the file descriptor 0 is allocated to
+   resources  @0 or @1, and the descriptor 1 is not allocated. For the
    remaining descriptors, the partial map gives the possible mappings.
 
-   In order to improve precision an under-approximation of the support 
-   of the  map (i.e. set of addresses) is used. It can forbid giving 
+   In order to improve precision an under-approximation of the support
+   of the  map (i.e. set of addresses) is used. It can forbid giving
    some ids when allocating new resources.
 *)
 
@@ -74,7 +74,7 @@ struct
     others: table;
   }
 
-  (** Precision window. The first file descriptors ∈ [0, window) are 
+  (** Precision window. The first file descriptors ∈ [0, window) are
       abstracted more precisely. *)
   let window = 3
 
@@ -84,7 +84,7 @@ struct
   }
 
   let top = {
-    first = [];
+    first = List.init window (fun _ -> Slot.Top);
     others = Table.top;
   }
 
@@ -242,7 +242,7 @@ struct
       let _, max = rangeof s32 in
       Z.of_int window, max
 
-  
+
   (** Insert an address in the remaining part of the table *)
   let insert_others addr range man flow =
     let a = Flow.get_domain_env T_cur man flow in
@@ -268,7 +268,7 @@ struct
     in
     Eval.join_list (case1 @ case2)
 
-  
+
   (** {2 Find the address of a numeric file descriptor} *)
   (** ================================================= *)
 
@@ -322,11 +322,11 @@ struct
       Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow)
     in
     find_first 0 a.first flow
-            
+
 
   (** {2 Removal of addresses} *)
   (** ======================== *)
-  
+
   let remove addr man flow =
     let a = Flow.get_domain_env T_cur man flow in
     let first = List.map (Slot.remove addr) a.first in

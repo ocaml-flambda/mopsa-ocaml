@@ -6,7 +6,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Map abstraction assuming ⊥ values for non-existing keys. *)
+(** Abstraction of sets of partial maps. *)
 
 open Top
 open Lattice
@@ -28,133 +28,192 @@ module Make
 struct
   module Map = MapExt.Make(Key)
 
-  type v = Value.t Map.t
-  (** Maps from variable to non-⊥ non-relational values. *)
+  (** [a:t] is an abstraction of a set of partial maps from [Key.t]
+      to [Value.t].*)
+  type t =
+    | Bot
+    (** empty set *)
 
-  type t = v with_top
+    | Finite of Value.t Map.t
+    (** [Finite m] abstracts partial maps having support included in
+       the support of [m] *)
 
-  (** Possibly ⊤ abstract elements. *)
+    | Top
+    (** all possible partial maps *)
 
-  (** {2 Framework.Domain.DOMAIN functions} *)
+  let bottom : t = Bot
 
-  let bottom = Nt Map.empty
+  let top : t = Top
 
-  let top = TOP
+  let is_bottom (a:t) : bool =
+    match a with
+    | Bot -> true
+    | Top -> false
+    | Finite m ->
+      Map.cardinal m > 0 &&
+      Map.exists (fun k v -> Value.is_bottom v) m
 
-  let is_bottom  abs =
-    top_dfl1 false (fun m ->
-        Map.for_all (fun _ v -> Value.is_bottom v) m
-      ) abs
-
-  let empty = bottom
-
-  let init = empty
+  let empty : t = Finite Map.empty (* Note: an empty map is different than an empty set of maps *)
 
   let subset  (a1:t) (a2:t) : bool =
-    top_included
-      (Map.for_all2zo
-         (fun _ v1 -> Value.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
-         (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
+    match a1, a2 with
+    | Bot, _ -> true
+    | _, Bot -> false
+    | _, Top -> true
+    | Top, _ -> false
+    | Finite m1, Finite m2 ->
+      Map.for_all2zo
+         (fun _ v1 -> false)
+         (fun _ v2 -> true)
          (fun _ v1 v2 -> Value.subset v1 v2)
-      )
-      a1 a2
-  (** Inclusion testing. Missing variables in one map are assimilated to ⊥. *)
+         m1 m2
+  (** Inclusion test. *)
 
   let join annot (a1:t) (a2:t) : t =
-    top_lift2
-      (Map.map2zo
-         (fun _ v1 -> v1)
-         (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.join annot v1 v2)
+    match a1, a2 with
+    | Bot, x | x, Bot -> x
+    | Top, _ | _, Top -> Top
+    | Finite m1, Finite m2 ->
+      Finite (
+        Map.map2zo
+          (fun _ v1 -> v1)
+          (fun _ v2 -> v2)
+          (fun _ v1 v2 -> Value.join annot v1 v2)
+          m1 m2
       )
-      a1 a2
-  (** Join. Missing variables in one map are assimilated to ⊥. *)
+  (** Join two sets of partial maps. *)
 
   let widen annot (a1:t) (a2:t) : t =
-    top_lift2
-      (Map.map2zo
-         (fun _ v1 -> v1)
-         (fun _ v2 -> v2)
-         (fun _ v1 v2 -> Value.widen annot v1 v2)
+    match a1, a2 with
+    | Bot, x | x, Bot -> x
+    | Top, x | x, Top -> Top
+    | Finite m1, Finite m2 ->
+      Finite (
+        Map.map2zo
+          (fun _ v1 -> v1)
+          (fun _ v2 -> v2)
+          (fun _ v1 v2 -> Value.widen annot v1 v2)
+          m1 m2
       )
-      a1 a2
   (** Widening (naive). *)
 
   let meet annot (a1:t) (a2:t) : t =
-    top_neutral2
-      (fun b1 b2 ->
-          (Map.map2zo
-             (fun _ v1 -> Value.bottom)
-             (fun _ v2 -> Value.bottom)
-             (fun _ v1 v2 -> Value.meet annot v1 v2)
-             b1) b2
+    match a1, a2 with
+    | Bot, x | x, Bot -> Bot
+    | Top, x | x, Top -> x
+    | Finite m1, Finite m2 ->
+      Finite (
+        Map.merge (fun _ v1 v2 ->
+            match v1, v2 with
+            | None, _ | _, None -> None
+            | Some vv1, Some vv2 -> Some (Value.meet annot vv1 vv2)
+          ) m1 m2
       )
-      a1 a2
-  (** Meet. Missing variables in one map are assimilated to ⊤. *)
+  (** Meet. *)
 
-  let print  fmt (a:t) =
-    let open Format in
-    top_fprint (fun fmt m ->
-        if Map.is_empty m then
-          pp_print_string fmt "⊥ "
-        else
-          fprintf fmt "@[<v>%a@]"
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> fprintf fmt ",@,")
-               (fun fmt (k, v) ->
-                  fprintf fmt "%a ⇀ @[<h2> %a@]" Key.print k Value.print v
-               )
-            ) (Map.bindings m)
-      ) fmt a
+  let print fmt (a:t) =
+    match a with
+    | Bot -> Format.pp_print_string fmt "⊥"
+    | Top -> Format.pp_print_string fmt "⊤"
+    | Finite m when Map.is_empty m -> Format.fprintf fmt "∅"
+    | Finite m ->
+      Format.fprintf fmt "@[<v>%a@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
+           (fun fmt (k, v) ->
+              Format.fprintf fmt "%a ⇀ @[<h2> %a@]" Key.print k Value.print v
+           )
+        ) (Map.bindings m)
   (** Printing. *)
 
-  let find  (k: Key.t) (a: t) =
-    try begin
-      let m = top_to_exn a in
-      try Map.find k m with Not_found -> Value.bottom
-    end
-    with
-      Found_TOP -> Value.top
+  let find (k: Key.t) (a: t) : Value.t =
+    match a with
+    | Bot -> Value.bottom
+    | Top -> Value.top
+    | Finite m ->
+      try Map.find k m
+      with Not_found -> Exceptions.panic ~loc:__LOC__ "key %a not found" Key.print k
 
-  let remove  (k: Key.t) (a: t) : t =
-    top_lift1 (Map.remove k) a
+  let remove (k: Key.t) (a: t) : t =
+    match a with
+    | Bot -> Bot
+    | Top -> Top
+    | Finite m -> Finite (Map.remove k m)
 
-  let add  (k: Key.t) (v: Value.t) (a: t) =
-    top_lift1 (Map.add k v) a
+  let add (k: Key.t) (v: Value.t) (a: t) : t =
+    if Value.is_bottom v then Bot
+    else
+      match a with
+      | Bot -> Bot
+      | Top -> Top
+      | Finite m -> Finite (Map.add k v m)
 
-  let singleton  k v =
+  let singleton (k:Key.t) (v:Value.t) : t =
     add k v empty
 
-  let filter (f : Key.t -> Value.t -> bool) (d : t) =
-    top_lift1 (Map.filter f) d
+  let filter (f : Key.t -> Value.t -> bool) (a : t) : t =
+    match a with
+    | Bot -> Bot
+    | Top -> Top
+    | Finite m -> Finite (Map.filter f m)
 
-  let fold f a x =
-    top_to_exn a |> (fun m -> Map.fold f m x)
+  let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a =
+    match a with
+    | Bot -> x
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.fold f m x
 
-  let fold_d f (a : 'a Map.t with_top) (d : 'b) (x : 'b) : 'b = match a with
-    | Top.TOP -> d
-    | Top.Nt m -> Map.fold f m x
+  let fold_d (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (d :'a) (x :'a) : 'a =
+    match a with
+    | Bot -> x
+    | Top -> d
+    | Finite m -> Map.fold f m x
 
-  let mem x a =
-    top_to_exn a |> (fun m -> Map.mem x m)
+  let mem (x:Key.t) (a:t) : bool =
+    match a with
+    | Bot -> false
+    | Top -> true
+    | Finite m -> Map.mem x m
 
-  let map f a =
-    top_lift1 (fun m -> Map.map f m) a
+  let canonize (a:t) : t =
+    if is_bottom a then Bot else a
 
-  let map_p f a = match a with
-    | TOP -> TOP
-    | Nt m ->
-      Nt (Map.fold (fun k v acc ->
-          let k',v' = f (k,v) in Map.add k' v' acc
+  let map (f:Value.t -> Value.t) (a:t) : t =
+    match a with
+    | Bot -> Bot
+    | Top -> Top
+    | Finite m ->
+      Finite (Map.map f m) |>
+      canonize
+
+  let map_p (f:Key.t * Value.t -> Key.t * Value.t) (a:t) : t  =
+    match a with
+    | Bot -> Bot
+    | Top -> Top
+    | Finite m ->
+      Finite (Map.fold (fun k v acc ->
+          let k',v' = f (k,v) in
+          Map.add k' v' acc
         ) m Map.empty)
+      |>
+      canonize
 
-  let bindings a =
-    top_to_exn a |> Map.bindings
+  let bindings (a:t) : (Key.t * Value.t) list =
+    match a with
+    | Bot -> []
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.bindings m
 
-  let for_all f a =
-    top_to_exn a |> (Map.for_all f)
+  let for_all (f:Key.t -> Value.t -> bool) (a:t) : bool =
+    match a with
+    | Bot -> true
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.for_all f m
 
-  let exists f a =
-    top_to_exn a |> (Map.exists f)
+  let exists (f:Key.t -> Value.t -> bool) (a:t) : bool =
+    match a with
+    | Bot -> false
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.exists f m
 
 end

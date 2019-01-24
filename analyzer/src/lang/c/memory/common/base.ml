@@ -16,14 +16,16 @@ open Zone
 
 (** lv base *)
 type base =
-  | V of var
-  | A of addr
-  | S of string
+  | V of var (** program variable *)
+  | A of addr (** resource address *)
+  | S of string (** string literal *)
+  | Z (** pointers with absolute numeric value *)
 
 let pp_base fmt = function
   | V v -> pp_var fmt v
   | A (a) -> pp_addr fmt a
   | S s -> Format.fprintf fmt "\"%s\"" s
+  | Z -> Format.fprintf fmt "ℤ"
 
 let compare_base b b' = match b, b' with
   | V v, V v' -> compare_var v v'
@@ -32,24 +34,29 @@ let compare_base b b' = match b, b' with
 
   | S s, S s' -> compare s s'
 
+  | Z, Z -> 0
+
   | _ -> compare b b'
 
 let base_uid = function
   | V v -> v.vuid
   | A a -> a.addr_uid
-  | S _ -> Exceptions.panic "base_uid: string literals not supported"
+  | S _ -> panic ~loc:__LOC__ "base_uid: string literals not supported"
+  | Z -> panic  ~loc:__LOC__ "base_uid: absolute pointers not supported"
 
 let base_size =
   function
   | V v -> sizeof_type v.vtyp
   | S s -> Z.of_int @@ String.length s
-  | A _ -> Exceptions.panic "base_size: addresses not supported"
+  | A _ -> panic ~loc:__LOC__ "base_size: addresses not supported"
+  | Z -> panic ~loc:__LOC__ "base_size: absolute pointers not supported"
 
 let base_mode =
   function
   | V v -> STRONG
   | S s -> STRONG
   | A a -> a.addr_mode
+  | Z -> panic ~loc:__LOC__ "base_mode: addresses not supported"
 
 let base_scope =
   function
@@ -70,3 +77,11 @@ let eval_base_size base ?(via=Z_any) range man flow =
   | A addr ->
     let size_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (SIZE, mk_addr addr range)) range ~etyp:ul in
     man.eval ~zone:(Z_c, Z_c_scalar) ~via size_expr flow
+  | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+
+module Base =
+struct
+  type t = base
+  let compare = compare_base
+  let print = pp_base
+end

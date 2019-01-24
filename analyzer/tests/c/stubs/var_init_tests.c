@@ -12,7 +12,7 @@ void test_init_global_scalar() {
 
 
 /*$
- * ensures: a[0] == 0 and 
+ * ensures: a[0] == 0 and
  *          a[1] == 1 and
  *          a[2] == 10;
  */
@@ -34,5 +34,3 @@ void *s;
 void test_init_resource() {
   _mopsa_assert(s != NULL);
 }
-
-

@@ -182,25 +182,16 @@ predicate:
 
 (* Assignment section *)
 assigns:
-  | ASSIGNS COLON with_range(expr) SEMICOL
-    {
-      {
-	assign_target = $3;
-	assign_offset = None;
-      }
-    }
-
   | ASSIGNS COLON with_range(expr) assigns_offset_list SEMICOL
     {
       {
 	assign_target = $3;
-	assign_offset = Some $4;
+	assign_offset = $4;
       }
     }
 
 assigns_offset_list:
-  | LBRACK with_range(expr) COMMA with_range(expr) RBRACK
-    { [($2, $4)] }
+  | { [] }
   | LBRACK with_range(expr) COMMA with_range(expr) RBRACK assigns_offset_list
     { ($2, $4) :: $6 }
 
