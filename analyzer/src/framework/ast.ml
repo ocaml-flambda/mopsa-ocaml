@@ -96,61 +96,6 @@ let pp_typ fmt typ = !typ_pp_chain fmt typ
 
 
 (*==========================================================================*)
-(**                       {2 Primed dimensions}                             *)
-(*==========================================================================*)
-
-(** Primed dimensions are used to differentiate between the value of
-   a dimension in the pre-condition and the post-condition. *)
-type 'a primed =
-  | Primed of 'a
-  | Unprimed of 'a
-
-let primed (a:'a) : 'a primed = Primed a
-
-let unprimed (a:'a) : 'a primed = Unprimed a
-
-let is_primed (a:'a primed) : bool =
-  match a with
-  | Unprimed _ -> false
-  | Primed _ -> true
-
-let is_primed_as (a:'a primed) (b:'b primed) : bool =
-  match a, b with
-  | Primed _, Primed _
-  | Unprimed _, Unprimed _ -> true
-  | _ -> false
-
-let prime_as (a:'a) (b:'b primed) : 'a primed =
-  match b with
-  | Primed _ -> Primed a
-  | Unprimed _ -> Unprimed a
-
-let unprime (a: 'a primed) : 'a =
-  match a with
-  | Primed aa -> aa
-  | Unprimed aa -> aa
-
-let primed_lift (f: 'a -> 'b) (a: 'a primed) : 'b primed =
-  match a with
-  | Unprimed aa -> Unprimed (f aa)
-  | Primed aa -> Primed (f aa)
-
-let primed_apply (f: 'a -> 'b) (a: 'a primed) : 'b =
-  f (unprime a)
-
-let compare_primed (cmp:'a->'b->int) (a:'a primed) (b:'b primed) : int =
-  match a, b with
-  | Primed aa, Primed bb -> cmp aa bb
-  | Unprimed aa, Unprimed bb -> cmp aa bb
-  | _ -> Pervasives.compare a b
-
-let pp_primed pp fmt a =
-  match a with
-  | Unprimed aa -> pp fmt aa
-  | Primed aa -> Format.fprintf fmt "(%a)'" pp aa
-
-
-(*==========================================================================*)
 (**                           {2 Variables}                                 *)
 (*==========================================================================*)
 
@@ -348,10 +293,6 @@ type expr_kind +=
   | E_binop of operator * expr * expr
   (** binary operator expressions *)
 
-  | E_primed of expr
-  (** Primed version of an expression *)
-
-
 let ekind (e: expr) = e.ekind
 let etyp (e: expr) = e.etyp
 let erange (e: expr) = e.erange
@@ -379,8 +320,6 @@ let rec expr_compare_chain : (expr -> expr -> int) ref =
           (fun () -> compare_expr e1' e2');
         ]
 
-      | E_primed e1, E_primed e2 -> compare_expr e1 e2
-
       | _ -> Pervasives.compare e1 e2
     )
 
@@ -395,7 +334,6 @@ let rec expr_pp_chain : (Format.formatter -> expr -> unit) ref =
       | E_var(v, WEAK) -> Format.fprintf fmt "_w_%a" pp_var v
       | E_unop(op, e) -> fprintf fmt "%a (%a)" pp_operator op pp_expr e
       | E_binop(op, e1, e2) -> fprintf fmt "(%a %a %a)" pp_expr e1 pp_operator op pp_expr e2
-      | E_primed(e) -> pp_primed pp_expr fmt (primed e)
       | _ -> failwith "Pp: Unknown expression"
     )
 
@@ -583,9 +521,6 @@ let expr_visit_chain = ref (fun exp ->
     | E_binop(binop, e1, e2) ->
       {exprs = [e1; e2]; stmts = []},
       (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
-    | E_primed e ->
-      {exprs = [e]; stmts = []},
-      (function {exprs = [e]} -> {exp with ekind = E_primed e} | _ -> assert false)
     | _ ->
       Exceptions.panic "expr visitor: unknown expression %a" pp_expr exp
   )
@@ -754,198 +689,6 @@ let mk_fold_var v vl range =
     (mk_var v range)
     (List.map (fun v' -> mk_var v' range) vl)
     range
-
-
-
-(*==========================================================================*)
-(**             {2 Utility functions for primed dimensions}                 *)
-(*==========================================================================*)
-
-let mk_primed (e:expr) : expr =
-  mk_expr (E_primed e) e.erange ~etyp:e.etyp
-
-let unprime_expr (e:expr) : expr =
-  match ekind e with
-  | E_primed ee -> ee
-  | _ -> e
-
-let is_primed_expr (e:expr) : bool =
-  match ekind e with
-  | E_primed _ -> true
-  | _ -> false
-
-let match_primed_expr (pred:expr -> bool) (e:expr) : bool =
-  match ekind e with
-  | E_primed ee -> pred ee
-  | _ -> pred e
-
-let primed_expr_lift (f:expr -> 'a) (e:expr) : 'a primed =
-  match ekind e with
-  | E_primed ee -> primed (f ee)
-  | _ -> unprimed (f e)
-
-let primed_expr_apply (f:expr -> 'a) (e:expr) : 'a =
-  match ekind e with
-  | E_primed ee -> f ee
-  | _ -> f e
-
-(** Lift a dimension to a primed dimension *)
-module MakePrimed
-    (Dim : sig
-       type t
-       val match_expr : expr -> bool
-       val to_expr : t -> Location.range -> expr
-       val from_expr : expr -> t
-       val compare : t -> t -> int
-       val print : Format.formatter -> t -> unit
-     end) =
-struct
-  type t = Dim.t primed
-
-  let compare = compare_primed Dim.compare
-
-  let print = pp_primed Dim.print
-
-  let match_expr (e:expr) : bool =
-    match ekind e with
-    | E_primed ee -> Dim.match_expr ee
-    | _ -> Dim.match_expr e
-
-  let to_expr (p:t) range =
-    match p with
-    | Unprimed e -> Dim.to_expr e range
-    | Primed e ->
-      let ee = Dim.to_expr e range in
-      mk_expr (E_primed ee) range ~etyp:ee.etyp
-
-  let from_expr (e:expr) : t =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee -> primed (Dim.from_expr ee)
-    | _ -> unprimed (Dim.from_expr e)
-  
-  let lift (f:Dim.t -> 'a) (p:t) : 'a primed =
-    match p with
-    | Unprimed a -> Unprimed (f a)
-    | Primed a -> Primed (f a)
-
-  let lift_expr (f:expr -> expr) (e:expr) : expr =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee -> mk_primed (f ee)
-    | _ -> f e
-
-  let substitute (f:Dim.t -> Dim.t) (e:expr) : expr =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee ->
-      let d = Dim.from_expr ee in
-      let d' = f d in
-      let ee' = Dim.to_expr d' ee.erange in
-      mk_primed ee' 
-
-    | _ ->
-      let d = Dim.from_expr e in
-      let d' = f d in
-      Dim.to_expr d' e.erange
-
-end
-
-
-(** Lift a dimension with extent information to a primed dimension *)
-module MakePrimedExt
-    (Dim : sig
-       type t
-       type ext
-       val match_expr : expr -> bool
-       val to_expr : t -> ext -> Location.range -> expr
-       val from_expr : expr -> t * ext
-       val compare : t -> t -> int
-       val print : Format.formatter -> t -> unit
-     end) =
-struct
-  type t = Dim.t primed
-
-  let compare = compare_primed Dim.compare
-
-  let print = pp_primed Dim.print
-
-  let match_expr (e:expr) : bool =
-    match ekind e with
-    | E_primed ee -> Dim.match_expr ee
-    | _ -> Dim.match_expr e
-
-  let to_expr (p:t) ext range =
-    match p with
-    | Unprimed e -> Dim.to_expr e ext range
-    | Primed e ->
-      let ee = Dim.to_expr e ext range in
-      mk_expr (E_primed ee) range ~etyp:ee.etyp
-
-  let from_expr (e:expr) : t =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee ->
-      let a, _ = Dim.from_expr ee in
-      primed a
-    | _ ->
-      let a, _ = Dim.from_expr e in
-      unprimed a
-
-  let ext_from_expr (e:expr) : Dim.ext =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee ->
-      let _, ext = Dim.from_expr ee in
-      ext
-    | _ ->
-      let _, ext = Dim.from_expr e in
-      ext
-
-  let lift (f:Dim.t -> 'a) (p:t) : 'a primed =
-    match p with
-    | Unprimed a -> Unprimed (f a)
-    | Primed a -> Primed (f a)
-
-  let lift_expr (f:expr -> expr) (e:expr) : expr =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee -> mk_primed (f ee)
-    | _ -> f e
-
-  let substitute (f:Dim.t -> Dim.t) (e:expr) : expr =
-    match ekind e with
-    | E_primed ee when Dim.match_expr ee ->
-      let d,ext = Dim.from_expr ee in
-      let d' = f d in
-      let ee' = Dim.to_expr d' ext ee.erange in 
-      mk_primed ee' 
-
-    | _ ->
-      let d,ext = Dim.from_expr e in
-      let d' = f d in
-      Dim.to_expr d' ext e.erange
-
-end
-
-
-
-module PrimedVar = MakePrimedExt(
-  struct
-    type t = var
-    type ext = mode
-
-    let compare = compare_var
-
-    let print = pp_var
-
-    let match_expr e =
-      match ekind e with
-      | E_var _ -> true
-      | _ -> false
-
-    let to_expr v mode range = mk_var v ~mode range
-
-    let from_expr e =
-      match ekind e with
-      | E_var (v, m) -> v, m
-      | _ -> assert false
-  end
-  )
 
 (* Utility to negate the comparisons in framework *)
 let negate_comparison = function

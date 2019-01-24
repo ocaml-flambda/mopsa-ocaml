@@ -6,10 +6,10 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** 
+(**
    Abstract Syntax Tree for stub specification. Similar to the AST of
    the parser, except for expressions, types and variables for which
-   MOPSA counterparts are used. 
+   MOPSA counterparts are used.
 *)
 
 open Mopsa
@@ -137,6 +137,17 @@ type expr_kind +=
   | E_stub_resource_mem of expr * resource
   (** Filter environments in which an instance is in a resource pool *)
 
+  | E_stub_primed of expr
+  (** Primed expressions denoting values in the post-state *)
+
+
+(** {2 Primed variables} *)
+(** =-=-=-=-=-=-=-=-=-=- *)
+
+type var_kind +=
+  | V_stub_primed of var
+  (** Primed variables denoting values in the post-state *)
+
 
 (** {2 Statements} *)
 (*  =-=-=-=-=-=-=- *)
@@ -188,6 +199,9 @@ let mk_stub_quantified quant v s range =
 
 let mk_stub_resource_mem e res range =
   mk_expr (E_stub_resource_mem (e, res)) ~etyp:T_bool range
+
+let mk_stub_primed e range =
+  mk_expr (E_stub_primed e) ~etyp:e.etyp range
 
 (** Check whether an expression is quantified? *)
 let is_expr_quantified e =
@@ -390,6 +404,9 @@ let () =
             (fun () -> compare res1 res2);
           ]
 
+        | E_stub_primed(e1), E_stub_primed(e2) ->
+          compare_expr e1 e2
+
         | _ -> next e1 e2
       );
 
@@ -413,6 +430,10 @@ let () =
           { exprs = [x]; stmts = []},
           (function { exprs = [x] } -> { e with ekind = E_stub_resource_mem(x, res) } | _ -> assert false)
 
+        | E_stub_primed(ee) ->
+          { exprs = [ee]; stmts = [] },
+          (function { exprs = [ee] } -> { e with ekind = E_stub_primed(ee) } | _ -> assert false)
+
         | _ -> next e
       );
 
@@ -425,7 +446,27 @@ let () =
         | E_stub_quantified(EXISTS, v, _) -> fprintf fmt "∃%a" pp_var v
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
         | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
+        | E_stub_primed(ee) -> fprintf fmt "%a'" pp_expr ee
         | _ -> next fmt e
+      );
+  }
+
+(** {2 Registration of variables} *)
+(*  =-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
+
+let () =
+  register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_stub_primed vv -> fprintf fmt "%a'" pp_var vv
+        | _ -> next fmt v
+      );
+
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_stub_primed vv1, V_stub_primed vv2 ->
+          compare_var vv1 vv2
+        | _ -> next v1 v2
       );
   }
 

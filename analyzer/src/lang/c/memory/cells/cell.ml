@@ -94,12 +94,19 @@ type var_kind +=
   | V_c_cell of cell
   (** Cell variable *)
 
+let cell_to_var_name c =
+  let () = Format.fprintf Format.str_formatter
+      "{%a,%a,%a}"
+      pp_base c.b pp_offset c.o Pp.pp_c_type_short c.t
+  in
+  Format.flush_str_formatter ()
+
 
 let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_c_cell c -> pp_cell fmt c
+        | V_c_cell c -> Format.pp_print_string fmt (cell_to_var_name c)
         | _ -> next fmt v
       );
     compare = (fun next v1 v2 ->
@@ -110,10 +117,7 @@ let () =
   }
 
 let cell_to_var c =
-  let vname =
-    let () = pp_cell Format.str_formatter  c in
-    Format.flush_str_formatter ()
-  in
+  let vname = cell_to_var_name c in
   let uid = base_uid c.b in
   {
     org_vname = vname;
@@ -130,7 +134,7 @@ type expr_kind +=
   | E_c_cell of cell * mode (* Expression representing a cell *)
 
 (** Create a cell expression *)
-let mk_c_cell c ?(mode = STRONG) range =
+let mk_c_cell c ?(mode = cell_mode(c)) range =
   mk_expr (E_c_cell(c, mode)) ~etyp:c.t range
 
 
@@ -140,34 +144,6 @@ struct
   let compare = compare_cell
   let print = pp_cell
 end
-
-
-(** {2 Primed cells} *)
-
-module PrimedCell = MakePrimedExt(
-  struct
-    type t = cell
-
-    type ext = mode
-
-    let compare = compare_cell
-
-    let print = pp_cell
-
-    let match_expr e =
-      match ekind e with
-      | E_c_cell _ -> true
-      | _ -> false
-
-    let from_expr e =
-      match ekind e with
-      | E_c_cell (c, m) -> c, m
-      | _ -> assert false
-
-    let to_expr c mode range = mk_c_cell c ~mode range
-
-  end)
-
 
 let () =
   register_expr {
@@ -212,7 +188,6 @@ let () =
         | E_c_cell _ -> Keep
         | E_var _ when exp.etyp |> is_c_scalar_type -> Process
         | E_c_address_of _ -> Keep
-        | E_primed _ -> Visit
         | Stubs.Ast.E_stub_quantified _ -> Visit
         | _ -> Framework.Zone.eval exp Zone.Z_c_low_level
       );

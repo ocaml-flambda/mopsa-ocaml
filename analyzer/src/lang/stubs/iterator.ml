@@ -312,7 +312,7 @@ struct
       List.fold_left (fun block a ->
           let t = a.content.assign_target in
           match a.content.assign_offset with
-          | None -> mk_rename (mk_primed t) t range :: block
+          | None -> mk_rename (mk_stub_primed t range) t range :: block
           | Some offsets -> mk_stub_rename_primed t offsets range :: block
         ) block1 assigns
     in
