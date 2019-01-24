@@ -352,6 +352,21 @@ struct
           let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
           man.eval (mk_var f range) flow
 
+        | A_py_instance ->
+          let cur = Flow.get_domain_cur man flow in
+          let ptys = TMap.find addr cur.abs_heap in
+
+          Polytypeset.fold (fun pty acc ->
+              match pty with
+              | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
+                let attr_addr = StringMap.find attr uattrs in
+                let cur = Flow.get_domain_cur man flow in
+                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
+                Eval.singleton (mk_py_object (attr_addr, e) range) flow :: acc
+
+              | _ -> Exceptions.panic "ll_hasattr %a@\n"  pp_polytype pty)
+            ptys [] |> Eval.join_list
+
         | _ -> Exceptions.panic_at range "ll_getattr: todo"
       end
       |> OptionExt.return
