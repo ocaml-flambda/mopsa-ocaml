@@ -69,7 +69,7 @@ and local_value =
 
 and assigns = {
   assign_target : expr with_range;
-  assign_offset : (expr with_range * expr with_range) list option;
+  assign_offset : (expr with_range * expr with_range) list;
 }
 
 and free = expr with_range
@@ -237,12 +237,9 @@ let pp_requires fmt requires =
 let pp_assigns fmt assigns =
   fprintf fmt "assigns  : %a%a;"
     pp_expr assigns.content.assign_target
-    (pp_opt (fun fmt l ->
-         (pp_print_list ~pp_sep:(fun fmt () -> ())
-            (fun fmt (l, u) ->
-               fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
-            )
-         ) fmt l
+    (pp_print_list ~pp_sep:(fun fmt () -> ())
+       (fun fmt (l, u) ->
+          fprintf fmt "[%a .. %a]" pp_expr l pp_expr u
        )
     ) assigns.content.assign_offset
 

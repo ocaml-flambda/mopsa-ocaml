@@ -83,3 +83,19 @@ void test_assign_two_scalars() {
   _mopsa_assert(x == 2);
   _mopsa_assert(y == 1);
 }
+
+/* Assignments on arrays */
+/* ********************* */
+
+/*$
+ * assigns: a[1, 1];
+ * ensures: (a[1])' == n;
+ */
+void init_second(int *a, int n);
+
+void test_assign_array() {
+  int a[10] = {1, 2, 3};
+  init_second(a, 5);
+  _mopsa_assert(a[0] == 1);
+  _mopsa_assert(a[1] == 5);
+}

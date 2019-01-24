@@ -311,9 +311,7 @@ struct
     let block2 =
       List.fold_left (fun block a ->
           let t = a.content.assign_target in
-          match a.content.assign_offset with
-          | None -> mk_rename (mk_stub_primed t range) t range :: block
-          | Some offsets -> mk_stub_rename_primed t offsets range :: block
+          mk_stub_rename_primed t a.content.assign_offset range :: block
         ) block1 assigns
     in
     man.exec (mk_block block2 range) flow

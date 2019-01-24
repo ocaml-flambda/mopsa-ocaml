@@ -527,7 +527,7 @@ let visit_assigns a prj func =
   bind_range a @@ fun a ->
   Ast.{
     assign_target = visit_expr a.Cst.assign_target prj func;
-    assign_offset = visit_option (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
+    assign_offset = (visit_list @@ visit_pair visit_expr visit_expr) a.Cst.assign_offset prj func;
   }
 
 let visit_ensures ens prj func =
@@ -604,7 +604,6 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
-  debug "convert to ast:@\n%a" Cst.pp_stub stub;
   let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
   Ast.{
     stub_name = func.C_AST.func_org_name;

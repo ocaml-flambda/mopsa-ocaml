@@ -874,13 +874,79 @@ module Domain = struct
     man.exec ~zone:Z_c_cell stmt' flow'
 
 
+  (** Rename primed cells that have been declared in `assigns` stub section *)
+  let rename_primed_cells target offsets range man flow =
+    match offsets with
+    | [] ->
+      (* target should be a scalar lval *)
+      eval_scalar_cell target man flow |>
+      Post.bind_flow man @@ fun c flow ->
+      rename_cell { c with p = true } c range man flow
 
-  (** Rename primed cells that have been declared as assigned in a stub *)
-  let rename_stub_primed_cells pt offsets t range man flow =
-    assert false
+    | _ ->
+      (* target is pointer, so resolve it and compute the affected offsets *)
+      man.eval ~zone:(Z_c, Z_c_points_to) target flow |>
+      Post.bind_flow man @@ fun pt flow ->
+      let base, offset =
+        match ekind pt with
+        | E_c_points_to (P_block(b, o)) -> b, o
+        | _ -> assert false
+      in
+
+      let a = Flow.get_domain_env T_cur man flow in
+
+      (* Get cells with the same base *)
+      let same_base_cells = Cells.filter (fun c ->
+          compare_base base (cell_base c) = 0
+        ) a.cells
+      in
+
+      (* For primed cells, just rename to an unprimed cell *)
+      let flow = Cells.fold (fun c flow ->
+          if c.p
+          then rename_cell c { c with p = false } range man flow
+          else flow
+        ) same_base_cells flow
+      in
+
+      (* Create the bound expressions of the offsets *)
+      let l, u =
+        let rec doit accl accu t =
+          function
+          | [] -> accl, accu
+          | [(l, u)] ->
+            (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+          | (l, u) :: tl ->
+            doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
+
+        (* Utility function that returns the expression of an offset bound *)
+        and mk_offset_bound before bound t =
+          let elem_size = sizeof_type t in
+          Universal.Ast.add before (
+            mul bound (mk_z elem_size range) range ~typ:T_int
+          ) range ~typ:T_int
+        in
+        doit offset offset (under_type target.etyp) offsets
+      in
+      debug "l = %a, u = %a" pp_expr l pp_expr u;
+
+      (* Compute the interval of the bounds *)
+      let itv1 = compute_bound l man flow in
+      let itv2 = compute_bound u man flow in      
+
+      (* Compute the interval of the assigned cells *)
+      let itv = Itv.join () itv1 itv2 in
+
+      (* Remove remaining cells that have an offset within the assigned interval *)
+      remove_cells (fun c ->
+          Cells.mem c same_base_cells &&
+          not (Cells.mem {c with p = true} same_base_cells) &&
+          Itv.mem (cell_zoffset c) itv
+        ) range man flow
+
 
   (** Entry point of post-condition computation *)
-  let rec exec zone stmt man flow =
+  let exec zone stmt man flow =
     match skind stmt with
     (* 𝕊⟦ t v = e; ⟧ when v is a global variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_extern
@@ -966,17 +1032,8 @@ module Domain = struct
 
       Post.return
 
-    (* 𝕊⟦ rename(old, new) ⟧ *)
-    | S_rename(eold, enew) when is_c_scalar_type eold.etyp &&
-                                is_c_scalar_type enew.etyp
-      ->
-      assert false
-
     | S_stub_rename_primed(p, offsets) ->
-      man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
-      Post.bind_opt man @@ fun pe flow ->
-
-      rename_stub_primed_cells pe offsets (under_type p.etyp) stmt.srange man flow  |>
+      rename_primed_cells p offsets stmt.srange man flow  |>
       Post.return
 
     (* 𝕊⟦ rename(@1, @2) ⟧ *)

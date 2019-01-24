@@ -198,11 +198,11 @@ let visit_ensures ensures scope =
 let visit_assigns assigns scope =
   bind_pair_range assigns @@ fun assigns ->
   let assign_target, scope = visit_expr assigns.assign_target scope in
-  let assign_offset, scope = visit_option (visit_list (fun (l, u) scope ->
+  let assign_offset, scope = visit_list (fun (l, u) scope ->
       let l, scope = visit_expr l scope in
       let u, scope = visit_expr u scope in
       (l, u), scope
-    )) assigns.assign_offset scope
+    ) assigns.assign_offset scope
   in
   { assign_target; assign_offset }, scope
 
