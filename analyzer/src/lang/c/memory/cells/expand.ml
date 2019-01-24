@@ -197,7 +197,8 @@ module Domain = struct
                  is_c_int_type (cell_typ c') &&
                  Z.equal (sizeof_type (cell_typ c')) (sizeof_type (cell_typ c)) &&
                  compare_base (cell_base c) (cell_base c') = 0 &&
-                 Z.equal (cell_zoffset c) (cell_zoffset c')
+                 Z.equal (cell_zoffset c) (cell_zoffset c') &&
+                 c.p = c'.p
               ) a
       with
       | Some (c') ->
@@ -214,7 +215,8 @@ module Domain = struct
               compare_base (cell_base c) (cell_base c') = 0 &&
               Z.lt b (sizeof_type (cell_typ c')) &&
               is_c_int_type (cell_typ c') &&
-              compare_typ (remove_typedef_qual (cell_typ c)) (T_c_integer(C_unsigned_char)) = 0
+              compare_typ (remove_typedef_qual (cell_typ c)) (T_c_integer(C_unsigned_char)) = 0 &&
+              c.p = c'.p
             ) a
         with
         | Some (c') ->
@@ -237,9 +239,10 @@ module Domain = struct
                 if i < n then
                   let tobein = (fun cc ->
                       {
-                        b = cc.b ;
+                        b = cc.b;
                         o = O_single (Z.add (cell_zoffset c) (Z.of_int i));
-                        t = t'
+                        t = t';
+                        p = cc.p;
                       }
                     ) c
                   in
@@ -387,7 +390,7 @@ module Domain = struct
       scalar = (fun v e range flow ->
           let c =
             match ekind v with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -408,7 +411,7 @@ module Domain = struct
       array =  (fun a is_global init_list range flow ->
           let c =
             match ekind a with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -419,7 +422,7 @@ module Domain = struct
               | [] -> flow
               | init :: tl ->
                 let t' = under_array_type c.t in
-                let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = t'} in
+                let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = t'; p = false;} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
@@ -430,7 +433,7 @@ module Domain = struct
       record =  (fun s is_global init_list range flow ->
           let c =
             match ekind s with
-            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = v.vtyp}
+            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
             | E_c_cell(c, _) -> c
             | _ -> assert false
           in
@@ -443,7 +446,7 @@ module Domain = struct
               | init :: tl ->
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
-                let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = t'} in
+                let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = t'; p = false;} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
@@ -533,7 +536,7 @@ module Domain = struct
 
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton {b;o;t} flow
+      Eval.singleton {b; o; t; p = false} flow
 
     | O_out_of_bound ->
       let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
@@ -689,7 +692,7 @@ module Domain = struct
   let rec eval_scalar_cell exp man flow : ('a, cell) evl =
     match ekind exp with
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
-      let c = { b = V v; o = O_single Z.zero; t = vtyp v } in
+      let c = { b = V v; o = O_single Z.zero; t = vtyp v; p = false; } in
       Eval.singleton c flow
 
     | E_c_deref p ->
@@ -758,6 +761,24 @@ module Domain = struct
         | _ -> panic_at exp.erange "expand: unsupported function pointer %a" pp_expr p
       end
 
+    | E_stub_primed (e) ->
+      eval_scalar_cell e man flow |>
+      Eval.bind_return @@ fun c flow ->
+      let c' = { c with p = true } in
+      debug "primed scalar cell evaluated into %a" pp_cell c';
+      begin match cell_offset c with
+        | O_single _ ->
+          let flow = add_cell c' exp.erange man flow in
+          Eval.singleton (mk_c_cell c' exp.erange) flow
+
+        | O_region _ ->
+          let l, u = rangeof (cell_typ c) in
+          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
+
+        | _ -> assert false
+      end
+
+
     (* 𝔼⟦ size(p) ⟧ *)
     | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
@@ -788,7 +809,7 @@ module Domain = struct
 
     (* 𝔼⟦ ∃v ⟧ *)
     | E_stub_quantified(EXISTS, var, set) when var.vtyp |> is_c_scalar_type ->
-      let c = { b = V var; o = O_single Z.zero; t = var.vtyp } in
+      let c = { b = V var; o = O_single Z.zero; t = var.vtyp; p = false } in
       Eval.singleton (mk_c_cell c exp.erange) flow |>
       Eval.return
 
@@ -973,6 +994,7 @@ module Domain = struct
               b = A addr2;
               o = cell_offset c;
               t = cell_typ c;
+              p = is_cell_primed c;
             }
             in
             rename_cell c c' stmt.srange man flow

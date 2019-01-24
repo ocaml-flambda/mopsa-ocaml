@@ -47,6 +47,7 @@ type cell = {
   b: base ;      (** base of the cell *)
   o: offset;     (** offset of the cell within the base *)
   t: typ;        (** type of the cell *)
+  p: bool;       (** is it primed? *)
 }
 
 (** Compare two cells *)
@@ -55,15 +56,20 @@ let compare_cell c1 c2 =
     (fun () -> compare_base c1.b c2.b);
     (fun () -> compare_offset c1.o c2.o);
     (fun () -> compare_typ c1.t c2.t);
+    (fun () -> compare c1.p c2.p);
   ]
+
+let pp_prime fmt b =
+  if b then Format.pp_print_string fmt "'"
+  else ()
 
 (** Print a cell *)
 let pp_cell fmt c =
-  Format.fprintf fmt "⟨%a,%a,%a⟩"
+  Format.fprintf fmt "⟨%a,%a,%a⟩%a"
     pp_base c.b
     pp_offset c.o
     Pp.pp_c_type_short c.t
-
+    pp_prime c.p
 
 let cell_base c = c.b
 
@@ -79,12 +85,13 @@ let is_cell_single_offset c =
   | O_single _ -> true
   | _ -> false
 
-
 let cell_typ c = c.t
 
 let cell_mode c =
   let b = cell_base c in
   base_mode b
+
+let is_cell_primed c = c.p
 
 
 (** {2 Cell variables} *)
@@ -96,8 +103,8 @@ type var_kind +=
 
 let cell_to_var_name c =
   let () = Format.fprintf Format.str_formatter
-      "{%a,%a,%a}"
-      pp_base c.b pp_offset c.o Pp.pp_c_type_short c.t
+      "{%a,%a,%a}%a"
+      pp_base c.b pp_offset c.o Pp.pp_c_type_short c.t pp_prime c.p
   in
   Format.flush_str_formatter ()
 
