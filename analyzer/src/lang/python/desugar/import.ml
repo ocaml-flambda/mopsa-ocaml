@@ -25,6 +25,16 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
+    let opt_stubs = ref []
+
+    let () =
+      register_domain_option name {
+        key = "-stub";
+        doc = " path to stub directory";
+        spec = Arg.String(fun f -> opt_stubs := f :: !opt_stubs);
+        default = "";
+      }
+
     let exec_interface = {export = [any_zone]; import = []}
     let eval_interface = {export = []; import = []}
 
@@ -71,11 +81,12 @@ module Domain =
         find_builtin name, flow
       else
         let dir =
-          Framework.Options.(common_options.stubs) |> List.find_opt
-                                                        (fun dir ->
-                                                          let filename = dir ^ "/" ^ name ^ ".py" in
-                                                          Sys.file_exists filename
-                                                        )
+          !opt_stubs |>
+          List.find_opt
+            (fun dir ->
+               let filename = dir ^ "/" ^ name ^ ".py" in
+               Sys.file_exists filename
+            )
         in
         match dir with
         | None -> panic_at range "module %s not found in stubs" name
@@ -100,11 +111,12 @@ module Domain =
     (** Parse and import a builtin module *)
     and import_builtin_module base name =
       let file = name ^ ".py" in
-      let dir = Framework.Options.(common_options.stubs) |> List.find_opt
-                                                              (fun dir ->
-                                                                let filename = dir ^ "/" ^ file in
-                                                                Sys.file_exists filename
-                                                              )
+      let dir = !opt_stubs |>
+                List.find_opt
+                  (fun dir ->
+                     let filename = dir ^ "/" ^ file in
+                     Sys.file_exists filename
+                  )
       in
       match dir with
       | None -> panic "builtin module %s not found" file

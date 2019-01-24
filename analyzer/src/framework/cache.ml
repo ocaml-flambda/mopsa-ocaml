@@ -14,6 +14,8 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.cache" fmt
 
+let opt_cache = ref 10
+
 module Make(Domain: sig type t end) =
 struct
   let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t flow) list ref = ref []
@@ -23,7 +25,7 @@ struct
   let add_to_cache : type a. a list ref -> a -> unit =
     fun cache x ->
       cache := x :: (
-          if List.length !cache < Options.(common_options.cache) then !cache
+          if List.length !cache < !opt_cache then !cache
           else List.rev @@ List.tl @@ List.rev !cache
         )
 
@@ -38,7 +40,7 @@ struct
 
       | Some post -> post.Post.flow
     in
-    if Options.(common_options.cache) == 0 then
+    if !opt_cache == 0 then
       ff ()
     else
       try List.assoc (zone, stmt, flow) !exec_cache
@@ -48,7 +50,7 @@ struct
         flow'
 
   let eval f zone exp man flow =
-    if Options.(common_options.cache) == 0
+    if !opt_cache == 0
     then f exp man flow
     else
       try List.assoc (zone, exp, flow) !eval_cache

@@ -23,11 +23,6 @@ let () =
       | E_type_partition i1, E_type_partition i2 -> Pervasives.compare i1 i2
       | _ -> next e1 e2)
 
-let opt_pyty_summaries : bool ref = ref false
-
-let () =
-  register_option (
-      "-pyty-summaries", Arg.Set opt_pyty_summaries, " enable interprocedural summaries for analyses using python types (default: false)")
 
 type summaries = Typingdomain.summary list
 
@@ -58,6 +53,17 @@ module Domain =
     let identify : type a. a domain -> (t, a) eq option = function
       | D_python_typing -> Some Eq
       | _ -> None
+
+    let opt_pyty_summaries : bool ref = ref false
+
+    let () =
+      register_domain_option name {
+        key = "-pyty-summaries";
+        spec = Arg.Set opt_pyty_summaries;
+        doc = " enable interprocedural summaries for analyses using python types";
+        default = "false";
+      }
+
 
     type _ Framework.Query.query +=
        | Q_types : Framework.Ast.expr -> Typingdomain.polytype Framework.Query.query

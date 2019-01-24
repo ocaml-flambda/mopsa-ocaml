@@ -13,6 +13,8 @@ open Ast
 open Zone
 
 
+let name = "universal.iterators.unittest"
+
 (* Command line options
    ====================
 
@@ -28,18 +30,20 @@ let unittest_flag = ref false
 let unittest_filter = ref []
 
 let () =
-  register_option (
-    "-unittest",
-    Arg.Set unittest_flag,
-    " activate unittest mode"
-  );
-  register_option (
-    "-unittest-filter",
-    Arg.String(fun s ->
+  register_domain_option name {
+    key = "-unittest";
+    spec = Arg.Set unittest_flag;
+    doc = " activate unittest mode";
+    default = "";
+  };
+  register_domain_option name {
+    key = "-unittest-filter";
+    doc = " list of test functions (separated by comma) to analyze";
+    spec = Arg.String(fun s ->
         unittest_filter := Str.split (Str.regexp "[ ]*,[ ]*") s
-      ),
-    " selection of test functions (separated by comma) to analyze (default: all)"
-  );
+      );
+    default = "";
+  };
   ()
 
 
@@ -134,7 +138,7 @@ struct
 
   type _ domain += D_universal_unittest : unit domain
   let id = D_universal_unittest
-  let name = "universal.iterators.unittest"
+  let name = name
   let identify : type a. a domain -> (unit, a) eq option =
     function
     | D_universal_unittest -> Some Eq

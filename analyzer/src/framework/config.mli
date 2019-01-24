@@ -33,6 +33,11 @@
 *)
 
 
-val parse : string -> (module Domain.DOMAIN)
-(** [parse path] constructs an abstract domain from the path of a
-    configuration file *)
+val parse : string -> string * (module Domain.DOMAIN)
+(** [parse path] constructs an abstract domain from a configuration file *)
+
+val language : string -> string
+(** [language path] returns the language of a configuration file *)
+
+val domains : string -> string list
+(** [domains path] returns the list of domains used in a configuration file *)

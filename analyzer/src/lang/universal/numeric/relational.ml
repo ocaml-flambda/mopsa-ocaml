@@ -14,30 +14,9 @@ open Rounding
 open Ast
 
 
-(****************************************************************************)
-(**                      {2 Command line options}                           *)
-(****************************************************************************)
-
-
 type _ Framework.Query.query +=
   | Q_sat  : Framework.Ast.expr -> bool Framework.Query.query
   | Q_fold : var list -> var list list Framework.Query.query
-
-let opt_float_rounding = ref Apron.Texpr1.Near
-
-let () =
-  register_option (
-    "-float-rounding-mode",
-    Arg.String (function
-        | "near" -> opt_float_rounding := Apron.Texpr1.Near
-        | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
-        | "up"   -> opt_float_rounding := Apron.Texpr1.Up
-        | "down" -> opt_float_rounding := Apron.Texpr1.Down
-        | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-        | x -> Exceptions.panic "Unknown rounding mode %s" x
-      ),
-    "selects the rounding mode of floating-point computations. Possible values: near, zero, up, down, and rnd (default: near)."
-  )
 
 
 (****************************************************************************)
@@ -59,17 +38,6 @@ module PolyMan = struct type t = Polka.strict Polka.t let name = "polyhedra" let
 module ApronTransformer(ApronManager : APRONMANAGER) =
 struct
 
-  (* let tcons_vars (tc: Apron.Tcons1.t) =
-   *   let expr = tc |> Apron.Tcons1.get_texpr1 |> Apron.Texpr1.to_expr in
-   *   let open Apron.Texpr1 in
-   *   let module SVar = Set.Make(Apron.Var) in
-   *   let rec aux expr cont = match expr with
-   *     | Cst _ -> cont SVar.empty
-   *     | Var v -> cont (SVar.singleton v)
-   *     | Unop(_, e, _, _) -> aux e cont
-   *     | Binop(_ , e, e', _, _) -> aux e (fun r -> aux e' (fun r' -> cont (SVar.union r r')))
-   *   in
-   *   aux expr (fun x -> x) |> SVar.elements *)
   let var_to_apron (v:var primed) =
     let name = primed_apply uniq_vname v in
     Apron.Var.of_string name
@@ -419,6 +387,13 @@ struct
     | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
+
+
+  (** {2 Command-line options} *)
+  (** ************************ *)
+  let () =
+    import_standalone_option Rounding.name ~into:name
+
 
   (** {2 Environment utility functions} *)
   (** ********************************* *)

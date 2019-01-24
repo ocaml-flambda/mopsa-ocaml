@@ -14,6 +14,11 @@ open Rounding
 open Ast
 open Bot
 
+let name = "universal.numeric.values.float_intervals"
+
+let () =
+  import_standalone_option Rounding.name ~into:name
+    
 
 module Value =
 struct
@@ -32,7 +37,7 @@ struct
   type _ value += V_float_interval : t value
 
   let id = V_float_interval
-  let name = "universal.numeric.values.float_intervals", "float_intervals"
+  let name = name, "float_intervals"
 
   let identify : type a. a value -> (t, a) eq option =
     function

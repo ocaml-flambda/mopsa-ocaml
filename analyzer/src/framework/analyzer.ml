@@ -26,10 +26,7 @@ let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 module Make(Domain : DOMAIN) =
 struct
 
-  (* Html output of the evaluation/execution tree *)
-  module Out = Output.Html.Make(Domain)
 
-  let output_actions () = Out.dump_html_actions ()
   (* Cache of previous evaluations and post-conditions *)
   module Cache = Cache.Make(struct type t = Domain.t end)
 
@@ -101,7 +98,6 @@ struct
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
-    Out.push_action (Exec({s = stmt; z= zone}));
     debug "exec:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_stmt stmt
       Location.pp_range stmt.srange
@@ -117,7 +113,6 @@ struct
     in
     let flow' = Cache.exec fexec zone stmt man flow in
 
-    Out.push_action (ExecDone({s_res = flow'}));
     debug "exec done:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]@\n time: %.4fs"
       pp_stmt stmt
       Location.pp_range stmt.srange
@@ -176,7 +171,6 @@ struct
 
   (** Evaluation of expressions. *)
   and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
-    Out.push_action (Eval({e = exp ; zs = zone}));
     debug "eval:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
       pp_expr exp
       Location.pp_range exp.erange
@@ -227,7 +221,6 @@ struct
             | _ -> Eval.singleton exp flow
     in
 
-    Out.push_action (EvalDone({e_res = ret}));
     debug "eval done:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output: @[  %a@]@\n time: %.4fs"
       pp_expr exp
       Location.pp_range exp.erange

@@ -14,20 +14,6 @@ open Universal.Ast
 open Ast
 
 
-(** Command line options *)
-(** ==================== *)
-
-(* Name of the entry function to be analyzed. *)
-let opt_entry_function = ref "main"
-
-let () =
-  register_option (
-    "-c-entry",
-    Arg.Set_string opt_entry_function,
-    " name of the entry function to be analyzed (default: main)"
-  )
-
-
 (** Iterator domain *)
 (** =============== *)
 
@@ -49,6 +35,20 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+
+  (** Command line options *)
+  (** ==================== *)
+
+  (* Name of the entry function to be analyzed. *)
+  let opt_entry_function = ref "main"
+
+  let () =
+    register_domain_option name {
+      key = "-c-entry";
+      doc = " name of the entry function to be analyzed";
+      spec = Arg.Set_string opt_entry_function;
+      default = "main";
+    }
 
   (** Zoning definition *)
   (** ================= *)
