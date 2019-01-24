@@ -34,6 +34,7 @@ let () =
     key = "-unittest";
     spec = Arg.Set unittest_flag;
     doc = " activate unittest mode";
+    default = "";
   };
   register_domain_option name {
     key = "-unittest-filter";
@@ -41,6 +42,7 @@ let () =
     spec = Arg.String(fun s ->
         unittest_filter := Str.split (Str.regexp "[ ]*,[ ]*") s
       );
+    default = "";
   };
   ()
 

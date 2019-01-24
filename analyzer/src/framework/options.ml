@@ -20,7 +20,7 @@ type opt =
   (** Domain option *)
 
   | O_standalone of string * desc
-  (** Standalone options. Several domains can share a same standalone option 
+  (** Standalone options. Several domains can share a same standalone option
       by importing it. *)
 
 (** Descriptor of a command-line option *)
@@ -28,6 +28,7 @@ and desc = {
   key: string;
   doc: string;
   spec: Arg.spec;
+  default: string;
 }
 
 (** {2 Registration} *)
@@ -100,16 +101,18 @@ let get_domain_options (dom:string) =
   in
   opt1 @ opt2
 
-(** {2 Interface with Arg} *)
-(** ********************** *)
-
-let desc_to_arg (desc:desc) : Arg.key * Arg.spec * Arg.doc =
-  desc.key, desc.spec, desc.doc
+(** {2 Interface with Arg and Output} *)
+(** ********************************* *)
 
 let opt_to_arg opt =
   match opt with
   | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
-    desc_to_arg d
+    d.key, d.spec, d.doc
+
+let opt_to_output opt =
+  match opt with
+  | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
+    d.key, d.spec, d.doc, d.default
 
 let to_arg () =
   List.map opt_to_arg !options
@@ -118,12 +121,13 @@ let to_arg () =
 (** ******************** *)
 
 (** Analysis configuration *)
-let opt_config = ref "" 
+let opt_config = ref ""
 let () =
   register_builtin_option {
     key = "-config";
     doc = " path to the configuration file to use for the analysis";
     spec = Arg.Set_string opt_config;
+    default = "";
   }
 
 (** Debug channels *)
@@ -132,11 +136,13 @@ let () =
     key = "-debug";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
     spec = Arg.String (fun s -> Debug.parse s);
+    default = "";
   };
   register_builtin_option {
     key = "-no-color";
     doc = " deactivate colors in debug messages.";
     spec = Arg.Clear Debug.print_color;
+    default = "";
   }
 
 (** List of available domains *)
@@ -151,13 +157,14 @@ let () =
         in
         Output.Factory.list_domains domains
       );
+    default = "";
   }
-      
+
 (** Output format *)
 let () =
   register_builtin_option {
     key = "-format";
-    doc = " selects the output format. (default: text)";
+    doc = " selects the output format.";
     spec = Arg.Symbol (
         ["text"; "json"],
         (fun s ->
@@ -167,6 +174,7 @@ let () =
            | _ -> assert false
         )
       );
+    default = "text";
   }
 
 (** Output stream *)
@@ -175,26 +183,42 @@ let () =
     key = "-output";
     doc = " redirect output to a file";
     spec = Arg.String (fun s -> Output.Factory.opt_file := Some s);
+    default = "";
   }
 
 (** Help message *)
+let help () =
+  let options =
+    if !opt_config = "" then !options
+    else
+      (* Get the language and domains of selected configuration *)
+      let lang = Config.language !opt_config in
+      let domains = Config.domains !opt_config in
+      (* Get the options *)
+      (get_language_options lang)
+      @
+      (List.map get_domain_options domains |> List.flatten)
+  in
+  let args = List.map opt_to_output options in
+  Output.Factory.help args;
+  exit 0
+
 let () =
   register_builtin_option {
     key  = "-help";
     doc  = " display the list of options";
-    spec = Arg.Unit (fun () ->
-        let options =
-          if !opt_config = "" then !options
-          else
-            (* Get the language and domains of selected configuration *)
-            let lang = Config.language !opt_config in
-            let domains = Config.domains !opt_config in
-            (* Get the options *)
-            (get_language_options lang)
-            @
-            (List.map get_domain_options domains |> List.flatten)
-        in
-        let args = List.map opt_to_arg options in
-        Output.Factory.help args
-      )
+    spec = Arg.Unit help;
+    default = "";
+  };
+  register_builtin_option {
+    key  = "--help";
+    doc  = " display the list of options";
+    spec = Arg.Unit help;
+    default = "";
+  };
+  register_builtin_option {
+    key  = "-h";
+    doc  = " display the list of options";
+    spec = Arg.Unit help;
+    default = "";
   }

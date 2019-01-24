@@ -32,5 +32,6 @@ let () =
           | x -> Exceptions.panic "unknown rounding mode %s" x
         )
       );
-    doc = "rounding mode of floating-point computations. (default: near)";
+    doc = "rounding mode of floating-point computations.";
+    default = "near";
   }

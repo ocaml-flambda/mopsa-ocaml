@@ -45,8 +45,9 @@ struct
   let () =
     register_domain_option name {
       key = "-c-entry";
-      doc = " name of the entry function to be analyzed (default: main)";
+      doc = " name of the entry function to be analyzed";
       spec = Arg.Set_string opt_entry_function;
+      default = "main";
     }
 
   (** Zoning definition *)

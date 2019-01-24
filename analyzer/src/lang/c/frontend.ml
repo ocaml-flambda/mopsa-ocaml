@@ -34,16 +34,19 @@ let () =
     key = "-I";
     doc = " add the directory to the search path for include files in C analysis";
     spec = Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]);
+    default = "";
   };
   register_language_option "c" {
     key = "-ccopt";
     doc = " pass the option to the Clang frontend";
     spec = Arg.String (fun l -> c_opts := !c_opts @ [l]);
+    default = "";
   };
   register_language_option "c" {
     key = "-make-target";
     doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
     spec = Arg.Set_string opt_make_target;
+    default = "";
   };
   ()
 

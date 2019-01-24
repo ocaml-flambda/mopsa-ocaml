@@ -32,6 +32,7 @@ module Domain =
         key = "-stub";
         doc = " path to stub directory";
         spec = Arg.String(fun f -> opt_stubs := f :: !opt_stubs);
+        default = "";
       }
 
     let exec_interface = {export = [any_zone]; import = []}

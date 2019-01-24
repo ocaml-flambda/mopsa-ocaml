@@ -60,7 +60,8 @@ module Domain =
       register_domain_option name {
         key = "-pyty-summaries";
         spec = Arg.Set opt_pyty_summaries;
-        doc = " enable interprocedural summaries for analyses using python types (default: false)";
+        doc = " enable interprocedural summaries for analyses using python types";
+        default = "false";
       }
 
 

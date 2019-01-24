@@ -76,20 +76,25 @@ let panic ?btrace exn files out =
   ()
 
 
-let help (args:(Arg.key * Arg.spec * Arg.doc) list) out =
+let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) out =
   let print fmt = get_printer out fmt in
+  let print_default fmt d =
+    if d = "" then ()
+    else fprintf fmt " (default: %s)" d
+  in
   print "Options:@.";
-  List.iter (fun (key,spec,doc) ->
+  List.iter (fun (key,spec,doc,default) ->
       match spec with
       | Arg.Symbol(l,_) ->
-        print "  %s={%a} %s@."
+        print "  %s={%a} %s%a@."
           key
           (pp_print_list
              ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
              pp_print_string
           ) l
           doc
-      | _ -> print "  %s %s@." key doc
+          print_default default
+      | _ -> print "  %s %s%a@." key doc print_default default
     ) args
 
 let list_domains (domains:string list) out =
