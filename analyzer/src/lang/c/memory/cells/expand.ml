@@ -190,7 +190,6 @@ module Domain = struct
   let phi (c:cell) (a:t) range : expr option =
     match find_cell_opt (fun c' -> compare_cell c c' = 0) a with
     | Some c ->
-      debug "case 1";
       Some (mk_c_cell c range)
 
     | None ->
@@ -204,7 +203,6 @@ module Domain = struct
               ) a
       with
       | Some (c') ->
-        debug "case 2";
         Some (wrap_expr
                 (mk_c_cell c' range)
                 (int_rangeof (cell_typ c))
@@ -222,7 +220,6 @@ module Domain = struct
             ) a
         with
         | Some (c') ->
-          debug "case 3";
           let b = Z.sub (cell_zoffset c) (cell_zoffset c') in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           Some (_mod
@@ -266,7 +263,6 @@ module Domain = struct
                   time',res'
                 ) (Z.of_int 1,(mk_int 0 range)) ll
               in
-              debug "case 4";
               Some e
             else
               raise NotPossible
@@ -274,7 +270,6 @@ module Domain = struct
           | NotPossible ->
             match cell_base c with
             | S s ->
-              debug "case 5 %a" pp_cell c;
               let o = cell_zoffset c in
               let len = String.length s in
               if Z.equal o (Z.of_int len) then
@@ -284,17 +279,14 @@ module Domain = struct
 
             | _ ->
               if is_c_int_type (cell_typ c) then
-                let () = debug "case 6" in
                 let a,b = rangeof (cell_typ c) in
                 Some (mk_z_interval a b range)
               else if is_c_float_type (cell_typ c) then
-                let () = debug "case 7" in
                 let prec = get_c_float_precision (cell_typ c) in
                 Some (mk_top (T_float prec) range)
               else if is_c_pointer_type (cell_typ c) then
                 panic_at range ~loc:__LOC__ "phi called on a pointer cell %a" pp_cell c
               else
-                let () = debug "case 8" in
                 None
 
   (** [constrain_cell c a range man f] add numerical constraints of [c] in [a] to flow [f] *)
@@ -316,7 +308,6 @@ module Domain = struct
 
   (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
   let add_cell c range man flow =
-    debug "add_cell %a" pp_cell c;
     let a = Flow.get_domain_env T_cur man flow in
     let a' = {
       a with bases = Bases.add (cell_base c) a.bases;
@@ -636,7 +627,6 @@ module Domain = struct
       evaluations.
   *)
   let eval_quantified_cell b o t range man flow : ('a, cell) evl =
-    debug "eval_quantified_cell: %a %a" pp_base b pp_expr o;
     (* Get the list of ∀ variables *)
     let forall_vars = get_forall_vars o in
 
@@ -680,7 +670,6 @@ module Domain = struct
                 o
             in
             (* Compute the cell for this sample. *)
-            debug "offset sample: %a" pp_expr o';
             eval_cell b o' t range man flow
           )
       in
@@ -738,7 +727,6 @@ module Domain = struct
       ->
       eval_scalar_cell exp man flow |>
       Eval.bind_return @@ fun c flow ->
-      debug "scalar cell evaluated into %a" pp_cell c;
       begin match cell_offset c with
         | O_single _ ->
           let flow = add_cell c exp.erange man flow in
@@ -767,7 +755,6 @@ module Domain = struct
       eval_scalar_cell e man flow |>
       Eval.bind_return @@ fun c flow ->
       let c' = { c with p = true } in
-      debug "primed scalar cell evaluated into %a" pp_cell c';
       begin match cell_offset c with
         | O_single _ ->
           let flow = add_cell c' exp.erange man flow in
@@ -856,7 +843,6 @@ module Domain = struct
 
   (** Rename an old cell into a new one *)
   let rename_cell cold cnew range man flow =
-    debug "rename %a into %a" pp_cell cold pp_cell cnew;
     let flow' =
       (* Add the old cell in case it has not been accessed before so
          that its constraints are added in the sub domain *)
@@ -930,11 +916,10 @@ module Domain = struct
         in
         doit offset offset (under_type target.etyp) offsets
       in
-      debug "l = %a, u = %a" pp_expr l pp_expr u;
 
       (* Compute the interval of the bounds *)
       let itv1 = compute_bound l man flow in
-      let itv2 = compute_bound u man flow in      
+      let itv2 = compute_bound u man flow in
 
       (* Compute the interval of the assigned cells *)
       let itv = Itv.join () itv1 itv2 in
@@ -1040,26 +1025,8 @@ module Domain = struct
 
     (* 𝕊⟦ rename(@1, @2) ⟧ *)
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      (* For each cell in base @1, create a similar one in base @2 and
-         copy its content *)
-      let a = Flow.get_domain_env T_cur man flow in
-      let flow = Cells.fold (fun c flow ->
-          let base = cell_base c in
-          if compare_base base (A addr1) != 0 then
-            flow
-          else
-            (* create a similar cell in @2 *)
-            let c' = {
-              b = A addr2;
-              o = cell_offset c;
-              t = cell_typ c;
-              p = is_cell_primed c;
-            }
-            in
-            rename_cell c c' stmt.srange man flow
-        ) a.cells flow
-      in
-      Post.return flow
+      panic_at stmt.srange
+        "cell: address renaming not supported"
 
     | _ -> None
 

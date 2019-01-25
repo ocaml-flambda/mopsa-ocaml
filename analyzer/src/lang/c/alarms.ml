@@ -16,6 +16,7 @@ type alarm_kind +=
   | AInvalidDeref
   | ADivideByZero
   | AIntegerOverflow
+  | AIllegalPointerDiff
 
 let () =
   register_alarm
@@ -28,6 +29,7 @@ let () =
           | AInvalidDeref -> Format.fprintf fmt "invalid-deref"
           | ADivideByZero -> Format.fprintf fmt "div-zero"
           | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
+          | AIllegalPointerDiff -> Format.fprintf fmt "ptr-diff"
           | _ -> default fmt a
         );
       pp_title = (fun default fmt a ->
@@ -37,15 +39,17 @@ let () =
           | AInvalidDeref -> Format.fprintf fmt "Invalid pointer dereference"
           | ADivideByZero -> Format.fprintf fmt "Division by zero"
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
+          | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
           | _ -> default fmt a
         );
       pp_report = (fun default fmt a ->
           match a.alarm_kind with
-          | AOutOfBound -> Format.fprintf fmt "TODO"
-          | ANullDeref -> Format.fprintf fmt "TODO"
-          | AInvalidDeref -> Format.fprintf fmt "TODO"
-          | ADivideByZero -> Format.fprintf fmt "TODO"
-          | AIntegerOverflow -> Format.fprintf fmt "TODO"
+          | AOutOfBound -> Format.fprintf fmt ""
+          | ANullDeref -> Format.fprintf fmt ""
+          | AInvalidDeref -> Format.fprintf fmt ""
+          | ADivideByZero -> Format.fprintf fmt ""
+          | AIntegerOverflow -> Format.fprintf fmt ""
+          | AIllegalPointerDiff -> Format.fprintf fmt ""
           | _ -> default fmt a
         )
     };

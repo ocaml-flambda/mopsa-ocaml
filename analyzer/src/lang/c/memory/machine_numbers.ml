@@ -36,7 +36,6 @@ let check_overflow typ man range f1 f2 exp flow =
   let rmin, rmax = rangeof typ in
   let rec fast_check e flow =
     let itv = man.ask (Itv_Value.Q_interval e) flow in
-    debug "overflow interval = %a" Itv_Value.print itv;
     if Itv_Value.is_bottom itv then Eval.empty_singleton flow
     else
     if Itv_Value.is_bounded itv then
@@ -61,7 +60,6 @@ let check_overflow typ man range f1 f2 exp flow =
 let check_division man range f1 f2 e e' flow =
   let rec fast_check () =
     let itv = man.ask (Itv_Value.Q_interval e') flow in
-    debug "div interval = %a" Itv_Value.print itv;
     if Itv_Value.is_bottom itv then Eval.empty_singleton flow
     else
     if Itv_Value.is_bounded itv then
@@ -153,7 +151,6 @@ struct
     | E_binop(op, e, e') when op |> is_c_div &&
                               e  |> etyp |> is_c_int_type &&
                               e' |> etyp |> is_c_int_type ->
-      let () = debug "case 1" in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Eval.bind_return @@ fun e flow ->
 
@@ -172,7 +169,6 @@ struct
 
     | E_unop(op, e) when is_c_int_op op &&
                          e |> etyp |> is_c_int_type ->
-      let () = debug "case 2" in
       let typ = etyp exp in
       let rmin, rmax = rangeof typ in
       eval_unop op e exp man flow  |>
@@ -191,7 +187,6 @@ struct
     | E_binop(op, e, e') when is_c_int_op op &&
                               e  |> etyp |> is_c_int_type &&
                               e' |> etyp |> is_c_int_type ->
-        let () = debug "case 3" in
         let typ = etyp exp in
         let rmin, rmax = rangeof typ in
         eval_binop op e e' exp man flow |>
@@ -208,10 +203,8 @@ struct
           )
 
     | E_c_cast(e, b) when exp |> etyp |> is_c_int_type ->
-      let () = debug "case 5: %a %a" pp_expr exp pp_typ exp.etyp in
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Eval.bind_return @@ fun e' flow ->
-      debug "cast step 2; %a" pp_expr e';
       let t  = etyp exp in
       let t' = etyp e in
       let r = rangeof t in
@@ -225,7 +218,6 @@ struct
           (fun e fflow ->
              if b && not (!cast_alarm) then
                begin
-                 debug "false flow : %a" (Flow.print man) fflow ;
                  Eval.singleton
                    ({ekind  = E_unop(O_wrap(rmin, rmax), e);
                      etyp   = to_universal_type t;
@@ -298,30 +290,24 @@ struct
       Eval.singleton exp' flow
 
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
-      debug "binop general case";
       eval_binop op e e' exp man flow
 
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
-      debug "unop general case";
       eval_unop op e exp man flow
 
     | E_c_cast(e, b) when e |> etyp |> is_c_num_type->
-      debug "cast general case";
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Eval.return
 
     | E_constant(C_c_character (c, _)) ->
-      let () = debug "case 6" in
       Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_universal_type exp.etyp} flow
       |> OptionExt.return
 
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
-      let () = debug "case 7" in
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> OptionExt.return
 
     | E_var _ ->
-      let () = debug "case 8" in
       Eval.singleton (to_universal_expr exp) flow |>
       Eval.return
 
