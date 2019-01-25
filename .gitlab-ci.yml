@@ -59,6 +59,7 @@ build_job:
     - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
 
 .bench-typpete:
+  allow_failure: true
   stage: benchmarks
   dependencies: [build_job]
   script:
