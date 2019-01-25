@@ -273,6 +273,9 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_type pt ->
+      let cur = Flow.get_domain_cur man flow in
+
+
       Exceptions.panic_at range "E_py_type %a@\n" pp_polytype pt
     | E_addr addr ->
       let cur = Flow.get_domain_cur man flow in
@@ -456,7 +459,16 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
-      Exceptions.panic "issubclass"
+      Eval.eval_list [cls; cls'] man.eval flow |>
+      Eval.bind (fun evals flow ->
+          let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+          let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
+          let addr_cls' = match ekind cls' with | E_py_object (a, _) -> a | _ -> assert false in
+          match akind addr_cls, akind addr_cls' with
+          | A_py_class (c, mro), A_py_class (c', mro') ->
+            Eval.singleton (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
+          | _ -> assert false)
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
       Eval.eval_list [obj; attr] man.eval flow |>

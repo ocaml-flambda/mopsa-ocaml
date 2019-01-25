@@ -35,7 +35,7 @@ module Domain =
       debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
-      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)} as f), [cls; obj], []) ->
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
          (* check if obj has str method, run it, check return type (can't be notimplemented) *)
          (* otherwise, call __repr__. Or repr? *)
          (* FIXME!*)
