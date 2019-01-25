@@ -30,6 +30,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
+    - echo $C_FILE
     - $MOPSA_C analyzer/tests/c/$C_FILE
 
 .test-u:
@@ -37,6 +38,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
+    - echo $U_FILE
     - $MOPSA_U analyzer/tests/universal/$U_FILE
 
 .test-py:
@@ -45,6 +47,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
+    - echo $PY_FILE
     - $MOPSA_PY analyzer/tests/python/$PY_FILE
 
 .test-pyty:
@@ -52,6 +55,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
+    - echo $PY_FILE
     - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
 
 .bench-typpete:
@@ -59,6 +63,7 @@ build_job:
   dependencies: [build_job]
   script:
     - eval `opam config env`
+    - echo $PY_FILE
     - $MOPSA_PYTY benchmarks/pytypes/typpete/$PY_FILE
 
 test-c 1/20:
@@ -370,4 +375,3 @@ bench-typpete 39/39:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
-

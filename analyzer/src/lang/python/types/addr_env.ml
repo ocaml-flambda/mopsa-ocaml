@@ -208,6 +208,7 @@ struct
           ) aset []
         |> Eval.join_list |> OptionExt.return
       else if is_builtin_name v.org_vname then
+        (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return
       else
         Eval.empty_singleton flow |> OptionExt.return

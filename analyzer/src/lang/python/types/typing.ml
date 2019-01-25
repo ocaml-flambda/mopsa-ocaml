@@ -272,6 +272,8 @@ struct
     debug "eval %a@\n" pp_expr exp;
     let range = erange exp in
     match ekind exp with
+    | E_py_type pt ->
+      Exceptions.panic_at range "E_py_type %a@\n" pp_polytype pt
     | E_addr addr ->
       let cur = Flow.get_domain_cur man flow in
       Polytypeset.fold (fun pty acc ->
@@ -460,6 +462,7 @@ struct
       Eval.eval_list [obj; attr] man.eval flow |>
       Eval.bind (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
+          debug "now isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr;
           let addr_obj = match ekind eobj with
             | E_py_object (a, _) -> a
             | _ -> assert false in
