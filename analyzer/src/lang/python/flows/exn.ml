@@ -108,7 +108,7 @@ module Domain =
                     let cur = Flow.get T_cur man true_flow in
                     let cs = Callstack.get true_flow in
                     let exn = man.ask (Types.Typing.Domain.Q_types exp) true_flow in
-                    let a = mk_alarm (APyException exp (* with ekind = Types.Typing.E_get_type_partition exn} *) ) range ~cs ~level:ERROR in
+                    let a = mk_alarm (APyException {exp with ekind = Types.Typing.E_py_type exn}) range ~cs ~level:ERROR in
                     (* let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in *)
                     let flow' = Flow.add (T_alarm a) cur man true_flow |>
                                   Flow.set T_cur man.bottom man

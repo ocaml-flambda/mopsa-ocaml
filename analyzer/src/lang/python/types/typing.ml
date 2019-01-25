@@ -7,91 +7,110 @@ open MapExt
 open Objects.Function
 open Universal.Ast
 
+type polytype =
+  | Bot | Top
+
+  | Class of class_address * py_object list (* class * mro *)
+  | Function of function_address
+  | Method of function_address * addr
+  | Module of module_address
+
+  | Instance of pytypeinst
+
+  (* | Union of addr list *)
+  | Typevar of int
+
+and pytypeinst = {classn: polytype (* TODO: polytype or addr? *); uattrs: addr StringMap.t; oattrs: addr StringMap.t}
+
+type addr_kind +=
+  | A_py_instance (*of  class_address*)
+
+let () =
+  Format.(register_addr {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_instance (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
+            -> fprintf fmt "inst"
+          | _ -> default fmt a);
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          (* | A_py_instance c1, A_py_instance c2 ->
+           *   compare_addr_kind (A_py_class (c1, [])) (A_py_class (c2, [])) *)
+          | _ -> default a1 a2);})
+
+
+let rec compare_polytype t1 t2 =
+  match t1, t2 with
+  | Class (ca, objs), Class (ca', objs') ->
+    compare_addr_kind (A_py_class (ca, objs)) (A_py_class (ca', objs'))
+  | Function f1, Function f2 ->
+    compare_addr_kind (A_py_function f1) (A_py_function f2)
+  | Module m1, Module m2 ->
+    compare_addr_kind (A_py_module m1) (A_py_module m2)
+  | Instance i1, Instance i2 ->
+    Compare.compose [
+      (* (fun () -> compare_addr i1.classn i2.classn); *)
+      (fun () -> compare_polytype i1.classn i2.classn);
+      (fun () -> StringMap.compare compare_addr i1.uattrs i2.uattrs);
+      (fun () -> StringMap.compare compare_addr i1.oattrs i2.oattrs)
+    ]
+  (* | Union l1, Union l2 ->
+   *   ListExt.compare compare_addr l1 l2 *)
+  | Typevar a1, Typevar a2 ->
+    Pervasives.compare a1 a2
+  | _ -> Pervasives.compare t1 t2
+
+let map_printer = MapExtSig.{ print_empty = "∅";
+                              print_begin = "{";
+                              print_arrow = ":";
+                              print_sep = ";";
+                              print_end = "}"; }
+
+let rec pp_polytype fmt t =
+  match t with
+  | Bot -> Format.fprintf fmt "⊥"
+  | Top -> Format.fprintf fmt "⊤"
+  | Class (C_user c, _) -> Format.fprintf fmt "Class {%a}" pp_var c.py_cls_var
+  | Class (C_builtin c, _) | Class (C_unsupported c, _) -> Format.fprintf fmt "Class[%s]" c
+  | Function (F_user f) -> Format.fprintf fmt "Function {%a}" pp_var f.py_func_var
+  | Function (F_builtin f) | Function (F_unsupported f) -> Format.fprintf fmt "Function[%s]" f
+  | Method (F_user f, a) -> Format.fprintf fmt "Method {%a}@%a" pp_var f.py_func_var pp_addr a
+  | Method (F_builtin f, a) | Method (F_unsupported f, a) -> Format.fprintf fmt "Method {%s}@%a" f pp_addr a
+
+  | Module (M_user (m, _) | M_builtin(m)) -> Format.fprintf fmt "Module[%s]" m
+
+  | Instance {classn; uattrs; oattrs} ->
+    if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
+      Format.fprintf fmt "Instance[%a]" pp_polytype classn
+    else
+      let pp_attrs = (StringMap.fprint map_printer Format.pp_print_string pp_addr) in
+      Format.fprintf fmt "Instance[%a, %a, %a]" pp_polytype classn pp_attrs uattrs pp_attrs oattrs
+
+  (* | Union l -> Format.fprintf fmt "Union[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_addr) l *)
+
+  | Typevar t -> Format.fprintf fmt "α(%d)" t
+
+type expr_kind +=
+  | E_py_type of polytype
+
+let () =
+  register_expr_pp (fun default fmt exp ->
+      match ekind exp with
+      | E_py_type (Instance {classn = Class (C_builtin c, _)})
+      | E_py_type (Instance {classn = Class (C_unsupported c, _)}) -> Format.fprintf fmt "%s" c
+      | E_py_type (Instance {classn = Class (C_user c, _)}) -> Format.fprintf fmt "%a" pp_var c.py_cls_var
+      | E_py_type p -> Format.fprintf fmt "E_py_type %a" pp_polytype p
+      | _ -> default fmt exp);
+  register_expr_compare (fun next e1 e2 ->
+      match ekind e1, ekind e2 with
+      | E_py_type p1, E_py_type p2 -> compare_polytype p1 p2
+      | _ -> next e1 e2)
+
+
+
 
 module Domain =
 struct
-
-  type polytype =
-    | Bot | Top
-
-    | Class of class_address * py_object list (* class * mro *)
-    | Function of function_address
-    | Method of function_address * addr
-    | Module of module_address
-
-    | Instance of pytypeinst
-
-    (* | Union of addr list *)
-    | Typevar of int
-
-  and pytypeinst = {classn: polytype (* TODO: polytype or addr? *); uattrs: addr StringMap.t; oattrs: addr StringMap.t}
-
-  type addr_kind +=
-    | A_py_instance (*of  class_address*)
-
-  let () =
-    Format.(register_addr {
-        print = (fun default fmt a ->
-            match a with
-            | A_py_instance (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
-              -> fprintf fmt "inst"
-            | _ -> default fmt a);
-        compare = (fun default a1 a2 ->
-            match a1, a2 with
-            (* | A_py_instance c1, A_py_instance c2 ->
-             *   compare_addr_kind (A_py_class (c1, [])) (A_py_class (c2, [])) *)
-            | _ -> default a1 a2);})
-
-  let rec compare_polytype t1 t2 =
-    match t1, t2 with
-    | Class (ca, objs), Class (ca', objs') ->
-      compare_addr_kind (A_py_class (ca, objs)) (A_py_class (ca', objs'))
-    | Function f1, Function f2 ->
-      compare_addr_kind (A_py_function f1) (A_py_function f2)
-    | Module m1, Module m2 ->
-      compare_addr_kind (A_py_module m1) (A_py_module m2)
-    | Instance i1, Instance i2 ->
-      Compare.compose [
-        (* (fun () -> compare_addr i1.classn i2.classn); *)
-        (fun () -> compare_polytype i1.classn i2.classn);
-        (fun () -> StringMap.compare compare_addr i1.uattrs i2.uattrs);
-        (fun () -> StringMap.compare compare_addr i1.oattrs i2.oattrs)
-      ]
-    (* | Union l1, Union l2 ->
-     *   ListExt.compare compare_addr l1 l2 *)
-    | Typevar a1, Typevar a2 ->
-      Pervasives.compare a1 a2
-    | _ -> Pervasives.compare t1 t2
-
-  let map_printer = MapExtSig.{ print_empty = "∅";
-                                print_begin = "{";
-                                print_arrow = ":";
-                                print_sep = ";";
-                                print_end = "}"; }
-
-  let rec pp_polytype fmt t =
-    match t with
-    | Bot -> Format.fprintf fmt "⊥"
-    | Top -> Format.fprintf fmt "⊤"
-    | Class (C_user c, _) -> Format.fprintf fmt "Class {%a}" pp_var c.py_cls_var
-    | Class (C_builtin c, _) | Class (C_unsupported c, _) -> Format.fprintf fmt "Class[%s]" c
-    | Function (F_user f) -> Format.fprintf fmt "Function {%a}" pp_var f.py_func_var
-    | Function (F_builtin f) | Function (F_unsupported f) -> Format.fprintf fmt "Function[%s]" f
-    | Method (F_user f, a) -> Format.fprintf fmt "Method {%a}@%a" pp_var f.py_func_var pp_addr a
-    | Method (F_builtin f, a) | Method (F_unsupported f, a) -> Format.fprintf fmt "Method {%s}@%a" f pp_addr a
-
-    | Module (M_user (m, _) | M_builtin(m)) -> Format.fprintf fmt "Module[%s]" m
-
-    | Instance {classn; uattrs; oattrs} ->
-     if StringMap.is_empty uattrs && StringMap.is_empty oattrs then
-       Format.fprintf fmt "Instance[%a]" pp_polytype classn
-     else
-       let pp_attrs = (StringMap.fprint map_printer Format.pp_print_string pp_addr) in
-       Format.fprintf fmt "Instance[%a, %a, %a]" pp_polytype classn pp_attrs uattrs pp_attrs oattrs
-
-    (* | Union l -> Format.fprintf fmt "Union[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_addr) l *)
-
-    | Typevar t -> Format.fprintf fmt "α(%d)" t
 
   module Polytypeset = Framework.Lattices.Powerset.Make
       (struct
@@ -130,7 +149,7 @@ struct
     | _ -> None
 
   type _ Framework.Query.query +=
-    | Q_types : Framework.Ast.expr -> Typingdomain.polytype Framework.Query.query
+    | Q_types : Framework.Ast.expr -> polytype Framework.Query.query
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -522,7 +541,17 @@ struct
     fun query man flow ->
     match query with
     | Q_types t ->
-      Exceptions.panic "query on %a@\n" pp_expr t
+      let cur = Flow.get_domain_cur man flow in
+      let addr = match ekind t with
+        | E_py_object (a, _) -> a
+        | _ -> assert false in
+      let ptys = TMap.find addr cur.abs_heap in
+      if Polytypeset.cardinal ptys = 1 then
+        let r = Polytypeset.choose ptys in
+        let () = debug "answer to query is %a@\n" pp_polytype r in
+        Some r
+      else
+        assert false
     | _ -> None
 
 end

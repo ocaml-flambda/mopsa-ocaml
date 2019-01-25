@@ -183,29 +183,35 @@ struct
     match ekind exp with
     | E_var (v, mode) ->
       let cur = Flow.get_domain_cur man flow in
-      let aset = AMap.find v cur in
-      ASet.fold (fun a acc ->
-          let flow = Flow.set_domain_cur (AMap.add v (ASet.singleton a) cur) man flow in
-          match a with
-          | Undef_global when is_builtin_name v.org_vname ->
-            (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+      if AMap.mem v cur then
+        let aset = AMap.find v cur in
+        ASet.fold (fun a acc ->
+            let flow = Flow.set_domain_cur (AMap.add v (ASet.singleton a) cur) man flow in
+            match a with
+            | Undef_global when is_builtin_name v.org_vname ->
+              (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
 
-          | Undef_local when is_builtin_name v.org_vname ->
-            (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+            | Undef_local when is_builtin_name v.org_vname ->
+              (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
 
-          | Undef_global ->
-            let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
-            Eval.empty_singleton flow :: acc
+            | Undef_global ->
+              let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
+              Eval.empty_singleton flow :: acc
 
-          | Undef_local ->
-            let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
-            Eval.empty_singleton flow :: acc
+            | Undef_local ->
+              let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
+              Eval.empty_singleton flow :: acc
 
-          | Def addr ->
-            man.eval (mk_py_object (addr, exp) range) flow :: acc
+            | Def addr ->
+              man.eval (mk_py_object (addr, exp) range) flow :: acc
 
-        ) aset []
-      |> Eval.join_list |> OptionExt.return
+          ) aset []
+        |> Eval.join_list |> OptionExt.return
+      else if is_builtin_name v.org_vname then
+        man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return
+      else
+        Eval.empty_singleton flow |> OptionExt.return
+
 
     | _ -> None
 
