@@ -18,16 +18,16 @@ module Domain =
 struct
 
 
-  (** Domain lattice *)
-  (** ============== *)
+  (** {2 Domain lattice} *)
+  (** ================== *)
 
   (** An abstract element is a partial map from pointer variables
       to a set of bases *)
   include Framework.Domains.Nonrel.Make(Framework.Value.LiftSimpleValue(Bases))
 
 
-  (** Domain identification *)
-  (** ===================== *)
+  (** {2 Domain identification} *)
+  (** ========================= *)
 
   type _ domain += D_c_cells_pointer : t domain
   let id = D_c_cells_pointer
@@ -40,8 +40,8 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  (** Zoning interface *)
-  (** ================ *)
+  (** {2 Zoning interface} *)
+  (** ==================== *)
 
   let exec_interface = {
     export = [Z_c_scalar];
@@ -60,8 +60,8 @@ struct
   }
 
 
-  (** Initialization *)
-  (** ============== *)
+  (** {2 Initialization} *)
+  (** ================== *)
 
   let init prog man flow =
     Flow.set_domain_env T_cur empty man flow |>
@@ -69,8 +69,8 @@ struct
     OptionExt.return
 
 
-  (** Evaluation of expressions *)
-  (** ========================= *)
+  (** {2 Utility functions for evaluations *)
+  (** ==================================== *)
 
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
@@ -107,6 +107,56 @@ struct
     | FUN _ ->
       panic_at range
         "pointers.add_offset: pointer arithmetics on functions not supported"
+
+
+  (* Get the base and eventual pointer offset from a pointer evaluation *)
+  let get_pointer_info (p:ptr) man flow : (Bases.t * expr option * var option) =
+    match p with
+    | ADDROF (b, o) -> debug "addof"; Bases.block b, Some o, None
+
+    | EQ(q, o) -> debug "eq";
+      let b = Flow.get_domain_env T_cur man flow |>
+              find q
+      in
+      b, (if Bases.mem_block b then Some o else None), Some q
+
+    | NULL -> debug "null";
+      Bases.null, None, None
+
+    | INVALID -> debug "invalid";
+      Bases.invalid, None, None
+
+    | FUN _ -> panic "eval_pointer_compare: function pointers not supported"
+
+
+  (* Set base of an optional pointer info *)
+  let set_base v b man flow =
+    match v with
+    | None -> flow
+    | Some vv -> Flow.map_domain_env T_cur (add vv b) man flow
+
+  (* Create the offset expression from optional pointer info *)
+  let offset_expr v o range =
+    match v, o with
+    | Some vv, Some oo -> mk_binop (mk_offset_var_expr vv range) O_plus oo range ~etyp:T_int
+    | None, Some oo -> oo
+    | _ -> assert false
+
+  (* Offset conditions for comparing two pointers *)
+  let compare_cond op p1 o1 p2 o2 range =
+    match o1, o2 with
+    | Some _, Some _ ->
+      let e1 = offset_expr p1 o1 range in
+      let e2 = offset_expr p2 o2 range in
+      mk_binop e1 op e2 range
+    | _ ->
+      match op with
+      | O_eq -> mk_one range
+      | O_ne -> mk_zero range
+      | _ -> assert false
+
+  (** {2 Pointer evaluation} *)
+  (** ====================== *)
 
   (** Static evaluation of a pointer base and offset *)
   let rec eval_pointer exp : ptr =
@@ -166,6 +216,7 @@ struct
     | _ -> panic_at exp.erange "eval_base_offset: %a not supported" pp_expr exp
 
 
+  (** Evaluation of points-to information *)
   let eval_points_to exp man flow =
     Some (
       let ptr = eval_pointer exp in
@@ -207,59 +258,8 @@ struct
         Eval.singleton (mk_c_points_to_invalid exp.erange) flow
     )
 
+  (** Evaluation of pointer comparisons *)
   let rec eval_pointer_compare exp man flow =
-    (* Some utility functions *)
-
-    (* Get the base and eventual pointer offset from a pointer evaluation *)
-    let get_pointer_info (p:ptr) : (Bases.t * expr option * var option) =
-      match p with
-      | ADDROF (b, o) -> Bases.block b, Some o, None
-
-      | EQ(q, o) ->
-        let b = Flow.get_domain_env T_cur man flow |>
-                find q
-        in
-        b, (if Bases.mem_block b then Some o else None), Some q
-
-      | NULL ->
-        Bases.null, None, None
-
-      | INVALID ->
-        Bases.invalid, None, None
-
-      | FUN _ -> panic_at exp.erange "eval_pointer_compare: function pointers not supported"
-    in
-
-    (* Set base of an optional pointer *)
-    let set_base v b man flow =
-      match v with
-      | None -> flow
-      | Some vv -> Flow.map_domain_env T_cur (add vv b) man flow
-    in
-
-    (* Offset conditions of two equal pointers *)
-    let offsets_cond op p1 o1 p2 o2 =
-      match p1, o1, p2, o2 with
-      | Some v1, Some o1, Some v2, Some o2 ->
-        let e1 = mk_binop (mk_offset_var_expr v1 exp.erange) O_plus o1 exp.erange ~etyp:T_int in
-        let e2 = mk_binop (mk_offset_var_expr v2 exp.erange) O_plus o2 exp.erange ~etyp:T_int in
-        mk_binop e1 op e2 exp.erange
-
-      | Some v, Some o, None, Some oo
-      | None, Some oo, Some v, Some o ->
-        let e1 = mk_binop (mk_offset_var_expr v exp.erange) O_plus o exp.erange ~etyp:T_int in
-        mk_binop e1 op oo exp.erange
-
-      | None, Some o1, None, Some o2 ->
-        mk_binop o1 op o2 exp.erange
-
-      | _ ->
-        match op with
-        | O_eq -> mk_one exp.erange
-        | O_ne -> mk_zero exp.erange
-        | _ -> assert false
-    in
-
     match ekind exp with
     (* 𝔼⟦ p == q ⟧ *)
     (* 𝔼⟦ !(p != q) ⟧ *)
@@ -272,8 +272,8 @@ struct
       let p1 = eval_pointer e1 in
       let p2 = eval_pointer e2 in
 
-      let b1, o1, v1 = get_pointer_info p1 in
-      let b2, o2, v2 = get_pointer_info p2 in
+      let b1, o1, v1 = get_pointer_info p1 man flow in
+      let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
       let b1', b2' = Bases.compare () O_eq b1 b2 true in
@@ -284,7 +284,7 @@ struct
 
       (* Refine offsets in case p or q may point to a block *)
       if Bases.mem_block b1' && Bases.mem_block b2' then
-        man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (offsets_cond O_eq v1 o1 v2 o2) flow' |>
+        man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (compare_cond O_eq v1 o1 v2 o2 exp.erange) flow' |>
         Eval.return
       else
         (* Remove offsets in other case *)
@@ -314,8 +314,8 @@ struct
       let p1 = eval_pointer e1 in
       let p2 = eval_pointer e2 in
 
-      let b1, o1, v1 = get_pointer_info p1 in
-      let b2, o2, v2 = get_pointer_info p2 in
+      let b1, o1, v1 = get_pointer_info p1 man flow in
+      let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
       let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
@@ -327,7 +327,6 @@ struct
           let flow' = set_base v1 b1ne man flow |>
                       set_base v2 b2ne man
           in
-          debug "case 1";
           [Eval.singleton (mk_one exp.erange) flow']
         else
           []
@@ -339,8 +338,7 @@ struct
           let flow' = set_base v1 b1eq man flow |>
                       set_base v2 b2eq man
           in
-          debug "case 2";
-          [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (offsets_cond O_ne v1 o1 v2 o2) flow']
+          [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (compare_cond O_ne v1 o1 v2 o2 exp.erange) flow']
         else
           []
       in
@@ -391,11 +389,64 @@ struct
         | _ -> panic_at exp.erange "valid(%a) not supported" pp_expr pt
       end
 
-    | E_binop(O_minus, e1, e2)
-      when is_c_pointer_type e1.etyp &&
-           is_c_pointer_type e2.etyp
+    (* 𝔼⟦ p1 - p2 ⟧ *)
+    | E_binop(O_minus, p1, p2)
+      when is_c_pointer_type p1.etyp &&
+           is_c_pointer_type p2.etyp
       ->
-      panic_at exp.erange "eval_pointer_compare: pointer difference not supported"
+      (* p1 and p2 should point to the same type *)
+      if compare_typ (under_type p1.etyp) (under_type p2.etyp) != 0
+      then panic_at exp.erange
+          "%a: pointers do not point to the same type"
+          pp_expr exp
+      ;
+
+      (* Evaluate pointers *)
+      let b1, o1, v1 = get_pointer_info (eval_pointer p1) man flow in
+      let b2, o2, v2 = get_pointer_info (eval_pointer p2) man flow in
+
+      (* Check if the bases are the same *)
+      (* Compute new bases *)
+      let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
+      let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
+
+      (* Size of a pointed element *)
+      let elem_size = under_type p1.etyp |> sizeof_type in
+
+      (* Case 1 : same base => return difference of offset *)
+      let case1 =
+        if not (Bases.is_bottom b1eq) &&
+           not (Bases.is_bottom b2eq) &&
+           Bases.mem_block b1eq &&
+           Bases.mem_block b2eq
+        then
+          let flow' = set_base v1 b1eq man flow |>
+                      set_base v2 b2eq man
+          in
+          let o1 = offset_expr v1 o1 exp.erange in
+          let o2 = offset_expr v2 o2 exp.erange in
+          let e = div (sub o1 o2 exp.erange) (mk_z elem_size exp.erange) exp.erange in
+          [Eval.singleton e flow']
+        else
+          []
+      in
+
+      (* Case 2: different base => raise an alarm *)
+      let case2 =
+        if not (Bases.is_bottom b1ne) &&
+           not (Bases.is_bottom b2ne)
+        then
+          let flow' = set_base v1 b1ne man flow |>
+                      set_base v2 b2ne man
+          in
+          let flow'' = raise_alarm Alarms.AIllegalPointerDiff ~bottom:true exp.erange man flow' in
+          [Eval.empty_singleton flow'']
+        else
+          []
+      in
+
+      Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) |>
+      Eval.return
 
     | _ -> None
 
@@ -408,8 +459,8 @@ struct
 
 
 
-  (** Computation of post-conditions *)
-  (** ============================== *)
+  (** {2 Computation of post-conditions} *)
+  (** ================================== *)
 
   let exec zone stmt man flow =
     let range = srange stmt in
@@ -518,8 +569,9 @@ struct
 
     | _ -> None
 
-  (** Handler of queries *)
-  (** ================== *)
+
+  (** {2 Handler of queries} *)
+  (** ====================== *)
 
   let ask _ _ _ = None
 

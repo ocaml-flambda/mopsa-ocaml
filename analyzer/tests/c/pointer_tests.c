@@ -210,3 +210,29 @@ void test_pointer_function_assignment() {
   f = g;
   _mopsa_assert((f)(5) == 10);
 }
+
+
+/*
+ * Pointer difference
+ */
+
+void test_safe_pointer_difference_with_array() {
+  int a[10];
+  int *p = a + 1;
+  _mopsa_assert(p - a == 1);
+}
+
+void test_safe_pointer_difference_with_pointer() {
+  int a[10];
+  int *p = a + 1;
+  int *q = a + 3;
+  _mopsa_assert(q - p == 2);
+}
+
+void test_unsafe_pointer_difference() {
+  int i, j;
+  int *p = &i;
+  int *q = &j;
+  int d = p - q;
+  _mopsa_assert_unsafe();
+}
