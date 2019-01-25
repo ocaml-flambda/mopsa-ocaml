@@ -165,7 +165,10 @@ struct
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       debug "ncur = %a@\n" print ncur;
       let flow = Flow.set_domain_cur ncur man flow in
-      man.exec ~zone:Zone.Z_py_types stmt flow |> Post.return
+      begin match akind a with
+        | Typing.A_py_instance -> man.exec ~zone:Zone.Z_py_types stmt flow |> Post.return
+        | _ -> flow |> Post.return
+      end
 
     | _ -> None
 

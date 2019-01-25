@@ -197,9 +197,13 @@ let pp_addr_kind fmt ak =
   !addr_kind_pp_chain fmt ak
 
 let pp_addr fmt a =
-  fprintf fmt "@@%a:%d"
+  let mode = match a.addr_mode with
+    | WEAK -> "w"
+    | STRONG -> "s" in
+  fprintf fmt "@@%a:%d:%s"
     pp_addr_kind a.addr_kind
     a.addr_uid
+    mode
 
 let compare_addr_kind ak1 ak2 =
   !addr_kind_compare_chain ak1 ak2
