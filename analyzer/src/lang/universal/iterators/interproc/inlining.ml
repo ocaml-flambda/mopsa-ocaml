@@ -128,6 +128,9 @@ struct
                   man.exec f.fun_body
       in
 
+      (* Restore call stack *)
+      let _, flow2 = Callstack.pop flow2 in
+
       (* Store the return expression in fun_return_var *)
       let ret = f.fun_return_var in
 
@@ -145,7 +148,7 @@ struct
 
             | _ -> Flow.add tk env man acc
           )
-          (Flow.remove T_cur man flow)
+          (Flow.remove T_cur man (Flow.copy_annot flow2 flow))
           man flow2
       in
 

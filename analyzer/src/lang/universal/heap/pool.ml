@@ -29,22 +29,24 @@ let recent_flag = 0
 let old_flag = 1
 
 module AddrInfo = struct
-  type t = Callstack.t * range * int
+  type t = addr_kind * Callstack.t * range * int
 
-  (** The following compare function can be modified in order to
-     change the granularity of the recency abstraction. *)
-  let compare (cs, r, f) (cs', r', f') =
+  let print fmt (a, cs, r, f) =
+    Format.fprintf fmt "(%a, %a, %a, %a)"
+      pp_addr_kind a
+      Callstack.pp_call_stack cs
+      pp_range r
+      Format.pp_print_int f
+
+  let compare (a, cs, r, f) (a', cs', r', f') =
     Compare.compose
       [
+        (fun () -> compare_addr_kind a a');
         (fun () -> Callstack.compare_call_stack cs cs');
         (fun () -> compare_range r r');
         (fun () -> (-) f f')
       ]
-  let print fmt (cs, r, f) =
-    Format.fprintf fmt "(%a, %a, %a)"
-      Callstack.pp_call_stack cs
-      pp_range r
-      Format.pp_print_int f
+
 end
 
 module AddrUid =
@@ -87,7 +89,7 @@ let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
 let get_addr_flag addr flow =
   let e = Flow.get_annot KAddr flow in
   try
-    let _, _, g = Equiv.find_r addr.addr_uid e in
+    let _, _, _, g = Equiv.find_r addr.addr_uid e in
     g
   with Not_found ->
     Exceptions.panic "get_addr_flag: %a not found" pp_addr addr

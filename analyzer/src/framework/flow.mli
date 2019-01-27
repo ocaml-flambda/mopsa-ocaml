@@ -150,4 +150,6 @@ val rm_annot  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
    annotations attached to flow [flow], does not fail if [key] was not
    present *)
 
+val copy_annot : 'a flow -> 'a flow -> 'a flow
+
 val without_callbacks : 'a flow -> 'a flow_callback

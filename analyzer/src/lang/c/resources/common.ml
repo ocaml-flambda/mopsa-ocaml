@@ -38,7 +38,18 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c]; import = []}
+  type zone +=
+    | Z_c_resource
+
+  let () =
+    register_zone {
+      zone = Z_c_resource;
+      subset = None;
+      name = "C/Resource";
+      eval = (fun e -> Process);
+    }
+
+  let exec_interface = {export = [Z_c_resource]; import = [Z_c]}
 
   let eval_interface = {
     export = [Z_c, Z_c_low_level];
@@ -94,6 +105,14 @@ struct
         | _ -> assert false
       end
 
+    | S_rename ({ ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr1) },
+                { ekind = E_addr ({ addr_kind = A_stub_resource _ } as addr2) })
+      ->
+      let bytes1 = mk_bytes_var addr1 stmt.srange in
+      let bytes2 = mk_bytes_var addr2 stmt.srange in
+      man.exec ~zone:Z_c (mk_rename bytes1 bytes2 stmt.srange) flow |>
+      man.exec ~zone:Z_c stmt |>
+      Post.return
 
     | _ -> None
 

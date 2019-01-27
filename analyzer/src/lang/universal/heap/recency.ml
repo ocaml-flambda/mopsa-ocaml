@@ -92,7 +92,13 @@ struct
 
       let cs = Callstack.get flow in
       let range = erange expr in
-      let recent_uid, flow = get_id_flow (cs, range, recent_flag) flow in
+
+      debug "allocate %a in %a on call stack:@\n @[%a@]"
+        pp_addr_kind addr_kind
+        pp_range range
+        Callstack.pp_call_stack_newlines cs;
+
+      let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
       let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
 
       (* Change the sub-domain *)
@@ -102,7 +108,7 @@ struct
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_uid, flow = get_id_flow (cs, range, old_flag) flow in
+          let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
           let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
           Flow.map_domain_cur (add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)

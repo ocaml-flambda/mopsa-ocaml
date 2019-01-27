@@ -94,14 +94,14 @@ struct
         in
         let rec stabilization f i wid_limit =
           let f' = man.exec stmt' f in
-          match next f f' i wid_limit with
+          match next (Flow.copy_annot f' f) f' i wid_limit with
           | None -> f'
           | Some f'' -> stabilization f'' (i+1) wid_limit
         in
         let flow1 = stabilization nogotos 0 3 in
         let flow1_minus_gotos = Flow.filter (fun k v -> match k with
             | T_goto s -> false | _ -> true) man flow1 in
-        let flow2 = Flow.join man flow1_minus_gotos gotos in
+        let flow2 = Flow.join man gotos flow1_minus_gotos in
         Post.return flow2
       end
 
