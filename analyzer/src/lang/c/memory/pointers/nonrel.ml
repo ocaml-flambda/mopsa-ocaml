@@ -89,16 +89,16 @@ struct
     | NULL
     | INVALID
 
-  (** Add a pointer evaluation with an offset expression *)
-  let add_offset (ptr:ptr) (o:expr) t range : ptr =
+  (** Advance the offset of a pointer evaluation *)
+  let advance_offset (op:operator) (ptr:ptr) (o:expr) t range : ptr =
     let size = sizeof_type t in
-    let add oo =
-      mk_binop oo O_plus (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
+    let advance oo =
+      mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
     in
     match ptr with
-    | ADDROF (b, oo) -> ADDROF (b, add oo)
+    | ADDROF (b, oo) -> ADDROF (b, advance oo)
 
-    | EQ (p, oo) -> EQ (p, add oo)
+    | EQ (p, oo) -> EQ (p, advance oo)
 
     | NULL -> NULL
 
@@ -198,14 +198,14 @@ struct
     | E_c_address_of { ekind = E_c_function f } ->
       FUN f
 
-    | E_binop(O_plus, e1, e2) ->
+    | E_binop(O_plus | O_minus as op, e1, e2) ->
       let p, i =
         if is_c_pointer_type e1.etyp || is_c_array_type e1.etyp
         then e1, e2
         else e2, e1
       in
       let ptr  = eval_pointer p in
-      add_offset ptr i (under_type p.etyp) exp.erange
+      advance_offset op ptr i (under_type p.etyp) exp.erange
 
     | E_var (v, STRONG) when is_c_pointer_type v.vtyp ->
       EQ (v, mk_zero exp.erange)

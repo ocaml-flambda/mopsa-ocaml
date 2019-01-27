@@ -28,7 +28,7 @@ let init_from_env () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Framework.Analyzer.progress "parsing";
+  Framework.Logging.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
@@ -65,13 +65,13 @@ let () =
 
         let t = Timing.start () in
 
-        Framework.Analyzer.progress "computing initial environments";
+        Framework.Logging.phase "computing initial environments";
         let flow = Analyzer.init prog in
         let stmt =
           Ast.mk_stmt (Ast.S_program prog) prog.prog_range
         in
 
-        Framework.Analyzer.progress "starting the analysis";
+        Framework.Logging.phase "starting the analysis";
 
         let res = Analyzer.exec stmt flow in
         let t = Timing.stop t in

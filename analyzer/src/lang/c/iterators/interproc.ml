@@ -71,7 +71,10 @@ struct
         Eval.bind @@ fun f flow ->
 
         match ekind f with
-        | E_c_points_to (P_fun f) when Libs.C_mopsa.is_builtin_function f.c_func_org_name ->
+        | E_c_points_to (P_fun f)
+          when Libs.Libmopsa.is_builtin_function f.c_func_org_name ||
+               Libs.Libc.is_builtin_function f.c_func_org_name
+          ->
           let exp' = {exp with ekind = E_c_builtin_call(f.c_func_org_name, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 

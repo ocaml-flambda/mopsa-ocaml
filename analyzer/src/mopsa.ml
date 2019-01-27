@@ -10,6 +10,8 @@
 
 include Framework.Ast
 
+module Logging = Framework.Logging
+
 module Visitor = Framework.Visitor
 
 include Framework.Zone

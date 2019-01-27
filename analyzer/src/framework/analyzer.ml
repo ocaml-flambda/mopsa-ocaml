@@ -20,11 +20,7 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
-let progress fmt = Debug.debug ~channel:"framework.progress" fmt
-
-(**
-   Functor to create an [Analyzer] module from an top-level abstract domain.
-*)
+(** Create an [Analyzer] module over some abstract domain. *)
 module Make(Domain : DOMAIN) =
 struct
 
@@ -100,13 +96,9 @@ struct
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
-    progress "analyzing %a" Location.pp_range (Location.untag_range stmt.srange);
-    debug "exec:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      pp_stmt stmt
-      Location.pp_range stmt.srange
-      pp_zone zone
-      (Flow.print man) flow
-    ;
+    Logging.reach "analyzing %a" Location.pp_range (Location.untag_range stmt.srange);
+    Logging.exec "exec in zone %a@\n @[%a@]" pp_zone zone pp_stmt stmt;
+    Logging.pre_state "pre-state@\n @[%a@]"(Flow.print man) flow;
 
     let timer = Timing.start () in
 
@@ -116,7 +108,7 @@ struct
     in
     let flow' = Cache.exec fexec zone stmt man flow in
 
-    debug "exec done:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]@\n time: %.4fs"
+    Logging.post_state "exec done:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]@\n time: %.4fs"
       pp_stmt stmt
       Location.pp_range stmt.srange
       pp_zone zone

@@ -3,7 +3,7 @@ TARGET_NATIVES = mopsa
 # Packs
 mopsa = framework mopsa lang main
 
-framework = ast visitor query annotation lattice zone manager	\
+framework = logging ast visitor query annotation lattice zone manager	\
 flow eval post channel value domain callstack alarm output \
 cache analyzer lattices domains config options
 framework.output = text json factory
@@ -37,7 +37,7 @@ lang.c.memory = common cells pointers machine_numbers
 lang.c.memory.common = base points_to init_visitor
 lang.c.memory.cells = cell expand cell2scalar
 lang.c.memory.pointers = bases nonrel
-lang.c.libs = c_mopsa
+lang.c.libs = libmopsa libc
 lang.c.resources = common file
 lang.c.resources.file = slot table domain
 

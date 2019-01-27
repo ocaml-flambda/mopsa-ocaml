@@ -131,19 +131,29 @@ void test_address_of_multi_array() {
 void test_pointer_increment() {
   int a[10];
   int *p;
-  p = &a;
+  p = a;
   p++;
   *p = 20;
   _mopsa_assert(a[1] == 20);
 }
 
-void test_castint() {
+void test_pointer_decrement() {
+  int a[10];
+  int *p;
+  p = a + 1;
+  p--;
+  *p = 20;
+  _mopsa_assert(a[0] == 20);
+}
+
+void test_dereference_casted_pointer() {
   char a[10];
   a[0] = 0;
   a[1] = 0;
   ((int *) a)[1] = 1;
   _mopsa_assert(a[1] == 0);
 }
+
 
 /*
  * Pointers to records

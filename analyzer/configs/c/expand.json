@@ -25,7 +25,8 @@
             "c.desugar.cond_expr",
 
             // C libraries
-            "c.libs.mopsa",
+            "c.libs.libc",
+            "c.libs.libmopsa",
 
 	    // C resources
 	    "c.resources.file",
