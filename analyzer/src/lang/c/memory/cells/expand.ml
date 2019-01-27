@@ -732,9 +732,12 @@ module Domain = struct
           let flow = add_cell c exp.erange man flow in
           Eval.singleton (mk_c_cell c exp.erange) flow
 
-        | O_region _ ->
+        | O_region _ when is_c_num_type c.t ->
           let l, u = rangeof (cell_typ c) in
           Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
+
+        | O_region _ when is_c_pointer_type c.t ->
+          panic_at exp.erange "can't expand pointer cell %a" pp_cell c
 
         | _ -> assert false
       end
@@ -827,40 +830,84 @@ module Domain = struct
     let flow'' = Flow.set_domain_env T_cur a' man flow' in
 
     let block = List.map (fun c' -> mk_remove (mk_c_cell c' range) range) overlappings in
-
     man.exec ~zone:Z_c_cell (mk_block block range) flow''
-
 
 
   (** Remove cells identified by a membership predicate *)
   let remove_cells pred range man flow =
     let a = Flow.get_domain_env T_cur man flow in
-    let cells = find_cells pred a in
-    let block = List.map (fun c' -> mk_remove (mk_c_cell c' range) range) cells in
+    let cells = Cells.filter pred a.cells in
+    let flow = Flow.set_domain_env T_cur { a with cells = Cells.diff a.cells cells } man flow in
+    let block = List.map (fun c' -> mk_remove (mk_c_cell c' range) range) (Cells.elements cells) in
     man.exec ~zone:Z_c_cell (mk_block block range) flow
 
+  (** Remove a cell *)
+  let remove_cell c range man flow =
+    let flow = Flow.map_domain_env T_cur (fun a ->
+        {a with cells = Cells.remove c a.cells}
+      ) man flow
+    in
+    let stmt = mk_remove (mk_c_cell c range) range in
+    man.exec ~zone:Z_c_cell stmt flow
 
 
   (** Rename an old cell into a new one *)
-  let rename_cell cold cnew range man flow =
+  let rename_cell old_cell new_cell range man flow =
     let flow' =
       (* Add the old cell in case it has not been accessed before so
          that its constraints are added in the sub domain *)
-      add_cell cold range man flow |>
+      add_cell old_cell range man flow |>
       (* Remove the old cell and add the new one *)
       Flow.map_domain_env T_cur (fun a ->
-          { a with cells = Cells.remove cold a.cells |>
-                           Cells.add cnew
+          { a with cells = Cells.remove old_cell a.cells |>
+                           Cells.add new_cell
           }
         ) man
     in
     let stmt' = mk_rename
-        (mk_c_cell cold range)
-        (mk_c_cell cnew range)
+        (mk_c_cell old_cell range)
+        (mk_c_cell new_cell range)
         range
     in
     man.exec ~zone:Z_c_cell stmt' flow'
 
+  (** Rename bases and their cells *)
+  let rename_base base1 base2 range man flow =
+    let a = Flow.get_domain_env T_cur man flow in
+    (* Cells of base1 *)
+    let cells1 = Cells.filter (fun c ->
+        compare_base (cell_base c) base1 = 0
+      ) a.cells
+    in
+
+    (* Cell renaming *)
+    let to_base2 c = { c with b = base2 } in
+
+    (* Content copy, depends on the presence of base2 *)
+    let copy =
+      if not (Bases.mem base2 a.bases) then
+      (* If base2 is not already present => rename the cells *)
+        fun c flow -> rename_cell c (to_base2 c) range man flow
+      else
+        (* Otherwise, assign with weak update *)
+        fun c flow -> assign_cell (to_base2 c) (mk_c_cell c range) range man flow |>
+                      remove_cell c range man
+    in
+
+    (* Apply copy function *)
+    let flow = Cells.fold copy cells1 flow in
+
+    (* Remove base1 and add base2 *)
+    let flow = Flow.map_domain_env T_cur (fun a ->
+        {
+          a with
+          bases = Bases.remove base1 a.bases |>
+                  Bases.add base2;
+        }
+      ) man flow
+    in
+    debug "renaming %a into %a done:@\n%a" pp_base base1 pp_base base2 (Flow.print man) flow;
+    flow
 
   (** Rename primed cells that have been declared in `assigns` stub section *)
   let rename_primed_cells target offsets range man flow =
@@ -1019,14 +1066,21 @@ module Domain = struct
 
       Post.return
 
+    (* 𝕊⟦ rename(v1, v2) ⟧ *)
+    | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
+      rename_base (V v1) (V v2) stmt.srange man flow |>
+      Post.return
+
+    (* 𝕊⟦ rename(addr1, addr2) ⟧ *)
+    | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
+      rename_base (A addr1) (A addr2) stmt.srange man flow |>
+      man.exec ~zone:Z_c_scalar stmt |>
+      Post.return
+
+    (* 𝕊⟦ rename primed p[a0, b0][a1, b1]... ⟧ *)
     | S_stub_rename_primed(p, offsets) ->
       rename_primed_cells p offsets stmt.srange man flow  |>
       Post.return
-
-    (* 𝕊⟦ rename(@1, @2) ⟧ *)
-    | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      panic_at stmt.srange
-        "cell: address renaming not supported"
 
     | _ -> None
 

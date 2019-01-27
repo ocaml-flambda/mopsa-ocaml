@@ -566,6 +566,21 @@ struct
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_rename o1 o2 range) flow1 in
       Post.return flow2
 
+    | S_rename ({ekind = E_addr addr1}, {ekind = E_addr addr2}) ->
+      let block1 = Bases.PB_block (A addr1) in
+      let block2 = Bases.PB_block (A addr2) in
+      let flow' = Flow.map_domain_env T_cur (fun a ->
+          let a' = map (fun bases ->
+              if not (Bases.mem block1 bases) then bases
+              else
+                Bases.remove block1 bases |>
+                Bases.add block2
+            ) a
+          in
+          a'
+        ) man flow
+      in
+      Post.return flow'
 
     | _ -> None
 
