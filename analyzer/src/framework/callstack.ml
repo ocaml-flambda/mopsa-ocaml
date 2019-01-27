@@ -44,6 +44,10 @@ let push range flow =
   let cs = get flow in
   set (range :: cs) flow
 
+let pop flow =
+  let cs = get flow in
+  List.hd cs, set (List.tl cs) flow
+
 let () =
   Annotation.(register_stateless_annot {
       eq = (let f: type a b. (a, b) key -> (t, b) eq option =

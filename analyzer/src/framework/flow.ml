@@ -255,5 +255,9 @@ let rm_annot k flow =
   |> Annotation.remove k
   |> fun annot -> set_all_annot annot flow
 
+let copy_annot flow1 flow2 =
+  let annot = get_all_annot flow1 in
+  set_all_annot annot flow2
+
 let without_callbacks flow =
   { flow; callbacks = [] }
