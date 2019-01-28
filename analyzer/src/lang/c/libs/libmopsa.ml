@@ -278,13 +278,16 @@ struct
           | true, true -> mk_zero
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let cur = Flow.get T_cur man flow in
-        let flow = Flow.set T_cur man.top man flow in
-        let flow = man.exec stmt flow |>
-                   Flow.filter (fun tk _ -> match tk with T_alarm _ -> false | _ -> true) man |>
-                   Flow.set T_cur cur man
+        let flow' = Flow.set T_cur man.top man flow in
+        let flow'' = man.exec stmt flow' |>
+                     (* Since the unsafe here is "normal", so we remove all alarms *)
+                     Flow.fold (fun flow tk _ ->
+                       match tk with
+                       | T_alarm _ -> Flow.remove tk man flow
+                       | _ -> flow
+                     ) flow man
         in
-        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
+        Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow'' |>
         OptionExt.return
       end
 
