@@ -622,29 +622,24 @@ let int_rangeof t =
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
 let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
     let open Universal.Ast in
-  mk_binop
-    (mk_int l (tag_range range "l"))
-    O_plus
-    (mk_binop
-       (mk_binop
+  add
+    (mk_int l range)
+    (_mod
+       (sub
           e
-          O_minus
-          (mk_int l (tag_range range "l"))
-          (tag_range range "?")
+          (mk_int l range)
+          range
        )
-       O_mod
-       (mk_binop
-          (mk_binop
-             (mk_int h (tag_range range "v"))
-             (O_minus)
-             (mk_int l (tag_range range "l"))
-             (tag_range range "?")
+       (add
+          (sub
+             (mk_int h range)
+             (mk_int l range)
+             range
           )
-          O_plus
-          (mk_one (tag_range range "1"))
-          (tag_range range "+1")
+          (mk_one range)
+          range
        )
-       (tag_range range "h-l+1")
+       range
     )
     range
 

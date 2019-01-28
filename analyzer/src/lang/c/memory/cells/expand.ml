@@ -212,6 +212,7 @@ module Domain = struct
         match
           find_cell_opt ( fun c' ->
               let b = Z.sub (cell_zoffset c) (cell_zoffset c') in
+              Z.geq b Z.zero &&
               compare_base (cell_base c) (cell_base c') = 0 &&
               Z.lt b (sizeof_type (cell_typ c')) &&
               is_c_int_type (cell_typ c') &&
