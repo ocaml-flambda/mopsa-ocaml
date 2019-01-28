@@ -202,7 +202,9 @@ struct
                 erange = tag_range range "wrap"} flow1
           )
 
-    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type ->
+    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
+                          e   |> etyp |> is_c_num_type
+      ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Eval.bind_return @@ fun e' flow ->
       let t  = etyp exp in

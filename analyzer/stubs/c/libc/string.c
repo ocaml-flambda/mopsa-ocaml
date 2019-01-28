@@ -242,7 +242,7 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
  *           );
  *  }
  */
-int strcmp (const char *__s1, const char *__s2);
+int __builtin_strcmp (const char *__s1, const char *__s2);
 
 /*$
  * requires: size(__s1) >= __n or valid_string(__s1);

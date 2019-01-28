@@ -246,3 +246,22 @@ void test_unsafe_pointer_difference() {
   int d = p - q;
   _mopsa_assert_unsafe();
 }
+
+void test_string2_1bptr_macro() {
+  // This macro tests that the object pointed by __x is one byte width
+  // It is a workaround when __x is a void* pointer 
+  // Used in libc and defined in /usr/include/bits/string2.h:92
+  #define __string2_1bptr_p(__x) \
+   ((size_t)(const void *)((__x) + 1) - (size_t)(const void *)(__x) == 1)
+
+  int x;
+  
+  void *p1 =(void*)&x;
+  _mopsa_assert(__string2_1bptr_p(p1));
+
+  char *p2 = (char*)&x;
+  _mopsa_assert(__string2_1bptr_p(p2));
+
+  int *p3 = &x;
+  _mopsa_assert(!__string2_1bptr_p(p3));
+}

@@ -81,6 +81,12 @@ struct
   let mk_offset_var_expr (p:var) range : expr =
     mk_var (mk_offset_var p) ~mode:STRONG range
 
+  let pointed_size t =
+    let tt = under_type t |> remove_typedef_qual in
+    match tt with
+    | T_c_void -> Z.one
+    | _ -> sizeof_type tt
+
   (** Pointer evaluations *)
   type ptr =
     | ADDROF of Common.Base.base * expr
@@ -91,7 +97,7 @@ struct
 
   (** Advance the offset of a pointer evaluation *)
   let advance_offset (op:operator) (ptr:ptr) (o:expr) t range : ptr =
-    let size = sizeof_type t in
+    let size = pointed_size t in
     let advance oo =
       mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
     in
@@ -112,18 +118,18 @@ struct
   (* Get the base and eventual pointer offset from a pointer evaluation *)
   let get_pointer_info (p:ptr) man flow : (Bases.t * expr option * var option) =
     match p with
-    | ADDROF (b, o) -> debug "addof"; Bases.block b, Some o, None
+    | ADDROF (b, o) -> Bases.block b, Some o, None
 
-    | EQ(q, o) -> debug "eq";
+    | EQ(q, o) ->
       let b = Flow.get_domain_env T_cur man flow |>
               find q
       in
       b, (if Bases.mem_block b then Some o else None), Some q
 
-    | NULL -> debug "null";
+    | NULL ->
       Bases.null, None, None
 
-    | INVALID -> debug "invalid";
+    | INVALID ->
       Bases.invalid, None, None
 
     | FUN _ -> panic "eval_pointer_compare: function pointers not supported"
@@ -205,7 +211,7 @@ struct
         else e2, e1
       in
       let ptr  = eval_pointer p in
-      advance_offset op ptr i (under_type p.etyp) exp.erange
+      advance_offset op ptr i p.etyp exp.erange
 
     | E_var (v, STRONG) when is_c_pointer_type v.vtyp ->
       EQ (v, mk_zero exp.erange)
@@ -411,7 +417,7 @@ struct
       let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
 
       (* Size of a pointed element *)
-      let elem_size = under_type p1.etyp |> sizeof_type in
+      let elem_size = pointed_size p1.etyp in
 
       (* Case 1 : same base => return difference of offset *)
       let case1 =
@@ -426,7 +432,7 @@ struct
           let o1 = offset_expr v1 o1 exp.erange in
           let o2 = offset_expr v2 o2 exp.erange in
           let e = div (sub o1 o2 exp.erange) (mk_z elem_size exp.erange) exp.erange in
-          [Eval.singleton e flow']
+          [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) e flow']
         else
           []
       in
@@ -446,6 +452,19 @@ struct
       in
 
       Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) |>
+      Eval.return
+
+    (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
+    | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp &&
+           is_c_int_type t1 &&
+           compare_typ t1 t2 = 0
+      ->
+      debug "pointer byte diff";
+      let diff = mk_c_cast (sub p q ~typ:s32 exp.erange) t1 exp.erange in
+      let exp' = mul (mk_z (pointed_size p.etyp) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange in
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
       Eval.return
 
     | _ -> None
