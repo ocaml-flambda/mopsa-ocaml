@@ -237,8 +237,8 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
  *              i <= len2 - 1 and 
  *              __s1[i] != __s2[i] and
  *              forall int j in [0, i - 1]: __s1[j] == __s2[j] and
- *             ((unsigned char*)__s1[i] - (unsigned char*)__s2[i] > 0 implies return > 0) and
- *             ((unsigned char*)__s1[i] - (unsigned char*)__s2[i] < 0 implies return < 0)
+ *             (__s1[i] - __s2[i] > 0 implies return > 0) and
+ *             (__s1[i] - __s2[i] < 0 implies return < 0)
  *           );
  *  }
  */
@@ -264,8 +264,8 @@ int __builtin_strcmp (const char *__s1, const char *__s2);
  *   ensures: exists int l in [0, __n - 1]: (
  *              __s1[l] != __s2[l] and
  *              forall int i in [0, l]: __s1[i] == __s2[i] and
- *              ((unsigned char*)__s1[l] - (unsigned char*)__s2[l] > 0 implies return > 0) and
- *              ((unsigned char*)__s1[l] - (unsigned char*)__s2[l] < 0 implies return < 0)
+ *              (__s1[l] - __s2[l] > 0 implies return > 0) and
+ *              (__s1[l] - __s2[l] < 0 implies return < 0)
  *            );
  *   }
  */
