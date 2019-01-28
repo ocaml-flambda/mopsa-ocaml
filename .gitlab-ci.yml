@@ -59,7 +59,6 @@ build_job:
     - $MOPSA_PYTY analyzer/tests/python/types/$PY_FILE
 
 .bench-typpete:
-  allow_failure: true
   stage: benchmarks
   dependencies: [build_job]
   script:
@@ -187,197 +186,77 @@ test-pyty 3/3:
     PY_FILE: 'exception_tests.py'
   extends: .test-pyty
 
-bench-typpete 1/39:
-  variables:
-    PY_FILE: 'builtins_test.py'
-  extends: .bench-typpete
-
-bench-typpete 2/39:
-  variables:
-    PY_FILE: 'callable_class.py'
-  extends: .bench-typpete
-
-bench-typpete 3/39:
+bench-typpete 1/15:
   variables:
     PY_FILE: 'classes.py'
   extends: .bench-typpete
 
-bench-typpete 4/39:
+bench-typpete 2/15:
   variables:
     PY_FILE: 'class_pre_store.py'
   extends: .bench-typpete
 
-bench-typpete 5/39:
-  variables:
-    PY_FILE: 'comparison_test.py'
-  extends: .bench-typpete
-
-bench-typpete 6/39:
-  variables:
-    PY_FILE: 'cookie.py'
-  extends: .bench-typpete
-
-bench-typpete 7/39:
-  variables:
-    PY_FILE: 'coop_concatenate.py'
-  extends: .bench-typpete
-
-bench-typpete 8/39:
-  variables:
-    PY_FILE: 'crafting_challenge.py'
-  extends: .bench-typpete
-
-bench-typpete 9/39:
-  variables:
-    PY_FILE: 'deceitful.py'
-  extends: .bench-typpete
-
-bench-typpete 10/39:
+bench-typpete 3/15:
   variables:
     PY_FILE: 'default_args_class.py'
   extends: .bench-typpete
 
-bench-typpete 11/39:
-  variables:
-    PY_FILE: 'dict_methods.py'
-  extends: .bench-typpete
-
-bench-typpete 12/39:
-  variables:
-    PY_FILE: 'disjoint_sets_nonrec.py'
-  extends: .bench-typpete
-
-bench-typpete 13/39:
-  variables:
-    PY_FILE: 'eight_queens.py'
-  extends: .bench-typpete
-
-bench-typpete 14/39:
+bench-typpete 4/15:
   variables:
     PY_FILE: 'except_clause.py'
   extends: .bench-typpete
 
-bench-typpete 15/39:
-  variables:
-    PY_FILE: 'expressions1.py'
-  extends: .bench-typpete
-
-bench-typpete 16/39:
-  variables:
-    PY_FILE: 'expressions.py'
-  extends: .bench-typpete
-
-bench-typpete 17/39:
-  variables:
-    PY_FILE: 'factorization.py'
-  extends: .bench-typpete
-
-bench-typpete 18/39:
+bench-typpete 5/15:
   variables:
     PY_FILE: 'file_download.py'
   extends: .bench-typpete
 
-bench-typpete 19/39:
-  variables:
-    PY_FILE: 'functions.py'
-  extends: .bench-typpete
-
-bench-typpete 20/39:
-  variables:
-    PY_FILE: 'generic_class_test.py'
-  extends: .bench-typpete
-
-bench-typpete 21/39:
+bench-typpete 6/15:
   variables:
     PY_FILE: 'guess_the_number.py'
   extends: .bench-typpete
 
-bench-typpete 22/39:
+bench-typpete 7/15:
   variables:
     PY_FILE: 'inheritance_cov_incorrect.py'
   extends: .bench-typpete
 
-bench-typpete 23/39:
+bench-typpete 8/15:
   variables:
     PY_FILE: 'inheritance_cov_sat.py'
   extends: .bench-typpete
 
-bench-typpete 24/39:
+bench-typpete 9/15:
   variables:
     PY_FILE: 'isinstance.py'
   extends: .bench-typpete
 
-bench-typpete 25/39:
-  variables:
-    PY_FILE: 'linear_equality.py'
-  extends: .bench-typpete
-
-bench-typpete 26/39:
-  variables:
-    PY_FILE: 'list_methods.py'
-  extends: .bench-typpete
-
-bench-typpete 27/39:
-  variables:
-    PY_FILE: 'magic.py'
-  extends: .bench-typpete
-
-bench-typpete 28/39:
-  variables:
-    PY_FILE: 'math_test.py'
-  extends: .bench-typpete
-
-bench-typpete 29/39:
+bench-typpete 10/15:
   variables:
     PY_FILE: 'mro.py'
   extends: .bench-typpete
 
-bench-typpete 30/39:
+bench-typpete 11/15:
   variables:
     PY_FILE: 'mult_inheritance.py'
   extends: .bench-typpete
 
-bench-typpete 31/39:
+bench-typpete 12/15:
   variables:
     PY_FILE: 'override_default_args_correct.py'
   extends: .bench-typpete
 
-bench-typpete 32/39:
-  variables:
-    PY_FILE: 'prog_1.py'
-  extends: .bench-typpete
-
-bench-typpete 33/39:
-  variables:
-    PY_FILE: 'prog_2.py'
-  extends: .bench-typpete
-
-bench-typpete 34/39:
-  variables:
-    PY_FILE: 'statements.py'
-  extends: .bench-typpete
-
-bench-typpete 35/39:
+bench-typpete 13/15:
   variables:
     PY_FILE: 'staticmethod.py'
   extends: .bench-typpete
 
-bench-typpete 36/39:
-  variables:
-    PY_FILE: 'str_methods.py'
-  extends: .bench-typpete
-
-bench-typpete 37/39:
+bench-typpete 14/15:
   variables:
     PY_FILE: 'stubs_default_args.py'
   extends: .bench-typpete
 
-bench-typpete 38/39:
+bench-typpete 15/15:
   variables:
     PY_FILE: 'syntax.py'
-  extends: .bench-typpete
-
-bench-typpete 39/39:
-  variables:
-    PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
