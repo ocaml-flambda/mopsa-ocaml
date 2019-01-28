@@ -28,6 +28,12 @@ def test_div():
     z = x // y
     mopsa.massert(isinstance(z, int))
 
+def test_div_float():
+    x = 84
+    y = 43
+    z = x / y
+    mopsa.massert(isinstance(z, float))
+
 def test_comps():
     x = 42
     y = 43

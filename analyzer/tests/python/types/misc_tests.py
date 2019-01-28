@@ -43,10 +43,28 @@ def test_attr_pos():
     x.a = 3
     mopsa.massert(hasattr(x, 'a'))
 
-# def test_attr_top():
+def test_attr_neg():
+    class A: pass
+    x = A()
+    mopsa.massert(not(hasattr(x, 'a')))
+
+# def test_attr_may():
 #     class A: pass
 #     x = A()
 #     if mopsa.random_bool():
-#         x.a = 3
+#         y = x
 #     else:
-#         z = 3
+#         y = A()
+#     y.a = 42
+#     mopsa.assert_safe()
+#     mopsa.massert(hasattr(y, 'a'))
+#     z = x.a
+#     mopsa.assert_exception(AttributeError)
+
+def  test_method():
+    class A:
+        def f(self):
+            return 1
+    x = A()
+    y = x.f()
+    mopsa.massert(isinstance(y, int))
