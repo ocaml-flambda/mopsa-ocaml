@@ -78,6 +78,22 @@ int test_overflow() {
   _mopsa_assert_error_exists(INTEGER_OVERFLOW);
 }
 
+int test_condition_value() {
+  int x = 1;
+
+  int b1 = (x == 1);
+  _mopsa_assert(b1 == 1);
+
+  int b2 = (x == 0);
+  _mopsa_assert(b2 == 0);
+
+  int b3 = (x >= 0);
+  _mopsa_assert(b3 == 1);
+
+  int b4 = (x <= 0);
+  _mopsa_assert(b4 == 0);
+}
+
 
 /* void test_interval_congruence_reduction() { */
 /*   int i = 1; */
