@@ -218,19 +218,29 @@ struct
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       begin match ekind lval, ekind rval with
-        | E_py_object (alval, _), E_py_object (arval, _) ->
+        | E_py_object (alval, _), E_py_object (arval, _) when alval.addr_mode = STRONG ->
           (* FIXME: weak vs strong updates? *)
           let cur = Flow.get_domain_cur man flow in
-          Polytypeset.fold (fun old_inst acc ->
+          let ael = Polytypeset.map (fun old_inst ->
               let old_inst = match old_inst with
                 | Instance i -> i
                 | _ -> assert false in
-              let new_inst = Instance {classn=old_inst.classn;
-                                       uattrs=StringMap.add attr arval old_inst.uattrs;
-                                       oattrs=old_inst.oattrs} in
-              let abs_heap = TMap.add alval (Polytypeset.singleton new_inst) cur.abs_heap in
-              Flow.set_domain_cur {cur with abs_heap} man flow :: acc) (TMap.find alval cur.abs_heap) []
-          |> Flow.join_list man |> Post.return
+              Instance {classn = old_inst.classn;
+                        uattrs = StringMap.add attr arval old_inst.uattrs;
+                        oattrs = old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
+          let abs_heap = TMap.add alval ael cur.abs_heap in
+          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+          Post.return flow
+          (* Polytypeset.fold (fun old_inst acc ->
+           *     let old_inst = match old_inst with
+           *       | Instance i -> i
+           *       | _ -> assert false in
+           *     let new_inst = Instance {classn=old_inst.classn;
+           *                              uattrs=StringMap.add attr arval old_inst.uattrs;
+           *                              oattrs=old_inst.oattrs} in
+           *     let abs_heap = TMap.add alval (Polytypeset.singleton new_inst) cur.abs_heap in
+           *     Flow.set_domain_cur {cur with abs_heap} man flow :: acc) (TMap.find alval cur.abs_heap) []
+           * |> Flow.join_list man |> Post.return *)
 
         | _ -> assert false
       end
@@ -376,6 +386,8 @@ struct
           Polytypeset.fold (fun pty acc ->
               match pty with
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
+                let cur = Flow.get_domain_cur man flow in
+                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_true range) flow :: acc
 
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) oattrs ->
@@ -386,7 +398,10 @@ struct
                 let flowf = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty_o) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_true range) flowt :: Eval.singleton (mk_py_false range) flowf :: acc
 
-              | Instance _ -> Eval.singleton (mk_py_false range) flow :: acc
+              | Instance _ ->
+                let cur = Flow.get_domain_cur man flow in
+                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
+                Eval.singleton (mk_py_false range) flow :: acc
 
               | _ -> Exceptions.panic "ll_hasattr %a" pp_polytype pty) ptys [] |> Eval.join_list
 
