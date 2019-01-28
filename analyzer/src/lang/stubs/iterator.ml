@@ -342,7 +342,8 @@ struct
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->
-      Exceptions.warn_at warn.range "%s" warn.content;
+      if not (Flow.is_cur_bottom man flow)
+      then Exceptions.warn_at warn.range "%s" warn.content;
       flow
 
 

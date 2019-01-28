@@ -26,7 +26,7 @@ extern void *_mopsa_int_to_fd(int fd);
 
 /*$$
  * predicate valid_string(s):
- *   exists int i in [0, size(s) - 1]: s[i] == 0
+ *   size(s) >= 1 and exists int i in [0, size(s) - 1]: s[i] == 0
  * ;
  *
  * predicate valid_primed_string(s):
