@@ -172,14 +172,19 @@ test-u 1/1:
     U_FILE: 'int_tests.u'
   extends: .test-u
 
-test-pyty 1/2:
+test-pyty 1/3:
   variables:
     PY_FILE: 'int_tests.py'
   extends: .test-pyty
 
-test-pyty 2/2:
+test-pyty 2/3:
   variables:
     PY_FILE: 'misc_tests.py'
+  extends: .test-pyty
+
+test-pyty 3/3:
+  variables:
+    PY_FILE: 'exception_tests.py'
   extends: .test-pyty
 
 bench-typpete 1/39:
