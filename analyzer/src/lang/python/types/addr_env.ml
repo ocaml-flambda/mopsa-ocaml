@@ -148,14 +148,15 @@ struct
        man.eval e flow |>
          Post.bind man (fun expr flow ->
            match ekind expr with
-           (* FIXME: same things for true and Top ? *)
            | E_constant (C_top T_bool)
            | E_constant (C_bool true)
-           | E_py_object ({addr_uid = -3}, _)
-           | E_py_object ({addr_uid = -1}, _)
              -> Post.of_flow flow
-           | E_py_object ({addr_uid = -2}, _)
-           | E_constant (C_bool false) -> Post.of_flow (Flow.set_domain_cur bottom man flow)
+           | E_py_object (a, _) when compare_addr a Typing.addr_true = 0 || compare_addr a Typing.addr_bool_top = 0
+             -> Post.of_flow flow
+           | E_py_object (a, _) when compare_addr a Typing.addr_false = 0
+             -> Post.of_flow (Flow.set_domain_cur bottom man flow)
+           | E_constant (C_bool false) ->
+             Post.of_flow (Flow.set_domain_cur bottom man flow)
            | _ ->
                 Exceptions.panic_at range "todo addr_env/assume")
        |> OptionExt.return

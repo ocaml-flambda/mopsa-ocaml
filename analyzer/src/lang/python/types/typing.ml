@@ -107,6 +107,13 @@ let () =
       | _ -> next e1 e2)
 
 
+(* conventions: -1 represents True, -2 represents False, -3 is T:bool (Weak), -4 is None, -5 is NotImplemented, -6 is for all integers (weak),  *)
+let addr_true = {addr_uid = -1; addr_kind = A_py_instance; addr_mode = STRONG}
+let addr_false = {addr_uid = -2; addr_kind = A_py_instance; addr_mode = STRONG}
+let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance; addr_mode = WEAK}
+let addr_none = {addr_uid = -4; addr_kind = A_py_instance; addr_mode = STRONG}
+let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance; addr_mode = STRONG}
+let addr_integers = {addr_uid = -6; addr_kind = A_py_instance; addr_mode = WEAK}
 
 
 module Domain =
@@ -186,13 +193,6 @@ struct
       pp_absheap abs_heap
       pp_typevar_env typevar_env
 
-  (* conventions: -1 represents True, -2 represents False, -3 is T:bool (Weak), -4 is None, -5 is NotImplemented, -6 is for all integers (weak),  *)
-  let addr_true = {addr_uid = -1; addr_kind = A_py_instance; addr_mode = STRONG}
-  let addr_false = {addr_uid = -2; addr_kind = A_py_instance; addr_mode = STRONG}
-  let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance; addr_mode = WEAK}
-  let addr_none = {addr_uid = -4; addr_kind = A_py_instance; addr_mode = STRONG}
-  let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance; addr_mode = STRONG}
-  let addr_integers = {addr_uid = -6; addr_kind = A_py_instance; addr_mode = WEAK}
 
   let init progr man flow =
     Flow.set_domain_env T_cur {abs_heap = TMap.empty; typevar_env = TypeVarMap.empty} man flow |> Flow.without_callbacks |> OptionExt.return
@@ -282,11 +282,9 @@ struct
     debug "eval %a@\n" pp_expr exp;
     let range = erange exp in
     match ekind exp with
-    | E_py_type pt ->
-      let cur = Flow.get_domain_cur man flow in
-
-
-      Exceptions.panic_at range "E_py_type %a@\n" pp_polytype pt
+    (* | E_py_type pt ->
+     *   let cur = Flow.get_domain_cur man flow in
+     *   Exceptions.panic_at range "E_py_type %a@\n" pp_polytype pt *)
     | E_addr addr ->
       let cur = Flow.get_domain_cur man flow in
       Polytypeset.fold (fun pty acc ->
@@ -357,12 +355,18 @@ struct
         (fun exp flow ->
            (* FIXME: test if instance of bool and proceed accordingly *)
            match ekind exp with
-           | E_constant (C_top T_bool) -> Eval.singleton exp flow
-           | E_constant (C_bool true) ->  Eval.singleton (mk_py_false range) flow
-           | E_constant (C_bool false) -> Eval.singleton (mk_py_true range) flow
-           | E_py_object ({addr_uid = -1}, _) -> man.eval (mk_py_false range) flow
-           | E_py_object ({addr_uid = -2}, _) -> man.eval (mk_py_true range) flow
-           | E_py_object ({addr_uid = -3}, _) -> Eval.singleton exp flow
+           | E_constant (C_top T_bool) ->
+             Eval.singleton exp flow
+           | E_constant (C_bool true) ->
+             Eval.singleton (mk_py_false range) flow
+           | E_constant (C_bool false) ->
+             Eval.singleton (mk_py_true range) flow
+           | E_py_object (a, _) when compare_addr a addr_true = 0 ->
+             man.eval (mk_py_false range) flow
+           | E_py_object (a, _) when compare_addr a addr_false = 0 ->
+             man.eval (mk_py_true range) flow
+           | E_py_object (a, _) when compare_addr a addr_bool_top = 0 ->
+             Eval.singleton exp flow
            | _ -> failwith "not: ni"
         )
       |> OptionExt.return
