@@ -19,27 +19,50 @@ let print json out =
   in
   to_channel channel json
 
-let range_to_string range =
-  let file = Location.get_range_file range in
-  let line = Location.get_range_line range in
-  file ^ ":" ^ (string_of_int line)
+let render_pos pos : json =
+  let file = Location.get_pos_file pos in
+  let line = Location.get_pos_line pos in
+  let column = Location.get_pos_column pos in
+  `Assoc [
+    "file", `String file;
+    "line", `Int line;
+    "column", `Int column;
+  ]
 
-let render man alarms time files out =
+
+let render_range range : json =
+  `Assoc [
+    "start", render_pos (Location.get_range_start range);
+    "end", render_pos (Location.get_range_end range)
+  ]
+
+let render_call (c:Callstack.call) : json =
+  `Assoc [
+    "function", `String c.call_fun;
+    "range", render_range c.call_site;
+  ]
+
+let render_callstack cs : json =
+  `List (List.map render_call cs)
+
+let render_alarm alarm : json =
+  let title =
+    let () = Alarm.pp_alarm_title Format.str_formatter alarm in
+    Format.flush_str_formatter ()
+  in
+  let range, cs = alarm.Alarm.alarm_trace in
+  `Assoc [
+    "title", `String title;
+    "range", render_range range;
+    "callstack", render_callstack cs;
+  ]
+
+let render man alarms time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (List.map (fun alarm ->
-          let title =
-            let () = Alarm.pp_alarm_title Format.str_formatter alarm in
-            Format.flush_str_formatter ()
-          in
-          let range, cs = alarm.Alarm.alarm_trace in
-          `Assoc [
-            "title", `String title;
-            "range", `String (range_to_string range);
-          ]
-        ) alarms);
+      "alarms", `List (List.map render_alarm alarms);
     ]
   in
   print json out

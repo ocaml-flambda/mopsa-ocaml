@@ -11,38 +11,53 @@
 
 open Location
 
-type t = range list
+type call = {
+  call_fun:  string;
+  call_site: range;
+}
 
-let pp_call_stack fmt cs =
+type cs = call list
+
+let pp_call fmt c =
+  Format.fprintf fmt "%s@%a"
+    c.call_fun
+    pp_range c.call_site
+
+let pp_call_stack fmt (cs:cs) =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.pp_print_string fmt " → ")
-    pp_range
+    pp_call
     fmt cs
 
-let pp_call_stack_newlines fmt cs =
+let print fmt (cs:cs) =
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-    pp_range
+    pp_call
     fmt cs
 
+let compare_call c c' =
+  Compare.compose [
+    (fun () -> compare c.call_fun c'.call_fun);
+    (fun () -> compare_range c.call_site c'.call_site);
+  ]
 
-let compare_call_stack cs cs' =
-  Compare.list compare_range cs cs'
+let compare cs cs' =
+  Compare.list compare_call cs cs'
 
 type ('a, _) Annotation.key +=
-  | A_call_stack: ('a, t) Annotation.key
+  | A_call_stack: ('a, cs) Annotation.key
 
-let empty : t = []
+let empty : cs = []
 
-let get flow : t =
+let get flow : cs =
   Flow.get_annot A_call_stack flow
 
 let set cs flow =
   Flow.set_annot A_call_stack cs flow
 
-let push range flow =
+let push f range flow =
   let cs = get flow in
-  set (range :: cs) flow
+  set ({ call_fun = f; call_site = range} :: cs) flow
 
 let pop flow =
   let cs = get flow in
@@ -50,7 +65,7 @@ let pop flow =
 
 let () =
   Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (t, b) eq option =
+      eq = (let f: type a b. (a, b) key -> (cs, b) eq option =
               function
               | A_call_stack -> Some Eq
               | _ -> None

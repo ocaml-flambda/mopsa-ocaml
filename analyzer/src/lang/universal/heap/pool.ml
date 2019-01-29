@@ -29,7 +29,7 @@ let recent_flag = 0
 let old_flag = 1
 
 module AddrInfo = struct
-  type t = addr_kind * Callstack.t * range * int
+  type t = addr_kind * Callstack.cs * range * int
 
   let print fmt (a, cs, r, f) =
     Format.fprintf fmt "(%a, %a, %a, %a)"
@@ -42,7 +42,7 @@ module AddrInfo = struct
     Compare.compose
       [
         (fun () -> compare_addr_kind a a');
-        (fun () -> Callstack.compare_call_stack cs cs');
+        (fun () -> Callstack.compare cs cs');
         (fun () -> compare_range r r');
         (fun () -> (-) f f')
       ]

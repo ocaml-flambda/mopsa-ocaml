@@ -21,7 +21,7 @@ type alarm_level =
 type alarm = {
   alarm_kind : alarm_kind;   (** the kind of the alarm *)
   alarm_level : alarm_level;
-  alarm_trace : Location.range * Callstack.t;
+  alarm_trace : Location.range * Callstack.cs;
 }
 
 type alarm_info = {
@@ -52,7 +52,7 @@ let register_alarm info =
 
 let compare_alarm a1 a2 =
   Compare.compose [
-        (fun () -> Compare.pair Location.compare_range Callstack.compare_call_stack a1.alarm_trace a2.alarm_trace);
+        (fun () -> Compare.pair Location.compare_range Callstack.compare a1.alarm_trace a2.alarm_trace);
         (fun () -> Pervasives.compare a1.alarm_level a2.alarm_level);
         (fun () -> !compare_chain a1 a2)
       ]
@@ -74,7 +74,7 @@ let pp_alarm fmt alarm =
     !pp_title_chain alarm
     Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
     !pp_report_chain alarm
-    Callstack.pp_call_stack_newlines (alarm.alarm_trace |> snd)
+    Callstack.print (alarm.alarm_trace |> snd)
 
 
 let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm

@@ -121,7 +121,7 @@ struct
       let init_block = mk_block parameters_assign range in
 
       (* Update call stack *)
-      let flow1 = Callstack.push range flow0 in
+      let flow1 = Callstack.push f.fun_name range flow0 in
 
       (* Execute body *)
       let flow2 = man.exec init_block flow1 |>
