@@ -401,7 +401,7 @@ struct
 
       (* Update the callstack *)
       let cs = Callstack.get flow in
-      let flow = Callstack.push exp.erange flow in
+      let flow = Callstack.push stub.stub_func_name exp.erange flow in
 
       (* Evaluate the body of the styb *)
       let flow = exec_body stub.stub_func_body return man flow in

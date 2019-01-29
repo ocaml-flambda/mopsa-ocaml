@@ -36,8 +36,14 @@ let render_range range : json =
     "end", render_pos (Location.get_range_end range)
   ]
 
+let render_call (c:Callstack.call) : json =
+  `Assoc [
+    "function", `String c.call_fun;
+    "range", render_range c.call_site;
+  ]
+
 let render_callstack cs : json =
-  `List (List.map render_range cs)
+  `List (List.map render_call cs)
 
 let render_alarm alarm : json =
   let title =
