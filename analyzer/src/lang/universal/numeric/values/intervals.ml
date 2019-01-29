@@ -270,6 +270,18 @@ struct
 
   let compare_interval itv1 itv2 =
     bot_compare (I.compare) itv1 itv2
+
+  let map (f: Z.t -> 'a) (itv:t) : 'a list =
+    if not (is_bounded itv) then panic ~loc:__LOC__ "map: unbounded interval %a" print itv
+    else if is_bottom itv then []
+    else
+      let a, b = bounds itv in
+      let rec iter i =
+        if Z.equal i b then [f i]
+        else f i :: iter (Z.succ i)
+      in
+      iter a
+    
 end
 
 

@@ -83,6 +83,10 @@ val map:
   ('e -> 'a flow -> 'e * 'a flow) ->
   ('a, 'e) evl -> ('a, 'e) evl
 
+val map_flow:
+  ('a flow -> 'a flow) ->
+  ('a, 'e) evl -> ('a, 'e) evl
+
 val choose : ('a, 'e) evl -> ('e option * 'a flow) option
 
 val to_dnf : ('a, 'e) evl -> ('a, 'e) evl_case Dnf.t

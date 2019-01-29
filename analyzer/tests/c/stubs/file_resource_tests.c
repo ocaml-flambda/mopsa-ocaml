@@ -7,7 +7,7 @@ extern void *_mopsa_int_to_fd(int fd);
  * local: int fd = new FileDescriptor;
  * ensures: return == fd;
  */
-int open_(const char *file, int oflag, ...);
+int open_(const char *file, int oflag);
 
 
 /*$
