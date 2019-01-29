@@ -5,26 +5,70 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-char *_var = 0;
-int _val = 0;
+/*********************************************************/
+/* Test of variadic functions with one optional argument */
+/*********************************************************/
 
-int env(char* var, ...) {
-  if (var == NULL) {
-    return _val;
+int _last = 0;
+
+/* Dummy addition function. When called with a valid pointer to an
+   integer, it adds its two arguments and stores the result in the
+   first argument. If the first argument is NULL, it returns the
+   result of the last computation */
+add(int* p, ...) {
+  if (p == NULL) {
+    return _last;
   }
-  _var = var;
-
   va_list ap;
-  va_start(ap, var);
-  int x = va_arg(ap, int);
-  _val = x;
-  va_end(ap);
+  va_start(ap, p);
 
-  return _val;
+  int x = va_arg(ap, int);
+  *p = *p + x;
+  _last = *p;
+
+  va_end(ap);
+  return _last;
 }
 
 void test_one_optional_argument() {
-  _mopsa_assert(env(NULL) == 0);
-  _mopsa_assert(env("a", 10) == 10);
-  _mopsa_assert(env(NULL) == 10);
+  int x = 1;
+  _mopsa_assert(add(NULL) == 0);
+  _mopsa_assert(add(&x, 10) == 11);
+  _mopsa_assert(x == 11);
+  _mopsa_assert(add(NULL) == 11);
+}
+
+
+/************************************************************/
+/* Test of passing a va_list argument to variadic functions */
+/************************************************************/
+
+int _last2 = 0;
+
+int vadd(int *p, va_list app) {
+  if (p == NULL) {
+    return _last2;
+  }
+  int x = va_arg(app, int);
+  *p = *p + x;
+  _last2 = *p;
+  return _last;  
+}
+
+int add_abs(int *p, ...) {
+  va_list ap;
+  va_start(ap, p);
+  int ret = vadd(p, ap);
+  if (ret < 0) {
+    ret = -ret;
+    _last2 = ret;
+  }
+  va_end(ap);
+  return ret;
+}
+
+void test_pass_va_list_to_variadic_function() {
+  int x = 1;
+  _mopsa_assert(add_abs(NULL) == 0);
+  _mopsa_assert(add_abs(&x, 1) == 2);
 }

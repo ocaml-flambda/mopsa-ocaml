@@ -142,6 +142,20 @@ let remove : type b. ('a, b) key -> 'a annot -> 'a annot =
     in
     {m with values = aux k m.values}
 
+let mem : type b. ('a, b) key -> 'a annot -> bool =
+  fun k m ->
+    let rec aux : type b. ('a, b) key -> 'a vl -> bool =
+      fun k -> function
+        | [] -> false
+        | hd :: tl ->
+          let (d, _) = hd in
+          let eq = match d with D_stateful d -> d.eq | D_stateless d -> d.eq in
+          match eq k with
+          | Some Eq -> true
+          | None -> aux k tl
+    in
+    aux k m.values
+
 let print fmt m =
   let rec aux : type b. Format.formatter -> b vl -> unit =
     fun fmt vl ->

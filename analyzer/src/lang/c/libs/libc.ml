@@ -57,8 +57,10 @@ struct
   (** ============================ *)
 
   type ('a, _) Annotation.key +=
-    | A_c_unnamed_args: ('a, var (** last named parameter *) *
-                             var (** unnamed parameters *) list
+    (** List of unnamed arguments in a variadic function *)
+    | A_c_unnamed_args: ('a,
+                         var (** last named parameter *) *
+                         var list (** unnamed parameters *)
                         ) Annotation.key
 
   let () =
@@ -94,12 +96,17 @@ struct
 
   let exec zone stmt man flow = None
 
-  
+
   (** {2 Variadic functions} *)
   (** ====================== *)
 
   (** Evaluate a call to a variadic function *)
   let call_variadic_function fundec args range man flow =
+    (* FIXME: for the moment, the domain does not supporting cascading
+       calls to variadic functions *)
+    if Flow.mem_annot A_c_unnamed_args flow
+    then panic_at range "cascading calls to variadic functions not supported";
+
     (* Partition args into named and unnamed arguments *)
     let named, last, unnamed =
       let rec doit params args =
@@ -124,23 +131,20 @@ struct
     in
 
     (* Put vars in the annotation *)
-    let old_annot = try Some (get_unnamed_args flow) with Not_found -> None in
     let flow = set_unnamed_args (last,vars) flow in
 
     (* Call the function with only named arguments *)
     let fundec' = {fundec with c_func_variadic = false} in
     man.eval (mk_c_call fundec' named range) flow |>
 
-    (* Remove unnamed arguments and restore previous annotation *)
+    (* Remove unnamed arguments and the annotation *)
     Eval.map_flow (fun flow ->
         let flow =
           List.fold_left (fun flow unnamed ->
               man.exec ~zone:Z_c (mk_remove_var unnamed range) flow
             ) flow vars
         in
-        match old_annot with
-        | None -> Flow.rm_annot A_c_unnamed_args flow
-        | Some old -> set_unnamed_args old flow
+        Flow.rm_annot A_c_unnamed_args flow
       )
 
   (* Create a counter variable for a va_list *)
@@ -210,7 +214,7 @@ struct
               (* Increment the counter *)
               let flow = man.exec
                   (mk_assign vlc (mk_z (Z.succ n) range) range)
-                  ~zone:Universal.Zone.Z_u_num 
+                  ~zone:Universal.Zone.Z_u_num
                   flow
               in
               Eval.singleton (mk_var arg range) flow
@@ -238,7 +242,7 @@ struct
     let flow' = man.exec (mk_remove vlc range) ~zone:Universal.Zone.Z_u_num flow in
     Eval.empty_singleton flow'
 
-  
+
   (** {2 Evaluation entry point} *)
   (** ========================== *)
 
