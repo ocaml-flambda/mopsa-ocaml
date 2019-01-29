@@ -4,69 +4,66 @@ Contributing
 This document describes the branching model followed in MOPSA and how contributions are merged into the code base.
 
 
-Branch Naming Convention
+Stable Branches
 ------------------------
 The repository of MOPSA has two protected and stable branches: 
 - There is one stable branch `master` containing the latest public release of MOPSA.
 - The development branch `dev` contains the latest stable features of the analyzer that are planned for the next release.
 
-For each sub-project `<project>` (a supported language, the web interface, a parser, etc.), there is one development branch `<project>/dev` containing stable features. Ongoing features are maintained in (timely limited) branches `<project>/feature/<feature name>`.
-
-To contribute to MOPSA, it is adviced to fork https://gitlab.com/mopsa/mopsa in a separate repository. Branch names should follow the same conventions described above
-
-Feature Branches
-----------------
-To work on a feature for some sub-project, create a new branch:
-```shell
-$ git checkout -b c/feature/handle-union-assignment
-```
-
-After committing code and testing it, merge into the sub-project's `dev` branch:
-```shell
-$ git checkout c/dev
-$ git pull origin c/dev
-$ git merge --no-ff c/feature/handle-union-assignment
-$ git push origin c/dev
-$ git branch -d c/feature/handle-union-assignment
-$ git push origin :c/feature/handle-union-assignment
-```
-
-Sometimes, one would like to clean the commit history of feature branch before merging into `<project>/dev`. This can be done using `git rebase -i` **before** checking out `<project>/dev` and merging into it.
-
 
 External Contributions
 ----------------------
-To integrate your new features into the upstream project branch `<project>/dev`, create a merge request using GitLab web interface and select `mopsa/mopsa/<project>/dev` as the target branch. Ensure to `git pull upstream/web/dev` in order to synchronize with the latest updates from upstream before merging.
+To contribute to MOPSA, it is adviced to fork https://gitlab.com/mopsa/mopsa in a separate repository and work on a separate branch `<project>/dev`.
+
+To remain synchronized with the upstream MOPSA repository, add a new remote to your local repository:
+```shell
+$ git remote add upstream git@gitlab.com:mopsa/mopsa.git
+```
+The branch `dev` should be read-only, fetched regularly from upstream and merged into local project branches:
+```shell
+$ git checkout dev
+$ git pull upstream dev
+$ git checkout my-project/dev
+$ git merge dev
+```
+
+To integrate your contributions into the upstream project branch `<project>/dev`, create a merge request using GitLab web interface and select `mopsa/mopsa/<project>/dev` as the target branch.
 
 
-The Development Branch `dev`
----------------------------
-When features in a project branch are stable enough and planned for the next release, they are merged into the main `dev` branch:
+Feature Branches
+----------------
+Daily work is generally done in *feature branches*. For internal contributions, features will likely be merged into `dev` and are named `feature/<category>/<feature name>`. For example:
+```shell
+$ git checkout dev
+$ git checkout -b feature/c/handle-union-assignment
+```
+
+After committing code and testing it, create a merge request to add the feature. Alternatively, the feature can be merged directly into `dev`:
 ```shell
 $ git checkout dev
 $ git pull origin dev
-$ git merge --no-ff python/dev
+$ git merge --no-ff feature/c/handle-union-assignment
 $ git push origin dev
+$ git branch -d feature/c/handle-union-assignment
+$ git push origin :feature/c/handle-union-assignment
 ```
 
-The flag --no-ff ensures that a new commit is always created when merging. In case `<project>/dev` contains advanced feature not yet completely stable, one could merge specific stable commits:
+Sometimes, one would like to clean the commit history of feature branch before merging into `dev`. This can be done using `git rebase -i` **before** checking out `dev` and merging into it.
+
+
+Remain Synchronized
+--------------------
+When features are merged into `dev`, **all existing** branches should pull these changes to remain up to date:
 ```shell
 $ git checkout dev
 $ git pull origin dev
-$ git cherry-pick <commit hash>
-$ git push origin dev
+$ git checkout my-project/dev
+$ git merge dev
+$ git checkout feature/my-feature
+$ git merge dev
 ```
 
-After updating `dev`, **all existing** `<project>/dev` should pull these changes to remain up to date:
-```shell
-$ git checkout c/dev
-$ git pull origin dev
-$ git checkout python/dev
-$ git pull origin dev
-```
-
-Note here that we fast forward the merges in order to have a cleaner commit history.
-
+For external contributions, replace `origin` with `upstream`.
 
 Release Branch
 ---------------
@@ -76,7 +73,7 @@ $ git checkout dev
 $ git checkout -b release/1.2
 ```
 
-Work is done in `release/<release id>` to polish the release (late bug fixes, documentation, version bumping). When code is ready for the public release, the branch is merged into `master`:
+Work is done in `release/<release id>` to polish the release (late bug fixes, documentation). When code is ready for the public release, the branch is merged into `master`:
 ```shell
 $ git checkout master
 $ git merge --no-ff release/1.2
