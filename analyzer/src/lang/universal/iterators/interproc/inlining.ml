@@ -143,7 +143,7 @@ struct
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
               man.exec (mk_add_var ret range) |>
-              man.exec (mk_assign (mk_var ret range) e range) |>
+              man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
               Flow.join man acc
 
             | _ -> Flow.add tk env man acc
