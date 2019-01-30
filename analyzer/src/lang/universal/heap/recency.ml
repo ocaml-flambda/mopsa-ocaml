@@ -96,7 +96,7 @@ struct
       debug "allocate %a in %a on call stack:@\n @[%a@]"
         pp_addr_kind addr_kind
         pp_range range
-        Callstack.pp_call_stack_newlines cs;
+        Callstack.print cs;
 
       let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
       let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
