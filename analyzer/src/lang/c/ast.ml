@@ -766,6 +766,10 @@ let is_c_type = function
   | T_c_qualified _ -> true
   | _ -> false
 
+let is_c_function_parameter v =
+  match v.vkind with
+  | V_c { var_scope = Variable_parameter _ } -> true
+  | _ -> false
 
 let mk_c_address_of e range =
   mk_expr (E_c_address_of e) ~etyp:(T_c_pointer e.etyp) range

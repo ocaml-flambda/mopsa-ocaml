@@ -67,7 +67,7 @@ type ctx = {
 
   ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
   (* cache the translation of all named types;
-     this is required for records defining recursive data-types 
+     this is required for records defining recursive data-types
   *)
 
   ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t;
@@ -371,8 +371,19 @@ and from_var ctx (v: C_AST.variable) : var =
       vtyp = from_typ ctx v.var_type;
     }
     in
-    Hashtbl.add ctx.ctx_vars v.var_uid (v', v);
-    v'
+    let v'' = patch_array_parameters v' in
+    Hashtbl.add ctx.ctx_vars v.var_uid (v'', v);
+    v''
+
+(* Formal parameters of functions having array types should be
+   considered as pointers *)
+and patch_array_parameters v =
+    if not (is_c_array_type v.vtyp) ||
+       not (is_c_function_parameter v)
+    then v
+    else
+      let t = under_array_type v.vtyp in
+      { v with vtyp = T_c_pointer t }
 
 and from_var_scope ctx = function
   | C_AST.Variable_global -> Ast.Variable_global
@@ -409,7 +420,7 @@ and from_init_stub ctx v =
     }
     in
     Some (C_init_stub stub)
-    
+
 
 
 (** {2 Types} *)
@@ -550,7 +561,7 @@ and find_field_index t f =
       field.field_index
 
     | T_typedef td -> find_field_index td.typedef_def f
-      
+
     | _ -> Exceptions.panic "find_field_index: called on a non-record type %s"
              (C_print.string_of_type_qual t)
   with
