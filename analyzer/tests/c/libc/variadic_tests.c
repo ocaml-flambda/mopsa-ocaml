@@ -52,7 +52,7 @@ int vadd(int *p, va_list app) {
   int x = va_arg(app, int);
   *p = *p + x;
   _last2 = *p;
-  return _last;  
+  return _last2;
 }
 
 int add_abs(int *p, ...) {
@@ -71,4 +71,6 @@ void test_pass_va_list_to_variadic_function() {
   int x = 1;
   _mopsa_assert(add_abs(NULL) == 0);
   _mopsa_assert(add_abs(&x, 1) == 2);
+  _mopsa_assert(add_abs(NULL) == 2);
+  _mopsa_assert(add_abs(&x, -10) == 8);
 }

@@ -89,12 +89,14 @@ struct
   let set_unnamed_args (last, unnamed) flow =
     Flow.set_annot A_c_unnamed_args (last, unnamed) flow
 
+
   (** {2 Transfer functions} *)
   (** ====================== *)
 
   let init prog man flow = None
 
   let exec zone stmt man flow = None
+
 
 
   (** {2 Variadic functions} *)
@@ -148,15 +150,15 @@ struct
       )
 
   (* Create a counter variable for a va_list *)
-  let mk_vlc_var va_list range =
+  let mk_valc_var va_list range =
     let name = "$" ^ va_list.org_vname ^ "_counter" in
     let v = mkv name (name ^ (string_of_int va_list.vuid)) va_list.vuid T_int in
     mk_var v range
 
   (* Initialize a counter *)
-  let init_vlc_var vlc range man flow =
-    man.exec (mk_add vlc range) ~zone:Universal.Zone.Z_u_num flow |>
-    man.exec (mk_assign vlc (mk_zero range) range) ~zone:Universal.Zone.Z_u_num
+  let init_valc_var valc range man flow =
+    man.exec (mk_add valc range) ~zone:Universal.Zone.Z_u_num flow |>
+    man.exec (mk_assign valc (mk_zero range) range) ~zone:Universal.Zone.Z_u_num
 
   (* Resolve a pointer to a va_list *)
   let resolve_va_list ap range man flow =
@@ -165,8 +167,24 @@ struct
     Eval.bind @@ fun pt flow ->
 
     match ekind pt with
-    | E_c_points_to (P_block (V ap, { ekind = E_constant (C_int o)})) when Z.equal o Z.zero ->
-      Eval.singleton ap flow
+    | E_c_points_to (P_block (V ap, offset)) ->
+      (* We do not consider the case of arrays of va_list *)
+      let base_size = sizeof_type ap.vtyp in
+      let elem_size = sizeof_type (under_type ap.vtyp) in
+      if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
+
+      (* In this case, only offset 0 is OK *)
+      Eval.assume
+        (mk_binop offset O_eq (mk_zero range) range)
+        ~fthen:(fun flow ->
+            Eval.singleton ap flow
+          )
+        ~felse:(fun flow ->
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man flow |>
+            Eval.empty_singleton
+          )
+        ~zone:Z_c
+        man flow
 
     | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_expr pt
 
@@ -184,8 +202,8 @@ struct
     Eval.bind @@ fun ap flow ->
 
     (* Initialize the counter *)
-    let vlc = mk_vlc_var ap range in
-    let flow = init_vlc_var vlc range man flow in
+    let valc = mk_valc_var ap range in
+    let flow = init_valc_var valc range man flow in
 
     Eval.empty_singleton flow
 
@@ -196,15 +214,15 @@ struct
     resolve_va_list ap range man flow |>
     Eval.bind @@ fun ap flow ->
 
-    let vlc = mk_vlc_var ap range in
+    let valc = mk_valc_var ap range in
 
     (* Check that value of the counter does not exceed the number of
        unnamed arguments *)
     Eval.assume
-      (mk_binop vlc O_lt (mk_int (List.length unnamed) range) range)
+      (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
-          let itv = man.ask (Itv.Q_interval vlc) flow |>
+          let itv = man.ask (Itv.Q_interval valc) flow |>
                     Itv.meet () (Itv.of_int 0 (List.length unnamed - 1))
           in
 
@@ -213,7 +231,7 @@ struct
               let arg = List.nth unnamed (Z.to_int n) in
               (* Increment the counter *)
               let flow = man.exec
-                  (mk_assign vlc (mk_z (Z.succ n) range) range)
+                  (mk_assign valc (mk_z (Z.succ n) range) range)
                   ~zone:Universal.Zone.Z_u_num
                   flow
               in
@@ -236,10 +254,10 @@ struct
     resolve_va_list ap range man flow |>
     Eval.bind @@ fun ap flow ->
 
-    let vlc = mk_vlc_var ap range in
+    let valc = mk_valc_var ap range in
 
     (* Remove the counter *)
-    let flow' = man.exec (mk_remove vlc range) ~zone:Universal.Zone.Z_u_num flow in
+    let flow' = man.exec (mk_remove valc range) ~zone:Universal.Zone.Z_u_num flow in
     Eval.empty_singleton flow'
 
 
