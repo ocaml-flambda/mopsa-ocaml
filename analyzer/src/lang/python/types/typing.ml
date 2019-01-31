@@ -160,8 +160,8 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [any_zone]; import = [Zone.Z_py_types]}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_addr]; import = [Universal.Zone.Z_u_heap, Z_any]}
+  let exec_interface = {export = [Zone.Z_py_obj]; import = []}
+  let eval_interface = {export = [Zone.Z_py_addr, Zone.Z_py_obj]; import = [(*Universal.Zone.Z_u_heap, Z_any*)]}
 
   let join annot d d' = {abs_heap = TMap.join annot d.abs_heap d'.abs_heap;
                          typevar_env = TypeVarMap.join annot d.typevar_env d'.typevar_env}

@@ -505,7 +505,7 @@ let create_builtin_class kind name cls bases range =
       addr_kind= (A_py_class (kind, bases));
       addr_uid=(-1);
       addr_mode = STRONG
-    }, mk_py_empty range)
+    }, None)
   in
   let addr = {
       addr_kind = A_py_class(kind, mro);
@@ -513,7 +513,7 @@ let create_builtin_class kind name cls bases range =
       addr_mode = STRONG
     }
   in
-  add_builtin_class (addr, mk_py_empty range) ()
+  add_builtin_class (addr, None) ()
 
 
 let () =

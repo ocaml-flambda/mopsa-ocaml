@@ -93,8 +93,8 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = { export = [Zone.Z_py]; import = [Zone.Z_py_types]; }
-  let eval_interface = { export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_addr]; }
+  let exec_interface = { export = [Zone.Z_py]; import = [Zone.Z_py_obj]; }
+  let eval_interface = { export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_obj]; }
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
@@ -133,7 +133,7 @@ struct
       Eval.eval_list [lval; rval] man.eval flow |>
       Post.bind man (fun args flow ->
           let elval, erval = match args with [e1;e2] -> e1, e2 | _ -> assert false in
-          man.exec ~zone:Zone.Z_py_types (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.of_flow
+          man.exec ~zone:Zone.Z_py_obj (mk_assign (mk_py_attr elval attr range) erval range) flow |> Post.of_flow
         )
       |> OptionExt.return
 
@@ -167,7 +167,7 @@ struct
       debug "ncur = %a@\n" print ncur;
       let flow = Flow.set_domain_cur ncur man flow in
       begin match akind a with
-        | Typing.A_py_instance -> man.exec ~zone:Zone.Z_py_types stmt flow |> Post.return
+        | Typing.A_py_instance -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
         | _ -> flow |> Post.return
       end
 
