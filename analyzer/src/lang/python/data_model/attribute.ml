@@ -139,7 +139,7 @@ module Domain =
                                                   debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
                                                   eval_alloc man (A_py_method (object_of_expr obj', e)) range flow |>
                                                   Eval.bind (fun addr flow ->
-                                                      let obj = (addr, mk_py_empty range) in
+                                                      let obj = (addr, None) in
                                                       Eval.singleton (mk_py_object obj range) flow)
                                                 (* let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', e))) range in
                                                  * man.eval exp flow *)

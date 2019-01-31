@@ -180,7 +180,7 @@ module Domain =
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
            Post.bind man (fun addr flow ->
-               let obj = (addr, mk_py_empty range) in
+               let obj = (addr, None) in
                man.exec
                  (mk_assign
                     (mk_var func.py_func_var range)

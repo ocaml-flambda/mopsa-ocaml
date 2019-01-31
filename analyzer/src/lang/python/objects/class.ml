@@ -99,7 +99,7 @@ module Domain =
                    Post.of_flow flow
                  else
                    try
-                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1); addr_mode = STRONG}, mk_py_empty range) in
+                     let mro = c3_lin ({addr_kind= (A_py_class (C_user cls, bases')); addr_uid=(-1); addr_mode = STRONG}, None) in
                      debug "MRO of %a: %a@\n" pp_var cls.py_cls_var
                        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
                           (fun fmt x -> Format.fprintf fmt "%a" pp_expr (mk_py_object x (srange stmt))))
@@ -108,7 +108,7 @@ module Domain =
                      eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
                        Post.bind man
                          (fun addr flow ->
-                           let obj = (addr, mk_py_empty range) in
+                           let obj = (addr, None) in
                            let flow = man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow in
                            debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;
                            man.exec cls.py_cls_body flow |>

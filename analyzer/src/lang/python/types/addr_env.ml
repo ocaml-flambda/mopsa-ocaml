@@ -207,7 +207,7 @@ struct
               Eval.empty_singleton flow :: acc
 
             | Def addr ->
-              man.eval (mk_py_object (addr, exp) range) flow :: acc
+              man.eval (mk_py_object (addr, None) range) flow :: acc
 
           ) aset []
         |> Eval.join_list |> OptionExt.return

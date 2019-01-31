@@ -253,7 +253,7 @@ struct
     | A_py_class (c, b) -> (c, b)
     | _ -> assert false
 
-  let allocate_builtin exp man range flow bltin =
+  let allocate_builtin man range flow bltin =
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let bltin_cls, bltin_mro = get_builtin bltin in
@@ -267,16 +267,16 @@ struct
         let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
         let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
         (* Eval.singleton eaddr flow *)
-        Eval.singleton (mk_py_object (addr, exp) range) flow
+        Eval.singleton (mk_py_object (addr, None) range) flow
       )
 
-  let process_constant man flow range exp bltin addr =
+  let process_constant man flow range bltin addr =
     let cur = Flow.get_domain_cur man flow in
     let cls, mro = get_builtin bltin in
     let bltin_inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs = StringMap.empty; oattrs = StringMap.empty}) in
     let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
     let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-    Eval.singleton (mk_py_object (addr, exp) range) flow |> OptionExt.return
+    Eval.singleton (mk_py_object (addr, None) range) flow |> OptionExt.return
 
   let eval zs exp man flow =
     debug "eval %a@\n" pp_expr exp;
@@ -292,41 +292,41 @@ struct
           let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
           match pty with
             | Class (c, b) ->
-              Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, exp) range) flow :: acc
+              Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, None) range) flow :: acc
 
             | _ -> Exceptions.panic_at range "%a@\n" pp_polytype pty)
         (TMap.find addr cur.abs_heap) []
       |> Eval.join_list |> OptionExt.return
 
     | E_constant (C_top T_bool) ->
-      process_constant man flow range exp "bool" addr_bool_top
+      process_constant man flow range "bool" addr_bool_top
 
     | E_constant (C_bool true) ->
-      process_constant man flow range exp "bool" addr_true
+      process_constant man flow range "bool" addr_true
 
     | E_constant (C_bool false) ->
-      process_constant man flow range exp "bool" addr_false
+      process_constant man flow range "bool" addr_false
 
     | E_constant (C_top T_int)
     | E_constant (C_int _) ->
-      process_constant man flow range exp "int" addr_integers
+      process_constant man flow range "int" addr_integers
 
     | E_constant C_py_none ->
-      process_constant man flow range exp "NoneType" addr_none
+      process_constant man flow range "NoneType" addr_none
 
     | E_constant C_py_not_implemented ->
-      process_constant man flow range exp "NotImplementedType" addr_notimplemented
+      process_constant man flow range "NotImplementedType" addr_notimplemented
 
     | E_constant (C_top (T_float _))
     | E_constant (C_float _) ->
-      allocate_builtin exp man range flow "float" |> OptionExt.return
+      allocate_builtin man range flow "float" |> OptionExt.return
 
     | E_constant (C_top T_string)
     | E_constant (C_string _) ->
-      allocate_builtin exp man range flow "str" |> OptionExt.return
+      allocate_builtin man range flow "str" |> OptionExt.return
 
     | E_py_bytes _ ->
-      allocate_builtin exp man range flow "bytes" |> OptionExt.return
+      allocate_builtin man range flow "bytes" |> OptionExt.return
 
 
     (* Je pense pas avoir besoin de ça finalement *)
@@ -443,7 +443,7 @@ struct
                 let attr_addr = StringMap.find attr uattrs in
                 let cur = Flow.get_domain_cur man flow in
                 let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
-                Eval.singleton (mk_py_object (attr_addr, e) range) flow :: acc
+                Eval.singleton (mk_py_object (attr_addr, None) range) flow :: acc
 
               | _ -> Exceptions.panic "ll_hasattr %a@\n"  pp_polytype pty)
             ptys [] |> Eval.join_list
@@ -467,7 +467,7 @@ struct
                ) ptys [] in
              let proceed (cl, mro, cur) =
                let flow = Flow.set_domain_cur cur man flow in
-               let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, exp) range in
+               let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, None) range in
                Eval.singleton obj flow in
              List.map proceed types |> Eval.join_list
 
@@ -542,7 +542,7 @@ struct
                 let inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty}) in
                 let abs_heap = TMap.add addr inst cur.abs_heap in
                 let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-                Eval.singleton (mk_py_object (addr, exp) range) flow
+                Eval.singleton (mk_py_object (addr, None) range) flow
               )
         )
       |> OptionExt.return
