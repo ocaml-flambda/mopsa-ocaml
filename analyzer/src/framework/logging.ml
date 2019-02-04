@@ -17,7 +17,7 @@ open Format
 let opt_log = ref false
 
 (** Command-line option for printing logs without abstract states *)
-let opt_short_logs = ref false
+let opt_short_log = ref false
 
 (** Number of tabs of the current level *)
 let tabs = ref 0
@@ -41,7 +41,7 @@ let indent_symbol level = color level "|"
 
 (** Indent a message by adding tabs at the beginning of each line *)
 let indent ?(close=false) fmt =
-  if !opt_log then
+  if !opt_log || !opt_short_log then
     (* Get the formatted message as a string *)
     Format.kasprintf (fun str ->
         (* Split the message into lines *)
@@ -92,13 +92,13 @@ let reach loc =
   indent "reaching %a" pp_range loc
 
 let exec stmt zone man flow =
-  if !opt_short_logs then
-    indent "@[<v 2>𝕊⟦ %a@] ⟧ in zone %a"
+  if !opt_short_log then
+    indent "@[<v 3>𝕊⟦ %a@] ⟧ in zone %a"
       pp_stmt stmt
       pp_zone zone
       ~close:false
   else
-    indent "@[<v 2>𝕊⟦ %a@] ⟧@ in %a@, and zone %a"
+    indent "@[<v 3>𝕊⟦ %a@] ⟧@ in %a@, and zone %a"
       pp_stmt stmt
       (Flow.print man) flow
       pp_zone zone
@@ -108,7 +108,7 @@ let exec stmt zone man flow =
 
 let exec_done stmt zone time man flow =
   decr tabs;
-  if !opt_short_logs then
+  if !opt_short_log then
     indent "@[<v 2>𝕊⟦ %a@] ⟧ done in zone %a"
       pp_stmt stmt
       pp_zone zone
@@ -122,7 +122,7 @@ let exec_done stmt zone time man flow =
       ~close:true 
 
 let eval exp zone man flow =
-  if !opt_short_logs then
+  if !opt_short_log then
     indent "@[<v 2>𝔼⟦ %a@] ⟧ in zone %a"
       pp_expr exp
       pp_zone2 zone

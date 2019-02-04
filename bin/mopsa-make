@@ -7,7 +7,9 @@ function usage() {
     echo " -h, --help                           display this message"
     echo " -C DIRECTORY, --directory DIRECTORY  change directory to DIRECTORY before compiling."
     echo " -t TARGET, --target TARGET           analyze binary TARGET. (default: [make-target])"
-    echo " -d DEBUG, --debug DEBUG              activate then debug channels DEBUG during the analysis. (default: none)"
+    echo " -l, --log                            display analysis logs."
+    echo " -s, --short-log                      display short analysis logs."
+    echo " -d DEBUG, --debug DEBUG              activate debug channels DEBUG during the analysis. (default: none)"
     echo " -o DB, --db DB                       save build database in DB. (default: mopsa.db)"
 }
 
@@ -15,11 +17,12 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 
 OPTIND=1
 
-opts=$(getopt --longoptions "help,directory:,target:,debug:,db:" --options "hC:t:d:o:" -- "$@")
+opts=$(getopt --longoptions "help,directory:,target:,log,short-log,debug:,db:" --options "hC:t:lsd:o:" -- "$@")
 
 DIRECTORY="."
 DB="mopsa.db"
 DEBUG=""
+LOG=""
 
 eval set --$opts
 
@@ -34,11 +37,17 @@ while true; do
         -t | --target )
             MOPSA_TARGET="$2"; shift 2;
             ;;
+        -l | --log)
+            LOG="-log"; shift;
+            ;;
+        -s | --short-log)
+            LOG="-short-log"; shift;
+            ;;
         -d | --debug)
-            DEBUG="$2"; shift 2
+            DEBUG="$2"; shift 2;
             ;;
         -o | --db)
-            DB="$2"; shift 2
+            DB="$2"; shift 2;
             ;;
         -- )
             MAKE_TARGET="$2"; shift 2;
@@ -64,7 +73,7 @@ else
     PATH=${MOPSADIR}/parsers/c/bin:${PATH} MOPSADB=${DB} make -C ${DIRECTORY} ${MAKE_TARGET}
     ERROR=$?
     if [[ ${ERROR} -eq 0 ]]; then
-        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${DB}"
-        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${DB}
+        echo "${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${LOG} ${DB}"
+        ${MOPSADIR}/bin/mopsa-c -make-target=${MOPSA_TARGET} -debug=${DEBUG} ${LOG} ${DB}
     fi
 fi

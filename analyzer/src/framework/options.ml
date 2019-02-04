@@ -198,9 +198,9 @@ let () =
 (** Short logs *)
 let () =
   register_builtin_option {
-    key = "-short-logs";
+    key = "-short-log";
     doc = " display logs without abstract states";
-    spec = Arg.Set Logging.opt_short_logs;
+    spec = Arg.Set Logging.opt_short_log;
     default = "false";
   }
 
