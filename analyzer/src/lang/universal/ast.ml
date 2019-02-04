@@ -293,10 +293,6 @@ let () =
 (** {2 Universal expressions} *)
 (*  ************************* *)
 
-type tc =
-  | TC_int of expr
-  | TC_symbol of expr * expr list
-
 type expr_kind +=
   (** Function expression *)
   | E_function of fun_expr
@@ -429,16 +425,6 @@ type stmt_kind +=
    | S_print
    (** Print the abstract flow map at current location *)
 
-   | S_forget of var
-   (** Forgets variable *)
-
-   | S_cf_part_start of int
-   (** [S_cf_part_start l] Start a control flow partitioning with label
-     [l] on next statement *)
-
-   | S_cf_part_merge of int
-   (** [S_cf_part_merge l] Merges partitioning with label [l] *)
-
    | S_free_addr of addr (** release an address *)
 
 
@@ -479,32 +465,26 @@ let () =
 
         | S_free_addr a1, S_free_addr a2 ->
           compare_addr a1 a2
-        | S_cf_part_start l, S_cf_part_start l' -> l - l'
-        | S_cf_part_merge l, S_cf_part_merge l' -> l - l'
         | _ -> next s1 s2
       );
 
     print = (fun default fmt stmt ->
         match skind stmt with
-        | S_assign(v, e) -> fprintf fmt "%a = %a;" pp_expr v pp_expr e
-        (* FIXME: improve pretty printer by checking whether this is a
-           Strong or a Weak assign*)
-        | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
-          fprintf fmt "if (%a) {@\n@[<v 2>  %a@]@\n} else {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s1 pp_stmt s2
+          fprintf fmt "@[<v 2>if (%a) {@,%a@]@,} @[<v 2>else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
         | S_block(l) ->
-          begin
-            fprintf fmt "@[<v>%a@]"
-              (pp_print_list
-                 ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                 pp_stmt
-              ) l
-          end
+          fprintf fmt "@[<v>";
+          pp_print_list
+            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            pp_stmt
+            fmt l
+          ;
+          fprintf fmt "@]"
         | S_return(None) -> pp_print_string fmt "return;"
         | S_return(Some e) -> fprintf fmt "return %a;" pp_expr e
         | S_while(e, s) ->
-          fprintf fmt "while %a {@\n@[<v 2>  %a@]@\n}" pp_expr e pp_stmt s
+          fprintf fmt "@[<v 2>while %a {@,%a@]@,}" pp_expr e pp_stmt s
         | S_break -> pp_print_string fmt "break;"
         | S_continue -> pp_print_string fmt "continue;"
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
@@ -518,8 +498,6 @@ let () =
             | false, true -> fprintf fmt "!is_bottom(assume(%a))" pp_expr e
           end
         | S_print -> fprintf fmt "print();"
-        | S_cf_part_start i -> fprintf fmt "cf_part_start(%d)" i
-        | S_cf_part_merge i -> fprintf fmt "cf_part_merge(%d)" i
         | S_free_addr a -> fprintf fmt "free_addr(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -527,17 +505,7 @@ let () =
     visit = (fun default stmt ->
         match skind stmt with
         | S_break
-        | S_continue
-        | S_cf_part_start _
-        | S_cf_part_merge _ -> leaf stmt
-
-        | S_assign(x, e) ->
-          {exprs = [e; x]; stmts = []},
-          (function {exprs = [e; x]; stmts = []} -> {stmt with skind = S_assign(x, e)} | _ -> assert false)
-
-        | S_assume(e) ->
-          {exprs = [e]; stmts = []},
-          (fun parts -> {stmt with skind = S_assume(List.hd parts.exprs)})
+        | S_continue -> leaf stmt
 
         | S_expression(e) ->
           {exprs = [e]; stmts = []},
@@ -579,9 +547,8 @@ let () =
           )
 
         | S_free_addr _ -> leaf stmt
+
         | S_print -> leaf stmt
-        | S_fold(_, _) -> leaf stmt
-        | S_expand(_, _) -> leaf stmt
 
         | _ -> default stmt
       );

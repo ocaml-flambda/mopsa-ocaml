@@ -101,7 +101,7 @@ struct
       man.exec ~zone:Zone.Z_c stmt flow
     else
       (* initialize argc and argv *)
-      let f = find_function "_mopsa_main" functions in
+      let f = find_function "_mopsa_init_symbolic_argc_argv" functions in
       let flow = call f [] man flow in
 
       (* call main with argc and argv *)

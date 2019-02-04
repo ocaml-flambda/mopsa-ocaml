@@ -9,7 +9,7 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
-  | C_init_stub stub -> fprintf fmt "/*$@\n  @[%a@]@\n */" Stubs.Ast.pp_stub_init stub
+  | C_init_stub stub -> fprintf fmt "@,@[<v 4>/*$@,%a@]@,*/" Stubs.Ast.pp_stub_init stub
 
 let rec pp_c_type_short fmt =
   function
@@ -138,7 +138,7 @@ let () =
       | E_c_address_of (e) -> fprintf fmt "&(%a)" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*(%a)" pp_expr p
       | E_c_cast(e, _) -> fprintf fmt "((%a) %a)" pp_typ (etyp expr) pp_expr e
-      | E_c_statement s -> fprintf fmt "{@\n  @[%a@]@\n}" pp_stmt s
+      | E_c_statement s -> fprintf fmt "@[<v 2>{@,%a@],}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_predefined _ -> assert false
       | E_c_atomic _ -> assert false
@@ -164,11 +164,11 @@ let () =
           (Printers.print_option pp_expr) it
           pp_stmt stmts
       | S_c_do_while (body,cond) ->
-        fprintf fmt "do {@\n  @[%a]@\n} while (%a);"
+        fprintf fmt "@[<v 2>do {@,%a@]@, while (%a);"
           pp_stmt body
           pp_expr cond
       | S_c_switch(cond, body) ->
-        fprintf fmt "switch (%a) {@\n  @[%a@]@\n}"
+        fprintf fmt "@[<v 2>switch (%a) {@,%a@]@,}"
           pp_expr cond
           pp_stmt body
       | S_c_switch_case(e) -> fprintf fmt "case %a:" pp_expr e
@@ -181,15 +181,23 @@ let () =
   register_program_pp (fun default fmt prg ->
       match prg.prog_kind with
       | Ast.C_program prog ->
-        pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+        (* Remove empty functions *)
+        List.filter (fun f ->
+            match f.c_func_body with
+            | None -> false
+            | Some _ -> true
+          ) prog.c_functions
+        |>
+        pp_print_list
+          ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
           (fun fmt f ->
-             fprintf fmt "%a %s(%a) {@\n@[<v 2>  %a@]@\n}"
+             fprintf fmt "@[<v 2>%a %s(%a) {@,%a@]@,}"
                pp_typ f.c_func_return
                f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
                (OptionExt.print pp_stmt) f.c_func_body
           )
-          fmt prog.c_functions
+          fmt
 
       | _ -> default fmt prg
     );

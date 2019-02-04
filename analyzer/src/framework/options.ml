@@ -186,6 +186,25 @@ let () =
     default = "";
   }
 
+(** Logs activation *)
+let () =
+  register_builtin_option {
+    key = "-log";
+    doc = " activate logs";
+    spec = Arg.Set Logging.opt_log;
+    default = "false";
+  }
+
+(** Short logs *)
+let () =
+  register_builtin_option {
+    key = "-short-logs";
+    doc = " display logs without abstract states";
+    spec = Arg.Set Logging.opt_short_logs;
+    default = "false";
+  }
+
+
 (** Help message *)
 let help () =
   let options =

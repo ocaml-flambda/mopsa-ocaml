@@ -273,10 +273,10 @@ let pp_log_binop = C_stubs_parser.Ast.pp_log_binop
 let rec pp_formula fmt f =
   match f.content with
   | F_expr e -> pp_expr fmt e
-  | F_binop (op, f1, f2) -> fprintf fmt "(%a)@\n%a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
+  | F_binop (op, f1, f2) -> fprintf fmt "(%a)@,%a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
-  | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
-  | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a:@ @[<v 2>  %a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
+  | F_forall (x, set, f) -> fprintf fmt "@[<v 2>∀ %a %a ∈ %a:@,%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
+  | F_exists (x, set, f) -> fprintf fmt "@[<v 2>∃ %a %a ∈ %a:@,%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
 
 and pp_set fmt =
@@ -347,7 +347,7 @@ let pp_leaf_sections fmt secs =
     fmt secs
 
 let pp_case fmt case =
-  fprintf fmt "case \"%s\":@\n  @[<v 2>%a@]"
+  fprintf fmt "@[<v 2>case \"%s\" {@,%a@]@,}"
     case.case_label
     pp_leaf_sections case.case_body
 
@@ -508,7 +508,7 @@ let () =
     print = (fun next fmt s ->
         match skind s with
         | S_stub_init (v, stub) ->
-          fprintf fmt "init %a:@\n  @[%a@]"
+          fprintf fmt "@[<v 2>init %a:@,%a@]"
             pp_var v
             pp_sections stub.stub_init_body
 

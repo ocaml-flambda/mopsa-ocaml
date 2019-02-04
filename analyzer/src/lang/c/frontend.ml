@@ -150,7 +150,7 @@ and parse_db (dbfile: string) ctx : unit =
 
 
 and parse_file (opts: string list) (file: string) ctx =
-  Logging.parse "parsing file %s" file;
+  Logging.parse file;
   C_parser.parse_file file opts ctx
 
 and from_project prj =
