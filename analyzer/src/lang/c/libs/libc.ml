@@ -19,6 +19,11 @@ let is_builtin_function = function
   | "__builtin_va_start"
   | "__builtin_va_end"
   | "__builtin_va_copy"
+  | "printf"
+  | "__printf_chk"
+  | "__fprintf_chk"
+  | "__vfprintf_chk"
+  | "__vprintf_chk"
     -> true
 
   | _ -> false
@@ -277,6 +282,27 @@ struct
       in
       Eval.singleton ret flow |>
       Eval.return
+
+    (* 𝔼⟦ printf(...) ⟧ *)
+    (* 𝔼⟦ __printf_chk(...) ⟧ *)
+    | E_c_builtin_call("__printf_chk", args) ->
+      warn_at exp.erange "__printf_chk: unsound implementation";
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Eval.return
+
+    (* 𝔼⟦ __fprintf_chk(...) ⟧ *)
+    | E_c_builtin_call("__fprintf_chk", args) ->
+      warn_at exp.erange "__fprintf_chk: unsound implementation";
+      Eval.singleton (mk_top s32 exp.erange) flow |>
+      Eval.return
+
+    (* 𝔼⟦ __vprintf_chk(...) ⟧ *)
+    | E_c_builtin_call("__vprintf_chk", args) ->
+      panic_at exp.erange "__vprintf_chk not supported"
+
+    (* 𝔼⟦ __vfprintf_chk(...) ⟧ *)
+    | E_c_builtin_call("__vfprintf_chk", args) ->
+      panic_at exp.erange "__vfprintf_chk not supported"
 
     (* 𝔼⟦ f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->

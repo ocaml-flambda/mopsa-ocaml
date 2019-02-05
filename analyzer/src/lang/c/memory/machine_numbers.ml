@@ -309,6 +309,17 @@ struct
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> OptionExt.return
 
+    | E_constant(C_top t) when is_c_int_type t ->
+      let l, u = rangeof t in
+      let exp' = mk_z_interval l u ~typ:(to_universal_type t) exp.erange in
+      Eval.singleton exp' flow |>
+      Eval.return
+
+    | E_constant(C_top t) when is_c_float_type t ->
+      let exp' = mk_top (to_universal_type t) exp.erange in
+      Eval.singleton exp' flow |>
+      Eval.return
+
     | E_var _ ->
       Eval.singleton (to_universal_expr exp) flow |>
       Eval.return

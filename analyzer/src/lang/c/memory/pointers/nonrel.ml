@@ -94,6 +94,7 @@ struct
     | FUN of c_fundec
     | NULL
     | INVALID
+    | TOP
 
   (** Advance the offset of a pointer evaluation *)
   let advance_offset (op:operator) (ptr:ptr) (o:expr) t range : ptr =
@@ -114,6 +115,8 @@ struct
       panic_at range
         "pointers.add_offset: pointer arithmetics on functions not supported"
 
+    | TOP -> TOP
+
 
   (* Get the base and eventual pointer offset from a pointer evaluation *)
   let get_pointer_info (p:ptr) man flow : (Bases.t * expr option * var option) =
@@ -133,6 +136,8 @@ struct
       Bases.invalid, None, None
 
     | FUN _ -> panic "eval_pointer_compare: function pointers not supported"
+
+    | TOP -> panic "eval_pointer_compare: TOP not supported"
 
 
   (* Set base of an optional pointer info *)
@@ -173,6 +178,9 @@ struct
 
     | E_constant(C_c_invalid) ->
       INVALID
+
+    | E_constant(C_top t) when is_c_pointer_type t ->
+      TOP
 
     | E_addr (addr) ->
       ADDROF(A addr, mk_zero exp.erange)
@@ -262,6 +270,9 @@ struct
 
       | INVALID ->
         Eval.singleton (mk_c_points_to_invalid exp.erange) flow
+
+      | TOP ->
+        Eval.singleton (mk_c_points_to_top exp.erange) flow
     )
 
   (** Evaluation of pointer comparisons *)
@@ -520,6 +531,11 @@ struct
         | NULL ->
           Flow.map_domain_env T_cur (add p Bases.null) man flow |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+
+        | TOP ->
+          Flow.map_domain_env T_cur (add p Bases.top) man flow |>
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
+
       in
       Post.return flow'
 

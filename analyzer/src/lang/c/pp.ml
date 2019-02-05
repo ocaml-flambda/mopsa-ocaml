@@ -135,9 +135,9 @@ let () =
       | E_c_compound_assign _ -> assert false
       | E_c_comma _ -> assert false
       | E_c_increment _ -> assert false
-      | E_c_address_of (e) -> fprintf fmt "&(%a)" pp_expr e
-      | E_c_deref(p) -> fprintf fmt "*(%a)" pp_expr p
-      | E_c_cast(e, _) -> fprintf fmt "((%a) %a)" pp_typ (etyp expr) pp_expr e
+      | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
+      | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
+      | E_c_cast(e, _) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
       | E_c_statement s -> fprintf fmt "@[<v 2>{@,%a@],}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_predefined _ -> assert false

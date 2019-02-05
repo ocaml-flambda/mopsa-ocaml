@@ -100,7 +100,6 @@ struct
     Logging.exec stmt zone man flow;
 
     let timer = Timing.start () in
-
     let fexec =
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
