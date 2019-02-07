@@ -176,8 +176,8 @@ let get_content a = a.content
 
 let get_range a = a.range
 
-let bind_range (a: 'a with_range) (f: 'a -> 'b) : 'b with_range =
-  { a with content = f a.content }
+let bind_range (a: 'a with_range) ?(range=a.range) (f: 'a -> 'b) : 'b with_range =
+  { content = f a.content; range }
 
 let bind_pair_range (a: 'a with_range) (f: 'a -> 'b * 'c) : 'b with_range * 'c =
   let b, c = f a.content in
