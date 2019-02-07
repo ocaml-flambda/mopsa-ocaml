@@ -36,7 +36,12 @@ module Domain =
     let rec eval zones exp man flow =
       let range = erange exp in
       match ekind exp with
+      (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
+      | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
+         None
+
       | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
+        debug "class call  %a@\n@\n" pp_expr exp;
         (* Call __new__ *)
         let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
         man.eval new_call flow |>
