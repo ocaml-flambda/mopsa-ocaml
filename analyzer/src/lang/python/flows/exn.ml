@@ -208,9 +208,14 @@ module Domain =
               | _ -> acc
             ) flow0 man flow
       in
+      let clean_except_var =
+        match excpt.py_excpt_name with
+        | None -> mk_block [] (tag_range range "clean_except_var")
+        | Some v -> mk_remove_var v (tag_range range "clean_except_var") in
       debug "except flow1 =@ @[%a@]" (Flow.print man) flow1;
       (* Execute exception handler *)
       man.exec excpt.py_excpt_body flow1
+      |> man.exec clean_except_var
 
 
     and escape_except man excpt range flow =

@@ -135,11 +135,12 @@ struct
       |> OptionExt.return
 
 
-    | S_remove { ekind = E_var (v, _) } ->
+    | S_remove ({ekind = E_var (v, _)} as var) ->
       let flow = Flow.map_domain_cur (remove v) man flow in
+      man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return
       (* let v' = mk_py_value_var v T_any in
        * man.exec (mk_remove_var v' range) flow |> Post.return *)
-      Post.return flow
+      (* Post.return flow *)
 
     | S_assume e ->
        man.eval e flow |>

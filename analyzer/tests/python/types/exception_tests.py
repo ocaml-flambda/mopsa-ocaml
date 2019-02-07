@@ -45,3 +45,13 @@ def test_default_except():
 def test_incorrect_raise():
     raise 2
     mopsa.assert_exception(TypeError)
+
+def test_delete_as():
+    x = 3.14
+    try:
+        raise TypeError('bla')
+    except TypeError as e:
+        e2 = e
+    mopsa.massert(isinstance(e2, TypeError))
+    z = e
+    mopsa.assert_exception(NameError)
