@@ -81,8 +81,6 @@ int remove (const char *__filename);
 int rename (const char *__old, const char *__new);
 
 
-#ifdef __USE_ATFILE
-
 /*$
  * requires: valid_string(__old);
  * requires: valid_string(__new);
@@ -99,8 +97,6 @@ int rename (const char *__old, const char *__new);
  * }
  */
 int renameat (int __oldfd, const char *__old, int __newfd, const char *__new);
-
-#endif
 
 /*$
  * case "success" {
@@ -142,7 +138,6 @@ static char _tmpnam_buf[L_tmpnam];
  */
 char *tmpnam (char *__s);
 
-#ifdef __USE_MISC
 
 /*$
  * warn: "avoid using function tmpnam_r";
@@ -161,17 +156,12 @@ char *tmpnam (char *__s);
  */
 char *tmpnam_r (char *__s);
 
-#endif
-
-
-#if defined __USE_MISC || defined __USE_XOPEN
 
 /*$
  * warn: "tempnam is obsolete, do not call";
  */
 char *tempnam (const char *__dir, const char *__pfx);
 
-#endif
 
 /*$
  * requires: __stream in File;
@@ -217,15 +207,12 @@ int fclose (FILE *__stream);
  */
 int fflush (FILE *__stream);
 
-#ifdef __USE_MISC
 
 /*$
  * local:   int r = fflush(__stream);
  * ensures: return == r;
  */
 int fflush_unlocked (FILE *__stream);
-
-#endif
 
 // TODO: not implemented fcloseall
 
@@ -272,8 +259,6 @@ FILE *freopen (const char *__restrict __filename,
                FILE *__restrict __stream);
 
 
-#ifdef __USE_POSIX
-
 /*$
  * requires: valid_string(__modes);
  * requires: __fd in FileDescriptor;
@@ -292,12 +277,10 @@ FILE *freopen (const char *__restrict __filename,
  */
 FILE *fdopen (int __fd, const char *__modes);
 
-#endif
 
 
 // TODO: omitted __USE_GNU fopencookie
 
-#ifdef __USE_XOPEN2K8
 
 /*$
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
@@ -332,7 +315,6 @@ FILE *fmemopen (void *__s, size_t __len, const char *__modes);
  */
 FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
 
-#endif
 
 /*$
  * // TODO: __buf becomes volatile
@@ -361,7 +343,6 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
              int __modes, size_t __n);
 
-#ifdef	__USE_MISC
 
 /*$
  * // TODO: __buf becomes volatile
@@ -377,7 +358,6 @@ void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
  */
 void setlinebuf (FILE *__stream);
 
-#endif
 
 /*$
  * // TODO: check format, check variable arguments
@@ -429,7 +409,6 @@ int vprintf (const char *__restrict __fmt, _G_va_list __ap);
 int vsprintf (char *__restrict __s, const char *__restrict __fmt,
               _G_va_list __ap);
 
-#if defined __USE_ISOC99 || defined __USE_UNIX98
 
 /*$
  * // TODO: check format, check variable arguments
@@ -438,7 +417,7 @@ int vsprintf (char *__restrict __s, const char *__restrict __fmt,
  * requires: valid_string(__format);
  */
 int snprintf (char *__restrict __s, size_t __maxlen,
-              const char *__restrict __format, ...);;
+              const char *__restrict __format, ...);
 
 /*$
  * // TODO: check format, check variable arguments
@@ -449,14 +428,11 @@ int snprintf (char *__restrict __s, size_t __maxlen,
 int vsnprintf (char *__restrict __s, size_t __n,
                const char *__restrict __fmt, _G_va_list __ap);
 
-#endif
-
-#ifdef __USE_GNU
 
 /*$
  * // TODO: check format, check variable arguments
  *
- * requires: valid_string(__f);
+ * requires: valid_string(__fmt);
  *
  * case "success" {
  *   local:    char* r = new Memory;
@@ -472,8 +448,8 @@ int vsnprintf (char *__restrict __s, size_t __n,
  *   ensures: return == -1;
  * }
  */
-int vasprintf (char **__restrict __ptr, const char *__restrict __f,
-               _G_va_list __arg);
+int vasprintf (char **__restrict __ptr, const char *__restrict __fmt,
+               _G_va_list __ap);
 
 /*$
  * // TODO: check format, check variable arguments
@@ -497,10 +473,6 @@ int vasprintf (char **__restrict __ptr, const char *__restrict __f,
 int asprintf (char **__restrict __ptr,
               const char *__restrict __fmt, ...);
 
-#endif
-
-#ifdef __USE_XOPEN2K8
-
 /*$
  * // TODO: check format, check variable arguments
  *
@@ -518,7 +490,6 @@ int vdprintf (int __fd, const char *__restrict __fmt,
  */
 int dprintf (int __fd, const char *__restrict __fmt, ...);
 
-#endif
 
 /*$
  * // TODO: check format, check variable arguments
@@ -548,8 +519,6 @@ int scanf (const char *__restrict __format, ...);
 int sscanf (const char *__restrict __s,
             const char *__restrict __format, ...);
 
-
-#ifdef	__USE_ISOC99
 
 /*$
  * // TODO: check format, check variable arguments
@@ -588,7 +557,6 @@ int vscanf (const char *__restrict __format, _G_va_list __arg);
 int vsscanf (const char *__restrict __s,
              const char *__restrict __format, _G_va_list __arg);
 
-#endif /* Use ISO C9x.  */
 
 
 /*$
@@ -617,7 +585,6 @@ int _IO_peekc_locked (_IO_FILE *__stream);
 int getchar (void);
 
 
-#ifdef __USE_POSIX199506
 
 /*$
  * // TODO: not thread-safe
@@ -632,11 +599,6 @@ int getc_unlocked (FILE *__fp);
  */
 int getchar_unlocked (void);
 
-#endif /* Use POSIX.  */
-
-
-
-#ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
@@ -645,7 +607,6 @@ int getchar_unlocked (void);
  */
 int fgetc_unlocked (FILE *__fp);
 
-#endif /* Use MISC.  */
 
 /*$
  * requires: __stream in File;
@@ -666,7 +627,6 @@ int _IO_putc (int __c, _IO_FILE *__stream);
 int putchar (int __c);
 
 
-#ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
@@ -675,10 +635,6 @@ int putchar (int __c);
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
-#endif /* Use MISC.  */
-
-
-#ifdef __USE_POSIX199506
 
 /*$
  * // TODO: not thread-safe
@@ -693,10 +649,6 @@ int putc_unlocked (int __c, FILE *__stream);
  */
 int putchar_unlocked (int __c);
 
-#endif /* Use POSIX.  */
-
-
-#if defined __USE_MISC || (defined __USE_XOPEN && !defined __USE_XOPEN2K)
 
 /*$
  * requires: __stream in File;
@@ -709,7 +661,6 @@ int getw (FILE *__stream);
  */
 int putw (int __w, FILE *__stream);
 
-#endif
 
 /*$
  * requires: __stream in File;
@@ -727,8 +678,6 @@ char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
 char *gets (char *__s);
 
 
-#ifdef __USE_GNU
-
 /*$
  * // TODO: not thread-safe
  * requires: __stream in File;
@@ -740,10 +689,6 @@ char *gets (char *__s);
 char *fgets_unlocked (char *__restrict __s, int __n,
                       FILE *__restrict __stream);
 
-#endif
-
-
-#ifdef __USE_XOPEN2K8
 
 /*$
  * requires: __stream in File;
@@ -788,7 +733,6 @@ ssize_t getline (char **__restrict __lineptr,
                  size_t *__restrict __n,
                  FILE *__restrict __stream);
 
-#endif
 
 /*$
  * requires: __stream in File;
@@ -842,7 +786,6 @@ size_t fread (void *__restrict __ptr, size_t __size,
 size_t fwrite (const void *__restrict __ptr, size_t __size,
                size_t __n, FILE *__restrict __s);
 
-#ifdef __USE_GNU
 
 /*$
  * // TODO: not thread-safe
@@ -861,9 +804,6 @@ size_t fwrite (const void *__restrict __ptr, size_t __size,
 int fputs_unlocked (const char *__restrict __s,
                     FILE *__restrict __stream);
 
-#endif
-
-#ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
@@ -883,8 +823,6 @@ size_t fread_unlocked (void *__restrict __ptr, size_t __size,
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
                         size_t __n, FILE *__restrict __stream);
-
-#endif
 
 /*$
  * requires: __stream in File;
@@ -920,8 +858,6 @@ long int ftell (FILE *__stream);
  */
 void rewind (FILE *__stream);
 
-#if defined __USE_LARGEFILE || defined __USE_XOPEN2K
-
 /*$
  * requires: __stream in File;
  * requires: __whence in [0, 2];
@@ -951,7 +887,6 @@ int fseeko (FILE *__stream, __off_t __off, int __whence);
  */
 __off_t ftello (FILE *__stream);
 
-#endif
 
 /*$
  * requires: __stream in File;
@@ -1010,7 +945,6 @@ int ferror (FILE *__stream);
  */
 int _IO_ferror (_IO_FILE *__stream);
 
-#ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
@@ -1030,14 +964,12 @@ int feof_unlocked (FILE *__stream);
  */
 int ferror_unlocked (FILE *__stream);
 
-#endif
 
 /*$
  * requires: valid_string(__s);
  */
 void perror (const char *__s);
 
-#ifdef	__USE_POSIX
 
 /*$
  * requires: __stream in File;
@@ -1045,9 +977,6 @@ void perror (const char *__s);
  */
 int fileno (FILE *__stream);
 
-#endif /* Use POSIX.  */
-
-#ifdef __USE_MISC
 
 /*$
  * // TODO: not thread-safe
@@ -1056,10 +985,6 @@ int fileno (FILE *__stream);
  */
 int fileno_unlocked (FILE *__stream);
 
-#endif
-
-
-#ifdef __USE_POSIX2
 
 /*$
  * requires: valid_string(__command);
@@ -1084,10 +1009,6 @@ FILE *popen (const char *__command, const char *__modes);
  */
 int pclose (FILE *__stream);
 
-#endif
-
-
-#ifdef	__USE_POSIX
 
 static char _ctermid_buf[L_ctermid];
 
@@ -1110,10 +1031,10 @@ static char _ctermid_buf[L_ctermid];
  */
 char *ctermid (char *__s);
 
-#endif /* Use POSIX.  */
-
-
-#if (defined __USE_XOPEN && !defined __USE_XOPEN2K) || defined __USE_GNU
+//L_cuserid is not always defined
+#ifndef L_cuserid
+#define L_cuserid 10
+#endif
 
 static char _cuserid_buf[L_cuserid];
 
@@ -1123,7 +1044,7 @@ static char _cuserid_buf[L_cuserid];
  * case "buf" {
  *   assumes: __s != NULL;
  *   assigns: __s[0, L_cuserid - 1];
- *   ensures: valid_primed_substrint(__s, L_cuserid);
+ *   ensures: valid_primed_substring(__s, L_cuserid);
  *   ensures: return == __s;
  * }
  *
@@ -1136,12 +1057,9 @@ static char _cuserid_buf[L_cuserid];
  */
 char *cuserid (char *__s);
 
-#endif /* Use X/Open, but not issue 6.  */
-
 
 // omitted: obstack with __USE_GNU
 
-#ifdef __USE_POSIX199506
 
 /*$
  * requires: __stream in File;
@@ -1175,8 +1093,6 @@ void _IO_funlockfile (_IO_FILE *__stream);
  * requires: __stream in File;
  */
 void funlockfile (FILE *__stream);
-
-#endif /* POSIX */
 
 
 // glibc internals
