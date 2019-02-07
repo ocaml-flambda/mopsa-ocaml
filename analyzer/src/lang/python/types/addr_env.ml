@@ -137,7 +137,7 @@ struct
 
     | S_remove ({ekind = E_var (v, _)} as var) ->
       let flow = Flow.map_domain_cur (remove v) man flow in
-      if String.sub v.org_vname 0 4 = "$tmp" then
+      if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
         Post.return flow
       else
         man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return
