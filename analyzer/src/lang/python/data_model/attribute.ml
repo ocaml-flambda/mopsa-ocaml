@@ -61,7 +61,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [Zone.Z_py]; import = []} (* TODO: add attribute assignment *)
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_addr]}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
 

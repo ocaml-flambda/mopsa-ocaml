@@ -161,7 +161,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = [Zone.Z_py_obj]; import = []}
-  let eval_interface = {export = [Zone.Z_py_addr, Zone.Z_py_obj]; import = [(*Universal.Zone.Z_u_heap, Z_any*)]}
+  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [(*Universal.Zone.Z_u_heap, Z_any*)]}
 
   let join annot d d' = {abs_heap = TMap.join annot d.abs_heap d'.abs_heap;
                          typevar_env = TypeVarMap.join annot d.typevar_env d'.typevar_env}
@@ -285,18 +285,40 @@ struct
     (* | E_py_type pt ->
      *   let cur = Flow.get_domain_cur man flow in
      *   Exceptions.panic_at range "E_py_type %a@\n" pp_polytype pt *)
-    | E_addr addr ->
+    | E_py_object (addr, _) when TMap.mem addr (Flow.get_domain_cur man flow).abs_heap ->
       let cur = Flow.get_domain_cur man flow in
       Polytypeset.fold (fun pty acc ->
           let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
           let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
           match pty with
-            | Class (c, b) ->
-              Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, None) range) flow :: acc
+          | Class (c, b) ->
+            debug "class is %a@\n" pp_addr addr;
+            Eval.singleton (mk_py_object ({addr with addr_kind = (A_py_class (c, b))}, None) range) flow :: acc
 
-            | _ -> Exceptions.panic_at range "%a@\n" pp_polytype pty)
+          | Instance _ ->
+            Eval.singleton (mk_py_object ({addr with addr_kind = A_py_instance}, None) range) flow :: acc
+
+          (* TODO: no need for modules and functions in types? *)
+          | Module m ->
+            Eval.singleton (mk_py_object ({addr with addr_kind = A_py_module m}, None) range) flow :: acc
+
+          | Function f ->
+            Eval.singleton (mk_py_object ({addr with addr_kind = A_py_function f}, None) range) flow :: acc
+
+          | _ -> Exceptions.panic_at range "E_py_object mem: %a@\n" pp_polytype pty)
         (TMap.find addr cur.abs_heap) []
       |> Eval.join_list |> OptionExt.return
+
+    | E_py_object (addr, _) ->
+      let cur = Flow.get_domain_cur man flow in
+      let ty = match akind addr with
+        | A_py_class (c, b) -> Class (c, b)
+        | A_py_function f -> Function f
+        | A_py_module m -> Module m
+        | _ -> Exceptions.panic_at range "E_py_object not mem: %a@\n" pp_addr addr in
+      let abs_heap = TMap.add addr (Polytypeset.singleton ty) cur.abs_heap in
+      let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+      Eval.singleton (mk_py_object (addr, None) range) flow |> OptionExt.return
 
     | E_constant (C_top T_bool) ->
       process_constant man flow range "bool" addr_bool_top
@@ -371,7 +393,7 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_ll_hasattr({ekind = E_py_object(addr, expr)} as e, attr) ->
+    | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | _ -> assert false in
@@ -414,7 +436,7 @@ struct
       end
       |> OptionExt.return
 
-    | E_py_ll_getattr({ekind = E_py_object (addr, expr)} as e, attr) ->
+    | E_py_ll_getattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | _ -> assert false in
@@ -534,6 +556,7 @@ struct
             Eval.bind (fun eaddr flow ->
                 let addr = match ekind eaddr with
                   | E_addr a -> a
+                  (* | E_py_object (a, _) -> a *)
                   | _ -> assert false in
                 let cur = Flow.get_domain_cur man flow in
                 let cls, mro = match akind @@ fst @@ object_of_expr cls with

@@ -30,7 +30,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_addr]}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
 
@@ -39,7 +39,7 @@ module Domain =
       match ekind exp with
       | E_binop(op, e1, e2) when is_arith_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
          debug "arith op@\n";
-         Eval.eval_list [e1; e2] man.eval flow |>
+         Eval.eval_list [e1; e2] (man.eval ~zone:zs) flow |>
            Eval.bind
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in

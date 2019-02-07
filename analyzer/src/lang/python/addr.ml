@@ -306,10 +306,12 @@ let mk_py_isinstance e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
 
 let mk_py_isinstance_builtin e builtin range =
-  mk_py_isinstance e (mk_py_object (find_builtin builtin) range) range
+  let obj = find_builtin builtin in
+  mk_py_isinstance e (mk_py_object obj range) range
 
 let mk_py_type e range =
-  mk_py_call (mk_py_object (find_builtin "type") range) [e] range
+  let obj = find_builtin "type" in
+  mk_py_call (mk_py_object obj range) [e] range
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =

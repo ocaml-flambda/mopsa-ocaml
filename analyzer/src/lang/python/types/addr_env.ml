@@ -94,7 +94,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = { export = [Zone.Z_py]; import = [Zone.Z_py_obj]; }
-  let eval_interface = { export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_obj]; }
+  let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]; }
 
   let print fmt m =
     Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
@@ -109,7 +109,7 @@ struct
     match skind stmt with
     (* S⟦ v = e ⟧ *)
     | S_assign({ekind = E_var (v, mode)}, e) ->
-      man.eval e flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
         Post.bind man
           (fun e flow ->
             match ekind e with
@@ -118,9 +118,6 @@ struct
 
               | E_py_undefined false ->
                 assign_addr man v PyAddr.Undef_local mode flow |> Post.of_flow
-
-              (* | E_addr a ->
-               *   assign_addr man v (PyAddr.Def a) mode flow |> Post.of_flow *)
 
               | E_py_object (addr, expr) ->
                 assign_addr man v (PyAddr.Def addr) mode flow |> Post.of_flow
@@ -186,6 +183,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_var (v, mode) ->
+      debug "eval %a@\n" pp_expr exp;
       let cur = Flow.get_domain_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
@@ -193,10 +191,10 @@ struct
             let flow = Flow.set_domain_cur (AMap.add v (ASet.singleton a) cur) man flow in
             match a with
             | Undef_global when is_builtin_name v.org_vname ->
-              (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+              man.eval (mk_py_object (find_builtin v.org_vname) range) flow :: acc
 
             | Undef_local when is_builtin_name v.org_vname ->
-              (man.eval (mk_py_object (find_builtin v.org_vname) range) flow) :: acc
+              man.eval (mk_py_object (find_builtin v.org_vname) range) flow :: acc
 
             | Undef_global ->
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
@@ -207,13 +205,16 @@ struct
               Eval.empty_singleton flow :: acc
 
             | Def addr ->
+              (* TODO: Values: eval to get something instead of None in the obj? *)
               man.eval (mk_py_object (addr, None) range) flow :: acc
 
           ) aset []
         |> Eval.join_list |> OptionExt.return
       else if is_builtin_name v.org_vname then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
-        man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return
+        (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return *)
+        let obj = find_builtin v.org_vname in
+        Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
       else
         Eval.empty_singleton flow |> OptionExt.return
 

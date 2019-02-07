@@ -27,7 +27,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_addr]; import = [Zone.Z_py, Zone.Z_py_addr]}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
 
@@ -62,13 +62,14 @@ module Domain =
 
                (* Calls on other kinds of addresses is handled by other domains *)
                | E_py_object _ ->
+               (* | E_addr _ -> *)
                   (* FIXME: be careful with evaluation zone *)
                   (* FIXME: assigner un tmp à chaque evaluation, et passer les tmps en argument. Ne pas oublier de nettoyer *)
                   Eval.eval_list args man.eval flow |>
                     Eval.bind (fun args' flow ->
                         let exp = {exp with ekind = E_py_call(f, args, [])} in
                         man.eval exp flow
-                      )
+                    )
 
                (* | E_get_type_partition _ ->
                 *    Eval.eval_list args man.eval flow |>
