@@ -163,6 +163,20 @@ struct
       let ncur = AMap.map (ASet.map (fun addr -> if addr = Def a then Def a' else addr)) cur in
       debug "ncur = %a@\n" print ncur;
       let flow = Flow.set_domain_cur ncur man flow in
+      let annot = Flow.get_all_annot flow in
+      let to_rename = Flow.fold (fun acc tk d ->
+          match tk with
+          | T_alarm {alarm_kind = Alarms.APyException {ekind = E_py_object _}} -> true
+          | _ -> acc) false man flow in
+      let flow =
+        if to_rename then
+          Flow.fold (fun acc tk d ->
+              match tk with
+              | T_alarm ({alarm_kind = Alarms.APyException ({ekind = E_py_object (oa, oe)} as e)} as al) when compare_addr a oa = 0 ->
+                Flow.add (T_alarm {al with alarm_kind = Alarms.APyException {e with ekind = E_py_object (a', oe)}}) d man acc
+              | _ -> Flow.add tk d man acc) (Flow.bottom annot) man flow
+        else
+          flow in
       begin match akind a with
         | Typing.A_py_instance -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
         | _ -> flow |> Post.return
