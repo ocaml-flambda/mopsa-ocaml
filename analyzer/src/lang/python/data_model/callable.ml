@@ -64,8 +64,11 @@ module Domain =
                | E_py_object _ ->
                (* | E_addr _ -> *)
                   (* FIXME: be careful with evaluation zone *)
-                  (* FIXME: assigner un tmp à chaque evaluation, et passer les tmps en argument. Ne pas oublier de nettoyer *)
-                  Eval.eval_list args man.eval flow |>
+                 (* FIXME: assigner un tmp à chaque evaluation, et passer les tmps en argument. Ne pas oublier de nettoyer *)
+
+                 Eval.eval_list args (fun e f -> match ekind e with
+                     | E_constant (C_string _) -> Eval.singleton e f
+                     | _ -> man.eval e f) flow |>
                     Eval.bind (fun args flow ->
                         let exp = {exp with ekind = E_py_call(f, args, [])} in
                         man.eval exp flow
