@@ -3,9 +3,9 @@
 
 void help() { }
 
-void version() {}
+void version() { }
 
-void error() {}
+void error() { }
 
 int main(int argc, char *argv[]) {
   int c;
@@ -24,6 +24,5 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
   }
-  _mopsa_print();
   exit(EXIT_SUCCESS);
 }

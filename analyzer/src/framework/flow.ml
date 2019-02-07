@@ -117,6 +117,9 @@ let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
   top_fprint (FlowMap.print man.print) fmt flow.map
 
 
+let singleton (annot:'a Annotation.annot) (tk:token) (env:'a) : 'a flow =
+  make annot (FlowMap.singleton tk env)
+
 let get (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a =
   try
     let m = top_to_exn flow.map in
@@ -131,6 +134,9 @@ let set (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
     ) flow.map
   in
   {flow with map}
+
+let copy (tk1:token) (tk2:token) (man:('a,'t) man) (flow1:'a flow) (flow2:'a flow) : 'a flow =
+  set tk2 (get tk1 man flow1) man flow2
 
 let add (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let annot = flow.annot in

@@ -27,6 +27,8 @@ type 'a flow = 'a Manager.flow
 
 val make: 'a annot -> 'a Manager.FlowMap.t -> 'a flow
 
+val singleton: 'a annot -> token -> 'a -> 'a flow
+
 val bottom : 'a annot -> 'a flow
 (** Empty set of flows *)
 
@@ -65,6 +67,8 @@ val get : token -> ('a, _) man -> 'a flow -> 'a
 val set : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
 (** [set tk a man flow] overwrites the binding of token [tk] in [flow]
    with the abstract element [a]. *)
+
+val copy: token -> token -> ('a,'t) man -> 'a flow -> 'a flow -> 'a flow
 
 val add : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
 (** [add tk a man flow] appends (by union) [a] to the existing binding
