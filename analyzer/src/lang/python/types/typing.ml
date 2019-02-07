@@ -197,7 +197,7 @@ struct
      typevar_env = TypeVarMap.widen annot d.typevar_env d'.typevar_env}
 
   let top = {abs_heap = TMap.top; typevar_env = TypeVarMap.top}
-  let bottom = (* FIXME *) {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
+  let bottom = {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
   let is_bottom {abs_heap; typevar_env} = TMap.is_bottom abs_heap && TypeVarMap.is_bottom typevar_env
 
 

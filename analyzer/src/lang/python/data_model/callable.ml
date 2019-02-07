@@ -44,60 +44,46 @@ module Domain =
        *   panic_at range "call %a can not be resolved" pp_expr exp *)
 
       | E_py_call(f, args, []) ->
-         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
-         man.eval f flow |>
-           Eval.bind
-             (fun f flow ->
-               debug "f is now %a" pp_expr f;
-               match ekind f with
-               (* Calls on non-object variables and constants is not allowed *)
-               | E_var _ | E_constant _ ->
-                  let stmt = Utils.mk_builtin_raise "TypeError" range in
-                  let flow = man.exec stmt flow in
-                  Eval.empty_singleton flow
+        debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
+        man.eval f flow |>
+        Eval.bind
+          (fun f flow ->
+             debug "f is now %a" pp_expr f;
+             match ekind f with
+             (* Calls on non-object variables and constants is not allowed *)
+             | E_var _ | E_constant _ ->
+               let stmt = Utils.mk_builtin_raise "TypeError" range in
+               let flow = man.exec stmt flow in
+               Eval.empty_singleton flow
 
-               (* (\* Calls on instances is OK if __call__ is defined *\)
-                * | E_py_object ({addr_kind = A_py_instance(cls, None)}, _) ->
-                *    assert false *)
+             (* Calls on other kinds of addresses is handled by other domains *)
+             | E_py_object _ ->
 
-               (* Calls on other kinds of addresses is handled by other domains *)
-               | E_py_object _ ->
-               (* | E_addr _ -> *)
-                  (* FIXME: be careful with evaluation zone *)
-                 (* FIXME: assigner un tmp à chaque evaluation, et passer les tmps en argument. Ne pas oublier de nettoyer *)
+               (* for now, we'd like string constants not to be evaluated, to be able to handle call like hasattr with precision, even on the type domain *)
+               Eval.eval_list args (fun e f -> match ekind e with
+                   | E_constant (C_string _) -> Eval.singleton e f
+                   | _ -> man.eval e f) flow |>
 
-                 Eval.eval_list args (fun e f -> match ekind e with
-                     | E_constant (C_string _) -> Eval.singleton e f
-                     | _ -> man.eval e f) flow |>
-                    Eval.bind (fun args flow ->
-                        let exp = {exp with ekind = E_py_call(f, args, [])} in
-                        man.eval exp flow
-                    )
+               Eval.bind (fun args flow ->
+                   let exp = {exp with ekind = E_py_call(f, args, [])} in
+                   man.eval exp flow
+                 )
 
-               (* | E_get_type_partition _ ->
-                *    Eval.eval_list args man.eval flow |>
-                *      (\* FIXME FIXME FIXME/danger: args'/arg *\)
-                *      Eval.bind (fun args' flow ->
-                *          let exp = {exp with ekind = E_py_call(f, args, [])} in
-                *          man.eval exp flow
-                *        (\*                        Eval.singleton exp flow *\)
-                *        ) *)
-
-               | _ ->
-                  (* if f has attribute call, restart with that *)
-                  Eval.assume
-                    (mk_py_hasattr f "__call__" range)
-                    ~fthen:(fun flow ->
-                      man.eval (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
-                    ~felse:(fun flow ->
-                      debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
-                    )
-                    man flow
-             )
-         |> OptionExt.return
+             | _ ->
+               (* if f has attribute call, restart with that *)
+               Eval.assume
+                 (mk_py_hasattr f "__call__" range)
+                 ~fthen:(fun flow ->
+                     man.eval (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
+                 ~felse:(fun flow ->
+                     debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
+                   )
+                 man flow
+          )
+        |> OptionExt.return
 
       | E_py_call(f, args, _) ->
-         panic_at range "calls with keyword arguments not supported"
+        panic_at range "calls with keyword arguments not supported"
 
       | _ -> None
 
