@@ -107,7 +107,8 @@ module Domain =
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man true_flow in
                    let cs = Callstack.get true_flow in
-                   let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
+                   let str = man.ask (Types.Typing.Domain.Q_exn_string exp) flow in
+                   let a = mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
                    let flow' = Flow.add (T_alarm a) cur man true_flow |>
                                Flow.set T_cur man.bottom man
                    in
@@ -162,7 +163,7 @@ module Domain =
           (* Add exception that match expression e *)
           Flow.fold (fun acc tk env ->
               match tk with
-              | T_alarm {alarm_kind = APyException exn} ->
+              | T_alarm {alarm_kind = APyException (exn, _)} ->
                 (* Evaluate e in env to check if it corresponds to eaddr *)
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man flow0 in
@@ -227,7 +228,7 @@ module Domain =
       | Some e ->
         Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm {alarm_kind = APyException exn} ->
+            | T_alarm {alarm_kind = APyException (exn, s)} ->
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man flow0 in
               let flow' =
@@ -247,7 +248,7 @@ module Domain =
                               ~fthen:(fun true_flow -> Post.of_flow true_flow)
                               ~felse:(fun false_flow ->
                                   let cs = Callstack.get false_flow in
-                                  let a = mk_alarm (APyException exn) range ~cs ~level:ERROR in
+                                  let a = mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
                                   Flow.add (T_alarm a) env man false_flow |> Post.of_flow)
                               true_flow)
                         ~felse:(fun false_flow -> Post.of_flow false_flow)

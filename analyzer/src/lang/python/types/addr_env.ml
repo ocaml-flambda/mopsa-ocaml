@@ -170,14 +170,14 @@ struct
       let annot = Flow.get_all_annot flow in
       let to_rename = Flow.fold (fun acc tk d ->
           match tk with
-          | T_alarm {alarm_kind = Alarms.APyException {ekind = E_py_object _}} -> true
+          | T_alarm {alarm_kind = Alarms.APyException ({ekind = E_py_object _}, _)} -> true
           | _ -> acc) false man flow in
       let flow =
         if to_rename then
           Flow.fold (fun acc tk d ->
               match tk with
-              | T_alarm ({alarm_kind = Alarms.APyException ({ekind = E_py_object (oa, oe)} as e)} as al) when compare_addr a oa = 0 ->
-                Flow.add (T_alarm {al with alarm_kind = Alarms.APyException {e with ekind = E_py_object (a', oe)}}) d man acc
+              | T_alarm ({alarm_kind = Alarms.APyException ({ekind = E_py_object (oa, oe)} as e, s)} as al) when compare_addr a oa = 0 ->
+                Flow.add (T_alarm {al with alarm_kind = Alarms.APyException ({e with ekind = E_py_object (a', oe)}, s)}) d man acc
               | _ -> Flow.add tk d man acc) (Flow.bottom annot) man flow
         else
           flow in

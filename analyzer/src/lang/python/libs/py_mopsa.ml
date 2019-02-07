@@ -188,7 +188,7 @@ module Domain =
          let annot = Flow.get_all_annot flow in
          let this_error_env, good_exns = Flow.fold (fun (acc_env, acc_good_exn) tk env ->
              match tk with
-             | T_alarm {alarm_kind = APyException exn} ->
+             | T_alarm {alarm_kind = APyException (exn, _)} ->
                let flow1 = Flow.bottom annot in
                let flow1 = Flow.set T_cur env man flow1 in
                let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
@@ -210,7 +210,7 @@ module Domain =
          let cur = Flow.get T_cur man flow in
          let flow = Flow.set T_cur man.top man flow in
          let flow = man.exec stmt flow |>
-                      Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException exn} when List.mem exn good_exns -> debug "Foundit@\n"; false | _ -> true) man |>
+                      Flow.filter (fun tk _ -> match tk with T_alarm {alarm_kind = APyException (exn, _)} when List.mem exn good_exns -> debug "Foundit@\n"; false | _ -> true) man |>
                       Flow.set T_cur cur man
          in
          (* FIXME:  mk_py_int ?*)
@@ -222,7 +222,7 @@ module Domain =
          let annot = Flow.get_all_annot flow in
          let none = mk_py_none range in
          let flow = Flow.fold (fun acc tk env -> match tk with
-                                                 | T_alarm {alarm_kind = APyException exn} ->
+                                                 | T_alarm {alarm_kind = APyException (exn, _)} ->
                                                     let flow1 =  Flow.bottom annot |> Flow.set T_cur env man in
                                                     let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 in
                                                     if Flow.is_cur_bottom man flow2 then
