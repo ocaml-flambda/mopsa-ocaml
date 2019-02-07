@@ -36,41 +36,30 @@ module Domain =
     let rec eval zones exp man flow =
       let range = erange exp in
       match ekind exp with
-      (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
-      | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
-         (* handled in myytypes *)
-         (* FIXME: what about the value analysis? *)
-         None
       | E_py_call({ekind = E_py_object cls} as ecls, args, []) when isclass cls ->
-         (* Call __new__ *)
-         let tmp_inst = mktmp () in
-         let inst_var = mk_var tmp_inst range in
-         debug "tmp inst var = %a@\n" pp_expr inst_var;
-         let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
-         man.exec (mk_assign inst_var new_call range) flow |>
-           (* man.eval inst_var |>
-            * Eval.bind
-            *   (fun eobj flow -> *)
+        (* Call __new__ *)
+        let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
+        man.eval new_call flow |>
+        Eval.bind (fun inst flow ->
            Eval.assume
-                 (mk_py_isinstance inst_var ecls range)
+                 (mk_py_isinstance inst ecls range)
                  ~fthen:(fun flow ->
                    debug "init!@\n";
-                   man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (inst_var :: args) range) flow |>
+                   man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: args) range) flow |>
                      Eval.bind (fun r flow ->
                          Eval.assume
                            (mk_py_isinstance_builtin r "NoneType" range)
-                           ~fthen:(fun flow -> man.eval inst_var flow)
+                           ~fthen:(fun flow -> man.eval inst flow)
                            ~felse:(fun flow ->
                              let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                              Eval.empty_singleton flow
                            )
                            man flow
                  ))
-                 ~felse:(fun flow -> Eval.singleton inst_var flow)
-                 man |>
-             (* ) |> *)
-           Eval.add_cleaners [mk_remove_var tmp_inst range]
-         |> OptionExt.return
+                 ~felse:(fun flow -> Eval.singleton inst flow)
+                 man flow
+          )
+        |> OptionExt.return
 
       | _ -> None
 

@@ -78,11 +78,12 @@ module Domain =
         in
 
         (* Execute finally body *)
-        let flow =
+        let flow_caught_finally =
           Flow.join man orelse_flow flow_caught |>
-          man.exec finally |> (* FIXME : execute finally also on still uncaught envs *)
-          Flow.join man flow_uncaught
-        in
+          man.exec finally in
+        let flow_uncaught_finally =
+          man.exec finally flow_uncaught in
+        let flow = Flow.join man flow_caught_finally flow_uncaught_finally in
 
         (* Restore old exceptions *)
         Flow.fold (fun acc tk env ->
@@ -103,13 +104,9 @@ module Domain =
                man
                ~fthen:(fun true_flow ->
                    debug "True flow, exp is %a@\n" pp_expr exp;
-                   (*if Addr.isinstance obj (Addr.find_builtin "BaseException") then*)
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man true_flow in
                    let cs = Callstack.get true_flow in
-                   (* BIG FIXME: I don't think it's safe to keep the exp here. When performing the type analysis, the exp will be an object whose address may not be valid anymore at the end *)
-                   (* let exn = man.ask (Types.Typing.Domain.Q_types exp) true_flow in
-                    * let a = mk_alarm (APyException {exp with ekind = Types.Typing.E_py_type exn}) range ~cs ~level:ERROR in *)
                    let a = mk_alarm (APyException exp) range ~cs ~level:ERROR in
                    let flow' = Flow.add (T_alarm a) cur man true_flow |>
                                Flow.set T_cur man.bottom man
