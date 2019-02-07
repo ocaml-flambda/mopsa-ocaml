@@ -174,20 +174,17 @@ let eval exp z =
     | Process -> Process
     | Visit ->
       (* Check whether all sub-expressions are part of the zone *)
-      let evals, is_stmt_free =
+      let evals =
         Visitor.fold_expr
-          (fun (eacc, sacc) exp ->
-             VisitParts ((template exp) :: eacc, sacc)
+          (fun acc exp ->
+             VisitParts ((template exp) :: acc)
           )
-          (fun (eacc, sacc) stmt ->
-             VisitParts (eacc, false)
+          (fun acc stmt ->
+             VisitParts (Process :: acc)
           )
-          ([], true) exp
+          [] exp
       in
-      (* Expressions with statements are always processed by domains *)
-      if not is_stmt_free
-      then Process
-      else if List.for_all (function Keep -> true | _ -> false) evals
+      if List.for_all (function Keep -> true | _ -> false) evals
       then Keep
       else Visit
   in
