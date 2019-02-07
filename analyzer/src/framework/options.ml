@@ -117,16 +117,26 @@ let opt_to_output opt =
 let to_arg () =
   List.map opt_to_arg !options
 
+
 (** {2 Built-in options} *)
 (** ******************** *)
 
+(** Path to share directory *)
+let () =
+  register_builtin_option {
+    key = "-share-dir";
+    doc = " path to the share directory";
+    spec = Arg.Set_string Setup.opt_share_dir;
+    default = "";
+  }
+  
+
 (** Analysis configuration *)
-let opt_config = ref ""
 let () =
   register_builtin_option {
     key = "-config";
     doc = " path to the configuration file to use for the analysis";
-    spec = Arg.Set_string opt_config;
+    spec = Arg.Set_string Config.opt_config;
     default = "";
   }
 
@@ -151,10 +161,7 @@ let () =
     key = "-list";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = Arg.Unit (fun () ->
-        let domains =
-          if !opt_config = "" then Domain.names ()
-          else Config.domains !opt_config
-        in
+        let domains = Config.domains () in
         Output.Factory.list_domains domains
       );
     default = "";
@@ -208,11 +215,11 @@ let () =
 (** Help message *)
 let help () =
   let options =
-    if !opt_config = "" then !options
+    if !Config.opt_config = "" then !options
     else
       (* Get the language and domains of selected configuration *)
-      let lang = Config.language !opt_config in
-      let domains = Config.domains !opt_config in
+      let lang = Config.language () in
+      let domains = Config.domains () in
       (* Get the options *)
       (get_language_options lang)
       @

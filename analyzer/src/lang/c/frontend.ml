@@ -15,9 +15,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 
-let debug fmt =
-  Debug.debug ~channel:"c.frontend" fmt
-
+let debug fmt = Debug.debug ~channel:"c.frontend" fmt
 
 
 (** {2 Command-line options} *)
@@ -89,8 +87,8 @@ let find_function_in_context ctx (f: C_AST.func) =
   with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
 
 
-(** {2 Entry} *)
-(** ========= *)
+(** {2 Entry point} *)
+(** =============== *)
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
@@ -101,10 +99,11 @@ let rec parse_program (files: string list) =
     (fun file ->
        match file, Filename.extension file with
        | _, ".c"
-       | _, ".h" -> parse_file !c_opts file ctx
+       | _, ".h" -> parse_file [] file ctx
        | _, ".db" | ".db", _ -> parse_db file ctx
-       | _, x -> Exceptions.panic "Unknown C extension %s" x
+       | _, x -> Exceptions.panic "unknown C extension %s" x
     ) files;
+  let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
   {
     prog_kind = from_project prj;
@@ -148,10 +147,21 @@ and parse_db (dbfile: string) ctx : unit =
        | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
     ) srcs
 
-
 and parse_file (opts: string list) (file: string) ctx =
   Logging.parse file;
-  C_parser.parse_file file opts ctx
+  let opts' = ("-I" ^ (Setup.resolve_stub "c" "mopsa")) ::
+              !c_opts @
+              opts
+  in
+  C_parser.parse_file file opts' ctx
+
+and parse_stubs ctx () =
+  let stubs = [
+    Setup.resolve_stub "c" "mopsa/mopsa.c";
+    Setup.resolve_stub "c" "libc/libc.c";
+  ]
+  in
+  List.iter (fun stub -> parse_file [] stub ctx) stubs
 
 and from_project prj =
   let funcs_and_origins =

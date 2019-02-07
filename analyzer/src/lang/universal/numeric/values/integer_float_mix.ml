@@ -51,6 +51,10 @@ struct
 
   let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
 
+  let () =
+    import_standalone_option Rounding.name
+      ~into:"universal.numeric.values.integer_float_mix"
+
 
   (** Lattice operations *)
                 

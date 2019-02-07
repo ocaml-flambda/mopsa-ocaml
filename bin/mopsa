@@ -1,1 +1,6 @@
-../analyzer/_build/mopsa.native
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+SHAREDIR=${MOPSADIR}/share
+
+${MOPSADIR}/bin/mopsa.bin -share-dir=${SHAREDIR} $@

@@ -5,7 +5,7 @@ mopsa = framework mopsa lang main
 
 framework = ast visitor query annotation lattice zone manager	\
 flow eval post channel value domain callstack alarm output logging \
-cache analyzer lattices domains config options
+cache analyzer lattices domains setup config options
 framework.output = text json factory
 framework.domains = stateless iter nonrel leaf functor stacked	\
 reduced_product empty

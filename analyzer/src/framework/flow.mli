@@ -69,6 +69,8 @@ val set : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
    with the abstract element [a]. *)
 
 val copy: token -> token -> ('a,'t) man -> 'a flow -> 'a flow -> 'a flow
+(** [copy tk1 tk2 man flow1 flow2] copies the environment at token
+    [tk1] in [flow1] into token [tk2] in [flow2] *)
 
 val add : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
 (** [add tk a man flow] appends (by union) [a] to the existing binding
@@ -149,12 +151,12 @@ val set_annot : ('a, 'b) Annotation.key -> 'b -> 'a flow -> 'a flow
    to be [value] in the annotations attached to flow [flow],
    overrights if already present *)
 
-val rm_annot  : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
+val rm_annot : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
 (** [rm annot key flow] removes the key binding with key [key] in the
    annotations attached to flow [flow], does not fail if [key] was not
    present *)
 
-val mem_annot  : ('a, 'b) Annotation.key -> 'a flow -> bool
+val mem_annot : ('a, 'b) Annotation.key -> 'a flow -> bool
 (** [mem_annot key flow] checks whether an annotation is currently
    bound to [key] in [flow] *)
 

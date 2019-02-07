@@ -32,12 +32,14 @@
 
 *)
 
+val opt_config : string ref
+(** Path to the configuration file *)
 
-val parse : string -> string * (module Domain.DOMAIN)
-(** [parse path] constructs an abstract domain from a configuration file *)
+val parse : unit -> string * (module Domain.DOMAIN)
+(** [parse ()] constructs an abstract domain from the current configuration file *)
 
-val language : string -> string
-(** [language path] returns the language of a configuration file *)
+val language : unit -> string
+(** [language ()] returns the language of the current configuration file *)
 
-val domains : string -> string list
-(** [domains path] returns the list of domains used in a configuration file *)
+val domains : unit -> string list
+(** [domains ()] returns the list of domains used in the current configuration file *)
