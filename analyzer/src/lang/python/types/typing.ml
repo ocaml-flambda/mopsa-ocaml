@@ -588,28 +588,7 @@ struct
       debug "Warning: no eval for %a" pp_expr exp;
       None
 
-
-  let is_type_query : type r. r Framework.Query.query -> bool =
-    function
-    | Q_types _ -> true
-    | _ -> false
-
-  let ask : type r. r Framework.Query.query -> ('a, t) man -> 'a flow -> r option =
-    fun query man flow ->
-    match query with
-    | Q_types t ->
-      let cur = Flow.get_domain_cur man flow in
-      let addr = match ekind t with
-        | E_py_object (a, _) -> a
-        | _ -> assert false in
-      let ptys = TMap.find addr cur.abs_heap in
-      if Polytypeset.cardinal ptys = 1 then
-        let r = Polytypeset.choose ptys in
-        let () = debug "answer to query is %a@\n" pp_polytype r in
-        Some r
-      else
-        assert false
-    | _ -> None
+  let ask _ _ _ = None
 
 end
 
