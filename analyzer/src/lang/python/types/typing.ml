@@ -170,20 +170,6 @@ struct
     (* FIXME *)
     compare_polytype pty pty' = 0
 
-  let subset d d' =
-    TMap.fold (fun absaddr ptys acc ->
-        let ptys' = TMap.find absaddr d'.abs_heap in
-        (* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *)
-        acc && Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env)) ptys') ptys
-      )
-      d.abs_heap true
-
-  let meet _ _ =  Exceptions.panic "todo meet "
-  let widen _ _  = Exceptions.panic "todo widen"
-  let top = {abs_heap = TMap.top; typevar_env = TypeVarMap.top}
-  let bottom = (* FIXME *) {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
-  let is_bottom {abs_heap; typevar_env} = TMap.is_bottom abs_heap && TypeVarMap.is_bottom typevar_env
-
   let pp_absheap = TMap.print
 
   let pp_typevar_env = TypeVarMap.print
@@ -192,6 +178,27 @@ struct
     Format.fprintf fmt "abs_heap = %a@\ntypevar_env = %a@\n"
       pp_absheap abs_heap
       pp_typevar_env typevar_env
+
+  let subset d d' =
+    let res = TMap.fold (fun absaddr ptys acc ->
+        let ptys' = TMap.find absaddr d'.abs_heap in
+        (* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *)
+        acc && Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env)) ptys') ptys
+      )
+        d.abs_heap true
+    in
+    debug "subset %a %a = %b@\n" print d print d' res;
+    res
+
+  let meet _ _ =  Exceptions.panic "todo meet "
+  let widen annot d d' =
+    {abs_heap = TMap.widen annot d.abs_heap d'.abs_heap;
+     typevar_env = TypeVarMap.widen annot d.typevar_env d'.typevar_env}
+
+  let top = {abs_heap = TMap.top; typevar_env = TypeVarMap.top}
+  let bottom = (* FIXME *) {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
+  let is_bottom {abs_heap; typevar_env} = TMap.is_bottom abs_heap && TypeVarMap.is_bottom typevar_env
+
 
 
   let init progr man flow =
