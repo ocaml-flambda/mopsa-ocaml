@@ -81,6 +81,12 @@ struct
   let mk_offset_var_expr (p:var) range : expr =
     mk_var (mk_offset_var p) ~mode:STRONG range
 
+  let pointed_size t =
+    let tt = under_type t |> remove_typedef_qual in
+    match tt with
+    | T_c_void -> Z.one
+    | _ -> sizeof_type tt
+
   (** Pointer evaluations *)
   type ptr =
     | ADDROF of Common.Base.base * expr
@@ -88,10 +94,11 @@ struct
     | FUN of c_fundec
     | NULL
     | INVALID
+    | TOP
 
   (** Advance the offset of a pointer evaluation *)
   let advance_offset (op:operator) (ptr:ptr) (o:expr) t range : ptr =
-    let size = sizeof_type t in
+    let size = pointed_size t in
     let advance oo =
       mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
     in
@@ -108,25 +115,29 @@ struct
       panic_at range
         "pointers.add_offset: pointer arithmetics on functions not supported"
 
+    | TOP -> TOP
+
 
   (* Get the base and eventual pointer offset from a pointer evaluation *)
   let get_pointer_info (p:ptr) man flow : (Bases.t * expr option * var option) =
     match p with
-    | ADDROF (b, o) -> debug "addof"; Bases.block b, Some o, None
+    | ADDROF (b, o) -> Bases.block b, Some o, None
 
-    | EQ(q, o) -> debug "eq";
+    | EQ(q, o) ->
       let b = Flow.get_domain_env T_cur man flow |>
               find q
       in
       b, (if Bases.mem_block b then Some o else None), Some q
 
-    | NULL -> debug "null";
+    | NULL ->
       Bases.null, None, None
 
-    | INVALID -> debug "invalid";
+    | INVALID ->
       Bases.invalid, None, None
 
     | FUN _ -> panic "eval_pointer_compare: function pointers not supported"
+
+    | TOP -> panic "eval_pointer_compare: TOP not supported"
 
 
   (* Set base of an optional pointer info *)
@@ -168,6 +179,9 @@ struct
     | E_constant(C_c_invalid) ->
       INVALID
 
+    | E_constant(C_top t) when is_c_pointer_type t ->
+      TOP
+
     | E_addr (addr) ->
       ADDROF(A addr, mk_zero exp.erange)
 
@@ -205,7 +219,7 @@ struct
         else e2, e1
       in
       let ptr  = eval_pointer p in
-      advance_offset op ptr i (under_type p.etyp) exp.erange
+      advance_offset op ptr i p.etyp exp.erange
 
     | E_var (v, STRONG) when is_c_pointer_type v.vtyp ->
       EQ (v, mk_zero exp.erange)
@@ -256,11 +270,14 @@ struct
 
       | INVALID ->
         Eval.singleton (mk_c_points_to_invalid exp.erange) flow
+
+      | TOP ->
+        Eval.singleton (mk_c_points_to_top exp.erange) flow
     )
 
   (** Evaluation of pointer comparisons *)
   let rec eval_pointer_compare exp man flow =
-    match ekind exp with
+    match ekind exp with    
     (* 𝔼⟦ p == q ⟧ *)
     (* 𝔼⟦ !(p != q) ⟧ *)
     | E_binop(O_eq, e1, e2)
@@ -358,6 +375,10 @@ struct
 
       eval_pointer_compare exp' man flow
 
+    (* 𝔼⟦ (t)p ⟧ *)
+    | E_c_cast(p, _) when is_c_pointer_type p.etyp ->
+      eval_pointer_compare p man flow
+
     (* 𝔼⟦ ptr_valid(p) ⟧ *)
     | Stubs.Ast.E_stub_builtin_call( PTR_VALID, p) ->
       (* A valid pointer is not NULL nor INVALID and its offset is
@@ -411,7 +432,7 @@ struct
       let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
 
       (* Size of a pointed element *)
-      let elem_size = under_type p1.etyp |> sizeof_type in
+      let elem_size = pointed_size p1.etyp in
 
       (* Case 1 : same base => return difference of offset *)
       let case1 =
@@ -426,7 +447,7 @@ struct
           let o1 = offset_expr v1 o1 exp.erange in
           let o2 = offset_expr v2 o2 exp.erange in
           let e = div (sub o1 o2 exp.erange) (mk_z elem_size exp.erange) exp.erange in
-          [Eval.singleton e flow']
+          [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) e flow']
         else
           []
       in
@@ -447,6 +468,20 @@ struct
 
       Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) |>
       Eval.return
+
+    (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
+    | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp &&
+           is_c_int_type t1 &&
+           compare_typ t1 t2 = 0
+      ->
+      debug "pointer byte diff";
+      let diff = mk_c_cast (sub p q ~typ:s32 exp.erange) t1 exp.erange in
+      let exp' = mul (mk_z (pointed_size p.etyp) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange in
+      man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
+      Eval.return
+
 
     | _ -> None
 
@@ -501,6 +536,11 @@ struct
         | NULL ->
           Flow.map_domain_env T_cur (add p Bases.null) man flow |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range)
+
+        | TOP ->
+          Flow.map_domain_env T_cur (add p Bases.top) man flow |>
+          man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range)
+
       in
       Post.return flow'
 

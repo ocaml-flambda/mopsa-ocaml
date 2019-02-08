@@ -26,19 +26,19 @@ extern void *_mopsa_int_to_fd(int fd);
 
 /*$$
  * predicate valid_string(s):
- *   exists int i in [0, size(s) - 1]: s[i] == 0
+ *   exists int _i in [0, size(s) - 1]: s[_i] == 0
  * ;
  *
  * predicate valid_primed_string(s):
- *   exists int i in [0, size(s) - 1]: (s[i])' == 0
+ *   exists int _i in [0, size(s) - 1]: (s[_i])' == 0
  * ;
  *
  * predicate valid_substring(s, n):
- *   exists int i in [0, n - 1]: s[i] == 0
+ *   exists int _i in [0, n - 1]: s[_i] == 0
  * ;
  *
  * predicate valid_primed_substring(s, n):
- *   exists int i in [0, n - 1]: (s[i])' == 0
+ *   exists int _i in [0, n - 1]: (s[_i])' == 0
  * ;
  */
 

@@ -71,7 +71,11 @@ val find : ('a, 'b) key -> 'a annot -> 'b
 
 val remove : ('a, 'b) key -> 'a annot -> 'a annot
 (** [remove k m] removes binding with key [k] in [m]. Does nothing if
-   there was no such binding. *)
+    there was no such binding. *)
+
+val mem : ('a, 'b) key -> 'a annot -> bool
+(** [mem k m] returns [true] if key [k] is bound to an annotation in
+   [m], or [false] otherwise. *)
 
 val cardinal : 'a annot -> int
 (** Number of values in a map *)

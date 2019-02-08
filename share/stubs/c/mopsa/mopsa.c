@@ -23,7 +23,7 @@ static char **_argv;
  */
 char* _mopsa_new_valid_string();
 
-void _mopsa_main() {
+void _mopsa_init_symbolic_argc_argv() {
   // Add program name
   _argv[0] = _mopsa_new_valid_string();
 
@@ -44,3 +44,7 @@ void _mopsa_main() {
   _argv[_argc] = NULL;
   #endif
 }
+
+
+// Temporary fix for missing error function in coreutuils
+void error (int __status, int __errnum, const char *__format, ...) { }

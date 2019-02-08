@@ -450,23 +450,27 @@ let stmt_pp_chain : (Format.formatter -> stmt -> unit) ref =
       | S_forget(e) -> fprintf fmt "forget(%a)" pp_expr e
 
       | S_project(el) ->
-        fprintf fmt "project(@[<h>%a@])"
+        fprintf fmt "project(%a)"
           (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
 
       | S_rename(e, e') -> fprintf fmt "rename(%a, %a)" pp_expr e pp_expr e'
+
+      | S_assign(x, e) -> fprintf fmt "%a = %a;" pp_expr x pp_expr e
+
+      | S_assume(e) -> fprintf fmt "assume(%a)" pp_expr e
 
       | S_expand(e, el) ->
         fprintf fmt "expand(%a,{%a})"
           pp_expr e
           (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             ~pp_sep:(fun fmt () -> fprintf fmt ", ")
              pp_expr) el
 
       | S_fold(e, el) ->
         fprintf fmt "fold(%a,{%a})"
           pp_expr e
           (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt ",")
+             ~pp_sep:(fun fmt () -> fprintf fmt ", ")
              pp_expr) el
 
       | _ -> failwith "Pp: Unknown statement"

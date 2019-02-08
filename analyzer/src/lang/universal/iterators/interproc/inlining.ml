@@ -128,9 +128,6 @@ struct
                   man.exec f.fun_body
       in
 
-      (* Restore call stack *)
-      let _, flow2 = Callstack.pop flow2 in
-
       (* Store the return expression in fun_return_var *)
       let ret = f.fun_return_var in
 
@@ -143,7 +140,7 @@ struct
             | T_return(_, Some e) ->
               Flow.set T_cur env man acc |>
               man.exec (mk_add_var ret range) |>
-              man.exec (mk_assign (mk_var ret range) e range) |>
+              man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
               Flow.join man acc
 
             | _ -> Flow.add tk env man acc
@@ -151,6 +148,9 @@ struct
           (Flow.remove T_cur man (Flow.copy_annot flow2 flow))
           man flow2
       in
+
+      (* Restore call stack *)
+      let _, flow3 = Callstack.pop flow3 in
 
       (* Remove parameters and local variables from the environment *)
       let ignore_stmt_list =

@@ -12,6 +12,10 @@ open Yojson.Basic
 open Yojson.Basic.Util
 
 
+(** Path to the current configuration *)
+let opt_config = ref ""
+
+
 (** {2 Configuration file} *)
 (** ********************** *)
 
@@ -19,12 +23,9 @@ open Yojson.Basic.Util
 let resolve_config_file config =
   if Sys.file_exists config && not (Sys.is_directory config) then config
   else
-    let config' = "configs/" ^ config in
-    if Sys.file_exists config' && not (Sys.is_directory config') then config'
-    else
-      let config'' = "analyzer/" ^ config' in
-      if Sys.file_exists config'' && not (Sys.is_directory config'') then config''
-      else Exceptions.panic "Unable to find configuration file %s" config
+    let file = Filename.concat (Setup.get_configs_dir ()) config in
+    if Sys.file_exists file && not (Sys.is_directory file) then file
+    else Exceptions.panic "unable to find configuration file %s" config
 
 
 (** {2 Domain builders} *)
@@ -130,46 +131,48 @@ let get_domain json =
 (** {2 Entry points} *)
 (** **************** *)
 
-let parse (config: string) : string * (module Domain.DOMAIN) =
-  let file = resolve_config_file config in
+let parse () : string * (module Domain.DOMAIN) =
+  let file = resolve_config_file !opt_config in
   let json = Yojson.Basic.from_file file in
   let language = get_language json in
   let domain = get_domain json in
   language, build_domain domain
 
-let language (config:string) : string =
-  let file = resolve_config_file config in
+let language () : string =
+  let file = resolve_config_file !opt_config in
   let json = Yojson.Basic.from_file file in
   get_language json
 
-let domains (config:string) : string list =
-  let file = resolve_config_file config in
-  let json = Yojson.Basic.from_file file in
-  let rec iter = function
-    | `String(name) -> [name]
+let domains () : string list =
+  if !opt_config = "" then Domain.names ()
+  else
+    let file = resolve_config_file !opt_config in
+    let json = Yojson.Basic.from_file file in
+    let rec iter = function
+      | `String(name) -> [name]
 
-    | `Assoc(obj) when List.mem_assoc "iter" obj ->
-      List.assoc "iter" obj |>
-      to_list |>
-      List.fold_left (fun acc obj ->
-          iter obj @ acc
-        ) []
+      | `Assoc(obj) when List.mem_assoc "iter" obj ->
+        List.assoc "iter" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
 
-    | `Assoc(obj) when List.mem_assoc "product" obj ->
-      List.assoc "product" obj |>
-      to_list |>
-      List.fold_left (fun acc obj ->
-          iter obj @ acc
-        ) []
+      | `Assoc(obj) when List.mem_assoc "product" obj ->
+        List.assoc "product" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
 
-    | `Assoc(obj) when List.mem_assoc "functor" obj ->
-      iter (List.assoc "functor" obj) @
-      iter (List.assoc "arg" obj)
+      | `Assoc(obj) when List.mem_assoc "functor" obj ->
+        iter (List.assoc "functor" obj) @
+        iter (List.assoc "arg" obj)
 
-    | `Assoc(obj) when List.mem_assoc "stack" obj ->
-      iter (List.assoc "stack" obj) @
-      iter (List.assoc "over" obj)
+      | `Assoc(obj) when List.mem_assoc "stack" obj ->
+        iter (List.assoc "stack" obj) @
+        iter (List.assoc "over" obj)
 
-    | _ -> assert false
-  in
-  iter (get_domain json)
+      | _ -> assert false
+    in
+    iter (get_domain json)

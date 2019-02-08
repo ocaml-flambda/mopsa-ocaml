@@ -17,6 +17,7 @@ type alarm_kind +=
   | ADivideByZero
   | AIntegerOverflow
   | AIllegalPointerDiff
+  | AVaArgNoNext
 
 let () =
   register_alarm
@@ -30,6 +31,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt "div-zero"
           | AIntegerOverflow -> Format.fprintf fmt "int-overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "ptr-diff"
+          | AVaArgNoNext -> Format.fprintf fmt "va-arg"
           | _ -> default fmt a
         );
       pp_title = (fun default fmt a ->
@@ -40,6 +42,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt "Division by zero"
           | AIntegerOverflow -> Format.fprintf fmt "Integer overflow"
           | AIllegalPointerDiff -> Format.fprintf fmt "Illegal pointer difference"
+          | AVaArgNoNext -> Format.fprintf fmt "No next argument for va_arg "
           | _ -> default fmt a
         );
       pp_report = (fun default fmt a ->
@@ -50,6 +53,7 @@ let () =
           | ADivideByZero -> Format.fprintf fmt ""
           | AIntegerOverflow -> Format.fprintf fmt ""
           | AIllegalPointerDiff -> Format.fprintf fmt ""
+          | AVaArgNoNext -> Format.fprintf fmt ""
           | _ -> default fmt a
         )
     };

@@ -99,3 +99,19 @@ void test_assign_array() {
   _mopsa_assert(a[0] == 1);
   _mopsa_assert(a[1] == 5);
 }
+
+/* Assign global variables */
+
+int glob = 1;
+
+/*$
+ * assigns: glob;
+ * ensures: glob' == n;
+ */
+void change_global(int n);
+
+void test_assign_global() {
+  _mopsa_assert(glob == 1);
+  change_global(10);
+  _mopsa_assert(glob == 10);
+}

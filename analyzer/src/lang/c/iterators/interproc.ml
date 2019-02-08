@@ -78,7 +78,7 @@ struct
           let exp' = {exp with ekind = E_c_builtin_call(f.c_func_org_name, args)} in
           man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
 
-        | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None} as fundec)) ->
+        | E_c_points_to (P_fun ({c_func_body = Some body; c_func_stub = None; c_func_variadic = false} as fundec)) ->
           let open Universal.Ast in
           let ret_var = mktmp ~typ:fundec.c_func_return () in
           let fundec' = {
@@ -95,12 +95,16 @@ struct
           (* Universal will evaluate the call into a temporary variable containing the returned value *)
           man.eval ~zone:(Universal.Zone.Z_u, any_zone) exp' flow
 
+        | E_c_points_to (P_fun ({c_func_variadic = true} as fundec)) ->
+          let exp' = mk_c_call fundec args exp.erange in
+          man.eval ~zone:(Zone.Z_c, Zone.Z_c_low_level) exp' flow
+
         | E_c_points_to (P_fun {c_func_stub = Some stub}) ->
           let exp' = Stubs.Ast.mk_stub_call stub args exp.erange in
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
         | E_c_points_to (P_fun {c_func_body = None; c_func_org_name}) ->
-          panic_at (erange exp) "no implementation found for function %s" c_func_org_name
+          panic_at exp.erange "no implementation found for function %s" c_func_org_name
 
         | _ -> assert false
       end |>

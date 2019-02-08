@@ -10,21 +10,6 @@
 
 open Framework
 
-(** Initialize options from environment variables *)
-let init_from_env () =
-  (* Initialize debug channels from the environment variable MOPSADEBUG. *)
-  ignore (
-    try Debug.parse (Unix.getenv "MOPSADEBUG")
-    with Not_found -> ()
-  );
-
-  (* Get the path of configuration file from variable MOPSACONFIG *)
-  ignore (
-    try Options.opt_config := Unix.getenv "MOPSACONFIG"
-    with Not_found ->()
-  );
-  ()
-
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
@@ -40,7 +25,6 @@ let parse_program lang files =
 (** Parse command line arguments and apply [f] on the list of target
    source files *)
 let parse_options f () =
-  init_from_env ();
   let files = ref [] in
   let n = Array.length Sys.argv in
   let return_value = ref 0 in
@@ -55,7 +39,7 @@ let parse_options f () =
 let () =
   exit @@ parse_options (fun files ->
       try
-        let lang, domain = Config.parse !Options.opt_config in
+        let lang, domain = Config.parse () in
 
         let prog = parse_program lang files in
 

@@ -12,6 +12,8 @@ include Framework.Ast
 
 module Logging = Framework.Logging
 
+module Setup = Framework.Setup
+
 module Visitor = Framework.Visitor
 
 include Framework.Zone

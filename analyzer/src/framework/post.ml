@@ -62,6 +62,25 @@ let meet (man: ('a, _) man) (post1: 'a post) (post2: 'a post) : 'a post =
     channels  = post1.channels @ post2.channels; (* FIXME *)
   }
 
+let clean cleaners man flow =
+  let exec_on_all_tokens stmt flow =
+    Flow.fold (fun flow tk env ->
+        (* Put env in T_cur token of flow and remove others *)
+        let annot = Flow.get_all_annot flow in
+        let flow' = Flow.singleton annot T_cur env in
+
+        (* Execute the cleaner *)
+        let flow'' = man.exec stmt flow' in
+
+        (* Restore T_cur in tk *)
+        Flow.copy T_cur tk man flow'' flow |>
+        Flow.copy_annot flow''
+      ) flow man flow
+  in
+  List.fold_left (fun flow stmt ->
+      exec_on_all_tokens stmt flow
+    ) flow cleaners
+
 let bind
     ?(zone = any_zone) (man: ('a, _) man)
     (f: 'e -> 'a flow -> 'a post)
@@ -78,10 +97,7 @@ let bind
 
         | Some e ->
           let post = f e flow' in
-          let flow'' = List.fold_left (fun acc stmt ->
-              man.exec ~zone stmt acc
-            ) post.flow case.cleaners
-          in
+          let flow'' = clean case.cleaners man post.flow in
           let post' = {post with flow = flow''} in
           let annot'' = Flow.get_all_annot flow'' in
           post', annot''
@@ -152,13 +168,10 @@ let bind_opt
           match f e flow' with
           | None -> None, annot
           | Some post ->
-          let flow'' = List.fold_left (fun acc stmt ->
-              man.exec ~zone stmt acc
-            ) post.flow case.cleaners
-          in
-          let post' = {post with flow = flow''} in
-          let annot'' = Flow.get_all_annot flow'' in
-          Some post', annot''
+            let flow'' = clean case.cleaners man post.flow in
+            let post' = {post with flow = flow''} in
+            let annot'' = Flow.get_all_annot flow'' in
+            Some post', annot''
       )
       (OptionExt.option_neutral2 (join man))
       (OptionExt.option_neutral2 (meet man))

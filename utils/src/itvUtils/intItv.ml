@@ -150,7 +150,7 @@ let signed64 : t = signed 64
 
 let equal ((a,b):t) ((a',b'):t) : bool =
   B.eq a a' && B.eq b b'
-(** Equality. = also workds *)
+(** Equality. = also works *)
 
 let equal_bot : t_with_bot -> t_with_bot -> bool =
   bot_equal equal
@@ -693,4 +693,10 @@ let bwd_shift_right : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_shift_right_trunc : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_bit_or : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_bit_and : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_eq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_neq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_lt : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_leq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_gt : t -> t -> t -> (t*t) with_bot = bwd_default_binary
+let bwd_log_geq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 (* TODO: more precise backward and, or, rem, shift, wrap *)

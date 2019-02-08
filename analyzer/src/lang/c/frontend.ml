@@ -15,9 +15,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 
-let debug fmt =
-  Debug.debug ~channel:"c.frontend" fmt
-
+let debug fmt = Debug.debug ~channel:"c.frontend" fmt
 
 
 (** {2 Command-line options} *)
@@ -67,7 +65,7 @@ type ctx = {
 
   ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
   (* cache the translation of all named types;
-     this is required for records defining recursive data-types 
+     this is required for records defining recursive data-types
   *)
 
   ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t;
@@ -89,8 +87,8 @@ let find_function_in_context ctx (f: C_AST.func) =
   with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
 
 
-(** {2 Entry} *)
-(** ========= *)
+(** {2 Entry point} *)
+(** =============== *)
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
@@ -101,10 +99,11 @@ let rec parse_program (files: string list) =
     (fun file ->
        match file, Filename.extension file with
        | _, ".c"
-       | _, ".h" -> parse_file !c_opts file ctx
+       | _, ".h" -> parse_file [] file ctx
        | _, ".db" | ".db", _ -> parse_db file ctx
-       | _, x -> Exceptions.panic "Unknown C extension %s" x
+       | _, x -> Exceptions.panic "unknown C extension %s" x
     ) files;
+  let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
   {
     prog_kind = from_project prj;
@@ -148,10 +147,21 @@ and parse_db (dbfile: string) ctx : unit =
        | _ -> Exceptions.warn "ignoring file %s\n%!" src.source_path
     ) srcs
 
-
 and parse_file (opts: string list) (file: string) ctx =
-  Logging.parse "parsing file %s" file;
-  C_parser.parse_file file opts ctx
+  Logging.parse file;
+  let opts' = ("-I" ^ (Setup.resolve_stub "c" "mopsa")) ::
+              !c_opts @
+              opts
+  in
+  C_parser.parse_file file opts' ctx
+
+and parse_stubs ctx () =
+  let stubs = [
+    Setup.resolve_stub "c" "mopsa/mopsa.c";
+    Setup.resolve_stub "c" "libc/libc.c";
+  ]
+  in
+  List.iter (fun stub -> parse_file [] stub ctx) stubs
 
 and from_project prj =
   let funcs_and_origins =
@@ -371,8 +381,19 @@ and from_var ctx (v: C_AST.variable) : var =
       vtyp = from_typ ctx v.var_type;
     }
     in
-    Hashtbl.add ctx.ctx_vars v.var_uid (v', v);
-    v'
+    let v'' = patch_array_parameters v' in
+    Hashtbl.add ctx.ctx_vars v.var_uid (v'', v);
+    v''
+
+(* Formal parameters of functions having array types should be
+   considered as pointers *)
+and patch_array_parameters v =
+    if not (is_c_array_type v.vtyp) ||
+       not (is_c_function_parameter v)
+    then v
+    else
+      let t = under_array_type v.vtyp in
+      { v with vtyp = T_c_pointer t }
 
 and from_var_scope ctx = function
   | C_AST.Variable_global -> Ast.Variable_global
@@ -409,7 +430,7 @@ and from_init_stub ctx v =
     }
     in
     Some (C_init_stub stub)
-    
+
 
 
 (** {2 Types} *)
@@ -550,7 +571,7 @@ and find_field_index t f =
       field.field_index
 
     | T_typedef td -> find_field_index td.typedef_def f
-      
+
     | _ -> Exceptions.panic "find_field_index: called on a non-record type %s"
              (C_print.string_of_type_qual t)
   with

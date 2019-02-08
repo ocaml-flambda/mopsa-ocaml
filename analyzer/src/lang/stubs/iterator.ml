@@ -92,7 +92,16 @@ struct
       ftrue, ffalse
 
 
-    | F_binop (IMPLIES, f1, f2) -> panic_at f.range "IMPLIES not supported"
+    | F_binop (IMPLIES, f1, f2) ->
+      let ftrue1, ffalse1 = eval_formula f1 ~negate:true man flow in
+      let ffalse1 = OptionExt.none_to_exn ffalse1 in
+
+      let ftrue2, ffalse2 = eval_formula f2 ~negate man ftrue1 in
+
+      let ftrue = Flow.join man ffalse1 ftrue2 in
+
+      ftrue, ffalse2
+      
 
     | F_not ff ->
       let ftrue, ffalse = eval_formula ff ~negate:true man flow in
@@ -333,7 +342,8 @@ struct
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->
-      Exceptions.warn_at warn.range "%s" warn.content;
+      if not (Flow.is_cur_bottom man flow)
+      then Exceptions.warn_at warn.range "%s" warn.content;
       flow
 
 

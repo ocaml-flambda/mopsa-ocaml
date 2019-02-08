@@ -381,12 +381,6 @@ let rec from_stmt (s: U.stat) (ext: extent) (var_ctx: var_context) (fun_ctx: fun
   | AST_print ->
     mk_stmt S_print range
 
-  | AST_expr(AST_fun_call(("__mopsa_cf_part_start", _), [AST_int_const (s, _ ), _]), _) ->
-    mk_stmt (S_cf_part_start (int_of_string s)) range
-
-  | AST_expr(AST_fun_call(("__mopsa_cf_part_merge", _), [AST_int_const (s, _ ), _]), _) ->
-    mk_stmt (S_cf_part_merge (int_of_string s)) range
-
   | AST_expr(e, ext) ->
     let e' = from_expr e ext var_ctx fun_ctx in
     mk_expr_stmt e' range

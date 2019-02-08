@@ -96,26 +96,17 @@ struct
       ) map
 
   and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
-    Logging.reach "analyzing %a" Location.pp_range (Location.untag_range stmt.srange);
-    Logging.exec "exec in zone %a@\n @[%a@]" pp_zone zone pp_stmt stmt;
-    Logging.pre_state "pre-state@\n @[%a@]"(Flow.print man) flow;
+    Logging.reach (Location.untag_range stmt.srange);
+    Logging.exec stmt zone man flow;
 
     let timer = Timing.start () in
-
     let fexec =
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
     let flow' = Cache.exec fexec zone stmt man flow in
 
-    Logging.post_state "exec done:@\n stmt: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output@\n@[  %a@]@\n time: %.4fs"
-      pp_stmt stmt
-      Location.pp_range stmt.srange
-      pp_zone zone
-      (Flow.print man) flow
-      (Flow.print man) flow'
-      (Timing.stop timer)
-    ;
+    Logging.exec_done stmt zone (Timing.stop timer) man flow';
     flow'
 
 
@@ -166,13 +157,7 @@ struct
 
   (** Evaluation of expressions. *)
   and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
-    debug "eval:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n  @[%a@]"
-      pp_expr exp
-      Location.pp_range exp.erange
-      pp_zone2 zone
-      (Flow.print man) flow
-    ;
-
+    Logging.eval exp zone man flow;
     let timer = Timing.start () in
 
     let ret =
@@ -216,14 +201,7 @@ struct
             | _ -> Eval.singleton exp flow
     in
 
-    debug "eval done:@\n expr: @[%a@]@\n loc: @[%a@]@\n zone: %a@\n input:@\n@[  %a@]@\n output: @[  %a@]@\n time: %.4fs"
-      pp_expr exp
-      Location.pp_range exp.erange
-      pp_zone2 zone
-      (Flow.print man) flow
-      (Eval.print ~pp:pp_expr) ret
-      (Timing.stop timer)
-    ;
+    Logging.eval_done exp zone (Timing.stop timer) ret;
     ret
 
   and eval_over_paths paths exp man flow =

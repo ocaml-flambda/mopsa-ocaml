@@ -58,6 +58,15 @@ let map
         { expr = Some e'; flow = flow'; cleaners = [] }
     ) evl
 
+let map_flow
+    (f: 'a flow -> 'a flow)
+    (evl: ('a, 'e) evl)
+  : ('a, 'e) evl =
+  Dnf.map (fun case ->
+      let flow' = f case.flow in
+      { case with flow = flow' }
+    ) evl
+
 let add_cleaners (cleaners: Ast.stmt list) (evl: ('e, 'a) evl ) : ('e, 'a) evl  =
   Dnf.map (fun case ->
       {case with cleaners = case.cleaners @ cleaners}

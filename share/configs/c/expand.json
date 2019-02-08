@@ -2,12 +2,6 @@
     "language": "c",
     "domain": {
 	"iter": [
-            // C iterators
-            "c.iterators.program",
-            "c.iterators.interproc",
-            "c.iterators.goto",
-            "c.iterators.switch",
-
             // Universal iterators
             "universal.iterators.intraproc",
             "universal.iterators.loops",
@@ -17,16 +11,22 @@
 	    // Stubs iterator
 	    "stubs.iterator",
 
+	    // C libraries
+            "c.libs.libc",
+            "c.libs.libmopsa",
+
+	    // C iterators
+            "c.iterators.program",
+            "c.iterators.interproc",
+            "c.iterators.goto",
+            "c.iterators.switch",
+
             // C desugar
             "c.desugar.low_level",
             "c.desugar.loops",
             "c.desugar.record_copy",
             "c.desugar.stub_init",
             "c.desugar.cond_expr",
-
-            // C libraries
-            "c.libs.libc",
-            "c.libs.libmopsa",
 
 	    // C resources
 	    "c.resources.file",

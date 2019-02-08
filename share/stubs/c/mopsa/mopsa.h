@@ -1,8 +1,8 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
-// main entry point of analyzed programs, where argc and argv are initialized
-extern void _mopsa_main();
+// Initialize argc and argv with symbolic values
+extern void _mopsa_init_symbolic_argc_argv();
 
 // Abstract values
 extern int _mopsa_rand();

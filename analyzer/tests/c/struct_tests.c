@@ -57,24 +57,6 @@ void test_struct_copy() {
   _mopsa_assert(p.x == q.x);
 }
 
-int f1(point p) {
-  return p.x + 1;
-}
-
-int f2(point p) {
-  p.x = p.x + 10;
-  return p.x;
-}
-
-void test_pass_struct_by_value() {
-  point p = {.x = 10, .y = 20};
-  int x = f1(p);
-  _mopsa_assert(x == 11);
-  int y = f2(p);
-  _mopsa_assert(p.x == 10 && y == 20);
-}
-
-
 
 typedef struct {
   int* f;

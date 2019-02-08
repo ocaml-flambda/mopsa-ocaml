@@ -68,7 +68,7 @@ let pp_cell fmt c =
   Format.fprintf fmt "⟨%a,%a,%a⟩%a"
     pp_base c.b
     pp_offset c.o
-    Pp.pp_c_type_short c.t
+    Pp.pp_c_type_short (remove_qual c.t)
     pp_prime c.p
 
 let cell_base c = c.b
@@ -104,7 +104,10 @@ type var_kind +=
 let cell_to_var_name c =
   let () = Format.fprintf Format.str_formatter
       "{%a,%a,%a}%a"
-      pp_base c.b pp_offset c.o Pp.pp_c_type_short c.t pp_prime c.p
+      pp_base c.b
+      pp_offset c.o
+      Pp.pp_c_type_short (remove_qual c.t)
+      pp_prime c.p
   in
   Format.flush_str_formatter ()
 

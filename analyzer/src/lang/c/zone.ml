@@ -109,7 +109,9 @@ let () =
         | E_c_cast _                         -> Visit
         (* ------------------------------------------- *)
         | E_c_address_of _                   -> Visit
-        | E_c_deref p when p.etyp |> under_type |> is_c_array_type -> Visit
+        | E_c_deref p
+          when p.etyp |> under_type |> is_c_array_type
+                                             -> Visit
         (* ------------------------------------------- *)
         | _                                  -> Process
       );

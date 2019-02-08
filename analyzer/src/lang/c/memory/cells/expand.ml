@@ -212,6 +212,7 @@ module Domain = struct
         match
           find_cell_opt ( fun c' ->
               let b = Z.sub (cell_zoffset c) (cell_zoffset c') in
+              Z.geq b Z.zero &&
               compare_base (cell_base c) (cell_base c') = 0 &&
               Z.lt b (sizeof_type (cell_typ c')) &&
               is_c_int_type (cell_typ c') &&
@@ -383,7 +384,7 @@ module Domain = struct
       scalar = (fun v e range flow ->
           let c =
             match ekind v with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false;}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -404,7 +405,7 @@ module Domain = struct
       array =  (fun a is_global init_list range flow ->
           let c =
             match ekind a with
-            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
+            | E_var(v, mode) -> {b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false;}
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
@@ -415,7 +416,7 @@ module Domain = struct
               | [] -> flow
               | init :: tl ->
                 let t' = under_array_type c.t in
-                let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = t'; p = false;} in
+                let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = remove_qual t'; p = false;} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
@@ -426,7 +427,7 @@ module Domain = struct
       record =  (fun s is_global init_list range flow ->
           let c =
             match ekind s with
-            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = v.vtyp; p = false;}
+            | E_var (v, _) -> {b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false;}
             | E_c_cell(c, _) -> c
             | _ -> assert false
           in
@@ -439,7 +440,7 @@ module Domain = struct
               | init :: tl ->
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
-                let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = t'; p = false;} in
+                let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = remove_qual t'; p = false;} in
                 let flow' = init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
@@ -529,7 +530,7 @@ module Domain = struct
 
     match o with
     | O_single _ | O_region _ ->
-      Eval.singleton {b; o; t; p = false} flow
+      Eval.singleton {b; o; t = remove_qual t; p = false} flow
 
     | O_out_of_bound ->
       let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
@@ -638,11 +639,10 @@ module Domain = struct
     in
 
     (* Check consistency *)
-    if List.exists (fun s ->
-        is_variation_empty s ||
-        not (is_variation_feasible s)
-      ) space
-    then
+    if List.exists is_variation_empty space then
+      Eval.empty_singleton flow
+    else
+    if List.exists (fun s -> not (is_variation_feasible s)) space then
       Eval.empty_singleton flow
     else
       (* Compute some samples from the space of under-approximations *)
@@ -683,7 +683,7 @@ module Domain = struct
   let rec eval_scalar_cell exp man flow : ('a, cell) evl =
     match ekind exp with
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
-      let c = { b = V v; o = O_single Z.zero; t = vtyp v; p = false; } in
+      let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
       Eval.singleton c flow
 
     | E_c_deref p ->
@@ -710,49 +710,79 @@ module Domain = struct
           let flow' = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow in
           Eval.empty_singleton flow'
 
-        | _ -> panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p;
+        | E_c_points_to(P_top) ->
+          panic_at exp.erange "eval_scalar_cell: top pointer not supported"
+
+        | _ ->
+          panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p
       end
 
     | _ -> panic_at exp.erange ~loc:__LOC__ "eval_scalar_cell called on a non-scalar expression %a" pp_expr exp
 
 
+  let cell_singleton c range man flow =
+    match cell_offset c with
+    | O_single _ ->
+      let flow = add_cell c range man flow in
+      Eval.singleton (mk_c_cell c range) flow
+
+    | O_region _ ->
+      Eval.singleton (mk_top c.t range) flow
+
+    | O_out_of_bound ->
+      assert false
+
 
   (** Entry-point of evaluations *)
   let eval zone exp man flow =
     match ekind exp with
-    (* 𝔼⟦ v | *p ⟧ *)
-    | E_var _
-    | E_c_deref _
-      when is_c_scalar_type exp.etyp
+    (* 𝔼⟦ v ⟧ *)
+    | E_var (v, _) when is_c_scalar_type v.vtyp ->
+      let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
+      cell_singleton c exp.erange man flow |>
+      Eval.return
+
+    (* 𝔼⟦ *p ⟧ *)
+    | E_c_deref p
+      when is_c_scalar_type exp.etyp ||
+           is_c_function_type exp.etyp
       ->
-      eval_scalar_cell exp man flow |>
-      Eval.bind_return @@ fun c flow ->
-      begin match cell_offset c with
-        | O_single _ ->
-          let flow = add_cell c exp.erange man flow in
-          Eval.singleton (mk_c_cell c exp.erange) flow
+      let t = under_type p.etyp in
 
-        | O_region _ when is_c_num_type c.t ->
-          let l, u = rangeof (cell_typ c) in
-          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
-
-        | O_region _ when is_c_pointer_type c.t ->
-          panic_at exp.erange "can't expand pointer cell %a" pp_cell c
-
-        | _ -> assert false
-      end
-
-    (* 𝔼⟦ *p ⟧ when p is function pointer*)
-    | E_c_deref p when is_c_function_type exp.etyp ->
       man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
       Eval.bind_return @@ fun pe flow ->
 
       begin match ekind pe with
+        | E_c_points_to(P_block (Common.Base.Z, o)) ->
+          panic_at exp.erange ~loc:__LOC__ "dereference of absolute pointers not supported"
+
+        | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
+          eval_quantified_cell b o t p.erange man flow |>
+          Eval.bind @@ fun c flow ->
+          cell_singleton c exp.erange man flow
+
+        | E_c_points_to(P_block (b, o)) ->
+          eval_cell b o t p.erange man flow  |>
+          Eval.bind @@ fun c flow ->
+          cell_singleton c exp.erange man flow
+
+        | E_c_points_to(P_null) ->
+          raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
+          Eval.empty_singleton
+
+        | E_c_points_to(P_invalid) ->
+          raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow |>
+          Eval.empty_singleton
+
+        | E_c_points_to(P_top) ->
+          Eval.singleton (mk_top exp.etyp exp.erange) flow
+
         | E_c_points_to(P_fun f) ->
           Eval.singleton { exp with ekind = E_c_function f } flow
 
-        | _ -> panic_at exp.erange "expand: unsupported function pointer %a" pp_expr p
+        | _ -> assert false
       end
+      
 
     | E_stub_primed (e) ->
       eval_scalar_cell e man flow |>
@@ -777,23 +807,29 @@ module Domain = struct
       Eval.bind_return @@ fun pe flow ->
 
       begin match ekind pe with
-        | E_c_points_to(P_block (b, o)) ->
+        | E_c_points_to(P_block (b, _)) ->
+          (* When p points to a block b, return sizeof(b) *)
           eval_base_size b exp.erange man flow |>
           Eval.bind @@ fun base_size flow ->
 
           let t = under_type p.etyp in
           let exp' =
             (* Pointer to void => return size in bytes *)
-            if t = T_c_void then base_size
+            if is_c_void_type t then base_size
             else div base_size (of_z (sizeof_type t) exp.erange) exp.erange
           in
+          Eval.singleton exp' flow
+
+        | E_c_points_to P_top ->
+          (* When we have no information on pointer p, return TOP *)
+          let exp' = mk_top exp.etyp exp.erange in
           Eval.singleton exp' flow
 
         | _ -> panic_at exp.erange "cells.expand: size(%a) not supported" pp_expr exp
       end
 
     (* 𝔼⟦ valid(p) ⟧ *)
-    | E_stub_builtin_call( PTR_VALID, p) ->
+    | E_stub_builtin_call(PTR_VALID, p) ->
       man.eval ~zone:(Z_c_low_level, Z_c_cell_expand) p flow |>
       Eval.bind_return @@ fun p flow ->
       let exp' = { exp with ekind = E_stub_builtin_call( PTR_VALID, p) } in
@@ -801,7 +837,7 @@ module Domain = struct
 
     (* 𝔼⟦ ∃v ⟧ *)
     | E_stub_quantified(EXISTS, var, set) when var.vtyp |> is_c_scalar_type ->
-      let c = { b = V var; o = O_single Z.zero; t = var.vtyp; p = false } in
+      let c = { b = V var; o = O_single Z.zero; t = remove_qual var.vtyp; p = false } in
       Eval.singleton (mk_c_cell c exp.erange) flow |>
       Eval.return
 
@@ -906,7 +942,6 @@ module Domain = struct
         }
       ) man flow
     in
-    debug "renaming %a into %a done:@\n%a" pp_base base1 pp_base base2 (Flow.print man) flow;
     flow
 
   (** Rename primed cells that have been declared in `assigns` stub section *)

@@ -202,7 +202,9 @@ struct
                 erange = tag_range range "wrap"} flow1
           )
 
-    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type ->
+    | E_c_cast(e, b) when exp |> etyp |> is_c_int_type &&
+                          e   |> etyp |> is_c_num_type
+      ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Eval.bind_return @@ fun e' flow ->
       let t  = etyp exp in
@@ -306,6 +308,17 @@ struct
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> OptionExt.return
+
+    | E_constant(C_top t) when is_c_int_type t ->
+      let l, u = rangeof t in
+      let exp' = mk_z_interval l u ~typ:(to_universal_type t) exp.erange in
+      Eval.singleton exp' flow |>
+      Eval.return
+
+    | E_constant(C_top t) when is_c_float_type t ->
+      let exp' = mk_top (to_universal_type t) exp.erange in
+      Eval.singleton exp' flow |>
+      Eval.return
 
     | E_var _ ->
       Eval.singleton (to_universal_expr exp) flow |>

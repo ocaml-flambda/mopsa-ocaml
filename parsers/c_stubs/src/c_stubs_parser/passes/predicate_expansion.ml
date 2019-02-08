@@ -53,6 +53,7 @@ struct
       let args = List.map get_content params |>
                  List.combine pred.predicate_args
       in
+
       let find_arg_expr arg =
         let rec iter =
           function
@@ -75,7 +76,7 @@ struct
       in
 
       let rec visit_formula f =
-        bind_range f @@ fun f ->
+        bind_range ~range f @@ fun f ->
         match f with
         | F_expr e -> F_expr (visit_expr e)
         | F_binop (op, f1, f2) -> F_binop(op, visit_formula f1, visit_formula f2)
@@ -87,7 +88,7 @@ struct
         | F_bool _ -> f
 
       and visit_expr (e:expr with_range) =
-        bind_range e @@ fun e ->
+        bind_range e ~range @@ fun e ->
         match e with
         | E_int _ | E_float _ | E_string _ | E_char _ | E_return | E_invalid -> e
         | E_var v ->
