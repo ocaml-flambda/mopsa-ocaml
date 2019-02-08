@@ -425,6 +425,14 @@ char *strrchr (const char *__s, int __c);
  */
 size_t strlen (const char *__s);
 
+/*$
+ * requires: valid_string(__s);
+ * ensures: return in [0, size(__s) - 1];
+ * ensures: __s[return] == 0;
+ * ensures: forall signed int i in [0, (signed int)return - 1]: __s[i] != 0;
+ */
+size_t __builtin_strlen (const char *__s);
+
 
 #ifdef	__USE_XOPEN2K8
 
