@@ -277,7 +277,7 @@ struct
 
   (** Evaluation of pointer comparisons *)
   let rec eval_pointer_compare exp man flow =
-    match ekind exp with
+    match ekind exp with    
     (* 𝔼⟦ p == q ⟧ *)
     (* 𝔼⟦ !(p != q) ⟧ *)
     | E_binop(O_eq, e1, e2)
@@ -374,6 +374,10 @@ struct
       let exp' = mk_binop e O_eq (mk_zero exp.erange) exp.erange in
 
       eval_pointer_compare exp' man flow
+
+    (* 𝔼⟦ (t)p ⟧ *)
+    | E_c_cast(p, _) when is_c_pointer_type p.etyp ->
+      eval_pointer_compare p man flow
 
     (* 𝔼⟦ ptr_valid(p) ⟧ *)
     | Stubs.Ast.E_stub_builtin_call( PTR_VALID, p) ->
@@ -477,6 +481,7 @@ struct
       let exp' = mul (mk_z (pointed_size p.etyp) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange in
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
       Eval.return
+
 
     | _ -> None
 

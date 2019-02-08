@@ -44,3 +44,7 @@ void _mopsa_init_symbolic_argc_argv() {
   _argv[_argc] = NULL;
   #endif
 }
+
+
+// Temporary fix for missing error function in coreutuils
+void error (int __status, int __errnum, const char *__format, ...) { }

@@ -104,7 +104,7 @@ struct
           man.eval ~zone:(Stubs.Zone.Z_stubs, any_zone) exp' flow
 
         | E_c_points_to (P_fun {c_func_body = None; c_func_org_name}) ->
-          panic_at (erange exp) "no implementation found for function %s" c_func_org_name
+          panic_at exp.erange "no implementation found for function %s" c_func_org_name
 
         | _ -> assert false
       end |>

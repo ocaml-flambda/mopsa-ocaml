@@ -689,11 +689,15 @@ let is_c_scalar_type ( t : typ) =
   | _ -> false
 
 (** [is_c_pointer t] tests whether [t] is a pointer *)
-let rec is_c_pointer_type ( t : typ) =
+let is_c_pointer_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_pointer _ -> true
   | _ -> false
 
+let is_c_void_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_void -> true
+  | _ -> false
 
 let is_c_record_type ( t : typ) =
   match remove_typedef_qual t with

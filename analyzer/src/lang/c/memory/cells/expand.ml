@@ -815,7 +815,7 @@ module Domain = struct
           let t = under_type p.etyp in
           let exp' =
             (* Pointer to void => return size in bytes *)
-            if t = T_c_void then base_size
+            if is_c_void_type t then base_size
             else div base_size (of_z (sizeof_type t) exp.erange) exp.erange
           in
           Eval.singleton exp' flow
