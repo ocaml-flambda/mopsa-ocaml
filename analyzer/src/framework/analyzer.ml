@@ -20,6 +20,7 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
+
 (** Create an [Analyzer] module over some abstract domain. *)
 module Make(Domain : DOMAIN) =
 struct
@@ -56,7 +57,7 @@ struct
   (**                        {2 Initialization}                               *)
   (*==========================================================================*)
 
-  let rec init prog : Domain.t flow =
+  let rec init prog man : Domain.t flow =
     let flow0 = Flow.bottom Annotation.empty  |>
                 Flow.set T_cur man.top man
     in
@@ -95,7 +96,7 @@ struct
             map
       ) map
 
-  and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
+  and exec ?(zone = any_zone) (stmt: Ast.stmt) man (flow: Domain.t flow) : Domain.t flow =
     Logging.reach (Location.untag_range stmt.srange);
     Logging.exec stmt zone man flow;
 
@@ -156,7 +157,7 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) man (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Logging.eval exp zone man flow;
     let timer = Timing.start () in
 
@@ -280,8 +281,89 @@ struct
     print = Domain.print;
     get = (fun flow -> flow);
     set = (fun flow _ -> flow);
-    exec = exec;
-    eval = eval;
+    exec = (fun ?(zone=any_zone) stmt flow -> exec ~zone stmt man flow);
+    eval = (fun ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow -> eval ~zone ~via exp man flow);
+    ask = ask;
+  }
+
+
+  (** {2 Interactive mode} *)
+  (** ******************** *)
+
+  open Format
+
+  (** Set of active breakpoints *)
+  let breakpoints : string list ref = ref []
+
+  (** Check if a range is in the set of breakpoints *)
+  let mem_breakpoints range =
+    false
+
+  (* Debugging commands *)
+  type command =
+    | Break of string
+    | Run
+    | Next
+    | Step
+    | Print
+
+  (** Read a debug command *)
+  let rec read_command () =
+    let l = read_line () in
+    match l with
+    | "run" -> Run
+    | "next" -> Next
+    | "step" -> Step
+    | "print" -> Print
+    | _ ->
+      if Str.string_match (Str.regexp "break \\(.*\\)") l 0
+      then (
+        let loc = Str.matched_group 0 l in
+        breakpoints := loc :: !breakpoints;
+        read_command ()
+      )
+      else (
+        printf "Unrecognized command: %s@." l;
+        read_command ()
+      )
+
+  let stop = ref true
+
+  let rec interactive_exec ?(zone = any_zone) stmt flow =
+    if not !stop
+    then exec ~zone stmt interactive_man flow
+    else
+      match read_command () with
+      | Run ->
+        stop := false;
+        exec ~zone stmt interactive_man flow
+
+      | _ -> assert false
+
+  and interactive_eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
+    if not !stop
+    then eval ~zone ~via exp interactive_man flow
+    else
+      match read_command () with
+      | Run ->
+        stop := false;
+        eval ~zone ~via exp interactive_man flow
+
+      | _ -> assert false
+
+  and interactive_man = {
+    bottom = Domain.bottom;
+    top = Domain.top;
+    is_bottom = Domain.is_bottom;
+    subset = Domain.subset;
+    join = Domain.join;
+    meet = Domain.meet;
+    widen = Domain.widen;
+    print = Domain.print;
+    get = (fun flow -> flow);
+    set = (fun flow _ -> flow);
+    exec = interactive_exec;
+    eval = interactive_eval;
     ask = ask;
   }
 

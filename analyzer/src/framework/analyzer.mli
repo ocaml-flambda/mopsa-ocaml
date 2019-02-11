@@ -13,14 +13,16 @@ open Manager
 module Make(Domain : Domain.DOMAIN) :
 sig
 
-  val init : Ast.program -> Domain.t flow
+  val init : Ast.program -> (Domain.t, Domain.t) man -> Domain.t flow
 
-  val exec : ?zone:Zone.zone -> Ast.stmt -> Domain.t flow -> Domain.t flow
+  val exec : ?zone:Zone.zone -> Ast.stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
 
-  val eval : ?zone:(Zone.zone * Zone.zone) -> ?via:Zone.zone -> Ast.expr -> Domain.t flow -> (Domain.t, Ast.expr) evl
+  val eval : ?zone:(Zone.zone * Zone.zone) -> ?via:Zone.zone -> Ast.expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (Domain.t, Ast.expr) evl
 
   val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
 
   val man : (Domain.t, Domain.t) man
+
+  val interactive_man : (Domain.t, Domain.t) man
 
 end
