@@ -24,7 +24,7 @@
 
         "python.objects.class",
         "python.objects.function",
-        "python.objects.nones",
+        // "python.objects.nones",
         "python.memory.string",
         "python.memory.int",
         "python.memory.float",
