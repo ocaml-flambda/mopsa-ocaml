@@ -189,6 +189,7 @@ let visit_section macros enums section =
   | S_case case -> S_case (visit_case macros enums case)
   | S_leaf leaf -> S_leaf (visit_leaf macros enums leaf)
   | S_predicate _ -> Exceptions.panic "macro_expansion: predicates not supported"
+  | S_alias _ -> section
 
 let visit_sections_list macros enums sections =
   List.map (fun section -> visit_section macros enums section) sections

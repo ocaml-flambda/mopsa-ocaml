@@ -52,15 +52,15 @@ let parse_function_comment
       pos_cnum = col;
     };
 
-    (* Parse the comment *)
     try
+      (* Parse the comment *)
       let cst = Parser.parse_stub Lexer.read buf in
       match cst with
       | None -> None
-      | Some cst ->
-        (* Remove predicates *)
-        let cst1 = Passes.Predicate_expansion.doit cst preds in
 
+      | Some cst ->
+        (* Remove predicates and macros *)
+        let cst1 = Passes.Predicate_expansion.doit cst preds in
         let cst2 = Passes.Macro_expansion.doit cst1 macros enums in
 
         (* Resolve scoping of variables *)

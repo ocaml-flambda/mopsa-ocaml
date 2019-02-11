@@ -22,6 +22,7 @@ type stub = {
   stub_locals  : local with_range list;
   stub_assigns : assigns with_range list;
   stub_body    : section list;
+  stub_alias   : string option;
   stub_range   : range;
 }
 
@@ -287,4 +288,7 @@ let pp_sections fmt secs =
     pp_section
     fmt secs
 
-let pp_stub fmt stub = pp_sections fmt stub.stub_body
+let pp_stub fmt stub =
+  match stub.stub_alias with
+  | None -> pp_sections fmt stub.stub_body
+  | Some alias -> fprintf fmt "alias: %s;" alias

@@ -201,6 +201,7 @@ let visit_section sec ctx =
   | S_predicate _ -> sec
   | S_leaf sec' -> S_leaf (visit_leaf sec' ctx)
   | S_case case -> S_case (visit_case case ctx)
+  | S_alias _ -> sec
 
 let doit (stub:stub) (preds:predicate with_range list): stub =
   bind_range stub @@ fun secs ->

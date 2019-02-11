@@ -33,6 +33,7 @@ let _ =
      "ensures", ENSURES;
      "predicate", PREDICATE;
      "warn", WARN;
+     "alias", ALIAS;
 
      (* Operators *)
      "and",  AND;

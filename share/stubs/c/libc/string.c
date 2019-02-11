@@ -242,7 +242,13 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
  *           );
  *  }
  */
+int strcmp (const char *__s1, const char *__s2);
+
+/*$
+ * alias: strcmp;
+ */
 int __builtin_strcmp (const char *__s1, const char *__s2);
+
 
 /*$
  * requires: size(__s1) >= __n or valid_string(__s1);
@@ -270,6 +276,12 @@ int __builtin_strcmp (const char *__s1, const char *__s2);
  *   }
  */
 int strncmp (const char *__s1, const char *__s2, size_t __n);
+
+/*$
+ * alias: strncmp;
+ */
+int __builtin_strncmp (const char *__s1, const char *__s2, size_t __n);
+
 
 /*$
  * requires: valid_string(__s1);
@@ -426,10 +438,7 @@ char *strrchr (const char *__s, int __c);
 size_t strlen (const char *__s);
 
 /*$
- * requires: valid_string(__s);
- * ensures: return in [0, size(__s) - 1];
- * ensures: __s[return] == 0;
- * ensures: forall signed int i in [0, (signed int)return - 1]: __s[i] != 0;
+ * alias: strlen;
  */
 size_t __builtin_strlen (const char *__s);
 

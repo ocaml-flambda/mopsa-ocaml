@@ -19,6 +19,7 @@ and section =
   | S_predicate of predicate with_range
   | S_case      of case with_range
   | S_leaf      of leaf
+  | S_alias     of alias with_range
 
 and leaf =
   | S_local     of local with_range
@@ -34,6 +35,7 @@ and case = {
   case_body      : leaf list;
 }
 
+and alias = string
 
 (** {2 Stub leaf sections} *)
 (** ********************** *)
@@ -225,6 +227,10 @@ let compare_resource (r1:resource) (r2:resource) = compare r1 r2
 
 let no_qual t = t, false
 
+let is_alias (cst:stub) : bool =
+  match cst.content with
+  | [ S_alias _ ] -> true
+  | _ -> false
 
 (** {2 Pretty printers} *)
 (** ******************* *)
@@ -432,11 +438,15 @@ let pp_case fmt case =
     case.case_label
     (pp_list pp_leaf "@\n") case.case_body
 
+let pp_alias fmt alias =
+  fprintf fmt "alias: %s;" alias.content
+
 let pp_section fmt sec =
   match sec with
   | S_leaf leaf -> pp_leaf fmt leaf
   | S_case case -> pp_case fmt case.content
   | S_predicate pred -> pp_predicate fmt pred
+  | S_alias alias -> pp_alias fmt alias
 
 let pp_sections fmt secs =
   pp_print_list

@@ -77,6 +77,9 @@ type ctx = {
   ctx_macros: string MapExt.StringMap.t;
   (* cache of (parameter-less) macros of the project *)
 
+  ctx_stubs: (string,Stubs.Ast.stub_func) Hashtbl.t;
+  (* cache of stubs *)
+
   ctx_enums: Z.t MapExt.StringMap.t;
   (* cache of enum values of the project *)
 }
@@ -89,6 +92,8 @@ let find_function_in_context ctx (f: C_AST.func) =
 
 (** {2 Entry point} *)
 (** =============== *)
+
+exception StubAliasFound of string
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
@@ -164,6 +169,7 @@ and parse_stubs ctx () =
   List.iter (fun stub -> parse_file [] stub ctx) stubs
 
 and from_project prj =
+  (* Preliminary parsing of functions *)
   let funcs_and_origins =
     StringMap.bindings prj.proj_funcs |>
     List.map snd |>
@@ -173,7 +179,11 @@ and from_project prj =
       StringMap.add o.func_unique_name f map
     ) StringMap.empty funcs_and_origins
   in
+
+  (* Parse stub predicates *)
   let preds = from_stub_global_predicates prj.proj_comments in
+
+  (* Prepare the parsing context *)
   let ctx = {
       ctx_fun = funcs;
       ctx_type = Hashtbl.create 16;
@@ -193,9 +203,12 @@ and from_project prj =
               MapExt.StringMap.add v.enum_val_org_name v.enum_val_value acc
             ) acc
         ) prj.proj_enums MapExt.StringMap.empty;
+      ctx_stubs = Hashtbl.create 16;
     }
   in
-  List.iter (fun (f, o) ->
+
+  (* Parse functions *)
+  let funcs_with_alias = List.fold_left (fun funcs_with_alias (f, o) ->
       debug "parsing function %s" o.func_org_name;
       f.c_func_uid <- o.func_uid;
       f.c_func_org_name <- o.func_org_name;
@@ -205,8 +218,36 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      f.c_func_stub <- from_stub_comment ctx o
-    ) funcs_and_origins;
+      try
+        f.c_func_stub <- from_stub_comment ctx o;
+        funcs_with_alias
+      with (StubAliasFound alias) ->
+        (f, alias) :: funcs_with_alias
+    ) [] funcs_and_origins
+  in
+
+  (* Resolve stub aliases *)
+  List.iter (fun (f, alias) ->
+      debug "resolving alias function %s" f.c_func_org_name;
+      try
+        let stub = Hashtbl.find ctx.ctx_stubs alias in
+        (* Check prototype matching *)
+        if List.length f.c_func_parameters = List.length stub.stub_func_params &&
+           List.for_all (fun (p1, p2) ->
+               p1.org_vname = p2.org_vname &&
+               compare_typ p1.vtyp p2.vtyp = 0
+             ) (List.combine f.c_func_parameters stub.stub_func_params)
+        then
+          (* Replace parameters of the alias by those of the function *)
+          let stub' = patch_alias_parameters stub f.c_func_parameters in
+          f.c_func_stub <- Some stub
+        else
+          panic "prototypes of function %s and its alias %s do not match"
+            f.c_func_org_name alias
+
+      with Not_found ->
+        panic_at f.c_func_range "alias %s not found" alias
+    ) funcs_with_alias;
 
   let globals = StringMap.bindings prj.proj_vars |>
                 List.map snd |>
@@ -420,7 +461,12 @@ and from_init ctx init =
   | I_init_implicit t -> C_init_implicit (from_typ ctx t)
 
 and from_init_stub ctx v =
-  match C_stubs_parser.Main.parse_var_comment v ctx.ctx_prj ctx.ctx_macros ctx.ctx_enums ctx.ctx_global_preds with
+  match C_stubs_parser.Main.parse_var_comment v
+          ctx.ctx_prj
+          ctx.ctx_macros
+          ctx.ctx_enums
+          ctx.ctx_global_preds
+  with
   | None -> None
   | Some stub ->
     let stub =   {
@@ -610,9 +656,21 @@ and from_range (range:C_AST.range) =
 (** ===================== *)
 
 and from_stub_comment ctx f =
-  match C_stubs_parser.Main.parse_function_comment f ctx.ctx_prj ctx.ctx_macros ctx.ctx_enums ctx.ctx_global_preds with
+  match C_stubs_parser.Main.parse_function_comment f
+          ctx.ctx_prj
+          ctx.ctx_macros
+          ctx.ctx_enums
+          ctx.ctx_global_preds
+  with
   | None -> None
-  | Some stub -> Some (from_stub_func ctx f stub)
+
+  | Some { stub_alias = Some alias } ->
+    raise (StubAliasFound alias)
+
+  | Some stub ->
+    let stub' = from_stub_func ctx f stub in
+    Hashtbl.add ctx.ctx_stubs f.func_org_name stub';
+    Some stub'
 
 and from_stub_func ctx f stub =
   {
@@ -787,3 +845,7 @@ and from_stub_global_predicates com_map =
   C_AST.RangeMap.fold (fun range com acc ->
       C_stubs_parser.Main.parse_global_predicate_comment com @ acc
     ) com_map []
+
+and patch_alias_parameters stub params =
+  warn "patch_alias_parameters not implemented";
+  stub
