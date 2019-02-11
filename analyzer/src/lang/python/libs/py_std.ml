@@ -28,7 +28,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = { export = []; import = [Zone.Z_py] }
-    let eval_interface = { export = [Zone.Z_py, Zone.Z_py]; import = [Zone.Z_py, Zone.Z_py] }
+    let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj] }
 
     let init _ _ flow = Some flow
 
@@ -127,7 +127,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "input")}, _)}, args, [])  ->
          let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
          if List.length args <= 1 then
-           man.eval (mk_py_top T_string range) flow |> OptionExt.return
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return
          else
            tyerror flow |> OptionExt.return
 
