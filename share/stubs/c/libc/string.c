@@ -410,6 +410,12 @@ char *strndup (const char *__s, size_t __n);
 char *strchr (const char *__s, int __c);
 
 /*$
+ * alias: strchr;
+ */
+char *__builtin_strchr (const char *__s, int __c);
+
+
+/*$
  * local: size_t len = strlen(__s);
  *
  * case "found" {

@@ -21,6 +21,7 @@ void test_alias_without_parameters() {
 }
 
 
+
 /* Aliases with parameters */
 /* *********************** */
 
@@ -34,6 +35,6 @@ int incr(int x);
  */
 int _incr(int x);
 
-void test_alias_with_parameter() {
+void test_alias_with_same_parameters() {
   _mopsa_assert(_incr(1) == 2);
 }

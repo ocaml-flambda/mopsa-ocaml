@@ -77,8 +77,8 @@ type ctx = {
   ctx_macros: string MapExt.StringMap.t;
   (* cache of (parameter-less) macros of the project *)
 
-  ctx_stubs: (string,Stubs.Ast.stub_func) Hashtbl.t;
-  (* cache of stubs *)
+  ctx_stubs: (string,C_stubs_parser.Cst.stub) Hashtbl.t;
+  (* cache of stubs CST, used for resolving aliases *)
 
   ctx_enums: Z.t MapExt.StringMap.t;
   (* cache of enum values of the project *)
@@ -222,31 +222,14 @@ and from_project prj =
         f.c_func_stub <- from_stub_comment ctx o;
         funcs_with_alias
       with (StubAliasFound alias) ->
-        (f, alias) :: funcs_with_alias
+        (f, o, alias) :: funcs_with_alias
     ) [] funcs_and_origins
   in
 
   (* Resolve stub aliases *)
-  List.iter (fun (f, alias) ->
+  List.iter (fun (f, o, alias) ->
       debug "resolving alias function %s" f.c_func_org_name;
-      try
-        let stub = Hashtbl.find ctx.ctx_stubs alias in
-        (* Check prototype matching *)
-        if List.length f.c_func_parameters = List.length stub.stub_func_params &&
-           List.for_all (fun (p1, p2) ->
-               p1.org_vname = p2.org_vname &&
-               compare_typ p1.vtyp p2.vtyp = 0
-             ) (List.combine f.c_func_parameters stub.stub_func_params)
-        then
-          (* Replace parameters of the alias by those of the function *)
-          let stub' = patch_alias_parameters stub f.c_func_parameters in
-          f.c_func_stub <- Some stub
-        else
-          panic "prototypes of function %s and its alias %s do not match"
-            f.c_func_org_name alias
-
-      with Not_found ->
-        panic_at f.c_func_range "alias %s not found" alias
+      f.c_func_stub <- from_stub_alias ctx o alias;
     ) funcs_with_alias;
 
   let globals = StringMap.bindings prj.proj_vars |>
@@ -466,6 +449,7 @@ and from_init_stub ctx v =
           ctx.ctx_macros
           ctx.ctx_enums
           ctx.ctx_global_preds
+          ctx.ctx_stubs
   with
   | None -> None
   | Some stub ->
@@ -661,6 +645,7 @@ and from_stub_comment ctx f =
           ctx.ctx_macros
           ctx.ctx_enums
           ctx.ctx_global_preds
+          ctx.ctx_stubs
   with
   | None -> None
 
@@ -668,9 +653,7 @@ and from_stub_comment ctx f =
     raise (StubAliasFound alias)
 
   | Some stub ->
-    let stub' = from_stub_func ctx f stub in
-    Hashtbl.add ctx.ctx_stubs f.func_org_name stub';
-    Some stub'
+    Some (from_stub_func ctx f stub)
 
 and from_stub_func ctx f stub =
   {
@@ -846,6 +829,30 @@ and from_stub_global_predicates com_map =
       C_stubs_parser.Main.parse_global_predicate_comment com @ acc
     ) com_map []
 
-and patch_alias_parameters stub params =
-  warn "patch_alias_parameters not implemented";
-  stub
+and from_stub_alias ctx f alias =
+  let stub = C_stubs_parser.Main.resolve_alias alias f ctx.ctx_prj ctx.ctx_stubs in
+
+  (* Check prototype matching *)
+  let params = Array.to_list f.func_parameters in
+  if List.length params = List.length stub.stub_params &&
+     List.for_all (fun (p1, p2) ->
+         p1.var_org_name = p2.var_org_name
+         (* FIXME: check types also *)
+       ) (List.combine params stub.stub_params)
+  then
+    Some   {
+      stub_func_name     = stub.stub_name;
+      stub_func_params   = List.map (from_var ctx) params;
+      stub_func_body     = List.map (from_stub_section ctx) stub.stub_body;
+      stub_func_range    = stub.stub_range;
+      stub_func_locals   = List.map (from_stub_local ctx) stub.stub_locals;
+      stub_func_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
+      stub_func_return_type =
+        match f.func_return with
+        | (T_void, _) -> None
+        | t -> Some (from_typ ctx t);
+    }
+
+  else
+    panic "prototypes of function %s and its alias %s do not match"
+      f.func_org_name alias
