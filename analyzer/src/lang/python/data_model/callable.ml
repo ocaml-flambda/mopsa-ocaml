@@ -45,7 +45,7 @@ module Domain =
 
       | E_py_call(f, args, []) ->
         debug "Calling %a from %a" pp_expr exp pp_range exp.erange;
-        man.eval f flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) f flow |>
         Eval.bind
           (fun f flow ->
              debug "f is now %a" pp_expr f;
@@ -66,7 +66,7 @@ module Domain =
 
                Eval.bind (fun args flow ->
                    let exp = {exp with ekind = E_py_call(f, args, [])} in
-                   man.eval exp flow
+                   man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
                  )
 
              | _ ->
@@ -74,7 +74,7 @@ module Domain =
                Eval.assume
                  (mk_py_hasattr f "__call__" range)
                  ~fthen:(fun flow ->
-                     man.eval (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
+                     man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
                  ~felse:(fun flow ->
                      debug "callable/E_py_call, on %a@\n" pp_expr f; assert false
                    )

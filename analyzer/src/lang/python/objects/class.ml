@@ -28,7 +28,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py]; import = []}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
 
@@ -44,17 +44,17 @@ module Domain =
         debug "class call  %a@\n@\n" pp_expr exp;
         (* Call __new__ *)
         let new_call = mk_py_call (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range) :: args) range in
-        man.eval new_call flow |>
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) new_call flow |>
         Eval.bind (fun inst flow ->
            Eval.assume
                  (mk_py_isinstance inst ecls range)
                  ~fthen:(fun flow ->
                    debug "init!@\n";
-                   man.eval (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: args) range) flow |>
+                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls "__init__" range) (inst :: args) range) flow |>
                      Eval.bind (fun r flow ->
                          Eval.assume
                            (mk_py_isinstance_builtin r "NoneType" range)
-                           ~fthen:(fun flow -> man.eval inst flow)
+                           ~fthen:(fun flow -> man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) inst flow)
                            ~felse:(fun flow ->
                              let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                              Eval.empty_singleton flow
@@ -74,7 +74,7 @@ module Domain =
       (* 𝕊⟦ class cls: body ⟧ *)
       | S_py_class cls ->
          debug "definition of class %a" pp_var cls.py_cls_var;
-         Eval.eval_list cls.py_cls_bases man.eval flow |>
+         Eval.eval_list cls.py_cls_bases (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Post.bind man
              (fun bases flow ->
                let bases' =

@@ -161,7 +161,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = [Zone.Z_py_obj]; import = []}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [(*Universal.Zone.Z_u_heap, Z_any*)]}
+  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any; Universal.Zone.Z_u, Z_any]}
 
   let join annot d d' = {abs_heap = TMap.join annot d.abs_heap d'.abs_heap;
                          typevar_env = TypeVarMap.join annot d.typevar_env d'.typevar_env}
@@ -265,7 +265,7 @@ struct
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let bltin_cls, bltin_mro = get_builtin bltin in
-    man.eval (mk_alloc_addr (A_py_instance (*bltin_cls*)) range) flow |>
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance (*bltin_cls*)) range) flow |>
     Eval.bind (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
@@ -380,7 +380,7 @@ struct
      *   |> OptionExt.return *)
 
     | E_unop(Framework.Ast.O_log_not, e') ->
-      man.eval e' flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' flow |>
       Eval.bind
         (fun exp flow ->
            (* FIXME: test if instance of bool and proceed accordingly *)
@@ -392,9 +392,9 @@ struct
            | E_constant (C_bool false) ->
              Eval.singleton (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a addr_true = 0 ->
-             man.eval (mk_py_false range) flow
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
            | E_py_object (a, _) when compare_addr a addr_false = 0 ->
-             man.eval (mk_py_true range) flow
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_true range) flow
            | E_py_object (a, _) when compare_addr a addr_bool_top = 0 ->
              Eval.singleton exp flow
            | _ -> failwith "not: ni"
@@ -454,14 +454,14 @@ struct
 
         | A_py_module (M_user (name, globals)) ->
           let v = List.find (fun x -> x.org_vname = attr) globals in
-          man.eval (mk_var v range) flow
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->
           Eval.singleton (mk_py_object (find_builtin_attribute (object_of_expr e) attr) range) flow
 
         | A_py_class (C_user c, b) ->
           let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
-          man.eval (mk_var f range) flow
+          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
 
         | A_py_instance ->
           let cur = Flow.get_domain_cur man flow in
@@ -483,7 +483,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
-      man.eval arg flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind
         (fun earg flow ->
            let cur = Flow.get_domain_cur man flow in
@@ -508,7 +508,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
-      Eval.eval_list [cls; cls'] man.eval flow |>
+      Eval.eval_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       Eval.bind (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
@@ -520,7 +520,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
-      Eval.eval_list [obj; attr] man.eval flow |>
+      Eval.eval_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       Eval.bind (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           debug "now isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr;
@@ -553,14 +553,14 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       Eval.bind (fun args flow ->
           match args with
           | [] ->
             debug "Error during creation of a new instance@\n";
             man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
           | cls :: tl ->
-            man.eval (mk_alloc_addr A_py_instance range) flow |>
+            man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr A_py_instance range) flow |>
             Eval.bind (fun eaddr flow ->
                 let addr = match ekind eaddr with
                   | E_addr a -> a
@@ -579,7 +579,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-      man.eval (mk_py_none range) flow |> OptionExt.return
+      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
 
     | E_py_sum_call (f, args) ->
       let func = match ekind f with
@@ -588,7 +588,7 @@ struct
       (* if !opt_pyty_summaries then
        *   Exceptions.panic_at range "todo@\n"
        * else *)
-        man.eval (mk_call func args range) flow
+        man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) flow
         |> OptionExt.return
 
 

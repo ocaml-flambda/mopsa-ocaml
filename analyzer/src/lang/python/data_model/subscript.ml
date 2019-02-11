@@ -36,17 +36,17 @@ module Domain =
       let range = exp.erange in
       match ekind exp with
       | E_py_index_subscript(obj, index) ->
-         Eval.eval_list [obj; index] man.eval flow |>
+         Eval.eval_list [obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Eval.bind (fun el flow ->
                let eobj, index = match el with [obj; index] -> obj, index | _ -> assert false in
 
-               man.eval (mk_py_type eobj range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      Eval.assume
                        (Utils.mk_hasattr cls "__getitem__" range)
                        ~fthen:(fun true_flow ->
                          let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; index] range in
-                         man.eval exp' true_flow
+                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' true_flow
                        )
                        ~felse:(fun false_flow ->
                          let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
@@ -58,18 +58,18 @@ module Domain =
          |> OptionExt.return
 
       | E_py_slice_subscript(obj, start, stop, step) ->
-         Eval.eval_list [obj; start; stop; step] man.eval flow |>
+         Eval.eval_list [obj; start; stop; step] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Eval.bind (fun el flow ->
                let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
-               man.eval (mk_py_type eobj range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
                      Eval.assume
                        (Utils.mk_hasattr cls "__getitem__" range)
                        ~fthen:(fun true_flow ->
-                         man.eval (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
+                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                            Eval.bind (fun slice flow ->
                                let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; slice] range in
-                               man.eval exp' flow
+                               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow
                              )
                        )
                        ~felse:(fun false_flow ->
@@ -88,11 +88,11 @@ module Domain =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_index_subscript(obj, index)}, exp) ->
-         Eval.eval_list [exp; obj; index] man.eval flow |>
+         Eval.eval_list [exp; obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Post.bind man
              (fun el flow ->
                let exp, eobj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
-               man.eval (mk_py_type eobj range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Post.bind man (fun cls flow ->
                      Post.assume
                        (Utils.mk_hasattr cls "__setitem__" range)
@@ -110,16 +110,16 @@ module Domain =
          |> OptionExt.return
 
       | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp) ->
-         Eval.eval_list [exp; obj; start; stop; step] man.eval flow |>
+         Eval.eval_list [exp; obj; start; stop; step] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Post.bind man (fun el flow ->
                let exp, eobj, start, stop, step = match el with [exp; obj; start; stop; step] -> exp, obj, start, stop, step | _ -> assert false in
-               man.eval (mk_py_type eobj range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Post.bind man (fun cls flow ->
                      Post.assume
                        (Utils.mk_hasattr cls "__setitem__" range)
                        man
                        ~fthen:(fun true_flow ->
-                         man.eval (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
+                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                            Post.bind man (fun slice flow ->
                                let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; slice; exp] range in
                                man.exec {stmt with skind = S_expression(exp')} flow |> Post.of_flow

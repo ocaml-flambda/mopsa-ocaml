@@ -43,8 +43,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = []; import = []}
+    let exec_interface = {export = [Zone.Z_py]; import = [Zone.Z_py]}
+    let eval_interface = {export = []; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
     let eval _ _ _ _ = None
@@ -95,7 +95,7 @@ module Domain =
 
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
-        (man.eval exp flow |>
+        (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow |>
          Post.bind_with_cleaners man (fun exp cleaners flow ->
              (* match ekind exp with
               * | E_py_object obj -> *)
@@ -168,7 +168,7 @@ module Domain =
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man flow0 in
                 let flow' =
-                  man.eval e flow |>
+                  man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
                   Post.bind man (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
@@ -232,7 +232,7 @@ module Domain =
               (* Evaluate e in env to check if it corresponds to exn *)
               let flow = Flow.set T_cur env man flow0 in
               let flow' =
-                man.eval e flow |>
+                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
                 Post.bind man (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->

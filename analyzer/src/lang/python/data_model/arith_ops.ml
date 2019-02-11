@@ -39,7 +39,7 @@ module Domain =
       match ekind exp with
       | E_binop(op, e1, e2) when is_arith_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
          debug "arith op@\n";
-         Eval.eval_list [e1; e2] (man.eval ~zone:zs) flow |>
+         Eval.eval_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Eval.bind
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -48,10 +48,10 @@ module Domain =
                let rop_fun = binop_to_rev_fun op in
 
                (* let o1 = object_of_expr e1 and o2 = object_of_expr e2 in *)
-               man.eval (mk_py_type e1 range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e1 range) flow |>
                  Eval.bind (fun cls1 flow ->
                      let cls1 = object_of_expr cls1 in
-                     man.eval (mk_py_type e2 range) flow |>
+                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e2 range) flow |>
                        Eval.bind (fun cls2 flow ->
                            let cls2 = object_of_expr cls2 in
                            (* let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in *)
@@ -62,7 +62,7 @@ module Domain =
                            Eval.assume
                              (Utils.mk_object_hasattr cls1 op_fun range)
                              ~fthen:(fun true_flow ->
-                               man.eval (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) true_flow |>
+                               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) true_flow |>
                                  Eval.bind (fun r flow ->
                                      let expr = mk_py_isinstance r not_implemented_type range in
                                      Eval.assume expr
@@ -76,7 +76,7 @@ module Domain =
                                            Eval.assume
                                              (Utils.mk_object_hasattr cls2 rop_fun range)
                                              ~fthen:(fun true_flow ->
-                                               man.eval (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
+                                               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                                  Eval.bind (fun r flow ->
                                                      Eval.assume
                                                        (mk_py_isinstance r not_implemented_type range)
@@ -108,7 +108,7 @@ module Domain =
                                  Eval.assume
                                    (Utils.mk_object_hasattr cls2 rop_fun range)
                                    ~fthen:(fun true_flow ->
-                                     man.eval (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
+                                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                        Eval.bind (fun r flow ->
                                            Eval.assume
                                              (mk_py_isinstance r not_implemented_type range)
@@ -132,17 +132,17 @@ module Domain =
          |> OptionExt.return
       | E_unop(op, e) when is_arith_op op(* && is_py_expr e*) ->
          debug "Resolving unary operator %a" Framework.Ast.pp_operator op;
-         man.eval e flow |>
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun e flow ->
                debug "Subexpression evaluated to %a(%a)" Framework.Ast.pp_expr e Framework.Ast.pp_typ e.etyp;
                let op_fun = unop_to_fun op in
-               man.eval (mk_py_type e range) flow |>
+               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
                      Eval.assume
                        (Utils.mk_object_hasattr cls op_fun range)
                        ~fthen:(fun true_flow ->
-                         man.eval (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
+                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
                        )
                        ~felse:(fun false_flow ->
                          let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow in
