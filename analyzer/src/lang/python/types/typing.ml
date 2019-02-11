@@ -215,6 +215,10 @@ struct
   let exec zone stmt man flow =
     debug "exec %a@\n" pp_stmt stmt;
     match skind stmt with
+    | S_assign ({ekind = E_addr _}, _) ->
+      debug "nothing to do@\n";
+      Post.return flow
+
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       (* TODO: le faire autrepart (addr_env), /!\ zones *)
       let cur = Flow.get_domain_cur man flow in
@@ -351,9 +355,25 @@ struct
     | E_constant (C_float _) ->
       allocate_builtin man range flow "float" |> OptionExt.return
 
-    | E_constant (C_top T_string)
-    | E_constant (C_string _) ->
+    | E_constant (C_top T_string) ->
       allocate_builtin man range flow "str" |> OptionExt.return
+
+    | E_constant (C_string s) ->
+      let range = tag_range range "alloc_str" in
+      let bltin_cls, bltin_mro = get_builtin "str" in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance (*bltin_cls*)) range) flow |>
+      Eval.bind (fun eaddr flow ->
+          let addr = match ekind eaddr with
+            | E_addr a -> a
+            | _ -> assert false in
+          let cur = Flow.get_domain_cur man flow in
+          let bltin_inst = (Polytypeset.singleton (Instance {classn=Class (bltin_cls, bltin_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
+          let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
+          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+          (* Eval.singleton eaddr flow *)
+          Eval.singleton (mk_py_object (addr, Some exp) range) flow
+        )
+      |> OptionExt.return
 
     | E_py_bytes _ ->
       allocate_builtin man range flow "bytes" |> OptionExt.return
@@ -404,6 +424,7 @@ struct
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
+        | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
       begin match akind addr with
         | A_py_class (C_builtin _, _)
@@ -447,6 +468,7 @@ struct
     | E_py_ll_getattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
+        | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
       begin match akind addr with
         | A_py_module (M_builtin m) ->

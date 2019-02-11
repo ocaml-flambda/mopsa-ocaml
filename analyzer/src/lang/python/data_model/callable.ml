@@ -60,9 +60,7 @@ module Domain =
              | E_py_object _ ->
 
                (* for now, we'd like string constants not to be evaluated, to be able to handle call like hasattr with precision, even on the type domain *)
-               Eval.eval_list args (fun e f -> match ekind e with
-                   | E_constant (C_string _) -> Eval.singleton e f
-                   | _ -> man.eval e f) flow |>
+               Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
 
                Eval.bind (fun args flow ->
                    let exp = {exp with ekind = E_py_call(f, args, [])} in
