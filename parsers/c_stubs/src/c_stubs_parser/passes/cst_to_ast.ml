@@ -593,7 +593,13 @@ let visit_section sect prj func =
 
   | S_case case -> S_case (visit_case case prj func), [], []
 
-  | S_predicate pred -> Exceptions.panic_at pred.range "predicate %a not expanded" pp_var pred.content.predicate_var
+  | S_predicate pred -> assert false
+  | S_alias alias -> assert false
+
+let visit_alias sects =
+  match sects with
+  | [ Cst.S_alias alias ] -> alias.content
+  | _ -> assert false
 
 (** {2 Entry point} *)
 (** *************** *)
@@ -604,12 +610,24 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
-  let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
-  Ast.{
-    stub_name = func.C_AST.func_org_name;
-    stub_params = Array.to_list func.C_AST.func_parameters;
-    stub_body = body;
-    stub_locals = locals;
-    stub_assigns = assigns;
-    stub_range = stub.range;
-  }
+  if Cst.is_alias stub then
+    Ast.{
+      stub_name = func.C_AST.func_org_name;
+      stub_params = Array.to_list func.C_AST.func_parameters;
+      stub_body = [];
+      stub_locals = [];
+      stub_assigns = [];
+      stub_alias = Some (visit_alias stub.content);
+      stub_range = stub.range;
+    }
+  else
+    let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
+    Ast.{
+      stub_name = func.C_AST.func_org_name;
+      stub_params = Array.to_list func.C_AST.func_parameters;
+      stub_body = body;
+      stub_locals = locals;
+      stub_assigns = assigns;
+      stub_alias = None;
+      stub_range = stub.range;
+    }

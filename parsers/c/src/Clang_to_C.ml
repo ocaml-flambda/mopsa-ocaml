@@ -138,8 +138,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
 
   let error range msg arg =
     failwith (Printf.sprintf "%s: %s: %s" (C.string_of_range range) msg arg)
+
   and warning range msg arg =
-    Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg
+    (* Printf.eprintf "WARNING %s: %s: %s\n" (C.string_of_range range) msg arg *)
+    ()
+
   in
 
   

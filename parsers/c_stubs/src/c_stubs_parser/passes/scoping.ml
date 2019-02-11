@@ -276,6 +276,9 @@ let visit_section sect scope =
   | S_predicate _ ->
     sect, scope
 
+  | S_alias _ ->
+    sect, scope
+
 
 (** {2 Entry point} *)
 (** *************** *)

@@ -51,7 +51,7 @@
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALIAS
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
 %token FREE PRIMED RETURN SIZE SIZEOF OFFSET BASE PTR_VALID
@@ -112,8 +112,9 @@ section_list:
 
 section:
   | with_range(case_section) { S_case $1 }
-  | leaf_section { S_leaf $1 }
+  | leaf_section             { S_leaf $1 }
   | with_range(predicate)    { S_predicate $1 }
+  | with_range(alias)        { S_alias $1 }
 
 (* Case section *)
 case_section:
@@ -179,6 +180,11 @@ predicate:
         predicate_body = $7;
       }
     }
+
+
+(* Alias section *)
+alias:
+  | ALIAS COLON IDENT SEMICOL { $3 }
 
 (* Assignment section *)
 assigns:

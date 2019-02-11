@@ -33,6 +33,7 @@ let parse_function_comment
     (macros:string MapExt.StringMap.t)
     (enums:Z.t MapExt.StringMap.t)
     (preds: Cst.predicate with_range list)
+    (stubs:(string,Cst.stub) Hashtbl.t)
   : Ast.stub option
   =
   if not (is_stub_comment func.func_com) then None
@@ -52,16 +53,20 @@ let parse_function_comment
       pos_cnum = col;
     };
 
-    (* Parse the comment *)
     try
+      (* Parse the comment *)
       let cst = Parser.parse_stub Lexer.read buf in
       match cst with
       | None -> None
-      | Some cst ->
-        (* Remove predicates *)
-        let cst1 = Passes.Predicate_expansion.doit cst preds in
 
+      | Some cst ->
+        (* Remove predicates and macros *)
+        let cst1 = Passes.Predicate_expansion.doit cst preds in
         let cst2 = Passes.Macro_expansion.doit cst1 macros enums in
+
+        (* Save the stub in the context, so it can be used later when
+           resolving aliases *)
+        Hashtbl.add stubs func.func_org_name cst2;
 
         (* Resolve scoping of variables *)
         let cst3 = Passes.Scoping.doit cst2 in
@@ -86,6 +91,7 @@ let parse_var_comment
   (macros:string MapExt.StringMap.t)
   (enums:Z.t MapExt.StringMap.t)
   (preds:Cst.predicate with_range list)
+  (stubs:(string,Cst.stub) Hashtbl.t)
   : Ast.stub option
   =
   (* Create a dummy init function *)
@@ -104,13 +110,13 @@ let parse_var_comment
     func_com = var.var_com;
   }
   in
-  parse_function_comment func prj macros enums preds
+  parse_function_comment func prj macros enums preds stubs
 
 
 (** Check whether a comment is a global predicate *)
 let is_global_predicate com =
   match com with
-  | [com] ->    
+  | [com] ->
     let comment = com.Clang_AST.com_text |>
                   String.trim
     in
@@ -158,3 +164,21 @@ let parse_global_predicate_comment com =
     | Parser.Error ->
       let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
       Exceptions.unnamed_syntax_error range
+
+
+(** Resolve a stub alias *)
+let resolve_alias
+    (alias:string)
+    (func:C_AST.func)
+    (prj:C_AST.project)
+    (stubs:(string,Cst.stub) Hashtbl.t)
+  : Ast.stub
+  =
+  (* Find the alias *)
+  let cst = Hashtbl.find stubs alias in
+
+  (* Resolve scoping of variables *)
+  let cst2 = Passes.Scoping.doit cst in
+
+  (* Translate CST into AST *)
+  Passes.Cst_to_ast.doit prj func cst2
