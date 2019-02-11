@@ -1,3 +1,5 @@
 #!/bin/bash
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-${MOPSADIR}/bin/mopsa -lang=universal -config ${MOPSADIR}/analyzer/configs/default.universal.json $@
+CONFIG=universal/default.json
+
+${MOPSADIR}/bin/mopsa -config=${CONFIG} $@
