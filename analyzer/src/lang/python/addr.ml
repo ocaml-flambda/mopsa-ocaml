@@ -55,7 +55,7 @@ type addr_kind +=
 (** Allocate an object on the heap and return its address as an evaluation *)
 let eval_alloc man kind range flow =
   let exp = mk_alloc_addr kind range in
-  man.eval exp flow |>
+  man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
       | E_addr (addr) -> Eval.singleton addr flow
@@ -306,10 +306,12 @@ let mk_py_isinstance e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
 
 let mk_py_isinstance_builtin e builtin range =
-  mk_py_isinstance e (mk_py_object (find_builtin builtin) range) range
+  let obj = find_builtin builtin in
+  mk_py_isinstance e (mk_py_object obj range) range
 
 let mk_py_type e range =
-  mk_py_call (mk_py_object (find_builtin "type") range) [e] range
+  let obj = find_builtin "type" in
+  mk_py_call (mk_py_object obj range) [e] range
 
 (* let none_range = Framework.Location.mk_fresh_range () *)
 (* let mk_py_none range =
@@ -505,7 +507,7 @@ let create_builtin_class kind name cls bases range =
       addr_kind= (A_py_class (kind, bases));
       addr_uid=(-1);
       addr_mode = STRONG
-    }, mk_py_empty range)
+    }, None)
   in
   let addr = {
       addr_kind = A_py_class(kind, mro);
@@ -513,7 +515,7 @@ let create_builtin_class kind name cls bases range =
       addr_mode = STRONG
     }
   in
-  add_builtin_class (addr, mk_py_empty range) ()
+  add_builtin_class (addr, None) ()
 
 
 let () =

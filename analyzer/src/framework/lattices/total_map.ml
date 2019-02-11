@@ -34,7 +34,6 @@ struct
 
   (** {2 Framework.Domain.DOMAIN functions} *)
 
-
   let bottom = BOT
 
   let top = Nb Map.empty

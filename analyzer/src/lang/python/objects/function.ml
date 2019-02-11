@@ -51,8 +51,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [any_zone]; import = []}
-    let eval_interface = {export = [any_zone, any_zone]; import = []}
+    let exec_interface = {export = [Zone.Z_py]; import = []}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = Some flow
 
@@ -152,14 +152,14 @@ module Domain =
                          fun_range = pyfundec.py_func_range;
                        } in
 
-                     man.eval (mk_sum_call fundec args exp.erange) flow |>
-                       Eval.bind (fun e flow -> man.eval e flow)
+                     man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_sum_call fundec args exp.erange) flow |>
+                     Eval.bind (fun e flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow )
                    )
                )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
          let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-         man.eval exp' flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
 
       | _ -> None
 
@@ -180,7 +180,7 @@ module Domain =
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
            Post.bind man (fun addr flow ->
-               let obj = (addr, mk_py_empty range) in
+               let obj = (addr, None) in
                man.exec
                  (mk_assign
                     (mk_var func.py_func_var range)

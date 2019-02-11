@@ -39,7 +39,7 @@ type typ +=
 (*==========================================================================*)
 
 (** Python objects *)
-type py_object = Universal.Ast.addr (** uid + type *) * expr (** value representation *)
+type py_object = Universal.Ast.addr (** uid + type *) * expr option (** optional value representation *)
 
 let compare_py_object (obj1: py_object) (obj2: py_object) : int =
   let addr1 = fst obj1 and addr2 = fst obj2 in
@@ -381,7 +381,7 @@ let object_of_expr e =
 let addr_of_object (obj:py_object) : Universal.Ast.addr =
   fst obj
 
-let value_of_object (obj:py_object) : expr =
+let value_of_object (obj:py_object) : expr option =
   snd obj
 
 let rec is_py_expr e =

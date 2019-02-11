@@ -148,6 +148,11 @@ struct
       | Top -> Top
       | Finite m -> Finite (Map.add k v m)
 
+  let rename (k: Key.t) (k': Key.t) (a: t) : t =
+    let v = find k a in
+    let a = remove k a in
+    add k' v a
+
   let singleton (k:Key.t) (v:Value.t) : t =
     add k v empty
 

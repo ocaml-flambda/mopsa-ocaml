@@ -43,7 +43,7 @@ lang.python = ast addr utils visitor operators pp frontend zone		\
 alarms  libs desugar objects data_model types flows program
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
-lang.python.types = typingdomain typing t_string t_int t_float t_list t_set
+lang.python.types = typing addr_env t_string t_int t_float t_list t_set
 
 
 # Packages

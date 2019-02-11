@@ -95,6 +95,9 @@ struct
   let exists f (abs:t) : bool =
     top_to_exn abs |> (fun s -> Set.exists f s)
 
+  let for_all f (abs:t) : bool =
+    top_to_exn abs |> (fun s -> Set.for_all f s)
+
   let cardinal (abs:t) : int =
     top_to_exn abs |> (fun s -> Set.cardinal s)
 

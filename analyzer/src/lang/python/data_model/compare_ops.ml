@@ -29,7 +29,7 @@ module Domain = struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Framework.Zone.Z_any, Framework.Zone.Z_any]; import = []}
+  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
   let init _ _ flow = Some flow
 
@@ -55,7 +55,7 @@ module Domain = struct
     match ekind exp with
     | E_binop(op, e1, e2) when is_comp_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
        debug "compare op@\n";
-       Eval.eval_list [e1; e2] man.eval flow |>
+       Eval.eval_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
          Eval.bind (fun el flow ->
              let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
@@ -70,10 +70,10 @@ module Domain = struct
                | _ -> assert false
              in
 
-             man.eval (mk_py_type e1 range) flow |>
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e1 range) flow |>
                Eval.bind (fun cls1 flow ->
                    let cls1 = object_of_expr cls1 in
-                   man.eval (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
+                   man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow |>
                      Eval.bind (fun cmp flow ->
                          let not_implemented_type = (* Addr.find_builtin "NotImplementedType" in*)
                            (* DONE? TODO: FIXME: ASK, issue with not_implemented *)

@@ -29,7 +29,7 @@ module Domain =
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [any_zone, any_zone]; import = []}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let init _ _ flow = OptionExt.return flow
 
@@ -69,27 +69,6 @@ module Domain =
          |> OptionExt.return
       (* combinatorial explosion *)
       (* man.eval (mk_expr (E_py_if (e1, e1, e2)) range) flow |> OptionExt.return *)
-
-
-      (* E⟦ e1 is e2 ⟧ *)
-      (* | E_binop(O_py_is, e1, e2) ->
-       *    Exceptions.panic "FIXME: To implement (maybe with id(e1)==id(e2), or to leave to another domain?)" *)
-      (* Eval.eval_list [e1; e2] man.eval flow |>
-          *   Eval.bind @@
-          *     fun el flow ->
-          *     let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-          *     let o1 = object_of_expr e1 and o2 = object_of_expr e2 in
-          *     let cls1 = Addr.class_of_object o1 and cls2 = Addr.class_of_object o2 in
-          *     if compare_py_object cls1 cls2 <> 0 then
-          *       Eval.singleton (mk_py_false range) flow
-          *     else
-          *       let a1 = addr_of_object o1 and a2 = addr_of_object o2 in
-          *       begin match Universal.Heap.Recency.is_weak a1, Universal.Heap.Recency.is_weak a2, compare_addr a1 a2 = 0 with
-          *       | false, false, true -> Eval.singleton (mk_py_true range) flow
-          *       | false, false, false -> Eval.singleton (mk_py_false range) flow
-          *       | true, true, false -> Eval.singleton (mk_py_false range) flow
-          *       | _ -> Eval.singleton (mk_py_top T_bool range) flow
-          *       end *)
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->

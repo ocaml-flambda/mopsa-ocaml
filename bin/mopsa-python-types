@@ -1,3 +1,6 @@
 #!/bin/bash
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-${MOPSADIR}/bin/mopsa -lang=python -config ${MOPSADIR}/analyzer/configs/python-types.json -stub ${MOPSADIR}/analyzer/stubs/python -widening-delay=1 $@
+CONFIG=python/types.json
+
+${MOPSADIR}/bin/mopsa -config=${CONFIG} -widening-delay=1 -stub=$MOPSADIR/share/stubs/python/ $@
+#-stub ${MOPSADIR}/analyzer/stubs/python

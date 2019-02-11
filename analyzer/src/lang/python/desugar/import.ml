@@ -35,7 +35,7 @@ module Domain =
         default = "";
       }
 
-    let exec_interface = {export = [any_zone]; import = []}
+    let exec_interface = {export = [Zone.Z_py]; import = []}
     let eval_interface = {export = []; import = []}
 
     let rec exec zone stmt man flow =
@@ -105,7 +105,7 @@ module Domain =
              }
            in
            let flow' = man.exec body flow in
-           (addr, mk_py_empty range), flow'
+           (addr, None), flow'
 
 
     (** Parse and import a builtin module *)
@@ -157,7 +157,7 @@ module Domain =
                   addr_mode = STRONG;
                 }
               in
-              add_builtin_function (addr, mk_py_empty (srange stmt)) ()
+              add_builtin_function (addr, None) ()
 
            | S_block(block) ->
               List.iter (parse base) block
@@ -175,7 +175,7 @@ module Domain =
                addr_mode = STRONG;
              }
            in
-           add_builtin_module (addr, mk_py_empty (srange stmt)) ()
+           add_builtin_module (addr, None) ()
          else
            ()
 

@@ -27,8 +27,8 @@ let pp_except fmt e =
 
 let pp_py_object fmt (obj: py_object) =
   match obj with
-  | (addr, {ekind = E_constant (C_py_empty)}) -> fprintf fmt "⟪%a⟫" Universal.Ast.pp_addr addr
-  | (addr, e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Ast.pp_addr addr pp_expr e
+  | (addr, None) -> fprintf fmt "⟪%a⟫" Universal.Ast.pp_addr addr
+  | (addr, Some e) -> fprintf fmt "⟪%a :: %a⟫" Universal.Ast.pp_addr addr pp_expr e
 
 let () =
   register_program_pp (fun default fmt prog ->
@@ -188,7 +188,11 @@ let () =
              ) l
 
       | S_py_class(cls) ->
-        fprintf fmt "class %a:@\n@[<h 2>  %a@]" pp_var cls.py_cls_var pp_stmt cls.py_cls_body
+        fprintf fmt "class %a(%a):@\n@[<h 2>  %a@]" pp_var cls.py_cls_var
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> fprintf fmt ", ")
+             pp_expr) cls.py_cls_bases
+          pp_stmt cls.py_cls_body
 
       | S_py_function(func) ->
         fprintf fmt "%a@\ndef %a(%a):@\n@[<h 2>  %a@]"

@@ -30,8 +30,8 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Framework.Zone.Z_any, Framework.Zone.Z_any]; import = []}
+    let exec_interface = {export = []; import = [Zone.Z_py]}
+    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mktmp () in

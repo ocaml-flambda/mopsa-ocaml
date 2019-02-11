@@ -9,21 +9,21 @@
 open Mopsa
 
 type alarm_kind +=
-   | APyException of expr
+   | APyException of expr * string
 
 let () =
   register_alarm
     {
       compare = (fun default a a' -> match a.alarm_kind, a'.alarm_kind with
-                                     | APyException e, APyException e' -> compare_expr e e'
+                                     | APyException (e, s), APyException (e', s') -> compare_expr e e'
                                      | _ -> default a a');
       pp_token = (fun default fmt a ->
         match a.alarm_kind with
-        | APyException e -> Format.fprintf fmt "PyExc(%a)" pp_expr e
+        | APyException (e, s) -> Format.fprintf fmt "PyExc(%a)" pp_expr e
         | _ -> default fmt a);
       pp_title = (fun default fmt a ->
         match a.alarm_kind with
-        | APyException e -> Format.fprintf fmt "Python Exception: %a" pp_expr e
+        | APyException (e, s) -> Format.fprintf fmt "Python Exception: %s" s
         | _ -> default fmt a);
       pp_report = (fun default fmt a ->
         match a.alarm_kind with
