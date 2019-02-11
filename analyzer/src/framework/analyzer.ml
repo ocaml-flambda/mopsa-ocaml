@@ -437,6 +437,10 @@ struct
           break := false;
           apply_action action flow
 
+        | Step ->
+          break := true;
+          apply_action action flow
+
         | Print ->
           printf "%a@." (Flow.print man) flow;
           interact action range flow
