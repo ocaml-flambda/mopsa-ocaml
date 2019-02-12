@@ -455,15 +455,17 @@ struct
           interact action range flow
 
         | Where ->
-            let () =
-              match action with
-              | Exec(stmt,zone) ->
-                printf "@[<v 3>𝕊 ⟦ %a@] ⟧ in zone %a@." pp_stmt stmt pp_zone zone
+          let () =
+            match action with
+            | Exec(stmt,zone) ->
+              printf "@[<v 3>𝕊 ⟦ %a@] ⟧ in zone %a@." pp_stmt stmt pp_zone zone
 
-              | Eval(exp,zone,_) ->
-                printf "@[<v 3>𝔼 ⟦ %a@] ⟧ in zone %a@." pp_expr exp pp_zone2 zone
-            in
-            interact action range flow
+            | Eval(exp,zone,_) ->
+              printf "@[<v 3>𝔼 ⟦ %a@] ⟧ in zone %a@." pp_expr exp pp_zone2 zone
+          in
+          let cs = Callstack.get flow in
+          printf "Callstack:@\n  @[%a@]@." Callstack.print cs;
+          interact action range flow
       )
 
   and interactive_exec ?(zone=any_zone) stmt flow =
