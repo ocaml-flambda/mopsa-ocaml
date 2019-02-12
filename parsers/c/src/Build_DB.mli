@@ -1,5 +1,26 @@
+(****************************************************************************)
+(*                                                                          *)
+(* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
+(*                                                                          *)
+(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(*                                                                          *)
+(* This program is free software: you can redistribute it and/or modify     *)
+(* it under the terms of the GNU Lesser General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or     *)
+(* (at your option) any later version.                                      *)
+(*                                                                          *)
+(* This program is distributed in the hope that it will be useful,          *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
+(* GNU Lesser General Public License for more details.                      *)
+(*                                                                          *)
+(* You should have received a copy of the GNU Lesser General Public License *)
+(* along with this program.  If not, see <http://www.gnu.org/licenses/>.    *)
+(*                                                                          *)
+(****************************************************************************)
+
 (**
-  Build_DB - Build database to manage the analysis of large projects
+  Build_DB - Build a database to manage the analysis of multi-file projects
 
   To help with the analysis of large projects that may have multiple
   source files, specific libraries, headers, preprocessing and compilation
@@ -10,17 +31,8 @@
   Note: the database is not very efficient as it is completely loaded and
   recreated at each file operation.
   Also, it requires a file lock in case of a concurrent build (e.g.: make -j).
-  It should suffice for small project though and is probably not a bottleneck
-
-
-  Copyright (C) 2017 The MOPSA Project
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the CeCILL license V2.1.
-
-  @author Antoine Miné
+  It should suffice for small project though and is probably not a bottleneck.
  *)
-
 
 
 (** {1 DB representation} *)
