@@ -354,8 +354,12 @@ struct
     printf "  h[elp]           print this message@.";
     ()
 
+  let prompt range () =
+    printf "%a %a @?" Location.pp_range range (Debug.color_str "blue") ">>"
+
   (** Read a debug command *)
-  let rec read_command () =
+  let rec read_command range () =
+    prompt range ();
     let l = read_line () in
     match l with
     | "run"   | "r"   -> Run
@@ -366,7 +370,7 @@ struct
 
     | "help"  | "h"   ->
       print_usage ();
-      read_command ()
+      read_command range ()
 
     | _ ->
       if Str.string_match (Str.regexp "\\(b\\|break\\) \\(.*\\)") l 0
@@ -380,12 +384,12 @@ struct
           | None ->
             printf "Invalid breakpoint syntax@."
         in
-        read_command ()
+        read_command range ()
       )
       else (
         printf "Unrecognized command: %s@." l;
         print_usage ();
-        read_command ()
+        read_command range ()
       )
 
   (** Breakpoint flag *)
@@ -434,8 +438,7 @@ struct
       then apply_action action flow
 
       else (
-        printf "at %a@." Location.pp_range range;
-        match read_command () with
+        match read_command range () with
         | Run ->
           break := false;
           apply_action action flow
@@ -464,7 +467,7 @@ struct
               printf "@[<v 3>𝔼 ⟦ %a@] ⟧ in zone %a@." pp_expr exp pp_zone2 zone
           in
           let cs = Callstack.get flow in
-          printf "Callstack:@\n  @[%a@]@." Callstack.print cs;
+          printf "@[<hv 2>Callstack:@  %a@]@." Callstack.print cs;
           interact action range flow
       )
 
