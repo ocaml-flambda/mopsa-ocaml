@@ -69,6 +69,14 @@ let find_domain_imports (dom:string) =
 (** {2 Filters} *)
 (** *********** *)
 
+(** Return the list of built-in options *)
+let get_builtin_options () =
+  List.filter (fun opt ->
+      match opt with
+      | O_builtin _ -> true
+      | _ -> false
+    ) !options
+
 (** Return the list of registered options of a language *)
 let get_language_options (lang:string) =
   List.filter (fun opt ->
@@ -220,9 +228,10 @@ let help () =
       (* Get the language and domains of selected configuration *)
       let lang = Config.language () in
       let domains = Config.domains () in
+
       (* Get the options *)
-      (get_language_options lang)
-      @
+      (get_builtin_options ())    @
+      (get_language_options lang) @
       (List.map get_domain_options domains |> List.flatten)
   in
   let args = List.map opt_to_output options in
