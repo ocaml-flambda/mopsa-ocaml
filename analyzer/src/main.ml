@@ -77,12 +77,9 @@ let () =
 
         Framework.Logging.phase "computing initial environments";
         let flow = Analyzer.init prog man in
-        let stmt =
-          Ast.mk_stmt (Ast.S_program prog) prog.prog_range
-        in
 
         Framework.Logging.phase "starting the analysis";
-
+        let stmt = Ast.mk_stmt (Ast.S_program prog) prog.prog_range in
         let res = Analyzer.exec stmt man flow in
         let t = Timing.stop t in
 

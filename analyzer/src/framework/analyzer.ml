@@ -292,7 +292,7 @@ struct
 
   open Format
 
-  (** Analysis breakpoints *)
+  (** Analysis breakpoint *)
   type breakpoint = {
     brk_file: string option;
     brk_line: int;
@@ -337,11 +337,11 @@ struct
 
   (* Debugging commands *)
   type command =
-    | Run   (** Analyze and stop at next breakpoint *)
-    | Next  (** Analyze and stop at next program point in the same level *)
-    | Step  (** Analyze and stop at next program point in the level beneath *)
-    | Print (** Print current abstract state *)
-    | Show  (** Show current program point *)
+    | Run    (** Analyze and stop at next breakpoint *)
+    | Next   (** Analyze and stop at next program point in the same level *)
+    | Step   (** Analyze and stop at next program point in the level beneath *)
+    | Print  (** Print current abstract state *)
+    | Where  (** Show current program point *)
 
   let print_usage () =
     printf "Available commands:@.";
@@ -350,7 +350,7 @@ struct
     printf "  n[ext]           analyze until next program point in the same level@.";
     printf "  s[tep]           analyze until next program point in the level beneath@.";
     printf "  p[rint]          print current abstract state@.";
-    printf "  sh[ow]           show current program point@.";
+    printf "  w[here]          show current program point@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -362,7 +362,7 @@ struct
     | "next"  | "n"   -> Next
     | "step"  | "s"   -> Step
     | "print" | "p"   -> Print
-    | "show"  | "sh"  -> Show
+    | "where" | "w"   -> Where
 
     | "help"  | "h"   ->
       print_usage ();
@@ -397,10 +397,12 @@ struct
       brk_line = -1;
     }
 
+
   (** Interpreter actions *)
   type _ action =
     | Exec : stmt * zone -> Domain.t flow action
     | Eval : expr * (zone * zone) * zone -> (Domain.t, expr) evl action
+
 
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Domain.t flow -> a =
@@ -408,6 +410,7 @@ struct
       match action with
       | Exec(stmt, zone) -> exec ~zone stmt interactive_man flow
       | Eval(exp, zone, via) -> eval ~zone ~via exp interactive_man flow
+
 
   (** Interact with the user input *)
   and interact : type a. a action -> Location.range -> Domain.t flow -> a =
@@ -417,7 +420,7 @@ struct
         match find_breakpoint_at range with
         | None ->
           (* No breakpoint here *)
-          ()
+          () 
 
         | Some brk ->
           (* Check if brk is different than the current breakpoint *)
@@ -441,11 +444,17 @@ struct
           break := true;
           apply_action action flow
 
+        | Next ->
+          break := false;
+          let ret = apply_action action flow in
+          break := true;
+          ret
+
         | Print ->
           printf "%a@." (Flow.print man) flow;
           interact action range flow
 
-        | Show ->
+        | Where ->
             let () =
               match action with
               | Exec(stmt,zone) ->
@@ -455,8 +464,6 @@ struct
                 printf "@[<v 3>𝔼 ⟦ %a@] ⟧ in zone %a@." pp_expr exp pp_zone2 zone
             in
             interact action range flow
-
-        | _ -> assert false
       )
 
   and interactive_exec ?(zone=any_zone) stmt flow =
