@@ -1,18 +1,32 @@
+(****************************************************************************)
+(*                                                                          *)
+(* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
+(*                                                                          *)
+(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(*                                                                          *)
+(* This program is free software: you can redistribute it and/or modify     *)
+(* it under the terms of the GNU Lesser General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or     *)
+(* (at your option) any later version.                                      *)
+(*                                                                          *)
+(* This program is distributed in the hope that it will be useful,          *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
+(* GNU Lesser General Public License for more details.                      *)
+(*                                                                          *)
+(* You should have received a copy of the GNU Lesser General Public License *)
+(* along with this program.  If not, see <http://www.gnu.org/licenses/>.    *)
+(*                                                                          *)
+(****************************************************************************)
+
 (**
-  Clang_AST - Raw Clang AST, in OCaml.
+  Clang_AST - Raw Clang AST, in OCaml
 
   The definition of the AST types returned by Clang_parser.
 
-  Initially based on Clang 4.0.0, with some extensions to from 5.0.0svn.
-  Updated to compile with Clang 7.0.0.
-  Features added in Clang 5 or later may be missing.
-
-  Copyright (C) 2017-2018 The MOPSA Project
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the CeCILL license V2.1.
-
-  @author Antoine Mine'
+  Tested with Clang 5.0 up to 7.0.1.
+  As it was initially based on Clang 4, some features introduced in
+  Clang 5 and later may be missing.
  *)
 
 

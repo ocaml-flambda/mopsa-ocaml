@@ -1,11 +1,30 @@
 Contributing
 ============
 
-This document describes the branching model followed in MOPSA and how contributions are merged into the code base.
+Contributions to MOPSA are welcome.
+
+This document describes the technical aspects of how to contribute: the branching model of MOPSA and how contributions are merged into the code base.
+It also describes the legal aspects (licensing and contributor agreement).
+
+
+License
+--------
+
+Unless explicitly specified, the components of the MOPSA software are distributed under the terms of the GNU Lesser General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+See the accompanying COPYING file, or [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
+
+The documentation and example files of the MOPSA software are distributed under a Creative Commons Attribution-ShareAlike 4.0 International License. See [https://creativecommons.org/licenses/by-sa/4.0/](https://creativecommons.org/licenses/by-sa/4.0/).
+
+The authors of the contributions must obey the term of our non-exclusive Contributor License Agreement, generated from [ContributorAgreements.org](http://contributoragreements.org/) and locally available as [CLA-Individual](CLA-Individual.pdf) (for individual contributors) and [CLA-Entity](CLA-Entity.pdf) (for entities).
+For non-trivial contributions to be included in the main Mopsa repository, we require the authors to sign the relevant agreement. See the [instructions to sign the forms](http://mopsa.lip6.fr/contributing.html).
+
+In any contribution, the license notice at the head of each file must remain intact, and new files should include the license notice.
+Please keep the [AUTHORS](AUTHORS) file up to date.
+
 
 
 Stable Branches
-------------------------
+---------------
 The repository of MOPSA has two protected and stable branches: 
 - There is one stable branch `master` containing the latest public release of MOPSA.
 - The development branch `dev` contains the latest stable features of the analyzer that are planned for the next release.

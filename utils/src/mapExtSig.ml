@@ -2,9 +2,10 @@
   This file is derived from the map.mli file from the OCaml distribution.
   Changes are marked with the [MOPSA] symbol.
 
+  Modifications are Copyright (C) 2017-2019 The MOPSA Project.
+
   Original copyright follows.
 *)
-
 
 (***********************************************************************)
 (*                                                                     *)

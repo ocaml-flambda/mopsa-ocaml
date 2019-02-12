@@ -1,21 +1,32 @@
+/****************************************************************************/
+/*                                                                          */
+/* This file is part of MOPSA, a Modular Open Platform for Static Analysis. */
+/*                                                                          */
+/* Copyright (C) 2017-2019 The MOPSA Project.                               */
+/*                                                                          */
+/* This program is free software: you can redistribute it and/or modify     */
+/* it under the terms of the GNU Lesser General Public License as published */
+/* by the Free Software Foundation, either version 3 of the License, or     */
+/* (at your option) any later version.                                      */
+/*                                                                          */
+/* This program is distributed in the hope that it will be useful,          */
+/* but WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            */
+/* GNU Lesser General Public License for more details.                      */
+/*                                                                          */
+/* You should have received a copy of the GNU Lesser General Public License */
+/* along with this program.  If not, see <http://www.gnu.org/licenses/>.    */
+/*                                                                          */
+/****************************************************************************/
+
+
 /*
   Clang_to_ml - Parse C files with Clang into AST and extract the AST to OCaml values.
 
-
-  This functions from this file are indented to be called from OCaml.
-  See Clang_AST.ml
-
-  Based initially on Clang 4.0.0, with some extensions from 5.0.0svn.
-  Updated to compile with Clang 7.0.0.
-  Features added in Clang 5 or later may be missing.
-
-  Copyright (C) 2017-2018 The MOPSA Project
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the CeCILL license V2.1.
-
-  @author Antoine Miné
+  The functions from this file are indented to be called from OCaml.
+  See Clang_parser.mli
 */
+
 
 /* Clang includes */
 #include "llvm/Support/Host.h"
