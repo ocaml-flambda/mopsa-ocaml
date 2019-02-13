@@ -148,9 +148,10 @@ struct
     | INVALID ->
       Bases.invalid, None, None
 
-    | FUN _ -> panic "eval_pointer_compare: function pointers not supported"
+    | TOP ->
+      Bases.top, None, None
 
-    | TOP -> panic "eval_pointer_compare: TOP not supported"
+    | FUN _ -> panic ~loc:__LOC__ "function pointers not supported"
 
 
   (* Set base of an optional pointer info *)
@@ -290,7 +291,7 @@ struct
 
   (** Evaluation of pointer comparisons *)
   let rec eval_pointer_compare exp man flow =
-    match ekind exp with    
+    match ekind exp with
     (* 𝔼⟦ p == q ⟧ *)
     (* 𝔼⟦ !(p != q) ⟧ *)
     | E_binop(O_eq, e1, e2)
@@ -495,6 +496,47 @@ struct
       man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) exp' flow |>
       Eval.return
 
+    (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
+    | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
+      when is_c_pointer_type p.etyp &&
+           is_c_pointer_type q.etyp
+      ->
+      (* Evaluate the pointed bases *)
+      let p1 = eval_pointer p in
+      let p2 = eval_pointer q in
+
+      let b1, o1, v1 = get_pointer_info p1 man flow in
+      let b2, o2, v2 = get_pointer_info p2 man flow in
+
+      (* Compute new bases *)
+      let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
+      let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
+
+      (* Case 1: different bases *)
+      let case1 =
+        if not (Bases.is_bottom b1ne) && not (Bases.is_bottom b2ne) then
+          let flow' = set_base v1 b1ne man flow |>
+                      set_base v2 b2ne man
+          in
+          [Eval.singleton (mk_top T_bool exp.erange) flow']
+        else
+          []
+      in
+
+      (* Case 2: same base => compare offsets *)
+      let case2 =
+        if not (Bases.is_bottom b1eq) && not (Bases.is_bottom b2eq) then
+          let flow' = set_base v1 b1eq man flow |>
+                      set_base v2 b2eq man
+          in
+          [man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (compare_cond op v1 o1 v2 o2 exp.erange) flow']
+        else
+          []
+      in
+      Eval.join_list (case1 @ case2) ~empty:(Eval.empty_singleton flow) |>
+      Eval.return
+
+
 
     | _ -> None
 
@@ -527,6 +569,10 @@ struct
         match ptr with
         | ADDROF (b, offset) ->
           let flow' = Flow.map_domain_env T_cur (add p (Bases.block b)) man flow in
+
+          man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
+          Post.bind_flow man @@ fun offset flow' ->
+
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow'
 
         | EQ (q, offset) ->
@@ -534,7 +580,12 @@ struct
           (* Assign offset only if q points to a block *)
           if Flow.test_domain_env T_cur (fun a -> find q a |> Bases.mem_block) man flow then
             let qo = mk_offset_var_expr q range in
-            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_binop qo O_plus offset ~etyp:T_int range) range) flow'
+            let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
+
+            man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
+            Post.bind_flow man @@ fun offset' flow ->
+
+            man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow'
           else
             man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow'
 

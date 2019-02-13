@@ -575,6 +575,16 @@ let () =
 (** {2 Utility functions} *)
 (*  ********************* *)
 
+let rec is_universal_type t =
+  match t with
+  | T_bool | T_int | T_float _
+  | T_string | T_addr   | T_unit | T_char ->
+    true
+
+  | T_array tt -> is_universal_type tt
+
+  | _ -> false
+
 let mk_not e = mk_unop O_log_not e
 
 let mk_int i ?(typ=T_int) erange =

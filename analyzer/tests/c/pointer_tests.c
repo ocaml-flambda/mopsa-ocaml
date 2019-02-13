@@ -223,6 +223,39 @@ void test_pointer_function_assignment() {
 
 
 /*
+ * Pointer comparison
+ */
+
+void test_pointer_lt() {
+  int a[10];
+  int *p = a + 1;
+  int *q = a + 2;
+  _mopsa_assert(p < q);
+}
+
+void test_pointer_le() {
+  int a[10];
+  int *p = a + 1;
+  int *q = a + 2;
+  _mopsa_assert(p <= p);
+  _mopsa_assert(p <= q);
+}
+
+void test_pointer_gt() {
+  int a[10];
+  int *p = a + 5;
+  int *q = a + 2;
+  _mopsa_assert(p > q);
+}
+
+void test_pointer_ge() {
+  int a[10];
+  int *p = a + 5;
+  _mopsa_assert(p >= a);
+}
+
+
+/*
  * Pointer difference
  */
 
@@ -248,14 +281,15 @@ void test_unsafe_pointer_difference() {
 }
 
 void test_string2_1bptr_macro() {
-  // This macro tests that the object pointed by __x is one byte width
-  // It is a workaround when __x is a void* pointer 
-  // Used in libc and defined in /usr/include/bits/string2.h:92
+  /* This macro tests that the object pointed by __x is one byte width
+   * It is a workaround when __x is a void* pointer
+   * Used in libc and defined in /usr/include/bits/string2.h:92
+   */
   #define __string2_1bptr_p(__x) \
    ((size_t)(const void *)((__x) + 1) - (size_t)(const void *)(__x) == 1)
 
   int x;
-  
+
   void *p1 =(void*)&x;
   _mopsa_assert(__string2_1bptr_p(p1));
 
