@@ -354,12 +354,12 @@ struct
     printf "  h[elp]           print this message@.";
     ()
 
-  let prompt range () =
-    printf "%a %a @?" Location.pp_range range (Debug.color_str "blue") ">>"
+  let print_prompt range () =
+    printf "%a >> @?" (Debug.color "blue" Location.pp_range) range
 
   (** Read a debug command *)
   let rec read_command range () =
-    prompt range ();
+    print_prompt range ();
     let l = read_line () in
     match l with
     | "run"   | "r"   -> Run
@@ -408,6 +408,31 @@ struct
     | Eval : expr * (zone * zone) * zone -> (Domain.t, expr) evl action
 
 
+  (** Print the current analysis action *)
+  let pp_action : type a. formatter -> a action * Domain.t flow -> unit = fun fmt (action, flow) ->
+    let () =
+      match action with
+      | Exec(stmt,zone) ->
+        fprintf fmt " @[<v 3>%a @[%a@]@] %a in zone %a@."
+          (Debug.color_str "IndianRed") "𝕊 ⟦"
+          pp_stmt stmt
+          (Debug.color_str "IndianRed") "⟧"
+          pp_zone zone
+
+      | Eval(exp,zone,_) ->
+        fprintf fmt " @[<v 3>%a %a@] %a in zone %a@."
+          (Debug.color_str "IndianRed") "𝔼 ⟦"
+          pp_expr exp
+          (Debug.color_str "IndianRed") "⟧"
+          pp_zone2 zone
+    in
+    let cs = Callstack.get flow in
+    fprintf fmt " @[<hv 2>%a:@  %a@]@."
+      (Debug.color_str "Teal") "Call stack"
+      Callstack.print cs
+
+
+
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Domain.t flow -> a =
     fun action flow ->
@@ -417,14 +442,14 @@ struct
 
 
   (** Interact with the user input *)
-  and interact : type a. a action -> Location.range -> Domain.t flow -> a =
-    fun action range flow ->
+  and interact : type a. ?where:bool -> a action -> Location.range -> Domain.t flow -> a =
+    fun ?(where=true) action range flow ->
       if not !break then (
         (* Search for a breakpoint at current location *)
         match find_breakpoint_at range with
         | None ->
           (* No breakpoint here *)
-          () 
+          ()
 
         | Some brk ->
           (* Check if brk is different than the current breakpoint *)
@@ -438,6 +463,7 @@ struct
       then apply_action action flow
 
       else (
+        if where then pp_action std_formatter (action, flow);
         match read_command range () with
         | Run ->
           break := false;
@@ -455,20 +481,11 @@ struct
 
         | Print ->
           printf "%a@." (Flow.print man) flow;
-          interact action range flow
+          interact ~where:false action range flow
 
         | Where ->
-          let () =
-            match action with
-            | Exec(stmt,zone) ->
-              printf "@[<v 3>𝕊 ⟦ %a@] ⟧ in zone %a@." pp_stmt stmt pp_zone zone
-
-            | Eval(exp,zone,_) ->
-              printf "@[<v 3>𝔼 ⟦ %a@] ⟧ in zone %a@." pp_expr exp pp_zone2 zone
-          in
-          let cs = Callstack.get flow in
-          printf "@[<hv 2>Callstack:@  %a@]@." Callstack.print cs;
-          interact action range flow
+          pp_action std_formatter (action, flow);
+          interact ~where:false action range flow
       )
 
   and interactive_exec ?(zone=any_zone) stmt flow =

@@ -319,10 +319,10 @@ let pp_assigns fmt assigns =
     ) assigns.content.assign_offset
 
 let pp_assumes fmt (assumes:assumes with_range) =
-  fprintf fmt "assumes  : @[%a@];" pp_formula assumes.content
+  fprintf fmt "assumes  : %a;" pp_formula assumes.content
 
 let pp_ensures fmt ensures =
-  fprintf fmt "ensures  : @[%a@];" pp_formula ensures.content
+  fprintf fmt "ensures  : %a;" pp_formula ensures.content
 
 let pp_free fmt free =
   fprintf fmt "free : %a;" pp_expr free.content
@@ -341,10 +341,13 @@ let pp_leaf_section fmt sec =
   | S_warn warn -> pp_warn fmt warn
 
 let pp_leaf_sections fmt secs =
+  fprintf fmt "@[<v>";
   pp_print_list
-    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    ~pp_sep:(fun fmt () -> fprintf fmt "@,")
     pp_leaf_section
     fmt secs
+  ;
+  fprintf fmt "@]"
 
 let pp_case fmt case =
   fprintf fmt "@[<v 2>case \"%s\" {@,%a@]@,}"
@@ -357,10 +360,13 @@ let pp_section fmt sec =
   | S_case case -> pp_case fmt case
 
 let pp_sections fmt secs =
+  fprintf fmt "@[<v>";
   pp_print_list
-    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    ~pp_sep:(fun fmt () -> fprintf fmt "@,")
     pp_section
     fmt secs
+  ;
+  fprintf fmt "@]"
 
 let pp_stub_func fmt stub = pp_sections fmt stub.stub_func_body
 
