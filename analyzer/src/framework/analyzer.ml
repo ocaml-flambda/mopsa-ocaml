@@ -33,6 +33,7 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
+
 (** Create an [Analyzer] module over some abstract domain. *)
 module Make(Domain : DOMAIN) =
 struct
@@ -69,7 +70,7 @@ struct
   (**                        {2 Initialization}                               *)
   (*==========================================================================*)
 
-  let rec init prog : Domain.t flow =
+  let rec init prog man : Domain.t flow =
     let flow0 = Flow.bottom Annotation.empty  |>
                 Flow.set T_cur man.top man
     in
@@ -108,7 +109,7 @@ struct
             map
       ) map
 
-  and exec ?(zone = any_zone) (stmt: Ast.stmt) (flow: Domain.t flow) : Domain.t flow =
+  and exec ?(zone = any_zone) (stmt: Ast.stmt) man (flow: Domain.t flow) : Domain.t flow =
     Logging.reach (Location.untag_range stmt.srange);
     Logging.exec stmt zone man flow;
 
@@ -169,7 +170,7 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) man (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
     Logging.eval exp zone man flow;
     let timer = Timing.start () in
 
@@ -293,8 +294,249 @@ struct
     print = Domain.print;
     get = (fun flow -> flow);
     set = (fun flow _ -> flow);
-    exec = exec;
-    eval = eval;
+    exec = (fun ?(zone=any_zone) stmt flow -> exec ~zone stmt man flow);
+    eval = (fun ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow -> eval ~zone ~via exp man flow);
+    ask = ask;
+  }
+
+
+  (** {2 Interactive mode} *)
+  (** ******************** *)
+
+  open Format
+
+  (** Analysis breakpoint *)
+  type breakpoint = {
+    brk_file: string option;
+    brk_line: int;
+  }
+
+  (** Compare two breakpoints *)
+  let compare_breakpoint brk1 brk2 =
+    Compare.compose [
+      (fun () -> Compare.option compare brk1.brk_file brk2.brk_file);
+      (fun () -> compare brk1.brk_line brk2.brk_line);
+    ]
+
+  (** Set of active breakpoints *)
+  module BreakpointSet = Set.Make(struct type t = breakpoint let compare = compare_breakpoint end)
+  let breakpoints : BreakpointSet.t ref = ref BreakpointSet.empty
+
+  (** Parse a breakpoint string *)
+  let parse_breakpoint breakpoint =
+    if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") breakpoint 0
+    then Some {
+      brk_file = Some (Str.matched_group 1 breakpoint);
+      brk_line = int_of_string (Str.matched_group 2 breakpoint);
+    }
+
+    else if Str.string_match (Str.regexp "\\([0-9]+\\)$") breakpoint 0
+    then Some {
+      brk_file = None;
+      brk_line = int_of_string (Str.matched_group 1 breakpoint);
+    }
+
+    else None
+
+  (** Check if a range matches a breakpoint *)
+  let match_breakpoint range breakpoint =
+    match breakpoint.brk_file with
+    | None -> Location.match_range_line breakpoint.brk_line range
+
+    | Some file -> Location.match_range_file file range &&
+                   Location.match_range_line breakpoint.brk_line range
+
+  (** Find the breakpoint covering location [range] *)
+  let find_breakpoint_at range =
+    BreakpointSet.filter (match_breakpoint range) !breakpoints |>
+    BreakpointSet.choose_opt
+
+  (* Debugging commands *)
+  type command =
+    | Run    (** Analyze and stop at next breakpoint *)
+    | Next   (** Analyze and stop at next program point in the same level *)
+    | Step   (** Analyze and stop at next program point in the level beneath *)
+    | Print  (** Print current abstract state *)
+    | Where  (** Show current program point *)
+
+
+  (** Reference to the last received command *)
+  let last_command : command option ref = ref None
+
+  (** Print help message *)
+  let print_usage () =
+    printf "Available commands:@.";
+    printf "  b[reak] <loc>    add a breakpoint at location <loc>@.";
+    printf "  r[un]            analyze until next breakpoint@.";
+    printf "  n[ext]           analyze until next program point in the same level@.";
+    printf "  s[tep]           analyze until next program point in the level beneath@.";
+    printf "  p[rint]          print current abstract state@.";
+    printf "  w[here]          show current program point@.";
+    printf "  h[elp]           print this message@.";
+    ()
+
+  let print_prompt range () =
+    printf "%a >> @?" (Debug.color "blue" Location.pp_range) range
+
+  (** Read a debug command *)
+  let rec read_command range () =
+    print_prompt range ();
+    let l = read_line () in
+    let c = match l with
+      | "run"   | "r"   -> Run
+      | "next"  | "n"   -> Next
+      | "step"  | "s"   -> Step
+      | "print" | "p"   -> Print
+      | "where" | "w"   -> Where
+
+      | "help"  | "h"   ->
+        print_usage ();
+        read_command range ()
+
+      | "" -> (
+        match !last_command with
+          | None ->  read_command range ()
+          | Some c -> c
+      )
+
+      | _ ->
+        if Str.string_match (Str.regexp "\\(b\\|break\\) \\(.*\\)") l 0
+        then (
+          let loc = Str.matched_group 2 l in
+          let () =
+            match parse_breakpoint loc with
+            | Some brk ->
+              breakpoints := BreakpointSet.add brk !breakpoints;
+
+            | None ->
+              printf "Invalid breakpoint syntax@."
+          in
+          read_command range ()
+        )
+        else (
+          printf "Unrecognized command: %s@." l;
+          print_usage ();
+          read_command range ()
+        )
+    in
+    last_command := Some c;
+    c
+
+  (** Breakpoint flag *)
+  let break = ref true
+
+  (** Last breakpoint reached *)
+  let last_breakpoint = ref {
+      brk_file = None;
+      brk_line = -1;
+    }
+
+
+  (** Interpreter actions *)
+  type _ action =
+    | Exec : stmt * zone -> Domain.t flow action
+    | Eval : expr * (zone * zone) * zone -> (Domain.t, expr) evl action
+
+
+  (** Print the current analysis action *)
+  let pp_action : type a. formatter -> a action * Domain.t flow -> unit = fun fmt (action, flow) ->
+    let () =
+      match action with
+      | Exec(stmt,zone) ->
+        fprintf fmt " @[<v 3>%a @[%a@]@] %a in zone %a@."
+          (Debug.color_str "IndianRed") "𝕊 ⟦"
+          pp_stmt stmt
+          (Debug.color_str "IndianRed") "⟧"
+          pp_zone zone
+
+      | Eval(exp,zone,_) ->
+        fprintf fmt " @[<v 3>%a %a@] %a in zone %a@."
+          (Debug.color_str "IndianRed") "𝔼 ⟦"
+          pp_expr exp
+          (Debug.color_str "IndianRed") "⟧"
+          pp_zone2 zone
+    in
+    let cs = Callstack.get flow in
+    fprintf fmt " @[<hv 2>%a:@  %a@]@."
+      (Debug.color_str "Teal") "Call stack"
+      Callstack.print cs
+
+
+
+  (** Apply an action on a flow and return its result *)
+  let rec apply_action : type a. a action -> Domain.t flow -> a =
+    fun action flow ->
+      match action with
+      | Exec(stmt, zone) -> exec ~zone stmt interactive_man flow
+      | Eval(exp, zone, via) -> eval ~zone ~via exp interactive_man flow
+
+
+  (** Interact with the user input *)
+  and interact : type a. ?where:bool -> a action -> Location.range -> Domain.t flow -> a =
+    fun ?(where=true) action range flow ->
+      if not !break then (
+        (* Search for a breakpoint at current location *)
+        match find_breakpoint_at range with
+        | None ->
+          (* No breakpoint here *)
+          ()
+
+        | Some brk ->
+          (* Check if brk is different than the current breakpoint *)
+          if compare_breakpoint brk !last_breakpoint != 0 then (
+            break := true;
+            last_breakpoint := brk;
+          )
+      );
+
+      if not !break
+      then apply_action action flow
+
+      else (
+        if where then pp_action std_formatter (action, flow);
+        match read_command range () with
+        | Run ->
+          break := false;
+          apply_action action flow
+
+        | Step ->
+          break := true;
+          apply_action action flow
+
+        | Next ->
+          break := false;
+          let ret = apply_action action flow in
+          break := true;
+          ret
+
+        | Print ->
+          printf "%a@." (Flow.print man) flow;
+          interact ~where:false action range flow
+
+        | Where ->
+          pp_action std_formatter (action, flow);
+          interact ~where:false action range flow
+      )
+
+  and interactive_exec ?(zone=any_zone) stmt flow =
+    interact (Exec (stmt, zone)) stmt.srange flow
+
+  and interactive_eval ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow =
+    interact (Eval (exp, zone, via)) exp.erange flow
+
+  and interactive_man = {
+    bottom = Domain.bottom;
+    top = Domain.top;
+    is_bottom = Domain.is_bottom;
+    subset = Domain.subset;
+    join = Domain.join;
+    meet = Domain.meet;
+    widen = Domain.widen;
+    print = Domain.print;
+    get = (fun flow -> flow);
+    set = (fun flow _ -> flow);
+    exec = interactive_exec;
+    eval = interactive_eval;
     ask = ask;
   }
 

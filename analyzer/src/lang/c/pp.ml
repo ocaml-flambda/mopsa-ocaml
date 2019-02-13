@@ -30,7 +30,7 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
-  | C_init_stub stub -> fprintf fmt "@,@[<v 4>/*$@,%a@]@,*/" Stubs.Ast.pp_stub_init stub
+  | C_init_stub stub -> fprintf fmt "@[<v 2>/*$@,%a@]@,*/" Stubs.Ast.pp_stub_init stub
 
 let rec pp_c_type_short fmt =
   function
@@ -203,14 +203,15 @@ let () =
       match prg.prog_kind with
       | Ast.C_program prog ->
         (* Remove empty functions *)
-        List.filter (fun f ->
+        let funs = List.filter (fun f ->
             match f.c_func_body with
             | None -> false
             | Some _ -> true
           ) prog.c_functions
-        |>
+        in
+        fprintf fmt "@[<v>";
         pp_print_list
-          ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+          ~pp_sep:(fun fmt () -> fprintf fmt "@,")
           (fun fmt f ->
              fprintf fmt "@[<v 2>%a %s(%a) {@,%a@]@,}"
                pp_typ f.c_func_return
@@ -218,7 +219,9 @@ let () =
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
                (OptionExt.print pp_stmt) f.c_func_body
           )
-          fmt
+          fmt funs
+        ;
+        fprintf fmt "@]"
 
       | _ -> default fmt prg
     );

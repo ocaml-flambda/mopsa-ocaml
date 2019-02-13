@@ -1,13 +1,7 @@
-unsigned char i, j;
-long int a[2];
+int a[10];
 
 void main() {
-  i = 0;
-  char*p;
-  p = &(a[1]);
-  *p = 100;
-  while(i < 2) {
-    a[i] = i;
-    i++;
-  }
+  int i = 10;
+  char *p = a;
+  *p = i;
 }
