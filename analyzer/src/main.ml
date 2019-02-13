@@ -29,6 +29,7 @@ let parse_program lang files =
   Framework.Logging.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "cfg" -> Lang.Cfg.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"

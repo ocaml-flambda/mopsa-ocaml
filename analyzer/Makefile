@@ -34,7 +34,7 @@ reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal stubs c python
+lang = universal stubs c python cfg
 
 lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
 strings
@@ -67,6 +67,8 @@ lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
 lang.python.types = typing addr_env t_string t_int t_float t_list t_set
 
+lang.cfg = ast pp visitor frontend iterator iterators
+lang.cfg.iterators = intraproc inlining
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
