@@ -491,9 +491,9 @@ let () =
         | S_if(e, s1, s2) ->
           fprintf fmt "@[<v 2>if (%a) {@,%a@]@,} @[<v 2>else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
         | S_block(l) ->
-          fprintf fmt "@[";
+          fprintf fmt "@[<v>";
           pp_print_list
-            ~pp_sep:(fun fmt () -> fprintf fmt "@;")
+            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
             pp_stmt
             fmt l
           ;

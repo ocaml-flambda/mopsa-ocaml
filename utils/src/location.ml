@@ -134,6 +134,17 @@ let get_range_column r =
   let pos = get_range_start r in
   pos.pos_column
 
+let match_range_file file r =
+  let pred f = Str.string_match (Str.regexp (".*" ^ file ^ "$")) f 0 in
+  match untag_range r with
+  | R_orig(p, _) -> pred p.pos_file
+  | R_program pl -> List.exists pred pl
+  | _ -> false
+
+let match_range_line line r =
+  match untag_range r with
+  | R_orig(p, _) -> p.pos_line = line
+  | _ -> false
 
 let from_lexing_pos pos =
   let open Lexing

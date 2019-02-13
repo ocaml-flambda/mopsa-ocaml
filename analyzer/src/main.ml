@@ -24,15 +24,18 @@
 open Framework
 
 
-(** Call the appropriate frontend to parse the input sources *)
-let parse_program lang files =
-  Framework.Logging.phase "parsing";
-  match lang with
-  | "universal" -> Lang.Universal.Frontend.parse_program files
-  | "c" -> Lang.C.Frontend.parse_program files
-  | "python" -> Lang.Python.Frontend.parse_program files
-  | _ -> Exceptions.panic "Unknown language"
+(** {2 Command-line options} *)
+(** ************************ *)
 
+let opt_interactive = ref false
+
+let () =
+  Options.register_builtin_option {
+    key = "-interactive";
+    doc = " start the analysis in interactive mode";
+    spec = Arg.Set opt_interactive;
+    default = "false";
+  }
 
 
 (** Parse command line arguments and apply [f] on the list of target
@@ -48,7 +51,23 @@ let parse_options f () =
     ) "Modular Open Platform for Static Analysis";
   !return_value
 
-(** Main entry point *)
+
+(** {2 Parsing} *)
+(** *********** *)
+
+(** Call the appropriate frontend to parse the input sources *)
+let parse_program lang files =
+  Framework.Logging.phase "parsing";
+  match lang with
+  | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "c" -> Lang.C.Frontend.parse_program files
+  | "python" -> Lang.Python.Frontend.parse_program files
+  | _ -> Exceptions.panic "Unknown language"
+
+
+(** {2 Entry point} *)
+(** *************** *)
+
 let () =
   exit @@ parse_options (fun files ->
       try
@@ -62,15 +81,19 @@ let () =
 
         let t = Timing.start () in
 
-        Framework.Logging.phase "computing initial environments";
-        let flow = Analyzer.init prog in
-        let stmt =
-          Ast.mk_stmt (Ast.S_program prog) prog.prog_range
+        (* Get the appropriate analysis manager *)
+        let man =
+          if !opt_interactive
+          then Analyzer.interactive_man
+          else Analyzer.man
         in
 
-        Framework.Logging.phase "starting the analysis";
+        Framework.Logging.phase "computing initial environments";
+        let flow = Analyzer.init prog man in
 
-        let res = Analyzer.exec stmt flow in
+        Framework.Logging.phase "starting the analysis";
+        let stmt = Ast.mk_stmt (Ast.S_program prog) prog.prog_range in
+        let res = Analyzer.exec stmt man flow in
         let t = Timing.stop t in
 
         Output.Factory.render Analyzer.man res t files
