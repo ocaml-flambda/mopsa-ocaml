@@ -143,9 +143,9 @@ let register_var info =
 
 let compare_var v1 v2 =
   Compare.compose [
+    (fun () -> compare v1.uniq_vname v2.uniq_vname);
     (fun () -> compare v1.vuid v2.vuid);
     (fun () -> compare_typ v1.vtyp v2.vtyp);
-    (fun () -> compare v1.uniq_vname v2.uniq_vname);
     (fun () -> !var_compare_chain v1 v2);
   ]
 
