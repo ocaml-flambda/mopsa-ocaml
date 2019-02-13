@@ -298,6 +298,7 @@ struct
     brk_line: int;
   }
 
+  (** Compare two breakpoints *)
   let compare_breakpoint brk1 brk2 =
     Compare.compose [
       (fun () -> Compare.option compare brk1.brk_file brk2.brk_file);
@@ -308,6 +309,7 @@ struct
   module BreakpointSet = Set.Make(struct type t = breakpoint let compare = compare_breakpoint end)
   let breakpoints : BreakpointSet.t ref = ref BreakpointSet.empty
 
+  (** Parse a breakpoint string *)
   let parse_breakpoint breakpoint =
     if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") breakpoint 0
     then Some {
@@ -323,6 +325,7 @@ struct
 
     else None
 
+  (** Check if a range matches a breakpoint *)
   let match_breakpoint range breakpoint =
     match breakpoint.brk_file with
     | None -> Location.match_range_line breakpoint.brk_line range
@@ -343,6 +346,11 @@ struct
     | Print  (** Print current abstract state *)
     | Where  (** Show current program point *)
 
+
+  (** Reference to the last received command *)
+  let last_command : command option ref = ref None
+
+  (** Print help message *)
   let print_usage () =
     printf "Available commands:@.";
     printf "  b[reak] <loc>    add a breakpoint at location <loc>@.";
@@ -361,36 +369,45 @@ struct
   let rec read_command range () =
     print_prompt range ();
     let l = read_line () in
-    match l with
-    | "run"   | "r"   -> Run
-    | "next"  | "n"   -> Next
-    | "step"  | "s"   -> Step
-    | "print" | "p"   -> Print
-    | "where" | "w"   -> Where
+    let c = match l with
+      | "run"   | "r"   -> Run
+      | "next"  | "n"   -> Next
+      | "step"  | "s"   -> Step
+      | "print" | "p"   -> Print
+      | "where" | "w"   -> Where
 
-    | "help"  | "h"   ->
-      print_usage ();
-      read_command range ()
-
-    | _ ->
-      if Str.string_match (Str.regexp "\\(b\\|break\\) \\(.*\\)") l 0
-      then (
-        let loc = Str.matched_group 2 l in
-        let () =
-          match parse_breakpoint loc with
-          | Some brk ->
-            breakpoints := BreakpointSet.add brk !breakpoints;
-
-          | None ->
-            printf "Invalid breakpoint syntax@."
-        in
-        read_command range ()
-      )
-      else (
-        printf "Unrecognized command: %s@." l;
+      | "help"  | "h"   ->
         print_usage ();
         read_command range ()
+
+      | "" -> (
+        match !last_command with
+          | None ->  read_command range ()
+          | Some c -> c
       )
+
+      | _ ->
+        if Str.string_match (Str.regexp "\\(b\\|break\\) \\(.*\\)") l 0
+        then (
+          let loc = Str.matched_group 2 l in
+          let () =
+            match parse_breakpoint loc with
+            | Some brk ->
+              breakpoints := BreakpointSet.add brk !breakpoints;
+
+            | None ->
+              printf "Invalid breakpoint syntax@."
+          in
+          read_command range ()
+        )
+        else (
+          printf "Unrecognized command: %s@." l;
+          print_usage ();
+          read_command range ()
+        )
+    in
+    last_command := Some c;
+    c
 
   (** Breakpoint flag *)
   let break = ref true
