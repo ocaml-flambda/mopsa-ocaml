@@ -355,8 +355,9 @@ struct
   type command =
     | Run    (** Analyze and stop at next breakpoint *)
     | Next   (** Analyze and stop at next program point in the same level *)
-    | Step   (** Analyze and stop at next program point in the level beneath *)
-    | Print  (** Print current abstract state *)
+    | Step   (** Step into current program point  *)
+    | Print  (** Print the current abstract state *)
+    | Env    (** Print the current  abstract environment associated to token T_cur *)
     | Where  (** Show current program point *)
 
 
@@ -370,7 +371,8 @@ struct
     printf "  r[un]            analyze until next breakpoint@.";
     printf "  n[ext]           analyze until next program point in the same level@.";
     printf "  s[tep]           analyze until next program point in the level beneath@.";
-    printf "  p[rint]          print current abstract state@.";
+    printf "  p[rint]          print the abstract state@.";
+    printf "  e[nv]            print the current abstract environment@.";
     printf "  w[here]          show current program point@.";
     printf "  h[elp]           print this message@.";
     ()
@@ -387,6 +389,7 @@ struct
       | "next"  | "n"   -> Next
       | "step"  | "s"   -> Step
       | "print" | "p"   -> Print
+      | "env"   | "e"   -> Env
       | "where" | "w"   -> Where
 
       | "help"  | "h"   ->
@@ -510,7 +513,12 @@ struct
           ret
 
         | Print ->
-          printf "%a@." (Flow.print man) flow;
+          printf "%a@." (Flow.print interact_man) flow;
+          interact ~where:false action range flow
+
+        | Env ->
+          let env = Flow.get T_cur interact_man flow in
+          printf "%a@." interact_man.print env;
           interact ~where:false action range flow
 
         | Where ->
