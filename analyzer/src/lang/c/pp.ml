@@ -30,7 +30,7 @@ let rec pp_c_init fmt = function
   | C_init_list(l, _) -> fprintf fmt "{%a}"
                            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
   | C_init_implicit t -> assert false
-  | C_init_stub stub -> fprintf fmt "@[<v 2>/*$@,%a@]@,*/" Stubs.Ast.pp_stub_init stub
+  | C_init_stub stub -> fprintf fmt "/*$@,@[  %a@]@,*/" Stubs.Ast.pp_stub_init stub
 
 let rec pp_c_type_short fmt =
   function
@@ -196,7 +196,7 @@ let () =
       | S_c_switch_default -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto l -> fprintf fmt "goto %s;" l
-      | S_c_goto_stab s -> fprintf fmt "goto_stab {%a};" pp_stmt s
+      | S_c_goto_stab s -> fprintf fmt "@[<v 2>goto_stab {@,%a@]@,};" pp_stmt s
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->
@@ -211,7 +211,7 @@ let () =
         in
         fprintf fmt "@[<v>";
         pp_print_list
-          ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+          ~pp_sep:(fun fmt () -> fprintf fmt "@,@,")
           (fun fmt f ->
              fprintf fmt "@[<v 2>%a %s(%a) {@,%a@]@,}"
                pp_typ f.c_func_return

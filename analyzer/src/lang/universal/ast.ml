@@ -489,7 +489,9 @@ let () =
         match skind stmt with
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
-          fprintf fmt "@[<v 2>if (%a) {@,%a@]@,} @[<v 2>else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+          fprintf fmt "@[<v 2>if (%a) {@,%a@]@,@[<v 2>} else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+        | S_block[] -> fprintf fmt "pass"
+        | S_block[s] -> pp_stmt fmt s
         | S_block(l) ->
           fprintf fmt "@[<v>";
           pp_print_list

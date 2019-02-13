@@ -62,6 +62,9 @@ type ('a, _) Annotation.key +=
 
 let empty : cs = []
 
+let is_empty (cs:cs) =
+  List.length cs = 0 
+
 let get flow : cs =
   Flow.get_annot A_call_stack flow
 

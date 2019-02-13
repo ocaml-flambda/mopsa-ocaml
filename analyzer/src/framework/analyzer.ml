@@ -455,23 +455,21 @@ struct
     let () =
       match action with
       | Exec(stmt,zone) ->
-        fprintf fmt " @[<v 3>%a @[%a@]@] %a in zone %a@."
-          (Debug.color_str "IndianRed") "𝕊 ⟦"
+        fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
           pp_stmt stmt
-          (Debug.color_str "IndianRed") "⟧"
           pp_zone zone
 
       | Eval(exp,zone,_) ->
-        fprintf fmt " @[<v 3>%a %a@] %a in zone %a@."
-          (Debug.color_str "IndianRed") "𝔼 ⟦"
+        fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
           pp_expr exp
-          (Debug.color_str "IndianRed") "⟧"
           pp_zone2 zone
     in
+
     let cs = Callstack.get flow in
-    fprintf fmt " @[<hv 2>%a:@  %a@]@."
-      (Debug.color_str "Teal") "Call stack"
-      Callstack.print cs
+    if not (Callstack.is_empty cs) then
+      fprintf fmt " @[<hv 2>%a:@  %a@]@."
+        (Debug.color_str "Teal") "Call stack"
+        Callstack.print cs
 
 
 
