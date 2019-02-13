@@ -1,0 +1,5 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+
+PATH=${MOPSADIR}/parsers/c/bin:${PATH} ./configure $@
