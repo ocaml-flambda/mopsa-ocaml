@@ -136,13 +136,17 @@ and parse_db (dbfile: string) ctx : unit =
   let execs = get_executables db in
   let exec =
     (* No need for target selection if there is only one binary *)
-    if List.length execs = 1 then List.hd execs else
-    if List.mem !opt_make_target execs then !opt_make_target else
-    if String.length !opt_make_target = 0 then
-      panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
+    if List.length execs = 1
+    then List.hd execs
+    else
+    if !opt_make_target = ""
+    then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
         execs
-    else panic "binary target %s not found" !opt_make_target
+    else
+      try find_target !opt_make_target execs
+      with Not_found ->
+        panic "binary target %s not found" !opt_make_target
   in
   let srcs = get_executable_sources db exec in
   let i = ref 0 in
@@ -260,6 +264,11 @@ and from_project prj =
   Ast.C_program { c_globals = globals; c_functions = StringMap.bindings funcs |> List.split |> snd }
 
 
+and find_target target targets =
+  let re = Str.regexp (".*" ^ target ^ "$") in
+  List.find (fun t ->
+      Str.string_match re t 0
+    ) targets
 
 (** {2 functions} *)
 (** ============= *)
