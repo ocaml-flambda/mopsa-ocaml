@@ -374,6 +374,7 @@ struct
     printf "  p[rint]          print the abstract state@.";
     printf "  e[nv]            print the current abstract environment@.";
     printf "  w[here]          show current program point@.";
+    printf "  l[og] {on|off}   activate/deactivate logging@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -394,6 +395,14 @@ struct
 
       | "help"  | "h"   ->
         print_usage ();
+        read_command range ()
+
+      | "log on" | "l on" ->
+        Logging.opt_short_log := true;
+        read_command range ()
+
+      | "log off" | "l off" ->
+        Logging.opt_short_log := false;
         read_command range ()
 
       | "" -> (
@@ -417,7 +426,7 @@ struct
           read_command range ()
         )
         else (
-          printf "Unrecognized command: %s@." l;
+          printf "Unknown command %s@." l;
           print_usage ();
           read_command range ()
         )
@@ -513,12 +522,12 @@ struct
           ret
 
         | Print ->
-          printf "%a@." (Flow.print interact_man) flow;
+          printf "%a@." (Flow.print man) flow;
           interact ~where:false action range flow
 
         | Env ->
-          let env = Flow.get T_cur interact_man flow in
-          printf "%a@." interact_man.print env;
+          let env = Flow.get T_cur man flow in
+          printf "%a@." man.print env;
           interact ~where:false action range flow
 
         | Where ->
