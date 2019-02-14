@@ -19,113 +19,96 @@
 /*                                                                          */
 /****************************************************************************/
 
-/*
-  libc stub
-  based on header from glibc-2.27-r6
-*/
+/* Stubs for functions provided by utmp.h */
 
-#include <locale.h>
-#include <limits.h>
-
-/*$
- * local: char* addr = new ReadOnlyString;
- * ensures: size(addr) > 0;
- * // TODO ensures: valid_string(addr);
- * ensures: _local_buf == addr;
- */
-char * _local_buf;
-
-/*$
- * requires: __locale != NULL implies valid_string(__locale);
- *
- * case "success" {
- *   local:   char* addr = new ReadOnlyString;
- *   assigns: _local_buf;
- *   ensures: size(addr) > 0;
- *   ensures: valid_string(addr);
- *   ensures: _local_buf' == addr;
- *   ensures: return == addr;
- *   free:    _local_buf;
- * }
- *
- * case "failure" {
- *   ensures: return == NULL;
- * }
- */
-char *setlocale (int __category, const char *__locale);
-
-
-struct lconv * _lconv_buf = NULL;
-
-/*$
- * local: struct lconv * addr = new ReadOnlyMemory;
- *
- * assigns: _lconv_buf;
- *
- * ensures: size(addr) == sizeof(struct lconv);
- * ensures: return == addr;
- * ensures: _lconv_buf' == addr;
- *
- * case "invalidate-previous-lconv" {
- *   assumes: _lconv_buf != NULL;
- *   free: _lconv_buf;
- * }
- */
-struct lconv *localeconv (void);
-
-
-#ifdef	__USE_XOPEN2K8
-
-
-// type __locale_t has been renamed local_t starting from glibv 2.26
-#if __GLIBC_MINOR__ < 26
+#include <utmp.h>
 
 /*$
  * warn: "unsupported stub";
  */
-__locale_t newlocale (int __category_mask, const char *__locale, __locale_t __base);
+int login_tty (int __fd);
+
 
 /*$
  * warn: "unsupported stub";
  */
-__locale_t duplocale (__locale_t __dataset);
+void login (const struct utmp *__entry);
+
 
 /*$
  * warn: "unsupported stub";
  */
-void freelocale (__locale_t __dataset);
+int logout (const char *__ut_line);
+
 
 /*$
  * warn: "unsupported stub";
  */
-__locale_t uselocale (__locale_t __dataset);
-
-
-#else // __GLIBC_MINOR__ >= 26
+void logwtmp (const char *__ut_line, const char *__ut_name,
+		     const char *__ut_host);
 
 /*$
  * warn: "unsupported stub";
  */
-locale_t newlocale (int __category_mask, const char *__locale, locale_t __base);
+void updwtmp (const char *__wtmp_file, const struct utmp *__utmp)
+    ;
+
 
 /*$
  * warn: "unsupported stub";
  */
-locale_t duplocale (locale_t __dataset);
+int utmpname (const char *__file);
+
 
 /*$
  * warn: "unsupported stub";
  */
-void freelocale (locale_t __dataset);
+struct utmp *getutent (void);
+
 
 /*$
  * warn: "unsupported stub";
  */
-locale_t uselocale (locale_t __dataset);
+void setutent (void);
 
 
+/*$
+ * warn: "unsupported stub";
+ */
+void endutent (void);
 
-#endif // __GLIBC_MINOR__ < 26
+
+/*$
+ * warn: "unsupported stub";
+ */
+struct utmp *getutid (const struct utmp *__id);
 
 
-#endif
+/*$
+ * warn: "unsupported stub";
+ */
+struct utmp *getutline (const struct utmp *__line);
+
+
+/*$
+ * warn: "unsupported stub";
+ */
+struct utmp *pututline (const struct utmp *__utmp_ptr);
+
+
+/*$
+ * warn: "unsupported stub";
+ */
+int getutent_r (struct utmp *__buffer, struct utmp **__result);
+
+/*$
+ * warn: "unsupported stub";
+ */
+int getutid_r (const struct utmp *__id, struct utmp *__buffer,
+		      struct utmp **__result);
+
+/*$
+ * warn: "unsupported stub";
+ */
+int getutline_r (const struct utmp *__line,
+			struct utmp *__buffer, struct utmp **__result);
