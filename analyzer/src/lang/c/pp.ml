@@ -158,8 +158,9 @@ let () =
       | E_c_increment _ -> assert false
       | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
-      | E_c_cast(e, _) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
-      | E_c_statement s -> fprintf fmt "@[<v 2>{@,%a@],}" pp_stmt s
+      | E_c_cast(e, true) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
+      | E_c_cast(e, false) -> fprintf fmt "%a" pp_expr e
+      | E_c_statement s -> fprintf fmt "@[<v 4>{@,%a@],}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_predefined _ -> assert false
       | E_c_atomic _ -> assert false
@@ -179,24 +180,24 @@ let () =
         end
 
       | S_c_for (init,cond,it,stmts) ->
-        fprintf fmt "@[<v 2>for (%a;%a;%a) {@,%a@]@,}"
+        fprintf fmt "@[<v 4>for (%a;%a;%a) {@,%a@]@,}"
           pp_stmt init
           (Printers.print_option pp_expr) cond
           (Printers.print_option pp_expr) it
           pp_stmt stmts
       | S_c_do_while (body,cond) ->
-        fprintf fmt "@[<v 2>do {@,%a@]@, while (%a);"
+        fprintf fmt "@[<v 4>do {@,%a@]@, while (%a);"
           pp_stmt body
           pp_expr cond
       | S_c_switch(cond, body) ->
-        fprintf fmt "@[<v 2>switch (%a) {@,%a@]@,}"
+        fprintf fmt "@[<v 4>switch (%a) {@,%a@]@,}"
           pp_expr cond
           pp_stmt body
       | S_c_switch_case(e) -> fprintf fmt "case %a:" pp_expr e
       | S_c_switch_default -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto l -> fprintf fmt "goto %s;" l
-      | S_c_goto_stab s -> fprintf fmt "@[<v 2>goto_stab {@,%a@]@,};" pp_stmt s
+      | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->
@@ -213,7 +214,7 @@ let () =
         pp_print_list
           ~pp_sep:(fun fmt () -> fprintf fmt "@,@,")
           (fun fmt f ->
-             fprintf fmt "@[<v 2>%a %s(%a) {@,%a@]@,}"
+             fprintf fmt "@[<v 4>%a %s(%a) {@,%a@]@,}"
                pp_typ f.c_func_return
                f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters

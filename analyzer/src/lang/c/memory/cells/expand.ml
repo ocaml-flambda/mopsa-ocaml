@@ -692,12 +692,12 @@ module Domain = struct
 
 
 
-  (** Evaluate a scalar lval into a cell *)
-  let rec eval_scalar_cell exp man flow : ('a, cell) evl =
+  (** Evaluate a scalar lval into an optional cell *)
+  let eval_scalar_cell_opt exp man flow : ('a, cell option) evl =
     match ekind exp with
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
       let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
-      Eval.singleton c flow
+      Eval.singleton (Some c) flow
 
     | E_c_deref p ->
       let t = under_type p.etyp in
@@ -710,10 +710,14 @@ module Domain = struct
           panic_at exp.erange ~loc:__LOC__ "dereference of absolute pointers not supported"
 
         | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
-          eval_quantified_cell b o t p.erange man flow
+          eval_quantified_cell b o t p.erange man flow |>
+          Eval.bind @@ fun c flow ->
+          Eval.singleton (Some c) flow
 
         | E_c_points_to(P_block (b, o)) ->
-          eval_cell b o t p.erange man flow
+          eval_cell b o t p.erange man flow |>
+          Eval.bind @@ fun c flow ->
+          Eval.singleton (Some c) flow
 
         | E_c_points_to(P_null) ->
           let flow' = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow in
@@ -724,13 +728,23 @@ module Domain = struct
           Eval.empty_singleton flow'
 
         | E_c_points_to(P_top) ->
-          panic_at exp.erange "eval_scalar_cell: top pointer not supported"
+          Eval.singleton None flow
 
         | _ ->
           panic_at exp.erange "eval_scalar_cell: invalid pointer %a" pp_expr p
       end
 
     | _ -> panic_at exp.erange ~loc:__LOC__ "eval_scalar_cell called on a non-scalar expression %a" pp_expr exp
+
+
+  (** Evaluate a scalar lval into a cell *)
+  let eval_scalar_cell exp man flow : ('a, cell) evl =
+    eval_scalar_cell_opt exp man flow |>
+    Eval.bind @@ fun c flow ->
+    match c with
+    | Some cc -> Eval.singleton cc flow
+    | None -> panic_at exp.erange ~loc:__LOC__ "%a can't be evaluated into a cell" pp_expr exp
+
 
 
   let cell_singleton c range man flow =
@@ -798,19 +812,22 @@ module Domain = struct
       
 
     | E_stub_primed (e) ->
-      eval_scalar_cell e man flow |>
+      eval_scalar_cell_opt e man flow |>
       Eval.bind_return @@ fun c flow ->
-      let c' = { c with p = true } in
-      begin match cell_offset c with
-        | O_single _ ->
-          let flow = add_cell c' exp.erange man flow in
-          Eval.singleton (mk_c_cell c' exp.erange) flow
+      begin match c with
+        | None -> Eval.singleton (mk_top e.etyp exp.erange) flow
+        | Some c ->
+          let c' = { c with p = true } in
+          match cell_offset c with
+          | O_single _ ->
+            let flow = add_cell c' exp.erange man flow in
+            Eval.singleton (mk_c_cell c' exp.erange) flow
 
-        | O_region _ ->
-          let l, u = rangeof (cell_typ c) in
-          Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
+          | O_region _ ->
+            let l, u = rangeof (cell_typ c) in
+            Eval.singleton (mk_z_interval l u ~typ:exp.etyp exp.erange) flow
 
-        | _ -> assert false
+          | _ -> assert false
       end
 
 
@@ -970,61 +987,63 @@ module Domain = struct
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c, Z_c_points_to) target flow |>
       Post.bind_flow man @@ fun pt flow ->
-      let base, offset =
-        match ekind pt with
-        | E_c_points_to (P_block(b, o)) -> b, o
-        | _ -> assert false
-      in
+      match ekind pt with
+      | E_c_points_to (P_block(base, offset)) ->
+        let a = Flow.get_domain_env T_cur man flow in
 
-      let a = Flow.get_domain_env T_cur man flow in
-
-      (* Get cells with the same base *)
-      let same_base_cells = Cells.filter (fun c ->
-          compare_base base (cell_base c) = 0
-        ) a.cells
-      in
-
-      (* For primed cells, just rename to an unprimed cell *)
-      let flow = Cells.fold (fun c flow ->
-          if c.p
-          then rename_cell c { c with p = false } range man flow
-          else flow
-        ) same_base_cells flow
-      in
-
-      (* Create the bound expressions of the offsets *)
-      let l, u =
-        let rec doit accl accu t =
-          function
-          | [] -> accl, accu
-          | [(l, u)] ->
-            (mk_offset_bound accl l t), (mk_offset_bound accu u t)
-          | (l, u) :: tl ->
-            doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
-
-        (* Utility function that returns the expression of an offset bound *)
-        and mk_offset_bound before bound t =
-          let elem_size = sizeof_type t in
-          Universal.Ast.add before (
-            mul bound (mk_z elem_size range) range ~typ:T_int
-          ) range ~typ:T_int
+        (* Get cells with the same base *)
+        let same_base_cells = Cells.filter (fun c ->
+            compare_base base (cell_base c) = 0
+          ) a.cells
         in
-        doit offset offset (under_type target.etyp) offsets
-      in
 
-      (* Compute the interval of the bounds *)
-      let itv1 = compute_bound l man flow in
-      let itv2 = compute_bound u man flow in
+        (* For primed cells, just rename to an unprimed cell *)
+        let flow = Cells.fold (fun c flow ->
+            if c.p
+            then rename_cell c { c with p = false } range man flow
+            else flow
+          ) same_base_cells flow
+        in
 
-      (* Compute the interval of the assigned cells *)
-      let itv = Itv.join () itv1 itv2 in
+        (* Create the bound expressions of the offsets *)
+        let l, u =
+          let rec doit accl accu t =
+            function
+            | [] -> accl, accu
+            | [(l, u)] ->
+              (mk_offset_bound accl l t), (mk_offset_bound accu u t)
+            | (l, u) :: tl ->
+              doit (mk_offset_bound accl l t) (mk_offset_bound accu u t) (under_type t) tl
 
-      (* Remove remaining cells that have an offset within the assigned interval *)
-      remove_cells (fun c ->
-          Cells.mem c same_base_cells &&
-          not (Cells.mem {c with p = true} same_base_cells) &&
-          Itv.mem (cell_zoffset c) itv
-        ) range man flow
+          (* Utility function that returns the expression of an offset bound *)
+          and mk_offset_bound before bound t =
+            let elem_size = sizeof_type t in
+            Universal.Ast.add before (
+              mul bound (mk_z elem_size range) range ~typ:T_int
+            ) range ~typ:T_int
+          in
+          doit offset offset (under_type target.etyp) offsets
+        in
+
+        (* Compute the interval of the bounds *)
+        let itv1 = compute_bound l man flow in
+        let itv2 = compute_bound u man flow in
+
+        (* Compute the interval of the assigned cells *)
+        let itv = Itv.join () itv1 itv2 in
+
+        (* Remove remaining cells that have an offset within the assigned interval *)
+        remove_cells (fun c ->
+            Cells.mem c same_base_cells &&
+            not (Cells.mem {c with p = true} same_base_cells) &&
+            Itv.mem (cell_zoffset c) itv
+          ) range man flow
+
+      | E_c_points_to(P_top) ->
+        flow
+
+      | _ -> assert false
+
 
 
   (** Entry point of post-condition computation *)
