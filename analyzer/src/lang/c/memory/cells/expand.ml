@@ -128,7 +128,6 @@ module Domain = struct
     }
 
 
-  
   (** {2 Zoning interface} *)
   (** ==================== *)
 
@@ -148,6 +147,8 @@ module Domain = struct
       (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
       (Z_c, Z_under Z_c_cell);              (* for rvals *)
       (Z_c, Z_c_points_to);                 (* for pointers *)
+      (Z_c_cell, Z_c_scalar);               (* for Q_print_var query *)
+      (Z_c_scalar, Z_c_points_to);          (* for Q_print_var query *)
     ];
   }
 
@@ -1156,7 +1157,55 @@ module Domain = struct
   (** ============== *)
 
 
-  let ask _ _ _ = None
+  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
+    match query with
+    | Query.Q_print_var ->
+      let pp fmt v =
+        let a = Flow.get_domain_env T_cur man flow in
+        (* Get the cells in variable v *)
+        let cells = find_cells (fun c ->
+            match cell_base c with
+            | V vv -> vv.org_vname = v
+            | _ -> false
+          ) a
+        in
+
+        (* Process each cell depending on its type *)
+        let range = mk_fresh_range () in
+        cells |> List.iter (fun c ->
+            (* Evaluate cell c into a scalar *)
+            man.eval
+              (mk_c_cell c range) ~zone:(Z_c_cell, Z_c_scalar) flow
+            |>
+            Eval.iter (fun e flow ->
+                if e.etyp |> is_c_num_type then
+                  (* For numeric cells, get the interval and print it *)
+                  man.eval e ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
+                  Eval.iter (fun ee flow ->
+                      let itv = man.ask (Itv.Q_interval ee) flow in
+                      Format.fprintf fmt "%a = %a" pp_expr e Itv.print itv
+                    )
+                else
+                if e.etyp |> is_c_pointer_type then
+                  (* For pointer cells, get pointed bases and offsets *)
+                  man.eval e ~zone:(Z_c_scalar, Z_c_points_to) flow |>
+                  Eval.iter (fun p flow ->
+                      match ekind p with
+                      | E_c_points_to(P_block(base, offset)) ->
+                        let itv = man.ask (Itv.Q_interval offset) flow in
+                        Format.fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
+
+                      | E_c_points_to pp ->
+                        Format.fprintf fmt "%a ⇝ %a" pp_expr e pp_points_to pp
+
+                      | _ -> assert false
+                    )
+              )
+          )
+      in
+      Some pp
+
+    | _ -> None
 
 end
 

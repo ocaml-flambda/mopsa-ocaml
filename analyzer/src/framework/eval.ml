@@ -53,10 +53,17 @@ let meet_list ?(empty=empty) (l: ('a, 'e) evl list) : ('a, 'e) evl =
   | [] -> empty
   | hd :: tl -> List.fold_left meet hd tl
 
-let iter (f: ('a, 'e) evl_case -> unit) (evl: ('a, 'e) evl) : unit =
+let iter_cases (f: ('a, 'e) evl_case -> unit) (evl: ('a, 'e) evl) : unit =
   Dnf.to_list evl |>
   List.flatten |>
   List.iter f
+
+let iter (f: 'e -> 'a flow -> unit) (evl: ('a, 'e) evl) : unit =
+  iter_cases (fun case ->
+      match case.expr with
+      | None -> ()
+      | Some e -> f e case.flow
+    ) evl
 
 let map
     (f: 'e -> 'a flow -> 'f * 'a flow)

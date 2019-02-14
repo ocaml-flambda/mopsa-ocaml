@@ -358,6 +358,7 @@ struct
     | Step   (** Step into current program point  *)
     | Print  (** Print the current abstract state *)
     | Env    (** Print the current  abstract environment associated to token T_cur *)
+    | Value of string (** Print the value of a variable *)
     | Where  (** Show current program point *)
 
 
@@ -373,6 +374,7 @@ struct
     printf "  s[tep]           analyze until next program point in the level beneath@.";
     printf "  p[rint]          print the abstract state@.";
     printf "  e[nv]            print the current abstract environment@.";
+    printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
     printf "  w[here]          show current program point@.";
     printf "  l[og] {on|off}   activate/deactivate logging@.";
     printf "  h[elp]           print this message@.";
@@ -425,6 +427,14 @@ struct
           in
           read_command range ()
         )
+
+        else
+        if Str.string_match (Str.regexp "\\(e\\|env\\) \\(.*\\)") l 0
+        then (
+          let var = Str.matched_group 2 l in
+          Value var
+        )
+
         else (
           printf "Unknown command %s@." l;
           print_usage ();
@@ -526,6 +536,10 @@ struct
         | Env ->
           let env = Flow.get T_cur man flow in
           printf "%a@." man.print env;
+          interact ~where:false action range flow
+
+        | Value(var) ->
+          printf "%a@." (man.ask Query.Q_print_var flow) var;
           interact ~where:false action range flow
 
         | Where ->

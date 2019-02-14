@@ -74,7 +74,7 @@ struct
           match evals with
           | None -> ()
           | Some evl ->
-            Eval.iter (fun case ->
+            Eval.iter_cases (fun case ->
               match case.expr with
               | Some e -> add_to_cache eval_cache ((zone, e, flow), Some (Eval.singleton e flow));
               | None -> ()

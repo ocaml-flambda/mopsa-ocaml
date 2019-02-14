@@ -46,6 +46,9 @@ type 'a post = 'a Post.post
 
 module Eval = Framework.Eval
 
+module Query = Framework.Query
+type 'a query = 'a Query.query
+
 include Location
 
 include Framework.Domain
