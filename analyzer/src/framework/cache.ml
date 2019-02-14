@@ -46,10 +46,13 @@ struct
     let ff () =
       match f stmt man flow with
       | None ->
-        Exceptions.panic
-          "Unable to analyze statement in %a:@\n @[%a@]"
-          Location.pp_range stmt.srange
-          pp_stmt stmt
+        if Flow.is_bottom man flow
+        then flow
+        else
+          Exceptions.panic
+            "Unable to analyze statement in %a:@\n @[%a@]"
+            Location.pp_range stmt.srange
+            pp_stmt stmt
 
       | Some post -> post.Post.flow
     in
