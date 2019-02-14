@@ -1156,7 +1156,6 @@ module Domain = struct
   (** Query handlers *)
   (** ============== *)
 
-
   let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with
     | Query.Q_print_var ->
@@ -1172,6 +1171,8 @@ module Domain = struct
 
         (* Process each cell depending on its type *)
         let range = mk_fresh_range () in
+        let ret = ref [] in
+        let open Format in
         cells |> List.iter (fun c ->
             (* Evaluate cell c into a scalar *)
             man.eval
@@ -1183,7 +1184,7 @@ module Domain = struct
                   man.eval e ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
                   Eval.iter (fun ee flow ->
                       let itv = man.ask (Itv.Q_interval ee) flow in
-                      Format.fprintf fmt "%a = %a" pp_expr e Itv.print itv
+                      ret := (fun fmt -> fprintf fmt "%a = %a" pp_expr e Itv.print itv) :: !ret
                     )
                 else
                 if e.etyp |> is_c_pointer_type then
@@ -1193,15 +1194,24 @@ module Domain = struct
                       match ekind p with
                       | E_c_points_to(P_block(base, offset)) ->
                         let itv = man.ask (Itv.Q_interval offset) flow in
-                        Format.fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
+                        ret := (fun fmt ->
+                            fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
+                          ) :: !ret
+
 
                       | E_c_points_to pp ->
-                        Format.fprintf fmt "%a ⇝ %a" pp_expr e pp_points_to pp
+                        ret := (fun fmt ->
+                            fprintf fmt "%a ⇝ %a" pp_expr e pp_points_to pp
+                          ) :: !ret
 
                       | _ -> assert false
                     )
               )
-          )
+          );
+        fprintf fmt "@[<v>%a@]"
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+             (fun fmt pp -> pp fmt)
+          ) !ret
       in
       Some pp
 
