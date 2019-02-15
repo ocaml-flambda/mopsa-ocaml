@@ -51,7 +51,7 @@ type symbol =
 let symbol_to_string symbol level =
   match symbol with
   | BEGIN -> color level "+"
-  | END -> color level "●"
+  | END -> color level "o"
   | MSG -> color level "*"
 
 let is_end_symbol = function
@@ -59,7 +59,7 @@ let is_end_symbol = function
   | _ -> false
 
 (** Tabulation *)
-let tab level = color level "|"  
+let tab level = color level "|"
 
 (** Indent a message by adding tabs at the beginning of each line *)
 let indent ~symbol fmt =

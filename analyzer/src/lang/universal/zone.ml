@@ -40,6 +40,11 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
+        | E_var _
+          when is_universal_type exp.etyp ->
+          Keep
+
+        (* ------------------------------------------- *)
         | E_function _
         | E_array _
         | E_subscript _
@@ -62,11 +67,9 @@ let () =
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
-          when is_numeric_type (etyp exp)
-          -> Keep
         | E_var _
-          when is_numeric_type (etyp exp)
-          -> Keep
+          when is_numeric_type (etyp exp) ->
+          Keep
         (* ------------------------------------------- *)
         | E_unop _
         | E_binop _                          -> Visit
@@ -93,27 +96,6 @@ let () =
     zone = Z_u_string;
     subset = Some Z_u;
     name = "U/String";
-    eval = (fun exp ->
-        match ekind exp with
-        (* ------------------------------------------- *)
-        | E_constant _
-        | E_function _
-        | E_array _
-        | E_subscript _
-        | E_addr _
-        | E_len _                            -> Keep
-        (* ------------------------------------------- *)
-        | E_unop _
-        | E_binop _                          -> Visit
-        (* ------------------------------------------- *)
-        | _                                  -> Process
-      );
-  };
-
-  register_zone {
-    zone = Z_u_tree;
-    subset = Some Z_u;
-    name = "U/Tree";
     eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)

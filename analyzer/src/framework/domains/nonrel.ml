@@ -240,8 +240,8 @@ struct
   }
 
   let eval_interface = Domain.{
-    import = [Zone.any_zone, Value.zone];
     export = [];
+    import = [];
   }
 
   let rec exec zone stmt man flow =
@@ -291,7 +291,6 @@ struct
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
       Some (
-        man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
             eval e a |> Channel.bind @@ fun (_,v) ->
             let a' = VarMap.add var v a in
@@ -327,7 +326,6 @@ struct
     (* FIXME: No check on weak variables in rhs *)
     | S_assume e ->
       Some (
-        man.eval ~zone:(Zone.any_zone, Value.zone) e flow |> Post.bind man @@ fun e flow ->
         let flow', channels = Channel.map_domain_env T_cur (fun a ->
             filter (Flow.get_all_annot flow) e true a
           ) man flow

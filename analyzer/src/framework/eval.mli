@@ -63,7 +63,9 @@ val substitute :
     ('a, 'e) evl ->
     'b
 
-val iter : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
+val iter : ('e -> 'a flow -> unit) -> ('a, 'e) evl -> unit
+
+val iter_cases : (('a, 'e) evl_case -> unit) -> ('a, 'e) evl -> unit
 
 val bind : ('e -> 'a flow -> ('a, 'f) evl ) -> ('a, 'e) evl -> ('a, 'f) evl
 

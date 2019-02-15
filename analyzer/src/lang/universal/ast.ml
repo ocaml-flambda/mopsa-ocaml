@@ -285,7 +285,7 @@ let () =
             (
               pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
                 (fun fmt f ->
-                   fprintf fmt "%a %a(%a) {@\n@[<v 2>  %a@]@\n}"
+                   fprintf fmt "%a %a(%a) {@\n@[<v 4>  %a@]@\n}"
                      (fun fmt ot ->
                         match ot with
                         | None -> pp_print_string fmt "void"
@@ -375,7 +375,7 @@ let () =
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
@@ -489,7 +489,9 @@ let () =
         match skind stmt with
         | S_expression(e) -> fprintf fmt "%a;" pp_expr e
         | S_if(e, s1, s2) ->
-          fprintf fmt "@[<v 2>if (%a) {@,%a@]@,} @[<v 2>else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+          fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr e pp_stmt s1 pp_stmt s2
+        | S_block[] -> fprintf fmt "pass"
+        | S_block[s] -> pp_stmt fmt s
         | S_block(l) ->
           fprintf fmt "@[<v>";
           pp_print_list
@@ -501,7 +503,7 @@ let () =
         | S_return(None) -> pp_print_string fmt "return;"
         | S_return(Some e) -> fprintf fmt "return %a;" pp_expr e
         | S_while(e, s) ->
-          fprintf fmt "@[<v 2>while %a {@,%a@]@,}" pp_expr e pp_stmt s
+          fprintf fmt "@[<v 4>while %a {@,%a@]@,}" pp_expr e pp_stmt s
         | S_break -> pp_print_string fmt "break;"
         | S_continue -> pp_print_string fmt "continue;"
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
@@ -574,6 +576,16 @@ let () =
 
 (** {2 Utility functions} *)
 (*  ********************* *)
+
+let rec is_universal_type t =
+  match t with
+  | T_bool | T_int | T_float _
+  | T_string | T_addr   | T_unit | T_char ->
+    true
+
+  | T_array tt -> is_universal_type tt
+
+  | _ -> false
 
 let mk_not e = mk_unop O_log_not e
 

@@ -2,7 +2,7 @@
 /*                                                                          */
 /* This file is part of MOPSA, a Modular Open Platform for Static Analysis. */
 /*                                                                          */
-/* Copyright (C) 2019 The MOPSA Project.                                    */
+/* Copyright (C) 2017-2019 The MOPSA Project.                               */
 /*                                                                          */
 /* This program is free software: you can redistribute it and/or modify     */
 /* it under the terms of the GNU Lesser General Public License as published */
@@ -19,49 +19,29 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include <stddef.h>
-#include <limits.h>
+/* Stubs for functions in error.h */
+
+#include <error.h>
 
 /*$
- * ensures: _argc in [1, INT_MAX - 1]; // do not go beyound INT_MAX because we will
- *                                     // allocate _argc + 1 pointers in _argv
+ * ensures: 1 == 0;
  */
-static int _argc;
+void error (int __status, int __errnum, const char *__format, ...) { }
+
 
 /*$
- * local:   char ** buf = new Memory;
- * ensures: size(buf) == _argc + 1; // need to allocate an additional
- *                                  // pointer for the last NULL
- * ensures: _argv == buf;
+ * ensures: 1 == 0;
  */
-static char **_argv;
+void error_at_line (int __status, int __errnum, const char *__fname, unsigned int __lineno, const char *__format, ...);
 
-/*$
- * local: char* str = new Memory;
- * ensures: size(str) in [1, INT_MAX]; // there is at least the NUL char at the end
- * // TODO ensures: str[size(str) - 1] == 0;
- * ensures: return == str;
- */
-char* _mopsa_new_valid_string();
 
-void _mopsa_init_symbolic_argc_argv() {
-  // Add program name
-  _argv[0] = _mopsa_new_valid_string();
+// TODO
+void (*error_print_progname) (void);
 
-  /*
-   * The following code produces false negative
-   * when analyzed with non-relational numeric domains
-   */
-  #if 0
-  int i = 1;
 
-  // Initialize the array with valid strings
-  while(i < _argc) {
-    _argv[i] = _mopsa_new_valid_string();
-    i++;
-  }
+// TODO
+unsigned int error_message_count;
 
-  // Add the last NULL pointer
-  _argv[_argc] = NULL;
-  #endif
-}
+
+// TODO
+int error_one_per_line;

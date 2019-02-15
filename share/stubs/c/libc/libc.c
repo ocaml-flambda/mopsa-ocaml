@@ -33,6 +33,11 @@
 #include "getopt.c"
 #include "locale.c"
 #include "libintl.c"
+#include "utmp.c"
+#include "utmpx.c"
+#include "signal.c"
+#include "error.c"
+
 /* #include "inttypes.c" */
 /* #include "fcntl.c" */
 /* #include "arpa/inet.c" */

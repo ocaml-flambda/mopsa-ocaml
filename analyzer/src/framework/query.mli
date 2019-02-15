@@ -48,6 +48,7 @@
 *)
 
 (** {2 Queries} *)
+(** *********** *)
 
 (** Type of a query, defined by domains and annotated with the type of the reply. *)
 type _ query = ..
@@ -69,3 +70,11 @@ val register_query : 'a info -> unit
 val join : 'a query -> 'a -> 'a -> 'a
 
 val meet : 'a query -> 'a -> 'a -> 'a
+
+
+(** {Common queries} *)
+(** **************** *)
+
+type _ query +=
+  | Q_print_var : (Format.formatter -> string -> unit) query
+  (** Print the value of a variable *)

@@ -19,35 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic query mechanism for extracting information from abstract domains.
+(** Generic mechanism for extracting information from abstract domains. *)
 
-    Defining a new query requires the definition of the type of its reply and a
-    manager on this type providing reply merging functions.
 
-    Here is an example. Let us define a new interval query:
-    {[type _ query += QInterval : var -> (int * int) query]}
-
-    Next, an interval manager is registered as follows:
-    {[register_query {
-        eq = (let check : type a. a query -> (a, (int * int)) eq option =
-                fun q ->
-                  match q with
-                  | QInterval _ -> Some Eq
-                  | _ -> None
-              in
-              check
-             );
-        join = (fun (a1, a2) (b1, b2) -> (min a1 b1, max a2 b2));
-        meet = (fun (a1, a2) (b1, b2) -> (max a1 b1, min a2 b2));
-      };;]}
-
-    For instance, the join of two intervals of a query [q] can be obtained simply by:
-    {[join q (Some (1, 20)) (Some (-1, 5));;]}
-    {v - : (int * int) option = Some (-1, 20) v}
-
-*)
 
 (** {2 Queries} *)
+(** *********** *)
 
 (** Type of a query, defined by domains and annotated with the type of the reply. *)
 type _ query = ..
@@ -56,7 +33,9 @@ type _ query = ..
 type (_, _) eq = Eq : ('a, 'a) eq
 
 
+
 (** {2 Managers} *)
+(** ************ *)
 
 (** Query manager defines merge operators on replies. *)
 type 'r info = {
@@ -102,3 +81,32 @@ let eq : type a b. a query -> b query -> (a, b) eq option =
   fun q1 q2 ->
     let info2 = find q2 in
     info2.eq q1
+
+
+
+(** {2 Common queries} *)
+(** ****************** *)
+
+type _ query +=
+  | Q_print_var : (Format.formatter -> string -> unit) query
+  (** Print the value of a variable *)
+
+let () =
+  register_query {
+    eq = (
+      let doit : type a. a query -> (a, (Format.formatter -> string -> unit)) eq option =
+        function
+        | Q_print_var -> Some Eq
+        | _ -> None
+      in
+      doit
+    );
+
+    join = (fun pp1 pp2 -> fun fmt var ->
+        Format.fprintf fmt "%a@,%a" pp1 var pp2 var
+      );
+
+    meet = (fun pp1 pp2 -> fun fmt var ->
+        Format.fprintf fmt "%a@,%a" pp1 var pp2 var
+      );
+  }

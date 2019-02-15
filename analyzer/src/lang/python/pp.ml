@@ -190,16 +190,6 @@ let () =
 
   register_stmt_pp (fun default fmt stmt ->
       match skind stmt with
-      | Universal.Ast.S_block(l) ->
-         if l = [] then
-           fprintf fmt "pass"
-         else
-           fprintf fmt "@[<v>%a@]"
-             (pp_print_list
-                ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                pp_stmt
-             ) l
-
       | S_py_class(cls) ->
         fprintf fmt "class %a(%a):@\n@[<h 2>  %a@]" pp_var cls.py_cls_var
           (pp_print_list

@@ -355,8 +355,10 @@ struct
   type command =
     | Run    (** Analyze and stop at next breakpoint *)
     | Next   (** Analyze and stop at next program point in the same level *)
-    | Step   (** Analyze and stop at next program point in the level beneath *)
-    | Print  (** Print current abstract state *)
+    | Step   (** Step into current program point  *)
+    | Print  (** Print the current abstract state *)
+    | Env    (** Print the current  abstract environment associated to token T_cur *)
+    | Value of string (** Print the value of a variable *)
     | Where  (** Show current program point *)
 
 
@@ -370,8 +372,11 @@ struct
     printf "  r[un]            analyze until next breakpoint@.";
     printf "  n[ext]           analyze until next program point in the same level@.";
     printf "  s[tep]           analyze until next program point in the level beneath@.";
-    printf "  p[rint]          print current abstract state@.";
+    printf "  p[rint]          print the abstract state@.";
+    printf "  e[nv]            print the current abstract environment@.";
+    printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
     printf "  w[here]          show current program point@.";
+    printf "  l[og] {on|off}   activate/deactivate logging@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -387,10 +392,19 @@ struct
       | "next"  | "n"   -> Next
       | "step"  | "s"   -> Step
       | "print" | "p"   -> Print
+      | "env"   | "e"   -> Env
       | "where" | "w"   -> Where
 
       | "help"  | "h"   ->
         print_usage ();
+        read_command range ()
+
+      | "log on" | "l on" ->
+        Logging.opt_short_log := true;
+        read_command range ()
+
+      | "log off" | "l off" ->
+        Logging.opt_short_log := false;
         read_command range ()
 
       | "" -> (
@@ -413,8 +427,16 @@ struct
           in
           read_command range ()
         )
+
+        else
+        if Str.string_match (Str.regexp "\\(e\\|env\\) \\(.*\\)") l 0
+        then (
+          let var = Str.matched_group 2 l in
+          Value var
+        )
+
         else (
-          printf "Unrecognized command: %s@." l;
+          printf "Unknown command %s@." l;
           print_usage ();
           read_command range ()
         )
@@ -443,23 +465,21 @@ struct
     let () =
       match action with
       | Exec(stmt,zone) ->
-        fprintf fmt " @[<v 3>%a @[%a@]@] %a in zone %a@."
-          (Debug.color_str "IndianRed") "𝕊 ⟦"
+        fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
           pp_stmt stmt
-          (Debug.color_str "IndianRed") "⟧"
           pp_zone zone
 
       | Eval(exp,zone,_) ->
-        fprintf fmt " @[<v 3>%a %a@] %a in zone %a@."
-          (Debug.color_str "IndianRed") "𝔼 ⟦"
+        fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
           pp_expr exp
-          (Debug.color_str "IndianRed") "⟧"
           pp_zone2 zone
     in
+
     let cs = Callstack.get flow in
-    fprintf fmt " @[<hv 2>%a:@  %a@]@."
-      (Debug.color_str "Teal") "Call stack"
-      Callstack.print cs
+    if not (Callstack.is_empty cs) then
+      fprintf fmt " @[<hv 2>%a:@  %a@]@."
+        (Debug.color_str "Teal") "Call stack"
+        Callstack.print cs
 
 
 
@@ -511,6 +531,15 @@ struct
 
         | Print ->
           printf "%a@." (Flow.print man) flow;
+          interact ~where:false action range flow
+
+        | Env ->
+          let env = Flow.get T_cur man flow in
+          printf "%a@." man.print env;
+          interact ~where:false action range flow
+
+        | Value(var) ->
+          printf "%a@." (man.ask Query.Q_print_var flow) var;
           interact ~where:false action range flow
 
         | Where ->

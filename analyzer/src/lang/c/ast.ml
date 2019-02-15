@@ -593,6 +593,7 @@ let rec remove_typedef = function
 
 let rec remove_qual = function
   | T_c_qualified(_, t) -> remove_qual t
+  | T_c_pointer t -> T_c_pointer (remove_qual t)
   | t -> t
 
 let rec remove_typedef_qual = function
