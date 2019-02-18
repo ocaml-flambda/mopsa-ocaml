@@ -19,65 +19,40 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Configuration parser.
 
-open Core
-open Manager
-open Domain
-open Post
-open Callback
-open Eq
+    Build the global abstract domain from a json configuration file.
 
-module type S =
-sig
+    The supported syntax for a [domain] is as follows:
 
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+    - a string denotes a leaf domain or a non-relational value
+   abstraction.
 
-end
+    - [\{"functor": domain, "arg": domain\}] creates a functor domain
+   parameterized by an argument domain.
 
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
+    - [\{"iter": \[domain list\]\}] uses the iterator composer to
+   combine a list of domains in sequence.
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
+    - [\{"stack": domain, "over": domain\}] combines two domains with
+   a stack configuration.
 
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
+    - [\{"product": \[domain/value list\], "reductions": \[string
+   list\]\}, "over": domain] constructs a reduced product of a set of
+   abstract domains and non-relational value abstractions with some
+   reduction rules. A common sub-domain can be provided to construct a
+   stacked product.
 
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
+*)
 
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
+val opt_config : string ref
+(** Path to the configuration file *)
 
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
+val parse : unit -> string * (module Core.Domain.DOMAIN)
+(** [parse ()] constructs an abstract domain from the current configuration file *)
 
-end
+val language : unit -> string
+(** [language ()] returns the language of the current configuration file *)
 
-
-
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+val domains : unit -> string list
+(** [domains ()] returns the list of domains used in the current configuration file *)

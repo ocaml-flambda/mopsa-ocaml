@@ -19,65 +19,52 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Zones for the Python language. *)
 
-open Core
-open Manager
-open Domain
-open Post
-open Callback
-open Eq
+open Mopsa
+open Universal.Ast
+open Ast
 
-module type S =
-sig
+type zone +=
+   | Z_py
+   | Z_py_obj
 
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+let () =
+  register_zone {
+    zone = Z_py;
+    name = "Z_py";
+    subset = None;
+    eval = (fun exp ->
+        match ekind exp with
+        | E_py_undefined _
+        | E_py_object _
+        | E_py_list _
+        | E_py_index_subscript _
+        | E_py_slice_subscript _
+        | E_py_attribute _
+        | E_py_dict _
+        | E_py_set _
+        | E_py_generator_comprehension _
+        | E_py_list_comprehension _
+        | E_py_set_comprehension _
+        | E_py_dict_comprehension _
+        | E_py_call _
+        | E_py_yield _
+        | E_py_if _
+        | E_py_tuple _
+        | E_py_bytes _
+        | E_py_lambda _
+        | E_py_multi_compare _ -> Keep
 
-end
+        | _ -> Process);
+  };
 
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
-
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
-
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
-
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-
-
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+  register_zone {
+    zone = Z_py_obj;
+    name = "Z_py_object";
+    subset = None;
+    eval = (fun exp ->
+        match ekind exp with
+        | E_py_object _ -> Keep
+        | _ -> Process);
+  }

@@ -23,53 +23,61 @@
 TARGET_NATIVES = mopsa
 
 # Packs
-mopsa = framework mopsa lang main
+mopsa = framework mopsa langs main
 
-framework = ast visitor query annotation lattice zone manager	\
-flow eval post channel value domain callstack alarm output logging \
-cache analyzer lattices domains setup config options
-framework.output = text json factory
-framework.domains = stateless iter nonrel leaf functor stacked	\
-reduced_product empty
-framework.domains.reduced_product = pool reductions products factory
-framework.domains.reduced_product.products = value_product domain_product
+# Framework
+framework = core export engine lattices domains composers config
+framework.core = ast visitor eq query annotation lattice zone manager flow eval \
+		 post channel value domain callstack alarm
+framework.export = text json factory
+framework.engine = logging cache analyzer
+framework.lattices = finite_powerset partial_map powerset total_map
+framework.composers = iter stacked reduced_product
+framework.domains = stateless nonrel leaf functor empty
+framework.config = setup abstraction options
+framework.composers.reduced_product = pool reductions products factory
+framework.composers.reduced_product.products = value_product domain_product
 
-lang = universal stubs c python
+# Languages
+langs = universal stubs c python
 
-lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
-strings
-lang.universal.iterators = program intraproc interproc unittest loops
-lang.universal.iterators.interproc = inlining
-lang.universal.heap = pool recency
-lang.universal.numeric = rounding values relational \
-reductions
-lang.universal.numeric.values = intervals congruences float_intervals	\
+# Universal
+langs.universal = ast frontend zone u_stdlib iterators heap numeric strings
+langs.universal.iterators = program intraproc interproc unittest loops
+langs.universal.iterators.interproc = inlining
+langs.universal.heap = pool recency
+langs.universal.numeric = rounding values relational
+langs.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix
-lang.universal.numeric.reductions = channels intervals_congruences	\
+langs.universal.numeric.reductions = channels intervals_congruences	\
 implicit_assume_relation intervals_broadcast
 
-lang.stubs = ast zone alarms iterator
+# Stubs
+langs.stubs = ast zone alarms iterator
 
-lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
-lang.c.iterators = program switch goto interproc
-lang.c.desugar = low_level record_copy loops stub_init cond_expr
-lang.c.memory = common cells pointers machine_numbers
-lang.c.memory.common = base points_to init_visitor
-lang.c.memory.cells = cell expand cell2scalar
-lang.c.memory.pointers = bases nonrel
-lang.c.libs = libmopsa libc
-lang.c.resources = common file
-lang.c.resources.file = slot table domain
+# C
+langs.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
+langs.c.iterators = program switch goto interproc
+langs.c.desugar = low_level record_copy loops stub_init cond_expr
+langs.c.memory = common cells pointers machine_numbers
+langs.c.memory.common = base points_to init_visitor
+langs.c.memory.cells = cell expand cell2scalar
+langs.c.memory.pointers = bases nonrel
+langs.c.libs = libmopsa libc
+langs.c.resources = common file
+langs.c.resources.file = slot table domain
 
-lang.python = ast addr utils visitor operators pp frontend zone		\
+# Python
+langs.python = ast addr utils visitor operators pp frontend zone		\
 alarms  libs desugar objects data_model types flows program
-lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+langs.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
-lang.python.types = typing addr_env t_string t_int t_float t_list t_set
+langs.python.types = typing addr_env t_string t_int t_float t_list t_set
 
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+
 
 # MOPSA
 MOPSAROOT = ..

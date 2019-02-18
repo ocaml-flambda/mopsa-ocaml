@@ -21,42 +21,51 @@
 
 (** Essential modules. *)
 
-include Framework.Ast
+include Framework.Core.Ast
 
-module Logging = Framework.Logging
+module Engine = Framework.Engine
 
-module Setup = Framework.Setup
+module Logging = Framework.Engine.Logging
 
-module Visitor = Framework.Visitor
+module Setup = Framework.Config.Setup
 
-include Framework.Zone
+module Visitor = Framework.Core.Visitor
 
-include Framework.Manager
+include Framework.Core.Zone
 
-module Flow = Framework.Flow
+include Framework.Core.Manager
 
-module Annotation = Framework.Annotation
+module Flow = Framework.Core.Flow
+
+module Annotation = Framework.Core.Annotation
 type 'a annot = 'a Annotation.annot
 
-module Channel = Framework.Channel
-type 'a with_channel = 'a Channel.with_channel
+module Channel = Framework.Core.Channel
 
-module Post = Framework.Post
+module Post = Framework.Core.Post
 type 'a post = 'a Post.post
 
-module Eval = Framework.Eval
+module Eval = Framework.Core.Eval
 
-module Query = Framework.Query
-type 'a query = 'a Query.query
+module Query = Framework.Core.Query
 
 include Location
 
-include Framework.Domain
+include Framework.Core.Domain
+include Framework.Core.Value
 
-include Framework.Options
+include Framework.Config.Options
 
 include Exceptions
 
-module Callstack = Framework.Callstack
+module Callstack = Framework.Core.Callstack
 
-include Framework.Alarm
+include Framework.Core.Alarm
+
+include Framework.Core.Eq
+
+module Config = Framework.Config
+module Abstraction = Framework.Config.Abstraction
+module Options = Framework.Config.Options
+
+module Export = Framework.Export

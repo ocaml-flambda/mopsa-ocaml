@@ -19,65 +19,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Reduction operators of post-conditions *)
 
 open Core
 open Manager
-open Domain
-open Post
-open Callback
-open Eq
+open Pool
 
-module type S =
+module type REDUCTION =
 sig
-
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
-
+  val trigger : Post.channel option
+  val reduce : Ast.stmt -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a flow -> 'a flow
 end
 
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
-
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
-
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
-
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-
-
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+(** Registration *)
+let reductions : (string * (module REDUCTION)) list ref = ref []
+let register_reduction name rule = reductions := (name, rule) :: !reductions
+let find_reduction name = List.assoc name !reductions

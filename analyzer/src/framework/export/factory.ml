@@ -19,65 +19,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Render the output of an analysis depending on the selected engine. *)
 
-open Core
-open Manager
-open Domain
-open Post
-open Callback
-open Eq
-
-module type S =
-sig
-
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
-
-end
-
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
-
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
-
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
-
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
+type format =
+  | F_text (* Textual output *)
+  | F_json (* Formatted output in JSON *)
 
 
+(* Command line option *)
+(* ------------------- *)
 
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+let opt_format = ref F_text
+let opt_file = ref None
+
+
+(* Result rendering *)
+(* ---------------- *)
+
+(* Print collected alarms in the desired output format *)
+let render man flow time files =
+  let alarms = Core.Flow.fold (fun acc tk env ->
+      match tk with
+      | Core.Alarm.T_alarm a -> a :: acc
+      | _ -> acc
+    ) [] man flow
+  in
+  let return_v = if List.length alarms > 0 then 1 else 0 in
+  let _ = match !opt_format with
+    | F_text -> Text.render man alarms time files !opt_file
+    | F_json -> Json.render man alarms time files !opt_file in
+  return_v
+
+let panic ?btrace exn files =
+  match !opt_format with
+  | F_text -> Text.panic ?btrace exn files !opt_file
+  | F_json -> Json.panic ?btrace exn files !opt_file
+
+let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) =
+  match !opt_format with
+  | F_text -> Text.help args !opt_file
+  | F_json -> Json.help args !opt_file
+
+let list_domains (domains:string list) =
+  match !opt_format with
+  | F_text -> Text.list_domains domains !opt_file
+  | F_json -> Json.list_domains domains !opt_file

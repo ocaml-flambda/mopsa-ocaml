@@ -19,65 +19,24 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Analyzer - Central orchestrer of the analysis architecture. *)
 
 open Core
 open Manager
-open Domain
-open Post
-open Callback
-open Eq
 
-module type S =
+module Make(Domain : Domain.DOMAIN) :
 sig
 
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  val init : Ast.program -> (Domain.t, Domain.t) man -> Domain.t flow
+
+  val exec : ?zone:Zone.zone -> Ast.stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
+
+  val eval : ?zone:(Zone.zone * Zone.zone) -> ?via:Zone.zone -> Ast.expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (Domain.t, Ast.expr) evl
+
+  val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
+
+  val man : (Domain.t, Domain.t) man
+
+  val interactive_man : (Domain.t, Domain.t) man
 
 end
-
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
-
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
-
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
-
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-
-
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)

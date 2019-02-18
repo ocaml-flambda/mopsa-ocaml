@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Copyright (C) 2019 The MOPSA Project.                                    *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -19,26 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Empty domain. *)
+open Mopsa
+open Ast
 
-open Core
-open Domain
-open Eq
+let debug fmt = Debug.debug ~channel:"python.utils" fmt
 
-include Stateless.Make(
-  struct
-    let name = "framework.domains.empty"
-    type _ domain += D_empty : unit domain
-    let id = D_empty
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_empty -> Some Eq
-      | _ -> None
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = []; import = []}
-    let init prog man flow = None
-    let exec zone stmt man flow = None
-    let eval zone exp man flow = None
-    let ask query man flow = None
-  end
-  )
+let rec partition_list_by_length n l =
+  if n = 0 then [], l
+  else
+    match l with
+    | hd :: tl ->
+      let lhd, ltl = partition_list_by_length (n-1) tl in
+      hd :: lhd, ltl
+    | _ -> assert false
+
+let mk_builtin_raise exn range =
+  mk_stmt (S_py_raise (Some (mk_py_object (Addr.find_builtin exn) range))) range
+
+let mk_builtin_call f params range =
+  mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
+
+let mk_hasattr obj attr range =
+  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string attr range] range
+
+let mk_object_hasattr obj attr range =
+  mk_hasattr (mk_py_object obj range) attr range
+
+let mk_addr_hasattr obj attr range =
+  mk_hasattr (Universal.Ast.mk_addr obj range) attr range
+
+
+let mk_try_stopiteration body except range =
+  mk_try
+    body
+    [mk_except
+       (Some (mk_py_object (Addr.find_builtin "StopIteration") range)) (* (mk_addr (fst @@ Addr.find_builtin "StopIteration") range)) *)
+       None
+       except
+    ]
+    (Universal.Ast.mk_block [] range)
+    (Universal.Ast.mk_block [] range)
+    range

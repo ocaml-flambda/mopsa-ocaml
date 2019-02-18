@@ -22,7 +22,7 @@
 (** Abstraction of sets of partial maps. *)
 
 open Top
-open Lattice
+open Core.Lattice
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.partial_map" fmt
 
@@ -36,7 +36,7 @@ end
 
 module Make
     (Key : KEY)
-    (Value: Lattice.LATTICE)
+    (Value: Core.Lattice.LATTICE)
 =
 struct
   module Map = MapExt.Make(Key)

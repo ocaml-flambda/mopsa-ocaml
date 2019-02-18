@@ -19,65 +19,58 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+(** Generic query mechanism for extracting information from abstract domains.
 
-open Core
-open Manager
-open Domain
-open Post
-open Callback
+    Defining a new query requires the definition of the type of its reply and a
+    manager on this type providing reply merging functions.
+
+    Here is an example. Let us define a new interval query:
+    {[type _ query += QInterval : var -> (int * int) query]}
+
+    Next, an interval manager is registered as follows:
+    {[register_query {
+        eq = (let check : type a. a query -> (a, (int * int)) eq option =
+                fun q ->
+                  match q with
+                  | QInterval _ -> Some Eq
+                  | _ -> None
+              in
+              check
+             );
+        join = (fun (a1, a2) (b1, b2) -> (min a1 b1, max a2 b2));
+        meet = (fun (a1, a2) (b1, b2) -> (max a1 b1, min a2 b2));
+      };;]}
+
+    For instance, the join of two intervals of a query [q] can be obtained simply by:
+    {[join q (Some (1, 20)) (Some (-1, 5));;]}
+    {v - : (int * int) option = Some (-1, 20) v}
+
+*)
+
+(** {2 Queries} *)
+(** *********** *)
+
 open Eq
 
-module type S =
-sig
+(** Type of a query, defined by domains and annotated with the type of the reply. *)
+type _ query = ..
 
-  val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+type 'r query_info = {
+  eq : 'a. 'a query -> ('a, 'r) eq option;
+  join: 'r -> 'r -> 'r;
+  meet: 'r -> 'r -> 'r;
+}
 
-end
+val register_query : 'a query_info -> unit
 
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
-struct
+val join : 'a query -> 'a -> 'a -> 'a
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
-  let widen _ _ _ = top
-  let print _ _ = ()
-
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
-
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
+val meet : 'a query -> 'a -> 'a -> 'a
 
 
+(** {Common queries} *)
+(** **************** *)
 
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+type _ query +=
+  | Q_print_var : (Format.formatter -> string -> unit) query
+  (** Print the value of a variable *)

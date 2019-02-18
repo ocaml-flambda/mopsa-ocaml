@@ -21,7 +21,7 @@
 
 (** Entry point of the analyzer. *)
 
-open Framework
+open Mopsa
 
 
 (** {2 Command-line options} *)
@@ -30,7 +30,7 @@ open Framework
 let opt_interactive = ref false
 
 let () =
-  Options.register_builtin_option {
+  register_builtin_option {
     key = "-interactive";
     doc = " start the analysis in interactive mode";
     spec = Arg.Set opt_interactive;
@@ -44,7 +44,7 @@ let parse_options f () =
   let files = ref [] in
   let n = Array.length Sys.argv in
   let return_value = ref 0 in
-  Arg.parse (Options.to_arg ()) (fun filename ->
+  Arg.parse (Config.Options.to_arg ()) (fun filename ->
       files := filename :: !files;
       if !Arg.current = n - 1 then
         return_value := !return_value * 10 + (f !files)
@@ -57,11 +57,11 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Framework.Logging.phase "parsing";
+  Logging.phase "parsing";
   match lang with
-  | "universal" -> Lang.Universal.Frontend.parse_program files
-  | "c" -> Lang.C.Frontend.parse_program files
-  | "python" -> Lang.Python.Frontend.parse_program files
+  | "universal" -> Langs.Universal.Frontend.parse_program files
+  | "c" -> Langs.C.Frontend.parse_program files
+  | "python" -> Langs.Python.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"
 
 
@@ -71,13 +71,13 @@ let parse_program lang files =
 let () =
   exit @@ parse_options (fun files ->
       try
-        let lang, domain = Config.parse () in
+        let lang, domain = Config.Abstraction.parse () in
 
         let prog = parse_program lang files in
 
         (* Top layer analyzer *)
         let module Domain = (val domain) in
-        let module Analyzer = Analyzer.Make(Domain) in
+        let module Analyzer = Engine.Analyzer.Make(Domain) in
 
         let t = Timing.start () in
 
@@ -88,16 +88,16 @@ let () =
           else Analyzer.man
         in
 
-        Framework.Logging.phase "computing initial environments";
+        Logging.phase "computing initial environments";
         let flow = Analyzer.init prog man in
 
-        Framework.Logging.phase "starting the analysis";
-        let stmt = Ast.mk_stmt (Ast.S_program prog) prog.prog_range in
+        Logging.phase "starting the analysis";
+        let stmt = mk_stmt (S_program prog) prog.prog_range in
         let res = Analyzer.exec stmt man flow in
         let t = Timing.stop t in
 
-        Output.Factory.render Analyzer.man res t files
+        Export.Factory.render Analyzer.man res t files
 
       with
-        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
+        e -> Export.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
     ) ()

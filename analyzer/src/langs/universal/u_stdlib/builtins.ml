@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Copyright (C) 2019 The MOPSA Project.                                    *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -19,26 +19,45 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Empty domain. *)
+open Mopsa
+open Ast
+open Zone
 
-open Core
-open Domain
-open Eq
+module Domain(* : Framework.Domains.Stateless.S *) =
+struct
+  let name = "universal.stdlib.builtins"
+  type _ domain += D_universal_stdlib_builtins : unit domain
+  let id = D_universal_stdlib_builtins
 
-include Stateless.Make(
-  struct
-    let name = "framework.domains.empty"
-    type _ domain += D_empty : unit domain
-    let id = D_empty
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_empty -> Some Eq
-      | _ -> None
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = []; import = []}
-    let init prog man flow = None
-    let exec zone stmt man flow = None
-    let eval zone exp man flow = None
-    let ask query man flow = None
-  end
-  )
+  let identify : type a. a domain -> (unit, a) eq option =
+    function
+    | D_universal_stdlib_builtins -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:name fmt
+
+  let exec_interface =
+    { export = [Z_any] ;
+      import = []
+    }
+  let eval_interface =
+    { export = [Z_any, Z_any];
+      import = []
+    }
+
+  let exec (_: zone) (stmt: stmt) (man: ('a, unit) man) (flow: 'a flow) =
+    match skind stmt with
+    | S_assign(_, {ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])})
+    | S_expression({ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])}) ->
+      man.exec (mk_assume e (srange stmt)) flow |> Post.of_flow |> OptionExt.return
+    | _ -> None
+
+  let eval z expr man flow =
+    None
+
+  let init _ _ _ = None
+  let ask _ _ _ = None
+end
+
+let () =
+  Framework.Domains.Stateless.register_domain (module Domain)

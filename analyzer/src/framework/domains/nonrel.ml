@@ -21,11 +21,13 @@
 
 (** Generic domain for creating non-relational value abstractions. *)
 
+open Core
 open Value
 open Ast
 open Manager
 open Domain
 open Annotation
+open Eq
 
 module Make(Value: VALUE) =
 struct
@@ -47,7 +49,7 @@ struct
 
   let name = "framework.domains.nonrel"
   let id = D_nonrel
-  let identify : type a. a domain -> (t, a) Domain.eq option =
+  let identify : type a. a domain -> (t, a) eq option =
     function
     | D_nonrel -> Some Eq
     | _ -> None

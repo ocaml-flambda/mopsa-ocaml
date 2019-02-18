@@ -23,9 +23,11 @@
    their local abstractions only; the global manager and its flow
    abstraction are not accessible. *)
 
+open Core
 open Ast
 open Manager
 open Domain
+open Eq
 include Channel
 
 module type S =

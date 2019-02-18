@@ -21,6 +21,7 @@
 
 (** Functor abstract domains. *)
 
+open Core
 open Domain
 
 module type S =
