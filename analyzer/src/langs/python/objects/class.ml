@@ -30,14 +30,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_objects_class : unit domain
-
-    let id = D_python_objects_class
     let name = "python.objects.class"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_objects_class -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [Zone.Z_py]; import = []}

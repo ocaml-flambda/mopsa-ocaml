@@ -171,7 +171,7 @@ and parse_db (dbfile: string) ctx : unit =
 
 and parse_file (opts: string list) (file: string) ctx =
   Logging.parse file;
-  let opts' = ("-I" ^ (Setup.resolve_stub "c" "mopsa")) ::
+  let opts' = ("-I" ^ (Config.Paths.resolve_stub "c" "mopsa")) ::
               !c_opts @
               opts
   in
@@ -179,8 +179,8 @@ and parse_file (opts: string list) (file: string) ctx =
 
 and parse_stubs ctx () =
   let stubs = [
-    Setup.resolve_stub "c" "mopsa/mopsa.c";
-    Setup.resolve_stub "c" "libc/libc.c";
+    Config.Paths.resolve_stub "c" "mopsa/mopsa.c";
+    Config.Paths.resolve_stub "c" "libc/libc.c";
   ]
   in
   List.iter (fun stub -> parse_file [] stub ctx) stubs

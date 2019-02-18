@@ -33,8 +33,6 @@ module type S =
 sig
 
   val name     : string
-  val id       : unit domain
-  val identify : 'b domain -> (unit, 'b) eq option
   val exec_interface : Zone.zone interface
   val eval_interface : (Zone.zone * Zone.zone) interface
   val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
@@ -58,9 +56,10 @@ struct
   let widen _ _ _ = top
   let print _ _ = ()
 
-  let name = D.name
-  let id = D.id
-  let identify = D.identify
+  include Core.Id.GenDomainId(struct
+      type typ = unit
+      let name = D.name
+    end)
 
   let init prog man flow =
     D.init prog man flow |>

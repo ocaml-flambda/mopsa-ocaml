@@ -101,16 +101,10 @@ module Domain = struct
   (** {2 Domain identification} *)
   (** ========================= *)
 
-  let name = "c.memory.cells.expand"
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  type _ domain += D_c_cell_expand : t domain
-  let id = D_c_cell_expand
-
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_c_cell_expand -> Some Eq
-    | _ -> None
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "c.memory.cells.expand"
+    end)
 
 
   (** Command-line options *)

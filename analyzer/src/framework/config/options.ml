@@ -147,10 +147,10 @@ let () =
   register_builtin_option {
     key = "-share-dir";
     doc = " path to the share directory";
-    spec = Arg.Set_string Setup.opt_share_dir;
+    spec = Arg.Set_string Paths.opt_share_dir;
     default = "";
   }
-  
+
 
 (** Analysis configuration *)
 let () =

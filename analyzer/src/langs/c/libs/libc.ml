@@ -48,14 +48,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_libs_libc : unit domain
-  let id = D_c_libs_libc
   let name = "c.libs.libc"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_libs_libc -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

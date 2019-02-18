@@ -28,15 +28,7 @@ open Zone
 module Domain =
 struct
 
-  type _ domain += D_universal_program : unit domain
-
-  let id = D_universal_program
   let name = "universal.iterators.program"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_program -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = [Z_u]; import = []}

@@ -28,13 +28,13 @@ mopsa = framework mopsa langs main
 # Framework
 framework = core export engine lattices domains composers config
 framework.core = ast visitor eq query annotation lattice zone manager flow eval \
-		 post channel value domain callstack alarm
+		 post channel value domain id callstack alarm
 framework.export = text json factory
 framework.engine = logging cache analyzer
 framework.lattices = finite_powerset partial_map powerset total_map
-framework.composers = iter stacked reduced_product
+framework.composers = iter stacked
 framework.domains = stateless nonrel leaf functor empty
-framework.config = setup abstraction options
+framework.config = paths abstraction options
 framework.composers.reduced_product = pool reductions products factory
 framework.composers.reduced_product.products = value_product domain_product
 

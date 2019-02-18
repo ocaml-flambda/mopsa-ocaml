@@ -34,14 +34,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_loops : unit domain
-  let id = D_c_desugar_loops
   let name = "c.desugar.loops"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_desugar_loops -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

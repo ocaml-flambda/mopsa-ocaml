@@ -36,14 +36,13 @@ sig
   include Lattice.LATTICE
 
   val name : string
-  val id : t domain
-  val identify : 'a domain -> (t, 'a) eq option
 
   val init : Ast.program -> t
 
   val zone : Zone.zone
 
   val exec : Ast.stmt -> t -> t with_channel
+
   val ask  : 'r Query.query -> t -> 'r option
 
 end
@@ -54,6 +53,11 @@ module Make(D: S) : Domain.DOMAIN =
 struct
 
   include D
+
+  include Core.Id.GenDomainId(struct
+      type typ = t
+      let name = name
+    end)
 
   let init prog man flow =
     Some (

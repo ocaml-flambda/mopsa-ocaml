@@ -46,17 +46,10 @@ struct
   type _ Query.query +=
   | Q_float_interval : expr -> t Query.query
 
-  type _ value += V_float_interval : t value
-
-  let id = V_float_interval
-  let name = name, "float_intervals"
-
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_float_interval -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = name, "float_intervals"
+    end)
 
   let zone = Zone.Z_u_num
 

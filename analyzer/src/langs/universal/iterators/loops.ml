@@ -82,16 +82,7 @@ let () =
 module Domain : Framework.Domains.Stateless.S =
 struct
 
-  type _ domain += D_universal_loops : unit domain
-
-  let id = D_universal_loops
   let name = name
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_loops -> Some Eq
-    | _ -> None
-
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

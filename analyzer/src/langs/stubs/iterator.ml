@@ -30,21 +30,7 @@ open Alarms
 module Domain =
 struct
 
-
-  (** Domain identification *)
-  (** ===================== *)
-
-  type _ domain += D_stubs_iterator : unit domain
-
-  let id = D_stubs_iterator
   let name = "stubs.iterator"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_stubs_iterator -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
-
 
   (** Zoning definition *)
   (** ================= *)

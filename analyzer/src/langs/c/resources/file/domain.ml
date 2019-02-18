@@ -144,16 +144,10 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_resources_file : t domain
-
-  let id = D_c_resources_file
-  let name = "c.resources.file"
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_c_resources_file -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "c.resources.file"
+    end)
 
 
   (** Zoning definition *)

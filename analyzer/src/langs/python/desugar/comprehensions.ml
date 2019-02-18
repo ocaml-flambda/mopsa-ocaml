@@ -33,14 +33,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_comprehensions : unit domain
-
-    let id = D_python_desugar_comprehensions
     let name = "python.desugar.comprehensions"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_comprehensions -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = [Zone.Z_py]}

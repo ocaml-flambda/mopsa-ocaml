@@ -33,14 +33,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_low_level : unit domain
-  let id = D_c_desugar_low_level
   let name = "c.desugar.low_level"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_desugar_low_level -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

@@ -35,15 +35,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_interproc : unit domain
-
-  let id = D_c_interproc
   let name = "c.iterators.interproc"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_interproc -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

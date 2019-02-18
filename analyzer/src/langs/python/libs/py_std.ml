@@ -30,14 +30,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_libs_stdlib : unit domain
-
-    let id = D_python_libs_stdlib
     let name = "python.libs.stdlib"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_libs_stdlib -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = { export = []; import = [Zone.Z_py] }

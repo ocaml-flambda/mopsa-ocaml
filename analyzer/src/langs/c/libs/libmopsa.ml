@@ -63,14 +63,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_libs_libmopsa : unit domain
-  let id = D_c_libs_libmopsa
   let name = "c.libs.libmopsa"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_libs_libmopsa -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

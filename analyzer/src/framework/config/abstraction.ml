@@ -37,7 +37,7 @@ let opt_config = ref ""
 let resolve_config_file config =
   if Sys.file_exists config && not (Sys.is_directory config) then config
   else
-    let file = Filename.concat (Setup.get_configs_dir ()) config in
+    let file = Filename.concat (Paths.get_configs_dir ()) config in
     if Sys.file_exists file && not (Sys.is_directory file) then file
     else Exceptions.panic "unable to find configuration file %s" config
 
@@ -48,7 +48,6 @@ let resolve_config_file config =
 let rec build_domain = function
   | `String(name) -> build_leaf name
   | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "product" obj -> build_product obj
   | `Assoc(obj) when List.mem_assoc "functor" obj -> build_functor obj
   | `Assoc(obj) when List.mem_assoc "stack" obj -> build_stack obj
   | _ -> assert false
@@ -81,16 +80,6 @@ and build_iter json =
         (module Dom : Domain.DOMAIN)
   in
   aux domains
-
-and build_product assoc =
-  let pool = List.assoc "product" assoc |> to_list |> List.map to_string in
-  let rules = List.assoc "reductions" assoc |> to_list |> List.map to_string in
-  let sub =
-      try List.assoc "over" assoc |> build_domain
-      with Not_found -> (module Domains.Empty : Domain.DOMAIN)
-  in
-  let module D = (val Composers.Reduced_product.Factory.make pool rules sub) in
-  (module D)
 
 and build_functor assoc =
   let arg = List.assoc "arg" assoc in

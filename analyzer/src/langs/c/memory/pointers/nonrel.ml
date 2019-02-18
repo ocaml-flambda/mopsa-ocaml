@@ -42,14 +42,7 @@ struct
   (** {2 Domain identification} *)
   (** ========================= *)
 
-  type _ domain += D_c_cells_pointer : t domain
-  let id = D_c_cells_pointer
   let name = "c.memory.cells.pointer"
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_c_cells_pointer -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

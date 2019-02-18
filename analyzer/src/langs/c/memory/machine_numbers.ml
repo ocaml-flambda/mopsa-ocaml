@@ -134,14 +134,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_machine_numbers : unit domain
-  let id = D_c_machine_numbers
   let name = "c.machine_numbers"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_machine_numbers -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

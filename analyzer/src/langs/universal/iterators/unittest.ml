@@ -149,14 +149,7 @@ struct
   (* Domain identification *)
   (* ===================== *)
 
-  type _ domain += D_universal_unittest : unit domain
-  let id = D_universal_unittest
   let name = name
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_unittest -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
   let summary fmt = Debug.debug ~channel:"unittest" fmt
 

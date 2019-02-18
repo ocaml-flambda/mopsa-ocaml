@@ -61,14 +61,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_universal_intraproc_inlining : unit domain
-  let id = D_universal_intraproc_inlining
   let name = "universal.iterators.interproc.inlining"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_intraproc_inlining -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

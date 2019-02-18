@@ -28,12 +28,6 @@ open Eq
 include Stateless.Make(
   struct
     let name = "framework.domains.empty"
-    type _ domain += D_empty : unit domain
-    let id = D_empty
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_empty -> Some Eq
-      | _ -> None
     let exec_interface = {export = []; import = []}
     let eval_interface = {export = []; import = []}
     let init prog man flow = None

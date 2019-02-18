@@ -29,14 +29,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_data_model_subscript : unit domain
-
-    let id = D_python_data_model_subscript
     let name = "python.data_model.subscript"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_data_model_subscript -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [Zone.Z_py]; import = []}

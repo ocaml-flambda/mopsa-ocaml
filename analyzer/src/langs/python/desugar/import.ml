@@ -27,15 +27,7 @@ open Universal.Ast
 
 module Domain =
   struct
-    type _ domain += D_python_desugar_import : unit domain
-
-    let id = D_python_desugar_import
     let name = "python.desugar.import"
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_python_desugar_import -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let opt_stubs = ref []

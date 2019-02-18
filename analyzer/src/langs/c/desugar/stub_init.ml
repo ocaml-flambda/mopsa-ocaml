@@ -34,14 +34,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_stub_init : unit domain
-  let id = D_c_desugar_stub_init
   let name = "c.desugar.stub_init"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_desugar_stub_init -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

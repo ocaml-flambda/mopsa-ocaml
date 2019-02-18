@@ -54,14 +54,7 @@ let mk_sum_call fundec args range =
 module Domain =
   struct
 
-    type _ domain += D_python_objects_function : unit domain
-
-    let id = D_python_objects_function
     let name = "python.objects.function"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_objects_function -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = [Zone.Z_py]; import = []}

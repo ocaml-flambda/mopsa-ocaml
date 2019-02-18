@@ -41,7 +41,6 @@ type 'a interface = {
 type _ domain = ..
 
 
-
 (** Unified signature of abstract domains *)
 module type DOMAIN =
 sig

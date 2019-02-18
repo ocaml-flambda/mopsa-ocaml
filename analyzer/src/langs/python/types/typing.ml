@@ -168,13 +168,10 @@ struct
   type t = {abs_heap: TMap.t;
             typevar_env: TypeVarMap.t}
 
-  type _ domain += D_python_typing : t domain
-
-  let id = D_python_typing
-  let name = "python.types.typing"
-  let identify : type a. a domain -> (t, a) eq option = function
-    | D_python_typing -> Some Eq
-    | _ -> None
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "python.types.typing"
+    end)
 
   type _ Query.query +=
     | Q_exn_string : expr -> string Query.query

@@ -45,14 +45,11 @@ struct
 
   include VarMap
 
-  type _ domain += D_nonrel : t domain
-
-  let name = "framework.domains.nonrel"
-  let id = D_nonrel
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_nonrel -> Some Eq
-    | _ -> None
+  include Core.Id.GenDomainId(struct
+      type typ = VarMap.t
+      let name = "framework.domains.nonrel"
+    end
+    )
 
   let print fmt a =
     Format.fprintf fmt "%s:@ @[   %a@]@\n" (snd @@ Value.name) VarMap.print a

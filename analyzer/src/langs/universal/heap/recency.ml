@@ -50,15 +50,10 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_u_heap_recency : t domain
-  let id = D_u_heap_recency
-  let name = "universal.heap.recency"
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_u_heap_recency -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "universal.heap.recency"
+    end)
 
   (** Zoning definition *)
   (** ================= *)

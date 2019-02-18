@@ -29,14 +29,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type  _ domain += D_python_data_model_callable : unit domain
-
-    let id = D_python_data_model_callable
     let name = "python.data_model.callable"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_data_model_callable -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}

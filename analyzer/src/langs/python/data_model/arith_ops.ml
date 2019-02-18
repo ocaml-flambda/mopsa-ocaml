@@ -32,14 +32,7 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_data_model_arith_ops : unit domain
-
-    let id = D_python_data_model_arith_ops
     let name = "python.data_model.arith_ops"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_data_model_arith_ops -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}

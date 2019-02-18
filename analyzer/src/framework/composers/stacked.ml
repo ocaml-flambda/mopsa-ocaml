@@ -125,13 +125,10 @@ struct
   (* Domain identification *)
   (* ===================== *)
 
-  type _ domain += D_stacked : t domain
-  let name = D1.name ^ "/" ^ D2.name
-  let id = D_stacked
-  let identify : type b. b domain -> (t, b) eq option =
-    function
-    | D_stacked -> Some Eq
-    | _ -> None
+  include Core.Id.GenDomainId(struct
+      type typ = t
+      let name = D1.name ^ "/" ^ D2.name
+    end)
 
 
   (* Managers definition *)

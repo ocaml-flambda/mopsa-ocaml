@@ -44,24 +44,11 @@ struct
 
   let zone = Zone.Z_u_num
 
-  type _ value += V_mix : IV.t value * FV.t value -> t value
-
-  let id = V_mix (IV.id, FV.id)
-
-  let name = "universal.numeric.values.integer_float_mix",
-             (snd IV.name) ^ " ⊎ " ^ (snd FV.name)
-
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_mix (x, y) ->
-       (match IV.identify x, IV.identify y with
-        | Some Eq, Some Eq -> Some Eq
-        | _ -> None
-       )
-    | _ -> None
-
-
-  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = "universal.numeric.values.integer_float_mix",
+                 (snd IV.name) ^ " ⊎ " ^ (snd FV.name)
+    end)
 
   let () =
     import_standalone_option Rounding.name

@@ -38,17 +38,10 @@ struct
   type _ Query.query +=
   | Q_interval : expr -> t Query.query
 
-  type _ value += V_integer_interval : t value
-
-  let id = V_integer_interval
-  let name = "universal.numeric.values.intervals", "intervals"
-
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_integer_interval -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = "universal.numeric.values.intervals", "intervals"
+    end)
 
   let zone = Zone.Z_u_num
 

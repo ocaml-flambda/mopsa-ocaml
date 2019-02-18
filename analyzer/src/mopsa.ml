@@ -27,8 +27,6 @@ module Engine = Framework.Engine
 
 module Logging = Framework.Engine.Logging
 
-module Setup = Framework.Config.Setup
-
 module Visitor = Framework.Core.Visitor
 
 include Framework.Core.Zone

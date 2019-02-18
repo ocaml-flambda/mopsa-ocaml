@@ -35,17 +35,10 @@ struct
   type _ Query.query +=
     | Q_string : expr -> t Query.query
 
-  type _ value += V_string_constant : t value
-
-  let id = V_string_constant
-  let name = "universal.strings.value", "strings"
-
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_string_constant -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = "universal.strings.value", "strings"
+    end)
 
   let bottom = B
   let top = T

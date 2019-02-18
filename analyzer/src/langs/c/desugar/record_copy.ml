@@ -34,14 +34,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += Dc_desugar_record_copy : unit domain
-  let id = Dc_desugar_record_copy
   let name = "c.desugar.record_copy"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | Dc_desugar_record_copy -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

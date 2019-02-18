@@ -19,18 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operators of evaluations *)
 
-open Core
-open Manager
-open Pool
+(** Generators of fresh module identifiers for domains and values *)
 
-module type REDUCTION =
-sig
-  val reduce : Ast.expr -> ('a, 'd) domain_man -> ('a, 'v) nonrel_man -> ('a, 'b) man -> 'a evl_conj -> 'a evl_conj
+open Eq
+open Domain
+open Value
+
+module GenDomainId(M:sig type typ val name : string end) =
+struct
+
+  type _ domain += DId : M.typ domain
+
+  let id = DId
+
+  let name = M.name
+
+  let identify : type a. a domain -> (M.typ, a) eq option =
+    function
+    | DId -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:M.name fmt
 end
 
-(** Registration *)
-let reductions : (string * (module REDUCTION)) list ref = ref []
-let register_reduction name rule = reductions := (name, rule) :: !reductions
-let find_reduction name = List.assoc name !reductions
+
+module GenValueId(M:sig type typ val name : string * string end) =
+struct
+
+  type _ value += VId : M.typ value
+
+  let id = VId
+
+  let name = M.name
+
+  let identify : type a. a value -> (M.typ, a) eq option =
+    function
+    | VId -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:(fst M.name) fmt
+end

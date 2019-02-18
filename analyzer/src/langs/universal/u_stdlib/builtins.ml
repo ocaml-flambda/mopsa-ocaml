@@ -23,17 +23,10 @@ open Mopsa
 open Ast
 open Zone
 
-module Domain(* : Framework.Domains.Stateless.S *) =
+module Domain =
 struct
+
   let name = "universal.stdlib.builtins"
-  type _ domain += D_universal_stdlib_builtins : unit domain
-  let id = D_universal_stdlib_builtins
-
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_stdlib_builtins -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface =

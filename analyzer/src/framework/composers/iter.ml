@@ -35,16 +35,10 @@ struct
 
   type t = Head.t * Tail.t
 
-  type _ domain += D_iter : t domain
-
-  let id = D_iter
-  let name = Head.name ^ ", " ^ Tail.name
-  let identify : type b. b domain -> (t, b) eq option =
-    function
-    | D_iter -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:"framework.domains.iter" fmt
+  include Core.Id.GenDomainId(struct
+      type typ = t
+      let name = Head.name ^ ", " ^ Tail.name
+    end)
 
   let bottom =
     Head.bottom, Tail.bottom

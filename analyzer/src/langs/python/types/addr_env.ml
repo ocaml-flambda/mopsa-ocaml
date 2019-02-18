@@ -96,15 +96,10 @@ struct
 
   include AMap
 
-  type _ domain += D_python_types_addr_env : t domain
-
-  let id = D_python_types_addr_env
-  let name = "python.types.addr_env"
-  let identify : type a. a domain -> (t, a) eq option = function
-    | D_python_types_addr_env -> Some Eq
-    | _  -> None
-
-  let debug fmt = Debug.debug ~channel:name fmt
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "python.types.addr_env"
+    end)
 
   let exec_interface = { export = [Zone.Z_py]; import = [Zone.Z_py; Zone.Z_py_obj]; }
   let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]; }

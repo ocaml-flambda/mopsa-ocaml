@@ -36,16 +36,7 @@ struct
 
   (** Domain identification *)
   (** ===================== *)
-
-  type _ domain += D_c_program : unit domain
-
-  let id = D_c_program
   let name = "c.iterators.program"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_program -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

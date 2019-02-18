@@ -28,14 +28,7 @@ open Universal.Ast
 
 module Domain =
   struct
-    type _ domain += D_python_types_t_float : unit domain
-
-    let id = D_python_types_t_float
     let name = "python.types.t_float"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_types_t_float -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     let exec_interface = {export = []; import = []}

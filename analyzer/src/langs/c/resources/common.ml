@@ -36,15 +36,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_resources_common : unit domain
-
-  let id = D_c_resources_common
   let name = "c.resources.common"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_resources_common -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

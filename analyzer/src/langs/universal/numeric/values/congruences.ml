@@ -33,17 +33,10 @@ struct
   type v = C.t
   type t = v with_bot
 
-  type _ value += V_integer_congruence : t value
-
-  let id = V_integer_congruence
-  let name = "universal.numeric.values.congruences", "congruences"
-
-  let identify : type a. a value -> (t, a) eq option =
-    function
-    | V_integer_congruence -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:(fst @@ name) fmt
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = "universal.numeric.values.congruences", "congruences"
+    end)
 
   let zone = Zone.Z_u_num
 

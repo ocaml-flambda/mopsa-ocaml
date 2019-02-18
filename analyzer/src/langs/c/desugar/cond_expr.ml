@@ -34,14 +34,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_cond_expr : unit domain
-  let id = D_c_desugar_cond_expr
   let name = "c.desugar.cond_expr"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_desugar_cond_expr -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 

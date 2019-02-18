@@ -61,18 +61,10 @@ module BaseSet = Framework.Lattices.Powerset.Make(
 
 include BaseSet
 
-let name = "c.memory.pointers", "pointers"
-
-type _ value += V_c_pointers_bases : t value
-
-let id = V_c_pointers_bases
-
-let identify : type a. a value -> (t, a) eq option =
-  function
-  | V_c_pointers_bases -> Some Eq
-  | _ -> None
-
-let debug fmt = Debug.debug ~channel:(fst name) fmt
+include Framework.Core.Id.GenValueId(struct
+    type typ = t
+    let name = "c.memory.pointers", "pointers"
+  end)
 
 let zone = Zone.Z_c_scalar
 
