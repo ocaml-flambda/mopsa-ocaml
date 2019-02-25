@@ -72,18 +72,17 @@ let subset (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : bool =
     flow1.map flow2.map
 
 let join (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  (* FIXME: we choose here one annotation, which is correct but too
-     coarse. We need to fold the annotation through the two flows *)
-  let annot = flow2.annot in
   let map = top_lift2
       (FlowMap.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> man.join annot v1 v2)
+         (fun _ v1 v2 -> man.join v1 v2)
       )
       flow1.map flow2.map
   in
-  {map; annot}
+  (* FIXME: we choose here one annotation, which is correct but too
+     coarse. We need to fold the annotation through the two flows *)
+  {map; annot = flow2.annot}
 
 let join_list man ?(annot=Annotation.empty) l =
   match l with
@@ -91,20 +90,17 @@ let join_list man ?(annot=Annotation.empty) l =
   | hd :: tl -> List.fold_left (join man) hd tl
 
 let meet (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  (* FIXME: we choose here one annotation, which is correct but too
-     coarse. We need to fold the annotation through the two flows *)
-  let annot = flow2.annot in
   let map = top_neutral2
       (fun b1 b2 ->
          FlowMap.map2zo
            (fun _ v1 -> man.bottom)
            (fun _ v2 -> man.bottom)
-           (fun _ v1 v2 -> man.meet annot v1 v2)
+           (fun _ v1 v2 -> man.meet v1 v2)
            b1 b2
       )
       flow1.map flow2.map
   in
-  {map; annot}
+  {map; annot = flow2.annot}
 
 let meet_list man ?(annot=Annotation.empty) l =
   match l with
@@ -113,8 +109,6 @@ let meet_list man ?(annot=Annotation.empty) l =
 
 
 let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  (* FIXME: we choose here one annotation, which is correct but too
-     coarse. We need to fold the annotation through the two flows *)
   let annot = flow2.annot in
   let map = top_lift2
       (FlowMap.map2zo
@@ -152,21 +146,20 @@ let copy (tk1:token) (tk2:token) (man:('a,'t) man) (flow1:'a flow) (flow2:'a flo
   set tk2 (get tk1 man flow1) man flow2
 
 let add (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
-  let annot = flow.annot in
   let map = top_lift1 (fun m ->
       if man.is_bottom a then m
       else
         let a' =
           try
             let old = FlowMap.find tk m in
-            man.join annot a old
+            man.join a old
           with Not_found ->
             a
         in
         FlowMap.add tk a' m
     ) flow.map
   in
-  {map; annot}
+  {map; annot = flow.annot}
 
 let remove (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.remove tk) flow.map in
@@ -281,6 +274,3 @@ let mem_annot k flow =
 let copy_annot flow1 flow2 =
   let annot = get_all_annot flow1 in
   set_all_annot annot flow2
-
-let without_callbacks flow =
-  { flow; callbacks = [] }

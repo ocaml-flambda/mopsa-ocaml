@@ -19,16 +19,38 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Unified signature of abstract domains.
+(** Unified signatures of abstract domains.
 
-    This is the low-level domain signature that gives full access to
-    the flow abstraction and global analysis manager.
+    Two signatures are defined:
+
+    1. Domains implementing the LEAF signature represent standalone
+   abstractions. Their γ function, lattice operators and transfer
+   functions do not depend on other external abstractions.
+
+    2. Domains implementing the STACK signature represent
+   parameterized abstractions. Their γ function, lattice operators and
+   transfer functions depend on argument abstractions. Unlike classic
+   OCaml functors, argument abstractions are not fixed at module
+   creation. Instead, stack domains receive a record encapsulation of
+   the transfer functions of their argument abstractions at
+   runtime. This allows sharing the arguments among other stack
+   domains (in a product for example).
+
 *)
 
+
+open Ast
+open Annotation
 open Manager
 open Eval
 open Post
+open Zone
 open Eq
+
+
+
+(** {2 Useful types} *)
+(** **************** *)
 
 (** Zone interface of a transfer function *)
 type 'a interface = {
@@ -37,43 +59,217 @@ type 'a interface = {
 }
 
 
-(** Domain identifer *)
+(** Domain identifier *)
 type _ domain = ..
 
 
-(** Unified signature of abstract domains *)
-module type DOMAIN =
+
+(** {2 Unified signatures} *)
+(** ********************** *)
+
+(** Unified signature of leaf abstract domains *)
+module type LEAF =
 sig
 
-  (** Lattice structure *)
-  include Lattice.LATTICE
+  (** {2 Structure} *)
+  (** ************* *)
 
-  (** Domain identifier *)
+  type t
+  (** Type of an abstract elements. *)
+
+  val bottom: t
+  (** Least abstract element of the lattice. *)
+
+  val top: t
+  (** Greatest abstract element of the lattice. *)
+
+
+  (** {2 Predicates} *)
+  (** ************** *)
+
+  val is_bottom: t -> bool
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
+
+  val subset: t -> t -> bool
+  (** Partial order relation. [subset a1 a2] tests whether [a1] is
+      related to (or included in) [a2]. *)
+
+
+  (** {2 Operators} *)
+  (** ************* *)
+
+  val join: t -> t -> t
+  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+
+  val meet: t -> t -> t
+  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+
+  val widen: 'a annot -> t -> t -> t
+  (** [widen annot a1 a2] computes an upper bound of [a1] and [a2] that
+      ensures stabilization of ascending chains. *)
+
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
+
+  (** {2 Identification} *)
+  (** ****************** *)
+
   val id : t domain
+  (** Domain identifier *)
 
-  (** Name of the domain *)
   val name : string
+  (** Name of the domain *)
 
-  (** Check the identity of the domain *)
   val identify : 'a domain -> (t, 'a) eq option
+  (** Check the identity of the domain *)
 
-  (** Initialization of the domain's abstract element *)
-  val init : Ast.program -> ('a, t) man -> 'a flow -> 'a flow_callback option
 
+  (** {2 Interface of transfer functions} *)
+  (** *********************************** *)
+
+  val exec_interface : zone interface
   (** Interface of the [exec] transfer function *)
-  val exec_interface : Zone.zone interface
 
+  val eval_interface : (zone * zone) interface
   (** Interface of the eval transfer function *)
-  val eval_interface : (Zone.zone * Zone.zone) interface
 
-  (** Transfer function for computing post-conditions of statements *)
-  val exec : Zone.zone -> Ast.stmt -> ('a, t) man -> 'a flow -> 'a post option
 
-  (** Transfer function for evaluating expressions *)
-  val eval : (Zone.zone * Zone.zone) -> Ast.expr -> ('a, t) man -> 'a flow -> ('a, Ast.expr) evl option
+  (** {2 Transfer functions} *)
+  (** ********************** *)
 
-  (** Handler of queries *)
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
+  (** Initialization function *)
+
+  val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
+  (** Post-state of statements *)
+
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> ('a, expr) eval option
+  (** Evaluation of expressions *)
+
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
+  (** Handler of queries *)
+
+end
+
+
+(** Unified signature of stack abstract domains *)
+module type STACK =
+sig
+
+  (** {2 Structure} *)
+  (** ************* *)
+
+  type t
+  (** Type of an abstract elements. *)
+
+  val bottom: t
+  (** Least abstract element of the lattice. *)
+
+  val top: t
+  (** Greatest abstract element of the lattice. *)
+
+
+  (** {2 Predicates} *)
+  (** ************** *)
+
+  val is_bottom: t -> bool
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
+
+  val subset: 'a arg -> t * 'a flow -> t * 'a flow -> bool * 'a post * 'a post
+  (** Partial order relation. [subset arg (a1, arg1) (a2, arg2)] tests
+     whether [a1] is related to (or included in) [a2] and unifies the
+     arguments [arg1] and [arg2]. *)
+
+
+  (** {2 Operators} *)
+  (** ************* *)
+
+  val join: 'a arg -> t * 'a flow -> t * 'a flow -> t * 'a post * 'a post
+  (** [join arg (a1, arg1) (a2, arg2)] computes an upper bound of [a1]
+     and [a2] and unifies the arguments [arg1] and [arg2]. *)
+
+  val meet: 'a arg -> t * 'a flow -> t * 'a flow -> t * 'a post * 'a post
+  (** [meet arg (a1, arg1) (a2, arg2)] computes a lower bound of of [a1]
+     and [a2] and unifies the arguments [arg1] and [arg2]. *)
+
+  val widen:
+    'a Annotation.annot -> 'a arg -> t * 'a flow -> t * 'a flow ->
+    t * bool * 'a post * 'a post
+  (** [widen annot arg (a1, arg1) (a2, arg2)] computes an upper bound of [a1] and [a2] that
+      ensures stabilization of ascending chains. *)
+
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
+
+  (** {2 Identification} *)
+  (** ****************** *)
+
+  val id : t domain
+  (** Domain identifier *)
+
+  val name : string
+  (** Name of the domain *)
+
+  val identify : 'a domain -> (t, 'a) eq option
+  (** Check the identity of the domain *)
+
+
+  (** {2 Interface of transfer functions} *)
+  (** *********************************** *)
+
+  val exec_interface : zone interface
+  (** Interface of the [exec] transfer function *)
+
+  val eval_interface : (zone * zone) interface
+  (** Interface of the eval transfer function *)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  val init : program -> ('a, t) man -> 'a arg -> 'a flow -> 'a post option
+  (** Initialization function *)
+
+  val exec : zone -> stmt -> ('a, t) man -> 'a arg -> 'a flow -> 'a post option
+  (** Post-state of statements *)
+
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a arg -> 'a flow -> ('a, expr) eval option
+  (** Evaluation of expressions *)
+
+  val ask  : 'r Query.query -> ('a, t) man -> 'a arg -> 'a flow -> 'r option
+  (** Handler of queries *)
+
+end
+
+
+(** {2 Leaf-to-Stack lifter} *)
+(** ************************ *)
+
+module LeafToStack(Domain:LEAF) : STACK =
+struct
+
+  (* Unchanged parts *)
+  type t = Domain.t
+  let name = Domain.name
+  let id = Domain.id
+  let identify = Domain.identify
+  let bottom = Domain.bottom
+  let top = Domain.top
+  let is_bottom = Domain.is_bottom
+  let print = Domain.print
+  let exec_interface = Domain.exec_interface
+  let eval_interface = Domain.eval_interface
+
 end
 
 
@@ -82,35 +278,8 @@ end
 (*==========================================================================*)
 
 
-let domains : (module DOMAIN) list ref = ref []
+let leaves : (module LEAF) list ref = ref []
+let stacks : (module STACK) list ref = ref []
 
-let register_domain info = domains := info :: !domains
-
-let find_domain name =
-  let rec aux = function
-    | [] -> raise Not_found
-    | hd :: tl ->
-      let module D = (val hd : DOMAIN) in
-      if D.name = name then
-        (module D : DOMAIN)
-      else aux tl
-  in
-  aux !domains
-
-let find_pool (names: string list) : (module DOMAIN) list =
-  List.filter (fun d ->
-      let module D = (val d : DOMAIN) in
-      List.mem D.name names
-    ) !domains
-
-let mem_domain name =
-  List.exists (fun d ->
-      let module D = (val d : DOMAIN) in
-      D.name = name
-    ) !domains
-
-let names () =
-  List.map (fun d ->
-      let module D = (val d : DOMAIN) in
-      D.name
-    ) !domains
+let register_leaf_domain info = leaves := info :: !leaves
+let register_stack_domain info = stacks := info :: !stacks

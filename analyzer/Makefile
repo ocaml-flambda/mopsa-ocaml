@@ -26,54 +26,29 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa langs main
 
 # Framework
-framework = core export engine lattices domains composers config
-framework.core = ast visitor eq query annotation lattice zone manager flow eval \
-		 post channel value domain id callstack alarm
+framework = core export engine lattices domains combiners config
+framework.core = ast visitor eq query annotation lattice zone abstract flow \
+		 eval post channel value domain id callstack alarm
 framework.export = text json factory
 framework.engine = logging cache analyzer
 framework.lattices = finite_powerset partial_map powerset total_map
-framework.composers = iter stacked
-framework.domains = stateless nonrel leaf functor empty
+framework.combiners = compose product
+framework.combiners.product = merge meet cartesian
+framework.domains = stateless nonrel leaf
 framework.config = paths abstraction options
-framework.composers.reduced_product = pool reductions products factory
-framework.composers.reduced_product.products = value_product domain_product
 
 # Languages
-langs = universal stubs c python
+langs = universal c python
 
 # Universal
-langs.universal = ast frontend zone u_stdlib iterators heap numeric strings
-langs.universal.iterators = program intraproc interproc unittest loops
-langs.universal.iterators.interproc = inlining
-langs.universal.heap = pool recency
-langs.universal.numeric = rounding values relational
-langs.universal.numeric.values = intervals congruences float_intervals	\
-integer_float_mix
-langs.universal.numeric.reductions = channels intervals_congruences	\
-implicit_assume_relation intervals_broadcast
+langs.universal = ast frontend
 
-# Stubs
-langs.stubs = ast zone alarms iterator
 
 # C
-langs.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
-langs.c.iterators = program switch goto interproc
-langs.c.desugar = low_level record_copy loops stub_init cond_expr
-langs.c.memory = common cells pointers machine_numbers
-langs.c.memory.common = base points_to init_visitor
-langs.c.memory.cells = cell expand cell2scalar
-langs.c.memory.pointers = bases nonrel
-langs.c.libs = libmopsa libc
-langs.c.resources = common file
-langs.c.resources.file = slot table domain
+langs.c = ast pp visitor zone frontend
 
 # Python
-langs.python = ast addr utils visitor operators pp frontend zone		\
-alarms  libs desugar objects data_model types flows program
-langs.python.data_model = callable arith_ops compare_ops aug_assign	\
-attribute subscript
-langs.python.types = typing addr_env t_string t_int t_float t_list t_set
-
+langs.python = ast addr utils visitor operators pp frontend
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
@@ -82,10 +57,10 @@ PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
 # MOPSA
 MOPSAROOT = ..
 MOPSALIBS := utils:utils \
-parsers/c:mlClangParser \
-parsers/python:mlPythonParser \
-parsers/universal:mlUniversalParser \
-parsers/c_stubs:mlCStubsParser
+             parsers/c:mlClangParser \
+             parsers/python:mlPythonParser \
+             parsers/universal:mlUniversalParser \
+             parsers/c_stubs:mlCStubsParser
 
 
 # Flags

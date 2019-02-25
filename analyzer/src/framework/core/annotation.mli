@@ -24,6 +24,8 @@
     on top of the global abstraction.
 *)
 
+open Eq
+
 type ('a, _) key = ..
 (** Type [('a, 'b) key] defines a key for a cell of type ['b] that can
    be polymorphic on ['a] *)
@@ -35,9 +37,6 @@ type 'a annot
 (*==========================================================================*)
 (**                      {2 Registering  keys}                              *)
 (*==========================================================================*)
-
-type (_, _) eq = Eq : ('a, 'a) eq
-(** Equality witness *)
 
 type ('a, 'b) sf = {
   eq : 'c. ('a, 'c) key -> ('b, 'c) eq option;

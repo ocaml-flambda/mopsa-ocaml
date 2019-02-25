@@ -24,9 +24,9 @@
     on top of the global abstraction.
 *)
 
-type ('a, _) key = ..
+open Eq
 
-type (_, _) eq = Eq : ('b, 'b) eq
+type ('a, _) key = ..
 
 
 (* Descriptor of a stateful annotation entry *)

@@ -81,7 +81,7 @@ let pop flow =
 
 let () =
   Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (cs, b) eq option =
+      eq = (let f: type a b. (a, b) key -> (cs, b) Eq.eq option =
               function
               | A_call_stack -> Some Eq
               | _ -> None

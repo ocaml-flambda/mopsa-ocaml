@@ -25,22 +25,28 @@ open Ast
 open Manager
 open Zone
 
-type channel = ..
+(*==========================================================================*)
+(**                          {2 Post-states}                                *)
+(*==========================================================================*)
 
-type 'a post = {
-  flow : 'a flow;
-  mergers : (stmt * zone) list;
-  channels : channel list;
+(** Combiner logs *)
+type clog =
+   | L_leaf
+   | L_product of clog list
+   | L_compose of clog * log
+
+(** Post-state logs *)
+and log = Ast.stmt list * clog
+
+(** Post-state case *)
+type 'a post_case = {
+  post_flow : 'a flow;
+  post_log  : 'a flow;
 }
 
-let add_mergers mergers ?(zone = any_zone) post =
-  {post with mergers = post.mergers @ (List.map (fun s -> (s, zone)) mergers)}
+(** Post-state *)
+type 'a post = 'a post_case Dnf.t
 
-let add_merger merger ?(zone = any_zone) post =
-  {post with mergers = post.mergers @ [(merger, zone)]}
-
-let add_channels channels post =
-  {post with channels = post.channels @ channels}
 
 let bottom annot = {
   flow = Flow.bottom annot;

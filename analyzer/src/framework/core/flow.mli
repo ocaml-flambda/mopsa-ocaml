@@ -174,5 +174,3 @@ val mem_annot : ('a, 'b) Annotation.key -> 'a flow -> bool
    bound to [key] in [flow] *)
 
 val copy_annot : 'a flow -> 'a flow -> 'a flow
-
-val without_callbacks : 'a flow -> 'a flow_callback
