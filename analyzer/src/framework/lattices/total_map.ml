@@ -68,12 +68,12 @@ struct
       a1 a2
   (** Inclusion testing. Missing variables in one map are assimilated to ⊤. *)
 
-  let join annot (a1:t) (a2:t) : t =
+  let join (a1:t) (a2:t) : t =
     bot_neutral2
       (Map.map2zo
          (fun _ v1 -> Value.top) (* ⊤ *)
          (fun _ v2 -> Value.top) (* ⊤ *)
-         (fun _ v1 v2 -> Value.join annot v1 v2)
+         (fun _ v1 v2 -> Value.join v1 v2)
       )
       a1 a2
   (** Join. Missing variables in one map are assimilated to ⊤. *)
@@ -90,7 +90,7 @@ struct
   (** Widening (naive). *)
 
 
-  let meet annot (a1:t) (a2:t) : t =
+  let meet (a1:t) (a2:t) : t =
     bot_absorb2
       (fun b1 b2 ->
         exn_to_bot
@@ -98,7 +98,7 @@ struct
              (fun _ v1 -> v1)
              (fun _ v2 -> v2)
              (fun _ v1 v2 ->
-                let v = Value.meet annot v1 v2 in
+                let v = Value.meet v1 v2 in
                 if Value.is_bottom v then
                   raise Found_BOT
                 else

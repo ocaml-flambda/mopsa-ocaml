@@ -126,7 +126,7 @@ let substitute
   in
   apply_disj dnf
 
-let substitute2
+let bind
     (f: 'a -> 'b t)
     (dnf: 'a t) : 'b t =
   substitute
@@ -155,3 +155,22 @@ let apply
 
 
 let to_list (dnf: 'a t) : 'a list list = dnf
+
+let print pp fmt (dnf:'a t) =
+  let open Format in
+  fprintf fmt "@[<hv>";
+
+  to_list dnf |>
+  pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")
+    (fun fmt conj ->
+       Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∧@;")
+         pp
+         fmt
+         conj
+    )
+    fmt;
+
+  fprintf fmt "@]"
+

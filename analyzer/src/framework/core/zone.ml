@@ -170,7 +170,7 @@ let pp_eval_path fmt (zp:path) =
 
 *)
 
-let eval exp z =
+let eval_template exp z =
   let template =
     try
       let info = ZoneMap.find z !zones in

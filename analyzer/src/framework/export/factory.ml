@@ -42,7 +42,7 @@ let render man flow time files =
       match tk with
       | Core.Alarm.T_alarm a -> a :: acc
       | _ -> acc
-    ) [] man flow
+    ) [] flow
   in
   let return_v = if List.length alarms > 0 then 1 else 0 in
   let _ = match !opt_format with

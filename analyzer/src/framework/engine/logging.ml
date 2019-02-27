@@ -24,6 +24,7 @@
 open Location
 open Core.Ast
 open Core.Zone
+open Core.Manager
 open Format
 
 (** Command-line option to activate logs *)
@@ -125,7 +126,7 @@ let exec stmt zone man flow =
   else
     indent "%a @,in %a @,and zone %a"
       pp_S stmt
-      (Core.Flow.print man) flow
+      (Core.Flow.print man.lattice) flow
       pp_zone zone
       ~symbol:BEGIN
   ;
@@ -141,7 +142,7 @@ let exec_done stmt zone time man flow =
   else
     indent "%a =@, %a@, in zone %a [%.4fs]"
       pp_S stmt
-      (Core.Flow.print man) flow
+      (Core.Flow.print man.lattice) flow
       pp_zone zone
       time
       ~symbol:END 
@@ -155,7 +156,7 @@ let eval exp zone man flow =
   else
     indent "%a @,in %a @,and zone %a"
       pp_E exp
-      (Core.Flow.print man) flow
+      (Core.Flow.print man.lattice) flow
       pp_zone2 zone
       ~symbol:BEGIN
   ;

@@ -19,9 +19,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Interface of lattice structures *)
+
 open Annotation
 
-(** Signature of a lattice. *)
+(** Signature of a lattice module. *)
 module type LATTICE =
 sig
 
@@ -70,3 +72,15 @@ sig
   (** Printer of an abstract element. *)
 
 end
+
+(** Signature of lattice records *)
+type 'a lattice = {
+  bottom:    'a;
+  top:       'a;
+  is_bottom: 'a -> bool;
+  subset:    'a -> 'a -> bool;
+  join:      'a -> 'a -> 'a;
+  meet:      'a -> 'a -> 'a;
+  widen:     'a annot -> 'a -> 'a -> 'a;
+  print:     Format.formatter -> 'a -> unit;
+}

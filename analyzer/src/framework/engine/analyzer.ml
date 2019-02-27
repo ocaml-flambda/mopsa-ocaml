@@ -36,7 +36,7 @@ let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 
 (** Create an [Analyzer] module over some abstract domain. *)
-module Make(Domain : DOMAIN) =
+module Make(Domain : LEAF) =
 struct
 
 
@@ -64,7 +64,7 @@ struct
         List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
       ) paths
 
-  let eval_graph = Zone.build_eval_graph Domain.eval_interface.export
+  let eval_graph = Zone.build_eval_graph Domain.eval_interface.provides
 
 
   (*==========================================================================*)
@@ -73,18 +73,11 @@ struct
 
   let rec init prog man : Domain.t flow =
     let flow0 = Flow.bottom Annotation.empty  |>
-                Flow.set T_cur man.top man
+                Flow.set T_cur man.lattice.top man.lattice
     in
     match Domain.init prog man flow0 with
     | None -> flow0
-    | Some flow ->
-      let rec call_callbacks flow callbacks =
-        match callbacks with
-        | [] -> flow
-        | hd :: tl ->
-          call_callbacks (hd flow) tl
-      in
-      call_callbacks flow.flow flow.callbacks
+    | Some flow -> flow
 
 
   (*==========================================================================*)
@@ -93,7 +86,7 @@ struct
 
   (** Build the map of exec functions *)
   and exec_map =
-    let required = Domain.exec_interface.import in
+    let required = Domain.exec_interface.uses in
     (* Add implicit import of Z_any *)
     let map = ExecMap.singleton any_zone (Domain.exec any_zone) in
     (* Iterate over the required zones of domain D *)
@@ -102,7 +95,7 @@ struct
         if ExecMap.mem zone map
         then map
         else
-          if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.export
+          if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.provides
           then
             ExecMap.add zone (Domain.exec zone) map
           else
@@ -119,10 +112,11 @@ struct
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
-    let flow' = Cache.exec fexec zone stmt man flow in
+    let post = Cache.exec fexec zone stmt man flow in
+    let flow = Post.to_flow man.lattice post in
 
-    Logging.exec_done stmt zone (Timing.stop timer) man flow';
-    flow'
+    Logging.exec_done stmt zone (Timing.stop timer) man flow;
+    flow
 
 
 
@@ -141,7 +135,7 @@ struct
     debug "eval graph:@\n @[%a@]" Zone.pp_graph eval_graph;
 
     (* Iterate over the required zone paths of domain Domain *)
-    let required = Domain.eval_interface.import in
+    let required = Domain.eval_interface.uses in
     required |>
     List.fold_left (fun acc (src, dst) ->
         if EvalMap.mem (src, dst) acc then acc
@@ -171,13 +165,13 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) (exp: Ast.expr) man (flow: Domain.t flow) : (Domain.t, Ast.expr) evl =
+  and eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
     Logging.eval exp zone man flow;
     let timer = Timing.start () in
 
     let ret =
       (* Check whether exp is already in the desired zone *)
-      match sat_zone via (snd zone), Zone.eval exp (snd zone) with
+      match sat_zone via (snd zone), Zone.eval_template exp (snd zone) with
       | true, Keep -> Eval.singleton exp flow
 
       | _, other_action ->
@@ -201,14 +195,17 @@ struct
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Eval.eval_list exprs (fun exp flow ->
-                  match eval_over_paths paths exp man flow with
-                  | None ->
-                    Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-                    Eval.singleton exp flow
+              Eval.eval_list
+                (fun exp flow ->
+                   match eval_over_paths paths exp man flow with
+                   | None ->
+                     Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
+                     Eval.singleton exp flow
 
-                  | Some evl -> evl
-                ) flow |>
+                   | Some evl -> evl
+                )
+                exprs flow
+              |>
               Eval.bind @@ fun exprs flow ->
               let exp = builder {exprs; stmts = []} in
               Eval.singleton exp flow
@@ -237,16 +234,16 @@ struct
 
     | (z1, z2, path, feval) :: tl ->
       eval_hop z1 z2 feval man exp flow |>
-      OptionExt.bind @@
+      Option.bind @@
       Eval.bind_opt @@
       eval_over_path tl man
 
   and eval_hop z1 z2 feval man exp flow =
     (* debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2); *)
-    match Zone.eval exp z2 with
+    match Zone.eval_template exp z2 with
     | Keep ->
       Eval.singleton exp flow |>
-      OptionExt.return
+      Option.return
 
     | other_action ->
       match Cache.eval feval (z1, z2) exp man flow with
@@ -265,8 +262,9 @@ struct
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
-            Eval.eval_list_opt exprs (eval_hop z1 z2 feval man) flow |>
-            OptionExt.lift @@ Eval.bind @@ fun exprs flow ->
+            Eval.eval_list_opt (eval_hop z1 z2 feval man) exprs flow |>
+            Option.lift @@
+            Eval.bind @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             (* debug "%a -> %a" pp_expr exp pp_expr exp'; *)
             Eval.singleton exp' flow
@@ -285,14 +283,16 @@ struct
   (** Top level manager *)
 
   and man : (Domain.t, Domain.t) man = {
-    bottom = Domain.bottom;
-    top = Domain.top;
-    is_bottom = Domain.is_bottom;
-    subset = Domain.subset;
-    join = Domain.join;
-    meet = Domain.meet;
-    widen = Domain.widen;
-    print = Domain.print;
+    lattice = {
+      bottom = Domain.bottom;
+      top = Domain.top;
+      is_bottom = Domain.is_bottom;
+      subset = Domain.subset;
+      join = Domain.join;
+      meet = Domain.meet;
+      widen = Domain.widen;
+      print = Domain.print;
+    };
     get = (fun flow -> flow);
     set = (fun flow _ -> flow);
     exec = (fun ?(zone=any_zone) stmt flow -> exec ~zone stmt man flow);
@@ -458,7 +458,7 @@ struct
   (** Interpreter actions *)
   type _ action =
     | Exec : stmt * zone -> Domain.t flow action
-    | Eval : expr * (zone * zone) * zone -> (Domain.t, expr) evl action
+    | Eval : expr * (zone * zone) * zone -> (expr, Domain.t) eval action
 
 
   (** Print the current analysis action *)
@@ -531,12 +531,12 @@ struct
           ret
 
         | Print ->
-          printf "%a@." (Flow.print man) flow;
+          printf "%a@." (Flow.print man.lattice) flow;
           interact ~where:false action range flow
 
         | Env ->
-          let env = Flow.get T_cur man flow in
-          printf "%a@." man.print env;
+          let env = Flow.get T_cur man.lattice flow in
+          printf "%a@." man.lattice.print env;
           interact ~where:false action range flow
 
         | Value(var) ->
@@ -555,14 +555,16 @@ struct
     interact (Eval (exp, zone, via)) exp.erange flow
 
   and interactive_man = {
-    bottom = Domain.bottom;
-    top = Domain.top;
-    is_bottom = Domain.is_bottom;
-    subset = Domain.subset;
-    join = Domain.join;
-    meet = Domain.meet;
-    widen = Domain.widen;
-    print = Domain.print;
+    lattice = {
+      bottom = Domain.bottom;
+      top = Domain.top;
+      is_bottom = Domain.is_bottom;
+      subset = Domain.subset;
+      join = Domain.join;
+      meet = Domain.meet;
+      widen = Domain.widen;
+      print = Domain.print;
+    };
     get = (fun flow -> flow);
     set = (fun flow _ -> flow);
     exec = interactive_exec;

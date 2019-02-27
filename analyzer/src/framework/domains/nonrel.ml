@@ -52,7 +52,7 @@ struct
     )
 
   let print fmt a =
-    Format.fprintf fmt "%s:@ @[   %a@]@\n" (snd @@ Value.name) VarMap.print a
+    Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -71,100 +71,93 @@ struct
   (** Forward evaluation returns the abstract value of the expression,
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
-  let rec eval (e:expr) (a:t) : (aexpr * Value.t) with_channel =
+  let rec eval (e:expr) (a:t) : aexpr * Value.t =
     match ekind e with
 
     | E_var(var, _) ->
       let v = VarMap.find var a in
-      (A_var (var, v), v) |>
-      Channel.return
+      (A_var (var, v), v)
 
     | E_constant(c) ->
       let t = etyp e in
       let v = Value.of_constant t c in
-      (A_cst (t, c, v), v) |>
-      Channel.return
+      (A_cst (t, c, v), v)
 
     | E_unop (op,e1) ->
       let t = etyp e in
-      eval e1 a |> Channel.bind @@ fun (ae1, v1) ->
-      Value.unop t op v1 |> Channel.bind @@ fun v ->
-      Channel.return (A_unop (t, op, ae1, v1), v)
+      let ae1, v1 = eval e1 a in
+      let v = Value.unop t op v1 in
+      A_unop (t, op, ae1, v1), v
 
     | E_binop (op,e1,e2) ->
       let t = etyp e in
-      eval e1 a |> Channel.bind @@ fun (ae1, v1) ->
-      eval e2 a |> Channel.bind @@ fun (ae2, v2) ->
-      Value.binop t op v1 v2 |> Channel.bind @@ fun v ->
-      Channel.return (A_binop (t, op, ae1, v1, ae2, v2), v)
+      let ae1, v1 = eval e1 a in
+      let ae2, v2 = eval e2 a in
+      let v = Value.binop t op v1 v2 in
+      A_binop (t, op, ae1, v1, ae2, v2), v
 
     | _ ->
       (* unsupported -> ⊤ *)
-      Channel.return (A_unsupported, Value.top)
+      A_unsupported, Value.top
 
 
    (** Forward evaluation of boolean expressions *)
-  let rec fwd_compare (e:expr) (a:t) : (aexpr * Value.t) with_channel =
+  let rec fwd_compare (e:expr) (a:t) : aexpr * Value.t =
     match ekind e with
 
     | E_var(var, _) ->
       let v = VarMap.find var a in
-      Channel.return (A_var (var, v), v)
+      A_var (var, v), v
 
     | E_constant(c) ->
       let t = etyp e in
       let v = Value.of_constant t c in
-      Channel.return (A_cst (t, c, v), v)
+      A_cst (t, c, v), v
 
     | E_unop (op,e1) ->
       let t = etyp e in
-      eval e1 a |>
-      Channel.bind @@ fun (ae1, v1) ->
-      Value.unop t op v1 |>
-      Channel.bind @@ fun v ->
-      Channel.return (A_unop (t, op, ae1, v1), v)
+      let ae1, v1 = eval e1 a in
+      let v = Value.unop t op v1 in
+      A_unop (t, op, ae1, v1), v
 
     | E_binop (op,e1,e2) ->
       let t = etyp e in
-      eval e1 a |>
-      Channel.bind @@ fun (ae1, v1) ->
-      eval e2 a |>
-      Channel.bind @@ fun (ae2, v2) ->
-      Value.binop t op v1 v2 |>
-      Channel.bind @@ fun v ->
-      Channel.return (A_binop (t, op, ae1, v1, ae2, v2), v)
+      let ae1, v1 = eval e1 a in
+      let ae2, v2 = eval e2 a in
+      let v = Value.binop t op v1 v2 in
+      A_binop (t, op, ae1, v1, ae2, v2), v
 
     | _ ->
       (* unsupported -> ⊤ *)
-      Channel.return (A_unsupported, Value.top)
+      A_unsupported, Value.top
 
   (** Backward refinement of expressions; given an annotated tree, and
      a target value, refine the environment using the variables in the
      expression *)
-  let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t with_channel =
-    let r' = Value.meet Annotation.empty v r in
+  let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
+    let r' = Value.meet v r in
     match ae with
     | A_var (var, _) ->
       if Value.is_bottom r'
-      then Channel.return bottom
-      else Channel.return (VarMap.add var r' a)
+      then bottom
+      else VarMap.add var r' a
 
     | A_cst(_) ->
       if Value.is_bottom r'
-      then Channel.return bottom
-      else Channel.return a
+      then bottom
+      else a
 
     | A_unop (t, op, ae1, v1) ->
-      Value.bwd_unop t op v1 r' |> Channel.bind @@ fun w ->
+      let w = Value.bwd_unop t op v1 r' in
       refine ae1 v1 w a
 
     | A_binop (t, op, ae1, v1, ae2, v2) ->
-      Value.bwd_binop t op v1 v2 r' |> Channel.bind @@ fun (w1, w2) ->
-      refine ae1 v1 w1 a |> Channel.bind @@ fun a1 ->
+      let w1, w2 = Value.bwd_binop t op v1 v2 r' in
+      let a1 = refine ae1 v1 w1 a in
       refine ae2 v2 w2 a1
 
     | A_unsupported ->
-      Channel.return a
+      a
 
   (* utility function to reduce the complexity of testing boolean expressions;
      it handles the boolean operators &&, ||, ! internally, by induction
@@ -173,49 +166,45 @@ struct
      if r=true, keep the states that may satisfy the expression;
      if r=false, keep the states that may falsify the expression
   *)
-  let filter (annot: 'a annot) (e:expr) (r:bool) (a:t) : t with_channel =
+  let filter (e:expr) (r:bool) (a:t) : t =
     (* recursive exploration of the expression *)
-    let rec doit (e:expr) (r:bool) (a:t) : t with_channel =
+    let rec doit (e:expr) (r:bool) (a:t) : t =
       match ekind e with
 
       | E_unop (O_log_not, e) ->
         doit e (not r) a
 
       | E_binop (O_log_and, e1, e2) ->
-        doit e1 r a |> Channel.bind @@ fun a1 ->
-        doit e2 r a |> Channel.bind @@ fun a2 ->
-        (if r then meet else join) annot a1 a2 |>
-        Channel.return
+        let a1 = doit e1 r a in
+        let a2 = doit e2 r a in
+        (if r then meet else join) a1 a2
 
       | E_binop (O_log_or, e1, e2) ->
-        doit e1 r a |> Channel.bind @@ fun a1 ->
-        doit e2 r a |> Channel.bind @@ fun a2 ->
-        (if r then join else meet) annot a1 a2 |>
-        Channel.return
+        let a1 = doit e1 r a in
+        let a2 = doit e2 r a in
+        (if r then join else meet) a1 a2
 
       | E_constant c ->
         let t = etyp e in
         let v = Value.of_constant t c in
-        Value.filter t v r |> Channel.bind @@ fun w ->
-        (if Value.is_bottom w then bottom else a) |>
-        Channel.return
+        let w = Value.filter t v r in
+        if Value.is_bottom w then bottom else a
 
       | E_var(var, _) ->
         let v = find var a in
-        Value.filter (var.vtyp) v r |> Channel.bind @@ fun w ->
-        (if Value.is_bottom w then bottom else add var w a) |>
-        Channel.return
+        let w = Value.filter (var.vtyp) v r in
+        if Value.is_bottom w then bottom else add var w a
 
       (* arithmetic comparison part, handled by Value *)
       | E_binop (op, e1, e2) ->
         let t = etyp e1 in
         (* evaluate forward each argument expression *)
-        eval e1 a |> Channel.bind @@ fun (ae1,v1) ->
-        eval e2 a |> Channel.bind @@ fun (ae2,v2) ->
+        let ae1,v1 = eval e1 a in
+        let ae2,v2 = eval e2 a in
         (* apply comparison *)
-        Value.compare t op v1 v2 r |> Channel.bind @@ fun (r1, r2) ->
+        let r1, r2 = Value.compare t op v1 v2 r in
         (* propagate backward on both argument expressions *)
-        refine ae1 v1 r1 a |> Channel.bind @@ fun a1 ->
+        let a1 = refine ae1 v1 r1 a in
         refine ae2 v2 r2 a1
 
       | _ -> assert false
@@ -231,79 +220,67 @@ struct
 
 
   let init prog man flow =
-    Some { flow = Flow.set_domain_env T_cur empty man flow; callbacks = [] }
+    Some (
+      Manager.set_domain_env Flow.T_cur empty man flow
+    )
 
   let exec_interface = Domain.{
-    import = [];
-    export = [Value.zone];
+    uses = [];
+    provides = [Value.zone];
   }
 
   let eval_interface = Domain.{
-    export = [];
-    import = [];
+    uses = [];
+    provides = [];
   }
 
   let rec exec zone stmt man flow =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
-      Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.remove v) man flow in
-        Post.of_flow flow'
-      )
+      Manager.map_domain_env Flow.T_cur (VarMap.remove v) man flow |>
+      Post.return_flow
 
     | S_add { ekind = E_var (v, _) } ->
-      Some (
-        let flow' = Flow.map_domain_env T_cur (VarMap.add v Value.top) man flow in
-        Post.of_flow flow'
-      )
+      Manager.map_domain_env Flow.T_cur (VarMap.add v Value.top) man flow  |>
+      Post.return_flow
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars ->
-      Some (
-        let vars = List.map (function
+      let vars = List.map (function
             | { ekind = E_var (v, _) } -> v
             | _ -> assert false
           ) vars
-        in
-        let flow' = Flow.map_domain_env T_cur (fun a ->
-            VarMap.fold (fun v _ acc ->
-                if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
-              ) a a
-          ) man flow
-        in
-        Post.of_flow flow'
-      )
+      in
+      Manager.map_domain_env Flow.T_cur (fun a ->
+          VarMap.fold (fun v _ acc ->
+              if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
+            ) a a
+        ) man flow
+      |>
+      Post.return_flow
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      Some (
-        let flow' = Flow.map_domain_env T_cur (fun a ->
-            let v = VarMap.find var1 a in
-            VarMap.remove var1 a |> VarMap.add var2 v
-          ) man flow
-        in
-        Post.of_flow flow'
-      )
+      Manager.map_domain_env Flow.T_cur (fun a ->
+          let v = VarMap.find var1 a in
+          VarMap.remove var1 a |> VarMap.add var2 v
+        ) man flow
+      |>
+      Post.return_flow
 
     | S_forget { ekind = E_var (var, _) } ->
-      Flow.map_domain_env T_cur (add var Value.top) man flow |>
-      Post.return
+      Manager.map_domain_env Flow.T_cur (add var Value.top) man flow |>
+      Post.return_flow
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
-      Some (
-        let flow', channels = Channel.map_domain_env T_cur (fun a ->
-            eval e a |> Channel.bind @@ fun (_,v) ->
-            let a' = VarMap.add var v a in
-            let a'' =
-              match mode with
-              | STRONG -> a'
-              | WEAK -> join (Flow.get_all_annot flow) a a'
-            in
-            Channel.return a''
-          ) man flow
-        in
-        Post.of_flow flow' |>
-        Post.add_channels channels
-      )
+      Manager.map_domain_env Flow.T_cur (fun a ->
+          let _, v = eval e a in
+          let a' = VarMap.add var v a in
+          match mode with
+          | STRONG -> a'
+          | WEAK -> join a a'    
+        ) man flow
+      |>
+      Post.return_flow
 
     | S_expand ({ekind = E_var (v, _)}, vl)
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
@@ -313,33 +290,27 @@ struct
           | _ -> assert false
         ) vl
       in
-      let a = Flow.get_domain_env T_cur man flow in
+      let a = Manager.get_domain_env Flow.T_cur man flow in
       let value = find v a in
       let aa = List.fold_left (fun acc v' ->
           add v' value acc
         ) a vl
       in
-      Flow.set_domain_env T_cur aa man flow |>
-      Post.return
+      Manager.set_domain_env Flow.T_cur aa man flow |>
+      Post.return_flow
 
-    (* FIXME: No check on weak variables in rhs *)
+    (* FIXME: check weak variables in rhs *)
     | S_assume e ->
-      Some (
-        let flow', channels = Channel.map_domain_env T_cur (fun a ->
-            filter (Flow.get_all_annot flow) e true a
-          ) man flow
-        in
-        Post.of_flow flow' |>
-        Post.add_channels channels
-      )
+      Manager.map_domain_env Flow.T_cur (filter e true) man flow |>
+      Post.return_flow
 
     | _ -> None
 
 
   let ask : type r. r Query.query -> _ -> _ -> r option =
     fun query man flow ->
-      let a = Flow.get_domain_env T_cur man flow in
-      Value.ask query (fun exp -> let v = eval exp a in snd v.value)
+      let a = Manager.get_domain_env Flow.T_cur man flow in
+      Value.ask query (fun exp -> snd @@ eval exp a)
 
 
   let eval zone exp man flow = None

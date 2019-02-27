@@ -23,10 +23,7 @@
 
 open Eq
 
-include Channel
-
 type _ value = ..
-
 
 module type VALUE =
 sig
@@ -41,92 +38,8 @@ sig
   (** Language zone in which the value abstraction is defined *)
 
   val id : t value
-  val name : string * string
-  val identify : 'a value -> (t, 'a) eq option
-
-  val of_constant : Ast.typ -> Ast.constant -> t
-  (** Create a singleton abstract value from a constant. *)
-
-  (*==========================================================================*)
-                          (** {2 Forward semantics} *)
-  (*==========================================================================*)
-
-  val unop : Ast.typ -> Ast.operator -> t -> t with_channel
-  (** Forward evaluation of unary operators. *)
-
-  val binop : Ast.typ -> Ast.operator -> t -> t -> t with_channel
-  (** Forward evaluation of binary operators. *)
-
-  val filter : Ast.typ -> t -> bool -> t with_channel
-  (** Keep values that may represent the argument truth value *)
-
-  (*==========================================================================*)
-                          (** {2 Backward operators} *)
-  (*==========================================================================*)
-
-  val bwd_unop : Ast.typ -> Ast.operator -> t -> t -> t with_channel
-  (** Backward evaluation of unary operators.
-      [bwd_unop op x r] returns x':
-       - x' abstracts the set of v in x such as op v is in r
-       i.e., we fiter the abstract values x knowing the result r of applying
-       the operation on x
-
-       it is safe, as first approximation, to implement it as the identity:
-       let bwd_unop _ x _ = x
-     *)
-
-  val bwd_binop : Ast.typ -> Ast.operator -> t -> t -> t -> (t * t) with_channel
-  (** Backward evaluation of binary operators.
-      [bwd_binop op x y r] returns (x',y') where
-      - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
-      - y' abstracts the set of v' in y such that v op v' is in r for some v  in x
-      i.e., we filter the abstract values x and y knowing that, after
-      applying the operation op, the result is in r
-
-      it is safe, as first approximation, to implement it as the identity:
-      let bwd_binop _ x y _ = (x,y)
-  *)
-
-
-  val compare : Ast.typ -> Ast.operator -> t -> t -> bool -> (t * t) with_channel
-  (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
-       - x' abstracts the set of v  in x such that v op v' is true for some v' in y
-       - y' abstracts the set of v' in y such that v op v' is true for some v  in x
-       i.e., we filter the abstract values x and y knowing that the test is true
-
-       [compare op x y false] is similar, but assumes that the test is false
-
-       a safe, but not precise implementation, would be:
-       compare _ _ x y = (x,y)
-  *)
-
-
-  (*==========================================================================*)
-                             (** {2 Queries } *)
-  (*==========================================================================*)
-
-  val ask : 'a Query.query -> (Ast.expr -> t) -> 'a option
-
-end
-
-
-
-
-(** Simpler interface, without channels *)
-module type SIMPLE_VALUE =
-sig
-
-  (*==========================================================================*)
-                        (** {2 Lattice structure} *)
-  (*==========================================================================*)
-
-  include Lattice.LATTICE
-
-  val zone : Zone.zone
-  (** Language zone in which the value abstraction is defined *)
-
-  val id : t value
-  val name : string * string
+  val name : string
+  val display : string
   val identify : 'a value -> (t, 'a) eq option
 
   val of_constant : Ast.typ -> Ast.constant -> t
@@ -195,25 +108,6 @@ sig
 end
 
 
-module LiftSimpleValue(V: SIMPLE_VALUE) : VALUE with type t = V.t =
-struct
-
-  include V
-
-  let unop t o v = V.unop t o v |> return
-
-  let binop t o v1 v2 = V.binop t o v1 v2 |> return
-
-  let filter t v r = V.filter t v r |> return
-
-  let bwd_unop t o v1 v2 = V.bwd_unop t o v1 v2 |> return
-
-  let bwd_binop t o v1 v2 r = V.bwd_binop t o v1 v2 r |> return
-
-  let compare t o v1 v2 r = V.compare t o v1 v2 r |> return
-
-end
-
 (*==========================================================================*)
 (**                         {2 Registration} *)
 (*==========================================================================*)
@@ -223,47 +117,16 @@ let values : (module VALUE) list ref = ref []
 
 let register_value v = values := v :: !values
 
-let register_simple_value v =
-  let module V = (val v : SIMPLE_VALUE) in
-  let module VV = LiftSimpleValue(V) in
-  register_value (module VV)
-
-let find_value name =
-  let rec aux = function
-    | [] -> raise Not_found
-    | hd :: tl ->
-      let module V = (val hd : VALUE) in
-      if (fst @@ V.name) = name then
-        (module V : VALUE)
-      else aux tl
-  in
-  aux !values
-
-let rec find_pool (names: string list) : (module VALUE) list =
-  List.filter (fun v ->
-      let module V = (val v : VALUE) in
-      List.mem (fst @@ V.name) names
-    ) !values
-
 
 (*==========================================================================*)
 (**                  {2 Default backward functions} *)
 (*==========================================================================*)
 
-let default_bwd_unop (t: Ast.typ) (op:Ast.operator) (x:'a) (r:'a) : 'a with_channel =
-  return x
-
-let default_bwd_unop_simple (t: Ast.typ) (op:Ast.operator) (x:'a) (r:'a) : 'a =
+let default_bwd_unop (t: Ast.typ) (op:Ast.operator) (x:'a) (r:'a) : 'a =
   x
 
-let default_bwd_binop (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) with_channel =
-  return (x, y)
-
-let default_bwd_binop_simple (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) =
+let default_bwd_binop (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) (r:'a) : ('a*'a) =
   (x, y)
 
-let default_compare (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) with_channel =
-  return (x, y)
-
-let default_compare_simple (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) =
+let default_compare (t: Ast.typ) (op:Ast.operator) (x:'a) (y:'a) : ('a*'a) =
   (x, y)

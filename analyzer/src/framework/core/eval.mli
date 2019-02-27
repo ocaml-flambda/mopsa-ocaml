@@ -19,95 +19,51 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Abstraction
+open Lattice
+open Flow
 
-type ('a, 'e) eval_case
+type ('e, 'a) eval
 
-type ('a, 'e) eval
+val empty : ('e, 'a) eval
 
-val empty : ('a, 'e) eval
+val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('e, 'a) eval
 
-val case : ('a, 'e) eval_case -> ('a, 'e) eval
+val empty_singleton : 'a flow -> ('e, 'a) eval
 
-val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('a, 'e) eval
+val join : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
 
-val empty_singleton : 'a flow -> ('a, 'e) eval
+val join_list : ?empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
 
-val join : ('a, 'e) eval  -> ('a, 'e) eval  -> ('a, 'e) eval
+val meet : ('e, 'a) eval  -> ('e, 'a) eval  -> ('e, 'a) eval
 
-val join_list : ?empty:(('a, 'e) eval) -> ('a, 'e) eval list -> ('a, 'e) eval
+val meet_list : ?empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
 
-val meet : ('a, 'e) eval  -> ('a, 'e) eval  -> ('a, 'e) eval
+val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit
 
-val meet_list : ?empty:(('a, 'e) eval) -> ('a, 'e) eval list -> ('a, 'e) eval
+val add_cleaners : Ast.stmt list -> ('e, 'a) eval  -> ('e, 'a) eval
 
-val add_cleaners : Ast.stmt list -> ('a, 'e) eval  -> ('a, 'e) eval
+val iter : ('e -> 'a flow -> unit) -> ('e, 'a) eval -> unit
 
-val flip : ('e, 'a) eval -> ('e, 'a) eval
-
-val fold :
-    ('b -> ('a, 'e) eval_case -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    'b -> ('a, 'e) eval ->
-    'b
-
-val fold2 :
-    ('c -> ('a, 'e) eval_case -> 'b * 'c) ->
-    ('b -> 'b -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    'c -> ('a, 'e) eval ->
-    'b * 'c
-
-val substitute :
-    ('e -> 'a flow -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    ('b -> 'b -> 'b) ->
-    ('b) ->
-    ('a, 'e) eval ->
-    'b
-
-val iter : ('e -> 'a flow -> unit) -> ('a, 'e) eval -> unit
-
-val iter_cases : (('a, 'e) eval_case -> unit) -> ('a, 'e) eval -> unit
-
-val bind : ('e -> 'a flow -> ('a, 'f) eval ) -> ('a, 'e) eval -> ('a, 'f) eval
-
-val bind_return : ('e -> 'a flow -> ('a, 'f) eval ) -> ('a, 'e) eval -> ('a, 'f) eval option
-
-val bind_opt : ('e -> 'a flow -> ('a, 'f) eval option) -> ('a, 'e) eval -> ('a, 'f) eval option
-
-val eval_list : 'e list -> ('e -> 'a flow -> ('a, 'c) eval) -> 'a flow ->  ('a, 'c list) eval
-
-val eval_list_opt : 'e list -> ('e -> 'a flow -> ('a, 'c) eval option) -> 'a flow ->  ('a, 'c list) eval option
-
-val assume :
-  Ast.expr -> ?zone:Zone.zone ->
-  fthen:('a flow -> ('a, 'e) eval ) ->
-  felse:('a flow -> ('a, 'e) eval ) ->
-  ?fboth:('a flow -> 'a flow -> ('a, 'e) eval ) ->
-  ?fnone:('a flow -> ('a, 'e) eval) ->
-  ('a, 'b) man -> 'a flow ->
-  ('a, 'e) eval
-
-val switch :
-  ((Ast.expr * bool) list * ('a flow -> ('a, 'e) eval )) list ->
-  ?zone:Zone.zone ->
-  ('a, 'b) Manager.man -> 'a flow ->
-  ('a, 'e) eval
-
-val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('a, 'e) eval -> unit
+val iter_all : ('e option -> 'a flow -> unit) -> ('e, 'a) eval -> unit
 
 val map:
   ('e -> 'a flow -> 'e * 'a flow) ->
-  ('a, 'e) eval -> ('a, 'e) eval
+  ('e, 'a) eval -> ('e, 'a) eval
 
 val map_flow:
   ('a flow -> 'a flow) ->
-  ('a, 'e) eval -> ('a, 'e) eval
+  ('e, 'a) eval -> ('e, 'a) eval
 
-val choose : ('a, 'e) eval -> ('e option * 'a flow) option
+val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 
-val to_dnf : ('a, 'e) eval -> ('a, 'e) eval_case Dnf.t
+val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
 
-val return : ('a, 'e) eval -> ('a, 'e) eval option
+val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
+
+val bind_return : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
+
+val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
+
+val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option

@@ -19,28 +19,46 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Flows is a trace partitioning the collect environments depending
+(** Abstraction of control flows.
+
+    Flows represent a trace partitioning the collect environments depending
     on the kind of the control flow. Not only reaching environments are
     concerned, but also environments of traces suspended at previous
-    control points are kept in the flow map.  Each kind of control flow
-    is identified with a unique token.
-
-    Flow insensitive annotations are also maintained in the flow
-    abstraction.
+    control points are kept in the flow map. In addition, flow insensitive 
+    annotations are also maintained in the flow abstraction.
 *)
 
 open Annotation
-open Manager
+open Lattice
 
-type token = Manager.token
-(** Flow tokens *)
 
-type 'a flow = 'a Manager.flow
-(** Flow abstraction *)
+(****************************************************************************)
+(**                             {2 Tokens}                                  *)
+(****************************************************************************)
 
-val make: 'a annot -> 'a Manager.FlowMap.t -> 'a flow
+type token = ..
+(** Flow tokens are used to distinguish between different control flows *)
 
-val singleton: 'a annot -> token -> 'a -> 'a flow
+type token += T_cur
+(** Token of current (active) execution flow *)
+
+val register_token : token Chain.info -> unit
+(** Register a new token with its compare and print functions *)
+
+val compare_token : token -> token -> int
+(** Compare two tokens with a total order *)
+
+val pp_token : Format.formatter -> token -> unit
+(** Pretty printer of tokens *)
+
+
+(****************************************************************************)
+(**                             {2 Flows}                                   *)
+(****************************************************************************)
+
+
+type 'a flow
+(** A flow is a flow map augmented with an annotation *)
 
 val bottom : 'a annot -> 'a flow
 (** Empty set of flows *)
@@ -48,100 +66,65 @@ val bottom : 'a annot -> 'a flow
 val top : 'a annot -> 'a flow
 (** Set of all possible flows *)
 
-val is_bottom : ('a, _) man -> 'a flow -> bool
+val singleton: 'a annot -> token -> 'a -> 'a flow
+(** [singleton annot tk e] returns a flow with an annotation [annot]
+    and a map with a single binding [tk] to environment [e] *)
+
+val is_bottom : 'a lattice -> 'a flow -> bool
 (** Emptiness test *)
 
-val is_top : ('a, _) man -> 'a flow -> bool
+val is_top : 'a lattice -> 'a flow -> bool
 (** top test *)
 
-val subset : ('a, _) man -> 'a flow -> 'a flow -> bool
+val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 (** Inclusion test *)
 
-val join : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
-(** Abstract union operator *)
+val join : 'a lattice -> 'a flow -> 'a flow -> 'a flow
+(** Abstraction union operator. *)
 
-val join_list : ('a, _) man -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+val join_list : 'a lattice -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+(** Union over a list of flows *)
 
-val meet : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
+val meet : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
 
-val meet_list : ('a, _) man -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+val meet_list : 'a lattice -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+(** Intersection over a list of flows. *)
 
-val widen : ('a, _) man -> 'a flow -> 'a flow -> 'a flow
-(** Widening operator *)
+val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow
+(** Widening operator. *)
 
-val print : ('a, _) man -> Format.formatter -> 'a flow -> unit
+val print : 'a lattice -> Format.formatter -> 'a flow -> unit
 (** Pretty printer *)
 
-val get : token -> ('a, _) man -> 'a flow -> 'a
-(** [get tk man flow] returns the abstract element associated to token
-   [tk] in [flow]. Returns [man.bottom] the binding is not found. *)
+val get : token -> 'a lattice -> 'a flow -> 'a
+(** [get tk lat flow] returns the abstract element associated to token
+    [tk] in [flow]. Returns [lat.bottom] if the binding is not found. *)
 
-val set : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
-(** [set tk a man flow] overwrites the binding of token [tk] in [flow]
-   with the abstract element [a]. *)
+val set : token -> 'a -> 'a lattice -> 'a flow -> 'a flow
+(** [set tk a lat flow] overwrites the binding of token [tk] in [flow]
+    with the abstract element [a]. *)
 
-val copy: token -> token -> ('a,'t) man -> 'a flow -> 'a flow -> 'a flow
-(** [copy tk1 tk2 man flow1 flow2] copies the environment at token
+val copy : token -> token -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
+(** [copy tk1 tk2 lat flow1 flow2] copies the environment at token
     [tk1] in [flow1] into token [tk2] in [flow2] *)
 
-val add : token -> 'a -> ('a, _) man -> 'a flow -> 'a flow
-(** [add tk a man flow] appends (by union) [a] to the existing binding
-   of [tk] in [flow].  It is equivalent to [set tk (man.join a (get tk
-   man flow)) man flow] *)
+val add : token -> 'a -> 'a lattice -> 'a flow -> 'a flow
+(** [add tk a lat flow] appends (by union) [a] to the existing binding
+   of [tk] in [flow].  It is equivalent to [set tk (lat.join a (get tk
+   lat flow)) flow] *)
 
-val remove    : token -> ('a, _) man -> 'a flow -> 'a flow
-(** [remove tk man flow] removes token [tk] from the map of [flow] *)
+val remove : token -> 'a flow -> 'a flow
+(** [remove tk flow] removes token [tk] from the map of [flow] *)
 
-val filter    : (token -> 'a -> bool) -> ('a, _) man -> 'a flow -> 'a flow
-(** [filter f man flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
+val filter : (token -> 'a -> bool) -> 'a flow -> 'a flow
+(** [filter f flow] keeps in [flow] all tokens [tk] verifying [f tk = true] *)
 
-val map : (token -> 'a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
+val map : (token -> 'a -> 'a) -> 'a flow -> 'a flow
 
-val map_list : ('b -> 'a flow -> 'a flow) -> 'a flow -> 'b list -> 'a flow list
-val map_list_opt : ('b -> 'a flow -> 'a flow option) -> 'a flow -> 'b list -> 'a flow list
+val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b
 
-val map_token : token -> ('a -> 'a) -> ('a, _) man -> 'a flow -> 'a flow
-
-val fold : ('b -> token -> 'a -> 'b)  -> 'b -> ('a, _) man -> 'a flow -> 'b
-
-val merge : (token -> 'a option -> 'a option -> 'a option) -> ('a, _) man -> 'a flow -> 'a flow -> 'a flow
-
-val set_domain_env : token -> 't -> ('a, 't) man -> 'a flow -> 'a flow
-(** [set_domain_env tk a man flow] overwrites the local part of a domain in
-   the abstract element bound to token [tk] in [flow] *)
-
-val get_domain_env : token -> ('a, 't) man -> 'a flow -> 't
-(** [get_domain_env tk man flow] retrieves the local part of a domain in the
-   abstract element bound to token [tk] in [flow] *)
-
-val map_domain_env : token -> ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
-(** [map_domain_env tk f man flow] is equivalent to [set_domain_env tk
-   (f (get_domain env tk man flow)) man flow] *)
-
-val set_domain_cur : 't -> ('a, 't) man -> 'a flow -> 'a flow
-(** [set_domain_cur a man flow] overwrites the local part of a domain in
-   the abstract element bound to token T_cur in [flow] *)
-
-val get_domain_cur : ('a, 't) man -> 'a flow -> 't
-(** [get_domain_cur man flow] retrieves the local part of a domain in the
-   abstract element bound to token T_cur in [flow] *)
-
-val is_cur_bottom : ('a, 't) man -> 'a flow -> bool
-(** [is_cur_bottom man flow] tests wether the environement associated
-    with the T_cur token is bottom *)
-
-val map_domain_cur : ('t -> 't) -> ('a, 't) man -> 'a flow -> 'a flow
-(** [map_domain_cur f man flow] is equivalent to [set_domain_cur (f
-   (get_domain_cur tk man flow)) man flow] *)
-
-val test_domain_env : token -> ('t -> bool) -> ('a, 't) man -> 'a flow -> bool
-(** [test_domain_cur tk f man flow] checks whether environment at
-    token [tk] verifies predicate [f] *)
-
-val test_domain_cur : ('t -> bool) -> ('a, 't) man -> 'a flow -> bool
-(** [test_domain_cur f man flow] is equivalent to 
-    [test_domain_env T_cur f man flow] *)
+val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
 
 val get_all_annot : 'a flow -> 'a annot
 (** [get_all_annot flow] retrieves the annotation pool from [flow] *)

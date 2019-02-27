@@ -22,16 +22,20 @@
 (** Analyzer - Central orchestrer of the analysis architecture. *)
 
 open Core
+open Ast
+open Flow
+open Eval
 open Manager
+open Zone
 
-module Make(Domain : Domain.DOMAIN) :
+module Make(Domain : Domain.LEAF) :
 sig
 
-  val init : Ast.program -> (Domain.t, Domain.t) man -> Domain.t flow
+  val init : program -> (Domain.t, Domain.t) man -> Domain.t flow
 
-  val exec : ?zone:Zone.zone -> Ast.stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
+  val exec : ?zone:zone -> stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
 
-  val eval : ?zone:(Zone.zone * Zone.zone) -> ?via:Zone.zone -> Ast.expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (Domain.t, Ast.expr) evl
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (expr, Domain.t) eval
 
   val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
 

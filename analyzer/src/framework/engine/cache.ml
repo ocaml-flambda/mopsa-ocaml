@@ -21,6 +21,9 @@
 
 (** Cache of post-conditions and evaluations *)
 
+open Core.Flow
+open Core.Eval
+open Core.Post
 open Core.Manager
 open Core.Ast
 open Core.Zone
@@ -31,9 +34,9 @@ let opt_cache = ref 10
 
 module Make(Domain: sig type t end) =
 struct
-  let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t flow) list ref = ref []
+  let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t post) list ref = ref []
 
-  let eval_cache : (((zone * zone) * expr * Domain.t flow) * (Domain.t, expr) evl option) list ref = ref []
+  let eval_cache : (((zone * zone) * expr * Domain.t flow) * (expr, Domain.t) eval option) list ref = ref []
 
   let add_to_cache : type a. a list ref -> a -> unit =
     fun cache x ->
@@ -46,24 +49,24 @@ struct
     let ff () =
       match f stmt man flow with
       | None ->
-        if Core.Flow.is_bottom man flow
-        then flow
+        if Core.Flow.is_bottom man.lattice flow
+        then Core.Post.of_flow flow
         else
           Exceptions.panic
             "Unable to analyze statement in %a:@\n @[%a@]"
             Location.pp_range stmt.srange
             pp_stmt stmt
 
-      | Some post -> post.Core.Post.flow
+      | Some post -> post
     in
     if !opt_cache == 0 then
       ff ()
     else
       try List.assoc (zone, stmt, flow) !exec_cache
       with Not_found ->
-        let flow' = ff () in
-        add_to_cache exec_cache ((zone, stmt, flow), flow');
-        flow'
+        let post = ff () in
+        add_to_cache exec_cache ((zone, stmt, flow), post);
+        post
 
   let eval f zone exp man flow =
     if !opt_cache == 0
@@ -77,8 +80,8 @@ struct
           match evals with
           | None -> ()
           | Some evl ->
-            Core.Eval.iter_cases (fun case ->
-              match case.expr with
+            Core.Eval.iter_all (fun exp' flow ->
+              match exp' with
               | Some e -> add_to_cache eval_cache ((zone, e, flow), Some (Core.Eval.singleton e flow));
               | None -> ()
             ) evl

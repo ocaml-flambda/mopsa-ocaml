@@ -41,6 +41,7 @@
 
 open Ast
 open Annotation
+open Flow
 open Manager
 open Eval
 open Post
@@ -54,8 +55,8 @@ open Eq
 
 (** Zone interface of a transfer function *)
 type 'a interface = {
-  export : 'a list;
-  import : 'a list;
+  provides : 'a list;
+  uses :     'a list;
 }
 
 
@@ -148,7 +149,7 @@ sig
   val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> ('a, expr) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
@@ -243,7 +244,7 @@ sig
   val exec : zone -> stmt -> ('a, t) man -> 'a arg -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a arg -> 'a flow -> ('a, expr) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a arg -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a arg -> 'a flow -> 'r option
@@ -251,26 +252,6 @@ sig
 
 end
 
-
-(** {2 Leaf-to-Stack lifter} *)
-(** ************************ *)
-
-module LeafToStack(Domain:LEAF) : STACK =
-struct
-
-  (* Unchanged parts *)
-  type t = Domain.t
-  let name = Domain.name
-  let id = Domain.id
-  let identify = Domain.identify
-  let bottom = Domain.bottom
-  let top = Domain.top
-  let is_bottom = Domain.is_bottom
-  let print = Domain.print
-  let exec_interface = Domain.exec_interface
-  let eval_interface = Domain.eval_interface
-
-end
 
 
 (*==========================================================================*)

@@ -19,28 +19,77 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   Flows are handled continuations and are identified by a finite
-   set of tokens. We use a partitioning abstraction to aggregate together
-   the abstract environments of each flow token.
-*)
+(** Abstraction of control flows *)
 
 open Top
 open Lattice
-open Manager
+open Annotation
 
-type token = Manager.token
 
-module FlowMap = Manager.FlowMap
+(****************************************************************************)
+(**                             {2 Tokens}                                  *)
+(****************************************************************************)
 
-type 'a fmap = 'a Manager.fmap
+type token = ..
 
-type 'a flow = 'a Manager.flow
+type token += T_cur
 
-let make annot fm =
-  { map = Nt fm;
-    annot;
-  }
+let token_compare_chain = Chain.mk_compare_chain (fun tk1 tk2 ->
+    match tk1, tk2 with
+    | T_cur, T_cur -> 0
+    | _ -> compare tk1 tk2
+  )
+
+let compare_token tk1 tk2 = Chain.compare token_compare_chain tk1 tk2
+
+let token_print_chain = Chain.mk_print_chain (fun fmt tk ->
+    match tk with
+    | T_cur -> Format.fprintf fmt "cur"
+    | _ -> Exceptions.panic ~loc:__LOC__ "unknown token"
+  )
+
+let pp_token fmt tk = Chain.print token_print_chain fmt tk
+
+let register_token (info:token Chain.info) =
+  Chain.register info (token_compare_chain, token_print_chain)
+
+
+(****************************************************************************)
+(**                             {2 Flows}                                   *)
+(****************************************************************************)
+
+
+(** Map of flows binding tokens to abstract elements *)
+
+module FlowMap =
+struct
+  include MapExt.Make(
+    struct
+      type t = token
+      let compare = compare_token
+      let print = pp_token
+    end
+    )
+
+  let print pp_value fmt m =
+    if is_empty m then Format.pp_print_string fmt "⊥"
+    else
+      Format.fprintf fmt "@[<v>%a@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt (k, v) -> Format.fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k pp_value v)
+        ) (bindings m)
+end
+
+type 'a fmap = 'a FlowMap.t Top.with_top
+(** ['a fmap] decorates a flow map with a ⊤ map *)
+
+type 'a flow = {
+  map   : 'a fmap;
+  annot : 'a annot;
+}
+(** A flow is a flow map augmented with an annotation *)
+
 
 let bottom annot : 'a flow = {
   map = Nt FlowMap.empty;
@@ -52,107 +101,106 @@ let top annot : 'a flow = {
   annot;
 }
 
-let is_bottom (man: ('a, _) man) (flow: 'a flow) : bool =
+let singleton (annot:'a Annotation.annot) (tk:token) (env:'a) : 'a flow =
+  {
+    map = Nt (FlowMap.singleton tk env);
+    annot
+  }
+
+let is_bottom (lattice: 'a lattice) (flow: 'a flow) : bool =
   top_dfl1 false (fun m ->
-      FlowMap.for_all (fun _ v -> man.is_bottom v) m
+      FlowMap.for_all (fun _ v -> lattice.is_bottom v) m
     ) flow.map
 
-
-let is_top (man: ('a, _) man) (flow: 'a flow) : bool =
+let is_top (lattice: 'a lattice) (flow: 'a flow) : bool =
   top_dfl1 true (fun _ -> false) flow.map
 
 
-let subset (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : bool =
+let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
   top_included
     (FlowMap.for_all2zo
-       (fun _ v1 -> man.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
+       (fun _ v1 -> lattice.is_bottom v1) (* non-⊥ ⊈ ⊥ *)
        (fun _ v2 -> true)  (* ⊥ ⊆ non-⊥ *)
-       (fun _ v1 v2 -> man.subset v1 v2)
+       (fun _ v1 v2 -> lattice.subset v1 v2)
     )
     flow1.map flow2.map
 
-let join (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let map = top_lift2
       (FlowMap.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> man.join v1 v2)
+         (fun _ v1 v2 -> lattice.join v1 v2)
       )
       flow1.map flow2.map
   in
-  (* FIXME: we choose here one annotation, which is correct but too
-     coarse. We need to fold the annotation through the two flows *)
   {map; annot = flow2.annot}
 
-let join_list man ?(annot=Annotation.empty) l =
+let join_list lattice ?(annot=Annotation.empty) l =
   match l with
   | [] -> bottom annot
-  | hd :: tl -> List.fold_left (join man) hd tl
+  | hd :: tl -> List.fold_left (join lattice) hd tl
 
-let meet (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let map = top_neutral2
       (fun b1 b2 ->
          FlowMap.map2zo
-           (fun _ v1 -> man.bottom)
-           (fun _ v2 -> man.bottom)
-           (fun _ v1 v2 -> man.meet v1 v2)
+           (fun _ v1 -> lattice.bottom)
+           (fun _ v2 -> lattice.bottom)
+           (fun _ v1 v2 -> lattice.meet v1 v2)
            b1 b2
       )
       flow1.map flow2.map
   in
   {map; annot = flow2.annot}
 
-let meet_list man ?(annot=Annotation.empty) l =
+let meet_list lattice ?(annot=Annotation.empty) l =
   match l with
   | [] -> bottom annot
-  | hd :: tl -> List.fold_left (meet man) hd tl
+  | hd :: tl -> List.fold_left (meet lattice) hd tl
 
 
-let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
+let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let annot = flow2.annot in
   let map = top_lift2
       (FlowMap.map2zo
          (fun _ v1 -> v1)
          (fun _ v2 -> v2)
-         (fun _ v1 v2 -> man.widen annot v1 v2)
+         (fun _ v1 v2 -> lattice.widen annot v1 v2)
       )
       flow1.map flow2.map
   in
   {map; annot}
 
-let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
-  top_fprint (FlowMap.print man.print) fmt flow.map
+let print (lattice: 'a lattice) fmt (flow : 'a flow) : unit =
+  top_fprint (FlowMap.print lattice.print) fmt flow.map
 
-
-let singleton (annot:'a Annotation.annot) (tk:token) (env:'a) : 'a flow =
-  make annot (FlowMap.singleton tk env)
-
-let get (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a =
+let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
   try
     let m = top_to_exn flow.map in
-    try FlowMap.find tk m with Not_found -> man.bottom
-  with Found_TOP -> man.top
+    try FlowMap.find tk m with Not_found -> lattice.bottom
+  with Found_TOP -> lattice.top
 
 
-let set (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+let set (tk: token) (a: 'a) (lattice:'a lattice) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (fun m ->
-      if man.is_bottom a then FlowMap.remove tk m
+      if lattice.is_bottom a then FlowMap.remove tk m
       else FlowMap.add tk a m
     ) flow.map
   in
   {flow with map}
 
-let copy (tk1:token) (tk2:token) (man:('a,'t) man) (flow1:'a flow) (flow2:'a flow) : 'a flow =
-  set tk2 (get tk1 man flow1) man flow2
+let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a flow) : 'a flow =
+  set tk2 (get tk1 lattice flow1) lattice flow2
 
-let add (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (fun m ->
-      if man.is_bottom a then m
+      if lattice.is_bottom a then m
       else
         let a' =
           try
             let old = FlowMap.find tk m in
-            man.join a old
+            lattice.join a old
           with Not_found ->
             a
         in
@@ -161,34 +209,27 @@ let add (tk: token) (a: 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
   in
   {map; annot = flow.annot}
 
-let remove (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+let remove (tk: token) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.remove tk) flow.map in
   {flow with map}
 
-let filter (f: token -> 'a -> bool) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+let filter (f: token -> 'a -> bool) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.filter f) flow.map in
   {flow with map}
 
-
-let map (f: token -> 'a -> 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
+let map (f: token -> 'a -> 'a) (flow: 'a flow) : 'a flow =
   let map = top_lift1 (FlowMap.mapi f) flow.map in
   {flow with map}
 
-let map_token tk (f: 'a -> 'a) (man: ('a, _) man) (flow: 'a flow) : 'a flow =
-  set tk (f (get tk man flow)) man flow
-
-
-let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (man: ('a, _) man) (flow: 'a flow) : 'b =
+let fold (f: 'b -> token -> 'a -> 'b) (init: 'b) (flow: 'a flow) : 'b =
   let m = top_to_exn flow.map in
   FlowMap.fold (fun tk a acc -> f acc tk a) m init
 
-let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  (* FIXME: we choose here one annotation, which is correct but too
-     coarse. We need to fold the annotation through the two flows *)
+let merge (f: token -> 'a option -> 'a option -> 'a option) (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let annot = flow2.annot in
   let fopt tk a b =
     match f tk a b with
-    | None -> man.bottom
+    | None -> lattice.bottom
     | Some v -> v
   in
   let map = top_lift2
@@ -201,57 +242,10 @@ let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (
   in
   {map; annot}
 
-let map_list (f:'b -> 'a flow -> 'a flow) (flow: 'a flow) (l: 'b list) : 'a flow list =
-  let flows, _ = List.fold_left (fun (acc, annot) x ->
-      let flow' = { flow with annot } in
-      let flow'' = f x flow' in
-      flow'' :: acc, flow''.annot
-    ) ([], flow.annot) l
-  in
-  flows
-
-let map_list_opt (f:'b -> 'a flow -> 'a flow option) (flow:'a flow) (l:'b list) : 'a flow list =
-  let flows, _ = List.fold_left (fun (acc, annot) x ->
-      let flow' = { flow with annot } in
-      match f x flow' with
-      | None -> acc, annot
-      | Some flow'' -> flow'' :: acc, flow''.annot
-    ) ([], flow.annot) l
-  in
-  flows
-
-let set_domain_env (tk: token) (a:'t) (man:('a, 't) man) (flow:'a flow) : 'a flow =
-  set tk (man.set a (get tk man flow)) man flow
-
-let get_domain_env (tk:token) (man:('a, 't) man) (flow:'a flow) : 't =
-  man.get (get tk man flow)
-
-let map_domain_env (tk:token) (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
-  set_domain_env tk (f (get_domain_env tk man flow)) man flow
-
-let set_domain_cur (a: 't) (man: ('a, 't) man) (flow: 'a flow): 'a flow =
-  set_domain_env T_cur a man flow
-
-let get_domain_cur (man: ('a, 't) man) (flow: 'a flow): 't =
-  get_domain_env T_cur man flow
-
-let map_domain_cur (f:'t -> 't) (man:('a, 't) man) (flow:'a flow) : 'a flow =
-  map_domain_env T_cur f man flow
-
-let is_cur_bottom (man : ('a, 't) man) (flow :'a flow) : bool =
-  man.is_bottom (get T_cur man flow)
-
-
-let test_domain_env (tk:token) (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
-  get_domain_env tk man flow |>
-  f
-
-let test_domain_cur (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
-  test_domain_env T_cur f man flow
-
-
 let get_all_annot flow = flow.annot
+
 let set_all_annot annot flow = {flow with annot}
+
 let map_all_annot f flow = set_all_annot (f @@ get_all_annot flow) flow
 
 let get_annot k flow =

@@ -19,84 +19,41 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Post-conditions of a domain's [exec] transfer function *)
+(** Post-states of statement transfer functions *)
 
-open Manager
 open Ast
+open Lattice
+open Flow
+open Eval
 
 
-(*==========================================================================*)
+
+(****************************************************************************)
 (**                          {2 Post-states}                                *)
-(*==========================================================================*)
+(****************************************************************************)
 
-(** Combiner logs *)
+(** Combiner merge logs *)
 type clog =
    | L_leaf
    | L_product of clog list
    | L_compose of clog * log
 
-(** Post-state logs *)
+(** Merge logs *)
 and log = Ast.stmt list * clog
 
-(** Post-state case *)
-type 'a post_case = {
-  post_flow : 'a flow;
-  post_log  : 'a flow;
-}
-
 (** Post-state *)
-type 'a post = 'a post_case Dnf.t
+type 'a post
 
 val of_flow : 'a flow -> 'a post
-(** [of_flow flow] returns a post-condition from a flow, without
-   mergers and channels *)
+(** [of_flow flow] returns a post-condition from a flow, without merge logs *)
 
-val return : 'a flow -> 'a post option
-(** [of_flow flow] returns a post-condition option from a flow,
-   without mergers and channels *)
+val to_flow : 'a lattice -> 'a post -> 'a flow
 
+val return_flow : 'a flow -> 'a post option
 
 val map_flow : ('a flow -> 'a flow) -> 'a post -> 'a post
 (** [map_flow f p] applies [f] on the underlying flow in [p]*)
 
+val print : 'a lattice -> Format.formatter -> 'a post -> unit
 
-val bind :
-  ?zone:Zone.zone -> ('a, _) man ->
-  ('e -> 'a flow -> 'a post) -> ('a, 'e) eval -> 'a post
-
-val bind_with_cleaners :
-  ?zone:Zone.zone -> ('a, _) man ->
-  ('e -> Ast.stmt list -> 'a flow -> 'a post) -> ('a, 'e) eval -> 'a post
-
-val bind_return :
-  ?zone:Zone.zone -> ('a, _) man ->
-  ('e -> 'a flow -> 'a post) -> ('a, 'e) eval -> 'a post option
-
-val bind_opt :
-  ?zone:Zone.zone -> ('a, _) man ->
-  ('e -> 'a flow -> 'a post option) -> ('a, 'e) eval -> 'a post option
-
-val bind_flow :
-  ?zone:Zone.zone ->
-  ('a, 't) man ->
-  ('e -> 'a flow -> 'a flow) ->
-  ('a, 'e) eval ->
-  'a flow
-
-
-val assume :
-  Ast.expr -> ?zone:Zone.zone -> ('a, _) man ->
-  fthen:('a Flow.flow -> 'a post) ->
-  felse:('a Flow.flow -> 'a post) ->
-  ?fboth:('a Flow.flow -> 'a Flow.flow -> 'a post) ->
-  ?fnone:('a Flow.flow -> 'a post) ->
-  'a flow ->
-  'a post
-
-val switch :
-  ((Ast.expr * bool) list * ('a flow -> 'a post)) list ->
-  ?zone:Zone.zone ->
-  ('a, 'b) man -> 'a flow ->
-  'a post
-
-val print : ('a, _) man -> Format.formatter -> 'a post -> unit
+val bind_eval : ('e -> 'a flow -> 'a post) -> ('e, 'a) eval -> 'a post

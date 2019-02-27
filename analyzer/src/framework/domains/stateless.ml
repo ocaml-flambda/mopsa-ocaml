@@ -20,30 +20,37 @@
 (****************************************************************************)
 
 (** Stateless domains are domains without a lattice structure. Only
-   transfer functions are defined. *)
+    transfer functions are defined. *)
 
 open Core
+open Ast
+open Flow
+open Post
+open Eval
+open Zone
 open Manager
 open Domain
-open Post
-open Callback
-open Eq
 
-module type S =
+
+(****************************************************************************)
+(**                      {2 Leaf stateless domains}                         *)
+(****************************************************************************)
+
+module type LEAF =
 sig
 
-  val name     : string
-  val exec_interface : Zone.zone interface
-  val eval_interface : (Zone.zone * Zone.zone) interface
-  val init : Ast.program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : Zone.zone -> Ast.stmt -> ('a, unit) man -> 'a flow -> 'a post option
-  val eval : Zone.zone * Zone.zone -> Ast.expr -> ('a, unit) man -> 'a flow -> ('a, Ast.expr) evl option
+  val name : string
+  val exec_interface : zone interface
+  val eval_interface : (zone * zone) interface
+  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
+  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a post option
+  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
   val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
 
 end
 
-(** Create a stateful domain from a stateless one. *)
-module Make(D: S) : Domain.DOMAIN =
+(** Create a leaf domain from a stateless one. *)
+module MakeLeaf(D: LEAF) : Domain.LEAF =
 struct
 
   type t = unit
@@ -51,8 +58,8 @@ struct
   let top = ()
   let is_bottom _ = false
   let subset _ _ = true
-  let join _ _ _ = top
-  let meet _ _ _ = top
+  let join _ _ = top
+  let meet _ _ = top
   let widen _ _ _ = top
   let print _ _ = ()
 
@@ -61,9 +68,7 @@ struct
       let name = D.name
     end)
 
-  let init prog man flow =
-    D.init prog man flow |>
-    OptionExt.lift Flow.without_callbacks
+  let init = D.init
 
   let exec_interface = D.exec_interface
   let eval_interface = D.eval_interface
@@ -74,9 +79,7 @@ struct
 
 end
 
-
-
-let register_domain modl =
-  let module M = (val modl : S) in
-  let module D = Make(M) in
-  Domain.register_domain (module D)
+let register_leaf_domain modl =
+  let module M = (val modl : LEAF) in
+  let module D = MakeLeaf(M) in
+  Domain.register_leaf_domain (module D)

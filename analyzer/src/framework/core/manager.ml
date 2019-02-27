@@ -25,77 +25,12 @@
 *)
 
 open Annotation
+open Lattice
+open Flow
+open Post
+open Eval
 open Ast
 open Zone
-
-(*==========================================================================*)
-(**                            {2 Flows}                                    *)
-(*==========================================================================*)
-
-type token = ..
-(** Flow tokens are used to tag abstract elements when encountered in a
-    relevant control point *)
-
-type token += T_cur
-(** Token of current (active) execution flow *)
-
-type token_info = {
-  compare : (token -> token -> int) -> token -> token -> int;
-  print   : (Format.formatter -> token -> unit) -> Format.formatter -> token -> unit;
-}
-
-val register_token : token_info -> unit
-
-val compare_token : token -> token -> int
-
-val pp_token : Format.formatter -> token -> unit
-
-module FlowMap : sig
-  include MapExtSig.S with type key = token
-  val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-end
-(** Map of flows binding tokens to abstract elements *)
-
-type 'a fmap = 'a FlowMap.t Top.with_top
-
-type 'a flow = {
-  map   : 'a fmap;
-  annot : 'a annot;
-}
-(** An abstract flow is a flow map augmented with an annotation *)
-
-
-
-
-(*==========================================================================*)
-(**                          {2 Post-states}                                *)
-(*==========================================================================*)
-
-(** Combiner logs *)
-type clog =
-   | L_leaf
-   | L_product of clog list
-   | L_compose of clog * log
-
-(** Post-state logs *)
-and log = Ast.stmt list * clog
-
-(** Post-state case *)
-type 'a post_case = {
-  post_flow : 'a flow;
-  post_log  : 'a flow;
-}
-
-(** Post-state *)
-type 'a post = 'a post_case Dnf.t
-
-
-
-
-(*==========================================================================*)
-(**                             {2 Managers}                                *)
-(*==========================================================================*)
-
 
 
 (**
@@ -106,14 +41,7 @@ type 'a post = 'a post_case Dnf.t
 *)
 type ('a, 't) man = {
   (* Functions on the global abstract element *)
-  bottom    : 'a;
-  top       : 'a;
-  is_bottom : 'a -> bool;
-  subset    : 'a -> 'a -> bool;
-  join      : 'a -> 'a -> 'a;
-  meet      : 'a -> 'a -> 'a;
-  widen     : 'a annot -> 'a -> 'a -> 'a;
-  print     : Format.formatter -> 'a -> unit;
+  lattice : 'a lattice;
 
   (* Accessors to abstract element ['t] of the domain *)
   get : 'a -> 't;
@@ -121,9 +49,18 @@ type ('a, 't) man = {
 
   (** Transfer functions *)
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> ('a, expr) eval;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 }
+
+let set_domain_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
+  Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
+
+let get_domain_env (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
+  man.get (Flow.get tk man.lattice flow)
+
+let map_domain_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
+  set_domain_env tk (f (get_domain_env tk man flow)) man flow
 
 
 (*==========================================================================*)

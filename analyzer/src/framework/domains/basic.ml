@@ -19,18 +19,17 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Leaf domains have a simplified interface that gives access to
-   their local abstractions only; the global manager and its flow
-   abstraction are not accessible. *)
+(** Basic domains have a simplified interface that gives access to
+    their local abstractions only; the global manager and its flow
+    abstraction are not accessible. *)
 
 open Core
 open Ast
 open Manager
 open Domain
 open Eq
-include Channel
 
-module type S =
+module type LEAF =
 sig
 
   include Lattice.LATTICE
@@ -41,15 +40,15 @@ sig
 
   val zone : Zone.zone
 
-  val exec : Ast.stmt -> t -> t with_channel
+  val exec : Ast.stmt -> t -> t
 
   val ask  : 'r Query.query -> t -> 'r option
 
 end
 
 
-(** Create a full domain from a leaf one. *)
-module Make(D: S) : Domain.DOMAIN =
+(** Create a full leaf domain from a basic one. *)
+module Make(D: LEAF) : Domain.LEAF =
 struct
 
   include D
@@ -61,20 +60,17 @@ struct
 
   let init prog man flow =
     Some (
-      {
-        flow = Flow.set_domain_env T_cur (D.init prog) man flow;
-        callbacks = []
-      }
+      Manager.set_domain_env Flow.T_cur (D.init prog) man flow
     )
 
   let exec_interface = {
-    export = [D.zone];
-    import = [];
+    provides = [D.zone];
+    uses = [];
   }
 
   let eval_interface = {
-    export = [Zone.any_zone, D.zone];
-    import = [Zone.any_zone, D.zone];
+    provides = [Zone.any_zone, D.zone];
+    uses = [Zone.any_zone, D.zone];
   }
 
   let exec zone stmt man flow =
@@ -82,29 +78,26 @@ struct
     | S_assign(v, e) ->
       Some (
         man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
-        Post.bind man @@ fun e' flow ->
+        Post.bind_eval @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e')} in
-        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
-        Post.of_flow flow' |>
-        Post.add_channels channels
+        Manager.map_domain_env Flow.T_cur (D.exec stmt') man flow |>
+        Post.of_flow
       )
 
     | S_assume(e) ->
       Some (
         man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
-        Post.bind man @@ fun e' flow ->
+        Post.bind_eval @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
-        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt') man flow in
-        Post.of_flow flow' |>
-        Post.add_channels channels
+        Manager.map_domain_env Flow.T_cur (D.exec stmt') man flow |>
+        Post.of_flow
       )
 
     | S_add _ | S_remove _ | S_rename _ | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       Some (
-        let flow', channels = Channel.map_domain_env T_cur (D.exec stmt) man flow in
-        Post.of_flow flow' |>
-        Post.add_channels channels
+        Manager.map_domain_env Flow.T_cur (D.exec stmt) man flow |>
+        Post.of_flow
       )
 
     | _ ->
@@ -113,13 +106,13 @@ struct
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Flow.get_domain_env T_cur man flow)
+    D.ask query (Manager.get_domain_env Flow.T_cur man flow)
 
 end
 
 
 
-let register_domain modl =
-  let module M = (val modl : S) in
+let register_leaf_domain modl =
+  let module M = (val modl : LEAF) in
   let module D = Make(M) in
-  Domain.register_domain (module D)
+  Domain.register_leaf_domain (module D)
