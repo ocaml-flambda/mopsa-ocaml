@@ -340,11 +340,13 @@ struct
                         | _ -> assert false in
                       let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
                       let flow = Flow.copy_annot indexerror_f flow in
+
                       let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
                       let indexerror_f = Flow.copy_annot assignment_f flow in
+
                       let assignment = man.eval (mk_py_none range) assignment_f in
                       let indexerror = Eval.empty_singleton indexerror_f in
-                      Eval.join_list (assignment::indexerror::[])
+                      Eval.join_list (assignment:: (Eval.copy_annot assignment indexerror) ::[])
                     )
                   ~felse:typerror
               )
