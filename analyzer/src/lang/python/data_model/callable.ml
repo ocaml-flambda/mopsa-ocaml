@@ -70,11 +70,12 @@ module Domain =
                Eval.empty_singleton flow
 
              (* Calls on other kinds of addresses is handled by other domains *)
-             | E_py_object _ ->
+             | E_py_object ({addr_kind = A_py_class _}, _)
+             | E_py_object ({addr_kind = A_py_function _}, _)
+             | E_py_object ({addr_kind = A_py_method _}, _)
+             | E_py_object ({addr_kind = A_py_module _}, _) ->
 
-               (* for now, we'd like string constants not to be evaluated, to be able to handle call like hasattr with precision, even on the type domain *)
                Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-
                Eval.bind (fun args flow ->
                    let exp = {exp with ekind = E_py_call(f, args, [])} in
                    man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow

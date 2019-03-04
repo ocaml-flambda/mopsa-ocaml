@@ -97,3 +97,5 @@ val switch :
   'a post
 
 val print : ('a, _) man -> Format.formatter -> 'a post -> unit
+
+val clean : Ast.stmt list -> ('a, 'b) Manager.man -> 'a flow -> 'a flow

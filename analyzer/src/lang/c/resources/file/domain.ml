@@ -366,7 +366,7 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     (* 𝔼⟦ new FileDescriptor ⟧ *)
-    | E_alloc_addr(A_stub_resource "FileDescriptor") ->
+    | E_alloc_addr(A_stub_resource "FileDescriptor", _) ->
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
       Eval.bind_return @@ fun exp' flow ->
       insert (Addr.from_expr exp') exp.erange man flow

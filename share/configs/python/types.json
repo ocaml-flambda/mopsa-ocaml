@@ -27,7 +27,8 @@
 
             "python.objects.class",
             "python.objects.function",
-            // "python.objects.nones",
+            "python.objects.list",
+            "python.objects.range",
 
             "python.data_model.attribute",
             "python.data_model.subscript",
@@ -44,8 +45,8 @@
                         "python.types.t_string",
                         "python.types.t_int",
                         "python.types.t_float",
-                        "python.types.t_list",
-                        "python.types.t_set",
+                        // "python.types.t_list",
+                        // "python.types.t_set",
                         "python.types.typing"
                     ]
                 }

@@ -98,12 +98,13 @@ module Domain =
                     ;
                       body
                     ] range)
-                 range;
-               mk_remove_var tmp range
+                 range
              ]
              range
          in
-         man.exec stmt flow |> Post.return
+         man.exec stmt flow |>
+         Post.clean [mk_remove_var tmp range] man |>
+         Post.return
 
 
       | _ -> None

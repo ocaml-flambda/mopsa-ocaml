@@ -208,6 +208,12 @@ module Domain =
          debug "Rewriting %a into %a@\n" pp_expr exp pp_expr expr;
          man.eval expr flow |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "print")}, _)}, [obj], [])  ->
+        man.eval obj flow |>
+        Eval.bind (fun eobj flow ->
+            man.eval (mk_py_none range) flow)
+        |> OptionExt.return
+
       | _ ->
          None
 

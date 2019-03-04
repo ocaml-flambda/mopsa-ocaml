@@ -60,6 +60,8 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+  let widen = join
+
   (** Zoning definition *)
   (** ================= *)
 
@@ -100,16 +102,18 @@ struct
 
   let eval zone expr man flow =
     match ekind expr with
-    | E_alloc_addr(addr_kind) ->
+    | E_alloc_addr(addr_kind, STRONG) ->
       let pool = Flow.get_domain_cur man flow in
 
       let cs = Callstack.get flow in
       let range = erange expr in
 
-      debug "allocate %a in %a on call stack:@\n @[%a@]"
+      debug "strongly allocate %a in %a on call stack:@\n @[%a@]@\n%a@\nequiv %a@\n"
         pp_addr_kind addr_kind
         pp_range range
-        Callstack.print cs;
+        Callstack.print cs
+        print pool
+        Equiv.print (Flow.get_annot KAddr flow);
 
       let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
       let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
@@ -130,6 +134,22 @@ struct
       (* Add the recent address *)
       Flow.map_domain_cur (add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
+      Eval.return
+
+
+    | E_alloc_addr(addr_kind, WEAK) ->
+      let cs = Callstack.get flow in
+      let range = erange expr in
+
+      debug "weakly allocate %a in %a on call stack:@\n @[%a@]"
+        pp_addr_kind addr_kind
+        pp_range range
+        Callstack.print cs;
+
+      let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
+      let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
+      Flow.map_domain_cur (add old_addr) man flow |>
+      Eval.singleton (mk_addr old_addr range) |>
       Eval.return
 
     | _ -> None

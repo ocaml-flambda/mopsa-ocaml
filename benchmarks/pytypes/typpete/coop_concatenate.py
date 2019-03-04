@@ -46,12 +46,12 @@ def test_main():
     xlst[0].baz()
     concatenator.concatenate(X(), wlst, xlst)
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(wlst, list))
     mopsa.massert(isinstance(xlst, list))
     mopsa.massert(isinstance(wlst[0], W))
     mopsa.massert(isinstance(xlst[0], X))
-    mopsa.ignore_exception(IndexError)
 
     class ZP:
         def foo(self):
@@ -72,6 +72,7 @@ def test_main():
     concatenatorP = Concatenator(YP())
     concatenatorP.a.bar()
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(concatenatorP, Concatenator))
 

@@ -57,7 +57,7 @@ module AddrInfo = struct
         (fun () -> compare_addr_kind a a');
         (fun () -> Callstack.compare cs cs');
         (fun () -> compare_range r r');
-        (fun () -> (-) f f')
+        (fun () -> Pervasives.compare f f')
       ]
 
 end
@@ -77,7 +77,8 @@ let get_id_equiv (info: AddrInfo.t) (e: Equiv.t) =
   with
   | Not_found ->
     let x = get_fresh () in
-    x, Equiv.add (info, x) e
+    let new_eq = Equiv.add (info, x) e in
+    x, new_eq
 
 type ('a, _) Annotation.key +=
   | KAddr : ('a, Equiv.t) Annotation.key

@@ -45,7 +45,6 @@ module Domain =
     let init _ _ _ = None
 
     let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
-      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       (* 𝔼⟦ list.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
