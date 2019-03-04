@@ -74,6 +74,7 @@ struct
     (** Initialize special variable __name__ *)
     let v = mkv "__name__" "__name__" 0 T_any in
     let stmt =
+      let range = tag_range range "__name__ assignment" in
       mk_assign
         (mk_var v range)
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
@@ -84,6 +85,7 @@ struct
     (** Initialize special variable __file__ *)
     let v = mkv "__file__" "__file__" 0 T_any in
     let stmt =
+      let range = tag_range range "__file__ assignment" in
         mk_assign
           (mk_var v range)
           (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)

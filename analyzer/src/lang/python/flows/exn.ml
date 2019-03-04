@@ -79,8 +79,10 @@ module Domain =
         let flow_caught, flow_uncaught =
           List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
               let caught = exec_except man excpt range acc_uncaught in
+              let acc_uncaught = Flow.copy_annot caught acc_uncaught in
               let uncaught = escape_except man excpt range acc_uncaught in
-              Flow.join man caught acc_caught, uncaught)
+              let caught = Flow.copy_annot uncaught caught in
+              Flow.join man acc_caught caught, uncaught)
             (Flow.bottom (Flow.get_all_annot try_flow), try_flow)  excepts in
 
         (* Execute else body after removing all exceptions *)
@@ -94,6 +96,7 @@ module Domain =
         let flow_caught_finally =
           Flow.join man orelse_flow flow_caught |>
           man.exec finally in
+        let flow_uncaught = Flow.copy_annot flow_caught_finally flow_uncaught in
         let flow_uncaught_finally =
           man.exec finally flow_uncaught in
         let flow = Flow.join man flow_caught_finally flow_uncaught_finally in

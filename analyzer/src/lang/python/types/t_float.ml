@@ -49,7 +49,6 @@ module Domain =
            | _ -> false
 
     let eval zs exp man flow =
-      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->

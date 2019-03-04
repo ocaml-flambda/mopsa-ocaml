@@ -79,7 +79,6 @@ module Domain =
     let init _ _ flow = Some flow
 
     let eval zs expr man flow =
-      debug "eval %a@\n" pp_expr expr;
       let range = erange expr in
       match ekind expr with
       (* Special attributes *)

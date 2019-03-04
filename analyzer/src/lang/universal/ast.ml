@@ -324,7 +324,7 @@ type expr_kind +=
   | E_subscript of expr * expr
 
   (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind
+  | E_alloc_addr of addr_kind * mode
 
   (** Head address. *)
   | E_addr of addr
@@ -354,8 +354,11 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(ak1), E_alloc_addr(ak2) ->
-          compare_addr_kind ak1 ak2
+        | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
+          Compare.compose [
+            (fun () -> compare_addr_kind ak1 ak2);
+            (fun () -> compare_mode m1 m2);
+          ]
 
         | E_addr(a1), E_addr(a2) ->
           compare_addr a1 a2
@@ -375,8 +378,8 @@ let () =
         | E_call(f, args) ->
           fprintf fmt "%a(%a)"
             pp_expr f
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
-        | E_alloc_addr(akind) -> fprintf fmt "alloc(%a)" pp_addr_kind akind
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_expr) args
+        | E_alloc_addr(akind, amode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode amode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
@@ -662,8 +665,8 @@ let mk_false = mk_bool false
 
 let mk_addr addr range = mk_expr ~etyp:T_addr (E_addr addr) range
 
-let mk_alloc_addr addr_kind range =
-  mk_expr (E_alloc_addr addr_kind) ~etyp:T_addr range
+let mk_alloc_addr addr_kind ?(mode=STRONG) range =
+  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let is_int_type = function
   | T_int -> true

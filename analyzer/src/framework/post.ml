@@ -196,12 +196,18 @@ let bind_opt
 let assume
     cond ?(zone = any_zone) man
     ~fthen ~felse
-    ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join man (fthen flow1) (felse flow2)))
+    ?(fboth = (fun flow1 flow2 ->
+        let fthen_r = fthen flow1 in
+        let fthen_r_flow = fthen_r.flow in
+        let flow2 = Flow.copy_annot fthen_r_flow flow2 in
+        join man fthen_r (felse flow2)))
     ?(fnone = (fun flow -> of_flow flow))
     flow
   : 'a post  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
+  let flow = Flow.copy_annot then_flow flow in
   let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  let then_flow = Flow.copy_annot else_flow then_flow in
   match man.is_bottom (Flow.get T_cur man then_flow), man.is_bottom (Flow.get T_cur man else_flow) with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
@@ -227,6 +233,7 @@ let switch
         ) flow cond
       |> t
     in
+
     List.fold_left (fun acc (cond, t) -> join man (one cond t) acc) (one cond t) q
 
 let print man fmt post = Flow.print man fmt post.flow

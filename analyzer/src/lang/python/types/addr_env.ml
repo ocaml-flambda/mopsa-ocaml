@@ -120,6 +120,24 @@ struct
   let rec exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    (* | S_add ({ekind = E_var (v, mode)}) ->
+     *   let cur = Flow.get_domain_cur man flow in
+     *   if mem v cur then
+     *     flow |> Post.return
+     *   else
+     *     let ncur = add v ASet.empty cur in
+     *     let () = debug "cur was %a@\nncur is %a@\n" print cur print ncur in
+     *     let flow =  Flow.set_domain_cur ncur man flow in
+     *     let () = debug "flow is now %a@\n" (Flow.print man) flow in
+     *     flow |> Post.return *)
+
+    | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
+      let cur = Flow.get_domain_cur man flow in
+      if mem w cur then
+        Flow.set_domain_cur (add v (find w cur) cur) man flow |> Post.return
+      else
+        flow |> Post.return
+
     (* S⟦ v = e ⟧ *)
     | S_assign({ekind = E_var (v, mode)}, e) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
@@ -199,17 +217,22 @@ struct
         else
           flow in
       begin match akind a with
-        | Typing.A_py_instance -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
+        | A_py_instance -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
         | _ -> flow |> Post.return
       end
 
     | _ -> None
 
   and assign_addr man v av mode flow =
+    debug "assign_addr %a %a@\n" pp_var v PyAddr.print av;
     let cur = Flow.get_domain_cur man flow in
     let aset = match mode with
       | STRONG -> ASet.singleton av
-      | WEAK -> ASet.add av (find v cur)
+      | WEAK ->
+        if mem v cur then
+          ASet.add av (find v cur)
+        else
+          ASet.singleton av
     in
     Flow.set_domain_cur (add v aset cur) man flow
 
@@ -218,32 +241,36 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_var (v, mode) ->
-      debug "eval %a@\n" pp_expr exp;
       let cur = Flow.get_domain_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
-        ASet.fold (fun a acc ->
+        let evals, annot = ASet.fold (fun a (acc, annots) ->
             let flow = Flow.set_domain_cur (AMap.add v (ASet.singleton a) cur) man flow in
+            let flow = Flow.set_all_annot annots flow in
             match a with
             | Undef_global when is_builtin_name v.org_vname ->
-              Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc
+              (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
 
             | Undef_local when is_builtin_name v.org_vname ->
-              Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc
+              (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
 
             | Undef_global ->
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
-              Eval.empty_singleton flow :: acc
+              (Eval.empty_singleton flow :: acc, Flow.get_all_annot flow)
 
             | Undef_local ->
               let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
-              Eval.empty_singleton flow :: acc
+              (Eval.empty_singleton flow :: acc, Flow.get_all_annot flow)
 
             | Def addr ->
-              man.eval (mk_py_object (addr, OptionExt.return @@ mk_addr addr range) range) flow :: acc
+              let res = man.eval (mk_py_object (addr, OptionExt.return @@ mk_addr addr range) range) flow in
+              let annots = Eval.choose_annot res in
+              res :: acc, annots
 
-          ) aset []
-        |> Eval.join_list |> OptionExt.return
+          ) aset ([], Flow.get_all_annot flow) in
+        let evals = List.map (fun eval -> Eval.map_flow (fun flow -> Flow.set_all_annot annot flow) eval) evals in
+        evals |> Eval.join_list
+        |> OptionExt.return
       else if is_builtin_name v.org_vname then
         (* let () = debug "bla %s %s %d" v.org_vname v.uniq_vname v.vuid in *)
         (* man.eval (mk_py_object (find_builtin v.org_vname) range) flow |> OptionExt.return *)

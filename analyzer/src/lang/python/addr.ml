@@ -578,3 +578,21 @@ let builtin_cl_and_mro s =
   match tyo with
   | A_py_class (c, b) -> c, b
   | _ -> assert false
+
+
+
+type addr_kind +=
+  | A_py_instance (*of  class_address*)
+
+let () =
+  Format.(register_addr {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_instance (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
+            -> fprintf fmt "inst"
+          | _ -> default fmt a);
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          (* | A_py_instance c1, A_py_instance c2 ->
+           *   compare_addr_kind (A_py_class (c1, [])) (A_py_class (c2, [])) *)
+          | _ -> default a1 a2);})

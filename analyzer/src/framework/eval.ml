@@ -137,6 +137,14 @@ let choose_annot evl =
   | Some case -> get_all_annot case.flow
   | None -> Annotation.empty
 
+(* [copy_annot evl1 evl2] assumes that the annotations stored in the
+   flows of [evl1] are unified. It copies these annotations into all
+   the flows of [evl2] and return the modified [evl2] *)
+let copy_annot evl1 evl2 =
+  let annot = choose_annot evl1 in
+  map_flow (Flow.set_all_annot annot) evl2
+
+
 let bind
     (f: 'e -> 'a flow -> ('a, 'f) evl)
     (evl: ('a, 'e) evl)
@@ -182,12 +190,18 @@ let bind_opt f evl =
 let assume
     cond ?(zone = any_zone)
     ~fthen ~felse
-    ?(fboth = (fun flow1 flow2 -> (* FIXME: propagate annotations *) join (fthen flow1) (felse flow2)))
+    ?(fboth = (fun flow1 flow2 ->
+        let fthen_r = fthen flow1 in
+        let flow2 = Flow.set_all_annot (choose_annot fthen_r) flow2 in
+        let felse_r = felse flow2 in
+        join fthen_r felse_r))
     ?(fnone = (fun flow -> empty_singleton flow))
     man flow
   : ('a, 'e) evl  =
   let then_flow = man.exec ~zone (mk_assume cond cond.erange) flow in
+  let flow = Flow.copy_annot then_flow flow in
   let else_flow = man.exec ~zone (mk_assume (mk_not cond cond.erange) cond.erange) flow in
+  let then_flow = Flow.copy_annot else_flow then_flow in
   match man.is_bottom (Flow.get T_cur man then_flow), man.is_bottom (Flow.get T_cur man else_flow) with
   | false, true -> fthen then_flow
   | true, false -> felse else_flow
@@ -220,22 +234,35 @@ let eval_list
     (eval: 'e -> 'c flow -> ('c, 'b) evl)
     (flow: 'c flow)
   : ('c, 'b list) evl =
-  let rec aux expl flow clean = function
-    | [] ->
-      singleton (List.rev expl) flow ~cleaners:clean
-    | exp :: tl ->
-      eval exp flow |>
-      Dnf.substitute2
-        (fun case ->
-           let exp' = case.expr in
-           let flow = case.flow in
-           let clean' = case.cleaners in
-           match exp' with
-           | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
-           | None -> empty_singleton flow
+  let rec aux l' flow = match l' with
+    | e :: tl ->
+      eval e flow |>
+      bind (fun e' flow ->
+          Debug.debug ~channel:"eval" "Annotations(%d) = %a" (List.length l') Annotation.print (Flow.get_all_annot flow);
+          aux tl flow |>
+          bind (fun tl flow ->
+              singleton (e'::tl) flow
+            )
         )
+    | [] -> singleton [] flow
   in
-  aux [] flow [] l
+  aux l flow
+  (* let rec aux expl flow clean = function
+   *   | [] ->
+   *     singleton (List.rev expl) flow ~cleaners:clean, Flow.get_all_annot flow
+   *   | exp :: tl ->
+   *     eval exp flow |>
+   *     fold2
+   *       (fun annot case ->
+   *          let exp' = case.expr in
+   *          let flow = case.flow in
+   *          let clean' = case.cleaners in
+   *          match exp' with
+   *          | Some exp' -> (aux (exp' :: expl) flow (clean @ clean') tl)
+   *          | None -> empty_singleton flow, annot
+   *       ) join meet None
+   * in
+   * fst @@ aux [] flow [] l *)
 
 
 let eval_list_opt

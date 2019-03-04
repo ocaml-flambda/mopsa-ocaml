@@ -129,9 +129,35 @@ let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
 let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
   top_fprint (FlowMap.print man.print) fmt flow.map
 
-
 let singleton (annot:'a Annotation.annot) (tk:token) (env:'a) : 'a flow =
   make annot (FlowMap.singleton tk env)
+
+
+let get_all_annot flow = flow.annot
+let set_all_annot annot flow = {flow with annot}
+let map_all_annot f flow = set_all_annot (f @@ get_all_annot flow) flow
+
+let get_annot k flow =
+  get_all_annot flow |> Annotation.find k
+
+let set_annot k v flow =
+  get_all_annot flow
+  |> Annotation.add k v
+  |> fun annot -> set_all_annot annot flow
+
+let rm_annot k flow =
+  get_all_annot flow
+  |> Annotation.remove k
+  |> fun annot -> set_all_annot annot flow
+
+let mem_annot k flow =
+  get_all_annot flow |>
+  Annotation.mem k
+
+let copy_annot flow1 flow2 =
+  let annot = get_all_annot flow1 in
+  set_all_annot annot flow2
+
 
 let get (tk: token) (man: ('a, _) man) (flow: 'a flow) : 'a =
   try
@@ -209,13 +235,13 @@ let merge (f: token -> 'a option -> 'a option -> 'a option) (man: ('a, _) man) (
   {map; annot}
 
 let map_list (f:'b -> 'a flow -> 'a flow) (flow: 'a flow) (l: 'b list) : 'a flow list =
-  let flows, _ = List.fold_left (fun (acc, annot) x ->
+  let flows, annot = List.fold_left (fun (acc, annot) x ->
       let flow' = { flow with annot } in
       let flow'' = f x flow' in
       flow'' :: acc, flow''.annot
     ) ([], flow.annot) l
   in
-  flows
+  List.map (set_all_annot annot) flows
 
 let map_list_opt (f:'b -> 'a flow -> 'a flow option) (flow:'a flow) (l:'b list) : 'a flow list =
   let flows, _ = List.fold_left (fun (acc, annot) x ->
@@ -255,32 +281,6 @@ let test_domain_env (tk:token) (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) :
 
 let test_domain_cur (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
   test_domain_env T_cur f man flow
-
-
-let get_all_annot flow = flow.annot
-let set_all_annot annot flow = {flow with annot}
-let map_all_annot f flow = set_all_annot (f @@ get_all_annot flow) flow
-
-let get_annot k flow =
-  get_all_annot flow |> Annotation.find k
-
-let set_annot k v flow =
-  get_all_annot flow
-  |> Annotation.add k v
-  |> fun annot -> set_all_annot annot flow
-
-let rm_annot k flow =
-  get_all_annot flow
-  |> Annotation.remove k
-  |> fun annot -> set_all_annot annot flow
-
-let mem_annot k flow =
-  get_all_annot flow |>
-  Annotation.mem k
-
-let copy_annot flow1 flow2 =
-  let annot = get_all_annot flow1 in
-  set_all_annot annot flow2
 
 let without_callbacks flow =
   { flow; callbacks = [] }

@@ -45,14 +45,13 @@ def test_main():
     mopsa.massert(isinstance(j, int))
     mopsa.massert(isinstance(z, int))
     mopsa.massert(isinstance(n, int))
-
     mopsa.massert(isinstance(L1, list))
     mopsa.massert(isinstance(L2, list))
     mopsa.massert(isinstance(L1[0], int))
     mopsa.massert(isinstance(L2[0], int))
     mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(res, str))
-
+    mopsa.ignore_exception(UnboundLocalError)
 # T := int
 # x := int
 # l1 := int

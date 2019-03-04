@@ -426,3 +426,29 @@ let rec is_py_expr e =
 
 let mk_py_none range =
   mk_constant ~etyp:T_py_none C_py_none range
+
+
+
+type expr_kind +=
+   | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
+
+let () =
+  register_expr_pp (fun default fmt exp ->
+      match ekind exp with
+      | E_py_sum_call (f, args) ->
+         Format.fprintf fmt "{py_sum_call}%a(%a)"
+           pp_expr f
+           (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
+      | _ -> default fmt exp);
+  register_expr_visitor (fun default exp ->
+      match ekind exp with
+      | E_py_sum_call(f, args) ->
+         {exprs = f :: args; stmts = []},
+         (fun parts -> {exp with ekind = E_py_sum_call(List.hd parts.exprs, List.tl parts.exprs)})
+      | _ -> default exp)
+
+let mk_sum_call fundec args range =
+  mk_expr (E_py_sum_call (
+      mk_expr (E_function (User_defined fundec)) range,
+      args
+    )) range
