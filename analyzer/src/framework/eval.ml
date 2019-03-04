@@ -144,12 +144,15 @@ let copy_annot evl1 evl2 =
   let annot = choose_annot evl1 in
   map_flow (Flow.set_all_annot annot) evl2
 
+let check_annot evl =
+  let annot = choose_annot evl in
+  assert (fold (fun acc case -> acc && case.flow.annot == annot) ( || ) ( && ) true evl)
 
 let bind
     (f: 'e -> 'a flow -> ('a, 'f) evl)
     (evl: ('a, 'e) evl)
   : ('a, 'f) evl =
-  let evl, _ = Dnf.fold2
+  let evl, annot = Dnf.fold2
     (fun annot case ->
       let flow' = set_all_annot annot case.flow in
       let evl' =
@@ -164,7 +167,7 @@ let bind
     join meet
     (choose_annot evl) evl
   in
-  evl
+  map_flow (Flow.set_all_annot annot) evl
 
 let bind_return f evl = bind f evl |> OptionExt.return
 

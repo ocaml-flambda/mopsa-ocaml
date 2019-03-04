@@ -101,7 +101,7 @@ let bind
   let annot = Eval.choose evl |>
               OptionExt.option_dfl1 Annotation.empty (fun (_, flow) -> Flow.get_all_annot flow)
   in
-  let post, _ =
+  let post, annot =
     Eval.fold2 (fun annot case ->
         let flow' = Flow.set_all_annot annot case.flow in
         match case.expr with
@@ -118,7 +118,7 @@ let bind
       annot
       evl
   in
-  post
+  {post with flow = Flow.set_all_annot annot post.flow}
 
 let bind_with_cleaners
     ?(zone = any_zone) (man: ('a, _) man)

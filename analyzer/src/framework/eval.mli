@@ -111,3 +111,5 @@ val return : ('a, 'e) evl -> ('a, 'e) evl option
 val choose_annot : ('a, 'e) evl -> 'a Annotation.annot
 
 val copy_annot : ('a, 'e) evl -> ('a, 'e) evl -> ('a, 'e) evl
+
+val check_annot : ('a, 'e) evl -> unit
