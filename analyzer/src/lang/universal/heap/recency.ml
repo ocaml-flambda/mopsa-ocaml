@@ -33,12 +33,13 @@ open Zone
 let name = "universal.heap.recency"
 let debug fmt = Debug.debug ~channel:name fmt
 
-module Domain =
+module Domain(AddrInfo: Pool.ADDRINFO) =
 struct
 
   (** Lattice definition *)
   (** ================== *)
 
+  module Pool = Pool.Make(AddrInfo)
   include Pool
 
   let is_bottom _ = false
@@ -52,7 +53,7 @@ struct
 
   type _ domain += D_u_heap_recency : t domain
   let id = D_u_heap_recency
-  let name = "universal.heap.recency"
+  let name = "universal.heap." ^ AddrInfo.name
   let identify : type a. a domain -> (t, a) eq option =
     function
     | D_u_heap_recency -> Some Eq
@@ -115,7 +116,7 @@ struct
         print pool
         Equiv.print (Flow.get_annot KAddr flow);
 
-      let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
+      let recent_uid, flow = get_id_flow (extract (addr_kind, cs, range, recent_flag)) flow in
       let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
 
       (* Change the sub-domain *)
@@ -125,7 +126,7 @@ struct
           flow
         else
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
+          let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
           let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
           Flow.map_domain_cur (add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
@@ -146,7 +147,7 @@ struct
         pp_range range
         Callstack.print cs;
 
-      let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
+      let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
       let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
       Flow.map_domain_cur (add old_addr) man flow |>
       Eval.singleton (mk_addr old_addr range) |>
@@ -161,5 +162,9 @@ struct
 
 end
 
+module HeapRecency = Domain(Pool.AddrInfoRecency)
+module HeapTypes   = Domain(Pool.AddrInfoTypes)
+
 let () =
-  Framework.Domain.register_domain (module Domain)
+  Framework.Domain.register_domain (module HeapRecency);
+  Framework.Domain.register_domain (module HeapTypes)

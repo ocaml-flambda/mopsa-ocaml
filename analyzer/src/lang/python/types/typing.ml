@@ -111,12 +111,12 @@ let () =
 
 
 (* conventions: -1 represents True, -2 represents False, -3 is T:bool (Weak), -4 is None, -5 is NotImplemented, -6 is for all integers (weak),  *)
-let addr_true = {addr_uid = -1; addr_kind = A_py_instance; addr_mode = STRONG}
-let addr_false = {addr_uid = -2; addr_kind = A_py_instance; addr_mode = STRONG}
-let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance; addr_mode = WEAK}
-let addr_none = {addr_uid = -4; addr_kind = A_py_instance; addr_mode = STRONG}
-let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance; addr_mode = STRONG}
-let addr_integers = {addr_uid = -6; addr_kind = A_py_instance; addr_mode = WEAK}
+let addr_true = {addr_uid = -1; addr_kind = A_py_instance "bool"; addr_mode = STRONG}
+let addr_false = {addr_uid = -2; addr_kind = A_py_instance "bool"; addr_mode = STRONG}
+let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance "bool"; addr_mode = WEAK}
+let addr_none = {addr_uid = -4; addr_kind = A_py_instance "NoneType"; addr_mode = STRONG}
+let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance "NotImplementedType"; addr_mode = STRONG}
+let addr_integers = {addr_uid = -6; addr_kind = A_py_instance "int"; addr_mode = WEAK}
 
 
 module Domain =
@@ -308,7 +308,7 @@ struct
     (* allocate addr, and map this addr to inst bltin *)
     let range = tag_range range "alloc_%s" bltin in
     let bltin_cls, bltin_mro = get_builtin bltin in
-    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance (*bltin_cls*)) range) flow |>
+    man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance bltin) range) flow |>
     Eval.bind (fun eaddr flow ->
         let addr = match ekind eaddr with
           | E_addr a -> a
@@ -357,7 +357,7 @@ struct
      *     (TMap.find addr cur.abs_heap) []
      *   |> Eval.join_list |> OptionExt.return *)
 
-    | E_py_object ({addr_kind = A_py_instance}, _) ->
+    | E_py_object ({addr_kind = A_py_instance _}, _) ->
       Eval.singleton exp flow |> OptionExt.return
 
 
@@ -401,7 +401,7 @@ struct
     | E_constant (C_string s) ->
       let range = tag_range range "alloc_str" in
       let bltin_cls, bltin_mro = get_builtin "str" in
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance (*bltin_cls*)) range) flow |>
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance "str" (*bltin_cls*)) range) flow |>
       Eval.bind (fun eaddr flow ->
           let addr = match ekind eaddr with
             | E_addr a -> a
@@ -474,7 +474,7 @@ struct
         | A_py_class (C_user c, b) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes) range) flow
 
-        | A_py_instance ->
+        | A_py_instance _ ->
           let cur = Flow.get_domain_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
 
@@ -531,7 +531,7 @@ struct
           let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
 
-        | A_py_instance ->
+        | A_py_instance _ ->
           let cur = Flow.get_domain_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
 
@@ -560,7 +560,7 @@ struct
              let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, None) range in
              Eval.singleton obj flow in
            match ekind earg with
-           | E_py_object ({addr_kind = A_py_instance} as addr, _) ->
+           | E_py_object ({addr_kind = A_py_instance _} as addr, _) ->
              let ptys = TMap.find addr cur.abs_heap in
              let types = Polytypeset.fold (fun pty acc ->
                  match pty with
@@ -617,7 +617,7 @@ struct
           | A_py_function _, A_py_class (C_builtin c, _) ->
             Eval.singleton (mk_py_bool (c = "function") range) flow
 
-          | A_py_instance, A_py_class (c, mro) ->
+          | A_py_instance _, A_py_class (c, mro) ->
             let cur = Flow.get_domain_cur man flow in
             let ptys = TMap.find addr_obj cur.abs_heap in
             Polytypeset.fold (fun pty acc ->
@@ -646,16 +646,21 @@ struct
             debug "Error during creation of a new instance@\n";
             man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton
           | cls :: tl ->
-            man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr A_py_instance range) flow |>
+            let cls, mro = match akind @@ fst @@ object_of_expr cls with
+              | A_py_class (c, mro) -> c, mro
+              | _ -> assert false in
+            let cls_str = match cls with
+              | C_builtin s
+              | C_unsupported s -> s
+              | C_user c -> c.py_cls_var.org_vname
+            in
+            man.eval  ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance cls_str) range) flow |>
             Eval.bind (fun eaddr flow ->
                 let addr = match ekind eaddr with
                   | E_addr a -> a
                   (* | E_py_object (a, _) -> a *)
                   | _ -> assert false in
                 let cur = Flow.get_domain_cur man flow in
-                let cls, mro = match akind @@ fst @@ object_of_expr cls with
-                  | A_py_class (c, mro) -> c, mro
-                  | _ -> assert false in
                 let inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty}) in
                 let abs_heap = TMap.add addr inst cur.abs_heap in
                 let flow = Flow.set_domain_cur {cur with abs_heap} man flow in

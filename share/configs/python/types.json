@@ -38,7 +38,7 @@
             "python.data_model.callable",
 
             {
-                "stack": "universal.heap.recency",
+                "stack": "universal.heap.types",
                 "over": {
                     "iter": [
                         "python.types.addr_env",
