@@ -217,7 +217,7 @@ struct
         else
           flow in
       begin match akind a with
-        | A_py_instance -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
+        | A_py_instance _ -> man.exec ~zone:Zone.Z_py_obj stmt flow |> Post.return
         | _ -> flow |> Post.return
       end
 
