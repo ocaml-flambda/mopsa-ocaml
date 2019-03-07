@@ -21,6 +21,7 @@
 
 (** Display the results of the analysis in a textual form. *)
 
+open ArgExt
 open Format
 
 let get_printer out =
@@ -88,27 +89,47 @@ let panic ?btrace exn files out =
   in
   ()
 
+let group_args_by_category args =
+  let sorted = List.sort (fun arg1 arg2 ->
+      compare arg1.category arg2.category
+    ) args
+  in
+  let grouped, _ = List.fold_right (fun arg (acc,cat) ->
+      if compare cat arg.category != 0
+      then
+        (arg.category,[arg]) :: acc, arg.category
+      else
+        let (_, l) = List.hd acc in
+        (cat, arg :: l) :: (List.tl acc), cat
+    ) sorted ([],"")
+  in
+  grouped
 
-let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) out =
+let help (args:ArgExt.arg list) out =
   let print fmt = get_printer out fmt in
   let print_default fmt d =
     if d = "" then ()
     else fprintf fmt " (default: %s)" d
   in
+  let groups = group_args_by_category args in
   print "Options:@.";
-  List.iter (fun (key,spec,doc,default) ->
-      match spec with
-      | Arg.Symbol(l,_) ->
-        print "  %s={%a} %s%a@."
-          key
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
-             pp_print_string
-          ) l
-          doc
-          print_default default
-      | _ -> print "  %s %s%a@." key doc print_default default
-    ) args
+  List.iter (fun (cat, args) ->
+      print "  %s@." (String.uppercase_ascii cat);
+      List.iter (fun arg ->
+          match arg.spec with
+          | ArgExt.Symbol(l,_) ->
+            print "    %s={%a} %s%a@."
+              arg.key
+              (pp_print_list
+                 ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                 pp_print_string
+              ) l
+              arg.doc
+              print_default arg.default
+          | _ ->
+            print "    %s %s%a@." arg.key arg.doc print_default arg.default
+        ) args
+    ) groups
 
 let list_domains (domains:string list) out =
   let print fmt = get_printer out fmt in

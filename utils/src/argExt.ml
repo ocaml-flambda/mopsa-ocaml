@@ -19,48 +19,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Render the output of an analysis depending on the selected engine. *)
+(** Command-line options, extends [Arg] module of standard library *)
 
-type format =
-  | F_text (* Textual output *)
-  | F_json (* Formatted output in JSON *)
+type spec =
+  | Unit of (unit -> unit)
+  | Bool of (bool -> unit)
+  | Set of bool ref
+  | Clear of bool ref
 
+  | Int of (int -> unit)
+  | Set_int of int ref
 
-(* Command line option *)
-(* ------------------- *)
+  | String of (string -> unit)
+  | Set_string of string ref
 
-let opt_format = ref F_text
-let opt_file = ref None
+  | Set_string_list of string list ref
 
+  | Symbol of string list * (string -> unit)
 
-(* Result rendering *)
-(* ---------------- *)
+type arg = {
+  key: string;
+  doc: string;
+  category: string;
+  default: string;
+  spec: spec;
+}
 
-(* Print collected alarms in the desired output format *)
-let render man flow time files =
-  let alarms = Flow.fold (fun acc tk env ->
-      match tk with
-      | Alarm.T_alarm a -> a :: acc
-      | _ -> acc
-    ) [] man flow
-  in
-  let return_v = if List.length alarms > 0 then 1 else 0 in
-  let _ = match !opt_format with
-    | F_text -> Text.render man alarms time files !opt_file
-    | F_json -> Json.render man alarms time files !opt_file in
-  return_v
+let from_spec =
+  function
+  | Unit f -> Arg.Unit f
+  | Bool f -> Arg.Bool f
+  | Set b -> Arg.Set b
+  | Clear b -> Arg.Clear b
+  | Int f -> Arg.Int f
+  | Set_int n -> Arg.Set_int n
+  | String f -> Arg.String f
+  | Set_string s -> Arg.Set_string s
+  | Set_string_list l -> Arg.String (fun s -> l := s :: !l)
+  | Symbol (l, f) -> Arg.Symbol (l, f)
 
-let panic ?btrace exn files =
-  match !opt_format with
-  | F_text -> Text.panic ?btrace exn files !opt_file
-  | F_json -> Json.panic ?btrace exn files !opt_file
+let from_arg (arg:arg) : (Arg.key*Arg.spec*Arg.doc) =
+  arg.key, from_spec arg.spec, arg.doc
 
-let help (args:ArgExt.arg list) =
-  match !opt_format with
-  | F_text -> Text.help args !opt_file
-  | F_json -> Json.help args !opt_file
-
-let list_domains (domains:string list) =
-  match !opt_format with
-  | F_text -> Text.list_domains domains !opt_file
-  | F_json -> Json.list_domains domains !opt_file
+let parse (args:arg list) (handler:string -> unit) (usage:string) : unit =
+  let args = List.map from_arg args in
+  Arg.parse args handler usage
