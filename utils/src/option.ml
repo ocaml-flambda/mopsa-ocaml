@@ -66,8 +66,8 @@ let apply2
   =
   match a,b with None,_ | _,None -> none | Some x, Some y -> f x y
 
-let default (none:'b) (some:'b) (a:'a option) : 'b =
-  apply (fun _ -> some) none a
+let default (none:'b) (a:'a option) : 'b =
+  apply (fun x -> x) none a
 
 let compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
   match a, b with

@@ -19,14 +19,16 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Lattice
+open Lattice.Sig
 open Flow
+open Ast.Stmt
+open Context
 
 type ('e, 'a) eval
 
 val empty : ('e, 'a) eval
 
-val singleton : 'e -> ?cleaners:Ast.stmt list -> 'a flow -> ('e, 'a) eval
+val singleton : 'e -> ?cleaners:stmt list -> 'a flow -> ('e, 'a) eval
 
 val empty_singleton : 'a flow -> ('e, 'a) eval
 
@@ -40,7 +42,7 @@ val meet_list : ?empty:(('e, 'a) eval) -> ('e, 'a) eval list -> ('e, 'a) eval
 
 val print: pp:(Format.formatter -> 'e -> unit) -> Format.formatter -> ('e, 'a) eval -> unit
 
-val add_cleaners : Ast.stmt list -> ('e, 'a) eval  -> ('e, 'a) eval
+val add_cleaners : stmt list -> ('e, 'a) eval  -> ('e, 'a) eval
 
 val iter : ('e -> 'a flow -> unit) -> ('e, 'a) eval -> unit
 
@@ -67,3 +69,5 @@ val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 
 val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
 
 val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option
+
+val choose_ctx : ('e, 'a) eval -> 'a ctx

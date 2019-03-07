@@ -19,68 +19,30 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Flow-insensitive context *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+open Eq
+
 
 (****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
+(**                        {2 Stateless contexts}                           *)
 (****************************************************************************)
 
-module type DOMAIN =
-sig
+type uctx
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+(****************************************************************************)
+(**                       {2 Polymorphic contexts}                          *)
+(****************************************************************************)
 
-end
+type 'a pctx
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+(****************************************************************************)
+(**                            {2 Contexts}                                 *)
+(****************************************************************************)
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+type 'a ctx = {
+  ctx_unit : uctx;
+  ctx_polymorph : 'a pctx;
+}
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
-
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+let empty : 'a ctx = assert false

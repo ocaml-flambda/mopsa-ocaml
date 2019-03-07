@@ -19,39 +19,77 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(**
-   Managers provide access to operators and transfer functions of the
-   global abstract environment.
+(** 
+   Managers encapsulate an abstract domain into a record so that it can be
+   passed to other abstract domains at runtime.
 *)
 
-open Annotation
-open Lattice
+open Context
+open Lattice.Sig
+open Token
 open Flow
-open Post
+open Log
+open JFlow
 open Eval
-open Ast
+open Ast.Stmt
+open Ast.Expr
+open Query
 open Zone
 
 
-(**
-   An instance of type [('a, 't) man] encapsulates the lattice
-   operators of the global environment abstraction ['a], the top-level
-   transfer functions [exec], [eval] and [ask], and the accessor to
-   the domain abstraction ['t] within ['a].
+(*==========================================================================*)
+(**                         {2 Global manager}                              *)
+(*==========================================================================*)
+
+
+(** Global managers provide access to full analyzer, i.e. (i) the lattice
+    operators of the global abstraction ['a], (ii) the transfer functions
+    over ['a flow] and (iii) accessors to the domain's abstract element ['t]
+    within ['a]. 
 *)
 type ('a, 't) man = {
-  (* Functions on the global abstract element *)
+  (* Lattice operators over global abstract elements ['a] *)
   lattice : 'a lattice;
 
-  (* Accessors to abstract element ['t] of the domain *)
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
   get : 'a -> 't;
   set : 't -> 'a -> 'a;
 
-  (** Transfer functions *)
+  (** Analyzer transfer functions *)
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
   eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 }
+
+
+
+(*==========================================================================*)
+(**                        {2 Sub-tree manager}                             *)
+(*==========================================================================*)
+
+(** Sub-tree managers are provided to stacked domains to access their parameter
+    domain. Journaling functions in these managers allow stacked domains to log
+    statements for eventual future merges.  
+*)
+type ('a,'t,'s) sman = {
+  (* Global manager of the stacked domain *)
+  man: ('a,'t) man;
+
+  (** Manager of the sub-tree domain *)
+  sub_man: ('s, 's) man;
+
+  (** Journaling transfer function in the sub-tree domain *)
+  sub_exec: ?zone:zone -> stmt -> 'a flow -> 'a jflow;
+
+  (** Accessors to the domain's log *)
+  set_log : log -> log -> log;
+  get_log : log -> log;
+}
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
 
 let set_domain_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
@@ -62,12 +100,5 @@ let get_domain_env (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
 let map_domain_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   set_domain_env tk (f (get_domain_env tk man flow)) man flow
 
-
-(*==========================================================================*)
-(**                     {2 Argument domain manager }                        *)
-(*==========================================================================*)
-
-type 'a arg = {
-  arg_exec : ?zone:zone -> stmt -> 'a flow -> 'a post;
-  arg_ask : 'r. 'r Query.query -> 'a flow -> 'r;
-}
+let sub_exec ?(zone=any_zone) stmt (sman:('a,'t,'s) sman) (s:'s) : 's =
+  assert false

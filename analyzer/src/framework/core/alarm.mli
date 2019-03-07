@@ -51,10 +51,10 @@ val pp_alarm : Format.formatter -> alarm -> unit
 
 val pp_alarm_title : Format.formatter -> alarm -> unit
 
-type Flow.token += T_alarm of alarm
+type Token.token += T_alarm of alarm
 
-val alarm_token : alarm -> Flow.token
+val alarm_token : alarm -> Token.token
 
 val mk_alarm : alarm_kind ->  ?cs:Callstack.cs -> ?level:alarm_level -> Location.range -> alarm
 
-val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow
+(* val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow *)

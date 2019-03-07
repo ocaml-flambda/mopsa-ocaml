@@ -19,68 +19,26 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Extensible type of programs *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+type prog_kind = ..
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+type program = {
+  prog_kind : prog_kind;
+  prog_range : Location.range;
+}
 
-module type DOMAIN =
-sig
+let program_pp_chain = TypeExt.mk_print_chain (fun fmt prg ->
+    Exceptions.panic "program_pp_chain: unknown program"
+  )
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+let program_compare_chain = TypeExt.mk_compare_chain (fun p1 p2 ->
+    compare p1 p2
+  )
 
-end
+let register_program (info:program TypeExt.info) =
+  TypeExt.register info program_compare_chain program_pp_chain
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+let compare_program p1 p2 = TypeExt.compare program_compare_chain p1 p2
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
-
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
-
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+let pp_program fmt program = TypeExt.print program_pp_chain fmt program

@@ -19,68 +19,39 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Common functions for extensible types *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+type 'a compare = ('a -> 'a -> int) -> 'a -> 'a -> int
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+type 'a compare_chain = ('a -> 'a -> int) ref
 
-module type DOMAIN =
-sig
+type 'a print = (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a -> unit
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+type 'a print_chain = (Format.formatter -> 'a -> unit) ref
 
-end
+let mk_compare_chain (default:'a -> 'a -> int) : 'a compare_chain =
+  ref default
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+let mk_print_chain (default:Format.formatter -> 'a -> unit) : 'a print_chain =
+  ref default
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+let register_compare (compare:'a compare) (chain:' compare_chain) : unit =
+  chain := compare !chain
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
+let register_print (print:'a print) (chain:' print_chain) : unit =
+  chain := print !chain
 
-  let init = D.init
+type 'a info = {
+  compare : 'a compare;
+  print   : 'a print;
+}
 
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
+let register info compare_chain print_chain =
+  register_compare info.compare compare_chain;
+  register_print info.print print_chain
 
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
+let compare (chain:'a compare_chain) x y =
+  !chain x y
 
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+let print (chain:'a print_chain) fmt x =
+  !chain fmt x

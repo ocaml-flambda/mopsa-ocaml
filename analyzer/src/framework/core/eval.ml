@@ -22,7 +22,7 @@
 
 (** Evaluation of expressions *)
 
-open Ast
+open Ast.Stmt
 open Flow
 open Zone
 
@@ -32,13 +32,13 @@ open Zone
 (*==========================================================================*)
 
 
-type ('e, 'a) eval_case = {
+type ('e, 'a) case = {
   eval_result : 'e option;
   eval_flow: 'a flow;
   eval_cleaners: stmt list;
 }
 
-type ('e, 'a) eval = ('e, 'a) eval_case Dnf.t
+type ('e, 'a) eval = ('e, 'a) case Dnf.t
 
 let empty = Dnf.mk_false
 
@@ -90,8 +90,8 @@ let map_flow
     ) eval
 
 
-let unify_annot annot evl =
-  map_flow (Flow.set_all_annot annot) evl
+let unify_ctx ctx evl =
+  map_flow (Flow.set_ctx ctx) evl
 
 let join (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
   Dnf.mk_or eval1 eval2
@@ -109,37 +109,37 @@ let meet_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   | [] -> empty
   | hd :: tl -> List.fold_left meet hd tl
 
-let add_cleaners (cleaners: Ast.stmt list) (eval: ('e, 'a) eval ) : ('e, 'a) eval  =
+let add_cleaners (cleaners: stmt list) (eval: ('e, 'a) eval ) : ('e, 'a) eval  =
   Dnf.map (fun case ->
       {case with eval_cleaners = case.eval_cleaners @ cleaners}
     ) eval
 
 
-(* [choose_annot eval] returns any annotation from evaluation flows
+(* [choose_ctx eval] returns any context from evaluation flows
    of [eval].
    Should be applied only if [eval] has been correctly constructed
-   by propagating annotations in a flow-insensitive manner. *)
-let choose_annot eval =
+   by propagating contexts in a flow-insensitive manner. *)
+let choose_ctx eval =
   match Dnf.choose eval with
-  | Some case -> get_all_annot case.eval_flow
-  | None -> Annotation.empty
+  | Some case -> get_ctx case.eval_flow
+  | None -> Context.empty
 
 let bind_opt f eval =
   let eval, _ = Dnf.fold2
-      (fun annot case ->
-         let flow' = set_all_annot annot case.eval_flow in
+      (fun ctx case ->
+         let flow' = set_ctx ctx case.eval_flow in
          let eval' =
            match case.eval_result with
            | None -> Some (empty_singleton flow')
            | Some expr -> f expr flow' |>
                           Option.lift (add_cleaners case.eval_cleaners)
          in
-         let annot = Option.apply choose_annot annot eval' in
-         (eval', annot)
+         let ctx = Option.apply choose_ctx ctx eval' in
+         (eval', ctx)
       )
       (Option.neutral2 join)
       (Option.neutral2 meet)
-      (choose_annot eval) eval
+      (choose_ctx eval) eval
   in
   eval
 

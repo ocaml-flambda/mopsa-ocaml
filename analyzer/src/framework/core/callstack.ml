@@ -57,36 +57,36 @@ let compare_call c c' =
 let compare cs cs' =
   Compare.list compare_call cs cs'
 
-type ('a, _) Annotation.key +=
-  | A_call_stack: ('a, cs) Annotation.key
-
 let empty : cs = []
 
 let is_empty (cs:cs) =
   List.length cs = 0 
 
-let get flow : cs =
-  Flow.get_annot A_call_stack flow
-
-let set cs flow =
-  Flow.set_annot A_call_stack cs flow
-
-let push f range flow =
-  let cs = get flow in
-  set ({ call_fun = f; call_site = range} :: cs) flow
-
-let pop flow =
-  let cs = get flow in
-  List.hd cs, set (List.tl cs) flow
-
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (cs, b) Eq.eq option =
-              function
-              | A_call_stack -> Some Eq
-              | _ -> None
-            in
-            f);
-      print = (fun fmt cs -> Format.fprintf fmt "Call stack: %a" pp_call_stack cs);
-    }) ();
-  ()
+(* type ('a, _) Context.key +=
+ *   | C_call_stack: ('a, cs) Context.key
+ * 
+ * let get flow : cs =
+ *   Flow.get_ctx C_call_stack flow
+ * 
+ * let set cs flow =
+ *   Flow.set_ctx C_call_stack cs flow
+ * 
+ * let push f range flow =
+ *   let cs = get flow in
+ *   set ({ call_fun = f; call_site = range} :: cs) flow
+ * 
+ * let pop flow =
+ *   let cs = get flow in
+ *   List.hd cs, set (List.tl cs) flow
+ * 
+ * let () =
+ *   Context.(register_stateless_ctx {
+ *       eq = (let f: type a b. (a, b) key -> (cs, b) Eq.eq option =
+ *               function
+ *               | C_call_stack -> Some Eq
+ *               | _ -> None
+ *             in
+ *             f);
+ *       print = (fun fmt cs -> Format.fprintf fmt "Call stack: %a" pp_call_stack cs);
+ *     }) ();
+ *   () *)

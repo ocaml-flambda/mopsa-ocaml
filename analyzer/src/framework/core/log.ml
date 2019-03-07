@@ -19,68 +19,36 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Journal logs *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+open Ast.Stmt
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+type log =
+  | L_empty
+  | L_domain of block * log
+  | L_compound of log list
 
-module type DOMAIN =
-sig
+let rec concat log1 log2 =
+  match log1, log2 with
+  | L_empty, x | x, L_empty -> x
+  | L_domain (b1, l1), L_domain (b2, l2) -> L_domain (b1 @ b2, concat l1 l2)
+  | L_compound ll1, L_compound ll2 -> L_compound (List.map2 concat ll1 ll2)
+  | _ -> assert false
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+let empty = L_empty
 
-end
+let is_empty log =
+  match log with
+  | L_empty -> true
+  | _ -> false
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+let get_domain_block log =
+  match log with
+  | L_domain(block, _) -> block
+  | _ -> assert false
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+let get_domain_log log =
+  match log with
+  | L_domain(_, l) -> l
+  | _ -> assert false
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
-
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)

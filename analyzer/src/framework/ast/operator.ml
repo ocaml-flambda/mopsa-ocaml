@@ -19,68 +19,59 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Extensible type of operators. *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+open Format
 
-module type DOMAIN =
-sig
+type operator = ..
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+(** Basic operators *)
+type operator +=
+  | O_eq         (** == *)
+  | O_ne         (** != *)
+  | O_lt         (** < *)
+  | O_le         (** <= *)
+  | O_gt         (** > *)
+  | O_ge         (** >= *)
 
-end
+  | O_log_not    (** Logical negation *)
+  | O_log_or     (** || *)
+  | O_log_and    (** && *)
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+let operator_compare_chain = TypeExt.mk_compare_chain (fun o1 o2 ->
+    compare o1 o2
+  )
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
+let operator_pp_chain = TypeExt.mk_print_chain (fun fmt op ->
+    match op with
+    | O_lt -> pp_print_string fmt "<"
+    | O_le -> pp_print_string fmt "<="
+    | O_gt -> pp_print_string fmt ">"
+    | O_ge -> pp_print_string fmt ">="
+    | O_eq -> pp_print_string fmt "=="
+    | O_ne -> pp_print_string fmt "!="
+    | O_log_or -> pp_print_string fmt "or"
+    | O_log_and -> pp_print_string fmt "and"
+    | O_log_not -> pp_print_string fmt "not"
+    | _ -> Exceptions.panic "operator_pp_chain: unknown operator"
+  )
 
-  let init = D.init
 
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
+let register_operator (info: operator TypeExt.info) : unit =
+  TypeExt.register info operator_compare_chain operator_pp_chain
 
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
+let compare_operator o1 o2 = TypeExt.compare operator_compare_chain o1 o2
 
-end
+let pp_operator fmt operator = TypeExt.print operator_pp_chain fmt operator
 
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+(* Utility to negate the comparisons in framework *)
+let negate_comparison = function
+  | O_eq -> O_ne
+  | O_ne -> O_eq
+  | O_lt -> O_ge
+  | O_le -> O_gt
+  | O_gt -> O_le
+  | O_ge -> O_lt
+  | op -> Exceptions.panic "don't know how to negate operator %a" pp_operator op

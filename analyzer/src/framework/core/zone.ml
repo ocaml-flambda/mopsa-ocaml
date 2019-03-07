@@ -22,6 +22,7 @@
 (** Zones for decomposing the AST into sub-languages. *)
 
 open Ast
+open Expr
 
 let debug fmt = Debug.debug ~channel:"framework.zone" fmt
 

@@ -19,68 +19,29 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Analyzer - Central orchestrer of the analysis architecture. *)
 
-open Ast.All
-open Core
-open Domain
+open Ast.Program
+open Ast.Expr
+open Ast.Stmt
 open Flow
 open Eval
-open Zone
-open Interface
 open Manager
-open JFlow
+open Zone
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
-
-module type DOMAIN =
+module Make(Domain : Domain.Sig.DOMAIN) :
 sig
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  val init : program -> (Domain.t, Domain.t) man -> Domain.t flow
+
+  val exec : ?zone:zone -> stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
+
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (expr, Domain.t) eval
+
+  val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
+
+  val man : (Domain.t, Domain.t) man
+
+  val interactive_man : (Domain.t, Domain.t) man
 
 end
-
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
-
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
-
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
-
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)

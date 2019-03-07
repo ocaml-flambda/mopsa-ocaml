@@ -19,68 +19,27 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Journaling flows log statements passed to domains during the computation
+    of a post-state.
+*)
 
-open Ast.All
-open Core
-open Domain
+open Ast.Stmt
+open Token
 open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+open Log
+open Lattice.Sig
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+type 'a jflow
 
-module type DOMAIN =
-sig
+val return : 'a flow -> 'a jflow
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a jflow) -> ('e, 'a) Eval.eval -> 'a jflow
 
-end
+val bind : ('a flow -> 'a jflow) -> 'a jflow -> 'a jflow
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+val map_log : (token -> log -> log) -> 'a jflow -> 'a jflow
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a jflow -> 'b jflow
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
 
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+val to_flow : 'a lattice -> 'a jflow -> 'a flow

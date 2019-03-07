@@ -25,49 +25,24 @@
     on the kind of the control flow. Not only reaching environments are
     concerned, but also environments of traces suspended at previous
     control points are kept in the flow map. In addition, flow insensitive 
-    annotations are also maintained in the flow abstraction.
+    contexts are also maintained in the flow abstraction.
 *)
 
-open Annotation
-open Lattice
-
-
-(****************************************************************************)
-(**                             {2 Tokens}                                  *)
-(****************************************************************************)
-
-type token = ..
-(** Flow tokens are used to distinguish between different control flows *)
-
-type token += T_cur
-(** Token of current (active) execution flow *)
-
-val register_token : token Chain.info -> unit
-(** Register a new token with its compare and print functions *)
-
-val compare_token : token -> token -> int
-(** Compare two tokens with a total order *)
-
-val pp_token : Format.formatter -> token -> unit
-(** Pretty printer of tokens *)
-
-
-(****************************************************************************)
-(**                             {2 Flows}                                   *)
-(****************************************************************************)
-
+open Context
+open Lattice.Sig
+open Token
 
 type 'a flow
-(** A flow is a flow map augmented with an annotation *)
+(** A flow is a flow map augmented with an context *)
 
-val bottom : 'a annot -> 'a flow
+val bottom : 'a ctx -> 'a flow
 (** Empty set of flows *)
 
-val top : 'a annot -> 'a flow
+val top : 'a ctx -> 'a flow
 (** Set of all possible flows *)
 
-val singleton: 'a annot -> token -> 'a -> 'a flow
-(** [singleton annot tk e] returns a flow with an annotation [annot]
+val singleton: 'a ctx -> token -> 'a -> 'a flow
+(** [singleton ctx tk e] returns a flow with a context [ctx]
     and a map with a single binding [tk] to environment [e] *)
 
 val is_bottom : 'a lattice -> 'a flow -> bool
@@ -82,13 +57,13 @@ val subset : 'a lattice -> 'a flow -> 'a flow -> bool
 val join : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstraction union operator. *)
 
-val join_list : 'a lattice -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+val join_list : 'a lattice -> ?ctx:'a Context.ctx -> 'a flow list -> 'a flow
 (** Union over a list of flows *)
 
 val meet : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Abstract intersection operator *)
 
-val meet_list : 'a lattice -> ?annot:'a Annotation.annot -> 'a flow list -> 'a flow
+val meet_list : 'a lattice -> ?ctx:'a Context.ctx -> 'a flow list -> 'a flow
 (** Intersection over a list of flows. *)
 
 val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow
@@ -126,34 +101,21 @@ val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b
 
 val merge : (token -> 'a option -> 'a option -> 'a option) -> 'a lattice -> 'a flow -> 'a flow -> 'a flow
 
-val get_all_annot : 'a flow -> 'a annot
-(** [get_all_annot flow] retrieves the annotation pool from [flow] *)
+val get_ctx : 'a flow -> 'a ctx
+(** [get_all_ctx flow] retrieves the context pool from [flow] *)
 
-val set_all_annot : 'a annot -> 'a flow -> 'a flow
-(** [set_all_annot annot flow] set the annotation pool of [flow] to
-   [annot] *)
+val set_ctx : 'a ctx -> 'a flow -> 'a flow
+(** [set_all_ctx ctx flow] set the context pool of [flow] to
+   [ctx] *)
 
-val map_all_annot : ('a annot -> 'a annot) -> 'a flow -> 'a flow
-(** [map_all_annot f flow] set the annotation of [flow] to be the
-   image of the initial annotation of [flow] by [f] *)
+val map_ctx : ('a ctx -> 'a ctx) -> 'a flow -> 'a flow
+(** [map_all_ctx f flow] set the context of [flow] to be the
+   image of the initial context of [flow] by [f] *)
 
-val get_annot : ('a, 'b) Annotation.key -> 'a flow -> 'b
-(** [get_annot key flow] retrieves to value associated to key [key] in
-   the annotations attached to flow [flow], returns [Not_found] if not
-   present *)
+val copy_ctx : 'a flow -> 'a flow -> 'a flow
 
-val set_annot : ('a, 'b) Annotation.key -> 'b -> 'a flow -> 'a flow
-(** [set_annot key value flow] sets the value associated to key [key]
-   to be [value] in the annotations attached to flow [flow],
-   overrights if already present *)
+val get_token_map : 'a flow -> 'a TokenMap.t
 
-val rm_annot : ('a, 'b) Annotation.key -> 'a flow -> 'a flow
-(** [rm annot key flow] removes the key binding with key [key] in the
-   annotations attached to flow [flow], does not fail if [key] was not
-   present *)
+val create : 'a ctx -> 'a TokenMap.t -> 'a flow
 
-val mem_annot : ('a, 'b) Annotation.key -> 'a flow -> bool
-(** [mem_annot key flow] checks whether an annotation is currently
-   bound to [key] in [flow] *)
-
-val copy_annot : 'a flow -> 'a flow -> 'a flow
+val map_flow : (token -> 'a -> 'b) -> 'b ctx -> 'a flow -> 'b flow

@@ -19,15 +19,15 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic domain for creating non-relational value abstractions. *)
+(** Generic leaf domain for creating non-relational value abstractions. *)
 
+open Ast.All
 open Core
-open Value
-open Ast
-open Manager
+open Log
 open Domain
-open Annotation
-open Eq
+open Value
+open Token
+open Manager
 
 module Make(Value: VALUE) =
 struct
@@ -39,22 +39,19 @@ struct
 
   (** Map with variables as keys. *)
   module VarMap =
-    Lattices.Partial_map.Make
+    Lattice.Partial_map.Make
       (Var)
       (Value)
 
   include VarMap
 
-  include Core.Id.GenDomainId(struct
-      type typ = VarMap.t
-      let name = "framework.domains.nonrel"
-    end
-    )
+  let name = Value.name
+
+  let merge pre (post1, log1) (post2, log2) =
+    assert false
 
   let print fmt a =
     Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
-
-  let debug fmt = Debug.debug ~channel:name fmt
 
   (*==========================================================================*)
   (**                    {2 Evaluation of expressions}                        *)
@@ -63,9 +60,9 @@ struct
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
     | A_var of var * Value.t
-    | A_cst of Ast.typ * constant * Value.t
-    | A_unop of Ast.typ * operator * aexpr * Value.t
-    | A_binop of Ast.typ * operator * aexpr * Value.t * aexpr * Value.t
+    | A_cst of typ * constant * Value.t
+    | A_unop of typ * operator * aexpr * Value.t
+    | A_binop of typ * operator * aexpr * Value.t * aexpr * Value.t
     | A_unsupported
 
   (** Forward evaluation returns the abstract value of the expression,
@@ -219,30 +216,17 @@ struct
   (*==========================================================================*)
 
 
-  let init prog man flow =
-    Some (
-      Manager.set_domain_env Flow.T_cur empty man flow
-    )
+  let init prog = empty
 
-  let exec_interface = Domain.{
-    uses = [];
-    provides = [Value.zone];
-  }
+  let zone = Value.zone
 
-  let eval_interface = Domain.{
-    uses = [];
-    provides = [];
-  }
-
-  let rec exec zone stmt man flow =
+  let rec exec stmt (map:t) : t =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
-      Manager.map_domain_env Flow.T_cur (VarMap.remove v) man flow |>
-      Post.return_flow
+      VarMap.remove v map
 
     | S_add { ekind = E_var (v, _) } ->
-      Manager.map_domain_env Flow.T_cur (VarMap.add v Value.top) man flow  |>
-      Post.return_flow
+      VarMap.add v Value.top map
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars ->
@@ -251,36 +235,25 @@ struct
             | _ -> assert false
           ) vars
       in
-      Manager.map_domain_env Flow.T_cur (fun a ->
-          VarMap.fold (fun v _ acc ->
-              if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
-            ) a a
-        ) man flow
-      |>
-      Post.return_flow
+      VarMap.fold (fun v _ acc ->
+          if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
+        ) map map
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      Manager.map_domain_env Flow.T_cur (fun a ->
-          let v = VarMap.find var1 a in
-          VarMap.remove var1 a |> VarMap.add var2 v
-        ) man flow
-      |>
-      Post.return_flow
+      let v = VarMap.find var1 map in
+      VarMap.remove var1 map |> VarMap.add var2 v
 
     | S_forget { ekind = E_var (var, _) } ->
-      Manager.map_domain_env Flow.T_cur (add var Value.top) man flow |>
-      Post.return_flow
+      add var Value.top map
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
-      Manager.map_domain_env Flow.T_cur (fun a ->
-          let _, v = eval e a in
-          let a' = VarMap.add var v a in
-          match mode with
-          | STRONG -> a'
-          | WEAK -> join a a'    
-        ) man flow
-      |>
-      Post.return_flow
+      let _, v = eval e map in
+      let map' = VarMap.add var v map in
+      begin
+        match mode with
+        | STRONG -> map'
+        | WEAK -> join map map'
+      end
 
     | S_expand ({ekind = E_var (v, _)}, vl)
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
@@ -290,30 +263,20 @@ struct
           | _ -> assert false
         ) vl
       in
-      let a = Manager.get_domain_env Flow.T_cur man flow in
-      let value = find v a in
-      let aa = List.fold_left (fun acc v' ->
+      let value = find v map in
+      List.fold_left (fun acc v' ->
           add v' value acc
-        ) a vl
-      in
-      Manager.set_domain_env Flow.T_cur aa man flow |>
-      Post.return_flow
-
+        ) map vl
+      
     (* FIXME: check weak variables in rhs *)
     | S_assume e ->
-      Manager.map_domain_env Flow.T_cur (filter e true) man flow |>
-      Post.return_flow
+      filter e true map
 
-    | _ -> None
-
-
-  let ask : type r. r Query.query -> _ -> _ -> r option =
-    fun query man flow ->
-      let a = Manager.get_domain_env Flow.T_cur man flow in
-      Value.ask query (fun exp -> snd @@ eval exp a)
+    | _ -> top
 
 
-  let eval zone exp man flow = None
-
+  let ask : type r. r Query.query -> t -> r option =
+    fun query map ->
+      Value.ask query (fun exp -> snd @@ eval exp map)
 
 end

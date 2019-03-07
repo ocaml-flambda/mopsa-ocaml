@@ -19,68 +19,30 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Extensible type of types *)
 
-open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+type typ = ..
 
-module type DOMAIN =
-sig
+(** Basic types *)
+type typ +=
+  | T_any (** Generic unknown type. *)
 
-  val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+let typ_compare_chain = TypeExt.mk_compare_chain (fun t1 t2 ->
+    match t1, t2 with
+    | T_any, T_any -> 0
+    | _ -> compare t1 t2
+  )
 
-end
+let typ_pp_chain = TypeExt.mk_print_chain (fun fmt typ ->
+    match typ with
+    | T_any -> Format.pp_print_string fmt "?"
+    | _ -> Exceptions.panic "typ_pp_chain: unknown type"
+  )
 
-(** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
-struct
+let register_typ (info: typ TypeExt.info) : unit =
+  TypeExt.register info typ_compare_chain typ_pp_chain
 
-  type t = unit
-  let bottom = ()
-  let top = ()
-  let is_bottom _ = false
-  let subset _ _ = true
-  let join _ _ = top
-  let meet _ _ = top
-  let widen _ _ _ = top
-  let merge _ _ _ = top
-  let print _ _ = ()
+let compare_typ t1 t2 = TypeExt.compare typ_compare_chain t1 t2
 
-  include Id.GenDomainId(struct
-      type typ = unit
-      let name = D.name
-    end)
-
-  let init = D.init
-
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
-
-  let exec = D.exec
-  let eval = D.eval
-  let ask = D.ask
-
-end
-
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
-  Sig.register_domain (module D)
+let pp_typ fmt typ = TypeExt.print typ_pp_chain fmt typ
