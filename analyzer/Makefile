@@ -35,7 +35,7 @@ framework.core.domain = interface id value sig
 framework.core.engine = logging cache analyzer
 framework.domains = leaf stateless nonrel
 framework.export = text json factory
-framework.combiners = compose
+framework.combiners = compose apply
 framework.combiners.product = merge meet cartesian
 framework.config = paths abstraction options
 
