@@ -34,8 +34,11 @@ let debug fmt = Debug.debug ~channel:"c.frontend" fmt
 (** {2 Command-line options} *)
 (** ======================== *)
 
-let c_opts = ref []
+let opt_clang = ref []
 (** Extra options to pass to clang when parsing  *)
+
+let opt_include_dirs = ref []
+(** List of include directories *)
 
 let opt_make_target = ref ""
 (** Name of the target binary to analyze *)
@@ -45,21 +48,21 @@ let () =
     key = "-I";
     category = "C";
     doc = " add the directory to the search path for include files in C analysis";
-    spec = Arg.String (fun l -> c_opts := !c_opts @ [ "-I"; l ]);
+    spec = ArgExt.Set_string_list opt_include_dirs;
     default = "";
   };
   register_language_option "c" {
     key = "-ccopt";
     category = "C";
     doc = " pass the option to the Clang frontend";
-    spec = Arg.String (fun l -> c_opts := !c_opts @ [l]);
+    spec = ArgExt.Set_string_list opt_clang;
     default = "";
   };
   register_language_option "c" {
     key = "-make-target";
     category = "C";
     doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
-    spec = Arg.Set_string opt_make_target;
+    spec = ArgExt.Set_string opt_make_target;
     default = "";
   };
   ()
@@ -175,7 +178,8 @@ and parse_db (dbfile: string) ctx : unit =
 and parse_file (opts: string list) (file: string) ctx =
   Logging.parse file;
   let opts' = ("-I" ^ (Setup.resolve_stub "c" "mopsa")) ::
-              !c_opts @
+              (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
+              !opt_clang @
               opts
   in
   C_parser.parse_file file opts' ctx

@@ -35,7 +35,7 @@ let () =
   register_standalone_option name {
     key = "-float-rounding-mode";
     category = "Numeric";
-    spec = Arg.Symbol (
+    spec = ArgExt.Symbol (
         ["near"; "zero"; "up"; "down"; "rnd"],
         (function
           | "near" -> opt_float_rounding := Apron.Texpr1.Near

@@ -60,7 +60,7 @@ struct
       key = "-c-entry";
       category = "C";
       doc = " name of the entry function to be analyzed";
-      spec = Arg.Set_string opt_entry_function;
+      spec = ArgExt.Set_string opt_entry_function;
       default = "main";
     }
 

@@ -34,7 +34,7 @@ let () =
     key = "-interactive";
     category = "Debugging";
     doc = " start the analysis in interactive mode";
-    spec = Arg.Set opt_interactive;
+    spec = ArgExt.Set opt_interactive;
     default = "false";
   }
 
@@ -45,7 +45,7 @@ let parse_options f () =
   let files = ref [] in
   let n = Array.length Sys.argv in
   let return_value = ref 0 in
-  Arg.parse (Options.to_arg ()) (fun filename ->
+  ArgExt.parse (Options.to_arg ()) (fun filename ->
       files := filename :: !files;
       if !Arg.current = n - 1 then
         return_value := !return_value * 10 + (f !files)

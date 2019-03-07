@@ -45,7 +45,7 @@ module Domain =
         key = "-stub";
         category = "Configuration";
         doc = " path to stub directory";
-        spec = Arg.String(fun f -> opt_stubs := f :: !opt_stubs);
+        spec = ArgExt.Set_string_list opt_stubs;
         default = "";
       }
 
