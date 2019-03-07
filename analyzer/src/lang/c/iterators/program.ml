@@ -58,6 +58,7 @@ struct
   let () =
     register_domain_option name {
       key = "-c-entry";
+      category = "C";
       doc = " name of the entry function to be analyzed";
       spec = Arg.Set_string opt_entry_function;
       default = "main";

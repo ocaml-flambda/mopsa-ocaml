@@ -32,6 +32,7 @@ let opt_interactive = ref false
 let () =
   Options.register_builtin_option {
     key = "-interactive";
+    category = "Debugging";
     doc = " start the analysis in interactive mode";
     spec = Arg.Set opt_interactive;
     default = "false";

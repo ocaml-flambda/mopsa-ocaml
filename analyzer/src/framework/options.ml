@@ -39,6 +39,7 @@ type opt =
 (** Descriptor of a command-line option *)
 and desc = {
   key: string;
+  category: string;
   doc: string;
   spec: Arg.spec;
   default: string;
@@ -133,7 +134,7 @@ let opt_to_arg opt =
 let opt_to_output opt =
   match opt with
   | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
-    d.key, d.spec, d.doc, d.default
+    d.key, d.spec, d.doc, d.default, d.category
 
 let to_arg () =
   List.map opt_to_arg !options
@@ -146,6 +147,7 @@ let to_arg () =
 let () =
   register_builtin_option {
     key = "-share-dir";
+    category = "Configuration";
     doc = " path to the share directory";
     spec = Arg.Set_string Setup.opt_share_dir;
     default = "";
@@ -156,6 +158,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-config";
+    category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
     spec = Arg.Set_string Config.opt_config;
     default = "";
@@ -165,12 +168,14 @@ let () =
 let () =
   register_builtin_option {
     key = "-debug";
+    category = "Debugging";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
     spec = Arg.String (fun s -> Debug.parse s);
     default = "";
   };
   register_builtin_option {
     key = "-no-color";
+    category = "Debugging";
     doc = " deactivate colors in debug messages.";
     spec = Arg.Clear Debug.print_color;
     default = "";
@@ -180,6 +185,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-list";
+    category = "Configuration";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = Arg.Unit (fun () ->
         let domains = Config.domains () in
@@ -192,6 +198,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-format";
+    category = "Output";
     doc = " selects the output format.";
     spec = Arg.Symbol (
         ["text"; "json"],
@@ -209,6 +216,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-output";
+    category = "Output";
     doc = " redirect output to a file";
     spec = Arg.String (fun s -> Output.Factory.opt_file := Some s);
     default = "";
@@ -218,6 +226,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-log";
+    category = "Debugging";
     doc = " activate logs";
     spec = Arg.Set Logging.opt_log;
     default = "false";
@@ -227,6 +236,7 @@ let () =
 let () =
   register_builtin_option {
     key = "-short-log";
+    category = "Debugging";
     doc = " display logs without abstract states";
     spec = Arg.Set Logging.opt_short_log;
     default = "false";
@@ -254,18 +264,21 @@ let help () =
 let () =
   register_builtin_option {
     key  = "-help";
+    category = "Help";
     doc  = " display the list of options";
     spec = Arg.Unit help;
     default = "";
   };
   register_builtin_option {
     key  = "--help";
+    category = "Help";
     doc  = " display the list of options";
     spec = Arg.Unit help;
     default = "";
   };
   register_builtin_option {
     key  = "-h";
+    category = "Help";
     doc  = " display the list of options";
     spec = Arg.Unit help;
     default = "";

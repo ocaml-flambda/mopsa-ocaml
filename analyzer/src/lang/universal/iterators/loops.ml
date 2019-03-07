@@ -64,12 +64,14 @@ let opt_loop_unrolling : int ref = ref 1
 let () =
   register_domain_option name {
     key = "-widening-delay";
+    category = "Loops";
     doc = " number of iterations before applying a widening";
     spec = Arg.Set_int opt_loop_widening_delay;
     default = "0";
   };
   register_domain_option name {
     key = "-loop-unrolling";
+    category = "Loops";
     doc = " number of unrolling iterations before joining the environments";
     spec = Arg.Set_int opt_loop_unrolling;
     default = "1";

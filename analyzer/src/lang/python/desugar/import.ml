@@ -43,6 +43,7 @@ module Domain =
     let () =
       register_domain_option name {
         key = "-stub";
+        category = "Configuration";
         doc = " path to stub directory";
         spec = Arg.String(fun f -> opt_stubs := f :: !opt_stubs);
         default = "";

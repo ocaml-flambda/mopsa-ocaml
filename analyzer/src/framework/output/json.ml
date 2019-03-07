@@ -99,13 +99,14 @@ let panic ?(btrace="<none>") exn files out =
   in
   print json out
 
-let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) out =
+let help (args:(Arg.key * Arg.spec * Arg.doc * string * string) list) out =
   let json : json = `List (
       args |>
-      List.map (fun (key,spec,doc,default) ->
+      List.map (fun (key,spec,doc,default, category) ->
           `Assoc [
             "key", `String key;
             "doc", `String doc;
+            "category", `String category;
             "default", `String default;
             "type", `String (
               match spec with

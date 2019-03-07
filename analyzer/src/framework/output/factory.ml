@@ -55,7 +55,7 @@ let panic ?btrace exn files =
   | F_text -> Text.panic ?btrace exn files !opt_file
   | F_json -> Json.panic ?btrace exn files !opt_file
 
-let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) =
+let help (args:(Arg.key * Arg.spec * Arg.doc * string * string) list) =
   match !opt_format with
   | F_text -> Text.help args !opt_file
   | F_json -> Json.help args !opt_file

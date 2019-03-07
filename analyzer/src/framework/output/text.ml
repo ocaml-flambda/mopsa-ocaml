@@ -88,27 +88,46 @@ let panic ?btrace exn files out =
   in
   ()
 
+let group_args_by_category args =
+  let sorted = List.sort (fun (_, _, _, _, cat1) (_, _, _, _, cat2) ->
+      compare cat1 cat2
+    ) args
+  in
+  let grouped, _ = List.fold_right (fun (key,spec,doc,default,category) (acc,cat) ->
+      if compare cat category != 0
+      then
+        (category,[(key,spec,doc,default)]) :: acc, category
+      else
+        let (_, l) = List.hd acc in
+        (cat, (key,spec,doc,default) :: l) :: (List.tl acc), cat
+    ) sorted ([],"")
+  in
+  grouped
 
-let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) out =
+let help (args:(Arg.key * Arg.spec * Arg.doc * string * string) list) out =
   let print fmt = get_printer out fmt in
   let print_default fmt d =
     if d = "" then ()
     else fprintf fmt " (default: %s)" d
   in
+  let groups = group_args_by_category args in
   print "Options:@.";
-  List.iter (fun (key,spec,doc,default) ->
-      match spec with
-      | Arg.Symbol(l,_) ->
-        print "  %s={%a} %s%a@."
-          key
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
-             pp_print_string
-          ) l
-          doc
-          print_default default
-      | _ -> print "  %s %s%a@." key doc print_default default
-    ) args
+  List.iter (fun (cat, args) ->
+      print "  %s@." (String.uppercase_ascii cat);
+      List.iter (fun (key,spec,doc,default) ->
+          match spec with
+          | Arg.Symbol(l,_) ->
+            print "    %s={%a} %s%a@."
+              key
+              (pp_print_list
+                 ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                 pp_print_string
+              ) l
+              doc
+              print_default default
+          | _ -> print "    %s %s%a@." key doc print_default default
+        ) args
+    ) groups
 
 let list_domains (domains:string list) out =
   let print fmt = get_printer out fmt in
