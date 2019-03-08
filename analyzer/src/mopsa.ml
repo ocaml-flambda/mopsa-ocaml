@@ -19,75 +19,44 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Flow-insensitive context *)
+(** Essential modules. *)
 
+include Framework.Ast
 
-(****************************************************************************)
-(**                          {2 Unit contexts}                              *)
-(****************************************************************************)
+module Logging = Framework.Logging
 
-type _ ukey
+module Setup = Framework.Setup
 
-module GenUnitKey
-    (V:sig
-       type t
-       val print : Format.formatter -> t -> unit
-     end)
-  :
-  sig
-    val key : V.t ukey
-  end
+module Visitor = Framework.Visitor
 
+include Framework.Zone
 
-type uctx
+include Framework.Manager
 
-val ufind :'v ukey -> uctx -> 'v
+module Flow = Framework.Flow
 
-val uempty : uctx
+module Annotation = Framework.Annotation
+type 'a annot = 'a Annotation.annot
 
-val uadd :'v ukey -> 'v -> uctx -> uctx
+module Channel = Framework.Channel
+type 'a with_channel = 'a Channel.with_channel
 
-val umem : 'v ukey -> uctx -> bool
+module Post = Framework.Post
+type 'a post = 'a Post.post
 
-val uremove : 'v ukey -> uctx -> uctx
+module Eval = Framework.Eval
 
-val uprint : Format.formatter -> uctx -> unit
+module Query = Framework.Query
+type 'a query = 'a Query.query
 
+include Location
 
-(****************************************************************************)
-(**                            {2 Contexts}                                 *)
-(****************************************************************************)
+include Framework.Domain
 
-type ('a, _) pkey
+include Framework.Options
 
+include Exceptions
 
-type 'a ctx
+module Callstack = Framework.Callstack
 
-module GenPolyKey
-    (V:sig
-       type 'a t
-       val ctx : 'a ctx
-       val print : Format.formatter -> 'a t -> unit
-     end)
-  :
-  sig
-    val key : ('a,'a V.t) pkey
-    val ctx : 'a ctx
-end
-
-
-val empty : 'a ctx
-
-val find_unit : 'v ukey -> 'a ctx -> 'v
-
-val find_poly : ('a,'v) pkey ->'a ctx -> 'v
-
-val add_unit : 'v ukey -> 'v -> 'a ctx -> 'a ctx
-
-val add_poly : ('a,'v) pkey -> 'v -> 'a ctx -> 'a ctx
-
-val remove_unit : 'v ukey -> 'a ctx -> 'a ctx
-
-val remove_poly : ('a,'v) pkey -> 'a ctx -> 'a ctx
-
-val print : Format.formatter -> 'a ctx -> unit
+include Framework.Alarm
