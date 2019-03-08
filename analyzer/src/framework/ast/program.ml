@@ -39,6 +39,10 @@ let program_compare_chain = TypeExt.mk_compare_chain (fun p1 p2 ->
 let register_program (info:program TypeExt.info) =
   TypeExt.register info program_compare_chain program_pp_chain
 
+let register_program_compare cmp = TypeExt.register_compare cmp program_compare_chain
+
+let register_program_pp pp = TypeExt.register_print pp program_pp_chain
+
 let compare_program p1 p2 = TypeExt.compare program_compare_chain p1 p2
 
 let pp_program fmt program = TypeExt.print program_pp_chain fmt program

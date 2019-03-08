@@ -43,6 +43,10 @@ let typ_pp_chain = TypeExt.mk_print_chain (fun fmt typ ->
 let register_typ (info: typ TypeExt.info) : unit =
   TypeExt.register info typ_compare_chain typ_pp_chain
 
+let register_typ_compare cmp = TypeExt.register_compare cmp typ_compare_chain
+
+let register_typ_pp pp = TypeExt.register_print pp typ_pp_chain
+
 let compare_typ t1 t2 = TypeExt.compare typ_compare_chain t1 t2
 
 let pp_typ fmt typ = TypeExt.print typ_pp_chain fmt typ

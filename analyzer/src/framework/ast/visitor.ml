@@ -79,6 +79,12 @@ let register_expr_with_visitor (info: expr vinfo) : unit =
   expr_visit_chain := info.visit !expr_visit_chain;
   ()
 
+
+let register_expr_visitor v : unit =
+  expr_visit_chain := v !expr_visit_chain;
+  ()
+
+
 let stmt_visit_chain : (stmt -> stmt structure) ref =
   ref (fun stmt ->
       match skind stmt with
@@ -119,8 +125,9 @@ let register_stmt_with_visitor (info: stmt vinfo) : unit =
   stmt_visit_chain := info.visit !stmt_visit_chain;
   ()
 
-let register_stmt_visitor visitor =
-  stmt_visit_chain := visitor !stmt_visit_chain
+let register_stmt_visitor v : unit =
+  stmt_visit_chain := v !stmt_visit_chain;
+  ()
 
 let split_expr (expr : expr) : expr structure = !expr_visit_chain expr
 

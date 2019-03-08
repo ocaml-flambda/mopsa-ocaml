@@ -23,12 +23,12 @@
 TARGET_NATIVES = mopsa
 
 # Packs
-mopsa = framework mopsa langs main
+mopsa = framework mopsa lang main
 
 # Framework
 framework = ast core domains combiners export config
 framework.ast = program typ operator constant var expr stmt visitor all
-framework.core = query context zone token log lattice flow eval jFlow manager \
+framework.core = query context zone token log lattice flow eval post manager \
 	         domain callstack alarm engine all
 framework.core.lattice = sig partial_map powerset total_map
 framework.core.domain = interface id value sig
@@ -40,17 +40,33 @@ framework.combiners.product = merge meet cartesian
 framework.config = paths abstraction options
 
 # Languages
-langs = universal c python
+lang = universal c python stubs
 
 # Universal
-langs.universal = ast frontend
+lang.universal = ast frontend
 
+# Stubs
+lang.stubs = ast zone alarms iterator
 
 # C
-langs.c = ast pp visitor zone frontend
+lang.c = ast pp visitor zone frontend alarms desugar memory libs iterators resources
+lang.c.iterators = program switch goto interproc
+lang.c.desugar = low_level record_copy loops stub_init cond_expr
+lang.c.memory = common cells pointers machine_numbers
+lang.c.memory.common = base points_to init_visitor
+lang.c.memory.cells = cell expand cell2scalar
+lang.c.memory.pointers = bases nonrel
+lang.c.libs = libmopsa libc
+lang.c.resources = common file
+lang.c.resources.file = slot table domain
 
 # Python
-langs.python = ast addr utils visitor operators pp frontend
+lang.python = ast addr utils visitor operators pp frontend zone		\
+alarms  libs desugar objects data_model types flows program
+lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+attribute subscript
+lang.python.types = typing addr_env t_string t_int t_float t_list t_set
+
 
 # Packages
 PKGS = str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith

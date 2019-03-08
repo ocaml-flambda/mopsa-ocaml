@@ -28,7 +28,7 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain : Framework.Domains.Stateless.DOMAIN =
 struct
 
   (** Domain identification *)

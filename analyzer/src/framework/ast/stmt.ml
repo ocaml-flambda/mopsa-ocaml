@@ -155,6 +155,9 @@ let pp_stmt fmt stmt = TypeExt.print stmt_pp_chain fmt stmt
 let register_stmt info =
   TypeExt.register info stmt_compare_chain stmt_pp_chain
 
+let register_stmt_compare cmp = TypeExt.register_compare cmp stmt_compare_chain
+
+let register_stmt_pp pp = TypeExt.register_print pp stmt_pp_chain
 
 
 (*==========================================================================*)

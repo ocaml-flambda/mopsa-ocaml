@@ -27,7 +27,7 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain : Framework.Domains.Stateless.DOMAIN =
 struct
 
   (** Domain identification *)
@@ -40,13 +40,13 @@ struct
   (** ================= *)
 
   let exec_interface = {
-    export = [];
-    import = [Z_c]
+    provides = [];
+    uses = [Z_c]
   }
 
   let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [Z_c, Z_c_low_level]
+    provides = [Z_c, Z_c_low_level];
+    uses = [Z_c, Z_c_low_level]
   }
 
   (** Initialization *)
@@ -153,12 +153,12 @@ struct
     (* 𝔼⟦ &*x ⟧ = x *)
     | E_c_address_of { ekind = E_c_deref x } ->
       man.eval ~zone:(Z_c, Z_c_low_level) x flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ *&x ⟧ = x *)
     | E_c_deref { ekind = E_c_address_of x } ->
       man.eval ~zone:(Z_c, Z_c_low_level) x flow |>
-      Eval.return
+      Option.return
 
     | E_c_assign(lval, rval) ->
       debug "E_c_assign %a" pp_zone2 zone;
@@ -175,7 +175,7 @@ struct
           let stmt' = mk_block q' (erange exp) in
           let flow' = man.exec ~zone:Z_c stmt' flow in
           man.eval ~zone:(Z_c, Z_c_low_level) e flow' |>
-          Eval.return
+          Option.return
 
         | _ ->
           panic "E_c_statement %a" pp_expr exp
@@ -183,7 +183,7 @@ struct
 
     | E_c_statement {skind = S_expression e} ->
       man.eval ~zone:(Z_c, Z_c_low_level) e flow |>
-      Eval.return
+      Option.return
 
     | _ -> None
 

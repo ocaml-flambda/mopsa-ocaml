@@ -390,7 +390,7 @@ let pp_stub_init fmt stub = pp_sections fmt stub.stub_init_body
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= *)
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_stub_call _, E_stub_call _ -> panic "stub comparison not supported"
@@ -490,7 +490,7 @@ let () =
 (*  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=- *)
 
 let () =
-  register_stmt {
+  register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
         | S_stub_init (v1, stub1), S_stub_init (v2, stub2) ->

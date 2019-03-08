@@ -98,6 +98,10 @@ let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
 let register_expr info =
   TypeExt.register info expr_compare_chain expr_pp_chain
 
+let register_expr_compare cmp = TypeExt.register_compare cmp expr_compare_chain
+
+let register_expr_pp pp = TypeExt.register_print pp expr_pp_chain
+
 let compare_expr e1 e2 =
   if e1 == e2 then 0 else TypeExt.compare expr_compare_chain e1 e2
 

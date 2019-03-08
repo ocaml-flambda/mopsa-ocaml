@@ -301,7 +301,7 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
       let v = from_var ctx v in
       Ast.S_c_declaration v
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
-    | C_AST.S_block block -> from_block ctx srange block |> Framework.Core.Ast.skind
+    | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
     | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)

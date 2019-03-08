@@ -85,6 +85,17 @@ let concat_logs (case: 'a case) (post:'b post) : 'b post =
        }
     )
 
+let to_flow (lattice: 'a lattice) (post: 'a post) : 'a flow =
+  List.fold_left (fun acc case ->
+      let flow =
+        Flow.create
+          case.ctx
+          (TokenMap.map (fun tk (e, log) -> e) case.tmap)
+      in
+      Flow.join lattice flow acc
+    )
+    (Flow.bottom Context.empty) post
+
 
 let bind (f:'a flow -> 'a post) (post:'a post) : 'a post =
   let ret, ctx =
@@ -117,6 +128,15 @@ let bind_eval
   in
   unify_ctx ctx ret
 
+let bind_eval_flow
+  (lattice:'a lattice)
+  (f:'e -> 'a flow -> 'a post)
+  (evl:('e, 'a) Eval.eval)
+  : 'a flow
+  =
+  bind_eval lattice f evl |>
+  to_flow lattice
+
 
 let map_log (f:token -> log -> log) (post:'a post) : 'a post =
   post |> List.map (fun case ->
@@ -133,14 +153,3 @@ let map (f:token -> 'a -> log -> 'b * log) (ctx: 'b ctx) (post:'a post) : 'b pos
         ctx;
       }
     )
-
-let to_flow (lattice: 'a lattice) (post: 'a post) : 'a flow =
-  List.fold_left (fun acc case ->
-      let flow =
-        Flow.create
-          case.ctx
-          (TokenMap.map (fun tk (e, log) -> e) case.tmap)
-      in
-      Flow.join lattice flow acc
-    )
-    (Flow.bottom Context.empty) post

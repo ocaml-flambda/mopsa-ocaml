@@ -33,11 +33,12 @@ val return : 'a flow -> 'a post
 
 val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a post
 
+val bind_eval_flow : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a flow
+
 val bind : ('a flow -> 'a post) -> 'a post -> 'a post
 
 val map_log : (token -> log -> log) -> 'a post -> 'a post
 
 val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
-
 
 val to_flow : 'a lattice -> 'a post -> 'a flow

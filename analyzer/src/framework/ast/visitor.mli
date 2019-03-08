@@ -45,7 +45,11 @@ type 'a vinfo = {
 
 val register_expr_with_visitor : expr vinfo -> unit
 
+val register_expr_visitor : ((expr -> expr structure) -> expr -> expr structure) -> unit
+
 val register_stmt_with_visitor : stmt vinfo -> unit
+
+val register_stmt_visitor : ((stmt -> stmt structure) -> stmt -> stmt structure) -> unit
 
 val split_expr : expr ->expr structure
 

@@ -35,8 +35,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_stubs]; import = []}
-  let eval_interface = {export = [Z_stubs, Z_any]; import = []}
+  let exec_interface = {provides = [Z_stubs]; uses = []}
+  let eval_interface = {provides = [Z_stubs, Z_any]; uses = []}
 
 
   (** Initialization of environments *)
@@ -56,7 +56,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "eval formula %a@\n%a" pp_formula f (Flow.print man) flow;
+    debug "eval formula %a@\n%a" pp_formula f (Flow.print man.lattice) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -69,7 +69,7 @@ struct
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
-        | true, Some f1, Some f2 -> Some (Flow.join man f1 f2)
+        | true, Some f1, Some f2 -> Some (Flow.join man.lattice f1 f2)
         | _ -> assert false
       in
 
@@ -79,12 +79,12 @@ struct
       let ftrue1, ffalse1 = eval_formula f1 ~negate man flow in
       let ftrue2, ffalse2 = eval_formula f2 ~negate man flow in
 
-      let ftrue = Flow.join man ftrue1 ftrue2 in
+      let ftrue = Flow.join man.lattice ftrue1 ftrue2 in
 
       let ffalse =
         match negate, ffalse1, ffalse2 with
         | false, None, None      -> None
-        | true, Some f1, Some f2 -> Some (Flow.meet man f1 f2)
+        | true, Some f1, Some f2 -> Some (Flow.meet man.lattice f1 f2)
         | _ -> assert false
       in
 
@@ -93,14 +93,14 @@ struct
 
     | F_binop (IMPLIES, f1, f2) ->
       let ftrue1, ffalse1 = eval_formula f1 ~negate:true man flow in
-      let ffalse1 = OptionExt.none_to_exn ffalse1 in
+      let ffalse1 = Option.none_to_exn ffalse1 in
 
       let ftrue2, ffalse2 = eval_formula f2 ~negate man ftrue1 in
 
-      let ftrue = Flow.join man ffalse1 ftrue2 in
+      let ftrue = Flow.join man.lattice ffalse1 ftrue2 in
 
       ftrue, ffalse2
-      
+
 
     | F_not ff ->
       let ftrue, ffalse = eval_formula ff ~negate:true man flow in
@@ -214,15 +214,15 @@ struct
     let rec lfp (flow: 'a flow) (neg: 'a flow option) : 'a flow * 'a flow option =
       debug "fixpoint iteration";
       let flow1, neg1 = eval_formula f ~negate man flow in
-      let flow1' = Flow.meet man flow flow1 in
-      let neg1' = (OptionExt.option_neutral2 (Flow.join man) neg neg1) in
+      let flow1' = Flow.meet man.lattice flow flow1 in
+      let neg1' = (Option.neutral2 (Flow.join man.lattice) neg neg1) in
       debug "fixpoint iteration done:@\n input: @[%a@]@\n neg: @[%a@]@\n output: @[%a@]@\n neg': @[%a@]"
-        (Flow.print man) flow
-        (OptionExt.print (Flow.print man)) neg
-        (Flow.print man) flow1'
-        (OptionExt.print (Flow.print man)) neg1'
+        (Flow.print man.lattice) flow
+        (Option.print @@ Flow.print man.lattice) neg
+        (Flow.print man.lattice) flow1'
+        (Option.print @@ Flow.print man.lattice) neg1'
       ;
-      if Flow.subset man flow flow1' then
+      if Flow.subset man.lattice flow flow1' then
         flow1', neg1'
       else
         lfp flow1' neg1'
@@ -251,17 +251,17 @@ struct
   let exec_assumes assumes man flow =
     let ftrue, _ = eval_formula_fixpoint assumes.content ~negate:false man flow in
     ftrue
-  
+
   (** Evaluate the formula of the `requires` section and add the eventual alarms *)
   let exec_requires req man flow =
     let ftrue, ffalse = eval_formula_fixpoint req.content ~negate:true man flow in
     match ffalse with
-    | Some ffalse when Flow.is_bottom man ffalse ->
+    | Some ffalse when Flow.is_bottom man.lattice ffalse ->
       ftrue
 
     | Some ffalse ->
       raise_alarm A_stub_invalid_require req.range ~bottom:true man ffalse |>
-      Flow.join man ftrue
+      Flow.join man.lattice ftrue
 
     | _ -> assert false
 
@@ -269,8 +269,9 @@ struct
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
     man.eval (mk_stub_alloc_resource res range) flow |>
-    Post.bind_flow man @@ fun addr flow ->
-    man.exec (mk_assign (mk_var v range) addr range) flow
+    Post.bind_eval_flow man.lattice @@ fun addr flow ->
+    man.exec (mk_assign (mk_var v range) addr range) flow |>
+    Post.return
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
@@ -341,7 +342,7 @@ struct
     | S_ensures ensures -> exec_ensures ensures return man flow
     | S_free free -> exec_free free man flow
     | S_warn warn ->
-      if not (Flow.is_cur_bottom man flow)
+      if not (Flow.get T_cur man.lattice flow |> man.lattice.is_bottom)
       then Exceptions.warn_at warn.range "%s" warn.content;
       flow
 
@@ -358,7 +359,7 @@ struct
     in
     flow'
 
-  
+
   (** Execute the body of a stub *)
   let exec_body body return man flow =
     (* Execute leaf sections *)
@@ -374,7 +375,7 @@ struct
         match section with
         | S_case case -> Some (exec_case case return man flow)
         | _ -> None
-      ) flow body
+      ) body flow
     in
 
     (* Join flows *)
@@ -383,8 +384,8 @@ struct
     | _ ->
       (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-      Flow.join_list man flows
-      
+      Flow.join_list man.lattice flows
+
 
   (** Entry point of expression evaluations *)
   let eval zone exp man flow =
@@ -427,11 +428,11 @@ struct
       begin match return with
         | None ->
           Eval.empty_singleton flow |>
-          Eval.return
+          Option.return
 
         | Some v ->
           Eval.singleton (mk_var v exp.erange) flow ~cleaners:[mk_remove_var v exp.erange] |>
-          Eval.return
+          Option.return
       end
 
     | _ -> None
@@ -449,11 +450,12 @@ struct
       (* Clean locals and primes *)
       let flow = clean_post stub.stub_init_locals [] stub.stub_init_range man flow in
 
-      Post.return flow
+      Post.return flow |>
+      Option.return
 
     | _ -> None
 
-  
+
   (** Handler of queries *)
   (** ================== *)
 

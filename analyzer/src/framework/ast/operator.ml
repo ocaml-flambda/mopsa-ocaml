@@ -62,6 +62,10 @@ let operator_pp_chain = TypeExt.mk_print_chain (fun fmt op ->
 let register_operator (info: operator TypeExt.info) : unit =
   TypeExt.register info operator_compare_chain operator_pp_chain
 
+let register_operator_compare cmp = TypeExt.register_compare cmp operator_compare_chain
+
+let register_operator_pp pp = TypeExt.register_print pp operator_pp_chain
+
 let compare_operator o1 o2 = TypeExt.compare operator_compare_chain o1 o2
 
 let pp_operator fmt operator = TypeExt.print operator_pp_chain fmt operator

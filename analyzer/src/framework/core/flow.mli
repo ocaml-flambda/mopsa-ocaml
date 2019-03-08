@@ -119,3 +119,7 @@ val get_token_map : 'a flow -> 'a TokenMap.t
 val create : 'a ctx -> 'a TokenMap.t -> 'a flow
 
 val map_flow : (token -> 'a -> 'b) -> 'b ctx -> 'a flow -> 'b flow
+
+val map_list : ('b -> 'a flow -> 'a flow) -> 'b list -> 'a flow -> 'a flow list
+
+val map_list_opt : ('b -> 'a flow -> 'a flow option) -> 'b list -> 'a flow -> 'a flow list

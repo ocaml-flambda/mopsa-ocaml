@@ -20,9 +20,8 @@
 (****************************************************************************)
 
 include Alarm
+module Callstack = Callstack
 module Context = Context
-open Callstack
-open Context
 module Eval = Eval
 type ('e, 'a) eval = ('e, 'a) Eval.eval
 module Flow = Flow
@@ -37,7 +36,6 @@ include Manager
 module Query = Query
 type 'a query = 'a Query.query
 include Token
-module Zone = Zone
 include Zone
 module Domain = Domain
 include Domain.Id

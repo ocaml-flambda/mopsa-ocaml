@@ -44,6 +44,11 @@ let constant_pp_chain = TypeExt.mk_print_chain (fun fmt c ->
 let register_constant (info: constant TypeExt.info) : unit =
   TypeExt.register info constant_compare_chain constant_pp_chain
 
+let register_constant_compare cmp = TypeExt.register_compare cmp constant_compare_chain
+
+let register_constant_pp pp = TypeExt.register_print pp constant_pp_chain
+
+
 let compare_constant o1 o2 = TypeExt.compare constant_compare_chain o1 o2
 
 let pp_constant fmt constant = TypeExt.print constant_pp_chain fmt constant

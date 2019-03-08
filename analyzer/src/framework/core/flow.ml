@@ -144,3 +144,22 @@ let map_flow (f:token -> 'a -> 'b) (ctx:'b ctx) (flow:'a flow) : 'b flow =
     tmap = TokenMap.map f flow.tmap;
     ctx;
   }
+
+let map_list (f:'b -> 'a flow -> 'a flow) (l: 'b list) (flow: 'a flow) : 'a flow list =
+  let flows, ctx = List.fold_left (fun (acc, ctx) x ->
+      let flow' = { flow with ctx } in
+      let flow'' = f x flow' in
+      flow'' :: acc, flow''.ctx
+    ) ([], flow.ctx) l
+  in
+  List.map (set_ctx ctx) flows
+
+let map_list_opt (f:'b -> 'a flow -> 'a flow option) (l:'b list) (flow:'a flow) : 'a flow list =
+  let flows, _ = List.fold_left (fun (acc, ctx) x ->
+      let flow' = { flow with ctx } in
+      match f x flow' with
+      | None -> acc, ctx
+      | Some flow'' -> flow'' :: acc, flow''.ctx
+    ) ([], flow.ctx) l
+  in
+  flows

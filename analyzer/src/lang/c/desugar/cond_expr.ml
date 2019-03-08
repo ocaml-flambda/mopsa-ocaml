@@ -19,25 +19,70 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Zones for the Stubs language. *)
+(** Desugar conditional expressions `cond?e1:e2`. *)
 
 open Mopsa
 open Ast
+open Zone
+
+(** {2 Domain definition} *)
+(** ===================== *)
+
+module Domain : Framework.Domains.Stateless.DOMAIN =
+struct
+
+  (** Domain identification *)
+  (** ===================== *)
+
+  let name = "c.desugar.cond_expr"
+  let debug fmt = Debug.debug ~channel:name fmt
 
 
-type zone +=
-  | Z_stubs
+  (** Zoning definition *)
+  (** ================= *)
+
+  let exec_interface = {provides = []; uses = []}
+  let eval_interface = {provides = [Z_c, Z_c_low_level]; uses = [Z_c, Z_c_low_level]}
+
+
+  (** Initialization *)
+  (** ============== *)
+
+  let init _ _ _ =
+    None
+
+
+  (** Post-condition computation *)
+  (** ========================== *)
+
+  let exec zone stmt man flow = None
+
+
+  (** Evaluation of expressions *)
+  (** ========================= *)
+
+  let eval zone exp man flow  =
+    match ekind exp with
+    | E_c_conditional(cond, e1, e2) ->
+      Eval.assume cond
+        ~fthen:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
+          )
+        ~felse:(fun flow ->
+            man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
+          )
+        man flow |>
+      Eval.return
+
+    | _ -> None
+
+
+  (** Query handler *)
+  (** ============= *)
+
+  let ask _ _ _  = None
+
+end
 
 let () =
-  register_zone {
-    zone = Z_stubs;
-    subset = None;
-    name = "Stubs";
-    eval = (fun exp ->
-        match ekind exp with
-        | E_stub_call _           -> Process
-        | E_stub_return           -> Keep
-        | E_stub_builtin_call _   -> Process
-        | _                       -> Process
-      );
-    }
+  Framework.Domains.Stateless.register_domain (module Domain)

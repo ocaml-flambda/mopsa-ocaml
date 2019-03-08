@@ -74,15 +74,15 @@ struct
   }
 
   let eval_interface = {
-    provides = [Zone.any_zone, D.zone];
-    uses = [Zone.any_zone, D.zone];
+    provides = [any_zone, D.zone];
+    uses = [any_zone, D.zone];
   }
 
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign(v, e) ->
       Some (
-        man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
+        man.eval ~zone:(any_zone, D.zone) e flow |>
         Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e')} in
         Manager.map_domain_env T_cur (D.exec stmt') man flow |>
@@ -91,7 +91,7 @@ struct
 
     | S_assume(e) ->
       Some (
-        man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
+        man.eval ~zone:(any_zone, D.zone) e flow |>
         Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
         Manager.map_domain_env T_cur (D.exec stmt') man flow |>

@@ -217,7 +217,7 @@ let () =
                pp_typ f.c_func_return
                f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
-               (OptionExt.print pp_stmt) f.c_func_body
+               (Option.print pp_stmt) f.c_func_body
           )
           fmt funs
         ;
