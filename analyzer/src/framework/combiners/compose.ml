@@ -23,17 +23,7 @@
     two stack domains *)
 
 open Ast.All
-open Core
-open Eq
-open Domain
-open Sig
-open Id
-open Zone
-open Log
-open Token
-open JFlow
-open Manager
-open Lattice.Sig
+open Core.All
 
 type _ domain +=
   | D_compose : 'a domain * 'b domain -> ('a * 'b) domain

@@ -29,13 +29,13 @@ mopsa = framework mopsa langs main
 framework = ast core domains combiners export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval jFlow manager \
-	         domain callstack alarm engine
+	         domain callstack alarm engine all
 framework.core.lattice = sig partial_map powerset total_map
 framework.core.domain = interface id value sig
 framework.core.engine = logging cache analyzer
 framework.domains = leaf stateless nonrel
 framework.export = text json factory
-framework.combiners = compose apply
+framework.combiners = compose apply sequence
 framework.combiners.product = merge meet cartesian
 framework.config = paths abstraction options
 
