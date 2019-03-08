@@ -19,36 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Configuration parser.
-
-    Build the global abstract domain from a json configuration file.
-
-    The supported syntax for a [domain] is as follows:
-
-    - a string denotes a leaf domain or a non-relational value
-   abstraction.
-
-    - [\{"functor": domain, "arg": domain\}] creates a functor domain
-   parameterized by an argument domain.
-
-    - [\{"iter": \[domain list\]\}] uses the iterator composer to
-   combine a list of domains in sequence.
-
-    - [\{"stack": domain, "over": domain\}] combines two domains with
-   a stack configuration.
-
-    - [\{"product": \[domain/value list\], "reductions": \[string
-   list\]\}, "over": domain] constructs a reduced product of a set of
-   abstract domains and non-relational value abstractions with some
-   reduction rules. A common sub-domain can be provided to construct a
-   stacked product.
-
-*)
+(** Configuration parser. *)
 
 val opt_config : string ref
 (** Path to the configuration file *)
 
-val parse : unit -> string * (module Core.Domain.DOMAIN)
+val parse : unit -> string * (module Core.Domain.Sig.DOMAIN)
 (** [parse ()] constructs an abstract domain from the current configuration file *)
 
 val language : unit -> string

@@ -22,6 +22,8 @@
 (** Configuration parser. *)
 
 open Core
+open Domain.Sig
+open Domain.Value
 open Yojson.Basic
 open Yojson.Basic.Util
 
@@ -45,75 +47,77 @@ let resolve_config_file config =
 (** {2 Domain builders} *)
 (** ******************* *)
 
-let rec build_domain = function
-  | `String(name) -> build_leaf name
-  | `Assoc(obj) when List.mem_assoc "iter" obj -> build_iter @@ List.assoc "iter" obj
-  | `Assoc(obj) when List.mem_assoc "functor" obj -> build_functor obj
-  | `Assoc(obj) when List.mem_assoc "stack" obj -> build_stack obj
+let rec domain = function
+  | `String(name) -> leaf_domain name
+  | `Assoc(obj) when List.mem_assoc "seq" obj -> seq obj
+  | `Assoc(obj) when List.mem_assoc "apply" obj -> apply obj
+  | `Assoc(obj) when List.mem_assoc "nonrel" obj -> nonrel obj
   | _ -> assert false
 
-and build_leaf name =
-  try Domain.find_domain name
-  with Not_found ->
-  try
-    let v = Value.find_value name in
-    let module V = (val v) in
-    let module D = Domains.Nonrel.Make(V) in
-    (module D)
-  with Not_found ->
-    Exceptions.panic "Domain %s not found" name
+and leaf_domain name =
+  try Domain.Sig.find_domain name
+  with Not_found -> Exceptions.panic "Domain %s not found" name
 
 
-and build_iter json =
-  let domains = json |> to_list |> List.map build_domain in
+and seq assoc =
+  let domains = List.assoc "seq" assoc |>
+                to_list |>
+                List.map domain
+  in
   let rec aux :
-    (module Domain.DOMAIN) list ->
-    (module Domain.DOMAIN)
+    (module Domain.Sig.DOMAIN) list ->
+    (module Domain.Sig.DOMAIN)
     = function
       | [] -> assert false
       | [d] -> d
       | hd :: tl ->
         let tl = aux tl in
-        let module Head = (val hd : Domain.DOMAIN) in
-        let module Tail = (val tl : Domain.DOMAIN) in
-        let module Dom = Composers.Iter.Make(Head)(Tail) in
-        (module Dom : Domain.DOMAIN)
+        let module Head = (val hd : Domain.Sig.DOMAIN) in
+        let module Tail = (val tl : Domain.Sig.DOMAIN) in
+        let module Dom = Combiners.Sequence.Make(Head)(Tail) in
+        (module Dom : Domain.Sig.DOMAIN)
   in
   aux domains
 
-and build_functor assoc =
-  let arg = List.assoc "arg" assoc in
-  let a = build_domain arg in
-  let module A = (val a : Domain.DOMAIN) in
-  let f = List.assoc "functor" assoc |> to_string in
-  try
-    let f = Domains.Functor.find_domain f in
-    let module F = (val f) in
-    let module D = F.Make(A) in
-    (module D : Domain.DOMAIN)
-  with Not_found ->
-    Exceptions.panic "Functor %s not found" f
+and apply assoc =
+  let s = List.assoc "apply" assoc |> stack in
+  let d = List.assoc "on" assoc |> domain in
+  let module S = (val s : STACK) in
+  let module D = (val d : DOMAIN) in
+  let module R = Combiners.Apply.Make(S)(D) in
+  (module R : DOMAIN)
 
-and build_stack assoc =
-  let d1 = List.assoc "stack" assoc in
+and nonrel assoc =
+  let v = List.assoc "nonrel" assoc |> value in
+  let module V = (val v : VALUE) in
+  let module D = Domains.Leaf.Make(Domains.Nonrel.Make(V)) in
+  (module D : DOMAIN)
 
-  let d1 =
-    try Composers.Stacked.find_domain (to_string d1)
-    with Not_found ->
-      let d1 = build_domain d1 in
-      let module D1 = (val d1) in
-      let module D1 = Composers.Stacked.MakeStacked(D1) in
-      (module D1)
-  in
+and value = function
+  | `String name -> value_leaf name
+  | _ -> assert false
 
-  let module D1 = (val d1 : Composers.Stacked.S) in
+and value_leaf name =
+  try Domain.Value.find_value name
+  with Not_found -> Exceptions.panic "Value %s not found" name
 
-  let d2 = List.assoc "over" assoc in
-  let d2 = build_domain d2 in
-  let module D2 = (val d2 : Domain.DOMAIN) in
+and stack = function
+  | `String(name) -> leaf_stack name
+  | `Assoc(obj) when List.mem_assoc "compose" obj -> compose obj
+  | _ -> assert false
 
-  let module D = Composers.Stacked.Make(D1)(D2) in
-  (module D : Domain.DOMAIN)
+and leaf_stack name =
+  try Domain.Sig.find_stack name
+  with Not_found -> Exceptions.panic "Stack %s not found" name
+
+and compose assoc =
+  let s1 = List.assoc "compose" assoc |> stack in
+  let s2 = List.assoc "with" assoc |> stack in
+  let module S1 = (val s1 : STACK) in
+  let module S2 = (val s2 : STACK) in
+  let module S = Combiners.Compose.Make(S1)(S2) in
+  (module S)
+
 
 (** {2 Toplevel attributes} *)
 (** *********************** *)
@@ -134,12 +138,12 @@ let get_domain json =
 (** {2 Entry points} *)
 (** **************** *)
 
-let parse () : string * (module Domain.DOMAIN) =
+let parse () : string * (module Domain.Sig.DOMAIN) =
   let file = resolve_config_file !opt_config in
   let json = Yojson.Basic.from_file file in
   let language = get_language json in
-  let domain = get_domain json in
-  language, build_domain domain
+  let json = get_domain json in
+  language, domain json
 
 let language () : string =
   let file = resolve_config_file !opt_config in
@@ -147,34 +151,34 @@ let language () : string =
   get_language json
 
 let domains () : string list =
-  if !opt_config = "" then Domain.names ()
+  if !opt_config = "" then Domain.Sig.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in
     let rec iter = function
       | `String(name) -> [name]
 
-      | `Assoc(obj) when List.mem_assoc "iter" obj ->
-        List.assoc "iter" obj |>
+      | `Assoc(obj) when List.mem_assoc "seq" obj ->
+        List.assoc "seq" obj |>
         to_list |>
         List.fold_left (fun acc obj ->
             iter obj @ acc
           ) []
 
-      | `Assoc(obj) when List.mem_assoc "product" obj ->
-        List.assoc "product" obj |>
+      | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
+        List.assoc "nonrel" obj |>
         to_list |>
         List.fold_left (fun acc obj ->
             iter obj @ acc
           ) []
 
-      | `Assoc(obj) when List.mem_assoc "functor" obj ->
-        iter (List.assoc "functor" obj) @
-        iter (List.assoc "arg" obj)
+      | `Assoc(obj) when List.mem_assoc "apply" obj ->
+        iter (List.assoc "apply" obj) @
+        iter (List.assoc "on" obj)
 
-      | `Assoc(obj) when List.mem_assoc "stack" obj ->
-        iter (List.assoc "stack" obj) @
-        iter (List.assoc "over" obj)
+      | `Assoc(obj) when List.mem_assoc "compose" obj ->
+        iter (List.assoc "compose" obj) @
+        iter (List.assoc "with" obj)
 
       | _ -> assert false
     in

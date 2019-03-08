@@ -219,7 +219,7 @@ let () =
   register_builtin_option {
     key = "-log";
     doc = " activate logs";
-    spec = Arg.Set Engine.Logging.opt_log;
+    spec = Arg.Set Core.Engine.Logging.opt_log;
     default = "false";
   }
 
@@ -228,7 +228,7 @@ let () =
   register_builtin_option {
     key = "-short-log";
     doc = " display logs without abstract states";
-    spec = Arg.Set Engine.Logging.opt_short_log;
+    spec = Arg.Set Core.Engine.Logging.opt_short_log;
     default = "false";
   }
 

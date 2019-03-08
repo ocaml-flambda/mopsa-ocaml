@@ -21,8 +21,11 @@
 
 (** Entry point of the analyzer. *)
 
-open Mopsa
-
+open Framework
+open Framework.Ast.All
+open Framework.Core
+open Framework.Core.Engine
+open Framework.Config.Options
 
 (** {2 Command-line options} *)
 (** ************************ *)
@@ -59,9 +62,9 @@ let parse_options f () =
 let parse_program lang files =
   Logging.phase "parsing";
   match lang with
-  | "universal" -> Langs.Universal.Frontend.parse_program files
-  | "c" -> Langs.C.Frontend.parse_program files
-  | "python" -> Langs.Python.Frontend.parse_program files
+  (* | "universal" -> Langs.Universal.Frontend.parse_program files
+   * | "c" -> Langs.C.Frontend.parse_program files
+   * | "python" -> Langs.Python.Frontend.parse_program files *)
   | _ -> Exceptions.panic "Unknown language"
 
 

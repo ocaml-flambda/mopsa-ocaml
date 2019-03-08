@@ -274,3 +274,27 @@ let register_domain dom =
 
 let register_stack_domain dom =
   stacks := dom :: !stacks
+
+let find_domain name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let find_stack name =
+  List.find (fun stack ->
+      let module S = (val stack : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
+let names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      D.name
+    ) !domains
+  @
+  List.map (fun st ->
+      let module S = (val st : STACK) in
+      S.name
+    ) !stacks
+  

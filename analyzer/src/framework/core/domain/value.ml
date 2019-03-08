@@ -120,6 +120,11 @@ let values : (module VALUE) list ref = ref []
 
 let register_value v = values := v :: !values
 
+let find_value name =
+  List.find (fun v ->
+      let module V = (val v : VALUE) in
+      compare V.name name = 0
+    ) !values
 
 (*==========================================================================*)
 (**                  {2 Default backward functions} *)
