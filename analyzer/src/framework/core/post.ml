@@ -19,9 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journaling flows log statements passed to domains during the computation
-    of a post-state.
-*)
+(** Post-states with journaling flows. *)
 
 open Ast.Stmt
 open Token
@@ -30,16 +28,16 @@ open Log
 open Context
 open Lattice.Sig
 
-(** Case of a journaling disjunction *)
+(** Disjunction case of a post-state *)
 type 'a case = {
   tmap: ('a * log) TokenMap.t;
   ctx: 'a ctx;
 }
 
 (** Disjunction of journaling flows *)
-type 'a jflow = 'a case list
+type 'a post = 'a case list
 
-let return flow : 'a jflow =
+let return flow : 'a post =
   [
     {
       tmap = TokenMap.map (fun tk e -> (e, Log.empty)) (Flow.get_token_map flow);
@@ -47,10 +45,10 @@ let return flow : 'a jflow =
     }
   ]
 
-let join (jflow1:'a jflow) (jflow2:'a jflow) =
-  jflow1 @ jflow2
+let join (post1:'a post) (post2:'a post) =
+  post1 @ post2
 
-let meet (lattice:'a lattice) (jflow1:'a jflow) (jflow2:'a jflow) : 'a jflow =
+let meet (lattice:'a lattice) (post1:'a post) (post2:'a post) : 'a post =
   List.fold_left (fun acc case1 ->
       acc @ List.map (fun case2 ->
           {
@@ -61,19 +59,19 @@ let meet (lattice:'a lattice) (jflow1:'a jflow) (jflow2:'a jflow) : 'a jflow =
                 case1.tmap case2.tmap;
             ctx = case2.ctx
           }
-        ) jflow2
-    ) [] jflow1
+        ) post2
+    ) [] post1
 
-let choose_ctx jflow =
-  match jflow with
+let choose_ctx post =
+  match post with
   | [] -> Context.empty
   | hd :: _ -> hd.ctx
 
-let unify_ctx (ctx:'a ctx) (jflow:'a jflow) =
-  List.map (fun case -> { case with ctx }) jflow
+let unify_ctx (ctx:'a ctx) (post:'a post) =
+  List.map (fun case -> { case with ctx }) post
 
-let concat_logs (case: 'a case) (jflow:'b jflow) : 'b jflow =
-  jflow |> List.map
+let concat_logs (case: 'a case) (post:'b post) : 'b post =
+  post |> List.map
     (fun case' ->
        {
          case' with
@@ -88,23 +86,23 @@ let concat_logs (case: 'a case) (jflow:'b jflow) : 'b jflow =
     )
 
 
-let bind (f:'a flow -> 'a jflow) (jflow:'a jflow) : 'a jflow =
+let bind (f:'a flow -> 'a post) (post:'a post) : 'a post =
   let ret, ctx =
-    jflow |> List.fold_left (fun (acc, ctx) case ->
+    post |> List.fold_left (fun (acc, ctx) case ->
         let tmap = TokenMap.map (fun tk (e, log) -> e) case.tmap in
         let flow = Flow.create case.ctx tmap in
         let ret = f flow in
         let ret' = concat_logs case ret in
         ret' @ acc, choose_ctx ret'
-      ) ([], choose_ctx jflow)
+      ) ([], choose_ctx post)
   in
   unify_ctx ctx ret
 
 let bind_eval
   (lattice:'a lattice)
-  (f:'e -> 'a flow -> 'a jflow)
+  (f:'e -> 'a flow -> 'a post)
   (evl:('e, 'a) Eval.eval)
-  : 'a jflow
+  : 'a post
   =
   let dnf = Eval.to_dnf evl in
   let ret, ctx = Dnf.fold2 (fun ctx (e, flow) ->
@@ -112,31 +110,31 @@ let bind_eval
       match e with
       | None -> return flow, ctx
       | Some ee ->
-        let jflow = f ee flow in
-        let ctx = choose_ctx jflow in
-        jflow, ctx
+        let post = f ee flow in
+        let ctx = choose_ctx post in
+        post, ctx
     ) join (meet lattice) (Eval.choose_ctx evl) dnf
   in
   unify_ctx ctx ret
 
 
-let map_log (f:token -> log -> log) (jflow:'a jflow) : 'a jflow =
-  jflow |> List.map (fun case ->
+let map_log (f:token -> log -> log) (post:'a post) : 'a post =
+  post |> List.map (fun case ->
       {
         case with
         tmap = TokenMap.map (fun tk (e,log) -> (e, f tk log)) case.tmap
       }
     )
 
-let map (f:token -> 'a -> log -> 'b * log) (ctx: 'b ctx) (jflow:'a jflow) : 'b jflow =
-  jflow |> List.map (fun case ->
+let map (f:token -> 'a -> log -> 'b * log) (ctx: 'b ctx) (post:'a post) : 'b post =
+  post |> List.map (fun case ->
       {
         tmap = TokenMap.map (fun tk (e,log) -> f tk e log) case.tmap;
         ctx;
       }
     )
 
-let to_flow (lattice: 'a lattice) (jflow: 'a jflow) : 'a flow =
+let to_flow (lattice: 'a lattice) (post: 'a post) : 'a flow =
   List.fold_left (fun acc case ->
       let flow =
         Flow.create
@@ -145,4 +143,4 @@ let to_flow (lattice: 'a lattice) (jflow: 'a jflow) : 'a flow =
       in
       Flow.join lattice flow acc
     )
-    (Flow.bottom Context.empty) jflow
+    (Flow.bottom Context.empty) post

@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** 
+(**
    Managers encapsulate an abstract domain into a record so that it can be
    passed to other abstract domains at runtime.
 *)
@@ -29,7 +29,7 @@ open Lattice.Sig
 open Token
 open Flow
 open Log
-open JFlow
+open Post
 open Eval
 open Ast.Stmt
 open Ast.Expr
@@ -45,7 +45,7 @@ open Zone
 (** Global managers provide access to full analyzer, i.e. (i) the lattice
     operators of the global abstraction ['a], (ii) the transfer functions
     over ['a flow] and (iii) accessors to the domain's abstract element ['t]
-    within ['a]. 
+    within ['a].
 *)
 type ('a, 't) man = {
   (* Lattice operators over global abstract elements ['a] *)
@@ -69,7 +69,7 @@ type ('a, 't) man = {
 
 (** Sub-tree managers are provided to stacked domains to access their parameter
     domain. Journaling functions in these managers allow stacked domains to log
-    statements for eventual future merges.  
+    statements for eventual future merges.
 *)
 type ('a,'t,'s) sman = {
   (* Global manager of the stacked domain *)
@@ -79,7 +79,7 @@ type ('a,'t,'s) sman = {
   sub_man: ('s, 's) man;
 
   (** Journaling transfer function in the sub-tree domain *)
-  sub_exec: ?zone:zone -> stmt -> 'a flow -> 'a jflow;
+  sub_exec: ?zone:zone -> stmt -> 'a flow -> 'a post;
 
   (** Accessors to the domain's log *)
   set_log : log -> log -> log;

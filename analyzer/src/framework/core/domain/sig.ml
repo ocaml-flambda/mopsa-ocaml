@@ -25,13 +25,13 @@
 
     - The signature DOMAIN is useful for domains that are not parameterized by
     other domains and that require a full accessing to the analyzer. In other
-    words, their concretization function γ, their lattice operators and their 
+    words, their concretization function γ, their lattice operators and their
     transfer functions do not depend on other external abstractions.
 
-    - Domains implementing the STACK signature represent parameterized 
-    abstractions. Their γ function, lattice operators and transfer functions 
+    - Domains implementing the STACK signature represent parameterized
+    abstractions. Their γ function, lattice operators and transfer functions
     depend on argument abstractions. Unlike classic OCaml functors, argument
-    abstractions are not fixed at module creation. Instead, stacked domains 
+    abstractions are not fixed at module creation. Instead, stacked domains
     receive a record encapsulation of the transfer functions of their argument
     abstractions at runtime. This allows sharing the arguments among other
     stacked domains (e.g, in a reduced product).
@@ -48,7 +48,7 @@ open Flow
 open Manager
 open Eval
 open Log
-open JFlow
+open Post
 open Zone
 open Eq
 open Id
@@ -143,7 +143,7 @@ sig
   val init : program -> ('a, t) man -> 'a flow -> 'a flow option
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a jflow option
+  val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
   val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
@@ -249,7 +249,7 @@ sig
   val init : program -> ('a, t) man -> 'a flow -> 'a flow option
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t, 's) sman -> 'a flow -> 'a jflow option
+  val exec : zone -> stmt -> ('a, t, 's) sman -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
   val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
@@ -297,4 +297,3 @@ let names () =
       let module S = (val st : STACK) in
       S.name
     ) !stacks
-  

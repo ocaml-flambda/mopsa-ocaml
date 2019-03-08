@@ -290,6 +290,8 @@ let empty : 'a ctx = {
   ctx_poly = pempty;
 }
 
+let unit ctx = ctx.ctx_unit
+
 let find_unit (k: 'v ukey) (ctx:'a ctx) : 'v =
   ufind k ctx.ctx_unit
 

@@ -104,14 +104,14 @@ let mk_alarm kind ?(cs = Callstack.empty) ?(level = WARNING) range =
     alarm_trace = (range, cs);
   }
 
-(* let raise_alarm akind range ?(level = WARNING) ?(bottom=true) (man:('a,'t) man) flow =
- *   let cs = Callstack.get flow in
- *   let alarm = mk_alarm akind range ~cs in
- *   let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man.lattice flow) man.lattice flow in
- *   if bottom then
- *     Flow.set T_cur man.lattice.bottom man.lattice flow'
- *   else
- *     flow' *)
+let raise_alarm akind range ?(level = WARNING) ?(bottom=true) (man:('a,'t) man) flow =
+  let cs = Callstack.get flow in
+  let alarm = mk_alarm akind range ~cs in
+  let flow' = Flow.add (alarm_token alarm) (Flow.get T_cur man.lattice flow) man.lattice flow in
+  if bottom then
+    Flow.set T_cur man.lattice.bottom man.lattice flow'
+  else
+    flow'
 
 
 let () =

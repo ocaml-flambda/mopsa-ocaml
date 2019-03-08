@@ -49,6 +49,58 @@ let pool : pool ref = ref []
 let register_query info =
   pool := info :: !pool
 
+module GenFunQuery(Q:sig
+    type arg
+    type ret
+    val join : ret -> ret -> ret
+    val meet : ret -> ret -> ret
+  end)
+  =
+  struct
+    type _ query += Query: Q.arg -> Q.ret query
+
+    let query arg = Query arg
+
+    let eq : type a. a query -> (a, Q.ret) eq option =
+      fun q ->
+        match q with
+        | Query _ -> Some Eq
+        | _ -> None
+
+    let () =
+      register_query {
+        eq = eq;
+        join = Q.join;
+        meet = Q.meet;
+      }
+  end
+
+module GenUnitQuery(Q:sig
+    type ret
+    val join : ret -> ret -> ret
+    val meet : ret -> ret -> ret
+  end)
+  =
+  struct
+    type _ query += Query: Q.ret query
+
+    let query = Query
+
+    let eq : type a. a query -> (a, Q.ret) eq option =
+      fun q ->
+        match q with
+        | Query -> Some Eq
+        | _ -> None
+
+    let () =
+      register_query {
+        eq = eq;
+        join = Q.join;
+        meet = Q.meet;
+      }
+  end
+
+
 let find query =
   let rec aux : type a b. a query -> pool -> a query_info =
     fun query -> function
@@ -73,36 +125,20 @@ let meet : type a. a query -> a -> a  -> a =
     let info = find q in
     info.meet r1 r2
 
-let eq : type a b. a query -> b query -> (a, b) eq option =
-  fun q1 q2 ->
-    let info2 = find q2 in
-    info2.eq q1
-
 
 
 (** {2 Common queries} *)
 (** ****************** *)
 
-type _ query +=
-  | Q_print_var : (Format.formatter -> string -> unit) query
-  (** Print the value of a variable *)
+let print_var_query =
+  let module Q = GenUnitQuery
+      (struct
+        type ret = Format.formatter -> string -> unit
 
-let () =
-  register_query {
-    eq = (
-      let doit : type a. a query -> (a, (Format.formatter -> string -> unit)) eq option =
-        function
-        | Q_print_var -> Some Eq
-        | _ -> None
-      in
-      doit
-    );
+        let join pp1 pp2  = fun fmt var ->
+          Format.fprintf fmt "%a@,%a" pp1 var pp2 var
 
-    join = (fun pp1 pp2 -> fun fmt var ->
-        Format.fprintf fmt "%a@,%a" pp1 var pp2 var
-      );
-
-    meet = (fun pp1 pp2 -> fun fmt var ->
-        Format.fprintf fmt "%a@,%a" pp1 var pp2 var
-      );
-  }
+        let meet = join
+      end)
+  in
+  Q.query

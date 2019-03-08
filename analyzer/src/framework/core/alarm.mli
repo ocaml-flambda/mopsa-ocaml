@@ -57,4 +57,4 @@ val alarm_token : alarm -> Token.token
 
 val mk_alarm : alarm_kind ->  ?cs:Callstack.cs -> ?level:alarm_level -> Location.range -> alarm
 
-(* val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow *)
+val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow

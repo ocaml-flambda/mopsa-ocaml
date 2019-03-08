@@ -51,4 +51,3 @@ let get_domain_log log =
   match log with
   | L_domain(_, l) -> l
   | _ -> assert false
-

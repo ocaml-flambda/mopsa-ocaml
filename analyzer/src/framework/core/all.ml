@@ -24,16 +24,24 @@ module Context = Context
 open Callstack
 open Context
 module Eval = Eval
+type ('e, 'a) eval = ('e, 'a) Eval.eval
 module Flow = Flow
-module JFlow = JFlow
+type 'a flow = 'a Flow.flow
+module Post = Post
+type 'a post = 'a Post.post
 include Log
 module Log = Log
 include Eq
+module Manager = Manager
 include Manager
 module Query = Query
+type 'a query = 'a Query.query
 include Token
+module Zone = Zone
 include Zone
+module Domain = Domain
 include Domain.Id
+include Domain.Interface
 module Interface = Domain.Interface
 include Domain.Sig
 include Lattice.Sig

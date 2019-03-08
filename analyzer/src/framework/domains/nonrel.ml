@@ -22,14 +22,9 @@
 (** Generic leaf domain for creating non-relational value abstractions. *)
 
 open Ast.All
-open Core
-open Log
-open Domain
-open Value
-open Token
-open Manager
+open Core.All
 
-module Make(Value: VALUE) =
+module Make(Value: Core.Domain.Value.VALUE) =
 struct
 
 
@@ -267,7 +262,7 @@ struct
       List.fold_left (fun acc v' ->
           add v' value acc
         ) map vl
-      
+
     (* FIXME: check weak variables in rhs *)
     | S_assume e ->
       filter e true map

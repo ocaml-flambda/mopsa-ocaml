@@ -124,22 +124,22 @@ struct
       L_domain (get_d1_block log, get_d1_log log);
       L_domain (b, get_d2_log log)
     ]
-    
-  let append2_d1_block stmt jflow =
-    JFlow.map_log (fun tk log ->
+
+  let append2_d1_block stmt post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           set_d1_block (stmt :: get_d1_block log) log
         | _ -> log
-      ) jflow
+      ) post
 
-  let append2_d2_block stmt jflow =
-    JFlow.map_log (fun tk log ->
+  let append2_d2_block stmt post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           set_d2_block (stmt :: get_d2_block log) log
         | _ -> log
-      ) jflow
+      ) post
 
 
   (**************************************************************************)
@@ -236,8 +236,8 @@ struct
       let f2 = D2.exec zone in
       (fun stmt man flow ->
          match f1 stmt (d1_man man) flow with
-         | Some jflow ->
-           Some (append2_d1_block stmt jflow)
+         | Some post ->
+           Some (append2_d1_block stmt post)
 
          | None ->
            f2 stmt (d2_man man) flow |>

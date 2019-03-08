@@ -23,14 +23,7 @@
     transfer functions are defined. *)
 
 open Ast.All
-open Core
-open Domain
-open Flow
-open Eval
-open Zone
-open Interface
-open Manager
-open JFlow
+open Core.All
 
 (****************************************************************************)
 (**                      {2 Leaf stateless domains}                         *)
@@ -43,14 +36,14 @@ sig
   val exec_interface : zone interface
   val eval_interface : (zone * zone) interface
   val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a jflow option
+  val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
   val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
 
 end
 
 (** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
+module Make(D: DOMAIN) : Domain.Sig.DOMAIN =
 struct
 
   type t = unit
@@ -64,7 +57,7 @@ struct
   let merge _ _ _ = top
   let print _ _ = ()
 
-  include Id.GenDomainId(struct
+  include GenDomainId(struct
       type typ = unit
       let name = D.name
     end)
@@ -83,4 +76,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Sig.register_domain (module D)
+  Domain.Sig.register_domain (module D)

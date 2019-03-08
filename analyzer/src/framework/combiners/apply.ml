@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** The [Apply] combiner implements the classic function application of a 
+(** The [Apply] combiner implements the classic function application of a
     stack domain on a domain *)
 
 open Ast.All
@@ -124,22 +124,22 @@ struct
       L_domain (get_s_block log, get_s_log log);
       L_domain (b, get_d_log log)
     ]
-    
-  let append_s_block stmt jflow =
-    JFlow.map_log (fun tk log ->
+
+  let append_s_block stmt post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           set_s_block (stmt :: get_s_block log) log
         | _ -> log
-      ) jflow
+      ) post
 
-  let append_d_block stmt jflow =
-    JFlow.map_log (fun tk log ->
+  let append_d_block stmt post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           set_d_block (stmt :: get_d_block log) log
         | _ -> log
-      ) jflow
+      ) post
 
 
   (**************************************************************************)
@@ -191,8 +191,8 @@ struct
             D.name
             pp_stmt stmt
 
-        | Some jflow ->
-          append_d_block stmt jflow
+        | Some post ->
+          append_d_block stmt post
       );
 
     get_log = get_s_log;
@@ -283,8 +283,8 @@ struct
       let f2 = D.exec zone in
       (fun stmt man flow ->
          match f1 stmt (s_sman man) flow with
-         | Some jflow ->
-           Some (append_s_block stmt jflow)
+         | Some post ->
+           Some (append_s_block stmt post)
 
          | None ->
            f2 stmt (d_man man) flow |>

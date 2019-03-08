@@ -70,12 +70,12 @@ let compare_eval_path (p1: path) (p2: path) =
 
 type zone_info = {
   zone   : zone;
-  subset : zone option;
-  name   : string;
-  eval   : expr -> action;
+  zone_subset : zone option;
+  zone_name   : string;
+  zone_eval   : expr -> zone_action;
 }
 
-and action =
+and zone_action =
   | Keep
   | Visit
   | Process
@@ -102,7 +102,7 @@ let rec subset (z1: zone) (z2: zone) : bool =
   | z1, z2 ->
     try
       let info = ZoneMap.find z1 !zones in
-      match info.subset with
+      match info.zone_subset with
       | Some z -> subset z z2
       | None -> false
     with Not_found -> false
@@ -136,7 +136,7 @@ let rec pp_zone fmt (z: zone) =
   | _ ->
     try
       let info = ZoneMap.find z !zones in
-      Format.pp_print_string fmt info.name
+      Format.pp_print_string fmt info.zone_name
     with Not_found ->
       Exceptions.panic "Unknown zone"
 
@@ -175,7 +175,7 @@ let eval_template exp z =
   let template =
     try
       let info = ZoneMap.find z !zones in
-      info.eval
+      info.zone_eval
     with Not_found ->
       (* Default template: call eval of domains *)
       (fun exp -> Process)

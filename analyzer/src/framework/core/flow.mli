@@ -24,7 +24,7 @@
     Flows represent a trace partitioning the collect environments depending
     on the kind of the control flow. Not only reaching environments are
     concerned, but also environments of traces suspended at previous
-    control points are kept in the flow map. In addition, flow insensitive 
+    control points are kept in the flow map. In addition, flow insensitive
     contexts are also maintained in the flow abstraction.
 *)
 

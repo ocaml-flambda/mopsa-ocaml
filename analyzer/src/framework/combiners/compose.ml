@@ -125,26 +125,26 @@ struct
       L_domain (b, get_s2_log log)
     ]
 
-  let append_s1_block stmt sman jflow =
-    JFlow.map_log (fun tk log ->
+  let append_s1_block stmt sman post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           let local_log = sman.get_log log in
           let local_log' = set_s1_block (stmt :: get_s1_block local_log) local_log in
           sman.set_log local_log' log
         | _ -> log
-      ) jflow
+      ) post
 
-    
-  let append_s2_block stmt sman jflow =
-    JFlow.map_log (fun tk log ->
+
+  let append_s2_block stmt sman post =
+    Post.map_log (fun tk log ->
         match tk with
         | T_cur ->
           let local_log = sman.get_log log in
           let local_log' = set_s2_block (stmt :: get_s2_block local_log) local_log in
           sman.set_log local_log' log
         | _ -> log
-      ) jflow
+      ) post
 
 
   (**************************************************************************)
@@ -240,7 +240,7 @@ struct
     sub_man = sman.sub_man;
     sub_exec = (fun ?(zone=any_zone) stmt flow ->
         man.exec ~zone stmt flow |>
-        JFlow.return
+        Post.return
       );
     get_log = (fun glog -> assert false);
     set_log = (fun log glog -> assert false);
@@ -254,7 +254,7 @@ struct
       set = (fun a _ -> a);
       exec = (fun ?(zone=any_zone) stmt flow ->
           match S2.exec zone stmt (s2_local_sman sman) flow with
-          | Some jflow -> JFlow.to_flow (s1_sub_lattice sman) jflow
+          | Some post -> Post.to_flow (s1_sub_lattice sman) post
           | None ->
             (* Downgrade flow type *)
             let sflow = Flow.map_flow (fun tk (a, s) -> s) Context.empty flow in
@@ -286,8 +286,8 @@ struct
             S2.name
             pp_stmt stmt
 
-        | Some jflow ->
-          append_s2_block stmt sman jflow
+        | Some post ->
+          append_s2_block stmt sman post
       );
 
     get_log = (fun glog -> get_s1_log @@ sman.get_log glog);
@@ -384,8 +384,8 @@ struct
       let f2 = S2.exec zone in
       (fun stmt sman flow ->
          match f1 stmt (s1_sman sman) flow with
-         | Some jflow ->
-           Some (append_s1_block stmt sman jflow)
+         | Some post ->
+           Some (append_s1_block stmt sman post)
 
          | None ->
            f2 stmt (s2_sman sman) flow |>

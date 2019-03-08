@@ -21,16 +21,11 @@
 
 (** Leaf domains have a simplified interface that gives access to
     their local abstractions only. The global manager and its flow
-    abstraction are not accessible. 
+    abstraction are not accessible.
 *)
 
 open Ast.All
-open Core
-open Domain
-open Token
-open Interface
-open Manager
-open Log
+open Core.All
 
 module type DOMAIN =
 sig
@@ -41,7 +36,7 @@ sig
 
   val init : program -> t
 
-  val zone : Zone.zone
+  val zone : zone
 
   val exec : stmt -> t -> t
 
@@ -53,7 +48,7 @@ end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Sig.DOMAIN =
+module Make(D: DOMAIN) : Domain.Sig.DOMAIN =
 struct
 
   include D
@@ -63,14 +58,14 @@ struct
     and block2 = Log.get_domain_block log2 in
     D.merge pre (post1, block1) (post2, block2)
 
-  include Id.GenDomainId(struct
+  include GenDomainId(struct
       type typ = t
       let name = name
     end)
 
   let init prog man flow =
     Some (
-      Manager.set_domain_env T_cur (D.init prog) man flow
+      set_domain_env T_cur (D.init prog) man flow
     )
 
   let exec_interface = {
@@ -88,26 +83,26 @@ struct
     | S_assign(v, e) ->
       Some (
         man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
-        JFlow.bind_eval man.lattice @@ fun e' flow ->
+        Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e')} in
         Manager.map_domain_env T_cur (D.exec stmt') man flow |>
-        JFlow.return
+        Post.return
       )
 
     | S_assume(e) ->
       Some (
         man.eval ~zone:(Zone.any_zone, D.zone) e flow |>
-        JFlow.bind_eval man.lattice @@ fun e' flow ->
+        Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
         Manager.map_domain_env T_cur (D.exec stmt') man flow |>
-        JFlow.return
+        Post.return
       )
 
     | S_add _ | S_remove _ | S_rename _ | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       Some (
         Manager.map_domain_env T_cur (D.exec stmt) man flow |>
-        JFlow.return
+        Post.return
       )
 
     | _ ->
@@ -125,4 +120,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Sig.register_domain (module D)
+  Domain.Sig.register_domain (module D)

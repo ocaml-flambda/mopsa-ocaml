@@ -23,7 +23,7 @@
 
 open Flow
 open Eval
-open JFlow
+open Post
 open Manager
 open Ast.Expr
 open Ast.Stmt
@@ -35,7 +35,7 @@ let opt_cache = ref 10
 
 module Make(Domain: sig type t end) =
 struct
-  let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t jflow) list ref = ref []
+  let exec_cache : ((zone * stmt * Domain.t flow) * Domain.t post) list ref = ref []
 
   let eval_cache : (((zone * zone) * expr * Domain.t flow) * (expr, Domain.t) eval option) list ref = ref []
 
@@ -51,7 +51,7 @@ struct
       match f stmt man flow with
       | None ->
         if Flow.is_bottom man.lattice flow
-        then JFlow.return flow
+        then Post.return flow
         else
           Exceptions.panic
             "Unable to analyze statement in %a:@\n @[%a@]"

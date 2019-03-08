@@ -29,7 +29,7 @@ open Token
 open Flow
 open Manager
 open Eval
-open JFlow
+open Post
 open Zone
 
 
@@ -113,8 +113,8 @@ struct
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
     in
-    let jflow = Cache.exec fexec zone stmt man flow in
-    let flow = assert false in
+    let post = Cache.exec fexec zone stmt man flow in
+    let flow = Post.to_flow man.lattice post in
 
     Logging.exec_done stmt zone (Timing.stop timer) man flow;
     flow
@@ -544,7 +544,7 @@ struct
           interact ~where:false action range flow
 
         | Value(var) ->
-          printf "%a@." (man.ask Query.Q_print_var flow) var;
+          printf "%a@." (man.ask Query.print_var_query flow) var;
           interact ~where:false action range flow
 
         | Where ->

@@ -78,6 +78,8 @@ end
 
 val empty : 'a ctx
 
+val unit : 'a ctx -> uctx
+
 val find_unit : 'v ukey -> 'a ctx -> 'v
 
 val find_poly : ('a,'v) pkey ->'a ctx -> 'v

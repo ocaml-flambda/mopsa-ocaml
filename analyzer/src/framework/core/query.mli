@@ -19,58 +19,39 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic query mechanism for extracting information from abstract domains.
+(** Generic query mechanism for extracting information from domains. *)
 
-    Defining a new query requires the definition of the type of its reply and a
-    manager on this type providing reply merging functions.
 
-    Here is an example. Let us define a new interval query:
-    {[type _ query += QInterval : var -> (int * int) query]}
+type _ query
 
-    Next, an interval manager is registered as follows:
-    {[register_query {
-        eq = (let check : type a. a query -> (a, (int * int)) eq option =
-                fun q ->
-                  match q with
-                  | QInterval _ -> Some Eq
-                  | _ -> None
-              in
-              check
-             );
-        join = (fun (a1, a2) (b1, b2) -> (min a1 b1, max a2 b2));
-        meet = (fun (a1, a2) (b1, b2) -> (max a1 b1, min a2 b2));
-      };;]}
 
-    For instance, the join of two intervals of a query [q] can be obtained simply by:
-    {[join q (Some (1, 20)) (Some (-1, 5));;]}
-    {v - : (int * int) option = Some (-1, 20) v}
+module GenFunQuery
+    (Q:
+     sig
+       type arg
+       type ret
+       val join : ret -> ret -> ret
+       val meet : ret -> ret -> ret
+     end)
+    :
+    sig
+      val query : Q.arg -> Q.ret query
+    end
 
-*)
-
-(** {2 Queries} *)
-(** *********** *)
-
-open Eq
-
-(** Type of a query, defined by domains and annotated with the type of the reply. *)
-type _ query = ..
-
-type 'r query_info = {
-  eq : 'a. 'a query -> ('a, 'r) eq option;
-  join: 'r -> 'r -> 'r;
-  meet: 'r -> 'r -> 'r;
-}
-
-val register_query : 'a query_info -> unit
+module GenUnitQuery
+    (Q:
+     sig
+       type ret
+       val join : ret -> ret -> ret
+       val meet : ret -> ret -> ret
+     end)
+    :
+    sig
+      val query : Q.ret query
+    end
 
 val join : 'a query -> 'a -> 'a -> 'a
 
 val meet : 'a query -> 'a -> 'a -> 'a
 
-
-(** {Common queries} *)
-(** **************** *)
-
-type _ query +=
-  | Q_print_var : (Format.formatter -> string -> unit) query
-  (** Print the value of a variable *)
+val print_var_query : (Format.formatter -> string -> unit) query

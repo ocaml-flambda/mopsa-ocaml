@@ -19,9 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journaling flows log statements passed to domains during the computation
-    of a post-state.
-*)
+(** Post-states with journaling flows. *)
 
 open Ast.Stmt
 open Token
@@ -29,17 +27,17 @@ open Flow
 open Log
 open Lattice.Sig
 
-type 'a jflow
+type 'a post
 
-val return : 'a flow -> 'a jflow
+val return : 'a flow -> 'a post
 
-val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a jflow) -> ('e, 'a) Eval.eval -> 'a jflow
+val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a post
 
-val bind : ('a flow -> 'a jflow) -> 'a jflow -> 'a jflow
+val bind : ('a flow -> 'a post) -> 'a post -> 'a post
 
-val map_log : (token -> log -> log) -> 'a jflow -> 'a jflow
+val map_log : (token -> log -> log) -> 'a post -> 'a post
 
-val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a jflow -> 'b jflow
+val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
 
 
-val to_flow : 'a lattice -> 'a jflow -> 'a flow
+val to_flow : 'a lattice -> 'a post -> 'a flow
