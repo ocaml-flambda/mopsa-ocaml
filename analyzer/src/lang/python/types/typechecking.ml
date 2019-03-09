@@ -63,8 +63,9 @@ struct
   let extract_type_aset (a: Addr_env.Domain.t) (t: Typing.Domain.t) (aset: Addr_env.Domain.ASet.t) : Typing.polytype option =
     if Addr_env.Domain.ASet.cardinal aset = 1 then
       let addr = Addr_env.Domain.ASet.choose aset in
-      let addr = match addr with | Def a -> a | _ -> assert false in
-      match addr.addr_kind with
+      match addr with
+      | Def addr ->
+        begin match addr.addr_kind with
         | A_py_instance _ ->
           let tys = Typing.Domain.TMap.find addr t.abs_heap in
           if Typing.Domain.Polytypeset.cardinal tys = 1 then
@@ -77,7 +78,9 @@ struct
           Some (Module m)
         | A_py_function f ->
           Some (Function f)
-        | _ -> Exceptions.panic "%a@\n" pp_addr addr
+        | _ -> Debug.warn "%a@\n" pp_addr addr; None
+        end
+      | _ -> None
     else
       None
 
