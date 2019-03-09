@@ -129,6 +129,13 @@ struct
         let print = pp_polytype
       end)
 
+  (* module PolytypesetJoin =
+   * struct
+   *   include Polytypeset
+   *   let join _ a b = failwith "join"
+   *   (\* join {instance[a]} {instance[a, empty, a]} = {instance[a, empty, a]} *\)
+   * end *)
+
   module TMap = Framework.Lattices.Partial_map.Make
       (struct
         type t = addr

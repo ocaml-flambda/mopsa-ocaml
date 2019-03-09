@@ -28,7 +28,7 @@
 open Manager
 open Domain
 
-module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN =
+module Make(Head: DOMAIN)(Tail: DOMAIN) : DOMAIN with type t = Head.t * Tail.t =
 struct
 
   type t = Head.t * Tail.t
