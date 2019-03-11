@@ -175,7 +175,7 @@ let () =
     key = "-list";
     category = "Configuration";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
-    spec = ArgExt.Unit (fun () ->
+    spec = ArgExt.Unit_delayed (fun () ->
         let domains = Config.domains () in
         Output.Factory.list_domains domains
       );
@@ -246,7 +246,10 @@ let help () =
       (List.map get_domain_options domains |> List.flatten)
   in
   let args = List.map opt_to_arg options in
-  Output.Factory.help args;
+  Output.Factory.help args
+
+let print_help_and_exit () =
+  help ();
   exit 0
 
 let () =
@@ -254,20 +257,20 @@ let () =
     key  = "-help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   };
   register_builtin_option {
     key  = "--help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   };
   register_builtin_option {
     key  = "-h";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   }
