@@ -115,6 +115,7 @@ let help (args:arg list) out =
               | ArgExt.Set _ -> "set"
               | ArgExt.Clear _ -> "clear"
               | ArgExt.Unit _ -> "unit"
+              | ArgExt.Unit_delayed _ -> "unit"
               | ArgExt.String _ -> "string"
               | ArgExt.Set_string _ -> "string"
               | ArgExt.Set_string_list _ -> "string list"

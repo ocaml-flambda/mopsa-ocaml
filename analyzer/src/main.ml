@@ -43,14 +43,11 @@ let () =
    source files *)
 let parse_options f () =
   let files = ref [] in
-  let n = Array.length Sys.argv in
-  let return_value = ref 0 in
-  ArgExt.parse (Options.to_arg ()) (fun filename ->
-      files := filename :: !files;
-      if !Arg.current = n - 1 then
-        return_value := !return_value * 10 + (f !files)
-    ) "Modular Open Platform for Static Analysis";
-  !return_value
+  ArgExt.parse (Options.to_arg ())
+               (fun filename -> files := filename :: !files)
+               "Modular Open Platform for Static Analysis"
+               Options.help;
+  if !files != [] then f !files else 0
 
 
 (** {2 Parsing} *)

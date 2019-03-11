@@ -19,10 +19,18 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Command-line options, extends [Arg] module of standard library *)
+(** Command-line options.
+    Replacement for [Arg] from the standard library 
+ *)
 
 type spec =
   | Unit of (unit -> unit)
+
+  | Unit_delayed of (unit -> unit)
+  (** [Unit_delayed] functions are only executed after parsing all 
+      the arguments, in the order they appear on the command-line.
+   *)
+
   | Bool of (bool -> unit)
   | Set of bool ref
   | Clear of bool ref
@@ -45,22 +53,141 @@ type arg = {
   spec: spec;
 }
 
-let from_spec =
-  function
-  | Unit f -> Arg.Unit f
-  | Bool f -> Arg.Bool f
-  | Set b -> Arg.Set b
-  | Clear b -> Arg.Clear b
-  | Int f -> Arg.Int f
-  | Set_int n -> Arg.Set_int n
-  | String f -> Arg.String f
-  | Set_string s -> Arg.Set_string s
-  | Set_string_list l -> Arg.String (fun s -> l := s :: !l)
-  | Symbol (l, f) -> Arg.Symbol (l, f)
 
-let from_arg (arg:arg) : (Arg.key*Arg.spec*Arg.doc) =
-  arg.key, from_spec arg.spec, arg.doc
-
-let parse (args:arg list) (handler:string -> unit) (usage:string) : unit =
-  let args = List.map from_arg args in
-  Arg.parse args handler usage
+(** Replacement for [Arg.parse]. 
+    Adds delayed Unit arguments.
+ *)
+let parse (args:arg list) (handler:string -> unit) (msg:string) (help:unit -> unit) : unit =
+  (* separate arg into program name and actual command-line arguments *)
+  let progname, opts =
+    if Array.length Sys.argv < 1 then "?", []
+    else Sys.argv.(0), List.tl (Array.to_list Sys.argv)
+  in
+  (* Unit_delayed actions are delayed into everything is parsed *)
+  let delayed = ref [] in
+  (* utilities *)
+  let to_bool a v =
+    try bool_of_string v with _ ->
+      Printf.eprintf "%s: option %s requires a boolean argument (true or false)\n" progname a;
+      help ();
+      exit 2
+  and to_int a v =
+    try int_of_string v with _ ->
+      Printf.eprintf "%s: option %s requires an integer argument\n" progname a;
+      help ();
+      exit 2
+  in
+  (* eat argument list *)
+  let rec eat = function
+    | [] -> ()
+    | a::rest ->
+       if a = "" then
+         eat rest
+       else if a.[0] != '-' then (
+         handler a;
+         eat rest
+       )
+       else (
+         (* cut option at '=' if necessary *)
+         let opt, arg =
+           if String.contains a '=' then
+             let i = String.index a '=' in
+             String.sub a 0 i,
+             Some (String.sub a (i+1) (String.length a - i - 1))
+           else
+             a, None
+         in
+         (* get option argument, either after '=' or in the next 
+            command-line argument *)
+         let get_arg () = match arg, rest with
+           | Some x, rest -> x, rest
+           | None, x::rest -> x, rest
+           | None, [] ->
+              Printf.eprintf "%s: option %s requires an argument\n" progname opt;
+              help ();
+              exit 2
+         and noarg () =
+           if arg <> None then (
+             Printf.eprintf "%s: option %s has no argument\n" progname opt;
+             help ();
+             exit 2
+           )
+         in
+         if List.exists (fun x -> x.key = opt) args then (
+           let arg = List.find (fun x -> x.key = opt) args in
+           match arg.spec with
+           
+           | Unit_delayed f ->
+              noarg ();
+              delayed := (!delayed)@[f];
+              eat rest
+              
+           | Unit f ->
+              noarg ();
+              f ();
+              eat rest
+              
+           | Set r ->
+              noarg ();
+              r := true;
+              eat rest
+              
+           | Clear r ->
+              noarg ();
+              r := false;
+              eat rest
+              
+           | Bool f ->
+              let v, rest = get_arg () in
+              f (to_bool a v);
+              eat rest
+            
+           | Int f ->
+              let v, rest = get_arg () in
+              f (to_int a v);
+              eat rest
+            
+           | Set_int f ->
+              let v, rest = get_arg () in
+              f := to_int a v;
+              eat rest
+            
+           | String f ->
+              let v, rest = get_arg () in
+              f v;
+              eat rest
+            
+           | Set_string f ->
+              let v, rest = get_arg () in
+              f := v;
+              eat rest
+              
+           | Set_string_list f ->
+              let v, rest = get_arg () in
+              f := (!f)@[v];
+              eat rest
+              
+           | Symbol (l,f) ->
+              let v, rest = get_arg () in
+              if not (List.mem v l) then (
+                Printf.eprintf
+                  "%s: option %s requires an argument in the list: [%a]\n"
+                  progname a
+                  (ListExt.print ListExt.printer_plain output_string) l;
+                help ();
+                exit 2
+              );
+              f v;
+              eat rest
+         )
+         else (
+           Printf.eprintf "%s: unknown option %s\n" progname a;
+           help ();
+           exit 2
+         )
+       )
+  in
+  eat opts;
+  (* now execute all delayed actions *)
+  List.iter (fun f -> f ()) !delayed
+         
