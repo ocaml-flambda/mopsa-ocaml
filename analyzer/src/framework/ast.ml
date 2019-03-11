@@ -604,6 +604,12 @@ let mkv orig uniq ?(vkind=V_common) vuid vtyp =
 
 let vcounter = ref 0
 
+let start_vcounter_at (d:int) : unit =
+  assert (!vcounter <= d);
+  vcounter := d
+
+let get_vcounter_val () = !vcounter
+
 let mkfresh ?(vkind=V_common) funiq vtyp () =
   incr vcounter;
   let uniq = funiq !vcounter in

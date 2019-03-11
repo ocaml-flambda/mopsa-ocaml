@@ -27,12 +27,26 @@ let debug fmt = Debug.debug ~channel:"frontend.uid" fmt
 
 let counter = ref 0
 
+let create_new_uid v = incr counter; {v with uid = !counter}
+
+let gc = List.map (fun v -> {name=v; uid=0} |> create_new_uid) Builtins.all
+
+let start_counter_at (d:int) : unit =
+  if d > 0 then counter := d
+
 let rec translate_program program =
-  let globals = List.map create_new_uid program.prog_globals in
-  {
+  let pp_globs = (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") (fun fmt var -> Format.fprintf fmt "%s:%d" var.name var.uid)) in
+  debug "starting at counter = %d@\n" !counter;
+  debug "program.prog_globals = %a@\n" pp_globs program.prog_globals;
+  let globals = gc @ List.rev @@ List.fold_left (fun acc var_wouid ->
+      if List.mem var_wouid.name Builtins.all then acc else
+        (create_new_uid var_wouid) :: acc) [] program.prog_globals in
+  debug "globals is now:@\n%a@\n" pp_globs globals;
+  let translated_prog = {
     prog_body = translate_stmt (globals, []) program.prog_body;
     prog_globals = globals;
-  }
+  } in
+  translated_prog, !counter
 
 and translate_stmt (scope: (var list) * (var list)) stmt =
   let (globals, lscope) = scope in
@@ -81,14 +95,14 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
            cls_range = cls.cls_range;
          }
       }
-      
+
     (* The remaining statements are just visited by induction since they don't change the scope *)
     | S_assign (target, expr) ->
       {stmt with skind = S_assign (translate_expr scope target, translate_expr scope expr)}
 
-    | S_aug_assign (target, op, expr) -> 
+    | S_aug_assign (target, op, expr) ->
       {stmt with skind = S_aug_assign (translate_expr scope target, op, translate_expr scope expr)}
-      
+
     | S_expression expr ->
       {stmt with skind = S_expression (translate_expr scope expr)}
 
@@ -191,7 +205,7 @@ and translate_expr scope expr =
 
   | E_if(test, body, orelse)  ->
     {expr with ekind = E_if (translate_expr scope test, translate_expr scope body, translate_expr scope orelse)}
-    
+
   | E_yield expr  ->
     {expr with ekind = E_yield (translate_expr scope expr)}
 
@@ -201,7 +215,7 @@ and translate_expr scope expr =
     let lambda_defaults = List.map (translate_expr_option scope) l.lambda_defaults in
     let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) lambda_parameters) lscope in
     let new_lscope = lambda_parameters @ parent_scope in
-    
+
     { expr with
       ekind = E_lambda {
           lambda_body = translate_expr (globals, new_lscope) l.lambda_body;
@@ -241,7 +255,7 @@ and translate_except_handler scope = function
 
 and translate_comprehension (comprhs, scope) (target, iter, conds) =
   let (globals, lscope) = scope in
-  let lscope' = 
+  let lscope' =
     let rec aux e =
       match e.ekind with
       | E_id v ->
@@ -261,16 +275,6 @@ and translate_comprehension (comprhs, scope) (target, iter, conds) =
 
 and find_in_scope (globals, lscope) v =
   try
-    List.find (fun v' -> v.name = v'.name) lscope
+    List.find (fun v' -> v.name = v'.name) (lscope @ globals)
   with Not_found ->
-  try
-    List.find (fun v' -> v.name = v'.name) globals
-  with Not_found ->
-    if List.mem v.name Builtins.all then
-      { name = v.name; uid = 0}
-    else
-      Exceptions.panic "Unbounded variable %a" Pp.print_var v
-
-and create_new_uid v =
-  incr counter;
-  {v with uid = !counter}
+    Exceptions.panic "Unbounded variable %a" Pp.print_var v
