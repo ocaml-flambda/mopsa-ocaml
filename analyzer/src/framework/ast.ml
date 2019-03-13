@@ -132,7 +132,7 @@ let var_compare_chain =
 let var_pp_chain =
   ref (fun fmt v ->
       match v.vkind with
-      | V_common -> Format.pp_print_string fmt v.org_vname
+      | V_common -> Format.fprintf fmt "%s" v.org_vname
       | _ -> Exceptions.panic "pp_var: unknown variable kind"
     )
 

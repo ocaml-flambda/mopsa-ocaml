@@ -44,8 +44,12 @@ let () =
 
 module Domain =
 struct
+  (* TODO: lists? *)
 
-  module Iter = Framework.Domains.Iter.Make(Addr_env.Domain)(Typing.Domain)
+  module AD = Addr_env.Domain
+  module TD = Typing.Domain
+
+  module Iter = Framework.Domains.Iter.Make(AD)(TD)
   include Iter
 
   let name = "python.types.typechecking"
@@ -60,16 +64,16 @@ struct
 
   module Uf = Unionfind(VarEls)
 
-  let extract_type_aset (a: Addr_env.Domain.t) (t: Typing.Domain.t) (aset: Addr_env.Domain.ASet.t) : Typing.polytype option =
-    if Addr_env.Domain.ASet.cardinal aset = 1 then
-      let addr = Addr_env.Domain.ASet.choose aset in
+  let extract_type_aset (a: AD.t) (t: TD.t) (aset: AD.ASet.t) : Typing.polytype option =
+    if AD.ASet.cardinal aset = 1 then
+      let addr = AD.ASet.choose aset in
       match addr with
       | Def addr ->
         begin match addr.addr_kind with
         | A_py_instance _ ->
-          let tys = Typing.Domain.TMap.find addr t.abs_heap in
-          if Typing.Domain.Polytypeset.cardinal tys = 1 then
-            Some (Typing.Domain.Polytypeset.choose tys)
+          let tys = TD.TMap.find addr t.abs_heap in
+          if TD.Polytypeset.cardinal tys = 1 then
+            Some (TD.Polytypeset.choose tys)
           else
             None
         | A_py_class (c, b) ->
@@ -84,63 +88,125 @@ struct
     else
       None
 
-  let extract_type (a: Addr_env.Domain.t) (t: Typing.Domain.t) (v: var) : Typing.polytype option =
-    (* debug "extracting type of var %a in %a %a@\n" pp_var v Addr_env.Domain.print a Typing.Domain.print t; *)
-    extract_type_aset a t (Addr_env.Domain.AMap.find v a)
+  let extract_type (a: AD.t) (t: TD.t) (v: var) : Typing.polytype option =
+    (* debug "extracting type of var %a in %a %a@\n" pp_var v AD.print a TD.print t; *)
+    extract_type_aset a t (AD.AMap.find v a)
 
-  let sametype_vars (a: Addr_env.Domain.t) (t: Typing.Domain.t) : Uf.t =
+  let extract_types_aset (t: TD.t) (aset: AD.ASet.t) : TD.Polytypeset.t =
+    let annot = Annotation.empty in
+    AD.ASet.fold (fun addr acc ->
+        match addr with
+        | Def addr ->
+          let to_join = match addr.addr_kind with
+            | A_py_instance _ ->
+  (TD.TMap.find addr t.abs_heap)
+            | A_py_class (c, b) ->
+              let ty = Class (c, b) in
+              TD.Polytypeset.singleton ty
+            | A_py_module m ->
+              TD.Polytypeset.singleton (Module m)
+            | A_py_function f ->
+              TD.Polytypeset.singleton (Function f)
+            | _ -> Debug.warn "%a@\n" pp_addr addr;
+              TD.Polytypeset.empty
+          in
+          TD.Polytypeset.union annot acc to_join
+        | _ -> acc
+      ) aset TD.Polytypeset.empty
+
+  let extract_types (a: AD.t) (t: TD.t) (v: var) : TD.Polytypeset.t =
+    extract_types_aset t (AD.AMap.find v a)
+
+
+  let sametype_vars (a: AD.t) (t: TD.t) : Uf.t =
     let module TypeMap = MapExt.Make(struct
         type t = Typing.polytype
         let compare = Typing.compare_polytype
         let print = Typing.pp_polytype
       end) in
     let map = TypeMap.empty in
-    let map = Addr_env.Domain.AMap.fold (fun var aset acc ->
+    let map = AD.AMap.fold (fun var aset acc ->
         let ty = extract_type_aset a t aset in
         match ty with
         | None -> acc
         | Some ty ->
           let old = if TypeMap.mem ty acc then TypeMap.find ty acc else [] in
           TypeMap.add ty (var::old) acc) a map in
-    let domain = Addr_env.Domain.AMap.fold (fun var _ acc -> var::acc) a [] in
+    let domain = AD.AMap.fold (fun var _ acc -> var::acc) a [] in
     let equivs = TypeMap.fold (fun ty vars acc -> vars :: acc) map [] in
     debug "uf = %a@\n" Uf.print_llist equivs;
     Uf.from_llist domain equivs
 
 
-  let join annot ((hd, tl): t) ((hd', tl'): t) =
-    debug "join %a %a and join %a %a@\n" Addr_env.Domain.print hd Addr_env.Domain.print hd' Typing.Domain.print tl Typing.Domain.print tl';
-    let u1 = sametype_vars hd tl in
-    let u2 = sametype_vars hd' tl' in
-    let u = Uf.intersection u1 u2 in
-    debug "u1 = %a@\nu2 = %a@\nu = %a@\n" Uf.print u1 Uf.print u2 Uf.print u;
-    let toworkon = List.filter (fun l -> List.length l > 1) (Uf.to_llist u) in
+  module VarSet = SetExt.Make
+      (struct
+        type t = var
+        let compare = compare_var
+        let print = pp_var
+      end
+      )
+
+  type partition = (VarSet.t * TD.Polytypeset.t) list
+
+  type intersectedpartition = (VarSet.t * TD.Polytypeset.t * TD.Polytypeset.t) list
+
+  let pp_i fmt (vs, tys1, tys2) =
+    Format.fprintf fmt "[%a -> %a | %a]" (VarSet.fprint SetExt.printer_default pp_var) vs TD.Polytypeset.print tys1 TD.Polytypeset.print tys2
+
+  let pp_ip fmt ip =
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_i fmt ip
+
+  let pp_e fmt (vs, tys1) =
+    Format.fprintf fmt "[%a -> %a]" (VarSet.fprint SetExt.printer_default pp_var) vs TD.Polytypeset.print tys1
+
+  let pp_p fmt p =
+    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_e fmt p
+
+  let create_partition (a: AD.t) (t: TD.t) : partition =
+    AD.AMap.fold (fun var aset acc ->
+        let tys = extract_types_aset t aset in
+        let sameclass, others = ListExt.partition (fun (_, tys') -> TD.Polytypeset.equal tys tys') acc in
+        match sameclass with
+          | [] -> (VarSet.singleton var, tys):: others
+          | [(vars, _)] -> (VarSet.add var vars, tys):: others
+          | _ -> assert false
+      ) a []
+
+  let intersect_partitions (p: partition) (p': partition) : intersectedpartition =
+    let lift_left (p: partition) : intersectedpartition = List.map (fun (vars, tys) -> (vars, tys, TD.Polytypeset.empty)) p in
+    let intersect_one (part: intersectedpartition) ((vars, tys): VarSet.t * TD.Polytypeset.t) : intersectedpartition =
+      List.fold_left (fun acc (vars_part, tys_part, tys_other) ->
+          let vars_int, vars_diff = VarSet.inter vars_part vars, VarSet.diff vars_part vars in
+          let res_int  = vars_int, tys_part, TD.Polytypeset.union Annotation.empty tys_other tys
+          and res_diff = vars_diff, tys_part, tys_other in
+          match VarSet.is_empty vars_int, VarSet.is_empty vars_diff with
+          | true, true   -> acc
+          | false, false -> res_int  :: res_diff :: acc
+          | true, false  -> res_diff :: acc
+          | false, true  -> res_int  :: acc
+        ) [] part in
+    List.fold_left (fun acc part' -> intersect_one acc part') (lift_left p) p'
+
+  let join annot (hd, tl) (hd', tl') =
+    let p = create_partition hd tl
+    and p' = create_partition hd' tl' in
+    let ip = intersect_partitions p p' in
+    let ip = List.filter (fun (vars, ty1, ty2) -> VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0) (* && not (TD.Polytypeset.equal ty1 ty2)) *)
+        ip in
+    debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
+    (* FIXME: is that necessary? *)
     let jhd, jtl = Iter.join annot (hd, tl) (hd', tl') in
-    let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) partition ->
-        debug "partition = %a@\n" Uf.print_class partition;
-        let v = get_fresh_a_py_var () in
-        let addr = {addr_uid = v; addr_kind = A_py_var v; addr_mode = WEAK} in
-        (* TODO: optimise types, we don't need that many add *)
-        let types = List.fold_left (fun ptys var ->
-            let ty1 = extract_type hd tl var in
-            let ty2 = extract_type hd' tl' var in
-            let ptys = match ty1 with
-              | None -> ptys
-              | Some ty -> Typing.Domain.Polytypeset.add ty ptys in
-            match ty2 with
-            | None -> ptys
-            | Some ty -> Typing.Domain.Polytypeset.add ty ptys
-          ) Typing.Domain.Polytypeset.empty partition in
-        let rhd = List.fold_left (fun rhd var ->
-            Addr_env.Domain.AMap.add var (Addr_env.Domain.ASet.singleton (Def addr)) rhd
-          ) rhd partition in
-        debug "types = %a@\n" Typing.Domain.Polytypeset.print types;
-        let rtl = Typing.Domain.TMap.add addr types rabsheap in
-        (rhd, rtl)
-      ) (jhd, jtl.abs_heap) toworkon in
-    let rtl = {Typing.Domain.abs_heap=rabsheap; Typing.Domain.typevar_env=jtl.typevar_env} in
-    debug "result is %a@\n%a@\n" Addr_env.Domain.print rhd Typing.Domain.print rtl;
-    rhd, rtl
+    let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
+        let alpha = get_fresh_a_py_var () in
+        let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
+        let types = TD.Polytypeset.join annot ty1 ty2 in
+        let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
+        let rabsheap = TD.TMap.add addr types rabsheap in
+        (rhd, rabsheap)
+      ) (jhd, jtl.abs_heap) ip in
+    let rtl = {jtl with abs_heap = rabsheap} in
+    debug "result is %a@\n%a@\n" AD.print rhd TD.print rtl;
+    rhd, {jtl with abs_heap = rabsheap}
 
 end
 
