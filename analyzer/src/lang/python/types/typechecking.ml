@@ -5,7 +5,6 @@ open Typing
 open Addr_env
 open Ast
 open Universal.Ast
-open Unionfind
 
 type addr_kind +=
     A_py_var of int
@@ -39,8 +38,6 @@ let () =
            | _ -> default a1 a2);
     }
   )
-
-
 
 module Domain =
 struct
