@@ -38,12 +38,12 @@ let rec translate_program program =
   let pp_globs = (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") (fun fmt var -> Format.fprintf fmt "%s:%d" var.name var.uid)) in
   debug "starting at counter = %d@\n" !counter;
   debug "program.prog_globals = %a@\n" pp_globs program.prog_globals;
-  let globals = gc @ List.rev @@ List.fold_left (fun acc var_wouid ->
+  let globals = List.rev @@ List.fold_left (fun acc var_wouid ->
       if List.mem var_wouid.name Builtins.all then acc else
         (create_new_uid var_wouid) :: acc) [] program.prog_globals in
   debug "globals is now:@\n%a@\n" pp_globs globals;
   let translated_prog = {
-    prog_body = translate_stmt (globals, []) program.prog_body;
+    prog_body = translate_stmt (gc @ globals, []) program.prog_body;
     prog_globals = globals;
   } in
   translated_prog, !counter
