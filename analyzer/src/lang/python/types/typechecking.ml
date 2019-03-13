@@ -55,43 +55,6 @@ struct
   let name = "python.types.typechecking"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  module VarEls =
-  struct
-    type t = var
-    let compare = compare_var
-    let print = pp_var
-  end
-
-  module Uf = Unionfind(VarEls)
-
-  let extract_type_aset (a: AD.t) (t: TD.t) (aset: AD.ASet.t) : Typing.polytype option =
-    if AD.ASet.cardinal aset = 1 then
-      let addr = AD.ASet.choose aset in
-      match addr with
-      | Def addr ->
-        begin match addr.addr_kind with
-        | A_py_instance _ ->
-          let tys = TD.TMap.find addr t.abs_heap in
-          if TD.Polytypeset.cardinal tys = 1 then
-            Some (TD.Polytypeset.choose tys)
-          else
-            None
-        | A_py_class (c, b) ->
-          let ty = Class (c, b) in Some ty
-        | A_py_module m ->
-          Some (Module m)
-        | A_py_function f ->
-          Some (Function f)
-        | _ -> Debug.warn "%a@\n" pp_addr addr; None
-        end
-      | _ -> None
-    else
-      None
-
-  let extract_type (a: AD.t) (t: TD.t) (v: var) : Typing.polytype option =
-    (* debug "extracting type of var %a in %a %a@\n" pp_var v AD.print a TD.print t; *)
-    extract_type_aset a t (AD.AMap.find v a)
-
   let extract_types_aset (t: TD.t) (aset: AD.ASet.t) : TD.Polytypeset.t =
     let annot = Annotation.empty in
     AD.ASet.fold (fun addr acc ->
@@ -116,27 +79,6 @@ struct
 
   let extract_types (a: AD.t) (t: TD.t) (v: var) : TD.Polytypeset.t =
     extract_types_aset t (AD.AMap.find v a)
-
-
-  let sametype_vars (a: AD.t) (t: TD.t) : Uf.t =
-    let module TypeMap = MapExt.Make(struct
-        type t = Typing.polytype
-        let compare = Typing.compare_polytype
-        let print = Typing.pp_polytype
-      end) in
-    let map = TypeMap.empty in
-    let map = AD.AMap.fold (fun var aset acc ->
-        let ty = extract_type_aset a t aset in
-        match ty with
-        | None -> acc
-        | Some ty ->
-          let old = if TypeMap.mem ty acc then TypeMap.find ty acc else [] in
-          TypeMap.add ty (var::old) acc) a map in
-    let domain = AD.AMap.fold (fun var _ acc -> var::acc) a [] in
-    let equivs = TypeMap.fold (fun ty vars acc -> vars :: acc) map [] in
-    debug "uf = %a@\n" Uf.print_llist equivs;
-    Uf.from_llist domain equivs
-
 
   module VarSet = SetExt.Make
       (struct
@@ -210,5 +152,4 @@ struct
 
 end
 
-let () =
-  register_domain (module Domain)
+let () = register_domain (module Domain)
