@@ -62,7 +62,7 @@ struct
     | D_python_objects_list -> Some Eq
     | _ -> None
 
-  let debug = Debug.debug ~channel:name
+  let debug fmt = Debug.debug ~channel:name fmt
 
   let exec_interface = {export = []; import = [Zone.Z_py_obj]}
   let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
@@ -342,11 +342,11 @@ struct
                       let flow = Flow.copy_annot indexerror_f flow in
 
                       let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
-                      let indexerror_f = Flow.copy_annot assignment_f flow in
+                      let indexerror_f = Flow.copy_annot assignment_f indexerror_f in
 
                       let assignment = man.eval (mk_py_none range) assignment_f in
                       let indexerror = Eval.empty_singleton indexerror_f in
-                      Eval.join_list (assignment:: (Eval.copy_annot assignment indexerror) ::[])
+                      Eval.join_list (assignment :: (Eval.copy_annot assignment indexerror) ::[])
                     )
                   ~felse:typerror
               )

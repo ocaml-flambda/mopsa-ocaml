@@ -41,7 +41,7 @@ let () =
 
 module Domain =
 struct
-  (* TODO: lists? *)
+  (* TODO: lists and polymorphism? *)
 
   module AD = Addr_env.Domain
   module TD = Typing.Domain
@@ -103,9 +103,11 @@ struct
 
   let create_partition (a: AD.t) (t: TD.t) : partition =
     AD.AMap.fold (fun var aset acc ->
-        let tys = extract_types_aset t aset in
-        let sameclass, others = ListExt.partition (fun (_, tys') -> TD.Polytypeset.equal tys tys') acc in
-        match sameclass with
+        let tys = match aset with
+          | TOP -> TD.Polytypeset.top
+          | _ ->   extract_types_aset t aset in
+          let sameclass, others = ListExt.partition (fun (_, tys') -> TD.Polytypeset.equal tys tys') acc in
+          match sameclass with
           | [] -> (VarSet.singleton var, tys):: others
           | [(vars, _)] -> (VarSet.add var vars, tys):: others
           | _ -> assert false
@@ -127,10 +129,17 @@ struct
     List.fold_left (fun acc part' -> intersect_one acc part') (lift_left p) p'
 
   let join annot (hd, tl) (hd', tl') =
+    match hd, hd' with
+    | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
+    | _ ->
+      match tl.TD.abs_heap, tl'.TD.abs_heap with
+      | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
+      | _ ->
+    debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
     let p = create_partition hd tl
     and p' = create_partition hd' tl' in
     let ip = intersect_partitions p p' in
-    let ip = List.filter (fun (vars, ty1, ty2) -> VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0) (* && not (TD.Polytypeset.equal ty1 ty2)) *)
+    let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
         ip in
     debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
     (* FIXME: is that necessary? *)
