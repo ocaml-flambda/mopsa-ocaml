@@ -64,10 +64,65 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
+
+  module VarInfo = struct type t = var let compare = compare_var let print = pp_var end
+  module ListInfo = struct
+    type t = Callstack.cs * range
+    let compare (cs, r) (cs', r') =
+      Compare.compose
+        [
+          (fun () -> Callstack.compare cs cs');
+          (fun () -> compare_range r r')
+        ]
+    let print fmt (cs, r) =
+      Format.fprintf fmt "(%a, %a)"
+        Callstack.pp_call_stack cs
+        pp_range r
+  end
+
+  module Equiv = Equiv.Make(ListInfo)(VarInfo)
+
+  type ('a, _) Annotation.key +=
+    | KListInfo : ('a, Equiv.t) Annotation.key
+
+  let () =
+    Annotation.(register_stateless_annot {
+        eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
+                function
+                | KListInfo -> Some Eq
+                | _ -> None
+              in
+              f);
+        print = (fun fmt m -> Format.fprintf fmt "List annots: @[%a@]" Equiv.print m);
+      }) ();
+    ()
+
+
+  let fresh_smashed_var =  mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any
+  (** todo: allouer une fresh_smashed_var seulement si on n'a rien pour cela côté callstack et range? *)
+  (** donc rajouter des Annotations comme pour la recency abstraction... *)
+
+  let get_var_equiv (info: ListInfo.t) (e: Equiv.t) =
+    try
+      Equiv.find_l info e, e
+    with Not_found ->
+      let var = fresh_smashed_var () in
+      let new_eq = Equiv.add (info, var) e in
+      var, new_eq
+
+  let get_var_flow (info: ListInfo.t) (f: 'a flow) : var * 'a flow =
+    let a = Flow.get_annot KListInfo f in
+    let var, a = get_var_equiv info a in
+    var, Flow.set_annot KListInfo a f
+
   let exec_interface = {export = []; import = [Zone.Z_py_obj]}
   let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
 
-  let init _ _ flow = Some flow
+  let init (prog:program) man flow =
+    Some (
+      Flow.set_annot KListInfo Equiv.empty flow
+    )
+
 
   let rec eval zones exp man flow =
     let range = erange exp in
@@ -90,7 +145,7 @@ struct
                       (* FIXME: try to reuse other functions? in the impl, list_concat (Objects/listobject.c) is not reusing anything *)
                       (* First, allocate new addr for the list, and new addr for the list elements *)
                       (* Then assign the el addr to both addresses above *)
-                      let els_res_var = mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any () in
+                      let els_res_var, flow = get_var_flow (Callstack.get flow, range) flow in
                       let flow = List.fold_left (fun acc el ->
                           man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_res_var range) el range) acc)
                           flow [mk_var ~mode:WEAK elsl_var range;
@@ -121,7 +176,7 @@ struct
                       let els_list = match ekind list with
                         | E_py_object ({addr_kind = A_py_list a}, _) -> a
                         | _ -> assert false in
-                      let els_var = mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any () in
+                      let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
                       let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) (mk_var ~mode:WEAK els_list range) range) flow in
                       let addr_list = mk_alloc_addr (A_py_list els_var) range in
                       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
@@ -140,12 +195,13 @@ struct
 
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
-      Eval.eval_list ls (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      Eval.bind (fun els flow ->
+      (* Eval.eval_list ls (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+       * Eval.bind (fun els flow -> *)
           (* TODO: handle empty lists *)
-          let els_var = mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any () in
+          let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
+          (* let els_var = fresh_smashed_var () in *)
           let flow = List.fold_left (fun acc el ->
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow els in
+              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
           (* let flow = man.exec ~zone:Zone.Z_py (mk_add_var els_var range) flow in *)
           (* let flow =
            *   List.fold_left (fun acc el ->
@@ -158,8 +214,8 @@ struct
                 | _ -> assert false in
               Eval.singleton (mk_py_object (addr_list, None) range) flow
             )
-        )
-    |> OptionExt.return
+          (** ) *)
+          |> OptionExt.return
 
 
     | E_py_object ({addr_kind = A_py_list _}, e) ->

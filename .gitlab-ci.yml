@@ -43,7 +43,6 @@ build_job:
 
 .test-py:
   allow_failure: true
-  allow_failure: true
   stage: test
   dependencies: [build_job]
   script:
@@ -53,7 +52,6 @@ build_job:
 
 .test-pyty:
   stage: test
-  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
@@ -62,7 +60,6 @@ build_job:
 
 .bench-typpete:
   stage: benchmarks
-  allow_failure: true
   dependencies: [build_job]
   script:
     - eval `opam config env`
@@ -313,4 +310,3 @@ bench-typpete 25/25:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .bench-typpete
-

@@ -174,7 +174,10 @@ struct
       let flow = Flow.map_domain_cur (remove v) man flow in
       if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
         Post.return flow
+      else if String.length v.org_vname >= 3 && String.sub v.org_vname 0 3 = "$l*" then
+        Post.return flow
       else
+        (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
         man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return
       (* let v' = mk_py_value_var v T_any in
        * man.exec (mk_remove_var v' range) flow |> Post.return *)

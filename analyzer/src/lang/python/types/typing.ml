@@ -741,7 +741,11 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind (fun arg flow ->
           Eval.assume (mk_py_isinstance_builtin arg "range_iterator" range) man flow
-            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
+            ~fthen:(fun flow ->
+              let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
+              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+              Eval.join_list (Eval.copy_annot stopiteration res::stopiteration::[])
+            )
             ~felse:tyerror
         )
       |> OptionExt.return

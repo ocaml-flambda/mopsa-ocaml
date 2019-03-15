@@ -75,11 +75,11 @@ module Domain =
              | E_py_object ({addr_kind = A_py_method _}, _)
              | E_py_object ({addr_kind = A_py_module _}, _) ->
 
-               Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-               Eval.bind (fun args flow ->
+               (* Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                * Eval.bind (fun args flow -> *)
                    let exp = {exp with ekind = E_py_call(f, args, [])} in
                    man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
-                 )
+                 (* ) *)
 
              | _ ->
                (* if f has attribute call, restart with that *)

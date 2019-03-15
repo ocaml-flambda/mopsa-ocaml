@@ -75,7 +75,8 @@ module Domain =
             not iterable), and is not an AttributeError stating that
             __iter__ does not exist *)
          (* same for next *)
-         let tmp = mktmp () in
+        let iterabletmp = mktmp () in
+        let tmp = mktmp () in
          (* Post.bind man (fun iter flow -> *)
          let l_else =
            match skind orelse with
@@ -83,7 +84,9 @@ module Domain =
            | _ -> [orelse; mk_stmt S_break range] in
          let stmt =
            mk_block
-             [ mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [iterable] range) range;
+             [
+               mk_assign (mk_var iterabletmp range) iterable range;
+               mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [mk_var iterabletmp range] range) range;
                mk_while
                  (mk_py_true range)
                  (mk_block [
@@ -103,7 +106,7 @@ module Domain =
              range
          in
          man.exec stmt flow |>
-         Post.clean [mk_remove_var tmp range] man |>
+         Post.clean (List.map (fun x -> mk_remove_var x range) [iterabletmp; tmp]) man |>
          Post.return
 
 
