@@ -406,6 +406,7 @@ struct
       allocate_builtin man range flow "str" |> OptionExt.return
 
     | E_constant (C_string s) ->
+      (* we keep s in the expression of the returned object *)
       let range = tag_range range "alloc_str" in
       let bltin_cls, bltin_mro = get_builtin "str" in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_py_instance "str" (*bltin_cls*)) range) flow |>
@@ -727,6 +728,14 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "slice.__new__")}, _)}, cls :: [down; up; step], []) ->
+      let intornone = ["int"; "NoneType"] in
+      Utils.check_instances_disj man flow range
+        [down; up; step]
+        [intornone; intornone; intornone]
+        (fun _ flow ->
+           allocate_builtin man range flow "slice")
+      |> OptionExt.return
 
     | E_py_undefined _ -> Eval.singleton exp flow |> OptionExt.return
 

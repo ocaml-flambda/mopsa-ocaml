@@ -110,6 +110,14 @@ module Domain =
              )
          |>  OptionExt.return
 
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__getitem__")}, _)}, [string; index], []) ->
+        Utils.check_instances_disj man flow range
+          [string; index]
+          [["str"]; ["int"; "slice"]]
+          (fun _ flow -> man.eval (mk_py_top T_string range) flow)
+        |> OptionExt.return
+
       | _ -> None
 
     let exec _ _ _ _ = None
