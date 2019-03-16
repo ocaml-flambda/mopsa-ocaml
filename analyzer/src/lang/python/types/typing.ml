@@ -40,7 +40,7 @@ type polytype =
   (* | Union of addr list *)
   | Typevar of int
 
-and pytypeinst = {classn: polytype (* TODO: polytype or addr? *); uattrs: addr StringMap.t; oattrs: addr StringMap.t}
+and pytypeinst = {classn: polytype; uattrs: addr StringMap.t; oattrs: addr StringMap.t}
 
 let rec compare_polytype t1 t2 =
   match t1, t2 with
@@ -128,6 +128,13 @@ struct
         let compare = compare_polytype
         let print = pp_polytype
       end)
+
+  (* module PolytypesetJoin =
+   * struct
+   *   include Polytypeset
+   *   let join _ a b = failwith "join"
+   *   (\* join {instance[a]} {instance[a, empty, a]} = {instance[a, empty, a]} *\)
+   * end *)
 
   module TMap = Framework.Lattices.Partial_map.Make
       (struct
@@ -734,7 +741,11 @@ struct
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind (fun arg flow ->
           Eval.assume (mk_py_isinstance_builtin arg "range_iterator" range) man flow
-            ~fthen:(man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range))
+            ~fthen:(fun flow ->
+              let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
+              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+              Eval.join_list (Eval.copy_annot stopiteration res::stopiteration::[])
+            )
             ~felse:tyerror
         )
       |> OptionExt.return

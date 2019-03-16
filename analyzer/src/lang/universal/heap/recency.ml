@@ -122,9 +122,11 @@ struct
       (* Change the sub-domain *)
       let flow' =
         if not (Pool.mem recent_addr pool) then
+          let () = debug "first allocation@\n" in
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
+          let () = debug "rename to perform@\n" in
           (* Otherwise, we make the previous recent address as an old one *)
           let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
           let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in

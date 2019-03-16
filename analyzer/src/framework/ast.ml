@@ -132,7 +132,7 @@ let var_compare_chain =
 let var_pp_chain =
   ref (fun fmt v ->
       match v.vkind with
-      | V_common -> Format.pp_print_string fmt v.org_vname
+      | V_common -> Format.fprintf fmt "%s" v.org_vname
       | _ -> Exceptions.panic "pp_var: unknown variable kind"
     )
 
@@ -603,6 +603,12 @@ let mkv orig uniq ?(vkind=V_common) vuid vtyp =
   {org_vname = orig; uniq_vname = uniq; vuid; vtyp; vkind}
 
 let vcounter = ref 0
+
+let start_vcounter_at (d:int) : unit =
+  assert (!vcounter <= d);
+  vcounter := d
+
+let get_vcounter_val () = !vcounter
 
 let mkfresh ?(vkind=V_common) funiq vtyp () =
   incr vcounter;

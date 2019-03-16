@@ -53,7 +53,6 @@ module Domain =
            | [] ->
               mk_stmt (S_expression (mk_py_call append (acc_var::expr) range)) range
            | (target, iter, conds)::tl ->
-              (* todo: mk_remove target in the end *)
               let i_conds = List.rev conds in
               let empty_stmt = mk_stmt (Universal.Ast.S_block []) range in
               let if_stmt = List.fold_left (fun acc cond ->
@@ -62,9 +61,10 @@ module Domain =
               mk_stmt (S_py_for(target, iter,
                                 if_stmt,
                                 empty_stmt)) range in
-         let clean_targets = List.fold_left (fun acc (target, _, _) -> match ekind target with
-                                                                       | E_var (v, _) -> (mk_remove_var v range)::acc
-                                                                       | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
+         let clean_targets = List.fold_left
+             (fun acc (target, _, _) -> match ekind target with
+                | E_var (v, _) -> (mk_remove_var v range)::acc
+                | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
 

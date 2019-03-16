@@ -52,36 +52,6 @@ struct
     | Undef_global -> Format.fprintf fmt "undef"
 end
 
-(*==========================================================================*)
-(**                          {2 Environment}                                *)
-(*==========================================================================*)
-(* type addr_kind +=
- *    | A_py_instance of py_object (\** class of the instance *\) * obj_param option (\** optional parameters *\)
- *
- * let () =
- *   Format.(
- *     register_addr {
- *       print = (fun default fmt a ->
- *           match a.addr_kind with
- *           | A_py_instance(obj, _) -> fprintf fmt "<inst of %a at $addr%@%d>" pp_addr (addr_of_object obj) a.addr_uid
- *           | _ -> default fmt a);
- *       compare =(fun default a1 a2 ->
- *           match a1.addr_kind, a2.addr_kind with
- *           | A_py_instance (obj1, l1), A_py_instance (obj2, l2) ->
- *             Compare.pair
- *               Ast.compare_py_object
- *               (Compare.option (fun op1 op2 ->
- *                    match op1, op2 with
- *                    | List p1, List p2
- *                    | Tuple p1, Tuple p2
- *                    | Dict p1, Dict p2
- *                    | Range p1, Range p2 -> Ast.compare_py_object p1 p2
- *                    | Generator g1, Generator g2 -> Exceptions.panic "todo"
- *                    | _ -> Pervasives.compare op1 op2)) (obj1, l1) (obj2, l2)
- *           | _ -> default a1 a2)
- *     }
- *   ) *)
-
 let mk_avar ?(vtyp = T_any) addr_uid =
   mkfresh (fun uid -> "$addr@" ^ (string_of_int addr_uid) ^ "_" ^ (string_of_int uid)) vtyp ()
 
@@ -174,7 +144,10 @@ struct
       let flow = Flow.map_domain_cur (remove v) man flow in
       if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
         Post.return flow
+      else if String.length v.org_vname >= 3 && String.sub v.org_vname 0 3 = "$l*" then
+        Post.return flow
       else
+        (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
         man.exec (mk_assign var (mk_expr (E_py_undefined true) range) range) flow |> Post.return
       (* let v' = mk_py_value_var v T_any in
        * man.exec (mk_remove_var v' range) flow |> Post.return *)

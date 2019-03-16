@@ -147,24 +147,16 @@ module Domain =
                                             Eval.assume
                                               (mk_py_isinstance_builtin obj' "function" range)
                                               ~fthen:(fun flow ->
-                                                  (* Debug.fail "todo@\n"; *)
                                                   debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
                                                   eval_alloc man (A_py_method (object_of_expr obj', e)) range flow |>
                                                   Eval.bind (fun addr flow ->
                                                       let obj = (addr, None) in
                                                       Eval.singleton (mk_py_object obj range) flow)
-                                                (* let exp = mk_expr (E_alloc_addr (A_py_method(object_of_expr obj', e))) range in
-                                                 * man.eval exp flow *)
-
                                                )
                                               ~felse:(fun flow ->
                                                 Eval.singleton obj' flow
-                                                (* let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
-                                                 *     Eval.singleton exp flow *)
                                               )
                                               man flow
-                                            (* let exp = mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range in
-                                             * man.eval exp flow *)
                                           )
                                     )
                                     ~felse:(fun flow -> search_mro flow tl)

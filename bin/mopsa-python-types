@@ -2,6 +2,6 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/types.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG}  -stub=$MOPSADIR/share/stubs/python/ $@
-#-widening-delay=1
+${MOPSADIR}/bin/mopsa -config=${CONFIG}  -stub=$MOPSADIR/share/stubs/python/ -widening-delay=0 -loop-unrolling=1 $@
+# -widening-delay=1
 #-stub ${MOPSADIR}/analyzer/stubs/python
