@@ -60,3 +60,17 @@ let mk_try_stopiteration body except range =
     (Universal.Ast.mk_block [] range)
     (Universal.Ast.mk_block [] range)
     range
+
+let check_instances man flow range exprs instances processing =
+  let open Mopsa in
+  let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+  let rec aux iexprs lexprs linstances flow =
+    match lexprs, linstances with
+    | _, [] -> processing iexprs flow
+    | e::es, i::is ->
+      Eval.assume (Addr.mk_py_isinstance_builtin e i range) man flow
+        ~fthen:(aux iexprs es is)
+        ~felse:tyerror
+    | [], _ -> assert false in
+  Eval.eval_list exprs man.eval flow |>
+  Eval.bind (fun exprs flow -> aux exprs exprs instances flow)

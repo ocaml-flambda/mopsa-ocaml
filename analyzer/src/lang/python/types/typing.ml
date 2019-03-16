@@ -690,25 +690,10 @@ struct
         |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: [down; up; step], []) ->
-      Eval.eval_list [down; up; step] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-      Eval.bind (fun l flow ->
-          let down, up, step = match l with
-            | e1 :: e2 :: e3 :: [] -> e1, e2, e3
-            | _ -> assert false in
-          let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-          Eval.assume (mk_py_isinstance_builtin down "int" range) man flow
-            ~fthen:(fun flow ->
-                Eval.assume (mk_py_isinstance_builtin up "int" range) man flow
-                  ~fthen:(fun flow ->
-                      Eval.assume (mk_py_isinstance_builtin step "int" range) man flow
-                        ~fthen:(fun flow ->
-                            allocate_builtin man range flow "range_iterator")
-                        ~felse:tyerror
-                    )
-                  ~felse:tyerror
-              )
-            ~felse:tyerror
-        )
+      Utils.check_instances man flow range
+        [down ; up   ; step]
+        ["int"; "int"; "int"]
+        (fun args flow -> allocate_builtin man range flow "range_iterator")
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
@@ -725,30 +710,23 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, [arg], []) ->
-      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-      Eval.bind (fun r flow ->
-          Eval.assume (mk_py_isinstance_builtin r "range" range) man flow
-            ~fthen:(fun flow ->
-              allocate_builtin man range flow "range_iterator"
-            )
-            ~felse:tyerror
-        )
+      Utils.check_instances man flow range
+        [arg]
+        ["range"]
+        (fun r flow -> allocate_builtin man range flow "range_iterator")
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, [arg], []) ->
-      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
-      Eval.bind (fun arg flow ->
-          Eval.assume (mk_py_isinstance_builtin arg "range_iterator" range) man flow
-            ~fthen:(fun flow ->
-              let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
-              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-              Eval.join_list (Eval.copy_annot stopiteration res::stopiteration::[])
-            )
-            ~felse:tyerror
+      Utils.check_instances man flow range
+        [arg]
+        ["range_iterator"]
+        (fun _ flow ->
+           let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
+           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+           Eval.join_list (Eval.copy_annot stopiteration res :: stopiteration :: [])
         )
       |> OptionExt.return
+
 
     | E_py_undefined _ -> Eval.singleton exp flow |> OptionExt.return
 
