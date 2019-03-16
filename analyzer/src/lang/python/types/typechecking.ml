@@ -1,4 +1,3 @@
-(* TODO: using union-find is probably useless, maybe arrays instead? *)
 open Mopsa
 open Addr
 open Typing

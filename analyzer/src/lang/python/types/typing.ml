@@ -40,7 +40,7 @@ type polytype =
   (* | Union of addr list *)
   | Typevar of int
 
-and pytypeinst = {classn: polytype (* TODO: polytype or addr? *); uattrs: addr StringMap.t; oattrs: addr StringMap.t}
+and pytypeinst = {classn: polytype; uattrs: addr StringMap.t; oattrs: addr StringMap.t}
 
 let rec compare_polytype t1 t2 =
   match t1, t2 with

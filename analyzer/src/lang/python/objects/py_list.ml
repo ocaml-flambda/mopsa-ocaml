@@ -22,6 +22,13 @@
 (* A general smashing abstraction for Python lists, (hopefully)
    irrelevant of the value/type domain *)
 
+(* currently, lists are smashed into one variable abstracting all
+   its elements. To avoid allocating a new variable each time
+   (especially during loops), we allocate them only if there has
+   been not other allocation at the same point. This is quite
+   similar to the recency abstraction, and is probably not optimal
+*)
+
 (* TODO: add length for lists and position for iterator? *)
 
 open Mopsa
@@ -99,8 +106,6 @@ struct
 
 
   let fresh_smashed_var =  mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any
-  (** todo: allouer une fresh_smashed_var seulement si on n'a rien pour cela côté callstack et range? *)
-  (** donc rajouter des Annotations comme pour la recency abstraction... *)
 
   let get_var_equiv (info: ListInfo.t) (e: Equiv.t) =
     try
@@ -195,27 +200,21 @@ struct
 
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
-      (* Eval.eval_list ls (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-       * Eval.bind (fun els flow -> *)
-          (* TODO: handle empty lists *)
-          let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
-          (* let els_var = fresh_smashed_var () in *)
-          let flow = List.fold_left (fun acc el ->
-              man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
-          (* let flow = man.exec ~zone:Zone.Z_py (mk_add_var els_var range) flow in *)
-          (* let flow =
-           *   List.fold_left (fun acc el ->
-           *     man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow els in *)
-          let addr_list = mk_alloc_addr (A_py_list els_var) range in
-          man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
-          Eval.bind (fun eaddr_list flow ->
-              let addr_list = match ekind eaddr_list with
-                | E_addr a -> a
-                | _ -> assert false in
-              Eval.singleton (mk_py_object (addr_list, None) range) flow
-            )
-          (** ) *)
-          |> OptionExt.return
+      (* TODO: handle empty lists *)
+      let els_var, flow = get_var_flow (Callstack.get flow, range) flow in
+      (* let els_var = fresh_smashed_var () in *)
+      let flow = List.fold_left (fun acc el ->
+          man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK els_var range) el range) acc) flow ls in
+      let addr_list = mk_alloc_addr (A_py_list els_var) range in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) addr_list flow |>
+      Eval.bind (fun eaddr_list flow ->
+          let addr_list = match ekind eaddr_list with
+            | E_addr a -> a
+            | _ -> assert false in
+          Eval.singleton (mk_py_object (addr_list, None) range) flow
+        )
+      (** ) *)
+      |> OptionExt.return
 
 
     | E_py_object ({addr_kind = A_py_list _}, e) ->
