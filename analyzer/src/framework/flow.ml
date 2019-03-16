@@ -127,8 +127,7 @@ let widen (man: ('a, _) man) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   {map; annot}
 
 let print (man: ('a, _) man) fmt (flow : 'a flow) : unit =
-  top_fprint (FlowMap.print man.print) fmt flow.map;
-  Annotation.print fmt flow.annot
+  top_fprint (FlowMap.print man.print) fmt flow.map
 
 let singleton (annot:'a Annotation.annot) (tk:token) (env:'a) : 'a flow =
   make annot (FlowMap.singleton tk env)
