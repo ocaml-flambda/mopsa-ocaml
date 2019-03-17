@@ -39,6 +39,64 @@ module Domain =
 
     let debug fmt = Debug.debug ~channel:name fmt
 
+    type stub_signature = {in_args: string list;
+                           out_type: Mopsa.typ}
+    type stub_db = stub_signature StringMap.t
+
+    let add_signature funname in_args out_type db =
+      let out_type = match out_type with
+        | "bool" -> T_bool
+        | "int" -> T_int
+        | "float" -> T_float F_DOUBLE
+        | "str" -> T_string
+        | "NoneType" -> T_py_none
+        | "NotImplementedType" -> T_py_not_implemented
+        | _ -> assert false in
+      StringMap.add funname {in_args; out_type} db
+
+    let stub_base =
+      let str = "str" and int = "int" and bool = "bool" in
+      StringMap.empty |>
+      add_signature "str.__mul__" [str; int] str |>
+      add_signature "str.__rmul__" [str; int] str |>
+
+      add_signature "str.capitalize" [str] str |>
+      (* add_signature "str.center" [str; int] str |> *)
+      add_signature "str.center" [str; int; str] str |>
+      (* add_signature "str.join" [str; List str] str  |>
+       * add_signature "str.join" [str; Generator str] [str] [] |> *)
+
+      add_signature "str.lower" [str] str |>
+      add_signature "str.upper" [str] str |>
+      (* add_signature "str.split" [str] [List str] [] |>
+       * add_signature "str.split" [str; str] [List str] [] |>
+       * add_signature "str.split" [str; str; int] [List str] [] |> *)
+      add_signature "str.replace" [str; str; str] str |>
+      (* add_signature "str.replace" [str; str; str; int] [str] [] |> *)
+      add_signature "str.rstrip" [str] str |>
+      (* add_signature "str.rstrip" [str; str] str |> *)
+      add_signature "str.strip" [str] str |>
+      (* add_signature "str.strip" [str; str] [str] [] |> *)
+      add_signature "str.swapcase" [str] str |>
+      add_signature "str.title" [str] str |>
+      add_signature "str.__len__" [str] int |>
+      (* add_signature "str.__getitem__" [str; int] [str] [] (\* ["IndexError"] *\) |>
+       * add_signature "str.__getitem__" [str; slice] [str] [] |> *)
+      add_signature "str.__contains__" [str; str] bool |>
+      add_signature "str.isalnum" [str] bool |>
+      add_signature "str.isalpha" [str] bool |>
+      add_signature "str.isdecimal" [str] bool |>
+      add_signature "str.isdigit" [str] bool |>
+      add_signature "str.islower" [str] bool |>
+      add_signature "str.isnumeric" [str] bool  |>
+      add_signature "str.isspace" [str] bool |>
+      add_signature "str.istitle" [str] bool |>
+      add_signature "str.isupper" [str] bool
+
+
+    let process_simple man flow range exprs instances return =
+      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+
     let exec_interface = {export = []; import = []}
     let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
 
@@ -49,12 +107,34 @@ module Domain =
         | "str.__mod__"
         (* | "str.__mul__" *)
         | "str.__rmod__"
-        | "str.__rmul__" -> true
+      (* | "str.__rmul__" *)
+            -> true
       | _ -> false
 
     let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
       let range = erange exp in
       match ekind exp with
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+        debug "function %s in stub_base, processing@\n" f;
+        let {in_args; out_type} = StringMap.find f stub_base in
+        process_simple man flow range args in_args out_type
+        |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [str], []) ->
+        (* rewrite into str.split(str, " ", -1) *)
+        let args' = (mk_constant T_string (C_string " ") range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+        man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
+        |> OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call , [str; split], []) ->
+        (* rewrite into str.split(str, split, -1) *)
+        let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+        man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
+        |> OptionExt.return
+
+      (* the last case of str.split is in the list abstraction as it uses the smashing *)
+
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
          (* check if obj has str method, run it, check return type (can't be notimplemented) *)
          (* otherwise, call __repr__. Or repr? *)
@@ -109,6 +189,8 @@ module Domain =
                  man flow
              )
          |>  OptionExt.return
+
+
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__getitem__")}, _)}, args, []) ->

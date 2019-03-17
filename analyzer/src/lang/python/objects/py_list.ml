@@ -410,24 +410,61 @@ struct
       |> OptionExt.return
 
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
-        let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-        Eval.eval_list args man.eval flow |>
-        Eval.bind (fun args flow ->
-            if List.length args >= 1 then
-              let in_ty = List.hd args in
-              Eval.assume (mk_py_isinstance_builtin in_ty "list" range) man flow
-                ~fthen:(fun flow ->
-                    (* FIXME: we're assuming that we use the list abstraction *)
-                    let var_els_in_ty = match ekind in_ty with
-                      | E_py_object ({addr_kind = A_py_list a}, _) -> a
-                      | _ -> assert false in
-                    Eval.assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
-                      ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
-                      ~felse:tyerror)
-                ~felse:tyerror
-            else tyerror flow)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
+      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+      Eval.eval_list args man.eval flow |>
+      Eval.bind (fun args flow ->
+          if List.length args >= 1 then
+            let in_ty = List.hd args in
+            Eval.assume (mk_py_isinstance_builtin in_ty "list" range) man flow
+              ~fthen:(fun flow ->
+                  (* FIXME: we're assuming that we use the list abstraction *)
+                  let var_els_in_ty = match ekind in_ty with
+                    | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                    | _ -> assert false in
+                  Eval.assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                    ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
+                    ~felse:tyerror)
+              ~felse:tyerror
+          else tyerror flow)
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.join")}, _)}, args, []) ->
+      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+      Utils.check_instances man flow range args
+        ["str"; "list"]
+        (fun eargs flow ->
+           let toinsert, iterable = match eargs with [t; i] -> t, i | _ -> assert false in
+           let var_els_iterable = match ekind iterable with
+             | E_py_object ({addr_kind = A_py_list a}, _) -> a
+             | _ -> assert false in
+           Eval.assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
+             ~fthen:(man.eval (mk_py_top T_string range))
+             ~felse:tyerror
+        )
+      |> OptionExt.return
+
+      (* the last case of str.split uses this list abstraction so every case is here... *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [str], []) ->
+        (* rewrite into str.split(str, " ", -1) *)
+        let args' = (mk_constant T_string (C_string " ") range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+        man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
         |> OptionExt.return
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call , [str; split], []) ->
+        (* rewrite into str.split(str, split, -1) *)
+        let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
+        man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
+        |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        ["str"; "str"; "int"]
+        (fun eargs flow ->
+           man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
+        )
+      |> OptionExt.return
 
     | _ -> None
 

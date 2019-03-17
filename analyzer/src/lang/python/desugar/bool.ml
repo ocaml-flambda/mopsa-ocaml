@@ -73,6 +73,7 @@ module Domain =
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
+        (* FIXME: combinatoric explosion *)
          man.eval e1 flow |>
            Eval.bind (fun e1 flow1 ->
                Eval.assume e1

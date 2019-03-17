@@ -88,14 +88,13 @@ module Domain =
       add_signature "math.log2"      ["float"]           "float" |>
       add_signature "math.sqrt"      ["float"]           "float"
 
+    let process_simple man flow range exprs instances return =
+      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+
     let init prog man flow =
       Some flow
 
     let exec _ _ _ _ = None
-
-
-    let process_simple man flow range exprs instances return =
-      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let eval zones exp man flow =
       let range = erange exp in
