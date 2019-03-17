@@ -127,7 +127,7 @@ module Domain =
                      Eval.assume
                        (Utils.mk_object_hasattr cls "__next__" range)
                        ~fthen:(fun true_flow ->
-                         man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
+                         man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
                        )
                        ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise "TypeError" range) false_flow |>

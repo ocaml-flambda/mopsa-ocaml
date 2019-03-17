@@ -28,6 +28,7 @@
             "python.objects.class",
             "python.objects.function",
             "python.objects.list",
+            "python.objects.tuple",
             "python.objects.range",
 
             "python.data_model.attribute",

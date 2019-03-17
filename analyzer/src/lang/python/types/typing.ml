@@ -328,13 +328,13 @@ struct
         Eval.singleton (mk_py_object (addr, None) range) flow
       )
 
-  let process_constant man flow range bltin addr =
+  let process_constant ?(value=None) man flow range bltin addr =
     let cur = Flow.get_domain_cur man flow in
     let cls, mro = get_builtin bltin in
     let bltin_inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs = StringMap.empty; oattrs = StringMap.empty}) in
     let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
     let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-    Eval.singleton (mk_py_object (addr, None) range) flow
+    Eval.singleton (mk_py_object (addr, value) range) flow
 
   let eval zs exp man flow =
     let range = erange exp in
@@ -475,6 +475,8 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | _ -> assert false in
       begin match akind addr with
+        | A_py_module (M_user(name, globals)) ->
+          Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) globals) range) flow
         | A_py_class (C_builtin _, _)
         | A_py_module _ ->
           Eval.singleton (mk_py_bool (is_builtin_attribute (object_of_expr e) attr) range) flow
@@ -584,9 +586,17 @@ struct
              let lc, lb = get_builtin "list" in
              proceed a (lc, lb, cur)
 
-           | E_py_object ({addr_kind = Objects.Py_list.A_py_iterator (s, _)} as a, _) ->
+           | E_py_object ({addr_kind = Objects.Tuple.A_py_tuple _} as a, _) ->
+             let tc, tb = get_builtin "tuple" in
+             proceed a (tc, tb, cur)
+
+           | E_py_object ({addr_kind = Objects.Py_list.A_py_iterator (s, _, _)} as a, _) ->
              let ic, ib = get_builtin s in
              proceed a (ic, ib, cur)
+
+           | E_py_object ({addr_kind = A_py_module m} as a, _) ->
+             let mc, mb = get_builtin "module" in
+             proceed a (mc, mb, cur)
 
            | _ -> Exceptions.panic_at range "type: todo"
 
@@ -639,8 +649,14 @@ struct
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin c, _) ->
             Eval.singleton (mk_py_bool (c = "list") range) flow
 
-          | Objects.Py_list.A_py_iterator (s, _), A_py_class (C_builtin c, _) ->
+          | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin c, _) ->
+            Eval.singleton (mk_py_bool (c = "tuple") range) flow
+
+          | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
             Eval.singleton (mk_py_bool (c = s) range) flow
+
+          | A_py_module _, A_py_class (C_builtin c, _) ->
+            Eval.singleton (mk_py_bool (c = "module" || c = "object") range) flow
 
           | _ -> assert false
         )
@@ -690,9 +706,8 @@ struct
         man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) flow
         |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: [down; up; step], []) ->
-      Utils.check_instances man flow range
-        [down ; up   ; step]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
+      Utils.check_instances man flow range args
         ["int"; "int"; "int"]
         (fun args flow -> allocate_builtin man range flow "range_iterator")
       |> OptionExt.return
@@ -710,16 +725,14 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, [arg], []) ->
-      Utils.check_instances man flow range
-        [arg]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
         ["range"]
         (fun r flow -> allocate_builtin man range flow "range_iterator")
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, [arg], []) ->
-      Utils.check_instances man flow range
-        [arg]
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
         ["range_iterator"]
         (fun _ flow ->
            let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
@@ -728,10 +741,9 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "slice.__new__")}, _)}, cls :: [down; up; step], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "slice.__new__")}, _)}, cls :: args, []) ->
       let intornone = ["int"; "NoneType"] in
-      Utils.check_instances_disj man flow range
-        [down; up; step]
+      Utils.check_instances_disj man flow range args
         [intornone; intornone; intornone]
         (fun _ flow ->
            allocate_builtin man range flow "slice")
