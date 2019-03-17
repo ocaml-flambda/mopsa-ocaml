@@ -141,6 +141,26 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__contains__")}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 man flow range args
+        ["tuple"]
+        (fun eargs flow ->
+           let tuple = List.hd eargs in
+           let isin = List.hd (List.tl eargs) in
+           let tuple_vars = match ekind tuple with
+             | E_py_object ({addr_kind = A_py_tuple vars}, _) -> vars
+             | _ -> assert false in
+           let mk_comp var = mk_binop (mk_var ~mode:WEAK var range) Framework.Ast.O_eq isin range in
+           if List.length tuple_vars = 0 then
+             man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
+           else
+             let or_expr = List.fold_left (fun acc var ->
+                 mk_binop acc O_py_or (mk_comp var) range
+               ) (mk_comp (List.hd tuple_vars)) (List.tl tuple_vars) in
+           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) or_expr flow
+        )
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__getitem__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
         ["tuple"; "int"]
