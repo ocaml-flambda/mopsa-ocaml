@@ -87,7 +87,6 @@ module Domain =
       add_signature "math.log10"     ["float"]           "float" |>
       add_signature "math.log2"      ["float"]           "float" |>
       add_signature "math.sqrt"      ["float"]           "float"
-      (* add_signature "math.fsum"      [List "float"] ["float"] [] |> (\* add iterator as well *\) *)
 
     let init prog man flow =
       Some flow
