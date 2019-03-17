@@ -61,26 +61,34 @@ let mk_try_stopiteration body except range =
     (Universal.Ast.mk_block [] range)
     range
 
-let check_instances man flow range exprs instances processing =
+let check_instances ?(arguments_after_check=0) man flow range exprs instances processing =
   let open Mopsa in
   let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
   let rec aux iexprs lexprs linstances flow =
     match lexprs, linstances with
-    | _, [] -> processing iexprs flow
+    | _, [] ->
+      if arguments_after_check = List.length lexprs then
+        processing iexprs flow
+      else
+        tyerror flow
     | e::es, i::is ->
       Eval.assume (Addr.mk_py_isinstance_builtin e i range) man flow
         ~fthen:(aux iexprs es is)
         ~felse:tyerror
-    | [], _ -> assert false in
+    | [], _ -> tyerror flow in
   Eval.eval_list exprs man.eval flow |>
   Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
 
-let check_instances_disj man flow range exprs instances processing =
+let check_instances_disj ?(arguments_after_check=0) man flow range exprs instances processing =
   let open Mopsa in
   let tyerror = fun flow -> man.exec (mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
   let rec aux iexprs lexprs linstances flow =
     match lexprs, linstances with
-    | _, [] -> processing iexprs flow
+    | _, [] ->
+      if arguments_after_check = List.length lexprs then
+        processing iexprs flow
+      else
+        tyerror flow
     | e::es, i::is ->
       (*   let rec aux2 instances flow =
        *     match instances with
@@ -98,7 +106,7 @@ let check_instances_disj man flow range exprs instances processing =
       Eval.assume cond man flow
         ~fthen:(aux iexprs es is)
         ~felse:tyerror
-    | _ -> assert false
+    | _ -> tyerror flow
   in
   Eval.eval_list exprs man.eval flow |>
   Eval.bind (fun exprs flow -> aux exprs exprs instances flow)
