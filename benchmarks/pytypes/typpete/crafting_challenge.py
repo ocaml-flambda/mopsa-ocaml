@@ -124,11 +124,15 @@ def test_main():
         else:
             print("you can't")
 
+    mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.assert_dict_of(commands, str, str)
     mopsa.assert_dict_of(items, str, int)
     mopsa.assert_dict_of(craft, str, dict)
-    mopsa.assert_list_of(command, str)
+    mopsa.massert(isinstance(command, list))
+    mopsa.massert(isinstance(command[0], str))
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(item, str))
     mopsa.massert(isinstance(verb, str))
     mopsa.massert(isinstance(canBeMade, bool))

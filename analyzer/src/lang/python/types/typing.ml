@@ -475,7 +475,13 @@ struct
 
 
     | E_binop(O_py_is, e1, e2) ->
-      man.eval (mk_py_top T_bool range) flow
+      begin match ekind e1, ekind e2 with
+      | E_py_object (a1, _), E_py_object (a2, _) when
+          compare_addr a1 a2 = 0 &&
+          (compare_addr a1 addr_notimplemented = 0 || compare_addr a1 addr_none = 0) ->
+        man.eval (mk_py_true range) flow
+      | _ -> man.eval (mk_py_top T_bool range) flow
+      end
       |> OptionExt.return
 
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
@@ -520,6 +526,9 @@ struct
               | _ -> Exceptions.panic "ll_hasattr %a" pp_polytype pty) ptys [] |> Eval.join_list
 
         | Objects.Py_list.A_py_list _ ->
+          Eval.singleton (mk_py_false range) flow
+
+        | Objects.Dict.A_py_dict _ ->
           Eval.singleton (mk_py_false range) flow
 
         | Objects.Py_list.A_py_iterator _ ->
@@ -594,6 +603,10 @@ struct
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _} as a, _) ->
              let lc, lb = get_builtin "list" in
              proceed a (lc, lb, cur)
+
+           | E_py_object ({addr_kind = Objects.Dict.A_py_dict _} as a, _) ->
+             let dc, db = get_builtin "dict" in
+             proceed a (dc, db, cur)
 
            | E_py_object ({addr_kind = Objects.Tuple.A_py_tuple _} as a, _) ->
              let tc, tb = get_builtin "tuple" in
@@ -676,6 +689,10 @@ struct
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "list") range) flow
+
+          | Objects.Dict.A_py_dict _, A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = "dict") range) flow
+
 
           | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "tuple") range) flow

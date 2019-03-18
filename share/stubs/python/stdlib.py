@@ -421,8 +421,8 @@ class slice(object):
     def __new__(self, args): pass
 
 class NotImplementedType(object): pass
-class NoneType(object):
-    def __eq__(self, other): pass
+class NoneType(object): pass
+    # def __eq__(self, other): pass
 
 @mopsa.unsupported
 class bytearray(object): pass

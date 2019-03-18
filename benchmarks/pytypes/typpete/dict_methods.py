@@ -20,12 +20,17 @@ def test_main():
     g = e[0]
     h = e[1]
 
+    mopsa.ignore_exception(KeyError)
     mopsa.assert_safe()
-    mopsa.assert_dict_of(x, float, str)
-    mopsa.assert_dict_of(y, float, str)
     mopsa.massert(isinstance(a, str))
     mopsa.massert(isinstance(d, str))
     mopsa.massert(isinstance(e, tuple))
+    mopsa.massert(isinstance(g, float))
+    mopsa.massert(isinstance(h, str))
+    mopsa.assert_dict_of(x, float, str)
+    # TODO: I disagree with that one, this is now an empty dictionary
+    # mopsa.assert_dict_of(y, float, str)
+    mopsa.ignore_exception(KeyError)
 
 # x := Dict[float, str]
 # y := Dict[float, str]
