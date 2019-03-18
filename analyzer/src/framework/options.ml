@@ -140,7 +140,7 @@ let () =
     spec = ArgExt.Set_string Setup.opt_share_dir;
     default = "";
   }
-  
+
 
 (** Analysis configuration *)
 let () =
@@ -199,6 +199,17 @@ let () =
       );
     default = "text";
   }
+
+(** Output last flow *)
+let () =
+  register_builtin_option {
+    key = "-lflow";
+    category = "Output";
+    doc = " display the last output";
+    spec = ArgExt.Set Output.Factory.opt_display_lastflow;
+    default = "false";
+  }
+
 
 (** Output stream *)
 let () =

@@ -70,7 +70,7 @@ let render_alarm alarm : json =
     "callstack", render_callstack cs;
   ]
 
-let render man alarms time files out : unit =
+let render ?(flow=None) man alarms time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;

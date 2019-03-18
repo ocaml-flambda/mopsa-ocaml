@@ -31,7 +31,7 @@ type format =
 
 let opt_format = ref F_text
 let opt_file = ref None
-
+let opt_display_lastflow = ref false
 
 (* Result rendering *)
 (* ---------------- *)
@@ -45,8 +45,9 @@ let render man flow time files =
     ) [] man flow
   in
   let return_v = if List.length alarms > 0 then 1 else 0 in
+  let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
-    | F_text -> Text.render man alarms time files !opt_file
+    | F_text -> Text.render ~flow:lf man alarms time files !opt_file
     | F_json -> Json.render man alarms time files !opt_file in
   return_v
 
