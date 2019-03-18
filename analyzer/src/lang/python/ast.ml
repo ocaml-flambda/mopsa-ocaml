@@ -260,6 +260,9 @@ type stmt_kind +=
   (** exception instance *)
   | S_py_raise of expr option
 
+  (** if condition *)
+  | S_py_if of expr (*t test *) * stmt (* then *) * stmt (* else *)
+
   (** while loops. *)
   | S_py_while of expr (* test *) * stmt (* body *) * stmt (* orelse *)
 

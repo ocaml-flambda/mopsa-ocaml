@@ -448,7 +448,7 @@ struct
      *   |> OptionExt.return *)
 
     | E_unop(Framework.Ast.O_log_not, e') ->
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' flow |>
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
         (fun exp flow ->
            (* FIXME: test if instance of bool and proceed accordingly *)
