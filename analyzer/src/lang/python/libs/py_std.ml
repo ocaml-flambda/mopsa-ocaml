@@ -25,7 +25,7 @@ open Mopsa
 open Addr
 open Ast
 open Universal.Ast
-
+open MapExt
 
 module Domain =
   struct
@@ -42,6 +42,30 @@ module Domain =
 
     let exec_interface = { export = []; import = [Zone.Z_py] }
     let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj] }
+
+    type stub_signature = {in_args: string list;
+                           out_type: Mopsa.typ}
+    type stub_db = stub_signature StringMap.t
+
+    let add_signature funname in_args out_type db =
+      let out_type = match out_type with
+        | "bool" -> T_bool
+        | "int" -> T_int
+        | "float" -> T_float F_DOUBLE
+        | "str" -> T_string
+        | "NoneType" -> T_py_none
+        | "NotImplementedType" -> T_py_not_implemented
+        | _ -> assert false in
+      StringMap.add funname {in_args; out_type} db
+
+    let stub_base =
+      StringMap.empty |>
+      add_signature "bin" ["int"] "str" |>
+      add_signature "chr" ["int"] "str" |>
+      add_signature "ord" ["str"] "int"
+
+    let process_simple man flow range exprs instances return =
+      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let init _ _ flow = Some flow
 
@@ -212,6 +236,30 @@ module Domain =
         Eval.bind (fun eobj flow ->
             man.eval (mk_py_none range) flow)
         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hash")}, _)}, args, []) ->
+        let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+        Eval.eval_list args man.eval flow |>
+        Eval.bind (fun eargs flow ->
+            if List.length eargs <> 1 then tyerror flow else
+              let el = List.hd eargs in
+              man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow
+          )
+        |> OptionExt.return
+
+
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+        debug "function %s in stub_base, processing@\n" f;
+        let {in_args; out_type} = StringMap.find f stub_base in
+        process_simple man flow range args in_args out_type
+        |> OptionExt.return
+
+
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bin")}, _)}, args, [])  ->
+       *   Utils.check_instances man flow range args ["int"]
+       *     (fun _ flow -> man.eval (mk_py_top T_string range) flow)
+       *   |> OptionExt.return *)
 
       | _ ->
          None

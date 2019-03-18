@@ -466,6 +466,12 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dir")}, _)}, args, []) ->
+      Utils.check_instances man flow range args []
+        (fun _ -> man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range))
+      |> OptionExt.return
+
+
     | _ -> None
 
 

@@ -405,6 +405,10 @@ struct
     | E_constant (C_top T_string) ->
       allocate_builtin man range flow "str" |> OptionExt.return
 
+
+    | E_constant (C_top T_py_complex) ->
+      allocate_builtin man range flow "complex" |> OptionExt.return
+
     | E_constant (C_string s) ->
       (* we keep s in the expression of the returned object *)
       let range = tag_range range "alloc_str" in
@@ -772,6 +776,61 @@ struct
         (fun _ flow ->
            allocate_builtin man range flow "slice")
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "abs")}, _)}, args, []) ->
+      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+      Eval.eval_list args man.eval flow |>
+      Eval.bind (fun eargs flow ->
+          if List.length eargs <> 1 then tyerror flow
+          else
+            let v = List.hd eargs in
+            Eval.assume (mk_py_isinstance_builtin v "int" range) man flow
+              ~fthen:(man.eval (mk_py_top T_int range))
+              ~felse:(fun flow ->
+                Eval.assume (mk_py_isinstance_builtin v "float" range) man flow
+                  ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
+                  ~felse:tyerror
+              )
+        )
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "all")}, _)}, args, []) ->
+      Utils.check_instances man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "divmod")}, _)}, args, []) ->
+      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
+      Eval.eval_list args man.eval flow |>
+      Eval.bind (fun eargs flow ->
+          if List.length args <> 2 then tyerror flow else
+            let argl, argr = match eargs with l::r::[] -> l, r | _ -> assert false in
+            Eval.assume (mk_py_isinstance_builtin argl "int" range) man flow
+              ~fthen:(fun flow ->
+                  Eval.assume (mk_py_isinstance_builtin argr "int" range) man flow
+                    ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
+                    ~felse:(fun flow ->
+                        Eval.assume (mk_py_isinstance_builtin argr "float" range) man flow
+                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~felse:tyerror
+                      )
+              )
+              ~felse:(fun flow ->
+                  Eval.assume (mk_py_isinstance_builtin argl "float" range) man flow
+                    ~fthen:(fun flow ->
+                        Eval.assume (mk_py_isinstance_builtin argr "int" range) man flow
+                          ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~felse:(fun flow ->
+                              Eval.assume (mk_py_isinstance_builtin argr "float" range) man flow
+                                ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                                ~felse:tyerror
+                            )
+
+                      )
+                    ~felse:tyerror
+                )
+        )
+      |> OptionExt.return
+
 
     | E_py_undefined _ -> Eval.singleton exp flow |> OptionExt.return
 

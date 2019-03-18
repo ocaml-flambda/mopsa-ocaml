@@ -66,7 +66,7 @@ alarms  libs desugar objects data_model types flows program
 lang.python.objects = class function range nones py_list tuple
 lang.python.data_model = callable arith_ops compare_ops aug_assign	\
 attribute subscript
-lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t_set
+lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t_set t_complex
 
 
 # Packages
