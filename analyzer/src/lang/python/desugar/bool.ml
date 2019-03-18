@@ -84,7 +84,7 @@ module Domain =
                  man flow1)
          |> OptionExt.return
       (* combinatorial explosion *)
-      (* man.eval (mk_expr (E_py_if (e1, e1, e2)) range) flow |> OptionExt.return *)
+      (* man.eval (mk_expr (E_py_if ((Utils.mk_builtin_call "bool" [e1] range), e1, e2)) range) flow |> OptionExt.return *)
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->

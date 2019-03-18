@@ -469,6 +469,11 @@ struct
         )
       |> OptionExt.return
 
+
+    | E_binop(O_py_is, e1, e2) ->
+      man.eval (mk_py_top T_bool range) flow
+      |> OptionExt.return
+
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
@@ -630,33 +635,52 @@ struct
           match akind addr_obj, akind addr_attr with
           (* FIXME: isinstance _, object *)
           | A_py_class _, A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = "type") range) flow
+            man.eval (mk_py_bool (c = "type") range) flow
 
           | A_py_function _, A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = "function") range) flow
+            man.eval (mk_py_bool (c = "function") range) flow
 
           | A_py_instance _, A_py_class (c, mro) ->
             let cur = Flow.get_domain_cur man flow in
             let ptys = TMap.find addr_obj cur.abs_heap in
+            let ptys = if not (Polytypeset.is_empty ptys) then ptys
+              else
+                let is_ao addr = compare_addr addr_obj addr = 0 in
+                let process bltin =
+                  let bltin_cls, bltin_mro = get_builtin "bool" in
+                  Polytypeset.singleton (Instance {classn = Class (bltin_cls, bltin_mro);
+                                                   uattrs = StringMap.empty;
+                                                   oattrs = StringMap.empty}) in
+                if is_ao addr_true || is_ao addr_false || is_ao addr_bool_top then
+                  process "bool"
+                else if is_ao addr_none then
+                  process "NoneType"
+                else if is_ao addr_notimplemented then
+                  process "NotImplementedType"
+                else if is_ao addr_integers then
+                  process "int"
+                else
+                  Exceptions.panic_at range "wtf @ %a@\n" pp_addr addr_obj
+            in
             Polytypeset.fold (fun pty acc ->
                 begin match pty with
                   | Instance {classn=Class (ci, mroi); uattrs; oattrs} ->
-                    Eval.singleton (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
+                    man.eval (mk_py_bool (class_le (ci, mroi) (c, mro)) range) flow :: acc
                   | _ -> Exceptions.panic "todo@\n"
                 end) ptys []
             |> Eval.join_list
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = "list") range) flow
+            man.eval (mk_py_bool (c = "list") range) flow
 
           | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = "tuple") range) flow
+            man.eval (mk_py_bool (c = "tuple") range) flow
 
           | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = s) range) flow
+            man.eval (mk_py_bool (c = s) range) flow
 
           | A_py_module _, A_py_class (C_builtin c, _) ->
-            Eval.singleton (mk_py_bool (c = "module" || c = "object") range) flow
+            man.eval (mk_py_bool (c = "module" || c = "object") range) flow
 
           | _ -> assert false
         )
