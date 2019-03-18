@@ -29,6 +29,7 @@ open Universal.Ast
 
 type addr_kind +=
   | A_py_dict of var * var (* variables where the smashed elements are stored (on for the keys and one for the values *)
+  | A_py_dict_view of string (* name *) * addr (* addr of the dictionary. That's bad *)
 
 let () =
   Format.(register_addr {
@@ -271,6 +272,10 @@ struct
              )
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.items")}, _)}, args, []) ->
+      (* in the concrete, this creates a list of tuples... but I don't think that we need such precision *)
+      failwith "use dict_view?"
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_keyiterator.__next__")}, _)}, args, []) ->
       Utils.check_instances man flow range args ["dict_keyiterator"]

@@ -392,6 +392,7 @@ struct
             | A_py_list a -> a
             | _ -> assert false in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
+          let flow = Flow.set_all_annot (Eval.choose_annot els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
           Eval.join_list (Eval.copy_annot stopiteration els::stopiteration::[])
         )
@@ -471,6 +472,22 @@ struct
         (fun _ -> man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range))
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_list_of")}, _)}, args, []) ->
+      Eval.eval_list args man.eval flow |>
+      Eval.bind (fun eargs flow ->
+          let list, type_v = match eargs with [d;e] -> d,e | _ -> assert false in
+          Eval.assume (mk_py_isinstance_builtin list "list" range) man flow
+            ~fthen:(fun flow ->
+                let var = match ekind list with
+                  | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                  | _ -> assert false in
+                Libs.Py_mopsa.check man
+                  (mk_py_isinstance (mk_var ~mode:WEAK var range) type_v range)
+                  range flow
+              )
+            ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
+        )
+      |> OptionExt.return
 
     | _ -> None
 

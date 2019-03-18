@@ -167,7 +167,7 @@ struct
         | E_constant (C_bool false) ->
           Post.of_flow (Flow.set_domain_cur bottom man flow)
         | _ ->
-          Exceptions.panic_at range "todo addr_env/assume"
+          Exceptions.panic_at range "todo addr_env/assume on %a@\n" pp_expr e
         )
       |> OptionExt.return
 
