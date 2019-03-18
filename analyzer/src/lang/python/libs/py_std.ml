@@ -166,41 +166,40 @@ module Domain =
            Eval.add_cleaners [mk_remove_var counter range; mk_remove_var target range] |>
            OptionExt.return
 
-      (* I prefer the version in typing.ml for now... *)
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
-       *    (\* desugaring max(iterable) into:
-       *     *    tmp1 = iter(iterable)
-       *     *    max = next(tmp1)
-       *     *    for x in tmp1:
-       *     *        if x > max:
-       *     *            max = x *\)
-       *    let iter = mk_tmp () in
-       *    let iter_var = mk_var iter range in
-       *    let maxi = mk_tmp () in
-       *    let maxi_var = mk_var maxi range in
-       *    let target = mk_tmp () in
-       *    let target_var = mk_var target range in
-       *
-       *    let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
-       *    let pass = mk_block [] range in
-       *
-       *    let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
-       *    let assign_max =
-       *      Utils.mk_try_stopiteration
-       *        (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
-       *        (Utils.mk_builtin_raise "ValueError" range)
-       *      range in
-       *    let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
-       *                                      mk_if (mk_binop target_var O_gt maxi_var range)
-       *                                        (mk_assign maxi_var target_var range)
-       *                                        pass range
-       *                                      , pass)) range in
-       *    let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
-       *    debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
-       *    man.exec stmt flow |>
-       *      man.eval maxi_var |>
-       *      Eval.add_cleaners cleaners |>
-       *      OptionExt.return *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [iterable], []) ->
+         (* desugaring max(iterable) into:
+          *    iter_var = iter(iterable)
+          *    maxi_var = next(iter_var)
+          *    for target_var in iter_var:
+          *        if target_var > maxi_var:
+          *            maxi_var = target_var *)
+         let iter = mktmp () in
+         let iter_var = mk_var iter range in
+         let maxi = mktmp () in
+         let maxi_var = mk_var maxi range in
+         let target = mktmp () in
+         let target_var = mk_var target range in
+
+         let cleaners = List.map (fun x -> mk_remove_var x range) [iter; maxi; target] in
+         let pass = mk_block [] range in
+
+         let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [iterable] range) range in
+         let assign_max =
+           Utils.mk_try_stopiteration
+             (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
+             (Utils.mk_builtin_raise "ValueError" range)
+           range in
+         let for_stmt = mk_stmt (S_py_for (target_var, iter_var,
+                                           mk_if (mk_binop target_var O_gt maxi_var range)
+                                             (mk_assign maxi_var target_var range)
+                                             pass range
+                                           , pass)) range in
+         let stmt = mk_block (assign_iter :: assign_max :: for_stmt :: []) range in
+         debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
+         man.exec stmt flow |>
+           man.eval maxi_var |>
+           Eval.add_cleaners cleaners |>
+           OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "max")}, _)}, [e1; e2], []) ->
          (* desugaring max(e1, e2) into if e1 > e2 then e1 else e2 *)
