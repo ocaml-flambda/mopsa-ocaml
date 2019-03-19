@@ -164,6 +164,19 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
+      when is_compare_op_fun "list" f ->
+      Utils.check_instances ~arguments_after_check:1 man flow range args ["list"]
+        (fun eargs flow ->
+           let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
+           Eval.assume (mk_py_isinstance_builtin e2 "list" range) man flow
+             ~fthen:(man.eval (mk_py_top T_bool range))
+             ~felse:(fun flow ->
+                 let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                 man.eval expr flow)
+        )
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__mul__")}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__rmul__")}, _)}, args, []) ->
       Utils.check_instances man flow range args

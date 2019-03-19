@@ -528,6 +528,9 @@ struct
         | Objects.Py_list.A_py_list _ ->
           Eval.singleton (mk_py_false range) flow
 
+        | Objects.Py_set.A_py_set _ ->
+          Eval.singleton (mk_py_false range) flow
+
         | Objects.Dict.A_py_dict _ ->
           Eval.singleton (mk_py_false range) flow
 
@@ -603,6 +606,10 @@ struct
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _} as a, _) ->
              let lc, lb = get_builtin "list" in
              proceed a (lc, lb, cur)
+
+           | E_py_object ({addr_kind = Objects.Py_set.A_py_set _} as a, _) ->
+             let sc, sb = get_builtin "set" in
+             proceed a (sc, sb, cur)
 
            | E_py_object ({addr_kind = Objects.Dict.A_py_dict _} as a, _) ->
              let dc, db = get_builtin "dict" in
@@ -689,6 +696,9 @@ struct
 
           | Objects.Py_list.A_py_list _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "list") range) flow
+
+          | Objects.Py_set.A_py_set _, A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = "set") range) flow
 
           | Objects.Dict.A_py_dict _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "dict") range) flow

@@ -8,7 +8,9 @@ def test_main():
     d = [[1.1, 2.5], c]
     e = {(i, i * 2) for j in d for i in j}
     f = 2 & 3
+    mopsa.assert_safe()
     g = d[f]
+    mopsa.ignore_exception(IndexError)
     h = (g, 2.0, a)
     i, j, (k, (l, m)) = {1: 2.0}, True, ((1, 2), (f, e))
     ii = i
@@ -18,7 +20,9 @@ def test_main():
     mm = m
     n = a if True else "string"
     o = (1 is 2) + 1
+    mopsa.assert_safe()
     p = i[o]
+    mopsa.ignore_exception(KeyError)
 
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, float))
@@ -27,16 +31,20 @@ def test_main():
     mopsa.massert(isinstance(d, list))
     mopsa.massert(isinstance(d[0], list))
     mopsa.massert(isinstance(d[0][0], float))
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(e, set))
     mopsa.massert(isinstance(f, int))
     mopsa.assert_list_of(g, float)
-    mopsa.assert_tuple_of(h, (list, float, float))
+    mopsa.massert(isinstance(h[0], list))
+    mopsa.massert(isinstance(h[1], float))
+    mopsa.massert(isinstance(h[2], float))
     # mopsa.assert_list_of(h[0], float)
     # mopsa.massert(h[1], float)
     # mopsa.massert(h[2], float)
     mopsa.assert_dict_of(i, int, float)
     mopsa.massert(isinstance(j, bool))
-    mopsa.assert_tuple_of(k, (int, int))
+    mopsa.massert(isinstance(k[0], int))
+    mopsa.massert(isinstance(k[1], int))
     # mopsa.massert(isinstance(k[0], int))
     # mopsa.massert(isinstance(k[1], int))
     mopsa.massert(isinstance(l, int))

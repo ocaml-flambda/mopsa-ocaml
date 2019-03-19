@@ -50,7 +50,7 @@ module Domain =
          let tmp = mktmp () in
          let flow = man.exec
                       (mk_if
-                         test
+                         (Utils.mk_builtin_call "bool" [test] range)
                          (mk_assign (mk_var tmp (tag_range range "true branch lval")) body (tag_range range "true branch assign"))
                          (mk_assign (mk_var tmp (tag_range range "false branch lval")) orelse (tag_range range "false branch assign"))
                          range

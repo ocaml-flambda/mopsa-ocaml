@@ -255,6 +255,17 @@ module Domain =
         process_simple man flow range args in_args out_type
         |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
+        let seq = mktmp () in
+        let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
+        man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
+        Eval.bind (fun _ flow ->
+            man.eval (mk_var seq range) flow |>
+            Eval.add_cleaners [mk_remove_var seq range]
+          )
+        |> OptionExt.return
+
+
 
       (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bin")}, _)}, args, [])  ->
        *   Utils.check_instances man flow range args ["int"]
