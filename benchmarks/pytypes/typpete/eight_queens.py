@@ -31,10 +31,13 @@ def add_queen(queens):
 def test_main():
     r_queens = add_queen([])
     print(r_queens)
-    print("\n".join(". "*q + "Q " + ". "*(BOARD_SIZE-q-1) for q in r_queens))
+    # todo: move back to generator instead of list
+    print("\n".join([". "*q + "Q " + ". "*(BOARD_SIZE-q-1) for q in r_queens]))
     mopsa.assert_safe()
     mopsa.massert(isinstance(BOARD_SIZE, int))
-    mopsa.assert_list_of(r_queens, int)
+    mopsa.massert(isinstance(r_queens, list))
+    mopsa.massert(isinstance(r_queens[0], int))
+    mopsa.ignore_exception(IndexError)
 
 # To fix: original file does not work... the raise BailOut is never catched
 # Also, there is a recursive function we don't handle yet

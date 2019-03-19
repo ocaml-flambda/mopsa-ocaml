@@ -220,6 +220,9 @@ let () =
           pp_stmt body
           pp_stmt orelse
 
+      | S_py_if(test, sthen, selse) ->
+          fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr test pp_stmt sthen pp_stmt selse
+
       | S_py_multi_assign(targets, e) ->
         fprintf fmt "%a %a"
           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " ") (fun fmt x -> fprintf fmt "%a =" pp_expr x)) targets

@@ -27,6 +27,7 @@ open Lexing
 open Py_parser.Cst
 open Py_parser.Ast
 open Ast
+open Utils
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
@@ -101,7 +102,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : Framework.Ast.stmt =
       S_py_aug_assign(from_exp x, from_binop op, from_exp e)
 
     | S_if (test, body, orelse) ->
-      Universal.Ast.S_if (
+      S_py_if (
         from_exp test,
         from_stmt body,
         from_stmt_option (tag_range srange' "empty if else") orelse

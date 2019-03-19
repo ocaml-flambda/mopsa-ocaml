@@ -154,21 +154,23 @@ struct
       (* Post.return flow *)
 
     | S_assume e ->
-       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
-         Post.bind man (fun expr flow ->
-           match ekind expr with
-           | E_constant (C_top T_bool)
-           | E_constant (C_bool true)
-             -> Post.of_flow flow
-           | E_py_object (a, _) when compare_addr a Typing.addr_true = 0 || compare_addr a Typing.addr_bool_top = 0
-             -> Post.of_flow flow
-           | E_py_object (a, _) when compare_addr a Typing.addr_false = 0
-             -> Post.of_flow (Flow.set_domain_cur bottom man flow)
-           | E_constant (C_bool false) ->
-             Post.of_flow (Flow.set_domain_cur bottom man flow)
-           | _ ->
-                Exceptions.panic_at range "todo addr_env/assume")
-       |> OptionExt.return
+      debug "S_assume %a in flow@\n%a@\n" pp_expr e (Flow.print man) flow;
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
+      Post.bind man (fun expr flow ->
+        match ekind expr with
+        | E_constant (C_top T_bool)
+        | E_constant (C_bool true)
+          -> Post.of_flow flow
+        | E_py_object (a, _) when compare_addr a Typing.addr_true = 0 || compare_addr a Typing.addr_bool_top = 0
+          -> Post.of_flow flow
+        | E_py_object (a, _) when compare_addr a Typing.addr_false = 0
+          -> Post.of_flow (Flow.set_domain_cur bottom man flow)
+        | E_constant (C_bool false) ->
+          Post.of_flow (Flow.set_domain_cur bottom man flow)
+        | _ ->
+          Exceptions.panic_at range "todo addr_env/assume on %a@\n" pp_expr e
+        )
+      |> OptionExt.return
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       let cur = Flow.get_domain_cur man flow in

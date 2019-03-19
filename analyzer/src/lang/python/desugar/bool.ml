@@ -57,13 +57,14 @@ module Domain =
          Eval.singleton (mk_py_false range) flow |> OptionExt.return
 
       | E_binop(O_py_and, e1, e2) ->
-         Some (man.eval e1 flow |>
-                 Eval.bind @@
-                   fun e1 flow1 ->
-                   Eval.assume e1 man
-                     ~fthen:(fun true_flow -> man.eval e2 true_flow)
-                     ~felse:(fun false_flow -> Eval.singleton e1 false_flow)
-                     flow1)
+        man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
+        Eval.bind (fun be1 flow1 ->
+            Eval.assume be1 man
+              ~fthen:(fun true_flow -> man.eval e2 true_flow)
+              ~felse:(fun false_flow -> man.eval e1 false_flow)
+              flow1
+          )
+        |> OptionExt.return
 
       (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
        *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
@@ -73,15 +74,18 @@ module Domain =
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
-         man.eval e1 flow |>
-           Eval.bind (fun e1 flow1 ->
-               Eval.assume e1
-                 ~fthen:(fun true_flow -> Eval.singleton e1 true_flow)
-                 ~felse:(fun false_flow -> man.eval e2 false_flow)
+        (* FIXME: combinatoric explosion *)
+         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
+           Eval.bind (fun be1 flow1 ->
+               Eval.assume be1
+                 ~fthen:(fun true_flow ->
+                     man.eval e1 true_flow)
+                 ~felse:(fun false_flow ->
+                     man.eval e2 false_flow)
                  man flow1)
          |> OptionExt.return
       (* combinatorial explosion *)
-      (* man.eval (mk_expr (E_py_if (e1, e1, e2)) range) flow |> OptionExt.return *)
+      (* man.eval (mk_expr (E_py_if ((Utils.mk_builtin_call "bool" [e1] range), e1, e2)) range) flow |> OptionExt.return *)
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->

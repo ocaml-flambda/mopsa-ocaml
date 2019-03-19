@@ -47,6 +47,8 @@ def test_main():
     g = f6({"st": 1})
     h = b[g]
 
+    mopsa.ignore_exception(KeyError)
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.assert_list_of(a, int)
     mopsa.assert_list_of(b, int)

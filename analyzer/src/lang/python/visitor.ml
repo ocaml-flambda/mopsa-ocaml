@@ -202,6 +202,11 @@ let () =
         (function
           | {exprs = [test']; stmts = [body'; orelse']} -> {stmt with skind = S_py_while(test', body',orelse')}
           | _ -> assert false)
+      | S_py_if(test, sthen, selse) ->
+        {exprs = [test]; stmts = [sthen; selse];},
+        (function
+          | {exprs = [test']; stmts = [sthen'; selse']} -> {stmt with skind = S_py_if(test', sthen', selse')}
+          | _ -> assert false)
 
       | S_py_for(({ekind = E_py_tuple _ | E_py_list _} as target), iter, body, orelse) ->
         {exprs = [iter]; stmts = [];},

@@ -39,9 +39,13 @@ let get_printer out =
   in
   print
 
-let render man alarms time files out =
+let render ?(flow=None) man alarms time files out =
   let print fmt = get_printer out fmt in
   print "%a@." (Debug.color_str "green") "Analysis terminated successfully";
+  let () = match flow with
+    | None -> ()
+    | Some f ->
+      print "Last flow = %a@\n" (Flow.print man) f in
   print "Time: %.3fs@." time;
   match alarms with
   | [] -> print "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"

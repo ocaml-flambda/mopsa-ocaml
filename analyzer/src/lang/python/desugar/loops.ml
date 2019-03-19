@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Inliner of imported packages. *)
+(** Desugaring loops into a usual case *)
 
 open Mopsa
 open Universal.Ast

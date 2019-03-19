@@ -51,7 +51,7 @@ module Domain =
       | E_py_index_subscript(obj, index) ->
          Eval.eval_list [obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Eval.bind (fun el flow ->
-               let eobj, index = match el with [obj; index] -> obj, index | _ -> assert false in
+               let eobj, eindex = match el with [obj; index] -> obj, index | _ -> assert false in
 
                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Eval.bind (fun cls flow ->
@@ -104,7 +104,7 @@ module Domain =
          Eval.eval_list [exp; obj; index] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
            Post.bind man
              (fun el flow ->
-               let exp, eobj, index = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
+               let exp, eobj, eindex = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type eobj range) flow |>
                  Post.bind man (fun cls flow ->
                      Post.assume

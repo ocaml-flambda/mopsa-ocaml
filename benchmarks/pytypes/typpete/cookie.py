@@ -20,6 +20,8 @@ def test_main():
                 y = y + b
                 cs = cs + F
 
+    mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(T, int))
     mopsa.massert(isinstance(C, float))
@@ -31,6 +33,7 @@ def test_main():
     mopsa.massert(isinstance(w, float))
     mopsa.massert(isinstance(x, int))
     mopsa.massert(isinstance(y, float))
+    mopsa.ignore_exception(UnboundLocalError)
 
 # T := int
 # C := float

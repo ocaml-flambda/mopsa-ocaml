@@ -28,6 +28,9 @@
             "python.objects.class",
             "python.objects.function",
             "python.objects.list",
+            "python.objects.tuple",
+            "python.objects.dict",
+            "python.objects.set",
             "python.objects.range",
 
             "python.data_model.attribute",
@@ -45,6 +48,7 @@
                         "python.types.t_string",
                         "python.types.t_int",
                         "python.types.t_float",
+                        "python.types.t_complex",
                         // "python.types.t_list",
                         // "python.types.t_set",
                         // "python.types.typing"

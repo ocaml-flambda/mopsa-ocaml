@@ -20,13 +20,14 @@
 (****************************************************************************)
 
 (** Math Python library. *)
-
+(** Currently based on types. If this is moved to values at some
+   point, it should be kept for the type analysis I think *)
 
 open Mopsa
-open Universal.Ast
 open Ast
 open Addr
-
+open MapExt
+open Universal.Ast
 
 module Domain =
   struct
@@ -44,22 +45,91 @@ module Domain =
     let exec_interface = { export = []; import = [] }
     let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [] }
 
-    let init _ _ flow = Some flow
+    type stub_signature = {in_args: string list;
+                           out_type: Mopsa.typ}
+    type stub_db = stub_signature StringMap.t
+
+    let add_signature funname in_args out_type db =
+      let out_type = match out_type with
+        | "bool" -> T_bool
+        | "int" -> T_int
+        | "float" -> T_float F_DOUBLE
+        | "str" -> T_string
+        | "NoneType" -> T_py_none
+        | "NotImplementedType" -> T_py_not_implemented
+        | _ -> assert false in
+      StringMap.add funname {in_args; out_type} db
+
+    let stub_base =
+      StringMap.empty |>
+      (* FIXME: I guess math.ceil also works from int to int... and that kind of stuff *)
+      add_signature "math.ceil"      ["float"]           "int"   |>
+      add_signature "math.copysign"  ["float"; "float"]  "float" |>
+      add_signature "math.erf"       ["float"]           "float" |>
+      add_signature "math.erfc"      ["float"]           "float" |>
+      add_signature "math.exp"       ["float"]           "float" |>
+      add_signature "math.expm1"     ["float"]           "float" |>
+      add_signature "math.fabs"      ["float"]           "float" |>
+      add_signature "math.factorial" ["int"]             "int"   |>
+      add_signature "math.floor"     ["float"]           "int"   |>
+      add_signature "math.fmod"      ["float"; "float"]  "float" |>
+      add_signature "math.gamma"     ["float"]           "float" |>
+      add_signature "math.gcd"       ["int"; "int"]      "int"   |>
+      add_signature "math.hypot"     ["float"; "float"]  "float" |>
+      add_signature "math.isclose"   ["float"; "float"]  "bool"  |>
+      add_signature "math.isfinite"  ["float"]           "bool"  |>
+      add_signature "math.isinf"     ["float"]           "bool"  |>
+      add_signature "math.isnan"     ["float"]           "bool"  |>
+      add_signature "math.ldexp"     ["float"; "int"]    "float" |>
+      add_signature "math.lgamma"    ["float"]           "float" |>
+      add_signature "math.log"       ["float"; "float"]  "float" |>
+      add_signature "math.log1p"     ["float"]           "float" |>
+      add_signature "math.log10"     ["float"]           "float" |>
+      add_signature "math.log2"      ["float"]           "float" |>
+      add_signature "math.sqrt"      ["float"]           "float"
+
+    let process_simple man flow range exprs instances return =
+      Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
+
+    let init prog man flow =
+      Some flow
 
     let exec _ _ _ _ = None
 
-    let eval zones exp man flow = None
-      (* let range = erange exp in
-       * match ekind exp with
-       * | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.sqrt")}, _)}, [e], []) ->
-       *    Exceptions.panic "blaaaaa@\n";
-       *    let exp' = mk_unop O_sqrt e ~etyp:(T_float F_DOUBLE) range in
-       *    Eval.singleton exp' flow
-       *    |> OptionExt.return
-       *
-       * | _ ->
-       *    None *)
+    let eval zones exp man flow =
+      let range = erange exp in
+      match ekind exp with
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
+        debug "function %s in stub_base, processing@\n" f;
+        let {in_args; out_type} = StringMap.find f stub_base in
+        process_simple man flow range args in_args out_type
+        |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.frexp")}, _)}, args, []) ->
+        Utils.check_instances man flow range args
+          ["float"]
+          (fun args flow ->
+             man.eval (mk_expr (E_py_tuple
+                                  [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
+                               ) range)  flow
+          )
+        |> OptionExt.return
+
+      (* math.fsum is handled in the list abstraction *)
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.modf")}, _)}, args, []) ->
+        Utils.check_instances man flow range args
+          ["float"]
+          (fun args flow ->
+             man.eval (mk_expr (E_py_tuple
+                                  [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
+                               ) range)  flow
+          )
+        |> OptionExt.return
+
+
+
+      | _ -> None
 
     let ask _ _ _ = None
 
