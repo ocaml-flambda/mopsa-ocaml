@@ -119,6 +119,39 @@ let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance "NotImplemen
 let addr_integers = {addr_uid = -6; addr_kind = A_py_instance "int"; addr_mode = WEAK}
 
 
+let pyvarcounter = ref (-1)
+
+let get_fresh_a_py_var () =
+  incr pyvarcounter;
+  !pyvarcounter
+
+let greek_of_int =
+  let list = ["α"; "β"; "γ"; "δ"; "ε"; "ζ"; "η"; "θ"; "ι"; "κ"; "λ"; "μ"; "ν"; "ξ"; "ο"; "π"; "ρ"; "σ"; "τ"; "υ"; "φ"; "χ"; "ψ"; "ω"] in
+  let listn = List.length list in
+  fun n ->
+    let letter = List.nth list (n mod listn) in
+    if n < listn then letter
+    else Format.sprintf "%s(%d)" letter (n / listn)
+
+type addr_kind +=
+    A_py_var of int
+
+let () =
+  Format.(
+    register_addr {
+      print =
+        (fun default fmt a -> match a with
+           | A_py_var a -> Format.fprintf fmt "%s" (greek_of_int a)
+           | _ -> default fmt a
+        );
+      compare =
+        (fun default a1 a2 ->
+           match a1, a2 with
+           | A_py_var v1, A_py_var v2 -> Pervasives.compare v1 v2
+           | _ -> default a1 a2);
+    }
+  )
+
 module Domain =
 struct
 
@@ -499,10 +532,11 @@ struct
         | A_py_class (C_user c, b) ->
           Eval.singleton (mk_py_bool (List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes) range) flow
 
+        | A_py_var _
         | A_py_instance _ ->
           let cur = Flow.get_domain_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
-
+          debug "%a %a" pp_addr addr (Flow.print man) flow;
           Polytypeset.fold (fun pty acc ->
               match pty with
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
@@ -565,6 +599,7 @@ struct
           let f = List.find (fun x -> x.org_vname = attr) c.py_cls_static_attributes in
           man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var f range) flow
 
+        | A_py_var _
         | A_py_instance _ ->
           let cur = Flow.get_domain_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
@@ -580,7 +615,7 @@ struct
               | _ -> Exceptions.panic "ll_hasattr %a@\n"  pp_polytype pty)
             ptys [] |> Eval.join_list
 
-        | _ -> Exceptions.panic_at range "ll_getattr: todo"
+        | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man) flow
       end
       |> OptionExt.return
 
@@ -594,7 +629,7 @@ struct
              let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, None) range in
              Eval.singleton obj flow in
            match ekind earg with
-           | E_py_object ({addr_kind = A_py_instance _} as addr, _) ->
+           | E_py_object ({addr_kind = A_py_instance _ | A_py_var _ } as addr, _) ->
              let ptys = TMap.find addr cur.abs_heap in
              let types = Polytypeset.fold (fun pty acc ->
                  match pty with
@@ -671,6 +706,7 @@ struct
           | A_py_function _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "function") range) flow
 
+          | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
             let cur = Flow.get_domain_cur man flow in
             let ptys = TMap.find addr_obj cur.abs_heap in

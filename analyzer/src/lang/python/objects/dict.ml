@@ -263,6 +263,12 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__contains__")}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 man flow range args ["dict"]
+        (fun args flow ->
+           man.eval (mk_py_top T_bool range) flow)
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args ["dict"]
         (fun args flow ->

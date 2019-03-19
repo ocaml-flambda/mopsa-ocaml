@@ -5,39 +5,6 @@ open Addr_env
 open Ast
 open Universal.Ast
 
-type addr_kind +=
-    A_py_var of int
-
-let pyvarcounter = ref (-1)
-
-let get_fresh_a_py_var () =
-  incr pyvarcounter;
-  !pyvarcounter
-
-let greek_of_int =
-  let list = ["α"; "β"; "γ"; "δ"; "ε"; "ζ"; "η"; "θ"; "ι"; "κ"; "λ"; "μ"; "ν"; "ξ"; "ο"; "π"; "ρ"; "σ"; "τ"; "υ"; "φ"; "χ"; "ψ"; "ω"] in
-  let listn = List.length list in
-  fun n ->
-    let letter = List.nth list (n mod listn) in
-    if n < listn then letter
-    else Format.sprintf "%s(%d)" letter (n / listn)
-
-let () =
-  Format.(
-    register_addr {
-      print =
-        (fun default fmt a -> match a with
-           | A_py_var a -> Format.fprintf fmt "%s" (greek_of_int a)
-           | _ -> default fmt a
-        );
-      compare =
-        (fun default a1 a2 ->
-           match a1, a2 with
-           | A_py_var v1, A_py_var v2 -> Pervasives.compare v1 v2
-           | _ -> default a1 a2);
-    }
-  )
-
 
 
 module Domain =
@@ -70,6 +37,7 @@ struct
         match addr with
         | Def addr ->
           let to_join = match addr.addr_kind with
+            (* | A_py_var _ (\* TODO: est-ce que c'est ok? *\) *)
             | A_py_instance _ ->
   (TD.TMap.find addr t.abs_heap)
             | A_py_class (c, b) ->

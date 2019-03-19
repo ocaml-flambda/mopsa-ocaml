@@ -154,6 +154,7 @@ struct
       (* Post.return flow *)
 
     | S_assume e ->
+      debug "S_assume %a in flow@\n%a@\n" pp_expr e (Flow.print man) flow;
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
       Post.bind man (fun expr flow ->
         match ekind expr with
