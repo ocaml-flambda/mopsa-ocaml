@@ -29,13 +29,14 @@ open Universal.Ast
 
 type addr_kind +=
   | A_py_dict of var * var (* variables where the smashed elements are stored (on for the keys and one for the values *)
-  | A_py_dict_view of string (* name *) * addr (* addr of the dictionary. That's bad *)
+  | A_py_dict_view of string (* name *) * addr (* addr of the dictionary *)
 
 let () =
   Format.(register_addr {
       print = (fun default fmt a ->
           match a with
           | A_py_dict (keys, values) -> fprintf fmt "dict[%a, %a]" pp_var keys pp_var values
+          | A_py_dict_view (s, a) -> fprintf fmt "%s[%a]" s pp_addr a
           | _ -> default fmt a);
       compare = (fun default a1 a2 ->
           match a1, a2 with
@@ -43,6 +44,11 @@ let () =
             Compare.compose [
               (fun () -> compare_var k1 k2);
               (fun () -> compare_var v1 v2);
+            ]
+          | A_py_dict_view (s1, a1), A_py_dict_view (s2, a2) ->
+            Compare.compose [
+              (fun () -> Pervasives.compare s1 s2);
+              (fun () -> compare_addr a1 a2);
             ]
           | _ -> default a1 a2);})
 
@@ -273,15 +279,57 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.items")}, _)}, args, []) ->
-      (* in the concrete, this creates a list of tuples... but I don't think that we need such precision *)
-      failwith "use dict_view?"
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.items" as n)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.keys" as n)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict.values" as n)}, _)}, args, []) ->
+      let viewname = match n with
+        | F_builtin "dict.items" -> "dict_items"
+        | F_builtin "dict.keys" -> "dict_keys"
+        | F_builtin "dict.values" -> "dict_values"
+        | _ -> assert false in
+      Utils.check_instances man flow range args ["dict"]
+        (fun args flow ->
+           let dict = List.hd args in
+           let dict_addr = match ekind dict with
+             | E_py_object ({addr_kind = A_py_dict _} as a, _) -> a
+             | _ -> assert false in
+           let a = mk_alloc_addr (A_py_dict_view (viewname, dict_addr)) range in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+           Eval.bind (fun addr_it flow ->
+               let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
+               Eval.singleton (mk_py_object (addr_it, None) range) flow
+             )
+        )
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_items.__iter__" as n)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_values.__iter__" as n)}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_keys.__iter__" as n)}, _)}, args, []) ->
+      let case, itname = match n with
+        | F_builtin "dict_items.__iter__" -> "dict_items", "dict_itemiterator"
+        | F_builtin "dict_values.__iter__" -> "dict_values", "dict_valueiterator"
+        | F_builtin "dict_keys.__iter__" -> "dict_keys", "dict_keyiterator"
+        | _ -> assert false in
+      Utils.check_instances man flow range args [case]
+        (fun args flow ->
+           let dict_addr = match ekind @@ List.hd args with
+             | E_py_object ({addr_kind = A_py_dict_view (case, a)}, _) -> a
+             | _ -> assert false in
+           let a = mk_alloc_addr (Py_list.A_py_iterator (itname, dict_addr, None)) range in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+           Eval.bind (fun addr_it flow ->
+               let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
+               Eval.singleton (mk_py_object (addr_it, None) range) flow
+             )
+        )
+      |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_keyiterator.__next__")}, _)}, args, []) ->
       Utils.check_instances man flow range args ["dict_keyiterator"]
         (fun args flow ->
            let dict_addr = match ekind @@ List.hd args with
-             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, a, _)}, _) when s = "dict_keyiterator" -> a
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_keyiterator", a, _)}, _) -> a
              | _ -> assert false in
            let var_k = match akind dict_addr with
              | A_py_dict (k, v) -> k
@@ -293,6 +341,41 @@ struct
            Eval.join_list (Eval.copy_annot stopiteration els :: stopiteration :: [])
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_valueiterator.__next__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args ["dict_valueiterator"]
+        (fun args flow ->
+           let dict_addr = match ekind @@ List.hd args with
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_valueiterator", a, _)}, _) -> a
+             | _ -> assert false in
+           let var_v = match akind dict_addr with
+             | A_py_dict (k, v) -> v
+             | _ -> assert false in
+           let els = man.eval (mk_var var_v ~mode:WEAK range) flow in
+
+           let flow = Flow.set_all_annot (Eval.choose_annot els) flow in
+           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+           Eval.join_list (Eval.copy_annot stopiteration els :: stopiteration :: [])
+        )
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dict_itemiterator.__next__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args ["dict_itemiterator"]
+        (fun args flow ->
+           let dict_addr = match ekind @@ List.hd args with
+             | E_py_object ({addr_kind = Py_list.A_py_iterator ("dict_itemiterator", a, _)}, _) -> a
+             | _ -> assert false in
+           let var_k, var_v = match akind dict_addr with
+             | A_py_dict (k, v) -> k, v
+             | _ -> assert false in
+           let els = man.eval (mk_expr (E_py_tuple [mk_var var_k ~mode:WEAK range;
+                                                    mk_var var_v ~mode:WEAK range]) range) flow in
+           let flow = Flow.set_all_annot (Eval.choose_annot els) flow in
+           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+           Eval.join_list (Eval.copy_annot stopiteration els :: stopiteration :: [])
+        )
+      |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_dict_of")}, _)}, args, []) ->
       Eval.eval_list args man.eval flow |>

@@ -537,6 +537,9 @@ struct
         | Objects.Py_list.A_py_iterator _ ->
           Eval.singleton (mk_py_false range) flow
 
+        | Objects.Dict.A_py_dict_view _ ->
+          Eval.singleton (mk_py_false range) flow
+
         | _ ->
           debug "%a@\n" pp_expr e; assert false
       end
@@ -620,6 +623,10 @@ struct
              proceed a (tc, tb, cur)
 
            | E_py_object ({addr_kind = Objects.Py_list.A_py_iterator (s, _, _)} as a, _) ->
+             let ic, ib = get_builtin s in
+             proceed a (ic, ib, cur)
+
+           | E_py_object ({addr_kind = Objects.Dict.A_py_dict_view (s, _)} as a, _) ->
              let ic, ib = get_builtin s in
              proceed a (ic, ib, cur)
 
@@ -708,6 +715,9 @@ struct
             man.eval (mk_py_bool (c = "tuple") range) flow
 
           | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
+            man.eval (mk_py_bool (c = s) range) flow
+
+          | Objects.Dict.A_py_dict_view (s, _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = s) range) flow
 
           | A_py_module _, A_py_class (C_builtin c, _) ->
