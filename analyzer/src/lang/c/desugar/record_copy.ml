@@ -41,13 +41,13 @@ struct
   (** ================= *)
 
   let exec_interface = {
-    export = [Z_c];
-    import = [Z_c]
+    provides = [Z_c];
+    uses = [Z_c]
   }
 
   let eval_interface = {
-    export = [];
-    import = []
+    provides = [];
+    uses = []
   }
 
   (** Initialization *)
@@ -103,8 +103,8 @@ struct
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
                   man.exec ~zone:Z_c stmt flow
                 ) flow
-              |> Post.of_flow
-              |> OptionExt.return
+              |> Post.return
+              |> Option.return
             | C_union ->
               begin
                 let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
@@ -120,8 +120,8 @@ struct
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
                   man.exec ~zone:Z_c stmt flow
-                  |> Post.of_flow
-                  |> OptionExt.return
+                  |> Post.return
+                  |> Option.return
                 | None -> Exceptions.panic "[%s] all fields have size 0" name
               end
           end

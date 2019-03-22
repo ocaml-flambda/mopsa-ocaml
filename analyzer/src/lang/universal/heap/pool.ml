@@ -78,28 +78,22 @@ let get_id_equiv (info: AddrInfo.t) (e: Equiv.t) =
     let x = get_fresh () in
     x, Equiv.add (info, x) e
 
-type ('a, _) Annotation.key +=
-  | KAddr : ('a, Equiv.t) Annotation.key
-
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
-              function
-              | KAddr -> Some Eq
-              | _ -> None
-            in
-            f);
-      print = (fun fmt m -> Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m);
-    }) ();
-  ()
+let ctx_key =
+  let module K = Context.GenUnitKey(
+    struct
+      type t = Equiv.t
+      let print fmt m = Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m
+    end)
+  in
+  K.key
 
 let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
-  let e = Flow.get_annot KAddr f in
+  let e = Flow.get_ctx f |> Context.find_unit ctx_key in
   let x, e = get_id_equiv info e in
-  (x, Flow.set_annot KAddr e f)
+  (x, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key e) f)
 
 let get_addr_flag addr flow =
-  let e = Flow.get_annot KAddr flow in
+  let e = Flow.get_ctx flow |> Context.find_unit ctx_key in
   try
     let _, _, _, g = Equiv.find_r addr.addr_uid e in
     g
@@ -120,3 +114,6 @@ include Framework.Lattices.Powerset.Make(
     let print = pp_addr
   end
   )
+
+let merge pre (post1,log1) (post2,log2) =
+  assert false

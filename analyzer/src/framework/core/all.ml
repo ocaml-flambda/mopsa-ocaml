@@ -20,27 +20,34 @@
 (****************************************************************************)
 
 include Alarm
+
 module Callstack = Callstack
+
 module Context = Context
+
 module Eval = Eval
 type ('e, 'a) eval = ('e, 'a) Eval.eval
+
 module Flow = Flow
 type 'a flow = 'a Flow.flow
+
 module Post = Post
 type 'a post = 'a Post.post
-include Log
+
 module Log = Log
-include Eq
-module Manager = Manager
+
 include Manager
+
 module Query = Query
 type 'a query = 'a Query.query
+
 include Token
+
 include Zone
-module Domain = Domain
-include Domain.Id
-include Domain.Interface
-module Interface = Domain.Interface
-include Domain.Sig
-include Lattice.Sig
-module Lattice = Lattice
+
+include Lattice
+
+include Sig.Id
+include Sig.Interface
+include Sig.Domain
+include Sig.Stacked

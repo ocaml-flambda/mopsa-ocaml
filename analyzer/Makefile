@@ -26,13 +26,13 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core domains combiners export config
+framework = ast core lattices domains combiners export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
-	         domain callstack alarm engine all
-framework.core.lattice = sig partial_map powerset total_map
-framework.core.domain = interface id value sig
+	         sig callstack alarm engine all
+framework.core.sig = interface id value domain stacked
 framework.core.engine = logging cache analyzer
+framework.lattices = partial_map powerset total_map
 framework.domains = leaf stateless nonrel
 framework.export = text json factory
 framework.combiners = compose apply sequence
@@ -44,6 +44,12 @@ lang = universal c python stubs
 
 # Universal
 lang.universal = ast frontend
+lang.universal = ast frontend zone iterators heap numeric
+lang.universal.iterators = program intraproc interproc unittest loops
+lang.universal.iterators.interproc = inlining
+lang.universal.heap = pool recency
+lang.universal.numeric = rounding values relational
+lang.universal.numeric.values = integer_interval
 
 # Stubs
 lang.stubs = ast zone alarms iterator

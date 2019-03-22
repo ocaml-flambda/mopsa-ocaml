@@ -31,8 +31,8 @@ struct
   let name = "universal.iterators.program"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
+  let exec_interface = {provides = [Z_u]; uses = []}
+  let eval_interface = {provides = []; uses = []}
 
   let init prog man flow = None
 
@@ -41,7 +41,7 @@ struct
     | S_program { prog_kind = P_universal{universal_main} } ->
       Some (
         man.exec universal_main flow |>
-        Post.of_flow
+        Post.return
       )
 
     | _ -> None

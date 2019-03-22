@@ -33,18 +33,18 @@ open Callstack
 type token +=
   | T_return of range * expr option
   (** [T_return(l, Some e)] represents flows reaching a return
-     statement at location [l] returning an expression [e]. The
-     expression is [None] when the function returns nothing
+      statement at location [l] returning an expression [e]. The
+      expression is [None] when the function returns nothing
       (i.e. case of a procedure). *)
 
 let () =
   register_token {
     compare = (fun next tk1 tk2 ->
-      match tk1, tk2 with
-      | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
-      | _ -> next tk1 tk2
-    );
-  print = (fun next fmt -> function
+        match tk1, tk2 with
+        | T_return(r1, _), T_return(r2, _) -> compare_range r1 r2
+        | _ -> next tk1 tk2
+      );
+    print = (fun next fmt -> function
         | T_return(r, Some e) -> Format.fprintf fmt "return %a" pp_expr e
         | T_return(r, None) -> Format.fprintf fmt "return"
         | tk -> next fmt tk
@@ -55,7 +55,7 @@ let () =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
@@ -67,15 +67,18 @@ struct
 
   (** Zoning definition *)
 
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = [Z_u, Z_any]; import = []}
+  let exec_interface = {provides = [Z_u]; uses = []}
+  let eval_interface = {provides = [Z_u, Z_any]; uses = []}
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man (flow: 'a flow) =
     Some (
-      Flow.set_annot A_call_stack [] flow
+      Flow.set_ctx (
+        Flow.get_ctx flow |>
+        Context.add_unit Callstack.ctx_key []
+      ) flow
     )
 
   (** Computation of post-conditions *)
@@ -85,10 +88,10 @@ struct
     match skind stmt with
     | S_return e ->
       Some (
-        let cur = Flow.get T_cur man flow in
-        Flow.add (T_return (stmt.srange, e)) cur man flow |>
-        Flow.remove T_cur man |>
-        Post.of_flow
+        let cur = Flow.get T_cur man.lattice flow in
+        Flow.add (T_return (stmt.srange, e)) cur man.lattice flow |>
+        Flow.remove T_cur |>
+        Post.return
       )
 
     | _ -> None
@@ -108,7 +111,7 @@ struct
           match tk with
           | T_return _ -> false
           | _ -> true
-        ) man flow
+        ) flow
       in
 
       (* Add parameters and local variables to the environment *)
@@ -141,18 +144,18 @@ struct
       let flow3 =
         Flow.fold (fun acc tk env ->
             match tk with
-            | T_return(_, None) -> Flow.add T_cur env man acc
+            | T_return(_, None) -> Flow.add T_cur env man.lattice acc
 
             | T_return(_, Some e) ->
-              Flow.set T_cur env man acc |>
+              Flow.set T_cur env man.lattice acc |>
               man.exec (mk_add_var ret range) |>
               man.exec (mk_assign (mk_var ret e.erange) e e.erange) |>
-              Flow.join man acc
+              Flow.join man.lattice acc
 
-            | _ -> Flow.add tk env man acc
+            | _ -> Flow.add tk env man.lattice acc
           )
-          (Flow.remove T_cur man (Flow.copy_annot flow2 flow))
-          man flow2
+          (Flow.remove T_cur (Flow.copy_ctx flow2 flow))
+          flow2
       in
 
       (* Restore call stack *)
@@ -169,7 +172,7 @@ struct
       let flow4 = man.exec ignore_block flow3 in
 
       Eval.singleton (mk_var ret range) flow4 ~cleaners:[mk_remove_var ret range] |>
-      Eval.return
+      Option.return
 
     | _ -> None
 

@@ -62,9 +62,9 @@ let parse_options f () =
 let parse_program lang files =
   Logging.phase "parsing";
   match lang with
-  | "universal" -> Langs.Universal.Frontend.parse_program files
-  | "c" -> Langs.C.Frontend.parse_program files
-  | "python" -> Langs.Python.Frontend.parse_program files
+  | "universal" -> Lang.Universal.Frontend.parse_program files
+  | "c" -> Lang.C.Frontend.parse_program files
+  | "python" -> Lang.Python.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"
 
 

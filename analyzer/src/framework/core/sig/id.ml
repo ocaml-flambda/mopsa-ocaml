@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2019 The MOPSA Project.                                    *)
+(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -19,38 +19,50 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Mopsa
-open Ast
-open Zone
 
-module Domain =
+(** Generators of fresh module identifiers for domains and values *)
+
+include Eq
+
+type _ domain = ..
+
+module GenDomainId(M:sig type typ val name : string end) =
 struct
 
-  let name = "universal.stdlib.builtins"
-  let debug fmt = Debug.debug ~channel:name fmt
+  type _ domain += DId : M.typ domain
 
-  let exec_interface =
-    { export = [Z_any] ;
-      import = []
-    }
-  let eval_interface =
-    { export = [Z_any, Z_any];
-      import = []
-    }
+  let id = DId
 
-  let exec (_: zone) (stmt: stmt) (man: ('a, unit) man) (flow: 'a flow) =
-    match skind stmt with
-    | S_assign(_, {ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])})
-    | S_expression({ekind = E_call ({ekind = E_function (Builtin {name = "mopsa_assume"})}, [e])}) ->
-      man.exec (mk_assume e (srange stmt)) flow |> Post.of_flow |> OptionExt.return
+  let name = M.name
+
+  let identify : type a. a domain -> (M.typ, a) eq option =
+    function
+    | DId -> Some Eq
     | _ -> None
 
-  let eval z expr man flow =
-    None
-
-  let init _ _ _ = None
-  let ask _ _ _ = None
+  let debug fmt = Debug.debug ~channel:M.name fmt
 end
 
-let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+
+type _ value = ..
+
+
+module GenValueId(M:sig type typ val name : string val display : string end) =
+struct
+
+  type _ value += VId : M.typ value
+
+  let id = VId
+
+  let name = M.name
+
+  let display = M.display
+
+  let identify : type a. a value -> (M.typ, a) eq option =
+    function
+    | VId -> Some Eq
+    | _ -> None
+
+  let debug fmt = Debug.debug ~channel:M.name fmt
+
+end

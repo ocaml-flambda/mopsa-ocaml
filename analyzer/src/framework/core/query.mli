@@ -24,34 +24,49 @@
 
 type _ query
 
+val join : 'a query -> 'a -> 'a -> 'a
 
-module GenFunQuery
-    (Q:
-     sig
+val meet : 'a query -> 'a -> 'a -> 'a
+
+module type UnitQuery =
+sig
+  type ret
+  val query : ret query
+  val handle : 'r query -> (unit -> ret) -> 'r option
+end
+
+module GenUnitQuery
+    (Spec: sig
+       type ret
+       val join : ret -> ret -> ret
+       val meet : ret -> ret -> ret
+     end)
+  : UnitQuery
+    with type ret = Spec.ret
+
+module type ArgQuery =
+sig
+  type ret
+  type arg
+  val query : arg -> ret query
+  val handle : 'r query -> (arg -> ret) -> 'r option
+end
+
+
+module GenArgQuery
+    (Spec: sig
        type arg
        type ret
        val join : ret -> ret -> ret
        val meet : ret -> ret -> ret
      end)
-    :
-    sig
-      val query : Q.arg -> Q.ret query
-    end
+  : ArgQuery
+    with type ret = Spec.ret
+    with type arg = Spec.arg
 
-module GenUnitQuery
-    (Q:
-     sig
-       type ret
-       val join : ret -> ret -> ret
-       val meet : ret -> ret -> ret
-     end)
-    :
-    sig
-      val query : Q.ret query
-    end
+module PrintVarQuery :
+sig
+  val query   : (Format.formatter -> string -> unit) query
+  val handle : 'r query -> (unit -> (Format.formatter -> string -> unit)) -> 'r option
+end
 
-val join : 'a query -> 'a -> 'a -> 'a
-
-val meet : 'a query -> 'a -> 'a -> 'a
-
-val print_var_query : (Format.formatter -> string -> unit) query

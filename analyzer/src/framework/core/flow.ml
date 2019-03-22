@@ -21,7 +21,7 @@
 
 (** Abstraction of control flows *)
 
-open Lattice.Sig
+open Lattice
 open Context
 open Token
 

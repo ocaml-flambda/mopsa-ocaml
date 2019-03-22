@@ -24,7 +24,7 @@
 val opt_config : string ref
 (** Path to the configuration file *)
 
-val parse : unit -> string * (module Core.Domain.Sig.DOMAIN)
+val parse : unit -> string * (module Core.Sig.Domain.DOMAIN)
 (** [parse ()] constructs an abstract domain from the current configuration file *)
 
 val language : unit -> string

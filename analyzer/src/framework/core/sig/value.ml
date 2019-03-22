@@ -21,21 +21,57 @@
 
 (** Abstraction of values. *)
 
-open Ast.Typ
-open Ast.Operator
-open Ast.Constant
-open Ast.Expr
-open Eq
+open Ast.All
+open Context
 open Id
+open Query
 
 module type VALUE =
 sig
 
-  (*==========================================================================*)
-                        (** {2 Lattice structure} *)
-  (*==========================================================================*)
+  (** {2 Structure} *)
+  (** ************* *)
 
-  include Lattice.Sig.LATTICE
+  type t
+  (** Type of an abstract value. *)
+
+  val bottom: t
+  (** Least abstract element of the lattice. *)
+
+  val top: t
+  (** Greatest abstract element of the lattice. *)
+
+
+  (** {2 Predicates} *)
+  (** ************** *)
+
+  val is_bottom: t -> bool
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
+
+  val subset: t -> t -> bool
+  (** Partial order relation. [subset a1 a2] tests whether [a1] is
+      related to (or included in) [a2]. *)
+
+
+  (** {2 Operators} *)
+  (** ************* *)
+
+  val join: t -> t -> t
+  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+
+  val meet: t -> t -> t
+  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+
+  val widen: uctx -> t -> t -> t
+  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+      ensures stabilization of ascending chains. *)
+
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
 
   val zone : Zone.zone
   (** Language zone in which the value abstraction is defined *)
@@ -103,10 +139,13 @@ sig
 
 
   (*==========================================================================*)
-                             (** {2 Queries } *)
+  (**                          {2 Eval query}                                 *)
   (*==========================================================================*)
 
-  val ask : 'a Query.query -> (expr -> t) -> 'a option
+  module EvalQuery : Query.ArgQuery
+    with type arg = expr
+    with type ret = t
+
 
 end
 

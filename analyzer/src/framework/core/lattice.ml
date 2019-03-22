@@ -19,47 +19,70 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** Interface of lattice structures *)
 
-(** Generators of fresh module identifiers for domains and values *)
+open Log
+open Context
 
-open Eq
+(** Signature of a lattice module. *)
+module type LATTICE =
+sig
 
-type _ domain = ..
+  (** {2 Structure} *)
+  (** ************* *)
 
-module GenDomainId(M:sig type typ val name : string end) =
-struct
+  type t
+  (** Type of an abstract elements. *)
 
-  type _ domain += DId : M.typ domain
+  val bottom: t
+  (** Least abstract element of the lattice. *)
 
-  let id = DId
+  val top: t
+  (** Greatest abstract element of the lattice. *)
 
-  let name = M.name
 
-  let identify : type a. a domain -> (M.typ, a) eq option =
-    function
-    | DId -> Some Eq
-    | _ -> None
+  (** {2 Predicates} *)
+  (** ************** *)
 
-  let debug fmt = Debug.debug ~channel:M.name fmt
+  val is_bottom: t -> bool
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
+
+  val subset: t -> t -> bool
+  (** Partial order relation. [subset a1 a2] tests whether [a1] is
+      related to (or included in) [a2]. *)
+
+
+  (** {2 Operators} *)
+  (** ************* *)
+
+  val join: t -> t -> t
+  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+
+  val meet: t -> t -> t
+  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+
+  val widen: uctx -> t -> t -> t
+  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+      ensures stabilization of ascending chains. *)
+
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
 end
 
-
-type _ value = ..
-
-
-module GenValueId(M:sig type typ val name : string * string end) =
-struct
-
-  type _ value += VId : M.typ value
-
-  let id = VId
-
-  let name = M.name
-
-  let identify : type a. a value -> (M.typ, a) eq option =
-    function
-    | VId -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:(fst M.name) fmt
-end
+(** Signature of lattice records *)
+type 'a lattice = {
+  bottom:    'a;
+  top:       'a;
+  is_bottom: 'a -> bool;
+  subset:    'a -> 'a -> bool;
+  join:      'a -> 'a -> 'a;
+  meet:      'a -> 'a -> 'a;
+  widen:     uctx -> 'a -> 'a -> 'a;
+  merge:     'a -> 'a * log -> 'a * log -> 'a;
+  print:     Format.formatter -> 'a -> unit;
+}

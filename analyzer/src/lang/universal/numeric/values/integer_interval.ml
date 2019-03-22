@@ -35,12 +35,10 @@ struct
   type v = I.t
   type t = v with_bot
 
-  type _ Query.query +=
-  | Q_interval : expr -> t Query.query
-
-  include Framework.Core.Id.GenValueId(struct
+  include GenValueId(struct
       type typ = t
-      let name = "universal.numeric.values.intervals", "intervals"
+      let name = "universal.numeric.values.integer_interval"
+      let display = "int itv"
     end)
 
   let zone = Zone.Z_u_num
@@ -54,11 +52,11 @@ struct
 
   let subset (a1:t) (a2:t) : bool = I.included_bot a1 a2
 
-  let join annot (a1:t) (a2:t) : t = I.join_bot a1 a2
+  let join (a1:t) (a2:t) : t = I.join_bot a1 a2
 
-  let meet annot (a1:t) (a2:t) : t = I.meet_bot a1 a2
+  let meet (a1:t) (a2:t) : t = I.meet_bot a1 a2
 
-  let widen annot (a1:t) (a2:t) : t = I.widen_bot a1 a2
+  let widen ctx (a1:t) (a2:t) : t = I.widen_bot a1 a2
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
@@ -83,8 +81,7 @@ struct
   let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
   let unop _ op a =
-    return (
-      match op with
+    match op with
       | O_log_not -> bot_lift1 I.log_not a
       | O_minus  -> bot_lift1 I.neg a
       | O_plus  -> a
@@ -94,10 +91,8 @@ struct
         rep
       | O_bit_invert -> bot_lift1 I.bit_not a
       | _ -> top
-    )
 
   let binop _ op a1 a2 =
-    return (
       match op with
       | O_plus   -> bot_lift2 I.add a1 a2
       | O_minus  -> bot_lift2 I.sub a1 a2
@@ -119,16 +114,12 @@ struct
       | O_bit_rshift -> bot_absorb2 I.shift_right a1 a2
       | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
       | _     -> top
-    )
 
   let filter _ a b =
-    return (
       if b then bot_absorb1 I.meet_nonzero a
       else bot_absorb1 I.meet_zero a
-    )
 
   let bwd_unop _ op a r =
-    return (
       try
         let a, r = bot_to_exn a, bot_to_exn r in
         let aa = match op with
@@ -143,10 +134,8 @@ struct
         Nb aa
       with Found_BOT ->
         bottom
-    )
 
   let bwd_binop _ op a1 a2 r =
-    return (
       try
         let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
         let aa1, aa2 =
@@ -173,10 +162,8 @@ struct
         Nb aa1, Nb aa2
       with Found_BOT ->
         bottom, bottom
-    )
 
   let compare _ op a1 a2 r =
-    return (
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
         let op = if r then op else negate_comparison op in
@@ -193,13 +180,10 @@ struct
         Nb aa1, Nb aa2
       with Found_BOT ->
         bottom, bottom
-    )
 
-  let ask : type r. r Query.query -> (expr -> t) -> r option =
-    fun query eval ->
-      match query with
-      | Q_interval e -> Some (eval e)
-      | _ -> None
+  
+  let ask query man flow =
+    assert false
 
   let z_of_z2 z z' round =
     let open Z in
@@ -286,9 +270,17 @@ struct
         else f i :: iter (Z.succ i)
       in
       iter a
+
+  module EvalQuery = Query.GenArgQuery (
+    struct
+      type arg = expr
+      type ret = t
+      let join = join
+      let meet = meet
+    end)
     
 end
 
 
 let () =
-  register_value (module Value)
+  Core.Sig.Value.register_value (module Value)

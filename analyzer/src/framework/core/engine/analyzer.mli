@@ -29,7 +29,7 @@ open Eval
 open Manager
 open Zone
 
-module Make(Domain : Domain.Sig.DOMAIN) :
+module Make(Domain : Sig.Domain.DOMAIN) :
 sig
 
   val init : program -> (Domain.t, Domain.t) man -> Domain.t flow

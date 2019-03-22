@@ -28,7 +28,7 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.DOMAIN =
+module Domain =
 struct
 
   (** Domain identification *)
@@ -64,7 +64,7 @@ struct
   let eval zone exp man flow  =
     match ekind exp with
     | E_c_conditional(cond, e1, e2) ->
-      Eval.assume cond
+      assume_eval cond
         ~fthen:(fun flow ->
             man.eval ~zone:(Z_c, Z_c_low_level) e1 flow
           )
@@ -72,7 +72,7 @@ struct
             man.eval ~zone:(Z_c, Z_c_low_level) e2 flow
           )
         man flow |>
-      Eval.return
+      Option.return
 
     | _ -> None
 

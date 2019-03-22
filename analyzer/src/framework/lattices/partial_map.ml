@@ -22,7 +22,7 @@
 (** Abstraction of sets of partial maps. *)
 
 open Top
-open Sig
+open Core.Lattice
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.partial_map" fmt
 
@@ -123,6 +123,7 @@ struct
           ) m1 m2
       )
   (** Meet. *)
+
 
   let print fmt (a:t) =
     match a with

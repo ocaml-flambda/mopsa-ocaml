@@ -26,7 +26,7 @@
 open Mopsa
 open Common.Base
 open Ast
-module Itv = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Integer_interval.Value
 
 
 (** {2 Cell offset} *)
@@ -168,7 +168,7 @@ struct
 end
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_c_cell(c1, m1), E_c_cell(c2, m2) ->
@@ -201,14 +201,14 @@ type zone +=
 let () =
   register_zone {
     zone = Z_c_cell;
-    name = "C/Cell";
-    subset = None;
-    eval = (fun exp ->
+    zone_name = "C/Cell";
+    zone_subset = None;
+    zone_eval = (fun exp ->
         match ekind exp with
         | E_c_cell _ -> Keep
         | E_var _ when exp.etyp |> is_c_scalar_type -> Process
         | E_c_address_of _ -> Keep
         | Stubs.Ast.E_stub_quantified _ -> Visit
-        | _ -> eval exp Zone.Z_c_low_level
+        | _ -> Core.Zone.eval_template exp Zone.Z_c_low_level
       );
   }

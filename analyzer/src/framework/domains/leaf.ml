@@ -30,7 +30,7 @@ open Core.All
 module type DOMAIN =
 sig
 
-  include Lattice.Sig.LATTICE
+  include LATTICE
 
   val name : string
 
@@ -48,7 +48,7 @@ end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Domain.Sig.DOMAIN =
+module Make(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
 struct
 
   include D
@@ -85,7 +85,7 @@ struct
         man.eval ~zone:(any_zone, D.zone) e flow |>
         Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assign(v, e')} in
-        Manager.map_domain_env T_cur (D.exec stmt') man flow |>
+        map_domain_env T_cur (D.exec stmt') man flow |>
         Post.return
       )
 
@@ -94,14 +94,14 @@ struct
         man.eval ~zone:(any_zone, D.zone) e flow |>
         Post.bind_eval man.lattice @@ fun e' flow ->
         let stmt' = {stmt with skind = S_assume(e')} in
-        Manager.map_domain_env T_cur (D.exec stmt') man flow |>
+        map_domain_env T_cur (D.exec stmt') man flow |>
         Post.return
       )
 
     | S_add _ | S_remove _ | S_rename _ | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       Some (
-        Manager.map_domain_env T_cur (D.exec stmt) man flow |>
+        map_domain_env T_cur (D.exec stmt) man flow |>
         Post.return
       )
 
@@ -111,7 +111,7 @@ struct
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Manager.get_domain_env T_cur man flow)
+    D.ask query (get_domain_env T_cur man flow)
 
 end
 
@@ -120,4 +120,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Domain.Sig.register_domain (module D)
+  Core.Sig.Domain.register_domain (module D)

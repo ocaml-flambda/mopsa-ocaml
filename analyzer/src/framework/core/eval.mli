@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Lattice.Sig
+open Lattice
 open Flow
 open Ast.Stmt
 open Context

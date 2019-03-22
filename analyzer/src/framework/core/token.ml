@@ -49,7 +49,7 @@ module TokenMap =
 struct
 
   open Top
-  open Lattice.Sig
+  open Lattice
 
   module Map = MapExt.Make(
     struct

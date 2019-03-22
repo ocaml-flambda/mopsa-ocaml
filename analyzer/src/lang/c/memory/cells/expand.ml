@@ -29,7 +29,7 @@ open Zone
 open Common.Base
 open Common.Points_to
 open Cell
-module Itv = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Integer_interval.Value
 
 
 (** {2 Zoning of expanded cells} *)
@@ -41,9 +41,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_c_cell_expand;
-    name = "C/Cell/Expand";
-    subset = Some Z_c_cell;
-    eval = (fun exp -> eval exp Z_c_cell);
+    zone_name = "C/Cell/Expand";
+    zone_subset = Some Z_c_cell;
+    zone_eval = (fun exp -> Core.Zone.eval_template exp Z_c_cell);
   }
 
 

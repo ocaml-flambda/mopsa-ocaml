@@ -25,11 +25,16 @@ open Ast.Stmt
 open Token
 open Flow
 open Log
-open Lattice.Sig
+open Context
+open Lattice
 
 type 'a post
 
 val return : 'a flow -> 'a post
+
+val join : 'a post -> 'a post -> 'a post
+
+val choose_ctx : 'a post -> 'a ctx
 
 val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a post
 

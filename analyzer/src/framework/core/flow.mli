@@ -29,7 +29,7 @@
 *)
 
 open Context
-open Lattice.Sig
+open Lattice
 open Token
 
 type 'a flow

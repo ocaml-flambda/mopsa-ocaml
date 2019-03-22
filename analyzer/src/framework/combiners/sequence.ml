@@ -24,6 +24,7 @@
 
 open Ast.All
 open Core.All
+open Log
 
 type _ domain +=
   | D_sequence : 'a domain * 'b domain -> ('a * 'b) domain
@@ -56,9 +57,9 @@ struct
   (**                       {2 Zoning interface}                            *)
   (**************************************************************************)
 
-  let exec_interface = Interface.concat D1.exec_interface D2.exec_interface
+  let exec_interface = Core.Sig.Interface.concat D1.exec_interface D2.exec_interface
 
-  let eval_interface = Interface.concat D1.eval_interface D2.eval_interface
+  let eval_interface = Core.Sig.Interface.concat D1.eval_interface D2.eval_interface
 
 
   (**************************************************************************)
@@ -207,8 +208,8 @@ struct
 
   (** Execution of statements *)
   let exec zone =
-    match Interface.sat_exec zone D1.exec_interface,
-          Interface.sat_exec zone D2.exec_interface
+    match Core.Sig.Interface.sat_exec zone D1.exec_interface,
+          Core.Sig.Interface.sat_exec zone D2.exec_interface
     with
     | false, false ->
       (* Both domains do not provide an [exec] for such zone *)
@@ -247,8 +248,8 @@ struct
 
   (** Evaluation of expressions *)
   let eval zone =
-    match Interface.sat_eval zone D1.eval_interface,
-          Interface.sat_eval zone D2.eval_interface
+    match Core.Sig.Interface.sat_eval zone D1.eval_interface,
+          Core.Sig.Interface.sat_eval zone D2.eval_interface
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such zone *)

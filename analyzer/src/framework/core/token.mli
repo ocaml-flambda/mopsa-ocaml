@@ -21,7 +21,7 @@
 
 (** Tokens identifying control flows *)
 
-open Lattice.Sig
+open Lattice
 open Context
 
 

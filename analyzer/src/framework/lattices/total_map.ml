@@ -34,7 +34,7 @@ end
 
 module Make
     (Key : KEY)
-    (Value : Sig.LATTICE)
+    (Value : Core.Lattice.LATTICE)
 =
 struct
   module Map = MapExt.Make(Key)

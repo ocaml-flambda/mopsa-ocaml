@@ -26,7 +26,7 @@ open Token
 open Flow
 open Log
 open Context
-open Lattice.Sig
+open Lattice
 
 (** Disjunction case of a post-state *)
 type 'a case = {

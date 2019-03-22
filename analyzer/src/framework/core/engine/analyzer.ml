@@ -37,7 +37,7 @@ let debug fmt = Debug.debug ~channel:"framework.analyzer" fmt
 
 
 (** Create an [Analyzer] module over some abstract domain. *)
-module Make(Domain : Domain.Sig.DOMAIN) =
+module Make(Domain : Sig.Domain.DOMAIN) =
 struct
 
 
@@ -544,7 +544,7 @@ struct
           interact ~where:false action range flow
 
         | Value(var) ->
-          printf "%a@." (man.ask Query.print_var_query flow) var;
+          printf "%a@." (man.ask Query.PrintVarQuery.query flow) var;
           interact ~where:false action range flow
 
         | Where ->

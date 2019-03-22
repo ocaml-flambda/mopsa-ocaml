@@ -43,7 +43,7 @@ sig
 end
 
 (** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Domain.Sig.DOMAIN =
+module Make(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
 struct
 
   type t = unit
@@ -76,4 +76,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Domain.Sig.register_domain (module D)
+  Core.Sig.Domain.register_domain (module D)

@@ -22,8 +22,9 @@
 (** Configuration parser. *)
 
 open Core
-open Domain.Sig
-open Domain.Value
+open Sig.Domain
+open Sig.Stacked
+open Sig.Value
 open Yojson.Basic
 open Yojson.Basic.Util
 
@@ -55,7 +56,7 @@ let rec domain = function
   | _ -> assert false
 
 and leaf_domain name =
-  try Domain.Sig.find_domain name
+  try Sig.Domain.find_domain name
   with Not_found -> Exceptions.panic "Domain %s not found" name
 
 
@@ -65,17 +66,17 @@ and seq assoc =
                 List.map domain
   in
   let rec aux :
-    (module Domain.Sig.DOMAIN) list ->
-    (module Domain.Sig.DOMAIN)
+    (module Sig.Domain.DOMAIN) list ->
+    (module Sig.Domain.DOMAIN)
     = function
       | [] -> assert false
       | [d] -> d
       | hd :: tl ->
         let tl = aux tl in
-        let module Head = (val hd : Domain.Sig.DOMAIN) in
-        let module Tail = (val tl : Domain.Sig.DOMAIN) in
+        let module Head = (val hd : Sig.Domain.DOMAIN) in
+        let module Tail = (val tl : Sig.Domain.DOMAIN) in
         let module Dom = Combiners.Sequence.Make(Head)(Tail) in
-        (module Dom : Domain.Sig.DOMAIN)
+        (module Dom : Sig.Domain.DOMAIN)
   in
   aux domains
 
@@ -98,7 +99,7 @@ and value = function
   | _ -> assert false
 
 and value_leaf name =
-  try Domain.Value.find_value name
+  try find_value name
   with Not_found -> Exceptions.panic "Value %s not found" name
 
 and stack = function
@@ -107,7 +108,7 @@ and stack = function
   | _ -> assert false
 
 and leaf_stack name =
-  try Domain.Sig.find_stack name
+  try find_stack name
   with Not_found -> Exceptions.panic "Stack %s not found" name
 
 and compose assoc =
@@ -138,7 +139,7 @@ let get_domain json =
 (** {2 Entry points} *)
 (** **************** *)
 
-let parse () : string * (module Domain.Sig.DOMAIN) =
+let parse () : string * (module DOMAIN) =
   let file = resolve_config_file !opt_config in
   let json = Yojson.Basic.from_file file in
   let language = get_language json in
@@ -151,7 +152,7 @@ let language () : string =
   get_language json
 
 let domains () : string list =
-  if !opt_config = "" then Domain.Sig.names ()
+  if !opt_config = "" then Sig.Domain.names () @ Sig.Stacked.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in

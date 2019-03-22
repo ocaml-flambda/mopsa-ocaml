@@ -19,90 +19,42 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic mechanism for extracting information from abstract domains. *)
+(** Queries are a generic mechanism for extracting information from abstract
+    domains without being coupled to their internal representation.
+*)
 
 open Eq
 
-(** {2 Queries} *)
-(** *********** *)
 
-(** Type of a query, defined by domains and annotated with the type of the reply. *)
-type _ query = ..
+(** {2 Argument-less (unit) queries} *)
+(** ******************************** *)
+
+type _ uq = ..
 
 
-(** {2 Managers} *)
-(** ************ *)
-
-(** Query manager defines merge operators on replies. *)
-type 'r query_info = {
-  eq : 'a. 'a query -> ('a, 'r) eq option;
+(** Registration record defining new argument-less queries. *)
+type 'r uinfo = {
+  eq : 'a. 'a uq -> ('a, 'r) eq option;
   join: 'r -> 'r -> 'r;
   meet: 'r -> 'r -> 'r;
 }
 
-type pool =
-  | [] : pool
-  | (::) : 'r query_info * pool -> pool
 
-let pool : pool ref = ref []
-
-let register_query info =
-  pool := info :: !pool
-
-module GenFunQuery(Q:sig
-    type arg
-    type ret
-    val join : ret -> ret -> ret
-    val meet : ret -> ret -> ret
-  end)
-  =
-  struct
-    type _ query += Query: Q.arg -> Q.ret query
-
-    let query arg = Query arg
-
-    let eq : type a. a query -> (a, Q.ret) eq option =
-      fun q ->
-        match q with
-        | Query _ -> Some Eq
-        | _ -> None
-
-    let () =
-      register_query {
-        eq = eq;
-        join = Q.join;
-        meet = Q.meet;
-      }
-  end
-
-module GenUnitQuery(Q:sig
-    type ret
-    val join : ret -> ret -> ret
-    val meet : ret -> ret -> ret
-  end)
-  =
-  struct
-    type _ query += Query: Q.ret query
-
-    let query = Query
-
-    let eq : type a. a query -> (a, Q.ret) eq option =
-      fun q ->
-        match q with
-        | Query -> Some Eq
-        | _ -> None
-
-    let () =
-      register_query {
-        eq = eq;
-        join = Q.join;
-        meet = Q.meet;
-      }
-  end
+(** Pool of unit queries *)
+type upool =
+  | [] : upool
+  | (::) : 'r uinfo * upool -> upool
 
 
-let find query =
-  let rec aux : type a b. a query -> pool -> a query_info =
+let upool : upool ref = ref []
+
+
+let uregister uinfo =
+  upool := uinfo :: !upool
+
+
+let ufind uq =
+  let rec aux : type a b. a uq -> upool -> a uinfo =
     fun query -> function
       | [] -> raise Not_found
       | hd :: tl ->
@@ -110,35 +62,198 @@ let find query =
         | Some Eq -> hd
         | None -> aux query tl
   in
-  aux query !pool
+  aux uq !upool
 
 
-(** {2 Operators} *)
 
-let join : type a. a query -> a -> a -> a =
-  fun q r1 r2 ->
-    let info = find q in
-    info.join r1 r2
+(** {2 Queries with arguments} *)
+(** ************************** *)
 
-let meet : type a. a query -> a -> a  -> a =
-  fun q r1 r2 ->
-    let info = find q in
-    info.meet r1 r2
+type (_,_) aq = ..
 
 
+type ('a,'r) ainfo = {
+  eq : 'b 's. ('b,'s) aq -> ('b*'s, 'a*'r) eq option;
+  join: 'r -> 'r -> 'r;
+  meet: 'r -> 'r -> 'r;
+}
+
+
+type apool =
+  | [] : apool
+  | (::) : ('a,'r) ainfo * apool -> apool
+
+
+let apool : apool ref = ref []
+
+
+let aregister ainfo =
+  apool := ainfo :: !apool
+
+
+let afind aq =
+  let rec aux : type a r. (a,r) aq -> apool -> (a,r) ainfo =
+    fun query -> function
+      | [] -> raise Not_found
+      | hd :: tl ->
+        match hd.eq query with
+        | Some Eq -> hd
+        | None -> aux query tl
+  in
+  aux aq !apool
+
+
+(** {2 Queries} *)
+(** *********** *)
+
+type _ query =
+  | Q_unit : 'r uq       -> 'r query
+  | Q_arg  : ('a, 'r) aq * 'a -> 'r query
+
+let join (query:'r query) (a:'r) (b:'r) =
+  match query with
+  | Q_unit uq ->
+    let info = ufind uq in
+    info.join a b
+
+  | Q_arg (aq,_) ->
+    let info = afind aq in
+    info.join a b
+
+
+let meet (query:'r query) (a:'r) (b:'r) =
+  match query with
+  | Q_unit uq ->
+    let info = ufind uq in
+    info.meet a b
+
+  | Q_arg (aq,_) ->
+    let info = afind aq in
+    info.meet a b
+    
+
+(** {2 Generators of queries} *)
+(** ************************* *)
+
+module type UnitQuery =
+sig
+  type ret
+  val query : ret query
+  val handle : 'r query -> (unit -> ret) -> 'r option
+end
+
+module GenUnitQuery
+    (Spec:
+     sig
+       type ret
+       val join : ret -> ret -> ret
+       val meet : ret -> ret -> ret
+     end
+    )
+  : UnitQuery
+    with type ret = Spec.ret
+  =
+  struct
+
+    type ret = Spec.ret
+
+    type _ uq +=
+      | Q : Spec.ret uq
+
+    let eq : type a. a uq -> (a, Spec.ret) eq option =
+      fun q ->
+        match q with
+        | Q -> Some Eq
+        | _ -> None             
+
+    let () =
+      uregister {
+        eq = eq;
+        join = Spec.join;
+        meet = Spec.meet;
+      }
+
+    let query = Q_unit Q
+
+    let handle : type r . r query -> (unit -> Spec.ret) -> r option =
+      fun query f ->
+        match query with
+        | Q_unit q ->
+          begin
+            match eq q with
+            | Some Eq -> Some (f ())
+            | None -> None
+          end
+        | _ -> None
+  end
+
+
+module type ArgQuery =
+sig
+  type ret
+  type arg
+  val query : arg -> ret query
+  val handle : 'r query -> (arg -> ret) -> 'r option
+end
+
+module GenArgQuery
+    (
+      Spec:
+      sig
+        type ret
+        type arg
+        val join : ret -> ret -> ret
+        val meet : ret -> ret -> ret
+      end
+    )
+  : ArgQuery
+    with type ret = Spec.ret
+    with type arg = Spec.arg
+=
+struct
+
+  type ret = Spec.ret
+  type arg = Spec.arg
+
+    type (_,_) aq +=
+      | Q : (Spec.arg,Spec.ret) aq
+
+    let eq : type a r. (a,r) aq -> (a*r, Spec.arg*Spec.ret) eq option =
+      fun q ->
+        match q with
+        | Q -> Some Eq
+        | _ -> None             
+
+    let () =
+      aregister {
+        eq = eq;
+        join = Spec.join;
+        meet = Spec.meet;
+      }
+
+    let query arg = Q_arg (Q,arg)
+
+    let handle : type r . r query -> (Spec.arg -> Spec.ret) -> r option =
+      fun query f ->
+        match query with
+        | Q_arg (q,arg) ->
+          begin
+            match eq q with
+            | Some Eq -> Some (f arg)
+            | None -> None
+          end
+        | _ -> None
+  end
 
 (** {2 Common queries} *)
 (** ****************** *)
 
-let print_var_query =
-  let module Q = GenUnitQuery
-      (struct
-        type ret = Format.formatter -> string -> unit
+module PrintVarQuery = GenUnitQuery
+    (struct
+      type ret = Format.formatter -> string -> unit
 
-        let join pp1 pp2  = fun fmt var ->
-          Format.fprintf fmt "%a@,%a" pp1 var pp2 var
+      let join pp1 pp2  = fun fmt var ->
+        Format.fprintf fmt "%a@,%a" pp1 var pp2 var
 
-        let meet = join
-      end)
-  in
-  Q.query
+      let meet = join
+    end)

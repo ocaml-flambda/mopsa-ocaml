@@ -50,7 +50,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  include Framework.Core.Id.GenDomainId(struct
+  include GenDomainId(struct
       type typ = t
       let name = "universal.heap.recency"
     end)
@@ -58,17 +58,16 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_u_heap]; import = []}
-  let eval_interface = {export = [Z_u_heap, Z_any]; import = []}
+  let exec_interface = {provides = [Z_u_heap]; uses = []}
+  let eval_interface = {provides = [Z_u_heap, Z_any]; uses = []}
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man flow =
     Some (
-      Flow.set_domain_cur empty man flow |>
-      Flow.set_annot KAddr Equiv.empty |>
-      Flow.without_callbacks
+      set_domain_env T_cur empty man flow |>
+      Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit Pool.ctx_key Equiv.empty)
     )
 
 
@@ -81,11 +80,12 @@ struct
     | S_free_addr addr ->
       let flow' =
         if is_old addr flow then flow
-        else Flow.map_domain_env T_cur (remove addr) man flow
+        else map_domain_env T_cur (remove addr) man flow
       in
       let stmt' = mk_remove (mk_addr addr stmt.srange) stmt.srange in
       man.exec stmt' flow' |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | _ -> None
 
@@ -96,7 +96,7 @@ struct
   let eval zone expr man flow =
     match ekind expr with
     | E_alloc_addr(addr_kind) ->
-      let pool = Flow.get_domain_cur man flow in
+      let pool = get_domain_env T_cur man flow in
 
       let cs = Callstack.get flow in
       let range = erange expr in
@@ -118,14 +118,14 @@ struct
           (* Otherwise, we make the previous recent address as an old one *)
           let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
           let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
-          Flow.map_domain_cur (add old_addr) man flow |>
+          map_domain_env T_cur (add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
       in
 
       (* Add the recent address *)
-      Flow.map_domain_cur (add recent_addr) man flow' |>
+      map_domain_env T_cur (add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
-      Eval.return
+      Option.return
 
     | _ -> None
 
@@ -137,4 +137,4 @@ struct
 end
 
 let () =
-  Framework.Core.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Domain.register_domain (module Domain)

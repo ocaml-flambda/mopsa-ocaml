@@ -23,8 +23,10 @@
 
 open Ast.All
 open Core.All
+open Core.Sig.Value
 
-module Make(Value: Core.Domain.Value.VALUE) =
+
+module Make(Value: VALUE) =
 struct
 
 
@@ -34,7 +36,7 @@ struct
 
   (** Map with variables as keys. *)
   module VarMap =
-    Lattice.Partial_map.Make
+    Lattices.Partial_map.Make
       (Var)
       (Value)
 
@@ -270,8 +272,15 @@ struct
     | _ -> top
 
 
+  
+  (** Evaluation query *)
+  (** **************** *)
+
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
-      Value.ask query (fun exp -> snd @@ eval exp map)
+      Value.EvalQuery.handle query (fun exp ->
+          eval exp map |>
+          snd
+        )
 
 end

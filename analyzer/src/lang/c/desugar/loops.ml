@@ -28,7 +28,7 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain : Framework.Domains.Stateless.DOMAIN =
 struct
 
   (** Domain identification *)
@@ -40,8 +40,8 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c]; import = []}
-  let eval_interface = {export = []; import = []}
+  let exec_interface = {provides = [Z_c]; uses = []}
+  let eval_interface = {provides = []; uses = []}
 
   (** Initialization *)
   (** ============== *)
@@ -64,7 +64,7 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return
+      man.exec stmt flow |> Post.return |> Option.return
 
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
@@ -75,7 +75,7 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return
+      man.exec stmt flow |> Post.return |> Option.return
 
     | _ -> None
 
