@@ -165,7 +165,8 @@ let language () : string =
   get_language json
 
 let domains () : string list =
-  if !opt_config = "" then Sig.Domain.names () @ Sig.Stacked.names ()
+  if !opt_config = ""
+  then Sig.Domain.names () @ Sig.Stacked.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in
@@ -180,19 +181,18 @@ let domains () : string list =
           ) []
 
       | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
-        List.assoc "nonrel" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
+        iter (List.assoc "nonrel" obj)
 
       | `Assoc(obj) when List.mem_assoc "apply" obj ->
         iter (List.assoc "apply" obj) @
         iter (List.assoc "on" obj)
 
       | `Assoc(obj) when List.mem_assoc "compose" obj ->
-        iter (List.assoc "compose" obj) @
-        iter (List.assoc "with" obj)
+        List.assoc "compose" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
 
       | _ -> assert false
     in
