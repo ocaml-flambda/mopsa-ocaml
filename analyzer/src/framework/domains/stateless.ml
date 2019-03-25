@@ -25,9 +25,9 @@
 open Ast.All
 open Core.All
 
-(****************************************************************************)
-(**                      {2 Leaf stateless domains}                         *)
-(****************************************************************************)
+(***********************************************************************)
+(**                      {2 Stateless domains}                         *)
+(***********************************************************************)
 
 module type DOMAIN =
 sig
@@ -43,7 +43,7 @@ sig
 end
 
 (** Create a full domain from a stateless domain. *)
-module Make(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
+module MakeDomain(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
 struct
 
   type t = unit
@@ -75,5 +75,60 @@ end
 
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
+  let module D = MakeDomain(M) in
   Core.Sig.Domain.register_domain (module D)
+
+
+
+(***********************************************************************)
+(**                      {2 Stateless stacks}                          *)
+(***********************************************************************)
+
+module type STACK =
+sig
+
+  val name : string
+  val exec_interface : zone interface
+  val eval_interface : (zone * zone) interface
+  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
+  val exec : zone -> stmt -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> 'a post option
+  val eval : zone * zone -> expr -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> (expr, 'a) eval option
+  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+
+end
+
+(** Create a full stack from a stateless domain. *)
+module MakeStack(S: STACK) : Core.Sig.Stacked.STACK =
+struct
+
+  type t = unit
+  let bottom = ()
+  let top = ()
+  let is_bottom _ = false
+  let subset ((),s) ((),s') _ = true,s,s'
+  let join ((),s) ((),s') _ = (),s,s'
+  let meet ((),s) ((),s') _ = (),s,s'
+  let widen _ ((),s) ((),s') _ = (),true,s,s'
+  let merge _ _ _ = ()
+  let print _ _ = ()
+
+  include GenDomainId(struct
+      type typ = unit
+      let name = S.name
+    end)
+
+  let init = S.init
+
+  let exec_interface = S.exec_interface
+  let eval_interface = S.eval_interface
+
+  let exec = S.exec
+  let eval = S.eval
+  let ask = S.ask
+
+end
+
+let register_stack modl =
+  let module M = (val modl : STACK) in
+  let module S = MakeStack(M) in
+  Core.Sig.Stacked.register_stack_domain (module S)
