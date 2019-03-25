@@ -78,29 +78,22 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_assign(v, e) ->
-      Some (
-        man.eval ~zone:(any_zone, D.zone) e flow |>
-        Post.bind_eval man.lattice @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assign(v, e')} in
-        map_domain_env T_cur (D.exec stmt') man flow |>
-        Post.return
-      )
+      let stmt' = {stmt with skind = S_assign(v, e)} in
+      map_domain_env T_cur (D.exec stmt') man flow |>
+      Post.return |>
+      Option.return
 
     | S_assume(e) ->
-      Some (
-        man.eval ~zone:(any_zone, D.zone) e flow |>
-        Post.bind_eval man.lattice @@ fun e' flow ->
-        let stmt' = {stmt with skind = S_assume(e')} in
-        map_domain_env T_cur (D.exec stmt') man flow |>
-        Post.return
-      )
+      let stmt' = {stmt with skind = S_assume(e)} in
+      map_domain_env T_cur (D.exec stmt') man flow |>
+      Post.return |>
+      Option.return
 
     | S_add _ | S_remove _ | S_rename _ | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
-      Some (
-        map_domain_env T_cur (D.exec stmt) man flow |>
-        Post.return
-      )
+      map_domain_env T_cur (D.exec stmt) man flow |>
+      Post.return |>
+      Option.return
 
     | _ ->
       None

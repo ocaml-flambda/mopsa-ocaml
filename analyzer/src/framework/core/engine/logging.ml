@@ -113,10 +113,10 @@ let reach loc =
   indent "reaching %a" pp_range loc ~symbol:MSG
 
 let pp_S fmt stmt =
-  fprintf fmt "@[<v 3>𝕊 ⟦ %a@] ⟧" pp_stmt stmt
+  fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
 
 let pp_E fmt exp =
-  fprintf fmt "@[<v 3>𝔼 ⟦ %a@] ⟧" pp_expr exp
+  fprintf fmt "@[<v 3>E [| %a@] |]" pp_expr exp
 
 let exec stmt zone man flow =
   if !opt_short_log then
