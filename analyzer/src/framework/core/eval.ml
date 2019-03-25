@@ -80,6 +80,23 @@ let map
         { eval_result = Some e'; eval_flow = flow'; eval_cleaners = [] }
     ) eval
 
+
+let reduce
+    (f: 'e -> 'a flow -> 'b)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (empty: 'b)
+    (evl: ('e,'a) eval)
+  : 'b =
+  Dnf.substitute
+    (fun case ->
+       match case.eval_result with
+       | Some e -> f e case.eval_flow
+       | None -> empty
+    )
+    join meet evl
+
+
 let map_flow
     (f: 'a flow -> 'a flow)
     (eval: ('e, 'a) eval)

@@ -63,7 +63,8 @@ include BaseSet
 
 include Framework.Core.Id.GenValueId(struct
     type typ = t
-    let name = "c.memory.pointers", "pointers"
+    let name = "c.memory.pointers"
+    let display = "pointers"
   end)
 
 let zone = Zone.Z_c_scalar
@@ -89,12 +90,13 @@ let unop _ op v = top
 
 let binop _ op v1 v2 = top
 
-let bwd_unop = default_bwd_unop_simple
-let bwd_binop = default_bwd_binop_simple
+let bwd_unop = Framework.Core.Sig.Value.default_bwd_unop
+
+let bwd_binop = Framework.Core.Sig.Value.default_bwd_binop
 
 let filter _ v b =
   if b then diff v null
-  else meet () v null
+  else meet v null
 
 let is_singleton v =
   not (is_top v) &&
@@ -104,7 +106,7 @@ let compare _ op v1 v2 r =
   let op = if r then op else negate_comparison op in
   match op with
   | O_eq ->
-    let v = meet () v1 v2 in
+    let v = meet v1 v2 in
     v, v
 
   | O_ne ->
@@ -114,4 +116,11 @@ let compare _ op v1 v2 r =
 
   | _ -> v1, v2
 
-let ask _ _ = None
+module EvalQuery = Query.GenArgQuery(
+  struct
+    type arg = expr
+    type ret = t
+    let join = join
+    let meet = meet
+  end
+  )

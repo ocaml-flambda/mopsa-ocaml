@@ -38,7 +38,7 @@ struct
   include GenValueId(struct
       type typ = t
       let name = "universal.numeric.values.integer_interval"
-      let display = "int itv"
+      let display = "int-itv"
     end)
 
   let zone = Zone.Z_u_num

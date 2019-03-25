@@ -20,49 +20,56 @@
 (****************************************************************************)
 
 
-(** Generators of fresh module identifiers for domains and values *)
+(** Generators of identifiers for domains and values *)
 
-include Eq
+open Eq
 
-type _ domain = ..
 
-module GenDomainId(M:sig type typ val name : string end) =
-struct
+type _ did
+(** Domain identifier *)
 
-  type _ domain += DId : M.typ domain
 
-  let id = DId
+val deq : 'a did -> 'b did -> ('a,'b) eq option
+(** Equality witness of domain identifiers *)
 
-  let name = M.name
-
-  let identify : type a. a domain -> (M.typ, a) eq option =
-    function
-    | DId -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:M.name fmt
+(** Generator of a new domain identifier *)
+module GenDomainId(
+    Spec: sig
+      type typ
+      val name : string
+    end
+  ) :
+sig
+  val id : Spec.typ did
+  val name : string
+  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
 
 
-type _ value = ..
+(****************************************************************************)
+(**                         {2 Value identifiers}                           *)
+(****************************************************************************)
 
 
-module GenValueId(M:sig type typ val name : string val display : string end) =
-struct
+type _ vid
+(** Value identifier *)
 
-  type _ value += VId : M.typ value
 
-  let id = VId
+val veq : 'a vid -> 'b vid -> ('a,'b) eq option
+(** Equality witness of value identifiers *)
 
-  let name = M.name
-
-  let display = M.display
-
-  let identify : type a. a value -> (M.typ, a) eq option =
-    function
-    | VId -> Some Eq
-    | _ -> None
-
-  let debug fmt = Debug.debug ~channel:M.name fmt
-
+(** Generator of a new value identifier *)
+module GenValueId(
+    Spec:sig
+      type typ
+      val name : string
+      val display : string
+    end
+  ) :
+sig
+  val id : Spec.typ vid
+  val name : string
+  val display : string
+  val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
+

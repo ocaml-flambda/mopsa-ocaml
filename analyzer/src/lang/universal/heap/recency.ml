@@ -47,19 +47,18 @@ struct
     Format.fprintf fmt "heap: @[%a@]@\n"
       Pool.print pool
 
-  (** Domain identification *)
-  (** ===================== *)
-
   include GenDomainId(struct
       type typ = t
       let name = "universal.heap.recency"
     end)
+
 
   (** Zoning definition *)
   (** ================= *)
 
   let exec_interface = {provides = [Z_u_heap]; uses = []}
   let eval_interface = {provides = [Z_u_heap, Z_any]; uses = []}
+
 
   (** Initialization *)
   (** ============== *)

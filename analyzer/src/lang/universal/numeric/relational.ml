@@ -40,8 +40,6 @@ sig
   val name : string
 end
 
-module OctMan = struct type t = Oct.t let name = "octagon" let man = Oct.manager_alloc () end
-module PolyMan = struct type t = Polka.strict Polka.t let name = "polyhedra" let man = Polka.manager_alloc_strict () end
 
 (** ToolBox module for Apron interfacing *)
 module ApronTransformer(ApronManager : APRONMANAGER) =
@@ -379,9 +377,11 @@ struct
 
   type t = ApronManager.t Apron.Abstract1.t
 
-  let name = "universal.numeric.relational"
+  include GenDomainId(struct
+      type typ = t
+      let name = "universal.numeric.relational." ^ ApronManager.name
+    end)
 
-  let debug fmt = Debug.debug ~channel:name fmt
 
 
   (** {2 Command-line options} *)
@@ -597,7 +597,21 @@ struct
 
 end
 
+module OctMan = struct
+  type t = Oct.t
+  let name = "octagon"
+  let man = Oct.manager_alloc ()
+end
+
 module Oct = Make(OctMan)
+
+
+module PolyMan = struct
+  type t = Polka.strict Polka.t
+  let name = "polyhedra"
+  let man = Polka.manager_alloc_strict ()
+end
+
 module Poly = Make(PolyMan)
 
 let () =

@@ -40,7 +40,6 @@ open Eval
 open Log
 open Post
 open Zone
-open Eq
 open Id
 open Interface
 
@@ -56,14 +55,11 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t did
   (** Domain identifier *)
 
   val name : string
   (** Name of the domain *)
-
-  val identify : 'a domain -> (t, 'a) eq option
-  (** Check the identity of the domain *)
 
 
   (** {2 Interface of transfer functions} *)
@@ -76,8 +72,8 @@ sig
   (** Interface of the eval transfer function *)
 
 
-  (** {2 Special values} *)
-  (** ****************** *)
+  (** {2 Lattice special values} *)
+  (** ************************** *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -86,8 +82,8 @@ sig
   (** Greatest abstract element of the lattice. *)
 
 
-  (** {2 Predicates} *)
-  (** ************** *)
+  (** {2 Lattice predicates} *)
+  (** ********************** *)
 
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
@@ -97,8 +93,8 @@ sig
       related to (or included in) [a2]. *)
 
 
-  (** {2 Operators} *)
-  (** ************* *)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val join: t -> t -> t
   (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
@@ -120,8 +116,8 @@ sig
   *)
 
 
-  (** {2 Printing} *)
-  (** ************ *)
+  (** {2 Pretty printing} *)
+  (** ******************* *)
 
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)

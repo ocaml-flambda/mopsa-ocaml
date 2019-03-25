@@ -43,7 +43,6 @@ open Eval
 open Log
 open Post
 open Zone
-open Eq
 open Id
 open Interface
 
@@ -59,14 +58,11 @@ sig
   type t
   (** Type of an abstract elements. *)
 
-  val id : t domain
+  val id : t did
   (** Domain identifier *)
 
   val name : string
   (** Name of the domain *)
-
-  val identify : 'a domain -> (t, 'a) eq option
-  (** Check the identity of the domain *)
 
 
   (** {2 Interface of transfer functions} *)
@@ -95,7 +91,7 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val subset: t * 's -> t * 's -> ('a,t,'s) sman -> bool * 's * 's
+  val subset: t * 's -> t * 's -> 's sub_man -> bool * 's * 's
   (** [subset (a1, s1) (a2, s2) man] tests whether [a1] is related to
      (or included in) [a2] and unifies the sub-tree elements [s1] and
      [s2]. *)
@@ -104,16 +100,16 @@ sig
   (** {2 Operators} *)
   (** ************* *)
 
-  val join: t * 's -> t * 's -> ('a,t,'s) sman -> t * 's * 's
+  val join: t * 's -> t * 's -> 's sub_man -> t * 's * 's
   (** [join (a1, s1) (a2, s2) man] computes an upper bound of [a1]
       and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
-  val meet: t * 's -> t * 's -> ('a,t,'s) sman -> t * 's * 's
+  val meet: t * 's -> t * 's -> 's sub_man -> t * 's * 's
   (** [meet (a1, s1) (a2, s2) man] computes a lower bound of [a1] and
       [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
   val widen:
-      uctx -> t * 's -> t * 's -> ('a,t,'s) sman -> t * bool * 's * 's
+      uctx -> t * 's -> t * 's -> 's sub_man -> t * bool * 's * 's
   (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
       [a1] and [a2] that ensures stabilization of ascending chains and
       unifies the sub-tree elements [s1] and [s2]. *)
@@ -141,10 +137,10 @@ sig
   val init : program -> ('a, t) man -> 'a flow -> 'a flow option
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t, 's) sman -> 'a flow -> 'a post option
+  val exec : zone -> stmt -> ('a, t) man -> ('a, t, 's) stack_man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> ('a, t, 's) stack_man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option

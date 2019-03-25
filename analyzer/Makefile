@@ -29,8 +29,8 @@ mopsa = framework mopsa lang main
 framework = ast core lattices domains combiners export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
-	         sig callstack alarm engine all
-framework.core.sig = interface id value domain stacked
+	         id sig callstack alarm engine all
+framework.core.sig = interface value domain stacked
 framework.core.engine = logging cache analyzer
 framework.lattices = partial_map powerset total_map
 framework.domains = leaf stateless nonrel
@@ -40,7 +40,7 @@ framework.combiners.product = merge meet cartesian
 framework.config = paths abstraction options
 
 # Languages
-lang = universal c python stubs
+lang = universal stubs c python
 
 # Universal
 lang.universal = ast frontend
@@ -67,11 +67,12 @@ lang.c.resources = common file
 lang.c.resources.file = slot table domain
 
 # Python
-lang.python = ast addr utils visitor operators pp frontend zone		\
-alarms  libs desugar objects data_model types flows program
-lang.python.data_model = callable arith_ops compare_ops aug_assign	\
-attribute subscript
-lang.python.types = typing addr_env t_string t_int t_float t_list t_set
+lang.python = ast addr utils visitor operators pp frontend
+# lang.python = ast addr utils visitor operators pp frontend zone alarms libs \
+# 	      desugar objects data_model types flows program
+# lang.python.data_model = callable arith_ops compare_ops aug_assign attribute \
+# 	                 subscript
+# lang.python.types = typing addr_env t_string t_int t_float t_list t_set
 
 
 # Packages

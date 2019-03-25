@@ -29,11 +29,23 @@ open Query
 module type VALUE =
 sig
 
-  (** {2 Structure} *)
-  (** ************* *)
+  (** {2 Structure and identification} *)
+  (** ******************************** *)
 
   type t
   (** Type of an abstract value. *)
+
+  val id : t vid
+  (** Identifier of the value abstraction *)
+
+  val name : string
+  (** Name of the value abstraction *)
+
+  val display : string
+  (** Debug display name used by the non-relational lifter *)
+
+  val zone : Zone.zone
+  (** Language zone in which the value abstraction is defined *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -42,8 +54,8 @@ sig
   (** Greatest abstract element of the lattice. *)
 
 
-  (** {2 Predicates} *)
-  (** ************** *)
+  (** {2 Lattice predicates} *)
+  (** ********************** *)
 
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
@@ -53,8 +65,8 @@ sig
       related to (or included in) [a2]. *)
 
 
-  (** {2 Operators} *)
-  (** ************* *)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val join: t -> t -> t
   (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
@@ -67,26 +79,18 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Printing} *)
-  (** ************ *)
+  (** {2 Pretty printing} *)
+  (** ******************* *)
 
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
-  val zone : Zone.zone
-  (** Language zone in which the value abstraction is defined *)
 
-  val id : t value
-  val name : string
-  val display : string
-  val identify : 'a value -> (t, 'a) eq option
+  (** {2 Forward semantics} *)
+  (** ********************* *)
 
   val of_constant : typ -> constant -> t
   (** Create a singleton abstract value from a constant. *)
-
-  (*==========================================================================*)
-                          (** {2 Forward semantics} *)
-  (*==========================================================================*)
 
   val unop : typ -> operator -> t -> t
   (** Forward evaluation of unary operators. *)
@@ -97,9 +101,9 @@ sig
   val filter : typ -> t -> bool -> t
   (** Keep values that may represent the argument truth value *)
 
-  (*==========================================================================*)
-                          (** {2 Backward operators} *)
-  (*==========================================================================*)
+
+  (** {2 Backward semantics} *)
+  (** ********************** *)
 
   val bwd_unop : typ -> operator -> t -> t -> t
   (** Backward evaluation of unary operators.
@@ -138,14 +142,12 @@ sig
   *)
 
 
-  (*==========================================================================*)
-  (**                          {2 Eval query}                                 *)
-  (*==========================================================================*)
+  (** {2 Evaluation query} *)
+  (** ******************** *)
 
   module EvalQuery : Query.ArgQuery
     with type arg = expr
     with type ret = t
-
 
 end
 

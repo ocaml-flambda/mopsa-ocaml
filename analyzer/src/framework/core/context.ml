@@ -298,6 +298,12 @@ let find_unit (k: 'v ukey) (ctx:'a ctx) : 'v =
 let find_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'v =
   pfind k ctx.ctx_poly
 
+let mem_unit (k: 'v ukey) (ctx:'a ctx) : bool =
+  umem k ctx.ctx_unit
+
+let mem_poly (k: ('a,'v) pkey) (ctx:'a ctx) : bool =
+  pmem k ctx.ctx_poly
+
 let add_unit (k: 'v ukey) (v:'v) (ctx:'a ctx) : 'a ctx =
   { ctx with ctx_unit = uadd k v ctx.ctx_unit }
 

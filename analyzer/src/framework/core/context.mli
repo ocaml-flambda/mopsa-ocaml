@@ -84,6 +84,10 @@ val find_unit : 'v ukey -> 'a ctx -> 'v
 
 val find_poly : ('a,'v) pkey ->'a ctx -> 'v
 
+val mem_unit : 'v ukey -> 'a ctx -> bool
+
+val mem_poly : ('a,'v) pkey -> 'a ctx -> bool
+
 val add_unit : 'v ukey -> 'v -> 'a ctx -> 'a ctx
 
 val add_poly : ('a,'v) pkey -> 'v -> 'a ctx -> 'a ctx

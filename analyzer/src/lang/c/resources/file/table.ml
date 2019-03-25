@@ -27,7 +27,7 @@
 
 open Mopsa
 open Universal.Ast
-module Itv = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Integer_interval.Value
 
 let debug fmt = Debug.debug ~channel:"c.resources.file.table" fmt
 
@@ -61,13 +61,13 @@ let subset a1 a2 =
   AddrItvMap.subset a1.map a2.map &&
   AddrSet.subset a2.support a1.support
 
-let join annot a1 a2 = {
-  map = AddrItvMap.join annot a1.map a2.map;
+let join a1 a2 = {
+  map = AddrItvMap.join a1.map a2.map;
   support = AddrSet.inter a1.support a2.support;
 }
 
-let meet annot a1 a2 = {
-  map = AddrItvMap.meet annot a1.map a2.map;
+let meet a1 a2 = {
+  map = AddrItvMap.meet a1.map a2.map;
   support = AddrSet.union a1.support a2.support;
 }
 
@@ -89,7 +89,7 @@ let add addr itv a = {
 (** Insert an address in the file table *)
 let insert addr window (t:table) =
   (* Compute the interval of allocated ids *)
-  let allocated = AddrItvMap.fold (fun _ -> Itv.join ()) t.map Itv.bottom in
+  let allocated = AddrItvMap.fold (fun _ -> Itv.join) t.map Itv.bottom in
 
   if Itv.is_bottom allocated then
     let itv = Itv.of_int window window in
@@ -114,7 +114,6 @@ let insert addr window (t:table) =
     in
     let itv = List.fold_left (fun acc itv ->
         Itv.compare () O_ne acc itv true |>
-        Channel.without_channel |>
         fst
       ) itv0 sorted
     in

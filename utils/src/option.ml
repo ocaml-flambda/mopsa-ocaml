@@ -96,7 +96,7 @@ let print pp fmt x =
 
 let return x = Some x
 
-let bind f x =
+let bind (f:'a -> 'b option) (x:'a option) : 'b option =
   match x with
   | None -> None
   | Some x -> f x

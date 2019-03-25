@@ -27,9 +27,6 @@ open Core.All
 open Log
 
 
-type _ domain +=
-  | D_apply : 'a domain * 'b domain -> ('a * 'b) domain
-
 module Make (S:STACK) (D:DOMAIN) : DOMAIN =
 struct
 
@@ -39,19 +36,12 @@ struct
 
   type t = S.t * D.t
 
-  let name = "framework.combiners.apply"
-
-  let id = D_apply (S.id, D.id)
-
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_apply(id1, id2) ->
-      begin match S.identify id1, D.identify id2 with
-        | Some Eq, Some Eq -> Some Eq
-        | _ -> None
-      end
-
-    | _ -> None
+  include GenDomainId(
+    struct
+      type typ = t
+      let name = "framework.combiners.apply"
+    end
+    )
 
 
   (**************************************************************************)
@@ -170,21 +160,18 @@ struct
     join = D.join;
     meet = D.meet;
     widen = D.widen;
-    merge = D.merge;
     print = D.print;
   }
 
-  let d_local_man : (D.t, D.t) man =
-    assert false
-
-  let s_local_sman : (S.t * D.t, S.t, D.t) sman =
+  let d_sub_man : D.t sub_man =
     assert false
 
 
   (** Sub-tree manager of [S] *)
-  let s_sman (man:('a,t) man) : ('a, S.t, D.t) sman = {
-    man = s_man man;
-    sub_man = d_local_man;
+  let s_sman (man:('a,t) man) : ('a, S.t, D.t) stack_man = {
+    sub_lattice = d_sub_man.sub_lattice;
+    sub_get = (fun a -> man.get a |> snd);
+    sub_set = (fun d a -> man.set (man.get a |> fst, d) a);
     sub_exec = (fun ?(zone=any_zone) stmt flow ->
         match D.exec zone stmt (d_man man) flow with
         | None ->
@@ -196,7 +183,7 @@ struct
         | Some post ->
           append_d_block stmt post
       );
-
+    sub_merge = (fun pre (post,log) (post',log') -> assert false);
     get_log = get_s_log;
     set_log = set_s_log;
   }
@@ -207,19 +194,19 @@ struct
   (**************************************************************************)
 
   let subset (a1,a2) (a1',a2') =
-    let b1, a2, a2' = S.subset (a1, a2) (a1', a2') s_local_sman in
+    let b1, a2, a2' = S.subset (a1, a2) (a1', a2') d_sub_man in
     b1 && D.subset a2 a2'
 
   let join (a1,a2) (a1',a2') =
-    let a1, a2, a2' = S.join (a1, a2) (a1', a2') s_local_sman in
+    let a1, a2, a2' = S.join (a1, a2) (a1', a2') d_sub_man in
     (a1, D.join a2 a2')
 
   let meet (a1,a2) (a1',a2') =
-    let a1, a2, a2' = S.meet (a1, a2) (a1', a2') s_local_sman in
+    let a1, a2, a2' = S.meet (a1, a2) (a1', a2') d_sub_man in
     (a1, D.meet a2 a2')
 
   let widen ctx (a1,a2) (a1',a2') =
-    let a1, converged, a2, a2' = S.widen ctx (a1, a2) (a1', a2') s_local_sman in
+    let a1, converged, a2, a2' = S.widen ctx (a1, a2) (a1', a2') d_sub_man in
     if not converged then
       a1, D.widen ctx a2 a2'
     else
@@ -267,7 +254,7 @@ struct
       (* Only [S] provides an [exec] for such zone *)
       let f = S.exec zone in
       (fun stmt man flow ->
-         f stmt (s_sman man) flow |>
+         f stmt (s_man man) (s_sman man) flow |>
          Option.lift (append_s_block stmt)
       )
 
@@ -284,7 +271,7 @@ struct
       let f1 = S.exec zone in
       let f2 = D.exec zone in
       (fun stmt man flow ->
-         match f1 stmt (s_sman man) flow with
+         match f1 stmt (s_man man) (s_sman man) flow with
          | Some post ->
            Some (append_s_block stmt post)
 
@@ -307,13 +294,13 @@ struct
       (* Only [S] provides an [eval] for such zone *)
       let f = S.eval zone in
       (fun exp man flow ->
-         f exp (s_man man) flow
+         f exp (s_man man) (s_sman man) flow
       )
 
     | false, true ->
       (* Only [D] provides an [eval] for such zone *)
       let f = D.eval zone in
-      (fun exp man  flow ->
+      (fun exp man flow ->
          f exp (d_man man) flow
       )
 
@@ -322,7 +309,7 @@ struct
       let f1 = S.eval zone in
       let f2 = D.eval zone in
       (fun exp man flow ->
-         match f1 exp (s_man man) flow with
+         match f1 exp (s_man man) (s_sman man) flow with
          | Some evl -> Some evl
 
          | None -> f2 exp (d_man man) flow

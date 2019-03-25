@@ -32,6 +32,8 @@ sig
 
   include LATTICE
 
+  val id : t did
+
   val name : string
 
   val init : program -> t
@@ -57,11 +59,6 @@ struct
     let block1 = Log.get_domain_block log1
     and block2 = Log.get_domain_block log2 in
     D.merge pre (post1, block1) (post2, block2)
-
-  include GenDomainId(struct
-      type typ = t
-      let name = name
-    end)
 
   let init prog man flow =
     Some (

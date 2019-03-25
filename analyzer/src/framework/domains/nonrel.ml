@@ -42,7 +42,10 @@ struct
 
   include VarMap
 
-  let name = Value.name
+  include GenDomainId(struct
+      type typ = t
+      let name = Value.name
+    end)
 
   let merge pre (post1, log1) (post2, log2) =
     assert false

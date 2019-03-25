@@ -83,6 +83,5 @@ type 'a lattice = {
   join:      'a -> 'a -> 'a;
   meet:      'a -> 'a -> 'a;
   widen:     uctx -> 'a -> 'a -> 'a;
-  merge:     'a -> 'a * log -> 'a * log -> 'a;
   print:     Format.formatter -> 'a -> unit;
 }

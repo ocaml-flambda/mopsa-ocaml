@@ -47,7 +47,8 @@ include Zone
 
 include Lattice
 
-include Sig.Id
+include Id
+
 include Sig.Interface
 include Sig.Domain
 include Sig.Stacked

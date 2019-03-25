@@ -25,7 +25,7 @@ open Mopsa
 open Universal.Ast
 open Ast
 open Zone
-module Itv = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Integer_interval.Value
 
 let is_builtin_function = function
   | "__builtin_constant_p"
@@ -54,12 +54,15 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = [Universal.Zone.Z_u_num]}
+  let exec_interface = {
+    provides = [];
+    uses = [Universal.Zone.Z_u_num]
+  }
   let eval_interface = {
-    export = [
+    provides = [
       Z_c, Z_c_low_level
     ];
-    import = [
+    uses = [
       Z_c, Memory.Common.Points_to.Z_c_points_to
     ]
   }
@@ -67,38 +70,40 @@ struct
   (** Flow-insensitive annotations *)
   (** ============================ *)
 
-  type ('a, _) Annotation.key +=
-    (** List of unnamed arguments in a variadic function *)
-    | A_c_unnamed_args: ('a,
-                         var (** last named parameter *) *
-                         var list (** unnamed parameters *)
-                        ) Annotation.key
-
-  let () =
-    let open Annotation in
-    register_stateless_annot {
-      eq = (
-        let f: type a b. (a, b) key -> (var * var list, b) eq option =
-          function
-          | A_c_unnamed_args -> Some Eq
-          | _ -> None
-        in
-        f
-      );
-      print = (fun fmt (last, unnamed) ->
+  let unnamed_args_ctx =
+    let module C = Context.GenUnitKey(
+      struct
+        type t = var (** last named parameter *) *
+                 var list (** unnamed parameters *)
+        let print fmt (last, unnamed) =
           Format.fprintf fmt "unnamed args: @[%a@]"
             (Format.pp_print_list
                ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ")
                pp_var
             ) unnamed
-        );
-    } ()
+      end
+      )
+    in
+    C.key
 
   let get_unnamed_args flow =
-    Flow.get_annot A_c_unnamed_args flow
+    Flow.get_ctx flow |> Context.find_unit unnamed_args_ctx
 
   let set_unnamed_args (last, unnamed) flow =
-    Flow.set_annot A_c_unnamed_args (last, unnamed) flow
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit unnamed_args_ctx (last, unnamed)
+    ) flow
+
+  let mem_unnamed_args flow =
+    Flow.get_ctx flow |>
+    Context.mem_unit unnamed_args_ctx
+
+  let remove_unnamed_args flow =
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.remove_unit unnamed_args_ctx
+    ) flow
 
 
   (** {2 Transfer functions} *)
@@ -117,7 +122,7 @@ struct
   let call_variadic_function fundec args range man flow =
     (* FIXME: for the moment, the domain does not supporting cascading
        calls to variadic functions *)
-    if Flow.mem_annot A_c_unnamed_args flow
+    if mem_unnamed_args flow
     then panic_at range "cascading calls to variadic functions not supported";
 
     (* Partition args into named and unnamed arguments *)
@@ -157,7 +162,7 @@ struct
               man.exec ~zone:Z_c (mk_remove_var unnamed range) flow
             ) flow vars
         in
-        Flow.rm_annot A_c_unnamed_args flow
+        remove_unnamed_args flow
       )
 
   (* Create a counter variable for a va_list *)
@@ -185,7 +190,7 @@ struct
       if not (Z.equal base_size elem_size) then panic_at range "arrays of va_list not supported";
 
       (* In this case, only offset 0 is OK *)
-      Eval.assume
+      assume_eval
         (mk_binop offset O_eq (mk_zero range) range)
         ~fthen:(fun flow ->
             Eval.singleton ap flow
@@ -229,12 +234,12 @@ struct
 
     (* Check that value of the counter does not exceed the number of
        unnamed arguments *)
-    Eval.assume
+    assume_eval
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
-          let itv = man.ask (Itv.Q_interval valc) flow |>
-                    Itv.meet () (Itv.of_int 0 (List.length unnamed - 1))
+          let itv = man.ask (Itv.EvalQuery.query valc) flow |>
+                    Itv.meet (Itv.of_int 0 (List.length unnamed - 1))
           in
 
           (* Iterate over possible values of the counter *)
@@ -287,20 +292,20 @@ struct
         | _ -> mk_z_interval Z.zero Z.one ~typ:s32 exp.erange
       in
       Eval.singleton ret flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ printf(...) ⟧ *)
     (* 𝔼⟦ __printf_chk(...) ⟧ *)
     | E_c_builtin_call("__printf_chk", args) ->
       warn_at exp.erange "__printf_chk: unsound implementation";
       Eval.singleton (mk_top s32 exp.erange) flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ __fprintf_chk(...) ⟧ *)
     | E_c_builtin_call("__fprintf_chk", args) ->
       warn_at exp.erange "__fprintf_chk: unsound implementation";
       Eval.singleton (mk_top s32 exp.erange) flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ __vprintf_chk(...) ⟧ *)
     | E_c_builtin_call("__vprintf_chk", args) ->
@@ -313,22 +318,22 @@ struct
     (* 𝔼⟦ f(...) ⟧ *)
     | E_call ({ ekind = E_c_function ({c_func_variadic = true} as fundec)}, args) ->
       call_variadic_function fundec args exp.erange man flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ va_start(ap, param) ⟧ *)
     | E_c_builtin_call("__builtin_va_start", [ap; { ekind = E_var (param, _) }]) ->
       va_start ap param exp.erange man flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ va_arg(ap) ⟧ *)
     | E_c_var_args(ap) ->
       va_arg ap exp.etyp exp.erange man flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ va_end(ap) ⟧ *)
     | E_c_builtin_call("__builtin_va_end", [ap]) ->
       va_end ap exp.erange man flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)
     | E_c_builtin_call("__builtin_va_copy", [src; dst]) ->

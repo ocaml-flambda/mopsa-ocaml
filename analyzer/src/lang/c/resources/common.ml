@@ -49,16 +49,19 @@ struct
   let () =
     register_zone {
       zone = Z_c_resource;
-      subset = None;
-      name = "C/Resource";
-      eval = (fun e -> Process);
+      zone_subset = None;
+      zone_name = "C/Resource";
+      zone_eval = (fun e -> Process);
     }
 
-  let exec_interface = {export = [Z_c_resource]; import = [Z_c]}
+  let exec_interface = {
+    provides = [Z_c_resource];
+    uses = [Z_c]
+  }
 
   let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [Z_c, Z_c_points_to]
+    provides = [Z_c, Z_c_low_level];
+    uses = [Z_c, Z_c_points_to]
   }
 
 
@@ -85,11 +88,12 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_stub_free { ekind = E_addr (addr) } ->
-      Post.return flow
+      Post.return flow |>
+      Option.return
 
     | S_stub_free p ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Post.bind_return man @@ fun pt flow ->
+      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -102,7 +106,7 @@ struct
 
           let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
-          Post.of_flow
+          Post.return
 
         | E_c_points_to P_top ->
           panic_at stmt.srange "resources.common: free(⊺) not supported"
@@ -117,7 +121,8 @@ struct
       let bytes2 = mk_bytes_var addr2 stmt.srange in
       man.exec ~zone:Z_c (mk_rename bytes1 bytes2 stmt.srange) flow |>
       man.exec ~zone:Z_c stmt |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | _ -> None
 
@@ -148,7 +153,7 @@ struct
     | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource _ } as addr)}) ->
       let bytes = mk_bytes_var addr exp.erange in
       Eval.singleton bytes flow |>
-      Eval.return
+      Option.return
 
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None

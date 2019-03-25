@@ -292,7 +292,6 @@ struct
       join = Domain.join;
       meet = Domain.meet;
       widen = Domain.widen;
-      merge = Domain.merge;
       print = Domain.print;
     };
     get = (fun flow -> flow);
@@ -567,7 +566,6 @@ struct
       join = Domain.join;
       meet = Domain.meet;
       widen = Domain.widen;
-      merge = Domain.merge;
       print = Domain.print;
     };
     get = (fun flow -> flow);

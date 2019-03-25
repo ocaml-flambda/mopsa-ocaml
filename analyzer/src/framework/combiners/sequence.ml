@@ -26,8 +26,6 @@ open Ast.All
 open Core.All
 open Log
 
-type _ domain +=
-  | D_sequence : 'a domain * 'b domain -> ('a * 'b) domain
 
 module Make (D1:DOMAIN) (D2:DOMAIN) : DOMAIN =
 struct
@@ -38,19 +36,12 @@ struct
 
   type t = D1.t * D2.t
 
-  let name = "framework.combiners.sequence"
-
-  let id = D_sequence (D1.id, D2.id)
-
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_sequence(id1, id2) ->
-      begin match D1.identify id1, D2.identify id2 with
-        | Some Eq, Some Eq -> Some Eq
-        | _ -> None
-      end
-
-    | _ -> None
+  include GenDomainId(
+    struct
+      type typ = t
+      let name = "framework.combiners.sequence"
+    end
+    )
 
 
   (**************************************************************************)

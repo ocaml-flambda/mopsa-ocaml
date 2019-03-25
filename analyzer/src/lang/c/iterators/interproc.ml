@@ -42,11 +42,14 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let exec_interface = {
+    provides = [];
+    uses = []
+  }
 
   let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [
+    provides = [Z_c, Z_c_low_level];
+    uses = [
       Z_c, Z_c_points_to;
       Universal.Zone.Z_u, any_zone;
       Stubs.Zone.Z_stubs, Z_any
@@ -113,7 +116,7 @@ struct
 
         | _ -> assert false
       end |>
-      OptionExt.return
+      Option.return
 
 
     | _ -> None

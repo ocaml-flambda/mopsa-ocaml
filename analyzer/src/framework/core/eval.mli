@@ -56,6 +56,14 @@ val map_flow:
   ('a flow -> 'a flow) ->
   ('e, 'a) eval -> ('e, 'a) eval
 
+val reduce :
+    ('e -> 'a flow -> 'b) ->
+    ('b -> 'b -> 'b) ->
+    ('b -> 'b -> 'b) ->
+    ('b) ->
+    ('e, 'a) eval ->
+    'b
+
 val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 
 val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
