@@ -34,7 +34,7 @@ reduced_product empty
 framework.domains.reduced_product = pool reductions products factory
 framework.domains.reduced_product.products = value_product domain_product
 
-lang = universal stubs c python
+lang = universal repl stubs c python
 
 lang.universal = ast frontend zone u_stdlib iterators heap numeric	\
 strings
@@ -47,6 +47,8 @@ lang.universal.numeric.values = intervals congruences float_intervals	\
 integer_float_mix
 lang.universal.numeric.reductions = channels intervals_congruences	\
 implicit_assume_relation intervals_broadcast
+
+lang.repl = frontend 
 
 lang.stubs = ast zone alarms iterator
 

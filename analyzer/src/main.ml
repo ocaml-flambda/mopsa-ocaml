@@ -47,7 +47,7 @@ let parse_options f () =
                (fun filename -> files := filename :: !files)
                "Modular Open Platform for Static Analysis"
                Options.help;
-  if !files != [] then f !files else 0
+  f !files
 
 
 (** {2 Parsing} *)
@@ -60,6 +60,7 @@ let parse_program lang files =
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
+  | "repl" -> Lang.Repl.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"
 
 
