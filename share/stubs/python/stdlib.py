@@ -428,8 +428,8 @@ class NoneType(object): pass
 @mopsa.unsupported
 class bytearray(object): pass
 
-@mopsa.unsupported
-class bytes(object): pass
+class bytes(object):
+    def __getitem__(self, i): pass
 
 @mopsa.unsupported
 class bytes_iterator(object): pass
