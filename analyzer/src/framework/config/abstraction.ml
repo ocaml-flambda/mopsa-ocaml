@@ -105,19 +105,32 @@ and value_leaf name =
 and stack = function
   | `String(name) -> leaf_stack name
   | `Assoc(obj) when List.mem_assoc "compose" obj -> compose obj
-  | _ -> assert false
+  | x -> Exceptions.panic "parsing error: unsupported stack declaration:@ %a"
+           (pretty_print ~std:true) x
 
 and leaf_stack name =
   try find_stack name
   with Not_found -> Exceptions.panic "Stack %s not found" name
 
 and compose assoc =
-  let s1 = List.assoc "compose" assoc |> stack in
-  let s2 = List.assoc "with" assoc |> stack in
-  let module S1 = (val s1 : STACK) in
-  let module S2 = (val s2 : STACK) in
-  let module S = Combiners.Compose.Make(S1)(S2) in
-  (module S)
+  let stacks = List.assoc "compose" assoc |>
+                to_list |>
+                List.map stack
+  in
+  let rec aux :
+    (module Sig.Stacked.STACK) list ->
+    (module Sig.Stacked.STACK)
+    = function
+      | [] -> assert false
+      | [s] -> s
+      | hd :: tl ->
+        let tl = aux tl in
+        let module Head = (val hd : Sig.Stacked.STACK) in
+        let module Tail = (val tl : Sig.Stacked.STACK) in
+        let module Dom = Combiners.Compose.Make(Head)(Tail) in
+        (module Dom : Sig.Stacked.STACK)
+  in
+  aux stacks
 
 
 (** {2 Toplevel attributes} *)

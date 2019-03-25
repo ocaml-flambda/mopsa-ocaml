@@ -1,7 +1,7 @@
 {
     "language": "c",
     "domain": {
-	"iter": [
+	"seq": [
             // Universal iterators
             "universal.iterators.intraproc",
             "universal.iterators.loops",
@@ -33,26 +33,24 @@
 	    "c.resources.common",
 
             // Memory model
-            {
-		"stack": "universal.heap.recency",
-		"over": {
-                    "iter": [
-			{
-                            "stack": "c.memory.cells.expand",
-                            "over" : {
-				"stack" : "c.memory.cells.cell_2_scalar",
-				"over": {
-				    "iter": [
-					"c.memory.cells.pointer",
-					"c.machine_numbers",
-					"universal.numeric.values.integer_float_mix"
-				    ]
-				}
-                            }
-			}
+            "universal.heap.recency",
+	    {
+                "apply": {
+                    "compose": [
+                        "c.memory.cells.expand",
+                        "c.memory.cells.cell_2_scalar"
                     ]
+                },
+		"on": {
+		    "seq": [
+			"c.memory.cells.pointer",
+			"c.machine_numbers",
+			{
+                            "nonrel": "universal.numeric.values.integer_interval"
+                        }
+		    ]
 		}
-            }
+	    }
 	]
     }
 }
