@@ -43,7 +43,7 @@ let parse_file ?(counter=(List.length Builtins.all)) (filename:string) : Ast.pro
   with
   | Lexer.LexingError e ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
-    Exceptions.syntax_error range "%s" e
+    Exceptions.syntax_error range "Lexer: %s" e
 
   | Parser.Error ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in

@@ -184,16 +184,16 @@ module Domain =
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
            Eval.bind (fun eobj flow ->
                Eval.assume (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
-                 ~fthen:(fun flow -> Eval.singleton (mk_py_true range) flow)
+                 ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                  ~felse:(fun flow ->
                    (* test with ll_hasattr and search in the MRO otherwise *)
                    let rec search_mro flow mro = match mro with
-                     | [] -> Eval.singleton (mk_py_false range) flow
+                     | [] -> man.eval (mk_py_false range) flow
                      | cls::tl ->
                         Eval.assume
                           (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                           ~fthen:(fun flow ->
-                            Eval.singleton (mk_py_true range) flow)
+                            man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> search_mro flow tl)
                           man flow
                    in

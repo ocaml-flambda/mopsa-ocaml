@@ -55,6 +55,7 @@ let () =
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
     | T_py_empty -> pp_print_string fmt "empty"
+    | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function

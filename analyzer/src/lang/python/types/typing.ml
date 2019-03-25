@@ -460,6 +460,7 @@ struct
         )
       |> OptionExt.return
 
+    | E_constant (C_top T_py_bytes)
     | E_py_bytes _ ->
       allocate_builtin man range flow "bytes" |> OptionExt.return
 
@@ -691,7 +692,7 @@ struct
       Eval.eval_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
       Eval.bind (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
-          debug "now isinstance(%a, %a)@\n" pp_expr eobj pp_expr eattr;
+          debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range;
           let addr_obj = match ekind eobj with
             | E_py_object (a, _) -> a
             | _ -> assert false in
