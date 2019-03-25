@@ -163,8 +163,58 @@ struct
     print = D.print;
   }
 
-  let d_sub_man : D.t sub_man =
-    assert false
+  let rec d_isolated_man : (D.t,D.t) man = {
+    lattice = d_lattice;
+    get = (fun d -> d);
+    set = (fun d _ -> d);
+    exec = (fun ?(zone=any_zone) stmt flow ->
+        match D.exec zone stmt d_isolated_man flow with
+        | Some post ->
+          Post.to_flow d_lattice post
+
+        | None ->
+          Exceptions.panic_at stmt.srange
+            "Statement %a not analyzed by domain %s"
+            pp_stmt stmt
+            D.name
+      );
+    eval = (fun ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow ->
+        match D.eval zone exp d_isolated_man flow with
+        | Some evl -> evl
+
+        | None ->
+          Exceptions.panic_at exp.erange
+            "Expression %a not evaluated by domain %s"
+            pp_expr exp
+            D.name
+      );
+    ask = (fun query flow ->
+        match D.ask query d_isolated_man flow with
+        | Some rep -> rep
+
+        | None ->
+          Exceptions.panic
+            "Query not handled by domain %s"
+            D.name
+      );
+  }
+
+  let d_sub_man : D.t sub_man = {
+    sub_lattice = d_lattice;
+    sub_exec = (fun ?(zone=any_zone) stmt d ->
+        let flow = Flow.singleton Context.empty T_cur d in
+        match D.exec zone stmt d_isolated_man flow with
+        | Some post ->
+          Post.to_flow d_lattice post |>
+          Flow.get T_cur d_lattice
+
+        | None ->
+          Exceptions.panic_at stmt.srange
+            "Statement %a not analyzed by domain %s"
+            pp_stmt stmt
+            D.name
+      );
+  }
 
 
   (** Sub-tree manager of [S] *)
