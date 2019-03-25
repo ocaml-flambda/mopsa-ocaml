@@ -39,7 +39,7 @@ let cell_scalar_ctx =
     )
   in
   C.key
-  
+
 let get_ctx flow =
   try Flow.get_ctx flow |> Context.find_unit cell_scalar_ctx
   with _ -> CellScalarEquiv.empty
@@ -86,7 +86,7 @@ let get_scalar_and_remove flow c =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.DOMAIN =
+module Domain : Framework.Domains.Stateless.STACK =
 struct
 
   (** Domain identification *)
@@ -126,7 +126,7 @@ struct
     | _ -> assert false
 
 
-  let exec zone stmt man flow =
+  let exec zone stmt man stman flow =
     match skind stmt with
     | S_add ({ ekind = E_c_cell (c, _) } as e)->
       Some (
@@ -193,7 +193,7 @@ struct
   (** Evaluations *)
   (** *********** *)
 
-  let rec eval zone exp man flow =
+  let rec eval zone exp man stman flow =
     match ekind exp with
     | E_c_cell({b = S s; o = O_single z}, mode) ->
       (* Case of a static string literal with a constant offset *)
@@ -250,4 +250,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Domains.Stateless.register_stack (module Domain)
