@@ -71,8 +71,8 @@ struct
   }
 
   let eval_interface = {
-    provides = [any_zone, D.zone];
-    uses = [any_zone, D.zone];
+    provides = [];
+    uses = [];
   }
 
   let exec zone stmt man flow =
