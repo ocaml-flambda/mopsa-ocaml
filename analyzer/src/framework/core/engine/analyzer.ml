@@ -73,9 +73,15 @@ struct
   (*==========================================================================*)
 
   let rec init prog man : Domain.t flow =
-    let flow0 = Flow.bottom Context.empty  |>
-                Flow.set T_cur man.lattice.top man.lattice
+    (* Initialize the context with an empty callstack *)
+    let ctx = Context.empty |>
+              Context.add_unit Callstack.ctx_key Callstack.empty
     in
+
+    (* The initial flow is a singleton ⊤ environment *)
+    let flow0 = Flow.singleton ctx T_cur man.lattice.top in
+
+    (* Initialize domains *)
     match Domain.init prog man flow0 with
     | None -> flow0
     | Some flow -> flow
@@ -221,8 +227,10 @@ struct
     match paths with
     | [] -> None
     | path :: tl ->
-      (* let p = List.hd path |> (fun (_, _, path, _) -> path) in
-       * debug "trying eval %a over path %a" pp_expr exp pp_eval_path p; *)
+      debug "trying eval %a over path %a"
+        pp_expr exp
+        pp_eval_path (List.hd path |> (fun (_, _, path, _) -> path))
+      ;
       match eval_over_path path man exp flow with
       | None -> eval_over_paths tl exp man flow
       | ret -> ret
@@ -240,7 +248,7 @@ struct
       eval_over_path tl man
 
   and eval_hop z1 z2 feval man exp flow =
-    (* debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2); *)
+    debug "trying eval %a in hop %a" pp_expr exp pp_zone2 (z1, z2);
     match Zone.eval_template exp z2 with
     | Keep ->
       Eval.singleton exp flow |>
@@ -254,11 +262,11 @@ struct
         | Keep -> assert false
 
         | Process ->
-          (* debug "no answer"; *)
+          debug "no answer";
           None
 
         | Visit ->
-          (* debug "visiting %a" pp_expr exp; *)
+          debug "visiting %a" pp_expr exp;
           let open Visitor in
           let parts, builder = split_expr exp in
           match parts with
@@ -267,7 +275,7 @@ struct
             Option.lift @@
             Eval.bind @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
-            (* debug "%a -> %a" pp_expr exp pp_expr exp'; *)
+            debug "%a -> %a" pp_expr exp pp_expr exp';
             Eval.singleton exp' flow
 
           | _ -> None
