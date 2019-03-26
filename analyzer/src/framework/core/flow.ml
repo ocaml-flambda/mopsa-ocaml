@@ -69,7 +69,9 @@ let join_list lattice ?(ctx=Context.empty) l =
   | [] -> bottom ctx
   | l -> {
       tmap = TokenMap.join_list lattice (List.map (function {tmap} -> tmap) l);
-      ctx  = let last = List.nth l (List.length l - 1) in last.ctx
+      ctx  =
+        let last = List.nth l (List.length l - 1) in
+        last.ctx
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -80,7 +82,9 @@ let meet_list lattice ?(ctx=Context.empty) l =
   | [] -> bottom ctx
   | l -> {
       tmap = TokenMap.meet_list lattice (List.map (function {tmap} -> tmap) l);
-      ctx  = let last = List.nth l (List.length l - 1) in last.ctx
+      ctx  =
+        let last = List.nth l (List.length l - 1) in
+        last.ctx
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =

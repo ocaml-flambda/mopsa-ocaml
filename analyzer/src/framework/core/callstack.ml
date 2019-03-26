@@ -66,7 +66,8 @@ let ctx_key =
   let module K = Context.GenUnitKey(
     struct
       type t = cs
-      let print = print
+      let print fmt cs =
+        Format.fprintf fmt "Callstack: %a" print cs
     end
     )
   in

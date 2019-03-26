@@ -77,7 +77,7 @@ struct
     Some (
       Flow.set_ctx (
         Flow.get_ctx flow |>
-        Context.add_unit Callstack.ctx_key []
+        Context.add_unit Callstack.ctx_key Callstack.empty
       ) flow
     )
 

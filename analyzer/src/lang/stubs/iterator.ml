@@ -444,7 +444,7 @@ struct
   let exec zone stmt man flow =
     match skind stmt with
     | S_stub_init (v, stub) ->
-      (* Evaluate the body of the styb *)
+      (* Evaluate the body of the stub *)
       let flow = exec_body stub.stub_init_body (Some v) man flow in
 
       (* Clean locals and primes *)
