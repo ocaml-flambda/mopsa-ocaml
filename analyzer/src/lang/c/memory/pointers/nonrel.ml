@@ -176,47 +176,46 @@ struct
   (** ====================== *)
 
   (** Static evaluation of a pointer base and offset *)
-  let rec eval_pointer exp : ptr =
-    let open Bases in
+  let rec eval_pointer_opt exp : ptr option =
     match ekind exp with
     | E_constant(C_int n) when Z.equal n Z.zero ->
-      NULL
+      NULL |> Option.return
 
     | E_constant(C_c_invalid) ->
-      INVALID
+      INVALID |> Option.return
 
     | E_constant(C_top t) when is_c_pointer_type t ->
-      TOP
+      TOP |> Option.return
 
     | E_addr (addr) ->
-      ADDROF(A addr, mk_zero exp.erange)
+      ADDROF(A addr, mk_zero exp.erange) |> Option.return
 
     | E_c_deref { ekind = E_c_address_of e } ->
-      eval_pointer e
+      eval_pointer_opt e
 
     | E_c_address_of { ekind = E_c_deref p } ->
-      eval_pointer p
+      eval_pointer_opt p
 
     | E_c_cast (e, _) ->
-      eval_pointer e
+      eval_pointer_opt e
 
     | E_c_function f ->
-      FUN f
+      FUN f |> Option.return
 
     | E_constant (C_c_string (s, _)) ->
-      ADDROF(S s, mk_zero exp.erange)
+      ADDROF(S s, mk_zero exp.erange) |> Option.return
 
     | E_var (a, _) when is_c_array_type a.vtyp ->
-      ADDROF(V a, mk_zero exp.erange)
+      ADDROF(V a, mk_zero exp.erange) |> Option.return
 
     | E_c_deref a when is_c_array_type (under_type a.etyp) ->
-      eval_pointer a
+      eval_pointer_opt a
 
     | E_c_address_of { ekind = E_var (v, _) } ->
-      ADDROF (V v, mk_zero exp.erange)
+      ADDROF (V v, mk_zero exp.erange) |> Option.return
 
     | E_c_address_of { ekind = E_c_function f } ->
-      FUN f
+      FUN f |> Option.return
 
     | E_binop(O_plus | O_minus as op, e1, e2) ->
       let p, i =
@@ -224,62 +223,69 @@ struct
         then e1, e2
         else e2, e1
       in
-      let ptr  = eval_pointer p in
+      eval_pointer_opt p |>
+      Option.lift @@ fun ptr ->
       advance_offset op ptr i p.etyp exp.erange
 
     | E_var (v, STRONG) when is_c_pointer_type v.vtyp ->
-      EQ (v, mk_zero exp.erange)
+      EQ (v, mk_zero exp.erange) |> Option.return
 
     | x when is_c_int_type exp.etyp ->
-      ADDROF(Common.Base.Z, exp)
+      ADDROF(Common.Base.Z, exp) |> Option.return
 
-    | _ -> panic_at exp.erange "eval_base_offset: %a not supported" pp_expr exp
+    | _ -> None
+
+  let eval_pointer exp : ptr =
+    match eval_pointer_opt exp with
+    | Some ptr -> ptr
+    | None -> panic_at exp.erange
+                "eval_pointer: %a not supported"
+                pp_expr exp
 
 
   (** Evaluation of points-to information *)
   let eval_points_to exp man flow =
-    Some (
-      let ptr = eval_pointer exp in
+    eval_pointer_opt exp |>
+    Option.lift @@ fun ptr ->
 
-      match ptr with
-      | ADDROF (base, offset) ->
-        Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
+    match ptr with
+    | ADDROF (base, offset) ->
+      Eval.singleton (mk_c_points_to_bloc base offset exp.erange) flow
 
-      | EQ (p, offset) ->
-        let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
-        let bases = find p (get_domain_env T_cur man flow) in
-        if Bases.is_top bases then
-          Eval.singleton (mk_c_points_to_top exp.erange) flow
-        else
-          let el = Bases.fold (fun b acc ->
-              match b with
-              | PB_block b ->
-                Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
-
-              | PB_fun f ->
-                Eval.singleton (mk_c_points_to_fun f exp.erange) flow :: acc
-
-              | PB_null ->
-                Eval.singleton (mk_c_points_to_null exp.erange) flow :: acc
-
-              | PB_invalid ->
-                Eval.singleton (mk_c_points_to_invalid exp.erange) flow :: acc
-            ) bases []
-          in
-          Eval.join_list el ~empty:(Eval.empty_singleton flow)
-
-      | FUN f ->
-        Eval.singleton (mk_c_points_to_fun f exp.erange) flow
-
-      | NULL ->
-        Eval.singleton (mk_c_points_to_null exp.erange) flow
-
-      | INVALID ->
-        Eval.singleton (mk_c_points_to_invalid exp.erange) flow
-
-      | TOP ->
+    | EQ (p, offset) ->
+      let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
+      let bases = find p (get_domain_env T_cur man flow) in
+      if Bases.is_top bases then
         Eval.singleton (mk_c_points_to_top exp.erange) flow
-    )
+      else
+        let el = Bases.fold (fun b acc ->
+            match b with
+            | PB_block b ->
+              Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
+
+            | PB_fun f ->
+              Eval.singleton (mk_c_points_to_fun f exp.erange) flow :: acc
+
+            | PB_null ->
+              Eval.singleton (mk_c_points_to_null exp.erange) flow :: acc
+
+            | PB_invalid ->
+              Eval.singleton (mk_c_points_to_invalid exp.erange) flow :: acc
+          ) bases []
+        in
+        Eval.join_list el ~empty:(Eval.empty_singleton flow)
+
+    | FUN f ->
+      Eval.singleton (mk_c_points_to_fun f exp.erange) flow
+
+    | NULL ->
+      Eval.singleton (mk_c_points_to_null exp.erange) flow
+
+    | INVALID ->
+      Eval.singleton (mk_c_points_to_invalid exp.erange) flow
+
+    | TOP ->
+      Eval.singleton (mk_c_points_to_top exp.erange) flow
 
   (** Evaluation of pointer comparisons *)
   let rec eval_pointer_compare exp man flow =
