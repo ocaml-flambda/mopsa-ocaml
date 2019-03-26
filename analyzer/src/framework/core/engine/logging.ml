@@ -136,17 +136,18 @@ let exec stmt zone man flow =
 let exec_done stmt zone time man flow =
   decr cur_level;
   if !opt_short_log then
-    indent "%a done in zone %a"
+    indent "%a done in zone %a [%.4fs]"
       pp_S stmt
-      pp_zone zone
-      ~symbol:END
-  else
-    indent "%a =@, %a@, in zone %a [%.4fs]"
-      pp_S stmt
-      (Flow.print man.lattice) flow
       pp_zone zone
       time
-      ~symbol:END 
+      ~symbol:END
+  else
+    indent "%a done in zone %a [%.4fs]@ -->  %a"
+      pp_S stmt
+      pp_zone zone
+      time
+      (Flow.print man.lattice) flow
+      ~symbol:END
 
 let eval exp zone man flow =
   if !opt_short_log then
@@ -163,14 +164,22 @@ let eval exp zone man flow =
   ;
   incr cur_level
 
+
 let eval_done exp zone time evl =
   decr cur_level;
-  indent "%a = %a in zone %a [%.4fs]"
-    pp_E exp
-    (Eval.print ~pp:pp_expr) evl
-    pp_zone2 zone
-    time
-    ~symbol:END
+  if !opt_short_log then
+    indent "%a done in zone %a [%.4fs]"
+      pp_E exp
+      pp_zone2 zone
+      time
+      ~symbol:END
+  else
+    indent "%a done in zone %a [%.4fs]@ -->  %a"
+      pp_E exp
+      pp_zone2 zone
+      time
+      (Eval.print ~pp:pp_expr) evl
+      ~symbol:END
 
 let debug fmt =
   indent ~symbol:MSG fmt
