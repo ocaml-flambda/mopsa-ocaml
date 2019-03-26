@@ -92,9 +92,9 @@ let to_flow (lattice: 'a lattice) (post: 'a post) : 'a flow =
           case.ctx
           (TokenMap.map (fun tk (e, log) -> e) case.tmap)
       in
-      Flow.join lattice flow acc
+      Flow.join lattice acc flow
     )
-    (Flow.bottom Context.empty) post
+    (Flow.bottom (choose_ctx post)) post
 
 
 let bind (f:'a flow -> 'a post) (post:'a post) : 'a post =
