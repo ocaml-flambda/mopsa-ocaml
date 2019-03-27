@@ -29,8 +29,8 @@ mopsa = framework mopsa lang main
 framework = ast core lattices domains combiners export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
-	         id sig callstack alarm engine all
-framework.core.sig = interface value domain stacked
+	         id interface sig callstack alarm engine all
+framework.core.sig = value domain stacked
 framework.core.engine = logging cache analyzer
 framework.lattices = partial_map powerset total_map
 framework.domains = leaf stateless nonrel

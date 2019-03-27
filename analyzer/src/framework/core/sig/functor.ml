@@ -19,38 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Alarm
+(** Functor domains *)
 
-module Callstack = Callstack
+open Domain
 
-module Context = Context
+module type FUNCTOR = functor(Domain: DOMAIN) ->
+sig
+end
 
-module Eval = Eval
-type ('e, 'a) eval = ('e, 'a) Eval.eval
 
-module Flow = Flow
-type 'a flow = 'a Flow.flow
-
-module Post = Post
-type 'a post = 'a Post.post
-
-module Log = Log
-
-include Manager
-
-module Query = Query
-type 'a query = 'a Query.query
-
-include Token
-
-include Zone
-
-include Lattice
-
-include Id
-
-include Interface
-
-include Sig.Domain
-
-include Sig.Stacked
+let functors : (module FUNCTOR) list ref = ref []
