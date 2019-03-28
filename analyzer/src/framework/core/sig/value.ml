@@ -147,7 +147,7 @@ sig
 
   module EvalQuery : Query.ArgQuery
     with type arg = expr
-    with type ret = t
+    and type ret = t
 
 end
 
