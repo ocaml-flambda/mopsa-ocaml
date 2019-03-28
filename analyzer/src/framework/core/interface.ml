@@ -19,23 +19,39 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Zoning interface of abstract domains *)
+(** Interfaces are declarations of zones on which a domain operates. *)
 
 open Zone
 
-(** Generic zone interface *)
-type 'a interface = {
-  provides : 'a list;
-  uses :     'a list;
+(** Interface of a transfer function (exec, eval) *)
+type 'a function_interface = {
+  provides : 'a list; (** List of provides zones *)
+  uses     : 'a list; (** List of uses zones *)
 }
 
-let concat (i: 'a interface) (j: 'a interface) = {
-  provides = i.provides @ j.provides;
-  uses     = i.uses @ j.uses;
+(** Interface of a domain *)
+type interface = {
+  exec : zone function_interface; (** Interface of exec transfer function *)
+  eval : (zone*zone) function_interface; (** Interface of eval transfer function *)
 }
 
-let sat_exec (zone:zone) (exec:zone interface) =
-  List.exists (Zone.sat_zone zone) exec.provides
+(** Concatenate two interfaces *)
+let concat (i: interface) (j: interface) =
+  {
+    exec = {
+      provides = i.exec.provides @ j.exec.provides;
+      uses     = i.exec.uses @ j.exec.uses;
+    };
+    eval = {
+      provides = i.eval.provides @ j.eval.provides;
+      uses     = i.eval.uses @ j.eval.uses;
+    };
+}
 
-let sat_eval (zone:zone*zone) (eval:(zone*zone) interface) =
-  List.exists (Zone.sat_zone2 zone) eval.provides
+(** Check if an interface satisfies a zone required by an exec *)
+let sat_exec (zone:zone) (i:interface) =
+  List.exists (Zone.sat_zone zone) i.exec.provides
+
+(** Check if an interface satisfies a zone required by an eval *)
+let sat_eval (zone:zone*zone) (i:interface) =
+  List.exists (Zone.sat_zone2 zone) i.eval.provides

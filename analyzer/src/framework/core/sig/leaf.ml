@@ -25,7 +25,12 @@
 *)
 
 open Ast.All
-open Core.All
+open Lattice
+open Id
+open Zone
+open Manager
+open Interface
+open Token
 
 module type DOMAIN =
 sig
@@ -50,7 +55,7 @@ end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
+module Make(D: DOMAIN) : Domain.DOMAIN =
 struct
 
   include D
@@ -65,14 +70,15 @@ struct
       set_domain_env T_cur (D.init prog) man flow
     )
 
-  let exec_interface = {
-    provides = [D.zone];
-    uses = [];
-  }
-
-  let eval_interface = {
-    provides = [];
-    uses = [];
+  let interface = {
+    exec = {
+      provides = [D.zone];
+      uses = [];
+    };
+    eval = {
+      provides = [];
+      uses = [];
+    }
   }
 
   let exec zone stmt man flow =
@@ -110,4 +116,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Core.Sig.Domain.register_domain (module D)
+  Domain.register_domain (module D)

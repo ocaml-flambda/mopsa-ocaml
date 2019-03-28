@@ -51,6 +51,8 @@ include Id
 
 include Interface
 
+module Sig = Sig
+
 include Sig.Domain
 
 include Sig.Stacked

@@ -24,6 +24,7 @@
 open Ast.Program
 open Ast.Expr
 open Ast.Stmt
+open Core
 open Flow
 open Eval
 open Manager

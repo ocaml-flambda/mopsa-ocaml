@@ -23,7 +23,13 @@
     transfer functions are defined. *)
 
 open Ast.All
-open Core.All
+open Interface
+open Id
+open Zone
+open Manager
+open Flow
+open Post
+open Eval
 
 (***********************************************************************)
 (**                      {2 Stateless domains}                         *)
@@ -33,8 +39,7 @@ module type DOMAIN =
 sig
 
   val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
+  val interface : interface
   val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
   val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a post option
   val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
@@ -43,7 +48,7 @@ sig
 end
 
 (** Create a full domain from a stateless domain. *)
-module MakeDomain(D: DOMAIN) : Core.Sig.Domain.DOMAIN =
+module MakeDomain(D: DOMAIN) : Domain.DOMAIN =
 struct
 
   type t = unit
@@ -64,8 +69,7 @@ struct
 
   let init = D.init
 
-  let exec_interface = D.exec_interface
-  let eval_interface = D.eval_interface
+  let interface = D.interface
 
   let exec = D.exec
   let eval = D.eval
@@ -76,7 +80,7 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = MakeDomain(M) in
-  Core.Sig.Domain.register_domain (module D)
+  Domain.register_domain (module D)
 
 
 
@@ -88,8 +92,7 @@ module type STACK =
 sig
 
   val name : string
-  val exec_interface : zone interface
-  val eval_interface : (zone * zone) interface
+  val interface : interface
   val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
   val exec : zone -> stmt -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> 'a post option
   val eval : zone * zone -> expr -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> (expr, 'a) eval option
@@ -98,7 +101,7 @@ sig
 end
 
 (** Create a full stack from a stateless domain. *)
-module MakeStack(S: STACK) : Core.Sig.Stacked.STACK =
+module MakeStack(S: STACK) : Stacked.STACK =
 struct
 
   type t = unit
@@ -119,8 +122,7 @@ struct
 
   let init = S.init
 
-  let exec_interface = S.exec_interface
-  let eval_interface = S.eval_interface
+  let interface = S.interface
 
   let exec = S.exec
   let eval = S.eval
@@ -131,4 +133,4 @@ end
 let register_stack modl =
   let module M = (val modl : STACK) in
   let module S = MakeStack(M) in
-  Core.Sig.Stacked.register_stack_domain (module S)
+  Stacked.register_stack_domain (module S)

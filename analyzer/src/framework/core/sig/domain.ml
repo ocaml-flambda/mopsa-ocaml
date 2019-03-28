@@ -49,8 +49,8 @@ open Interface
 module type DOMAIN =
 sig
 
-  (** {2 Structure and identification} *)
-  (** ******************************** *)
+  (** {2 Declaration header} *)
+  (** ********************** *)
 
   type t
   (** Type of an abstract elements. *)
@@ -61,15 +61,8 @@ sig
   val name : string
   (** Name of the domain *)
 
-
-  (** {2 Interface of transfer functions} *)
-  (** *********************************** *)
-
-  val exec_interface : zone interface
-  (** Interface of the [exec] transfer function *)
-
-  val eval_interface : (zone * zone) interface
-  (** Interface of the eval transfer function *)
+  val interface : interface
+  (** Interface of the domain *)
 
 
   (** {2 Lattice special values} *)

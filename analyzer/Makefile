@@ -26,17 +26,15 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices domains combiners export config
+framework = ast core lattices engine operators export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
-	         id interface sig callstack alarm engine all
-framework.core.sig = value domain stacked
-framework.core.engine = logging cache analyzer
+	         id interface sig callstack alarm all
+framework.core.sig = value domain stacked leaf stateless
 framework.lattices = partial_map powerset total_map
-framework.domains = leaf stateless nonrel
+framework.engine = logging cache analyzer
 framework.export = text json factory
-framework.combiners = compose apply sequence
-framework.combiners.product = merge meet cartesian
+framework.operators = compose apply sequence nonrel
 framework.config = paths abstraction options
 
 # Languages

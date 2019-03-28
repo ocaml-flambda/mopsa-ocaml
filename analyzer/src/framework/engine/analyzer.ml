@@ -24,6 +24,7 @@
 open Ast
 open Ast.Stmt
 open Ast.Expr
+open Core
 open Lattice
 open Token
 open Flow
@@ -65,7 +66,7 @@ struct
         List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
       ) paths
 
-  let eval_graph = Zone.build_eval_graph Domain.eval_interface.provides
+  let eval_graph = Zone.build_eval_graph Domain.interface.eval.provides
 
 
   (*==========================================================================*)
@@ -93,7 +94,7 @@ struct
 
   (** Build the map of exec functions *)
   and exec_map =
-    let required = Domain.exec_interface.uses in
+    let required = Domain.interface.exec.uses in
     (* Add implicit import of Z_any *)
     let map = ExecMap.singleton any_zone (Domain.exec any_zone) in
     (* Iterate over the required zones of domain D *)
@@ -102,7 +103,7 @@ struct
         if ExecMap.mem zone map
         then map
         else
-          if List.exists (fun z -> sat_zone z zone) Domain.exec_interface.provides
+          if List.exists (fun z -> sat_zone z zone) Domain.interface.exec.provides
           then
             ExecMap.add zone (Domain.exec zone) map
           else
@@ -142,7 +143,7 @@ struct
     debug "eval graph:@\n @[%a@]" Zone.pp_graph eval_graph;
 
     (* Iterate over the required zone paths of domain Domain *)
-    let required = Domain.eval_interface.uses in
+    let required = Domain.interface.eval.uses in
     required |>
     List.fold_left (fun acc (src, dst) ->
         if EvalMap.mem (src, dst) acc then acc
