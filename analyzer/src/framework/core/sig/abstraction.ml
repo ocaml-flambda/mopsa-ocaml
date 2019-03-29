@@ -34,7 +34,10 @@ open Flow
 open Manager
 open Eval
 open Zone
+open Log
 
+
+(** Signature of an encapsulated abstraction *)
 module type ABSTRACTION =
 sig
 
@@ -43,9 +46,6 @@ sig
 
   type t
   (** Type of an abstract elements. *)
-
-  type a
-  (** Type of the global abstraction. *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -70,6 +70,18 @@ sig
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
+  val merge: t -> t * log -> t * log -> t
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+      post-conditions [post1] and [post2] using a common pre-condition [pre].
+
+      Diverging post-conditions emerge after a fork-join trajectory in the
+      abstraction DAG (e.g., a reduced product).
+
+      The logs [log1] and [log2] represent a journal of internal statements
+      executed during the the computation of the post-conditions over the
+      two trajectories.
+  *)
+
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
@@ -77,16 +89,24 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> (a, t) man -> a flow -> a flow
+  val init : program -> (t, t) man -> t flow -> t flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> (a, t) man -> a flow -> a flow
-  (** Post-state of statements *)
+  val exec_flow : zone -> stmt -> (t, t) man -> t flow -> t flow
+  (** Computation of post-conditions on a flow abstraction *)
 
-  val eval : (zone * zone) -> zone -> expr -> (a, t) man -> a flow -> (expr, a) eval
+  val exec_state : zone -> stmt -> (t, t) man -> t -> t
+  (** Same as [exec_flow], but limited to one flow *)
+
+  val eval : (zone * zone) -> zone -> expr -> (t, t) man -> t flow -> (expr, t) eval
   (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> (a, t) man -> a flow -> 'r
+  val ask  : 'r Query.query -> (t, t) man -> t flow -> 'r
   (** Handler of queries *)
+
+  (** {2 Standalone manager} *)
+  (** ********************** *)
+
+  val man : (t,t) man
 
 end

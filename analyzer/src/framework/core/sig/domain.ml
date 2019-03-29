@@ -37,6 +37,7 @@ open Context
 open Flow
 open Manager
 open Eval
+open Query
 open Log
 open Post
 open Zone
@@ -176,7 +177,6 @@ struct
 
   (* Trivial lifting *)
   type t = Domain.t
-  type a
   let bottom = Domain.bottom
   let top = Domain.top
   let is_bottom = Domain.is_bottom
@@ -184,6 +184,7 @@ struct
   let join = Domain.join
   let meet = Domain.meet
   let widen = Domain.widen
+  let merge = Domain.merge
   let print = Domain.print
 
 
@@ -224,7 +225,7 @@ struct
             map
       ) map
 
-  let exec zone (stmt: stmt) (man:(a,t) man) (flow: a flow) : a flow =
+  let exec_flow zone (stmt: stmt) (man:(t,t) man) (flow: t flow) : t flow =
     let fexec =
       try ExecMap.find zone exec_map
       with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
@@ -238,6 +239,13 @@ struct
         "unable to analyze statement in %a:@\n @[%a@]"
         Location.pp_range stmt.srange
         pp_stmt stmt
+
+  let exec_state zone stmt man (a:t) : t =
+    (* Create a singleton flow with environment [a] in [T_cur] *)
+    let flow = Flow.singleton Context.empty Token.T_cur a in
+    let flow' = exec_flow zone stmt man flow in
+    (* Return the environment at [T_cur] and ignore the others *)
+    Flow.get Token.T_cur man.lattice flow'
 
 
   (*========================================================================*)
@@ -303,7 +311,7 @@ struct
       map
 
   (** Evaluation of expressions. *)
-  let rec eval zone via exp (man:(a,t) man) flow =
+  let rec eval zone via exp (man:(t,t) man) flow =
     (* Check whether exp is already in the desired zone *)
     match sat_zone via (snd zone), Zone.eval_template exp (snd zone) with
     | true, Keep -> Eval.singleton exp flow
@@ -415,7 +423,23 @@ struct
       Exceptions.panic "query not handled by domain %s" Domain.name
 
 
-
+  let rec man : (t, t) man = {
+    lattice = {
+      bottom = Domain.bottom;
+      top = Domain.top;
+      is_bottom = Domain.is_bottom;
+      subset = Domain.subset;
+      join = Domain.join;
+      meet = Domain.meet;
+      widen = Domain.widen;
+      print = Domain.print;
+    };
+    get = (fun flow -> flow);
+    set = (fun flow _ -> flow);
+    exec = (fun ?(zone=any_zone) stmt flow -> exec_flow zone stmt man flow);
+    eval = (fun ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow -> eval zone via exp man flow);
+    ask = (fun query flow -> ask query man flow);
+  }
 
 
 end
