@@ -71,7 +71,7 @@ type ('a, 't) man = {
     domain. Journaling functions in these managers allow stacked domains to log
     statements for eventual future merges.
 *)
-type ('a,'t,'s) stack_man = {
+type ('a,'s) stack_man = {
   (** Accessors to the abstract element of the sub-tree domain *)
   get_sub : 'a -> 's;
   set_sub : 's -> 'a -> 'a;

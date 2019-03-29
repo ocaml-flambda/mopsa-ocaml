@@ -111,16 +111,16 @@ sig
         unifies the sub-tree elements [s1] and [s2]. *)
 
 
-    val init : program -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'a flow option
+    val init : program -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a flow option
     (** Initialization function *)
 
-    val exec : zone -> stmt -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'a post option
+    val exec : zone -> stmt -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a post option
     (** Post-state of statements *)
 
-    val eval : (zone * zone) -> expr -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
+    val eval : (zone * zone) -> expr -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
     (** Evaluation of expressions *)
 
-    val ask  : 'r Query.query -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'r option
+    val ask  : 'r Query.query -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'r option
     (** Handler of queries *)
 
   end

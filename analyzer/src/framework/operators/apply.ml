@@ -155,7 +155,7 @@ struct
 
 
   (** Stack manager of [S] *)
-  let s_sman (man:('a,t) man) : ('a, S.t, D.t) stack_man = {
+  let s_sman (man:('a,t) man) : ('a,D.t) stack_man = {
     get_sub = (fun a -> man.get a |> snd);
     set_sub = (fun d a -> man.set (man.get a |> fst, d) a);
     sub_exec = (fun ?(zone=any_zone) stmt flow ->

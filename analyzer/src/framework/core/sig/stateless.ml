@@ -96,10 +96,10 @@ sig
   val interface : interface
   module Make(Sub:ABSTRACTION) :
   sig
-    val init : program -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'a flow option
-    val exec : zone -> stmt -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'a post option
-    val eval : zone * zone -> expr -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
-    val ask  : 'r Query.query -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'r option
+    val init : program -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a flow option
+    val exec : zone -> stmt -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a post option
+    val eval : zone * zone -> expr -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
+    val ask  : 'r Query.query -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'r option
   end
 
 end
