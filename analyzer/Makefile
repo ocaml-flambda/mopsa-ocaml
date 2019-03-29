@@ -30,7 +30,7 @@ framework = ast core lattices engine operators export config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
 	         id interface sig callstack alarm all
-framework.core.sig = value abstraction domain stacked functor leaf stateless
+framework.core.sig = value domain abstraction stacked functor leaf stateless
 framework.lattices = partial_map powerset total_map
 framework.engine = logging cache analyzer
 framework.export = text json factory

@@ -87,7 +87,7 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val subset: t -> t -> bool
+  val subset: ('a,t) man -> 'a -> 'a -> bool
   (** Partial order relation. [subset a1 a2] tests whether [a1] is
       related to (or included in) [a2]. *)
 
@@ -95,17 +95,17 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val join: t -> t -> t
+  val join: ('a,t) man -> 'a -> 'a -> 'a
   (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: t -> t -> t
+  val meet: ('a,t) man -> 'a -> 'a -> 'a
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> t -> t -> t
+  val widen: uctx -> ('a,t) man -> 'a -> 'a -> 'a
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge: t -> t * log -> t * log -> t
+  val merge: ('a,t) man -> 'a * log -> 'a * log -> 'a
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 

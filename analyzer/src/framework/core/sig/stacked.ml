@@ -74,12 +74,15 @@ sig
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
   val merge: t -> t * log -> t * log -> t
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two post-conditions
-      [post1] and [post2] using a common pre-condition [pre] after a fork-join
-      trajectory in the abstraction DAG.
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+      post-conditions [post1] and [post2] using a common pre-condition [pre].
+
+      Diverging post-conditions emerge after a fork-join trajectory in the
+      abstraction DAG (e.g., a reduced product).
 
       The logs [log1] and [log2] represent a journal of internal statements
-      executed during the the computation of the post-conditions.
+      executed during the the computation of the post-conditions over the
+      two trajectories.
   *)
 
   val print: Format.formatter -> t -> unit
@@ -87,45 +90,41 @@ sig
 
 
 
-  module Make : functor(Sub:ABSTRACTION) ->
-  sig
 
-    val subset: t * Sub.t -> t * Sub.t -> bool * Sub.t * Sub.t
+    val subset: 's sman -> t * 's -> t * 's -> bool * Sub.t * Sub.t
     (** [subset (a1, s1) (a2, s2)] tests whether [a1] is related to
         (or included in) [a2] and unifies the sub-tree elements [s1] and
         [s2]. *)
 
 
-    val join: t * Sub.t -> t * Sub.t -> t * Sub.t * Sub.t
+    val join: 's sman -> t * 's -> t * 's -> t * 's * 's
     (** [join (a1, s1) (a2, s2)] computes an upper bound of [a1]
         and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
-    val meet: t * Sub.t -> t * Sub.t -> t * Sub.t * Sub.t
+    val meet: 's sman -> t * 's -> t * 's -> t * 's * 's
     (** [meet (a1, s1) (a2, s2)] computes a lower bound of [a1] and
         [a2] and unifies the sub-tree elements [s1] and [s2]. *)
 
     val widen:
-      uctx -> t * Sub.t -> t * Sub.t -> t * bool * Sub.t * Sub.t
+      uctx -> 's sman -> t * 's -> t * 's -> t * 's * 's * bool
     (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
         [a1] and [a2] that ensures stabilization of ascending chains and
         unifies the sub-tree elements [s1] and [s2]. *)
 
 
-    val init : program -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a flow option
+    val init : program -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a flow option
     (** Initialization function *)
 
-    val exec : zone -> stmt -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a post option
+    val exec : zone -> stmt -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a post option
     (** Post-state of statements *)
 
-    val eval : (zone * zone) -> expr -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
+    val eval : (zone * zone) -> expr -> ('a, t) man -> ('a,'s) man -> 'a flow -> (expr, 'a) eval option
     (** Evaluation of expressions *)
 
-    val ask  : 'r Query.query -> ('a, t) man -> ('a,Sub.t) stack_man -> 'a flow -> 'r option
+    val ask  : 'r Query.query -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'r option
     (** Handler of queries *)
 
   end
-
-end
 
 
 (*==========================================================================*)

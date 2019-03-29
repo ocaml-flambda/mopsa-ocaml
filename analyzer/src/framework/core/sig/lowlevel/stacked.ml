@@ -19,12 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Unified domain signature.
+(** Unified stacked domain signature.
 
-    The signature DOMAIN is useful for domains that are not parameterized by
-    other domains and that require a full accessing to the analyzer. In other
-    words, their concretization function γ, their lattice operators and their
-    transfer functions do not depend on other external abstractions.
+    Domains implementing the STACK signature represent parameterized
+    abstractions. Their γ function, lattice operators and transfer functions
+    depend on argument abstractions. Stacks extend classic OCaml functors by
+    allowing shared argument abstractions.
 
 *)
 
@@ -37,22 +37,16 @@ open Context
 open Flow
 open Manager
 open Eval
-open Query
 open Log
 open Post
 open Zone
 open Id
 open Interface
+open Abstraction
 
 
-
-(*==========================================================================*)
-(**                            {2 Signature}                                *)
-(*==========================================================================*)
-
-
-(** Unified signature of an abstract domain *)
-module type DOMAIN =
+(** Unified signature of stacked abstract domains *)
+module type STACK =
 sig
 
   (** {2 Declaration header} *)
@@ -70,42 +64,16 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
-
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val subset: t -> t -> bool
-  (** Partial order relation. [subset a1 a2] tests whether [a1] is
-      related to (or included in) [a2]. *)
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
-
-  val join: t -> t -> t
-  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
-
-  val meet: t -> t -> t
-  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
-
-  val widen: uctx -> t -> t -> t
-  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
-      ensures stabilization of ascending chains. *)
-
-  val merge: t -> t * log -> t * log -> t
+  val merge: ('a,t) man -> 'a * log -> 'a * log -> 'a
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
@@ -117,27 +85,43 @@ sig
       two trajectories.
   *)
 
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
 
-  (** {2 Transfer functions} *)
-  (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
+
+  val subset: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> bool * 'a * 'a
+  (** [subset (a1, s1) (a2, s2)] tests whether [a1] is related to
+      (or included in) [a2] and unifies the sub-tree elements [s1] and
+      [s2]. *)
+
+
+  val join: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a
+  (** [join (a1, s1) (a2, s2)] computes an upper bound of [a1]
+      and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
+
+  val meet: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a
+  (** [meet (a1, s1) (a2, s2)] computes a lower bound of [a1] and
+      [a2] and unifies the sub-tree elements [s1] and [s2]. *)
+
+  val widen:
+    uctx -> ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a * bool
+  (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
+      [a1] and [a2] that ensures stabilization of ascending chains and
+      unifies the sub-tree elements [s1] and [s2]. *)
+
+
+  val init : program -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a flow option
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
+  val exec : zone -> stmt -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
+  val eval : (zone * zone) -> expr -> ('a, t) man -> ('a,'s) man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
+  val ask  : 'r Query.query -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
@@ -148,19 +132,19 @@ end
 (*==========================================================================*)
 
 
-let domains : (module DOMAIN) list ref = ref []
+let stacks : (module STACK) list ref = ref []
 
-let register_domain dom =
-  domains := dom :: !domains
+let register_stack_domain dom =
+  stacks := dom :: !stacks
 
-let find_domain name =
-  List.find (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      compare D.name name = 0
-    ) !domains
+let find_stack name =
+  List.find (fun stack ->
+      let module S = (val stack : STACK) in
+      compare S.name name = 0
+    ) !stacks
 
 let names () =
-  List.map (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      D.name
-    ) !domains
+  List.map (fun st ->
+      let module S = (val st : STACK) in
+      S.name
+    ) !stacks

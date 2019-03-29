@@ -27,7 +27,7 @@ open Core.All
 open Log
 
 
-module Make (S:STACK) (D:DOMAIN) : DOMAIN =
+module Make (S:STACK) (D:DOMAIN) : DOMAIN with type t = S.t * D.t =
 struct
 
 
@@ -59,7 +59,7 @@ struct
   (**************************************************************************)
 
   (* Encapsulation of domain [D] into an abstraction *)
-  module Sub = Sig.Domain.MakeAbstraction(D)
+  module Sub = Sig.Abstraction.Make(D)
 
   (* Instantiate the stack using its sub-tree abstraction *)
   module SI = S.Make(Sub)

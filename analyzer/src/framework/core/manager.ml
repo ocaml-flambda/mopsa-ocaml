@@ -57,8 +57,12 @@ type ('a, 't) man = {
 
   (** Analyzer transfer functions *)
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  jexec : ?zone:zone -> stmt -> 'a flow -> 'a post;
   eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  get_log : log -> log;
+  set_log : log -> log -> log;
 }
 
 
@@ -68,20 +72,11 @@ type ('a, 't) man = {
 (*==========================================================================*)
 
 (** Stack managers are provided to stacked domains to access their parameter
-    domain. Journaling functions in these managers allow stacked domains to log
-    statements for eventual future merges.
+    domain.
 *)
-type ('a,'s) stack_man = {
-  (** Accessors to the abstract element of the sub-tree domain *)
-  get_sub : 'a -> 's;
-  set_sub : 's -> 'a -> 'a;
-
-  (** Journaling transfer function over the sub-tree domain *)
-  sub_exec: ?zone:zone -> stmt -> 'a flow -> 'a post;
-
-  (** Accessors to the domain's log *)
-  set_log : log -> log -> log;
-  get_log : log -> log;
+type 's sman = {
+  sexec: ?zone:zone -> stmt -> 's -> 's;
+  sask: 'r. 'r query -> 's -> 'r;
 }
 
 
@@ -89,6 +84,14 @@ type ('a,'s) stack_man = {
 (*==========================================================================*)
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
+
+let log ?(zone=any_zone) stmt man flow =
+  man.jexec ~zone stmt flow |>
+  Post.map_log (fun tk log ->
+      match tk with
+      | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
+      | _ -> log
+    )
 
 let set_domain_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
