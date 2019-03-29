@@ -34,7 +34,7 @@ framework.core.sig = value abstraction domain stacked functor leaf stateless
 framework.lattices = partial_map powerset total_map
 framework.engine = logging cache analyzer
 framework.export = text json factory
-framework.operators = compose apply sequence nonrel
+framework.operators = apply sequence compose nonrel
 framework.config = paths abstraction options
 
 # Languages

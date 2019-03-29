@@ -30,8 +30,9 @@ open Log
 module Make (S:STACK) (D:DOMAIN) : DOMAIN =
 struct
 
+
   (**************************************************************************)
-  (**                       {2 Type declaration}                            *)
+  (**                         {2 Domain header}                             *)
   (**************************************************************************)
 
   type t = S.t * D.t
@@ -43,19 +44,7 @@ struct
     end
     )
 
-
-  (**************************************************************************)
-  (**                       {2 Zoning interface}                            *)
-  (**************************************************************************)
-
-  let exec_interface = Core.Sig.Interface.concat S.exec_interface D.exec_interface
-
-  let eval_interface = Core.Sig.Interface.concat S.eval_interface D.eval_interface
-
-
-  (**************************************************************************)
-  (**                        {2 Special values}                             *)
-  (**************************************************************************)
+  let interface = Core.Interface.concat S.interface D.interface
 
   let bottom = S.bottom, D.bottom
 
@@ -63,6 +52,18 @@ struct
 
   let is_bottom (a, b) =
     S.is_bottom a || D.is_bottom b
+
+
+  (**************************************************************************)
+  (**                  {2 Instantiation of the stack}                       *)
+  (**************************************************************************)
+
+  (* Encapsulation of domain [D] into an abstraction *)
+  module Sub = Sig.Domain.MakeAbstraction(D)
+
+  (* Instantiate the stack using its sub-tree abstraction *)
+  module SI = S.Make(Sub)
+
 
 
   (**************************************************************************)
@@ -152,76 +153,11 @@ struct
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
   }
 
-  let d_lattice : D.t lattice = {
-    bottom = D.bottom;
-    top = D.top;
-    is_bottom = D.is_bottom;
-    subset = D.subset;
-    join = D.join;
-    meet = D.meet;
-    widen = D.widen;
-    print = D.print;
-  }
 
-  let rec d_isolated_man : (D.t,D.t) man = {
-    lattice = d_lattice;
-    get = (fun d -> d);
-    set = (fun d _ -> d);
-    exec = (fun ?(zone=any_zone) stmt flow ->
-        match D.exec zone stmt d_isolated_man flow with
-        | Some post ->
-          Post.to_flow d_lattice post
-
-        | None ->
-          Exceptions.panic_at stmt.srange
-            "Statement %a not analyzed by domain %s"
-            pp_stmt stmt
-            D.name
-      );
-    eval = (fun ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow ->
-        match D.eval zone exp d_isolated_man flow with
-        | Some evl -> evl
-
-        | None ->
-          Exceptions.panic_at exp.erange
-            "Expression %a not evaluated by domain %s"
-            pp_expr exp
-            D.name
-      );
-    ask = (fun query flow ->
-        match D.ask query d_isolated_man flow with
-        | Some rep -> rep
-
-        | None ->
-          Exceptions.panic
-            "Query not handled by domain %s"
-            D.name
-      );
-  }
-
-  let d_sub_man : D.t sub_man = {
-    sub_lattice = d_lattice;
-    sub_exec = (fun ?(zone=any_zone) stmt d ->
-        let flow = Flow.singleton Context.empty T_cur d in
-        match D.exec zone stmt d_isolated_man flow with
-        | Some post ->
-          Post.to_flow d_lattice post |>
-          Flow.get T_cur d_lattice
-
-        | None ->
-          Exceptions.panic_at stmt.srange
-            "Statement %a not analyzed by domain %s"
-            pp_stmt stmt
-            D.name
-      );
-  }
-
-
-  (** Sub-tree manager of [S] *)
+  (** Stack manager of [S] *)
   let s_sman (man:('a,t) man) : ('a, S.t, D.t) stack_man = {
-    sub_lattice = d_sub_man.sub_lattice;
-    sub_get = (fun a -> man.get a |> snd);
-    sub_set = (fun d a -> man.set (man.get a |> fst, d) a);
+    get_sub = (fun a -> man.get a |> snd);
+    set_sub = (fun d a -> man.set (man.get a |> fst, d) a);
     sub_exec = (fun ?(zone=any_zone) stmt flow ->
         match D.exec zone stmt (d_man man) flow with
         | None ->
@@ -233,7 +169,6 @@ struct
         | Some post ->
           append_d_block stmt post
       );
-    sub_merge = (fun pre (post,log) (post',log') -> assert false);
     get_log = get_s_log;
     set_log = set_s_log;
   }
@@ -244,19 +179,19 @@ struct
   (**************************************************************************)
 
   let subset (a1,a2) (a1',a2') =
-    let b1, a2, a2' = S.subset (a1, a2) (a1', a2') d_sub_man in
+    let b1, a2, a2' = SI.subset (a1, a2) (a1', a2') in
     b1 && D.subset a2 a2'
 
   let join (a1,a2) (a1',a2') =
-    let a1, a2, a2' = S.join (a1, a2) (a1', a2') d_sub_man in
+    let a1, a2, a2' = SI.join (a1, a2) (a1', a2') in
     (a1, D.join a2 a2')
 
   let meet (a1,a2) (a1',a2') =
-    let a1, a2, a2' = S.meet (a1, a2) (a1', a2') d_sub_man in
+    let a1, a2, a2' = SI.meet (a1, a2) (a1', a2') in
     (a1, D.meet a2 a2')
 
   let widen ctx (a1,a2) (a1',a2') =
-    let a1, converged, a2, a2' = S.widen ctx (a1, a2) (a1', a2') d_sub_man in
+    let a1, converged, a2, a2' = SI.widen ctx (a1, a2) (a1', a2') in
     if not converged then
       a1, D.widen ctx a2 a2'
     else
@@ -285,7 +220,7 @@ struct
   (** Initialization function *)
   let init prog man flow =
     let flow1 =
-      match S.init prog (s_man man) flow with
+      match SI.init prog (s_man man) (s_sman man) flow with
       | None -> flow
       | Some flow -> flow
     in
@@ -293,8 +228,8 @@ struct
 
   (** Execution of statements *)
   let exec zone =
-    match Core.Sig.Interface.sat_exec zone S.exec_interface,
-          Core.Sig.Interface.sat_exec zone D.exec_interface
+    match Core.Interface.sat_exec zone S.interface,
+          Core.Interface.sat_exec zone D.interface
     with
     | false, false ->
       (* Both domains do not provide an [exec] for such zone *)
@@ -302,7 +237,7 @@ struct
 
     | true, false ->
       (* Only [S] provides an [exec] for such zone *)
-      let f = S.exec zone in
+      let f = SI.exec zone in
       (fun stmt man flow ->
          f stmt (s_man man) (s_sman man) flow |>
          Option.lift (append_s_block stmt)
@@ -318,7 +253,7 @@ struct
 
     | true, true ->
       (* Both [S] and [D] provide an [exec] for such zone *)
-      let f1 = S.exec zone in
+      let f1 = SI.exec zone in
       let f2 = D.exec zone in
       (fun stmt man flow ->
          match f1 stmt (s_man man) (s_sman man) flow with
@@ -333,8 +268,8 @@ struct
 
   (** Evaluation of expressions *)
   let eval zone =
-    match Core.Sig.Interface.sat_eval zone S.eval_interface,
-          Core.Sig.Interface.sat_eval zone D.eval_interface
+    match Core.Interface.sat_eval zone S.interface,
+          Core.Interface.sat_eval zone D.interface
     with
     | false, false ->
       (* Both domains do not provide an [eval] for such zone *)
@@ -342,7 +277,7 @@ struct
 
     | true, false ->
       (* Only [S] provides an [eval] for such zone *)
-      let f = S.eval zone in
+      let f = SI.eval zone in
       (fun exp man flow ->
          f exp (s_man man) (s_sman man) flow
       )
@@ -356,7 +291,7 @@ struct
 
     | true, true ->
       (* Both [S] and [D] provide an [eval] for such zone *)
-      let f1 = S.eval zone in
+      let f1 = SI.eval zone in
       let f2 = D.eval zone in
       (fun exp man flow ->
          match f1 exp (s_man man) (s_sman man) flow with
@@ -368,7 +303,7 @@ struct
 
   (** Query handler *)
   let ask query man flow =
-    let reply1 = S.ask query (s_man man) flow in
+    let reply1 = SI.ask query (s_man man) (s_sman man) flow in
     let reply2 = D.ask query (d_man man) flow in
     Option.neutral2 (Query.join query) reply1 reply2
 
