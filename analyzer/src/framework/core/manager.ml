@@ -72,34 +72,18 @@ type ('a, 't) man = {
     statements for eventual future merges.
 *)
 type ('a,'t,'s) stack_man = {
-  (** Lattice of the sub-tree domain *)
-  sub_lattice: 's lattice;
+  (** Accessors to the abstract element of the sub-tree domain *)
+  get_sub : 'a -> 's;
+  set_sub : 's -> 'a -> 'a;
 
-  sub_get : 'a -> 's;
-  sub_set : 's -> 'a -> 'a;
-
-  (** Journaling transfer function of the sub-tree domain *)
+  (** Journaling transfer function over the sub-tree domain *)
   sub_exec: ?zone:zone -> stmt -> 'a flow -> 'a post;
-
-  (** Merge two post-conditions of the sub-tree domain *)
-  sub_merge : 's -> 's * log -> 's * log -> 's;
 
   (** Accessors to the domain's log *)
   set_log : log -> log -> log;
   get_log : log -> log;
 }
 
-
-(*==========================================================================*)
-(**                        {2 Sub-tree manager}                             *)
-(*==========================================================================*)
-
-(** Sub-tree manager provides a simplified interface to the argument
-   sub-tree of a stacked domain. *)
-type 's sub_man = {
-  sub_lattice: 's lattice;
-  sub_exec: ?zone:zone -> stmt -> 's -> 's;
-}
 
 
 (*==========================================================================*)
@@ -118,21 +102,6 @@ let map_domain_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a
 let mem_domain_env (tk:token) (f:'t -> bool) (man:('a,'t) man) (flow:'a flow) : bool =
   get_domain_env tk man flow |>
   f
-  
-
-(** Create a sub-tree manager from a stacked manager *)
-let sub_man_of_stack_man (man:('a,'t) man) (sman:('a,'t,'s) stack_man) : 's sub_man = {
-  sub_lattice = sman.sub_lattice;
-  sub_exec = (fun ?(zone=any_zone) stmt s ->
-      let flow = sman.sub_set s man.lattice.top |>
-                 Flow.singleton Context.empty T_cur
-      in
-      let post = sman.sub_exec ~zone stmt flow in
-      let flow = Post.to_flow man.lattice post in
-      Flow.get T_cur man.lattice flow |>
-      sman.sub_get
-    );
-}
 
 let assume cond ?(zone = any_zone)
     ~fthen ~felse ~fboth ~fnone

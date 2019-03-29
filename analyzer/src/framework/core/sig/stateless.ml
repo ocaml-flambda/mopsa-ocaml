@@ -30,6 +30,7 @@ open Manager
 open Flow
 open Post
 open Eval
+open Abstraction
 
 (***********************************************************************)
 (**                      {2 Stateless domains}                         *)
@@ -93,10 +94,13 @@ sig
 
   val name : string
   val interface : interface
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
-  val exec : zone -> stmt -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> 'a post option
-  val eval : zone * zone -> expr -> ('a, unit) man -> ('a,unit,'s) stack_man -> 'a flow -> (expr, 'a) eval option
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  module Make(Sub:ABSTRACTION) :
+  sig
+    val init : program -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'a flow option
+    val exec : zone -> stmt -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'a post option
+    val eval : zone * zone -> expr -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
+    val ask  : 'r Query.query -> ('a, unit) man -> ('a,unit,Sub.t) stack_man -> 'a flow -> 'r option
+  end
 
 end
 
@@ -108,10 +112,6 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let subset ((),s) ((),s') _ = true,s,s'
-  let join ((),s) ((),s') _ = (),s,s'
-  let meet ((),s) ((),s') _ = (),s,s'
-  let widen _ ((),s) ((),s') _ = (),true,s,s'
   let merge _ _ _ = ()
   let print _ _ = ()
 
@@ -120,13 +120,23 @@ struct
       let name = S.name
     end)
 
-  let init = S.init
-
   let interface = S.interface
 
-  let exec = S.exec
-  let eval = S.eval
-  let ask = S.ask
+  module Make(Sub:ABSTRACTION) =
+  struct
+    module SI = S.Make(Sub)
+
+    let subset ((),s) ((),s') = true,s,s'
+    let join ((),s) ((),s') = (),s,s'
+    let meet ((),s) ((),s') = (),s,s'
+    let widen _ ((),s) ((),s') = (),true,s,s'
+
+    let init = SI.init
+    let exec = SI.exec
+    let eval = SI.eval
+    let ask = SI.ask
+
+  end
 
 end
 

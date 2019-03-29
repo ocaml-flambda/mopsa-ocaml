@@ -23,11 +23,8 @@
 
     Domains implementing the STACK signature represent parameterized
     abstractions. Their γ function, lattice operators and transfer functions
-    depend on argument abstractions. Unlike classic OCaml functors, argument
-    abstractions are not fixed at module creation. Instead, stacked domains
-    receive a record encapsulation of the transfer functions of their argument
-    abstractions at runtime. This allows sharing the arguments among other
-    stacked domains (e.g, in a reduced product).
+    depend on argument abstractions. Stacks extend classic OCaml functors by
+    allowing shared argument abstractions.
 
 *)
 
@@ -45,7 +42,7 @@ open Post
 open Zone
 open Id
 open Interface
-
+open Abstraction
 
 
 (** Unified signature of stacked abstract domains *)
@@ -67,45 +64,14 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
-
-  (** {2 Special values} *)
-  (** ****************** *)
-
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-
-  (** {2 Predicates} *)
-  (** ************** *)
-
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
-
-  val subset: t * 's -> t * 's -> 's sub_man -> bool * 's * 's
-  (** [subset (a1, s1) (a2, s2) man] tests whether [a1] is related to
-     (or included in) [a2] and unifies the sub-tree elements [s1] and
-     [s2]. *)
-
-
-  (** {2 Operators} *)
-  (** ************* *)
-
-  val join: t * 's -> t * 's -> 's sub_man -> t * 's * 's
-  (** [join (a1, s1) (a2, s2) man] computes an upper bound of [a1]
-      and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val meet: t * 's -> t * 's -> 's sub_man -> t * 's * 's
-  (** [meet (a1, s1) (a2, s2) man] computes a lower bound of [a1] and
-      [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val widen:
-      uctx -> t * 's -> t * 's -> 's sub_man -> t * bool * 's * 's
-  (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
-      [a1] and [a2] that ensures stabilization of ascending chains and
-      unifies the sub-tree elements [s1] and [s2]. *)
 
   val merge: t -> t * log -> t * log -> t
   (** [merge pre (post1, log1) (post2, log2)] synchronizes two post-conditions
@@ -116,28 +82,48 @@ sig
       executed during the the computation of the post-conditions.
   *)
 
-
-  (** {2 Printing} *)
-  (** ************ *)
-
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
 
-  (** {2 Transfer functions} *)
-  (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
-  (** Initialization function *)
+  module Make : functor(Sub:ABSTRACTION) ->
+  sig
 
-  val exec : zone -> stmt -> ('a, t) man -> ('a, t, 's) stack_man -> 'a flow -> 'a post option
-  (** Post-state of statements *)
+    val subset: t * Sub.t -> t * Sub.t -> bool * Sub.t * Sub.t
+    (** [subset (a1, s1) (a2, s2)] tests whether [a1] is related to
+        (or included in) [a2] and unifies the sub-tree elements [s1] and
+        [s2]. *)
 
-  val eval : (zone * zone) -> expr -> ('a, t) man -> ('a, t, 's) stack_man -> 'a flow -> (expr, 'a) eval option
-  (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
-  (** Handler of queries *)
+    val join: t * Sub.t -> t * Sub.t -> t * Sub.t * Sub.t
+    (** [join (a1, s1) (a2, s2)] computes an upper bound of [a1]
+        and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
+
+    val meet: t * Sub.t -> t * Sub.t -> t * Sub.t * Sub.t
+    (** [meet (a1, s1) (a2, s2)] computes a lower bound of [a1] and
+        [a2] and unifies the sub-tree elements [s1] and [s2]. *)
+
+    val widen:
+      uctx -> t * Sub.t -> t * Sub.t -> t * bool * Sub.t * Sub.t
+    (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
+        [a1] and [a2] that ensures stabilization of ascending chains and
+        unifies the sub-tree elements [s1] and [s2]. *)
+
+
+    val init : program -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'a flow option
+    (** Initialization function *)
+
+    val exec : zone -> stmt -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'a post option
+    (** Post-state of statements *)
+
+    val eval : (zone * zone) -> expr -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
+    (** Evaluation of expressions *)
+
+    val ask  : 'r Query.query -> ('a, t) man -> ('a, t, Sub.t) stack_man -> 'a flow -> 'r option
+    (** Handler of queries *)
+
+  end
 
 end
 
@@ -163,110 +149,3 @@ let names () =
       let module S = (val st : STACK) in
       S.name
     ) !stacks
-
-
-
-(****************************************************************************)
-(**                          {2 Stack instance}                             *)
-(****************************************************************************)
-
-module type STACKINST =
-sig
-
-  (** {2 Declaration header} *)
-  (** ********************** *)
-
-  type t
-  (** Type of an abstract elements. *)
-
-  type s
-  (** Type of the sub-tree abstraction *)
-
-  val id : t did
-  (** Domain identifier *)
-
-  val name : string
-  (** Name of the domain *)
-
-  val interface : interface
-  (** Interface of the domain *)
-
-
-  (** {2 Special values} *)
-  (** ****************** *)
-
-  val bottom: t
-  (** Least abstract element of the lattice. *)
-
-  val top: t
-  (** Greatest abstract element of the lattice. *)
-
-
-  (** {2 Predicates} *)
-  (** ************** *)
-
-  val is_bottom: t -> bool
-  (** [is_bottom a] tests whether [a] is bottom or not. *)
-
-  val subset: t * s -> t * s -> bool * s * s
-  (** [subset (a1, s1) (a2, s2)] tests whether [a1] is related to
-     (or included in) [a2] and unifies the sub-tree elements [s1] and
-     [s2]. *)
-
-
-  (** {2 Operators} *)
-  (** ************* *)
-
-  val join: t * s -> t * s -> t * s * s
-  (** [join (a1, s1) (a2, s2)] computes an upper bound of [a1]
-      and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val meet: t * s -> t * s -> t * s * s
-  (** [meet (a1, s1) (a2, s2) man] computes a lower bound of [a1] and
-      [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val widen:
-      uctx -> t * s -> t * s -> t * bool * s * s
-  (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
-      [a1] and [a2] that ensures stabilization of ascending chains and
-      unifies the sub-tree elements [s1] and [s2]. *)
-
-  val merge: t -> t * log -> t * log -> t
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two post-conditions
-      [post1] and [post2] using a common pre-condition [pre] after a fork-join
-      trajectory in the abstraction DAG.
-
-      The logs [log1] and [log2] represent a journal of internal statements
-      executed during the the computation of the post-conditions.
-  *)
-
-
-  (** {2 Printing} *)
-  (** ************ *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
-
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
-  (** Initialization function *)
-
-  val exec : zone -> stmt -> ('a, t) man -> ('a, t, s) stack_man -> 'a flow -> 'a post option
-  (** Post-state of statements *)
-
-  val eval : (zone * zone) -> expr -> ('a, t) man -> ('a, t, s) stack_man -> 'a flow -> (expr, 'a) eval option
-  (** Evaluation of expressions *)
-
-  val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
-  (** Handler of queries *)
-
-end
-
-
-(** Instantiate a stack domain using its argument *)
-module InstantiateStack(Stack:STACK)(Abstraction: ABSTRACTION) : STACKINST with type t = STACK.t and type s = Abstraction.t =
-struct
-end
