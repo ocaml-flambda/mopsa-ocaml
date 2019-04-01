@@ -45,6 +45,16 @@ let return flow : 'a post =
     }
   ]
 
+let print (lattice:'a lattice) fmt (post:'a post) : unit =
+  let open Format in
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@ ∨@ ")
+    (fun fmt case ->
+       let tmap' = TokenMap.map (fun tk (e,log) -> e) case.tmap in
+       TokenMap.print lattice fmt tmap'
+    )
+    fmt post
+
 let join (post1:'a post) (post2:'a post) =
   post1 @ post2
 

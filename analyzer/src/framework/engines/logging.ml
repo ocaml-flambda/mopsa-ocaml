@@ -134,7 +134,7 @@ let exec stmt zone man flow =
   ;
   incr cur_level
 
-let exec_done stmt zone time man flow =
+let exec_done stmt zone time man post =
   decr cur_level;
   if !opt_short_log then
     indent "%a done in zone %a [%.4fs]"
@@ -147,7 +147,7 @@ let exec_done stmt zone time man flow =
       pp_S stmt
       pp_zone zone
       time
-      (Flow.print man.lattice) flow
+      (Post.print man.lattice) post
       ~symbol:END
 
 let eval exp zone man flow =

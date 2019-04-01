@@ -30,12 +30,12 @@ open Eq
 (****************************************************************************)
 
 (** Domain identifier *)
-type _ did = ..
+type _ domain = ..
 
 (** Descriptor of a domain identifier *)
 type 'a dinfo = {
-  did : 'a did;
-  eq :  'b. 'b did -> ('b,'a) eq option;
+  domain : 'a domain;
+  eq :  'b. 'b domain -> ('b,'a) eq option;
 }
 
 (** Pool of descriptors of domain identifiers *)
@@ -50,22 +50,22 @@ let register_domain_id (dinfo:'a dinfo) =
   dpool := dinfo :: !dpool
 
 (** Find descriptor of a domain identifier *)
-let dfind (did:'a did) =
-  let rec aux : type b. b did -> dpool -> b dinfo =
-    fun did dpool ->
+let dfind (domain:'a domain) =
+  let rec aux : type b. b domain -> dpool -> b dinfo =
+    fun domain dpool ->
       match dpool with
       | [] -> raise Not_found
       | dinfo :: tl ->
-        match dinfo.eq did with
+        match dinfo.eq domain with
         | Some Eq -> dinfo
-        | None -> aux did tl
+        | None -> aux domain tl
   in
-  aux did !dpool
+  aux domain !dpool
 
 (** Equality witness of domain identifiers *)
-let deq (did1:'a did) (did2:'b did) : ('a,'b) eq option =
-  let dinfo2 = dfind did2 in
-  dinfo2.eq did1
+let deq (domain1:'a domain) (domain2:'b domain) : ('a,'b) eq option =
+  let dinfo2 = dfind domain2 in
+  dinfo2.eq domain1
 
 (** Generator of a new domain identifier *)
 module GenDomainId(Spec:sig
@@ -74,21 +74,21 @@ module GenDomainId(Spec:sig
   end) =
 struct
 
-  type _ did += DId : Spec.typ did
+  type _ domain += Domain : Spec.typ domain
 
-  let id = DId
+  let id = Domain
 
   let name = Spec.name
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a did -> (a,Spec.typ) eq option =
+  let eq : type a. a domain -> (a,Spec.typ) eq option =
     function
-    | DId -> Some Eq
+    | Domain -> Some Eq
     | _ -> None
 
   let () =
-    register_domain_id { did = id; eq }
+    register_domain_id { domain = id; eq }
 
 end
 
@@ -99,12 +99,12 @@ end
 
 
 (** Value identifier *)
-type _ vid = ..
+type _ value = ..
 
 (** Descriptor of a value identifier *)
 type 'a vinfo = {
-  vid : 'a vid;
-  eq :  'b. 'b vid -> ('b,'a) eq option;
+  value : 'a value;
+  eq :  'b. 'b value -> ('b,'a) eq option;
 }
 
 (** Pool of descriptors of value identifiers *)
@@ -119,22 +119,22 @@ let register_value_id (vinfo:'a vinfo) =
   vpool := vinfo :: !vpool
 
 (** Find descriptor of a value identifier *)
-let vfind (vid:'a vid) =
-  let rec aux : type b. b vid -> vpool -> b vinfo =
-    fun vid vpool ->
+let vfind (value:'a value) =
+  let rec aux : type b. b value -> vpool -> b vinfo =
+    fun value vpool ->
       match vpool with
       | [] -> raise Not_found
       | vinfo :: tl ->
-        match vinfo.eq vid with
+        match vinfo.eq value with
         | Some Eq -> vinfo
-        | None -> aux vid tl
+        | None -> aux value tl
   in
-  aux vid !vpool
+  aux value !vpool
 
 (** Equality witness of value identifiers *)
-let veq (vid1:'a vid) (vid2:'b vid) : ('a,'b) eq option =
-  let vinfo2 = vfind vid2 in
-  vinfo2.eq vid1
+let veq (value1:'a value) (value2:'b value) : ('a,'b) eq option =
+  let vinfo2 = vfind value2 in
+  vinfo2.eq value1
 
 (** Generator of a new value identifier *)
 module GenValueId(Spec:sig
@@ -144,9 +144,9 @@ module GenValueId(Spec:sig
   end) =
 struct
 
-  type _ vid += VId : Spec.typ vid
+  type _ value += Value : Spec.typ value
 
-  let id = VId
+  let id = Value
 
   let name = Spec.name
 
@@ -154,13 +154,13 @@ struct
 
   let debug fmt = Debug.debug ~channel:Spec.name fmt
 
-  let eq : type a. a vid -> (a,Spec.typ) eq option =
+  let eq : type a. a value -> (a,Spec.typ) eq option =
     function
-    | VId -> Some Eq
+    | Value -> Some Eq
     | _ -> None
 
   let () =
-    register_value_id { vid = id; eq }
+    register_value_id { value = id; eq }
 
 end
 

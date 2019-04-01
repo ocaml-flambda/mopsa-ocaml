@@ -19,13 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Unified domain signature.
-
-    The signature DOMAIN is useful for domains that are not parameterized by
-    other domains and that require a full accessing to the analyzer. In other
-    words, their concretization function γ, their lattice operators and their
-    transfer functions do not depend on other external abstractions.
-
+(** Low level signature of domains. Similar to the unified domain signature,
+    except that lattice operators are defined on the global abstraction.
 *)
 
 
@@ -45,23 +40,22 @@ open Id
 open Interface
 
 
-
 (*==========================================================================*)
 (**                            {2 Signature}                                *)
 (*==========================================================================*)
 
 
-(** Unified signature of an abstract domain *)
+(** Low-level signature of an abstract domain *)
 module type DOMAIN =
 sig
 
-  (** {2 Declaration header} *)
-  (** ********************** *)
+  (** {2 Domain header} *)
+  (** ***************** *)
 
   type t
   (** Type of an abstract elements. *)
 
-  val id : t did
+  val id : t domain
   (** Domain identifier *)
 
   val name : string
@@ -81,32 +75,40 @@ sig
   (** Greatest abstract element of the lattice. *)
 
 
+  (** {2 Pretty printing} *)
+  (** ******************* *)
+
+  val print: ('a,t) man -> Format.formatter -> 'a -> unit
+  (** Printer of an abstract element. *)
+
+
   (** {2 Lattice predicates} *)
   (** ********************** *)
 
-  val is_bottom: t -> bool
-  (** [is_bottom a] tests whether [a] is bottom or not. *)
+  val is_bottom: ('a,t) man -> 'a -> bool
+  (** [is_bottom man a] tests whether [a] is bottom or not. *)
 
   val subset: ('a,t) man -> 'a -> 'a -> bool
-  (** Partial order relation. [subset a1 a2] tests whether [a1] is
-      related to (or included in) [a2]. *)
+  (** [subset man a1 a2] provides a partial order relation over
+      elements of the domain by testing whether [a1] is related to (or
+     included in) [a2]. *)
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val join: ('a,t) man -> 'a -> 'a -> 'a
-  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+  val join: ('a,t) man -> 'a -> 'a -> t
+  (** [join man a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: ('a,t) man -> 'a -> 'a -> 'a
-  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+  val meet: ('a,t) man -> 'a -> 'a -> t
+  (** [meet man a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> ('a,t) man -> 'a -> 'a -> 'a
-  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+  val widen: ('a,t) man -> uctx -> 'a -> 'a -> t
+  (** [widen man ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge: ('a,t) man -> 'a * log -> 'a * log -> 'a
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+  val merge: ('a,t) man -> 'a -> 'a * log -> 'a * log -> t
+  (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
@@ -116,13 +118,6 @@ sig
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
-
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
 
 
   (** {2 Transfer functions} *)

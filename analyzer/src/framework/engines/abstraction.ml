@@ -19,8 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Abstractions are the encapsulation used by the analyzer to access
-    the transfer function of the abstract domain.
+(** An abstraction is the encapsulation of the overall abstract domain used by
+    the analyzer.
 
     There are three main differences with domains. First, maps of zoned
     transfer functions are constructed at creation. Second, transfer functions
@@ -28,13 +28,14 @@
     conditions of statements are merged into flows.
 *)
 
+open Core
+open Token
 open Context
 open Ast.All
 open Flow
 open Manager
 open Eval
 open Post
-open Domain
 open Zone
 open Query
 open Log
@@ -44,39 +45,123 @@ open Log
 module type ABSTRACTION =
 sig
 
-  include DOMAIN
+  (** {2 Abstraction lattice} *)
+  (** *********************** *)
 
-  val zexec : ?zone:zone -> stmt -> t flow -> t post
-  (** Computation of post-conditions *)
+  type t
 
-  val zeval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> (expr, t) eval
-  (** Evaluation of expressions *)
+  val bottom: t
+
+  val top: t
+
+  val is_bottom: (t, t) man -> t -> bool
+
+  val subset: (t, t) man -> t -> t -> bool
+
+  val join: (t, t) man -> t -> t -> t
+
+  val meet: (t, t) man -> t -> t -> t
+
+  val widen: (t, t) man -> uctx -> t -> t -> t
+
+  val print: (t, t) man -> Format.formatter -> t -> unit
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  val init : program -> (t, t) man -> t flow
+
+  val exec : ?zone:zone -> stmt -> (t, t) man -> t flow -> t flow
+
+  val post : ?zone:zone -> stmt -> (t, t) man -> t flow -> t post
+
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (t, t) man -> t flow -> (expr, t) eval
+
+  val ask  : 'r Query.query -> (t, t) man -> t flow -> 'r
 
 end
 
 
 (*==========================================================================*)
-(**                 {2 Encapsulation into abstractions}                     *)
+(**             {2 Domain encapsulation into an abstraction}                *)
 (*==========================================================================*)
 
+
+let debug fmt = Debug.debug ~channel:"framework.engines.abstraction" fmt
+
+
 (** Encapsulate a domain into an abstraction *)
-module Make(Domain:DOMAIN) : ABSTRACTION with type t = Domain.t =
+module Make(Domain:Core.Sig.Lowlevel.Domain.DOMAIN)
+  : ABSTRACTION with type t = Domain.t
+=
 struct
 
-  include Domain
+  (** {2 Abstraction lattice} *)
+  (** *********************** *)
 
-  (*========================================================================*)
-  (**                   {2 Execution of statements}                         *)
-  (*========================================================================*)
+  type t = Domain.t
 
-  (** Map of zoned transfer functions *)
-        (** Map giving the [exec] transfer function of a zone *)
+  let bottom = Domain.bottom
+
+  let top = Domain.top
+
+  let is_bottom man a = Domain.is_bottom man a
+
+  let subset man a a' = Domain.subset man a a'
+
+  let join man a a' = Domain.join man a a'
+
+  let meet man a a' = Domain.meet man a a'
+
+  let widen man ctx a a' = Domain.widen man ctx a a'
+
+  let print man fmt a = Domain.print man fmt a
+
+
+  (** {2 Caches and zone maps} *)
+  (** ************************ *)
+
+  (* Cache of previous evaluations and post-conditions *)
+  module Cache = Cache.Make(struct type t = Domain.t end)
+
+
+  (** Map giving the [exec] transfer function of a zone *)
   module ExecMap = MapExt.Make(struct
       type t = zone
       let compare = compare_zone
     end)
 
 
+  (** Map giving the [eval] evaluation function of a zone path *)
+  module EvalMap = MapExt.Make(struct
+      type t = zone * zone
+      let compare = compare_zone2
+    end)
+
+
+  (** {2 Initialization} *)
+  (** ****************** *)
+
+  let init prog man : Domain.t flow =
+    (* Initialize the context with an empty callstack *)
+    let ctx = Context.empty |>
+              Context.add_unit Callstack.ctx_key Callstack.empty
+    in
+
+    (* The initial flow is a singleton ⊤ environment *)
+    let flow0 = Flow.singleton ctx T_cur man.lattice.top in
+
+    (* Initialize domains *)
+    match Domain.init prog man flow0 with
+    | None -> flow0
+    | Some flow -> flow
+
+
+  (** {2 Statement execution} *)
+  (** *********************** *)
+
+  (** Build the map of exec functions *)
   let exec_map =
     let required = Domain.interface.exec.uses in
     (* Add implicit import of Z_any *)
@@ -87,32 +172,38 @@ struct
         if ExecMap.mem zone map
         then map
         else
-          if List.exists (fun z -> sat_zone z zone) Domain.interface.exec.provides
-          then
-            ExecMap.add zone (Domain.exec zone) map
-          else
-            let () = Exceptions.warn "exec for %a not found" pp_zone zone in
-            map
+        if List.exists (fun z -> sat_zone z zone) Domain.interface.exec.provides
+        then
+          ExecMap.add zone (Domain.exec zone) map
+        else
+          let () = Exceptions.warn "exec for %a not found" pp_zone zone in
+          map
       ) map
 
-  
-  (** Map giving the [eval] evaluation function of a zone path *)
-  module EvalMap = MapExt.Make(struct
-      type t = zone * zone
-      let compare = compare_zone2
-    end)
+  let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
+    Logging.reach (Location.untag_range stmt.srange);
+    Logging.exec stmt zone man flow;
+
+    let timer = Timing.start () in
+    let fexec =
+      try ExecMap.find zone exec_map
+      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
+    in
+    let post = Cache.exec fexec zone stmt man flow in
+
+    Logging.exec_done stmt zone (Timing.stop timer) man post;
+    post
+
+  let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
+    let post = post ~zone stmt man flow in
+    Post.to_flow man.lattice post
 
 
-  (* Filter paths that pass through [via] zone *)
-  let find_eval_paths_via (src, dst) via map =
-    let paths = EvalMap.find (src, dst) map in
-    List.filter (fun path ->
-        List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
-      ) paths
 
+  (** {2 Evaluation of expressions} *)
+  (** ***************************** *)
 
   let eval_graph = Zone.build_eval_graph Domain.interface.eval.provides
-
 
   (** Build the map of [eval] functions *)
   let eval_map =
@@ -154,70 +245,57 @@ struct
       )
       map
 
-
-  let rec zexec ?(zone=any_zone) (stmt: stmt) (flow: t flow) : t post =
-    let fexec =
-      try ExecMap.find zone exec_map
-      with Not_found -> Exceptions.panic_at stmt.srange "exec for %a not found" pp_zone zone
-    in
-    match fexec stmt man flow with
-    | Some post -> post
-
-    | None ->
-      Exceptions.panic
-        "unable to analyze statement in %a:@\n @[%a@]"
-        Location.pp_range stmt.srange
-        pp_stmt stmt
-
-
-  (*========================================================================*)
-  (**                   {2 Evaluation of expressions}                       *)
-  (*========================================================================*)
-
   (** Evaluation of expressions. *)
-  and zeval ?(zone=(any_zone,any_zone)) ?(via=any_zone) exp flow =
-    (* Check whether exp is already in the desired zone *)
-    match sat_zone via (snd zone), Zone.eval_template exp (snd zone) with
-    | true, Keep -> Eval.singleton exp flow
+  let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
+    Logging.eval exp zone man flow;
+    let timer = Timing.start () in
 
-    | _, other_action ->
-      (* Try available eval paths in sequence *)
-      let paths =
-        try find_eval_paths_via zone via eval_map
-        with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
-      in
-      match eval_over_paths paths exp man flow with
-      | Some evl -> evl
-      | None ->
-        match other_action with
-        | Keep -> Eval.singleton exp flow
+    let ret =
+      (* Check whether exp is already in the desired zone *)
+      match sat_zone via (snd zone), Zone.eval_template exp (snd zone) with
+      | true, Keep -> Eval.singleton exp flow
 
-        | Process ->
-          Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-          Eval.singleton exp flow
+      | _, other_action ->
+        (* Try available eval paths in sequence *)
+        let paths =
+          try find_eval_paths_via zone via eval_map
+          with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_zone2 zone
+        in
+        match eval_over_paths paths exp man flow with
+        | Some evl -> evl
+        | None ->
+          match other_action with
+          | Keep -> Eval.singleton exp flow
 
-        | Visit ->
-          let open Ast.Visitor in
-          let parts, builder = split_expr exp in
-          match parts with
-          | {exprs; stmts = []} ->
-            Eval.eval_list
-              (fun exp flow ->
-                 match eval_over_paths paths exp man flow with
-                 | None ->
-                   Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
-                   Eval.singleton exp flow
-
-                 | Some evl -> evl
-              )
-              exprs flow
-            |>
-            Eval.bind @@ fun exprs flow ->
-            let exp = builder {exprs; stmts = []} in
+          | Process ->
+            Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
             Eval.singleton exp flow
 
-          | _ -> Eval.singleton exp flow
+          | Visit ->
+            let open Ast.Visitor in
+            let parts, builder = split_expr exp in
+            match parts with
+            | {exprs; stmts = []} ->
+              Eval.eval_list
+                (fun exp flow ->
+                   match eval_over_paths paths exp man flow with
+                   | None ->
+                     Exceptions.warn_at exp.erange "%a not evaluated" pp_expr exp;
+                     Eval.singleton exp flow
 
+                   | Some evl -> evl
+                )
+                exprs flow
+              |>
+              Eval.bind @@ fun exprs flow ->
+              let exp = builder {exprs; stmts = []} in
+              Eval.singleton exp flow
+
+            | _ -> Eval.singleton exp flow
+    in
+
+    Logging.eval_done exp zone (Timing.stop timer) ret;
+    ret
 
   and eval_over_paths paths exp man flow =
     match paths with
@@ -251,7 +329,7 @@ struct
       Option.return
 
     | other_action ->
-      match feval exp man flow with
+      match Cache.eval feval (z1, z2) exp man flow with
       | Some evl -> Some evl
       | None ->
         match other_action with
@@ -276,31 +354,22 @@ struct
 
           | _ -> None
 
-  and zask : type r. r query -> t flow -> r =
-    fun query flow ->
-      match Domain.ask query man flow with
-      | Some r -> r
-      | None ->
-        Exceptions.panic
-          "unable to handle query in domain %s" Domain.name
+  (* Filter paths that pass through [via] zone *)
+  and find_eval_paths_via (src, dst) via map =
+    let paths = EvalMap.find (src, dst) map in
+    List.filter (fun path ->
+        List.exists (fun (z1, z2, _, _) -> Zone.sat_zone z1 via || Zone.sat_zone z2 via) path
+      ) paths
 
-  and man : (t, t) man = {
-    lattice = {
-      bottom;
-      top;
-      is_bottom;
-      subset;
-      join;
-      meet;
-      widen;
-      print;
-    };
-    get = (fun a -> a);
-    set = (fun a _ -> a);
-    exec = (fun ?(zone=any_zone) stmt flow -> zexec ~zone stmt flow |> Post.to_flow man.lattice);
-    eval = (fun ?(zone=(any_zone, any_zone)) ?(via=any_zone) exp flow -> zeval ~zone ~via exp flow);
-    ask = zask;
-  }
+
+  (** {2 Handler of queries} *)
+  (** ********************** *)
+
+  let ask : type r. r Query.query -> (t,t) man -> t flow -> r =
+    fun query man flow ->
+      match Domain.ask query man flow with
+      | None -> Exceptions.panic "query not handled"
+      | Some r -> r
 
 
 

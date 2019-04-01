@@ -23,10 +23,7 @@
 
 open Ast.Stmt
 
-type log =
-  | L_empty
-  | L_domain of block * log
-  | L_compound of log list
+type log
 
 val concat : log -> log -> log
 
@@ -34,6 +31,18 @@ val empty : log
 
 val is_empty : log -> bool
 
+val tuple : log * log -> log
+
+val first : log -> log
+
+val second : log -> log
+
 val get_domain_block : log -> block
 
-val get_domain_log : log -> log
+val get_domain_inner_log : log -> log
+
+val append : stmt -> log -> log
+
+val append_fst : stmt -> log -> log
+
+val append_snd : stmt -> log -> log

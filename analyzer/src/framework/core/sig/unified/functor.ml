@@ -23,9 +23,7 @@
 
 open Domain
 
-module type FUNCTOR = functor(Domain: DOMAIN) ->
-sig
-end
+module type FUNCTOR = functor(Domain: DOMAIN) -> DOMAIN
 
 
 let functors : (module FUNCTOR) list ref = ref []

@@ -20,8 +20,9 @@
 (****************************************************************************)
 
 (**
-   Managers encapsulate an abstract domain into a record so that it can be
-   passed to other abstract domains at runtime.
+   Managers are an encapsulation of an abstract domain into a record. They
+   are passed as arguments to the transfer functions to allow domains access
+   the global abstraction.
 *)
 
 open Context
@@ -57,10 +58,11 @@ type ('a, 't) man = {
 
   (** Analyzer transfer functions *)
   exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
-  jexec : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
   eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
   ask : 'r. 'r Query.query -> 'a flow -> 'r;
 
+  (** Accessors to the domain's merging logs *)
   get_log : log -> log;
   set_log : log -> log -> log;
 }
@@ -71,8 +73,8 @@ type ('a, 't) man = {
 (**                          {2 Stack manager}                              *)
 (*==========================================================================*)
 
-(** Stack managers are provided to stacked domains to access their parameter
-    domain.
+(** Stack managers are provided to the lattice operators of stacked domains
+    to modify the state of the parameter abstraction during unification.
 *)
 type 's sman = {
   sexec: ?zone:zone -> stmt -> 's -> 's;
@@ -85,13 +87,12 @@ type 's sman = {
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
 
-let log ?(zone=any_zone) stmt man flow =
-  man.jexec ~zone stmt flow |>
+let log_post_stmt stmt man post =
   Post.map_log (fun tk log ->
       match tk with
       | T_cur -> man.set_log (man.get_log log |> Log.append stmt) log
       | _ -> log
-    )
+    ) post
 
 let set_domain_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow

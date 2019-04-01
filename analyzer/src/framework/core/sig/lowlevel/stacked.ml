@@ -19,13 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Unified stacked domain signature.
-
-    Domains implementing the STACK signature represent parameterized
-    abstractions. Their γ function, lattice operators and transfer functions
-    depend on argument abstractions. Stacks extend classic OCaml functors by
-    allowing shared argument abstractions.
-
+(** Low level signature of stacked domains. Similar to the unified stacked
+    domain signature, except that lattice operators are defined on the global
+    abstraction.
 *)
 
 
@@ -42,20 +38,19 @@ open Post
 open Zone
 open Id
 open Interface
-open Abstraction
 
 
-(** Unified signature of stacked abstract domains *)
+(** Low level signature of stacked abstract domains *)
 module type STACK =
 sig
 
-  (** {2 Declaration header} *)
-  (** ********************** *)
+  (** {2 Domain header} *)
+  (** ***************** *)
 
   type t
   (** Type of an abstract elements. *)
 
-  val id : t did
+  val id : t domain
   (** Domain identifier *)
 
   val name : string
@@ -64,17 +59,44 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
+
+  (** {2 Lattice special values} *)
+  (** ************************** *)
+
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-  val is_bottom: t -> bool
-  (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val merge: ('a,t) man -> 'a * log -> 'a * log -> 'a
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+  (** {2 Pretty printing} *)
+  (** ******************* *)
+
+  val print: ('a,t) man -> Format.formatter -> 'a -> unit
+  (** Printer of an abstract element. *)
+
+
+  (** {2 Lattice predicates} *)
+  (** ********************** *)
+
+  val is_bottom: ('a,t) man -> ('a,'s) man -> 'a -> bool
+  (** [is_bottom man a] tests whether [a] is bottom or not. *)
+
+  val subset: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> bool * 'a * 'a
+
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
+
+  val join: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> t * 'a * 'a
+
+  val meet: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> t * 'a * 'a
+
+  val widen: ('a,t) man -> ('a,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a * bool
+
+  val merge: ('a,t) man -> 'a -> 'a * log -> 'a * log -> t
+  (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
@@ -85,32 +107,9 @@ sig
       two trajectories.
   *)
 
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
 
-
-
-
-  val subset: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> bool * 'a * 'a
-  (** [subset (a1, s1) (a2, s2)] tests whether [a1] is related to
-      (or included in) [a2] and unifies the sub-tree elements [s1] and
-      [s2]. *)
-
-
-  val join: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a
-  (** [join (a1, s1) (a2, s2)] computes an upper bound of [a1]
-      and [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val meet: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a
-  (** [meet (a1, s1) (a2, s2)] computes a lower bound of [a1] and
-      [a2] and unifies the sub-tree elements [s1] and [s2]. *)
-
-  val widen:
-    uctx -> ('a,t) man -> ('a,'s) man -> 'a -> 'a -> 'a * 'a * bool
-  (** [widen ctx (a1, s1) (a2, s2) man] computes an upper bound of
-      [a1] and [a2] that ensures stabilization of ascending chains and
-      unifies the sub-tree elements [s1] and [s2]. *)
-
+  (** {2 Transfer functions} *)
+  (** ********************** *)
 
   val init : program -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a flow option
   (** Initialization function *)
@@ -134,17 +133,17 @@ end
 
 let stacks : (module STACK) list ref = ref []
 
-let register_stack_domain dom =
+let register_stack dom =
   stacks := dom :: !stacks
 
 let find_stack name =
-  List.find (fun stack ->
-      let module S = (val stack : STACK) in
+  List.find (fun dom ->
+      let module S = (val dom : STACK) in
       compare S.name name = 0
     ) !stacks
 
 let names () =
-  List.map (fun st ->
-      let module S = (val st : STACK) in
+  List.map (fun dom ->
+      let module S = (val dom : STACK) in
       S.name
     ) !stacks

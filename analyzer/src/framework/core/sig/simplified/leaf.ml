@@ -20,12 +20,13 @@
 (****************************************************************************)
 
 (** Leaf domains have a simplified interface that gives access to
-    their local abstractions only. The global manager and its flow
-    abstraction are not accessible.
+    their local abstractions. The global manager and the flow abstraction are
+    not accessible.
 *)
 
 open Ast.All
 open Lattice
+open Context
 open Id
 open Zone
 open Manager
@@ -35,27 +36,85 @@ open Token
 module type DOMAIN =
 sig
 
-  include LATTICE
+  (** {2 Domain header} *)
+  (** ***************** *)
 
-  val id : t did
+  type t
+  (** Type of an abstract elements. *)
+
+  val id : t domain
+  (** Domain identifier *)
 
   val name : string
-
-  val init : program -> t
+  (** Domain name *)
 
   val zone : zone
+  (** Domain zone *)
 
-  val exec : stmt -> t -> t
+  val bottom: t
+  (** Least abstract element of the lattice. *)
+
+  val top: t
+  (** Greatest abstract element of the lattice. *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
+
+  (** {2 Predicates} *)
+  (** ************** *)
+
+  val is_bottom: t -> bool
+  (** [is_bottom a] tests whether [a] is bottom or not. *)
+
+  val subset: t -> t -> bool
+  (** Partial order relation. [subset a1 a2] tests whether [a1] is
+      related to (or included in) [a2]. *)
+
+
+  (** {2 Operators} *)
+  (** ************* *)
+
+  val join: t -> t -> t
+  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+
+  val meet: t -> t -> t
+  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+
+  val widen: uctx -> t -> t -> t
+  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+      ensures stabilization of ascending chains. *)
 
   val merge : t -> t * block -> t * block -> t
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+      post-conditions [post1] and [post2] using a common pre-condition [pre].
+
+      Diverging post-conditions emerge after a fork-join trajectory in the
+      abstraction DAG (e.g., a reduced product).
+
+      The logs [log1] and [log2] represent a journal of internal statements
+      executed during the the computation of the post-conditions over the
+      two trajectories.
+  *)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  val init : program -> t
+  (** Initial abstract element *)
+
+  val exec : stmt -> t -> t
+  (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
+  (** Handler of queries *)
 
 end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Domain.DOMAIN =
+module Make(D: DOMAIN) : Unified.Domain.DOMAIN =
 struct
 
   include D
@@ -116,4 +175,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Domain.register_domain (module D)
+  Unified.Domain.register_domain (module D)

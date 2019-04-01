@@ -19,8 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Stateless domains are domains without a lattice structure. Only
-    transfer functions are defined. *)
+(** Stateless domains are domains without an abstract element (e.g., iterators).
+    Only transfer functions need to be defined.
+
+    Two signatures are provides: DOMAIN for stateless domains and STACK for
+    stateless stacked domains.
+*)
 
 open Ast.All
 open Interface
@@ -30,7 +34,6 @@ open Manager
 open Flow
 open Post
 open Eval
-open Abstraction
 
 (***********************************************************************)
 (**                      {2 Stateless domains}                         *)
@@ -39,17 +42,35 @@ open Abstraction
 module type DOMAIN =
 sig
 
+  (** {2 Domain header} *)
+  (** ***************** *)
+
   val name : string
+  (** Name of the domain *)
+
   val interface : interface
+  (** Zoning interface *)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
   val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
+  (** Initialization routine *)
+
   val exec : zone -> stmt -> ('a, unit) man -> 'a flow -> 'a post option
+  (** Computation of post-conditions *)
+
   val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
+  (** Evaluation of expressions *)
+
   val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  (** Handler of queries *)
 
 end
 
 (** Create a full domain from a stateless domain. *)
-module MakeDomain(D: DOMAIN) : Domain.DOMAIN =
+module MakeDomain(D: DOMAIN) : Unified.Domain.DOMAIN =
 struct
 
   type t = unit
@@ -81,7 +102,7 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = MakeDomain(M) in
-  Domain.register_domain (module D)
+  Unified.Domain.register_domain (module D)
 
 
 
@@ -92,20 +113,34 @@ let register_domain modl =
 module type STACK =
 sig
 
+  (** {2 Domain header} *)
+  (** ***************** *)
+
   val name : string
+  (** Name of the domain *)
+
   val interface : interface
-  module Make(Sub:ABSTRACTION) :
-  sig
-    val init : program -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a flow option
-    val exec : zone -> stmt -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'a post option
-    val eval : zone * zone -> expr -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> (expr, 'a) eval option
-    val ask  : 'r Query.query -> ('a, unit) man -> ('a,Sub.t) stack_man -> 'a flow -> 'r option
-  end
+  (** Zoning interface *)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+  val init : program -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'a flow option
+  (** Initialization routine *)
+
+  val exec : zone -> stmt -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'a post option
+  (** Computation of post-conditions *)
+
+  val eval : zone * zone -> expr -> ('a, unit) man -> ('a,'s) man -> 'a flow -> (expr, 'a) eval option
+  (** Evaluation of expressions *)
+
+  val ask  : 'r Query.query -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'r option
+  (** Handler of queries *)
 
 end
 
 (** Create a full stack from a stateless domain. *)
-module MakeStack(S: STACK) : Stacked.STACK =
+module MakeStack(S: STACK) : Unified.Stacked.STACK =
 struct
 
   type t = unit
@@ -122,25 +157,21 @@ struct
 
   let interface = S.interface
 
-  module Make(Sub:ABSTRACTION) =
-  struct
-    module SI = S.Make(Sub)
 
-    let subset ((),s) ((),s') = true,s,s'
-    let join ((),s) ((),s') = (),s,s'
-    let meet ((),s) ((),s') = (),s,s'
-    let widen _ ((),s) ((),s') = (),true,s,s'
+  let subset _ ((),s) ((),s') = true,s,s'
+  let join _ ((),s) ((),s') = (),s,s'
+  let meet _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
 
-    let init = SI.init
-    let exec = SI.exec
-    let eval = SI.eval
-    let ask = SI.ask
-
-  end
+  let init = S.init
+  let exec = S.exec
+  let eval = S.eval
+  let ask = S.ask
 
 end
+
 
 let register_stack modl =
   let module M = (val modl : STACK) in
   let module S = MakeStack(M) in
-  Stacked.register_stack_domain (module S)
+  Unified.Stacked.register_stack (module S)

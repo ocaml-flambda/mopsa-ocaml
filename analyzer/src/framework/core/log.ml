@@ -19,35 +19,87 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journal logs *)
+(** Journal logs used to merge two post-conditions that diverged due to a
+    fork-join trajectory in the abstraction DAG. 
+*)
 
 open Ast.Stmt
 
+(** Logs *)
 type log =
+  (** Empty log *)
   | L_empty
-  | L_domain of block * log
-  | L_compound of log list
 
+  (** Logs of a singleton domain *)
+  | L_singleton of block (** Block of statements received by the domain *) *
+                   log   (** Inner logs of the domain *)
+  
+  (** Logs of a compound domain *)
+  | L_tuple of log (** Logs of the first domain *) *
+               log (** Logs of the second domain *)
+
+(** Concatenate two logs *)
 let rec concat log1 log2 =
   match log1, log2 with
   | L_empty, x | x, L_empty -> x
-  | L_domain (b1, l1), L_domain (b2, l2) -> L_domain (b1 @ b2, concat l1 l2)
-  | L_compound ll1, L_compound ll2 -> L_compound (List.map2 concat ll1 ll2)
+  | L_singleton (b1, l1), L_singleton (b2, l2) -> L_singleton (b1 @ b2, concat l1 l2)
+  | L_tuple (fst1,snd1), L_tuple (fst2,snd2) -> L_tuple (concat fst1 fst2, concat snd1 snd2)
   | _ -> assert false
 
+(** Empty log *)
 let empty = L_empty
 
+(** Test if a log is empty *)
 let is_empty log =
   match log with
   | L_empty -> true
   | _ -> false
 
-let get_domain_block log =
+let tuple (fst, snd) =
+  L_tuple (fst, snd)
+
+let first log =
   match log with
-  | L_domain(block, _) -> block
+  | L_empty -> L_empty
+  | L_tuple(fst,_) -> fst
   | _ -> assert false
 
-let get_domain_log log =
+let second log =
   match log with
-  | L_domain(_, l) -> l
+  | L_empty -> L_empty
+  | L_tuple(_,snd) -> snd
   | _ -> assert false
+
+
+(** Return the block of statement logged by a domain *)
+let get_domain_block log =
+  match log with
+  | L_singleton(block, _) -> block
+  | _ -> assert false
+
+(** Return the inner logs of the domain *)
+let get_domain_inner_log log =
+  match log with
+  | L_singleton(_, l) -> l
+  | _ -> assert false
+
+(** Append a statement to the logs of a domain *)
+let append stmt log =
+  match log with
+  | L_empty -> L_singleton ([stmt], L_empty)
+  | L_singleton (block, inner) -> L_singleton (block @ [stmt], inner)
+  | L_tuple (fst,snd) -> assert false
+
+(** Append a statement to the logs of the first domain in a tuple configuration *)
+let append_fst stmt log =
+  match log with
+  | L_empty -> L_tuple (append stmt empty, empty)
+  | L_singleton (block, inner) -> assert false
+  | L_tuple (fst,snd) -> L_tuple (append stmt fst, snd)
+
+(** Append a statement to the logs of the second domain in a tuple configuration *)
+let append_snd stmt log =
+  match log with
+  | L_empty -> L_tuple (empty, append stmt empty)
+  | L_singleton (block, inner) -> assert false
+  | L_tuple (fst,snd) -> L_tuple (fst, append stmt snd)

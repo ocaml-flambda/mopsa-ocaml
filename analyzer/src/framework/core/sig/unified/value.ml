@@ -35,7 +35,7 @@ sig
   type t
   (** Type of an abstract value. *)
 
-  val id : t vid
+  val id : t value
   (** Identifier of the value abstraction *)
 
   val name : string

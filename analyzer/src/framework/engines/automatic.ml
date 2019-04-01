@@ -19,33 +19,62 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Post-states with journaling flows. *)
+(** Engine of an automatic analysis *)
 
 open Ast.Stmt
-open Token
-open Flow
-open Log
-open Context
+open Ast.Expr
+open Core
 open Lattice
+open Flow
+open Manager
+open Eval
+open Zone
+open Query
+open Abstraction
+open Engine
 
-type 'a post
+(** Create an automatic analysis engine over an abstraction. *)
+module Make : ENGINE = functor(Abstraction : ABSTRACTION) ->
+struct
 
-val return : 'a flow -> 'a post
+  let rec init prog =
+    Abstraction.init prog man
 
-val print : 'a lattice -> Format.formatter -> 'a post -> unit
+  and exec ?(zone=any_zone) stmt flow =
+    Abstraction.exec ~zone stmt man flow
 
-val join : 'a post -> 'a post -> 'a post
+  and post ?(zone=any_zone) stmt flow =
+    Abstraction.post ~zone stmt man flow
 
-val choose_ctx : 'a post -> 'a ctx
+  and eval ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow =
+    Abstraction.eval ~zone ~via exp man flow
 
-val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a post
+  and ask : type r. r query -> Abstraction.t flow -> r =
+    fun query flow ->
+      Abstraction.ask query man flow
 
-val bind_eval_flow : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a flow
+  and lattice : Abstraction.t lattice = {
+    bottom = Abstraction.bottom;
+    top = Abstraction.top;
+    is_bottom = (fun a -> Abstraction.is_bottom man a);
+    subset = (fun a a' -> Abstraction.subset man a a');
+    join = (fun a a' -> Abstraction.join man a a');
+    meet = (fun a a' -> Abstraction.meet man a a');
+    widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
+    print = (fun fmt a -> Abstraction.print man fmt a);
+  }
 
-val bind : ('a flow -> 'a post) -> 'a post -> 'a post
+  and man : (Abstraction.t, Abstraction.t) man = {
+    lattice;
+    get = (fun flow -> flow);
+    set = (fun flow _ -> flow);
+    get_log = (fun log -> log);
+    set_log = (fun log _ -> log);
+    exec = exec;
+    post = post;
+    eval = eval;
+    ask = ask;
+  }
 
-val map_log : (token -> log -> log) -> 'a post -> 'a post
 
-val map : (token -> 'a -> log -> 'b * log) -> 'b Context.ctx -> 'a post -> 'b post
-
-val to_flow : 'a lattice -> 'a post -> 'a flow
+end

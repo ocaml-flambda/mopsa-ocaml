@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Analyzer - Central orchestrer of the analysis architecture. *)
+(** Signature of an analysis engine *)
 
 open Ast.Program
 open Ast.Expr
@@ -29,20 +29,19 @@ open Flow
 open Eval
 open Manager
 open Zone
+open Abstraction
 
-module Make(Domain : Sig.Domain.DOMAIN) :
+module type ENGINE = functor(Abstraction : ABSTRACTION) ->
 sig
 
-  val init : program -> (Domain.t, Domain.t) man -> Domain.t flow
+  val init : program -> Abstraction.t flow
 
-  val exec : ?zone:zone -> stmt -> (Domain.t, Domain.t) man -> Domain.t flow -> Domain.t flow
+  val exec : ?zone:zone -> stmt -> Abstraction.t flow -> Abstraction.t flow
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> (Domain.t, Domain.t) man -> Domain.t flow -> (expr, Domain.t) eval
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> Abstraction.t flow -> (expr, Abstraction.t) eval
 
-  val ask : 'r Query.query -> Domain.t Flow.flow -> 'r
+  val ask : 'r Query.query -> Abstraction.t flow -> 'r
 
-  val man : (Domain.t, Domain.t) man
-
-  val interactive_man : (Domain.t, Domain.t) man
+  val man : (Abstraction.t, Abstraction.t) man
 
 end

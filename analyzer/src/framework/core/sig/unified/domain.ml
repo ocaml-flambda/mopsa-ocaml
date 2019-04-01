@@ -19,13 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Unified domain signature.
-
-    The signature DOMAIN is useful for domains that are not parameterized by
-    other domains and that require a full accessing to the analyzer. In other
-    words, their concretization function γ, their lattice operators and their
-    transfer functions do not depend on other external abstractions.
-
+(** The signature DOMAIN is the unified and general-purpose interface for
+    domains that are not parameterized by other domains. In other
+    words, the concretization function γ, the lattice operators and the
+    transfer functions do not depend on other external abstractions. Domains
+    implementing this signature have full access to the analyzer: global
+    abstraction, flows, zoned transfer functions of all other domains.
 *)
 
 
@@ -55,13 +54,13 @@ open Interface
 module type DOMAIN =
 sig
 
-  (** {2 Declaration header} *)
-  (** ********************** *)
+  (** {2 Domain header} *)
+  (** ***************** *)
 
   type t
   (** Type of an abstract elements. *)
 
-  val id : t did
+  val id : t domain
   (** Domain identifier *)
 
   val name : string
@@ -143,24 +142,85 @@ sig
 end
 
 
+
+(*==========================================================================*)
+(**                         {2 Low-level cast}                              *)
+(*==========================================================================*)
+
+(** Cast a unified signature into a low-level signature *)
+module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.Domain.DOMAIN with type t = D.t =
+struct
+
+  (** {2 Domain header} *)
+  (** ***************** *)
+
+  type t = D.t
+
+  let id = D.id
+
+  let name = D.name
+
+  let interface = D.interface
+
+
+  (** {2 Lattice special values} *)
+  (** ************************** *)
+
+  let bottom = D.bottom
+
+  let top = D.bottom
+
+
+  (** {2 Lattice predicates} *)
+  (** ********************** *)
+
+  let is_bottom man a = D.is_bottom (man.get a)
+
+  let subset man a a' = D.subset (man.get a) (man.get a')
+
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
+
+  let join man a a' = D.join (man.get a) (man.get a')
+
+  let meet man a a' = D.meet (man.get a) (man.get a')
+
+  let widen man ctx a a' = D.widen ctx (man.get a) (man.get a')
+
+  let merge man pre (post1,log1) (post2,log2) =
+    D.merge
+      (man.get pre)
+      (man.get post1, man.get_log log1)
+      (man.get post1, man.get_log log1)
+
+
+  (** {2 Pretty printing} *)
+  (** ******************* *)
+
+  let print man fmt a = D.print fmt (man.get a)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
+  let init = D.init
+
+  let exec = D.exec
+
+  let eval = D.eval
+
+  let ask = D.ask
+
+end
+
+
 (*==========================================================================*)
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
 
-let domains : (module DOMAIN) list ref = ref []
-
 let register_domain dom =
-  domains := dom :: !domains
-
-let find_domain name =
-  List.find (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      compare D.name name = 0
-    ) !domains
-
-let names () =
-  List.map (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      D.name
-    ) !domains
+  let module D = (val dom : DOMAIN) in
+  let module DL = MakeLowlevelDomain(D) in
+  Lowlevel.Domain.register_domain (module DL)

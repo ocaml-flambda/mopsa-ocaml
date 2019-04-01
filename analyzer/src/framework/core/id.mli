@@ -25,11 +25,11 @@
 open Eq
 
 
-type _ did
+type _ domain
 (** Domain identifier *)
 
 
-val deq : 'a did -> 'b did -> ('a,'b) eq option
+val deq : 'a domain -> 'b domain -> ('a,'b) eq option
 (** Equality witness of domain identifiers *)
 
 (** Generator of a new domain identifier *)
@@ -40,7 +40,7 @@ module GenDomainId(
     end
   ) :
 sig
-  val id : Spec.typ did
+  val id : Spec.typ domain
   val name : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
 end
@@ -51,11 +51,11 @@ end
 (****************************************************************************)
 
 
-type _ vid
+type _ value
 (** Value identifier *)
 
 
-val veq : 'a vid -> 'b vid -> ('a,'b) eq option
+val veq : 'a value -> 'b value -> ('a,'b) eq option
 (** Equality witness of value identifiers *)
 
 (** Generator of a new value identifier *)
@@ -67,7 +67,7 @@ module GenValueId(
     end
   ) :
 sig
-  val id : Spec.typ vid
+  val id : Spec.typ value
   val name : string
   val display : string
   val debug : ('a, Format.formatter, unit, unit) format4 -> 'a
