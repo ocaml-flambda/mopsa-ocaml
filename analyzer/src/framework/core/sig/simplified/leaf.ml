@@ -130,11 +130,11 @@ struct
     )
 
   let interface = {
-    exec = {
+    iexec = {
       provides = [D.zone];
       uses = [];
     };
-    eval = {
+    ieval = {
       provides = [];
       uses = [];
     }

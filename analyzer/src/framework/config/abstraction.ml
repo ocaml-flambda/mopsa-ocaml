@@ -22,9 +22,10 @@
 (** Configuration parser. *)
 
 open Core
-open Sig.Domain
-open Sig.Stacked
-open Sig.Value
+open Sig.Lowlevel.Domain
+open Sig.Lowlevel.Stacked
+open Sig.Unified.Value
+open Engines.Abstraction
 open Yojson.Basic
 open Yojson.Basic.Util
 
@@ -50,37 +51,37 @@ let resolve_config_file config =
 
 let rec domain = function
   | `String(name) -> leaf_domain name
-  | `Assoc(obj) when List.mem_assoc "seq" obj -> seq obj
+  | `Assoc(obj) when List.mem_assoc "seq" obj -> domain_seq obj
   | `Assoc(obj) when List.mem_assoc "apply" obj -> apply obj
   | `Assoc(obj) when List.mem_assoc "nonrel" obj -> nonrel obj
   | _ -> assert false
 
-and leaf_domain name =
-  try Sig.Domain.find_domain name
+and leaf_domain name : (module DOMAIN) =
+  try find_domain name
   with Not_found -> Exceptions.panic "Domain %s not found" name
 
 
-and seq assoc =
+and domain_seq assoc : (module DOMAIN) =
   let domains = List.assoc "seq" assoc |>
                 to_list |>
                 List.map domain
   in
   let rec aux :
-    (module Sig.Domain.DOMAIN) list ->
-    (module Sig.Domain.DOMAIN)
+    (module DOMAIN) list ->
+    (module DOMAIN)
     = function
       | [] -> assert false
       | [d] -> d
       | hd :: tl ->
         let tl = aux tl in
-        let module Head = (val hd : Sig.Domain.DOMAIN) in
-        let module Tail = (val tl : Sig.Domain.DOMAIN) in
-        let module Dom = Combiners.Sequence.Make(Head)(Tail) in
-        (module Dom : Sig.Domain.DOMAIN)
+        let module Head = (val hd : DOMAIN) in
+        let module Tail = (val tl : DOMAIN) in
+        let module Dom = Combiners.Sequence.MakeDomain(Head)(Tail) in
+        (module Dom : DOMAIN)
   in
   aux domains
 
-and apply assoc =
+and apply assoc : (module DOMAIN) =
   let s = List.assoc "apply" assoc |> stack in
   let d = List.assoc "on" assoc |> domain in
   let module S = (val s : STACK) in
@@ -88,10 +89,16 @@ and apply assoc =
   let module R = Combiners.Apply.Make(S)(D) in
   (module R : DOMAIN)
 
-and nonrel assoc =
+and nonrel assoc : (module DOMAIN) =
   let v = List.assoc "nonrel" assoc |> value in
   let module V = (val v : VALUE) in
-  let module D = Domains.Leaf.Make(Domains.Nonrel.Make(V)) in
+  let module D =
+    Sig.Unified.Domain.MakeLowlevelDomain(
+      Sig.Simplified.Leaf.Make(
+        Combiners.Nonrel.Make(V)
+      )
+    )
+  in
   (module D : DOMAIN)
 
 and value = function
@@ -104,31 +111,53 @@ and value_leaf name =
 
 and stack = function
   | `String(name) -> leaf_stack name
+  | `Assoc(obj) when List.mem_assoc "seq" obj -> stack_seq obj
   | `Assoc(obj) when List.mem_assoc "compose" obj -> compose obj
   | x -> Exceptions.panic "parsing error: unsupported stack declaration:@ %a"
            (pretty_print ~std:true) x
 
-and leaf_stack name =
+and leaf_stack name : (module STACK) =
   try find_stack name
   with Not_found -> Exceptions.panic "Stack %s not found" name
 
-and compose assoc =
+
+and stack_seq assoc : (module STACK) =
+  let stacks = List.assoc "seq" assoc |>
+                to_list |>
+                List.map stack
+  in
+  let rec aux :
+    (module STACK) list ->
+    (module STACK)
+    = function
+      | [] -> assert false
+      | [d] -> d
+      | hd :: tl ->
+        let tl = aux tl in
+        let module Head = (val hd : STACK) in
+        let module Tail = (val tl : STACK) in
+        let module Dom = Combiners.Sequence.MakeStack(Head)(Tail) in
+        (module Dom : STACK)
+  in
+  aux stacks
+
+and compose assoc : (module STACK) =
   let stacks = List.assoc "compose" assoc |>
                 to_list |>
                 List.map stack
   in
   let rec aux :
-    (module Sig.Stacked.STACK) list ->
-    (module Sig.Stacked.STACK)
+    (module STACK) list ->
+    (module STACK)
     = function
       | [] -> assert false
       | [s] -> s
       | hd :: tl ->
         let tl = aux tl in
-        let module Head = (val hd : Sig.Stacked.STACK) in
-        let module Tail = (val tl : Sig.Stacked.STACK) in
+        let module Head = (val hd : STACK) in
+        let module Tail = (val tl : STACK) in
         let module Dom = Combiners.Compose.Make(Head)(Tail) in
-        (module Dom : Sig.Stacked.STACK)
+        (module Dom : STACK)
   in
   aux stacks
 
@@ -166,7 +195,8 @@ let language () : string =
 
 let domains () : string list =
   if !opt_config = ""
-  then Sig.Domain.names () @ Sig.Stacked.names ()
+  then Sig.Lowlevel.Domain.names () @
+       Sig.Lowlevel.Stacked.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in

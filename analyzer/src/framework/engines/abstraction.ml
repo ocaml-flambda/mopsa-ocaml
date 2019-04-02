@@ -163,7 +163,7 @@ struct
 
   (** Build the map of exec functions *)
   let exec_map =
-    let required = Domain.interface.exec.uses in
+    let required = Domain.interface.iexec.uses in
     (* Add implicit import of Z_any *)
     let map = ExecMap.singleton any_zone (Domain.exec any_zone) in
     (* Iterate over the required zones of domain D *)
@@ -172,7 +172,7 @@ struct
         if ExecMap.mem zone map
         then map
         else
-        if List.exists (fun z -> sat_zone z zone) Domain.interface.exec.provides
+        if List.exists (fun z -> sat_zone z zone) Domain.interface.iexec.provides
         then
           ExecMap.add zone (Domain.exec zone) map
         else
@@ -203,7 +203,7 @@ struct
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)
 
-  let eval_graph = Zone.build_eval_graph Domain.interface.eval.provides
+  let eval_graph = Zone.build_eval_graph Domain.interface.ieval.provides
 
   (** Build the map of [eval] functions *)
   let eval_map =
@@ -216,7 +216,7 @@ struct
     debug "eval graph:@\n @[%a@]" Zone.pp_graph eval_graph;
 
     (* Iterate over the required zone paths of domain Domain *)
-    let required = Domain.interface.eval.uses in
+    let required = Domain.interface.ieval.uses in
     required |>
     List.fold_left (fun acc (src, dst) ->
         if EvalMap.mem (src, dst) acc then acc

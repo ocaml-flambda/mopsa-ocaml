@@ -183,7 +183,7 @@ let () =
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = Arg.Unit (fun () ->
         let domains = Abstraction.domains () in
-        Export.Factory.list_domains domains
+        Output.Factory.list_domains domains
       );
     default = "";
   }
@@ -197,8 +197,8 @@ let () =
         ["text"; "json"],
         (fun s ->
            match s with
-           | "text" -> Export.Factory.(opt_format := F_text)
-           | "json" -> Export.Factory.(opt_format := F_json)
+           | "text" -> Output.Factory.(opt_format := F_text)
+           | "json" -> Output.Factory.(opt_format := F_json)
            | _ -> assert false
         )
       );
@@ -210,7 +210,7 @@ let () =
   register_builtin_option {
     key = "-output";
     doc = " redirect output to a file";
-    spec = Arg.String (fun s -> Export.Factory.opt_file := Some s);
+    spec = Arg.String (fun s -> Output.Factory.opt_file := Some s);
     default = "";
   }
 
@@ -219,7 +219,7 @@ let () =
   register_builtin_option {
     key = "-log";
     doc = " activate logs";
-    spec = Arg.Set Core.Engine.Logging.opt_log;
+    spec = Arg.Set Engines.Logging.opt_log;
     default = "false";
   }
 
@@ -228,7 +228,7 @@ let () =
   register_builtin_option {
     key = "-short-log";
     doc = " display logs without abstract states";
-    spec = Arg.Set Core.Engine.Logging.opt_short_log;
+    spec = Arg.Set Engines.Logging.opt_short_log;
     default = "false";
   }
 
@@ -248,7 +248,7 @@ let help () =
       (List.map get_domain_options domains |> List.flatten)
   in
   let args = List.map opt_to_output options in
-  Export.Factory.help args;
+  Output.Factory.help args;
   exit 0
 
 let () =

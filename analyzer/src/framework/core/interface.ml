@@ -31,27 +31,27 @@ type 'a function_interface = {
 
 (** Interface of a domain *)
 type interface = {
-  exec : zone function_interface; (** Interface of exec transfer function *)
-  eval : (zone*zone) function_interface; (** Interface of eval transfer function *)
+  iexec : zone function_interface; (** Interface of exec function *)
+  ieval : (zone*zone) function_interface; (** Interface of eval function *)
 }
 
 (** Concatenate two interfaces *)
 let concat (i: interface) (j: interface) =
   {
-    exec = {
-      provides = i.exec.provides @ j.exec.provides;
-      uses     = i.exec.uses @ j.exec.uses;
+    iexec = {
+      provides = i.iexec.provides @ j.iexec.provides;
+      uses     = i.iexec.uses @ j.iexec.uses;
     };
-    eval = {
-      provides = i.eval.provides @ j.eval.provides;
-      uses     = i.eval.uses @ j.eval.uses;
+    ieval = {
+      provides = i.ieval.provides @ j.ieval.provides;
+      uses     = i.ieval.uses @ j.ieval.uses;
     };
 }
 
 (** Check if an interface satisfies a zone required by an exec *)
 let sat_exec (zone:zone) (i:interface) =
-  List.exists (Zone.sat_zone zone) i.exec.provides
+  List.exists (Zone.sat_zone zone) i.iexec.provides
 
 (** Check if an interface satisfies a zone required by an eval *)
 let sat_eval (zone:zone*zone) (i:interface) =
-  List.exists (Zone.sat_zone2 zone) i.eval.provides
+  List.exists (Zone.sat_zone2 zone) i.ieval.provides
