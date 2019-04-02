@@ -100,6 +100,10 @@ struct
           man2.set_log (Log.first l) log |>
           sman.set_log (Log.second l)
         );
+      post = (fun ?(zone=any_zone) stmt flow ->
+          man2.post ~zone stmt flow |>
+          log_post_stmt stmt man2
+        );
     }
 
   (**************************************************************************)

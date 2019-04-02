@@ -81,6 +81,17 @@ struct
       ) glog);
   }
 
+  (** Sub-tree manager of [S] *)
+  let s_sman (man:('a,t) man) : ('a, D.t) man =
+    let dman = d_man man in
+    {
+      dman with
+      post = (fun ?(zone=any_zone) stmt flow ->
+          dman.post ~zone stmt flow |>
+          log_post_stmt stmt dman
+        );
+    }
+
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
@@ -95,21 +106,21 @@ struct
       (D.print @@ d_man man) a
 
   let subset man a a' =
-    let b1, a, a' = S.subset (s_man man) (d_man man) a a' in
+    let b1, a, a' = S.subset (s_man man) (s_sman man) a a' in
     b1 && D.subset (d_man man) a a'
 
   let join man a a' =
-    let a1, a, a' = S.join (s_man man) (d_man man) a a' in
+    let a1, a, a' = S.join (s_man man) (s_sman man) a a' in
     let a2 = D.join (d_man man) a a' in
     (a1,a2)
 
   let meet man a a' =
-    let a1, a, a' = S.meet (s_man man) (d_man man) a a' in
+    let a1, a, a' = S.meet (s_man man) (s_sman man) a a' in
     let a2 = D.meet (d_man man) a a' in
     (a1,a2)
 
   let widen man ctx a a' =
-    let a1, a, a', stable = S.widen (s_man man) (d_man man) ctx a a' in
+    let a1, a, a', stable = S.widen (s_man man) (s_sman man) ctx a a' in
     if stable then
       let a2 = D.join (d_man man) a a' in
       (a1,a2)
@@ -130,7 +141,7 @@ struct
   (** Initialization function *)
   let init prog man flow =
     let flow1 =
-      match S.init prog (s_man man) (d_man man) flow with
+      match S.init prog (s_man man) (s_sman man) flow with
       | None -> flow
       | Some flow -> flow
     in
@@ -149,7 +160,7 @@ struct
       (* Only [S] provides an [exec] for such zone *)
       let f = S.exec zone in
       (fun stmt man flow ->
-         f stmt (s_man man) (d_man man) flow |>
+         f stmt (s_man man) (s_sman man) flow |>
          Option.lift @@ log_post_stmt stmt (s_man man)
       )
 
@@ -166,7 +177,7 @@ struct
       let f1 = S.exec zone in
       let f2 = D.exec zone in
       (fun stmt man flow ->
-         match f1 stmt (s_man man) (d_man man) flow with
+         match f1 stmt (s_man man) (s_sman man) flow with
          | Some post ->
            Some (log_post_stmt stmt (s_man man) post)
 
@@ -189,7 +200,7 @@ struct
       (* Only [S] provides an [eval] for such zone *)
       let f = S.eval zone in
       (fun exp man flow ->
-         f exp (s_man man) (d_man man) flow
+         f exp (s_man man) (s_sman man) flow
       )
 
     | false, true ->
@@ -204,7 +215,7 @@ struct
       let f1 = S.eval zone in
       let f2 = D.eval zone in
       (fun exp man flow ->
-         match f1 exp (s_man man) (d_man man) flow with
+         match f1 exp (s_man man) (s_sman man) flow with
          | Some evl -> Some evl
 
          | None -> f2 exp (d_man man) flow
@@ -213,7 +224,7 @@ struct
 
   (** Query handler *)
   let ask query man flow =
-    let reply1 = S.ask query (s_man man) (d_man man) flow in
+    let reply1 = S.ask query (s_man man) (s_sman man) flow in
     let reply2 = D.ask query (d_man man) flow in
     Option.neutral2 (Query.join query) reply1 reply2
 
