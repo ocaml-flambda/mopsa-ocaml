@@ -81,14 +81,20 @@ let pp_level fmt = function
   | WARNING -> ((Debug.color "orange") Format.pp_print_string) fmt "⚠"
   | PANIC -> ((Debug.color "red") Format.pp_print_string) fmt "⛔"
 
+let pp_callstack fmt (cs:Callstack.cs) =
+  (* print in the style of gcc's preprocessor include stack *)
+  List.iter
+    (fun c -> Format.fprintf fmt "\tfrom %a: %s@\n" Location.pp_range c.Callstack.call_site c.Callstack.call_fun)
+    cs
+
 let pp_alarm fmt alarm =
-  Format.fprintf fmt "%a  %a in %a@\n@[%a@]@\nTrace: @[%a@]"
+  (* print using a format recognized by emacs: location first *)
+  Format.fprintf fmt "%a: %a %a@\n%a@[%a@]"
+    Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
     pp_level alarm.alarm_level
     !pp_title_chain alarm
-    Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
+    pp_callstack (alarm.alarm_trace |> snd)
     !pp_report_chain alarm
-    Callstack.print (alarm.alarm_trace |> snd)
-
 
 let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm
 
