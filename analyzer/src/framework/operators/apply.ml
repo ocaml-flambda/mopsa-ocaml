@@ -19,8 +19,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** The [Apply] combiner implements the classic function application of a
-    stack domain on a domain *)
+(** The [Apply ∈ 𝒮 × 𝒟 → 𝒟] operator implements the classic function
+    application of a stack domain on a domain *)
 
 open Ast.All
 open Core.All
@@ -80,18 +80,14 @@ struct
         Log.tuple (man.get_log glog |> Log.first, log)
       ) glog);
   }
-  
-  let is_bottom (man:('a,t) man) a =
-    S.is_bottom (s_man man) (d_man man) a ||
-    D.is_bottom (d_man man) a
-
-
-
-
 
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
+
+  let is_bottom (man:('a,t) man) a =
+    S.is_bottom (s_man man) (d_man man) a ||
+    D.is_bottom (d_man man) a
 
   let subset man a a' =
     let b1, a, a' = S.subset (s_man man) (d_man man) a a' in

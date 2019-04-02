@@ -19,11 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Generic leaf domain for creating non-relational value abstractions. *)
+(** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into a (leaf)
+    abstract domain of partial environments from variables to values. 
+*)
 
 open Ast.All
 open Core.All
-open Core.Sig.Value
+open Core.Sig.Unified.Value
 
 
 module Make(Value: VALUE) =
