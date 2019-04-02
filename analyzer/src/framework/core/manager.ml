@@ -91,8 +91,8 @@ type 's sman = {
 type ('a, 't) vman = {
   vget : 'a -> 't;
   vset : 't -> 'a -> 'a;
-  veval : expr -> 'a -> 'a;
-  vask : 'r. 'r query -> 'a -> 'r;
+  veval : expr -> 'a;
+  vask : 'r. 'r query -> 'r;
 }
 
 (*==========================================================================*)

@@ -49,7 +49,7 @@ sig
   val zone : Zone.zone
   (** Language zone in which the value abstraction is defined *)
 
-  val expr_filter : expr -> bool
+  val accept_expr : expr -> bool
   (** Filter expressions that can be handled by the value abstraction *)
 
   val bottom: t
@@ -127,7 +127,7 @@ struct
   let name = Value.name
   let display = Value.display
   let zone = Value.zone
-  let expr_filter = Value.expr_filter
+  let accept_expr = Value.accept_expr
   let bottom = Value.bottom
   let top = Value.top
   let is_bottom = Value.is_bottom

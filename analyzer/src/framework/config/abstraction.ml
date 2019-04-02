@@ -24,7 +24,7 @@
 open Core
 open Sig.Lowlevel.Domain
 open Sig.Lowlevel.Stacked
-open Sig.Unified.Value
+open Sig.Lowlevel.Value
 open Engines.Abstraction
 open Yojson.Basic
 open Yojson.Basic.Util
@@ -93,8 +93,8 @@ and nonrel assoc : (module DOMAIN) =
   let v = List.assoc "nonrel" assoc |> value in
   let module V = (val v : VALUE) in
   let module D =
-    Sig.Unified.Domain.MakeLowlevelDomain(
-      Sig.Simplified.Leaf.Make(
+    Sig.Intermediate.Domain.MakeLowlevelDomain(
+      Sig.Simplified.Domain.Make(
         Combiners.Nonrel.Make(V)
       )
     )

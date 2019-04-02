@@ -25,7 +25,7 @@
 
 open Ast.All
 open Core.All
-open Core.Sig.Unified.Value
+open Core.Sig.Lowlevel.Value
 
 
 module Make(Value: VALUE) =
@@ -62,77 +62,61 @@ struct
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
     | A_var of var * Value.t
-    | A_cst of typ * constant * Value.t
-    | A_unop of typ * operator * aexpr * Value.t
-    | A_binop of typ * operator * aexpr * Value.t * aexpr * Value.t
+    | A_cst of constant * Value.t
+    | A_unop of operator * aexpr * Value.t
+    | A_binop of operator * aexpr * Value.t * aexpr * Value.t
     | A_unsupported
+
+  (** Value manager *)
+  let rec vman (a:t) : (Value.t,Value.t) vman = {
+    vget = (fun v -> v);
+    vset = (fun v _ -> v);
+    veval = (fun e -> eval e a |> snd);
+    vask = (fun query ->
+        let r = Value.EvalQuery.handle query (fun e -> eval e a |> snd) in
+        match r with
+        | Some rr -> rr
+        | None -> Exceptions.panic "query with no reply"
+      );
+  }
+
 
   (** Forward evaluation returns the abstract value of the expression,
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
-  let rec eval (e:expr) (a:t) : aexpr * Value.t =
-    match ekind e with
+  and eval (e:expr) (a:t) : aexpr * Value.t =
+    if not (Value.accept_expr e)
+    then A_unsupported, Value.top
+    else
+      match ekind e with
+      | E_var(var, _) ->
+        let v = VarMap.find var a in
+        (A_var (var, v), v)
 
-    | E_var(var, _) ->
-      let v = VarMap.find var a in
-      (A_var (var, v), v)
+      | E_constant(c) ->
+        let v = Value.of_constant c in
+        (A_cst (c, v), v)
 
-    | E_constant(c) ->
-      let t = etyp e in
-      let v = Value.of_constant t c in
-      (A_cst (t, c, v), v)
+      | E_unop (op,e1) ->
+        let (ae1, v1) = eval e1 a in
+        let v = Value.unop (vman a) op v1 in
+        (A_unop (op, ae1, v1), v)
 
-    | E_unop (op,e1) ->
-      let t = etyp e in
-      let ae1, v1 = eval e1 a in
-      let v = Value.unop t op v1 in
-      A_unop (t, op, ae1, v1), v
+      | E_binop (op,e1,e2) ->
+        let (ae1, v1) = eval e1 a in
+        let (ae2, v2) = eval e2 a in
+        let v = Value.binop (vman a) op v1 v2 in
+        A_binop (op, ae1, v1, ae2, v2), v
 
-    | E_binop (op,e1,e2) ->
-      let t = etyp e in
-      let ae1, v1 = eval e1 a in
-      let ae2, v2 = eval e2 a in
-      let v = Value.binop t op v1 v2 in
-      A_binop (t, op, ae1, v1, ae2, v2), v
-
-    | _ ->
-      (* unsupported -> ⊤ *)
-      A_unsupported, Value.top
+      | _ ->
+        (* unsupported -> ⊤ *)
+        A_unsupported, Value.top
 
 
-   (** Forward evaluation of boolean expressions *)
-  let rec fwd_compare (e:expr) (a:t) : aexpr * Value.t =
-    match ekind e with
-
-    | E_var(var, _) ->
-      let v = VarMap.find var a in
-      A_var (var, v), v
-
-    | E_constant(c) ->
-      let t = etyp e in
-      let v = Value.of_constant t c in
-      A_cst (t, c, v), v
-
-    | E_unop (op,e1) ->
-      let t = etyp e in
-      let ae1, v1 = eval e1 a in
-      let v = Value.unop t op v1 in
-      A_unop (t, op, ae1, v1), v
-
-    | E_binop (op,e1,e2) ->
-      let t = etyp e in
-      let ae1, v1 = eval e1 a in
-      let ae2, v2 = eval e2 a in
-      let v = Value.binop t op v1 v2 in
-      A_binop (t, op, ae1, v1, ae2, v2), v
-
-    | _ ->
-      (* unsupported -> ⊤ *)
-      A_unsupported, Value.top
 
   (** Backward refinement of expressions; given an annotated tree, and
-     a target value, refine the environment using the variables in the
-     expression *)
+      a target value, refine the environment using the variables in the
+      expression *)
   let rec refine (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
     let r' = Value.meet v r in
     match ae with
@@ -146,12 +130,12 @@ struct
       then bottom
       else a
 
-    | A_unop (t, op, ae1, v1) ->
-      let w = Value.bwd_unop t op v1 r' in
+    | A_unop (op, ae1, v1) ->
+      let w = Value.bwd_unop (vman a) op v1 r' in
       refine ae1 v1 w a
 
-    | A_binop (t, op, ae1, v1, ae2, v2) ->
-      let w1, w2 = Value.bwd_binop t op v1 v2 r' in
+    | A_binop (op, ae1, v1, ae2, v2) ->
+      let w1, w2 = Value.bwd_binop (vman a) op v1 v2 r' in
       let a1 = refine ae1 v1 w1 a in
       refine ae2 v2 w2 a1
 
@@ -184,24 +168,22 @@ struct
         (if r then join else meet) a1 a2
 
       | E_constant c ->
-        let t = etyp e in
-        let v = Value.of_constant t c in
-        let w = Value.filter t v r in
+        let v = Value.of_constant c in
+        let w = Value.filter (vman a) v r in
         if Value.is_bottom w then bottom else a
 
       | E_var(var, _) ->
         let v = find var a in
-        let w = Value.filter (var.vtyp) v r in
+        let w = Value.filter (vman a) v r in
         if Value.is_bottom w then bottom else add var w a
 
       (* arithmetic comparison part, handled by Value *)
       | E_binop (op, e1, e2) ->
-        let t = etyp e1 in
         (* evaluate forward each argument expression *)
         let ae1,v1 = eval e1 a in
         let ae2,v2 = eval e2 a in
         (* apply comparison *)
-        let r1, r2 = Value.compare t op v1 v2 r in
+        let r1, r2 = Value.compare (vman a) op v1 v2 r in
         (* propagate backward on both argument expressions *)
         let a1 = refine ae1 v1 r1 a in
         refine ae2 v2 r2 a1

@@ -49,7 +49,7 @@ sig
   val zone : Zone.zone
   (** Language zone in which the value abstraction is defined *)
 
-  val expr_filter : expr -> bool
+  val accept_expr : expr -> bool
   (** Filter of expressions that are handled by the value abstraction *)
 
   val bottom: t
