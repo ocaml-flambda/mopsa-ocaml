@@ -70,7 +70,7 @@ sig
 end
 
 (** Create a full domain from a stateless domain. *)
-module MakeDomain(D: DOMAIN) : Unified.Domain.DOMAIN =
+module MakeDomain(D: DOMAIN) : Intermediate.Domain.DOMAIN =
 struct
 
   type t = unit
@@ -102,7 +102,7 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = MakeDomain(M) in
-  Unified.Domain.register_domain (module D)
+  Intermediate.Domain.register_domain (module D)
 
 
 
@@ -140,7 +140,7 @@ sig
 end
 
 (** Create a full stack from a stateless domain. *)
-module MakeStack(S: STACK) : Unified.Stacked.STACK =
+module MakeStack(S: STACK) : Intermediate.Stacked.STACK =
 struct
 
   type t = unit
@@ -174,4 +174,4 @@ end
 let register_stack modl =
   let module M = (val modl : STACK) in
   let module S = MakeStack(M) in
-  Unified.Stacked.register_stack (module S)
+  Intermediate.Stacked.register_stack (module S)

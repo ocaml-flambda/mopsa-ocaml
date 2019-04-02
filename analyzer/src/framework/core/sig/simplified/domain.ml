@@ -104,7 +104,7 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t -> t
+  val exec : stmt -> t -> t option
   (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
@@ -114,7 +114,7 @@ end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Unified.Domain.DOMAIN =
+module Make(D: DOMAIN) : Intermediate.Domain.DOMAIN =
 struct
 
   include D
@@ -125,9 +125,8 @@ struct
     D.merge pre (post1, block1) (post2, block2)
 
   let init prog man flow =
-    Some (
-      set_domain_env T_cur (D.init prog) man flow
-    )
+    set_domain_env T_cur (D.init prog) man flow |>
+    Option.return
 
   let interface = {
     iexec = {
@@ -142,26 +141,15 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(v, e) ->
-      let stmt' = {stmt with skind = S_assign(v, e)} in
-      map_domain_env T_cur (D.exec stmt') man flow |>
-      Post.return |>
-      Option.return
-
-    | S_assume(e) ->
-      let stmt' = {stmt with skind = S_assume(e)} in
-      map_domain_env T_cur (D.exec stmt') man flow |>
-      Post.return |>
-      Option.return
-
-    | S_add _ | S_remove _ | S_rename _ | S_project _ | S_fold _ | S_expand _ | S_forget _
+    | S_assign _ | S_assume _ | S_add _ | S_remove _ | S_rename _
+    | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
-      map_domain_env T_cur (D.exec stmt) man flow |>
-      Post.return |>
-      Option.return
+      let a = get_domain_env T_cur man flow in
+      D.exec stmt a |> Option.lift @@ fun a' ->
+      set_domain_env T_cur a' man flow |>
+      Post.return
 
-    | _ ->
-      None
+    | _ -> None
 
   let eval zone exp man flow = None
 
@@ -175,4 +163,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = Make(M) in
-  Unified.Domain.register_domain (module D)
+  Intermediate.Domain.register_domain (module D)

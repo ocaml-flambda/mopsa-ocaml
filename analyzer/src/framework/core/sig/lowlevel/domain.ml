@@ -19,8 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Low level signature of domains. Similar to the unified domain signature,
-    except that lattice operators are defined on the global abstraction.
+(** Low level signature of domains. Similar to the general-purpose domain
+    signature, except that lattice operators are defined on the global
+    abstraction.
 *)
 
 

@@ -19,9 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Low level signature of stacked domains. Similar to the unified stacked
-    domain signature, except that lattice operators are defined on the global
-    abstraction.
+(** Low level signature of stacked domains. Similar to the general-purpose
+    stacked domain signature, except that lattice operators are defined on
+    the global abstraction.
 *)
 
 

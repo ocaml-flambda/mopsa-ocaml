@@ -52,7 +52,3 @@ include Id
 include Interface
 
 module Sig = Sig
-
-include Sig.Unified.Domain
-
-include Sig.Unified.Stacked
