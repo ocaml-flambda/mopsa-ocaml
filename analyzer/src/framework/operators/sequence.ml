@@ -45,7 +45,7 @@ struct
   include GenDomainId(
     struct
       type typ = t
-      let name = "framework.combiners.sequence"
+      let name = "framework.operators.sequence"
     end
     )
 

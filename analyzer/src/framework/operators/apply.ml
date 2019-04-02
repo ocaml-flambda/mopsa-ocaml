@@ -44,7 +44,7 @@ struct
   include GenDomainId(
     struct
       type typ = t
-      let name = "framework.combiners.apply"
+      let name = "framework.operators.apply"
     end
     )
 
@@ -89,6 +89,11 @@ struct
     S.is_bottom (s_man man) (d_man man) a ||
     D.is_bottom (d_man man) a
 
+  let print man fmt a =
+    Format.fprintf fmt "%a%a"
+      (S.print @@ s_man man) a
+      (D.print @@ d_man man) a
+
   let subset man a a' =
     let b1, a, a' = S.subset (s_man man) (d_man man) a a' in
     b1 && D.subset (d_man man) a a'
@@ -116,16 +121,6 @@ struct
   let merge man pre (post, log) (post', log') =
     S.merge (s_man man) pre (post, log) (post', log'),
     D.merge (d_man man) pre (post, log) (post', log')
-
-
-  (**************************************************************************)
-  (**                        {2 Pretty printer}                             *)
-  (**************************************************************************)
-
-  let print man fmt a =
-    Format.fprintf fmt "%a%a"
-      (S.print @@ s_man man) a
-      (D.print @@ d_man man) a
 
 
   (**************************************************************************)
