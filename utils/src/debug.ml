@@ -92,3 +92,15 @@ let info fmt = debug ~channel:"info" fmt
 
 let plurial_list fmt l = if List.length l <= 1 then () else Format.pp_print_string fmt "s"
 let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"
+
+
+(* simple detection of terminal coloring capabilities, using TERM variable;
+   able to detect whether we are runnig under emacs and force no-color
+ *)
+let terminal_has_colors () =
+  try match Sys.getenv "TERM" with
+      | "dumb" | "" -> false
+      | _ -> true (* by default *)
+  with Not_found -> false
+
+let () = print_color := terminal_has_colors ()

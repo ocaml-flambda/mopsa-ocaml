@@ -69,8 +69,8 @@ let panic ?btrace exn files out =
     | Exceptions.PanicAt (range, msg, "") -> print "panic in %a: %s@." Location.pp_range range msg
     | Exceptions.PanicAt (range, msg, loc) -> print "%a: panic raised in %s: %s@." Location.pp_range range loc msg
 
-    | Exceptions.SyntaxError (range, msg) -> print "syntax error in %a: %s@." Location.pp_range range msg
-    | Exceptions.UnnamedSyntaxError range -> print "syntax error in %a@." Location.pp_range range
+    | Exceptions.SyntaxError (range, msg) -> print "%a: syntax error: %s@." Location.pp_range range msg
+    | Exceptions.UnnamedSyntaxError range -> print "%a: syntax error@." Location.pp_range range
 
     | Exceptions.SyntaxErrorList l ->
       print "Syntax errors:@\n  @[%a@]@."
