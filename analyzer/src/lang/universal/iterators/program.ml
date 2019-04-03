@@ -31,8 +31,10 @@ struct
   let name = "universal.iterators.program"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {provides = [Z_u]; uses = []}
-  let eval_interface = {provides = []; uses = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
   let init prog man flow = None
 
@@ -53,4 +55,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)

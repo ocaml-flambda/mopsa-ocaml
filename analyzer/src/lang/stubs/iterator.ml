@@ -35,8 +35,10 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {provides = [Z_stubs]; uses = []}
-  let eval_interface = {provides = [Z_stubs, Z_any]; uses = []}
+  let interface = {
+    iexec = {provides = [Z_stubs]; uses = []};
+    ieval = {provides = [Z_stubs, Z_any]; uses = []};
+  }
 
 
   (** Initialization of environments *)
@@ -464,4 +466,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)

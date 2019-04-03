@@ -23,11 +23,11 @@
 
 
 open Mopsa
-open Framework.Domains.Stateless
 open Ast
 open Zone
 
 let name = "universal.iterators.loops"
+
 
 (*==========================================================================*)
 (**                         {2 Loops flow token}                            *)
@@ -50,6 +50,7 @@ let () =
         | _ -> next fmt tk
       );
   }
+
 
 (*==========================================================================*)
 (**                       {2 Command line options}                          *)
@@ -75,6 +76,7 @@ let () =
     default = "1";
   }
 
+
 (*==========================================================================*)
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
@@ -86,8 +88,10 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  let exec_interface = {provides = [Z_u]; uses = []}
-  let eval_interface = {provides = []; uses = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
   let init prog man flow = None
 
@@ -213,4 +217,4 @@ end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain);
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)

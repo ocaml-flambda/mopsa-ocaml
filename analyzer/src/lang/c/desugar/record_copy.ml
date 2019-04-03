@@ -28,7 +28,7 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.DOMAIN =
+module Domain =
 struct
 
   (** Domain identification *)
@@ -40,14 +40,16 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    provides = [Z_c];
-    uses = [Z_c]
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c];
+      uses = [Z_c]
+    };
 
-  let eval_interface = {
-    provides = [];
-    uses = []
+    ieval = {
+      provides = [];
+      uses = []
+    }
   }
 
   (** Initialization *)
@@ -136,4 +138,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)

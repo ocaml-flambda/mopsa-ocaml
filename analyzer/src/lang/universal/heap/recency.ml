@@ -56,8 +56,10 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {provides = [Z_u_heap]; uses = []}
-  let eval_interface = {provides = [Z_u_heap, Z_any]; uses = []}
+  let interface = {
+    iexec = {provides = [Z_u_heap]; uses = []};
+    ieval = {provides = [Z_u_heap, Z_any]; uses = []};
+  }
 
 
   (** Initialization *)
@@ -136,4 +138,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Intermediate.Domain.register_domain (module Domain)

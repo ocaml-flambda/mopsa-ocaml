@@ -37,11 +37,14 @@ struct
 
   include GenValueId(struct
       type typ = t
-      let name = "universal.numeric.values.integer_interval"
+      let name = "universal.numeric.values.intervals.integer"
       let display = "int-itv"
     end)
 
   let zone = Zone.Z_u_num
+
+  let accept_expr e =
+    compare_typ e.etyp T_int = 0
 
   let bottom = BOT
 
@@ -60,19 +63,19 @@ struct
 
   let print fmt (a:t) = I.fprint_bot fmt a
 
-  let of_constant _ = function
+  let of_constant = function
     | C_int i ->
        Nb (I.of_z i i)
-      
+
     | C_int_interval (i1,i2) ->
        Nb (I.of_z i1 i2)
-      
+
     | C_float_interval (lo,up) ->
        (bot_absorb1 FI.to_int_itv) (FI.of_float_bot lo up)
-      
+
     | C_float f ->
        (bot_absorb1 FI.to_int_itv) (FI.of_float_bot f f)
-      
+
     | _ -> top
 
   let zero = Nb (I.zero)
@@ -80,7 +83,7 @@ struct
   let of_z z1 z2 : t = Nb (I.of_z z1 z2)
   let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
-  let unop _ op a =
+  let unop op a =
     match op with
       | O_log_not -> bot_lift1 I.log_not a
       | O_minus  -> bot_lift1 I.neg a
@@ -92,7 +95,7 @@ struct
       | O_bit_invert -> bot_lift1 I.bit_not a
       | _ -> top
 
-  let binop _ op a1 a2 =
+  let binop op a1 a2 =
       match op with
       | O_plus   -> bot_lift2 I.add a1 a2
       | O_minus  -> bot_lift2 I.sub a1 a2
@@ -115,11 +118,11 @@ struct
       | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
       | _     -> top
 
-  let filter _ a b =
+  let filter a b =
       if b then bot_absorb1 I.meet_nonzero a
       else bot_absorb1 I.meet_zero a
 
-  let bwd_unop _ op a r =
+  let bwd_unop op a r =
       try
         let a, r = bot_to_exn a, bot_to_exn r in
         let aa = match op with
@@ -135,7 +138,7 @@ struct
       with Found_BOT ->
         bottom
 
-  let bwd_binop _ op a1 a2 r =
+  let bwd_binop op a1 a2 r =
       try
         let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
         let aa1, aa2 =
@@ -163,7 +166,7 @@ struct
       with Found_BOT ->
         bottom, bottom
 
-  let compare _ op a1 a2 r =
+  let compare op a1 a2 r =
       try
         let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
         let op = if r then op else negate_comparison op in
@@ -180,10 +183,6 @@ struct
         Nb aa1, Nb aa2
       with Found_BOT ->
         bottom, bottom
-
-  
-  let ask query man flow =
-    assert false
 
   let z_of_z2 z z' round =
     let open Z in
@@ -278,9 +277,9 @@ struct
       let join = join
       let meet = meet
     end)
-    
+
 end
 
 
 let () =
-  Core.Sig.Value.register_value (module Value)
+  Core.Sig.Intermediate.Value.register_value (module Value)

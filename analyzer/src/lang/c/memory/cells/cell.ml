@@ -26,7 +26,7 @@
 open Mopsa
 open Common.Base
 open Ast
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
 (** {2 Cell offset} *)

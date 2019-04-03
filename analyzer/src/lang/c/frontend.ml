@@ -170,7 +170,6 @@ and parse_db (dbfile: string) ctx : unit =
     ) srcs
 
 and parse_file (opts: string list) (file: string) ctx =
-  Logging.parse file;
   let opts' = ("-I" ^ (Config.Paths.resolve_stub "c" "mopsa")) ::
               !c_opts @
               opts

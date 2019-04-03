@@ -27,8 +27,6 @@ include Framework.Core.All
 
 module Core = Framework.Core
 
-module Logging = Framework.Core.Engine.Logging
-
 module Config = Framework.Config
 
 module Paths = Framework.Config.Paths

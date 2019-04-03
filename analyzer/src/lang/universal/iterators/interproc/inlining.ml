@@ -32,10 +32,9 @@ open Callstack
 
 type token +=
   | T_return of range * expr option
-  (** [T_return(l, Some e)] represents flows reaching a return
-      statement at location [l] returning an expression [e]. The
-      expression is [None] when the function returns nothing
-      (i.e. case of a procedure). *)
+  (** [T_return(l, ret)] represents flows reaching a return statement at
+      location [l]. The option expression [ret] keeps the returned expression
+      if present. *)
 
 let () =
   register_token {
@@ -67,8 +66,10 @@ struct
 
   (** Zoning definition *)
 
-  let exec_interface = {provides = [Z_u]; uses = []}
-  let eval_interface = {provides = [Z_u, Z_any]; uses = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = [Z_u, Z_any]; uses = [] };
+  }
 
   (** Initialization *)
   (** ============== *)
@@ -182,4 +183,4 @@ end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)

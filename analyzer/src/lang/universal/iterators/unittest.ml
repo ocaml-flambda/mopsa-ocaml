@@ -157,8 +157,10 @@ struct
   (* Zoning interface *)
   (* ================ *)
 
-  let exec_interface = {provides = [Z_u]; uses = []}
-  let eval_interface = {provides = []; uses = []}
+  let interface = {
+    iexec = {provides = [Z_u]; uses = []};
+    ieval = {provides = []; uses = []};
+  }
 
 
   (* Initialization *)
@@ -295,12 +297,6 @@ struct
           let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man.lattice flow) man.lattice flow in
           Flow.join man.lattice acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1
 
-        (* | exn ->
-         *   let msg = Printexc.to_string exn in
-         *   let a = mk_alarm (A_panic_test (msg, name)) test.srange ~level:PANIC in
-         *   let flow1 = Flow.add (T_alarm a) (Flow.get T_cur man flow) man flow in
-         *   Flow.join man acc flow1, nb_ok, nb_fail, nb_may_fail, nb_panic + 1 *)
-
 
       ) (Flow.bottom annot, 0, 0, 0, 0)
 
@@ -312,5 +308,5 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain);
+  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain);
   ()

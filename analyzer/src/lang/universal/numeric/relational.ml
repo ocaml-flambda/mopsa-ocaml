@@ -22,7 +22,6 @@
 (** Relational numeric abstract domain, based on APRON. *)
 
 open Mopsa
-open Framework.Domains.Leaf
 open Rounding
 open Ast
 
@@ -51,7 +50,7 @@ struct
 
   let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) =
     Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
-    Values.Integer_interval.Value.of_apron
+    Values.Intervals.Integer.Value.of_apron
 
   let is_numerical_var (v: var): bool =
     match vtyp v with
@@ -365,7 +364,7 @@ struct
   let get_interval_expr (e:expr) (a: ApronManager.t Apron.Abstract1.t) =
     Apron.Abstract1.bound_texpr ApronManager.man a
       (exp_to_apron e |> Apron.Texpr1.of_expr (Apron.Abstract1.env a)) |>
-      Values.Integer_interval.Value.of_apron
+      Values.Intervals.Integer.Value.of_apron
 
 end
 
@@ -587,12 +586,12 @@ struct
 
   and ask : type r. r Query.query -> t -> r option =
     fun query abs ->
-      Values.Integer_interval.Value.EvalQuery.handle query (fun e ->
+      Values.Intervals.Integer.Value.EvalQuery.handle query (fun e ->
           let e = exp_to_apron e in
           let env = Apron.Abstract1.env abs in
           let e = Apron.Texpr1.of_expr env e in
           Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-          Values.Integer_interval.Value.of_apron
+          Values.Intervals.Integer.Value.of_apron
         )
 
 end
@@ -615,5 +614,5 @@ end
 module Poly = Make(PolyMan)
 
 let () =
-  register_domain (module Oct);
-  register_domain (module Poly);
+  Framework.Core.Sig.Simplified.Domain.register_domain (module Oct);
+  Framework.Core.Sig.Simplified.Domain.register_domain (module Poly);
