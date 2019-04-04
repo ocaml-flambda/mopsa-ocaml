@@ -81,14 +81,14 @@ let map
     ) eval
 
 
-let reduce
+let apply
     (f: 'e -> 'a flow -> 'b)
     (join: 'b -> 'b -> 'b)
     (meet: 'b -> 'b -> 'b)
     (empty: 'b)
     (evl: ('e,'a) eval)
   : 'b =
-  Dnf.substitute
+  Dnf.apply
     (fun case ->
        match case.eval_result with
        | Some e -> f e case.eval_flow
@@ -96,6 +96,18 @@ let reduce
     )
     join meet evl
 
+let fold_apply
+    (f:'b -> 'e option -> 'a flow -> stmt list -> 'b * 'c)
+    (join:'c -> 'c -> 'c)
+    (meet:'c -> 'c -> 'c)
+    (init:'b)
+    (evl:('e,'a) eval)
+  : 'b * 'c
+  =
+  Dnf.fold_apply
+    (fun acc case -> f acc case.eval_result case.eval_flow case.eval_cleaners)
+    join meet init
+    evl
 
 let map_flow
     (f: 'a flow -> 'a flow)
@@ -107,7 +119,7 @@ let map_flow
     ) eval
 
 
-let unify_ctx ctx evl =
+let set_ctx ctx evl =
   map_flow (Flow.set_ctx ctx) evl
 
 let join (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
@@ -126,25 +138,30 @@ let meet_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
   | [] -> empty
   | hd :: tl -> List.fold_left meet hd tl
 
+let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
+  Dnf.print (fun fmt case ->
+      match case.eval_result with
+      | None -> Format.pp_print_string fmt "ϵ"
+      | Some x -> pp fmt x
+    )
+    fmt evl
+
+
 let add_cleaners (cleaners: stmt list) (eval: ('e, 'a) eval ) : ('e, 'a) eval  =
   Dnf.map (fun case ->
       {case with eval_cleaners = case.eval_cleaners @ cleaners}
     ) eval
 
-
-(* [choose_ctx eval] returns any context from evaluation flows
-   of [eval].
-   Should be applied only if [eval] has been correctly constructed
-   by propagating contexts in a flow-insensitive manner. *)
 let choose_ctx eval =
   match Dnf.choose eval with
   | Some case -> get_ctx case.eval_flow
   | None -> Context.empty
 
+
 let bind_opt f eval =
-  let eval, _ = Dnf.fold2
+  let ctx, eval = Dnf.fold_apply
       (fun ctx case ->
-         let flow' = set_ctx ctx case.eval_flow in
+         let flow' = Flow.set_ctx ctx case.eval_flow in
          let eval' =
            match case.eval_result with
            | None -> Some (empty_singleton flow')
@@ -152,13 +169,13 @@ let bind_opt f eval =
                           Option.lift (add_cleaners case.eval_cleaners)
          in
          let ctx = Option.apply ctx choose_ctx eval' in
-         (eval', ctx)
+         (ctx,eval')
       )
       (Option.neutral2 join)
       (Option.neutral2 meet)
       (choose_ctx eval) eval
   in
-  eval
+  Option.lift (set_ctx ctx) eval
 
 
 let bind
@@ -168,44 +185,8 @@ let bind
   bind_opt (fun e flow -> Some (f e flow)) evl |>
   Option.none_to_exn
 
-let bind_flow
-  (lattice:'a Lattice.lattice)
-  (f:'e -> 'a flow -> 'a flow)
-  (evl:('e, 'a) eval)
-  : 'a flow
-  =
-  let ret, ctx = Dnf.fold2 (fun ctx case ->
-      let flow = Flow.set_ctx ctx case.eval_flow in
-      match case.eval_result with
-      | None -> flow, ctx
-      | Some ee ->
-        let flow' = f ee flow in
-        flow', Flow.get_ctx flow'
-    ) (Flow.join lattice) (Flow.meet lattice) (choose_ctx evl) evl
-  in
-  Flow.set_ctx ctx ret
 
-let bind_return f eval =
-  bind f eval |> Option.return
-
-
-let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
-  Dnf.print (fun fmt case ->
-      match case.eval_result with
-      | None -> Format.pp_print_string fmt "ϵ"
-      | Some x -> pp fmt x
-    )
-    fmt evl
-
-let to_dnf (evl: ('e, 'a) eval) : ('e option * 'a flow) Dnf.t =
-  Dnf.map (fun case -> case.eval_result, case.eval_flow) evl
-
-let choose eval =
-  match Dnf.choose eval with
-  | Some case -> Some (case.eval_result, case.eval_flow)
-  | None -> None
-
-let eval_list_opt feval l flow =
+let bind_list_opt feval l flow =
   let rec aux l flow =
     match l with
     | e :: tl ->
@@ -225,6 +206,17 @@ let eval_list_opt feval l flow =
   in
   aux l flow
 
-let eval_list feval l flow =
-  eval_list_opt (fun e flow -> Some (feval e flow)) l flow |>
+let bind_list feval l flow =
+  bind_list_opt (fun e flow -> Some (feval e flow)) l flow |>
   Option.none_to_exn
+
+let to_dnf (evl: ('e, 'a) eval) : ('e option * 'a flow) Dnf.t =
+  Dnf.map (fun case -> case.eval_result, case.eval_flow) evl
+
+let to_dnf_with_cleaners (evl: ('e, 'a) eval) : ('e option * 'a flow * stmt list) Dnf.t =
+  Dnf.map (fun case -> case.eval_result, case.eval_flow, case.eval_cleaners) evl
+
+let choose eval =
+  match Dnf.choose eval with
+  | Some case -> Some (case.eval_result, case.eval_flow)
+  | None -> None

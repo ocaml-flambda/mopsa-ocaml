@@ -596,7 +596,7 @@ struct
           let flow' = map_domain_env T_cur (Map.add p (Bases.block b)) man flow in
 
           man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
-          Post.bind_eval man.lattice @@ fun offset flow' ->
+          post_eval man @@ fun offset flow' ->
 
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset range) flow' |>
           Post.return
@@ -609,7 +609,7 @@ struct
             let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
             man.eval offset' ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
-            Post.bind_eval man.lattice @@ fun offset' flow ->
+            post_eval man @@ fun offset' flow ->
 
             man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o offset' range) flow' |>
             Post.return

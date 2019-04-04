@@ -174,7 +174,7 @@ struct
       Some (
         let v, flow = cell_expr_to_var c flow in
         man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
-        Post.bind_eval man.lattice @@ fun e flow ->
+        post_eval man @@ fun e flow ->
 
         man.exec ~zone:Z_c_scalar (mk_assign v e stmt.srange) flow |>
         Post.return
@@ -183,7 +183,7 @@ struct
     | S_assume(e) ->
       Some (
         man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
-        Post.bind_eval man.lattice @@ fun e' flow ->
+        post_eval man @@ fun e' flow ->
 
         let stmt' = {stmt with skind = S_assume e'} in
         man.exec ~zone:Zone.Z_c_scalar stmt' flow |>

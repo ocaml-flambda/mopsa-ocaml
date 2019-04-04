@@ -43,7 +43,7 @@ struct
     | S_expression(e) ->
       Some (
         man.eval e flow |>
-        Post.bind_eval man.lattice @@ fun e flow ->
+        post_eval man @@ fun e flow ->
         Post.return flow
       )
 

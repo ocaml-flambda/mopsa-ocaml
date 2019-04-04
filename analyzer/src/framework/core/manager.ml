@@ -183,3 +183,55 @@ let switch
 let switch_eval = switch ~join:Eval.join
 
 let switch_post = switch ~join:Post.join
+
+
+let exec_eval
+  (man:('a,'t) man)
+  (f:'e -> 'a flow -> 'a flow)
+  (evl:('e, 'a) eval)
+  : 'a flow
+  =
+  let ctx, ret = Eval.fold_apply
+      (fun ctx e flow cleaners ->
+         let flow = Flow.set_ctx ctx flow in
+         match e with
+         | None -> ctx, flow
+         | Some ee ->
+           let flow' = f ee flow in
+           let flow'' = List.fold_left (fun acc stmt ->
+               man.exec stmt acc
+             ) flow' cleaners
+           in
+           Flow.get_ctx flow'', flow''
+      )
+      (Flow.join man.lattice)
+      (Flow.meet man.lattice)
+      (Eval.choose_ctx evl) evl
+  in
+  Flow.set_ctx ctx ret
+
+
+let post_eval
+    (man:('a,'t) man)
+    (f:'e -> 'a flow -> 'a post)
+    (evl:('e, 'a) Eval.eval)
+  : 'a post
+  =
+  let ctx, ret = Eval.fold_apply
+      (fun ctx e flow cleaners ->
+         let flow = Flow.set_ctx ctx flow in
+         match e with
+         | None -> ctx, Post.return flow
+         | Some ee ->
+           let post = f ee flow in
+           let post' = List.fold_left (fun acc stmt ->
+               Post.bind (man.post stmt) acc
+             ) post cleaners
+           in
+           Post.choose_ctx post', post'
+      )
+      Post.join
+      (Post.meet man.lattice)
+      (Eval.choose_ctx evl) evl
+  in
+  Post.set_ctx ctx ret

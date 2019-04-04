@@ -193,9 +193,9 @@ struct
     in
 
     (* allocate stdin, stdout and stderr *)
-    allocate_std 0 flow |> Eval.bind_flow man.lattice @@ fun stdin_addr flow ->
-    allocate_std 1 flow |> Eval.bind_flow man.lattice @@ fun stdout_addr flow ->
-    allocate_std 2 flow |> Eval.bind_flow man.lattice @@ fun stderr_addr flow ->
+    allocate_std 0 flow |> exec_eval man @@ fun stdin_addr flow ->
+    allocate_std 1 flow |> exec_eval man @@ fun stdout_addr flow ->
+    allocate_std 2 flow |> exec_eval man @@ fun stderr_addr flow ->
 
     let init_state = {
       first = [
@@ -358,13 +358,13 @@ struct
     (* 𝔼⟦ new FileDescriptor ⟧ *)
     | E_alloc_addr(A_stub_resource "FileDescriptor") ->
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
-      Eval.bind_return @@ fun exp' flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun exp' flow ->
       insert (Addr.from_expr exp') exp.erange man flow
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Eval.bind_return @@ fun n flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun n flow ->
 
       find n exp.erange man flow |>
       Eval.bind @@ fun addr flow ->
@@ -380,7 +380,7 @@ struct
     (* 𝔼⟦ _mopsa_int_to_fd(n) ⟧ *)
     | E_c_builtin_call("_mopsa_int_to_fd", [n]) ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Eval.bind_return @@ fun n flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun n flow ->
       find n exp.erange man flow
 
     | _ -> None

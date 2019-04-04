@@ -271,9 +271,8 @@ struct
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
     man.eval (mk_stub_alloc_resource res range) flow |>
-    Post.bind_eval_flow man.lattice @@ fun addr flow ->
-    man.exec (mk_assign (mk_var v range) addr range) flow |>
-    Post.return
+    exec_eval man @@ fun addr flow ->
+    man.exec (mk_assign (mk_var v range) addr range) flow
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)

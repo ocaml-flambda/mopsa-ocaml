@@ -36,11 +36,11 @@ val print : 'a lattice -> Format.formatter -> 'a post -> unit
 
 val join : 'a post -> 'a post -> 'a post
 
+val meet : 'a lattice -> 'a post -> 'a post -> 'a post
+
 val choose_ctx : 'a post -> 'a ctx
 
-val bind_eval : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a post
-
-val bind_eval_flow : 'a lattice -> ('e -> 'a flow -> 'a post) -> ('e, 'a) Eval.eval -> 'a flow
+val set_ctx : 'a ctx -> 'a post -> 'a post
 
 val bind : ('a flow -> 'a post) -> 'a post -> 'a post
 

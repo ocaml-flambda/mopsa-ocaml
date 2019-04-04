@@ -60,7 +60,8 @@ struct
     match ekind exp with
     (* 𝔼⟦ a[i] ⟧ = *(a + i) *)
     | E_c_array_subscript(a, i) ->
-      man.eval ~zone:(Z_c, Z_c_low_level) a flow |> Eval.bind_return @@ fun a flow ->
+      man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
+      Option.return |> Option.lift @@ Eval.bind @@ fun a flow ->
       man.eval ~zone:(Z_c, Z_c_low_level) i flow |> Eval.bind @@ fun i flow ->
 
       let t = exp |> etyp |> Ast.pointer_type in
@@ -71,7 +72,8 @@ struct
     (* 𝔼⟦ s.f ⟧ = *(( typeof(s.f)* )(( char* )(&s) + alignof(s.f))) *)
     | E_c_member_access (s, i, f) ->
       let ss = mk_c_address_of s exp.erange in
-      man.eval ~zone:(Z_c, Z_c_low_level) ss flow |> Eval.bind_return @@ fun ss flow ->
+      man.eval ~zone:(Z_c, Z_c_low_level) ss flow |>
+      Option.return |> Option.lift @@ Eval.bind @@ fun ss flow ->
 
       let st = etyp s in
       let t = etyp exp in
@@ -95,7 +97,8 @@ struct
 
     (* 𝔼⟦ p->f ⟧ = *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
     | E_c_arrow_access(p, i, f) ->
-      man.eval ~zone:(Z_c, Z_c_low_level) p flow |> Eval.bind_return @@ fun p flow ->
+      man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
+      Option.return |> Option.lift @@ Eval.bind @@ fun p flow ->
 
       let st = under_pointer_type p.etyp in
       let t = etyp exp in
@@ -120,7 +123,7 @@ struct
     (* 𝔼⟦ &(a[i]) ⟧ = a + i *)
     | E_c_address_of { ekind = E_c_array_subscript(a,i) } ->
       man.eval ~zone:(Z_c, Z_c_low_level) a flow |>
-      Eval.bind_return @@ fun a flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun a flow ->
 
       man.eval ~zone:(Z_c, Z_c_low_level) i flow |>
       Eval.bind @@ fun i flow ->
@@ -130,7 +133,8 @@ struct
 
     (* 𝔼⟦ &(p->f) ⟧ = ( typeof(p->f)* )(( char* )p + alignof(p->f)) *)
     | E_c_address_of { ekind = E_c_arrow_access(p, i, f) } ->
-      man.eval ~zone:(Z_c, Z_c_low_level) p flow |> Eval.bind_return @@ fun p flow ->
+      man.eval ~zone:(Z_c, Z_c_low_level) p flow |>
+      Option.return |> Option.lift @@ Eval.bind @@ fun p flow ->
 
       let st = under_pointer_type p.etyp in
       let t = etyp exp in
@@ -162,7 +166,8 @@ struct
     | E_c_assign(lval, rval) ->
       debug "E_c_assign %a" pp_zone2 zone;
       man.eval rval ~zone:(Z_c, Z_c_low_level) flow |>
-      Eval.bind_return @@ fun rval flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun rval flow ->
+
       let flow = man.exec ~zone:Z_c (mk_assign lval rval exp.erange) flow in
       Eval.singleton rval flow
 

@@ -77,7 +77,7 @@ let choose_ctx post =
   | [] -> Context.empty
   | hd :: _ -> hd.ctx
 
-let unify_ctx (ctx:'a ctx) (post:'a post) =
+let set_ctx (ctx:'a ctx) (post:'a post) =
   List.map (fun case -> { case with ctx }) post
 
 let concat_logs (case: 'a case) (post:'b post) : 'b post =
@@ -117,35 +117,7 @@ let bind (f:'a flow -> 'a post) (post:'a post) : 'a post =
         ret' @ acc, choose_ctx ret'
       ) ([], choose_ctx post)
   in
-  unify_ctx ctx ret
-
-let bind_eval
-  (lattice:'a lattice)
-  (f:'e -> 'a flow -> 'a post)
-  (evl:('e, 'a) Eval.eval)
-  : 'a post
-  =
-  let dnf = Eval.to_dnf evl in
-  let ret, ctx = Dnf.fold2 (fun ctx (e, flow) ->
-      let flow = Flow.set_ctx ctx flow in
-      match e with
-      | None -> return flow, ctx
-      | Some ee ->
-        let post = f ee flow in
-        let ctx = choose_ctx post in
-        post, ctx
-    ) join (meet lattice) (Eval.choose_ctx evl) dnf
-  in
-  unify_ctx ctx ret
-
-let bind_eval_flow
-  (lattice:'a lattice)
-  (f:'e -> 'a flow -> 'a post)
-  (evl:('e, 'a) Eval.eval)
-  : 'a flow
-  =
-  bind_eval lattice f evl |>
-  to_flow lattice
+  set_ctx ctx ret
 
 
 let map_log (f:token -> log -> log) (post:'a post) : 'a post =

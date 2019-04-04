@@ -56,28 +56,32 @@ val map_flow:
   ('a flow -> 'a flow) ->
   ('e, 'a) eval -> ('e, 'a) eval
 
-val reduce :
+val apply :
     ('e -> 'a flow -> 'b) ->
     ('b -> 'b -> 'b) ->
     ('b -> 'b -> 'b) ->
-    ('b) ->
+    'b ->
     ('e, 'a) eval ->
     'b
+
+val fold_apply :
+  ('b -> 'e option -> 'a flow -> stmt list -> 'b * 'c) ->
+  ('c -> 'c -> 'c) ->
+  ('c -> 'c -> 'c) ->
+  'b -> ('e,'a) eval ->
+  'b * 'c
+
 
 val choose : ('e, 'a) eval -> ('e option * 'a flow) option
 
 val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
 
+val choose_ctx : ('e, 'a) eval -> 'a ctx
+
 val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
-
-val bind_flow : 'a Lattice.lattice -> ('e -> 'a flow -> 'a flow) -> ('e, 'a) eval -> 'a flow
-
-val bind_return : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
 
 val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
 
-val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
+val bind_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
 
-val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option
-
-val choose_ctx : ('e, 'a) eval -> 'a ctx
+val bind_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option

@@ -554,14 +554,18 @@ struct
         let a = add_missing_vars a (Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
-        let join_list l = List.fold_left (Apron.Abstract1.join ApronManager.man) (Apron.Abstract1.bottom ApronManager.man env) l in
+        let join_list l = List.fold_left
+            (Apron.Abstract1.join ApronManager.man)
+            (Apron.Abstract1.bottom ApronManager.man env)
+            l
+        in
         let meet_list l = tcons_array_of_tcons_list env l |>
                           Apron.Abstract1.meet_tcons_array ApronManager.man a
         in
 
         try
           bexp_to_apron e |>
-          Dnf.apply
+          Dnf.apply_list
             (fun (op,e1,typ1,e2,typ2) ->
                let typ =
                  match typ1, typ2 with
@@ -577,7 +581,7 @@ struct
                let diff_texpr = Apron.Texpr1.of_expr env diff in
                Apron.Tcons1.make diff_texpr op
             )
-            meet_list join_list
+            join_list meet_list
         with UnsupportedExpression -> a
       end
 

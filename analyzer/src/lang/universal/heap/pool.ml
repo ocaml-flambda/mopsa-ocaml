@@ -115,5 +115,7 @@ include Framework.Lattices.Powerset.Make(
   end
   )
 
+let widen ctx = join
+
 let merge pre (post1,log1) (post2,log2) =
   assert false

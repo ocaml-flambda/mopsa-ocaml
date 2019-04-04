@@ -158,7 +158,7 @@ struct
                               e  |> etyp |> is_c_int_type &&
                               e' |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Eval.bind_return @@ fun e flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
 
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
       Eval.bind @@ fun e' flow ->
@@ -288,7 +288,7 @@ struct
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Eval.bind_return @@ fun e flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
       let exp' = {
         ekind = E_unop (O_cast, e);
         etyp = to_universal_type exp.etyp;
@@ -335,7 +335,7 @@ struct
 
   and eval_binop op e e' exp man flow =
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-    Eval.bind_return @@ fun e flow ->
+    Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
 
     man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
     Eval.bind @@ fun e' flow ->
@@ -350,7 +350,7 @@ struct
 
   and eval_unop op e exp man flow =
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-    Eval.bind_return @@ fun e flow ->
+    Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
 
     let exp' = {exp with
                 ekind = E_unop(op, e);
@@ -364,12 +364,11 @@ struct
     match skind stmt with
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@
+      Option.return |> Option.lift @@ post_eval stman @@
       fun lval' flow ->
 
       man.eval ~zone:(Z_c_scalar, Z_u_num) rval flow |>
-      Post.bind_eval man.lattice @@
-      fun rval' flow ->
+      post_eval stman @@ fun rval' flow ->
 
       man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
       Post.return
@@ -405,8 +404,7 @@ struct
 
     | S_assume(e) ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@
-      fun e' flow ->
+      Option.return |> Option.lift @@ post_eval stman @@ fun e' flow ->
 
       man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>
       Post.return

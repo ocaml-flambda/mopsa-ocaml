@@ -95,7 +95,7 @@ struct
 
     | S_stub_free p ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@ fun pt flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -139,7 +139,7 @@ struct
     | E_alloc_addr (A_stub_resource _) ->
       (* Allocate in the heap *)
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
-      Eval.bind_return @@ fun exp flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun exp flow ->
 
       begin match ekind exp with
       | E_addr addr ->
@@ -162,7 +162,7 @@ struct
 
     | E_stub_attribute(p, attr) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pt flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -180,7 +180,7 @@ struct
 
     | E_stub_resource_mem(p, res) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pt flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->

@@ -419,7 +419,7 @@ module Domain = struct
           match e with
           | Some e ->
             man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-            Eval.bind_flow man.lattice @@ fun e flow ->
+            exec_eval man @@ fun e flow ->
 
             let stmt = mk_assign (mk_c_cell c range) e range in
             man.exec ~zone:Z_c_cell stmt flow
@@ -583,9 +583,12 @@ module Domain = struct
   (** Compute the interval of a C expression *)
   let compute_bound e man flow =
     let evl = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) e flow in
-    Eval.reduce (fun ee flow ->
+    Eval.apply
+      (fun ee flow ->
         man.ask (Itv.EvalQuery.query ee) flow
-      ) Itv.join Itv.meet Itv.bottom evl
+      )
+      Itv.join Itv.meet Itv.bottom
+      evl
 
   (** Under-approximate an interval range *)
   let get_variation_under_approx itv1 itv2 =
@@ -786,7 +789,7 @@ module Domain = struct
       let t = under_type p.etyp in
 
       man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
-      Eval.bind_return @@ fun pe flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (Common.Base.Z, o)) ->
@@ -822,7 +825,7 @@ module Domain = struct
 
     | E_stub_primed (e) ->
       eval_scalar_cell_opt e man flow |>
-      Eval.bind_return @@ fun c flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun c flow ->
       begin match c with
         | None -> Eval.singleton (mk_top e.etyp exp.erange) flow
         | Some c ->
@@ -843,7 +846,7 @@ module Domain = struct
     (* 𝔼⟦ size(p) ⟧ *)
     | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pe flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, _)) ->
@@ -870,7 +873,7 @@ module Domain = struct
     (* 𝔼⟦ valid(p) ⟧ *)
     | E_stub_builtin_call(PTR_VALID, p) ->
       man.eval ~zone:(Z_c_low_level, Z_c_cell_expand) p flow |>
-      Eval.bind_return @@ fun p flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun p flow ->
       let exp' = { exp with ekind = E_stub_builtin_call( PTR_VALID, p) } in
       Eval.singleton exp' flow
 
@@ -989,14 +992,14 @@ module Domain = struct
     | [] ->
       (* target should be a scalar lval *)
       eval_scalar_cell target man flow |>
-      Post.bind_eval_flow man.lattice @@ fun c flow ->
+      post_eval man @@ fun c flow ->
       rename_cell { c with p = true } c range man stman flow |>
       Post.return
 
     | _ ->
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c, Z_c_points_to) target flow |>
-      Post.bind_eval_flow man.lattice @@ fun pt flow ->
+      post_eval man @@ fun pt flow ->
       match ekind pt with
       | E_c_points_to (P_block(base, offset)) ->
         let a = get_domain_env T_cur man flow in
@@ -1080,7 +1083,7 @@ module Domain = struct
     (* 𝕊⟦ add v ⟧ when v is a scalar *)
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@
+      Option.return |> Option.lift @@ post_eval man @@
       fun c flow ->
 
       add_cell c stmt.srange man flow |>
@@ -1106,13 +1109,13 @@ module Domain = struct
     (* 𝕊⟦ lval = rval ⟧ *)
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c, Z_under Z_c_cell) rval flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@ fun rval flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun rval flow ->
 
       man.eval ~zone:(Z_c, Z_c_low_level) lval flow |>
-      Post.bind_eval man.lattice @@ fun lval flow ->
+      post_eval man @@ fun lval flow ->
 
       eval_scalar_cell lval man flow |>
-      Post.bind_eval man.lattice @@ fun c flow ->
+      post_eval man @@ fun c flow ->
 
       let flow =
         match cell_offset c with
@@ -1133,7 +1136,7 @@ module Domain = struct
     (* 𝕊⟦ assume ?e ⟧ *)
     | S_assume(e) ->
       man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-      Option.return |> Option.lift @@ Post.bind_eval man.lattice @@ fun e' flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun e' flow ->
 
       let stmt' = {stmt with skind = S_assume e'} in
       man.exec ~zone:Z_c_cell stmt' flow |>
@@ -1153,8 +1156,8 @@ module Domain = struct
 
     (* 𝕊⟦ rename primed p[a0, b0][a1, b1]... ⟧ *)
     | S_stub_rename_primed(p, offsets) ->
-      rename_primed_cells p offsets stmt.srange man stman flow  |>
-      Post.return |> Option.return
+      rename_primed_cells p offsets stmt.srange man stman flow |>
+      Option.return
 
     | _ -> None
 
