@@ -27,7 +27,7 @@ open Log
 
 (** The [StackSequence ∈ 𝒮 × 𝒮 → 𝒮] operator combines two stacks over the
     same sub-abstraction, by "concatenating" their transfer functions (i.e.
-    return the result of the first answering domain). 
+    return the result of the first answering domain).
 *)
 module MakeStack
     (S1:Sig.Lowlevel.Stacked.STACK)
@@ -127,13 +127,13 @@ struct
   (**************************************************************************)
 
   (** Initialization procedure *)
-  let init prog man sman flow =
+  let init prog man flow =
     let flow1 =
-      match S1.init prog (s1_man man) sman flow with
+      match S1.init prog (s1_man man) flow with
       | None -> flow
       | Some flow -> flow
     in
-    S2.init prog (s2_man man) sman flow1
+    S2.init prog (s2_man man) flow1
 
   (** Execution of statements *)
   let exec zone =
@@ -187,33 +187,33 @@ struct
     | true, false ->
       (* Only [S1] provides an [eval] for such zone *)
       let f = S1.eval zone in
-      (fun exp man sman flow ->
-         f exp (s1_man man) sman flow
+      (fun exp man flow ->
+         f exp (s1_man man) flow
       )
 
     | false, true ->
       (* Only [S2] provides an [eval] for such zone *)
       let f = S2.eval zone in
-      (fun exp man sman flow ->
-         f exp (s2_man man) sman flow
+      (fun exp man flow ->
+         f exp (s2_man man) flow
       )
 
     | true, true ->
       (* Both [S1] and [S2] provide an [eval] for such zone *)
       let f1 = S1.eval zone in
       let f2 = S2.eval zone in
-      (fun exp man sman flow ->
-         match f1 exp (s1_man man) sman flow with
+      (fun exp man flow ->
+         match f1 exp (s1_man man) flow with
          | Some evl -> Some evl
 
-         | None -> f2 exp (s2_man man) sman flow
+         | None -> f2 exp (s2_man man) flow
       )
 
 
   (** Query handler *)
-  let ask query man sman flow =
-    let reply1 = S1.ask query (s1_man man) sman flow in
-    let reply2 = S2.ask query (s2_man man) sman flow in
+  let ask query man flow =
+    let reply1 = S1.ask query (s1_man man) flow in
+    let reply2 = S2.ask query (s2_man man) flow in
     Option.neutral2 (Query.join query) reply1 reply2
 
 end
@@ -223,7 +223,7 @@ end
 
 (** The [DomainSequence ∈ 𝒟 × 𝒟 → 𝒟] operator combines two domains by
     "concatenating" their transfer functions (i.e. return the result of the
-    first answering domain). 
+    first answering domain).
 *)
 module MakeDomain
     (D1:Sig.Lowlevel.Domain.DOMAIN)

@@ -141,7 +141,7 @@ struct
   (** Initialization function *)
   let init prog man flow =
     let flow1 =
-      match S.init prog (s_man man) (s_sman man) flow with
+      match S.init prog (s_man man) flow with
       | None -> flow
       | Some flow -> flow
     in
@@ -200,7 +200,7 @@ struct
       (* Only [S] provides an [eval] for such zone *)
       let f = S.eval zone in
       (fun exp man flow ->
-         f exp (s_man man) (s_sman man) flow
+         f exp (s_man man) flow
       )
 
     | false, true ->
@@ -215,7 +215,7 @@ struct
       let f1 = S.eval zone in
       let f2 = D.eval zone in
       (fun exp man flow ->
-         match f1 exp (s_man man) (s_sman man) flow with
+         match f1 exp (s_man man) flow with
          | Some evl -> Some evl
 
          | None -> f2 exp (d_man man) flow
@@ -224,7 +224,7 @@ struct
 
   (** Query handler *)
   let ask query man flow =
-    let reply1 = S.ask query (s_man man) (s_sman man) flow in
+    let reply1 = S.ask query (s_man man) flow in
     let reply2 = D.ask query (d_man man) flow in
     Option.neutral2 (Query.join query) reply1 reply2
 

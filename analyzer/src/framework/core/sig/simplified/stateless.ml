@@ -125,16 +125,16 @@ sig
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-  val init : program -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'a flow option
+  val init : program -> ('a, unit) man -> 'a flow -> 'a flow option
   (** Initialization routine *)
 
   val exec : zone -> stmt -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : zone * zone -> expr -> ('a, unit) man -> ('a,'s) man -> 'a flow -> (expr, 'a) eval option
+  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'r option
+  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
