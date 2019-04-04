@@ -29,7 +29,7 @@ open Zone
 open Common.Base
 open Common.Points_to
 open Cell
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
 (** {2 Zoning of expanded cells} *)
@@ -125,25 +125,26 @@ module Domain = struct
   (** {2 Zoning interface} *)
   (** ==================== *)
 
-  let exec_interface = {
-    provides = [Z_c];
-    uses = [Z_c_cell];
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c];
+      uses = [Z_c_cell];
+    };
 
-  let eval_interface = {
-    provides = [Z_c_low_level, Z_c_cell_expand];
-    uses = [
-      (Z_c_low_level, Z_c_cell_expand);     (* for lvals *)
-      (Z_c, Z_c_scalar);                    (* for base size *)
-      (Z_c_scalar, Universal.Zone.Z_u_num); (* for offsets *)
-      (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
-      (Z_c, Z_under Z_c_cell);              (* for rvals *)
-      (Z_c, Z_c_points_to);                 (* for pointers *)
-      (Z_c_cell, Z_c_scalar);               (* for Q_print_var query *)
-      (Z_c_scalar, Z_c_points_to);          (* for Q_print_var query *)
-    ];
+    ieval = {
+      provides = [Z_c_low_level, Z_c_cell_expand];
+      uses = [
+        (Z_c_low_level, Z_c_cell_expand);     (* for lvals *)
+        (Z_c, Z_c_scalar);                    (* for base size *)
+        (Z_c_scalar, Universal.Zone.Z_u_num); (* for offsets *)
+        (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
+        (Z_c, Z_under Z_c_cell);              (* for rvals *)
+        (Z_c, Z_c_points_to);                 (* for pointers *)
+        (Z_c_cell, Z_c_scalar);               (* for Q_print_var query *)
+        (Z_c_scalar, Z_c_points_to);          (* for Q_print_var query *)
+      ];
+    }
   }
-
 
   (** {2 Utility functions for cells} *)
   (** =============================== *)
@@ -297,38 +298,48 @@ module Domain = struct
                 None
 
   (** [constrain_cell c a range man f] add numerical constraints of [c] in [a] to flow [f] *)
-  let constrain_cell c a range (man:'s sub_man) (s:'s) : 's  =
+  let constrain_cell_in_sub c a range (man:'s sman) (s:'s) : 's  =
     if Cells.mem c a.cells ||
        not (is_c_scalar_type (cell_typ c)) ||
        not (Bases.mem (cell_base c) a.bases)
     then s
     else
-      let s' = man.sub_exec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) s in
+      let s' = man.sexec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) s in
       if is_c_pointer_type ((cell_typ c)) then s'
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:u8 range) range in
-          man.sub_exec ~zone:(Z_c_cell) stmt s'
+          man.sexec ~zone:(Z_c_cell) stmt s'
 
         | None ->
           s'
 
-  let constrain_cell_flow c a range man stman flow =
-    let sbman = sub_man_of_stack_man man stman in
-    let env = Flow.get T_cur man.lattice flow in
-    let s = stman.sub_get env in
-    let s' = constrain_cell c a range sbman s in
-    Flow.set T_cur (stman.sub_set s' env) man.lattice flow
+  let constrain_cell_in_flow c a range man flow =
+    if Cells.mem c a.cells ||
+       not (is_c_scalar_type (cell_typ c)) ||
+       not (Bases.mem (cell_base c) a.bases)
+    then flow
+    else
+      let flow' = man.exec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) flow in
+      if is_c_pointer_type ((cell_typ c)) then flow'
+      else
+        match phi c a range with
+        | Some e ->
+          let stmt = mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:u8 range) range in
+          man.exec ~zone:(Z_c_cell) stmt flow'
+
+        | None ->
+          flow'
 
   (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
-  let add_cell c range (man:('a,t) man) (stman:('a,t,'s) stack_man) flow =
+  let add_cell c range (man:('a,t) man) flow =
     let a = get_domain_env T_cur man flow in
     let a' = {
       a with bases = Bases.add (cell_base c) a.bases;
     }
     in
-    let flow' = constrain_cell_flow c a' range man stman flow in
+    let flow' = constrain_cell_in_flow c a' range man flow in
     let a'' = {
       a' with cells = Cells.add c a'.cells
     }
@@ -336,9 +347,9 @@ module Domain = struct
     set_domain_env T_cur a'' man flow'
 
   (** [add_cells cells range man flow] adds a set of cells and their constraints to the [flow] *)
-  let add_cells cells range man stman flow =
+  let add_cells cells range man flow =
     Cells.fold (fun c flow ->
-        add_cell c range man stman flow
+        add_cell c range man flow
       ) cells flow
 
   (** [add_base base man flow] adds a new base to the support *)
@@ -348,7 +359,7 @@ module Domain = struct
       ) man flow
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
-  let unify (sbman: 's sub_man) (a:t) (s: 's) (a':t) (s': 's) =
+  let unify (sbman: 's sman) (a:t) (s: 's) (a':t) (s': 's) =
     let range = mk_fresh_range () in
     if Cells.is_empty a.cells then s, s' else
     if Cells.is_empty a'.cells then s, s'
@@ -357,21 +368,21 @@ module Domain = struct
         let diff' = Cells.diff a.cells a'.cells in
         let diff = Cells.diff a'.cells a.cells in
         Cells.fold (fun c s ->
-            constrain_cell c a range sbman s
+            constrain_cell_in_sub c a range sbman s
           ) diff s
         ,
         Cells.fold (fun c s' ->
-            constrain_cell c a' range sbman s'
+            constrain_cell_in_sub c a' range sbman s'
           ) diff' s'
       with Top.Found_TOP ->
-        sbman.sub_lattice.top, sbman.sub_lattice.top
+        s, s'
 
 
-  let subset (u,s) (u',s') (sbman: 's sub_man) =
+  let subset (sbman: 's sman) (u,s) (u',s') =
     let  s, s' = unify sbman u s u' s' in
     (true, s, s')
 
-  let join ((u:t),(s:'s)) ((u':t),(s':'s)) (sbman: 's sub_man) =
+  let join (sbman: 's sman) ((u:t),(s:'s)) ((u':t),(s':'s)) =
     let s, s' = unify sbman u s u' s' in
     let a = {
       cells = Cells.join u.cells u'.cells;
@@ -380,12 +391,12 @@ module Domain = struct
     in
     (a, s, s')
 
-  let meet ((u:t),(s:'s)) ((u':t),(s':'s)) (sbman: 's sub_man) =
-    join (u, s) (u', s') sbman
+  let meet (sbman: 's sman) ((u:t),(s:'s)) ((u':t),(s':'s)) =
+    join sbman (u, s) (u', s')
 
-  let widen ctx ((u:t),(s:'s)) ((u':t),(s':'s)) (sbman: 's sub_man) =
-    let (u, s, s') = join (u,s) (u',s') sbman in
-    (u, true, s, s')
+  let widen (sbman: 's sman) ctx ((u:t),(s:'s)) ((u':t),(s':'s)) =
+    let (u, s, s') = join sbman  (u,s) (u',s') in
+    (u, s, s', false)
 
   let merge pre (post1,log1) (post2,log2) =
     assert false
@@ -404,7 +415,7 @@ module Domain = struct
             | E_c_cell (c, mode) -> c
             | _ -> assert false
           in
-          let flow = add_cell c range man stman flow in
+          let flow = add_cell c range man flow in
           match e with
           | Some e ->
             man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
@@ -517,7 +528,7 @@ module Domain = struct
                 else if i >= !opt_expand
                 then
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton (O_region (Itv.of_constant () (C_int_interval (o, u)))) flow']
+                  [Eval.singleton (O_region (Itv.of_constant (C_int_interval (o, u)))) flow']
                 else
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                   Eval.singleton (O_single o) flow' :: aux (i + 1) (Z.add o step)
@@ -748,10 +759,10 @@ module Domain = struct
 
 
 
-  let cell_singleton c range man stman flow =
+  let cell_singleton c range man flow =
     match cell_offset c with
     | O_single _ ->
-      let flow = add_cell c range man stman flow in
+      let flow = add_cell c range man flow in
       Eval.singleton (mk_c_cell c range) flow
 
     | O_region _ ->
@@ -762,12 +773,12 @@ module Domain = struct
 
 
   (** Entry-point of evaluations *)
-  let eval zone exp (man:('a,t) man) stman flow =
+  let eval zone exp (man:('a,t) man) flow =
     match ekind exp with
     (* 𝔼⟦ v ⟧ *)
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
       let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
-      cell_singleton c exp.erange man stman flow |>
+      cell_singleton c exp.erange man flow |>
       Option.return
 
     (* 𝔼⟦ *p ⟧ *)
@@ -787,12 +798,12 @@ module Domain = struct
         | E_c_points_to(P_block (b, o)) when is_expr_quantified o ->
           eval_quantified_cell b o t p.erange man flow |>
           Eval.bind @@ fun c flow ->
-          cell_singleton c exp.erange man stman flow
+          cell_singleton c exp.erange man flow
 
         | E_c_points_to(P_block (b, o)) ->
           eval_cell b o t p.erange man flow  |>
           Eval.bind @@ fun c flow ->
-          cell_singleton c exp.erange man stman flow
+          cell_singleton c exp.erange man flow
 
         | E_c_points_to(P_null) ->
           raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
@@ -810,7 +821,7 @@ module Domain = struct
 
         | _ -> assert false
       end
-      
+
 
     | E_stub_primed (e) ->
       eval_scalar_cell_opt e man flow |>
@@ -821,7 +832,7 @@ module Domain = struct
           let c' = { c with p = true } in
           match cell_offset c with
           | O_single _ ->
-            let flow = add_cell c' exp.erange man stman flow in
+            let flow = add_cell c' exp.erange man flow in
             Eval.singleton (mk_c_cell c' exp.erange) flow
 
           | O_region _ ->
@@ -923,7 +934,7 @@ module Domain = struct
     let flow' =
       (* Add the old cell in case it has not been accessed before so
          that its constraints are added in the sub domain *)
-      add_cell old_cell range man stman flow |>
+      add_cell old_cell range man flow |>
       (* Remove the old cell and add the new one *)
       map_domain_env T_cur (fun a ->
           { a with cells = Cells.remove old_cell a.cells |>
@@ -976,7 +987,7 @@ module Domain = struct
     flow
 
   (** Rename primed cells that have been declared in `assigns` stub section *)
-  let rename_primed_cells target offsets range man (stman:('a,t,'s) stack_man) flow =
+  let rename_primed_cells target offsets range man stman flow =
     match offsets with
     | [] ->
       (* target should be a scalar lval *)
@@ -1050,7 +1061,7 @@ module Domain = struct
 
 
   (** Entry point of post-condition computation *)
-  let exec zone stmt man (stman:('a,t,'s) stack_man) flow =
+  let exec zone stmt man stman flow =
     match skind stmt with
     (* 𝕊⟦ t v = e; ⟧ when v is a global variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_extern
@@ -1075,7 +1086,7 @@ module Domain = struct
       Option.return |> Option.lift @@ Post.bind_eval man.lattice @@
       fun c flow ->
 
-      add_cell c stmt.srange man stman flow |>
+      add_cell c stmt.srange man flow |>
       man.exec ~zone:Z_c_cell (mk_add (mk_c_cell c stmt.srange) stmt.srange) |>
       Post.return
 
@@ -1215,4 +1226,4 @@ end
 
 
 let () =
-  Framework.Core.Sig.Stacked.register_stack_domain (module Domain);
+  Framework.Core.Sig.Intermediate.Stacked.register_stack (module Domain);

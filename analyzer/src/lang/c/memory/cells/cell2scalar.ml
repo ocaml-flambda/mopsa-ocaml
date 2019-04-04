@@ -86,7 +86,7 @@ let get_scalar_and_remove flow c =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.STACK =
+module Domain =
 struct
 
   (** Domain identification *)
@@ -98,14 +98,16 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    provides = [Z_c_cell];
-    uses = [Z_c_scalar]
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c_cell];
+      uses = [Z_c_scalar]
+    };
 
-  let eval_interface = {
-    provides = [Z_under Z_c_cell, Z_c_scalar];
-    uses = [Z_under Z_c_cell, Z_c_scalar]
+    ieval = {
+      provides = [Z_under Z_c_cell, Z_c_scalar];
+      uses = [Z_under Z_c_cell, Z_c_scalar]
+    }
   }
 
   (** Initialization *)
@@ -193,7 +195,7 @@ struct
   (** Evaluations *)
   (** *********** *)
 
-  let rec eval zone exp man stman flow =
+  let rec eval zone exp man flow =
     match ekind exp with
     | E_c_cell({b = S s; o = O_single z}, mode) ->
       (* Case of a static string literal with a constant offset *)
@@ -250,4 +252,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_stack (module Domain)
+  Framework.Core.Sig.Simplified.Stateless.register_stack (module Domain)
