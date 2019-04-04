@@ -34,43 +34,69 @@ struct
   (** {2 Domain lattice} *)
   (** ================== *)
 
-  (** An abstract element is a partial map from pointer variables
-      to a set of bases *)
-  include Framework.Domains.Nonrel.Make(Bases)
+  (** An abstract element is a partial map from pointer variables to a set
+      of bases *)
+  module Map = Framework.Combiners.Nonrel.Make(
+      Framework.Core.Sig.Intermediate.Value.MakeLowlevel(Bases)
+    )
 
+  type t = Map.t
 
-  (** {2 Domain identification} *)
-  (** ========================= *)
+  include GenDomainId(struct
+      type typ = t
+      let name = "c.memory.pointer"
+    end)
 
-  let name = "c.memory.cells.pointer"
-  let debug fmt = Debug.debug ~channel:name fmt
+  let bottom = Map.bottom
 
+  let top = Map.top
+
+  let is_bottom a = Map.is_bottom a
+
+  let subset man (a,s) (a',s') =
+    Map.subset a a', s, s'
+
+  let join man (a,s) (a',s') =
+    Map.join a a', s, s'
+
+  let meet man (a,s) (a',s') =
+    Map.meet a a', s, s'
+
+  let widen man ctx (a,s) (a',s') =
+    Map.widen ctx a a', s, s', true
+
+  let merge pre (post,log) (post',log') =
+    assert false
+
+  let print fmt a =
+    Map.print fmt a
 
   (** {2 Zoning interface} *)
   (** ==================== *)
 
-  let exec_interface = {
-    provides = [Z_c_scalar];
-    uses = [Universal.Zone.Z_u_num];
+  let interface = {
+    iexec = {
+      provides = [Z_c_scalar];
+      uses = [Universal.Zone.Z_u_num];
+    };
+
+
+    ieval = {
+      provides = [
+        Z_c_scalar, Z_c_points_to;
+        Z_c_scalar, Universal.Zone.Z_u_num
+      ];
+      uses = [
+        Z_c_scalar, Universal.Zone.Z_u_num
+      ]
+    }
   }
-
-
-  let eval_interface = {
-    provides = [
-      Z_c_scalar, Z_c_points_to;
-      Z_c_scalar, Universal.Zone.Z_u_num
-    ];
-    uses = [
-      Z_c_scalar, Universal.Zone.Z_u_num
-    ]
-  }
-
 
   (** {2 Initialization} *)
   (** ================== *)
 
   let init prog man flow =
-    set_domain_env T_cur empty man flow |>
+    set_domain_env T_cur Map.empty man flow |>
     Option.return
 
 
@@ -130,7 +156,7 @@ struct
 
     | EQ(q, o) ->
       let b = get_domain_env T_cur man flow |>
-              find q
+              Map.find q
       in
       b, (if Bases.mem_block b then Some o else None), Some q
 
@@ -150,7 +176,7 @@ struct
   let set_base v b man flow =
     match v with
     | None -> flow
-    | Some vv -> map_domain_env T_cur (add vv b) man flow
+    | Some vv -> map_domain_env T_cur (Map.add vv b) man flow
 
   (* Create the offset expression from optional pointer info *)
   let offset_expr v o range =
@@ -254,7 +280,7 @@ struct
 
     | EQ (p, offset) ->
       let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
-      let bases = find p (get_domain_env T_cur man flow) in
+      let bases = Map.find p (get_domain_env T_cur man flow) in
       if Bases.is_top bases then
         Eval.singleton (mk_c_points_to_top exp.erange) flow
       else
@@ -305,7 +331,7 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1', b2' = Bases.compare () O_eq b1 b2 true in
+      let b1', b2' = Bases.compare O_eq b1 b2 true in
 
       let flow' = set_base v1 b1' man flow |>
                   set_base v2 b2' man
@@ -347,8 +373,8 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
+      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
+      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
 
       (* Case 1: different bases *)
       let case1 =
@@ -440,8 +466,8 @@ struct
 
       (* Check if the bases are the same *)
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
+      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
+      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
 
       (* Size of a pointed element *)
       let elem_size = pointed_size p1.etyp in
@@ -507,8 +533,8 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare () O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare () O_ne b1 b2 true in
+      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
+      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
 
       (* Case 1: different bases *)
       let case1 =
@@ -550,12 +576,12 @@ struct
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
-  let exec zone stmt man flow =
+  let exec zone stmt man sman flow =
     let range = srange stmt in
     match skind stmt with
     | S_c_declaration(p) when is_c_pointer_type p.vtyp ->
       let flow' = map_domain_env T_cur (
-          add p Bases.null
+          Map.add p Bases.null
         ) man flow
       in
       Post.return flow' |>
@@ -567,7 +593,7 @@ struct
       let post =
         match ptr with
         | ADDROF (b, offset) ->
-          let flow' = map_domain_env T_cur (add p (Bases.block b)) man flow in
+          let flow' = map_domain_env T_cur (Map.add p (Bases.block b)) man flow in
 
           man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
           Post.bind_eval man.lattice @@ fun offset flow' ->
@@ -576,9 +602,9 @@ struct
           Post.return
 
         | EQ (q, offset) ->
-          let flow' = map_domain_env T_cur (fun a -> add p (find q a) a) man flow in
+          let flow' = map_domain_env T_cur (fun a -> Map.add p (Map.find q a) a) man flow in
           (* Assign offset only if q points to a block *)
-          if mem_domain_env T_cur (fun a -> find q a |> Bases.mem_block) man flow then
+          if mem_domain_env T_cur (fun a -> Map.find q a |> Bases.mem_block) man flow then
             let qo = mk_offset_var_expr q range in
             let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
@@ -592,22 +618,22 @@ struct
             Post.return
 
         | FUN f ->
-          map_domain_env T_cur (add p (Bases.bfun f)) man flow |>
+          map_domain_env T_cur (Map.add p (Bases.bfun f)) man flow |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
           Post.return
 
         | INVALID ->
-          map_domain_env T_cur (add p Bases.invalid) man flow  |>
+          map_domain_env T_cur (Map.add p Bases.invalid) man flow  |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
           Post.return
 
         | NULL ->
-          map_domain_env T_cur (add p Bases.null) man flow |>
+          map_domain_env T_cur (Map.add p Bases.null) man flow |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
           Post.return
 
         | TOP ->
-          map_domain_env T_cur (add p Bases.top) man flow |>
+          map_domain_env T_cur (Map.add p Bases.top) man flow |>
           man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range) |>
           Post.return
 
@@ -616,13 +642,13 @@ struct
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let o = mk_offset_var_expr p range in
-      map_domain_env T_cur (add p Bases.top) man flow |>
+      map_domain_env T_cur (Map.add p Bases.top) man flow |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
       Post.return |>
       Option.return
 
     | S_remove { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
-      let flow1 = map_domain_env T_cur (remove p) man flow in
+      let flow1 = map_domain_env T_cur (Map.remove p) man flow in
       let o = mk_offset_var_expr p range in
       let flow2 = man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) flow1 in
       Post.return flow2 |>
@@ -631,7 +657,7 @@ struct
     | S_remove { ekind = E_addr addr } ->
       let block = Bases.PB_block (A addr) in
       let flow' = map_domain_env T_cur (fun a ->
-          let a' = map (fun base ->
+          let a' = Map.map (fun base ->
               if not (Bases.mem block base) then
                 base
               else
@@ -651,12 +677,12 @@ struct
     | S_expand({ekind = E_var (p, _)}, pl) when is_c_pointer_type p.vtyp ->
       let pl = List.map (function { ekind = E_var (q,_) } -> q | _ -> assert false) pl in
       let a = get_domain_env T_cur man flow in
-      let pt = find p a in
+      let pt = Map.find p a in
       let o = mk_offset_var_expr p range in
       let ool, flow =
         pl |> List.fold_left (fun (ool, flow) p' ->
             let oo = mk_offset_var_expr p' range in
-            oo :: ool, map_domain_env T_cur (add p' pt) man flow
+            oo :: ool, map_domain_env T_cur (Map.add p' pt) man flow
           ) ([],flow)
       in
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_expand o ool range) flow |>
@@ -668,9 +694,9 @@ struct
            is_c_pointer_type p2.vtyp
       ->
       let flow1 = map_domain_env T_cur (fun a ->
-          let b1 = find p1 a in
-          let a' = add p2 b1 a |>
-                   remove p1
+          let b1 = Map.find p1 a in
+          let a' = Map.add p2 b1 a |>
+                   Map.remove p1
           in
           a'
         ) man flow
@@ -685,7 +711,7 @@ struct
       let block1 = Bases.PB_block (A addr1) in
       let block2 = Bases.PB_block (A addr2) in
       let flow' = map_domain_env T_cur (fun a ->
-          let a' = map (fun bases ->
+          let a' = Map.map (fun bases ->
               if not (Bases.mem block1 bases) then bases
               else
                 Bases.remove block1 bases |>
@@ -709,5 +735,5 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.register_domain (module Domain);
+  Framework.Core.Sig.Intermediate.Stacked.register_stack (module Domain);
   ()
