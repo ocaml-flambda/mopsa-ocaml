@@ -121,7 +121,7 @@ struct
 
   let widen man ctx a a' =
     let a1, a, a', stable = S.widen (s_man man) (s_sman man) ctx a a' in
-    if stable then
+    if not stable then
       let a2 = D.join (d_man man) a a' in
       (a1,a2)
     else

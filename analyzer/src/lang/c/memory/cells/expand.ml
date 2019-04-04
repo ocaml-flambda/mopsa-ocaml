@@ -396,7 +396,7 @@ module Domain = struct
 
   let widen (sbman: 's sman) ctx ((u:t),(s:'s)) ((u':t),(s':'s)) =
     let (u, s, s') = join sbman  (u,s) (u',s') in
-    (u, s, s', false)
+    (u, s, s', true)
 
   let merge pre (post1,log1) (post2,log2) =
     assert false
