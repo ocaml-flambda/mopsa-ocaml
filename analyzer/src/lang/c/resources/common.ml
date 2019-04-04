@@ -136,9 +136,10 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     (* 𝔼⟦ new Resource ⟧ *)
-    | E_alloc_addr (A_stub_resource _) ->
+    | E_stub_alloc res ->
       (* Allocate in the heap *)
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
+      let alloc = mk_alloc_addr (A_stub_resource res) exp.erange in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
       Option.return |> Option.lift @@ Eval.bind @@ fun exp flow ->
 
       begin match ekind exp with

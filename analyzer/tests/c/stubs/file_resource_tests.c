@@ -19,7 +19,7 @@ void close_(int fd);
 
 
 /* Test that open returns a positive number */
-void test_open_retuns_positive() {
+void test_open_returns_positive() {
   int fd = open_("/tmp/a.txt", O_RDONLY);
   _mopsa_assert_safe();
   _mopsa_assert(fd >= 0);
@@ -27,7 +27,7 @@ void test_open_retuns_positive() {
 
 
 /* Test that open returns increasing numbers */
-void test_open_retuns_increasing_ids() {
+void test_open_returns_increasing_ids() {
   int fd1 = open_("/tmp/a.txt", O_RDONLY);
   int fd2 = open_("/tmp/b.txt", O_RDONLY);
   _mopsa_assert(fd2 > fd1);
