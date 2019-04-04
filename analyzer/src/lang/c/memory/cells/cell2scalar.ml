@@ -114,7 +114,7 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    Some (init_ctx flow)
+    init_ctx flow
 
   (** Post-conditions *)
   (** *************** *)

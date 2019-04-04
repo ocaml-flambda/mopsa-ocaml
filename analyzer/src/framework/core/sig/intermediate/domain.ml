@@ -127,7 +127,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
   val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
@@ -168,7 +168,7 @@ struct
 
   let bottom = D.bottom
 
-  let top = D.bottom
+  let top = D.top
 
 
   (** {2 Lattice predicates} *)
@@ -192,7 +192,7 @@ struct
     D.merge
       (man.get pre)
       (man.get post1, man.get_log log1)
-      (man.get post1, man.get_log log1)
+      (man.get post2, man.get_log log2)
 
 
   (** {2 Pretty printing} *)

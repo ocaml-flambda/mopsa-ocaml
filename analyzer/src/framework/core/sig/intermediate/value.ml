@@ -196,10 +196,10 @@ struct
     Value.bwd_unop op (man.vget v) (man.vget r)
 
   let bwd_binop man op v1 v2 r =
-    Value.bwd_binop op (man.vget v1) (man.vget v1) (man.vget r)
+    Value.bwd_binop op (man.vget v1) (man.vget v2) (man.vget r)
 
   let compare man op v1 v2 b =
-    Value.compare op (man.vget v1) (man.vget v1) b
+    Value.compare op (man.vget v1) (man.vget v2) b
 
 
   (** {2 Evaluation query} *)

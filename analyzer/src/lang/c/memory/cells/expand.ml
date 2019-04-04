@@ -419,11 +419,10 @@ module Domain = struct
           match e with
           | Some e ->
             man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-            Post.bind_eval_flow man.lattice @@ fun e flow ->
+            Eval.bind_flow man.lattice @@ fun e flow ->
 
             let stmt = mk_assign (mk_c_cell c range) e range in
-            man.exec ~zone:Z_c_cell stmt flow |>
-            Post.return
+            man.exec ~zone:Z_c_cell stmt flow
 
           | None -> flow
         );
@@ -478,9 +477,7 @@ module Domain = struct
     }
 
   let init prog man flow =
-    Some (
-      set_domain_env T_cur empty man flow
-    )
+    set_domain_env T_cur empty man flow
 
 
   (** {2 Evaluation of offsets} *)

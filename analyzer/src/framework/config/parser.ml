@@ -76,7 +76,7 @@ and domain_seq assoc : (module DOMAIN) =
         let tl = aux tl in
         let module Head = (val hd : DOMAIN) in
         let module Tail = (val tl : DOMAIN) in
-        let module Dom = Combiners.Sequence.MakeDomain(Head)(Tail) in
+        let module Dom = Combiners.Sequence.Domain.Make(Head)(Tail) in
         (module Dom : DOMAIN)
   in
   aux domains
@@ -136,7 +136,7 @@ and stack_seq assoc : (module STACK) =
         let tl = aux tl in
         let module Head = (val hd : STACK) in
         let module Tail = (val tl : STACK) in
-        let module Dom = Combiners.Sequence.MakeStack(Head)(Tail) in
+        let module Dom = Combiners.Sequence.Stacked.Make(Head)(Tail) in
         (module Dom : STACK)
   in
   aux stacks

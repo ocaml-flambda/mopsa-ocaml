@@ -44,7 +44,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
 
   (** Evaluation of expressions *)

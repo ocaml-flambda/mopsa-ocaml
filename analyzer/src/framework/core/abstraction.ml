@@ -87,7 +87,7 @@ end
 (*==========================================================================*)
 
 
-let debug fmt = Debug.debug ~channel:"framework.engines.abstraction" fmt
+let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
 
 
 (** Encapsulate a domain into an abstraction *)
@@ -150,11 +150,10 @@ struct
 
     (* The initial flow is a singleton ⊤ environment *)
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
+    debug "flow0 = %a" (Flow.print man.lattice) flow0;
 
     (* Initialize domains *)
-    match Domain.init prog man flow0 with
-    | None -> flow0
-    | Some flow -> flow
+    Domain.init prog man flow0
 
 
   (** {2 Statement execution} *)

@@ -28,12 +28,12 @@
             "c.desugar.stub_init",
             "c.desugar.cond_expr",
 
-	    // C resources
+	    // Resouce management
+            "universal.heap.recency",
 	    "c.resources.file",
 	    "c.resources.common",
 
             // Memory model
-            "universal.heap.recency",
 	    {
                 "apply": {
                     "compose": [

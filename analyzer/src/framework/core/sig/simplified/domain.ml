@@ -125,8 +125,7 @@ struct
     D.merge pre (post1, block1) (post2, block2)
 
   let init prog man flow =
-    set_domain_env T_cur (D.init prog) man flow |>
-    Option.return
+    set_domain_env T_cur (D.init prog) man flow
 
   let interface = {
     iexec = {

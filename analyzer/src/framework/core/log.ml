@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (** Journal logs used to merge two post-conditions that diverged due to a
-    fork-join trajectory in the abstraction DAG. 
+    fork-join trajectory in the abstraction DAG.
 *)
 
 open Ast.Stmt
@@ -33,7 +33,7 @@ type log =
   (** Logs of a singleton domain *)
   | L_singleton of block (** Block of statements received by the domain *) *
                    log   (** Inner logs of the domain *)
-  
+
   (** Logs of a compound domain *)
   | L_tuple of log (** Logs of the first domain *) *
                log (** Logs of the second domain *)
@@ -88,7 +88,7 @@ let append stmt log =
   match log with
   | L_empty -> L_singleton ([stmt], L_empty)
   | L_singleton (block, inner) -> L_singleton (block @ [stmt], inner)
-  | L_tuple (fst,snd) -> assert false
+  | L_tuple (fst,snd) -> log
 
 (** Append a statement to the logs of the first domain in a tuple configuration *)
 let append_fst stmt log =

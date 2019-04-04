@@ -85,10 +85,7 @@ struct
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
   and eval (e:expr) (a:t) : aexpr * Value.t =
-    if not (Value.accept_expr e)
-    then A_unsupported, Value.top
-    else
-      match ekind e with
+    match ekind e with
       | E_var(var, _) ->
         let v = VarMap.find var a in
         (A_var (var, v), v)
@@ -149,49 +146,44 @@ struct
      if r=true, keep the states that may satisfy the expression;
      if r=false, keep the states that may falsify the expression
   *)
-  let filter (e:expr) (r:bool) (a:t) : t =
-    (* recursive exploration of the expression *)
-    let rec doit (e:expr) (r:bool) (a:t) : t =
-      match ekind e with
+  let rec filter (e:expr) (r:bool) (a:t) : t =
+    match ekind e with
 
-      | E_unop (O_log_not, e) ->
-        doit e (not r) a
+    | E_unop (O_log_not, e) ->
+      filter e (not r) a
 
-      | E_binop (O_log_and, e1, e2) ->
-        let a1 = doit e1 r a in
-        let a2 = doit e2 r a in
-        (if r then meet else join) a1 a2
+    | E_binop (O_log_and, e1, e2) ->
+      let a1 = filter e1 r a in
+      let a2 = filter e2 r a in
+      (if r then meet else join) a1 a2
 
-      | E_binop (O_log_or, e1, e2) ->
-        let a1 = doit e1 r a in
-        let a2 = doit e2 r a in
-        (if r then join else meet) a1 a2
+    | E_binop (O_log_or, e1, e2) ->
+      let a1 = filter e1 r a in
+      let a2 = filter e2 r a in
+      (if r then join else meet) a1 a2
 
-      | E_constant c ->
-        let v = Value.of_constant c in
-        let w = Value.filter (vman a) v r in
-        if Value.is_bottom w then bottom else a
+    | E_constant c ->
+      let v = Value.of_constant c in
+      let w = Value.filter (vman a) v r in
+      if Value.is_bottom w then bottom else a
 
-      | E_var(var, _) ->
-        let v = find var a in
-        let w = Value.filter (vman a) v r in
-        if Value.is_bottom w then bottom else add var w a
+    | E_var(var, _) ->
+      let v = find var a in
+      let w = Value.filter (vman a) v r in
+      if Value.is_bottom w then bottom else add var w a
 
-      (* arithmetic comparison part, handled by Value *)
-      | E_binop (op, e1, e2) ->
-        (* evaluate forward each argument expression *)
-        let ae1,v1 = eval e1 a in
-        let ae2,v2 = eval e2 a in
-        (* apply comparison *)
-        let r1, r2 = Value.compare (vman a) op v1 v2 r in
-        (* propagate backward on both argument expressions *)
-        let a1 = refine ae1 v1 r1 a in
-        refine ae2 v2 r2 a1
+    (* arithmetic comparison part, handled by Value *)
+    | E_binop (op, e1, e2) ->
+      (* evaluate forward each argument expression *)
+      let ae1,v1 = eval e1 a in
+      let ae2,v2 = eval e2 a in
+      (* apply comparison *)
+      let r1, r2 = Value.compare (vman a) op v1 v2 r in
+      (* propagate backward on both argument expressions *)
+      let a1 = refine ae1 v1 r1 a in
+      refine ae2 v2 r2 a1
 
-      | _ -> assert false
-
-    in
-    doit e r a
+    | _ -> assert false
 
 
 
@@ -259,7 +251,7 @@ struct
     | _ -> top
 
 
-  
+
   (** Evaluation query *)
   (** **************** *)
 

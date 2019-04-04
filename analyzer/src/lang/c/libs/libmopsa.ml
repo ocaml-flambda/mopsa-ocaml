@@ -109,7 +109,7 @@ struct
   (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
 
   let exec zone stmt man flow = None
 

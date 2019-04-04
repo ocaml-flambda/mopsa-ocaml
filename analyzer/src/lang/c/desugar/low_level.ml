@@ -52,8 +52,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ _ =
-    None
+  let init _ _ flow = flow
 
   let exec _ _ _ _ = None
 

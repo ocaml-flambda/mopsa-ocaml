@@ -124,7 +124,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
   val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option

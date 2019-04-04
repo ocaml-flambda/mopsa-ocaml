@@ -36,7 +36,7 @@ struct
     ieval = { provides = []; uses = [] };
   }
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
   let exec zone stmt man flow =
     match skind stmt with

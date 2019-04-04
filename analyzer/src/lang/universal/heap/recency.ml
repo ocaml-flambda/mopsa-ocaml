@@ -66,10 +66,8 @@ struct
   (** ============== *)
 
   let init prog man flow =
-    Some (
-      set_domain_env T_cur empty man flow |>
-      Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit Pool.ctx_key Equiv.empty)
-    )
+    set_domain_env T_cur empty man flow |>
+    Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit Pool.ctx_key Equiv.empty)
 
 
   (** Post-conditions *)

@@ -46,7 +46,7 @@ struct
   include GenDomainId(
     struct
       type typ = t
-      let name = "framework.operators.sequence"
+      let name = "framework.operators.compose"
     end
     )
 
@@ -151,12 +151,8 @@ struct
 
   (** Initialization procedure *)
   let init prog man flow =
-    let flow1 =
-      match S1.init prog (s1_man man) flow with
-      | None -> flow
-      | Some flow -> flow
-    in
-    S2.init prog (s2_man man) flow1
+    S1.init prog (s1_man man) flow |>
+    S2.init prog (s2_man man)
 
 
   (** Execution of statements *)

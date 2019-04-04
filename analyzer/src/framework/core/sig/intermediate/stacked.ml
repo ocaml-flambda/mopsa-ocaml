@@ -110,7 +110,7 @@ sig
       unifies the sub-tree elements [s1] and [s2]. *)
 
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow option
+  val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
   val exec : zone -> stmt -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a post option
@@ -150,7 +150,7 @@ struct
 
   let bottom = S.bottom
 
-  let top = S.bottom
+  let top = S.top
 
 
   (** {2 Stack manager} *)
@@ -224,7 +224,7 @@ struct
     S.merge
       (man.get pre)
       (man.get post1, man.get_log log1)
-      (man.get post1, man.get_log log1)
+      (man.get post2, man.get_log log2)
 
 
   (** {2 Pretty printing} *)

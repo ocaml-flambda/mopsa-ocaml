@@ -103,7 +103,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) = None
+  let init _ _ flow =  flow
 
 
   (** Computation of post-conditions *)

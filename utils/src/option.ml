@@ -55,7 +55,7 @@ let equal (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
 let included (f:'a->'b->bool) (a:'a option) (b:'b option) : bool =
   match a,b with None, _ -> true | Some x, Some y -> f x y | _ -> false
 
-let apply (f:'b->'a) (none:'a) (b:'b option) : 'a =
+let apply (none:'a) (f:'b->'a) (b:'b option) : 'a =
   match b with None -> none | Some x -> f x
 
 let apply2
@@ -66,8 +66,8 @@ let apply2
   =
   match a,b with None,_ | _,None -> none | Some x, Some y -> f x y
 
-let default (none:'b) (a:'a option) : 'b =
-  apply (fun x -> x) none a
+let default (none:'a) (a:'a option) : 'a =
+  apply none (fun x -> x) a
 
 let compare (cmp: 'a -> 'a -> int) (a: 'a option) (b: 'a option) : int =
   match a, b with

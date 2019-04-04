@@ -73,8 +73,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) =
-    None
+  let init _ _ flow =  flow
 
   let exec zone stmt man flow =
     match skind stmt with

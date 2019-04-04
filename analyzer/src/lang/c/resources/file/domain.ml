@@ -182,37 +182,31 @@ struct
     else panic "stdno_to_string: invalid argument %d" n
 
   let init prog man flow =
-    Some flow
-      (* {
-       *   flow;
-       *   (\* Need a callback to evaluate heap allocation *\)
-       *   callbacks = [(fun flow ->
-       *       (\* generic allocation function *\)
-       *       let allocate_std n flow =
-       *         let range = tag_range prog.prog_range "alloc_%s" (stdno_to_string n) in
-       *         man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_stub_resource "FileDescriptor") range) flow |>
-       *         Eval.bind @@ fun alloc flow ->
-       *         match ekind alloc with
-       *         | E_addr addr -> Eval.singleton addr flow
-       *         | _ -> assert false
-       *       in
-       *       (\* allocate stdin, stdout and stderr *\)
-       *       allocate_std 0 flow |> Post.bind_flow man @@ fun stdin_addr flow ->
-       *       allocate_std 1 flow |> Post.bind_flow man @@ fun stdout_addr flow ->
-       *       allocate_std 2 flow |> Post.bind_flow man @@ fun stderr_addr flow ->
-       * 
-       *       let init_state = {
-       *         first = [
-       *           NotFree (AddrSet.singleton stdin_addr);
-       *           NotFree (AddrSet.singleton stdout_addr);
-       *           NotFree (AddrSet.singleton stderr_addr);
-       *         ];
-       *         others = Table.empty;
-       *       }
-       *       in
-       *       Flow.set_domain_env T_cur init_state man flow
-       *     )]
-       * } *)
+    (* generic allocation function *)
+    let allocate_std n flow =
+      let range = tag_range prog.prog_range "alloc_%s" (stdno_to_string n) in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) (mk_alloc_addr (A_stub_resource "FileDescriptor") range) flow |>
+      Eval.bind @@ fun alloc flow ->
+      match ekind alloc with
+      | E_addr addr -> Eval.singleton addr flow
+      | _ -> assert false
+    in
+
+    (* allocate stdin, stdout and stderr *)
+    allocate_std 0 flow |> Eval.bind_flow man.lattice @@ fun stdin_addr flow ->
+    allocate_std 1 flow |> Eval.bind_flow man.lattice @@ fun stdout_addr flow ->
+    allocate_std 2 flow |> Eval.bind_flow man.lattice @@ fun stderr_addr flow ->
+
+    let init_state = {
+      first = [
+        NotFree (AddrSet.singleton stdin_addr);
+        NotFree (AddrSet.singleton stdout_addr);
+        NotFree (AddrSet.singleton stderr_addr);
+      ];
+      others = Table.empty;
+    }
+    in
+    set_domain_env T_cur init_state man flow
 
 
   (** {2 Insertion of new resources} *)

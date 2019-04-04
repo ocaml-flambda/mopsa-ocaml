@@ -70,7 +70,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
 
   (** Byte attribute *)
   (** ============== *)

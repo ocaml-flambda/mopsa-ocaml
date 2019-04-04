@@ -70,6 +70,8 @@ val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
 
 val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
 
+val bind_flow : 'a Lattice.lattice -> ('e -> 'a flow -> 'a flow) -> ('e, 'a) eval -> 'a flow
+
 val bind_return : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
 
 val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option

@@ -96,8 +96,8 @@ struct
   (** ================== *)
 
   let init prog man flow =
-    set_domain_env T_cur Map.empty man flow |>
-    Option.return
+    debug "init";
+    set_domain_env T_cur Map.empty man flow
 
 
   (** {2 Utility functions for evaluations *)

@@ -151,7 +151,7 @@ let bind_opt f eval =
            | Some expr -> f expr flow' |>
                           Option.lift (add_cleaners case.eval_cleaners)
          in
-         let ctx = Option.apply choose_ctx ctx eval' in
+         let ctx = Option.apply ctx choose_ctx eval' in
          (eval', ctx)
       )
       (Option.neutral2 join)
@@ -167,6 +167,23 @@ let bind
   : ('f, 'a) eval =
   bind_opt (fun e flow -> Some (f e flow)) evl |>
   Option.none_to_exn
+
+let bind_flow
+  (lattice:'a Lattice.lattice)
+  (f:'e -> 'a flow -> 'a flow)
+  (evl:('e, 'a) eval)
+  : 'a flow
+  =
+  let ret, ctx = Dnf.fold2 (fun ctx case ->
+      let flow = Flow.set_ctx ctx case.eval_flow in
+      match case.eval_result with
+      | None -> flow, ctx
+      | Some ee ->
+        let flow' = f ee flow in
+        flow', Flow.get_ctx flow'
+    ) (Flow.join lattice) (Flow.meet lattice) (choose_ctx evl) evl
+  in
+  Flow.set_ctx ctx ret
 
 let bind_return f eval =
   bind f eval |> Option.return
