@@ -53,7 +53,7 @@ let () =
 (*==========================================================================*)
 
 
-module Domain : Framework.Domains.Stateless.DOMAIN =
+module Domain =
 struct
 
   (** Domain identification *)
@@ -65,8 +65,10 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {provides = [Zone.Z_c]; uses = []}
-  let eval_interface = {provides = []; uses = []}
+  let interface = {
+    iexec = {provides = [Zone.Z_c]; uses = []};
+    ieval = {provides = []; uses = []};
+  }
 
   (** Initialization *)
   (** ============== *)
@@ -139,4 +141,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

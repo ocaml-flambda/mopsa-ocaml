@@ -153,7 +153,7 @@ end
 (*==========================================================================*)
 
 (** Lift a general-purpose signature to a low-level one *)
-module MakeLowlevel(Value:VALUE) : Lowlevel.Value.VALUE =
+module MakeLowlevel(Value:VALUE) : Lowlevel.Value.VALUE with type t = Value.t =
 struct
 
   (* Trivial lifts *)

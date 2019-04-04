@@ -39,6 +39,7 @@ module Make
     (Value: LATTICE)
 =
 struct
+
   module Map = MapExt.Make(Key)
 
   (** [a:t] is an abstraction of a set of partial maps from [Key.t]

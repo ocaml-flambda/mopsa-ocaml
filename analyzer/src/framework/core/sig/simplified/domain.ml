@@ -114,7 +114,7 @@ end
 
 
 (** Create a full domain from a leaf. *)
-module Make(D: DOMAIN) : Intermediate.Domain.DOMAIN =
+module MakeIntermediate(D: DOMAIN) : Intermediate.Domain.DOMAIN with type t = D.t =
 struct
 
   include D
@@ -163,5 +163,5 @@ end
 
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
-  let module D = Make(M) in
+  let module D = MakeIntermediate(M) in
   Intermediate.Domain.register_domain (module D)

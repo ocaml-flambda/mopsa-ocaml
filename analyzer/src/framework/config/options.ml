@@ -157,7 +157,7 @@ let () =
   register_builtin_option {
     key = "-config";
     doc = " path to the configuration file to use for the analysis";
-    spec = Arg.Set_string Abstraction.opt_config;
+    spec = Arg.Set_string Parser.opt_config;
     default = "";
   }
 
@@ -182,7 +182,7 @@ let () =
     key = "-list";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = Arg.Unit (fun () ->
-        let domains = Abstraction.domains () in
+        let domains = Parser.domains () in
         Output.Factory.list_domains domains
       );
     default = "";
@@ -219,7 +219,7 @@ let () =
   register_builtin_option {
     key = "-log";
     doc = " activate logs";
-    spec = Arg.Set Engines.Logging.opt_log;
+    spec = Arg.Set Core.Debug_tree.opt_log;
     default = "false";
   }
 
@@ -228,7 +228,7 @@ let () =
   register_builtin_option {
     key = "-short-log";
     doc = " display logs without abstract states";
-    spec = Arg.Set Engines.Logging.opt_short_log;
+    spec = Arg.Set Core.Debug_tree.opt_short_log;
     default = "false";
   }
 
@@ -236,11 +236,11 @@ let () =
 (** Help message *)
 let help () =
   let options =
-    if !Abstraction.opt_config = "" then !options
+    if !Parser.opt_config = "" then !options
     else
       (* Get the language and domains of selected configuration *)
-      let lang = Abstraction.language () in
-      let domains = Abstraction.domains () in
+      let lang = Parser.language () in
+      let domains = Parser.domains () in
 
       (* Get the options *)
       (get_builtin_options ())    @

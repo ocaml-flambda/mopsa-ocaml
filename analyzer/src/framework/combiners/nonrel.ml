@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into a (leaf)
-    abstract domain of partial environments from variables to values. 
+    abstract domain of partial environments from variables to values.
 *)
 
 open Ast.All

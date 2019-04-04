@@ -38,18 +38,18 @@
                 "apply": {
                     "compose": [
                         "c.memory.cells.expand",
-                        "c.memory.cells.cell_2_scalar"
+                        "c.memory.cells.cell_2_scalar",
+                        {
+                            "seq": [
+			        "c.memory.pointer",
+			        "c.memory.machine_numbers"
+                            ]
+                        }
                     ]
                 },
 		"on": {
-		    "seq": [
-			"c.memory.cells.pointer",
-			"c.machine_numbers",
-			{
-                            "nonrel": "universal.numeric.values.integer_interval"
-                        }
-		    ]
-		}
+                    "nonrel": "universal.numeric.values.intervals.integer"
+                }
 	    }
 	]
     }

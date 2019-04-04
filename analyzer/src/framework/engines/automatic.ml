@@ -34,8 +34,10 @@ open Abstraction
 open Engine
 
 (** Create an automatic analysis engine over an abstraction. *)
-module Make : ENGINE = functor(Abstraction : ABSTRACTION) ->
+module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
 struct
+
+  type t = Abstraction.t
 
   let rec init prog =
     Abstraction.init prog man

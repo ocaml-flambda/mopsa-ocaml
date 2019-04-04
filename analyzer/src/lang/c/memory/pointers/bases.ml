@@ -81,20 +81,22 @@ let mem_block v =
   if is_top v then true
   else exists (function PB_block _ -> true | _ -> false) v
 
-let of_constant _ c =
+let accept_expr _ = true
+
+let of_constant c =
   match c with
   | C_int n when Z.equal n Z.zero -> null
   | _ -> top
 
-let unop _ op v = top
+let unop op v = top
 
-let binop _ op v1 v2 = top
+let binop op v1 v2 = top
 
-let bwd_unop = Framework.Core.Sig.Value.default_bwd_unop
+let bwd_unop = Framework.Core.Sig.Intermediate.Value.default_bwd_unop
 
-let bwd_binop = Framework.Core.Sig.Value.default_bwd_binop
+let bwd_binop = Framework.Core.Sig.Intermediate.Value.default_bwd_binop
 
-let filter _ v b =
+let filter v b =
   if b then diff v null
   else meet v null
 
@@ -102,7 +104,7 @@ let is_singleton v =
   not (is_top v) &&
   cardinal v == 1
 
-let compare _ op v1 v2 r =
+let compare op v1 v2 r =
   let op = if r then op else negate_comparison op in
   match op with
   | O_eq ->

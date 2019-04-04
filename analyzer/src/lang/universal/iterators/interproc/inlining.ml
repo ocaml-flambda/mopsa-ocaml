@@ -183,4 +183,4 @@ end
 
 
 let () =
-  Framework.Core.Sig.Simplified.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -25,7 +25,7 @@ open Mopsa
 open Universal.Ast
 open Ast
 open Zone
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 let is_builtin_function = function
   | "__builtin_constant_p"
@@ -54,19 +54,20 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    provides = [];
-    uses = [Universal.Zone.Z_u_num]
+  let interface = {
+    iexec = {
+      provides = [];
+      uses = [Universal.Zone.Z_u_num]
+    };
+    ieval = {
+      provides = [
+        Z_c, Z_c_low_level
+      ];
+      uses = [
+        Z_c, Memory.Common.Points_to.Z_c_points_to
+      ]
+    }
   }
-  let eval_interface = {
-    provides = [
-      Z_c, Z_c_low_level
-    ];
-    uses = [
-      Z_c, Memory.Common.Points_to.Z_c_points_to
-    ]
-  }
-
   (** Flow-insensitive annotations *)
   (** ============================ *)
 
@@ -346,4 +347,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

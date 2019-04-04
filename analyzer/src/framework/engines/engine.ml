@@ -31,17 +31,19 @@ open Manager
 open Zone
 open Abstraction
 
-module type ENGINE = functor(Abstraction : ABSTRACTION) ->
+module type ENGINE =
 sig
 
-  val init : program -> Abstraction.t flow
+  type t
 
-  val exec : ?zone:zone -> stmt -> Abstraction.t flow -> Abstraction.t flow
+  val init : program -> t flow
 
-  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> Abstraction.t flow -> (expr, Abstraction.t) eval
+  val exec : ?zone:zone -> stmt -> t flow -> t flow
 
-  val ask : 'r Query.query -> Abstraction.t flow -> 'r
+  val eval : ?zone:(zone * zone) -> ?via:zone -> expr -> t flow -> (expr, t) eval
 
-  val man : (Abstraction.t, Abstraction.t) man
+  val ask : 'r Query.query -> t flow -> 'r
+
+  val man : (t, t) man
 
 end

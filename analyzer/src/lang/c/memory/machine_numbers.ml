@@ -27,7 +27,7 @@ open Ast
 open Zone
 open Universal.Zone
 
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 let range_leq (a,b) (c,d) =
   Z.leq c a && Z.leq b d
@@ -128,28 +128,28 @@ let to_universal_expr e =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.DOMAIN =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.machine_numbers"
+  let name = "c.memory.machine_numbers"
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)
 
-  let eval_interface =
-    {
+  let interface = {
+    iexec = {
+      provides = [Z_c_scalar];
+      uses = [Z_u_num];
+    };
+    ieval = {
       provides = [Z_c_scalar, Z_u_num];
       uses = [Z_c_scalar, Z_u_num];
     }
-  let exec_interface =
-    {
-      provides = [Z_c_scalar];
-      uses = [Z_u_num];
-    }
+  }
 
   let rec eval zone exp man flow =
     let range = erange exp in
@@ -360,7 +360,7 @@ struct
     Eval.singleton exp' flow
 
 
-  let exec zone stmt man flow =
+  let exec zone stmt man stman flow =
     match skind stmt with
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
@@ -423,4 +423,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Stacked.register_stack (module Domain)

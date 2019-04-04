@@ -19,15 +19,15 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** 
+(**
    Abstraction of the table of file descriptors. Each allocated file
-   descriptor is mapped to an interval of possible numeric values. 
+   descriptor is mapped to an interval of possible numeric values.
 *)
 
 
 open Mopsa
 open Universal.Ast
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 let debug fmt = Debug.debug ~channel:"c.resources.file.table" fmt
 
@@ -54,7 +54,7 @@ let top : table = {
   support = AddrSet.empty;
 }
 
-let is_bottom (t:table) = false (* FIXME: replace by Table.is_bottom after 
+let is_bottom (t:table) = false (* FIXME: replace by Table.is_bottom after
                                    fixing bottom value of partial maps *)
 
 let subset a1 a2 =
@@ -113,7 +113,7 @@ let insert addr window (t:table) =
       ) minitv
     in
     let itv = List.fold_left (fun acc itv ->
-        Itv.compare () O_ne acc itv true |>
+        Itv.compare O_ne acc itv true |>
         fst
       ) itv0 sorted
     in

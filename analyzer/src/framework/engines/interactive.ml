@@ -39,9 +39,10 @@ open Format
 
 
 (** Create an interactive analysis engine over an abstraction. *)
-module Make : ENGINE = functor(Abstraction : ABSTRACTION) ->
+module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
 struct
 
+  type t = Abstraction.t
 
   (** Analysis breakpoint *)
   type breakpoint = {
@@ -138,11 +139,11 @@ struct
         read_command range ()
 
       | "log on" | "l on" ->
-        Logging.opt_short_log := true;
+        Core.Debug_tree.opt_short_log := true;
         read_command range ()
 
       | "log off" | "l off" ->
-        Logging.opt_short_log := false;
+        Core.Debug_tree.opt_short_log := false;
         read_command range ()
 
       | "" -> (

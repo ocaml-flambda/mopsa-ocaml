@@ -118,7 +118,7 @@ end
 (*==========================================================================*)
 
 (** Lift a simplified signature to an intermediate one *)
-module MakeIntermediate(Value:VALUE) : Intermediate.Value.VALUE =
+module MakeIntermediate(Value:VALUE) : Intermediate.Value.VALUE with type t = Value.t =
 struct
 
   (* Trivial lifts *)

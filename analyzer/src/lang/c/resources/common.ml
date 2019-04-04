@@ -54,14 +54,16 @@ struct
       zone_eval = (fun e -> Process);
     }
 
-  let exec_interface = {
-    provides = [Z_c_resource];
-    uses = [Z_c]
-  }
+  let interface= {
+    iexec = {
+      provides = [Z_c_resource];
+      uses = [Z_c]
+    };
 
-  let eval_interface = {
-    provides = [Z_c, Z_c_low_level];
-    uses = [Z_c, Z_c_points_to]
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = [Z_c, Z_c_points_to]
+    }
   }
 
 
@@ -201,4 +203,4 @@ struct
 end
 
 let () =
-    Framework.Domains.Stateless.register_domain (module Domain)
+    Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

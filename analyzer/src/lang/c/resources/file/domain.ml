@@ -68,7 +68,7 @@ open Stubs.Ast
 open Ast
 open Zone
 open Memory.Common.Points_to
-module Itv = Universal.Numeric.Values.Integer_interval.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Slot
 open Table
 
@@ -155,18 +155,20 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    provides = [Z_c];
-    uses = []
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c];
+      uses = []
+    };
 
-  let eval_interface = {
-    provides = [Z_c, Z_c_low_level];
-    uses = [
-      Z_c, Z_c_points_to;
-      Z_c, Universal.Zone.Z_u_num;
-      Universal.Zone.Z_u_heap, Z_any
-    ]
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = [
+        Z_c, Z_c_points_to;
+        Z_c, Universal.Zone.Z_u_num;
+        Universal.Zone.Z_u_heap, Z_any
+      ]
+    }
   }
 
 
@@ -316,7 +318,7 @@ struct
       (* Second case: return NULL when all intervals may differ from the target interval *)
       let case2 =
         if Table.for_all (fun _ itv' ->
-            let itv1, itv2 = Itv.compare () O_ne itv itv' true in
+            let itv1, itv2 = Itv.compare O_ne itv itv' true in
             not @@ Itv.is_bottom itv1 &&
             not @@ Itv.is_bottom itv2
           ) a.others
@@ -395,4 +397,4 @@ struct
 end
 
 let () =
-    Framework.Core.Sig.Domain.register_domain (module Domain)
+    Framework.Core.Sig.Intermediate.Domain.register_domain (module Domain)
