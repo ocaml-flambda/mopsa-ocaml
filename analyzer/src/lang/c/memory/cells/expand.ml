@@ -789,7 +789,7 @@ module Domain = struct
       let t = under_type p.etyp in
 
       man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun pe flow ->
+      Eval.bind_some @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (Common.Base.Z, o)) ->
@@ -825,7 +825,7 @@ module Domain = struct
 
     | E_stub_primed (e) ->
       eval_scalar_cell_opt e man flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun c flow ->
+      Eval.bind_some @@ fun c flow ->
       begin match c with
         | None -> Eval.singleton (mk_top e.etyp exp.erange) flow
         | Some c ->
@@ -846,7 +846,7 @@ module Domain = struct
     (* 𝔼⟦ size(p) ⟧ *)
     | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun pe flow ->
+      Eval.bind_some @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, _)) ->
@@ -873,7 +873,7 @@ module Domain = struct
     (* 𝔼⟦ valid(p) ⟧ *)
     | E_stub_builtin_call(PTR_VALID, p) ->
       man.eval ~zone:(Z_c_low_level, Z_c_cell_expand) p flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun p flow ->
+      Eval.bind_some @@ fun p flow ->
       let exp' = { exp with ekind = E_stub_builtin_call( PTR_VALID, p) } in
       Eval.singleton exp' flow
 

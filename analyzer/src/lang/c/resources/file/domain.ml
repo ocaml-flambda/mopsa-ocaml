@@ -359,13 +359,13 @@ struct
     | E_stub_alloc("FileDescriptor") ->
       let alloc = mk_alloc_addr (A_stub_resource "FileDescriptor") exp.erange in
       man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun exp' flow ->
+      Eval.bind_some @@ fun exp' flow ->
       insert (Addr.from_expr exp') exp.erange man flow
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun n flow ->
+      Eval.bind_some @@ fun n flow ->
 
       find n exp.erange man flow |>
       Eval.bind @@ fun addr flow ->
@@ -381,7 +381,7 @@ struct
     (* 𝔼⟦ _mopsa_int_to_fd(n) ⟧ *)
     | E_c_builtin_call("_mopsa_int_to_fd", [n]) ->
       man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) n flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun n flow ->
+      Eval.bind_some @@ fun n flow ->
       find n exp.erange man flow
 
     | _ -> None

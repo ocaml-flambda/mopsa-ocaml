@@ -158,7 +158,7 @@ struct
                               e  |> etyp |> is_c_int_type &&
                               e' |> etyp |> is_c_int_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
+      Eval.bind_some @@ fun e flow ->
 
       man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
       Eval.bind @@ fun e' flow ->
@@ -212,7 +212,7 @@ struct
                           e   |> etyp |> is_c_num_type
       ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun e' flow ->
+      Eval.bind_some @@ fun e' flow ->
       let t  = etyp exp in
       let t' = etyp e in
       let r = rangeof t in
@@ -288,7 +288,7 @@ struct
     | E_c_cast(e, b) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_int_type->
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-      Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
+      Eval.bind_some @@ fun e flow ->
       let exp' = {
         ekind = E_unop (O_cast, e);
         etyp = to_universal_type exp.etyp;
@@ -335,7 +335,7 @@ struct
 
   and eval_binop op e e' exp man flow =
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-    Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
+    Eval.bind_some @@ fun e flow ->
 
     man.eval ~zone:(Z_c_scalar, Z_u_num) e' flow |>
     Eval.bind @@ fun e' flow ->
@@ -350,7 +350,7 @@ struct
 
   and eval_unop op e exp man flow =
     man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
-    Option.return |> Option.lift @@ Eval.bind @@ fun e flow ->
+    Eval.bind_some @@ fun e flow ->
 
     let exp' = {exp with
                 ekind = E_unop(op, e);

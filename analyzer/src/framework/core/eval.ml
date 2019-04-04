@@ -210,6 +210,9 @@ let bind_list feval l flow =
   bind_list_opt (fun e flow -> Some (feval e flow)) l flow |>
   Option.none_to_exn
 
+let bind_some f evl =
+  Some (bind f evl)
+
 let to_dnf (evl: ('e, 'a) eval) : ('e option * 'a flow) Dnf.t =
   Dnf.map (fun case -> case.eval_result, case.eval_flow) evl
 
