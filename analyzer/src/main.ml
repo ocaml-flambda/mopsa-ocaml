@@ -24,7 +24,6 @@
 open Framework
 open Framework.Ast.All
 open Framework.Core
-open Framework.Core.Engine
 open Framework.Config.Options
 
 (** {2 Command-line options} *)
@@ -60,7 +59,7 @@ let parse_options f () =
 
 (** Call the appropriate frontend to parse the input sources *)
 let parse_program lang files =
-  Logging.phase "parsing";
+  Framework.Core.Debug_tree.phase "parsing";
   match lang with
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
@@ -74,33 +73,38 @@ let parse_program lang files =
 let () =
   exit @@ parse_options (fun files ->
       try
-        let lang, domain = Config.Abstraction.parse () in
+        let lang, domain = Config.Parser.parse () in
 
         let prog = parse_program lang files in
 
         (* Top layer analyzer *)
         let module Domain = (val domain) in
-        let module Analyzer = Engine.Analyzer.Make(Domain) in
+        let module Abstraction = Abstraction.Make(Domain) in
+        let module Engine =
+          (val
+            if !opt_interactive
+            then
+              let module E = Engines.Interactive.Make(Abstraction) in
+              (module E)
+            else
+              let module E = Engines.Automatic.Make(Abstraction) in
+              (module E)
+            : Framework.Engines.Engine.ENGINE with type t = Domain.t
+          )
+        in
 
         let t = Timing.start () in
 
-        (* Get the appropriate analysis manager *)
-        let man =
-          if !opt_interactive
-          then Analyzer.interactive_man
-          else Analyzer.man
-        in
+        Debug_tree.phase "computing initial environments";
+        let flow = Engine.init prog in
 
-        Logging.phase "computing initial environments";
-        let flow = Analyzer.init prog man in
-
-        Logging.phase "starting the analysis";
+        Debug_tree.phase "starting the analysis";
         let stmt = mk_stmt (S_program prog) prog.prog_range in
-        let res = Analyzer.exec stmt man flow in
+        let res = Engine.exec stmt flow in
         let t = Timing.stop t in
 
-        Export.Factory.render Analyzer.man res t files
+        Output.Factory.render Engine.man res t files
 
       with
-        e -> Export.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
+        e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2
     ) ()

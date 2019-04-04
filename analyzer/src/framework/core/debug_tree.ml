@@ -24,9 +24,8 @@
 open Location
 open Ast.Expr
 open Ast.Stmt
-open Core
-open Core.Zone
-open Core.Manager
+open Zone
+open Manager
 open Format
 
 (** Command-line option to activate logs *)

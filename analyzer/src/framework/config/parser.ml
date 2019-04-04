@@ -25,7 +25,7 @@ open Core
 open Sig.Lowlevel.Domain
 open Sig.Lowlevel.Stacked
 open Sig.Lowlevel.Value
-open Engines.Abstraction
+open Abstraction
 open Yojson.Basic
 open Yojson.Basic.Util
 
@@ -58,7 +58,7 @@ let rec domain = function
 
 and leaf_domain name : (module DOMAIN) =
   try find_domain name
-  with Not_found -> Exceptions.panic "Domain %s not found" name
+  with Not_found -> Exceptions.panic "domain %s not found" name
 
 
 and domain_seq assoc : (module DOMAIN) =
@@ -94,7 +94,7 @@ and nonrel assoc : (module DOMAIN) =
   let module V = (val v : VALUE) in
   let module D =
     Sig.Intermediate.Domain.MakeLowlevelDomain(
-      Sig.Simplified.Domain.Make(
+      Sig.Simplified.Domain.MakeIntermediate(
         Combiners.Nonrel.Make(V)
       )
     )
@@ -107,7 +107,7 @@ and value = function
 
 and value_leaf name =
   try find_value name
-  with Not_found -> Exceptions.panic "Value %s not found" name
+  with Not_found -> Exceptions.panic "value %s not found" name
 
 and stack = function
   | `String(name) -> leaf_stack name
@@ -118,7 +118,7 @@ and stack = function
 
 and leaf_stack name : (module STACK) =
   try find_stack name
-  with Not_found -> Exceptions.panic "Stack %s not found" name
+  with Not_found -> Exceptions.panic "stack %s not found" name
 
 
 and stack_seq assoc : (module STACK) =

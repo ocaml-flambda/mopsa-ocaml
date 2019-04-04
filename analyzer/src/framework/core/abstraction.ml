@@ -28,7 +28,6 @@
     conditions of statements are merged into flows.
 *)
 
-open Core
 open Token
 open Context
 open Ast.All
@@ -92,7 +91,7 @@ let debug fmt = Debug.debug ~channel:"framework.engines.abstraction" fmt
 
 
 (** Encapsulate a domain into an abstraction *)
-module Make(Domain:Core.Sig.Lowlevel.Domain.DOMAIN)
+module Make(Domain:Sig.Lowlevel.Domain.DOMAIN)
   : ABSTRACTION with type t = Domain.t
 =
 struct
@@ -181,8 +180,8 @@ struct
       ) map
 
   let post ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
-    Logging.reach (Location.untag_range stmt.srange);
-    Logging.exec stmt zone man flow;
+    Debug_tree.reach (Location.untag_range stmt.srange);
+    Debug_tree.exec stmt zone man flow;
 
     let timer = Timing.start () in
     let fexec =
@@ -191,7 +190,7 @@ struct
     in
     let post = Cache.exec fexec zone stmt man flow in
 
-    Logging.exec_done stmt zone (Timing.stop timer) man post;
+    Debug_tree.exec_done stmt zone (Timing.stop timer) man post;
     post
 
   let exec ?(zone = any_zone) (stmt: stmt) man (flow: Domain.t flow) : Domain.t flow =
@@ -247,7 +246,7 @@ struct
 
   (** Evaluation of expressions. *)
   let rec eval ?(zone = (any_zone, any_zone)) ?(via=any_zone) exp man flow =
-    Logging.eval exp zone man flow;
+    Debug_tree.eval exp zone man flow;
     let timer = Timing.start () in
 
     let ret =
@@ -294,7 +293,7 @@ struct
             | _ -> Eval.singleton exp flow
     in
 
-    Logging.eval_done exp zone (Timing.stop timer) ret;
+    Debug_tree.eval_done exp zone (Timing.stop timer) ret;
     ret
 
   and eval_over_paths paths exp man flow =

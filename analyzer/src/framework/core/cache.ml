@@ -21,7 +21,6 @@
 
 (** Cache of post-conditions and evaluations *)
 
-open Core
 open Flow
 open Eval
 open Post
