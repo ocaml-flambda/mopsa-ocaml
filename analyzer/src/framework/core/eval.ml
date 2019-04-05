@@ -56,16 +56,11 @@ let empty_singleton flow : ('e, 'a) eval  =
     eval_cleaners = []
   }
 
-let iter_all (f: 'e option -> 'a flow -> unit) (eval: ('e, 'a) eval) : unit =
-  Dnf.to_list eval |>
-  List.flatten |>
-  List.iter (fun case -> f case.eval_result case.eval_flow)
-
 let iter (f: 'e -> 'a flow -> unit) (eval: ('e, 'a) eval) : unit =
-  iter_all (fun res flow ->
-      match res with
+  Dnf.iter (fun case ->
+      match case.eval_result with
       | None -> ()
-      | Some e -> f e flow
+      | Some e -> f e case.eval_flow
     ) eval
 
 let map

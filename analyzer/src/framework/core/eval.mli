@@ -46,8 +46,6 @@ val add_cleaners : stmt list -> ('e, 'a) eval  -> ('e, 'a) eval
 
 val iter : ('e -> 'a flow -> unit) -> ('e, 'a) eval -> unit
 
-val iter_all : ('e option -> 'a flow -> unit) -> ('e, 'a) eval -> unit
-
 val map:
   ('e -> 'a flow -> 'e * 'a flow) ->
   ('e, 'a) eval -> ('e, 'a) eval

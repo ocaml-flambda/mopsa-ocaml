@@ -77,16 +77,6 @@ struct
       with Not_found ->
         let evals = f exp man flow in
         add_to_cache eval_cache ((zone, exp, flow), evals);
-        (
-          match evals with
-          | None -> ()
-          | Some evl ->
-            Eval.iter_all (fun exp' flow ->
-              match exp' with
-              | Some e -> add_to_cache eval_cache ((zone, e, flow), Some (Eval.singleton e flow));
-              | None -> ()
-            ) evl
-        );
         evals
 
 end

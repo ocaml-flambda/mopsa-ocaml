@@ -73,6 +73,14 @@ let map
   List.map (List.map f) dnf
 
 
+let iter
+    (f:'a -> unit)
+    (dnf:'a t)
+  : unit
+  =
+  List.iter (List.iter f) dnf
+
+
 let apply
     (f: 'a -> 'b)
     (join: 'b -> 'b -> 'b)
