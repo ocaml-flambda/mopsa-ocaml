@@ -122,10 +122,12 @@ struct
   let print_prompt range () =
     printf "%a >> @?" (Debug.color "blue" Location.pp_range) range
 
+  let linedit_ctx = LineEdit.create_ctx ()
+
   (** Read a debug command *)
   let rec read_command range () =
     print_prompt range ();
-    let l = read_line () in
+    let l =  LineEdit.read_line linedit_ctx |> String.trim in
     let c = match l with
       | "run"   | "r"   -> Run
       | "next"  | "n"   -> Next
