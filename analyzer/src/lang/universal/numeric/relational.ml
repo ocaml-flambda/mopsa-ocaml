@@ -478,12 +478,14 @@ struct
         List.map var_to_apron
       in
       let env = Apron.Environment.remove env (Array.of_list vars) in
-      Apron.Abstract1.change_environment ApronManager.man a env true
+      Apron.Abstract1.change_environment ApronManager.man a env true |>
+      Option.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       Apron.Abstract1.rename_array ApronManager.man a
         [| var_to_apron var1  |]
-        [| var_to_apron var2 |] 
+        [| var_to_apron var2 |] |>
+      Option.return
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
@@ -499,7 +501,8 @@ struct
       let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
       let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
       let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
-      Apron.Abstract1.change_environment ApronManager.man a new_env true
+      Apron.Abstract1.change_environment ApronManager.man a new_env true |>
+      Option.return
 
     | S_assign({ ekind = E_var (var, STRONG) }, e) ->
       let a = add_missing_vars a (var :: (Visitor.expr_vars e)) in
@@ -508,7 +511,8 @@ struct
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv e in
           Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron var) texp None |>
-          remove_tmp l
+          remove_tmp l |>
+          Option.return
         with UnsupportedExpression ->
           exec (mk_remove_var var stmt.srange) a
       end
@@ -516,7 +520,7 @@ struct
     | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
       let lval' = { lval with ekind = E_var(var, STRONG) } in
       exec {stmt with skind = S_assign(lval', e)} a |>
-      join a
+      Option.lift (join a)
 
     | S_fold( {ekind = E_var (v, _)}, vl)
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl ->
@@ -531,9 +535,11 @@ struct
         | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
           let abs = Apron.Abstract1.fold ApronManager.man a
-              (List.map var_to_apron vl |> Array.of_list) in
+              (List.map var_to_apron vl |> Array.of_list)
+          in
           Apron.Abstract1.rename_array ApronManager.man abs
-              [|var_to_apron p|] [|var_to_apron v|]
+            [|var_to_apron p|] [|var_to_apron v|] |>
+          Option.return
       end
 
     | S_expand({ekind = E_var (v, _)}, vl)
@@ -548,7 +554,8 @@ struct
       let abs = Apron.Abstract1.expand ApronManager.man a
           (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
       let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
-      Apron.Abstract1.change_environment ApronManager.man abs env false
+      Apron.Abstract1.change_environment ApronManager.man abs env false |>
+      Option.return
 
     | S_assume(e) -> begin
         let a = add_missing_vars a (Visitor.expr_vars e) in
@@ -581,11 +588,12 @@ struct
                let diff_texpr = Apron.Texpr1.of_expr env diff in
                Apron.Tcons1.make diff_texpr op
             )
-            join_list meet_list
-        with UnsupportedExpression -> a
+            join_list meet_list |>
+          Option.return
+        with UnsupportedExpression -> Option.return a
       end
 
-    | _ -> top
+    | _ -> None
 
 
   and ask : type r. r Query.query -> t -> r option =

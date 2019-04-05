@@ -71,9 +71,18 @@ struct
   let rec vman (a:t) : (Value.t,Value.t) vman = {
     vget = (fun v -> v);
     vset = (fun v _ -> v);
-    veval = (fun e -> eval e a |> snd);
+    veval = (fun e ->
+        eval e a |>
+        Option.default (A_unsupported,Value.top) |>
+        snd
+      );
     vask = (fun query ->
-        let r = Value.EvalQuery.handle query (fun e -> eval e a |> snd) in
+        let r = Value.EvalQuery.handle query
+            (fun e -> eval e a |>
+                      Option.default (A_unsupported,Value.top) |>
+                      snd
+            )
+        in
         match r with
         | Some rr -> rr
         | None -> Exceptions.panic "query with no reply"
@@ -84,30 +93,38 @@ struct
   (** Forward evaluation returns the abstract value of the expression,
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
-  and eval (e:expr) (a:t) : aexpr * Value.t =
-    match ekind e with
+  and eval (e:expr) (a:t) : (aexpr * Value.t) option =
+    if not (Value.accept_expr e)
+    then None
+    else
+      match ekind e with
       | E_var(var, _) ->
         let v = VarMap.find var a in
-        (A_var (var, v), v)
+        (A_var (var, v), v) |>
+        Option.return
 
       | E_constant(c) ->
         let v = Value.of_constant c in
-        (A_cst (c, v), v)
+        (A_cst (c, v), v) |>
+        Option.return
 
       | E_unop (op,e1) ->
-        let (ae1, v1) = eval e1 a in
+        eval e1 a |> Option.bind @@ fun (ae1, v1) ->
         let v = Value.unop (vman a) op v1 in
-        (A_unop (op, ae1, v1), v)
+        (A_unop (op, ae1, v1), v) |>
+        Option.return
 
       | E_binop (op,e1,e2) ->
-        let (ae1, v1) = eval e1 a in
-        let (ae2, v2) = eval e2 a in
+        eval e1 a |> Option.bind @@ fun (ae1, v1) ->
+        eval e2 a |> Option.bind @@ fun (ae2, v2) ->
         let v = Value.binop (vman a) op v1 v2 in
-        A_binop (op, ae1, v1, ae2, v2), v
+        (A_binop (op, ae1, v1, ae2, v2), v) |>
+        Option.return
 
       | _ ->
         (* unsupported -> ⊤ *)
-        A_unsupported, Value.top
+        (* A_unsupported, Value.top *)
+        None
 
 
 
@@ -146,42 +163,48 @@ struct
      if r=true, keep the states that may satisfy the expression;
      if r=false, keep the states that may falsify the expression
   *)
-  let rec filter (e:expr) (r:bool) (a:t) : t =
+  let rec filter (e:expr) (r:bool) (a:t) : t option =
     match ekind e with
 
     | E_unop (O_log_not, e) ->
       filter e (not r) a
 
     | E_binop (O_log_and, e1, e2) ->
-      let a1 = filter e1 r a in
-      let a2 = filter e2 r a in
-      (if r then meet else join) a1 a2
+      filter e1 r a |> Option.bind @@ fun a1 ->
+      filter e2 r a |> Option.bind @@ fun a2 ->
+      (if r then meet else join) a1 a2 |>
+      Option.return
 
     | E_binop (O_log_or, e1, e2) ->
-      let a1 = filter e1 r a in
-      let a2 = filter e2 r a in
-      (if r then join else meet) a1 a2
+      filter e1 r a |> Option.bind @@ fun a1 ->
+      filter e2 r a |> Option.bind @@ fun a2 ->
+      (if r then join else meet) a1 a2 |>
+      Option.return
 
     | E_constant c ->
       let v = Value.of_constant c in
       let w = Value.filter (vman a) v r in
-      if Value.is_bottom w then bottom else a
+      (if Value.is_bottom w then bottom else a) |>
+      Option.return
 
     | E_var(var, _) ->
       let v = find var a in
       let w = Value.filter (vman a) v r in
-      if Value.is_bottom w then bottom else add var w a
+      (if Value.is_bottom w then bottom else add var w a) |>
+      Option.return
 
     (* arithmetic comparison part, handled by Value *)
     | E_binop (op, e1, e2) ->
       (* evaluate forward each argument expression *)
-      let ae1,v1 = eval e1 a in
-      let ae2,v2 = eval e2 a in
+      eval e1 a |> Option.bind @@ fun (ae1,v1) ->
+      eval e2 a |> Option.bind @@ fun (ae2,v2) ->
+
       (* apply comparison *)
       let r1, r2 = Value.compare (vman a) op v1 v2 r in
+
       (* propagate backward on both argument expressions *)
-      let a1 = refine ae1 v1 r1 a in
-      refine ae2 v2 r2 a1
+      refine ae2 v2 r2 @@ refine ae1 v1 r1 a |>
+      Option.return
 
     | _ -> assert false
 
@@ -196,13 +219,15 @@ struct
 
   let zone = Value.zone
 
-  let rec exec stmt (map:t) : t =
+  let rec exec stmt (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) }  ->
-      VarMap.remove v map
+      VarMap.remove v map |>
+      Option.return
 
     | S_add { ekind = E_var (v, _) } ->
-      VarMap.add v Value.top map
+      VarMap.add v Value.top map |>
+      Option.return
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars ->
@@ -213,17 +238,21 @@ struct
       in
       VarMap.fold (fun v _ acc ->
           if List.exists (fun v' -> compare_var v v' = 0) vars then acc else VarMap.remove v acc
-        ) map map
+        ) map map |>
+      Option.return
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v = VarMap.find var1 map in
-      VarMap.remove var1 map |> VarMap.add var2 v
+      VarMap.remove var1 map |>
+      VarMap.add var2 v |>
+      Option.return
 
     | S_forget { ekind = E_var (var, _) } ->
-      add var Value.top map
+      add var Value.top map |>
+      Option.return
 
     | S_assign ({ ekind= E_var (var, mode) }, e)  ->
-      let _, v = eval e map in
+      eval e map |> Option.lift @@ fun (_, v) ->
       let map' = VarMap.add var v map in
       begin
         match mode with
@@ -242,13 +271,14 @@ struct
       let value = find v map in
       List.fold_left (fun acc v' ->
           add v' value acc
-        ) map vl
+        ) map vl |>
+      Option.return
 
     (* FIXME: check weak variables in rhs *)
     | S_assume e ->
       filter e true map
 
-    | _ -> top
+    | _ -> None
 
 
 
@@ -259,6 +289,7 @@ struct
     fun query map ->
       Value.EvalQuery.handle query (fun exp ->
           eval exp map |>
+          Option.default (A_unsupported,Value.top) |>
           snd
         )
 

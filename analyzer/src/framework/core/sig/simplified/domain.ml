@@ -104,7 +104,7 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> t -> t
+  val exec : stmt -> t -> t option
   (** Computation of post-conditions *)
 
   val ask : 'r Query.query -> t -> 'r option
@@ -144,10 +144,10 @@ struct
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       let a = get_domain_env T_cur man flow in
-      let a' = D.exec stmt a in
+      D.exec stmt a |> Option.lift @@ fun a' ->
+
       set_domain_env T_cur a' man flow |>
-      Post.return |>
-      Option.return
+      Post.return
 
     | _ -> None
 
