@@ -31,10 +31,12 @@ module Domain =
     let name = "python.types.t_float"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ _ = None
+    let init _ _ flow = flow
 
     let is_arith_unop_fun = function
       | "float.__pos__"
@@ -42,28 +44,27 @@ module Domain =
            | _ -> false
 
     let eval zs exp man flow =
-      debug "eval %a@\n" pp_expr exp;
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls], []) ->
          (* FIXME?*)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__new__")}, _)}, [cls; arg], []) ->
          (* FIXME?*)
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
            Eval.bind (fun el flow ->
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin el "float" range)
                  ~fthen:(fun flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                  ~felse:(fun flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin el "int" range)
                      ~fthen:(fun flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
                      ~felse:(fun flow ->
-                       Eval.assume
+                       assume_eval
                          (mk_py_isinstance_builtin el "str" range)
                          ~fthen:(fun flow ->
                            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) flow)
@@ -75,19 +76,19 @@ module Domain =
                  )
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
 
 
       (* 𝔼⟦ float.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_compare_op_fun "float" f ->
-         Eval.eval_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e1 "float" range)
                  ~fthen:(fun true_flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin e2 "float" range)
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
@@ -101,22 +102,22 @@ module Domain =
                    Eval.empty_singleton flow)
                  man flow
              )
-         |>  OptionExt.return
+         |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
            when is_arith_binop_fun "float" f ->
-         Eval.eval_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e1 "float" range)
                  ~fthen:(fun true_flow ->
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin e2 "float" range)
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)
                      ~felse:(fun false_flow ->
-                       Eval.assume
+                       assume_eval
                          (mk_py_isinstance_builtin e2 "int" range)
                          ~fthen:(fun flow -> man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)
                          ~felse:(fun false_flow ->
@@ -130,13 +131,13 @@ module Domain =
                    Eval.empty_singleton flow)
                  man flow
              )
-         |>  OptionExt.return
+         |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e], [])
            when is_arith_unop_fun f ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
            Eval.bind (fun el flow ->
-               Eval.assume
+               assume_eval
                  (mk_py_isinstance_builtin e "float" range)
                  ~fthen:(fun true_flow ->
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top (T_float F_DOUBLE) range) true_flow)
@@ -145,8 +146,12 @@ module Domain =
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
 
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "float.__hash__")}, _)}, args, []) ->
+        Utils.check_instances man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
+        |> Option.return
 
       | _ -> None
 
@@ -154,4 +159,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

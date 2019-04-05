@@ -1,7 +1,7 @@
 {
     "language": "python",
     "domain": {
-        "iter": [
+        "seq": [
             "python.program",
 
             "python.desugar.bool",
@@ -27,7 +27,11 @@
 
             "python.objects.class",
             "python.objects.function",
-            // "python.objects.nones",
+            "python.objects.list",
+            "python.objects.tuple",
+            "python.objects.dict",
+            "python.objects.set",
+            "python.objects.range",
 
             "python.data_model.attribute",
             "python.data_model.subscript",
@@ -36,20 +40,16 @@
             "python.data_model.aug_assign",
             "python.data_model.callable",
 
-            {
-                "stack": "universal.heap.recency",
-                "over": {
-                    "iter": [
-                        "python.types.addr_env",
-                        "python.types.t_string",
-                        "python.types.t_int",
-                        "python.types.t_float",
-                        "python.types.t_list",
-                        "python.types.t_set",
-                        "python.types.typing"
-                    ]
-                }
-            }
+            "universal.heap.recency.by_kind_callstack",
+            // "python.types.addr_env",
+            "python.types.t_string",
+            "python.types.t_int",
+            "python.types.t_float",
+            "python.types.t_complex",
+            // "python.types.t_list",
+            // "python.types.t_set",
+            // "python.types.typing"
+            "python.types.typechecking"
         ]
     }
 }

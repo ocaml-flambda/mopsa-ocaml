@@ -32,10 +32,12 @@ module Domain =
     let name = "python.data_model.callable"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let exec _ _ _ _ = None
 
@@ -63,19 +65,20 @@ module Domain =
                Eval.empty_singleton flow
 
              (* Calls on other kinds of addresses is handled by other domains *)
-             | E_py_object _ ->
+             | E_py_object ({addr_kind = A_py_class _}, _)
+             | E_py_object ({addr_kind = A_py_function _}, _)
+             | E_py_object ({addr_kind = A_py_method _}, _)
+             | E_py_object ({addr_kind = A_py_module _}, _) ->
 
-               (* for now, we'd like string constants not to be evaluated, to be able to handle call like hasattr with precision, even on the type domain *)
-               Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-
-               Eval.bind (fun args flow ->
+               (* Eval.eval_list args (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+                * Eval.bind (fun args flow -> *)
                    let exp = {exp with ekind = E_py_call(f, args, [])} in
                    man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) exp flow
-                 )
+                 (* ) *)
 
              | _ ->
                (* if f has attribute call, restart with that *)
-               Eval.assume
+               assume_eval
                  (mk_py_hasattr f "__call__" range)
                  ~fthen:(fun flow ->
                      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
@@ -84,7 +87,7 @@ module Domain =
                    )
                  man flow
           )
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call(f, args, _) ->
         panic_at range "calls with keyword arguments not supported"
@@ -97,4 +100,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

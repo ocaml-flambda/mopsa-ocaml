@@ -32,7 +32,7 @@ open Log
 module Make
     (D1:Sig.Lowlevel.Domain.DOMAIN)
     (D2:Sig.Lowlevel.Domain.DOMAIN)
-  : Sig.Lowlevel.Domain.DOMAIN
+  : Sig.Lowlevel.Domain.DOMAIN with type t = D1.t * D2.t
 =
 struct
 

@@ -4,6 +4,7 @@ def test_main():
     a = 1
     b = [a, 2]
     c = {a: b[0]}
+    mopsa.ignore_exception(IndexError)
     d = (a, b, c)
     e = {a}
     f = (a & 2 * 3) - 33 / 2
@@ -32,6 +33,7 @@ def test_main():
     mopsa.massert(isinstance(l, list))
     mopsa.massert(isinstance(l[0], tuple))
     mopsa.massert(isinstance(l[0][0], int))
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_dict_of(m, int, int)
     mopsa.massert(isinstance(n, int))
     mopsa.massert(isinstance(o, str))

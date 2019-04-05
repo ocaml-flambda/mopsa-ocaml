@@ -118,9 +118,16 @@ let map_flow
       { case with eval_flow = flow' }
     ) eval
 
+let choose_ctx eval =
+  match Dnf.choose eval with
+  | Some case -> get_ctx case.eval_flow
+  | None -> Context.empty
 
 let set_ctx ctx evl =
   map_flow (Flow.set_ctx ctx) evl
+
+let copy_ctx src dst =
+  set_ctx (choose_ctx src) dst
 
 let join (eval1: ('e, 'a) eval) (eval2: ('e, 'a) eval) : ('e, 'a) eval =
   Dnf.mk_or eval1 eval2
@@ -152,12 +159,6 @@ let add_cleaners (cleaners: stmt list) (eval: ('e, 'a) eval ) : ('e, 'a) eval  =
       {case with eval_cleaners = case.eval_cleaners @ cleaners}
     ) eval
 
-let choose_ctx eval =
-  match Dnf.choose eval with
-  | Some case -> get_ctx case.eval_flow
-  | None -> Context.empty
-
-
 let bind_opt f eval =
   let ctx, eval = Dnf.fold_apply
       (fun ctx case ->
@@ -186,7 +187,7 @@ let bind
   Option.none_to_exn
 
 
-let bind_list_opt feval l flow =
+let eval_list_opt feval l flow =
   let rec aux l flow =
     match l with
     | e :: tl ->
@@ -206,8 +207,8 @@ let bind_list_opt feval l flow =
   in
   aux l flow
 
-let bind_list feval l flow =
-  bind_list_opt (fun e flow -> Some (feval e flow)) l flow |>
+let eval_list feval l flow =
+  eval_list_opt (fun e flow -> Some (feval e flow)) l flow |>
   Option.none_to_exn
 
 let bind_some f evl =

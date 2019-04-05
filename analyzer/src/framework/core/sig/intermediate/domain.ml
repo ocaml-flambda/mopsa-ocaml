@@ -144,8 +144,18 @@ end
 
 
 (*==========================================================================*)
-(**                         {2 Low-level cast}                              *)
+(**                        {2 Low-level lifters}                            *)
 (*==========================================================================*)
+
+let lift_low_level_binop
+    (man:('a,'t) man)
+    (a:'a)
+    (a':'a)
+    (f:'t->'t->'r)
+  : 'r
+  =
+  f (man.get a) (man.get a')
+  
 
 (** Cast a unified signature into a low-level signature *)
 module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.Domain.DOMAIN with type t = D.t =
@@ -176,17 +186,17 @@ struct
 
   let is_bottom man a = D.is_bottom (man.get a)
 
-  let subset man a a' = D.subset (man.get a) (man.get a')
+  let subset man a a' = lift_low_level_binop man a a' D.subset
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let join man a a' = D.join (man.get a) (man.get a')
+  let join man a a' = lift_low_level_binop man a a' D.join
 
-  let meet man a a' = D.meet (man.get a) (man.get a')
+  let meet man a a' = lift_low_level_binop man a a' D.meet
 
-  let widen man ctx a a' = D.widen ctx (man.get a) (man.get a')
+  let widen man ctx a a' = lift_low_level_binop man a a' (D.widen ctx)
 
   let merge man pre (post1,log1) (post2,log2) =
     D.merge

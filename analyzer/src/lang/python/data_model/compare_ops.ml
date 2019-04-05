@@ -34,10 +34,12 @@ module Domain = struct
   let name = "python.data_model.compare_ops"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = []; import = []}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+  let interface = {
+    iexec = {provides = []; uses = []};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+  }
 
-  let init _ _ flow = Some flow
+  let init _ _ flow = flow
 
 
   (* check equality by inspecting types and instance addresses. Return
@@ -61,7 +63,7 @@ module Domain = struct
     match ekind exp with
     | E_binop(op, e1, e2) when is_comp_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
        debug "compare op@\n";
-       Eval.eval_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+       Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj))  [e1; e2] flow |>
          Eval.bind (fun el flow ->
              let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
@@ -87,14 +89,14 @@ module Domain = struct
                            in
                          let expr = mk_py_isinstance cmp not_implemented_type range in
                          debug "Expr is %a@\n" pp_expr expr;
-                         Eval.assume
+                         assume_eval
                            expr
                            ~fthen:(fun true_flow ->
                              (* FIXME: subclass priority check is not implemented *)
                              begin
                                match op with
                                | O_eq | O_ne ->
-                                  Eval.assume
+                                  assume_eval
                                     (mk_expr (E_binop(O_py_is, e1, e2)) range)
                                     ~fthen:(fun flow ->
                                       match op with
@@ -115,7 +117,7 @@ module Domain = struct
                              end)
                            ~felse:(fun false_flow ->
                              Eval.singleton cmp flow)
-                           man flow))) |> OptionExt.return
+                           man flow))) |> Option.return
     | _ -> None
 
   let exec _ _ _ _ = None
@@ -124,4 +126,4 @@ module Domain = struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

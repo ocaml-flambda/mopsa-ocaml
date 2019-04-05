@@ -40,6 +40,7 @@ def test_main():
     mopsa.massert(isinstance(K[0], float))
     mopsa.massert(isinstance(N[0], float))
     mopsa.ignore_exception(IndexError)
+    mopsa.ignore_exception(UnboundLocalError)
 
 # T := int
 # x := int

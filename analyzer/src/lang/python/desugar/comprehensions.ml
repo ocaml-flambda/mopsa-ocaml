@@ -36,8 +36,10 @@ module Domain =
     let name = "python.desugar.comprehensions"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = [Zone.Z_py]}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = [Zone.Z_py]};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mktmp () in
@@ -46,7 +48,6 @@ module Domain =
            | [] ->
               mk_stmt (S_expression (mk_py_call append (acc_var::expr) range)) range
            | (target, iter, conds)::tl ->
-              (* todo: mk_remove target in the end *)
               let i_conds = List.rev conds in
               let empty_stmt = mk_stmt (Universal.Ast.S_block []) range in
               let if_stmt = List.fold_left (fun acc cond ->
@@ -55,14 +56,15 @@ module Domain =
               mk_stmt (S_py_for(target, iter,
                                 if_stmt,
                                 empty_stmt)) range in
-         let clean_targets = List.fold_left (fun acc (target, _, _) -> match ekind target with
-                                                                       | E_var (v, _) -> (mk_remove_var v range)::acc
-                                                                       | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
+         let clean_targets = List.fold_left
+             (fun acc (target, _, _) -> match ekind target with
+                | E_var (v, _) -> (mk_remove_var v range)::acc
+                | _ -> Exceptions.panic "Comprehension: target %a is not a variable...@\n" pp_expr target) [] comprehensions in
          let stmt = mk_block ((mk_assign acc_var base range) :: (unfold_lc comprehensions) :: clean_targets) range in
          stmt, tmp_acc
 
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
@@ -75,7 +77,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
@@ -87,7 +89,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
@@ -99,7 +101,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
          Debug.warn "No desugaring for generator comprehensions@\n"; None
@@ -113,4 +115,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

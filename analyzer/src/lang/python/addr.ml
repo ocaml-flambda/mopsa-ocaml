@@ -302,15 +302,16 @@ let mk_py_z_interval l u range =
 let mk_py_float_interval l u range =
   mk_float_interval l u range
 
-let mk_attribute_var obj attr range =
-  let addr = addr_of_object obj in
-  let vname =
-    let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
-    Format.flush_str_formatter ()
-  in
-  let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
-  let v = mkv vname uniq addr.addr_uid T_any in
-  mk_var v range
+(* Warning: mkv is depecriated, doesn't respect unique ids *)
+(* let mk_attribute_var obj attr range =
+ *   let addr = addr_of_object obj in
+ *   let vname =
+ *     let () = Format.fprintf Format.str_formatter "%a.%s" pp_addr addr attr in
+ *     Format.flush_str_formatter ()
+ *   in
+ *   let uniq = vname ^ ":" ^ (string_of_int addr.addr_uid) in
+ *   let v = mkv vname uniq addr.addr_uid T_any in
+ *   mk_var v range *)
 
 let mk_py_hasattr e attr range =
   mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
@@ -578,3 +579,21 @@ let builtin_cl_and_mro s =
   match tyo with
   | A_py_class (c, b) -> c, b
   | _ -> assert false
+
+
+
+type addr_kind +=
+  | A_py_instance of string
+
+let () =
+  Format.(register_addr {
+      print = (fun default fmt a ->
+          match a with
+          | A_py_instance s (*c -> fprintf fmt "Inst{%a}" pp_addr_kind (A_py_class (c, []))*)
+            -> fprintf fmt "inst[%s]" s
+          | _ -> default fmt a);
+      compare = (fun default a1 a2 ->
+          match a1, a2 with
+          | A_py_instance c1, A_py_instance c2 ->
+            Pervasives.compare c1 c2
+          | _ -> default a1 a2);})

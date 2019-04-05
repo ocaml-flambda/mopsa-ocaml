@@ -1,7 +1,6 @@
 import mopsa
 
 def test_main():
-
     """Number of solutions of linear equality"""
 
 
@@ -12,6 +11,7 @@ def test_main():
         for i in range(len(a)):
             for j in range(a[i]):
                 dp[j] += dp[j - a[i]]
+
         return dp[b]
 
     a = count_solutions([1, 2, 3], 2)

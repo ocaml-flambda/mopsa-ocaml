@@ -32,39 +32,44 @@ module Domain =
     let name = "python.desugar.iterable_assign"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = [Zone.Z_py]}
-    let eval_interface = {export = []; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
+      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let rec exec zone stmt man flow =
       let range = srange stmt in
       match skind stmt with
       | S_assign({ekind = E_py_tuple(el)}, exp)
-        | S_assign({ekind = E_py_list(el)}, exp) ->
-         man.eval (Utils.mk_builtin_call "iter" [exp] range) flow |>
-           Post.bind man
-             (fun iter flow ->
-               assign_iter man el iter range flow
-               |> Post.of_flow
-             )
-         |> OptionExt.return
+      | S_assign({ekind = E_py_list(el)}, exp) ->
+        debug "iterable assign@\n";
+         (* man.eval (Utils.mk_builtin_call "iter" [exp] range) flow |>
+          *   Post.bind man
+          *     (fun iter flow -> *)
+               assign_iter man el exp range flow
+             (*   |> Post.of_flow
+              * ) *)
+         (* |> OptionExt.return *)
 
       | _ -> None
 
-    and assign_iter man el iter range flow =
+    and assign_iter man el exp range flow =
+      let tmp = mktmp () in
+      let assign_iterable = mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [exp] range) range in
       let stmtl =
         List.fold_left (fun acc e ->
             mk_assign
               e
-              (Utils.mk_builtin_call "next" [iter] range)
+              (Utils.mk_builtin_call "next" [mk_var tmp range] range)
               (tag_range range "next assign")
             :: acc
           ) [] el |>
           List.rev
       in
       let block = mk_block stmtl (tag_range range "next assign block") in
-      let stmt =
+      let stmt_itera =
         mk_try
           block
           [mk_except
@@ -76,7 +81,11 @@ module Domain =
           (mk_nop (tag_range range "empty try finally"))
           (tag_range range "try next")
       in
-      man.exec stmt flow
+      let stmt = mk_block [assign_iterable; stmt_itera] range in
+      man.exec stmt flow |>
+      exec_stmt_on_all_flows (mk_remove_var tmp range) man |>
+      Post.return |>
+      Option.return
 
 
     let eval _ _ _ _ = None
@@ -85,4 +94,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

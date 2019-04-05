@@ -1,4 +1,6 @@
-# Il faut gérer les effets de bord (cf adj_list[i].append)
+import mopsa
+
+
 INF = 100000000
 
 
@@ -37,21 +39,33 @@ def has_negative_cycle(source, adj_list):
     return found_cycle
 
 
-size = 5
-adj_list = [[] * size]
-adj_list[0].append(Edge(1, 23))
-adj_list[0].append(Edge(3, 7))
-adj_list[1].append(Edge(0, 85))
-adj_list[1].append(Edge(4, 16))
-adj_list[2].append(Edge(3, 229))
-adj_list[3].append(Edge(1, -50))
-adj_list[4].append(Edge(0, 99))
-adj_list[4].append(Edge(2, -38))
+def test_main():
+    size = 5
+    adj_list = [[] * size]
+    adj_list[0].append(Edge(1, 23))
+    adj_list[0].append(Edge(3, 7))
+    adj_list[1].append(Edge(0, 85))
+    adj_list[1].append(Edge(4, 16))
+    adj_list[2].append(Edge(3, 229))
+    adj_list[3].append(Edge(1, -50))
+    adj_list[4].append(Edge(0, 99))
+    adj_list[4].append(Edge(2, -38))
+    mopsa.ignore_exception(IndexError)
 
-for source in range(size):
-    if has_negative_cycle(source, adj_list):
-        print("Found negative cycle starting from" + str(source))
+    for source in range(size):
+        if has_negative_cycle(source, adj_list):
+            print("Found negative cycle starting from" + str(source))
 
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+    mopsa.massert(isinstance(INF, int))
+    mopsa.massert(isinstance(size, int))
+    mopsa.massert(isinstance(source, int))
+    mopsa.ignore_exception(UnboundLocalError)
+    mopsa.massert(isinstance(adj_list, list))
+    mopsa.massert(isinstance(adj_list[0], list))
+    mopsa.massert(isinstance(adj_list[0][0], Edge))
+    mopsa.ignore_exception(IndexError)
 
 # INF := int
 # size := int

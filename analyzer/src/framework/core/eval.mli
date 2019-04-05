@@ -78,12 +78,14 @@ val to_dnf : ('e, 'a) eval -> ('e option * 'a flow) Dnf.t
 
 val choose_ctx : ('e, 'a) eval -> 'a ctx
 
+val copy_ctx : ('e, 'a) eval -> ('e, 'a) eval -> ('e, 'a) eval
+
 val bind : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval
 
 val bind_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> ('e, 'a) eval -> ('f, 'a) eval option
 
 val bind_some : ('e -> 'a flow -> ('f, 'a) eval ) -> ('e, 'a) eval -> ('f, 'a) eval option
 
-val bind_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
+val eval_list : ('e -> 'a flow -> ('f, 'a) eval) -> 'e list -> 'a flow -> ('f list, 'a) eval
 
-val bind_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option
+val eval_list_opt : ('e -> 'a flow -> ('f, 'a) eval option) -> 'e list -> 'a flow -> ('f list, 'a) eval option

@@ -23,7 +23,7 @@
 
 (** Main entry point of the parser *)
 
-let parse_file (filename:string) : Ast.program =
+let parse_file ?(counter=(List.length Builtins.all)) (filename:string) : Ast.program * int =
   let f = open_in filename in
   let buf = Lexing.from_channel f in
   buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = filename };
@@ -32,6 +32,7 @@ let parse_file (filename:string) : Ast.program =
     (* Parse the program source *)
     let cst = Parser.file_input Lexer.next_token buf in
     close_in f;
+    Scoping.start_counter_at counter;
 
     (* Simplify the CST into an AST *)
     Cst_to_ast.translate_program cst |>
@@ -42,7 +43,7 @@ let parse_file (filename:string) : Ast.program =
   with
   | Lexer.LexingError e ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
-    Exceptions.syntax_error range "%s" e
+    Exceptions.syntax_error range "Lexer: %s" e
 
   | Parser.Error ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in

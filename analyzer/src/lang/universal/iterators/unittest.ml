@@ -45,14 +45,16 @@ let unittest_filter = ref []
 let () =
   register_domain_option name {
     key = "-unittest";
-    spec = Arg.Set unittest_flag;
+    category = "Unit tests";
+    spec = ArgExt.Set unittest_flag;
     doc = " activate unittest mode";
     default = "";
   };
   register_domain_option name {
     key = "-unittest-filter";
+    category = "Unit tests";
     doc = " list of test functions (separated by comma) to analyze";
-    spec = Arg.String(fun s ->
+    spec = ArgExt.String(fun s ->
         unittest_filter := Str.split (Str.regexp "[ ]*,[ ]*") s
       );
     default = "";

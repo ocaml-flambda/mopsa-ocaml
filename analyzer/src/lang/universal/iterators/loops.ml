@@ -65,14 +65,16 @@ let opt_loop_unrolling : int ref = ref 1
 let () =
   register_domain_option name {
     key = "-widening-delay";
+    category = "Loops";
     doc = " number of iterations before applying a widening";
-    spec = Arg.Set_int opt_loop_widening_delay;
+    spec = ArgExt.Set_int opt_loop_widening_delay;
     default = "0";
   };
   register_domain_option name {
     key = "-loop-unrolling";
+    category = "Loops";
     doc = " number of unrolling iterations before joining the environments";
-    spec = Arg.Set_int opt_loop_unrolling;
+    spec = ArgExt.Set_int opt_loop_unrolling;
     default = "1";
   }
 
@@ -187,6 +189,7 @@ struct
           man.exec body |>
           merge_cur_and_continue man
         in
+
         let flow2 =
           man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_ctx flow1 flow)
         in

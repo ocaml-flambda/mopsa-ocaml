@@ -55,6 +55,7 @@ let () =
     | T_py_none -> pp_print_string fmt "none"
     | T_py_complex -> pp_print_string fmt "complex"
     | T_py_empty -> pp_print_string fmt "empty"
+    | T_py_bytes -> pp_print_string fmt "bytes"
     | _ -> default fmt typ
     );
   register_constant_pp (fun default fmt -> function
@@ -219,6 +220,9 @@ let () =
           pp_expr test
           pp_stmt body
           pp_stmt orelse
+
+      | S_py_if(test, sthen, selse) ->
+          fprintf fmt "@[<v 4>if (%a) {@,%a@]@,@[<v 4>} else {@,%a@]@,}" pp_expr test pp_stmt sthen pp_stmt selse
 
       | S_py_multi_assign(targets, e) ->
         fprintf fmt "%a %a"

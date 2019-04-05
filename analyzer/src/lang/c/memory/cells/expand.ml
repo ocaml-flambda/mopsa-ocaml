@@ -116,8 +116,9 @@ module Domain = struct
   let () =
     register_domain_option name {
       key = "-cell-expand";
+      category = "C";
       doc = " maximal number of expanded cells";
-      spec = Arg.Set_int opt_expand;
+      spec = ArgExt.Set_int opt_expand;
       default = "1";
     }
 

@@ -347,6 +347,7 @@ class dict(object):
     def __getitem__(self, k): pass
     def __setitem__(self, k, v): pass
     def __iter__(self): pass
+    def __contains__(self, k): pass
     def copy(self): pass
     def clear(self): pass
     def get(self): pass
@@ -421,14 +422,14 @@ class slice(object):
     def __new__(self, args): pass
 
 class NotImplementedType(object): pass
-class NoneType(object):
-    def __eq__(self, other): pass
+class NoneType(object): pass
+    # def __eq__(self, other): pass
 
 @mopsa.unsupported
 class bytearray(object): pass
 
-@mopsa.unsupported
-class bytes(object): pass
+class bytes(object):
+    def __getitem__(self, i): pass
 
 @mopsa.unsupported
 class bytes_iterator(object): pass

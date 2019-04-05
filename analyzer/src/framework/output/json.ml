@@ -22,14 +22,15 @@
 (** Format the results of the analysis in JSON. *)
 
 open Yojson.Basic
+open ArgExt
 
-let print json out =
+let print out json =
   let channel =
     match out with
     | None -> stdout
     | Some file -> open_out file
   in
-  to_channel channel json
+  Yojson.Basic.pretty_to_channel channel json
 
 let render_pos pos : json =
   let file = Location.get_pos_file pos in
@@ -69,7 +70,7 @@ let render_alarm alarm : json =
     "callstack", render_callstack cs;
   ]
 
-let render man alarms time files out : unit =
+let report ?(flow=None) man alarms time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;
@@ -77,7 +78,7 @@ let render man alarms time files out : unit =
       "alarms", `List (List.map render_alarm alarms);
     ]
   in
-  print json out
+  print out json
 
 
 let panic ?(btrace="<none>") exn files out =
@@ -97,36 +98,36 @@ let panic ?(btrace="<none>") exn files out =
       "backtrace", `String btrace;
     ]
   in
-  print json out
+  print out json
 
-let help (args:(Arg.key * Arg.spec * Arg.doc * string) list) out =
+let help (args:arg list) out =
   let json : json = `List (
       args |>
-      List.map (fun (key,spec,doc,default) ->
+      List.map (fun arg ->
           `Assoc [
-            "key", `String key;
-            "doc", `String doc;
-            "default", `String default;
+            "key", `String arg.key;
+            "doc", `String arg.doc;
+            "category", `String arg.category;
+            "default", `String arg.default;
             "type", `String (
-              match spec with
-              | Arg.Bool _ -> "bool"
-              | Arg.Set _ -> "set"
-              | Arg.Clear _ -> "clear"
-              | Arg.Unit _ -> "unit"
-              | Arg.String _ -> "string"
-              | Arg.Set_string _ -> "string"
-              | Arg.Int _ -> "int"
-              | Arg.Set_int _ -> "int"
-              | Arg.Float _ -> "float"
-              | Arg.Set_float _ -> "float"
-              | Arg.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
-              | _ -> Exceptions.panic ~loc:__LOC__ "unsupported option"
+              match arg.spec with
+              | ArgExt.Bool _ -> "bool"
+              | ArgExt.Set _ -> "set"
+              | ArgExt.Clear _ -> "clear"
+              | ArgExt.Unit _ -> "unit"
+              | ArgExt.Unit_delayed _ -> "unit"
+              | ArgExt.String _ -> "string"
+              | ArgExt.Set_string _ -> "string"
+              | ArgExt.Set_string_list _ -> "string list"
+              | ArgExt.Int _ -> "int"
+              | ArgExt.Set_int _ -> "int"
+              | ArgExt.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
             )
           ]
         )
     )
   in
-  print json out
+  print out json
 
 let list_domains (domains:string list) out =
   let json : json = `List (
@@ -134,4 +135,4 @@ let list_domains (domains:string list) out =
       List.map (fun d -> `String d)
     )
   in
-  print json out
+  print out json

@@ -35,17 +35,19 @@ module Domain =
     let name = "python.data_model.arith_ops"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_binop(op, e1, e2) when is_arith_op op (*&& is_py_expr e1 && is_py_expr e2*) ->
          debug "arith op@\n";
-         Eval.eval_list [e1; e2] (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+         Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
            Eval.bind
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
@@ -65,13 +67,13 @@ module Domain =
                            let is_same_type = compare_py_object cls1 cls2 = 0 in
                            let not_implemented_type = mk_py_type (mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range) range in
 
-                           Eval.assume
+                           assume_eval
                              (Utils.mk_object_hasattr cls1 op_fun range)
                              ~fthen:(fun true_flow ->
                                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) true_flow |>
                                  Eval.bind (fun r flow ->
                                      let expr = mk_py_isinstance r not_implemented_type range in
-                                     Eval.assume expr
+                                     assume_eval expr
                                        ~fthen:(fun true_flow ->
                                          let flow = true_flow in
                                          (* if is_not_implemented r then *)
@@ -79,12 +81,12 @@ module Domain =
                                            let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                                            Eval.empty_singleton flow
                                          else
-                                           Eval.assume
+                                           assume_eval
                                              (Utils.mk_object_hasattr cls2 rop_fun range)
                                              ~fthen:(fun true_flow ->
                                                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                                  Eval.bind (fun r flow ->
-                                                     Eval.assume
+                                                     assume_eval
                                                        (mk_py_isinstance r not_implemented_type range)
                                                        ~fthen:(fun true_flow ->
                                                          (* if is_not_implemented r then *)
@@ -111,12 +113,12 @@ module Domain =
                                  let flow = man.exec (Utils.mk_builtin_raise "TypeError" range) flow in
                                  Eval.empty_singleton flow
                                else
-                                 Eval.assume
+                                 assume_eval
                                    (Utils.mk_object_hasattr cls2 rop_fun range)
                                    ~fthen:(fun true_flow ->
                                      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) true_flow |>
                                        Eval.bind (fun r flow ->
-                                           Eval.assume
+                                           assume_eval
                                              (mk_py_isinstance r not_implemented_type range)
                                              ~fthen:(fun true_flow ->
                                                (* if is_not_implemented r then *)
@@ -135,7 +137,7 @@ module Domain =
                              )
                            man flow
              )))
-         |> OptionExt.return
+         |> Option.return
       | E_unop(op, e) when is_arith_op op(* && is_py_expr e*) ->
          debug "Resolving unary operator %a" pp_operator op;
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e flow |>
@@ -145,7 +147,7 @@ module Domain =
                man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_type e range) flow |>
                  Eval.bind (fun cls flow ->
                      let cls = object_of_expr cls in
-                     Eval.assume
+                     assume_eval
                        (Utils.mk_object_hasattr cls op_fun range)
                        ~fthen:(fun true_flow ->
                          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
@@ -157,7 +159,7 @@ module Domain =
                        man flow
                    )
              )
-         |> OptionExt.return
+         |> Option.return
       | _ -> None
 
     let exec _ _ _ _ = None
@@ -166,4 +168,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

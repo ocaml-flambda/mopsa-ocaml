@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Inliner of imported packages. *)
+(** Desugaring loops into a usual case *)
 
 open Mopsa
 open Universal.Ast
@@ -31,10 +31,12 @@ module Domain =
     let name = "python.desugar.loops"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = []; import = []}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = []; uses = []}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval _ _ _ _ = None
 
 
@@ -59,8 +61,8 @@ module Domain =
                  ] range)
               range
            ) flow
-         |> Post.of_flow
-         |> OptionExt.return
+         |> Post.return
+         |> Option.return
 
       | S_py_for(target, iterable, body, orelse) ->
          (* iter is better than iterable.__iter__, as the error
@@ -68,7 +70,8 @@ module Domain =
             not iterable), and is not an AttributeError stating that
             __iter__ does not exist *)
          (* same for next *)
-         let tmp = mktmp () in
+        let iterabletmp = mktmp () in
+        let tmp = mktmp () in
          (* Post.bind man (fun iter flow -> *)
          let l_else =
            match skind orelse with
@@ -76,7 +79,9 @@ module Domain =
            | _ -> [orelse; mk_stmt S_break range] in
          let stmt =
            mk_block
-             [ mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [iterable] range) range;
+             [
+               mk_assign (mk_var iterabletmp range) iterable range;
+               mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [mk_var iterabletmp range] range) range;
                mk_while
                  (mk_py_true range)
                  (mk_block [
@@ -91,12 +96,14 @@ module Domain =
                     ;
                       body
                     ] range)
-                 range;
-               mk_remove_var tmp range
+                 range
              ]
              range
          in
-         man.exec stmt flow |> Post.return
+         man.exec stmt flow |>
+         exec_block_on_all_flows (List.map (fun x -> mk_remove_var x range) [iterabletmp; tmp]) man |>
+         Post.return |>
+         Option.return
 
 
       | _ -> None
@@ -106,4 +113,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

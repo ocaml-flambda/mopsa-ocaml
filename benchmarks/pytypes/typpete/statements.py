@@ -11,6 +11,8 @@ def test_main():
                 if L1[i] == L2[j]:
                     n = L1[i]
 
+
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(i, int))
     mopsa.massert(isinstance(j, int))
@@ -21,7 +23,7 @@ def test_main():
     mopsa.massert(isinstance(L1[0], int))
     mopsa.massert(isinstance(L2[0], int))
     mopsa.ignore_exception(IndexError)
-
+    mopsa.ignore_exception(UnboundLocalError)
 
 # L1 := List[int]
 # L2 := List[int]

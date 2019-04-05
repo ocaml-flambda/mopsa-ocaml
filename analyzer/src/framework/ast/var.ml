@@ -95,3 +95,9 @@ let mktmp ?(typ=T_any) () =
       let vname = "$tmp" ^ (string_of_int uid) in
       vname
     ) typ ()
+
+let start_vcounter_at (d:int) : unit =
+  assert (!vcounter <= d);
+  vcounter := d
+
+let get_vcounter_val () = !vcounter

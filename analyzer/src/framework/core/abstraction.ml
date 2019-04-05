@@ -274,7 +274,7 @@ struct
             let parts, builder = split_expr exp in
             match parts with
             | {exprs; stmts = []} ->
-              Eval.bind_list
+              Eval.eval_list
                 (fun exp flow ->
                    match eval_over_paths paths exp man flow with
                    | None ->
@@ -343,7 +343,7 @@ struct
           let parts, builder = split_expr exp in
           match parts with
           | {exprs; stmts = []} ->
-            Eval.bind_list_opt (eval_hop z1 z2 feval man) exprs flow |>
+            Eval.eval_list_opt (eval_hop z1 z2 feval man) exprs flow |>
             Option.lift @@ Eval.bind @@ fun exprs flow ->
             let exp' = builder {exprs; stmts = []} in
             debug "%a -> %a" pp_expr exp pp_expr exp';

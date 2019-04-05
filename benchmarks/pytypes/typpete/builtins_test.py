@@ -18,6 +18,7 @@ def test_main():
     l = int(j)
     m = str(l)
     n = f[l]
+    mopsa.ignore_exception(IndexError)
     o = f[k]
     mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
@@ -27,6 +28,8 @@ def test_main():
     mopsa.massert(isinstance(d, str))
     mopsa.massert(isinstance(e, complex))
     mopsa.massert(isinstance(f, list))
+    mopsa.massert(isinstance(f[0], str))
+    mopsa.ignore_exception(IndexError)
     mopsa.massert(isinstance(h, float))
     mopsa.massert(isinstance(i, float))
     mopsa.massert(isinstance(j, float))

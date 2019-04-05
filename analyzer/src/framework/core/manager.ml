@@ -235,3 +235,44 @@ let post_eval
       (Eval.choose_ctx evl) evl
   in
   Post.set_ctx ctx ret
+
+let post_eval_with_cleaners
+    (man:('a,'t) man)
+    (f:'e -> 'a flow -> stmt list -> 'a post)
+    (evl:('e, 'a) Eval.eval)
+  : 'a post
+  =
+  let ctx, ret = Eval.fold_apply
+      (fun ctx e flow cleaners ->
+         let flow = Flow.set_ctx ctx flow in
+         match e with
+         | None -> ctx, Post.return flow
+         | Some ee ->
+           let post = f ee flow cleaners in
+           Post.choose_ctx post, post
+      )
+      Post.join
+      (Post.meet man.lattice)
+      (Eval.choose_ctx evl) evl
+  in
+  Post.set_ctx ctx ret
+
+
+let exec_stmt_on_all_flows stmt man flow =
+  Flow.fold (fun flow tk env ->
+      (* Put env in T_cur token of flow and remove others *)
+      let annot = Flow.get_ctx flow in
+      let flow' = Flow.singleton annot T_cur env in
+
+      (* Execute the cleaner *)
+      let flow'' = man.exec stmt flow' in
+
+      (* Restore T_cur in tk *)
+      Flow.copy T_cur tk man.lattice flow'' flow |>
+      Flow.copy_ctx flow''
+    ) flow flow
+
+let exec_block_on_all_flows block man flow =
+  List.fold_left (fun flow stmt ->
+      exec_stmt_on_all_flows stmt man flow
+    ) flow block

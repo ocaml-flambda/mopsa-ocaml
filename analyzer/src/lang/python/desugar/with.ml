@@ -32,10 +32,12 @@ module Domain =
     let name = "python.desugar.with"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = [Zone.Z_py]}
-    let eval_interface = {export = []; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
+      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval _ _ _ _ = None
 
     let exec zone stmt man flow =
@@ -45,10 +47,10 @@ module Domain =
          let erange = context.erange in
          (* Evaluate the context *)
          man.eval context flow |>
-           Post.bind man (fun econtext flow ->
+           post_eval man (fun econtext flow ->
                (* Enter the context *)
                man.eval (mk_py_type econtext econtext.erange) flow |>
-                 Post.bind man (fun cls flow ->
+                 post_eval man (fun cls flow ->
                      let cls = object_of_expr cls in
                      let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
                      let flow =
@@ -104,10 +106,10 @@ module Domain =
                      in
                      man.exec stmt flow |>
                        man.exec (mk_remove_var tmpexn srange) |>
-                       man.exec (mk_remove_var tmpret srange) |> Post.of_flow
+                       man.exec (mk_remove_var tmpret srange) |> Post.return
                    )
              )
-         |> OptionExt.return
+         |> Option.return
 
       | _ -> None
 
@@ -117,4 +119,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

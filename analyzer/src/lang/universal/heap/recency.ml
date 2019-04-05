@@ -30,14 +30,13 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-let name = "universal.heap.recency"
-let debug fmt = Debug.debug ~channel:name fmt
-
-module Domain =
+module Domain(AddrInfo: Pool.ADDRINFO) =
 struct
 
   (** Lattice definition *)
   (** ================== *)
+
+  module Pool = Pool.Make(AddrInfo)
 
   include Pool
 
@@ -49,9 +48,11 @@ struct
 
   include GenDomainId(struct
       type typ = t
-      let name = "universal.heap.recency"
+      let name = "universal.heap.recency" ^ "." ^ AddrInfo.name
     end)
 
+
+  let widen ctx = join
 
   (** Zoning definition *)
   (** ================= *)
@@ -94,28 +95,25 @@ struct
 
   let eval zone expr man flow =
     match ekind expr with
-    | E_alloc_addr(addr_kind) ->
+    | E_alloc_addr(addr_kind, STRONG) ->
       let pool = get_domain_env T_cur man flow in
 
       let cs = Callstack.get flow in
       let range = erange expr in
 
-      debug "allocate %a in %a on call stack:@\n @[%a@]"
-        pp_addr_kind addr_kind
-        pp_range range
-        Callstack.print cs;
-
-      let recent_uid, flow = get_id_flow (addr_kind, cs, range, recent_flag) flow in
+      let recent_uid, flow = get_id_flow (extract (addr_kind, cs, range, recent_flag)) flow in
       let recent_addr = {addr_kind; addr_uid = recent_uid; addr_mode = STRONG} in
 
       (* Change the sub-domain *)
       let flow' =
         if not (Pool.mem recent_addr pool) then
+          let () = debug "first allocation@\n" in
           (* First time we allocate at this site, so no change to the sub-domain. *)
           flow
         else
+          let () = debug "rename to perform@\n" in
           (* Otherwise, we make the previous recent address as an old one *)
-          let old_uid, flow = get_id_flow (addr_kind, cs, range, old_flag) flow in
+          let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
           let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
           map_domain_env T_cur (add old_addr) man flow |>
           man.exec (mk_rename (mk_addr recent_addr range) (mk_addr old_addr range) range)
@@ -124,6 +122,22 @@ struct
       (* Add the recent address *)
       map_domain_env T_cur (add recent_addr) man flow' |>
       Eval.singleton (mk_addr recent_addr range) |>
+      Option.return
+
+
+    | E_alloc_addr(addr_kind, WEAK) ->
+      let cs = Callstack.get flow in
+      let range = erange expr in
+
+      debug "weakly allocate %a in %a on call stack:@\n @[%a@]"
+        pp_addr_kind addr_kind
+        pp_range range
+        Callstack.print cs;
+
+      let old_uid, flow = get_id_flow (extract (addr_kind, cs, range, old_flag)) flow in
+      let old_addr = {addr_kind; addr_uid = old_uid; addr_mode = WEAK} in
+      map_domain_env T_cur (add old_addr) man flow |>
+      Eval.singleton (mk_addr old_addr range) |>
       Option.return
 
     | _ -> None
@@ -135,5 +149,9 @@ struct
 
 end
 
+module HeapRecency = Domain(Pool.AddrInfoRecency)
+module HeapTypes   = Domain(Pool.AddrInfoTypes)
+
 let () =
-  Framework.Core.Sig.Intermediate.Domain.register_domain (module Domain)
+  Framework.Core.Sig.Intermediate.Domain.register_domain (module HeapRecency);
+  Framework.Core.Sig.Intermediate.Domain.register_domain (module HeapTypes)

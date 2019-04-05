@@ -37,8 +37,7 @@ framework.output = text json factory
 framework.combiners = apply sequence compose nonrel
 framework.config = paths parser options
 
-# Languages
-lang = universal stubs c python
+lang = universal repl stubs c python
 
 # Universal
 lang.universal = ast frontend
@@ -50,7 +49,8 @@ lang.universal.numeric = rounding values relational
 lang.universal.numeric.values = intervals
 lang.universal.numeric.values.intervals = integer
 
-# Stubs
+lang.repl = frontend 
+
 lang.stubs = ast zone alarms iterator
 
 # C
@@ -65,13 +65,12 @@ lang.c.libs = libmopsa libc
 lang.c.resources = common file
 lang.c.resources.file = slot table domain
 
-# Python
-lang.python = ast addr utils visitor operators pp frontend
-# lang.python = ast addr utils visitor operators pp frontend zone alarms libs \
-# 	      desugar objects data_model types flows program
-# lang.python.data_model = callable arith_ops compare_ops aug_assign attribute \
-# 	                 subscript
-# lang.python.types = typing addr_env t_string t_int t_float t_list t_set
+lang.python = ast addr utils visitor operators pp frontend zone		\
+              alarms libs desugar objects data_model types flows program
+lang.python.objects = class function range nones py_list tuple dict py_set
+lang.python.data_model = callable arith_ops compare_ops aug_assign	\
+                         attribute subscript
+lang.python.types = typing addr_env typechecking t_string t_int t_float t_list t_set t_complex
 
 
 # Packages

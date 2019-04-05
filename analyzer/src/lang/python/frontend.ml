@@ -25,8 +25,7 @@
 open Mopsa
 open Lexing
 open Ast
-module C = Py_parser.Cst
-module A = Py_parser.Ast
+open Utils
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
@@ -34,7 +33,8 @@ let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
-    let ast = Py_parser.Main.parse_file filename in
+    let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+    Framework.Ast.Var.start_vcounter_at counter;
     {
       prog_kind = from_program filename ast;
       prog_range = mk_program_range [filename];
@@ -43,12 +43,18 @@ let rec parse_program (files: string list) : program =
   | _ -> assert false
 
 and parse_file (filename: string) =
-  let ast = Py_parser.Main.parse_file filename in
+  let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+  Framework.Ast.Var.start_vcounter_at counter;
   from_stmt ast.prog_body
 
 (** Create a Universal.var variable from Py_parser.Ast.var *)
-and from_var (v:A.var) =
-  mkv v.name (v.name ^ ":" ^ (string_of_int v.A.uid)) v.A.uid T_any
+and from_var (v:Py_parser.Ast.var) =
+  let open Framework.Ast in
+  (* let () = if Hashtbl.mem tmp v.uid && Hashtbl.find tmp v.uid <> v.name then
+   *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
+   *   else
+   *     Hashtbl.add tmp v.uid v.name in *)
+  mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) v.uid T_any
 
 (** Translate a Python program into a stmt *)
 and from_program filename (p: Py_parser.Ast.program) : prog_kind =
@@ -94,7 +100,7 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
       S_py_aug_assign(from_exp x, from_binop op, from_exp e)
 
     | S_if (test, body, orelse) ->
-      Universal.Ast.S_if (
+      S_py_if (
         from_exp test,
         from_stmt body,
         from_stmt_option (tag_range srange' "empty if else") orelse

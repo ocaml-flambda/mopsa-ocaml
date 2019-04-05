@@ -21,28 +21,22 @@
 
 (** Management of command-line options *)
 
+open ArgExt
+
 (** Command-line option *)
 type opt =
-  | O_builtin of desc
+  | O_builtin of arg
   (** Built-in option *)
 
-  | O_language of string * desc
+  | O_language of string * arg
   (** Language option *)
 
-  | O_domain of string * desc
+  | O_domain of string * arg
   (** Domain option *)
 
-  | O_standalone of string * desc
+  | O_standalone of string * arg
   (** Standalone options. Several domains can share a same standalone option
       by importing it. *)
-
-(** Descriptor of a command-line option *)
-and desc = {
-  key: string;
-  doc: string;
-  spec: Arg.spec;
-  default: string;
-}
 
 (** {2 Registration} *)
 (** **************** *)
@@ -54,20 +48,20 @@ let options : opt list ref = ref []
 let imports : (string, string list) Hashtbl.t = Hashtbl.create 16
 
 (** Register a built-in option *)
-let register_builtin_option (desc:desc) =
-  options := (O_builtin desc) :: !options
+let register_builtin_option (arg:arg) =
+  options := (O_builtin arg) :: !options
 
 (** Register a language option. *)
-let register_language_option (lang:string) (desc:desc) =
-  options := (O_language (lang, desc)) :: !options
+let register_language_option (lang:string) (arg:arg) =
+  options := (O_language (lang, arg)) :: !options
 
 (** Register a domain option. *)
-let register_domain_option (dom:string) (desc:desc) =
-  options := (O_domain (dom, desc)) :: !options
+let register_domain_option (dom:string) (arg:arg) =
+  options := (O_domain (dom, arg)) :: !options
 
 (** Register a group option *)
-let register_standalone_option (name:string) (desc:desc) =
-  options := (O_standalone (name, desc)) :: !options
+let register_standalone_option (name:string) (arg:arg) =
+  options := (O_standalone (name, arg)) :: !options
 
 (** Import a standalone option into a domain *)
 let import_standalone_option ~(into:string) (name:string) =
@@ -94,7 +88,7 @@ let get_builtin_options () =
 let get_language_options (lang:string) =
   List.filter (fun opt ->
       match opt with
-      | O_language (l, desc) -> l = lang
+      | O_language (l, arg) -> l = lang
       | _ -> false
     ) !options
 
@@ -111,7 +105,7 @@ let get_domain_options (dom:string) =
   (* Options registered by the domain *)
   let opt1 = List.filter (fun opt ->
       match opt with
-      | O_domain (d, desc) -> d = dom
+      | O_domain (d, arg) -> d = dom
       | _ -> false
     ) !options
   in
@@ -128,12 +122,7 @@ let get_domain_options (dom:string) =
 let opt_to_arg opt =
   match opt with
   | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
-    d.key, d.spec, d.doc
-
-let opt_to_output opt =
-  match opt with
-  | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
-    d.key, d.spec, d.doc, d.default
+    d
 
 let to_arg () =
   List.map opt_to_arg !options
@@ -146,8 +135,9 @@ let to_arg () =
 let () =
   register_builtin_option {
     key = "-share-dir";
+    category = "Configuration";
     doc = " path to the share directory";
-    spec = Arg.Set_string Paths.opt_share_dir;
+    spec = ArgExt.Set_string Paths.opt_share_dir;
     default = "";
   }
 
@@ -156,8 +146,9 @@ let () =
 let () =
   register_builtin_option {
     key = "-config";
+    category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
-    spec = Arg.Set_string Parser.opt_config;
+    spec = ArgExt.Set_string Parser.opt_config;
     default = "";
   }
 
@@ -165,14 +156,16 @@ let () =
 let () =
   register_builtin_option {
     key = "-debug";
+    category = "Debugging";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
-    spec = Arg.String (fun s -> Debug.parse s);
+    spec = ArgExt.String (fun s -> Debug.parse s);
     default = "";
   };
   register_builtin_option {
     key = "-no-color";
+    category = "Debugging";
     doc = " deactivate colors in debug messages.";
-    spec = Arg.Clear Debug.print_color;
+    spec = ArgExt.Clear Debug.print_color;
     default = "";
   }
 
@@ -180,8 +173,9 @@ let () =
 let () =
   register_builtin_option {
     key = "-list";
+    category = "Configuration";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
-    spec = Arg.Unit (fun () ->
+    spec = ArgExt.Unit_delayed (fun () ->
         let domains = Parser.domains () in
         Output.Factory.list_domains domains
       );
@@ -192,8 +186,9 @@ let () =
 let () =
   register_builtin_option {
     key = "-format";
+    category = "Output";
     doc = " selects the output format.";
-    spec = Arg.Symbol (
+    spec = ArgExt.Symbol (
         ["text"; "json"],
         (fun s ->
            match s with
@@ -205,12 +200,24 @@ let () =
     default = "text";
   }
 
+(** Output last flow *)
+let () =
+  register_builtin_option {
+    key = "-lflow";
+    category = "Output";
+    doc = " display the last output";
+    spec = ArgExt.Set Output.Factory.opt_display_lastflow;
+    default = "false";
+  }
+
+
 (** Output stream *)
 let () =
   register_builtin_option {
     key = "-output";
+    category = "Output";
     doc = " redirect output to a file";
-    spec = Arg.String (fun s -> Output.Factory.opt_file := Some s);
+    spec = ArgExt.String (fun s -> Output.Factory.opt_file := Some s);
     default = "";
   }
 
@@ -218,8 +225,9 @@ let () =
 let () =
   register_builtin_option {
     key = "-log";
+    category = "Debugging";
     doc = " activate logs";
-    spec = Arg.Set Core.Debug_tree.opt_log;
+    spec = ArgExt.Set Core.Debug_tree.opt_log;
     default = "false";
   }
 
@@ -227,8 +235,9 @@ let () =
 let () =
   register_builtin_option {
     key = "-short-log";
+    category = "Debugging";
     doc = " display logs without abstract states";
-    spec = Arg.Set Core.Debug_tree.opt_short_log;
+    spec = ArgExt.Set Core.Debug_tree.opt_short_log;
     default = "false";
   }
 
@@ -247,26 +256,32 @@ let help () =
       (get_language_options lang) @
       (List.map get_domain_options domains |> List.flatten)
   in
-  let args = List.map opt_to_output options in
-  Output.Factory.help args;
+  let args = List.map opt_to_arg options in
+  Output.Factory.help args
+
+let print_help_and_exit () =
+  help ();
   exit 0
 
 let () =
   register_builtin_option {
     key  = "-help";
+    category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   };
   register_builtin_option {
     key  = "--help";
+    category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   };
   register_builtin_option {
     key  = "-h";
+    category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit help;
+    spec = ArgExt.Unit_delayed print_help_and_exit;
     default = "";
   }

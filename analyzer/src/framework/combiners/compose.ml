@@ -32,7 +32,7 @@ open Log
 module Make
     (S1:Sig.Lowlevel.Stacked.STACK)
     (S2:Sig.Lowlevel.Stacked.STACK)
-  : Sig.Lowlevel.Stacked.STACK
+  : Sig.Lowlevel.Stacked.STACK with type t = S1.t * S2.t
 =
 struct
 

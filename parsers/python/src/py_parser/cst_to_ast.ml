@@ -26,7 +26,7 @@
 
    The AST contains some additional static information, such as:
    - global variables,
-   - functions locals, 
+   - functions locals,
    - detection of generator functions,
    - inlining of packages imports.
 
@@ -97,7 +97,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         cls_keywords = List.map (fun (k, v) -> (k, translate_expr v)) keywords;
         cls_range = range;
       }
-        
+
     | Return value ->
       S_return (translate_expr_option range value)
 
@@ -130,13 +130,13 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         translate_block body range,
         translate_block_option orelse
       )
-        
+
     | Raise (e, c) ->
       S_raise (
         translate_expr_option2 e,
         translate_expr_option2 c
       )
-        
+
     | Try (body, excepts, orelse, finalbody) ->
       S_try (
         translate_block body range,
@@ -150,7 +150,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
         translate_block_option orelse,
         translate_block_option finalbody
       )
-        
+
     | Import([(modl, asname)]) ->
       let hd = module_hd modl in
       let asvar = match asname with None -> None | Some name -> Some (translate_var name) in
@@ -163,7 +163,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
           translate_stmt stmt
           )
       )
-      
+
     | ImportFrom (Some modl, [(name, asname)], Some 0) ->
       let hd = module_hd modl in
       let vroot = translate_var hd in
@@ -180,7 +180,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
 
     | Global names -> S_pass
     | Nonlocal names -> S_pass
-      
+
     | Expr e -> S_expression (translate_expr e)
     | Pass -> S_pass
     | Break -> S_break
@@ -205,10 +205,10 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
 
     | Delete el ->
       S_block (
-        el |> List.map (fun e -> {skind = S_delete (translate_expr e); srange = stmt.srange}) 
+        el |> List.map (fun e -> {skind = S_delete (translate_expr e); srange = stmt.srange})
       )
 
-    | Assert (test, msg) -> 
+    | Assert (test, msg) ->
       S_assert (translate_expr test, translate_expr_option2 msg)
 
     (* Not supported statements *)
@@ -218,7 +218,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
     | AsyncFor _ -> failwith "Async not supported"
     | AsyncWith (_,_) -> failwith "Async not supported"
     | With ([], _) -> failwith "With not supported"
-                                 
+
   in
   {skind = skind; srange = stmt.srange}
 
@@ -247,7 +247,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         op,
         translate_expr operand
       )
-    | List (elts, _) -> 
+    | List (elts, _) ->
       E_list (List.map translate_expr elts)
     | Dict (keys, values) ->
       E_dict (
@@ -286,24 +286,25 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
         translate_expr right
       )
     | BoolOp (op, values) ->
-      let hd, tl = List.hd values, List.tl values in
+      let rvalues = List.rev values in
+      let hd, tl = List.hd rvalues, List.tl rvalues in
       let hd' = translate_expr hd in
       tl |> List.fold_left (fun acc exp ->
           let left = {ekind = acc; erange = hd'.erange} in
           let right = translate_expr exp in
           E_binop (
-            left,
+            right,
             O_bool op,
-            right
+            left
           )
-      ) hd'.ekind
+        ) hd'.ekind
     | Compare (left, ops, rights) ->
       E_multi_compare (
         translate_expr left,
         List.map (fun op -> O_comparison op) ops,
         List.map translate_expr rights
       )
-      
+
     | Call (func, args, keywords) ->
       E_call (
         translate_expr func,
@@ -459,7 +460,7 @@ and find_lvals_in_stmt stmt =
     targets @ find_lvals_in_block body
 
   (* Read-only statements *)
-  | Assert _ | Raise _ | Return _ | Delete _ 
+  | Assert _ | Raise _ | Return _ | Delete _
   | Global _| Nonlocal _ | Expr _ | Pass | Break | Continue
     -> []
   (* Not supported statements *)
@@ -478,7 +479,7 @@ and find_lvals_in_excepts handlers =
 and find_lvals_in_expr expr =
   match expr.ekind with
   | Name (id, _) -> [id]
-  | Tuple (elts, _) 
+  | Tuple (elts, _)
   | List(elts, _) ->
     elts |> List.fold_left (fun acc e -> acc @ find_lvals_in_expr e) []
   (** Method-based lvals do not make the expression local *)
@@ -539,7 +540,7 @@ and find_scopes_in_stmt stmt =
     [name], [], []
 
   (* Atomic statements *)
-  | Assign (targets, _) -> 
+  | Assign (targets, _) ->
     (
       targets |> List.fold_left (fun acc t -> find_lvals_in_expr t @ acc) []
     ), [], []
@@ -552,7 +553,7 @@ and find_scopes_in_stmt stmt =
 
   | ImportFrom _ ->
     find_lvals_in_stmt stmt, [], []
-      
+
   | Assert _ | Raise _ | Return _ | Delete _ | Expr _ | Pass | Break | Continue
     -> [], [], []
   (* Not supported statements *)
@@ -598,7 +599,7 @@ and find_globals_in_stmt stmt =
   | AnnAssign _ -> failwith "Annotated assign not supported"
   | AsyncFor _ -> failwith "Async not supported"
   | AsyncWith (_,_) -> failwith "Async not supported"
- 
+
 
 (** Generator function detection *)
 and detect_yield_in_function body =
@@ -612,8 +613,8 @@ and detect_yield_in_function body =
     match skind with
     | Expr e | Assign(_, e) | AugAssign(_, _, e) -> detect_yield_in_expr e
     (* Compound statements *)
-    | For (_, _, body, orelse) 
-    | While (_, body, orelse) 
+    | For (_, _, body, orelse)
+    | While (_, body, orelse)
     | If (_, body, orelse) ->
       detect_yield_in_block body || detect_yield_in_block orelse
     | Try (body, handlers, orelse, finalbody) ->
@@ -623,7 +624,7 @@ and detect_yield_in_function body =
     (* Inner scope statements *)
     | FunctionDef _ | ClassDef _ -> false
     (* Atomic statements *)
-    | Import _ | ImportFrom _ | Assert _ | Raise _ | Return _ | Delete _ 
+    | Import _ | ImportFrom _ | Assert _ | Raise _ | Return _ | Delete _
     | Pass | Break | Continue | Global _ | Nonlocal _ -> false
     (* Not supported statements *)
     | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"

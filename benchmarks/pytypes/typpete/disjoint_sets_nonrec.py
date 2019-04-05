@@ -44,6 +44,7 @@ def test_main():
     d.union_sets(0, 1)
     print(d.is_same_set(0, 1))
 
+    mopsa.ignore_exception(IndexError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(d, DisjointSets))
 

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+CONFIG=python/default.json
+
+${MOPSADIR}/bin/mopsa -config=${CONFIG} $@

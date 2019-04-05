@@ -34,8 +34,9 @@ let opt_interactive = ref false
 let () =
   register_builtin_option {
     key = "-interactive";
+    category = "Debugging";
     doc = " start the analysis in interactive mode";
-    spec = Arg.Set opt_interactive;
+    spec = ArgExt.Set opt_interactive;
     default = "false";
   }
 
@@ -44,14 +45,11 @@ let () =
    source files *)
 let parse_options f () =
   let files = ref [] in
-  let n = Array.length Sys.argv in
-  let return_value = ref 0 in
-  Arg.parse (Config.Options.to_arg ()) (fun filename ->
-      files := filename :: !files;
-      if !Arg.current = n - 1 then
-        return_value := !return_value * 10 + (f !files)
-    ) "Modular Open Platform for Static Analysis";
-  !return_value
+  ArgExt.parse (Config.Options.to_arg ())
+               (fun filename -> files := filename :: !files)
+               "Modular Open Platform for Static Analysis"
+               Config.Options.help;
+  f !files
 
 
 (** {2 Parsing} *)
@@ -64,6 +62,7 @@ let parse_program lang files =
   | "universal" -> Lang.Universal.Frontend.parse_program files
   | "c" -> Lang.C.Frontend.parse_program files
   | "python" -> Lang.Python.Frontend.parse_program files
+  | "repl" -> Lang.Repl.Frontend.parse_program files
   | _ -> Exceptions.panic "Unknown language"
 
 
@@ -103,7 +102,7 @@ let () =
         let res = Engine.exec stmt flow in
         let t = Timing.stop t in
 
-        Output.Factory.render Engine.man res t files
+        Output.Factory.report Engine.man res t files
 
       with
         e -> Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e files; 2

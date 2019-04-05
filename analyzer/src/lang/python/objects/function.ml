@@ -26,30 +26,6 @@ open Ast
 open Addr
 open Universal.Ast
 
-type expr_kind +=
-   | E_py_sum_call of expr (** function expression *) * expr list (** list of arguments *)
-
-let () =
-  register_expr_pp (fun default fmt exp ->
-      match ekind exp with
-      | E_py_sum_call (f, args) ->
-         Format.fprintf fmt "{py_sum_call}%a(%a)"
-           pp_expr f
-           (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@ ") pp_expr) args
-      | _ -> default fmt exp);
-  register_expr_visitor (fun default exp ->
-      match ekind exp with
-      | E_py_sum_call(f, args) ->
-         {exprs = f :: args; stmts = []},
-         (fun parts -> {exp with ekind = E_py_sum_call(List.hd parts.exprs, List.tl parts.exprs)})
-      | _ -> default exp)
-
-let mk_sum_call fundec args range =
-  mk_expr (E_py_sum_call (
-      mk_expr (E_function (User_defined fundec)) range,
-      args
-    )) range
-
 
 module Domain =
   struct
@@ -57,10 +33,12 @@ module Domain =
     let name = "python.objects.function"
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
@@ -70,7 +48,7 @@ module Domain =
          debug "user-defined function call@\n";
          (* First check the correct number of arguments *)
          let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
-         OptionExt.return @@
+         Option.return @@
            if List.length pyfundec.py_func_parameters < List.length nondefault_args then
              (
                debug "Too few arguments!@\n";
@@ -165,7 +143,7 @@ module Domain =
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
          let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
       | _ -> None
 
@@ -185,7 +163,7 @@ module Domain =
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
-           Post.bind man (fun addr flow ->
+           post_eval man (fun addr flow ->
                let obj = (addr, None) in
                man.exec
                  (mk_assign
@@ -193,9 +171,9 @@ module Domain =
                     (mk_py_object obj range)
                     range
                  ) flow
-               |> Post.of_flow
+               |> Post.return
              )
-         |> OptionExt.return
+         |> Option.return
       | _ ->
          None
 
@@ -205,4 +183,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

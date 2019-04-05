@@ -25,7 +25,6 @@
    functions if required *)
 
 open Mopsa
-open Framework.Domains.Stateless
 open Addr
 open Ast
 open Universal.Ast
@@ -37,10 +36,12 @@ struct
   let name = "python.program"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Zone.Z_py]; uses = []};
+    ieval = {provides = []; uses = []}
+  }
 
-  let init _ _ flow = Some flow
+  let init _ _ flow = flow
 
   let eval _ _ _ _ = None
 
@@ -62,8 +63,9 @@ struct
     let flow1 = man.exec stmt flow in
 
     (** Initialize special variable __name__ *)
-    let v = mkv "__name__" "__name__" 0 T_any in
+    let v = mkfresh (fun uid -> "__name__" ^ (string_of_int uid)) T_any () in
     let stmt =
+      let range = tag_range range "__name__ assignment" in
       mk_assign
         (mk_var v range)
         (mk_constant (Universal.Ast.C_string "__main__") ~etyp:Universal.Ast.T_string range)
@@ -72,8 +74,9 @@ struct
     let flow2 = man.exec stmt flow1 in
 
     (** Initialize special variable __file__ *)
-    let v = mkv "__file__" "__file__" 0 T_any in
+    let v = mkfresh (fun uid -> "__file__" ^ (string_of_int uid)) T_any () in
     let stmt =
+      let range = tag_range range "__file__ assignment" in
         mk_assign
           (mk_var v range)
           (mk_constant (Universal.Ast.C_string (get_range_file range)) ~etyp:Universal.Ast.T_string range)
@@ -120,7 +123,8 @@ struct
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | S_program { prog_kind = Py_program(globals, body) }
       when !Universal.Iterators.Unittest.unittest_flag ->
@@ -133,7 +137,8 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
-      Post.return (man.exec stmt flow2)
+      Post.return (man.exec stmt flow2) |>
+      Option.return
 
 
     | _ -> None
@@ -143,4 +148,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -31,7 +31,7 @@ open Zone
 
 let debug fmt = Debug.debug ~channel:"framework.cache" fmt
 
-let opt_cache = ref 10
+let opt_cache = ref 0
 
 module Make(Domain: sig type t end) =
 struct

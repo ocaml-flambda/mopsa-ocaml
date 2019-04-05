@@ -6,6 +6,8 @@ def test_main():
     for i in range(n):
         a[n - i - 1] = input()
 
+    mopsa.ignore_exception(IndexError)
+
     res, ll, rr, k, l, r = 0, 0, 0, 0, 0, 0
 
     for s in a:
@@ -27,6 +29,7 @@ def test_main():
         k += 1
         ll, rr = p, q
 
+    mopsa.ignore_exception(UnboundLocalError)
     mopsa.assert_safe()
     mopsa.massert(isinstance(a, list))
     mopsa.massert(isinstance(a[0], str))
@@ -44,6 +47,7 @@ def test_main():
     mopsa.massert(isinstance(rr, int))
     mopsa.massert(isinstance(s, str))
     mopsa.massert(isinstance(z, str))
+    mopsa.ignore_exception(UnboundLocalError)
 
 # a := List[str]
 # i := int

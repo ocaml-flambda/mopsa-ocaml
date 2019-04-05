@@ -177,6 +177,12 @@ struct
     | Top -> Top
     | Finite m -> Finite (Map.filter f m)
 
+  let iter (f:Key.t -> Value.t -> unit) (a: t) : unit =
+    match a with
+    | Bot -> ()
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.iter f m
+
   let fold (f:Key.t -> Value.t -> 'a -> 'a) (a:t) (x:'a) : 'a =
     match a with
     | Bot -> x
@@ -236,4 +242,15 @@ struct
     | Top -> raise Top.Found_TOP
     | Finite m -> Map.exists f m
 
+  let max_binding (a:t) : (Key.t * Value.t) option =
+    match a with
+    | Bot -> None
+    | Top -> None
+    | Finite m -> Some (Map.max_binding m)
+
+  let cardinal (a: t) : int =
+    match a with
+    | Bot -> 0
+    | Top -> raise Top.Found_TOP
+    | Finite m -> Map.cardinal m
 end

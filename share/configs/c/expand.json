@@ -29,7 +29,7 @@
             "c.desugar.cond_expr",
 
 	    // Resouce management
-            "universal.heap.recency",
+            "universal.heap.recency.by_kind_callstack_range",
 	    "c.resources.file",
 	    "c.resources.common",
 
