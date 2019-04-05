@@ -40,7 +40,9 @@ let rec parse_program (files: string list) : program =
       prog_range = mk_program_range [filename];
     }
 
-  | _ -> assert false
+  | [] -> panic "no input file"
+
+  | _ -> panic "analysis of multiple files not supported"
 
 and parse_file (filename: string) =
   let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in

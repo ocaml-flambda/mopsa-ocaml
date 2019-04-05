@@ -541,5 +541,6 @@ let rec parse_program (files: string list): program =
       prog_range = mk_program_range [filename];
     }
 
-  | _ ->
-    Exceptions.panic "only one file supported for universal"
+  | [] -> panic "no input file"
+
+  | _ -> panic "analysis of multiple files not supported"

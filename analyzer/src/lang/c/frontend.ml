@@ -117,6 +117,9 @@ exception StubAliasFound of string
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
+
+  if files = [] then panic "no input file";
+
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
   List.iter

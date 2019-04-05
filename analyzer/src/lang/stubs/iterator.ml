@@ -32,6 +32,8 @@ struct
 
   let name = "stubs.iterator"
 
+  let debug fmt = Debug.debug ~channel:name fmt
+
   (** Zoning definition *)
   (** ================= *)
 

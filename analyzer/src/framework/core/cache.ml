@@ -29,9 +29,9 @@ open Ast.Expr
 open Ast.Stmt
 open Zone
 
-let debug fmt = Debug.debug ~channel:"framework.cache" fmt
+let debug fmt = Debug.debug ~channel:"framework.core.cache" fmt
 
-let opt_cache = ref 0
+let opt_cache = ref 10
 
 module Make(Domain: sig type t end) =
 struct

@@ -24,8 +24,6 @@
 open Ast
 open Expr
 
-let debug fmt = Debug.debug ~channel:"framework.zone" fmt
-
 
 (** {2 Zones}
     =========
