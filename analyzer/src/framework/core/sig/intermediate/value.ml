@@ -46,11 +46,11 @@ sig
   val display : string
   (** Debug display name used by the non-relational lifter *)
 
-  val zone : Zone.zone
-  (** Language zone in which the value abstraction is defined *)
+  val zones : Zone.zone list
+  (** Zones of provided transfer functions *)
 
-  val accept_expr : expr -> bool
-  (** Filter expressions that can be handled by the value abstraction *)
+  val types : typ list
+  (** Types abstracted by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -161,8 +161,8 @@ struct
   let id = Value.id
   let name = Value.name
   let display = Value.display
-  let zone = Value.zone
-  let accept_expr = Value.accept_expr
+  let zones = Value.zones
+  let types = Value.types
   let bottom = Value.bottom
   let top = Value.top
   let is_bottom = Value.is_bottom
@@ -176,13 +176,13 @@ struct
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  let of_constant const =
+  let of_constant typ const =
     Value.of_constant const
 
-  let unop man op v =
+  let unop man typ op v =
     Value.unop op (man.vget v)
 
-  let binop man op v1 v2 =
+  let binop man typ op v1 v2 =
     Value.binop op (man.vget v1) (man.vget v2)
 
   let filter man v b =
@@ -192,10 +192,10 @@ struct
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop man op v r =
+  let bwd_unop man typ op v r =
     Value.bwd_unop op (man.vget v) (man.vget r)
 
-  let bwd_binop man op v1 v2 r =
+  let bwd_binop man typ op v1 v2 r =
     Value.bwd_binop op (man.vget v1) (man.vget v2) (man.vget r)
 
   let compare man op v1 v2 b =

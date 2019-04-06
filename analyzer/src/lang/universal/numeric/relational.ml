@@ -464,7 +464,7 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let zone = Zone.Z_u_num
+  let zones = [Zone.Z_u_num]
 
   let init prog = top
 

@@ -76,7 +76,7 @@ and domain_seq assoc : (module DOMAIN) =
         let tl = aux tl in
         let module Head = (val hd : DOMAIN) in
         let module Tail = (val tl : DOMAIN) in
-        let module Dom = Combiners.Sequence.Domain.Make(Head)(Tail) in
+        let module Dom = Combiners.Domain.Sequence.Make(Head)(Tail) in
         (module Dom : DOMAIN)
   in
   aux domains
@@ -95,7 +95,7 @@ and nonrel assoc : (module DOMAIN) =
   let module D =
     Sig.Intermediate.Domain.MakeLowlevelDomain(
       Sig.Simplified.Domain.MakeIntermediate(
-        Combiners.Nonrel.Make(V)
+        Combiners.Value.Nonrel.Make(V)
       )
     )
   in
@@ -103,11 +103,32 @@ and nonrel assoc : (module DOMAIN) =
 
 and value = function
   | `String name -> value_leaf name
+  | `Assoc obj when List.mem_assoc "disjoint" obj -> value_disjoint obj
   | _ -> assert false
 
 and value_leaf name =
   try find_value name
   with Not_found -> Exceptions.panic "value %s not found" name
+
+and value_disjoint assoc : (module VALUE) =
+  let values = List.assoc "disjoint" assoc |>
+                to_list |>
+                List.map value
+  in
+  let rec aux :
+    (module VALUE) list ->
+    (module VALUE)
+    = function
+      | [] -> assert false
+      | [d] -> d
+      | hd :: tl ->
+        let tl = aux tl in
+        let module Head = (val hd : VALUE) in
+        let module Tail = (val tl : VALUE) in
+        let module Dom = Combiners.Value.Disjoint.Make(Head)(Tail) in
+        (module Dom : VALUE)
+  in
+  aux values
 
 and stack = function
   | `String(name) -> leaf_stack name
@@ -136,7 +157,7 @@ and stack_seq assoc : (module STACK) =
         let tl = aux tl in
         let module Head = (val hd : STACK) in
         let module Tail = (val tl : STACK) in
-        let module Dom = Combiners.Sequence.Stacked.Make(Head)(Tail) in
+        let module Dom = Combiners.Stacked.Sequence.Make(Head)(Tail) in
         (module Dom : STACK)
   in
   aux stacks
@@ -156,7 +177,7 @@ and compose assoc : (module STACK) =
         let tl = aux tl in
         let module Head = (val hd : STACK) in
         let module Tail = (val tl : STACK) in
-        let module Dom = Combiners.Compose.Make(Head)(Tail) in
+        let module Dom = Combiners.Stacked.Compose.Make(Head)(Tail) in
         (module Dom : STACK)
   in
   aux stacks

@@ -63,8 +63,8 @@ struct
   type aexpr =
     | A_var of var * Value.t
     | A_cst of constant * Value.t
-    | A_unop of operator * aexpr * Value.t
-    | A_binop of operator * aexpr * Value.t * aexpr * Value.t
+    | A_unop of operator * typ  * aexpr * Value.t
+    | A_binop of operator * typ * aexpr * Value.t * aexpr * Value.t
     | A_unsupported
 
   (** Value manager *)
@@ -94,37 +94,34 @@ struct
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
-    if not (Value.accept_expr e)
-    then None
-    else
-      match ekind e with
-      | E_var(var, _) ->
-        let v = VarMap.find var a in
-        (A_var (var, v), v) |>
-        Option.return
+    match ekind e with
+    | E_var(var, _) ->
+      let v = VarMap.find var a in
+      (A_var (var, v), v) |>
+      Option.return
 
-      | E_constant(c) ->
-        let v = Value.of_constant c in
-        (A_cst (c, v), v) |>
-        Option.return
+    | E_constant(c) ->
+      let v = Value.of_constant e.etyp c in
+      (A_cst (c, v), v) |>
+      Option.return
 
-      | E_unop (op,e1) ->
-        eval e1 a |> Option.bind @@ fun (ae1, v1) ->
-        let v = Value.unop (vman a) op v1 in
-        (A_unop (op, ae1, v1), v) |>
-        Option.return
+    | E_unop (op,e1) ->
+      eval e1 a |> Option.bind @@ fun (ae1, v1) ->
+      let v = Value.unop (vman a) e.etyp op v1 in
+      (A_unop (op, e.etyp, ae1, v1), v) |>
+      Option.return
 
-      | E_binop (op,e1,e2) ->
-        eval e1 a |> Option.bind @@ fun (ae1, v1) ->
-        eval e2 a |> Option.bind @@ fun (ae2, v2) ->
-        let v = Value.binop (vman a) op v1 v2 in
-        (A_binop (op, ae1, v1, ae2, v2), v) |>
-        Option.return
+    | E_binop (op,e1,e2) ->
+      eval e1 a |> Option.bind @@ fun (ae1, v1) ->
+      eval e2 a |> Option.bind @@ fun (ae2, v2) ->
+      let v = Value.binop (vman a) e.etyp op v1 v2 in
+      (A_binop (op, e.etyp, ae1, v1, ae2, v2), v) |>
+      Option.return
 
-      | _ ->
-        (* unsupported -> ⊤ *)
-        (* A_unsupported, Value.top *)
-        None
+    | _ ->
+      (* unsupported -> ⊤ *)
+      (* A_unsupported, Value.top *)
+      None
 
 
 
@@ -144,12 +141,12 @@ struct
       then bottom
       else a
 
-    | A_unop (op, ae1, v1) ->
-      let w = Value.bwd_unop (vman a) op v1 r' in
+    | A_unop (op, typ, ae1, v1) ->
+      let w = Value.bwd_unop (vman a) typ op v1 r' in
       refine ae1 v1 w a
 
-    | A_binop (op, ae1, v1, ae2, v2) ->
-      let w1, w2 = Value.bwd_binop (vman a) op v1 v2 r' in
+    | A_binop (op, typ, ae1, v1, ae2, v2) ->
+      let w1, w2 = Value.bwd_binop (vman a) typ op v1 v2 r' in
       let a1 = refine ae1 v1 w1 a in
       refine ae2 v2 w2 a1
 
@@ -182,7 +179,7 @@ struct
       Option.return
 
     | E_constant c ->
-      let v = Value.of_constant c in
+      let v = Value.of_constant e.etyp c in
       let w = Value.filter (vman a) v r in
       (if Value.is_bottom w then bottom else a) |>
       Option.return
@@ -217,7 +214,7 @@ struct
 
   let init prog = empty
 
-  let zone = Value.zone
+  let zones = Value.zones
 
   let rec exec stmt (map:t) : t option =
     match skind stmt with

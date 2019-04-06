@@ -67,7 +67,7 @@ include Framework.Core.Id.GenValueId(struct
     let display = "pointers"
   end)
 
-let zone = Zone.Z_c_scalar
+let zones = [Zone.Z_c_scalar]
 
 let null = singleton PB_null
 
@@ -81,7 +81,7 @@ let mem_block v =
   if is_top v then true
   else exists (function PB_block _ -> true | _ -> false) v
 
-let accept_expr _ = true
+let types = []
 
 let of_constant c =
   match c with

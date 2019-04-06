@@ -41,10 +41,9 @@ struct
       let display = "int-itv"
     end)
 
-  let zone = Zone.Z_u_num
+  let zones = [Zone.Z_u_num]
 
-  let accept_expr e =
-    compare_typ e.etyp T_int = 0
+  let types = [T_int; T_bool]
 
   let bottom = BOT
 

@@ -48,8 +48,8 @@ sig
   val name : string
   (** Domain name *)
 
-  val zone : zone
-  (** Domain zone *)
+  val zones : zone list
+  (** Zones of the provided transfer functions *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
@@ -129,7 +129,7 @@ struct
 
   let interface = {
     iexec = {
-      provides = [D.zone];
+      provides = D.zones;
       uses = [];
     };
     ieval = {
