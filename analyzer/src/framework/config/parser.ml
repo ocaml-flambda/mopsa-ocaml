@@ -60,7 +60,6 @@ and leaf_domain name : (module DOMAIN) =
   try find_domain name
   with Not_found -> Exceptions.panic "domain %s not found" name
 
-
 and domain_seq assoc : (module DOMAIN) =
   let domains = List.assoc "seq" assoc |>
                 to_list |>
@@ -72,11 +71,12 @@ and domain_seq assoc : (module DOMAIN) =
     = function
       | [] -> assert false
       | [d] -> d
-      | hd :: tl ->
-        let tl = aux tl in
-        let module Head = (val hd : DOMAIN) in
-        let module Tail = (val tl : DOMAIN) in
-        let module Dom = Combiners.Sequence.Domain.Make(Head)(Tail) in
+      | r ->
+        let a,b = ListExt.split r in
+        let aa, bb = aux a, aux b in
+        let module A = (val aa : DOMAIN) in
+        let module B = (val bb : DOMAIN) in
+        let module Dom = Combiners.Sequence.Domain.Make(A)(B) in
         (module Dom : DOMAIN)
   in
   aux domains
@@ -132,11 +132,12 @@ and stack_seq assoc : (module STACK) =
     = function
       | [] -> assert false
       | [d] -> d
-      | hd :: tl ->
-        let tl = aux tl in
-        let module Head = (val hd : STACK) in
-        let module Tail = (val tl : STACK) in
-        let module Dom = Combiners.Sequence.Stacked.Make(Head)(Tail) in
+      | r ->
+        let a,b = ListExt.split r in
+        let aa, bb = aux a, aux b in
+        let module A = (val aa : STACK) in
+        let module B = (val bb : STACK) in
+        let module Dom = Combiners.Sequence.Stacked.Make(A)(B) in
         (module Dom : STACK)
   in
   aux stacks
