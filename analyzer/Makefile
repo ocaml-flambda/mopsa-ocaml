@@ -46,7 +46,7 @@ lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational
 lang.universal.numeric.values = intervals
-lang.universal.numeric.values.intervals = integer
+lang.universal.numeric.values.intervals = integer float
 
 lang.repl = frontend 
 

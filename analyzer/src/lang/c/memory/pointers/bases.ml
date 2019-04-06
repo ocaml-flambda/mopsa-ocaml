@@ -92,9 +92,9 @@ let unop op v = top
 
 let binop op v1 v2 = top
 
-let bwd_unop = Framework.Core.Sig.Intermediate.Value.default_bwd_unop
+let bwd_unop = Framework.Core.Sig.Simplified.Value.default_bwd_unop
 
-let bwd_binop = Framework.Core.Sig.Intermediate.Value.default_bwd_binop
+let bwd_binop = Framework.Core.Sig.Simplified.Value.default_bwd_binop
 
 let filter v b =
   if b then diff v null
@@ -118,11 +118,5 @@ let compare op v1 v2 r =
 
   | _ -> v1, v2
 
-module EvalQuery = Query.GenArgQuery(
-  struct
-    type arg = expr
-    type ret = t
-    let join = join
-    let meet = meet
-  end
-  )
+
+let ask _ _ = None

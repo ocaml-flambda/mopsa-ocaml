@@ -117,8 +117,10 @@ struct
     man with
     vget = (fun v ->
         match man.vget v with
+        | BOT -> V1.bottom
+        | TOP -> V1.top
         | V1 v1 -> v1
-        | _ -> V1.bottom
+        | V2 _ -> V1.bottom
       );
     vset = (fun v1 v -> man.vset (V1 v1) v);
   }
@@ -127,8 +129,10 @@ struct
     man with
     vget = (fun v ->
         match man.vget v with
+        | BOT -> V2.bottom
+        | TOP -> V2.top
+        | V1 _ -> V2.bottom
         | V2 v2 -> v2
-        | _ -> V2.bottom
       );
     vset = (fun v2 v -> man.vset (V2 v2) v);
   }
@@ -211,32 +215,32 @@ struct
         pp_operator op
         pp_typ t
 
-  let compare man op a b r =
+  let compare man t op a b r =
     match man.vget a, man.vget b with
-    | BOT, BOT -> BOT, BOT
+    | V1 _, V2 _ | V2 _, V1 _ ->
+      Exceptions.panic "compare called on unsupported arguments %a and %a"
+        ~loc:__LOC__
+        print (man.vget a)
+        print (man.vget b)
+
+    | BOT, _ | _, BOT -> BOT, BOT
+
     | TOP, TOP -> TOP, TOP
-    | V1 _, V1 _ ->
-      let a',b' = V1.compare (v1_man man) op a b r in
+
+    | V1 _, _ | _, V1 _ ->
+      let a',b' = V1.compare (v1_man man) t op a b r in
       V1 a', V1 b'
-    | V2 _, V2 _ ->
-      let a',b' = V2.compare (v2_man man) op a b r in
+    | V2 _, _ | _, V2 _ ->
+      let a',b' = V2.compare (v2_man man) t op a b r in
       V2 a', V2 b'
-    | _ -> Exceptions.panic "compare called on unsupported arguments %a and %a"
-             ~loc:__LOC__
-             print (man.vget a)
-             print (man.vget b)
 
 
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  module EvalQuery = Query.GenArgQuery(
-    struct
-      type arg = expr
-      type ret = t
-      let join = join
-      let meet = meet
-    end
-    )
+  let ask man q =
+    let a = V1.ask (v1_man man) q in
+    let b = V2.ask (v2_man man) q in
+    Option.neutral2 (Query.join q) a b
 
 end

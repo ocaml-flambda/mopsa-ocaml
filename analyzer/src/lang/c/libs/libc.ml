@@ -239,7 +239,7 @@ struct
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
           (* Compute the interval of the counter *)
-          let itv = man.ask (Itv.EvalQuery.query valc) flow |>
+          let itv = man.ask (Itv.Q_interval valc) flow |>
                     Itv.meet (Itv.of_int 0 (List.length unnamed - 1))
           in
 

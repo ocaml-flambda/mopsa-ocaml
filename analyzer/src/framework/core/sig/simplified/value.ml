@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** General-purpose signature of a value abstraction. *)
+(** Simplified signature of a value abstraction. *)
 
 open Ast.All
 open Manager
@@ -86,13 +86,13 @@ sig
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  val of_constant : typ -> constant -> t
+  val of_constant : constant -> t
   (** Create a singleton abstract value from a constant. *)
 
-  val unop : typ -> operator -> t -> t
+  val unop : operator -> t -> t
   (** Forward evaluation of unary operators. *)
 
-  val binop : typ -> operator -> t -> t -> t
+  val binop : operator -> t -> t -> t
   (** Forward evaluation of binary operators. *)
 
   val filter : t -> bool -> t
@@ -102,7 +102,7 @@ sig
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : typ -> operator -> t -> t -> t
+  val bwd_unop : operator -> t -> t -> t
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -110,7 +110,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : typ -> operator -> t -> t -> t -> (t * t)
+  val bwd_binop : operator -> t -> t -> t -> (t * t)
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -120,7 +120,7 @@ sig
   *)
 
 
-  val compare : typ -> operator -> t -> t -> bool -> (t * t)
+  val compare : operator -> t -> t -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -135,8 +135,6 @@ sig
 
   val ask : 'r query -> (expr -> t) -> 'r option
 
-
-
 end
 
 
@@ -144,17 +142,17 @@ end
 (**                      {2 Low-level lifters}                              *)
 (*==========================================================================*)
 
-let lift_unop unop (man:('a,'t) vman) (t:typ) (op:operator) (a:'a) : 't = unop t op (man.vget a)
+let lift_unop unop man t op a = unop op (man.vget a)
 
-let lift_binop binop man t op a b = binop t op (man.vget a) (man.vget b)
+let lift_binop binop man t op a b = binop op (man.vget a) (man.vget b)
 
 let lift_filter filter man v b =  filter (man.vget v) b
 
-let lift_bwd_unop bwd_unop man t op v r = bwd_unop t op (man.vget v) (man.vget r)
+let lift_bwd_unop bwd_unop man t op v r = bwd_unop op (man.vget v) (man.vget r)
 
-let lift_bwd_binop bwd_binop man t op a b r = bwd_binop t op (man.vget a) (man.vget b) (man.vget r)
+let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.vget a) (man.vget b) (man.vget r)
 
-let lift_compare compare man t op a b r = compare t op (man.vget a) (man.vget b) r
+let lift_compare compare man t op a b r = compare op (man.vget a) (man.vget b) r
 
 let lift_ask ask man q = ask q (fun e -> man.veval e |> man.vget)
 
@@ -182,7 +180,7 @@ struct
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  let of_constant = Value.of_constant
+  let of_constant t = Value.of_constant
 
   let unop man t op a = lift_unop Value.unop man t op a
 
@@ -223,11 +221,11 @@ let register_value v =
 (**                  {2 Default backward functions} *)
 (*==========================================================================*)
 
-let default_bwd_unop t op x r =
+let default_bwd_unop op x r =
   x
 
-let default_bwd_binop t op x y r =
+let default_bwd_binop op x y r =
   (x, y)
 
-let default_compare t op x y b =
+let default_compare op x y b =
   (x, y)

@@ -77,15 +77,9 @@ struct
         snd
       );
     vask = (fun query ->
-        let r = Value.EvalQuery.handle query
-            (fun e -> eval e a |>
-                      Option.default (A_unsupported,Value.top) |>
-                      snd
-            )
-        in
-        match r with
+        match Value.ask (vman a) query with
         | Some rr -> rr
-        | None -> Exceptions.panic "query with no reply"
+        | None -> Exceptions.panic "query not handled"
       );
   }
 
@@ -197,7 +191,7 @@ struct
       eval e2 a |> Option.bind @@ fun (ae2,v2) ->
 
       (* apply comparison *)
-      let r1, r2 = Value.compare (vman a) op v1 v2 r in
+      let r1, r2 = Value.compare (vman a) e1.etyp op v1 v2 r in
 
       (* propagate backward on both argument expressions *)
       refine ae2 v2 r2 @@ refine ae1 v1 r1 a |>
@@ -284,10 +278,6 @@ struct
 
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
-      Value.EvalQuery.handle query (fun exp ->
-          eval exp map |>
-          Option.default (A_unsupported,Value.top) |>
-          snd
-        )
+      Value.ask (vman map) query
 
 end

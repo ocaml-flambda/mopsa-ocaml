@@ -37,6 +37,37 @@ open Abstraction
 open Engine
 open Format
 
+(** Query for printing variables *)
+type _ query += Q_print_var : (Format.formatter -> string -> unit) query
+
+let () =
+  register_query {
+    query_join = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_var ->
+            fun fmt var ->
+              Format.fprintf fmt "%a@,%a" a var b var
+          | _ -> next.join query a b
+      in
+      doit
+    );
+
+    query_meet = (
+      let doit : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_print_var ->
+            fun fmt var ->
+              Format.fprintf fmt "%a@,%a" a var b var
+          | _ -> next.join query a b
+      in
+      doit
+    );
+  }
+
+
 
 (** Create an interactive analysis engine over an abstraction. *)
 module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
@@ -289,7 +320,7 @@ struct
           interact ~where:false action range flow
 
         | Value(var) ->
-          printf "%a@." (man.ask Query.PrintVarQuery.query flow) var;
+          printf "%a@." (man.ask Q_print_var flow) var;
           interact ~where:false action range flow
 
         | Where ->

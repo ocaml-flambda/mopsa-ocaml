@@ -38,8 +38,8 @@ module Log = Log
 
 include Manager
 
+include Query
 module Query = Query
-type 'a query = 'a Query.query
 
 include Token
 

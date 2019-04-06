@@ -514,7 +514,7 @@ module Domain = struct
       assume_eval ~zone:Universal.Zone.Z_u_num cond
         ~fthen:(fun flow ->
             (* Compute the interval and create a finite number of cells *)
-            let v = man.ask (Itv.EvalQuery.query offset) flow in
+            let v = man.ask (Itv.Q_interval offset) flow in
             let itv = v and step = Z.one in
 
             (* Iterate in case of bounded interval *)
@@ -586,7 +586,7 @@ module Domain = struct
     let evl = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) e flow in
     Eval.apply
       (fun ee flow ->
-        man.ask (Itv.EvalQuery.query ee) flow
+        man.ask (Itv.Q_interval ee) flow
       )
       Itv.join Itv.meet Itv.bottom
       evl
@@ -1167,7 +1167,9 @@ module Domain = struct
   (** ============== *)
 
   let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
-    Query.PrintVarQuery.handle query (fun () ->
+    match query with
+    | Framework.Engines.Interactive.Q_print_var ->
+      Some (
         fun fmt v ->
           let a = get_domain_env T_cur man flow in
           (* Get the cells in variable v *)
@@ -1192,7 +1194,7 @@ module Domain = struct
                     (* For numeric cells, get the interval and print it *)
                     man.eval e ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
                     Eval.iter (fun ee flow ->
-                        let itv = man.ask (Itv.EvalQuery.query ee) flow in
+                        let itv = man.ask (Itv.Q_interval ee) flow in
                         ret := (fun fmt -> fprintf fmt "%a = %a" pp_expr e Itv.print itv) :: !ret
                       )
                   else
@@ -1202,7 +1204,7 @@ module Domain = struct
                     Eval.iter (fun p flow ->
                         match ekind p with
                         | E_c_points_to(P_block(base, offset)) ->
-                          let itv = man.ask (Itv.EvalQuery.query offset) flow in
+                          let itv = man.ask (Itv.Q_interval offset) flow in
                           ret := (fun fmt ->
                               fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
                             ) :: !ret
@@ -1222,6 +1224,8 @@ module Domain = struct
                (fun fmt pp -> pp fmt)
             ) !ret
       )
+
+    | _ -> None
 
 end
 

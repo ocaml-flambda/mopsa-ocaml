@@ -48,7 +48,12 @@
                     ]
                 },
 		"on": {
-                    "nonrel": "universal.numeric.values.intervals.integer"
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.integer",
+			    "universal.numeric.values.intervals.float"
+			]
+		    }
                 }
 	    }
 	]

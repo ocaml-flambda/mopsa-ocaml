@@ -598,13 +598,16 @@ struct
 
   and ask : type r. r Query.query -> t -> r option =
     fun query abs ->
-      Values.Intervals.Integer.Value.EvalQuery.handle query (fun e ->
-          let e = exp_to_apron e in
-          let env = Apron.Abstract1.env abs in
-          let e = Apron.Texpr1.of_expr env e in
-          Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-          Values.Intervals.Integer.Value.of_apron
-        )
+      match query with
+      | Values.Intervals.Integer.Value.Q_interval e ->
+        let e = exp_to_apron e in
+        let env = Apron.Abstract1.env abs in
+        let e = Apron.Texpr1.of_expr env e in
+        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
+        Values.Intervals.Integer.Value.of_apron |>
+        Option.return
+
+      | _ -> None
 
 end
 

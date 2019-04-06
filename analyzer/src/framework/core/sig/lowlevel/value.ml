@@ -120,7 +120,7 @@ sig
   *)
 
 
-  val compare : ('a,t) vman -> operator -> 'a -> 'a -> bool -> (t * t)
+  val compare : ('a,t) vman -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -133,9 +133,7 @@ sig
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  module EvalQuery : Query.ArgQuery
-    with type arg = expr
-    and type ret = t
+  val ask : ('a,t) vman -> 'r query -> 'r option
 
 end
 
@@ -165,5 +163,5 @@ let default_bwd_unop ma typ op x r =
 let default_bwd_binop man typ op x y r =
   (x, y)
 
-let default_compare man op x y b =
+let default_compare man typ op x y b =
   (x, y)
