@@ -80,6 +80,7 @@ struct
 
   let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
 
+  let cast man id' a = leaf_cast man id id' a
 
   (** Arithmetic operators *)
                       
@@ -119,17 +120,19 @@ struct
 
     | _ -> top
 
-  let unop man t op a = lift_unop (fun t op a ->
+  let unop man t op v = lift_unop (fun t op a ->
       match t with
       | T_float p ->
         (match op with
          | O_minus -> I.neg a
          | O_plus  -> a
          | O_sqrt  -> I.sqrt (prec p) (round ()) a
-         | O_cast  -> I.round (prec p) (round ()) a
+         | O_cast  ->
+           let int_itv = man.vcast Integer.Value.id v in
+           I.of_int_itv_bot (prec p) (round ()) int_itv
          | _ -> top)
       | _ -> top
-    ) man t op a
+    ) man t op v
 
   let binop man t op a1 a2 = lift_binop (fun t op a1 a2 ->
       match t with

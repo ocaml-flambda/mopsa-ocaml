@@ -248,6 +248,14 @@ struct
         | _ -> panic "bounds called on a unbounded interval %a" print itv
       ) itv
 
+  let bounds_opt (itv:t) : Z.t option * Z.t option =
+    bot_dfl1 (None, None) (function
+        | I.B.Finite a, I.B.Finite b -> (Some a, Some b)
+        | I.B.Finite a, _ -> (Some a, None)
+        | _, I.B.Finite b -> (None, Some b)
+        | _ -> (None, None)
+      ) itv
+
   let mem (i: Z.t) (itv:t) : bool =
     bot_dfl1 true (fun (a, b) ->
         let open I.B in

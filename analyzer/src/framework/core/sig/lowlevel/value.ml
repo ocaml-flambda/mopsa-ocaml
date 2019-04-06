@@ -61,6 +61,7 @@ sig
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
+  val cast: ('a,t) vman -> 's value -> 'a -> 's option
 
   (** {2 Lattice operators} *)
   (** ********************* *)
