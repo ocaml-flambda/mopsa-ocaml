@@ -76,10 +76,10 @@ struct
         Option.default (A_unsupported,Value.top) |>
         snd
       );
-    vask = (fun query ->
-        match Value.ask (vman a) query with
+    vcast = (fun id v ->
+        match Value.cast (vman a) id v with
         | Some rr -> rr
-        | None -> Exceptions.panic "query not handled"
+        | None -> Exceptions.panic "cast not handled"
       );
   }
 

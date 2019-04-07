@@ -137,6 +137,11 @@ struct
     vset = (fun v2 v -> man.vset (V2 v2) v);
   }
 
+  let cast man id a =
+    match V1.cast (v1_man man) id a with
+    | Some v -> Some v
+    | None -> V2.cast (v2_man man) id a
+
 
   (** {2 Forward semantics} *)
   (** ********************* *)

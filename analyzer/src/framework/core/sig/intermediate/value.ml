@@ -158,6 +158,12 @@ let lift_compare compare man t op a b r = compare t op (man.vget a) (man.vget b)
 
 let lift_ask ask man q = ask q (fun e -> man.veval e |> man.vget)
 
+let leaf_cast :type t s. ('a,t) vman -> t value -> s value -> 'a -> s option =
+  fun man id1 id2 a ->
+    match Id.veq id1 id2 with
+    | Some Eq.Eq -> Some (man.vget a)
+    | None -> None
+
 (** Lift a general-purpose signature to a low-level one *)
 module MakeLowlevel(Value:VALUE) : Lowlevel.Value.VALUE with type t = Value.t =
 struct
@@ -177,6 +183,8 @@ struct
   let meet = Value.meet
   let widen = Value.widen
   let print = Value.print
+
+  let cast man id a = leaf_cast man Value.id id a
 
 
   (** {2 Forward semantics} *)

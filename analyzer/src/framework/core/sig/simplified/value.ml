@@ -176,6 +176,13 @@ struct
   let widen = Value.widen
   let print = Value.print
 
+  let cast : type s. ('a,t) vman -> s value -> 'a -> s option =
+    fun man id a ->
+      match Id.veq id Value.id with
+      | Some Eq.Eq -> Some (man.vget a)
+      | None -> None
+
+
 
   (** {2 Forward semantics} *)
   (** ********************* *)
