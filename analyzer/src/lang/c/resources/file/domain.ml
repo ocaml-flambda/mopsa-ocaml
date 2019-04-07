@@ -296,7 +296,7 @@ struct
             man flow
     and find_others flow =
       let a = get_domain_env T_cur man flow in
-      let itv = man.ask (Itv.EvalQuery.query i) flow in
+      let itv = man.ask (Itv.Q_interval i) flow in
 
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)

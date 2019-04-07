@@ -34,7 +34,6 @@ framework.core.sig = lowlevel intermediate simplified stateless
 framework.lattices = partial_map powerset total_map
 framework.engines = engine automatic interactive
 framework.output = text json factory
-framework.combiners = apply sequence compose nonrel
 framework.config = paths parser options
 
 lang = universal repl stubs c python
@@ -47,7 +46,7 @@ lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational
 lang.universal.numeric.values = intervals
-lang.universal.numeric.values.intervals = integer
+lang.universal.numeric.values.intervals = integer float
 
 lang.repl = frontend 
 

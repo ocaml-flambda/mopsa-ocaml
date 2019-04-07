@@ -46,21 +46,24 @@ sig
   val display : string
   (** Display name used in debug messages *)
 
-  val zone : Zone.zone
-  (** Language zone in which the value abstraction is defined *)
+  val zones : Zone.zone list
+  (** Zones in which the value abstraction is defined *)
 
-  val accept_expr : expr -> bool
-  (** Filter of expressions that are handled by the value abstraction *)
+  val types : typ list
+  (** Types abstracted by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
+  
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
 
 
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
@@ -68,10 +71,6 @@ sig
   val subset: t -> t -> bool
   (** Partial order relation. [subset a1 a2] tests whether [a1] is
       related to (or included in) [a2]. *)
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
 
   val join: t -> t -> t
   (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
@@ -84,23 +83,16 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
-
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  val of_constant : constant -> t
+  val of_constant : typ -> constant -> t
   (** Create a singleton abstract value from a constant. *)
 
-  val unop : ('a,t) vman -> operator -> 'a -> t
+  val unop : ('a,t) vman -> typ -> operator -> 'a -> t
   (** Forward evaluation of unary operators. *)
 
-  val binop : ('a,t) vman -> operator -> 'a -> 'a -> t
+  val binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
   (** Forward evaluation of binary operators. *)
 
   val filter : ('a,t) vman -> 'a -> bool -> t
@@ -110,7 +102,7 @@ sig
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : ('a,t) vman -> operator -> 'a -> 'a -> t
+  val bwd_unop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -118,7 +110,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : ('a,t) vman -> operator -> 'a -> 'a -> 'a -> (t * t)
+  val bwd_binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> 'a -> (t * t)
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -128,7 +120,7 @@ sig
   *)
 
 
-  val compare : ('a,t) vman -> operator -> 'a -> 'a -> bool -> (t * t)
+  val compare : ('a,t) vman -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -141,9 +133,7 @@ sig
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  module EvalQuery : Query.ArgQuery
-    with type arg = expr
-    and type ret = t
+  val ask : ('a,t) vman -> 'r query -> 'r option
 
 end
 
@@ -151,7 +141,6 @@ end
 (*==========================================================================*)
 (**                         {2 Registration}                                *)
 (*==========================================================================*)
-
 
 let values : (module VALUE) list ref = ref []
 
@@ -163,15 +152,16 @@ let find_value name =
       compare V.name name = 0
     ) !values
 
+
 (*==========================================================================*)
 (**                  {2 Default backward functions}                         *)
 (*==========================================================================*)
 
-let default_bwd_unop ma op x r =
+let default_bwd_unop ma typ op x r =
   x
 
-let default_bwd_binop man op x y r =
+let default_bwd_binop man typ op x y r =
   (x, y)
 
-let default_compare man op x y b =
+let default_compare man typ op x y b =
   (x, y)

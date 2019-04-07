@@ -152,6 +152,8 @@ let () =
     }
   )
 
+type _ query += Q_exn_string_query : expr -> string query
+
 module Domain =
 struct
 
@@ -194,15 +196,6 @@ struct
       type typ = t
       let name = "python.types.typing"
     end)
-
-  module ExnStringQuery = Query.GenArgQuery(
-    struct
-      type arg = expr
-      type ret = string
-      let join _ _ = assert false
-      let meet _ _ = assert false
-    end
-    )
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -930,28 +923,30 @@ struct
 
   let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-      ExnStringQuery.handle query (fun t ->
-          let cur = get_domain_env T_cur man flow in
-          let addr = match ekind t with
-            | E_py_object (a, _) -> a
+      match query with
+      | Q_exn_string_query t ->
+        let cur = get_domain_env T_cur man flow in
+        let addr = match ekind t with
+          | E_py_object (a, _) -> a
+          | _ -> assert false in
+        let ptys = TMap.find addr cur.abs_heap in
+        if Polytypeset.cardinal ptys = 1 then
+          let r = Polytypeset.choose ptys in
+          let str = match r with
+            | Instance {classn} -> begin match classn with
+                | Class (c, b) -> begin match c with
+                    | C_builtin name | C_unsupported name -> name
+                    | C_user c -> c.py_cls_var.org_vname
+                  end
+                | _ -> assert false
+              end
             | _ -> assert false in
-          let ptys = TMap.find addr cur.abs_heap in
-          if Polytypeset.cardinal ptys = 1 then
-            let r = Polytypeset.choose ptys in
-            let str = match r with
-              | Instance {classn} -> begin match classn with
-                  | Class (c, b) -> begin match c with
-                      | C_builtin name | C_unsupported name -> name
-                      | C_user c -> c.py_cls_var.org_vname
-                    end
-                  | _ -> assert false
-                end
-              | _ -> assert false in
-            let () = debug "answer to query is %s@\n" str in
-            str
-          else
-            assert false
-        )
+          let () = debug "answer to query is %s@\n" str in
+          Some str
+        else
+          assert false
+
+      | _ -> None
 
 end
 

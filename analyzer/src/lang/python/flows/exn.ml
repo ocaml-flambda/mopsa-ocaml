@@ -117,7 +117,7 @@ module Domain =
                    let true_flow =  man.exec (mk_block cleaners range) true_flow in
                    let cur = Flow.get T_cur man.lattice true_flow in
                    let cs = Callstack.get true_flow in
-                   let str = man.ask (Types.Typing.Domain.ExnStringQuery.query exp) flow in
+                   let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
                    let a = mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
                    let flow' = Flow.add (T_alarm a) cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice

@@ -210,7 +210,7 @@ let rec repl_loop ctx man flow =
          List.iter
            (fun v ->
              let var = parse_var ctx v in
-             pf "%a@." (man.ask Query.PrintVarQuery.query flow) (uniq_vname var)
+             pf "%a@." (man.ask Framework.Engines.Interactive.Q_print_var flow) (uniq_vname var)
            ) vars;
          ctx, flow
          

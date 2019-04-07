@@ -41,10 +41,9 @@ struct
       let display = "int-itv"
     end)
 
-  let zone = Zone.Z_u_num
+  let zones = [Zone.Z_u_num]
 
-  let accept_expr e =
-    compare_typ e.etyp T_int = 0
+  let types = [T_int; T_bool]
 
   let bottom = BOT
 
@@ -270,16 +269,21 @@ struct
       in
       iter a
 
-  module EvalQuery = Query.GenArgQuery (
-    struct
-      type arg = expr
-      type ret = t
-      let join = join
-      let meet = meet
-    end)
+
+  (** {2 Interval query} *)
+
+  type _ query += Q_interval : expr -> t query
+
+  let ask : type r. r query -> (expr -> t) -> r option =
+    fun query eval ->
+      match query with
+      | Q_interval e ->
+        eval e |> Option.return
+
+      | _ -> None
 
 end
 
 
 let () =
-  Core.Sig.Intermediate.Value.register_value (module Value)
+  Core.Sig.Simplified.Value.register_value (module Value)
