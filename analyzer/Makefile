@@ -41,14 +41,14 @@ lang = universal repl stubs c python
 # Universal
 lang.universal = ast frontend
 lang.universal = ast frontend zone iterators heap numeric
-lang.universal.iterators = program intraproc interproc unittest loops
+lang.universal.iterators = program intraproc scalar interproc unittest loops
 lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational
 lang.universal.numeric.values = intervals
 lang.universal.numeric.values.intervals = integer float
 
-lang.repl = frontend 
+lang.repl = frontend
 
 lang.stubs = ast zone alarms iterator
 
