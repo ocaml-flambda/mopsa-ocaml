@@ -28,28 +28,22 @@ open Zone
 module Domain =
 struct
 
-  type _ domain += D_universal_program : unit domain
-
-  let id = D_universal_program
   let name = "universal.iterators.program"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_program -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
   let exec zone stmt man flow =
     match skind stmt with
     | S_program { prog_kind = P_universal{universal_main} } ->
       Some (
         man.exec universal_main flow |>
-        Post.of_flow
+        Post.return
       )
 
     | _ -> None
@@ -61,4 +55,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

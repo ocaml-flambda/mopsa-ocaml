@@ -45,13 +45,7 @@ let () =
 module Domain =
 struct
 
-  type _ domain += D_python_objects_set : unit domain
-
-  let id = D_python_objects_set
   let name = "python.objects.set"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_objects_set -> Some Eq
-    | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -73,20 +67,16 @@ struct
 
   module Equiv = Equiv.Make(SetInfo)(VarInfo)
 
-  type ('a, _) Annotation.key +=
-    | KSetInfo : ('a, Equiv.t) Annotation.key
-
-  let () =
-    Annotation.(register_stateless_annot {
-        eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
-                function
-                | KSetInfo -> Some Eq
-                | _ -> None
-              in
-              f);
-        print = (fun fmt m -> Format.fprintf fmt "List annots: @[%a@]" Equiv.print m);
-      }) ();
-    ()
+  let ctx_key =
+    let module K = Context.GenUnitKey(
+      struct
+        type t = Equiv.t
+        let print fmt m =
+          Format.fprintf fmt "Set annots: @[%a@]" Equiv.print m
+      end
+      )
+    in
+    K.key
 
 
   let fresh_smashed_var =  mkfresh (fun uid -> "$s*" ^ (string_of_int uid)) T_any
@@ -100,17 +90,22 @@ struct
       var, new_eq
 
   let get_var_flow (info: SetInfo.t) (f: 'a flow) : var * 'a flow =
-    let a = Flow.get_annot KSetInfo f in
+    let a = Flow.get_ctx f |>
+            Context.find_unit ctx_key
+    in
     let var, a = get_var_equiv info a in
-    var, Flow.set_annot KSetInfo a f
+    var, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
 
-  let exec_interface = {export = []; import = [Zone.Z_py_obj]}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  let interface = {
+    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  }
 
   let init (prog:program) man flow =
-    Some (
-      Flow.set_annot KSetInfo Equiv.empty flow
-    )
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit ctx_key Equiv.empty
+    ) flow
 
 
   let rec eval zones exp man flow =
@@ -129,20 +124,20 @@ struct
             | _ -> assert false in
           Eval.singleton (mk_py_object (addr_set, None) range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
       when is_compare_op_fun "set" f ->
       Utils.check_instances ~arguments_after_check:1 man flow range args ["set"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
-           Eval.assume (mk_py_isinstance_builtin e2 "set" range) man flow
+           assume_eval (mk_py_isinstance_builtin e2 "set" range) man flow
              ~fthen:(man.eval (mk_py_top T_bool range))
              ~felse:(fun flow ->
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                  man.eval expr flow)
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -159,7 +154,7 @@ struct
                Eval.singleton (mk_py_object (addr_it, None) range) flow
              )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__next__")}, _)}, [iterator], []) ->
       (* todo: checks ? *)
@@ -172,15 +167,15 @@ struct
             | A_py_set a -> a
             | _ -> assert false in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-          let flow = Flow.set_all_annot (Eval.choose_annot els) flow in
+          let flow = Flow.set_ctx (Eval.choose_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list (Eval.copy_annot stopiteration els::stopiteration::[])
+          Eval.join_list (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set_iterator.__iter__")}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> OptionExt.return
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.__len__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -188,7 +183,7 @@ struct
         (fun args flow ->
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "set.add")}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 man flow range args
@@ -201,14 +196,14 @@ struct
              | _ -> assert false in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_set_of")}, _)}, args, []) ->
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list man.eval args flow |>
       Eval.bind (fun eargs flow ->
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in
-          Eval.assume (mk_py_isinstance_builtin set "set" range) man flow
+          assume_eval (mk_py_isinstance_builtin set "set" range) man flow
             ~fthen:(fun flow ->
                 let var = match ekind set with
                   | E_py_object ({addr_kind = A_py_set a}, _) -> a
@@ -219,7 +214,7 @@ struct
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | _ -> None
@@ -231,4 +226,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

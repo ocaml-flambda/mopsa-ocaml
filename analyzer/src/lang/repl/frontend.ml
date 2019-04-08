@@ -210,7 +210,7 @@ let rec repl_loop ctx man flow =
          List.iter
            (fun v ->
              let var = parse_var ctx v in
-             pf "%a@." (man.ask Query.Q_print_var flow) (uniq_vname var)
+             pf "%a@." (man.ask Framework.Engines.Interactive.Q_print_var flow) (uniq_vname var)
            ) vars;
          ctx, flow
          
@@ -222,7 +222,7 @@ let rec repl_loop ctx man flow =
             let stmt = parse_stmt ctx str in
             pf "%s@[<v 4>X♯ ≜ 𝕊⟦%a@]⟧ =@]%s@." col_out pp_stmt stmt col_reset;
             let flow = man.exec stmt flow in
-            pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man) flow col_reset;
+            pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice) flow col_reset;
             ctx, flow
             
          | VarDecl ->
@@ -235,7 +235,7 @@ let rec repl_loop ctx man flow =
                 pf "variable %a : %a declared@." pp_var v pp_typ (vtyp v)
               ) vars;
             pf "%s@[<v 4>X♯ ≜%s@." col_out col_reset;
-            pf "%s%a%s@." col_out (Flow.print man) flow col_reset;
+            pf "%s%a%s@." col_out (Flow.print man.lattice) flow col_reset;
             ctx, flow
             
          | FunDecl ->
@@ -296,26 +296,21 @@ let parse_program files : program =
   
 module Domain = struct
 
-  type _ domain += D_REPL_program : unit domain
-
-  let id = D_REPL_program
   let name = "universal.repl"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_REPL_program -> Some Eq
-    | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Z_u]; uses = []};
+    ieval = {provides = []; uses = []};
+  }
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
   let exec zone stmt man flow =
     match skind stmt with
     | S_program { prog_kind = P_REPL } ->
-       Some (Post.of_flow (enter_repl man flow))
+       Some (Post.return (enter_repl man flow))
       
     | _ -> None
 
@@ -326,5 +321,5 @@ module Domain = struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
   

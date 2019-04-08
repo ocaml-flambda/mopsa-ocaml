@@ -23,7 +23,6 @@
 
 open Mopsa
 open Universal.Ast
-module Itv = Universal.Numeric.Values.Intervals.Value
 
 type slot =
   | Bot

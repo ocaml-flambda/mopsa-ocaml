@@ -28,20 +28,15 @@ open Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_loops : unit domain
-
-    let id = D_python_desugar_loops
     let name = "python.desugar.loops"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_loops -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = []; import = []}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = []; uses = []}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval _ _ _ _ = None
 
 
@@ -66,8 +61,8 @@ module Domain =
                  ] range)
               range
            ) flow
-         |> Post.of_flow
-         |> OptionExt.return
+         |> Post.return
+         |> Option.return
 
       | S_py_for(target, iterable, body, orelse) ->
          (* iter is better than iterable.__iter__, as the error
@@ -106,8 +101,9 @@ module Domain =
              range
          in
          man.exec stmt flow |>
-         Post.clean (List.map (fun x -> mk_remove_var x range) [iterabletmp; tmp]) man |>
-         Post.return
+         exec_block_on_all_flows (List.map (fun x -> mk_remove_var x range) [iterabletmp; tmp]) man |>
+         Post.return |>
+         Option.return
 
 
       | _ -> None
@@ -117,4 +113,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

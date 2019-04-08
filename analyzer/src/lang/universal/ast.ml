@@ -334,7 +334,7 @@ type expr_kind +=
 
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_function(f1), E_function(f2) -> compare_fun_expr f1 f2
@@ -449,7 +449,7 @@ type stmt_kind +=
 
 
 let () =
-  register_stmt {
+  register_stmt_with_visitor {
     compare = (fun next s1 s2 ->
         match skind s1, skind s2 with
         | S_expression(e1), S_expression(e2) -> compare_expr e1 e2

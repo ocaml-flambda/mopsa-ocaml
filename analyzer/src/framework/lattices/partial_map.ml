@@ -22,7 +22,7 @@
 (** Abstraction of sets of partial maps. *)
 
 open Top
-open Lattice
+open Core.Lattice
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.partial_map" fmt
 
@@ -36,9 +36,10 @@ end
 
 module Make
     (Key : KEY)
-    (Value: Lattice.LATTICE)
+    (Value: LATTICE)
 =
 struct
+
   module Map = MapExt.Make(Key)
 
   (** [a:t] is an abstraction of a set of partial maps from [Key.t]
@@ -82,7 +83,7 @@ struct
          m1 m2
   (** Inclusion test. *)
 
-  let join annot (a1:t) (a2:t) : t =
+  let join (a1:t) (a2:t) : t =
     match a1, a2 with
     | Bot, x | x, Bot -> x
     | Top, _ | _, Top -> Top
@@ -91,7 +92,7 @@ struct
         Map.map2zo
           (fun _ v1 -> v1)
           (fun _ v2 -> v2)
-          (fun _ v1 v2 -> Value.join annot v1 v2)
+          (fun _ v1 v2 -> Value.join v1 v2)
           m1 m2
       )
   (** Join two sets of partial maps. *)
@@ -110,7 +111,7 @@ struct
       )
   (** Widening (naive). *)
 
-  let meet annot (a1:t) (a2:t) : t =
+  let meet (a1:t) (a2:t) : t =
     match a1, a2 with
     | Bot, x | x, Bot -> Bot
     | Top, x | x, Top -> x
@@ -119,10 +120,11 @@ struct
         Map.merge (fun _ v1 v2 ->
             match v1, v2 with
             | None, _ | _, None -> None
-            | Some vv1, Some vv2 -> Some (Value.meet annot vv1 vv2)
+            | Some vv1, Some vv2 -> Some (Value.meet vv1 vv2)
           ) m1 m2
       )
   (** Meet. *)
+
 
   let print fmt (a:t) =
     match a with

@@ -27,7 +27,6 @@
 
 
 open Mopsa
-open Framework.Value
 open Universal.Ast
 open Common.Base
 
@@ -62,20 +61,13 @@ module BaseSet = Framework.Lattices.Powerset.Make(
 
 include BaseSet
 
-let name = "c.memory.pointers", "pointers"
+include Framework.Core.Id.GenValueId(struct
+    type typ = t
+    let name = "c.memory.pointers"
+    let display = "pointers"
+  end)
 
-type _ value += V_c_pointers_bases : t value
-
-let id = V_c_pointers_bases
-
-let identify : type a. a value -> (t, a) eq option =
-  function
-  | V_c_pointers_bases -> Some Eq
-  | _ -> None
-
-let debug fmt = Debug.debug ~channel:(fst name) fmt
-
-let zone = Zone.Z_c_scalar
+let zones = [Zone.Z_c_scalar]
 
 let null = singleton PB_null
 
@@ -89,31 +81,34 @@ let mem_block v =
   if is_top v then true
   else exists (function PB_block _ -> true | _ -> false) v
 
-let of_constant _ c =
+let types = []
+
+let of_constant c =
   match c with
   | C_int n when Z.equal n Z.zero -> null
   | _ -> top
 
-let unop _ op v = top
+let unop op v = top
 
-let binop _ op v1 v2 = top
+let binop op v1 v2 = top
 
-let bwd_unop = default_bwd_unop_simple
-let bwd_binop = default_bwd_binop_simple
+let bwd_unop = Framework.Core.Sig.Simplified.Value.default_bwd_unop
 
-let filter _ v b =
+let bwd_binop = Framework.Core.Sig.Simplified.Value.default_bwd_binop
+
+let filter v b =
   if b then diff v null
-  else meet () v null
+  else meet v null
 
 let is_singleton v =
   not (is_top v) &&
   cardinal v == 1
 
-let compare _ op v1 v2 r =
+let compare op v1 v2 r =
   let op = if r then op else negate_comparison op in
   match op with
   | O_eq ->
-    let v = meet () v1 v2 in
+    let v = meet v1 v2 in
     v, v
 
   | O_ne ->
@@ -122,5 +117,6 @@ let compare _ op v1 v2 r =
     else v1, v2
 
   | _ -> v1, v2
+
 
 let ask _ _ = None

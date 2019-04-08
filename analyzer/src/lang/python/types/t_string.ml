@@ -28,15 +28,7 @@ open Universal.Ast
 
 module Domain =
   struct
-    type _ domain += D_python_types_t_string : unit domain
-
-    let id = D_python_types_t_string
     let name = "python.types.t_string"
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_python_types_t_string -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
     type stub_signature = {in_args: string list;
@@ -97,10 +89,12 @@ module Domain =
     let process_simple man flow range exprs instances return =
       Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ _ = None
+    let init _ _ flow = flow
 
     let is_str_binop_fun = function
       | "str.__add__"
@@ -111,31 +105,31 @@ module Domain =
             -> true
       | _ -> false
 
-    let eval zs exp (man: ('a, unit) man) (flow:'a flow) : ('a, expr) evl option =
+    let eval zs exp (man: ('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple man flow range args in_args out_type
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__new__")}, _)}), [cls; obj], []) ->
         (* check if obj has str method, run it, check return type (can't be notimplemented) *)
         (* otherwise, call __repr__. Or repr? *)
         (* FIXME!*)
-        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> OptionExt.return
+        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) flow |> Option.return
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
         when is_compare_op_fun "str" f ->
-        Eval.eval_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
         Eval.bind (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-            Eval.assume
+            assume_eval
               (mk_py_isinstance_builtin e1 "str" range)
               ~fthen:(fun true_flow ->
-                  Eval.assume
+                  assume_eval
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
@@ -149,17 +143,17 @@ module Domain =
                   Eval.empty_singleton flow)
               man flow
           )
-        |>  OptionExt.return
+        |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, [e1; e2], [])
         when is_str_binop_fun f ->
-        Eval.eval_list [e1; e2] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+        Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1; e2] flow |>
         Eval.bind (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
-            Eval.assume
+            assume_eval
               (mk_py_isinstance_builtin e1 "str" range)
               ~fthen:(fun true_flow ->
-                  Eval.assume
+                  assume_eval
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
                         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_string range) true_flow)
@@ -173,19 +167,19 @@ module Domain =
                   Eval.empty_singleton flow)
               man flow
           )
-        |>  OptionExt.return
+        |>  Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__getitem__")}, _)}, args, []) ->
         Utils.check_instances_disj man flow range args
           [["str"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_string range) flow)
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "bytes.__getitem__")}, _)}, args, []) ->
         Utils.check_instances_disj man flow range args
           [["bytes"]; ["int"; "slice"]]
           (fun _ flow -> man.eval (mk_py_top T_py_bytes range) flow)
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.__iter__")}, _)}, args, []) ->
         Utils.check_instances man flow range args
@@ -202,19 +196,19 @@ module Domain =
                  Eval.singleton (mk_py_object (it_addr, None) range) flow
                )
           )
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str_iterator.__next__")}, _)}, args, []) ->
         Utils.check_instances man flow range args
           ["str_iterator"]
           (fun _ flow ->
              let stopiteration_f = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow in
-             let flow = Flow.copy_annot stopiteration_f flow in
+             let flow = Flow.copy_ctx stopiteration_f flow in
              let els = man.eval (mk_py_top T_string range) flow in
              let stopiteration = stopiteration_f |> Eval.empty_singleton in
-             Eval.join_list (Eval.copy_annot els stopiteration :: els :: [])
+             Eval.join_list (Eval.copy_ctx els stopiteration :: els :: [])
           )
-        |> OptionExt.return
+        |> Option.return
 
 
       | _ -> None
@@ -223,4 +217,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -22,7 +22,6 @@
 (** Data model for attribute access. *)
 
 open Mopsa
-open Framework.Visitor
 open Ast
 open Addr
 open Universal.Ast
@@ -63,20 +62,15 @@ let () =
 module Domain =
   struct
 
-    type _ domain += D_python_data_model_attribute : unit domain
-
-    let id = D_python_data_model_attribute
     let name = "python.data_model.attribute"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_data_model_attribute -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []} (* TODO: add attribute assignment *)
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []} (* TODO: add attribute assignment *);
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs expr man flow =
       let range = erange expr in
@@ -98,7 +92,7 @@ module Domain =
          let c_attr = mk_constant T_string (C_string attr) range in
          man.eval e ~zone:(Zone.Z_py, Zone.Z_py_obj) flow |>
            Eval.bind (fun exp flow ->
-               Eval.assume (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
+               assume_eval (mk_expr (E_py_ll_hasattr (exp, c_attr)) range)
                  ~fthen:(fun flow ->
                    debug "instance attribute found locally@\n";
                    man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr(exp, c_attr)) range) flow
@@ -109,7 +103,7 @@ module Domain =
                       instance, we take its class, search in the mro
                       and create a method *)
                    (* to test if an object o is a class, we call isinstance(o, type) *)
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin exp "type" range)
                      ~fthen:(fun flow ->
                        let mro = mro (object_of_expr exp) in
@@ -119,7 +113,7 @@ module Domain =
                             let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
                             Eval.empty_singleton flow
                          | cls::tl ->
-                            Eval.assume
+                            assume_eval
                               (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
                               ~fthen:(fun flow ->
                                 man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_expr (E_py_ll_getattr (mk_py_object cls range, c_attr)) range) flow)
@@ -137,14 +131,14 @@ module Domain =
                                   let flow = man.exec (Utils.mk_builtin_raise "AttributeError" range) flow in
                                   Eval.empty_singleton flow
                                | cls::tl ->
-                                  Eval.assume
+                                  assume_eval
                                     (mk_expr (E_py_ll_hasattr (mk_py_object cls range, c_attr)) range)
                                     ~fthen:(fun flow ->
                                       (* FIXME: disjunction between instances an non-instances *)
                                       (* FIXME: perf: optim this into a get_attr? *)
                                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_object_attr cls attr range) flow |>
                                         Eval.bind (fun obj' flow ->
-                                            Eval.assume
+                                            assume_eval
                                               (mk_py_isinstance_builtin obj' "function" range)
                                               ~fthen:(fun flow ->
                                                   debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
@@ -178,26 +172,26 @@ module Domain =
                  )
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "hasattr")}, _)}, [obj; attr], []) ->
          man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) obj flow |>
            Eval.bind (fun eobj flow ->
-               Eval.assume (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
+               assume_eval (mk_expr (E_py_ll_hasattr (eobj, attr)) range)
                  ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
                  ~felse:(fun flow ->
                    (* test with ll_hasattr and search in the MRO otherwise *)
                    let rec search_mro flow mro = match mro with
                      | [] -> man.eval (mk_py_false range) flow
                      | cls::tl ->
-                        Eval.assume
+                        assume_eval
                           (mk_expr (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
                           ~fthen:(fun flow ->
                             man.eval (mk_py_true range) flow)
                           ~felse:(fun flow -> search_mro flow tl)
                           man flow
                    in
-                   Eval.assume
+                   assume_eval
                      (mk_py_isinstance_builtin eobj "type" range)
                      ~fthen:(fun flow ->
                        let mro = mro (object_of_expr eobj) in
@@ -212,7 +206,7 @@ module Domain =
                  )
                  man flow
              )
-         |> OptionExt.return
+         |> Option.return
 
       | _ -> None
 
@@ -221,4 +215,4 @@ module Domain =
   end
 
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

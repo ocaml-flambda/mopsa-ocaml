@@ -28,20 +28,15 @@ open Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_if : unit domain
-
-    let id = D_python_desugar_if
     let name = "python.desugar.if"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_if -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
@@ -59,7 +54,7 @@ module Domain =
          let exp' = {exp with ekind = E_var (tmp, STRONG)} in
          man.eval exp' flow |>
            Eval.add_cleaners [mk_remove_var tmp (tag_range range "cleaner")] |>
-           OptionExt.return
+           Option.return
 
       | _ -> None
 
@@ -69,7 +64,7 @@ module Domain =
       match skind stmt with
       | S_py_if (test, sthen, selse) ->
         man.exec (mk_if (Utils.mk_builtin_call "bool" [test] range) sthen selse range) flow
-        |> Post.return
+        |> Post.return |> Option.return
 
       | _ -> None
 
@@ -78,4 +73,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

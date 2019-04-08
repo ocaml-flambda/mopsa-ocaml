@@ -21,7 +21,6 @@
 
 open Format
 open Mopsa
-open Framework.Ast
 open Ast
 
 let rec pp_c_init fmt = function
@@ -218,7 +217,7 @@ let () =
                pp_typ f.c_func_return
                f.c_func_org_name
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_var) f.c_func_parameters
-               (OptionExt.print pp_stmt) f.c_func_body
+               (Option.print pp_stmt) f.c_func_body
           )
           fmt funs
         ;

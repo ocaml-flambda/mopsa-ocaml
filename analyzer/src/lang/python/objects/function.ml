@@ -30,20 +30,15 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_objects_function : unit domain
-
-    let id = D_python_objects_function
     let name = "python.objects.function"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_objects_function -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
@@ -53,7 +48,7 @@ module Domain =
          debug "user-defined function call@\n";
          (* First check the correct number of arguments *)
          let default_args, nondefault_args = List.partition (function None -> false | _ -> true) pyfundec.py_func_defaults in
-         OptionExt.return @@
+         Option.return @@
            if List.length pyfundec.py_func_parameters < List.length nondefault_args then
              (
                debug "Too few arguments!@\n";
@@ -148,7 +143,7 @@ module Domain =
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e)}, _)}, args, []) ->
          let exp' = mk_py_call (mk_py_object f range) (e :: args) range in
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) exp' flow |> Option.return
 
       | _ -> None
 
@@ -168,7 +163,7 @@ module Domain =
              else F_user func
          in
          eval_alloc man (A_py_function kind) stmt.srange flow |>
-           Post.bind man (fun addr flow ->
+           post_eval man (fun addr flow ->
                let obj = (addr, None) in
                man.exec
                  (mk_assign
@@ -176,9 +171,9 @@ module Domain =
                     (mk_py_object obj range)
                     range
                  ) flow
-               |> Post.of_flow
+               |> Post.return
              )
-         |> OptionExt.return
+         |> Option.return
       | _ ->
          None
 
@@ -188,4 +183,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

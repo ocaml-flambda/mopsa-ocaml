@@ -30,20 +30,15 @@ open Universal.Ast
 
 module Domain = struct
 
-  type _ domain += D_python_data_model_aug_assign : unit domain
-
-  let id = D_python_data_model_aug_assign
   let name = "python.data_model.aug_assign"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_data_model_aug_assign -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Zone.Z_py]; uses = []};
+    ieval = {provides = []; uses = []}
+  }
 
-  let init _ _ flow = Some flow
+  let init _ _ flow = flow
   let eval _ _ _ _ = None
 
 
@@ -52,30 +47,30 @@ module Domain = struct
     match skind stmt with
     | S_py_aug_assign(x, op, e) ->
        let x0 = x in
-       Eval.eval_list [e; x] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
-         Post.bind man (fun el flow ->
+       Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e; x] flow |>
+         post_eval man (fun el flow ->
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
              man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)  (mk_py_type x range) flow |>
-               Post.bind man (fun cls flow ->
+               post_eval man (fun cls flow ->
                    let cls = object_of_expr cls in
-                   Post.assume
+                   assume_post
                      (Utils.mk_object_hasattr cls op_fun range)
                      man
                      ~fthen:(fun true_flow ->
                        let stmt = mk_assign x0 (mk_py_call (mk_py_object_attr cls op_fun range) [x; e] range) range in
-                       man.exec stmt true_flow |> Post.of_flow
+                       man.exec stmt true_flow |> Post.return
                      )
                      ~felse:(fun false_flow ->
                        debug "Fallback on default assignment@\n";
                        let default_assign = mk_assign x0 (mk_binop x op e range) range in
-                       man.exec default_assign flow |> Post.of_flow
+                       man.exec default_assign flow |> Post.return
                      )
                      flow
                  )
            )
-       |> OptionExt.return
+       |> Option.return
 
     | _ -> None
 
@@ -84,4 +79,4 @@ module Domain = struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

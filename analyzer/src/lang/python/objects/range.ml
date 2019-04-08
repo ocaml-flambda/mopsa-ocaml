@@ -29,18 +29,14 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_objects_range : unit domain
-
-    let id = D_python_objects_range
     let name = "python.objects.range"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_objects_range -> Some Eq
-      | _ -> None
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; import = []}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py; Zone.Z_py, Zone.Z_py_obj]; uses = []}
+    }
 
     let rec eval zs exp man flow =
       let range = exp.erange in
@@ -48,23 +44,23 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [up], []) ->
         let args' = (mk_constant T_int (C_int (Z.of_int 0)) range)::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
         man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)} as call, cls :: [down; up], []) ->
         let args' = down::up::(mk_constant T_int (C_int (Z.of_int 1)) range)::[] in
         man.eval {exp with ekind = E_py_call(call, cls :: args', [])} flow
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__iter__")}, _)}, [self], []) ->
-        man.eval self flow |> OptionExt.return
+        man.eval self flow |> Option.return
 
       | _ -> None
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let exec _ _ _ _ = None
     let ask _ _ _ = None
 
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

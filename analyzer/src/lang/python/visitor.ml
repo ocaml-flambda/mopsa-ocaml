@@ -21,8 +21,7 @@
 
 (** Visitor of Python AST. *)
 
-open Framework.Ast
-open Framework.Visitor
+open Mopsa
 open Ast
 
 let () =

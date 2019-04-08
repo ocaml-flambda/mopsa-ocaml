@@ -28,40 +28,34 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += Dc_desugar_record_copy : unit domain
-  let id = Dc_desugar_record_copy
   let name = "c.desugar.record_copy"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | Dc_desugar_record_copy -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    export = [Z_c];
-    import = [Z_c]
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c];
+      uses = [Z_c]
+    };
 
-  let eval_interface = {
-    export = [];
-    import = []
+    ieval = {
+      provides = [];
+      uses = []
+    }
   }
 
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ _ =
-    None
+  let init _ _ flow = flow
 
   (** Evaluations *)
   (** *********** *)
@@ -110,8 +104,8 @@ struct
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
                   man.exec ~zone:Z_c stmt flow
                 ) flow
-              |> Post.of_flow
-              |> OptionExt.return
+              |> Post.return
+              |> Option.return
             | C_union ->
               begin
                 let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
@@ -127,8 +121,8 @@ struct
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
                   man.exec ~zone:Z_c stmt flow
-                  |> Post.of_flow
-                  |> OptionExt.return
+                  |> Post.return
+                  |> Option.return
                 | None -> Exceptions.panic "[%s] all fields have size 0" name
               end
           end
@@ -143,4 +137,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

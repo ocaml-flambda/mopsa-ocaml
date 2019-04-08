@@ -152,6 +152,8 @@ let () =
     }
   )
 
+type _ query += Q_exn_string_query : expr -> string query
+
 module Domain =
 struct
 
@@ -190,25 +192,21 @@ struct
   type t = {abs_heap: TMap.t;
             typevar_env: TypeVarMap.t}
 
-  type _ domain += D_python_typing : t domain
-
-  let id = D_python_typing
-  let name = "python.types.typing"
-  let identify : type a. a domain -> (t, a) eq option = function
-    | D_python_typing -> Some Eq
-    | _ -> None
-
-  type _ Framework.Query.query +=
-    | Q_exn_string : Framework.Ast.expr -> string Framework.Query.query
+  include Framework.Core.Id.GenDomainId(struct
+      type typ = t
+      let name = "python.types.typing"
+    end)
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py_obj]; import = []}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any; Universal.Zone.Z_u, Z_any]}
+  let interface = {
+    iexec = {provides = [Zone.Z_py_obj]; uses = []};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any; Universal.Zone.Z_u, Z_any]}
+  }
 
-  let join annot d d' =
-    {abs_heap = TMap.join annot d.abs_heap d'.abs_heap;
-     typevar_env = TypeVarMap.join annot d.typevar_env d'.typevar_env}
+  let join d d' =
+    {abs_heap = TMap.join d.abs_heap d'.abs_heap;
+     typevar_env = TypeVarMap.join d.typevar_env d'.typevar_env}
 
   let polytype_leq (pty, env) (pty', env') =
     (* FIXME *)
@@ -246,10 +244,10 @@ struct
   let bottom = {abs_heap = TMap.bottom; typevar_env = TypeVarMap.bottom}
   let is_bottom {abs_heap; typevar_env} = TMap.is_bottom abs_heap && TypeVarMap.is_bottom typevar_env
 
-
+  let merge _ _ _ = assert false
 
   let init progr man flow =
-    Flow.set_domain_env T_cur {abs_heap = TMap.empty; typevar_env = TypeVarMap.empty} man flow |> Flow.without_callbacks |> OptionExt.return
+    set_domain_env T_cur {abs_heap = TMap.empty; typevar_env = TypeVarMap.empty} man flow
 
   let class_le (c, b: class_address * py_object list) (d, b': class_address * py_object list) : bool =
     let res = List.exists (fun x -> match akind @@ fst x with
@@ -262,8 +260,7 @@ struct
     match skind stmt with
     | S_assign ({ekind = E_addr ({addr_mode} as la)}, {ekind = E_py_object (a, _)}) ->
       (* si l'adresse est weak et pas dans le store, faire un assign strong *)
-      let cur = Flow.get_domain_cur man flow in
-      let annot = Flow.get_all_annot flow in
+      let cur = get_domain_env T_cur man flow in
       if TMap.mem a cur.abs_heap then
         let tys = TMap.find a cur.abs_heap in
         let abs_heap =
@@ -271,30 +268,38 @@ struct
             TMap.add la tys cur.abs_heap
           else
             let old_tys = TMap.find la cur.abs_heap in
-            TMap.add la (Polytypeset.union annot old_tys tys) cur.abs_heap
+            TMap.add la (Polytypeset.union old_tys tys) cur.abs_heap
         in
-        Flow.set_domain_cur {cur with abs_heap} man flow |> Post.return
+        set_domain_env T_cur {cur with abs_heap} man flow |>
+        Post.return |>
+        Option.return
       else
         let () = warn_at (srange stmt) "%a => addr %a not in cur.abs_heap, nothing done" pp_stmt stmt pp_addr a in
-        Post.return flow
+        Post.return flow |>
+        Option.return
     | S_assign ({ekind = E_addr _}, _) ->
       debug "nothing to do@\n";
-      Post.return flow
+      Post.return flow |>
+      Option.return
 
     | S_rename ({ekind = E_addr a}, {ekind = E_addr a'}) ->
       (* TODO: le faire autrepart (addr_env), /!\ zones *)
-      let cur = Flow.get_domain_cur man flow in
+      let cur = get_domain_env T_cur man flow in
       let abs_heap = TMap.rename a a' cur.abs_heap in
       debug "abs_heap = %a@\n" pp_absheap abs_heap;
-      Flow.set_domain_cur {cur with abs_heap} man flow |> Post.return
+      set_domain_env T_cur {cur with abs_heap} man flow |>
+      Post.return |>
+      Option.return
 
-    | S_add _ -> Post.return flow
+    | S_add _ ->
+      Post.return flow |>
+      Option.return
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       begin match ekind lval, ekind rval with
         | E_py_object (alval, _), E_py_object (arval, _) when alval.addr_mode = STRONG ->
           (* FIXME: weak vs strong updates? *)
-          let cur = Flow.get_domain_cur man flow in
+          let cur = get_domain_env T_cur man flow in
           (* during strong updates, there should be just one sub element *)
           assert (Polytypeset.cardinal (TMap.find alval cur.abs_heap) <= 1);
           let ael = Polytypeset.map (fun old_inst ->
@@ -305,8 +310,9 @@ struct
                         uattrs = StringMap.add attr arval old_inst.uattrs;
                         oattrs = old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
           let abs_heap = TMap.add alval ael cur.abs_heap in
-          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-          Post.return flow
+          let flow = set_domain_env T_cur {cur with abs_heap} man flow in
+          Post.return flow |>
+          Option.return
           (* Polytypeset.fold (fun old_inst acc ->
            *     let old_inst = match old_inst with
            *       | Instance i -> i
@@ -315,12 +321,12 @@ struct
            *                              uattrs=StringMap.add attr arval old_inst.uattrs;
            *                              oattrs=old_inst.oattrs} in
            *     let abs_heap = TMap.add alval (Polytypeset.singleton new_inst) cur.abs_heap in
-           *     Flow.set_domain_cur {cur with abs_heap} man flow :: acc) (TMap.find alval cur.abs_heap) []
+           *     set_domain_env T_cur {cur with abs_heap} man flow :: acc) (TMap.find alval cur.abs_heap) []
            * |> Flow.join_list man |> Post.return *)
 
         | E_py_object (alval, _), E_py_object (arval, _) ->
           (* in case of weak updates, we can only add the attribute in the overapproximation *)
-          let cur = Flow.get_domain_cur man flow in
+          let cur = get_domain_env T_cur man flow in
           let ael = Polytypeset.map (fun old_inst ->
               let old_inst = match old_inst with
                 | Instance i -> i
@@ -329,8 +335,9 @@ struct
                         uattrs = old_inst.uattrs;
                         oattrs = StringMap.add attr arval old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
           let abs_heap = TMap.add alval ael cur.abs_heap in
-          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-          Post.return flow
+          let flow = set_domain_env T_cur {cur with abs_heap} man flow in
+          Post.return flow |>
+          Option.return
 
 
         | _ -> assert false
@@ -353,31 +360,31 @@ struct
         let addr = match ekind eaddr with
           | E_addr a -> a
           | _ -> assert false in
-        let cur = Flow.get_domain_cur man flow in
+        let cur = get_domain_env T_cur man flow in
         let bltin_inst = (Polytypeset.singleton (Instance {classn=Class (bltin_cls, bltin_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
         let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
-        let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+        let flow = set_domain_env T_cur {cur with abs_heap} man flow in
         (* Eval.singleton eaddr flow *)
         Eval.singleton (mk_py_object (addr, None) range) flow
       )
 
   let process_constant ?(value=None) man flow range bltin addr =
-    let cur = Flow.get_domain_cur man flow in
+    let cur = get_domain_env T_cur man flow in
     let cls, mro = get_builtin bltin in
     let bltin_inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs = StringMap.empty; oattrs = StringMap.empty}) in
     let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
-    let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+    let flow = set_domain_env T_cur {cur with abs_heap} man flow in
     Eval.singleton (mk_py_object (addr, value) range) flow
 
   let eval zs exp man flow =
     let range = erange exp in
     match ekind exp with
-    (* | E_py_object (addr, _) when TMap.mem addr (Flow.get_domain_cur man flow).abs_heap ->
+    (* | E_py_object (addr, _) when TMap.mem addr (Flow.get_domain_env T_cur man flow).abs_heap ->
      *   debug "this addr: %a@\n" pp_addr addr;
-     *   let cur = Flow.get_domain_cur man flow in
+     *   let cur = Flow.get_domain_env T_cur man flow in
      *   Polytypeset.fold (fun pty acc ->
      *       let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
-     *       let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+     *       let flow = set_domain_env T_cur {cur with abs_heap} man flow in
      *       match pty with
      *       | Class (c, b) ->
      *         debug "class is %a@\n" pp_addr addr;
@@ -398,10 +405,10 @@ struct
      *   |> Eval.join_list |> OptionExt.return *)
 
     | E_py_object ({addr_kind = A_py_instance _}, _) ->
-      Eval.singleton exp flow |> OptionExt.return
+      Eval.singleton exp flow |> Option.return
 
 
-      (* let cur = Flow.get_domain_cur man flow in
+      (* let cur = Flow.get_domain_env T_cur man flow in
        *
        * let ty = match akind addr with
        *   | A_py_class (c, b) -> Class (c, b)
@@ -409,38 +416,38 @@ struct
        *   | A_py_module m -> Module m
        *   | _ -> Exceptions.panic_at range "E_py_object not mem: %a@\n" pp_addr addr in
        * let abs_heap = TMap.add addr (Polytypeset.singleton ty) cur.abs_heap in
-       * let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+       * let flow = set_domain_env T_cur {cur with abs_heap} man flow in
        * Eval.singleton (mk_py_object (addr, None) range) flow |> OptionExt.return *)
 
     | E_constant (C_top T_bool) ->
-      process_constant man flow range "bool" addr_bool_top  |> OptionExt.return
+      process_constant man flow range "bool" addr_bool_top  |> Option.return
 
     | E_constant (C_bool true) ->
-      process_constant man flow range "bool" addr_true  |> OptionExt.return
+      process_constant man flow range "bool" addr_true  |> Option.return
 
     | E_constant (C_bool false) ->
-      process_constant man flow range "bool" addr_false |> OptionExt.return
+      process_constant man flow range "bool" addr_false |> Option.return
 
     | E_constant (C_top T_int)
     | E_constant (C_int _) ->
-      process_constant man flow range "int" addr_integers |> OptionExt.return
+      process_constant man flow range "int" addr_integers |> Option.return
 
     | E_constant C_py_none ->
-      process_constant man flow range "NoneType" addr_none |> OptionExt.return
+      process_constant man flow range "NoneType" addr_none |> Option.return
 
     | E_constant C_py_not_implemented ->
-      process_constant man flow range "NotImplementedType" addr_notimplemented |> OptionExt.return
+      process_constant man flow range "NotImplementedType" addr_notimplemented |> Option.return
 
     | E_constant (C_top (T_float _))
     | E_constant (C_float _) ->
-      allocate_builtin man range flow "float" |> OptionExt.return
+      allocate_builtin man range flow "float" |> Option.return
 
     | E_constant (C_top T_string) ->
-      allocate_builtin man range flow "str" |> OptionExt.return
+      allocate_builtin man range flow "str" |> Option.return
 
 
     | E_constant (C_top T_py_complex) ->
-      allocate_builtin man range flow "complex" |> OptionExt.return
+      allocate_builtin man range flow "complex" |> Option.return
 
     | E_constant (C_string s) ->
       (* we keep s in the expression of the returned object *)
@@ -451,26 +458,26 @@ struct
           let addr = match ekind eaddr with
             | E_addr a -> a
             | _ -> assert false in
-          let cur = Flow.get_domain_cur man flow in
+          let cur = get_domain_env T_cur man flow in
           let bltin_inst = (Polytypeset.singleton (Instance {classn=Class (bltin_cls, bltin_mro); uattrs=StringMap.empty; oattrs=StringMap.empty})) in
           let abs_heap = TMap.add addr bltin_inst cur.abs_heap in
-          let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+          let flow = set_domain_env T_cur {cur with abs_heap} man flow in
           (* Eval.singleton eaddr flow *)
           Eval.singleton (mk_py_object (addr, Some exp) range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_constant (C_top T_py_bytes)
     | E_py_bytes _ ->
-      allocate_builtin man range flow "bytes" |> OptionExt.return
+      allocate_builtin man range flow "bytes" |> Option.return
 
 
     (* Je pense pas avoir besoin de ça finalement *)
     (* | E_py_object ({addr_kind = A_py_class (c, b)} as addr, expr) ->
-     *   let cur = Flow.get_domain_cur man flow in
+     *   let cur = get_domain_env T_cur man flow in
      *   let abs_heap = TMap.add addr (Polytypeset.singleton (Class (c, b))) cur.abs_heap in
-     *   let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
-     *   Eval.singleton (mk_addr addr range) flow |> OptionExt.return *)
+     *   let flow = set_domain_env T_cur {cur with abs_heap} man flow in
+     *   Eval.singleton (mk_addr addr range) flow |> Option.return *)
 
     (* begin match akind with
      * | A_py_method (func, self) ->
@@ -479,13 +486,13 @@ struct
      *    let addr = {addr_kind = akind; addr_uid=(-1);addr_mode=STRONG} in
      *    Eval.singleton (mk_addr addr range) flow
      * end
-     * |> OptionExt.return *)
+     * |> Option.return *)
 
-    (* | E_unop(Framework.Ast.O_log_not, {ekind=E_constant (C_bool b)}) ->
+    (* | E_unop(O_log_not, {ekind=E_constant (C_bool b)}) ->
      *   Eval.singleton (mk_py_bool (not b) range) flow
-     *   |> OptionExt.return *)
+     *   |> Option.return *)
 
-    | E_unop(Framework.Ast.O_log_not, e') ->
+    | E_unop(O_log_not, e') ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) e' (*(Utils.mk_builtin_call "bool" [e'] range)*) flow |>
       Eval.bind
         (fun exp flow ->
@@ -505,7 +512,7 @@ struct
              Eval.singleton exp flow
            | _ -> failwith "not: ni"
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_binop(O_py_is, e1, e2) ->
@@ -516,7 +523,7 @@ struct
         man.eval (mk_py_true range) flow
       | _ -> man.eval (mk_py_top T_bool range) flow
       end
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
@@ -535,27 +542,27 @@ struct
 
         | A_py_var _
         | A_py_instance _ ->
-          let cur = Flow.get_domain_cur man flow in
+          let cur = get_domain_env T_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
-          debug "%a %a" pp_addr addr (Flow.print man) flow;
+          debug "%a %a" pp_addr addr (Flow.print man.lattice) flow;
           Polytypeset.fold (fun pty acc ->
               match pty with
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
-                let cur = Flow.get_domain_cur man flow in
-                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
+                let cur = get_domain_env T_cur man flow in
+                let flow = set_domain_env T_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_true range) flow :: acc
 
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) oattrs ->
                 let pty_u = Instance {classn; uattrs= StringMap.add attr (StringMap.find attr oattrs) uattrs; oattrs = StringMap.remove attr oattrs} in
                 let pty_o = Instance {classn; uattrs; oattrs = StringMap.remove attr oattrs} in
-                let cur = Flow.get_domain_cur man flow in
-                let flowt = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty_u) cur.abs_heap} man flow in
-                let flowf = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty_o) cur.abs_heap} man flow in
+                let cur = get_domain_env T_cur man flow in
+                let flowt = set_domain_env T_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty_u) cur.abs_heap} man flow in
+                let flowf = set_domain_env T_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty_o) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_true range) flowt :: Eval.singleton (mk_py_false range) flowf :: acc
 
               | Instance _ ->
-                let cur = Flow.get_domain_cur man flow in
-                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
+                let cur = get_domain_env T_cur man flow in
+                let flow = set_domain_env T_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_false range) flow :: acc
 
               | _ -> Exceptions.panic "ll_hasattr %a" pp_polytype pty) ptys [] |> Eval.join_list
@@ -578,7 +585,7 @@ struct
         | _ ->
           debug "%a@\n" pp_expr e; assert false
       end
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_ll_getattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
       let attr = match ekind attr with
@@ -602,31 +609,31 @@ struct
 
         | A_py_var _
         | A_py_instance _ ->
-          let cur = Flow.get_domain_cur man flow in
+          let cur = get_domain_env T_cur man flow in
           let ptys = TMap.find addr cur.abs_heap in
 
           Polytypeset.fold (fun pty acc ->
               match pty with
               | Instance {classn; uattrs; oattrs} when StringMap.exists (fun k _ -> k = attr) uattrs ->
                 let attr_addr = StringMap.find attr uattrs in
-                let cur = Flow.get_domain_cur man flow in
-                let flow = Flow.set_domain_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
+                let cur = get_domain_env T_cur man flow in
+                let flow = set_domain_env T_cur {cur with abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap} man flow in
                 Eval.singleton (mk_py_object (attr_addr, None) range) flow :: acc
 
               | _ -> Exceptions.panic "ll_hasattr %a@\n"  pp_polytype pty)
             ptys [] |> Eval.join_list
 
-        | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man) flow
+        | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice) flow
       end
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [arg], []) ->
       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) arg flow |>
       Eval.bind
         (fun earg flow ->
-           let cur = Flow.get_domain_cur man flow in
+           let cur = get_domain_env T_cur man flow in
            let proceed addr (cl, mro, cur) =
-             let flow = Flow.set_domain_cur cur man flow in
+             let flow = set_domain_env T_cur cur man flow in
              let obj = mk_py_object ({addr with addr_kind = A_py_class (cl, mro)}, None) range in
              Eval.singleton obj flow in
            match ekind earg with
@@ -635,7 +642,7 @@ struct
              let types = Polytypeset.fold (fun pty acc ->
                  match pty with
                  | Instance {classn = Class (c, b) } ->
-                   let cur = Flow.get_domain_cur man flow in
+                   let cur = get_domain_env T_cur man flow in
                    let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
                    (c, b, {cur with abs_heap})::acc
                  | _ -> Exceptions.panic_at range "type : todo"
@@ -674,10 +681,10 @@ struct
 
 
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "issubclass")}, _)}, [cls; cls'], []) ->
-      Eval.eval_list [cls; cls'] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [cls; cls'] flow |>
       Eval.bind (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
@@ -686,10 +693,10 @@ struct
           | A_py_class (c, mro), A_py_class (c', mro') ->
             Eval.singleton (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | _ -> assert false)
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "isinstance")}, _)}, [obj; attr], []) ->
-      Eval.eval_list [obj; attr] (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) [obj; attr] flow |>
       Eval.bind (fun evals flow ->
           let eobj, eattr = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           debug "now isinstance(%a, %a) at range %a@\n" pp_expr eobj pp_expr eattr pp_range range;
@@ -709,7 +716,7 @@ struct
 
           | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
-            let cur = Flow.get_domain_cur man flow in
+            let cur = get_domain_env T_cur man flow in
             let ptys = TMap.find addr_obj cur.abs_heap in
             let ptys = if not (Polytypeset.is_empty ptys) then ptys
               else
@@ -762,10 +769,10 @@ struct
 
           | _ -> assert false
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__new__")}, _)}, args, []) ->
-      Eval.eval_list args (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) flow |>
+      Eval.eval_list (man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj)) args flow |>
       Eval.bind (fun args flow ->
           match args with
           | [] ->
@@ -786,17 +793,17 @@ struct
                   | E_addr a -> a
                   (* | E_py_object (a, _) -> a *)
                   | _ -> assert false in
-                let cur = Flow.get_domain_cur man flow in
+                let cur = get_domain_env T_cur man flow in
                 let inst = Polytypeset.singleton (Instance {classn = Class (cls, mro); uattrs=StringMap.empty; oattrs=StringMap.empty}) in
                 let abs_heap = TMap.add addr inst cur.abs_heap in
-                let flow = Flow.set_domain_cur {cur with abs_heap} man flow in
+                let flow = set_domain_env T_cur {cur with abs_heap} man flow in
                 Eval.singleton (mk_py_object (addr, None) range) flow
               )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "object.__init__")}, _)}, args, []) ->
-      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> OptionExt.return
+      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_none range) flow |> Option.return
 
     | E_py_sum_call (f, args) ->
       let func = match ekind f with
@@ -806,13 +813,13 @@ struct
        *   Exceptions.panic_at range "todo@\n"
        * else *)
         man.eval ~zone:(Universal.Zone.Z_u, Z_any) (mk_call func args range) flow
-        |> OptionExt.return
+        |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
       Utils.check_instances man flow range args
         ["int"; "int"; "int"]
         (fun args flow -> allocate_builtin man range flow "range_iterator")
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
       (* isinstance(arg1, range) && isinstance(arg2, int) ? *)
@@ -825,13 +832,13 @@ struct
           (* TODO: which one is better? *)
           (* process_constant man flow range "int" addr_integers *)
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
         ["range"]
         (fun r flow -> allocate_builtin man range flow "range_iterator")
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range_iterator.__next__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -839,9 +846,9 @@ struct
         (fun _ flow ->
            let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow in
            let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-           Eval.join_list (Eval.copy_annot stopiteration res :: stopiteration :: [])
+           Eval.join_list (Eval.copy_ctx stopiteration res :: stopiteration :: [])
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "slice.__new__")}, _)}, cls :: args, []) ->
       let intornone = ["int"; "NoneType"] in
@@ -849,52 +856,52 @@ struct
         [intornone; intornone; intornone]
         (fun _ flow ->
            allocate_builtin man range flow "slice")
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "abs")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list man.eval args flow |>
       Eval.bind (fun eargs flow ->
           if List.length eargs <> 1 then tyerror flow
           else
             let v = List.hd eargs in
-            Eval.assume (mk_py_isinstance_builtin v "int" range) man flow
+            assume_eval (mk_py_isinstance_builtin v "int" range) man flow
               ~fthen:(man.eval (mk_py_top T_int range))
               ~felse:(fun flow ->
-                Eval.assume (mk_py_isinstance_builtin v "float" range) man flow
+                assume_eval (mk_py_isinstance_builtin v "float" range) man flow
                   ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                   ~felse:tyerror
               )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "all")}, _)}, args, []) ->
       Utils.check_instances man flow range args ["list"] (fun _ -> man.eval (mk_py_top T_bool range))
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "divmod")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list man.eval args flow |>
       Eval.bind (fun eargs flow ->
           if List.length args <> 2 then tyerror flow else
             let argl, argr = match eargs with l::r::[] -> l, r | _ -> assert false in
-            Eval.assume (mk_py_isinstance_builtin argl "int" range) man flow
+            assume_eval (mk_py_isinstance_builtin argl "int" range) man flow
               ~fthen:(fun flow ->
-                  Eval.assume (mk_py_isinstance_builtin argr "int" range) man flow
+                  assume_eval (mk_py_isinstance_builtin argr "int" range) man flow
                     ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
                     ~felse:(fun flow ->
-                        Eval.assume (mk_py_isinstance_builtin argr "float" range) man flow
+                        assume_eval (mk_py_isinstance_builtin argr "float" range) man flow
                           ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:tyerror
                       )
               )
               ~felse:(fun flow ->
-                  Eval.assume (mk_py_isinstance_builtin argl "float" range) man flow
+                  assume_eval (mk_py_isinstance_builtin argl "float" range) man flow
                     ~fthen:(fun flow ->
-                        Eval.assume (mk_py_isinstance_builtin argr "int" range) man flow
+                        assume_eval (mk_py_isinstance_builtin argr "int" range) man flow
                           ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:(fun flow ->
-                              Eval.assume (mk_py_isinstance_builtin argr "float" range) man flow
+                              assume_eval (mk_py_isinstance_builtin argr "float" range) man flow
                                 ~fthen:(man.eval (mk_expr (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                                 ~felse:tyerror
                             )
@@ -903,44 +910,44 @@ struct
                     ~felse:tyerror
                 )
         )
-      |> OptionExt.return
+      |> Option.return
 
 
-    | E_py_undefined _ -> Eval.singleton exp flow |> OptionExt.return
+    | E_py_undefined _ -> Eval.singleton exp flow |> Option.return
 
-    | E_py_object _ -> Eval.singleton exp flow |> OptionExt.return
+    | E_py_object _ -> Eval.singleton exp flow |> Option.return
 
     | _ ->
       Exceptions.panic_at range "Warning: no eval for %a" pp_expr exp (* ;
            None *)
 
-  let ask : type r. r Framework.Query.query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-    match query with
-    | Q_exn_string t ->
-      let cur = Flow.get_domain_cur man flow in
-      let addr = match ekind t with
-        | E_py_object (a, _) -> a
-        | _ -> assert false in
-      let ptys = TMap.find addr cur.abs_heap in
-      if Polytypeset.cardinal ptys = 1 then
-        let r = Polytypeset.choose ptys in
-        let str = match r with
-          | Instance {classn} -> begin match classn with
-              | Class (c, b) -> begin match c with
-                  | C_builtin name | C_unsupported name -> name
-                  | C_user c -> c.py_cls_var.org_vname
-                end
-              | _ -> assert false
-            end
+      match query with
+      | Q_exn_string_query t ->
+        let cur = get_domain_env T_cur man flow in
+        let addr = match ekind t with
+          | E_py_object (a, _) -> a
           | _ -> assert false in
-        let () = debug "answer to query is %s@\n" str in
-        Some str
-      else
-        assert false
-    | _ -> None
+        let ptys = TMap.find addr cur.abs_heap in
+        if Polytypeset.cardinal ptys = 1 then
+          let r = Polytypeset.choose ptys in
+          let str = match r with
+            | Instance {classn} -> begin match classn with
+                | Class (c, b) -> begin match c with
+                    | C_builtin name | C_unsupported name -> name
+                    | C_user c -> c.py_cls_var.org_vname
+                  end
+                | _ -> assert false
+              end
+            | _ -> assert false in
+          let () = debug "answer to query is %s@\n" str in
+          Some str
+        else
+          assert false
 
+      | _ -> None
 
 end
 
-let () = register_domain (module Domain)
+let () = Framework.Core.Sig.Intermediate.Domain.register_domain (module Domain)

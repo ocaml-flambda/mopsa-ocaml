@@ -23,13 +23,21 @@
 
 type 'a t = 'a list list
 
+
 let singleton (a: 'a) : 'a t = [[a]]
+
 
 let mk_true = [[]]
 
+
 let mk_false = []
 
-let rec mk_and ?(fand=(@)) ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
+
+let rec mk_and
+    ?(fand=(@))
+    ?(compare=Pervasives.compare)
+    (a: 'a t) (b: 'a t) : 'a t
+  =
    List.fold_left (fun acc conj1 ->
       List.fold_left (fun acc conj2 ->
           let conj = fand conj1 conj2 in
@@ -38,9 +46,14 @@ let rec mk_and ?(fand=(@)) ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : '
         ) acc b
     ) mk_false a
 
-and mk_or ?(compare=Pervasives.compare) (a: 'a t) (b: 'a t) : 'a t =
+
+and mk_or
+    ?(compare=Pervasives.compare)
+    (a: 'a t) (b: 'a t) : 'a t
+  =
   a @ b |>
   List.sort_uniq (Compare.list compare)
+
 
 and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
   a |> List.fold_left (fun acc conj ->
@@ -52,11 +65,60 @@ and mk_neg neg ?(compare=Pervasives.compare) (a: 'a t) : 'a t =
       )
     ) [[]]
 
+
 let map
     (f: 'a -> 'b)
     (dnf: 'a t)
   : 'b t =
   List.map (List.map f) dnf
+
+
+let iter
+    (f:'a -> unit)
+    (dnf:'a t)
+  : unit
+  =
+  List.iter (List.iter f) dnf
+
+
+let apply
+    (f: 'a -> 'b)
+    (join: 'b -> 'b -> 'b)
+    (meet: 'b -> 'b -> 'b)
+    (dnf: 'a t)
+  : 'b =
+  let rec apply_conj = function
+    | [] -> assert false
+    | [e] -> f e
+    | e :: tl -> meet (f e) (apply_conj tl)
+  in
+  let rec apply_disj = function
+    | [conj] -> apply_conj conj
+    | conj :: tl -> join (apply_conj conj) (apply_disj tl)
+    | _ -> assert false
+  in
+  apply_disj dnf
+
+
+let apply_list
+    (f: 'a -> 'b)
+    (join: 'c list -> 'd)
+    (meet: 'b list -> 'c)
+    (dnf: 'a t)
+  : 'd =
+  join (
+    List.map (fun c ->
+        meet (List.map f c)
+      ) dnf
+  )
+
+
+
+let bind
+    (f: 'a -> 'b t)
+    (dnf: 'a t) : 'b t =
+  apply f mk_or mk_and dnf
+
 
 let fold
     (f: 'b -> 'a -> 'b)
@@ -83,57 +145,32 @@ let fold
   in
   apply_disj init dnf
 
-let fold2
-    (f: 'c -> 'a -> 'b * 'c)
-    (join: 'b -> 'b -> 'b)
-    (meet: 'b -> 'b -> 'b)
-    (init: 'c)
+
+let fold_apply
+    (f: 'b -> 'a -> 'b * 'c)
+    (join: 'c -> 'c -> 'c)
+    (meet: 'c -> 'c -> 'c)
+    (init: 'b)
     (dnf: 'a t)
   : 'b * 'c =
   let rec apply_conj acc = function
     | [] -> assert false
     | [e] -> f acc e
     | e :: tl ->
-      let (b1, acc1) = f acc e in
-      let (b2, acc2) = apply_conj acc1 tl in
-      meet b1 b2, acc2
+      let (acc1, r1) = f acc e in
+      let (acc2, r2) = apply_conj acc1 tl in
+      acc2, meet r1 r2
   in
   let rec apply_disj acc = function
     | [] -> assert false
     | [conj] -> apply_conj acc conj
     | conj :: tl ->
-      let (b1, acc1) = apply_conj acc conj in
-      let (b2, acc2) = apply_disj acc1 tl in
-      (join b1 b2, acc2)
+      let (acc1,r1) = apply_conj acc conj in
+      let (acc2,r2) = apply_disj acc1 tl in
+      acc2, join r1 r2
   in
   apply_disj init dnf
 
-let substitute
-    (f: 'a -> 'b)
-    (join: 'b -> 'b -> 'b)
-    (meet: 'b -> 'b -> 'b)
-    (dnf: 'a t)
-  : 'b =
-  let rec apply_conj = function
-    | [] -> assert false
-    | [e] -> f e
-    | e :: tl -> meet (f e) (apply_conj tl)
-  in
-  let rec apply_disj = function
-    | [conj] -> apply_conj conj
-    | conj :: tl -> join (apply_conj conj) (apply_disj tl)
-    | _ -> assert false
-  in
-  apply_disj dnf
-
-let substitute2
-    (f: 'a -> 'b t)
-    (dnf: 'a t) : 'b t =
-  substitute
-    f
-    mk_or
-    mk_and
-    dnf
 
 let choose (dnf: 'a t) : 'a option =
   match dnf with
@@ -141,17 +178,24 @@ let choose (dnf: 'a t) : 'a option =
   | (hd :: _) :: _ -> Some hd
   | _ -> assert false
 
-let apply
-    (f: 'a -> 'b)
-    (meet: 'b list -> 'c)
-    (join: 'c list -> 'd)
-    (dnf: 'a t)
-  : 'd =
-  join (
-    List.map (fun c ->
-        meet (List.map f c)
-      ) dnf
-  )
-
 
 let to_list (dnf: 'a t) : 'a list list = dnf
+
+
+let print pp fmt (dnf:'a t) =
+  let open Format in
+  fprintf fmt "@[<hv>";
+
+  to_list dnf |>
+  pp_print_list
+    ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∨@;")
+    (fun fmt conj ->
+       Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@;∧@;")
+         pp
+         fmt
+         conj
+    )
+    fmt;
+
+  fprintf fmt "@]"

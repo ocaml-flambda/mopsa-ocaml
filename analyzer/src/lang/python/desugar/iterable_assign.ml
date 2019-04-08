@@ -29,20 +29,15 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_iterable_assign : unit domain
-
-    let id = D_python_desugar_iterable_assign
     let name = "python.desugar.iterable_assign"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_iterable_assign -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = [Zone.Z_py]; import = [Zone.Z_py]}
-    let eval_interface = {export = []; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = [Zone.Z_py]; uses = [Zone.Z_py]};
+      ieval = {provides = []; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let rec exec zone stmt man flow =
       let range = srange stmt in
@@ -88,8 +83,9 @@ module Domain =
       in
       let stmt = mk_block [assign_iterable; stmt_itera] range in
       man.exec stmt flow |>
-      Post.clean [mk_remove_var tmp range] man |>
-      Post.return
+      exec_stmt_on_all_flows (mk_remove_var tmp range) man |>
+      Post.return |>
+      Option.return
 
 
     let eval _ _ _ _ = None
@@ -98,4 +94,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

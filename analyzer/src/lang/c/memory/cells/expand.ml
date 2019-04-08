@@ -29,7 +29,7 @@ open Zone
 open Common.Base
 open Common.Points_to
 open Cell
-module Itv = Universal.Numeric.Values.Intervals.Value
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
 (** {2 Zoning of expanded cells} *)
@@ -41,9 +41,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_c_cell_expand;
-    name = "C/Cell/Expand";
-    subset = Some Z_c_cell;
-    eval = (fun exp -> Framework.Zone.eval exp Z_c_cell);
+    zone_name = "C/Cell/Expand";
+    zone_subset = Some Z_c_cell;
+    zone_eval = (fun exp -> Core.Zone.eval_template exp Z_c_cell);
   }
 
 
@@ -101,16 +101,10 @@ module Domain = struct
   (** {2 Domain identification} *)
   (** ========================= *)
 
-  let name = "c.memory.cells.expand"
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  type _ domain += D_c_cell_expand : t domain
-  let id = D_c_cell_expand
-
-  let identify : type a. a domain -> (t, a) eq option =
-    function
-    | D_c_cell_expand -> Some Eq
-    | _ -> None
+  include GenDomainId(struct
+      type typ = t
+      let name = "c.memory.cells.expand"
+    end)
 
 
   (** Command-line options *)
@@ -132,27 +126,26 @@ module Domain = struct
   (** {2 Zoning interface} *)
   (** ==================== *)
 
-  let exec_interface = {
-    export = [Z_c];
-    import = [Z_c_cell];
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c];
+      uses = [Z_c_cell];
+    };
 
-  let eval_interface = {
-    export = [
-      Z_c_low_level, Z_c_cell_expand
-    ];
-    import = [
-      (Z_c_low_level, Z_c_cell_expand);     (* for lvals *)
-      (Z_c, Z_c_scalar);                    (* for base size *)
-      (Z_c_scalar, Universal.Zone.Z_u_num); (* for offsets *)
-      (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
-      (Z_c, Z_under Z_c_cell);              (* for rvals *)
-      (Z_c, Z_c_points_to);                 (* for pointers *)
-      (Z_c_cell, Z_c_scalar);               (* for Q_print_var query *)
-      (Z_c_scalar, Z_c_points_to);          (* for Q_print_var query *)
-    ];
+    ieval = {
+      provides = [Z_c_low_level, Z_c_cell_expand];
+      uses = [
+        (Z_c_low_level, Z_c_cell_expand);     (* for lvals *)
+        (Z_c, Z_c_scalar);                    (* for base size *)
+        (Z_c_scalar, Universal.Zone.Z_u_num); (* for offsets *)
+        (Z_c, Universal.Zone.Z_u_num);        (* for quantified vars *)
+        (Z_c, Z_under Z_c_cell);              (* for rvals *)
+        (Z_c, Z_c_points_to);                 (* for pointers *)
+        (Z_c_cell, Z_c_scalar);               (* for Q_print_var query *)
+        (Z_c_scalar, Z_c_points_to);          (* for Q_print_var query *)
+      ];
+    }
   }
-
 
   (** {2 Utility functions for cells} *)
   (** =============================== *)
@@ -306,35 +299,53 @@ module Domain = struct
                 None
 
   (** [constrain_cell c a range man f] add numerical constraints of [c] in [a] to flow [f] *)
-  let constrain_cell c a range man f  =
-    if Cells.mem c a.cells then f else
-    if not (is_c_scalar_type (cell_typ c)) then f else
-    if not (Bases.mem (cell_base c) a.bases) then f
+  let constrain_cell_in_sub c a range (man:'s sman) (s:'s) : 's  =
+    if Cells.mem c a.cells ||
+       not (is_c_scalar_type (cell_typ c)) ||
+       not (Bases.mem (cell_base c) a.bases)
+    then s
     else
-      let f' = man.exec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) f in
-      if is_c_pointer_type ((cell_typ c)) then f'
+      let s' = man.sexec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) s in
+      if is_c_pointer_type ((cell_typ c)) then s'
       else
         match phi c a range with
         | Some e ->
           let stmt = mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:u8 range) range in
-          man.exec ~zone:(Z_c_cell) stmt f'
+          man.sexec ~zone:(Z_c_cell) stmt s'
 
         | None ->
-          f'
+          s'
+
+  let constrain_cell_in_flow c a range man flow =
+    if Cells.mem c a.cells ||
+       not (is_c_scalar_type (cell_typ c)) ||
+       not (Bases.mem (cell_base c) a.bases)
+    then flow
+    else
+      let flow' = man.exec ~zone:Z_c_cell (mk_add (mk_c_cell c range) range) flow in
+      if is_c_pointer_type ((cell_typ c)) then flow'
+      else
+        match phi c a range with
+        | Some e ->
+          let stmt = mk_assume (mk_binop (mk_c_cell c range) O_eq e ~etyp:u8 range) range in
+          man.exec ~zone:(Z_c_cell) stmt flow'
+
+        | None ->
+          flow'
 
   (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
-  let add_cell c range man flow =
-    let a = Flow.get_domain_env T_cur man flow in
+  let add_cell c range (man:('a,t) man) flow =
+    let a = get_domain_env T_cur man flow in
     let a' = {
       a with bases = Bases.add (cell_base c) a.bases;
     }
     in
-    let flow' = constrain_cell c a' range man flow in
+    let flow' = constrain_cell_in_flow c a' range man flow in
     let a'' = {
       a' with cells = Cells.add c a'.cells
     }
     in
-    Flow.set_domain_env T_cur a'' man flow'
+    set_domain_env T_cur a'' man flow'
 
   (** [add_cells cells range man flow] adds a set of cells and their constraints to the [flow] *)
   let add_cells cells range man flow =
@@ -343,13 +354,13 @@ module Domain = struct
       ) cells flow
 
   (** [add_base base man flow] adds a new base to the support *)
-  let add_base base man flow =
-    Flow.map_domain_env T_cur (fun a ->
+  let add_base base man stman flow =
+    map_domain_env T_cur (fun a ->
         { a with bases = Bases.add base a.bases }
       ) man flow
 
   (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
-  let unify (subman: ('b, 'b) man) (a:t) (s: 'b flow) (a':t) (s': 'b flow) =
+  let unify (sbman: 's sman) (a:t) (s: 's) (a':t) (s': 's) =
     let range = mk_fresh_range () in
     if Cells.is_empty a.cells then s, s' else
     if Cells.is_empty a'.cells then s, s'
@@ -358,42 +369,44 @@ module Domain = struct
         let diff' = Cells.diff a.cells a'.cells in
         let diff = Cells.diff a'.cells a.cells in
         Cells.fold (fun c s ->
-            constrain_cell c a range subman s
+            constrain_cell_in_sub c a range sbman s
           ) diff s
         ,
         Cells.fold (fun c s' ->
-            constrain_cell c a' range subman s'
+            constrain_cell_in_sub c a' range sbman s'
           ) diff' s'
       with Top.Found_TOP ->
-        Flow.top (Flow.get_all_annot s), Flow.top (Flow.get_all_annot s')
+        s, s'
 
 
-  let subset (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    let  s, s' = unify subman u s u' s' in
+  let subset (sbman: 's sman) (u,s) (u',s') =
+    let  s, s' = unify sbman u s u' s' in
     (true, s, s')
 
-  let join annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    let s, s' = unify subman u s u' s' in
+  let join (sbman: 's sman) ((u:t),(s:'s)) ((u':t),(s':'s)) =
+    let s, s' = unify sbman u s u' s' in
     let a = {
-      cells = Cells.join () u.cells u'.cells;
-      bases = Bases.join () u.bases u'.bases;
+      cells = Cells.join u.cells u'.cells;
+      bases = Bases.join u.bases u'.bases;
     }
     in
     (a, s, s')
 
-  let meet annot (subman: ('b, 'b) man) (u , (s: 'b flow) ) (u', (s': 'b flow)) =
-    join annot subman (u, s) (u', s')
+  let meet (sbman: 's sman) ((u:t),(s:'s)) ((u':t),(s':'s)) =
+    join sbman (u, s) (u', s')
 
-  let widen annot subman (u,s) (u', s') =
-    let (u, s, s') = join annot subman (u,s) (u',s') in
-    (u, true, s, s')
+  let widen (sbman: 's sman) ctx ((u:t),(s:'s)) ((u':t),(s':'s)) =
+    let (u, s, s') = join sbman  (u,s) (u',s') in
+    (u, s, s', true)
 
+  let merge pre (post1,log1) (post2,log2) =
+    assert false
 
 
   (** {2 Domain initialization} *)
   (** ========================= *)
 
-  let rec init_visitor man =
+  let rec init_visitor man stman =
     Common.Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
@@ -407,13 +420,12 @@ module Domain = struct
           match e with
           | Some e ->
             man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-            Post.bind_flow man @@ fun e flow ->
+            exec_eval man @@ fun e flow ->
 
             let stmt = mk_assign (mk_c_cell c range) e range in
             man.exec ~zone:Z_c_cell stmt flow
 
-          | None ->
-            flow
+          | None -> flow
         );
 
       (* Initialization of arrays *)
@@ -432,7 +444,7 @@ module Domain = struct
               | init :: tl ->
                 let t' = under_array_type c.t in
                 let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = remove_qual t'; p = false;} in
-                let flow' = init_expr (init_visitor man) (mk_c_cell ci range) is_global init range flow in
+                let flow' = init_expr (init_visitor man stman) (mk_c_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
           aux 0 init_list flow
@@ -456,7 +468,7 @@ module Domain = struct
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = remove_qual t'; p = false;} in
-                let flow' = init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
+                let flow' = init_expr (init_visitor man stman) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -466,17 +478,14 @@ module Domain = struct
     }
 
   let init prog man flow =
-    Some (
-      Flow.set_domain_cur empty man flow |>
-      Flow.without_callbacks
-    )
+    set_domain_env T_cur empty man flow
 
 
   (** {2 Evaluation of offsets} *)
   (** ========================= *)
 
   (** Evaluate an offset expression into an offset evaluation *)
-  let eval_cell_offset (offset:expr) cell_size base_size man flow : ('a, offset) evl =
+  let eval_cell_offset (offset:expr) cell_size base_size man flow : (offset,'a) eval =
     (* Try the static case *)
     match expr_to_z offset, expr_to_z base_size with
     | Some z, Some base_size ->
@@ -502,23 +511,22 @@ module Domain = struct
           (sub base_size (mk_z cell_size range) range ~typ:T_int)
           range
       in
-      Eval.assume ~zone:Universal.Zone.Z_u_num cond
+      assume_eval ~zone:Universal.Zone.Z_u_num cond
         ~fthen:(fun flow ->
             (* Compute the interval and create a finite number of cells *)
-            let open Universal.Numeric.Values.Intervals in
-            let v = man.ask (Value.Q_interval offset) flow in
+            let v = man.ask (Itv.Q_interval offset) flow in
             let itv = v and step = Z.one in
 
             (* Iterate in case of bounded interval *)
-            if Value.is_bounded itv then
-              let l, u = Value.bounds itv in
+            if Itv.is_bounded itv then
+              let l, u = Itv.bounds itv in
               let rec aux i o =
                 if Z.gt o u
                 then []
                 else if i >= !opt_expand
                 then
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_ge (mk_z o range) range) range) flow in
-                  [Eval.singleton (O_region (Itv.of_constant () (C_int_interval (o, u)))) flow']
+                  [Eval.singleton (O_region (Itv.of_constant (C_int_interval (o, u)))) flow']
                 else
                   let flow' = man.exec ~zone:Universal.Zone.Z_u_num (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow in
                   Eval.singleton (O_single o) flow' :: aux (i + 1) (Z.add o step)
@@ -536,7 +544,7 @@ module Domain = struct
   (** ======================= *)
 
   (** Evaluate a base and an non-quantified offset expression into a cell *)
-  let eval_cell b o t range man flow : ('a, cell) evl =
+  let eval_cell b o t range man flow : (cell,'a) eval =
     eval_base_size b range man flow |>
     Eval.bind @@ fun base_size flow ->
 
@@ -576,9 +584,12 @@ module Domain = struct
   (** Compute the interval of a C expression *)
   let compute_bound e man flow =
     let evl = man.eval ~zone:(Z_c, Universal.Zone.Z_u_num) e flow in
-    Eval.substitute (fun ee flow ->
+    Eval.apply
+      (fun ee flow ->
         man.ask (Itv.Q_interval ee) flow
-      ) (Itv.join ()) (Itv.meet ()) Itv.bottom evl
+      )
+      Itv.join Itv.meet Itv.bottom
+      evl
 
   (** Under-approximate an interval range *)
   let get_variation_under_approx itv1 itv2 =
@@ -592,7 +603,7 @@ module Domain = struct
 
   (** Over-approximate an interval range *)
   let get_variation_over_approx itv1 itv2 =
-    Itv.join () itv1 itv2
+    Itv.join itv1 itv2
 
   (** Compute the variation space of a ∀ variable *)
   let compute_variation v l u man flow =
@@ -642,7 +653,7 @@ module Domain = struct
       by its literal value, and we compute a conjunction of the resulting
       evaluations.
   *)
-  let eval_quantified_cell b o t range man flow : ('a, cell) evl =
+  let eval_quantified_cell b o t range man flow : (cell,'a) eval =
     (* Get the list of ∀ variables *)
     let forall_vars = get_forall_vars o in
 
@@ -695,7 +706,7 @@ module Domain = struct
 
 
   (** Evaluate a scalar lval into an optional cell *)
-  let eval_scalar_cell_opt exp man flow : ('a, cell option) evl =
+  let eval_scalar_cell_opt exp man flow : (cell option,'a) eval =
     match ekind exp with
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
       let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
@@ -740,7 +751,7 @@ module Domain = struct
 
 
   (** Evaluate a scalar lval into a cell *)
-  let eval_scalar_cell exp man flow : ('a, cell) evl =
+  let eval_scalar_cell exp man flow : (cell,'a) eval =
     eval_scalar_cell_opt exp man flow |>
     Eval.bind @@ fun c flow ->
     match c with
@@ -763,13 +774,13 @@ module Domain = struct
 
 
   (** Entry-point of evaluations *)
-  let eval zone exp man flow =
+  let eval zone exp (man:('a,t) man) flow =
     match ekind exp with
     (* 𝔼⟦ v ⟧ *)
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
       let c = { b = V v; o = O_single Z.zero; t = remove_qual v.vtyp; p = false; } in
       cell_singleton c exp.erange man flow |>
-      Eval.return
+      Option.return
 
     (* 𝔼⟦ *p ⟧ *)
     | E_c_deref p
@@ -779,7 +790,7 @@ module Domain = struct
       let t = under_type p.etyp in
 
       man.eval ~zone:(Z_c, Z_c_points_to) ~via:Z_c_cell_expand p flow |>
-      Eval.bind_return @@ fun pe flow ->
+      Eval.bind_some @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (Common.Base.Z, o)) ->
@@ -811,11 +822,11 @@ module Domain = struct
 
         | _ -> assert false
       end
-      
+
 
     | E_stub_primed (e) ->
       eval_scalar_cell_opt e man flow |>
-      Eval.bind_return @@ fun c flow ->
+      Eval.bind_some @@ fun c flow ->
       begin match c with
         | None -> Eval.singleton (mk_top e.etyp exp.erange) flow
         | Some c ->
@@ -836,7 +847,7 @@ module Domain = struct
     (* 𝔼⟦ size(p) ⟧ *)
     | E_stub_builtin_call(SIZE, p) ->
       man.eval ~zone:(Zone.Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pe flow ->
+      Eval.bind_some @@ fun pe flow ->
 
       begin match ekind pe with
         | E_c_points_to(P_block (b, _)) ->
@@ -863,7 +874,7 @@ module Domain = struct
     (* 𝔼⟦ valid(p) ⟧ *)
     | E_stub_builtin_call(PTR_VALID, p) ->
       man.eval ~zone:(Z_c_low_level, Z_c_cell_expand) p flow |>
-      Eval.bind_return @@ fun p flow ->
+      Eval.bind_some @@ fun p flow ->
       let exp' = { exp with ekind = E_stub_builtin_call( PTR_VALID, p) } in
       Eval.singleton exp' flow
 
@@ -871,7 +882,7 @@ module Domain = struct
     | E_stub_quantified(EXISTS, var, set) when var.vtyp |> is_c_scalar_type ->
       let c = { b = V var; o = O_single Z.zero; t = remove_qual var.vtyp; p = false } in
       Eval.singleton (mk_c_cell c exp.erange) flow |>
-      Eval.return
+      Option.return
 
     | _ -> None
 
@@ -881,13 +892,13 @@ module Domain = struct
   (** ============================== *)
 
   (** Assign an rval to a cell *)
-  let assign_cell c rval range man flow =
+  let assign_cell c rval range man stman flow =
     let lval = mk_c_cell c range in
-    let flow' = Flow.map_domain_env T_cur (fun a -> { a with cells = Cells.add c a.cells}) man flow |>
+    let flow' = map_domain_env T_cur (fun a -> { a with cells = Cells.add c a.cells}) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
     in
 
-    let a = Flow.get_domain_env T_cur man flow' in
+    let a = get_domain_env T_cur man flow' in
     let overlappings = get_overlappings c a in
 
     let a' =
@@ -895,23 +906,23 @@ module Domain = struct
       List.fold_left (fun a c' -> {a with cells = Cells.remove c' a.cells}) a
     in
 
-    let flow'' = Flow.set_domain_env T_cur a' man flow' in
+    let flow'' = set_domain_env T_cur a' man flow' in
 
     let block = List.map (fun c' -> mk_remove (mk_c_cell c' range) range) overlappings in
     man.exec ~zone:Z_c_cell (mk_block block range) flow''
 
 
   (** Remove cells identified by a membership predicate *)
-  let remove_cells pred range man flow =
-    let a = Flow.get_domain_env T_cur man flow in
+  let remove_cells pred range man stman flow =
+    let a = get_domain_env T_cur man flow in
     let cells = Cells.filter pred a.cells in
-    let flow = Flow.set_domain_env T_cur { a with cells = Cells.diff a.cells cells } man flow in
+    let flow = set_domain_env T_cur { a with cells = Cells.diff a.cells cells } man flow in
     let block = List.map (fun c' -> mk_remove (mk_c_cell c' range) range) (Cells.elements cells) in
     man.exec ~zone:Z_c_cell (mk_block block range) flow
 
   (** Remove a cell *)
-  let remove_cell c range man flow =
-    let flow = Flow.map_domain_env T_cur (fun a ->
+  let remove_cell c range man stman flow =
+    let flow = map_domain_env T_cur (fun a ->
         {a with cells = Cells.remove c a.cells}
       ) man flow
     in
@@ -920,13 +931,13 @@ module Domain = struct
 
 
   (** Rename an old cell into a new one *)
-  let rename_cell old_cell new_cell range man flow =
+  let rename_cell old_cell new_cell range man stman flow =
     let flow' =
       (* Add the old cell in case it has not been accessed before so
          that its constraints are added in the sub domain *)
       add_cell old_cell range man flow |>
       (* Remove the old cell and add the new one *)
-      Flow.map_domain_env T_cur (fun a ->
+      map_domain_env T_cur (fun a ->
           { a with cells = Cells.remove old_cell a.cells |>
                            Cells.add new_cell
           }
@@ -940,8 +951,8 @@ module Domain = struct
     man.exec ~zone:Z_c_cell stmt' flow'
 
   (** Rename bases and their cells *)
-  let rename_base base1 base2 range man flow =
-    let a = Flow.get_domain_env T_cur man flow in
+  let rename_base base1 base2 range man stman flow =
+    let a = get_domain_env T_cur man flow in
     (* Cells of base1 *)
     let cells1 = Cells.filter (fun c ->
         compare_base (cell_base c) base1 = 0
@@ -955,18 +966,18 @@ module Domain = struct
     let copy =
       if not (Bases.mem base2 a.bases) then
       (* If base2 is not already present => rename the cells *)
-        fun c flow -> rename_cell c (to_base2 c) range man flow
+        fun c flow -> rename_cell c (to_base2 c) range man stman flow
       else
         (* Otherwise, assign with weak update *)
-        fun c flow -> assign_cell (to_base2 c) (mk_c_cell c range) range man flow |>
-                      remove_cell c range man
+        fun c flow -> assign_cell (to_base2 c) (mk_c_cell c range) range man stman flow |>
+                      remove_cell c range man stman
     in
 
     (* Apply copy function *)
     let flow = Cells.fold copy cells1 flow in
 
     (* Remove base1 and add base2 *)
-    let flow = Flow.map_domain_env T_cur (fun a ->
+    let flow = map_domain_env T_cur (fun a ->
         {
           a with
           bases = Bases.remove base1 a.bases |>
@@ -977,21 +988,22 @@ module Domain = struct
     flow
 
   (** Rename primed cells that have been declared in `assigns` stub section *)
-  let rename_primed_cells target offsets range man flow =
+  let rename_primed_cells target offsets range man stman flow =
     match offsets with
     | [] ->
       (* target should be a scalar lval *)
       eval_scalar_cell target man flow |>
-      Post.bind_flow man @@ fun c flow ->
-      rename_cell { c with p = true } c range man flow
+      post_eval man @@ fun c flow ->
+      rename_cell { c with p = true } c range man stman flow |>
+      Post.return
 
     | _ ->
       (* target is pointer, so resolve it and compute the affected offsets *)
       man.eval ~zone:(Z_c, Z_c_points_to) target flow |>
-      Post.bind_flow man @@ fun pt flow ->
+      post_eval man @@ fun pt flow ->
       match ekind pt with
       | E_c_points_to (P_block(base, offset)) ->
-        let a = Flow.get_domain_env T_cur man flow in
+        let a = get_domain_env T_cur man flow in
 
         (* Get cells with the same base *)
         let same_base_cells = Cells.filter (fun c ->
@@ -1002,7 +1014,7 @@ module Domain = struct
         (* For primed cells, just rename to an unprimed cell *)
         let flow = Cells.fold (fun c flow ->
             if c.p
-            then rename_cell c { c with p = false } range man flow
+            then rename_cell c { c with p = false } range man stman flow
             else flow
           ) same_base_cells flow
         in
@@ -1032,24 +1044,25 @@ module Domain = struct
         let itv2 = compute_bound u man flow in
 
         (* Compute the interval of the assigned cells *)
-        let itv = Itv.join () itv1 itv2 in
+        let itv = Itv.join itv1 itv2 in
 
         (* Remove remaining cells that have an offset within the assigned interval *)
         remove_cells (fun c ->
             Cells.mem c same_base_cells &&
             not (Cells.mem {c with p = true} same_base_cells) &&
             Itv.mem (cell_zoffset c) itv
-          ) range man flow
+          ) range man stman flow |>
+        Post.return
 
       | E_c_points_to(P_top) ->
-        flow
+        Post.return flow
 
       | _ -> assert false
 
 
 
   (** Entry point of post-condition computation *)
-  let exec zone stmt man flow =
+  let exec zone stmt man stman flow =
     match skind stmt with
     (* 𝕊⟦ t v = e; ⟧ when v is a global variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_extern
@@ -1058,67 +1071,63 @@ module Domain = struct
                                                | Variable_func_static _;
                                      var_init = init}} as v)
       ->
-      add_base (V v) man flow |>
-      Common.Init_visitor.init_global (init_visitor man) v init stmt.srange |>
-      Post.return
+      add_base (V v) man stman flow |>
+      Common.Init_visitor.init_global (init_visitor man stman) v init stmt.srange |>
+      Post.return |> Option.return
 
     (* 𝕊⟦ t v = e; ⟧ when v is a local variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_local _; var_init = init}} as v) ->
-      add_base (V v) man flow |>
-      Common.Init_visitor.init_local (init_visitor man) v init stmt.srange |>
-      Post.return
+      add_base (V v) man stman flow |>
+      Common.Init_visitor.init_local (init_visitor man stman) v init stmt.srange |>
+      Post.return |> Option.return
 
     (* 𝕊⟦ add v ⟧ when v is a scalar *)
     | S_add { ekind = E_var (v, _) } when is_c_scalar_type v.vtyp ->
       eval_scalar_cell (mk_var v stmt.srange) man flow |>
-      Post.bind_return man @@ fun c flow ->
+      Option.return |> Option.lift @@ post_eval man @@
+      fun c flow ->
 
       add_cell c stmt.srange man flow |>
       man.exec ~zone:Z_c_cell (mk_add (mk_c_cell c stmt.srange) stmt.srange) |>
-
-      Post.of_flow |>
-      Post.add_merger (mk_add (mk_c_cell c stmt.srange) stmt.srange)
+      Post.return
 
     (* 𝕊⟦ add v ⟧ when v is not a scalar *)
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (V v) man flow |>
-      Post.return
+      add_base (V v) man stman flow |>
+      Post.return |> Option.return
 
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
-      let u = Flow.get_domain_cur man flow in
+      let u = get_domain_env T_cur man flow in
       let l = find_cells (fun c -> compare_base (cell_base c) (V v) = 0) u in
       let u = List.fold_left (fun u c -> { u with cells = Cells.remove c u.cells }) u l in
       let u = { u with bases = Bases.remove (V v) u.bases } in
-      let mergers = List.map (fun c -> mk_remove (mk_c_cell c stmt.srange) stmt.srange) l in
-      let to_exec_in_sub = mergers in
-      let flow = Flow.set_domain_cur u man flow in
+      let to_exec_in_sub = List.map (fun c -> mk_remove (mk_c_cell c stmt.srange) stmt.srange) l in
+      let flow = set_domain_env T_cur u man flow in
       man.exec ~zone:Z_c_cell (mk_block to_exec_in_sub stmt.srange) flow |>
-      Post.of_flow |>
-      Post.add_mergers mergers |>
-      OptionExt.return
+      Post.return |> Option.return
 
     (* 𝕊⟦ lval = rval ⟧ *)
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c, Z_under Z_c_cell) rval flow |>
-      Post.bind_opt man @@ fun rval flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun rval flow ->
 
       man.eval ~zone:(Z_c, Z_c_low_level) lval flow |>
-      Post.bind_opt man @@ fun lval flow ->
+      post_eval man @@ fun lval flow ->
 
       eval_scalar_cell lval man flow |>
-      Post.bind_opt man @@ fun c flow ->
+      post_eval man @@ fun c flow ->
 
       let flow =
         match cell_offset c with
         | O_single _ ->
-          assign_cell c rval stmt.srange man flow
+          assign_cell c rval stmt.srange man stman flow
 
         | O_region itv ->
           remove_cells (fun c' ->
               compare_base (cell_base c) (cell_base c') = 0 &&
               Itv.mem (cell_zoffset c') itv
-            ) stmt.srange man flow
+            ) stmt.srange man stman flow
 
         | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" pp_cell c
       in
@@ -1128,7 +1137,7 @@ module Domain = struct
     (* 𝕊⟦ assume ?e ⟧ *)
     | S_assume(e) ->
       man.eval ~zone:(Z_c, Z_under Z_c_cell) e flow |>
-      Post.bind_opt man @@ fun e' flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun e' flow ->
 
       let stmt' = {stmt with skind = S_assume e'} in
       man.exec ~zone:Z_c_cell stmt' flow |>
@@ -1137,19 +1146,19 @@ module Domain = struct
 
     (* 𝕊⟦ rename(v1, v2) ⟧ *)
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      rename_base (V v1) (V v2) stmt.srange man flow |>
-      Post.return
+      rename_base (V v1) (V v2) stmt.srange man stman flow |>
+      Post.return |> Option.return
 
     (* 𝕊⟦ rename(addr1, addr2) ⟧ *)
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      rename_base (A addr1) (A addr2) stmt.srange man flow |>
+      rename_base (A addr1) (A addr2) stmt.srange man stman flow |>
       man.exec ~zone:Z_c_scalar stmt |>
-      Post.return
+      Post.return |> Option.return
 
     (* 𝕊⟦ rename primed p[a0, b0][a1, b1]... ⟧ *)
     | S_stub_rename_primed(p, offsets) ->
-      rename_primed_cells p offsets stmt.srange man flow  |>
-      Post.return
+      rename_primed_cells p offsets stmt.srange man stman flow |>
+      Option.return
 
     | _ -> None
 
@@ -1157,64 +1166,64 @@ module Domain = struct
   (** Query handlers *)
   (** ============== *)
 
-  let ask : type r. r query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
+  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
     match query with
-    | Query.Q_print_var ->
-      let pp fmt v =
-        let a = Flow.get_domain_env T_cur man flow in
-        (* Get the cells in variable v *)
-        let cells = find_cells (fun c ->
-            match cell_base c with
-            | V vv -> vv.org_vname = v
-            | _ -> false
-          ) a
-        in
+    | Framework.Engines.Interactive.Q_print_var ->
+      Some (
+        fun fmt v ->
+          let a = get_domain_env T_cur man flow in
+          (* Get the cells in variable v *)
+          let cells = find_cells (fun c ->
+              match cell_base c with
+              | V vv -> vv.org_vname = v
+              | _ -> false
+            ) a
+          in
 
-        (* Process each cell depending on its type *)
-        let range = mk_fresh_range () in
-        let ret = ref [] in
-        let open Format in
-        cells |> List.iter (fun c ->
-            (* Evaluate cell c into a scalar *)
-            man.eval
-              (mk_c_cell c range) ~zone:(Z_c_cell, Z_c_scalar) flow
-            |>
-            Eval.iter (fun e flow ->
-                if e.etyp |> is_c_num_type then
-                  (* For numeric cells, get the interval and print it *)
-                  man.eval e ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
-                  Eval.iter (fun ee flow ->
-                      let itv = man.ask (Itv.Q_interval ee) flow in
-                      ret := (fun fmt -> fprintf fmt "%a = %a" pp_expr e Itv.print itv) :: !ret
-                    )
-                else
-                if e.etyp |> is_c_pointer_type then
-                  (* For pointer cells, get pointed bases and offsets *)
-                  man.eval e ~zone:(Z_c_scalar, Z_c_points_to) flow |>
-                  Eval.iter (fun p flow ->
-                      match ekind p with
-                      | E_c_points_to(P_block(base, offset)) ->
-                        let itv = man.ask (Itv.Q_interval offset) flow in
-                        ret := (fun fmt ->
-                            fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
-                          ) :: !ret
+          (* Process each cell depending on its type *)
+          let range = mk_fresh_range () in
+          let ret = ref [] in
+          let open Format in
+          cells |> List.iter (fun c ->
+              (* Evaluate cell c into a scalar *)
+              man.eval
+                (mk_c_cell c range) ~zone:(Z_c_cell, Z_c_scalar) flow
+              |>
+              Eval.iter (fun e flow ->
+                  if e.etyp |> is_c_num_type then
+                    (* For numeric cells, get the interval and print it *)
+                    man.eval e ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow |>
+                    Eval.iter (fun ee flow ->
+                        let itv = man.ask (Itv.Q_interval ee) flow in
+                        ret := (fun fmt -> fprintf fmt "%a = %a" pp_expr e Itv.print itv) :: !ret
+                      )
+                  else
+                  if e.etyp |> is_c_pointer_type then
+                    (* For pointer cells, get pointed bases and offsets *)
+                    man.eval e ~zone:(Z_c_scalar, Z_c_points_to) flow |>
+                    Eval.iter (fun p flow ->
+                        match ekind p with
+                        | E_c_points_to(P_block(base, offset)) ->
+                          let itv = man.ask (Itv.Q_interval offset) flow in
+                          ret := (fun fmt ->
+                              fprintf fmt "%a ⇝ %a%a" pp_expr e pp_base base Itv.print itv
+                            ) :: !ret
 
 
-                      | E_c_points_to pp ->
-                        ret := (fun fmt ->
-                            fprintf fmt "%a ⇝ %a" pp_expr e pp_points_to pp
-                          ) :: !ret
+                        | E_c_points_to pp ->
+                          ret := (fun fmt ->
+                              fprintf fmt "%a ⇝ %a" pp_expr e pp_points_to pp
+                            ) :: !ret
 
-                      | _ -> assert false
-                    )
-              )
-          );
-        fprintf fmt "@[<v>%a@]"
-          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-             (fun fmt pp -> pp fmt)
-          ) !ret
-      in
-      Some pp
+                        | _ -> assert false
+                      )
+                )
+            );
+          fprintf fmt "@[<v>%a@]"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+               (fun fmt pp -> pp fmt)
+            ) !ret
+      )
 
     | _ -> None
 
@@ -1222,4 +1231,4 @@ end
 
 
 let () =
-  Framework.Domains.Stacked.register_domain (module Domain);
+  Framework.Core.Sig.Intermediate.Stacked.register_stack (module Domain);

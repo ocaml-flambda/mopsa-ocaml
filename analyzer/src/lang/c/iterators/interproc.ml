@@ -35,37 +35,35 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_interproc : unit domain
-
-  let id = D_c_interproc
   let name = "c.iterators.interproc"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_interproc -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
+  let interface = {
+    iexec = {
+      provides = [];
+      uses = []
+    };
 
-  let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [
-      Z_c, Z_c_points_to;
-      Universal.Zone.Z_u, any_zone;
-      Stubs.Zone.Z_stubs, Z_any
-    ]
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = [
+        Z_c, Z_c_points_to;
+        Universal.Zone.Z_u, any_zone;
+        Stubs.Zone.Z_stubs, Z_any
+      ]
+    }
   }
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
+
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -121,7 +119,7 @@ struct
 
         | _ -> assert false
       end |>
-      OptionExt.return
+      Option.return
 
 
     | _ -> None
@@ -136,4 +134,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -24,33 +24,33 @@
 *)
 open Mopsa
 open Lexing
-open Py_parser.Cst
-open Py_parser.Ast
 open Ast
 open Utils
 
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
 (** Entry point of the frontend *)
-let rec parse_program (files: string list) : Framework.Ast.program =
+let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
-    let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.get_vcounter_val ()) filename in
-    Framework.Ast.start_vcounter_at counter;
+    let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+    Framework.Ast.Var.start_vcounter_at counter;
     {
       prog_kind = from_program filename ast;
       prog_range = mk_program_range [filename];
     }
 
-  | _ -> assert false
+  | [] -> panic "no input file"
+
+  | _ -> panic "analysis of multiple files not supported"
 
 and parse_file (filename: string) =
-  let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.get_vcounter_val ()) filename in
-  Framework.Ast.start_vcounter_at counter;
+  let ast, counter = Py_parser.Main.parse_file ~counter:(Framework.Ast.Var.get_vcounter_val ()) filename in
+  Framework.Ast.Var.start_vcounter_at counter;
   from_stmt ast.prog_body
 
 (** Create a Universal.var variable from Py_parser.Ast.var *)
-and from_var v =
+and from_var (v:Py_parser.Ast.var) =
   let open Framework.Ast in
   (* let () = if Hashtbl.mem tmp v.uid && Hashtbl.find tmp v.uid <> v.name then
    *     Exceptions.panic "%d is already %s, conflict with current %s@\n" v.uid (Hashtbl.find tmp v.uid) v.name
@@ -58,20 +58,20 @@ and from_var v =
    *     Hashtbl.add tmp v.uid v.name in *)
   mkv v.name (v.name ^ ":" ^ (string_of_int v.uid)) v.uid T_any
 
-(** Translate a Python program into a Framework.Ast.stmt *)
-and from_program filename (p: Py_parser.Ast.program) : Framework.Ast.prog_kind =
+(** Translate a Python program into a stmt *)
+and from_program filename (p: Py_parser.Ast.program) : prog_kind =
   let body = from_stmt p.prog_body in
   let globals = List.map from_var p.prog_globals in
   Ast.Py_program (globals, body)
 
 
 (** Translation of a Python statement *)
-and from_stmt (stmt: Py_parser.Ast.stmt) : Framework.Ast.stmt =
+and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
   let srange' = stmt.srange in
   let skind' =
     match stmt.skind with
     | S_assign (x, e) ->
-      Framework.Ast.S_assign (from_exp x, from_exp e)
+      S_assign (from_exp x, from_exp e)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
@@ -181,12 +181,12 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : Framework.Ast.stmt =
   {skind = skind'; srange = srange'}
 
 (** Translate an optional statement into en eventual empty one *)
-and from_stmt_option : Location.range -> Py_parser.Ast.stmt option -> Framework.Ast.stmt
+and from_stmt_option : Location.range -> Py_parser.Ast.stmt option -> stmt
   = fun none_case_range -> function
     | None -> {skind = Universal.Ast.S_block []; srange = none_case_range}
     | Some s -> from_stmt s
 
-and from_exp_option : Py_parser.Ast.expr option -> Framework.Ast.expr option
+and from_exp_option : Py_parser.Ast.expr option -> expr option
   = function
     | None -> None
     | Some e -> Some (from_exp e)
@@ -362,7 +362,7 @@ and from_exp exp =
   {ekind; etyp; erange = exp.erange}
 
 
-and from_binop : Py_parser.Ast.binop -> Framework.Ast.operator = function
+and from_binop : Py_parser.Ast.binop -> operator = function
   | O_arithmetic op -> from_arithmetic_op op
   | O_comparison op -> from_comparison_op op
   | O_bool op -> from_bool_op op
@@ -386,20 +386,20 @@ and from_bool_op = function
   | And -> O_py_and
   | Or -> O_py_or
 
-and from_comparison_op : Py_parser.Cst.cmpop -> Framework.Ast.operator = function
-  | Eq -> Framework.Ast.O_eq
-  | NotEq -> Framework.Ast.O_ne
-  | Lt -> Framework.Ast.O_lt
-  | LtE -> Framework.Ast.O_le
-  | Gt -> Framework.Ast.O_gt
-  | GtE -> Framework.Ast.O_ge
+and from_comparison_op : Py_parser.Cst.cmpop -> operator = function
+  | Eq -> O_eq
+  | NotEq -> O_ne
+  | Lt -> O_lt
+  | LtE -> O_le
+  | Gt -> O_gt
+  | GtE -> O_ge
   | Is -> O_py_is
   | IsNot -> O_py_is_not
   | In -> O_py_in
   | NotIn -> O_py_not_in
 
 and from_unop = function
-  | Not -> Framework.Ast.O_log_not
+  | Not -> O_log_not
   | USub -> Universal.Ast.O_minus
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert

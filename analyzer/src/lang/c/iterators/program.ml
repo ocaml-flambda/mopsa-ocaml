@@ -36,16 +36,7 @@ struct
 
   (** Domain identification *)
   (** ===================== *)
-
-  type _ domain += D_c_program : unit domain
-
-  let id = D_c_program
   let name = "c.iterators.program"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_program -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -67,14 +58,23 @@ struct
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = [Zone.Z_c]}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {
+      provides= [Zone.Z_c];
+      uses = [Zone.Z_c]
+    };
+
+    ieval = {
+      provides = [];
+      uses = []
+    }
+  }
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
 
 
   (** Computation of post-conditions *)
@@ -144,11 +144,13 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         exec_main entry c_globals c_functions man flow1 |>
-        Post.return
+        Post.return |>
+        Option.return
       else
         (* Otherwise execute the body *)
         call entry [] man flow1 |>
-        Post.return
+        Post.return |>
+        Option.return
 
     | S_program { prog_kind = C_program{ c_globals; c_functions } }
       when !Universal.Iterators.Unittest.unittest_flag ->
@@ -179,7 +181,8 @@ struct
       let tests = get_test_functions c_functions in
       let stmt = mk_c_unit_tests tests in
       man.exec stmt flow1 |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | _ -> None
 
@@ -198,4 +201,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

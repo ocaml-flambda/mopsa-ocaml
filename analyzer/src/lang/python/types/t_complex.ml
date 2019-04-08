@@ -27,38 +27,34 @@ open Universal.Ast
 
 module Domain =
   struct
-    type _ domain += D_python_types_t_complex : unit domain
-
-    let id = D_python_types_t_complex
     let name = "python.types.t_complex"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_types_t_complex -> Some Eq
-      | _ -> None
 
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ _ = None
+    let init _ _ flow = flow
 
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, [cls], []) ->
          (* FIXME?*)
-         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range) flow |> OptionExt.return
+         man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_py_complex range) flow |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, [cls; arg], []) ->
         Utils.check_instances_disj man flow range [arg] [["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, [cls; arg1; arg2], []) ->
         Utils.check_instances_disj man flow range [arg1; arg2] [["float"; "int"; "str"]; ["float"; "int"; "str"]] (fun _ -> man.eval (mk_py_top T_py_complex range))
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "complex.__new__")}, _)}, args, []) ->
-        man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton |> OptionExt.return
+        man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton |> Option.return
 
       | _ -> None
 
@@ -66,4 +62,4 @@ module Domain =
     let ask _ _ _ = None
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

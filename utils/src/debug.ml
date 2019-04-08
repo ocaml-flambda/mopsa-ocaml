@@ -29,6 +29,7 @@ let colors = [
   ("green", 0x28);
   ("yellow", 0xbe);
   ("blue", 4);
+  ("lightblue", 75);
   ("magenta", 0x5c);
   ("fushia", 13);
   ("orange", 0xd0);
@@ -78,9 +79,9 @@ let debug ?(channel = "debug") fmt =
   if can_print channel then
     Format.kasprintf (fun str ->
         if !print_color then
-          Format.eprintf "\027[1;38;5;%dm[%s %.3f]\027[0m @[%s@]@." (random_color channel) channel (Sys.time ()) str
+          Format.printf "\027[1;38;5;%dm[%s %.3f]\027[0m @[%s@]@." (random_color channel) channel (Sys.time ()) str
         else
-          Format.eprintf "[%s %.3f] @[%s@]@." channel (Sys.time ()) str
+          Format.printf "[%s %.3f] @[%s@]@." channel (Sys.time ()) str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt

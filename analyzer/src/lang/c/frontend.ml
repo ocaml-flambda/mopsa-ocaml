@@ -82,12 +82,12 @@ type ctx = {
   ctx_fun: Ast.c_fundec StringMap.t;
   (* cache of functions of the project *)
 
-  ctx_type: (type_space*string,Framework.Ast.typ) Hashtbl.t;
+  ctx_type: (type_space*string,typ) Hashtbl.t;
   (* cache the translation of all named types;
      this is required for records defining recursive data-types
   *)
 
-  ctx_vars: (int,Framework.Ast.var*C_AST.variable) Hashtbl.t;
+  ctx_vars: (int,var*C_AST.variable) Hashtbl.t;
   (* cache of variables of the project *)
 
   ctx_global_preds: C_stubs_parser.Cst.predicate with_range list;
@@ -117,6 +117,9 @@ exception StubAliasFound of string
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
+
+  if files = [] then panic "no input file";
+
   let target = get_target_info (get_default_target_options ()) in
   let ctx = Clang_to_C.create_context "project" target in
   List.iter
@@ -176,8 +179,7 @@ and parse_db (dbfile: string) ctx : unit =
     ) srcs
 
 and parse_file (opts: string list) (file: string) ctx =
-  Logging.parse file;
-  let opts' = ("-I" ^ (Setup.resolve_stub "c" "mopsa")) ::
+  let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               !opt_clang @
               opts
@@ -186,8 +188,8 @@ and parse_file (opts: string list) (file: string) ctx =
 
 and parse_stubs ctx () =
   let stubs = [
-    Setup.resolve_stub "c" "mopsa/mopsa.c";
-    Setup.resolve_stub "c" "libc/libc.c";
+    Config.Paths.resolve_stub "c" "mopsa/mopsa.c";
+    Config.Paths.resolve_stub "c" "libc/libc.c";
   ]
   in
   List.iter (fun stub -> parse_file [] stub ctx) stubs
@@ -301,14 +303,14 @@ and from_function =
 (** {2 Statements} *)
 (** ============== *)
 
-and from_stmt ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
+and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
   let srange = from_range range in
   let skind = match skind with
     | C_AST.S_local_declaration v ->
       let v = from_var ctx v in
       Ast.S_c_declaration v
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
-    | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.skind
+    | C_AST.S_block block -> from_block ctx srange block |> Framework.Ast.Stmt.skind
     | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
     | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
     | C_AST.S_do_while (body, cond) -> Ast.S_c_do_while (from_block ctx srange body, from_expr ctx cond)
@@ -325,15 +327,15 @@ and from_stmt ctx ((skind, range): C_AST.statement) : Framework.Ast.stmt =
   in
   {skind; srange}
 
-and from_block ctx range (block: C_AST.block) : Framework.Ast.stmt =
+and from_block ctx range (block: C_AST.block) : stmt =
   mk_block (List.map (from_stmt ctx) block) range
 
-and from_block_option ctx (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt =
+and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
   match block with
   | None -> mk_nop range
   | Some stmtl -> from_block ctx range stmtl
 
-and from_body_option (ctx) (range: Location.range) (block: C_AST.block option) : Framework.Ast.stmt option =
+and from_body_option (ctx) (range: Location.range) (block: C_AST.block option) : stmt option =
   match block with
   | None -> None
   | Some stmtl -> Some (from_block ctx range stmtl)
@@ -344,7 +346,7 @@ and from_body_option (ctx) (range: Location.range) (block: C_AST.block option) :
 (** {2 Expressions} *)
 (** =============== *)
 
-and from_expr ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
+and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
   let erange = from_range range in
   let etyp = from_typ ctx tc in
   let ekind =
@@ -379,7 +381,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : Framework.Ast.expr =
   in
   {ekind; erange; etyp}
 
-and from_expr_option ctx : C_AST.expr option -> Framework.Ast.expr option = function
+and from_expr_option ctx : C_AST.expr option -> expr option = function
   | None -> None
   | Some e -> Some (from_expr ctx e)
 
@@ -495,7 +497,7 @@ and from_init_stub ctx v =
 (** {2 Types} *)
 (** ========= *)
 
-and from_typ ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
+and from_typ ctx (tc: C_AST.type_qual) : typ =
   let typ, qual = tc in
   let typ' = from_unqual_typ ctx typ in
   if qual.C_AST.qual_is_const then
@@ -503,7 +505,7 @@ and from_typ ctx (tc: C_AST.type_qual) : Framework.Ast.typ =
   else
     typ'
 
-and from_unqual_typ ctx (tc: C_AST.typ) : Framework.Ast.typ =
+and from_unqual_typ ctx (tc: C_AST.typ) : typ =
   match tc with
   | C_AST.T_void -> Ast.T_c_void
   | C_AST.T_bool -> Ast.T_c_bool

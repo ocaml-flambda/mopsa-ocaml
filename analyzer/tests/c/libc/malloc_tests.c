@@ -79,7 +79,7 @@ void test_malloc_in_loop() {
   }
   _mopsa_assert(cur != &n);
   _mopsa_assert_exists(prev != &n);
-  
+
   *cur = *cur + 1;
   _mopsa_assert(*cur == 2);
   _mopsa_assert(n == 0);

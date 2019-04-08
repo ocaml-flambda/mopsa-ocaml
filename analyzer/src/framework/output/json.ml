@@ -24,7 +24,7 @@
 open Yojson.Basic
 open ArgExt
 
-let print json out =
+let print out json =
   let channel =
     match out with
     | None -> stdout
@@ -49,7 +49,7 @@ let render_range range : json =
     "end", render_pos (Location.get_range_end range)
   ]
 
-let render_call (c:Callstack.call) : json =
+let render_call (c:Core.Callstack.call) : json =
   `Assoc [
     "function", `String c.call_fun;
     "range", render_range c.call_site;
@@ -60,17 +60,17 @@ let render_callstack cs : json =
 
 let render_alarm alarm : json =
   let title =
-    let () = Alarm.pp_alarm_title Format.str_formatter alarm in
+    let () = Core.Alarm.pp_alarm_title Format.str_formatter alarm in
     Format.flush_str_formatter ()
   in
-  let range, cs = alarm.Alarm.alarm_trace in
+  let range, cs = alarm.Core.Alarm.alarm_trace in
   `Assoc [
     "title", `String title;
     "range", render_range range;
     "callstack", render_callstack cs;
   ]
 
-let render ?(flow=None) man alarms time files out : unit =
+let report ?(flow=None) man alarms time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;
@@ -78,7 +78,7 @@ let render ?(flow=None) man alarms time files out : unit =
       "alarms", `List (List.map render_alarm alarms);
     ]
   in
-  print json out
+  print out json
 
 
 let panic ?(btrace="<none>") exn files out =
@@ -98,7 +98,7 @@ let panic ?(btrace="<none>") exn files out =
       "backtrace", `String btrace;
     ]
   in
-  print json out
+  print out json
 
 let help (args:arg list) out =
   let json : json = `List (
@@ -127,7 +127,7 @@ let help (args:arg list) out =
         )
     )
   in
-  print json out
+  print out json
 
 let list_domains (domains:string list) out =
   let json : json = `List (
@@ -135,4 +135,4 @@ let list_domains (domains:string list) out =
       List.map (fun d -> `String d)
     )
   in
-  print json out
+  print out json

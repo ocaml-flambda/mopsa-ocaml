@@ -51,10 +51,10 @@ struct
   let equal (abs1:t) (abs2:t) : bool =
     top_equal Set.equal abs1 abs2
 
-  let join annot (abs1:t) (abs2:t) : t =
+  let join (abs1:t) (abs2:t) : t =
     top_lift2 Set.union abs1 abs2
 
-  let meet annot (abs1:t) (abs2:t) : t =
+  let meet (abs1:t) (abs2:t) : t =
     top_neutral2 Set.inter abs1 abs2
 
   let union = join
@@ -191,13 +191,13 @@ struct
     Set.equal l1 l2 &&
     USet.equal u1 u2
 
-  let join annot ((l1,u1): t) ((l2,u2): t) : t =
+  let join ((l1,u1): t) ((l2,u2): t) : t =
     Set.inter l1 l2,
-    USet.join annot u1 u2
+    USet.join u1 u2
 
-  let meet annot ((l1,u1): t) ((l2,u2): t) : t =
+  let meet ((l1,u1): t) ((l2,u2): t) : t =
     Set.union l1 l2,
-    USet.meet annot u1 u2
+    USet.meet u1 u2
 
   let union = join
 

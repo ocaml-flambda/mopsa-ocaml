@@ -72,7 +72,7 @@ let mk_c_points_to_fun f range =
 
 
 let () =
-  register_expr {
+  register_expr_with_visitor {
     compare = (fun next e1 e2 ->
         match ekind e1, ekind e2 with
         | E_c_points_to p1, E_c_points_to p2 -> compare_points_to p1 p2
@@ -85,7 +85,6 @@ let () =
         | _ -> next fmt e
       );
     visit = (fun next e ->
-        let open Framework.Visitor in
         match ekind e with
         | E_c_points_to p -> leaf e (* FIXME: do we need to visit the offset expression? *)
         | _ -> next e
@@ -99,9 +98,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_c_points_to;
-    name = "C/Points-To";
-    subset = None;
-    eval = (fun exp ->
+    zone_name = "C/Points-To";
+    zone_subset = None;
+    zone_eval = (fun exp ->
         match ekind exp with
         | E_c_points_to _ -> Keep
         | _ -> Process

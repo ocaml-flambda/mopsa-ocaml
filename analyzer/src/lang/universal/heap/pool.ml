@@ -27,10 +27,8 @@
 *)
 
 open Mopsa
-open Framework.Ast
 open Ast
 
-let debug fmt = Debug.debug ~channel:"universal.heap.pool" fmt
 
 module type ADDRINFO =
 sig
@@ -46,7 +44,7 @@ module AddrInfoRecency = struct
   type flag = int
   type t = addr_kind * Callstack.cs * range * flag
 
-  let name = "recency"
+  let name = "by_kind_callstack_range"
 
   let extract x = x
 
@@ -73,7 +71,7 @@ module AddrInfoTypes = struct
   type flag = int
   type t = addr_kind * Callstack.cs * flag
 
-  let name = "types"
+  let name = "by_kind_callstack"
 
   let extract (a, cs, r, f) = (a, cs, f)
 
@@ -93,7 +91,6 @@ module AddrInfoTypes = struct
 
   let get_flag (a, cs, f) = f
 end
-
 
 
 module Make
@@ -120,6 +117,9 @@ struct
     let print = Format.pp_print_int
   end
 
+
+
+
   module Equiv = Equiv.Make(AddrInfo)(AddrUid)
 
   let get_id_equiv (info: AddrInfo.t) (e: Equiv.t) =
@@ -128,41 +128,36 @@ struct
     with
     | Not_found ->
       let x = get_fresh () in
-      let new_eq = Equiv.add (info, x) e in
-      x, new_eq
+      x, Equiv.add (info, x) e
 
-  type ('a, _) Annotation.key +=
-    | KAddr : ('a, Equiv.t) Annotation.key
-
-  let () =
-    Annotation.(register_stateless_annot {
-        eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
-                function
-                | KAddr -> Some Eq
-                | _ -> None
-              in
-              f);
-        print = (fun fmt m -> Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m);
-      }) ();
-    ()
+  let ctx_key =
+    let module K = Context.GenUnitKey(
+      struct
+        type t = Equiv.t
+        let print fmt m = Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m
+      end)
+    in
+    K.key
 
   let get_id_flow (info: AddrInfo.t) (f: 'a flow) : (int * 'a flow) =
-    let e = Flow.get_annot KAddr f in
+    let e = Flow.get_ctx f |> Context.find_unit ctx_key in
     let x, e = get_id_equiv info e in
-    (x, Flow.set_annot KAddr e f)
+    (x, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key e) f)
 
   let get_addr_flag addr flow =
-    let e = Flow.get_annot KAddr flow in
+    let e = Flow.get_ctx flow |> Context.find_unit ctx_key in
     try
-      AddrInfo.get_flag @@ Equiv.find_r addr.addr_uid e
+      Equiv.find_r addr.addr_uid e |>
+      AddrInfo.get_flag
     with Not_found ->
       Exceptions.panic "get_addr_flag: %a not found" pp_addr addr
 
   let is_recent addr flow =
-    get_addr_flag addr flow = recent_flag
+    get_addr_flag addr flow == recent_flag
 
   let is_old addr flow =
-    get_addr_flag addr flow = old_flag
+    get_addr_flag addr flow == old_flag
+
 
 
   include Framework.Lattices.Powerset.Make(
@@ -172,4 +167,10 @@ struct
       let print = pp_addr
     end
     )
+
+  let widen ctx = join
+
+  let merge pre (post1,log1) (post2,log2) =
+    assert false
+
 end

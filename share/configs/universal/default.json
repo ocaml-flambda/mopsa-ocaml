@@ -1,15 +1,23 @@
 {
     "language": "universal",
     "domain": {
-	"iter": [
+	"seq": [
 	    // Iterators
 	    "universal.iterators.program",
 	    "universal.iterators.intraproc",
 	    "universal.iterators.loops",
             "universal.iterators.interproc.inlining",
+            "universal.iterators.scalar",
 
 	    // Numeric abstraction
-            "universal.numeric.values.integer_float_mix"
+            {
+                "nonrel": {
+		    "disjoint": [
+			"universal.numeric.values.intervals.integer",
+			"universal.numeric.values.intervals.float"
+		    ]
+		}
+            }
 	]
     }
 }

@@ -35,9 +35,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_c;
-    subset = None;
-    name = "C";
-    eval = (fun exp ->
+    zone_subset = None;
+    zone_name = "C";
+    zone_eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
@@ -77,9 +77,9 @@ let () =
 let () =
   register_zone {
     zone = Z_c_low_level;
-    subset = Some Z_c;
-    name = "C/LowLevel";
-    eval = (fun exp ->
+    zone_subset = Some Z_c;
+    zone_name = "C/LowLevel";
+    zone_eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _
@@ -105,9 +105,9 @@ let () =
 let () =
   register_zone {
     zone = Z_c_scalar;
-    subset = Some Z_c;
-    name = "C/Scalar";
-    eval = (fun exp ->
+    zone_subset = Some Z_c;
+    zone_name = "C/Scalar";
+    zone_eval = (fun exp ->
         match ekind exp with
         (* ------------------------------------------- *)
         | E_constant _

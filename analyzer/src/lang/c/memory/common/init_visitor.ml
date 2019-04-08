@@ -57,7 +57,7 @@ let rec init_scalar visitor v is_global init range flow =
   | Some (C_init_expr e) ->
     visitor.scalar v (Some e) range flow
 
-  | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (OptionExt.none_to_exn init);
+  | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (Option.none_to_exn init);
 
 
 and init_array visitor a is_global init range flow =
@@ -89,14 +89,14 @@ and init_array visitor a is_global init range flow =
       in
       aux 0
 
-    | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (OptionExt.none_to_exn init);
+    | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (Option.none_to_exn init);
   in
   visitor.array a is_global el range flow
 
 and init_union visitor u is_global init range flow =
   match init with
   | None when not is_global -> flow
-  | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (OptionExt.none_to_exn init);
+  | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (Option.none_to_exn init);
 
 
 and init_record visitor s is_global init range flow =
@@ -126,7 +126,7 @@ and init_record visitor s is_global init range flow =
     | Some (C_init_expr e) ->
       Expr e
 
-    | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (OptionExt.none_to_exn init);
+    | _ -> panic_at range "init_visitor: %a is not supported" Pp.pp_c_init (Option.none_to_exn init);
   in
   visitor.record s is_global el range flow
 
@@ -135,7 +135,7 @@ and init_expr visitor e is_global (init: c_var_init option) (range: range) flow 
   if is_c_scalar_type e.etyp then init_scalar visitor e is_global init range flow else
   if is_c_array_type e.etyp then  init_array visitor e is_global init range flow else
   if is_c_record_type e.etyp then init_record visitor e is_global init range flow
-  else panic_at ~loc:__LOC__ range "init %a of type %a not supported" (OptionExt.print Pp.pp_c_init) init pp_typ e.etyp
+  else panic_at ~loc:__LOC__ range "init %a of type %a not supported" (Option.print Pp.pp_c_init) init pp_typ e.etyp
 
 
 let init_global visitor v init range flow =

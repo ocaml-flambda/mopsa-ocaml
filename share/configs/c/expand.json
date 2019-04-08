@@ -1,7 +1,7 @@
 {
     "language": "c",
     "domain": {
-	"iter": [
+	"seq": [
             // Universal iterators
             "universal.iterators.intraproc",
             "universal.iterators.loops",
@@ -28,31 +28,34 @@
             "c.desugar.stub_init",
             "c.desugar.cond_expr",
 
-	    // C resources
+	    // Resouce management
+            "universal.heap.recency.by_kind_callstack_range",
 	    "c.resources.file",
 	    "c.resources.common",
 
             // Memory model
-            {
-		"stack": "universal.heap.recency",
-		"over": {
-                    "iter": [
-			{
-                            "stack": "c.memory.cells.expand",
-                            "over" : {
-				"stack" : "c.memory.cells.cell_2_scalar",
-				"over": {
-				    "iter": [
-					"c.memory.cells.pointer",
-					"c.machine_numbers",
-					"universal.numeric.values.integer_float_mix"
-				    ]
-				}
-                            }
-			}
+	    {
+                "apply": {
+                    "compose": [
+                        "c.memory.cells.expand",
+                        "c.memory.cells.cell_2_scalar",
+                        {
+                            "seq": [
+			        "c.memory.pointer",
+			        "c.memory.machine_numbers"
+                            ]
+                        }
                     ]
-		}
-            }
+                },
+		"on": {
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.integer",
+			    "universal.numeric.values.intervals.float"
+			]
+		    }
+                }
+	    }
 	]
     }
 }

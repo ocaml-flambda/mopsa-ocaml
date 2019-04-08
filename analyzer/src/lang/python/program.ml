@@ -25,10 +25,6 @@
    functions if required *)
 
 open Mopsa
-open Framework.Domains.Stateless
-open Framework.Domains
-open Framework.Manager
-open Framework.Flow
 open Addr
 open Ast
 open Universal.Ast
@@ -37,20 +33,15 @@ open Universal.Ast
 module Domain =
 struct
 
-  type _ domain += D_python_program : unit domain
-
-  let id = D_python_program
   let name = "python.program"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_program -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let exec_interface = {export = [Zone.Z_py]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Zone.Z_py]; uses = []};
+    ieval = {provides = []; uses = []}
+  }
 
-  let init _ _ flow = Some flow
+  let init _ _ flow = flow
 
   let eval _ _ _ _ = None
 
@@ -104,7 +95,7 @@ struct
     else String.sub name 0 4 = "test"
 
   let get_test_functions body =
-    Framework.Visitor.fold_stmt
+    Visitor.fold_stmt
         (fun acc exp -> VisitParts acc)
         (fun acc stmt ->
            match skind stmt with
@@ -132,7 +123,8 @@ struct
       init_globals man globals (srange stmt) flow |>
       (* Execute the body *)
       man.exec body |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | S_program { prog_kind = Py_program(globals, body) }
       when !Universal.Iterators.Unittest.unittest_flag ->
@@ -145,7 +137,8 @@ struct
       (* Collect test functions *)
       let tests = get_test_functions body in
       let stmt = mk_py_unit_tests tests (srange stmt) in
-      Post.return (man.exec stmt flow2)
+      Post.return (man.exec stmt flow2) |>
+      Option.return
 
 
     | _ -> None
@@ -155,4 +148,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

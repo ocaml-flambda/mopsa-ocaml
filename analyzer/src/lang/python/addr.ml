@@ -72,7 +72,7 @@ let eval_alloc man kind range flow =
   Eval.bind (fun exp flow ->
       match ekind exp with
       | E_addr (addr) -> Eval.singleton addr flow
-      | _ -> panic "eval_alloc: allocation returned a non-address express %a" Framework.Ast.pp_expr exp
+      | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
     )
 
 (*==========================================================================*)
@@ -179,7 +179,7 @@ let is_builtin_class_function cls f =
 
 
 (** Class name of an atomic type *)
-let atomic_type_to_class_name (t: Framework.Ast.typ) : string=
+let atomic_type_to_class_name (t: typ) : string=
   let open Universal.Ast in
   match t with
   | T_int -> "int"
@@ -417,10 +417,10 @@ let mk_py_type e range =
  * let mk_py_top t range =
  *   let open Universal.Ast in
  *   match t with
- *   | T_int -> mk_py_int_expr (Framework.Ast.mk_top T_int range) range
- *   | T_float -> mk_py_float_expr (Framework.Ast.mk_top T_float range) range
- *   | T_bool -> mk_py_bool_expr (Framework.Ast.mk_top T_bool range) range
- *   | T_string -> mk_py_string_expr (Framework.Ast.mk_top T_string range) range
+ *   | T_int -> mk_py_int_expr (mk_top T_int range) range
+ *   | T_float -> mk_py_float_expr (mk_top T_float range) range
+ *   | T_bool -> mk_py_bool_expr (mk_top T_bool range) range
+ *   | T_string -> mk_py_string_expr (mk_top T_string range) range
  *   | _ -> assert false
  *
  * let mk_py_constant c range =
@@ -553,14 +553,14 @@ let () =
              begin match c1, c2 with
                | C_builtin s1, C_builtin s2
                | C_unsupported s1, C_unsupported s2 -> Pervasives.compare s1 s2
-               | C_user c1, C_user c2 -> Framework.Ast.compare_var c1.py_cls_var c2.py_cls_var
+               | C_user c1, C_user c2 -> compare_var c1.py_cls_var c2.py_cls_var
                | _, _ -> default a1 a2
              end
            | A_py_function f1, A_py_function f2 ->
              begin match f1, f2 with
                | F_builtin s1, F_builtin s2
                | F_unsupported s1, F_unsupported s2 -> Pervasives.compare s1 s2
-               | F_user u1, F_user u2 -> Framework.Ast.compare_var u1.py_func_var u2.py_func_var
+               | F_user u1, F_user u2 -> compare_var u1.py_func_var u2.py_func_var
                | _, _ -> default a1 a2
              end
            | A_py_module m1, A_py_module m2 ->

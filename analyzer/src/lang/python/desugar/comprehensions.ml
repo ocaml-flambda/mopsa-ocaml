@@ -33,18 +33,13 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_desugar_comprehensions : unit domain
-
-    let id = D_python_desugar_comprehensions
     let name = "python.desugar.comprehensions"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_desugar_comprehensions -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = [Zone.Z_py]}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = [Zone.Z_py]};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mktmp () in
@@ -69,7 +64,7 @@ module Domain =
          stmt, tmp_acc
 
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
     let eval zs exp man flow =
       let range = erange exp in
       match ekind exp with
@@ -82,7 +77,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_set_comprehension (expr, comprehensions) ->
          let set = find_builtin "set" in
@@ -94,7 +89,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_dict_comprehension (key, value, comprehensions) ->
          let dict = find_builtin "dict" in
@@ -106,7 +101,7 @@ module Domain =
          man.exec stmt flow |>
            man.eval acc_var |>
            Eval.add_cleaners [mk_remove_var tmp_acc range] |>
-           OptionExt.return
+           Option.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
          Debug.warn "No desugaring for generator comprehensions@\n"; None
@@ -120,4 +115,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

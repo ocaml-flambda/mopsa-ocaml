@@ -32,18 +32,13 @@ open Universal.Ast
 module Domain =
   struct
 
-    type _ domain += D_python_libs_math : unit domain
-
-    let id = D_python_libs_math
     let name = "python.libs.math"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_libs_math -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = { export = []; import = [] }
-    let eval_interface = { export = [Zone.Z_py, Zone.Z_py_obj]; import = [] }
+    let interface = {
+      iexec = { provides = []; uses = [] };
+      ieval = { provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [] }
+    }
 
     type stub_signature = {in_args: string list;
                            out_type: Mopsa.typ}
@@ -92,7 +87,7 @@ module Domain =
       Utils.check_instances man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let init prog man flow =
-      Some flow
+      flow
 
     let exec _ _ _ _ = None
 
@@ -103,7 +98,7 @@ module Domain =
         debug "function %s in stub_base, processing@\n" f;
         let {in_args; out_type} = StringMap.find f stub_base in
         process_simple man flow range args in_args out_type
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.frexp")}, _)}, args, []) ->
         Utils.check_instances man flow range args
@@ -113,7 +108,7 @@ module Domain =
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top T_int range]
                                ) range)  flow
           )
-        |> OptionExt.return
+        |> Option.return
 
       (* math.fsum is handled in the list abstraction *)
 
@@ -125,7 +120,7 @@ module Domain =
                                   [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]
                                ) range)  flow
           )
-        |> OptionExt.return
+        |> Option.return
 
 
 
@@ -135,4 +130,4 @@ module Domain =
 
   end
 
-let () = Framework.Domains.Stateless.register_domain (module Domain)
+let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

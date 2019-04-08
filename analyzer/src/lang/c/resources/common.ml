@@ -36,15 +36,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_resources_common : unit domain
-
-  let id = D_c_resources_common
   let name = "c.resources.common"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_resources_common -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 
@@ -57,23 +49,28 @@ struct
   let () =
     register_zone {
       zone = Z_c_resource;
-      subset = None;
-      name = "C/Resource";
-      eval = (fun e -> Process);
+      zone_subset = None;
+      zone_name = "C/Resource";
+      zone_eval = (fun e -> Process);
     }
 
-  let exec_interface = {export = [Z_c_resource]; import = [Z_c]}
+  let interface= {
+    iexec = {
+      provides = [Z_c_resource];
+      uses = [Z_c]
+    };
 
-  let eval_interface = {
-    export = [Z_c, Z_c_low_level];
-    import = [Z_c, Z_c_points_to]
+    ieval = {
+      provides = [Z_c, Z_c_low_level];
+      uses = [Z_c, Z_c_points_to]
+    }
   }
 
 
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
 
   (** Byte attribute *)
   (** ============== *)
@@ -93,11 +90,12 @@ struct
   let exec zone stmt man flow  =
     match skind stmt with
     | S_stub_free { ekind = E_addr (addr) } ->
-      Post.return flow
+      Post.return flow |>
+      Option.return
 
     | S_stub_free p ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Post.bind_return man @@ fun pt flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -110,7 +108,7 @@ struct
 
           let stmt'' = mk_stub_free (mk_addr addr stmt.srange) stmt.srange in
           man.exec stmt'' flow' |>
-          Post.of_flow
+          Post.return
 
         | E_c_points_to P_top ->
           panic_at stmt.srange "resources.common: free(⊺) not supported"
@@ -125,7 +123,8 @@ struct
       let bytes2 = mk_bytes_var addr2 stmt.srange in
       man.exec ~zone:Z_c (mk_rename bytes1 bytes2 stmt.srange) flow |>
       man.exec ~zone:Z_c stmt |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | _ -> None
 
@@ -137,10 +136,11 @@ struct
   let eval zone exp man flow =
     match ekind exp with
     (* 𝔼⟦ new Resource ⟧ *)
-    | E_alloc_addr (A_stub_resource _, _) ->
+    | E_stub_alloc res ->
       (* Allocate in the heap *)
-      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
-      Eval.bind_return @@ fun exp flow ->
+      let alloc = mk_alloc_addr (A_stub_resource res) exp.erange in
+      man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) alloc flow |>
+      Option.return |> Option.lift @@ Eval.bind @@ fun exp flow ->
 
       begin match ekind exp with
       | E_addr addr ->
@@ -156,14 +156,14 @@ struct
     | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource _ } as addr)}) ->
       let bytes = mk_bytes_var addr exp.erange in
       Eval.singleton bytes flow |>
-      Eval.return
+      Option.return
 
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None
 
     | E_stub_attribute(p, attr) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pt flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A ({ addr_kind = A_stub_resource _ } as addr), _)) ->
@@ -181,7 +181,7 @@ struct
 
     | E_stub_resource_mem(p, res) ->
       man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
-      Eval.bind_return @@ fun pt flow ->
+      Option.return |> Option.lift @@ Eval.bind @@ fun pt flow ->
 
       begin match ekind pt with
         | E_c_points_to (P_block (A { addr_kind = A_stub_resource res' }, _)) ->
@@ -204,4 +204,4 @@ struct
 end
 
 let () =
-    Framework.Domains.Stateless.register_domain (module Domain)
+    Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

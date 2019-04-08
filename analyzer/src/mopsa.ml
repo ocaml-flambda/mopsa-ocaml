@@ -21,42 +21,22 @@
 
 (** Essential modules. *)
 
-include Framework.Ast
+include Framework.Ast.All
 
-module Logging = Framework.Logging
+include Framework.Core.All
 
-module Setup = Framework.Setup
+module Core = Framework.Core
 
-module Visitor = Framework.Visitor
+module Config = Framework.Config
 
-include Framework.Zone
+module Paths = Framework.Config.Paths
 
-include Framework.Manager
-
-module Flow = Framework.Flow
-
-module Annotation = Framework.Annotation
-type 'a annot = 'a Annotation.annot
-
-module Channel = Framework.Channel
-type 'a with_channel = 'a Channel.with_channel
-
-module Post = Framework.Post
-type 'a post = 'a Post.post
-
-module Eval = Framework.Eval
-
-module Query = Framework.Query
-type 'a query = 'a Query.query
+module Visitor = Framework.Ast.Visitor
 
 include Location
 
-include Framework.Domain
-
-include Framework.Options
+include Framework.Config.Options
 
 include Exceptions
 
-module Callstack = Framework.Callstack
-
-include Framework.Alarm
+type 'a info = 'a TypeExt.info

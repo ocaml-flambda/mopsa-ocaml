@@ -30,83 +30,77 @@ open Zone
 
 module Domain =
   struct
-    type _ domain += D_python_desugar_bool : unit domain
-
-    let id = D_python_desugar_bool
     let name = "python.desugar.bool"
-    let identify : type a. a domain -> (unit, a) eq option =
-      function
-      | D_python_desugar_bool -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = OptionExt.return flow
+    let init _ _ flow = flow
 
-    let eval zs exp (man:('a, unit) man) (flow:'a flow) : ('a, Framework.Ast.expr) evl option =
+    let eval zs exp (man:('a, unit) man) (flow:'a flow) : (expr,'a) eval option =
       let range = erange exp in
       match ekind exp with
       (* E⟦ e1 and e2 ⟧ *)
       | E_binop(O_py_and, {ekind = E_constant (C_bool true)}, e2) ->
-         man.eval e2 flow |> OptionExt.return
+         man.eval e2 flow |> Option.return
 
       | E_binop(O_py_and, {ekind = E_constant (C_bool false)}, e2) ->
-         Eval.singleton (mk_py_false range) flow |> OptionExt.return
+         Eval.singleton (mk_py_false range) flow |> Option.return
 
       | E_binop(O_py_and, e1, e2) ->
         man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
         Eval.bind (fun be1 flow1 ->
-            Eval.assume be1 man
+            assume_eval be1 man
               ~fthen:(fun true_flow -> man.eval e2 true_flow)
               ~felse:(fun false_flow -> man.eval e1 false_flow)
               flow1
           )
-        |> OptionExt.return
+        |> Option.return
 
       (* | E_binop(O_py_or, {ekind = E_constant (C_bool true)}, e2) ->
-       *    Eval.singleton (mk_py_true range) flow |> OptionExt.return
+       *    Eval.singleton (mk_py_true range) flow |> Option.return
        *
        * | E_binop(O_py_or, {ekind = E_constant (C_bool false)}, e2) ->
-       *    man.eval e2 flow |> OptionExt.return *)
+       *    man.eval e2 flow |> Option.return *)
 
       (* E⟦ e1 or e2 ⟧ *)
       | E_binop(O_py_or, e1, e2) ->
         (* FIXME: combinatoric explosion *)
          man.eval (Utils.mk_builtin_call "bool" [e1] range) flow |>
            Eval.bind (fun be1 flow1 ->
-               Eval.assume be1
+               assume_eval be1
                  ~fthen:(fun true_flow ->
                      man.eval e1 true_flow)
                  ~felse:(fun false_flow ->
                      man.eval e2 false_flow)
                  man flow1)
-         |> OptionExt.return
+         |> Option.return
       (* combinatorial explosion *)
-      (* man.eval (mk_expr (E_py_if ((Utils.mk_builtin_call "bool" [e1] range), e1, e2)) range) flow |> OptionExt.return *)
+      (* man.eval (mk_expr (E_py_if ((Utils.mk_builtin_call "bool" [e1] range), e1, e2)) range) flow |> Option.return *)
 
       (* E⟦ e1 is not e2 ⟧ *)
       | E_binop(O_py_is_not, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop e1 O_py_is e2 range) range) flow |> Option.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
-         Eval.eval_list [e1; e2] man.eval flow |>
+         Eval.eval_list man.eval [e1; e2] flow |>
            Eval.bind (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
                man.eval (mk_py_type e2 range) flow |>
                  Eval.bind (fun cls2 flow ->
-                     Eval.assume
+                     assume_eval
                        (Utils.mk_hasattr cls2 "__contains__" range)
                        ~fthen:(fun true_flow ->
                          let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
                          man.eval exp' true_flow
                        )
                        ~felse:(fun false_flow ->
-                         Eval.assume
+                         assume_eval
                            (Utils.mk_hasattr cls2 "__iter__" range)
                            ~fthen:(fun true_flow ->
                              let v = mktmp () in
@@ -125,7 +119,7 @@ module Domain =
                              man.eval (mk_var v range) flow |> Eval.add_cleaners [mk_remove_var v range]
                            )
                            ~felse:(fun false_flow ->
-                             Eval.assume
+                             assume_eval
                                (Utils.mk_hasattr cls2 "__getitem__" range)
                                ~fthen:(fun true_flow ->
                                  panic_at range "evaluating 'in' operator using __getitem__ not supported"
@@ -140,11 +134,11 @@ module Domain =
                        ) man flow
                    )
              )
-         |> OptionExt.return
+         |> Option.return
 
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_not_in, e1, e2) ->
-         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> OptionExt.return
+         man.eval (mk_not (mk_binop e1 O_py_in e2 range) range) flow |> Option.return
 
       (* E⟦ e1 op e2 op e3 ... ⟧ *)
       | E_py_multi_compare(left, ops, rights) ->
@@ -161,7 +155,7 @@ module Domain =
                  | (op, right) :: tl ->
                     man.eval right flow |>
                       Eval.bind (fun right flow ->
-                          Eval.assume
+                          assume_eval
                             (mk_binop left op right range)
                             ~fthen:(fun true_flow -> aux right true_flow tl)
                             ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
@@ -169,7 +163,7 @@ module Domain =
                         )
                in
                aux left flow (List.combine ops rights)
-             ) |> OptionExt.return
+             ) |> Option.return
 
       | _ -> None
 
@@ -181,4 +175,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

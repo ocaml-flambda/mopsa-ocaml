@@ -22,7 +22,6 @@
 (** Zones for the Python language. *)
 
 open Mopsa
-open Framework.Zone
 open Universal.Ast
 open Ast
 
@@ -33,9 +32,9 @@ type zone +=
 let () =
   register_zone {
     zone = Z_py;
-    name = "Z_py";
-    subset = None;
-    eval = (fun exp ->
+    zone_name = "Z_py";
+    zone_subset = None;
+    zone_eval = (fun exp ->
         match ekind exp with
         | E_py_undefined _
         | E_py_object _
@@ -62,9 +61,9 @@ let () =
 
   register_zone {
     zone = Z_py_obj;
-    name = "Z_py_object";
-    subset = None;
-    eval = (fun exp ->
+    zone_name = "Z_py_object";
+    zone_subset = None;
+    zone_eval = (fun exp ->
         match ekind exp with
         | E_py_object _ -> Keep
         | _ -> Process);

@@ -37,18 +37,18 @@ let opt_display_lastflow = ref false
 (* ---------------- *)
 
 (* Print collected alarms in the desired output format *)
-let render man flow time files =
-  let alarms = Flow.fold (fun acc tk env ->
+let report man flow time files =
+  let alarms = Core.Flow.fold (fun acc tk env ->
       match tk with
-      | Alarm.T_alarm a -> a :: acc
+      | Core.Alarm.T_alarm a -> a :: acc
       | _ -> acc
-    ) [] man flow
+    ) [] flow
   in
   let return_v = if List.length alarms > 0 then 1 else 0 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
-    | F_text -> Text.render ~flow:lf man alarms time files !opt_file
-    | F_json -> Json.render man alarms time files !opt_file in
+    | F_text -> Text.report ~flow:lf man alarms time files !opt_file
+    | F_json -> Json.report man alarms time files !opt_file in
   return_v
 
 let panic ?btrace exn files =

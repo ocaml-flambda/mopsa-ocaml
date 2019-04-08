@@ -634,7 +634,7 @@ let int_rangeof t =
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
-let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
+let wrap_expr (e: expr) ((l,h) : int * int) range : expr =
     let open Universal.Ast in
   add
     (mk_int l range)
@@ -658,7 +658,7 @@ let wrap_expr (e: expr) ((l,h) : int * int) range : Framework.Ast.expr =
     range
 
 (** [wrap v (l,h)] expression needed to bring back [v] in range ([l],[h]) *)
-let wrap (v : var) ((l,h) : int * int) range : Framework.Ast.expr =
+let wrap (v : var) ((l,h) : int * int) range : expr =
   wrap_expr (mk_var v (tag_range range "v")) (l,h) range
 
 

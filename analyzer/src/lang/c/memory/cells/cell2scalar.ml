@@ -29,52 +29,53 @@ module Itv =  ItvUtils.IntItv
 
 module CellScalarEquiv = Equiv.Make(Cell)(Var)
 
-type ('a, _) Annotation.key +=
-  | A_cell_scalar: ('a, CellScalarEquiv.t) Annotation.key
+let cell_scalar_ctx =
+  let module C = Context.GenUnitKey(
+    struct
+      type t = CellScalarEquiv.t
+      let print fmt m =
+        Format.fprintf fmt "Cells vars: @[%a@]" CellScalarEquiv.print m
+    end
+    )
+  in
+  C.key
 
-
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (CellScalarEquiv.t, b) eq option =
-              function
-              | A_cell_scalar -> Some Eq
-              | _ -> None
-            in
-            f);
-      print = (fun fmt m -> Format.fprintf fmt "Cells vars: @[%a@]" CellScalarEquiv.print m);
-    }) ();
-  ()
-
-let get_annot flow =
-  try Flow.get_annot A_cell_scalar flow
+let get_ctx flow =
+  try Flow.get_ctx flow |> Context.find_unit cell_scalar_ctx
   with _ -> CellScalarEquiv.empty
 
+let set_ctx ctx flow =
+  Flow.set_ctx (Context.add_unit cell_scalar_ctx ctx @@ Flow.get_ctx flow) flow
+
+let init_ctx flow =
+  set_ctx CellScalarEquiv.empty flow
+
 let get_scalar_or_create flow c =
-  let annot = get_annot flow in
-  try CellScalarEquiv.find_l c annot, flow
+  let ctx = get_ctx flow in
+  try CellScalarEquiv.find_l c ctx, flow
   with
   | Not_found ->
     let v = cell_to_var c in
-    let annot' = CellScalarEquiv.add (c, v) annot in
-    let flow' = Flow.set_annot A_cell_scalar annot' flow in
+    let ctx' = CellScalarEquiv.add (c, v) ctx in
+    let flow' = set_ctx ctx' flow in
     (v, flow')
 
 let get_cell flow v =
-  let annot = get_annot flow in
-  try CellScalarEquiv.find_r v annot
+  let ctx = get_ctx flow in
+  try CellScalarEquiv.find_r v ctx
   with
   | Not_found ->
     Exceptions.panic
-      "Cell2Scalar get_cell could not find binding of %a in annot:@\n @[%a@]"
+      "Cell2Scalar get_cell could not find binding of %a in ctx:@\n @[%a@]"
       pp_var v
-      CellScalarEquiv.print annot
+      CellScalarEquiv.print ctx
 
 let get_scalar_and_remove flow c =
-  let annot = get_annot flow in
+  let ctx = get_ctx flow in
   try
-    let v = CellScalarEquiv.find_l c annot in
-    let annot' = CellScalarEquiv.remove_l c annot in
-    let flow' = Flow.set_annot A_cell_scalar annot' flow in
+    let v = CellScalarEquiv.find_l c ctx in
+    let ctx' = CellScalarEquiv.remove_l c ctx in
+    let flow' = set_ctx ctx' flow in
     v, flow'
   with
   | Not_found ->
@@ -85,42 +86,35 @@ let get_scalar_and_remove flow c =
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_cell_2_scalar : unit domain
-  let id = D_c_cell_2_scalar
   let name = "c.memory.cells.cell_2_scalar"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_cell_2_scalar -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {
-    export = [Z_c_cell];
-    import = [Z_c_scalar]
-  }
+  let interface = {
+    iexec = {
+      provides = [Z_c_cell];
+      uses = [Z_c_scalar]
+    };
 
-  let eval_interface = {
-    export = [Z_under Z_c_cell, Z_c_scalar];
-    import = [Z_under Z_c_cell, Z_c_scalar]
+    ieval = {
+      provides = [Z_under Z_c_cell, Z_c_scalar];
+      uses = [Z_under Z_c_cell, Z_c_scalar]
+    }
   }
 
   (** Initialization *)
   (** ============== *)
 
   let init prog man flow =
-    Some (
-      Flow.set_annot A_cell_scalar CellScalarEquiv.empty flow
-    )
+    init_ctx flow
 
   (** Post-conditions *)
   (** *************** *)
@@ -134,21 +128,23 @@ struct
     | _ -> assert false
 
 
-  let exec zone stmt man flow =
+  let exec zone stmt man stman flow =
     match skind stmt with
     | S_add ({ ekind = E_c_cell (c, _) } as e)->
-      begin match cell_base c with
+      Some (
+        match cell_base c with
         | S _ -> Post.return flow
         | _ ->
           let v, flow = cell_expr_to_var e flow in
           man.exec ~zone:Z_c_scalar (mk_add v stmt.srange) flow |>
           Post.return
-      end
+      )
 
     | S_remove ({ ekind = E_c_cell _ } as e) ->
       let v, flow = cell_expr_to_var e flow in
       man.exec ~zone:Z_c_scalar (mk_remove v stmt.srange) flow |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | S_expand (({ekind = E_c_cell _} as e), cl) ->
       let v, flow = cell_expr_to_var e flow in
@@ -163,30 +159,36 @@ struct
         doit flow cl
       in
       man.exec ~zone:Z_c_scalar ({stmt with skind = S_expand (v, vl)}) flow |>
-      Post.return
+      Post.return |>
+      Option.return
 
     | S_rename(({ekind = E_c_cell _} as c1), ({ekind = E_c_cell _} as c2)) ->
       let v1, flow = cell_expr_to_var c1 flow in
       let v2, flow = cell_expr_to_var c2 flow in
       man.exec ~zone:Z_c_scalar (mk_rename v1 v2 stmt.srange) flow |>
-      Post.return
+      Post.return |>
+      Option.return
 
 
     | S_assign({ekind = E_c_cell _} as c, e) ->
-      let v, flow = cell_expr_to_var c flow in
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
-      Post.bind_opt man @@ fun e flow ->
+      Some (
+        let v, flow = cell_expr_to_var c flow in
+        man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
+        post_eval man @@ fun e flow ->
 
-      man.exec ~zone:Z_c_scalar (mk_assign v e stmt.srange) flow |>
-      Post.return
+        man.exec ~zone:Z_c_scalar (mk_assign v e stmt.srange) flow |>
+        Post.return
+      )
 
     | S_assume(e) ->
-      man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
-      Post.bind_opt man @@ fun e' flow ->
+      Some (
+        man.eval ~zone:(Z_under Z_c_cell, Z_c_scalar) e flow |>
+        post_eval man @@ fun e' flow ->
 
-      let stmt' = {stmt with skind = S_assume e'} in
-      man.exec ~zone:Zone.Z_c_scalar stmt' flow |>
-      Post.return
+        let stmt' = {stmt with skind = S_assume e'} in
+        man.exec ~zone:Zone.Z_c_scalar stmt' flow |>
+        Post.return
+      )
 
     | _ -> None
 
@@ -201,11 +203,11 @@ struct
       let len = String.length s in
       if Z.equal z (Z.of_int len) then
         Eval.singleton (Universal.Ast.mk_zero exp.erange ~typ:exp.etyp) flow |>
-        Eval.return
+        Option.return
       else
         let ch = String.get s (Z.to_int z) in
         Eval.singleton (Universal.Ast.mk_int (int_of_char ch) ~typ:exp.etyp exp.erange) flow |>
-        Eval.return
+        Option.return
 
     | E_c_cell({b = S s; o = O_region itv}, mode) ->
       (* Otherwise, return the interval covering characters of the string within itv *)
@@ -233,12 +235,12 @@ struct
            Eval.singleton (Universal.Ast.mk_z_interval vmin vmax ~typ:exp.etyp exp.erange) flow
         )
       |>
-      Eval.return
+      Option.return
 
     | E_c_cell _ ->
       let v, flow = cell_expr_to_var exp flow in
       Eval.singleton v flow |>
-      Eval.return
+      Option.return
 
     | _ -> None
 
@@ -250,4 +252,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Stacked.register_stack (module Domain)

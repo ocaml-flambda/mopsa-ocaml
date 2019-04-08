@@ -46,13 +46,7 @@ let () =
 module Domain =
 struct
 
-  type _ domain += D_python_objects_tuple : unit domain
-
-  let id = D_python_objects_tuple
   let name = "python.objects.tuple"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_objects_tuple -> Some Eq
-    | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -76,20 +70,16 @@ struct
 
   module Equiv = Equiv.Make(TupleInfo)(VarInfo)
 
-  type ('a, _) Annotation.key +=
-    | KTupleInfo : ('a, Equiv.t) Annotation.key
-
-  let () =
-    Annotation.(register_stateless_annot {
-        eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
-                function
-                | KTupleInfo -> Some Eq
-                | _ -> None
-              in
-              f);
-        print = (fun fmt m -> Format.fprintf fmt "Tuple annots: @[%a@]" Equiv.print m);
-      }) ();
-    ()
+  let ctx_key =
+    let module K = Context.GenUnitKey(
+      struct
+        type t = Equiv.t
+        let print fmt m =
+          Format.fprintf fmt "Tuple annots: @[%a@]" Equiv.print m
+      end
+      )
+    in
+    K.key
 
 
   let fresh_expanded_vars range d =
@@ -107,24 +97,28 @@ struct
       vars, new_eq
 
   let get_var_flow (info: TupleInfo.t) (f: 'a flow) : var list * 'a flow =
-    let a = Flow.get_annot KTupleInfo f in
+    let a = Flow.get_ctx f |>
+            Context.find_unit ctx_key
+    in
     let var, a = get_var_equiv info a in
-    var, Flow.set_annot KTupleInfo a f
+    var, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
 
-  let exec_interface = {export = []; import = [Zone.Z_py_obj]}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  let interface = {
+    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  }
 
   let init (prog:program) man flow =
-    Some (
-      Flow.set_annot KTupleInfo Equiv.empty flow
-    )
-
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit ctx_key Equiv.empty
+    ) flow
 
   let rec eval zones exp man flow =
     let range = erange exp in
     match ekind exp with
     | E_py_tuple els ->
-      Eval.eval_list els man.eval flow |>
+      Eval.eval_list man.eval els flow |>
       Eval.bind(fun els flow ->
           let els_vars, flow = get_var_flow (Callstack.get flow, range, List.length els) flow in
           let flow = List.fold_left2 (fun acc vari eli ->
@@ -139,7 +133,7 @@ struct
               Eval.singleton (mk_py_object (addr_tuple, None) range) flow
             )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__contains__")}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 man flow range args
@@ -150,7 +144,7 @@ struct
            let tuple_vars = match ekind tuple with
              | E_py_object ({addr_kind = A_py_tuple vars}, _) -> vars
              | _ -> assert false in
-           let mk_comp var = mk_binop (mk_var ~mode:WEAK var range) Framework.Ast.O_eq isin range in
+           let mk_comp var = mk_binop (mk_var ~mode:WEAK var range) O_eq isin range in
            if List.length tuple_vars = 0 then
              man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_false range) flow
            else
@@ -159,7 +153,7 @@ struct
                ) (mk_comp (List.hd tuple_vars)) (List.tl tuple_vars) in
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) or_expr flow
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__getitem__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -178,7 +172,7 @@ struct
              man.exec (Utils.mk_builtin_raise "IndexError" range) flow |>
              Eval.empty_singleton
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -197,7 +191,7 @@ struct
                Eval.singleton (mk_py_object (addr_it, None) range) flow
              )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "tuple_iterator.__next__")}, _)}, [iterator], []) ->
       (* todo: checks? *)
@@ -220,7 +214,7 @@ struct
           | _ ->
             man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton
         )
-      |> OptionExt.return
+      |> Option.return
 
 
 
@@ -233,4 +227,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -29,20 +29,15 @@ open Universal.Ast
 module Domain =
   struct
 
-    type  _ domain += D_python_data_model_callable : unit domain
-
-    let id = D_python_data_model_callable
     let name = "python.data_model.callable"
-    let identify : type a. a domain -> (unit, a) eq option = function
-      | D_python_data_model_callable -> Some Eq
-      | _ -> None
-
     let debug fmt = Debug.debug ~channel:name fmt
 
-    let exec_interface = {export = []; import = []}
-    let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj]}
+    let interface = {
+      iexec = {provides = []; uses = []};
+      ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj]}
+    }
 
-    let init _ _ flow = Some flow
+    let init _ _ flow = flow
 
     let exec _ _ _ _ = None
 
@@ -83,7 +78,7 @@ module Domain =
 
              | _ ->
                (* if f has attribute call, restart with that *)
-               Eval.assume
+               assume_eval
                  (mk_py_hasattr f "__call__" range)
                  ~fthen:(fun flow ->
                      man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_call (mk_py_attr f "__call__" range) args range) flow)
@@ -92,7 +87,7 @@ module Domain =
                    )
                  man flow
           )
-        |> OptionExt.return
+        |> Option.return
 
       | E_py_call(f, args, _) ->
         panic_at range "calls with keyword arguments not supported"
@@ -105,4 +100,4 @@ module Domain =
   end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

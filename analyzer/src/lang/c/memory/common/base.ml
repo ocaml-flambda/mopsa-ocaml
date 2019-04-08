@@ -21,9 +21,8 @@
 
 (** Base storage of scalar values. *)
 
-open Framework.Ast
-open Universal.Ast
 open Mopsa
+open Universal.Ast
 open Ast
 open Zone
 

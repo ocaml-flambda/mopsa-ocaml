@@ -24,7 +24,6 @@ The documentation and example files of the MOPSA software are distributed under 
 * zarith
 * menhir
 * yojson
-* ocp-pack-split
 * gmp
 * mpfr
 * camlidl
@@ -41,7 +40,7 @@ sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev
 opam init
 opam switch 4.06.0
 eval `opam config env`
-opam install apron ocp-pack-split zarith menhir yojson
+opam install apron zarith menhir yojson
 make
 
 ```
@@ -55,7 +54,7 @@ sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-deve
 opam init
 opam switch 4.06.0
 eval $(opam config env)
-opam install apron ocp-pack-split zarith menhir yojson
+opam install apron zarith menhir yojson
 make
 
 ```

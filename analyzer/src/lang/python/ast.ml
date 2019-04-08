@@ -121,12 +121,12 @@ let is_arith_binop_fun cl str =
     | _ -> false
 
 let is_comp_op = function
-  | Framework.Ast.O_eq
-  | Framework.Ast.O_ne
-  | Framework.Ast.O_lt
-  | Framework.Ast.O_le
-  | Framework.Ast.O_gt
-  | Framework.Ast.O_ge -> true
+  | O_eq
+  | O_ne
+  | O_lt
+  | O_le
+  | O_gt
+  | O_ge -> true
   | _ -> false
 
 let is_compare_op_fun cl str =

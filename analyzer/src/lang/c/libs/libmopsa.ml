@@ -63,25 +63,22 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_libs_libmopsa : unit domain
-  let id = D_c_libs_libmopsa
   let name = "c.libs.libmopsa"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_libs_libmopsa -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = []; import = []}
-  let eval_interface = {
-    export = [
-      Zone.Z_c, Zone.Z_c_low_level
-    ];
-    import = []
+  let interface = {
+    iexec = {
+      provides = [];
+      uses = []
+    };
+
+    ieval = {
+      provides = [Zone.Z_c, Zone.Z_c_low_level];
+      uses = []
+    }
   }
 
   let is_c_alarm a =
@@ -112,7 +109,7 @@ struct
   (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init prog man flow = None
+  let init _ _ flow =  flow
 
   let exec zone stmt man flow = None
 
@@ -126,52 +123,52 @@ struct
       in
       let () = Debug.set_channels channels in
       Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_char", []) ->
       rand_int Ast.C_signed_char exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_char", []) ->
       rand_int Ast.C_unsigned_char exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_int", []) ->
       rand_int Ast.C_signed_int exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_int", []) ->
       rand_int Ast.C_unsigned_int exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_short", []) ->
       rand_int Ast.C_signed_short exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_short", []) ->
       rand_int Ast.C_unsigned_short exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_long", []) ->
       rand_int Ast.C_signed_long exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_long", []) ->
       rand_int Ast.C_unsigned_long exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_long_long", []) ->
       rand_int Ast.C_signed_long_long exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_range_unsigned_long_long", []) ->
       rand_int Ast.C_unsigned_long_long exp.erange man flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_rand", []) ->
       let exp' = mk_int_interval 0 1 ~typ:(T_c_integer C_signed_int) exp.erange in
       Eval.singleton exp' flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_rand_int", [a; b]) ->
       let erange = exp.erange in
@@ -190,7 +187,7 @@ struct
         ] erange) flow
       in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_rand_unsigned_long", [a; b]) ->
       let erange = exp.erange in
@@ -209,7 +206,7 @@ struct
         ] erange) flow
       in
       Eval.singleton v flow ~cleaners:[mk_remove_var tmp erange] |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_panic", [msg]) ->
       let rec remove_cast e =
@@ -226,34 +223,33 @@ struct
     | E_c_builtin_call("_mopsa_print", []) ->
         Debug.debug ~channel:"print" "%a@\n  @[%a@]"
         pp_position (erange exp |> get_range_start)
-        (Flow.print man) flow
+        (Flow.print man.lattice) flow
       ;
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      OptionExt.return
+      Option.return
 
 
     | E_c_builtin_call("_mopsa_assert", [cond]) ->
       let stmt = mk_assert cond exp.erange in
       let flow = man.exec stmt flow in
       Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-      OptionExt.return
+      Option.return
 
     | E_c_builtin_call("_mopsa_assert_false", [cond]) ->
       assert false
 
     | E_c_builtin_call("_mopsa_assert_safe", []) ->
       begin
-        let annot = Flow.get_all_annot flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm _ -> man.join annot acc env
+            | T_alarm _ -> man.lattice.join acc env
             | _ -> acc
-          ) man.bottom man flow in
+          ) man.lattice.bottom flow in
         let exception BottomFound in
         try
           let cond =
-            match Flow.get T_cur man flow |> man.is_bottom,
-                  man.is_bottom error_env
+            match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
+                  man.lattice.is_bottom error_env
             with
             | false, true -> mk_one
             | true, false -> mk_zero
@@ -261,29 +257,28 @@ struct
             | true, true -> raise BottomFound
           in
           let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-          let cur = Flow.get T_cur man flow in
-          let flow = Flow.set T_cur man.top man flow |>
+          let cur = Flow.get T_cur man.lattice flow in
+          let flow = Flow.set T_cur man.lattice.top man.lattice flow |>
                      man.exec stmt |>
-                     Flow.set T_cur cur man
+                     Flow.set T_cur cur man.lattice
           in
           Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-          OptionExt.return
+          Option.return
         with BottomFound ->
           Eval.empty_singleton flow |>
-          OptionExt.return
+          Option.return
       end
 
      | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
       begin
-        let annot = Flow.get_all_annot flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm _ -> man.join annot acc env
+            | T_alarm _ -> man.lattice.join acc env
             | _ -> acc
-          ) man.bottom man flow in
+          ) man.lattice.bottom flow in
         let cond =
-          match Flow.get T_cur man flow |> man.is_bottom,
-                man.is_bottom error_env
+          match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
+                man.lattice.is_bottom error_env
           with
           | false, true -> mk_zero
           | true, false -> mk_one
@@ -291,51 +286,58 @@ struct
           | true, true -> mk_zero
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let flow' = Flow.set T_cur man.top man flow in
+        let flow' = Flow.set T_cur man.lattice.top man.lattice flow in
         let flow'' = man.exec stmt flow' |>
                      (* Since the unsafe here is "normal", so we remove all alarms *)
                      Flow.fold (fun flow tk _ ->
                        match tk with
-                       | T_alarm _ -> Flow.remove tk man flow
+                       | T_alarm _ -> Flow.remove tk flow
                        | _ -> flow
-                     ) flow man
+                     ) flow
         in
         Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow'' |>
-        OptionExt.return
+        Option.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
-        let annot = Flow.get_all_annot flow in
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
-            | T_alarm a when is_c_alarm a && code = alarm_to_code a -> man.join annot acc env
+            | T_alarm a when is_c_alarm a &&
+                             code = alarm_to_code a
+              ->
+              man.lattice.join acc env
             | _ -> acc
-          ) man.bottom man flow in
+          ) man.lattice.bottom flow in
         let cond =
-          match Flow.get T_cur man flow |> man.is_bottom,
-                man.is_bottom this_error_env
+          match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
+                man.lattice.is_bottom this_error_env
           with
           | true, false -> mk_one
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let cur = Flow.get T_cur man flow in
-        let flow = Flow.set T_cur man.top man flow in
+        let cur = Flow.get T_cur man.lattice flow in
+        let flow = Flow.set T_cur man.lattice.top man.lattice flow in
         let flow = man.exec stmt flow |>
-                   Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
-                   Flow.set T_cur cur man
+                   Flow.filter (fun tk _ ->
+                       match tk with
+                       | T_alarm a when is_c_alarm a &&
+                                        code = alarm_to_code a
+                         -> false
+                       | _ -> true
+                     ) |>
+                   Flow.set T_cur cur man.lattice
         in
         Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-        OptionExt.return
+        Option.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error_at_line", [{ekind = E_constant(C_int code)}; {ekind = E_constant(C_int line)}]) ->
       begin
         let code = Z.to_int code and line = Z.to_int line in
-        let annot = Flow.get_all_annot flow in
         let this_error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
@@ -343,20 +345,20 @@ struct
                 && code = alarm_to_code a
                 && line = get_range_line @@ fst a.alarm_trace
               ->
-              man.join annot acc env
+              man.lattice.join acc env
             | _ -> acc
-          ) man.bottom man flow in
+          ) man.lattice.bottom flow in
         let cond =
-          match Flow.get T_cur man flow |> man.is_bottom,
-                man.is_bottom this_error_env
+          match Flow.get T_cur man.lattice flow |> man.lattice.is_bottom,
+                man.lattice.is_bottom this_error_env
           with
           | true, false -> mk_one
           | _, true -> mk_zero
           | false, false ->  mk_int_interval 0 1
         in
         let stmt = mk_assert (cond ~typ:u8 exp.erange) exp.erange in
-        let cur = Flow.get T_cur man flow in
-        let flow = Flow.set T_cur man.top man flow in
+        let cur = Flow.get T_cur man.lattice flow in
+        let flow = Flow.set T_cur man.lattice.top man.lattice flow in
         let flow = man.exec stmt flow |>
                    Flow.filter (fun tk _ ->
                        match tk with
@@ -365,36 +367,49 @@ struct
                            && code = alarm_to_code a
                            && line = get_range_line @@ fst a.alarm_trace
                          -> false
-                       | _ -> true) man |>
-                   Flow.set T_cur cur man
+                       | _ -> true) |>
+                   Flow.set T_cur cur man.lattice
         in
         Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow |>
-        OptionExt.return
+        Option.return
       end
 
     | E_c_builtin_call("_mopsa_assert_error_exists", [{ekind = E_constant(C_int code)}]) ->
       begin
         let code = Z.to_int code in
-        let annot = Flow.get_all_annot flow in
         let error_env = Flow.fold (fun acc tk env ->
             match tk with
             | T_alarm a
               when is_c_alarm a
                 && code = alarm_to_code a
-              -> man.join annot acc env
+              -> man.lattice.join acc env
             | _ -> acc
-          ) man.bottom man flow in
-        let cur = Flow.get T_cur man flow in
-        let cur' = if man.is_bottom cur then man.top else cur in
-        let cond = if man.is_bottom error_env then mk_zero ~typ:u8 exp.erange else mk_one ~typ:u8 exp.erange in
+          ) man.lattice.bottom flow in
+        let cur = Flow.get T_cur man.lattice flow in
+        let cur' =
+          if man.lattice.is_bottom cur
+          then man.lattice.top
+          else cur
+        in
+        let cond =
+          if man.lattice.is_bottom error_env
+          then mk_zero ~typ:u8 exp.erange
+          else mk_one ~typ:u8 exp.erange
+        in
         let stmt = mk_assert cond exp.erange in
-        let flow' = Flow.set T_cur cur' man flow |>
+        let flow' = Flow.set T_cur cur' man.lattice flow |>
                     man.exec stmt |>
-                    Flow.filter (fun tk _ -> match tk with T_alarm a when is_c_alarm a && code = alarm_to_code a -> false | _ -> true) man |>
-                    Flow.set T_cur cur man
+                    Flow.filter (fun tk _ ->
+                        match tk with
+                        | T_alarm a when is_c_alarm a &&
+                                         code = alarm_to_code a
+                          -> false
+                        | _ -> true
+                      ) |>
+                    Flow.set T_cur cur man.lattice
         in
         Eval.singleton (mk_int 0 ~typ:u8 exp.erange) flow' |>
-        OptionExt.return
+        Option.return
       end
 
     | _ -> None
@@ -404,4 +419,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

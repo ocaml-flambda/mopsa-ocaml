@@ -43,58 +43,67 @@ let () =
   };
   ()
 
+
 (*==========================================================================*)
-(**                             {2 Annotation}                              *)
+(**                     {2 Flow-insensitive context}                        *)
 (*==========================================================================*)
 
-type ('a, _) Annotation.key +=
-  | KSwitchExpr: ('a, expr) Annotation.key
-  (** Condition expression of the most enclosing switch statement. *)
+let switch_expr_ctx =
+  let module C = Context.GenUnitKey(
+    struct
 
-let () =
-  Annotation.(register_stateless_annot {
-      eq = (let f: type a b. (a, b) key -> (expr, b) eq option =
-              function
-              | KSwitchExpr -> Some Eq
-              | _ -> None
-            in
-            f);
-      print = (fun fmt e -> Format.fprintf fmt "Switch expr: %a" pp_expr e);
-    }) ();
-  ()
+      type t = expr
+      (** Condition expression of the most enclosing switch statement. *)
 
+      let print fmt cond =
+        Format.fprintf fmt "Switch expr: %a" pp_expr cond
+    end
+    )
+  in
+  C.key
+
+let get_switch_cond flow =
+  Flow.get_ctx flow |>
+  Context.find_unit switch_expr_ctx
+
+let set_switch_cond cond flow =
+  Flow.set_ctx (
+    Flow.get_ctx flow |>
+    Context.add_unit switch_expr_ctx cond
+  ) flow
+
+let remove_switch_cond flow =
+  Flow.set_ctx (
+    Flow.get_ctx flow |>
+    Context.remove_unit switch_expr_ctx
+  ) flow
 
 (*==========================================================================*)
 (**                        {2 Abstract domain}                              *)
 (*==========================================================================*)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_switch : unit domain
-  let id = D_c_switch
   let name = "c.iterators.switch"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_switch -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Zone.Z_c]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Zone.Z_c]; uses = []};
+    ieval = {provides = []; uses = []};
+  }
 
   (** Initialization *)
   (** ============== *)
 
-  let init prog man (flow: 'a flow) = None
+  let init _ _ flow =  flow
 
 
   (** Computation of post-conditions *)
@@ -107,102 +116,99 @@ struct
       (* Save current switch expression to be stored back in flow at
          the end of body of switch *)
       let cur_switch_expr =
-        try
-          Flow.get_annot KSwitchExpr flow |> OptionExt.return
-        with
-        | Not_found -> None
+        try Some (get_switch_cond flow)
+        with Not_found -> None
       in
 
       (* Save T_cur env in TSwitch token, then reset T_cur and T_break. *)
-      let cur = Flow.get T_cur man flow in
-      let flow0 = Flow.set TSwitch cur man flow |>
-                  Flow.remove T_cur man |>
-                  Flow.remove Universal.Iterators.Loops.T_break man
+      let cur = Flow.get T_cur man.lattice flow in
+      let flow0 = Flow.set TSwitch cur man.lattice flow |>
+                  Flow.remove T_cur |>
+                  Flow.remove Universal.Iterators.Loops.T_break
       in
 
       (* Store e in the annotations and execute body. *)
-      let flow0' = Flow.set_annot KSwitchExpr e flow0 in
+      let flow0' = set_switch_cond e flow0 in
 
       (* let ctx = set_annot KSwitchExpr e ctx in *)
       let flow1 = man.exec body flow0' in
 
       (* Merge resulting T_cur, T_break and TSwitch (in case when there is no default case) *)
-
       let cur =
-        man.join
-          (Flow.get_all_annot flow1)
-          (Flow.get T_cur man flow1)
-          (Flow.get Universal.Iterators.Loops.T_break man flow1) |>
-        man.join
-          (Flow.get_all_annot flow1)
-          (Flow.get TSwitch man flow1)
+        man.lattice.join
+          (Flow.get T_cur man.lattice flow1)
+          (Flow.get Universal.Iterators.Loops.T_break man.lattice flow1) |>
+        man.lattice.join
+          (Flow.get TSwitch man.lattice flow1)
 
       in
       (* Put the merge into T_cur and restore previous T_break and TSwitch. *)
-      let flow2 = Flow.set T_cur cur man flow1 |>
+      let flow2 = Flow.set T_cur cur man.lattice flow1 |>
                   Flow.set
                     Universal.Iterators.Loops.T_break
-                    (Flow.get Universal.Iterators.Loops.T_break man flow) man |>
-                  Flow.set TSwitch (Flow.get TSwitch man flow) man
+                    (Flow.get Universal.Iterators.Loops.T_break man.lattice flow) man.lattice |>
+                  Flow.set TSwitch (Flow.get TSwitch man.lattice flow) man.lattice
       in
 
       (* Puts back switch expression *)
       let flow3 = match cur_switch_expr with
-        | None -> Flow.rm_annot KSwitchExpr flow2
-        | Some e -> Flow.set_annot KSwitchExpr e flow2
+        | None -> remove_switch_cond flow2
+        | Some e -> set_switch_cond e flow2
       in
 
-      Some (Post.of_flow flow3)
+      Post.return flow3 |>
+      Option.return
 
     | S_c_switch_case(e) ->
       (* Look up expression in switch *)
       let e0 =
-        try
-          Flow.get_annot KSwitchExpr flow
-        with
-        | Not_found -> Exceptions.panic "Could not find KSwitchExpr token in \
-                                   annotations at %a" pp_range (srange stmt)
+        try get_switch_cond flow
+        with Not_found -> Exceptions.panic_at stmt.srange
+                            "Could not find KSwitchExpr token in annotations at %a"
+                            pp_range (srange stmt)
       in
 
-      let flow0 = Flow.set T_cur (Flow.get TSwitch man flow) man flow in
-      Post.assume
+      let flow0 = Flow.set T_cur (Flow.get TSwitch man.lattice flow) man.lattice flow in
+      assume_post
         (mk_binop e0 O_eq e stmt.srange ~etyp:u8)
-        man
         ~fthen:(fun true_flow ->
-            Flow.set TSwitch man.bottom man true_flow
-            |> Post.of_flow)
+            Flow.set TSwitch man.lattice.bottom man.lattice true_flow
+            |> Post.return)
         ~felse:(fun false_flow ->
-            let cur = Flow.get T_cur man false_flow in
-            Flow.set T_cur man.bottom man false_flow |>
-            Flow.set TSwitch cur man |>
-            Post.of_flow
+            let cur = Flow.get T_cur man.lattice false_flow in
+            Flow.set T_cur man.lattice.bottom man.lattice false_flow |>
+            Flow.set TSwitch cur man.lattice |>
+            Post.return
           )
         ~fboth:(fun true_flow false_flow ->
-            let true_cur = Flow.get T_cur man true_flow in
-            let false_cur = Flow.get T_cur man false_flow in
+            let true_cur = Flow.get T_cur man.lattice true_flow in
+            let false_cur = Flow.get T_cur man.lattice false_flow in
             Flow.merge (fun tk true_env false_env ->
                 match tk, true_env, false_env with
                 | T_cur, _, _ -> Some true_cur
                 | TSwitch, _, _ -> Some false_cur
                 | _, Some env, _ | _, _, Some env -> Some env
                 | _, None, None -> None
-              ) man true_flow false_flow
-            |> Post.of_flow
+              ) man.lattice true_flow false_flow
+            |> Post.return
           )
-        flow0 |>
-      Post.map_flow (fun flow0 -> Flow.add T_cur (Flow.get T_cur man flow) man flow0) |>
-      fun x -> Some x
+        man flow0 |>
+      Post.bind (fun flow0 ->
+          Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice flow0 |>
+          Post.return
+        ) |>
+      Option.return
 
     | S_c_switch_default ->
-      let cur = man.join
-          (Flow.get_all_annot flow)
-          (Flow.get TSwitch man flow)
-          (Flow.get T_cur man flow)
+      let cur = man.lattice.join
+          (Flow.get TSwitch man.lattice flow)
+          (Flow.get T_cur man.lattice flow)
       in
-      let flow = Flow.set T_cur cur man flow |>
-                 Flow.set TSwitch man.bottom man
+      let flow = Flow.set T_cur cur man.lattice flow |>
+                 Flow.set TSwitch man.lattice.bottom man.lattice
       in
-      Some (Post.of_flow flow)
+      Post.return flow |>
+      Option.return
 
     | _ -> None
 
@@ -219,4 +225,4 @@ struct
   end
 
 let () =
-    Framework.Domains.Stateless.register_domain (module Domain)
+    Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

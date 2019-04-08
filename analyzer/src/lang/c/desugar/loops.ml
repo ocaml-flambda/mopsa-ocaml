@@ -28,33 +28,27 @@ open Zone
 (** {2 Domain definition} *)
 (** ===================== *)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain =
 struct
 
   (** Domain identification *)
   (** ===================== *)
 
-  type _ domain += D_c_desugar_loops : unit domain
-  let id = D_c_desugar_loops
   let name = "c.desugar.loops"
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_c_desugar_loops -> Some Eq
-    | _ -> None
-
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
   (** ================= *)
 
-  let exec_interface = {export = [Z_c]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = {provides = [Z_c]; uses = []};
+    ieval = {provides = []; uses = []};
+  }
 
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ _ =
-    None
+  let init _ _ flow = flow
 
 
   let exec zone stmt man flow =
@@ -71,7 +65,7 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return
+      man.exec stmt flow |> Post.return |> Option.return
 
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
@@ -82,7 +76,7 @@ struct
           ] range
         )
       in
-      man.exec stmt flow |> Post.return
+      man.exec stmt flow |> Post.return |> Option.return
 
     | _ -> None
 
@@ -93,4 +87,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

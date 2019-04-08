@@ -65,13 +65,7 @@ let () =
 module Domain =
 struct
 
-  type _ domain += D_python_objects_list : unit domain
-
-  let id = D_python_objects_list
   let name = "python.objects.list"
-  let identify : type a. a domain -> (unit, a) eq option = function
-    | D_python_objects_list -> Some Eq
-    | _ -> None
 
   let debug fmt = Debug.debug ~channel:name fmt
 
@@ -93,20 +87,16 @@ struct
 
   module Equiv = Equiv.Make(ListInfo)(VarInfo)
 
-  type ('a, _) Annotation.key +=
-    | KListInfo : ('a, Equiv.t) Annotation.key
-
-  let () =
-    Annotation.(register_stateless_annot {
-        eq = (let f: type a b. (a, b) key -> (Equiv.t, b) eq option =
-                function
-                | KListInfo -> Some Eq
-                | _ -> None
-              in
-              f);
-        print = (fun fmt m -> Format.fprintf fmt "List annots: @[%a@]" Equiv.print m);
-      }) ();
-    ()
+  let ctx_key =
+    let module K = Context.GenUnitKey(
+      struct
+        type t = Equiv.t
+        let print fmt m =
+          Format.fprintf fmt "List annots: @[%a@]" Equiv.print m
+      end
+      )
+    in
+    K.key
 
 
   let fresh_smashed_var =  mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any
@@ -120,17 +110,22 @@ struct
       var, new_eq
 
   let get_var_flow (info: ListInfo.t) (f: 'a flow) : var * 'a flow =
-    let a = Flow.get_annot KListInfo f in
+    let a = Flow.get_ctx f |>
+            Context.find_unit ctx_key
+    in
     let var, a = get_var_equiv info a in
-    var, Flow.set_annot KListInfo a f
+    var, Flow.set_ctx (Flow.get_ctx f |> Context.add_unit ctx_key a) f
 
-  let exec_interface = {export = []; import = [Zone.Z_py_obj]}
-  let eval_interface = {export = [Zone.Z_py, Zone.Z_py_obj]; import = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  let interface = {
+    iexec = {provides = []; uses = [Zone.Z_py_obj]};
+    ieval = {provides = [Zone.Z_py, Zone.Z_py_obj]; uses = [Zone.Z_py, Zone.Z_py_obj; Universal.Zone.Z_u_heap, Z_any]}
+  }
 
   let init (prog:program) man flow =
-    Some (
-      Flow.set_annot KListInfo Equiv.empty flow
-    )
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit ctx_key Equiv.empty
+    ) flow
 
 
   let rec eval zones exp man flow =
@@ -162,20 +157,20 @@ struct
                Eval.singleton (mk_py_object (alist_addr, None) range) flow
              )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin f)}, _)}, args, [])
       when is_compare_op_fun "list" f ->
       Utils.check_instances ~arguments_after_check:1 man flow range args ["list"]
         (fun eargs flow ->
            let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
-           Eval.assume (mk_py_isinstance_builtin e2 "list" range) man flow
+           assume_eval (mk_py_isinstance_builtin e2 "list" range) man flow
              ~fthen:(man.eval (mk_py_top T_bool range))
              ~felse:(fun flow ->
                  let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
                  man.eval expr flow)
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__mul__")}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__rmul__")}, _)}, args, []) ->
@@ -197,7 +192,7 @@ struct
                Eval.singleton (mk_py_object (addr_list, None) range) flow
              )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_list ls ->
       debug "Skipping list.__new__, list.__init__ for now@\n";
@@ -213,11 +208,11 @@ struct
             | _ -> assert false in
           Eval.singleton (mk_py_object (addr_list, None) range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_object ({addr_kind = A_py_list _}, e) ->
-      Eval.singleton exp flow |> OptionExt.return
+      Eval.singleton exp flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.append")}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 man flow range args
@@ -230,7 +225,7 @@ struct
              | _ -> assert false in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.insert")}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 man flow range args
@@ -242,7 +237,7 @@ struct
              | _ -> assert false in
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) element range) flow |>
            man.eval (mk_py_none range))
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__init__")}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.extend")}, _)}, args, []) ->
@@ -259,25 +254,25 @@ struct
            man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
            man.eval (mk_py_none range)
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.count")}, _)}, args, []) ->
       (* TODO: something smarter depending on the occurence of \gamma(element) in \gamma(list elements) ? *)
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun _ flow -> man.eval (mk_py_top T_int range) flow)
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.index")}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun args flow ->
            let eval_verror_f = man.exec (Utils.mk_builtin_raise "ValueError" range) flow in
-           let flow = Flow.copy_annot eval_verror_f flow in
+           let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
            let eval_res = man.eval (mk_py_top T_int range) flow in
            Eval.join_list (eval_res :: eval_verror :: []))
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.pop")}, _)}, args, []) ->
@@ -291,9 +286,9 @@ struct
            let eval_indexerror = man.exec (Utils.mk_builtin_raise "IndexError" range) flow
                                  |> Eval.empty_singleton in
            let eval_el = man.eval (mk_var ~mode:WEAK var_els range) flow in
-           Eval.join_list (Eval.copy_annot eval_indexerror eval_el :: eval_indexerror :: [])
+           Eval.join_list (Eval.copy_ctx eval_indexerror eval_el :: eval_indexerror :: [])
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.remove")}, _)}, args, []) ->
@@ -302,11 +297,11 @@ struct
         (fun args flow ->
            let eval_verror_f = man.exec (Utils.mk_builtin_raise "ValueError" range) flow in
            let eval_verror = Eval.empty_singleton eval_verror_f in
-           let flow = Flow.copy_annot eval_verror_f flow in
+           let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none = man.eval (mk_py_none range) flow in
            Eval.join_list (eval_none :: eval_verror :: [])
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.reverse")}, _)}, args, [])
@@ -314,29 +309,29 @@ struct
       Utils.check_instances man flow range args
         ["list"]
         (fun _ flow -> man.eval (mk_py_none range) flow)
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__getitem__")}, _)}, [list; index], []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list [list; index] man.eval flow |>
+      Eval.eval_list man.eval [list; index] flow |>
       Eval.bind (fun exprs flow ->
           let list, index = match exprs with [l; i] -> l, i | _ -> assert false in
-          Eval.assume (mk_py_isinstance_builtin list "list" range) man flow
+          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var_els = match ekind list with
                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
                   | _ -> assert false in
-                Eval.assume (mk_py_isinstance_builtin index "int" range) man flow
+                assume_eval (mk_py_isinstance_builtin index "int" range) man flow
                   ~fthen:(fun flow ->
                       let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
                       let indexerror = Eval.empty_singleton indexerror_f in
-                      let flow = Flow.copy_annot indexerror_f flow in
+                      let flow = Flow.copy_ctx indexerror_f flow in
                       let evals = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_var var_els range) flow in
-                      Eval.join_list (evals :: Eval.copy_annot evals indexerror :: [])
+                      Eval.join_list (evals :: Eval.copy_ctx evals indexerror :: [])
                     )
                   ~felse:(fun flow ->
-                      Eval.assume (mk_py_isinstance_builtin index "slice" range) man flow
+                      assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
                         ~fthen:(fun flow ->
                             let slicedlist_var, flow = get_var_flow (Callstack.get flow, range) flow in
                             let flow = man.exec ~zone:Zone.Z_py (mk_assign (mk_var ~mode:WEAK slicedlist_var range) (mk_var ~mode:WEAK var_els range) range) flow in
@@ -354,7 +349,7 @@ struct
               )
             ~felse:tyerror
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__setitem__")}, _)}, args, []) ->
@@ -366,16 +361,16 @@ struct
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
            let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
-           let flow = Flow.copy_annot indexerror_f flow in
+           let flow = Flow.copy_ctx indexerror_f flow in
 
            let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
-           let indexerror_f = Flow.copy_annot assignment_f indexerror_f in
+           let indexerror_f = Flow.copy_ctx assignment_f indexerror_f in
 
            let assignment = man.eval (mk_py_none range) assignment_f in
            let indexerror = Eval.empty_singleton indexerror_f in
-           Eval.join_list (assignment :: (Eval.copy_annot assignment indexerror) ::[])
+           Eval.join_list (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__iter__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -392,7 +387,7 @@ struct
                Eval.singleton (mk_py_object (addr_it, None) range) flow
              )
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__next__")}, _)}, [iterator], []) ->
       (* todo: checks ? *)
@@ -405,15 +400,15 @@ struct
             | A_py_list a -> a
             | _ -> assert false in
           let els = man.eval (mk_var var_els ~mode:WEAK range) flow in
-          let flow = Flow.set_all_annot (Eval.choose_annot els) flow in
+          let flow = Flow.set_ctx (Eval.choose_ctx els) flow in
           let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
-          Eval.join_list (Eval.copy_annot stopiteration els::stopiteration::[])
+          Eval.join_list (Eval.copy_ctx stopiteration els::stopiteration::[])
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list_iterator.__iter__")}, _)}, [iterator], []) ->
       (* todo: checks ? *)
-      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> OptionExt.return
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__len__")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -421,27 +416,27 @@ struct
         (fun args flow ->
            man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_int range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list man.eval args flow |>
       Eval.bind (fun args flow ->
           if List.length args >= 1 then
             let in_ty = List.hd args in
-            Eval.assume (mk_py_isinstance_builtin in_ty "list" range) man flow
+            assume_eval (mk_py_isinstance_builtin in_ty "list" range) man flow
               ~fthen:(fun flow ->
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = match ekind in_ty with
                     | E_py_object ({addr_kind = A_py_list a}, _) -> a
                     | _ -> assert false in
-                  Eval.assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
+                  assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_in_ty range) "float" range) man flow
                     ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:tyerror)
               ~felse:tyerror
           else tyerror flow)
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.join")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
@@ -452,25 +447,25 @@ struct
            let var_els_iterable = match ekind iterable with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
-           Eval.assume (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
+           assume_eval (mk_py_isinstance_builtin (mk_var ~mode:WEAK var_els_iterable range) "str" range) man flow
              ~fthen:(man.eval (mk_py_top T_string range))
              ~felse:tyerror
         )
-      |> OptionExt.return
+      |> Option.return
 
       (* the last case of str.split uses this list abstraction so every case is here... *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call, [str], []) ->
         (* rewrite into str.split(str, " ", -1) *)
         let args' = (mk_constant T_string (C_string " ") range) :: (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
         man.eval {exp with ekind = E_py_call(call, str :: args', [])} flow
-        |> OptionExt.return
+        |> Option.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)} as call , [str; split], []) ->
         (* rewrite into str.split(str, split, -1) *)
         let args' = (mk_constant T_int (C_int (Z.of_int 1)) range) :: [] in
         man.eval {exp with ekind = E_py_call(call, str :: split :: args', [])} flow
-        |> OptionExt.return
+        |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.split")}, _)}, args, []) ->
       Utils.check_instances man flow range args
@@ -478,18 +473,18 @@ struct
         (fun eargs flow ->
            man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
         )
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dir")}, _)}, args, []) ->
       Utils.check_instances man flow range args []
         (fun _ -> man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range))
-      |> OptionExt.return
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_list_of")}, _)}, args, []) ->
-      Eval.eval_list args man.eval flow |>
+      Eval.eval_list man.eval args flow |>
       Eval.bind (fun eargs flow ->
           let list, type_v = match eargs with [d;e] -> d,e | _ -> assert false in
-          Eval.assume (mk_py_isinstance_builtin list "list" range) man flow
+          assume_eval (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var = match ekind list with
                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
@@ -500,7 +495,7 @@ struct
               )
             ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
         )
-      |> OptionExt.return
+      |> Option.return
 
     | _ -> None
 
@@ -511,4 +506,4 @@ struct
 end
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)

@@ -23,11 +23,11 @@
 
 
 open Mopsa
-open Framework.Domains.Stateless
 open Ast
 open Zone
 
 let name = "universal.iterators.loops"
+
 
 (*==========================================================================*)
 (**                         {2 Loops flow token}                            *)
@@ -50,6 +50,7 @@ let () =
         | _ -> next fmt tk
       );
   }
+
 
 (*==========================================================================*)
 (**                       {2 Command line options}                          *)
@@ -77,85 +78,79 @@ let () =
     default = "1";
   }
 
+
 (*==========================================================================*)
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
 
-module Domain : Framework.Domains.Stateless.S =
+module Domain  =
 struct
 
-  type _ domain += D_universal_loops : unit domain
-
-  let id = D_universal_loops
   let name = name
-  let identify : type a. a domain -> (unit, a) eq option =
-    function
-    | D_universal_loops -> Some Eq
-    | _ -> None
-
-
   let debug fmt = Debug.debug ~channel:name fmt
 
 
-  let exec_interface = {export = [Z_u]; import = []}
-  let eval_interface = {export = []; import = []}
+  let interface = {
+    iexec = { provides = [Z_u]; uses = [] };
+    ieval = { provides = []; uses = [] };
+  }
 
-  let init prog man flow = None
+  let init prog man flow = flow
 
-  let rec exec zone stmt man flow =
+  let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
-      debug "while:@\n abs = @[%a@]" (Flow.print man) flow;
+      debug "while:@\n abs = @[%a@]" (Flow.print man.lattice) flow;
 
-      let flow0 = Flow.remove T_continue man flow |>
-                  Flow.remove T_break man
+      let flow0 = Flow.remove T_continue flow |>
+                  Flow.remove T_break
       in
 
       let flow_init, flow_out = unroll cond body man flow0 in
 
       debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
-        (Flow.print man) flow_init
-        (Flow.print man) flow_out
+        (Flow.print man.lattice) flow_init
+        (Flow.print man.lattice) flow_out
       ;
 
       let res0 =
         lfp !opt_loop_widening_delay cond body man flow_init flow_init |>
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
-        Flow.join man flow_out
+        Flow.join man.lattice flow_out
       in
 
-      let res1 = Flow.add T_cur (Flow.get T_break man res0) man res0 |>
-                 Flow.set T_break (Flow.get T_break man flow) man |>
-                 Flow.set T_continue (Flow.get T_continue man flow) man
+      let res1 = Flow.add T_cur (Flow.get T_break man.lattice res0) man.lattice res0 |>
+                 Flow.set T_break (Flow.get T_break man.lattice flow) man.lattice |>
+                 Flow.set T_continue (Flow.get T_continue man.lattice flow) man.lattice
       in
 
-      debug "while post abs:@\n abs = @[%a@]" (Flow.print man) res1;
+      debug "while post abs:@\n abs = @[%a@]" (Flow.print man.lattice) res1;
 
-      Some (Post.of_flow res1)
+      Some (Post.return res1)
 
     | S_break ->
-      let cur = Flow.get T_cur man flow in
-      let flow' = Flow.add T_break cur man flow |>
-                  Flow.remove T_cur man
+      let cur = Flow.get T_cur man.lattice flow in
+      let flow' = Flow.add T_break cur man.lattice flow |>
+                  Flow.remove T_cur
       in
-      Some (Post.of_flow flow')
+      Some (Post.return flow')
 
     | S_continue ->
-      let cur = Flow.get T_cur man flow in
-      let flow' = Flow.add T_continue cur man flow |>
-                  Flow.remove T_cur man
+      let cur = Flow.get T_cur man.lattice flow in
+      let flow' = Flow.add T_continue cur man.lattice flow |>
+                  Flow.remove T_cur
       in
-      Some (Post.of_flow flow')
+      Some (Post.return flow')
 
     | _ -> None
 
   and lfp delay cond body man flow_init flow =
-    let flow0 = Flow.remove T_continue man flow |>
-                Flow.remove T_break man
+    let flow0 = Flow.remove T_continue flow |>
+                Flow.remove T_break
     in
 
     debug "lfp:@\n delay = %d@\n abs = @[%a@]"
-      delay (Flow.print man) flow0
+      delay (Flow.print man.lattice) flow0
     ;
 
     let flow1 = man.exec (mk_assume cond cond.erange) flow0 |>
@@ -164,21 +159,21 @@ struct
 
     let flow2 = merge_cur_and_continue man flow1 in
 
-    debug "lfp post:@\n res = @[%a@]" (Flow.print man) flow1;
+    debug "lfp post:@\n res = @[%a@]" (Flow.print man.lattice) flow1;
 
-    let flow3 = Flow.join man flow_init flow2 in
+    let flow3 = Flow.join man.lattice flow_init flow2 in
 
-    debug "lfp join:@\n res = @[%a@]" (Flow.print man) flow3;
+    debug "lfp join:@\n res = @[%a@]" (Flow.print man.lattice) flow3;
 
-    if Flow.subset man flow3 flow then flow3
+    if Flow.subset man.lattice flow3 flow then flow3
     else
     if delay = 0 then
-      let wflow = Flow.widen man flow flow3 in
+      let wflow = Flow.widen man.lattice flow flow3 in
       debug
         "widening:@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
-        (Flow.print man) flow
-        (Flow.print man) flow3
-        (Flow.print man) wflow;
+        (Flow.print man.lattice) flow
+        (Flow.print man.lattice) flow3
+        (Flow.print man.lattice) wflow;
       lfp !opt_loop_widening_delay cond body man flow_init wflow
     else
       lfp (delay - 1) cond body man flow_init flow3
@@ -186,7 +181,7 @@ struct
   and unroll cond body man flow =
     let rec loop i flow =
       debug "unrolling iteration %d" i;
-      let annot = Flow.get_all_annot flow in
+      let annot = Flow.get_ctx flow in
       if i = 0 then (flow, Flow.bottom annot)
       else
         let flow1 =
@@ -196,23 +191,22 @@ struct
         in
 
         let flow2 =
-          man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_annot flow1 flow)
+          man.exec (mk_assume (mk_not cond cond.erange) cond.erange) (Flow.copy_ctx flow1 flow)
         in
-        let flow1', flow2' = loop (i - 1) (Flow.copy_annot flow2 flow1) in
-        flow1', Flow.join man flow2 flow2'
+        let flow1', flow2' = loop (i - 1) (Flow.copy_ctx flow2 flow1) in
+        flow1', Flow.join man.lattice flow2 flow2'
     in
     loop !opt_loop_unrolling flow
 
   and merge_cur_and_continue man flow =
-    let annot = Flow.get_all_annot flow in
     Flow.map (fun tk eabs ->
         match tk with
         | T_cur ->
-          let cont = Flow.get T_continue man flow in
-          man.join annot eabs cont
-        | T_continue -> man.bottom
+          let cont = Flow.get T_continue man.lattice flow in
+          man.lattice.join eabs cont
+        | T_continue -> man.lattice.bottom
         | _ -> eabs
-      ) man flow
+      ) flow
 
   let eval _ _ _ _ = None
 
@@ -226,4 +220,4 @@ end
 
 
 let () =
-  Framework.Domains.Stateless.register_domain (module Domain);
+  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
