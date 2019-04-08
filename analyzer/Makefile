@@ -30,7 +30,7 @@ framework = ast core lattices engines combiners output config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
 	         id interface sig callstack alarm debug_tree cache abstraction all
-framework.core.sig = lowlevel intermediate simplified stateless
+framework.core.sig = lowlevel intermediate simplified stateless reduction
 framework.lattices = partial_map powerset total_map
 framework.engines = engine automatic interactive
 framework.output = text json factory

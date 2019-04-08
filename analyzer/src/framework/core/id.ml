@@ -163,4 +163,3 @@ struct
     register_value_id { value = id; eq }
 
 end
-
