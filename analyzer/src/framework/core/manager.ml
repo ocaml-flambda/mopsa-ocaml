@@ -184,6 +184,25 @@ let switch_eval = switch ~join:Eval.join
 
 let switch_post = switch ~join:Post.join
 
+let exec_stmt_on_all_flows stmt man flow =
+  Flow.fold (fun flow tk env ->
+      (* Put env in T_cur token of flow and remove others *)
+      let annot = Flow.get_ctx flow in
+      let flow' = Flow.singleton annot T_cur env in
+
+      (* Execute the cleaner *)
+      let flow'' = man.exec stmt flow' in
+
+      (* Restore T_cur in tk *)
+      Flow.copy T_cur tk man.lattice flow'' flow |>
+      Flow.copy_ctx flow''
+    ) flow flow
+
+let exec_block_on_all_flows block man flow =
+  List.fold_left (fun flow stmt ->
+      exec_stmt_on_all_flows stmt man flow
+    ) flow block
+
 
 let exec_eval
   (man:('a,'t) man)
@@ -198,10 +217,7 @@ let exec_eval
          | None -> ctx, flow
          | Some ee ->
            let flow' = f ee flow in
-           let flow'' = List.fold_left (fun acc stmt ->
-               man.exec stmt acc
-             ) flow' cleaners
-           in
+           let flow'' = exec_block_on_all_flows cleaners man flow' in
            Flow.get_ctx flow'', flow''
       )
       (Flow.join man.lattice)
@@ -224,9 +240,10 @@ let post_eval
          | None -> ctx, Post.return flow
          | Some ee ->
            let post = f ee flow in
-           let post' = List.fold_left (fun acc stmt ->
-               Post.bind (man.post stmt) acc
-             ) post cleaners
+           let post' = Post.bind (fun flow ->
+               exec_block_on_all_flows cleaners man flow |>
+               Post.return (* FIXME: do we need to log cleaners? *)
+             ) post
            in
            Post.choose_ctx post', post'
       )
@@ -256,23 +273,3 @@ let post_eval_with_cleaners
       (Eval.choose_ctx evl) evl
   in
   Post.set_ctx ctx ret
-
-
-let exec_stmt_on_all_flows stmt man flow =
-  Flow.fold (fun flow tk env ->
-      (* Put env in T_cur token of flow and remove others *)
-      let annot = Flow.get_ctx flow in
-      let flow' = Flow.singleton annot T_cur env in
-
-      (* Execute the cleaner *)
-      let flow'' = man.exec stmt flow' in
-
-      (* Restore T_cur in tk *)
-      Flow.copy T_cur tk man.lattice flow'' flow |>
-      Flow.copy_ctx flow''
-    ) flow flow
-
-let exec_block_on_all_flows block man flow =
-  List.fold_left (fun flow stmt ->
-      exec_stmt_on_all_flows stmt man flow
-    ) flow block
