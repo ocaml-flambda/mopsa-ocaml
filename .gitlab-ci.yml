@@ -1,7 +1,7 @@
 variables:
   MOPSA_C: "./bin/mopsa-c -unittest"
   MOPSA_U: "./bin/mopsa-universal -unittest"
-  MOPSA_PY: "./bin/mopsa-python -unittest"
+  MOPSA_PY: "./bin/mopsa-python-types -unittest"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
