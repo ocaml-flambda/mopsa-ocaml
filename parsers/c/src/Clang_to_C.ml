@@ -993,7 +993,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comm
       (* TODO: update when the AtomicExpr Clang node is handled better *)
       E_atomic (e.C.atomic_op, expr func e.C.atomic_ptr, expr func e.C.atomic_order),
       typ, range
-              
+
+   | C.FullExpr e | C.ConstantExpr e ->
+      expr func e
+     
    | e -> error range "unhandled expression" (C.expr_kind_name e)
 
 

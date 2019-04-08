@@ -2008,6 +2008,8 @@ enum {
   MLTAG_StringLiteral,
   MLTAG_UnaryExprOrTypeTraitExpr,
   MLTAG_VAArgExpr,
+  MLTAG_FullExpr,
+  MLTAG_ConstantExpr,
 
   /* C++ expressions */
   MLTAG_ArrayTypeTraitExpr,
@@ -2308,7 +2310,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
       GENERATE_NODE(PredefinedExpr, ret, node, 2, {
           int r = 0;
+#if CLANG_VERSION_MAJOR >= 8
+          switch (x->getIdentKind()) {
+#else
           switch (x->getIdentType()) {
+#endif
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Func);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Function);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, LFunction);
@@ -2317,7 +2323,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunction);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunctionNoVirtual);
           default:
+#if CLANG_VERSION_MAJOR >= 8
+            if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentKind(); }
+#else            
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentType(); }
+#endif            
             caml_failwith("mlClangAST: unknown ident type");
           }
           Store_field(ret, 0, Val_int(r));
@@ -2655,6 +2665,20 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_array(ret, 0, x->getNumSubExprs(), TranslateExpr(x->getExpr(i)));
         });
 
+
+      /* Clang >= 8 */
+
+#if CLANG_VERSION_MAJOR >= 8
+        
+      GENERATE_NODE(ConstantExpr, ret, node, 1, {
+          Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
+        });
+
+      GENERATE_NODE(FullExpr, ret, node, 1, {
+          Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
+        });
+
+#endif        
 
       // Default
       if (ret == Val_int(-1)) {
