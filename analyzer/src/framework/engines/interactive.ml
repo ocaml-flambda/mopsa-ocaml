@@ -151,7 +151,9 @@ struct
     ()
 
   let print_prompt range () =
-    printf "%a >> @?" (Debug.color "blue" Location.pp_range) range
+    printf "%a %a @?"
+      (Debug.color "lightblue" Location.pp_range) range
+      (Debug.color "green" pp_print_string) ">>"
 
   let linedit_ctx = LineEdit.create_ctx ()
 
@@ -225,6 +227,9 @@ struct
       brk_line = -1;
     }
 
+  (** Catch Ctrl+C interrupts as a Break exception*)
+  let () = Sys.catch_break true
+
 
   (** Interpreter actions *)
   type _ action =
@@ -235,32 +240,21 @@ struct
 
   (** Print the current analysis action *)
   let pp_action : type a. formatter -> a action * Abstraction.t flow -> unit = fun fmt (action, flow) ->
-    let () =
-      match action with
-      | Exec(stmt,zone) ->
-        fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
-          pp_stmt stmt
-          pp_zone zone
+    match action with
+    | Exec(stmt,zone) ->
+      fprintf fmt "@[<v 4>S[ %a@] ] in zone %a@."
+        pp_stmt stmt
+        pp_zone zone
 
-      | Post(stmt,zone) ->
-        fprintf fmt "@[<v 4>P[ %a@] ] in zone %a@."
-          pp_stmt stmt
-          pp_zone zone
+    | Post(stmt,zone) ->
+      fprintf fmt "@[<v 4>P[ %a@] ] in zone %a@."
+        pp_stmt stmt
+        pp_zone zone
 
-      | Eval(exp,zone,_) ->
-        fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
-          pp_expr exp
-          pp_zone2 zone
-    in
-
-    ()
-
-    (* let cs = Callstack.get flow in
-     * if not (Callstack.is_empty cs) then
-     *   fprintf fmt " @[<hv 2>%a:@  %a@]@."
-     *     (Debug.color_str "Teal") "Call stack"
-     *     Callstack.print cs *)
-
+    | Eval(exp,zone,_) ->
+      fprintf fmt "@[<v 4>E[ %a@] ] in zone %a@."
+        pp_expr exp
+        pp_zone2 zone
 
 
   (** Apply an action on a flow and return its result *)
@@ -290,43 +284,57 @@ struct
           )
       );
 
-      if not !break
-      then apply_action action flow
+      try
 
-      else (
-        if where then pp_action std_formatter (action, flow);
-        match read_command range () with
-        | Run ->
-          break := false;
-          apply_action action flow
+        if not !break
+        then apply_action action flow
 
-        | Step ->
-          break := true;
-          apply_action action flow
+        else (
+          if where then pp_action std_formatter (action, flow);
 
-        | Next ->
-          break := false;
-          let ret = apply_action action flow in
-          break := true;
-          ret
+          let cmd =
+            try read_command range ()
+            with Sys.Break ->
+              Sys.catch_break false;
+              exit 0
+          in
 
-        | Print ->
-          printf "%a@." (Flow.print man.lattice) flow;
-          interact ~where:false action range flow
+          match cmd with
+          | Run ->
+            break := false;
+            apply_action action flow
 
-        | Env ->
-          let env = Flow.get T_cur man.lattice flow in
-          printf "%a@." man.lattice.print env;
-          interact ~where:false action range flow
+          | Step ->
+            break := true;
+            apply_action action flow
 
-        | Value(var) ->
-          printf "%a@." (man.ask Q_print_var flow) var;
-          interact ~where:false action range flow
+          | Next ->
+            break := false;
+            let ret = apply_action action flow in
+            break := true;
+            ret
 
-        | Where ->
-          pp_action std_formatter (action, flow);
-          interact ~where:false action range flow
-      )
+          | Print ->
+            printf "%a@." (Flow.print man.lattice) flow;
+            interact ~where:false action range flow
+
+          | Env ->
+            let env = Flow.get T_cur man.lattice flow in
+            printf "%a@." man.lattice.print env;
+            interact ~where:false action range flow
+
+          | Value(var) ->
+            printf "%a@." (man.ask Q_print_var flow) var;
+            interact ~where:false action range flow
+
+          | Where ->
+            pp_action std_formatter (action, flow);
+            interact ~where:false action range flow
+        )
+
+      with Sys.Break ->
+        break := true;
+        interact ~where:true action range flow
 
   and init prog =
     Abstraction.init prog man

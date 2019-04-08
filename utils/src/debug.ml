@@ -29,6 +29,7 @@ let colors = [
   ("green", 0x28);
   ("yellow", 0xbe);
   ("blue", 4);
+  ("lightblue", 75);
   ("magenta", 0x5c);
   ("fushia", 13);
   ("orange", 0xd0);
