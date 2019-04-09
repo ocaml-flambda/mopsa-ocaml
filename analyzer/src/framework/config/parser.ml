@@ -61,9 +61,10 @@ and leaf_domain name : (module DOMAIN) =
   with Not_found -> Exceptions.panic "domain %s not found" name
 
 and domain_seq assoc : (module DOMAIN) =
-  let domains = List.assoc "seq" assoc |>
-                to_list |>
-                List.map domain
+  let domains =
+    List.assoc "seq" assoc |>
+    to_list |>
+    List.map domain
   in
   let rec aux :
     (module DOMAIN) list ->
@@ -112,9 +113,10 @@ and value_leaf name =
   with Not_found -> Exceptions.panic "value %s not found" name
 
 and value_disjoint assoc : (module VALUE) =
-  let values = List.assoc "disjoint" assoc |>
-                to_list |>
-                List.map value
+  let values =
+    List.assoc "disjoint" assoc |>
+    to_list |>
+    List.map value
   in
   let rec aux :
     (module VALUE) list ->
@@ -133,12 +135,15 @@ and value_disjoint assoc : (module VALUE) =
 
 
 and value_product assoc : (module VALUE) =
-  let values = List.assoc "product" assoc |>
-               to_list |>
-               List.map value
+  let values =
+    List.assoc "product" assoc |>
+    to_list |>
+    List.map value
   in
-  let rules  = List.assoc "reduction" assoc |>
-               value_reduction
+  let rules  =
+    try List.assoc "reduction" assoc |>
+        value_reduction
+    with Not_found -> []
   in
   Combiners.Value.Product.make values rules
 
@@ -167,9 +172,10 @@ and leaf_stack name : (module STACK) =
 
 
 and stack_seq assoc : (module STACK) =
-  let stacks = List.assoc "seq" assoc |>
-                to_list |>
-                List.map stack
+  let stacks =
+    List.assoc "seq" assoc |>
+    to_list |>
+    List.map stack
   in
   let rec aux :
     (module STACK) list ->
@@ -188,9 +194,10 @@ and stack_seq assoc : (module STACK) =
   aux stacks
 
 and compose assoc : (module STACK) =
-  let stacks = List.assoc "compose" assoc |>
-                to_list |>
-                List.map stack
+  let stacks =
+    List.assoc "compose" assoc |>
+    to_list |>
+    List.map stack
   in
   let rec aux :
     (module STACK) list ->
@@ -258,6 +265,20 @@ let domains () : string list =
 
       | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
         iter (List.assoc "nonrel" obj)
+
+      | `Assoc(obj) when List.mem_assoc "disjoint" obj ->
+        List.assoc "disjoint" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
+
+      | `Assoc(obj) when List.mem_assoc "product" obj ->
+        List.assoc "product" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
 
       | `Assoc(obj) when List.mem_assoc "apply" obj ->
         iter (List.assoc "apply" obj) @
