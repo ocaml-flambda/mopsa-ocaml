@@ -5,5 +5,7 @@ void main () {
     i = i + 2;
 
   if (i >= 12)
-    i = 0; // Should not be reachable with a reduced product interval x congruence
+    i = 0;
+
+  float f = 1.0 / i; // Should be safe with a reduced product interval x congruence
 }

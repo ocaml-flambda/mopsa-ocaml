@@ -210,7 +210,7 @@ struct
     let last, _ = get_unnamed_args flow in
 
     (* Ensure that param is the last named parameter *)
-    if last.org_vname != param.org_vname
+    if last.org_vname <> param.org_vname
     then panic_at range "va_start: %a is not the last named parameter"
         pp_var param
     ;

@@ -25,28 +25,30 @@ open Mopsa
 open Core.Sig.Reduction.Value
 
 
-(***************************************************************************)
-(*                             First reduction                             *)
-(***************************************************************************)
 
-let name = "universal.numeric.values.reductions.interval_congruence"
-let debug fmt = Debug.debug ~channel:name fmt
-
-module I = Intervals.Integer.Value
-module C = Congruences.Value
+module I = Values.Intervals.Integer.Value
+module C = Values.Congruences.Value
 
 module Reduction =
 struct
+
+  let name = "universal.numeric.reductions.intervals_congruences"
+  let debug fmt = Debug.debug ~channel:name fmt
+
 
   (* Reduce a congruence and an interval *)
   let meet_cgr_itv c i =
     match c, i with
     | Bot.BOT, _ | _, Bot.BOT -> (C.bottom, I.bottom)
+
     | Bot.Nb a, Bot.Nb b ->
       match CongUtils.IntCong.meet_inter a b with
       | Bot.BOT -> (C.bottom, I.bottom)
+
       | Bot.Nb (a', b') ->
-        let c' = Bot.Nb a' and i' = Bot.Nb b' in
+        let c' = Bot.Nb a'
+        and i' = Bot.Nb b' in
+
         debug "reduce %a and %a => result: %a and %a"
           I.print i
           C.print c
@@ -57,15 +59,15 @@ struct
 
   (* Reduction operator *)
   let reduce (man: 'a vrman) (v: 'a) : 'a =
-    let c = man.vrget C.id v in
-    let i = man.vrget I.id v in
+    let c = man.get C.id v
+    and i = man.get I.id v in
 
     let c', i' = meet_cgr_itv c i in
 
-    man.vrset I.id i' v |>
-    man.vrset C.id c'
+    man.set I.id i' v |>
+    man.set C.id c'
 end
 
 
 let () =
-  register_reduction name (module Reduction)
+  register_reduction (module Reduction)

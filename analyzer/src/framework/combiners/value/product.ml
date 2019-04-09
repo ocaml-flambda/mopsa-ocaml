@@ -27,6 +27,7 @@ open Ast.All
 open Core.All
 open Core.Sig.Lowlevel.Value
 open Core.Sig.Reduction.Value
+open Utils.Value_list
 
 
 (** Specification of a reduced product *)
@@ -39,6 +40,7 @@ end
 
 
 
+(** Factory functor *)
 module Make(Spec: SPEC) : VALUE with type t = Spec.t =
 struct
 
@@ -54,69 +56,75 @@ struct
       let name = "framework.combiners.value.product"
 
       let display =
-        let l = vlist_export { f = (fun (type a) (m:a vmodule) ->
-            let module Value = (val m) in
-            Value.display
-          )} Spec.pool
+        let f = fun (type a) (m:a vmodule) ->
+          let module Value = (val m) in
+          Value.display
         in
+        let l = vlist_map { f } Spec.pool in
         "(" ^ (String.concat " × " l) ^ ")"
     end
     )
 
   let zones =
-    vlist_export { f = (fun (type a) (m:a vmodule) ->
-        let module Value = (val m) in
-        Value.zones
-      )} Spec.pool
-    |>
+    let f = fun (type a) (m:a vmodule) ->
+      let module Value = (val m) in
+      Value.zones
+    in
+    vlist_map { f } Spec.pool |>
     List.flatten
 
   let types =
-    vlist_export { f = (fun (type a) (m:a vmodule) ->
+    let f = fun (type a) (m:a vmodule) ->
         let module Value = (val m) in
         Value.types
-      )} Spec.pool
-    |>
+    in
+    vlist_map { f } Spec.pool |>
     List.flatten
 
 
   let bottom =
-    vlist_create { f = (fun (type a) (m:a vmodule) ->
-        let module Value = (val m) in
-        Value.bottom
-      )} Spec.pool
+    let f = fun (type a) (m:a vmodule) ->
+      let module Value = (val m) in
+      Value.bottom
+    in
+    vlist_apply { f } Spec.pool
 
 
   let top =
-    vlist_create { f = (fun (type a) (m:a vmodule) ->
-        let module Value = (val m) in
-        Value.top
-      )} Spec.pool
+    let f = fun (type a) (m:a vmodule) ->
+      let module Value = (val m) in
+      Value.top
+    in
+    vlist_apply { f } Spec.pool
 
 
   let print fmt v =
-    vlist_print { f = (fun (type a) (m:a vmodule) fmt (v:a) ->
-        let module Value = (val m) in
-        Value.print fmt v
-      )} Spec.pool fmt " × " v
+    let f = fun (type a) (m:a vmodule) fmt (v:a) ->
+      let module Value = (val m) in
+      Value.print fmt v
+    in
+    vlist_print { f } Spec.pool fmt " × " v
 
   let is_bottom v =
-    vlist_exists { f = (fun (type a) (m:a vmodule) (v:a) ->
-        let module Value = (val m) in
-        Value.is_bottom v
-      )} Spec.pool v
+    let f = fun (type a) (m:a vmodule) (v:a) ->
+      let module Value = (val m) in
+      Value.is_bottom v
+    in
+    vlist_exists { f } Spec.pool v
 
   let subset v v' =
-    vlist_all2 { f = (fun (type a) (m:a vmodule) (v:a) (v':a) ->
-        let module Value = (val m) in
-        Value.subset v v'
-      )} Spec.pool v v'
+    let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
+      let module Value = (val m) in
+      Value.subset v v'
+    in
+    vlist_all2 { f } Spec.pool v v'
 
   let join v v' =
-    vlist_apply2 { f = (fun (type a) (m:a vmodule) (v:a) (v':a) ->
-        let module Value = (val m) in
-        Value.join v v'
-      )} Spec.pool v v'
+    let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
+      let module Value = (val m) in
+      Value.join v v'
+    in
+    vlist_apply2 { f } Spec.pool v v'
 
   let meet v v' =
     vlist_apply2 { f = (fun (type a) (m:a vmodule) (v:a) (v':a) ->
@@ -125,25 +133,30 @@ struct
       )} Spec.pool v v'
 
   let widen ctx v v' =
-    vlist_apply2 { f = (fun (type a) (m:a vmodule) (v:a) (v':a) ->
-        let module Value = (val m) in
-        Value.widen ctx v v'
-      )} Spec.pool v v'
+    let f = fun (type a) (m:a vmodule) (v:a) (v':a) ->
+      let module Value = (val m) in
+      Value.widen ctx v v'
+    in
+    vlist_apply2 { f } Spec.pool v v'
 
   let mem_types types t =
     List.exists (fun  t' -> compare_typ t t' = 0) types
 
   let of_constant t c =
-    vlist_create { f = (fun (type a) (m:a vmodule) ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.of_constant t c
-        else
-          assert false
-      )} Spec.pool
+    let f = fun (type a) (m:a vmodule) ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.of_constant t c
+      else
+        Exceptions.panic "of_constant called on unsupported constant %a of type %a"
+          ~loc:__LOC__
+          pp_constant c
+          pp_typ t
+    in
+    vlist_apply { f } Spec.pool
 
   let vrman = {
-    vrget = (fun (type a) (id:a Core.Id.value) (v:t) ->
+    get = (fun (type a) (id:a Core.Id.value) (v:t) ->
         let rec aux : type b. b vlist -> b -> a =
           fun l v ->
             match l, v with
@@ -156,7 +169,7 @@ struct
         in
         aux Spec.pool v
       );
-    vrset = (fun (type a) (id:a Core.Id.value) (x:a) (v:t) ->
+    set = (fun (type a) (id:a Core.Id.value) (x:a) (v:t) ->
         let rec aux : type b. b vlist -> b -> b =
           fun l v ->
             match l, v with
@@ -192,83 +205,99 @@ struct
 
 
   let unop man t op v =
-    vlist_man_apply { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.unop man t op v
-        else
-          assert false
-      )} Spec.pool man
-    |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.unop man t op v
+      else
+        Exceptions.panic "unop called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply { f } Spec.pool man |>
     reduce
 
 
   let binop man t op v1 v2 =
-    vlist_man_apply { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.binop man t op v1 v2
-        else
-          assert false
-      )} Spec.pool man
-    |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.binop man t op v1 v2
+      else
+        Exceptions.panic "binop called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply { f } Spec.pool man |>
     reduce
 
   let filter man v b =
-    vlist_man_apply { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        Value.filter man v b
-      )} Spec.pool man
-    |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      Value.filter man v b
+    in
+    vlist_man_apply { f } Spec.pool man |>
     reduce
 
   let bwd_unop man t op v r =
-    vlist_man_apply { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.bwd_unop man t op v r
-        else
-          assert false
-      )} Spec.pool man
-    |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.bwd_unop man t op v r
+      else
+        Exceptions.panic "bwd_unop called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply { f } Spec.pool man |>
     reduce
 
   let bwd_binop man t op v1 v2 r =
-    vlist_man_apply_pair { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.bwd_binop man t op v1 v2 r
-        else
-          assert false
-      )} Spec.pool man
-    |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.bwd_binop man t op v1 v2 r
+      else
+        Exceptions.panic "bwd_binop called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply_pair { f } Spec.pool man |>
     reduce_pair
 
 
   let compare man t op v1 v2 r =
-    vlist_man_apply_pair { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        if mem_types Value.types t then
-          Value.compare man t op v1 v2 r
-        else
-          assert false
-      )} Spec.pool man |>
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      if mem_types Value.types t then
+        Value.compare man t op v1 v2 r
+      else
+        Exceptions.panic "compare called on unsupported operator %a of type %a"
+          ~loc:__LOC__
+          pp_operator op
+          pp_typ t
+    in
+    vlist_man_apply_pair { f } Spec.pool man |>
     reduce_pair
 
   let cast man id v =
-    vlist_export_opt2 { f = (fun (type a) (m:a vmodule) man ->
-        let module Value = (val m) in
-        Value.cast man id v
-      )} Spec.pool man
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      Value.cast man id v
+    in
+    vlist_ret_man_opt { f } Spec.pool man
 
 
   let ask man query =
-    let replies =
-      vlist_export_opt { f = (fun (type a) (m:a vmodule) man ->
-          let module Value = (val m) in
-          Value.ask man query
-        )} Spec.pool man
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      Value.ask man query
     in
+    let replies = vlist_map_man_opt { f } Spec.pool man in
     match replies with
     | [] -> None
     | [hd] -> Some hd
@@ -283,6 +312,7 @@ struct
 end
 
 
+(** Factory function *)
 
 type vpool = V : 'a vlist -> vpool
 

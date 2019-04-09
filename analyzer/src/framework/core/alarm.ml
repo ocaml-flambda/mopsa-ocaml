@@ -90,12 +90,11 @@ let pp_callstack fmt (cs:Callstack.cs) =
 
 let pp_alarm fmt alarm =
   (* print using a format recognized by emacs: location first *)
-  Format.fprintf fmt "%a: %a %a@\n%a@[%a@]"
+  Format.fprintf fmt "%a: %a %a@\n%a"
     Location.pp_range (alarm.alarm_trace |> fst |> Location.untag_range)
     pp_level alarm.alarm_level
     !pp_title_chain alarm
     pp_callstack (alarm.alarm_trace |> snd)
-    !pp_report_chain alarm
 
 let pp_alarm_title fmt alarm = !pp_title_chain fmt alarm
 

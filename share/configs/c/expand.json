@@ -57,7 +57,7 @@
 			            "universal.numeric.values.congruences"
                                 ],
                                 "reductions": [
-                                    "universal.numeric.values.reductions.interval_congruence"
+                                    "universal.numeric.reductions.intervals_congruences"
                                 ]
                             }
 			]

@@ -21,16 +21,30 @@
 
 (** Reduction operators of non-relational abstract values *)
 
-open Manager
+
+
+(** Manager for value reduction rules *)
+type 'a vrman = {
+  get : 'r. 'r Id.value -> 'a -> 'r;
+  set : 'r. 'r Id.value -> 'r -> 'a -> 'a;
+}
+
+
 
 module type REDUCTION =
 sig
+  val name   : string
   val reduce : 'v vrman -> 'v -> 'v
 end
 
 (** Registration *)
-let reductions : (string * (module REDUCTION)) list ref = ref []
+let reductions : (module REDUCTION) list ref = ref []
 
-let register_reduction name rule = reductions := (name, rule) :: !reductions
+let register_reduction rule =
+  reductions := rule :: !reductions
 
-let find_reduction name = List.assoc name !reductions
+let find_reduction name =
+  List.find (fun v ->
+      let module V = (val v : REDUCTION) in
+      compare V.name name = 0
+    ) !reductions

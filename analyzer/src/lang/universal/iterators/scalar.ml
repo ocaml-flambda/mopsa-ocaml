@@ -43,8 +43,8 @@ struct
 
   let exec zone stmt man flow =
     match skind stmt with
-    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num != Keep ||
-                          Core.Zone.eval_template e Z_u_num != Keep
+    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num <> Keep ||
+                          Core.Zone.eval_template e Z_u_num <> Keep
       ->
       desugar x man flow |>
       Option.return |> Option.lift @@
@@ -55,7 +55,7 @@ struct
 
       man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow
 
-    | S_assume e when Core.Zone.eval_template e Z_u_num != Keep ->
+    | S_assume e when Core.Zone.eval_template e Z_u_num <> Keep ->
       desugar e man flow |>
       Option.return |> Option.lift @@
       post_eval man @@ fun e flow ->

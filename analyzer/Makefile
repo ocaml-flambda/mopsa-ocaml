@@ -26,7 +26,7 @@ TARGET_NATIVES = mopsa
 mopsa = framework mopsa lang main
 
 # Framework
-framework = ast core lattices engines combiners output config
+framework = ast core lattices engines utils combiners output config
 framework.ast = program typ operator constant var expr stmt visitor all
 framework.core = query context zone token log lattice flow eval post manager \
 	         id interface sig callstack alarm debug_tree cache abstraction all
@@ -44,10 +44,10 @@ lang.universal = ast frontend zone iterators heap numeric
 lang.universal.iterators = program intraproc scalar interproc unittest loops
 lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
-lang.universal.numeric = rounding values relational
-lang.universal.numeric.values = intervals congruences reductions
+lang.universal.numeric = rounding values relational reductions
+lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
-lang.universal.numeric.values.reductions = interval_congruence
+lang.universal.numeric.reductions = intervals_congruences
 
 lang.repl = frontend
 

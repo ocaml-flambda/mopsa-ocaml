@@ -87,7 +87,7 @@ struct
         let t1 = lval |> etyp |> remove_typedef_qual
         and t2 = rval |> etyp |> remove_typedef_qual in
 
-        if compare_typ t1 t2 != 0 then
+        if compare_typ t1 t2 <> 0 then
           Exceptions.panic "[%s] assignment of records with uncompatible \
                             types: %a %a" name pp_typ t1 pp_typ t2
         else

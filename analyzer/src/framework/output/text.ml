@@ -96,7 +96,7 @@ let group_args_by_category args =
     ) args
   in
   let grouped, _ = List.fold_right (fun arg (acc,cat) ->
-      if compare cat arg.category != 0
+      if compare cat arg.category <> 0
       then
         (arg.category,[arg]) :: acc, arg.category
       else
