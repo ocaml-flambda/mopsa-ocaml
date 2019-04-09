@@ -45,8 +45,9 @@ lang.universal.iterators = program intraproc scalar interproc unittest loops
 lang.universal.iterators.interproc = inlining
 lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational
-lang.universal.numeric.values = intervals congruences
+lang.universal.numeric.values = intervals congruences reductions
 lang.universal.numeric.values.intervals = integer float
+lang.universal.numeric.values.reductions = interval_congruence
 
 lang.repl = frontend
 

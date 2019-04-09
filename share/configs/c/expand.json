@@ -55,6 +55,9 @@
                                 "product": [
                                     "universal.numeric.values.intervals.integer",
 			            "universal.numeric.values.congruences"
+                                ],
+                                "reductions": [
+                                    "universal.numeric.values.reductions.interval_congruence"
                                 ]
                             }
 			]

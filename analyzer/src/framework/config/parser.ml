@@ -141,7 +141,7 @@ and value_product assoc : (module VALUE) =
     List.map value
   in
   let rules  =
-    try List.assoc "reduction" assoc |>
+    try List.assoc "reductions" assoc |>
         value_reduction
     with Not_found -> []
   in
