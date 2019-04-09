@@ -147,15 +147,18 @@ end
 (**                        {2 Low-level lifters}                            *)
 (*==========================================================================*)
 
-let lift_low_level_binop
-    (man:('a,'t) man)
-    (a:'a)
-    (a':'a)
-    (f:'t->'t->'r)
-  : 'r
-  =
-  f (man.get a) (man.get a')
-  
+let lift_unop f man a = f (man.get a)
+
+let lift_binop f man a a' = f (man.get a) (man.get a')
+
+let lift_merge merge man pre (post1,log1) (post2,log2) =
+  merge
+    (man.get pre)
+    (man.get post1, man.get_log log1)
+    (man.get post2, man.get_log log2)
+
+let lift_print print man fmt a = print fmt (man.get a)
+
 
 (** Cast a unified signature into a low-level signature *)
 module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.Domain.DOMAIN with type t = D.t =
@@ -184,31 +187,28 @@ struct
   (** {2 Lattice predicates} *)
   (** ********************** *)
 
-  let is_bottom man a = D.is_bottom (man.get a)
+  let is_bottom man a = lift_unop D.is_bottom man a
 
-  let subset man a a' = lift_low_level_binop man a a' D.subset
+  let subset man a a' = lift_binop D.subset man a a'
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let join man a a' = lift_low_level_binop man a a' D.join
+  let join man a a' = lift_binop D.join man a a'
 
-  let meet man a a' = lift_low_level_binop man a a' D.meet
+  let meet man a a' = lift_binop D.meet man a a'
 
-  let widen man ctx a a' = lift_low_level_binop man a a' (D.widen ctx)
+  let widen man ctx a a' = lift_binop (D.widen ctx) man a a'
 
   let merge man pre (post1,log1) (post2,log2) =
-    D.merge
-      (man.get pre)
-      (man.get post1, man.get_log log1)
-      (man.get post2, man.get_log log2)
+    lift_merge D.merge man pre (post1,log1) (post2,log2)
 
 
   (** {2 Pretty printing} *)
   (** ******************* *)
 
-  let print man fmt a = D.print fmt (man.get a)
+  let print man fmt a = lift_print D.print man fmt a
 
 
   (** {2 Transfer functions} *)

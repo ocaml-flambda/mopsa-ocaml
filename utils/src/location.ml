@@ -134,6 +134,10 @@ let get_range_column r =
   let pos = get_range_start r in
   pos.pos_column
 
+let is_orig = function
+  | R_orig _ -> true
+  | _ -> false
+
 let match_range_file file r =
   let pred f = Str.string_match (Str.regexp (".*" ^ file ^ "$")) f 0 in
   match untag_range r with

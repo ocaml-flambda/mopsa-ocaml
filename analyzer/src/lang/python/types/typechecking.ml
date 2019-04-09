@@ -113,7 +113,7 @@ struct
 
 
   let join man a a' =
-    Framework.Core.Sig.Intermediate.Domain.lift_low_level_binop man a a'
+    Framework.Core.Sig.Intermediate.Domain.lift_binop
       (fun (hd, tl) (hd', tl') ->
          (* if !opt_polymorphism then *)
          match hd, hd' with
@@ -144,7 +144,7 @@ struct
              rhd, {jtl with abs_heap = rabsheap}
              (* else
               *   Iter.join annot (hd, tl) (hd', tl') *)
-      )
+      ) man a a'
 
 end
 

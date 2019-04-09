@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into a (leaf)
+(** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into an
     abstract domain of partial environments from variables to values.
 *)
 
@@ -28,7 +28,7 @@ open Core.All
 open Core.Sig.Lowlevel.Value
 
 
-module Make(Value: VALUE) =
+module MakeWithoutHistory(Value: VALUE) =
 struct
 
 
@@ -54,6 +54,7 @@ struct
 
   let print fmt a =
     Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
+
 
   (*==========================================================================*)
   (**                    {2 Evaluation of expressions}                        *)
@@ -279,5 +280,109 @@ struct
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
       Value.ask (vman map) query
+
+
+end
+
+
+module MakeWithHistory(Value: VALUE) =
+struct
+
+  include Sig.Simplified.Domain.MakeIntermediate(MakeWithoutHistory(Value))
+
+
+  (*==========================================================================*)
+  (**                    {2 Program state history}                            *)
+  (*==========================================================================*)
+
+  open Location
+
+  (* We keep all encountered program states in the flow-insensitive context *)
+  module History = MapExt.Make(
+    struct
+      type t = range
+      let compare = compare_range
+    end
+    )
+
+  (* This trick is necessary to escape the "acyclic type" error later *)
+  type state = t
+
+  (** Key of the cache in the flow-insensitive context *)
+  let cache_key =
+    let module C = Context.GenUnitKey(
+      struct
+
+        type t = state History.t
+
+        let print fmt cache =
+          Format.fprintf fmt "@[<v>%a@]"
+            (Format.pp_print_list
+               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
+               (fun fmt (range, a) ->
+                  Format.fprintf fmt "%a: @[<h2> %a@]" pp_range range print a
+               )
+            ) (History.bindings cache)
+      end
+      )
+    in
+    C.key
+
+  let init_history flow =
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit cache_key History.empty
+    ) flow
+
+
+  (** Update the cache with a program state attached to a program location range *)
+  let update_history stmt man flow =
+    match skind stmt with
+    | S_assign _ | S_assume _
+      when Location.is_orig stmt.srange ->
+
+      let range = srange stmt in
+      let state = get_domain_env T_cur man flow in
+
+      Debug.debug ~channel:"history"
+        "update history:@\n  statement: %a@\n  location: %a@\n  state: @[%a@]"
+        pp_stmt stmt
+        pp_range range
+        print state
+      ;
+
+      let ctx = Flow.get_ctx flow in
+      let cache = Context.find_unit cache_key ctx in
+
+      let old_state =
+        try History.find range cache
+        with Not_found -> bottom
+      in
+      let state' = join old_state state in
+      let cache' = History.add range state' cache in
+
+      let ctx' = Context.add_unit cache_key cache' ctx in
+      Flow.set_ctx ctx' flow
+
+    | _ -> flow
+
+
+
+  (*==========================================================================*)
+  (**                       {2 Transfer functions}                            *)
+  (*==========================================================================*)
+
+
+  let init prog man flow =
+    init prog man flow |>
+    init_history
+
+  let exec zone stmt man flow =
+    exec zone stmt man flow |>
+    Option.lift @@ Post.bind @@ fun flow ->
+
+    update_history stmt man flow |>
+    Post.return
+
 
 end
