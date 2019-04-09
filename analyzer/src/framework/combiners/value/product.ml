@@ -260,7 +260,21 @@ struct
 
 
   let ask man query =
-    assert false
+    let replies =
+      vlist_export_opt { f = (fun (type a) (m:a vmodule) man ->
+          let module Value = (val m) in
+          Value.ask man query
+        )} Spec.pool man
+    in
+    match replies with
+    | [] -> None
+    | [hd] -> Some hd
+    | hd :: tl ->
+      let r =
+        List.fold_left (fun acc r -> Query.join query acc r) hd tl
+      in
+      Some r
+
 
 
 end

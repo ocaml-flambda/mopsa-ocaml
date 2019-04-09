@@ -260,6 +260,19 @@ let vlist_all2 f l v1 v2 =
   aux l v1 v2
 
 
+let hdman man = {
+  man with
+  vget = (fun v -> man.vget v |> fst);
+  vset = (fun hdv v -> man.vset (hdv, man.vget v |> snd) v);
+}
+
+let tlman man = {
+  man with
+  vget = (fun v -> man.vget v |> snd);
+  vset = (fun tlv v -> man.vset (man.vget v |> fst, tlv) v);
+}
+
+
 type 'a man_apply = {
   f: 't. 't vmodule -> ('a,'t) vman -> 't;
 }
@@ -270,19 +283,7 @@ let vlist_man_apply f l man =
       match l with
       | Nil -> ()
       | Cons(hd,tl) ->
-        let hdman = {
-          man with
-          vget = (fun v -> man.vget v |> fst);
-          vset = (fun hdv v -> man.vset (hdv, man.vget v |> snd) v);
-        }
-        in
-        let tlman = {
-          man with
-          vget = (fun v -> man.vget v |> snd);
-          vset = (fun tlv v -> man.vset (man.vget v |> fst, tlv) v);
-        }
-        in
-        f.f hd hdman, aux tl tlman
+        f.f hd (hdman man), aux tl (tlman man)
   in
   aux l man
 
@@ -291,26 +292,15 @@ type 'a man_apply_pair = {
   f: 't. 't vmodule -> ('a,'t) vman -> 't * 't;
 }
 
+
 let vlist_man_apply_pair f l man =
   let rec aux : type t. t vlist -> ('a,t) vman -> t * t =
     fun l man ->
       match l with
       | Nil -> (),()
       | Cons(hd,tl) ->
-        let hdman = {
-          man with
-          vget = (fun v -> man.vget v |> fst);
-          vset = (fun hdv v -> man.vset (hdv, man.vget v |> snd) v);
-        }
-        in
-        let tlman = {
-          man with
-          vget = (fun v -> man.vget v |> snd);
-          vset = (fun tlv v -> man.vset (man.vget v |> fst, tlv) v);
-        }
-        in
-        let v1, v2 = f.f hd hdman in
-        let tl1, tl2 = aux tl tlman in
+        let v1, v2 = f.f hd (hdman man) in
+        let tl1, tl2 = aux tl (tlman man) in
         (v1,tl1),(v2,tl2)
   in
   aux l man
@@ -377,3 +367,20 @@ let vlist_print f l fmt v =
         Format.fprintf fmt "%a%a" (f.f hd) hdv (aux tl) tlv
   in
   aux l fmt v
+
+
+type ('a,'r) export_opt = {
+  f : 't. 't vmodule -> ('a,'t) vman -> 'r option
+}
+
+let vlist_export_opt f l man =
+  let rec aux : type t. t vlist -> ('a,t) vman -> 'r list =
+    fun l man ->
+      match l with
+      | Nil -> []
+      | Cons(hd,tl) ->
+        match f.f hd (hdman man) with
+        | Some r -> r :: aux tl (tlman man)
+        | None -> aux tl (tlman man)
+  in
+  aux l man
