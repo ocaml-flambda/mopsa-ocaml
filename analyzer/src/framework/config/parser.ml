@@ -104,6 +104,7 @@ and nonrel assoc : (module DOMAIN) =
 and value = function
   | `String name -> value_leaf name
   | `Assoc obj when List.mem_assoc "disjoint" obj -> value_disjoint obj
+  | `Assoc obj when List.mem_assoc "product" obj -> value_product obj
   | _ -> assert false
 
 and value_leaf name =
@@ -129,6 +130,29 @@ and value_disjoint assoc : (module VALUE) =
         (module Dom : VALUE)
   in
   aux values
+
+
+and value_product assoc : (module VALUE) =
+  let values = List.assoc "product" assoc |>
+               to_list |>
+               List.map value
+  in
+  let rules  = List.assoc "reduction" assoc |>
+               value_reduction
+  in
+  Combiners.Value.Product.make values rules
+
+
+and value_reduction = function
+  | `String(name) -> [value_reduction_leaf name]
+  | `List l -> List.map value_reduction l |>
+               List.flatten
+  | x -> Exceptions.panic "parsing error: unsupported reduction declaration:@ %a"
+           (pretty_print ~std:true) x
+
+and value_reduction_leaf name =
+  try Sig.Reduction.Value.find_reduction name
+  with Not_found -> Exceptions.panic "value reduction %s not found" name
 
 and stack = function
   | `String(name) -> leaf_stack name

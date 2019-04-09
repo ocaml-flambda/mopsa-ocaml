@@ -19,14 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** [Product ∈ 𝒱 list × 𝓡 list→ 𝒱] creates an n-ary reduced product of
-    value abstractions and reduction rules.
+(** [Product ∈ (𝒱 × ... × 𝒱) × (𝓡 × ... × 𝓡)→ 𝒱] creates an n-ary reduced
+    product from n value abstractions and m reduction rules.
 *)
 
 open Ast.All
 open Core.All
 open Core.Sig.Lowlevel.Value
-
+open Core.Sig.Reduction.Value
 
 
 (** Specification of a reduced product *)
@@ -34,7 +34,7 @@ module type SPEC =
 sig
   type t
   val pool : t vlist
-  val rules : (module Core.Sig.Reduction.Value.REDUCTION) list
+  val rules : (module REDUCTION) list
 end
 
 
@@ -175,7 +175,7 @@ struct
   let reduce (v:t) : t =
     let apply v =
       List.fold_left (fun acc r ->
-          let module R = (val r : Sig.Reduction.Value.REDUCTION) in
+          let module R = (val r : REDUCTION) in
           R.reduce vrman acc
         ) v Spec.rules
     in
@@ -255,11 +255,48 @@ struct
       )} Spec.pool man |>
     reduce_pair
 
-  let ask man query =
-    assert false
-
   let cast man id v =
     assert false
 
 
+  let ask man query =
+    assert false
+
+
 end
+
+
+
+type vpool = V : 'a vlist -> vpool
+
+let type_value (type a) (v : (module VALUE with type t = a)) =
+    let module V = (val v) in
+    (module V : VALUE with type t = a)
+
+let rec type_value_pool : (module VALUE) list -> vpool = function
+  | [] -> V Nil
+  | hd :: tl ->
+    let module V = (val hd) in
+    let v = type_value (module V) in
+    let V tl = type_value_pool tl in
+    V (Cons (v, tl))
+
+let make
+    (values: (module VALUE) list)
+    (rules: (module REDUCTION) list)
+  : (module VALUE) =
+
+  let V pool = type_value_pool values in
+
+  let create_product (type a) (pool: a vlist) =
+    let module V = Make(
+      struct
+        type t = a
+        let pool = pool
+        let rules = rules
+      end)
+    in
+    (module V : VALUE)
+  in
+
+  create_product pool
