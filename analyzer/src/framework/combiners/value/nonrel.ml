@@ -28,13 +28,18 @@ open Core.All
 open Core.Sig.Lowlevel.Value
 
 
+(****************************************************************************)
+(**         {2 Abstract domain without history of reachable states}         *)
+(****************************************************************************)
+
+
 module MakeWithoutHistory(Value: VALUE) =
 struct
 
 
-  (*==========================================================================*)
-                          (** {2 Lattice structure} *)
-  (*==========================================================================*)
+  (**************************************************************************)
+  (**                         {2 Domain header}                             *)
+  (**************************************************************************)
 
   (** Map with variables as keys. *)
   module VarMap =
@@ -56,9 +61,10 @@ struct
     Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
 
 
-  (*==========================================================================*)
-  (**                    {2 Evaluation of expressions}                        *)
-  (*==========================================================================*)
+
+  (**************************************************************************)
+  (**                    {2 Evaluation of expressions}                      *)
+  (**************************************************************************)
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
@@ -202,9 +208,9 @@ struct
 
 
 
-  (*==========================================================================*)
-                         (** {2 Transfer function} *)
-  (*==========================================================================*)
+  (**************************************************************************)
+  (**                      {2 Transfer functions}                           *)
+  (**************************************************************************)
 
 
   let init prog = empty
@@ -273,10 +279,6 @@ struct
     | _ -> None
 
 
-
-  (** Evaluation query *)
-  (** **************** *)
-
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
       Value.ask (vman map) query
@@ -285,6 +287,15 @@ struct
 end
 
 
+(****************************************************************************)
+(**         {2 Abstract domain with history of reachable states}            *)
+(****************************************************************************)
+
+(** Command line option to activate caching *)
+let opt_collect_states = ref false
+
+
+(** Value lifter with history *)
 module MakeWithHistory(Value: VALUE) =
 struct
 
@@ -386,3 +397,16 @@ struct
 
 
 end
+
+
+module Make(Value:VALUE) () =
+  (val
+    if !opt_collect_states
+    then
+      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(MakeWithHistory(Value)) in
+      (module M)
+    else
+      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(Sig.Simplified.Domain.MakeIntermediate(MakeWithoutHistory(Value))) in
+      (module M)
+    : Sig.Lowlevel.Domain.DOMAIN
+  )
