@@ -70,12 +70,28 @@ let render_alarm alarm : json =
     "callstack", render_callstack cs;
   ]
 
-let report ?(flow=None) man alarms time files out : unit =
+let render_var var : json =
+  `String var.Ast.Var.org_vname
+
+let render_env (var,value) : json =
+  `Assoc [
+    "var", render_var var;
+    "value", `String value
+  ]
+
+let render_state (range,state) : json =
+  `Assoc [
+    "range", render_range range;
+    "state", `List (List.map render_env state)
+  ]
+
+let report ?(flow=None) man alarms states time files out : unit =
   let json : json = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "files", `List (List.map (fun f -> `String f) files);
       "alarms", `List (List.map render_alarm alarms);
+      "states", `List (List.map render_state states)
     ]
   in
   print out json

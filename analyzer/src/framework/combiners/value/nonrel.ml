@@ -288,6 +288,27 @@ end
 
 
 (****************************************************************************)
+(**                       {2 Reachable states}                              *)
+(****************************************************************************)
+
+
+open Location
+
+(** Export format of a reachable state *)
+type state = (var * string) list
+type history = (range * state) list
+
+(** Query to extract the collection of reachable states *)
+type _ query += Q_reachable_states : history query
+
+let () =
+  register_query {
+    query_join = (fun next a b -> assert false);
+    query_meet = (fun next a b -> assert false);
+  }
+
+
+(****************************************************************************)
 (**         {2 Abstract domain with history of reachable states}            *)
 (****************************************************************************)
 
@@ -299,14 +320,15 @@ let opt_collect_states = ref false
 module MakeWithHistory(Value: VALUE) =
 struct
 
-  include Sig.Simplified.Domain.MakeIntermediate(MakeWithoutHistory(Value))
+  module D = MakeWithoutHistory(Value)
+
+  include Sig.Simplified.Domain.MakeIntermediate(D)
 
 
-  (*==========================================================================*)
+  (****************************************************************************)
   (**                    {2 Program state history}                            *)
-  (*==========================================================================*)
+  (****************************************************************************)
 
-  open Location
 
   (* We keep all encountered program states in the flow-insensitive context *)
   module History = MapExt.Make(
@@ -317,14 +339,14 @@ struct
     )
 
   (* This trick is necessary to escape the "acyclic type" error later *)
-  type state = t
+  type s = t
 
   (** Key of the cache in the flow-insensitive context *)
   let cache_key =
     let module C = Context.GenUnitKey(
       struct
 
-        type t = state History.t
+        type t = s History.t
 
         let print fmt cache =
           Format.fprintf fmt "@[<v>%a@]"
@@ -378,10 +400,15 @@ struct
     | _ -> flow
 
 
+  (** Get history of reachable states *)
+  let get_history flow =
+    let ctx = Flow.get_ctx flow in
+    Context.find_unit cache_key ctx
 
-  (*==========================================================================*)
+
+  (****************************************************************************)
   (**                       {2 Transfer functions}                            *)
-  (*==========================================================================*)
+  (****************************************************************************)
 
 
   let init prog man flow =
@@ -396,6 +423,39 @@ struct
     Post.return
 
 
+
+  (****************************************************************************)
+  (**                          {2 Query handler}                              *)
+  (****************************************************************************)
+
+
+  let ask : type r. r query -> ('a,t) man -> 'a flow -> r option =
+    fun query man flow ->
+      match query with
+      | Q_reachable_states ->
+
+        let export_state (state:t) : state =
+          D.VarMap.fold (fun var value acc ->
+              let value_str =
+                Value.print Format.str_formatter value;
+                Format.flush_str_formatter ()
+              in
+              (var, value_str) :: acc
+            ) state []
+        in
+
+        let export_history (history:t History.t) : history =
+          History.fold (fun range state acc ->
+            (range, export_state state) :: acc
+          ) history []
+        in
+
+        Some (export_history @@ get_history flow)
+
+      | _ -> ask query man flow
+
+
+
 end
 
 
@@ -403,10 +463,18 @@ module Make(Value:VALUE) () =
   (val
     if !opt_collect_states
     then
-      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(MakeWithHistory(Value)) in
+      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(
+          MakeWithHistory(Value)
+        )
+      in
       (module M)
     else
-      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(Sig.Simplified.Domain.MakeIntermediate(MakeWithoutHistory(Value))) in
+      let module M = Sig.Intermediate.Domain.MakeLowlevelDomain(
+          Sig.Simplified.Domain.MakeIntermediate(
+            MakeWithoutHistory(Value)
+          )
+        )
+      in
       (module M)
     : Sig.Lowlevel.Domain.DOMAIN
   )
