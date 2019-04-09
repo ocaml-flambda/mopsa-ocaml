@@ -294,9 +294,7 @@ struct
 
           let cmd =
             try read_command range ()
-            with Sys.Break ->
-              Sys.catch_break false;
-              exit 0
+            with Exit -> exit 0
           in
 
           match cmd with
