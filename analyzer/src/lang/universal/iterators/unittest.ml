@@ -192,7 +192,6 @@ struct
     | S_assert(cond) ->
       let range = srange stmt in
       let cs = Callstack.get flow in
-      debug "Expression is %a" pp_expr cond;
       assume_post
         cond
         ~fthen:(fun safe_flow ->

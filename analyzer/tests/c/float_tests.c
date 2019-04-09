@@ -59,3 +59,11 @@ void test_float_division() {
   float epsilon = 0.0001;
   _mopsa_assert(equals(f1 / f2, 0.5, epsilon));
 }
+
+void test_float_of_int_cast() {
+  int i = 2;
+  float f1 = 1.1;
+  float f2 = f1 * i;
+  float epsilon = 0.0001;
+  _mopsa_assert(equals(f2, 2.2, epsilon));
+}

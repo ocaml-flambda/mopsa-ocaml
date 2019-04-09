@@ -98,7 +98,7 @@ struct
     vlist_print { f = (fun (type a) (m:a vmodule) fmt (v:a) ->
         let module Value = (val m) in
         Value.print fmt v
-      )} Spec.pool fmt v
+      )} Spec.pool fmt " × " v
 
   let is_bottom v =
     vlist_exists { f = (fun (type a) (m:a vmodule) (v:a) ->
@@ -256,7 +256,10 @@ struct
     reduce_pair
 
   let cast man id v =
-    assert false
+    vlist_export_opt2 { f = (fun (type a) (m:a vmodule) man ->
+        let module Value = (val m) in
+        Value.cast man id v
+      )} Spec.pool man
 
 
   let ask man query =

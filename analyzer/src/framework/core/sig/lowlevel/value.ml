@@ -357,14 +357,14 @@ type print = {
 }
 
 
-let vlist_print f l fmt v =
+let vlist_print f l fmt sep v =
   let rec aux : type t. t vlist -> Format.formatter -> t -> unit =
     fun l fmt v ->
       match l, v with
       | Nil, () -> ()
       | Cons(m,Nil), (v,()) -> f.f m fmt v
       | Cons(hd,tl), (hdv, tlv) ->
-        Format.fprintf fmt "%a%a" (f.f hd) hdv (aux tl) tlv
+        Format.fprintf fmt "%a%s%a" (f.f hd) hdv sep (aux tl) tlv
   in
   aux l fmt v
 
@@ -381,6 +381,19 @@ let vlist_export_opt f l man =
       | Cons(hd,tl) ->
         match f.f hd (hdman man) with
         | Some r -> r :: aux tl (tlman man)
+        | None -> aux tl (tlman man)
+  in
+  aux l man
+
+
+let vlist_export_opt2 f l man =
+  let rec aux : type t. t vlist -> ('a,t) vman -> 'r option =
+    fun l man ->
+      match l with
+      | Nil -> None
+      | Cons(hd,tl) ->
+        match f.f hd (hdman man) with
+        | Some r -> Some r
         | None -> aux tl (tlman man)
   in
   aux l man
