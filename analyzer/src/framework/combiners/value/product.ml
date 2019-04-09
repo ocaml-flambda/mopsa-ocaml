@@ -54,12 +54,12 @@ struct
       let name = "framework.combiners.value.product"
 
       let display =
-        vlist_export { f = (fun (type a) (m:a vmodule) ->
+        let l = vlist_export { f = (fun (type a) (m:a vmodule) ->
             let module Value = (val m) in
             Value.display
           )} Spec.pool
-        |>
-        String.concat " × "
+        in
+        "(" ^ (String.concat " × " l) ^ ")"
     end
     )
 
