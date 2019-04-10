@@ -61,7 +61,7 @@ struct
           Value.display
         in
         let l = vlist_map { f } Spec.pool in
-        "(" ^ (String.concat " × " l) ^ ")"
+        "(" ^ (String.concat " ∧ " l) ^ ")"
     end
     )
 
@@ -103,7 +103,7 @@ struct
       let module Value = (val m) in
       Value.print fmt v
     in
-    vlist_print { f } Spec.pool fmt " × " v
+    vlist_print { f } Spec.pool fmt " ∧ " v
 
   let is_bottom v =
     let f = fun (type a) (m:a vmodule) (v:a) ->

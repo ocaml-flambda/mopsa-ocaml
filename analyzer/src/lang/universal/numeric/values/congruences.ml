@@ -22,6 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
+open Core.Sig.Simplified.Value
 open Ast
 open Bot
 
@@ -100,7 +101,7 @@ struct
       let aa = match op with
         | O_log_not -> assert false
         | O_minus  -> bot_to_exn (C.bwd_neg a r)
-        | _ -> assert false
+        | _ -> a
       in
       Nb aa
     with Found_BOT ->
@@ -118,7 +119,7 @@ struct
         | O_mod    -> bot_to_exn (C.bwd_rem a1 a2 r)
         | O_bit_rshift -> bot_to_exn (C.bwd_shift_right a1 a2 r)
         | O_bit_lshift -> bot_to_exn (C.bwd_shift_left a1 a2 r)
-        | _ -> assert false
+        | _ -> a1, a2
       in
       Nb aa1, Nb aa2
     with Found_BOT ->
@@ -136,7 +137,7 @@ struct
         | O_gt -> bot_to_exn (C.filter_gt a1 a2)
         | O_le -> bot_to_exn (C.filter_leq a1 a2)
         | O_ge -> bot_to_exn (C.filter_geq a1 a2)
-        | _ -> assert false
+        | _ -> a1, a2
       in
       Nb aa1, Nb aa2
     with Found_BOT ->
@@ -147,4 +148,4 @@ struct
 end
 
 let () =
-  Core.Sig.Simplified.Value.register_value (module Value)
+  register_value (module Value)
