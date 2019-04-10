@@ -278,7 +278,7 @@ struct
 
         | Some brk ->
           (* Check if brk is different than the current breakpoint *)
-          if compare_breakpoint brk !last_breakpoint != 0 then (
+          if compare_breakpoint brk !last_breakpoint <> 0 then (
             break := true;
             last_breakpoint := brk;
           )
@@ -294,9 +294,7 @@ struct
 
           let cmd =
             try read_command range ()
-            with Sys.Break ->
-              Sys.catch_break false;
-              exit 0
+            with Exit -> exit 0
           in
 
           match cmd with
@@ -324,7 +322,10 @@ struct
             interact ~where:false action range flow
 
           | Value(var) ->
+            let old_break = !break in
+            break := false;
             printf "%a@." (man.ask Q_print_var flow) var;
+            break := old_break;
             interact ~where:false action range flow
 
           | Where ->

@@ -57,7 +57,7 @@ sig
 
   val top: t
   (** Greatest abstract element of the lattice. *)
-  
+
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 

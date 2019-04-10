@@ -19,57 +19,32 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugar non-scalar expressions in assignments and tests *)
-
-open Mopsa
-open Ast
-open Zone
-
-module Domain =
-struct
-
-  let name = "universal.iterators.scalar"
-  let debug fmt = Debug.debug ~channel:name fmt
-
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [Z_u_num] };
-    ieval = { provides = []; uses = [Z_u,Z_u_num] };
-  }
-
-  let init prog man flow = flow
-
-  let desugar e man flow =
-    man.eval e ~zone:(Z_u, Z_u_num) flow
-
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num <> Keep ||
-                          Core.Zone.eval_template e Z_u_num <> Keep
-      ->
-      desugar x man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun x flow ->
-
-      desugar e man flow |>
-      post_eval man @@ fun e flow ->
-
-      man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow
-
-    | S_assume e when Core.Zone.eval_template e Z_u_num <> Keep ->
-      desugar e man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun e flow ->
-
-      man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow
+(** Reduction operators of non-relational abstract values *)
 
 
-    | _ -> None
 
-  let eval zone exp man flow = None
+(** Manager for value reduction rules *)
+type 'a vrman = {
+  get : 'r. 'r Id.value -> 'a -> 'r;
+  set : 'r. 'r Id.value -> 'r -> 'a -> 'a;
+}
 
-  let ask query man flow = None
 
+
+module type REDUCTION =
+sig
+  val name   : string
+  val reduce : 'v vrman -> 'v -> 'v
 end
 
-let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+(** Registration *)
+let reductions : (module REDUCTION) list ref = ref []
+
+let register_reduction rule =
+  reductions := rule :: !reductions
+
+let find_reduction name =
+  List.find (fun v ->
+      let module V = (val v : REDUCTION) in
+      compare V.name name = 0
+    ) !reductions

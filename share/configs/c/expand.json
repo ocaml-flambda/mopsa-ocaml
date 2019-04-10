@@ -50,8 +50,16 @@
 		"on": {
                     "nonrel": {
 			"disjoint": [
-			    "universal.numeric.values.intervals.integer",
-			    "universal.numeric.values.intervals.float"
+			    "universal.numeric.values.intervals.float",
+                            {
+                                "product": [
+                                    "universal.numeric.values.intervals.integer",
+			            "universal.numeric.values.congruences"
+                                ],
+                                "reductions": [
+                                    "universal.numeric.reductions.intervals_congruences"
+                                ]
+                            }
 			]
 		    }
                 }

@@ -454,7 +454,7 @@ struct
            is_c_pointer_type p2.etyp
       ->
       (* p1 and p2 should point to the same type *)
-      if compare_typ (under_type p1.etyp) (under_type p2.etyp) != 0
+      if compare_typ (under_type p1.etyp) (under_type p2.etyp) <> 0
       then panic_at exp.erange
           "%a: pointers do not point to the same type"
           pp_expr exp

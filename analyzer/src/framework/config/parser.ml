@@ -61,9 +61,10 @@ and leaf_domain name : (module DOMAIN) =
   with Not_found -> Exceptions.panic "domain %s not found" name
 
 and domain_seq assoc : (module DOMAIN) =
-  let domains = List.assoc "seq" assoc |>
-                to_list |>
-                List.map domain
+  let domains =
+    List.assoc "seq" assoc |>
+    to_list |>
+    List.map domain
   in
   let rec aux :
     (module DOMAIN) list ->
@@ -104,6 +105,7 @@ and nonrel assoc : (module DOMAIN) =
 and value = function
   | `String name -> value_leaf name
   | `Assoc obj when List.mem_assoc "disjoint" obj -> value_disjoint obj
+  | `Assoc obj when List.mem_assoc "product" obj -> value_product obj
   | _ -> assert false
 
 and value_leaf name =
@@ -111,9 +113,10 @@ and value_leaf name =
   with Not_found -> Exceptions.panic "value %s not found" name
 
 and value_disjoint assoc : (module VALUE) =
-  let values = List.assoc "disjoint" assoc |>
-                to_list |>
-                List.map value
+  let values =
+    List.assoc "disjoint" assoc |>
+    to_list |>
+    List.map value
   in
   let rec aux :
     (module VALUE) list ->
@@ -130,6 +133,32 @@ and value_disjoint assoc : (module VALUE) =
   in
   aux values
 
+
+and value_product assoc : (module VALUE) =
+  let values =
+    List.assoc "product" assoc |>
+    to_list |>
+    List.map value
+  in
+  let rules  =
+    try List.assoc "reductions" assoc |>
+        value_reduction
+    with Not_found -> []
+  in
+  Combiners.Value.Product.make values rules
+
+
+and value_reduction = function
+  | `String(name) -> [value_reduction_leaf name]
+  | `List l -> List.map value_reduction l |>
+               List.flatten
+  | x -> Exceptions.panic "parsing error: unsupported reduction declaration:@ %a"
+           (pretty_print ~std:true) x
+
+and value_reduction_leaf name =
+  try Sig.Reduction.Value.find_reduction name
+  with Not_found -> Exceptions.panic "value reduction %s not found" name
+
 and stack = function
   | `String(name) -> leaf_stack name
   | `Assoc(obj) when List.mem_assoc "seq" obj -> stack_seq obj
@@ -143,9 +172,10 @@ and leaf_stack name : (module STACK) =
 
 
 and stack_seq assoc : (module STACK) =
-  let stacks = List.assoc "seq" assoc |>
-                to_list |>
-                List.map stack
+  let stacks =
+    List.assoc "seq" assoc |>
+    to_list |>
+    List.map stack
   in
   let rec aux :
     (module STACK) list ->
@@ -164,9 +194,10 @@ and stack_seq assoc : (module STACK) =
   aux stacks
 
 and compose assoc : (module STACK) =
-  let stacks = List.assoc "compose" assoc |>
-                to_list |>
-                List.map stack
+  let stacks =
+    List.assoc "compose" assoc |>
+    to_list |>
+    List.map stack
   in
   let rec aux :
     (module STACK) list ->
@@ -234,6 +265,20 @@ let domains () : string list =
 
       | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
         iter (List.assoc "nonrel" obj)
+
+      | `Assoc(obj) when List.mem_assoc "disjoint" obj ->
+        List.assoc "disjoint" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
+
+      | `Assoc(obj) when List.mem_assoc "product" obj ->
+        List.assoc "product" obj |>
+        to_list |>
+        List.fold_left (fun acc obj ->
+            iter obj @ acc
+          ) []
 
       | `Assoc(obj) when List.mem_assoc "apply" obj ->
         iter (List.assoc "apply" obj) @

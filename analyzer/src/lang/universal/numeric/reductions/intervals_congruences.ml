@@ -19,57 +19,55 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Desugar non-scalar expressions in assignments and tests *)
+(** Reduction operator for intervals and congruences. *)
 
 open Mopsa
-open Ast
-open Zone
+open Core.Sig.Reduction.Value
 
-module Domain =
+
+
+module I = Values.Intervals.Integer.Value
+module C = Values.Congruences.Value
+
+module Reduction =
 struct
 
-  let name = "universal.iterators.scalar"
+  let name = "universal.numeric.reductions.intervals_congruences"
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let interface = {
-    iexec = { provides = [Z_u]; uses = [Z_u_num] };
-    ieval = { provides = []; uses = [Z_u,Z_u_num] };
-  }
 
-  let init prog man flow = flow
+  (* Reduce a congruence and an interval *)
+  let meet_cgr_itv c i =
+    match c, i with
+    | Bot.BOT, _ | _, Bot.BOT -> (C.bottom, I.bottom)
 
-  let desugar e man flow =
-    man.eval e ~zone:(Z_u, Z_u_num) flow
+    | Bot.Nb a, Bot.Nb b ->
+      match CongUtils.IntCong.meet_inter a b with
+      | Bot.BOT -> (C.bottom, I.bottom)
 
-  let exec zone stmt man flow =
-    match skind stmt with
-    | S_assign(x, e) when Core.Zone.eval_template x Z_u_num <> Keep ||
-                          Core.Zone.eval_template e Z_u_num <> Keep
-      ->
-      desugar x man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun x flow ->
+      | Bot.Nb (a', b') ->
+        let c' = Bot.Nb a'
+        and i' = Bot.Nb b' in
 
-      desugar e man flow |>
-      post_eval man @@ fun e flow ->
+        debug "reduce %a and %a => result: %a and %a"
+          I.print i
+          C.print c
+          I.print i'
+          C.print c'
+        ;
+        (c', i')
 
-      man.post ~zone:Z_u_num (mk_assign x e stmt.srange) flow
+  (* Reduction operator *)
+  let reduce (man: 'a vrman) (v: 'a) : 'a =
+    let c = man.get C.id v
+    and i = man.get I.id v in
 
-    | S_assume e when Core.Zone.eval_template e Z_u_num <> Keep ->
-      desugar e man flow |>
-      Option.return |> Option.lift @@
-      post_eval man @@ fun e flow ->
+    let c', i' = meet_cgr_itv c i in
 
-      man.post ~zone:Z_u_num (mk_assume e stmt.srange) flow
-
-
-    | _ -> None
-
-  let eval zone exp man flow = None
-
-  let ask query man flow = None
-
+    man.set I.id i' v |>
+    man.set C.id c'
 end
 
+
 let () =
-  Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+  register_reduction (module Reduction)
