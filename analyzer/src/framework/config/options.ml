@@ -242,6 +242,17 @@ let () =
   }
 
 
+(** Collection of reachable states *)
+let () =
+  register_builtin_option {
+    key = "-collect-states";
+    category = "Debugging";
+    doc = " collect (non-relational) reachable states";
+    spec = ArgExt.Set Combiners.Value.Nonrel.opt_collect_states;
+    default = "false";
+  }
+
+
 (** Help message *)
 let help () =
   let options =

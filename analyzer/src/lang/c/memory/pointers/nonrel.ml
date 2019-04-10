@@ -36,7 +36,8 @@ struct
 
   (** An abstract element is a partial map from pointer variables to a set
       of bases *)
-  module Map = Framework.Combiners.Value.Nonrel.Make(
+  module Map =
+    Framework.Combiners.Value.Nonrel.MakeWithoutHistory(
       Framework.Core.Sig.Simplified.Value.MakeLowlevel(Bases)
     )
 

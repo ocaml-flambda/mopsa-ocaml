@@ -93,11 +93,8 @@ and apply assoc : (module DOMAIN) =
 and nonrel assoc : (module DOMAIN) =
   let v = List.assoc "nonrel" assoc |> value in
   let module V = (val v : VALUE) in
-  let module D =
-    Sig.Intermediate.Domain.MakeLowlevelDomain(
-      Sig.Simplified.Domain.MakeIntermediate(
-        Combiners.Value.Nonrel.Make(V)
-      )
+  let module D = Sig.Intermediate.Domain.MakeLowlevelDomain(
+      Combiners.Value.Nonrel.Make(V)()
     )
   in
   (module D : DOMAIN)

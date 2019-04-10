@@ -21,6 +21,8 @@
 
 (** Render the output of an analysis depending on the selected engine. *)
 
+open Core.Manager
+
 type format =
   | F_text (* Textual output *)
   | F_json (* Formatted output in JSON *)
@@ -45,10 +47,15 @@ let report man flow time files =
     ) [] flow
   in
   let return_v = if List.length alarms > 0 then 1 else 0 in
+  let states =
+    if not !Combiners.Value.Nonrel.opt_collect_states
+    then []
+    else man.ask Combiners.Value.Nonrel.Q_reachable_states flow
+  in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
-    | F_text -> Text.report ~flow:lf man alarms time files !opt_file
-    | F_json -> Json.report man alarms time files !opt_file in
+    | F_text -> Text.report ~flow:lf man alarms states time files !opt_file
+    | F_json -> Json.report man alarms states time files !opt_file in
   return_v
 
 let panic ?btrace exn files =

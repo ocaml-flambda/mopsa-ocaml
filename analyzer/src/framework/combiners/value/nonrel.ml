@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into a (leaf)
+(** [Nonrel ∈ 𝒱 → 𝒟] lifts a non-relational value abstraction into an
     abstract domain of partial environments from variables to values.
 *)
 
@@ -28,13 +28,16 @@ open Core.All
 open Core.Sig.Lowlevel.Value
 
 
-module Make(Value: VALUE) =
+(****************************************************************************)
+(**             {2 Domain without history of reachable states}              *)
+(****************************************************************************)
+
+module MakeWithoutHistory(Value: VALUE) =
 struct
 
 
-  (*==========================================================================*)
-                          (** {2 Lattice structure} *)
-  (*==========================================================================*)
+  (** {2 Domain header} *)
+  (** ***************** *)
 
   (** Map with variables as keys. *)
   module VarMap =
@@ -55,9 +58,10 @@ struct
   let print fmt a =
     Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
 
-  (*==========================================================================*)
-  (**                    {2 Evaluation of expressions}                        *)
-  (*==========================================================================*)
+
+
+  (** {2 Evaluation of expressions} *)
+  (** ***************************** *)
 
   (** Expressions annotated with abstract values; useful for assignment and compare. *)
   type aexpr =
@@ -201,10 +205,8 @@ struct
 
 
 
-  (*==========================================================================*)
-                         (** {2 Transfer function} *)
-  (*==========================================================================*)
-
+  (** {2 Transfer functions} *)
+  (** ********************** *)
 
   let init prog = empty
 
@@ -272,12 +274,224 @@ struct
     | _ -> None
 
 
-
-  (** Evaluation query *)
-  (** **************** *)
-
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
       Value.ask (vman map) query
 
+
 end
+
+
+
+(****************************************************************************)
+(**                       {2 Reachable states}                              *)
+(****************************************************************************)
+
+(** The non-relational domain can store all reachable environments encountered
+    during the analysis. They can be exported via query Q_reachable_states,
+    which returns a list (loc, pre, post) representing the pre and post
+    conditions of the program at location loc. The environments pre and post
+    are structured as lists of (variable, value) mapping variables to
+    their values in string format.
+*)
+
+open Location
+
+(** Export formats of reachable states *)
+type value = string
+type state = (var * value) list
+type history = (range * (state * state)) list
+
+(** Query to extract the collection of reachable states *)
+type _ query += Q_reachable_states : history query
+
+let () =
+  register_query {
+    query_join = (fun next a b ->
+        Exceptions.panic ~loc:__LOC__ "join of Q_reachable_states not implemented"
+      );
+    query_meet = (fun next a b ->
+        Exceptions.panic ~loc:__LOC__ "meet of Q_reachable_states not implemented"
+      );
+  }
+
+
+(****************************************************************************)
+(**              {2 Domain with history of reachable states}                *)
+(****************************************************************************)
+
+(** Command line option to activate state collection *)
+let opt_collect_states = ref false
+
+
+module MakeWithHistory(Value: VALUE) =
+struct
+
+  module D = MakeWithoutHistory(Value)
+
+  include Sig.Simplified.Domain.MakeIntermediate(D)
+
+
+  (****************************************************************************)
+  (**                    {2 Program state history}                            *)
+  (****************************************************************************)
+
+  (* We keep all encountered pre and post states a flow-insensitive  context *)
+
+  module History = MapExt.Make(
+    struct
+      type t = range
+      let compare = compare_range
+    end
+    )
+
+  (* This trick is necessary to escape the "acyclic type" error later *)
+  type s = t
+
+  (** Key of the cache in the flow-insensitive context *)
+  let history_key =
+    let module C = Context.GenUnitKey(
+      struct
+
+        type t = (s * s) History.t
+
+        let print fmt history =
+          Format.fprintf fmt "@[<v>%a@]"
+            (Format.pp_print_list
+               ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
+               (fun fmt (range, (pre,post)) ->
+                  Format.fprintf fmt "%a:@  pre: @[%a@]@  post: @[%a@]"
+                    pp_range range
+                    print pre
+                    print post
+               )
+            ) (History.bindings history)
+      end
+      )
+    in
+    C.key
+
+  let init_history flow =
+    Flow.set_ctx (
+      Flow.get_ctx flow |>
+      Context.add_unit history_key History.empty
+    ) flow
+
+
+  (** Update the pre-condition of the statement *)
+  let update_pre stmt man flow =
+    match skind stmt with
+    | S_assign _ | S_assume _
+      when Location.is_orig stmt.srange ->
+
+      let range = srange stmt in
+      let pre = get_domain_env T_cur man flow in
+
+      let ctx = Flow.get_ctx flow in
+      let history = Context.find_unit history_key ctx in
+
+      let old_pre, old_post =
+        try History.find range history
+        with Not_found -> (bottom,bottom)
+      in
+      let pre' = join old_pre pre in
+      let history' = History.add range (pre', old_post) history in
+
+      let ctx' = Context.add_unit history_key history' ctx in
+      Flow.set_ctx ctx' flow
+
+    | _ -> flow
+
+  (** Update the post-condition of the statement *)
+  let update_post stmt man flow =
+    match skind stmt with
+    | S_assign _ | S_assume _
+      when Location.is_orig stmt.srange ->
+
+      let range = srange stmt in
+      let post = get_domain_env T_cur man flow in
+
+      let ctx = Flow.get_ctx flow in
+      let history = Context.find_unit history_key ctx in
+
+      let old_pre, old_post =
+        try History.find range history
+        with Not_found -> (bottom,bottom)
+      in
+      let post' = join old_post post in
+      let history' = History.add range (old_pre, post') history in
+
+      let ctx' = Context.add_unit history_key history' ctx in
+      Flow.set_ctx ctx' flow
+
+    | _ -> flow
+
+
+  (** Get history of reachable states *)
+  let get_history flow =
+    let ctx = Flow.get_ctx flow in
+    Context.find_unit history_key ctx
+
+  let export_state (state:t) : state =
+    D.VarMap.fold (fun var value acc ->
+        let value_str =
+          Value.print Format.str_formatter value;
+          Format.flush_str_formatter ()
+        in
+        (var, value_str) :: acc
+      ) state []
+
+  let export_history (history:(t*t) History.t) : history =
+    History.fold (fun range (pre,post) acc ->
+        (range, (export_state pre, export_state post)) :: acc
+      ) history []
+
+
+  (****************************************************************************)
+  (**                       {2 Transfer functions}                            *)
+  (****************************************************************************)
+
+
+  let init prog man flow =
+    init prog man flow |>
+    init_history
+
+  let exec zone stmt man flow =
+    update_pre stmt man flow |>
+
+    exec zone stmt man |>
+    Option.lift @@ Post.bind @@ fun flow ->
+
+    update_post stmt man flow |>
+    Post.return
+
+  let ask : type r. r query -> ('a,t) man -> 'a flow -> r option =
+    fun query man flow ->
+      match query with
+      | Q_reachable_states ->
+        let history = get_history flow in
+        Some (export_history history)
+
+      | _ -> ask query man flow
+
+
+
+end
+
+
+(** Create a non-relational abstraction with eventual history caching
+    depending on the option opt_collect_states *)
+module Make(Value:VALUE) () : Sig.Intermediate.Domain.DOMAIN =
+  (val
+    if !opt_collect_states
+    then
+      let module M = MakeWithHistory(Value) in
+      (module M)
+    else
+      let module M = Sig.Simplified.Domain.MakeIntermediate(
+          MakeWithoutHistory(Value)
+        )
+      in
+      (module M)
+    : Sig.Intermediate.Domain.DOMAIN
+  )

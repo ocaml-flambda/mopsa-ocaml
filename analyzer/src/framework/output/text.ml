@@ -37,7 +37,13 @@ let print out fmt =
       fprintf formatter "%s" str
     ) fmt
 
-let report ?(flow=None) man alarms time files out =
+let pp_state fmt state =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+    (fun fmt (var,env) -> fprintf fmt "%a → %s" Ast.Var.pp_var var env)
+    fmt state
+
+let report ?(flow=None) man alarms states time files out =
   print out "%a@." (Debug.color_str "green") "Analysis terminated successfully";
   let () = match flow with
     | None -> ()
@@ -45,15 +51,31 @@ let report ?(flow=None) man alarms time files out =
       print out "Last flow = %a@\n" (Core.Flow.print man.lattice) f
   in
   print out "Time: %.3fs@." time;
-  match alarms with
-  | [] -> print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
-  | _ ->
-    print out "%d alarm%a detected:@." (List.length alarms) Debug.plurial_list alarms;
-    print out "@[%a@]@."
-      (pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
-         Core.Alarm.pp_alarm
-      ) alarms
+  let () =
+    match alarms with
+    | [] -> print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
+    | _ ->
+      print out "%d alarm%a detected:@." (List.length alarms) Debug.plurial_list alarms;
+      print out "@[%a@]@."
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@\n@\n")
+           Core.Alarm.pp_alarm
+        ) alarms
+  in
+  let () =
+    match states with
+    | [] -> ()
+    | _ ->
+      let open Combiners.Value.Nonrel in
+      print out "reachable states:@.";
+      List.iter (fun (range, (pre,post)) ->
+          print out "%a:@\n  pre:@\n    @[%a@]@\n  post:@\n    @[%a@]@."
+            Location.pp_range range
+            pp_state pre
+            pp_state post
+      ) states
+  in
+  ()
 
 
 let panic ?btrace exn files out =
