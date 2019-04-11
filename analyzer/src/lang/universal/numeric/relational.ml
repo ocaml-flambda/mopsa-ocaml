@@ -451,7 +451,7 @@ struct
     assert false
 
   let print fmt abs =
-    Format.fprintf fmt "%s:@\n  @[%a@]@\n"
+    Format.fprintf fmt "%s:@,  @[%a@]@\n"
       ApronManager.name
       Apron.Abstract1.print abs
 
@@ -471,6 +471,10 @@ struct
   let rec exec stmt a =
     let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
+    | S_add { ekind = E_var (var, _) } ->
+      add_missing_vars a [var] |>
+      Option.return
+
     | S_remove { ekind = E_var (var, _) } ->
       let env = Apron.Abstract1.env a in
       let vars =
