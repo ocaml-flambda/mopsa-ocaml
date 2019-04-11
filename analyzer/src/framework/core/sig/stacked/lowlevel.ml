@@ -19,9 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Low level signature of domains. Similar to the general-purpose domain
-    signature, except that lattice operators are defined on the global
-    abstraction.
+(** Low level signature of stacked domains. Similar to the general-purpose
+    stacked domain signature, except that lattice operators are defined on
+    the global abstraction.
 *)
 
 
@@ -33,21 +33,15 @@ open Context
 open Flow
 open Manager
 open Eval
-open Query
 open Log
 open Post
 open Zone
 open Id
 open Interface
+open Channel
 
-
-(*==========================================================================*)
-(**                            {2 Signature}                                *)
-(*==========================================================================*)
-
-
-(** Low-level signature of an abstract domain *)
-module type DOMAIN =
+(** Low level signature of stacked abstract domains *)
+module type STACK =
 sig
 
   (** {2 Domain header} *)
@@ -86,27 +80,20 @@ sig
   (** {2 Lattice predicates} *)
   (** ********************** *)
 
-  val is_bottom: ('a,t) man -> 'a -> bool
+  val is_bottom: ('a,t) man -> ('a,'s) man -> 'a -> bool
   (** [is_bottom man a] tests whether [a] is bottom or not. *)
 
-  val subset: ('a,t) man -> 'a -> 'a -> bool
-  (** [subset man a1 a2] provides a partial order relation over
-      elements of the domain by testing whether [a1] is related to (or
-     included in) [a2]. *)
+  val subset: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> bool * 'a * 'a
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val join: ('a,t) man -> 'a -> 'a -> t
-  (** [join man a1 a2] computes an upper bound of [a1] and [a2]. *)
+  val join: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> t * 'a * 'a
 
-  val meet: ('a,t) man -> 'a -> 'a -> t
-  (** [meet man a1 a2] computes a lower bound of [a1] and [a2]. *)
+  val meet: ('a,t) man -> ('a,'s) man -> 'a -> 'a -> t * 'a * 'a
 
-  val widen: ('a,t) man -> uctx -> 'a -> 'a -> t
-  (** [widen man ctx a1 a2] computes an upper bound of [a1] and [a2] that
-      ensures stabilization of ascending chains. *)
+  val widen: ('a,t) man -> ('a,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a * bool
 
   val merge: ('a,t) man -> 'a -> 'a * log -> 'a * log -> t
   (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
@@ -127,7 +114,7 @@ sig
   val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
-  val exec : zone -> stmt -> ('a, t) man -> 'a flow -> 'a post option
+  val exec : zone -> stmt -> ('a, t) man -> ('a,'s) man -> 'a flow -> 'a post option
   (** Post-state of statements *)
 
   val eval : (zone * zone) -> expr -> ('a, t) man -> 'a flow -> (expr, 'a) eval option
@@ -135,6 +122,13 @@ sig
 
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
+
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  val refine : channel -> ('a,t) man -> ('a,'s) man -> 'a flow -> 'a flow with_channel
+
 
 end
 
@@ -144,19 +138,19 @@ end
 (*==========================================================================*)
 
 
-let domains : (module DOMAIN) list ref = ref []
+let stacks : (module STACK) list ref = ref []
 
-let register_domain dom =
-  domains := dom :: !domains
+let register_stack dom =
+  stacks := dom :: !stacks
 
-let find_domain name =
+let find_stack name =
   List.find (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      compare D.name name = 0
-    ) !domains
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
 
 let names () =
   List.map (fun dom ->
-      let module D = (val dom : DOMAIN) in
-      D.name
-    ) !domains
+      let module S = (val dom : STACK) in
+      S.name
+    ) !stacks

@@ -62,7 +62,7 @@ sig
 end
 
 (** Create a full stack from a stateless domain. *)
-module MakeIntermediate(S: STACK) : Intermediate.Stacked.STACK with type t = unit =
+module MakeIntermediate(S: STACK) : Intermediate.STACK with type t = unit =
 struct
 
   type t = unit
@@ -89,6 +89,7 @@ struct
   let exec = S.exec
   let eval = S.eval
   let ask = S.ask
+  let refine channel man sman flow = Channel.return flow
 
 end
 
@@ -96,4 +97,4 @@ end
 let register_stack modl =
   let module M = (val modl : STACK) in
   let module S = MakeIntermediate(M) in
-  Intermediate.Stacked.register_stack (module S)
+  Intermediate.register_stack (module S)

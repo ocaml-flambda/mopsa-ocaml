@@ -22,11 +22,11 @@
 (** Interval abstraction of float values. *)
 
 open Mopsa
-open Core.Sig.Intermediate.Value
+open Core.Sig.Value.Intermediate
 open Rounding
 open Ast
 open Bot
-    
+
 
 module Value =
 struct
@@ -193,13 +193,11 @@ struct
 
   let ask man q = None
 
-  (** Casts *)
+  let refine man channel v = Channel.return v
 
-    (* let float_of_int (p:float_prec) (i:int_t) : float_t with_channel =
-     * return (I.of_int_itv_bot (prec p) (round ()) i) *)
 
 end
 
 
 let () =
-  Core.Sig.Lowlevel.Value.register_value (module Value)
+  Sig.Value.Lowlevel.register_value (module Value)

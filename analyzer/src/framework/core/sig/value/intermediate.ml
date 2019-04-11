@@ -19,13 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Low-level signature of a value abstraction. *)
+(** General-purpose signature of a value abstraction. *)
 
 open Ast.All
 open Manager
 open Context
 open Id
 open Query
+open Channel
 
 
 module type VALUE =
@@ -61,7 +62,6 @@ sig
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
-  val cast: ('a,t) vman -> 's value -> 'a -> 's option
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -90,20 +90,20 @@ sig
   val of_constant : typ -> constant -> t
   (** Create a singleton abstract value from a constant. *)
 
-  val unop : ('a,t) vman -> typ -> operator -> 'a -> t
+  val unop : typ -> operator -> t -> t
   (** Forward evaluation of unary operators. *)
 
-  val binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
+  val binop : typ -> operator -> t -> t -> t
   (** Forward evaluation of binary operators. *)
 
-  val filter : ('a,t) vman -> 'a -> bool -> t
+  val filter : t -> bool -> t
   (** Keep values that may represent the argument truth value *)
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
+  val bwd_unop : typ -> operator -> t -> t -> t
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -111,7 +111,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> 'a -> (t * t)
+  val bwd_binop : typ -> operator -> t -> t -> t -> (t * t)
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -121,7 +121,7 @@ sig
   *)
 
 
-  val compare : ('a,t) vman -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
+  val compare : typ -> operator -> t -> t -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -131,10 +131,109 @@ sig
   *)
 
 
+  (** {2 Query handler} *)
+  (** ***************** *)
+
+  val ask : 'r query -> (expr -> t) -> 'r option
+
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  val refine : channel -> t -> t with_channel
+
+
+
+end
+
+
+(*==========================================================================*)
+(**                      {2 Low-level lifters}                              *)
+(*==========================================================================*)
+
+let lift_unop unop (man:('a,'t) vman) (t:typ) (op:operator) (a:'a) : 't = unop t op (man.vget a)
+
+let lift_binop binop man t op a b = binop t op (man.vget a) (man.vget b)
+
+let lift_filter filter man v b =  filter (man.vget v) b
+
+let lift_bwd_unop bwd_unop man t op v r = bwd_unop t op (man.vget v) (man.vget r)
+
+let lift_bwd_binop bwd_binop man t op a b r = bwd_binop t op (man.vget a) (man.vget b) (man.vget r)
+
+let lift_compare compare man t op a b r = compare t op (man.vget a) (man.vget b) r
+
+let lift_ask ask man q = ask q (fun e -> man.veval e |> man.vget)
+
+let lift_refine refine man channel v =
+  refine channel (man.vget v) |>
+  Channel.bind @@ fun r ->
+
+  man.vset r v |>
+  Channel.return
+
+let leaf_cast :type t s. ('a,t) vman -> t value -> s value -> 'a -> s option =
+  fun man id1 id2 a ->
+    match Id.veq id1 id2 with
+    | Some Eq.Eq -> Some (man.vget a)
+    | None -> None
+
+(** Lift a general-purpose signature to a low-level one *)
+module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
+struct
+
+  (* Trivial lifts *)
+  type t = Value.t
+  let id = Value.id
+  let name = Value.name
+  let display = Value.display
+  let zones = Value.zones
+  let types = Value.types
+  let bottom = Value.bottom
+  let top = Value.top
+  let is_bottom = Value.is_bottom
+  let subset = Value.subset
+  let join = Value.join
+  let meet = Value.meet
+  let widen = Value.widen
+  let print = Value.print
+
+  let cast man id a = leaf_cast man Value.id id a
+
+
+  (** {2 Forward semantics} *)
+  (** ********************* *)
+
+  let of_constant = Value.of_constant
+
+  let unop man t op a = lift_unop Value.unop man t op a
+
+  let binop man t op a b = lift_binop Value.binop man t op a b
+
+  let filter man a b = lift_filter Value.filter man a b
+
+
+  (** {2 Backward semantics} *)
+  (** ********************** *)
+
+  let bwd_unop man t op v r = lift_bwd_unop Value.bwd_unop man t op v r
+
+  let bwd_binop man t op v1 v2 r = lift_bwd_binop Value.bwd_binop man t op v1 v2 r
+
+  let compare man t op v1 v2 b = lift_compare Value.compare man t op v1 v2 b
+
+
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  val ask : ('a,t) vman -> 'r query -> 'r option
+  let ask man q = lift_ask Value.ask man q
+
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  let refine man channel a =
+    lift_refine Value.refine man channel a
 
 end
 
@@ -143,26 +242,21 @@ end
 (**                         {2 Registration}                                *)
 (*==========================================================================*)
 
-let values : (module VALUE) list ref = ref []
-
-let register_value v = values := v :: !values
-
-let find_value name =
-  List.find (fun v ->
-      let module V = (val v : VALUE) in
-      compare V.name name = 0
-    ) !values
+let register_value v =
+  let module V = (val v : VALUE) in
+  let module VL = MakeLowlevel(V) in
+  Lowlevel.register_value (module VL)
 
 
 (*==========================================================================*)
-(**                  {2 Default backward functions}                         *)
+(**                  {2 Default backward functions} *)
 (*==========================================================================*)
 
-let default_bwd_unop ma typ op x r =
+let default_bwd_unop t op x r =
   x
 
-let default_bwd_binop man typ op x y r =
+let default_bwd_binop t op x y r =
   (x, y)
 
-let default_compare man typ op x y b =
+let default_compare t op x y b =
   (x, y)

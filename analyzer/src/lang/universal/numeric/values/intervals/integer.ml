@@ -290,8 +290,10 @@ struct
 
       | _ -> None
 
+  let refine channel v = Channel.return v
+
 end
 
 
 let () =
-  Core.Sig.Simplified.Value.register_value (module Value)
+  Core.Sig.Value.Simplified.register_value (module Value)

@@ -26,7 +26,7 @@ open Manager
 open Context
 open Id
 open Query
-
+open Channel
 
 module type VALUE =
 sig
@@ -57,7 +57,7 @@ sig
 
   val top: t
   (** Greatest abstract element of the lattice. *)
-  
+
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
@@ -135,6 +135,13 @@ sig
 
   val ask : 'r query -> (expr -> t) -> 'r option
 
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  val refine : channel -> t -> t with_channel
+
+
 end
 
 
@@ -154,10 +161,12 @@ let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.vget a) (man.vge
 
 let lift_compare compare man t op a b r = compare op (man.vget a) (man.vget b) r
 
-let lift_ask ask man q = ask q (fun e -> man.veval e |> man.vget)
+let lift_ask ask man q = Intermediate.lift_ask ask man q
+
+let lift_refine refine man channel v = Intermediate.lift_refine refine man channel v
 
 (** Lift a general-purpose signature to a low-level one *)
-module MakeLowlevel(Value:VALUE) : Lowlevel.Value.VALUE with type t = Value.t =
+module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
 struct
 
   (* Trivial lifts *)
@@ -211,6 +220,14 @@ struct
 
   let ask man q = lift_ask Value.ask man q
 
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  let refine man channel a =
+    lift_refine Value.refine man channel a
+
+
 end
 
 
@@ -221,7 +238,7 @@ end
 let register_value v =
   let module V = (val v : VALUE) in
   let module VL = MakeLowlevel(V) in
-  Lowlevel.Value.register_value (module VL)
+  Lowlevel.register_value (module VL)
 
 
 (*==========================================================================*)

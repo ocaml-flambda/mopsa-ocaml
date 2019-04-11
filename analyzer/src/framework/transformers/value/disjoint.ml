@@ -27,7 +27,7 @@
 
 open Ast.All
 open Core
-open Sig.Lowlevel.Value
+open Sig.Value.Lowlevel
 open Manager
 open Context
 open Id
@@ -247,5 +247,15 @@ struct
     let a = V1.ask (v1_man man) q in
     let b = V2.ask (v2_man man) q in
     Option.neutral2 (Query.join q) a b
+
+
+  (** {2 Reduction refiner} *)
+  (** ********************* *)
+
+  let refine man channel v =
+    V1.refine (v1_man man) channel v |>
+    Core.Channel.bind @@ V2.refine (v2_man man) channel
+
+
 
 end

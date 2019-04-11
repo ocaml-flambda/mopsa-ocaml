@@ -92,9 +92,9 @@ let unop op v = top
 
 let binop op v1 v2 = top
 
-let bwd_unop = Framework.Core.Sig.Simplified.Value.default_bwd_unop
+let bwd_unop = Framework.Core.Sig.Value.Simplified.default_bwd_unop
 
-let bwd_binop = Framework.Core.Sig.Simplified.Value.default_bwd_binop
+let bwd_binop = Framework.Core.Sig.Value.Simplified.default_bwd_binop
 
 let filter v b =
   if b then diff v null
@@ -120,3 +120,5 @@ let compare op v1 v2 r =
 
 
 let ask _ _ = None
+
+let refine channel v = Channel.return v

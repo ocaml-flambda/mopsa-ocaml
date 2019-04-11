@@ -42,7 +42,7 @@ open Post
 open Zone
 open Id
 open Interface
-
+open Channel
 
 (** Unified signature of stacked abstract domains *)
 module type STACK =
@@ -122,6 +122,13 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  val refine : channel -> ('a,t) man -> ('a,'s) man -> 'a flow -> 'a flow with_channel
+
+
 end
 
 
@@ -130,7 +137,7 @@ end
 (*==========================================================================*)
 
 (** Cast a unified signature into a low-level signature *)
-module MakeLowlevelStack(S:STACK) : Lowlevel.Stacked.STACK with type t = S.t =
+module MakeLowlevelStack(S:STACK) : Lowlevel.STACK with type t = S.t =
 struct
 
   (** {2 Domain header} *)
@@ -244,6 +251,8 @@ struct
 
   let ask = S.ask
 
+  let refine = S.refine
+
 end
 
 
@@ -255,4 +264,4 @@ end
 let register_stack st =
   let module S = (val st : STACK) in
   let module SL = MakeLowlevelStack(S) in
-  Lowlevel.Stacked.register_stack (module SL)
+  Lowlevel.register_stack (module SL)

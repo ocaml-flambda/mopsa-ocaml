@@ -64,7 +64,7 @@ sig
 end
 
 (** Create a full domain from a stateless domain. *)
-module MakeIntermediate(D: DOMAIN) : Intermediate.Domain.DOMAIN with type t = unit =
+module MakeIntermediate(D: DOMAIN) : Intermediate.DOMAIN with type t = unit =
 struct
 
   type t = unit
@@ -90,10 +90,11 @@ struct
   let exec = D.exec
   let eval = D.eval
   let ask = D.ask
+  let refine channel man flow = Channel.return flow
 
 end
 
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = MakeIntermediate(M) in
-  Intermediate.Domain.register_domain (module D)
+  Intermediate.register_domain (module D)

@@ -596,7 +596,7 @@ struct
     | _ -> None
 
 
-  and ask : type r. r Query.query -> t -> r option =
+  let ask : type r. r Query.query -> t -> r option =
     fun query abs ->
       match query with
       | Values.Intervals.Integer.Value.Q_interval e ->
@@ -608,6 +608,8 @@ struct
         Option.return
 
       | _ -> None
+
+  let refine channel a = Channel.return a
 
 end
 
@@ -629,5 +631,5 @@ end
 module Poly = Make(PolyMan)
 
 let () =
-  Framework.Core.Sig.Simplified.Domain.register_domain (module Oct);
-  Framework.Core.Sig.Simplified.Domain.register_domain (module Poly);
+  Framework.Core.Sig.Domain.Simplified.register_domain (module Oct);
+  Framework.Core.Sig.Domain.Simplified.register_domain (module Poly);

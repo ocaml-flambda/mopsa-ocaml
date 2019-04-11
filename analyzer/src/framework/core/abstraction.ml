@@ -91,7 +91,7 @@ let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
 
 
 (** Encapsulate a domain into an abstraction *)
-module Make(Domain:Sig.Lowlevel.Domain.DOMAIN)
+module Make(Domain:Sig.Domain.Lowlevel.DOMAIN)
   : ABSTRACTION with type t = Domain.t
 =
 struct

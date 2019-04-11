@@ -32,6 +32,7 @@ open Zone
 open Manager
 open Interface
 open Token
+open Channel
 
 module type DOMAIN =
 sig
@@ -110,11 +111,18 @@ sig
   val ask : 'r Query.query -> t -> 'r option
   (** Handler of queries *)
 
+
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
+
+  val refine : channel -> t -> t with_channel
+
+
 end
 
 
 (** Create a full domain from a leaf. *)
-module MakeIntermediate(D: DOMAIN) : Intermediate.Domain.DOMAIN with type t = D.t =
+module MakeIntermediate(D: DOMAIN) : Intermediate.DOMAIN with type t = D.t =
 struct
 
   include D
@@ -156,6 +164,13 @@ struct
   let ask query man flow =
     D.ask query (get_domain_env T_cur man flow)
 
+  let refine channel man flow =
+    D.refine channel (get_domain_env T_cur man flow) |>
+    Channel.bind @@ fun a ->
+
+    set_domain_env T_cur a man flow |>
+    Channel.return
+
 end
 
 
@@ -163,4 +178,4 @@ end
 let register_domain modl =
   let module M = (val modl : DOMAIN) in
   let module D = MakeIntermediate(M) in
-  Intermediate.Domain.register_domain (module D)
+  Intermediate.register_domain (module D)

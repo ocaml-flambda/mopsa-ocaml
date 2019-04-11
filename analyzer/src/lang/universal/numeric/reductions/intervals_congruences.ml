@@ -22,7 +22,7 @@
 (** Reduction operator for intervals and congruences. *)
 
 open Mopsa
-open Core.Sig.Reduction.Value
+open Core.Sig.Value.Reduction
 
 
 

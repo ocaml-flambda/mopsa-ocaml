@@ -21,8 +21,9 @@
 
 (** Utility functions for manipulating lists of value abstractions. *)
 
-open Core.Sig.Lowlevel.Value
+open Core.Sig.Value.Lowlevel
 open Core.Manager
+
 
 (****************************************************************************)
 (**                              {2 Types}                                  *)
@@ -243,6 +244,28 @@ let vlist_ret_man_opt f l man =
         | None -> aux tl (tlman man)
   in
   aux l man
+
+
+(****************************************************************************)
+(**                         {2 Iterators}                                   *)
+(****************************************************************************)
+
+
+type ('a,'b) man_fold = {
+  f: 't. 't vmodule -> ('a,'t) vman -> 'b -> 'b;
+}
+
+
+let vlist_man_fold f l man init =
+  let rec aux : type t. t vlist -> ('a,t) vman -> 'b -> 'b =
+    fun l man acc ->
+      match l with
+      | Nil -> acc
+      | Cons(hd,tl) ->
+        let acc' = f.f hd (hdman man) acc in
+        aux tl (tlman man) acc'
+  in
+  aux l man init
 
 
 (****************************************************************************)

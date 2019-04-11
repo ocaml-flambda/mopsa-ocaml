@@ -19,56 +19,43 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Render the output of an analysis depending on the selected engine. *)
+(** Reduction rules of statements post-states *)
 
-open Core.Manager
-
-type format =
-  | F_text (* Textual output *)
-  | F_json (* Formatted output in JSON *)
+open Id
+open Query
+open Channel
 
 
-(* Command line option *)
-(* ------------------- *)
 
-let opt_format = ref F_text
-let opt_file = ref None
-let opt_display_lastflow = ref false
+(** Manager used by post-state reduction rules *)
+type 'a xrman = {
+  get : 'r. 'r domain -> 'a -> 'r;
+  set : 'r. 'r domain -> 'r -> 'a -> 'a;
+  ask : 'r. 'r query -> 'a -> 'r;
+  refine : channel -> 'a -> 'a;
+}
 
-(* Result rendering *)
-(* ---------------- *)
 
-(* Print collected alarms in the desired output format *)
-let report man flow time files =
-  let alarms = Core.Flow.fold (fun acc tk env ->
-      match tk with
-      | Core.Alarm.T_alarm a -> a :: acc
-      | _ -> acc
-    ) [] flow
-  in
-  let return_v = if List.length alarms > 0 then 1 else 0 in
-  let states =
-    if not !Transformers.Value.Nonrel.opt_collect_states
-    then []
-    else man.ask Transformers.Value.Nonrel.Q_reachable_states flow
-  in
-  let lf = if !opt_display_lastflow then Some flow else None in
-  let _ = match !opt_format with
-    | F_text -> Text.report ~flow:lf man alarms states time files !opt_file
-    | F_json -> Json.report man alarms states time files !opt_file in
-  return_v
 
-let panic ?btrace exn files =
-  match !opt_format with
-  | F_text -> Text.panic ?btrace exn files !opt_file
-  | F_json -> Json.panic ?btrace exn files !opt_file
+(** Signature of a post-state reduction rule *)
+module type REDUCTION =
+sig
+  val name   : string
+  val reduce : 'a xrman -> 'a -> 'a
+end
 
-let help (args:ArgExt.arg list) =
-  match !opt_format with
-  | F_text -> Text.help args !opt_file
-  | F_json -> Json.help args !opt_file
 
-let list_domains (domains:string list) =
-  match !opt_format with
-  | F_text -> Text.list_domains domains !opt_file
-  | F_json -> Json.list_domains domains !opt_file
+(** Registered reductions *)
+let reductions : (module REDUCTION) list ref = ref []
+
+
+(** Register a new reduction *)
+let register_reduction rule =
+  reductions := rule :: !reductions
+
+(** Find a reduction by its name *)
+let find_reduction name =
+  List.find (fun v ->
+      let module V = (val v : REDUCTION) in
+      compare V.name name = 0
+    ) !reductions

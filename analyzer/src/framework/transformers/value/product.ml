@@ -25,8 +25,8 @@
 
 open Ast.All
 open Core.All
-open Core.Sig.Lowlevel.Value
-open Core.Sig.Reduction.Value
+open Core.Sig.Value.Lowlevel
+open Core.Sig.Value.Reduction
 open Utils.Value_list
 
 
@@ -307,7 +307,12 @@ struct
       in
       Some r
 
-
+  let refine man channel v =
+    let f = fun (type a) (m:a vmodule) man acc ->
+      let module Value = (val m) in
+      Core.Channel.bind (Value.refine man channel) acc
+    in
+    vlist_man_fold { f } Spec.pool man (Core.Channel.return v)
 
 end
 

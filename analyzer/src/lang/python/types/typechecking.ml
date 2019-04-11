@@ -14,9 +14,9 @@ struct
   module AD = Addr_env.Domain
   module TD = Typing.Domain
 
-  module Iter = Framework.Combiners.Domain.Sequence.Make
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(AD))
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(TD))
+  module Iter = Framework.Transformers.Domain.Sequence.Make
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(AD))
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(TD))
 
   include Iter
 
@@ -113,7 +113,7 @@ struct
 
 
   let join man a a' =
-    Framework.Core.Sig.Intermediate.Domain.lift_binop
+    Framework.Core.Sig.Domain.Intermediate.lift_binop
       (fun (hd, tl) (hd', tl') ->
          (* if !opt_polymorphism then *)
          match hd, hd' with
@@ -146,6 +146,7 @@ struct
               *   Iter.join annot (hd, tl) (hd', tl') *)
       ) man a a'
 
+
 end
 
-let () = Framework.Core.Sig.Lowlevel.Domain.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Lowlevel.register_domain (module Domain)

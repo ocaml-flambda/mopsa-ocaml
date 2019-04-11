@@ -25,14 +25,13 @@
 
 open Ast.All
 open Core.All
-open Core.Sig.Lowlevel.Value
 
 
 (****************************************************************************)
 (**             {2 Domain without history of reachable states}              *)
 (****************************************************************************)
 
-module MakeWithoutHistory(Value: VALUE) =
+module MakeWithoutHistory(Value: Sig.Value.Lowlevel.VALUE) =
 struct
 
 
@@ -279,6 +278,10 @@ struct
       Value.ask (vman map) query
 
 
+  let refine channel a =
+    assert false
+
+
 end
 
 
@@ -324,12 +327,12 @@ let () =
 let opt_collect_states = ref false
 
 
-module MakeWithHistory(Value: VALUE) =
+module MakeWithHistory(Value: Sig.Value.Lowlevel.VALUE) =
 struct
 
   module D = MakeWithoutHistory(Value)
 
-  include Sig.Simplified.Domain.MakeIntermediate(D)
+  include Sig.Domain.Simplified.MakeIntermediate(D)
 
 
   (****************************************************************************)
@@ -481,17 +484,17 @@ end
 
 (** Create a non-relational abstraction with eventual history caching
     depending on the option opt_collect_states *)
-module Make(Value:VALUE) () : Sig.Intermediate.Domain.DOMAIN =
+module Make(Value:Sig.Value.Lowlevel.VALUE) () : Sig.Domain.Intermediate.DOMAIN =
   (val
     if !opt_collect_states
     then
       let module M = MakeWithHistory(Value) in
       (module M)
     else
-      let module M = Sig.Simplified.Domain.MakeIntermediate(
+      let module M = Sig.Domain.Simplified.MakeIntermediate(
           MakeWithoutHistory(Value)
         )
       in
       (module M)
-    : Sig.Intermediate.Domain.DOMAIN
+    : Sig.Domain.Intermediate.DOMAIN
   )

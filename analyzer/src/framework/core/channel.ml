@@ -19,11 +19,19 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Functor domains *)
-
-open Domain
-
-module type FUNCTOR = functor(Domain: DOMAIN) -> DOMAIN
+(** Reduction channels *)
 
 
-let functors : (module FUNCTOR) list ref = ref []
+type channel = ..
+
+type 'a with_channel = {
+  value: 'a;
+  channels: channel list;
+}
+
+let return x =
+  { value = x; channels = [] }
+
+let bind f wc =
+  let wc' = f wc.value in
+  { wc' with channels = wc.channels @ wc'.channels }

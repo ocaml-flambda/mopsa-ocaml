@@ -22,9 +22,9 @@
 (** Configuration parser. *)
 
 open Core
-open Sig.Lowlevel.Domain
-open Sig.Lowlevel.Stacked
-open Sig.Lowlevel.Value
+open Sig.Domain.Lowlevel
+open Sig.Stacked.Lowlevel
+open Sig.Value.Lowlevel
 open Abstraction
 open Yojson.Basic
 open Yojson.Basic.Util
@@ -77,7 +77,7 @@ and domain_seq assoc : (module DOMAIN) =
         let aa, bb = aux a, aux b in
         let module A = (val aa : DOMAIN) in
         let module B = (val bb : DOMAIN) in
-        let module Dom = Combiners.Domain.Sequence.Make(A)(B) in
+        let module Dom = Transformers.Domain.Sequence.Make(A)(B) in
         (module Dom : DOMAIN)
   in
   aux domains
@@ -87,14 +87,14 @@ and apply assoc : (module DOMAIN) =
   let d = List.assoc "on" assoc |> domain in
   let module S = (val s : STACK) in
   let module D = (val d : DOMAIN) in
-  let module R = Combiners.Apply.Make(S)(D) in
+  let module R = Transformers.Apply.Make(S)(D) in
   (module R : DOMAIN)
 
 and nonrel assoc : (module DOMAIN) =
   let v = List.assoc "nonrel" assoc |> value in
   let module V = (val v : VALUE) in
-  let module D = Sig.Intermediate.Domain.MakeLowlevelDomain(
-      Combiners.Value.Nonrel.Make(V)()
+  let module D = Sig.Domain.Intermediate.MakeLowlevelDomain(
+      Transformers.Value.Nonrel.Make(V)()
     )
   in
   (module D : DOMAIN)
@@ -125,7 +125,7 @@ and value_disjoint assoc : (module VALUE) =
         let tl = aux tl in
         let module Head = (val hd : VALUE) in
         let module Tail = (val tl : VALUE) in
-        let module Dom = Combiners.Value.Disjoint.Make(Head)(Tail) in
+        let module Dom = Transformers.Value.Disjoint.Make(Head)(Tail) in
         (module Dom : VALUE)
   in
   aux values
@@ -142,7 +142,7 @@ and value_product assoc : (module VALUE) =
         value_reduction
     with Not_found -> []
   in
-  Combiners.Value.Product.make values rules
+  Transformers.Value.Product.make values rules
 
 
 and value_reduction = function
@@ -153,7 +153,7 @@ and value_reduction = function
            (pretty_print ~std:true) x
 
 and value_reduction_leaf name =
-  try Sig.Reduction.Value.find_reduction name
+  try Sig.Value.Reduction.find_reduction name
   with Not_found -> Exceptions.panic "value reduction %s not found" name
 
 and stack = function
@@ -185,7 +185,7 @@ and stack_seq assoc : (module STACK) =
         let aa, bb = aux a, aux b in
         let module A = (val aa : STACK) in
         let module B = (val bb : STACK) in
-        let module Dom = Combiners.Stacked.Sequence.Make(A)(B) in
+        let module Dom = Transformers.Stacked.Sequence.Make(A)(B) in
         (module Dom : STACK)
   in
   aux stacks
@@ -206,7 +206,7 @@ and compose assoc : (module STACK) =
         let tl = aux tl in
         let module Head = (val hd : STACK) in
         let module Tail = (val tl : STACK) in
-        let module Dom = Combiners.Stacked.Compose.Make(Head)(Tail) in
+        let module Dom = Transformers.Stacked.Compose.Make(Head)(Tail) in
         (module Dom : STACK)
   in
   aux stacks
@@ -245,8 +245,8 @@ let language () : string =
 
 let domains () : string list =
   if !opt_config = ""
-  then Sig.Lowlevel.Domain.names () @
-       Sig.Lowlevel.Stacked.names ()
+  then Sig.Domain.Lowlevel.names () @
+       Sig.Stacked.Lowlevel.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in

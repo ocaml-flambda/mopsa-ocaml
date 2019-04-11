@@ -52,3 +52,5 @@ include Id
 include Interface
 
 module Sig = Sig
+
+module Channel = Channel

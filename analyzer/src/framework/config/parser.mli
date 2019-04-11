@@ -21,12 +21,10 @@
 
 (** Configuration parser. *)
 
-open Core.Sig.Lowlevel.Domain
-
 val opt_config : string ref
 (** Path to the current configuration file *)
 
-val parse : unit -> string * (module DOMAIN)
+val parse : unit -> string * (module Core.Sig.Domain.Lowlevel.DOMAIN)
 (** Construct an abstraction from the current configuration file *)
 
 val language : unit -> string

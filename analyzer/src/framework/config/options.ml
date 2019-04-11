@@ -248,7 +248,7 @@ let () =
     key = "-collect-states";
     category = "Debugging";
     doc = " collect (non-relational) reachable states";
-    spec = ArgExt.Set Combiners.Value.Nonrel.opt_collect_states;
+    spec = ArgExt.Set Transformers.Value.Nonrel.opt_collect_states;
     default = "false";
   }
 

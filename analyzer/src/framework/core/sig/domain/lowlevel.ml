@@ -19,12 +19,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** The signature DOMAIN is the unified and general-purpose interface for
-    domains that are not parameterized by other domains. In other
-    words, the concretization function γ, the lattice operators and the
-    transfer functions do not depend on other external abstractions. Domains
-    implementing this signature have full access to the analyzer: global
-    abstraction, flows, zoned transfer functions of all other domains.
+(** Low level signature of domains. Similar to the general-purpose domain
+    signature, except that lattice operators are defined on the global
+    abstraction.
 *)
 
 
@@ -42,7 +39,7 @@ open Post
 open Zone
 open Id
 open Interface
-
+open Channel
 
 
 (*==========================================================================*)
@@ -50,7 +47,7 @@ open Interface
 (*==========================================================================*)
 
 
-(** Unified signature of an abstract domain *)
+(** Low-level signature of an abstract domain *)
 module type DOMAIN =
 sig
 
@@ -80,32 +77,40 @@ sig
   (** Greatest abstract element of the lattice. *)
 
 
+  (** {2 Pretty printing} *)
+  (** ******************* *)
+
+  val print: ('a,t) man -> Format.formatter -> 'a -> unit
+  (** Printer of an abstract element. *)
+
+
   (** {2 Lattice predicates} *)
   (** ********************** *)
 
-  val is_bottom: t -> bool
-  (** [is_bottom a] tests whether [a] is bottom or not. *)
+  val is_bottom: ('a,t) man -> 'a -> bool
+  (** [is_bottom man a] tests whether [a] is bottom or not. *)
 
-  val subset: t -> t -> bool
-  (** Partial order relation. [subset a1 a2] tests whether [a1] is
-      related to (or included in) [a2]. *)
+  val subset: ('a,t) man -> 'a -> 'a -> bool
+  (** [subset man a1 a2] provides a partial order relation over
+      elements of the domain by testing whether [a1] is related to (or
+     included in) [a2]. *)
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val join: t -> t -> t
-  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
+  val join: ('a,t) man -> 'a -> 'a -> t
+  (** [join man a1 a2] computes an upper bound of [a1] and [a2]. *)
 
-  val meet: t -> t -> t
-  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
+  val meet: ('a,t) man -> 'a -> 'a -> t
+  (** [meet man a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> t -> t -> t
-  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
+  val widen: ('a,t) man -> uctx -> 'a -> 'a -> t
+  (** [widen man ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge: t -> t * log -> t * log -> t
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+  val merge: ('a,t) man -> 'a -> 'a * log -> 'a * log -> t
+  (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
@@ -115,13 +120,6 @@ sig
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
-
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
 
 
   (** {2 Transfer functions} *)
@@ -139,88 +137,11 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
-end
 
+  (** {2 Reduction refinement} *)
+  (** ************************ *)
 
-
-(*==========================================================================*)
-(**                        {2 Low-level lifters}                            *)
-(*==========================================================================*)
-
-let lift_unop f man a = f (man.get a)
-
-let lift_binop f man a a' = f (man.get a) (man.get a')
-
-let lift_merge merge man pre (post1,log1) (post2,log2) =
-  merge
-    (man.get pre)
-    (man.get post1, man.get_log log1)
-    (man.get post2, man.get_log log2)
-
-let lift_print print man fmt a = print fmt (man.get a)
-
-
-(** Cast a unified signature into a low-level signature *)
-module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.Domain.DOMAIN with type t = D.t =
-struct
-
-  (** {2 Domain header} *)
-  (** ***************** *)
-
-  type t = D.t
-
-  let id = D.id
-
-  let name = D.name
-
-  let interface = D.interface
-
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
-  let bottom = D.bottom
-
-  let top = D.top
-
-
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
-
-  let is_bottom man a = lift_unop D.is_bottom man a
-
-  let subset man a a' = lift_binop D.subset man a a'
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
-
-  let join man a a' = lift_binop D.join man a a'
-
-  let meet man a a' = lift_binop D.meet man a a'
-
-  let widen man ctx a a' = lift_binop (D.widen ctx) man a a'
-
-  let merge man pre (post1,log1) (post2,log2) =
-    lift_merge D.merge man pre (post1,log1) (post2,log2)
-
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  let print man fmt a = lift_print D.print man fmt a
-
-
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  let init = D.init
-
-  let exec = D.exec
-
-  let eval = D.eval
-
-  let ask = D.ask
+  val refine : channel -> ('a,t) man -> 'a flow -> 'a flow with_channel
 
 end
 
@@ -230,7 +151,19 @@ end
 (*==========================================================================*)
 
 
+let domains : (module DOMAIN) list ref = ref []
+
 let register_domain dom =
-  let module D = (val dom : DOMAIN) in
-  let module DL = MakeLowlevelDomain(D) in
-  Lowlevel.Domain.register_domain (module DL)
+  domains := dom :: !domains
+
+let find_domain name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      D.name
+    ) !domains
