@@ -39,6 +39,10 @@ let opt_config = ref ""
 
 (** Return the path of the configuration file *)
 let resolve_config_file config =
+  let config =
+    try Sys.getenv "MOPSACONFIG"
+    with Not_found -> config
+  in
   if Sys.file_exists config && not (Sys.is_directory config) then config
   else
     let file = Filename.concat (Paths.get_configs_dir ()) config in
@@ -54,6 +58,7 @@ let rec domain = function
   | `Assoc(obj) when List.mem_assoc "seq" obj -> domain_seq obj
   | `Assoc(obj) when List.mem_assoc "apply" obj -> apply obj
   | `Assoc(obj) when List.mem_assoc "nonrel" obj -> nonrel obj
+  | `Assoc(obj) when List.mem_assoc "product" obj -> domain_product obj
   | _ -> assert false
 
 and leaf_domain name : (module DOMAIN) =
@@ -98,6 +103,34 @@ and nonrel assoc : (module DOMAIN) =
     )
   in
   (module D : DOMAIN)
+
+
+
+and domain_product assoc : (module DOMAIN) =
+  let domains =
+    List.assoc "product" assoc |>
+    to_list |>
+    List.map domain
+  in
+  let rules  =
+    try List.assoc "reductions" assoc |>
+        domain_reduction
+    with Not_found -> []
+  in
+  Transformers.Domain.Product.make domains rules
+
+
+and domain_reduction = function
+  | `String(name) -> [domain_reduction_leaf name]
+  | `List l -> List.map domain_reduction l |>
+               List.flatten
+  | x -> Exceptions.panic "parsing error: unsupported reduction declaration:@ %a"
+           (pretty_print ~std:true) x
+
+and domain_reduction_leaf name =
+  try Sig.Domain.Reduction.find_reduction name
+  with Not_found -> Exceptions.panic "domain reduction %s not found" name
+
 
 and value = function
   | `String name -> value_leaf name

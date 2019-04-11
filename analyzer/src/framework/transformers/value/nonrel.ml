@@ -313,11 +313,27 @@ type _ query += Q_reachable_states : history query
 
 let () =
   register_query {
-    query_join = (fun next a b ->
-        Exceptions.panic ~loc:__LOC__ "join of Q_reachable_states not implemented"
-      );
-    query_meet = (fun next a b ->
-        Exceptions.panic ~loc:__LOC__ "meet of Q_reachable_states not implemented"
+    query_join = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_reachable_states ->
+            Exceptions.panic ~loc:__LOC__ "join of Q_reachable_states not implemented"
+
+          | _ -> next.join query a b
+      in
+      f
+    );
+    query_meet = (
+      let f : type r. query_pool -> r query -> r -> r -> r =
+        fun next query a b ->
+          match query with
+          | Q_reachable_states ->
+            Exceptions.panic ~loc:__LOC__ "join of Q_reachable_states not implemented"
+
+          | _ -> next.join query a b
+      in
+      f
       );
   }
 

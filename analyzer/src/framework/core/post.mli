@@ -36,6 +36,8 @@ val print : 'a lattice -> Format.formatter -> 'a post -> unit
 
 val join : 'a post -> 'a post -> 'a post
 
+val merge : (token -> ('a*log) -> ('a*log) -> ('a*log)) -> 'a post -> 'a post -> 'a post
+
 val meet : 'a lattice -> 'a post -> 'a post -> 'a post
 
 val choose_ctx : 'a post -> 'a ctx

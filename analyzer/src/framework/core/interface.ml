@@ -35,6 +35,17 @@ type interface = {
   ieval : (zone*zone) function_interface; (** Interface of eval function *)
 }
 
+let empty = {
+  iexec = {
+    provides = [];
+    uses = [];
+  };
+  ieval = {
+    provides = [];
+    uses = [];
+  }
+}
+
 (** Concatenate two interfaces *)
 let concat (i: interface) (j: interface) =
   {

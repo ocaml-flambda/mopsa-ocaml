@@ -20,15 +20,17 @@
 (****************************************************************************)
 
 
+(** The operator [Sequence ∈ 𝒟 × 𝒟 → 𝒟] operator combines two domains by
+    "concatenating" their transfer functions (i.e. return the result of the
+    first answering domain).
+*)
+
+
 open Ast.All
 open Core.All
 open Log
 
 
-(** The [Sequence.Domain ∈ 𝒟 × 𝒟 → 𝒟] operator combines two domains by
-    "concatenating" their transfer functions (i.e. return the result of the
-    first answering domain).
-*)
 module Make
     (D1:Sig.Domain.Lowlevel.DOMAIN)
     (D2:Sig.Domain.Lowlevel.DOMAIN)
