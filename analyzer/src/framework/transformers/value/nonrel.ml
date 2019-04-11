@@ -55,7 +55,7 @@ struct
     assert false
 
   let print fmt a =
-    Format.fprintf fmt "%s:@ @[   %a@]@\n" Value.display VarMap.print a
+    Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
 
 
 
@@ -218,8 +218,11 @@ struct
       Option.return
 
     | S_add { ekind = E_var (v, _) } ->
-      VarMap.add v Value.top map |>
-      Option.return
+      (* Check of the variable is already present *)
+      if VarMap.mem v map
+      then Option.return map
+      else Option.return @@ VarMap.add v Value.top map
+
 
     | S_project vars
       when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars ->
