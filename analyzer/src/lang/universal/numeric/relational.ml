@@ -54,7 +54,7 @@ struct
 
   let is_numerical_var (v: var): bool =
     match vtyp v with
-    | T_int | T_float _ -> true
+    | T_bool | T_int | T_float _ -> true
     | _ -> false
   let empty_env = Apron.Environment.make [| |] [| |]
 
@@ -204,12 +204,13 @@ struct
 
     | E_unop(O_wrap(g, d), e) ->
       let r = erange e in
-      mk_binop (mk_z g r) O_plus (mk_binop
-                                    (mk_binop e O_minus (mk_z g r) r)
-                                    O_mod
-                                    (mk_z (Z.(d-g+one)) r)
-                                    r
-                                 ) r
+      mk_binop ~etyp:T_int
+        (mk_z g r) O_plus (mk_binop ~etyp:T_int
+                             (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
+                             O_mod
+                             (mk_z (Z.(d-g+one)) r)
+                             r
+                          ) r
       |> fun x -> strongify_rhs x abs l
 
     | _ ->
@@ -273,12 +274,15 @@ struct
 
     | E_unop(O_wrap(g, d), e) ->
       let r = erange e in
-      mk_binop (mk_z g r) O_plus (mk_binop
-                                    (mk_binop e O_minus (mk_z g r) r)
-                                    O_mod
-                                    (mk_z (Z.(d-g+one)) r)
-                                    r
-                                 ) r
+      mk_binop ~etyp:T_int
+        (mk_z g r)
+        O_plus
+        (mk_binop ~etyp:T_int
+           (mk_binop e O_minus (mk_z g r) r ~etyp:T_int)
+           O_mod
+           (mk_z (Z.(d-g+one)) r)
+           r
+        ) r
       |> exp_to_apron
 
     | _ ->
@@ -286,12 +290,13 @@ struct
       raise UnsupportedExpression
 
   and typ_to_apron = function
+    | T_bool -> Apron.Texpr1.Int
     | T_int -> Apron.Texpr1.Int
     | T_float F_SINGLE -> Apron.Texpr1.Single
     | T_float F_DOUBLE -> Apron.Texpr1.Double
     | T_float F_LONG_DOUBLE -> Apron.Texpr1.Extended
     | T_float F_REAL -> Apron.Texpr1.Real
-    | _ -> assert false
+    | t -> panic ~loc:__LOC__ "typ_to_apron: unsupported type %a" pp_typ t
 
   and bexp_to_apron exp =
     match ekind exp with
@@ -406,7 +411,7 @@ struct
         (
           Array.of_list @@
           List.map var_to_apron @@
-          List.filter (fun v -> vtyp v = T_int) lv
+          List.filter (fun v -> vtyp v = T_int || vtyp v = T_bool) lv
         )
         (
           Array.of_list @@
@@ -469,7 +474,6 @@ struct
   let init prog = top
 
   let rec exec stmt a =
-    let () = debug "input: %a" pp_stmt stmt in
     match skind stmt with
     | S_add { ekind = E_var (var, _) } ->
       add_missing_vars a [var] |>
@@ -534,7 +538,6 @@ struct
             | _ -> assert false
           ) vl
         in
-        debug "Starting fold";
         match vl with
         | [] -> Exceptions.panic "Can not fold list of size 0"
         | p::q ->
@@ -554,7 +557,6 @@ struct
           | _ -> assert false
         ) vl
       in
-      debug "Starting expand";
       let abs = Apron.Abstract1.expand ApronManager.man a
           (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
       let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
@@ -579,14 +581,27 @@ struct
           Dnf.apply_list
             (fun (op,e1,typ1,e2,typ2) ->
                let typ =
-                 match typ1, typ2 with
-                 | T_int, T_int -> Apron.Texpr1.Int
-                 | T_float _, T_int
-                 | T_int, T_float _
-                 | T_float _, T_float _ -> Apron.Texpr1.Real
-                 | _ -> Exceptions.panic_at (srange stmt)
-                          "Unsupported case (%a, %a) in stmt @[%a@]"
-                          pp_typ typ1 pp_typ typ2 pp_stmt stmt
+
+                 let is_integer = function
+                   | T_int | T_bool -> true
+                   | _ -> false
+                 in
+
+                 let is_float = function
+                   | T_float _ -> true
+                   | _ -> false
+                 in
+
+                 if is_float typ1 || is_float typ2
+                 then Apron.Texpr1.Real
+
+                 else if is_integer typ1 && is_integer typ2
+                 then Apron.Texpr1.Int
+
+                 else
+                   Exceptions.panic_at (srange stmt)
+                     "Unsupported case (%a, %a) in stmt @[%a@]"
+                     pp_typ typ1 pp_typ typ2 pp_stmt stmt
                in
                let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
                let diff_texpr = Apron.Texpr1.of_expr env diff in

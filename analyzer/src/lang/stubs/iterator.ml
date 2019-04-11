@@ -125,9 +125,10 @@ struct
         else Some (
             man.exec (mk_assume (
                 mk_binop
-                  (mk_binop e O_lt l f.range)
+                  (mk_binop e O_lt l ~etyp:T_bool f.range)
                   O_log_or
-                  (mk_binop e O_gt u f.range)
+                  (mk_binop e O_gt u ~etyp:T_bool f.range)
+                  ~etyp:T_bool
                   f.range
               ) f.range) flow
           )
@@ -154,8 +155,8 @@ struct
     let flow =
       match s, q with
       | S_interval (l, u), EXISTS ->
-        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l range) range) flow |>
-        man.exec (mk_assume (mk_binop (mk_var v range) O_le u range) range)
+        man.exec (mk_assume (mk_binop (mk_var v range) O_ge l ~etyp:T_bool range) range) flow |>
+        man.exec (mk_assume (mk_binop (mk_var v range) O_le u ~etyp:T_bool range) range)
 
       | _ -> flow
     in
