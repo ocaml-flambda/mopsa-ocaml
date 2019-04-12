@@ -24,66 +24,75 @@
 open Visitor
 
 
-(** {2 Types} *)
-(** ********* *)
+(** {2 Types used by the typer} *)
+(** *************************** *)
 
+(** Abstractions present in MOPSA *)
 type abstraction =
   | A_domain
   | A_stack
   | A_value
 
+(** Signature levels of an abstraction *)
 type signature =
   | S_lowlevel
   | S_intermediate
   | S_simplified
   | S_stateless
 
-type operator =
+(** Configuration of an abstraction *)
+type config = {
+  abstraction : abstraction;
+  signature   : signature;
+  structure : structure;
+}
+
+(** Structure of a configuration *)
+and structure =
+  | S_leaf    of string (** Leaf configuration with a name *)
+  | S_chain   of operator * config list (** Chain configurations connected by an operator *)
+  | S_apply   of config * config (** Application of a stack on a domain *)
+  | S_product of config list * string list (** Reduced product *)
+  | S_nonrel  of config (** Non-relational domain *)
+  | S_cast    of config (** Cast of a configuration to a lower signature *)
+
+(** Operator of a chain transformer *)
+and operator =
   | O_seq
   | O_compose
   | O_disjoint
 
-type config = {
-  abstraction : abstraction;
-  signature   : signature;
-  kind : kind;
-}
 
-and kind =
-  | K_leaf of string
-  | K_chain of operator * config list
-  | K_apply of config * config
-  | K_product of config list * string list
-  | K_nonrel of config
-  | K_cast of config
-
-
+(** Extract the abstraction of a configuration *)
 let abstraction config = config.abstraction
 
+(** Extract the signature of a configuration *)
 let signature config = config.signature
 
-let kind config = config.kind
 
 
-
-(** {2 Available transformers} *)
+(** {2 Analyzer specification} *)
 (** ************************** *)
 
-type arch = {
-  chain : abstraction -> operator -> signature -> bool;
-  apply : signature -> bool;
+(** A specification determines which transformers are provided by the framework *)
+type spec = {
+  chain   : abstraction -> operator -> signature -> bool;
+  apply   : signature -> bool;
   product : abstraction -> signature -> bool;
-  nonrel : signature -> bool;
+  nonrel  : signature -> bool;
 }
 
 
-(** {2 Unification} *)
-(** *************** *)
+(** {2 Unification of signatures} *)
+(** ***************************** *)
 
-let is_same_signature n1 n2 =
-  n1.signature = n2.signature
+let is_same_signature (c1:config) (c2:config) : bool =
+  c1.signature = c2.signature
 
-let rec split l =
+(** Split a list of configurations into two lists. The first list
+    contains the head configurations having the same signature, and the
+    second contains the remaining ones. *)
+let rec split (l:config list) : config list * config list =
   match l with
   | [] -> [], []
   | [n] -> [n], []
@@ -94,12 +103,14 @@ let rec split l =
     else
       hd :: l1, snd :: l2
 
+(** Downgrade a signature by one level *)
 let downgrade = function
   | S_lowlevel -> S_lowlevel
   | S_intermediate -> S_lowlevel
   | S_simplified -> S_intermediate
   | S_stateless -> S_simplified
 
+(** Check if a signature [s1] can be downgraded to [s2] *)
 let can_downgrade_signature s1 s2 =
   match s1, s2 with
   | S_lowlevel, _ -> false
@@ -113,173 +124,165 @@ let can_downgrade_signature s1 s2 =
 
   | S_stateless, _ -> false
 
+(** Cast a configuration [config] to signature [s] *)
 let cast s config =
   if can_downgrade_signature (signature config) s
   then
     {
       config with
       signature = s;
-      kind = K_cast config
+      structure = S_cast config
     }
   else
     config
 
-let unify n1 n2 =
-  if is_same_signature n1 n2
-  then n1, n2
+(** Unify the signature of two configurations *)
+let unify c1 c2 =
+  if is_same_signature c1 c2
+  then c1, c2
   else
-    let n1 = cast (signature n2) n1  in
-    let n2 = cast (signature n1) n2 in
-    n1, n2
+    let c1 = cast (signature c2) c1  in
+    let c2 = cast (signature c1) c2 in
+    c1, c2
 
-let smallest_signature l =
+(** Return the smallest signature of a list of configurations *)
+let smallest_signature (l:config list) : signature =
   List.fold_left (fun min n ->
       let s = signature n in
       if can_downgrade_signature min s then s else min
     ) S_stateless l
 
+(** Find the highest signature below [s] verifying the predicate [pred] *)
 let rec find_available_signature s pred =
   match pred s with
   | true -> s
   | false -> find_available_signature (downgrade s) pred
 
-let unified_chain arch op l =
+(** Create a chain of a list of unified configurations *)
+let unified_chain spec op l =
   let s = List.hd l |> signature in
-  if arch.chain op s then
+  let a = List.hd l |> abstraction in
+  if spec.chain a op s then
     {
-      abstraction = List.hd l |> abstraction;
+      abstraction = a;
       signature = s;
-      kind = K_chain (op, l)
+      structure = S_chain (op, l)
     }
   else
-    let s' = find_available_signature s (arch.chain op) in
+    let s' = find_available_signature s (spec.chain a op) in
     let l' = List.map (cast s') l in
     {
-      abstraction = List.hd l' |> abstraction;
+      abstraction = a;
       signature = s';
-      kind = K_chain (op, l')
+      structure = S_chain (op, l')
     }
 
 
-let rec chain arch op l =
+(** Create a chain of a list of configurations *)
+let rec chain spec op l =
   let l1, l2 = split l in
   match l2 with
-  | [] -> unified_chain arch op l1
+  | [] -> unified_chain spec op l1
   | _ ->
-    let n1 = unified_chain arch op l1 in
-    let n2 = chain arch op l2 in
+    let n1 = unified_chain spec op l1 in
+    let n2 = chain spec op l2 in
     let n1, n2 = unify n1 n2 in
-    unified_chain arch op [n1; n2]
+    unified_chain spec op [n1; n2]
 
 
-let product arch l r =
+(** Create a product of a list of configurations *)
+let product spec l r =
   let s = smallest_signature l in
-  let s' = find_available_signature s arch.product in
+  let a = List.hd l |> abstraction in
+  let s' = find_available_signature s (spec.product a) in
   let l' = List.map (cast s') l in
   {
-    abstraction = List.hd l' |> abstraction;
+    abstraction = a;
     signature = s';
-    kind = K_product (l',r);
+    structure = S_product (l',r);
   }
 
+let apply spec stack domain =
+  let stack, domain = unify stack domain in
+  let s = signature stack in
+  let s' = find_available_signature s spec.apply in
+  let stack = cast s' stack in
+  let domain = cast s' domain in
+  {
+    abstraction = A_domain;
+    signature = s';
+    structure = S_apply (stack, domain);
+  }
 
-(** {2 Domains} *)
-(** *********** *)
+let nonrel spec value =
+  let s = signature value in
+  let s' = find_available_signature s spec.nonrel in
+  let value = cast s' value in
+  {
+    abstraction = A_domain;
+    signature = s';
+    structure = S_nonrel value;
+  }
+  
+let leaf_domain name = assert false
 
-let rec domain_visitor arch = {
-    leaf = (fun name ->
-        {
-          abstraction = A_domain;
-          signature = S_lowlevel;
-          kind = K_leaf name;
-        }
-      );
+let leaf_stack name = assert false
 
-    seq = (fun l -> List.map (domain_typer arch) l |> chain arch O_seq);
+let leaf_value name = assert false
 
+
+(** {2 Domain typer} *)
+(** **************** *)
+
+(** Configuration visitor for a domain object *)
+let rec domain_visitor spec = {
+    leaf = leaf_domain;
+    seq = (fun l -> List.map (domain spec) l |> chain spec O_seq);
     compose = (fun l -> assert false);
-
-    apply = (fun s d ->
-        {
-          abstraction = A_domain;
-          signature = S_lowlevel;
-          kind = K_apply (stack_typer arch s, domain_typer arch d);
-        }
-      );
-
-    nonrel = (fun v -> {
-          abstraction = A_domain;
-          signature = S_lowlevel;
-          kind = K_nonrel (value_typer arch v);
-        }
-      );
-
-    product = (fun l r -> product arch (List.map (domain_typer arch) l) r);
-
+    apply = (fun s d -> apply spec (stack spec s) (domain spec d));
+    nonrel = (fun v -> nonrel spec (value spec v));
+    product = (fun l r -> product spec (List.map (domain spec) l) r);
+    disjoint = (fun l -> assert false);
   }
 
-and domain_typer arch json : config =
-  visit (domain_visitor arch) json
+(** Create a domain configuration from a json object *)
+and domain spec json : config =
+  visit (domain_visitor spec) json
 
 
 (** {2 Stacks} *)
 (** ********** *)
 
-and stack_visitor arch = {
-    leaf = (fun name ->
-        {
-          abstraction = A_stack;
-          signature = S_lowlevel;
-          kind = K_leaf name;
-        }
-      );
-
-    seq = (fun l -> List.map (stack_typer arch) l |> chain arch O_seq);
-
-    compose = (fun l -> List.map (stack_typer arch) l |> chain arch O_compose);
-
+(** Configuration visitor for a stack object *)
+and stack_visitor spec = {
+    leaf = leaf_stack;
+    seq = (fun l -> List.map (stack spec) l |> chain spec O_seq);
+    compose = (fun l -> List.map (stack spec) l |> chain spec O_compose);
     apply = (fun s d -> assert false);
-
     nonrel = (fun v -> assert false);
-
     product = (fun l r -> assert false);
-
+    disjoint = (fun l -> assert false);
   }
 
-and stack_typer arch json : config =
-  visit (stack_visitor arch) json
+(** Create a stack configuration from a json object *)
+and stack spec json : config =
+  visit (stack_visitor spec) json
 
 
 (** {2 Values} *)
 (** ********** *)
 
-and value_visitor arch = {
-    leaf = (fun name ->
-        {
-          abstraction = A_value;
-          signature = S_lowlevel;
-          kind = K_leaf name;
-        }
-      );
-
-    seq = (fun l -> List.map (value_typer arch) l |> chain arch O_seq);
-
+(** Configuration visitor for a value object *)
+and value_visitor spec = {
+    leaf = leaf_value;
+    seq = (fun l -> List.map (value spec) l |> chain spec O_seq);
     compose = (fun l -> assert false);
-
     apply = (fun s d -> assert false);
-
     nonrel = (fun v -> assert false);
-
-    product = (fun l r -> product arch (List.map (value_typer arch) l) r);
-
+    product = (fun l r -> product spec (List.map (value spec) l) r);
+    disjoint = (fun l -> List.map (value spec) l |> chain spec O_disjoint);
   }
 
-and value_typer arch json : config =
-  visit (value_visitor arch) json
-
-
-(** {2 Entry point} *)
-(** *************** *)
-
-let typer arch json : config =
-  domain_typer arch json
+(** Create a value configuration from a json object *)
+and value spec json : config =
+  visit (value_visitor spec) json

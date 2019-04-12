@@ -277,50 +277,21 @@ let language () : string =
   get_language json
 
 let domains () : string list =
-  if !opt_config = ""
-  then Sig.Domain.Lowlevel.names () @
-       Sig.Stacked.Lowlevel.names ()
+  if !opt_config = "" then
+    Sig.Domain.Lowlevel.names () @
+    Sig.Stacked.Lowlevel.names ()
   else
     let file = resolve_config_file !opt_config in
     let json = Yojson.Basic.from_file file in
-    let rec iter = function
-      | `String(name) -> [name]
-
-      | `Assoc(obj) when List.mem_assoc "seq" obj ->
-        List.assoc "seq" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
-        iter (List.assoc "nonrel" obj)
-
-      | `Assoc(obj) when List.mem_assoc "disjoint" obj ->
-        List.assoc "disjoint" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "product" obj ->
-        List.assoc "product" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "apply" obj ->
-        iter (List.assoc "apply" obj) @
-        iter (List.assoc "on" obj)
-
-      | `Assoc(obj) when List.mem_assoc "compose" obj ->
-        List.assoc "compose" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | _ -> assert false
-    in
-    iter (get_domain json)
+    let domain = json |> member "domain" in
+    let rec name_visitor = Visitor.{
+        leaf = (fun name -> [name]);
+        seq = (fun l -> List.map get_names l |> List.flatten);
+        nonrel = (fun v -> get_names v);
+        apply = (fun s d -> get_names s @ get_names d);
+        compose = (fun l -> List.map get_names l |> List.flatten);
+        product = (fun l r -> List.map get_names l |> List.flatten);        
+        disjoint = (fun l -> List.map get_names l |> List.flatten);
+    }
+    and get_names json = Visitor.visit name_visitor json in
+    get_names domain

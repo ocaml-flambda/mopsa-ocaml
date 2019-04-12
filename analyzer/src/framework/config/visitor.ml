@@ -30,6 +30,7 @@ type 'a visitor = {
   leaf : string -> 'a;
   seq : json list -> 'a;
   compose : json list -> 'a;
+  disjoint : json list -> 'a;
   apply : json -> json -> 'a;
   nonrel : json -> 'a;
   product : json list -> string list -> 'a;
@@ -40,6 +41,10 @@ let rec visit visitor json =
   | `String s -> visit_leaf visitor s
   | `Assoc obj when List.mem_assoc "seq" obj -> visit_seq visitor obj
   | `Assoc obj when List.mem_assoc "compose" obj -> visit_compose visitor obj
+  | `Assoc obj when List.mem_assoc "apply" obj -> visit_apply visitor obj
+  | `Assoc obj when List.mem_assoc "nonrel" obj -> visit_nonrel visitor obj
+  | `Assoc obj when List.mem_assoc "product" obj -> visit_product visitor obj
+  | `Assoc obj when List.mem_assoc "disjoint" obj -> visit_disjoint visitor obj
   | _ -> Exceptions.panic "parsing error: configuration not supported@  %a"
            (pretty_print ~std:true) json
 
@@ -52,3 +57,21 @@ and visit_seq visitor obj =
 and visit_compose visitor obj =
   let l = List.assoc "compose" obj |> to_list in
   visitor.compose l
+
+and visit_apply visitor obj =
+  let s = List.assoc "apply" obj in
+  let d = List.assoc "on" obj in
+  visitor.apply s d
+
+and visit_nonrel visitor obj =
+  let v = List.assoc "nonrel" obj in
+  visitor.nonrel v
+
+and visit_disjoint visitor obj =
+  let l = List.assoc "disjoint" obj |> to_list in
+  visitor.disjoint l
+
+and visit_product visitor obj =
+  let l = List.assoc "product" obj |> to_list in
+  let r = try List.assoc "reductions" obj |> to_list |> List.map to_string with Not_found -> [] in
+  visitor.product l r
