@@ -38,7 +38,7 @@ framework.core.sig.stacked = lowlevel intermediate stateless
 framework.lattices = partial_map powerset total_map
 framework.engines = engine automatic interactive
 framework.output = text json factory
-framework.config = paths parser options
+framework.config = paths visitor typer parser options
 
 lang = universal repl stubs c python
 
