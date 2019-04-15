@@ -94,7 +94,30 @@ struct
 end
 
 
-let register_stack modl =
-  let module M = (val modl : STACK) in
-  let module S = MakeIntermediate(M) in
-  Intermediate.register_stack (module S)
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+
+let stacks : (module STACK) list ref = ref []
+
+let register_stack dom =
+  stacks := dom :: !stacks
+
+let find_stack name =
+  List.find (fun dom ->
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
+let mem_stack name =
+  List.exists (fun dom ->
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
+let names () =
+  List.map (fun dom ->
+      let module S = (val dom : STACK) in
+      S.name
+    ) !stacks

@@ -149,24 +149,19 @@ end
 (**                      {2 Low-level lifters}                              *)
 (*==========================================================================*)
 
-let lift_unop unop man t op a = unop op (man.vget a)
+let lift_unop unop t op a = unop op a
 
-let lift_binop binop man t op a b = binop op (man.vget a) (man.vget b)
+let lift_binop binop t op a b = binop op a b
 
-let lift_filter filter man v b =  filter (man.vget v) b
+let lift_filter filter v b =  filter v b
 
-let lift_bwd_unop bwd_unop man t op v r = bwd_unop op (man.vget v) (man.vget r)
+let lift_bwd_unop bwd_unop t op v r = bwd_unop op v r
 
-let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.vget a) (man.vget b) (man.vget r)
+let lift_bwd_binop bwd_binop t op a b r = bwd_binop op a b r
 
-let lift_compare compare man t op a b r = compare op (man.vget a) (man.vget b) r
+let lift_compare compare t op a b r = compare op a b r
 
-let lift_ask ask man q = Intermediate.lift_ask ask man q
-
-let lift_refine refine man channel v = Intermediate.lift_refine refine man channel v
-
-(** Lift a general-purpose signature to a low-level one *)
-module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
+module MakeIntermediate(Value:VALUE) : Intermediate.VALUE with type t = Value.t =
 struct
 
   (* Trivial lifts *)
@@ -185,12 +180,6 @@ struct
   let widen = Value.widen
   let print = Value.print
 
-  let cast : type s. ('a,t) vman -> s value -> 'a -> s option =
-    fun man id a ->
-      match Id.veq id Value.id with
-      | Some Eq.Eq -> Some (man.vget a)
-      | None -> None
-
 
 
   (** {2 Forward semantics} *)
@@ -198,47 +187,37 @@ struct
 
   let of_constant t = Value.of_constant
 
-  let unop man t op a = lift_unop Value.unop man t op a
+  let unop t op a = lift_unop Value.unop t op a
 
-  let binop man t op a b = lift_binop Value.binop man t op a b
+  let binop t op a b = lift_binop Value.binop t op a b
 
-  let filter man a b = lift_filter Value.filter man a b
+  let filter a b = lift_filter Value.filter a b
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop man t op v r = lift_bwd_unop Value.bwd_unop man t op v r
+  let bwd_unop t op v r = lift_bwd_unop Value.bwd_unop t op v r
 
-  let bwd_binop man t op v1 v2 r = lift_bwd_binop Value.bwd_binop man t op v1 v2 r
+  let bwd_binop t op v1 v2 r = lift_bwd_binop Value.bwd_binop t op v1 v2 r
 
-  let compare man t op v1 v2 b = lift_compare Value.compare man t op v1 v2 b
+  let compare t op v1 v2 b = lift_compare Value.compare t op v1 v2 b
 
 
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask man q = lift_ask Value.ask man q
+  let ask = Value.ask
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  let refine man channel a =
-    lift_refine Value.refine man channel a
+  let refine = Value.refine
 
 
 end
 
-
-(*==========================================================================*)
-(**                         {2 Registration}                                *)
-(*==========================================================================*)
-
-let register_value v =
-  let module V = (val v : VALUE) in
-  let module VL = MakeLowlevel(V) in
-  Lowlevel.register_value (module VL)
 
 
 (*==========================================================================*)
@@ -253,3 +232,23 @@ let default_bwd_binop op x y r =
 
 let default_compare op x y b =
   (x, y)
+
+(*==========================================================================*)
+(**                         {2 Registration}                                *)
+(*==========================================================================*)
+
+let values : (module VALUE) list ref = ref []
+
+let register_value v = values := v :: !values
+
+let find_value name =
+  List.find (fun v ->
+      let module V = (val v : VALUE) in
+      compare V.name name = 0
+    ) !values
+
+let mem_value name =
+  List.exists (fun v ->
+      let module V = (val v : VALUE) in
+      compare V.name name = 0
+    ) !values

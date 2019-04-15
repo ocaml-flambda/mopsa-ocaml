@@ -256,12 +256,31 @@ struct
 end
 
 
+
 (*==========================================================================*)
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
 
-let register_stack st =
-  let module S = (val st : STACK) in
-  let module SL = MakeLowlevelStack(S) in
-  Lowlevel.register_stack (module SL)
+let stacks : (module STACK) list ref = ref []
+
+let register_stack dom =
+  stacks := dom :: !stacks
+
+let find_stack name =
+  List.find (fun dom ->
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
+let mem_stack name =
+  List.exists (fun dom ->
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
+let names () =
+  List.map (fun dom ->
+      let module S = (val dom : STACK) in
+      S.name
+    ) !stacks

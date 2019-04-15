@@ -14,7 +14,7 @@ struct
   module AD = Addr_env.Domain
   module TD = Typing.Domain
 
-  module Iter = Framework.Transformers.Domain.Sequence.Make
+  module Iter = Framework.Transformers.Domain.Lowlevel.Sequence.Make
       (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(AD))
       (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(TD))
 

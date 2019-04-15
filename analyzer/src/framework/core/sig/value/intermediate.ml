@@ -239,16 +239,6 @@ end
 
 
 (*==========================================================================*)
-(**                         {2 Registration}                                *)
-(*==========================================================================*)
-
-let register_value v =
-  let module V = (val v : VALUE) in
-  let module VL = MakeLowlevel(V) in
-  Lowlevel.register_value (module VL)
-
-
-(*==========================================================================*)
 (**                  {2 Default backward functions} *)
 (*==========================================================================*)
 
@@ -260,3 +250,24 @@ let default_bwd_binop t op x y r =
 
 let default_compare t op x y b =
   (x, y)
+
+
+(*==========================================================================*)
+(**                         {2 Registration}                                *)
+(*==========================================================================*)
+
+let values : (module VALUE) list ref = ref []
+
+let register_value v = values := v :: !values
+
+let find_value name =
+  List.find (fun v ->
+      let module V = (val v : VALUE) in
+      compare V.name name = 0
+    ) !values
+
+let mem_value name =
+  List.exists (fun v ->
+      let module V = (val v : VALUE) in
+      compare V.name name = 0
+    ) !values

@@ -24,6 +24,9 @@
 open Visitor
 
 
+let debug fmt = Debug.debug ~channel:"framework.config.typer" fmt
+
+
 (** {2 Types used by the typer} *)
 (** *************************** *)
 
@@ -62,13 +65,58 @@ and operator =
   | O_compose
   | O_disjoint
 
-
-(** Extract the abstraction of a configuration *)
-let abstraction config = config.abstraction
-
-(** Extract the signature of a configuration *)
 let signature config = config.signature
 
+let abstraction config = config.abstraction
+
+
+(** {2 Pretty printers} *)
+(** ******************* *)
+
+open Format
+
+let pp_abstraction fmt = function
+  | A_domain -> pp_print_string fmt "𝒟"
+  | A_stack -> pp_print_string fmt "𝒮"
+  | A_value -> pp_print_string fmt "𝒱"
+
+let pp_signature fmt = function
+  | S_lowlevel -> pp_print_string fmt "0"
+  | S_intermediate -> pp_print_string fmt "1"
+  | S_simplified -> pp_print_string fmt "2"
+  | S_stateless-> pp_print_string fmt "3"
+
+let pp_operator fmt = function
+  | O_seq -> pp_print_string fmt " ; "
+  | O_compose -> pp_print_string fmt " o "
+  | O_disjoint -> pp_print_string fmt " ∨ "
+
+let rec pp_config fmt config =
+  match config.structure with
+  | S_leaf name ->
+    pp_print_string fmt name
+
+  | S_chain(op,l) ->
+    fprintf fmt "(%a)"
+      (pp_print_list ~pp_sep:(fun fmt () -> pp_operator fmt op) pp_config) l
+
+  | S_apply(s,d) ->
+    fprintf fmt "%a(%a)" pp_config s pp_config d
+
+  | S_product(l,[]) ->
+    fprintf fmt "(%a)"
+      (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt " ∧ ") pp_config) l
+
+  | S_product(l,r) ->
+    fprintf fmt "(%a | %a)"
+      (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt " ∧ ") pp_config) l
+      (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt " : ") pp_print_string) r
+
+  | S_nonrel v ->
+    fprintf fmt "𝐍(%a)" pp_config v
+
+  | S_cast c ->
+    fprintf fmt "(%a) %a" pp_signature config.signature pp_config c
 
 
 (** {2 Analyzer specification} *)
@@ -79,7 +127,6 @@ type spec = {
   chain   : abstraction -> operator -> signature -> bool;
   apply   : signature -> bool;
   product : abstraction -> signature -> bool;
-  nonrel  : signature -> bool;
 }
 
 
@@ -97,36 +144,45 @@ let rec split (l:config list) : config list * config list =
   | [] -> [], []
   | [n] -> [n], []
   | hd :: snd :: tl ->
-    let l1, l2 = split l in
+    debug "split: hd: %a, snd: %a" pp_config hd pp_config snd;
     if is_same_signature hd snd then
-      hd :: snd :: l1, l2
+      let () = debug "same signature" in
+      let l1, l2 = split (snd :: tl) in
+      hd :: l1, l2
     else
-      hd :: l1, snd :: l2
+      let () = debug "not same signature" in
+      [hd], snd :: tl
 
 (** Downgrade a signature by one level *)
 let downgrade = function
   | S_lowlevel -> S_lowlevel
   | S_intermediate -> S_lowlevel
   | S_simplified -> S_intermediate
-  | S_stateless -> S_simplified
+  | S_stateless -> S_intermediate
 
-(** Check if a signature [s1] can be downgraded to [s2] *)
-let can_downgrade_signature s1 s2 =
+let subset (s1:signature) (s2:signature) =
   match s1, s2 with
-  | S_lowlevel, _ -> false
   | _, S_lowlevel -> true
+  | S_lowlevel, _ -> false
 
-  | S_intermediate, _ -> false
   | _, S_intermediate -> true
+  | S_intermediate, _ -> false
 
-  | S_simplified, _ -> false
-  | _, S_simplified -> true
+  | S_simplified, S_simplified -> true
 
-  | S_stateless, _ -> false
+  | S_stateless, S_simplified -> true
+
+  | _ -> false
+
+
+let strict_subset (s1:signature) (s2:signature) =
+  if s1 = s2 then false
+  else subset s1 s2
+
 
 (** Cast a configuration [config] to signature [s] *)
 let cast s config =
-  if can_downgrade_signature (signature config) s
+  if strict_subset config.signature s
   then
     {
       config with
@@ -141,15 +197,15 @@ let unify c1 c2 =
   if is_same_signature c1 c2
   then c1, c2
   else
-    let c1 = cast (signature c2) c1  in
-    let c2 = cast (signature c1) c2 in
+    let c1 = cast c2.signature c1  in
+    let c2 = cast c1.signature c2 in
     c1, c2
 
 (** Return the smallest signature of a list of configurations *)
 let smallest_signature (l:config list) : signature =
-  List.fold_left (fun min n ->
-      let s = signature n in
-      if can_downgrade_signature min s then s else min
+  List.fold_left (fun min c ->
+      let s = c.signature in
+      if strict_subset min s then s else min
     ) S_stateless l
 
 (** Find the highest signature below [s] verifying the predicate [pred] *)
@@ -180,6 +236,7 @@ let unified_chain spec op l =
 
 (** Create a chain of a list of configurations *)
 let rec chain spec op l =
+  debug "chain %a:@, @[<v>%a@]" pp_operator op (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_config) l;
   let l1, l2 = split l in
   match l2 with
   | [] -> unified_chain spec op l1
@@ -215,20 +272,56 @@ let apply spec stack domain =
   }
 
 let nonrel spec value =
-  let s = signature value in
-  let s' = find_available_signature s spec.nonrel in
-  let value = cast s' value in
+  let value = cast S_lowlevel value in
   {
     abstraction = A_domain;
-    signature = s';
+    signature = S_simplified;
     structure = S_nonrel value;
   }
-  
-let leaf_domain name = assert false
 
-let leaf_stack name = assert false
+let leaf_domain name =
+  debug "leaf domain: %s" name;
+  let signature =
+    if Core.Sig.Domain.Lowlevel.mem_domain name then S_lowlevel
+    else if Core.Sig.Domain.Intermediate.mem_domain name then S_intermediate
+    else if Core.Sig.Domain.Simplified.mem_domain name then S_simplified
+    else if Core.Sig.Domain.Stateless.mem_domain name then S_stateless
+    else Exceptions.panic "domain %s not found" name
+  in
+  debug "signature: %a" pp_signature signature;
+  {
+    abstraction = A_domain;
+    signature = signature;
+    structure = S_leaf name
+  }
 
-let leaf_value name = assert false
+let leaf_stack name =
+  let signature =
+    if Core.Sig.Stacked.Lowlevel.mem_stack name then S_lowlevel
+    else if Core.Sig.Stacked.Intermediate.mem_stack name then S_intermediate
+    else if Core.Sig.Stacked.Stateless.mem_stack name then S_stateless
+    else Exceptions.panic "stack %s not found" name
+  in
+  {
+    abstraction = A_stack;
+    signature = signature;
+    structure = S_leaf name
+  }
+
+
+let leaf_value name =
+  let signature =
+    if Core.Sig.Value.Lowlevel.mem_value name then S_lowlevel
+    else if Core.Sig.Value.Intermediate.mem_value name then S_intermediate
+    else if Core.Sig.Value.Simplified.mem_value name then S_simplified
+    else Exceptions.panic "value %s not found" name
+  in
+  {
+    abstraction = A_value;
+    signature = signature;
+    structure = S_leaf name
+  }
+
 
 
 (** {2 Domain typer} *)

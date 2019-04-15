@@ -94,7 +94,30 @@ struct
 
 end
 
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = MakeIntermediate(M) in
-  Intermediate.register_domain (module D)
+
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+let domains : (module DOMAIN) list ref = ref []
+
+let register_domain dom =
+  domains := dom :: !domains
+
+let find_domain name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let mem_domain name =
+  List.exists (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      D.name
+    ) !domains

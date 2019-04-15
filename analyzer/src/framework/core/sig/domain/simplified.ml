@@ -175,7 +175,259 @@ end
 
 
 
-let register_domain modl =
-  let module M = (val modl : DOMAIN) in
-  let module D = MakeIntermediate(M) in
-  Intermediate.register_domain (module D)
+(*==========================================================================*)
+(**                          {2 Registration}                               *)
+(*==========================================================================*)
+
+let domains : (module DOMAIN) list ref = ref []
+
+let register_domain dom =
+  domains := dom :: !domains
+
+let find_domain name =
+  List.find (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let mem_domain name =
+  List.exists (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      compare D.name name = 0
+    ) !domains
+
+let names () =
+  List.map (fun dom ->
+      let module D = (val dom : DOMAIN) in
+      D.name
+    ) !domains
+
+
+
+(****************************************************************************)
+(**                      {2 List representation}                            *)
+(****************************************************************************)
+
+
+(** Abstract domain module *)
+type 't dmodule = (module DOMAIN with type t = 't)
+
+
+(** List of domain modules *)
+type _ dlist =
+  | Nil : unit dlist
+  | Cons : 't dmodule * 'b dlist -> ('t * 'b) dlist
+
+
+
+
+
+(****************************************************************************)
+(**                         {2 Iterators}                                   *)
+(****************************************************************************)
+
+
+type 'b fold = {
+  f: 't. 't dmodule -> 'b -> 'b;
+}
+
+
+let dlist_fold f l init =
+  let rec aux : type t. t dlist -> 'b -> 'b =
+    fun l acc ->
+      match l with
+      | Nil -> acc
+      | Cons(hd,tl) ->
+        let acc' = f.f hd acc in
+        aux tl acc'
+  in
+  aux l init
+
+
+type 'b fold_apply = {
+  f: 't. 't dmodule -> 'b -> 't -> 'b;
+}
+
+
+let dlist_fold_apply f l init a =
+  let rec aux : type t. t dlist -> 'b -> t -> 'b =
+    fun l acc a ->
+      match l,a with
+      | Nil,() -> acc
+      | Cons(hd,tl), (hda,tla) ->
+        let acc' = f.f hd acc hda in
+        aux tl acc' tla
+  in
+  aux l init a
+
+
+
+(****************************************************************************)
+(**                       {2 Value creation}                                *)
+(****************************************************************************)
+
+type create = {
+  f: 't. 't dmodule -> 't;
+}
+
+(** Create an abstract value *)
+let dlist_create f l =
+  let rec aux : type t. t dlist -> t =
+    fun l ->
+      match l with
+      | Nil -> ()
+      | Cons(hd,tl) ->
+        f.f hd, aux tl
+  in
+  aux l
+
+
+type apply = {
+  f: 't. 't dmodule -> 't -> 't;
+}
+
+(** Create an abstract value *)
+let dlist_apply f l a =
+  let rec aux : type t. t dlist -> t -> t =
+    fun l a ->
+      match l, a with
+      | Nil, () -> ()
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd hda, aux tl tla
+  in
+  aux l a
+
+type apply_opt = {
+  f: 't. 't dmodule -> 't -> 't option;
+}
+
+(** Create an abstract value *)
+let dlist_apply_opt f l a =
+  let rec aux : type t. t dlist -> t -> t option =
+    fun l a ->
+      match l, a with
+      | Nil, () -> None
+      | Cons(hd,tl), (hda,tla) ->
+        match f.f hd hda, aux tl tla with
+        | None, None -> None
+        | Some hda', Some tla' -> Some (hda',tla')
+        | Some hda', None -> Some (hda',tla)
+        | None, Some tla' -> Some (hda,tla')
+  in
+  aux l a
+
+
+
+type apply2 = {
+  f: 't. 't dmodule -> 't -> 't -> 't;
+}
+
+(** Create an abstract value *)
+let dlist_apply2 f l a b =
+  let rec aux : type t. t dlist -> t -> t -> t =
+    fun l a b ->
+      match l, a, b with
+      | Nil, (), () -> ()
+      | Cons(hd,tl), (hda,tla), (hdb,tlb) ->
+        f.f hd hda hdb, aux tl tla tlb
+  in
+  aux l a b
+
+
+type apply3 = {
+  f: 't. 't dmodule -> 't -> 't -> 't -> 't;
+}
+
+(** Create an abstract value *)
+let dlist_apply3 f l a b c =
+  let rec aux : type t. t dlist -> t -> t -> t -> t =
+    fun l a b c ->
+      match l, a, b, c with
+      | Nil, (), (), () -> ()
+      | Cons(hd,tl), (hda,tla), (hdb,tlb), (hdc,tlc) ->
+        f.f hd hda hdb hdc, aux tl tla tlb tlc
+  in
+  aux l a b c
+
+(****************************************************************************)
+(**                         {2 Pretty printer}                              *)
+(****************************************************************************)
+
+type 'a print = {
+  f: 't. 't dmodule -> Format.formatter -> 't -> unit;
+}
+
+
+(** Print an abstract value *)
+let dlist_print f l sep fmt a =
+  let rec aux : type t. t dlist -> Format.formatter -> t -> unit =
+    fun l fmt a ->
+      match l, a with
+      | Nil, () -> ()
+      | Cons(m,Nil), (aa, ()) -> f.f m fmt aa
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd fmt hda;
+        Format.fprintf fmt "%s" sep;
+        aux tl fmt tla
+  in
+  aux l fmt a
+
+
+(****************************************************************************)
+(**                           {2 Predicates}                                *)
+(****************************************************************************)
+
+type 'a pred = {
+  f: 't. 't dmodule -> 't -> bool;
+}
+
+(** Test an ∃ predicate *)
+let dlist_exists f l a =
+  let rec aux : type t. t dlist -> t -> bool =
+    fun l a ->
+      match l, a with
+      | Nil, () -> false
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd hda || aux tl tla
+  in
+  aux l a
+
+
+(** Test a ∀ predicate *)
+let dlist_forall f l a =
+  let rec aux : type t. t dlist -> t -> bool =
+    fun l a ->
+      match l, a with
+      | Nil, () -> true
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd hda && aux tl tla
+  in
+  aux l a
+
+
+type 'a pred2 = {
+  f: 't. 't dmodule -> 't -> 't -> bool;
+}
+
+(** Test an ∃ predicate *)
+let dlist_exists2 f l a b =
+  let rec aux : type t. t dlist -> t -> t -> bool =
+    fun l a b ->
+      match l, a, b with
+      | Nil, (), () -> false
+      | Cons(hd,tl), (hda,tla), (hdb,tlb) ->
+        f.f hd hda hdb || aux tl tla tlb
+  in
+  aux l a b
+
+
+(** Test an ∃ predicate *)
+let dlist_forall2 f l a b =
+  let rec aux : type t. t dlist -> t -> t -> bool =
+    fun l a b ->
+      match l, a, b with
+      | Nil, (), () -> true
+      | Cons(hd,tl), (hda,tla), (hdb,tlb) ->
+        f.f hd hda hdb && aux tl tla tlb
+  in
+  aux l a b
