@@ -38,7 +38,9 @@ struct
       of bases *)
   module Map =
     Framework.Transformers.Value.Nonrel.MakeWithoutHistory(
-      Framework.Core.Sig.Value.Simplified.MakeLowlevel(Bases)
+      Framework.Core.Sig.Value.Intermediate.MakeLowlevel(
+        Framework.Core.Sig.Value.Simplified.MakeIntermediate(Bases)
+      )
     )
 
   type t = Map.t

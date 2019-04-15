@@ -19,16 +19,21 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Configuration parser. *)
+(** Visitor of configuration files *)
 
-val opt_config : string ref
-(** Path to the current configuration file *)
 
-val parse : string -> string * (module Core.Sig.Domain.Lowlevel.DOMAIN)
-(** Construct an abstraction from a configuration file *)
+open Yojson.Basic
+open Yojson.Basic.Util
 
-val language : string -> string
-(** Return the language of a configuration file *)
 
-val domains : string -> string list
-(** Return the list of domains used in a configuration file *)
+type 'a visitor = {
+  leaf : string -> 'a;
+  seq : json list -> 'a;
+  compose : json list -> 'a;
+  disjoint : json list -> 'a;
+  apply : json -> json -> 'a;
+  nonrel : json -> 'a;
+  product : json list -> string list -> 'a;
+}
+
+val visit : 'a visitor -> json -> 'a

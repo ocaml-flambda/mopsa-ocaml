@@ -22,12 +22,13 @@
 (** Configuration parser. *)
 
 open Core
-open Sig.Domain.Lowlevel
-open Sig.Stacked.Lowlevel
-open Sig.Value.Lowlevel
 open Abstraction
 open Yojson.Basic
 open Yojson.Basic.Util
+open Typer
+
+
+let debug fmt = Debug.debug ~channel:"framework.config.parser" fmt
 
 
 (** Path to the current configuration *)
@@ -50,199 +51,341 @@ let resolve_config_file config =
     else Exceptions.panic "unable to find configuration file %s" config
 
 
+(** {2 Specification of transformers} *)
+(** ********************************* *)
+
+let spec = {
+  chain = (fun abstraction operator signature ->
+      match abstraction, operator,signature with
+      | _, _, S_lowlevel -> true
+
+      | A_domain, O_seq, S_intermediate -> true
+      | A_domain, O_seq, S_stateless -> true
+
+      | A_stack, O_seq, S_intermediate -> true
+
+      | _, _, _ -> false
+    );
+
+  apply = (fun signature ->
+      match signature with
+      | S_lowlevel -> true
+      | _ -> false
+    );
+
+  product = (fun abstraction signature ->
+      match abstraction, signature with
+      | _, S_lowlevel -> true
+
+      | A_domain, S_simplified -> true
+
+      | _ -> false
+    );
+
+}
+
+
+
 (** {2 Domain builders} *)
 (** ******************* *)
 
-let rec domain = function
-  | `String(name) -> leaf_domain name
-  | `Assoc(obj) when List.mem_assoc "seq" obj -> domain_seq obj
-  | `Assoc(obj) when List.mem_assoc "apply" obj -> apply obj
-  | `Assoc(obj) when List.mem_assoc "nonrel" obj -> nonrel obj
-  | `Assoc(obj) when List.mem_assoc "product" obj -> domain_product obj
+
+let rec domain_lowlevel config : (module Sig.Domain.Lowlevel.DOMAIN) =
+  debug "domain configuration:@, %a" Typer.pp_config config;
+  match config.structure with
+  | S_leaf name -> Sig.Domain.Lowlevel.find_domain name
+  | S_chain(op, l) -> domain_chain_lowlevel op l
+  | S_apply(s,d) -> domain_apply_lowlevel s d
+  | S_cast c -> domain_cast_lowlevel c
   | _ -> assert false
 
-and leaf_domain name : (module DOMAIN) =
-  try find_domain name
-  with Not_found -> Exceptions.panic "domain %s not found" name
+and domain_chain_lowlevel (op:operator) (l:config list) : (module Sig.Domain.Lowlevel.DOMAIN) =
+  match l with
+  | [] -> assert false
+  | [d] -> domain_lowlevel d
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = domain_chain_lowlevel op a, domain_chain_lowlevel op b in
+    let module A = (val aa : Sig.Domain.Lowlevel.DOMAIN) in
+    let module B = (val bb : Sig.Domain.Lowlevel.DOMAIN) in
+    match op with
+    | O_seq ->
+      let module C = Transformers.Domain.Lowlevel.Sequence.Make(A)(B) in
+      (module C)
+    | _ -> assert false
 
-and domain_seq assoc : (module DOMAIN) =
-  let domains =
-    List.assoc "seq" assoc |>
-    to_list |>
-    List.map domain
-  in
-  let rec aux :
-    (module DOMAIN) list ->
-    (module DOMAIN)
-    = function
-      | [] -> assert false
-      | [d] -> d
-      | r ->
-        let a,b = ListExt.split r in
-        let aa, bb = aux a, aux b in
-        let module A = (val aa : DOMAIN) in
-        let module B = (val bb : DOMAIN) in
-        let module Dom = Transformers.Domain.Sequence.Make(A)(B) in
-        (module Dom : DOMAIN)
-  in
-  aux domains
+and domain_apply_lowlevel (stack:config) (domain:config) : (module Sig.Domain.Lowlevel.DOMAIN) =
+  let s = stack_lowlevel stack in
+  let d = domain_lowlevel domain in
+  let module S = (val s : Sig.Stacked.Lowlevel.STACK) in
+  let module D = (val d : Sig.Domain.Lowlevel.DOMAIN) in
+  let module DD = Transformers.Domain.Lowlevel.Apply.Make(S)(D) in
+  (module DD)
 
-and apply assoc : (module DOMAIN) =
-  let s = List.assoc "apply" assoc |> stack in
-  let d = List.assoc "on" assoc |> domain in
-  let module S = (val s : STACK) in
-  let module D = (val d : DOMAIN) in
-  let module R = Transformers.Apply.Make(S)(D) in
-  (module R : DOMAIN)
+and domain_cast_lowlevel (config:config) : (module Sig.Domain.Lowlevel.DOMAIN) =
+  match config.signature with
+  | S_intermediate ->
+    let s = domain_intermediate config in
+    let module S = (val s : Sig.Domain.Intermediate.DOMAIN) in
+    let module SS = Sig.Domain.Intermediate.MakeLowlevelDomain(S) in
+    (module SS)
 
-and nonrel assoc : (module DOMAIN) =
-  let v = List.assoc "nonrel" assoc |> value in
-  let module V = (val v : VALUE) in
-  let module D = Sig.Domain.Intermediate.MakeLowlevelDomain(
-      Transformers.Value.Nonrel.Make(V)()
-    )
-  in
-  (module D : DOMAIN)
+  | S_simplified ->
+    let s = domain_simplified config in
+    let module S = (val s : Sig.Domain.Simplified.DOMAIN) in
+    let module SS = Sig.Domain.Intermediate.MakeLowlevelDomain(
+        Sig.Domain.Simplified.MakeIntermediate(S)
+      )
+    in
+    (module SS)
 
+  | S_stateless ->
+    let s = domain_stateless config in
+    let module S = (val s : Sig.Domain.Stateless.DOMAIN) in
+    let module SS = Sig.Domain.Intermediate.MakeLowlevelDomain(
+        Sig.Domain.Stateless.MakeIntermediate(S)
+      )
+    in
+    (module SS)
 
-
-and domain_product assoc : (module DOMAIN) =
-  let domains =
-    List.assoc "product" assoc |>
-    to_list |>
-    List.map domain
-  in
-  let rules  =
-    try List.assoc "reductions" assoc |>
-        domain_reduction
-    with Not_found -> []
-  in
-  Transformers.Domain.Product.make domains rules
-
-
-and domain_reduction = function
-  | `String(name) -> [domain_reduction_leaf name]
-  | `List l -> List.map domain_reduction l |>
-               List.flatten
-  | x -> Exceptions.panic "parsing error: unsupported reduction declaration:@ %a"
-           (pretty_print ~std:true) x
-
-and domain_reduction_leaf name =
-  try Sig.Domain.Reduction.find_reduction name
-  with Not_found -> Exceptions.panic "domain reduction %s not found" name
-
-
-and value = function
-  | `String name -> value_leaf name
-  | `Assoc obj when List.mem_assoc "disjoint" obj -> value_disjoint obj
-  | `Assoc obj when List.mem_assoc "product" obj -> value_product obj
   | _ -> assert false
 
-and value_leaf name =
-  try find_value name
-  with Not_found -> Exceptions.panic "value %s not found" name
 
-and value_disjoint assoc : (module VALUE) =
-  let values =
-    List.assoc "disjoint" assoc |>
-    to_list |>
-    List.map value
-  in
-  let rec aux :
-    (module VALUE) list ->
-    (module VALUE)
-    = function
-      | [] -> assert false
-      | [d] -> d
-      | hd :: tl ->
-        let tl = aux tl in
-        let module Head = (val hd : VALUE) in
-        let module Tail = (val tl : VALUE) in
-        let module Dom = Transformers.Value.Disjoint.Make(Head)(Tail) in
-        (module Dom : VALUE)
-  in
-  aux values
+and domain_intermediate (config:config) : (module Sig.Domain.Intermediate.DOMAIN) =
+  match config.structure with
+  | S_leaf name -> Sig.Domain.Intermediate.find_domain name
+  | S_chain (op,l) -> domain_chain_intermediate op l
+  | S_cast d -> domain_cast_intermediate d
+  | _ -> assert false
 
+and domain_chain_intermediate (op:operator) (l:config list) : (module Sig.Domain.Intermediate.DOMAIN) =
+  match l with
+  | [] -> assert false
+  | [d] -> domain_intermediate d
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = domain_chain_intermediate op a, domain_chain_intermediate op b in
+    let module A = (val aa : Sig.Domain.Intermediate.DOMAIN) in
+    let module B = (val bb : Sig.Domain.Intermediate.DOMAIN) in
+    match op with
+    | O_seq ->
+      let module C = Transformers.Domain.Intermediate.Sequence.Make(A)(B) in
+      (module C)
+    | _ -> assert false
 
-and value_product assoc : (module VALUE) =
-  let values =
-    List.assoc "product" assoc |>
-    to_list |>
-    List.map value
-  in
-  let rules  =
-    try List.assoc "reductions" assoc |>
-        value_reduction
-    with Not_found -> []
-  in
-  Transformers.Value.Product.make values rules
+and domain_cast_intermediate (config:config) : (module Sig.Domain.Intermediate.DOMAIN) =
+  match config.signature with
+  | S_simplified ->
+    let s = domain_simplified config in
+    let module S = (val s : Sig.Domain.Simplified.DOMAIN) in
+    let module SS = Sig.Domain.Simplified.MakeIntermediate(S) in
+    (module SS)
 
+  | S_stateless ->
+    let s = domain_stateless config in
+    let module S = (val s : Sig.Domain.Stateless.DOMAIN) in
+    let module SS = Sig.Domain.Stateless.MakeIntermediate(S) in
+    (module SS)
 
-and value_reduction = function
-  | `String(name) -> [value_reduction_leaf name]
-  | `List l -> List.map value_reduction l |>
-               List.flatten
-  | x -> Exceptions.panic "parsing error: unsupported reduction declaration:@ %a"
-           (pretty_print ~std:true) x
-
-and value_reduction_leaf name =
-  try Sig.Value.Reduction.find_reduction name
-  with Not_found -> Exceptions.panic "value reduction %s not found" name
-
-and stack = function
-  | `String(name) -> leaf_stack name
-  | `Assoc(obj) when List.mem_assoc "seq" obj -> stack_seq obj
-  | `Assoc(obj) when List.mem_assoc "compose" obj -> compose obj
-  | x -> Exceptions.panic "parsing error: unsupported stack declaration:@ %a"
-           (pretty_print ~std:true) x
-
-and leaf_stack name : (module STACK) =
-  try find_stack name
-  with Not_found -> Exceptions.panic "stack %s not found" name
+  | _ -> assert false
 
 
-and stack_seq assoc : (module STACK) =
-  let stacks =
-    List.assoc "seq" assoc |>
-    to_list |>
-    List.map stack
-  in
-  let rec aux :
-    (module STACK) list ->
-    (module STACK)
-    = function
-      | [] -> assert false
-      | [d] -> d
-      | r ->
-        let a,b = ListExt.split r in
-        let aa, bb = aux a, aux b in
-        let module A = (val aa : STACK) in
-        let module B = (val bb : STACK) in
-        let module Dom = Transformers.Stacked.Sequence.Make(A)(B) in
-        (module Dom : STACK)
-  in
-  aux stacks
+and domain_simplified (config:config) : (module Sig.Domain.Simplified.DOMAIN) =
+  match config.structure with
+  | S_leaf name -> Sig.Domain.Simplified.find_domain name
+  | S_product(l,r) -> domain_simplified_product l r
+  | S_nonrel v -> domain_simplified_nonrel v
+  | _ -> assert false
 
-and compose assoc : (module STACK) =
-  let stacks =
-    List.assoc "compose" assoc |>
-    to_list |>
-    List.map stack
-  in
-  let rec aux :
-    (module STACK) list ->
-    (module STACK)
-    = function
-      | [] -> assert false
-      | [s] -> s
-      | hd :: tl ->
-        let tl = aux tl in
-        let module Head = (val hd : STACK) in
-        let module Tail = (val tl : STACK) in
-        let module Dom = Transformers.Stacked.Compose.Make(Head)(Tail) in
-        (module Dom : STACK)
-  in
-  aux stacks
+and domain_simplified_product (l:config list) (rules:string list) : (module Sig.Domain.Simplified.DOMAIN) =
+  let ll = List.map domain_simplified l in
+  let rules = List.map Sig.Domain.Reduction.find_reduction rules in
+  Transformers.Domain.Simplified.Product.make ll rules
+
+and domain_simplified_nonrel (v:config) : (module Sig.Domain.Simplified.DOMAIN) =
+  let vv = value_lowlevel v in
+  let module V = (val vv : Sig.Value.Lowlevel.VALUE) in
+  let module VV = Transformers.Value.Nonrel.MakeWithoutHistory(V) in
+  (module VV)
+
+and domain_stateless (config:config) : (module Sig.Domain.Stateless.DOMAIN) =
+  debug "stateless domain configuration:@, %a" pp_config config;
+  match config.structure with
+  | S_leaf name -> Sig.Domain.Stateless.find_domain name
+  | S_chain(op,l) -> domain_chain_stateless op l
+  | _ -> assert false
+
+
+and domain_chain_stateless (op:operator) (l:config list) : (module Sig.Domain.Stateless.DOMAIN) =
+  match l with
+  | [] -> assert false
+  | [d] -> domain_stateless d
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = domain_chain_stateless op a, domain_chain_stateless op b in
+    let module A = (val aa : Sig.Domain.Stateless.DOMAIN) in
+    let module B = (val bb : Sig.Domain.Stateless.DOMAIN) in
+    match op with
+    | O_seq ->
+      let module C = Transformers.Domain.Stateless.Sequence.Make(A)(B) in
+      (module C)
+    | _ -> assert false
+
+
+(** {2 Stack builders} *)
+(** ******************* *)
+
+and stack_lowlevel config : (module Sig.Stacked.Lowlevel.STACK) =
+  debug "stack configuration:@, %a" Typer.pp_config config;
+  match config.structure with
+  | S_leaf name -> Sig.Stacked.Lowlevel.find_stack name
+  | S_chain(op, l) -> stack_chain_lowlevel op l
+  | S_cast c -> stack_cast_lowlevel c
+  | _ -> assert false
+
+
+and stack_chain_lowlevel (op:operator) (l:config list) : (module Sig.Stacked.Lowlevel.STACK) =
+  match l with
+  | [] -> assert false
+  | [s] -> stack_lowlevel s
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = stack_chain_lowlevel op a, stack_chain_lowlevel op b in
+    let module A = (val aa : Sig.Stacked.Lowlevel.STACK) in
+    let module B = (val bb : Sig.Stacked.Lowlevel.STACK) in
+    match op with
+    | O_seq ->
+      let module C = Transformers.Stacked.Lowlevel.Sequence.Make(A)(B) in
+      (module C)
+
+    | O_compose ->
+      let module C = Transformers.Stacked.Lowlevel.Compose.Make(A)(B) in
+      (module C)
+
+    | _ -> assert false
+
+
+and stack_cast_lowlevel (config:config) : (module Sig.Stacked.Lowlevel.STACK) =
+  match config.signature with
+  | S_intermediate ->
+    let s = stack_intermediate config in
+    let module S = (val s : Sig.Stacked.Intermediate.STACK) in
+    let module SS = Sig.Stacked.Intermediate.MakeLowlevelStack(S) in
+    (module SS)
+
+  | S_stateless ->
+    let s = stack_stateless config in
+    let module S = (val s : Sig.Stacked.Stateless.STACK) in
+    let module SS = Sig.Stacked.Intermediate.MakeLowlevelStack(
+        Sig.Stacked.Stateless.MakeIntermediate(S)
+      )
+    in
+    (module SS)
+
+  | _ -> assert false
+
+and stack_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
+  match config.structure with
+  | S_leaf name -> Sig.Stacked.Intermediate.find_stack name
+  | S_chain (op,l) -> stack_chain_intermediate op l
+  | S_cast c -> stack_cast_intermediate c
+  | _ -> assert false
+
+
+and stack_chain_intermediate (op:operator) (l:config list) : (module Sig.Stacked.Intermediate.STACK) =
+  match l with
+  | [] -> assert false
+  | [s] -> stack_intermediate s
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = stack_chain_intermediate op a, stack_chain_intermediate op b in
+    let module A = (val aa : Sig.Stacked.Intermediate.STACK) in
+    let module B = (val bb : Sig.Stacked.Intermediate.STACK) in
+    match op with
+    | O_seq ->
+      let module C = Transformers.Stacked.Intermediate.Sequence.Make(A)(B) in
+      (module C)
+
+    | _ -> assert false
+
+and stack_cast_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
+  match config.signature with
+  | S_stateless ->
+    let s = stack_stateless config in
+    let module S = (val s : Sig.Stacked.Stateless.STACK) in
+    let module SS = Sig.Stacked.Stateless.MakeIntermediate(S) in
+    (module SS)
+
+  | _ -> assert false
+
+
+and stack_stateless (config:config) : (module Sig.Stacked.Stateless.STACK) =
+  match config.structure with
+  | S_leaf name -> Sig.Stacked.Stateless.find_stack name
+  | _ -> assert false
+
+
+(** {2 Value builders} *)
+(** ******************* *)
+
+and value_lowlevel config : (module Sig.Value.Lowlevel.VALUE) =
+  debug "value configuration:@, %a" Typer.pp_config config;
+  match config.structure with
+  | S_leaf name -> Sig.Value.Lowlevel.find_value name
+  | S_chain(op, l) -> value_chain_lowlevel op l
+  | S_cast c -> value_cast_lowlevel c
+  | S_product(l,r) -> value_product_lowlevel l r
+  | _ -> assert false
+
+
+and value_chain_lowlevel (op:operator) (l:config list) : (module Sig.Value.Lowlevel.VALUE) =
+  match l with
+  | [] -> assert false
+  | [v] -> value_lowlevel v
+  | r ->
+    let a,b = ListExt.split r in
+    let aa, bb = value_chain_lowlevel op a, value_chain_lowlevel op b in
+    let module A = (val aa : Sig.Value.Lowlevel.VALUE) in
+    let module B = (val bb : Sig.Value.Lowlevel.VALUE) in
+    match op with
+    | O_disjoint ->
+      let module C = Transformers.Value.Lowlevel.Disjoint.Make(A)(B) in
+      (module C)
+
+    | _ -> assert false
+
+
+and value_product_lowlevel (l:config list) (rules:string list) : (module Sig.Value.Lowlevel.VALUE) =
+  let ll = List.map value_lowlevel l in
+  let rules = List.map Sig.Value.Reduction.find_reduction rules in
+  Transformers.Value.Lowlevel.Product.make ll rules
+
+
+and value_cast_lowlevel (config:config) : (module Sig.Value.Lowlevel.VALUE) =
+  match config.signature with
+  | S_intermediate ->
+    let v = value_intermediate config in
+    let module V = (val v : Sig.Value.Intermediate.VALUE) in
+    let module VV = Sig.Value.Intermediate.MakeLowlevel(V) in
+    (module VV)
+
+  | S_simplified ->
+    let v = value_simplified config in
+    let module V = (val v : Sig.Value.Simplified.VALUE) in
+    let module VV = Sig.Value.Intermediate.MakeLowlevel(Sig.Value.Simplified.MakeIntermediate(V)) in
+    (module VV)
+
+  | _ -> assert false
+
+and value_intermediate (config:config) : (module Sig.Value.Intermediate.VALUE) =
+  match config.structure with
+  | S_leaf name -> Sig.Value.Intermediate.find_value name
+  | _ -> assert false
+
+and value_simplified (config:config) : (module Sig.Value.Simplified.VALUE) =
+  match config.structure with
+  | S_leaf name -> Sig.Value.Simplified.find_value name
+  | _ -> assert false
 
 
 (** {2 Toplevel attributes} *)
@@ -261,66 +404,56 @@ let get_domain json =
   | _ -> Exceptions.panic "domain declaration not found in configuration file"
 
 
+
+
+
 (** {2 Entry points} *)
 (** **************** *)
 
-let parse () : string * (module DOMAIN) =
-  let file = resolve_config_file !opt_config in
+let parse file : string * (module Sig.Domain.Lowlevel.DOMAIN) =
+  let file = resolve_config_file file in
+
   let json = Yojson.Basic.from_file file in
   let language = get_language json in
   let json = get_domain json in
-  language, domain json
 
-let language () : string =
-  let file = resolve_config_file !opt_config in
+  let config = Typer.domain spec json in
+  let config'= Typer.cast S_lowlevel config in
+
+  language, domain_lowlevel config'
+
+let language file : string =
+  let file = resolve_config_file file in
   let json = Yojson.Basic.from_file file in
   get_language json
 
-let domains () : string list =
-  if !opt_config = ""
-  then Sig.Domain.Lowlevel.names () @
-       Sig.Stacked.Lowlevel.names ()
+let domains file : string list =
+  if file = "" then
+    Sig.Domain.Lowlevel.names () @
+    Sig.Domain.Intermediate.names () @
+    Sig.Domain.Simplified.names () @
+    Sig.Domain.Stateless.names () @
+
+    Sig.Stacked.Lowlevel.names () @
+    Sig.Stacked.Intermediate.names () @
+    Sig.Stacked.Stateless.names () @
+
+    Sig.Value.Lowlevel.names () @
+    Sig.Value.Intermediate.names () @
+    Sig.Value.Simplified.names ()
+
   else
-    let file = resolve_config_file !opt_config in
+    let file = resolve_config_file file in
     let json = Yojson.Basic.from_file file in
-    let rec iter = function
-      | `String(name) -> [name]
-
-      | `Assoc(obj) when List.mem_assoc "seq" obj ->
-        List.assoc "seq" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "nonrel" obj ->
-        iter (List.assoc "nonrel" obj)
-
-      | `Assoc(obj) when List.mem_assoc "disjoint" obj ->
-        List.assoc "disjoint" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "product" obj ->
-        List.assoc "product" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | `Assoc(obj) when List.mem_assoc "apply" obj ->
-        iter (List.assoc "apply" obj) @
-        iter (List.assoc "on" obj)
-
-      | `Assoc(obj) when List.mem_assoc "compose" obj ->
-        List.assoc "compose" obj |>
-        to_list |>
-        List.fold_left (fun acc obj ->
-            iter obj @ acc
-          ) []
-
-      | _ -> assert false
-    in
-    iter (get_domain json)
+    let domain = json |> member "domain" in
+    let rec name_visitor = Visitor.{
+        leaf = (fun name -> [name]);
+        seq = (fun l -> List.map get_names l |> List.flatten);
+        nonrel = (fun v -> get_names v);
+        apply = (fun s d -> get_names s @ get_names d);
+        compose = (fun l -> List.map get_names l |> List.flatten);
+        product = (fun l r -> List.map get_names l |> List.flatten);
+        disjoint = (fun l -> List.map get_names l |> List.flatten);
+    }
+    and get_names json = Visitor.visit name_visitor json in
+    get_names domain

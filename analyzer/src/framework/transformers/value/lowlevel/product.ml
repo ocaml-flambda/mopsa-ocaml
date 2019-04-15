@@ -27,7 +27,6 @@ open Ast.All
 open Core.All
 open Core.Sig.Value.Lowlevel
 open Core.Sig.Value.Reduction
-open Utils.Value_list
 
 
 (** Specification of a reduced product *)

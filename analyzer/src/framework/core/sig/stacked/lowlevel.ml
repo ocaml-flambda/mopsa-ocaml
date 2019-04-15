@@ -149,6 +149,12 @@ let find_stack name =
       compare S.name name = 0
     ) !stacks
 
+let mem_stack name =
+  List.exists (fun dom ->
+      let module S = (val dom : STACK) in
+      compare S.name name = 0
+    ) !stacks
+
 let names () =
   List.map (fun dom ->
       let module S = (val dom : STACK) in

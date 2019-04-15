@@ -26,9 +26,8 @@
 open Ast.All
 open Core.All
 open Log
-open Sig.Domain.Lowlevel
+open Sig.Domain.Simplified
 open Sig.Domain.Reduction
-open Utils.Domain_list
 
 
 
@@ -58,12 +57,12 @@ struct
     end
     )
 
-  let interface =
+  let zones =
     let f = fun (type a) (m:a dmodule) acc ->
       let module Domain = (val m) in
-      Interface.concat acc Domain.interface
+      Domain.zones @ acc
     in
-    dlist_fold { f } Spec.pool Interface.empty
+    dlist_fold { f } Spec.pool []
 
 
 
@@ -75,7 +74,7 @@ struct
       let module Domain = (val m) in
       Domain.bottom
     in
-    dlist_apply { f } Spec.pool
+    dlist_create { f } Spec.pool
 
 
   let top : t =
@@ -83,107 +82,97 @@ struct
       let module Domain = (val m) in
       Domain.top
     in
-    dlist_apply { f } Spec.pool
+    dlist_create { f } Spec.pool
 
 
-  let print man fmt a =
-    let f = fun (type a) (m: a dmodule) man fmt ->
+  let print fmt a =
+    let f = fun (type a) (m: a dmodule) fmt aa ->
       let module Domain = (val m) in
-      Domain.print man fmt a
+      Domain.print fmt aa
     in
-    dlist_man_print { f } Spec.pool man fmt ""
+    dlist_print { f } Spec.pool "" fmt a
 
 
-  let is_bottom man a =
-    let f = fun (type a) (m: a dmodule) man ->
+  let is_bottom a =
+    let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      Domain.is_bottom man a
+      Domain.is_bottom aa
     in
-    dlist_man_exists { f } Spec.pool man
+    dlist_exists { f } Spec.pool a
 
-  let subset man a1 a2 =
-    let f = fun (type a) (m: a dmodule) man ->
+  let subset a1 a2 =
+    let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
-      Domain.subset man a1 a2
+      Domain.subset aa1 aa2
     in
-    dlist_man_forall { f } Spec.pool man
+    dlist_forall2 { f } Spec.pool a1 a2
 
-  let join man a1 a2 =
-    let f = fun (type a) (m: a dmodule) man ->
+  let join a1 a2 =
+    let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
-      Domain.join man a1 a2
+      Domain.join aa1 aa2
     in
-    dlist_man_apply { f } Spec.pool man
+    dlist_apply2 { f } Spec.pool a1 a2
 
-  let meet man a1 a2 =
-    let f = fun (type a) (m: a dmodule) man ->
+  let meet a1 a2 =
+    let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
-      Domain.meet man a1 a2
+      Domain.meet aa1 aa2
     in
-    dlist_man_apply { f } Spec.pool man
+    dlist_apply2 { f } Spec.pool a1 a2
 
-  let widen man ctx a1 a2 =
-    let f = fun (type a) (m: a dmodule) man ->
+  let widen ctx a1 a2 =
+    let f = fun (type a) (m: a dmodule) aa1 aa2 ->
       let module Domain = (val m) in
-      Domain.widen man ctx a1 a2
+      Domain.widen ctx aa1 aa2
     in
-    dlist_man_apply { f } Spec.pool man
+    dlist_apply2 { f } Spec.pool a1 a2
 
-  let merge man pre (post1,log1) (post2,log2) =
-    let f = fun (type a) (m: a dmodule) man ->
+  let merge pre (post1,log1) (post2,log2) =
+    let f = fun (type a) (m: a dmodule) pre post1 post2 ->
       let module Domain = (val m) in
-      Domain.merge man pre (post1,log1) (post2,log2)
+      Domain.merge pre (post1,log1) (post2,log2)
     in
-    dlist_man_apply { f } Spec.pool man
+    dlist_apply3 { f } Spec.pool pre post1 post2
 
 
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let init prog man flow =
-    let f = fun (type a) (m: a dmodule) man acc ->
+  let init prog =
+    let f = fun (type a) (m: a dmodule) ->
       let module Domain = (val m) in
-      Domain.init prog man acc
+      Domain.init prog
     in
-    dlist_man_fold { f } Spec.pool man flow
+    dlist_create { f } Spec.pool
 
-  let reduce stmt man flow =
-    Post.return flow
+  let reduce stmt a =
+    a
 
-  let exec zone stmt man flow =
-    let f = fun (type a) (m: a dmodule) man acc ->
+  let exec stmt a =
+    let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      let post = Domain.exec zone stmt man flow in
-      Option.neutral2 (fun post acc ->
-          Post.merge (fun tk (a,log) (acc,acclog) ->
-              let acc' = man.set (man.get a) acc in
-              let acclog' = man.set_log (man.get_log log) acclog in
-              acc', acclog'
-            ) post acc
-        ) post acc
+      Domain.exec stmt aa
     in
-    dlist_man_fold { f } Spec.pool man None |>
-    Option.lift (Post.bind @@ reduce stmt man)
+    dlist_apply_opt { f } Spec.pool a |>
+    Option.lift (reduce stmt)
 
 
-  let eval zone exp man flow =
-    Exceptions.panic ~loc:__LOC__ "eval of reduced products not implemented"
-
-  let ask query man flow =
-    let f = fun (type a) (m: a dmodule) man acc ->
+  let ask query a =
+    let f = fun (type a) (m: a dmodule) acc aa ->
       let module Domain = (val m) in
-      let rep = Domain.ask query man flow in
+      let rep = Domain.ask query aa in
       Option.neutral2 (fun rep acc ->
           Query.meet query rep acc
         ) rep acc
     in
-    dlist_man_fold { f } Spec.pool man None
+    dlist_fold_apply { f } Spec.pool None a
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  let refine channel man flow =
+  let refine channel a =
     assert false
 
 end

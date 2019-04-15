@@ -7,5 +7,4 @@ void main () {
   if (i >= 12)
     i = 0;
 
-  float f = 1.0 / i; // Should be safe with a reduced product interval x congruence
 }
