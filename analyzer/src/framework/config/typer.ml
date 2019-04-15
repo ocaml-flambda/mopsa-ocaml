@@ -113,7 +113,7 @@ let rec pp_config fmt config =
       (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt " : ") pp_print_string) r
 
   | S_nonrel v ->
-    fprintf fmt "𝐍(%a)" pp_config v
+    fprintf fmt "𝐕(%a)" pp_config v
 
   | S_cast c ->
     fprintf fmt "(%a) %a" pp_signature config.signature pp_config c

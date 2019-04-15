@@ -123,7 +123,6 @@ and domain_apply_lowlevel (stack:config) (domain:config) : (module Sig.Domain.Lo
   (module DD)
 
 and domain_cast_lowlevel (config:config) : (module Sig.Domain.Lowlevel.DOMAIN) =
-  debug "cast %a" pp_config config;
   match config.signature with
   | S_intermediate ->
     let s = domain_intermediate config in
@@ -156,6 +155,7 @@ and domain_intermediate (config:config) : (module Sig.Domain.Intermediate.DOMAIN
   match config.structure with
   | S_leaf name -> Sig.Domain.Intermediate.find_domain name
   | S_chain (op,l) -> domain_chain_intermediate op l
+  | S_cast d -> domain_cast_intermediate d
   | _ -> assert false
 
 and domain_chain_intermediate (op:operator) (l:config list) : (module Sig.Domain.Intermediate.DOMAIN) =
@@ -172,6 +172,22 @@ and domain_chain_intermediate (op:operator) (l:config list) : (module Sig.Domain
       let module C = Transformers.Domain.Intermediate.Sequence.Make(A)(B) in
       (module C)
     | _ -> assert false
+
+and domain_cast_intermediate (config:config) : (module Sig.Domain.Intermediate.DOMAIN) =
+  match config.signature with
+  | S_simplified ->
+    let s = domain_simplified config in
+    let module S = (val s : Sig.Domain.Simplified.DOMAIN) in
+    let module SS = Sig.Domain.Simplified.MakeIntermediate(S) in
+    (module SS)
+
+  | S_stateless ->
+    let s = domain_stateless config in
+    let module S = (val s : Sig.Domain.Stateless.DOMAIN) in
+    let module SS = Sig.Domain.Stateless.MakeIntermediate(S) in
+    (module SS)
+
+  | _ -> assert false
 
 
 and domain_simplified (config:config) : (module Sig.Domain.Simplified.DOMAIN) =

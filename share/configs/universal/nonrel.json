@@ -1,9 +1,9 @@
 {
-    "language": "repl",
+    "language": "universal",
     "domain": {
 	"seq": [
 	    // Iterators
-	    "universal.repl",
+	    "universal.iterators.program",
 	    "universal.iterators.intraproc",
 	    "universal.iterators.loops",
             "universal.iterators.interproc.inlining",
