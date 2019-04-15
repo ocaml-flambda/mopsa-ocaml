@@ -394,26 +394,40 @@ let get_domain json =
 (** {2 Entry points} *)
 (** **************** *)
 
-let parse () : string * (module Sig.Domain.Lowlevel.DOMAIN) =
-  let file = resolve_config_file !opt_config in
+let parse file : string * (module Sig.Domain.Lowlevel.DOMAIN) =
+  let file = resolve_config_file file in
+
   let json = Yojson.Basic.from_file file in
   let language = get_language json in
   let json = get_domain json in
+
   let config = Typer.domain spec json in
   let config'= Typer.cast S_lowlevel config in
+
   language, domain_lowlevel config'
 
-let language () : string =
-  let file = resolve_config_file !opt_config in
+let language file : string =
+  let file = resolve_config_file file in
   let json = Yojson.Basic.from_file file in
   get_language json
 
-let domains () : string list =
-  if !opt_config = "" then
+let domains file : string list =
+  if file = "" then
     Sig.Domain.Lowlevel.names () @
-    Sig.Stacked.Lowlevel.names ()
+    Sig.Domain.Intermediate.names () @
+    Sig.Domain.Simplified.names () @
+    Sig.Domain.Stateless.names () @
+
+    Sig.Stacked.Lowlevel.names () @
+    Sig.Stacked.Intermediate.names () @
+    Sig.Stacked.Stateless.names () @
+
+    Sig.Value.Lowlevel.names () @
+    Sig.Value.Intermediate.names () @
+    Sig.Value.Simplified.names ()
+
   else
-    let file = resolve_config_file !opt_config in
+    let file = resolve_config_file file in
     let json = Yojson.Basic.from_file file in
     let domain = json |> member "domain" in
     let rec name_visitor = Visitor.{

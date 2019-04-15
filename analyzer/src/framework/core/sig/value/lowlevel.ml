@@ -181,7 +181,11 @@ let mem_value name =
       compare V.name name = 0
     ) !values
 
-
+let names () =
+  List.map (fun v ->
+      let module V = (val v : VALUE) in
+      V.name
+    ) !values
 
 
 
