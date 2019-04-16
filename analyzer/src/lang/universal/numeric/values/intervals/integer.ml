@@ -299,7 +299,7 @@ struct
           fun next query a b ->
             match query with
             | Q_interval e -> meet a b
-            | _ -> next.join query a b
+            | _ -> next.meet query a b
         in
         f
       );

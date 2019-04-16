@@ -37,48 +37,45 @@ struct
   module R = Relational.Factory
 
   (** Get a list of variables related numerically to [v] *)
-  let get_related_vars v man a =
-    man.ask (R.Q_related_vars v) a
+  let get_related_vars v man ctx a =
+    man.ask (R.Q_related_vars v) ctx a
 
   (** Get a list of constant variables *)
-  let get_constant_vars man a =
-    man.ask R.Q_constant_vars a
+  let get_constant_vars man ctx a =
+    man.ask R.Q_constant_vars ctx a
 
 
   (** Get the list of modified variables *)
-  let get_modified_vars stmt man a =
+  let get_modified_vars stmt man ctx a =
     let l =
       match skind stmt with
       | S_assign({ekind = E_var (v, _)}, _) -> [v]
       | S_assume e -> Visitor.expr_vars e
       | _ -> []
     in
-    List.fold_left (fun acc v -> get_related_vars v man a @ acc) l l
-    @
-    get_constant_vars man a
+    List.fold_left (fun acc v -> get_related_vars v man ctx a @ acc) l l |>
+    List.sort_uniq compare_var
 
 
   (** Reduction operator *)
-  let reduce stmt (man: 'a man) (a: 'a) : 'a =
+  let reduce stmt (man: 'a man) ctx (pre:'a) (post:'a) : 'a =
     (* Get the modified variables *)
-    let vars = get_modified_vars stmt man a in
+    let vars = get_modified_vars stmt man ctx pre in
 
     (* Refine the interval of each variable *)
-    List.fold_left (fun a var ->
+    List.fold_left (fun post var ->
         (* Get the interval of var in the box domain *)
-        let itv = man.get_value I.id var a in
-
+        let itv = man.get_value I.id var post in
+      
         (* Get the interval in all domain *)
-        let itv' = man.ask (I.Q_interval (mk_var var stmt.srange)) a in
+        let itv' = man.ask (I.Q_interval (mk_var var stmt.srange)) ctx post in
 
         (* Check if box is less precise *)
         if not (I.subset itv itv')
-        then
-          let () = debug "interval of %a reduced from %a to %a" pp_var var I.print itv I.print itv' in
-          man.set_value I.id var itv' a
-        else a
+        then man.set_value I.id var itv' post
+        else post
 
-      ) a vars
+      ) post vars
 
 end
 

@@ -70,7 +70,7 @@ let () =
           | Q_reachable_states ->
             Exceptions.panic ~loc:__LOC__ "join of Q_reachable_states not implemented"
 
-          | _ -> next.join query a b
+          | _ -> next.meet query a b
       in
       f
       );

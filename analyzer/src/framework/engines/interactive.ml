@@ -61,7 +61,7 @@ let () =
           | Q_print_var ->
             fun fmt var ->
               Format.fprintf fmt "%a@,%a" a var b var
-          | _ -> next.join query a b
+          | _ -> next.meet query a b
       in
       doit
     );
