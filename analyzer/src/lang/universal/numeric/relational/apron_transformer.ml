@@ -19,34 +19,43 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Relational numeric abstract domain, based on APRON. *)
+
+(** ToolBox module for Apron interfacing *)
 
 open Mopsa
 open Rounding
 open Ast
+open Apron_manager
 
 
 
-(****************************************************************************)
-(**                         {2 Abstract domain}                             *)
-(****************************************************************************)
-
-(** Module to encapsulate a manager of Apron and the type of its abstraction *)
-module type APRONMANAGER =
-sig
-  type t
-  val man : t Apron.Manager.t
-  val name : string
-end
-
-
-(** ToolBox module for Apron interfacing *)
 module ApronTransformer(ApronManager : APRONMANAGER) =
 struct
+
+  let debug fmt = Debug.debug ~channel:"universal.numeric.relational.apron_transformer" fmt
 
   let var_to_apron (v:var) =
     let name = uniq_vname v in
     Apron.Var.of_string name
+
+  (** FIXME: this is ugly! we need a flow-insensitive context to maintain a
+      mapping mopsa var <-> apron var *)
+  let apron_to_var v =
+    let v = Apron.Var.to_string v in
+    if Str.string_match (Str.regexp "\\([^:]+\\):\\([0-9]+\\)") v 0 then
+      let orig = Str.matched_group 1 v in
+      let vuid = Str.matched_group 2 v |> int_of_string in
+      let uniq = orig ^ ":" ^ (string_of_int vuid) in
+      mkv orig uniq vuid T_int
+    else
+    if Str.string_match (Str.regexp "\\([^@]+\\)@\\([0-9]+\\)") v 0 then
+      let orig = Str.matched_group 1 v in
+      let vuid = Str.matched_group 2 v |> int_of_string in
+      let uniq = orig ^ ":" ^ (string_of_int vuid) in
+      (* TODO: replace F_REAL with real type *)
+      mkv orig uniq vuid (T_float F_REAL)
+    else raise (Invalid_argument v)
+
 
   let get_interval (v:var) (a: ApronManager.t Apron.Abstract1.t) =
     Apron.Abstract1.bound_variable ApronManager.man a (var_to_apron v) |>
@@ -108,34 +117,77 @@ struct
       (fun int_var -> not (Apron.Environment.mem_var b int_var))
       a
 
-  let earray_of_array env a =
-    let n = Array.length a in
-    let rep = Apron.Lincons1.array_make env n in
-    let _ = Array.fold_left (fun i cont ->
-        let () = Apron.Lincons1.array_set rep i cont in
-        (i+1)
-      ) 0 a
-    in
-    rep
-
-  let to_lincons_list a =
+  let to_constraints a =
     let earray = Apron.Abstract1.to_lincons_array ApronManager.man a in
     let rec iter i =
       if i = Apron.Lincons1.array_length earray then []
-      else (Apron.Lincons1.array_get earray i) :: (iter (i + 1))
+      else
+        let l = ref [] in
+        let cons = Apron.Lincons1.array_get earray i in
+        Apron.Lincons1.iter (fun c v ->
+            l := (c, apron_to_var v) :: !l
+          ) cons
+        ;
+        (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
     in
     iter 0
 
-  let vars_in_lincons (lc: Apron.Lincons1.t) =
-    let rep = ref [] in
-    let () = Apron.Lincons1.iter (fun c v -> if not (Apron.Coeff.is_zero c) then rep := v::(!rep)) lc in
-    let env = Apron.Lincons1.get_env lc in
-    filter_env (fun x -> List.mem x !rep) (fun x -> List.mem x !rep) env
+
+  (** Restrict linear constraints involving variable [v] *)
+  let constraints_of_var v constraints =
+    List.filter (fun (cons,_,_) ->
+        List.exists (fun (c, v') ->
+            (compare_var v  v' = 0)
+            && not (Apron.Coeff.is_zero c)
+          ) cons
+      ) constraints
+
+  (** Get the list of variables with which [v] has numeric relations *)
+  let related_vars v a =
+    debug "computing related vars of %a in %a" pp_var v Apron.Abstract1.print a;
+    to_constraints a |>
+    constraints_of_var v |>
+    List.fold_left (fun acc (cons,_,_) ->
+        List.fold_left (fun acc (c, v') ->
+            if compare_var v v' <> 0 && not (Apron.Coeff.is_zero c) then
+              let () = debug "adding %a" pp_var v' in
+              v' :: acc
+            else
+              acc
+          ) acc cons
+      ) []
+
+  (** Get the list of constant variables *)
+  let constant_vars a =
+    debug "computing constant vars in %a" Apron.Abstract1.print a;
+    let rec iter candidate l =
+      match l with
+      | [] -> candidate
+      | (c, v) :: tl ->
+        if Apron.Coeff.is_zero c
+        then iter candidate tl
+        else
+          match candidate with
+          | Some vv -> None
+          | None -> iter (Some v) tl
+    in
+    to_constraints a |>
+    List.fold_left (fun acc (cons,c,t) ->
+        match t with
+        | Apron.Lincons1.EQ ->
+          begin
+            match iter None cons with
+            | None -> acc
+            | Some v ->
+              debug "%a is constant" pp_var v;
+              v :: acc
+          end
+        | _ -> acc
+      ) []
+
 
 
   exception UnsupportedExpression
-
-  let apron_to_var v = panic "relational: apron_to_var not implemented"
 
   let rec binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
@@ -372,283 +424,3 @@ struct
       Values.Intervals.Integer.Value.of_apron
 
 end
-
-
-module Make(ApronManager : APRONMANAGER) =
-struct
-
-  include ApronTransformer(ApronManager)
-
-  type t = ApronManager.t Apron.Abstract1.t
-
-  include GenDomainId(struct
-      type typ = t
-      let name = "universal.numeric.relational." ^ ApronManager.name
-    end)
-
-
-
-  (** {2 Command-line options} *)
-  (** ************************ *)
-  let () =
-    import_standalone_option Rounding.name ~into:name
-
-
-  (** {2 Environment utility functions} *)
-  (** ********************************* *)
-
-  let unify abs1 abs2 =
-    let env1 = Apron.Abstract1.env abs1 and env2 = Apron.Abstract1.env abs2 in
-    let env = Apron.Environment.lce env1 env2 in
-    (Apron.Abstract1.change_environment ApronManager.man abs1 env false),
-    (Apron.Abstract1.change_environment ApronManager.man abs2 env false)
-
-  let add_missing_vars abs lv =
-    let env = Apron.Abstract1.env abs in
-    let lv = List.sort_uniq compare lv in
-    let lv = List.filter (fun v -> not (Apron.Environment.mem_var env (var_to_apron v))) lv in
-    let env' = Apron.Environment.add env
-        (
-          Array.of_list @@
-          List.map var_to_apron @@
-          List.filter (fun v -> vtyp v = T_int || vtyp v = T_bool) lv
-        )
-        (
-          Array.of_list @@
-          List.map var_to_apron @@
-          List.filter (fun v ->
-              match vtyp v with
-              | T_float _ -> true
-              | _ -> false
-            ) lv
-        )
-    in
-    Apron.Abstract1.change_environment ApronManager.man abs env' false
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
-
-  let top = Apron.Abstract1.top ApronManager.man empty_env
-
-  let bottom = Apron.Abstract1.bottom ApronManager.man empty_env
-
-  let is_bottom abs =
-    Apron.Abstract1.is_bottom ApronManager.man abs
-
-  let subset abs1 abs2 =
-    let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.is_leq ApronManager.man abs1' abs2'
-
-  let join abs1 abs2 =
-    let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.join ApronManager.man abs1' abs2'
-
-  let meet abs1 abs2 =
-    let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.meet ApronManager.man abs1' abs2'
-
-  let widen ctx abs1 abs2 =
-    let abs1', abs2' = unify abs1 abs2 in
-    Apron.Abstract1.widening ApronManager.man abs1' abs2'
-
-  let merge pre (post1,log1) (post2,log2) =
-    assert false
-
-  let print fmt abs =
-    Format.fprintf fmt "%s:@,  @[%a@]@\n"
-      ApronManager.name
-      Apron.Abstract1.print abs
-
-
-  (** {2 Transformers to Apron syntax} *)
-  (** ******************************** *)
-
-
-
-  (** {2 Transfer functions} *)
-  (** ********************** *)
-
-  let zones = [Zone.Z_u_num]
-
-  let init prog = top
-
-  let rec exec stmt a =
-    match skind stmt with
-    | S_add { ekind = E_var (var, _) } ->
-      add_missing_vars a [var] |>
-      Option.return
-
-    | S_remove { ekind = E_var (var, _) } ->
-      let env = Apron.Abstract1.env a in
-      let vars =
-        List.filter (fun v -> is_env_var v a) [var] |>
-        List.map var_to_apron
-      in
-      let env = Apron.Environment.remove env (Array.of_list vars) in
-      Apron.Abstract1.change_environment ApronManager.man a env true |>
-      Option.return
-
-    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      Apron.Abstract1.rename_array ApronManager.man a
-        [| var_to_apron var1  |]
-        [| var_to_apron var2 |] |>
-      Option.return
-
-    | S_project vars
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
-      ->
-      let vars = List.map (function
-          | { ekind = E_var (v, _) } -> v
-          | _ -> assert false
-        ) vars
-      in
-      let env = Apron.Abstract1.env a in
-      let vars = List.map var_to_apron vars in
-      let old_vars1, old_vars2 = Apron.Environment.vars env in
-      let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
-      let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
-      let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
-      Apron.Abstract1.change_environment ApronManager.man a new_env true |>
-      Option.return
-
-    | S_assign({ ekind = E_var (var, STRONG) }, e) ->
-      let a = add_missing_vars a (var :: (Visitor.expr_vars e)) in
-      let e, a, l = strongify_rhs e a [] in
-      begin try
-          let aenv = Apron.Abstract1.env a in
-          let texp = Apron.Texpr1.of_expr aenv e in
-          Apron.Abstract1.assign_texpr ApronManager.man a (var_to_apron var) texp None |>
-          remove_tmp l |>
-          Option.return
-        with UnsupportedExpression ->
-          exec (mk_remove_var var stmt.srange) a
-      end
-
-    | S_assign({ ekind = E_var (var, WEAK) } as lval, e) ->
-      let lval' = { lval with ekind = E_var(var, STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} a |>
-      Option.lift (join a)
-
-    | S_fold( {ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl ->
-      begin
-        let vl = List.map (function
-            | { ekind = E_var (v, _) } -> v
-            | _ -> assert false
-          ) vl
-        in
-        match vl with
-        | [] -> Exceptions.panic "Can not fold list of size 0"
-        | p::q ->
-          let abs = Apron.Abstract1.fold ApronManager.man a
-              (List.map var_to_apron vl |> Array.of_list)
-          in
-          Apron.Abstract1.rename_array ApronManager.man abs
-            [|var_to_apron p|] [|var_to_apron v|] |>
-          Option.return
-      end
-
-    | S_expand({ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
-      ->
-      let vl = List.map (function
-          | { ekind = E_var (v, _) } -> v
-          | _ -> assert false
-        ) vl
-      in
-      let abs = Apron.Abstract1.expand ApronManager.man a
-          (var_to_apron v) (List.map var_to_apron vl |> Array.of_list) in
-      let env = Apron.Environment.remove (Apron.Abstract1.env abs) [|var_to_apron v|] in
-      Apron.Abstract1.change_environment ApronManager.man abs env false |>
-      Option.return
-
-    | S_assume(e) -> begin
-        let a = add_missing_vars a (Visitor.expr_vars e) in
-        let env = Apron.Abstract1.env a in
-
-        let join_list l = List.fold_left
-            (Apron.Abstract1.join ApronManager.man)
-            (Apron.Abstract1.bottom ApronManager.man env)
-            l
-        in
-        let meet_list l = tcons_array_of_tcons_list env l |>
-                          Apron.Abstract1.meet_tcons_array ApronManager.man a
-        in
-
-        try
-          bexp_to_apron e |>
-          Dnf.apply_list
-            (fun (op,e1,typ1,e2,typ2) ->
-               let typ =
-
-                 let is_integer = function
-                   | T_int | T_bool -> true
-                   | _ -> false
-                 in
-
-                 let is_float = function
-                   | T_float _ -> true
-                   | _ -> false
-                 in
-
-                 if is_float typ1 || is_float typ2
-                 then Apron.Texpr1.Real
-
-                 else if is_integer typ1 && is_integer typ2
-                 then Apron.Texpr1.Int
-
-                 else
-                   Exceptions.panic_at (srange stmt)
-                     "Unsupported case (%a, %a) in stmt @[%a@]"
-                     pp_typ typ1 pp_typ typ2 pp_stmt stmt
-               in
-               let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
-               let diff_texpr = Apron.Texpr1.of_expr env diff in
-               Apron.Tcons1.make diff_texpr op
-            )
-            join_list meet_list |>
-          Option.return
-        with UnsupportedExpression -> Option.return a
-      end
-
-    | _ -> None
-
-
-  let ask : type r. r Query.query -> t -> r option =
-    fun query abs ->
-      match query with
-      | Values.Intervals.Integer.Value.Q_interval e ->
-        let e = exp_to_apron e in
-        let env = Apron.Abstract1.env abs in
-        let e = Apron.Texpr1.of_expr env e in
-        Apron.Abstract1.bound_texpr ApronManager.man abs e |>
-        Values.Intervals.Integer.Value.of_apron |>
-        Option.return
-
-      | _ -> None
-
-  let refine channel a = Channel.return a
-
-end
-
-module OctMan = struct
-  type t = Oct.t
-  let name = "octagon"
-  let man = Oct.manager_alloc ()
-end
-
-module Oct = Make(OctMan)
-
-
-module PolyMan = struct
-  type t = Polka.strict Polka.t
-  let name = "polyhedra"
-  let man = Polka.manager_alloc_strict ()
-end
-
-module Poly = Make(PolyMan)
-
-let () =
-  Framework.Core.Sig.Domain.Simplified.register_domain (module Oct);
-  Framework.Core.Sig.Domain.Simplified.register_domain (module Poly);

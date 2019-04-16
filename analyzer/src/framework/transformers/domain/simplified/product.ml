@@ -267,6 +267,7 @@ struct
   }
 
   let reduce stmt a =
+    debug "reduce %a" print a;
     List.fold_left (fun acc rule ->
         let module R = (val rule : REDUCTION) in
         R.reduce stmt reduction_man acc
@@ -275,7 +276,10 @@ struct
   let exec stmt a =
     let f = fun (type a) (m: a dmodule) aa ->
       let module Domain = (val m) in
-      Domain.exec stmt aa
+      debug "exec %a in %s" pp_stmt stmt Domain.name;
+      match Domain.exec stmt aa with
+      | None -> debug "no answer"; None
+      | Some aa -> debug "answer: %a" Domain.print aa; Some aa
     in
     dlist_apply_opt { f } Spec.pool a |>
     Option.lift (reduce stmt)

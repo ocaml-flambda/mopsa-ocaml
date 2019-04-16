@@ -34,18 +34,34 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   module I = Values.Intervals.Integer.Value
+  module R = Relational.Factory
+
+  (** Get a list of variables related numerically to [v] *)
+  let get_related_vars v man a =
+    man.ask (R.Q_related_vars v) a
+
+  (** Get a list of constant variables *)
+  let get_constant_vars man a =
+    man.ask R.Q_constant_vars a
+
 
   (** Get the list of modified variables *)
-  let modified_vars stmt =
-    match skind stmt with
-    | S_assign({ekind = E_var (v, _)}, _) -> [v]
-    | S_assume e -> Visitor.expr_vars e
-    | _ -> []
+  let get_modified_vars stmt man a =
+    let l =
+      match skind stmt with
+      | S_assign({ekind = E_var (v, _)}, _) -> [v]
+      | S_assume e -> Visitor.expr_vars e
+      | _ -> []
+    in
+    List.fold_left (fun acc v -> get_related_vars v man a @ acc) l l
+    @
+    get_constant_vars man a
+
 
   (** Reduction operator *)
   let reduce stmt (man: 'a man) (a: 'a) : 'a =
     (* Get the modified variables *)
-    let vars = modified_vars stmt in
+    let vars = get_modified_vars stmt man a in
 
     (* Refine the interval of each variable *)
     List.fold_left (fun a var ->
