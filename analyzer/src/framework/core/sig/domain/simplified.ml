@@ -115,7 +115,7 @@ sig
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  val refine : channel -> uctx -> t -> t with_channel
+  val refine : channel -> t -> t with_channel
 
 
 end
@@ -173,7 +173,7 @@ struct
     D.ask query (Flow.get_ctx flow |> Context.get_unit) (get_domain_env T_cur man flow)
 
   let refine channel man flow =
-    D.refine channel (Flow.get_ctx flow |> Context.get_unit) (get_domain_env T_cur man flow) |>
+    D.refine channel (get_domain_env T_cur man flow) |>
     Channel.bind @@ fun a ->
 
     set_domain_env T_cur a man flow |>

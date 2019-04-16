@@ -59,9 +59,10 @@ struct
   let id = D_nonrel_id (module Value)
 
   let () =
-    Core.Id.register_domain_id {
+    let open Eq in
+    register_domain_id {
       eq = (
-        let f : type a. a domain -> (a, t) Eq.eq option =
+        let f : type a. a domain -> (a, t) eq option =
           function
           | D_nonrel_id vmodule ->
             begin

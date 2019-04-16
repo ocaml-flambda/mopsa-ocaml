@@ -25,6 +25,7 @@
 
 open Ast.All
 open Core.All
+open Context
 open Log
 open Sig.Domain.Simplified
 open Sig.Domain.Reduction
@@ -140,18 +141,23 @@ struct
   (** ********************** *)
 
   let init prog ctx =
-    let f = fun (type a) (m: a dmodule) ->
-      let module Domain = (val m) in
-      Domain.init prog ctx
+    let rec aux : type t. t dlist -> uctx -> t * uctx =
+      fun l ctx ->
+        match l with
+        | Nil -> (), ctx
+        | Cons(hd,tl) ->
+          let module Domain = (val hd) in
+          let hda, ctx = Domain.init prog ctx in
+          let tla, ctx = aux tl ctx in
+          (hda,tla), ctx
     in
-    dlist_create { f } Spec.pool
+    aux Spec.pool ctx
 
-
-  let ask : type r. r query -> t -> r option =
-    fun query a ->
+  let ask : type r. r query -> uctx -> t -> r option =
+    fun query ctx a ->
       let f = fun (type a) (m: a dmodule) acc aa ->
         let module Domain = (val m) in
-        let rep = Domain.ask query aa in
+        let rep = Domain.ask query ctx aa in
         Option.neutral2 (fun rep acc ->
             Query.meet query rep acc
           ) rep acc
@@ -254,9 +260,9 @@ struct
       );
 
     ask = (
-      let doit : type r. r query -> t -> r =
-        fun query a ->
-          match ask query a with
+      let doit : type r. r query -> uctx -> t -> r =
+        fun query ctx a ->
+          match ask query ctx a with
           | Some r -> r
           | None -> Exceptions.panic "query not handled"
       in
@@ -266,25 +272,35 @@ struct
     refine = refine_lfp;
   }
 
-  let reduce stmt a =
-    debug "reduce %a" print a;
+  let reduce stmt ctx pre post =
     List.fold_left (fun acc rule ->
         let module R = (val rule : REDUCTION) in
-        R.reduce stmt reduction_man acc
-      ) a Spec.rules
+        R.reduce stmt reduction_man ctx pre acc
+      ) post Spec.rules
 
-  let exec stmt a =
-    let f = fun (type a) (m: a dmodule) aa ->
-      let module Domain = (val m) in
-      debug "exec %a in %s" pp_stmt stmt Domain.name;
-      match Domain.exec stmt aa with
-      | None -> debug "no answer"; None
-      | Some aa -> debug "answer: %a" Domain.print aa; Some aa
+  let exec stmt ctx a =
+    let rec aux : type t. t dlist -> uctx -> t -> (t*uctx) option =
+      fun l ctx a ->
+        match l, a with
+        | Nil, () -> None
+        | Cons(hd,tl), (hda,tla) ->
+          let module Domain = (val hd) in
+          match Domain.exec stmt ctx hda with
+          | None ->
+            begin match aux tl ctx tla with
+              | None -> None
+              | Some (tla',ctx) -> Some ((hda,tla'),ctx)
+            end
+
+          | Some (hda',ctx') ->
+            match aux tl ctx' tla with
+            | None -> Some ((hda',tla),ctx')
+            | Some (tla',ctx'') -> Some ((hda',tla'),ctx'')
     in
-    dlist_apply_opt { f } Spec.pool a |>
-    Option.lift (reduce stmt)
-
-
+    aux Spec.pool ctx a |>
+    Option.lift @@ fun (aa,ctx) ->
+    let a' = reduce stmt ctx a aa in
+    (a',ctx)
 
 
 end
