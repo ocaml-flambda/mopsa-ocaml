@@ -144,13 +144,10 @@ let rec split (l:config list) : config list * config list =
   | [] -> [], []
   | [n] -> [n], []
   | hd :: snd :: tl ->
-    debug "split: hd: %a, snd: %a" pp_config hd pp_config snd;
     if is_same_signature hd snd then
-      let () = debug "same signature" in
       let l1, l2 = split (snd :: tl) in
       hd :: l1, l2
     else
-      let () = debug "not same signature" in
       [hd], snd :: tl
 
 (** Downgrade a signature by one level *)
@@ -236,7 +233,6 @@ let unified_chain spec op l =
 
 (** Create a chain of a list of configurations *)
 let rec chain spec op l =
-  debug "chain %a:@, @[<v>%a@]" pp_operator op (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_config) l;
   let l1, l2 = split l in
   match l2 with
   | [] -> unified_chain spec op l1
@@ -280,7 +276,6 @@ let nonrel spec value =
   }
 
 let leaf_domain name =
-  debug "leaf domain: %s" name;
   let signature =
     if Core.Sig.Domain.Lowlevel.mem_domain name then S_lowlevel
     else if Core.Sig.Domain.Intermediate.mem_domain name then S_intermediate
@@ -288,7 +283,6 @@ let leaf_domain name =
     else if Core.Sig.Domain.Stateless.mem_domain name then S_stateless
     else Exceptions.panic "domain %s not found" name
   in
-  debug "signature: %a" pp_signature signature;
   {
     abstraction = A_domain;
     signature = signature;

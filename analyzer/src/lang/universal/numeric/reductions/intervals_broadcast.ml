@@ -19,64 +19,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Engine of an automatic analysis *)
+(** Reduction operator for computing the most precise interval and broadcast
+    it. 
+*)
 
-open Ast.Stmt
-open Ast.Expr
-open Core
-open Lattice
-open Flow
-open Manager
-open Eval
-open Zone
-open Query
-open Abstraction
-open Engine
+open Mopsa
+open Core.Sig.Domain.Reduction
 
-(** Create an automatic analysis engine over an abstraction. *)
-module Make(Abstraction : ABSTRACTION) : ENGINE with type t = Abstraction.t =
+
+module Reduction =
 struct
 
-  type t = Abstraction.t
+  let name = "universal.numeric.reductions.intervals_broadcast"
+  let debug fmt = Debug.debug ~channel:name fmt
 
-  let rec init prog =
-    Abstraction.init prog man
-
-  and exec ?(zone=any_zone) stmt flow =
-    Abstraction.exec ~zone stmt man flow
-
-  and post ?(zone=any_zone) stmt flow =
-    Abstraction.post ~zone stmt man flow
-
-  and eval ?(zone=any_zone,any_zone) ?(via=any_zone) exp flow =
-    Abstraction.eval ~zone ~via exp man flow
-
-  and ask : type r. r query -> Abstraction.t flow -> r =
-    fun query flow ->
-      Abstraction.ask query man flow
-
-  and lattice : Abstraction.t lattice = {
-    bottom = Abstraction.bottom;
-    top = Abstraction.top;
-    is_bottom = Abstraction.is_bottom;
-    subset = (fun a a' -> Abstraction.subset man a a');
-    join = (fun a a' -> Abstraction.join man a a');
-    meet = (fun a a' -> Abstraction.meet man a a');
-    widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
-    print = Abstraction.print;
-  }
-
-  and man : (Abstraction.t, Abstraction.t) man = {
-    lattice;
-    get = (fun flow -> flow);
-    set = (fun flow _ -> flow);
-    get_log = (fun log -> log);
-    set_log = (fun log _ -> log);
-    exec = exec;
-    post = post;
-    eval = eval;
-    ask = ask;
-  }
-
+  let reduce (man: 'a man) (a: 'a) : 'a =
+    a
 
 end
+
+
+let () =
+  register_reduction (module Reduction)

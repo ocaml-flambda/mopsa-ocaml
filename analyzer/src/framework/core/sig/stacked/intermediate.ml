@@ -72,22 +72,12 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val merge: t -> t * log -> t * log -> t
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
-      post-conditions [post1] and [post2] using a common pre-condition [pre].
-
-      Diverging post-conditions emerge after a fork-join trajectory in the
-      abstraction DAG (e.g., a reduced product).
-
-      The logs [log1] and [log2] represent a journal of internal statements
-      executed during the the computation of the post-conditions over the
-      two trajectories.
-  *)
-
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
 
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val subset: 's sman -> t * 's -> t * 's -> bool * 's * 's
   (** [subset (a1, s1) (a2, s2) sman] tests whether [a1] is related to
@@ -110,6 +100,22 @@ sig
       unifies the sub-tree elements [s1] and [s2]. *)
 
 
+  val merge: t -> t * log -> t * log -> t
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+      post-conditions [post1] and [post2] using a common pre-condition [pre].
+
+      Diverging post-conditions emerge after a fork-join trajectory in the
+      abstraction DAG (e.g., a reduced product).
+
+      The logs [log1] and [log2] represent a journal of internal statements
+      executed during the the computation of the post-conditions over the
+      two trajectories.
+  *)
+
+
+  (** {2 Transfer functions} *)
+  (** ********************** *)
+
   val init : program -> ('a, t) man -> 'a flow -> 'a flow
   (** Initialization function *)
 
@@ -122,12 +128,8 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
   val refine : channel -> ('a,t) man -> ('a,'s) man -> 'a flow -> 'a flow with_channel
-
+  (** Refinement using reduction channels *)
 
 end
 
@@ -151,13 +153,13 @@ struct
 
   let interface = S.interface
 
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
   let bottom = S.bottom
 
   let top = S.top
+
+  let is_bottom = S.is_bottom
+
+  let print = S.print
 
 
   (** {2 Stack manager} *)
@@ -190,10 +192,9 @@ struct
       );
   }
 
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
 
-  let is_bottom man sman a = S.is_bottom (man.get a)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   let subset man sman a a' =
     let b, s, s' = S.subset (stack_man sman)
@@ -201,10 +202,6 @@ struct
         (man.get a', sman.get a')
     in
     b, sman.set s a, sman.set s' a'
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
 
   let join man sman a a' =
     let x, s, s' = S.join (stack_man sman)
@@ -232,12 +229,6 @@ struct
       (man.get pre)
       (man.get post1, man.get_log log1)
       (man.get post2, man.get_log log2)
-
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  let print man fmt a = S.print fmt (man.get a)
 
 
   (** {2 Transfer functions} *)

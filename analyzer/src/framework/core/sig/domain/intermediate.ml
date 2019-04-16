@@ -69,30 +69,25 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
-
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val subset: t -> t -> bool
-  (** Partial order relation. [subset a1 a2] tests whether [a1] is
-      related to (or included in) [a2]. *)
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
+
+  val subset: t -> t -> bool
+  (** Partial order relation. [subset a1 a2] tests whether [a1] is
+      related to (or included in) [a2]. *)
 
   val join: t -> t -> t
   (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
@@ -117,13 +112,6 @@ sig
   *)
 
 
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
-
   (** {2 Transfer functions} *)
   (** ********************** *)
 
@@ -139,12 +127,8 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
   val refine : channel -> ('a,t) man -> 'a flow -> 'a flow with_channel
-
+  (** Refinement using reduction channel *)
 
 end
 
@@ -164,8 +148,6 @@ let lift_merge merge man pre (post1,log1) (post2,log2) =
     (man.get post1, man.get_log log1)
     (man.get post2, man.get_log log2)
 
-let lift_print print man fmt a = print fmt (man.get a)
-
 
 (** Cast a unified signature into a low-level signature *)
 module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.DOMAIN with type t = D.t =
@@ -182,25 +164,19 @@ struct
 
   let interface = D.interface
 
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
   let bottom = D.bottom
 
   let top = D.top
 
+  let is_bottom = D.is_bottom
 
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
-
-  let is_bottom man a = lift_unop D.is_bottom man a
-
-  let subset man a a' = lift_binop D.subset man a a'
+  let print = D.print
 
 
   (** {2 Lattice operators} *)
   (** ********************* *)
+
+  let subset man a a' = lift_binop D.subset man a a'
 
   let join man a a' = lift_binop D.join man a a'
 
@@ -210,12 +186,6 @@ struct
 
   let merge man pre (post1,log1) (post2,log2) =
     lift_merge D.merge man pre (post1,log1) (post2,log2)
-
-
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  let print man fmt a = lift_print D.print man fmt a
 
 
   (** {2 Transfer functions} *)
@@ -228,10 +198,6 @@ struct
   let eval = D.eval
 
   let ask = D.ask
-
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
 
   let refine = D.refine
 

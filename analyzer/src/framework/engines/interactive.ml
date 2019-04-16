@@ -356,12 +356,12 @@ struct
   and lattice : Abstraction.t lattice = {
     bottom = Abstraction.bottom;
     top = Abstraction.top;
-    is_bottom = (fun a -> Abstraction.is_bottom man a);
+    is_bottom = Abstraction.is_bottom;
     subset = (fun a a' -> Abstraction.subset man a a');
     join = (fun a a' -> Abstraction.join man a a');
     meet = (fun a a' -> Abstraction.meet man a a');
     widen = (fun ctx a a' -> Abstraction.widen man ctx a a');
-    print = (fun fmt a -> Abstraction.print man fmt a);
+    print = Abstraction.print;
   }
 
   and man : (Abstraction.t, Abstraction.t) man = {

@@ -91,7 +91,6 @@ let spec = {
 
 
 let rec domain_lowlevel config : (module Sig.Domain.Lowlevel.DOMAIN) =
-  debug "domain configuration:@, %a" Typer.pp_config config;
   match config.structure with
   | S_leaf name -> Sig.Domain.Lowlevel.find_domain name
   | S_chain(op, l) -> domain_chain_lowlevel op l
@@ -205,11 +204,10 @@ and domain_simplified_product (l:config list) (rules:string list) : (module Sig.
 and domain_simplified_nonrel (v:config) : (module Sig.Domain.Simplified.DOMAIN) =
   let vv = value_lowlevel v in
   let module V = (val vv : Sig.Value.Lowlevel.VALUE) in
-  let module VV = Transformers.Value.Nonrel.MakeWithoutHistory(V) in
+  let module VV = Transformers.Value.Nonrel.Make(V) in
   (module VV)
 
 and domain_stateless (config:config) : (module Sig.Domain.Stateless.DOMAIN) =
-  debug "stateless domain configuration:@, %a" pp_config config;
   match config.structure with
   | S_leaf name -> Sig.Domain.Stateless.find_domain name
   | S_chain(op,l) -> domain_chain_stateless op l
@@ -236,7 +234,6 @@ and domain_chain_stateless (op:operator) (l:config list) : (module Sig.Domain.St
 (** ******************* *)
 
 and stack_lowlevel config : (module Sig.Stacked.Lowlevel.STACK) =
-  debug "stack configuration:@, %a" Typer.pp_config config;
   match config.structure with
   | S_leaf name -> Sig.Stacked.Lowlevel.find_stack name
   | S_chain(op, l) -> stack_chain_lowlevel op l
@@ -329,7 +326,6 @@ and stack_stateless (config:config) : (module Sig.Stacked.Stateless.STACK) =
 (** ******************* *)
 
 and value_lowlevel config : (module Sig.Value.Lowlevel.VALUE) =
-  debug "value configuration:@, %a" Typer.pp_config config;
   match config.structure with
   | S_leaf name -> Sig.Value.Lowlevel.find_value name
   | S_chain(op, l) -> value_chain_lowlevel op l
@@ -419,6 +415,7 @@ let parse file : string * (module Sig.Domain.Lowlevel.DOMAIN) =
 
   let config = Typer.domain spec json in
   let config'= Typer.cast S_lowlevel config in
+  debug "analysis configuration:@, %a" Typer.pp_config config';
 
   language, domain_lowlevel config'
 

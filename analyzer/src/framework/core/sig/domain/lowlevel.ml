@@ -66,38 +66,26 @@ sig
   val interface : interface
   (** Interface of the domain *)
 
-
-  (** {2 Lattice special values} *)
-  (** ************************** *)
-
   val bottom: t
   (** Least abstract element of the lattice. *)
 
   val top: t
   (** Greatest abstract element of the lattice. *)
 
+  val is_bottom: t -> bool
+  (** [is_bottom man a] tests whether [a] is bottom or not. *)
 
-  (** {2 Pretty printing} *)
-  (** ******************* *)
-
-  val print: ('a,t) man -> Format.formatter -> 'a -> unit
+  val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
 
-  (** {2 Lattice predicates} *)
-  (** ********************** *)
-
-  val is_bottom: ('a,t) man -> 'a -> bool
-  (** [is_bottom man a] tests whether [a] is bottom or not. *)
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val subset: ('a,t) man -> 'a -> 'a -> bool
   (** [subset man a1 a2] provides a partial order relation over
       elements of the domain by testing whether [a1] is related to (or
      included in) [a2]. *)
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
 
   val join: ('a,t) man -> 'a -> 'a -> t
   (** [join man a1 a2] computes an upper bound of [a1] and [a2]. *)
@@ -137,11 +125,8 @@ sig
   val ask  : 'r Query.query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
-
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
   val refine : channel -> ('a,t) man -> 'a flow -> 'a flow with_channel
+  (** Refinement using reduction channels *)
 
 end
 

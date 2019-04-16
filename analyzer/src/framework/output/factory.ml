@@ -48,9 +48,9 @@ let report man flow time files =
   in
   let return_v = if List.length alarms > 0 then 1 else 0 in
   let states =
-    if not !Transformers.Value.Nonrel.opt_collect_states
+    if not !Transformers.Value.Nonrel_with_history.opt_collect_states
     then []
-    else man.ask Transformers.Value.Nonrel.Q_reachable_states flow
+    else man.ask Transformers.Value.Nonrel_with_history.Q_reachable_states flow
   in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with

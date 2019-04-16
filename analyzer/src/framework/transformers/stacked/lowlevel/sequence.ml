@@ -55,6 +55,14 @@ struct
 
   let top = S1.top, S2.top
 
+  let is_bottom (a1,a2) =
+    S1.is_bottom a1 ||
+    S2.is_bottom a2
+
+  let print fmt (a1,a2) =
+    Format.fprintf fmt "%a%a"
+      S1.print a1
+      S2.print a2
 
   (**************************************************************************)
   (**                           {2 Managers}                                *)
@@ -86,15 +94,6 @@ struct
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
-
-  let is_bottom (man:('a,t) man) (sman:('a,'s) man) a =
-    S1.is_bottom (s1_man man) sman a ||
-    S2.is_bottom (s2_man man) sman a
-
-  let print man fmt a =
-    Format.fprintf fmt "%a%a"
-      (S1.print @@ s1_man man) a
-      (S2.print @@ s2_man man) a
 
   let subset man sman a a' =
     let b1, a, a' = S1.subset (s1_man man) sman a a' in
