@@ -359,24 +359,14 @@ and value_product_lowlevel (l:config list) (rules:string list) : (module Sig.Val
 
 and value_cast_lowlevel (config:config) : (module Sig.Value.Lowlevel.VALUE) =
   match config.signature with
-  | S_intermediate ->
-    let v = value_intermediate config in
-    let module V = (val v : Sig.Value.Intermediate.VALUE) in
-    let module VV = Sig.Value.Intermediate.MakeLowlevel(V) in
-    (module VV)
-
   | S_simplified ->
     let v = value_simplified config in
     let module V = (val v : Sig.Value.Simplified.VALUE) in
-    let module VV = Sig.Value.Intermediate.MakeLowlevel(Sig.Value.Simplified.MakeIntermediate(V)) in
+    let module VV = Sig.Value.Simplified.MakeLowlevel(V) in
     (module VV)
 
   | _ -> assert false
 
-and value_intermediate (config:config) : (module Sig.Value.Intermediate.VALUE) =
-  match config.structure with
-  | S_leaf name -> Sig.Value.Intermediate.find_value name
-  | _ -> assert false
 
 and value_simplified (config:config) : (module Sig.Value.Simplified.VALUE) =
   match config.structure with
@@ -436,7 +426,6 @@ let domains file : string list =
     Sig.Stacked.Stateless.names () @
 
     Sig.Value.Lowlevel.names () @
-    Sig.Value.Intermediate.names () @
     Sig.Value.Simplified.names ()
 
   else

@@ -283,10 +283,17 @@ struct
     vlist_man_apply_pair { f } Spec.pool man |>
     reduce_pair
 
-  let cast man id v =
+  let get man id v =
     let f = fun (type a) (m:a vmodule) man ->
       let module Value = (val m) in
-      Value.cast man id v
+      Value.get man id v
+    in
+    vlist_ret_man_opt { f } Spec.pool man
+
+  let set man id v vv =
+    let f = fun (type a) (m:a vmodule) man ->
+      let module Value = (val m) in
+      Value.set man id v vv
     in
     vlist_ret_man_opt { f } Spec.pool man
 

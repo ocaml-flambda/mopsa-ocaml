@@ -25,9 +25,10 @@
 
 open Ast.All
 open Core.All
+open Sig.Value.Lowlevel
 
 
-module Make(Value: Sig.Value.Lowlevel.VALUE) =
+module Make(Value: VALUE) =
 struct
 
 
@@ -67,16 +68,16 @@ struct
     | A_unsupported
 
   (** Value manager *)
-  let rec vman (a:t) : (Value.t,Value.t) vman = {
-    vget = (fun v -> v);
-    vset = (fun v _ -> v);
-    veval = (fun e ->
+  let rec man (a:t) : (Value.t,Value.t) man = {
+    get = (fun v -> v);
+    set = (fun v _ -> v);
+    eval = (fun e ->
         eval e a |>
         Option.default (A_unsupported,Value.top) |>
         snd
       );
-    vcast = (fun id v ->
-        match Value.cast (vman a) id v with
+    cast = (fun id v ->
+        match Value.get (man a) id v with
         | Some rr -> rr
         | None -> Exceptions.panic "cast not handled"
       );
@@ -100,14 +101,14 @@ struct
 
     | E_unop (op,e1) ->
       eval e1 a |> Option.bind @@ fun (ae1, v1) ->
-      let v = Value.unop (vman a) e.etyp op v1 in
+      let v = Value.unop (man a) e.etyp op v1 in
       (A_unop (op, e.etyp, ae1, v1), v) |>
       Option.return
 
     | E_binop (op,e1,e2) ->
       eval e1 a |> Option.bind @@ fun (ae1, v1) ->
       eval e2 a |> Option.bind @@ fun (ae2, v2) ->
-      let v = Value.binop (vman a) e.etyp op v1 v2 in
+      let v = Value.binop (man a) e.etyp op v1 v2 in
       (A_binop (op, e.etyp, ae1, v1, ae2, v2), v) |>
       Option.return
 
@@ -135,11 +136,11 @@ struct
       else a
 
     | A_unop (op, typ, ae1, v1) ->
-      let w = Value.bwd_unop (vman a) typ op v1 r' in
+      let w = Value.bwd_unop (man a) typ op v1 r' in
       refine ae1 v1 w a
 
     | A_binop (op, typ, ae1, v1, ae2, v2) ->
-      let w1, w2 = Value.bwd_binop (vman a) typ op v1 v2 r' in
+      let w1, w2 = Value.bwd_binop (man a) typ op v1 v2 r' in
       let a1 = refine ae1 v1 w1 a in
       refine ae2 v2 w2 a1
 
@@ -173,13 +174,13 @@ struct
 
     | E_constant c ->
       let v = Value.of_constant e.etyp c in
-      let w = Value.filter (vman a) v r in
+      let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else a) |>
       Option.return
 
     | E_var(var, _) ->
       let v = find var a in
-      let w = Value.filter (vman a) v r in
+      let w = Value.filter (man a) v r in
       (if Value.is_bottom w then bottom else add var w a) |>
       Option.return
 
@@ -190,7 +191,7 @@ struct
       eval e2 a |> Option.bind @@ fun (ae2,v2) ->
 
       (* apply comparison *)
-      let r1, r2 = Value.compare (vman a) e1.etyp op v1 v2 r in
+      let r1, r2 = Value.compare (man a) e1.etyp op v1 v2 r in
 
       (* propagate backward on both argument expressions *)
       refine ae2 v2 r2 @@ refine ae1 v1 r1 a |>
@@ -274,7 +275,7 @@ struct
 
   let ask : type r. r Query.query -> t -> r option =
     fun query map ->
-      Value.ask (vman map) query
+      Value.ask (man map) query
 
 
   let refine channel a =

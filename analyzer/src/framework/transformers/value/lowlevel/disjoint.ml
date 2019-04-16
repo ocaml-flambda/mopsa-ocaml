@@ -28,7 +28,6 @@
 open Ast.All
 open Core
 open Sig.Value.Lowlevel
-open Manager
 open Context
 open Id
 open Query
@@ -113,34 +112,40 @@ struct
   (** {2 Value managers} *)
   (** ****************** *)
 
-  let v1_man (man:('a,t) vman) : ('a,V1.t) vman = {
+  let v1_man (man:('a,t) man) : ('a,V1.t) man = {
     man with
-    vget = (fun v ->
-        match man.vget v with
+    get = (fun v ->
+        match man.get v with
         | BOT -> V1.bottom
         | TOP -> V1.top
         | V1 v1 -> v1
         | V2 _ -> V1.bottom
       );
-    vset = (fun v1 v -> man.vset (V1 v1) v);
+    set = (fun v1 v -> man.set (V1 v1) v);
   }
 
-  let v2_man (man:('a,t) vman) : ('a,V2.t) vman = {
+  let v2_man (man:('a,t) man) : ('a,V2.t) man = {
     man with
-    vget = (fun v ->
-        match man.vget v with
+    get = (fun v ->
+        match man.get v with
         | BOT -> V2.bottom
         | TOP -> V2.top
         | V1 _ -> V2.bottom
         | V2 v2 -> v2
       );
-    vset = (fun v2 v -> man.vset (V2 v2) v);
+    set = (fun v2 v -> man.set (V2 v2) v);
   }
 
-  let cast man id a =
-    match V1.cast (v1_man man) id a with
+  let get man id a =
+    match V1.get (v1_man man) id a with
     | Some v -> Some v
-    | None -> V2.cast (v2_man man) id a
+    | None -> V2.get (v2_man man) id a
+
+  let set man id v a =
+    match V1.set (v1_man man) id v a with
+    | Some v -> Some v
+    | None -> V2.set (v2_man man) id v a
+
 
 
   (** {2 Forward semantics} *)
@@ -186,7 +191,7 @@ struct
         pp_typ t
 
   let filter man a b =
-    match man.vget a with
+    match man.get a with
     | BOT -> BOT
     | TOP -> TOP
     | V1 _ -> V1 (V1.filter (v1_man man) a b)
@@ -221,12 +226,12 @@ struct
         pp_typ t
 
   let compare man t op a b r =
-    match man.vget a, man.vget b with
+    match man.get a, man.get b with
     | V1 _, V2 _ | V2 _, V1 _ ->
       Exceptions.panic "compare called on unsupported arguments %a and %a"
         ~loc:__LOC__
-        print (man.vget a)
-        print (man.vget b)
+        print (man.get a)
+        print (man.get b)
 
     | BOT, _ | _, BOT -> BOT, BOT
 

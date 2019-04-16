@@ -32,7 +32,7 @@ framework.core = query context zone token log lattice flow eval post manager \
 	         id interface channel sig callstack alarm debug_tree cache \
 		 abstraction all
 framework.core.sig = value domain stacked
-framework.core.sig.value = lowlevel intermediate simplified reduction
+framework.core.sig.value = lowlevel simplified reduction
 framework.core.sig.domain = lowlevel intermediate simplified stateless reduction
 framework.core.sig.stacked = lowlevel intermediate stateless
 framework.lattices = partial_map powerset total_map

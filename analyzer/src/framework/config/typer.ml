@@ -306,7 +306,6 @@ let leaf_stack name =
 let leaf_value name =
   let signature =
     if Core.Sig.Value.Lowlevel.mem_value name then S_lowlevel
-    else if Core.Sig.Value.Intermediate.mem_value name then S_intermediate
     else if Core.Sig.Value.Simplified.mem_value name then S_simplified
     else Exceptions.panic "value %s not found" name
   in

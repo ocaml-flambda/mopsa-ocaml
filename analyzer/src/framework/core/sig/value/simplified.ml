@@ -19,14 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Simplified signature of a value abstraction. *)
+(** General-purpose signature of a value abstraction. *)
 
 open Ast.All
-open Manager
 open Context
 open Id
 open Query
 open Channel
+open Lowlevel
 
 module type VALUE =
 sig
@@ -130,8 +130,8 @@ sig
   *)
 
 
-  (** {2 Evaluation query} *)
-  (** ******************** *)
+  (** {2 Query handler} *)
+  (** ***************** *)
 
   val ask : 'r query -> (expr -> t) -> 'r option
 
@@ -142,6 +142,7 @@ sig
   val refine : channel -> t -> t with_channel
 
 
+
 end
 
 
@@ -149,19 +150,41 @@ end
 (**                      {2 Low-level lifters}                              *)
 (*==========================================================================*)
 
-let lift_unop unop t op a = unop op a
+let lift_unop unop (man:('a,'t) man) (t:typ) (op:operator) (a:'a) : 't = unop op (man.get a)
 
-let lift_binop binop t op a b = binop op a b
+let lift_binop binop man t op a b = binop op (man.get a) (man.get b)
 
-let lift_filter filter v b =  filter v b
+let lift_filter filter man v b =  filter (man.get v) b
 
-let lift_bwd_unop bwd_unop t op v r = bwd_unop op v r
+let lift_bwd_unop bwd_unop man t op v r = bwd_unop op (man.get v) (man.get r)
 
-let lift_bwd_binop bwd_binop t op a b r = bwd_binop op a b r
+let lift_bwd_binop bwd_binop man t op a b r = bwd_binop op (man.get a) (man.get b) (man.get r)
 
-let lift_compare compare t op a b r = compare op a b r
+let lift_compare compare man t op a b r = compare op (man.get a) (man.get b) r
 
-module MakeIntermediate(Value:VALUE) : Intermediate.VALUE with type t = Value.t =
+let lift_ask ask man q = ask q (fun e -> man.eval e |> man.get)
+
+let lift_refine refine man channel v =
+  refine channel (man.get v) |>
+  Channel.bind @@ fun r ->
+
+  man.set r v |>
+  Channel.return
+
+let leaf_get :type t s. ('a,t) man -> t value -> s value -> 'a -> s option =
+  fun man id1 id2 a ->
+    match Id.veq id1 id2 with
+    | Some Eq.Eq -> Some (man.get a)
+    | None -> None
+
+let leaf_set :type t s. ('a,t) man -> t value -> s value -> s -> 'a -> 'a option =
+  fun man id1 id2 v a ->
+    match Id.veq id1 id2 with
+    | Some Eq.Eq -> Some (man.set v a)
+    | None -> None
+
+(** Lift a general-purpose signature to a low-level one *)
+module MakeLowlevel(Value:VALUE) : Lowlevel.VALUE with type t = Value.t =
 struct
 
   (* Trivial lifts *)
@@ -180,44 +203,45 @@ struct
   let widen = Value.widen
   let print = Value.print
 
+  let get man id a = leaf_get man Value.id id a
+  let set man id v a = leaf_set man Value.id id v a
 
 
   (** {2 Forward semantics} *)
   (** ********************* *)
 
-  let of_constant t = Value.of_constant
+  let of_constant t c = Value.of_constant c
 
-  let unop t op a = lift_unop Value.unop t op a
+  let unop man t op a = lift_unop Value.unop man t op a
 
-  let binop t op a b = lift_binop Value.binop t op a b
+  let binop man t op a b = lift_binop Value.binop man t op a b
 
-  let filter a b = lift_filter Value.filter a b
+  let filter man a b = lift_filter Value.filter man a b
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop t op v r = lift_bwd_unop Value.bwd_unop t op v r
+  let bwd_unop man t op v r = lift_bwd_unop Value.bwd_unop man t op v r
 
-  let bwd_binop t op v1 v2 r = lift_bwd_binop Value.bwd_binop t op v1 v2 r
+  let bwd_binop man t op v1 v2 r = lift_bwd_binop Value.bwd_binop man t op v1 v2 r
 
-  let compare t op v1 v2 b = lift_compare Value.compare t op v1 v2 b
+  let compare man t op v1 v2 b = lift_compare Value.compare man t op v1 v2 b
 
 
   (** {2 Evaluation query} *)
   (** ******************** *)
 
-  let ask = Value.ask
+  let ask man q = lift_ask Value.ask man q
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  let refine = Value.refine
-
+  let refine man channel a =
+    lift_refine Value.refine man channel a
 
 end
-
 
 
 (*==========================================================================*)
@@ -232,6 +256,7 @@ let default_bwd_binop op x y r =
 
 let default_compare op x y b =
   (x, y)
+
 
 (*==========================================================================*)
 (**                         {2 Registration}                                *)

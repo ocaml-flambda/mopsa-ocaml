@@ -22,11 +22,30 @@
 (** Low-level signature of a value abstraction. *)
 
 open Ast.All
-open Manager
 open Context
 open Id
 open Query
 open Channel
+
+
+
+(*==========================================================================*)
+(**                         {2 Value manager}                              *)
+(*==========================================================================*)
+
+
+(** Manager for value abstractions *)
+type ('a, 't) man = {
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+  eval : expr -> 'a;
+  cast : 'r. 'r Id.value -> 'a -> 'r;
+}
+
+
+(*==========================================================================*)
+(**                          {2 Value domain}                               *)
+(*==========================================================================*)
 
 
 module type VALUE =
@@ -62,7 +81,11 @@ sig
   val print: Format.formatter -> t -> unit
   (** Printer of an abstract element. *)
 
-  val cast: ('a,t) vman -> 's value -> 'a -> 's option
+  val get: ('a,t) man -> 's value -> 'a -> 's option
+  (** Get a specific value embedded in the abstraction *)
+
+  val set: ('a,t) man -> 's value -> 's -> 'a -> 'a option
+  (** Set a specific value embedded in the abstraction *)
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -91,20 +114,20 @@ sig
   val of_constant : typ -> constant -> t
   (** Create a singleton abstract value from a constant. *)
 
-  val unop : ('a,t) vman -> typ -> operator -> 'a -> t
+  val unop : ('a,t) man -> typ -> operator -> 'a -> t
   (** Forward evaluation of unary operators. *)
 
-  val binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
+  val binop : ('a,t) man -> typ -> operator -> 'a -> 'a -> t
   (** Forward evaluation of binary operators. *)
 
-  val filter : ('a,t) vman -> 'a -> bool -> t
+  val filter : ('a,t) man -> 'a -> bool -> t
   (** Keep values that may represent the argument truth value *)
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> t
+  val bwd_unop : ('a,t) man -> typ -> operator -> 'a -> 'a -> t
   (** Backward evaluation of unary operators.
       [bwd_unop op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -112,7 +135,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : ('a,t) vman -> typ -> operator -> 'a -> 'a -> 'a -> (t * t)
+  val bwd_binop : ('a,t) man -> typ -> operator -> 'a -> 'a -> 'a -> (t * t)
   (** Backward evaluation of binary operators.
       [bwd_binop op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -122,7 +145,7 @@ sig
   *)
 
 
-  val compare : ('a,t) vman -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
+  val compare : ('a,t) man -> typ -> operator -> 'a -> 'a -> bool -> (t * t)
   (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
        - x' abstracts the set of v  in x such that v op v' is true for some v' in y
        - y' abstracts the set of v' in y such that v op v' is true for some v  in x
@@ -135,13 +158,13 @@ sig
   (** {2 Query handler } *)
   (** ****************** *)
 
-  val ask : ('a,t) vman -> 'r query -> 'r option
+  val ask : ('a,t) man -> 'r query -> 'r option
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  val refine : ('a,t) vman -> channel -> 'a -> 'a with_channel
+  val refine : ('a,t) man -> channel -> 'a -> 'a with_channel
 
 
 end
@@ -333,25 +356,25 @@ let vlist_all2 f l v1 v2 =
 (** Create a value manager for the head of the list *)
 let hdman man = {
   man with
-  vget = (fun v -> man.vget v |> fst);
-  vset = (fun hdv v -> man.vset (hdv, man.vget v |> snd) v);
+  get = (fun v -> man.get v |> fst);
+  set = (fun hdv v -> man.set (hdv, man.get v |> snd) v);
 }
 
 (** Create a value manager for the tail of the list *)
 let tlman man = {
   man with
-  vget = (fun v -> man.vget v |> snd);
-  vset = (fun tlv v -> man.vset (man.vget v |> fst, tlv) v);
+  get = (fun v -> man.get v |> snd);
+  set = (fun tlv v -> man.set (man.get v |> fst, tlv) v);
 }
 
 
 type 'a man_apply = {
-  f: 't. 't vmodule -> ('a,'t) vman -> 't;
+  f: 't. 't vmodule -> ('a,'t) man -> 't;
 }
 
 (** Create an abstract value with a manager *)
 let vlist_man_apply f l man =
-  let rec aux : type t. t vlist -> ('a,t) vman -> t =
+  let rec aux : type t. t vlist -> ('a,t) man -> t =
     fun l man ->
       match l with
       | Nil -> ()
@@ -362,13 +385,13 @@ let vlist_man_apply f l man =
 
 
 type 'a man_apply_pair = {
-  f: 't. 't vmodule -> ('a,'t) vman -> 't * 't;
+  f: 't. 't vmodule -> ('a,'t) man -> 't * 't;
 }
 
 
 (** Create a pair of abstract values with a manager *)
 let vlist_man_apply_pair f l man =
-  let rec aux : type t. t vlist -> ('a,t) vman -> t * t =
+  let rec aux : type t. t vlist -> ('a,t) man -> t * t =
     fun l man ->
       match l with
       | Nil -> (),()
@@ -381,11 +404,11 @@ let vlist_man_apply_pair f l man =
 
 
 type ('a,'r) map_man_opt = {
-  f : 't. 't vmodule -> ('a,'t) vman -> 'r option
+  f : 't. 't vmodule -> ('a,'t) man -> 'r option
 }
 
 let vlist_map_man_opt f l man =
-  let rec aux : type t. t vlist -> ('a,t) vman -> 'r list =
+  let rec aux : type t. t vlist -> ('a,t) man -> 'r list =
     fun l man ->
       match l with
       | Nil -> []
@@ -398,7 +421,7 @@ let vlist_map_man_opt f l man =
 
 
 let vlist_ret_man_opt f l man =
-  let rec aux : type t. t vlist -> ('a,t) vman -> 'r option =
+  let rec aux : type t. t vlist -> ('a,t) man -> 'r option =
     fun l man ->
       match l with
       | Nil -> None
@@ -416,12 +439,12 @@ let vlist_ret_man_opt f l man =
 
 
 type ('a,'b) man_fold = {
-  f: 't. 't vmodule -> ('a,'t) vman -> 'b -> 'b;
+  f: 't. 't vmodule -> ('a,'t) man -> 'b -> 'b;
 }
 
 
 let vlist_man_fold f l man init =
-  let rec aux : type t. t vlist -> ('a,t) vman -> 'b -> 'b =
+  let rec aux : type t. t vlist -> ('a,t) man -> 'b -> 'b =
     fun l man acc ->
       match l with
       | Nil -> acc
