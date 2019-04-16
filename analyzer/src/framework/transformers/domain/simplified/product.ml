@@ -147,15 +147,16 @@ struct
     dlist_create { f } Spec.pool
 
 
-  let ask query a =
-    let f = fun (type a) (m: a dmodule) acc aa ->
-      let module Domain = (val m) in
-      let rep = Domain.ask query aa in
-      Option.neutral2 (fun rep acc ->
-          Query.meet query rep acc
-        ) rep acc
-    in
-    dlist_fold_apply { f } Spec.pool None a
+  let ask : type r. r query -> t -> r option =
+    fun query a ->
+      let f = fun (type a) (m: a dmodule) acc aa ->
+        let module Domain = (val m) in
+        let rep = Domain.ask query aa in
+        Option.neutral2 (fun rep acc ->
+            Query.meet query rep acc
+          ) rep acc
+      in
+      dlist_fold_apply { f } Spec.pool None a
 
 
   let refine channel a =
@@ -164,6 +165,10 @@ struct
       Domain.refine channel aa
     in
     dlist_apply_with_channel { f } Spec.pool a
+
+  let rec refine_lfp channel a =
+    let ret, channels = refine channel a |> Channel.destruct in
+    List.fold_left (fun acc ch -> refine_lfp ch acc) ret channels
 
 
   let reduction_man : Spec.t man = {
@@ -175,21 +180,90 @@ struct
         assert false
       );
 
-    get_value = (fun id var a ->
-        assert false
+    get_value = (
+      let doit : type v. v value -> var -> t -> v =
+        fun (type v) (id:v value)  var a ->
+        let open Value.Nonrel in
+
+        let f : type a. a dmodule -> a -> v option =
+          fun m aa ->
+            let module Domain = (val m) in
+
+            match Domain.id with
+            | D_nonrel_id vmodule ->
+              let module Value = (val vmodule) in
+              let v = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
+
+              let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
+                get = (fun v -> v);
+                set = (fun v _ -> v);
+                eval = (fun e -> assert false);
+                cast = (fun id v -> assert false);
+              }
+              in
+
+              Value.get man id v
+
+            | _ -> None
+        in
+
+        match dlist_map_opt { f } Spec.pool a with
+        | Some r -> r
+        | None -> Exceptions.panic "value of %a not found" pp_var var
+
+      in
+      doit
+    );
+
+    set_value = (
+        let doit : type v. v value -> var -> v -> t -> t =
+          fun (type v) (id:v value) var v a ->
+            let open Value.Nonrel in
+
+            let f : type a. a dmodule -> a -> a option =
+              fun m aa ->
+                let module Domain = (val m) in
+
+                match Domain.id with
+                | D_nonrel_id vmodule ->
+                  let module Value = (val vmodule) in
+                  let x = VarMap.find var aa ~bottomv:Value.bottom ~topv:Value.top in
+
+                  let man : (Value.t,Value.t) Sig.Value.Lowlevel.man = {
+                    get = (fun v -> v);
+                    set = (fun v _ -> v);
+                    eval = (fun e -> assert false);
+                    cast = (fun id v -> assert false);
+                  }
+                  in
+
+                  begin match Value.set man id v x with
+                    | Some x' -> Some (VarMap.add var x' aa ~is_bottomv:Value.is_bottom)
+                    | None -> None
+                  end
+
+                | _ -> None
+            in
+
+            match dlist_apply_opt { f } Spec.pool a with
+            | Some r -> r
+            | None -> Exceptions.panic "value of %a not updated" pp_var var
+
+        in
+        doit
       );
 
-    set_value = (fun id var v a ->
-        assert false
-      );
+    ask = (
+      let doit : type r. r query -> t -> r =
+        fun query a ->
+          match ask query a with
+          | Some r -> r
+          | None -> Exceptions.panic "query not handled"
+      in
+      doit
+    );
 
-    ask = (fun query a ->
-        assert false
-      );
-
-    refine = (fun channel a ->
-        assert false
-      );
+    refine = refine_lfp;
   }
 
   let reduce stmt a =

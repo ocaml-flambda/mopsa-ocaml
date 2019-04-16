@@ -173,13 +173,13 @@ let lift_refine refine man channel v =
 
 let leaf_get :type t s. ('a,t) man -> t value -> s value -> 'a -> s option =
   fun man id1 id2 a ->
-    match Id.veq id1 id2 with
+    match Id.value_id_eq id1 id2 with
     | Some Eq.Eq -> Some (man.get a)
     | None -> None
 
 let leaf_set :type t s. ('a,t) man -> t value -> s value -> s -> 'a -> 'a option =
   fun man id1 id2 v a ->
-    match Id.veq id1 id2 with
+    match Id.value_id_eq id1 id2 with
     | Some Eq.Eq -> Some (man.set v a)
     | None -> None
 

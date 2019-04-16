@@ -28,6 +28,19 @@ open Core.All
 open Sig.Value.Lowlevel
 
 
+(** {2 Variable maps} *)
+(** ***************** *)
+
+module VarMap = Lattices.Partial_map.MakePolymorph(Var)
+
+
+(** {2 Identifier for the non-relation domain} *)
+(** ****************************************** *)
+
+type _ domain +=
+  | D_nonrel_id : 'v vmodule -> 'v VarMap.t domain
+
+
 module Make(Value: VALUE) =
 struct
 
@@ -43,10 +56,28 @@ struct
 
   include VarMap
 
-  include GenDomainId(struct
-      type typ = t
-      let name = Value.name
-    end)
+  let id = D_nonrel_id (module Value)
+
+  let () =
+    Core.Id.register_domain_id {
+      eq = (
+        let f : type a. a domain -> (a, t) Eq.eq option =
+          function
+          | D_nonrel_id vmodule ->
+            begin
+              let module V = (val vmodule) in
+              match Core.Id.value_id_eq V.id Value.id with
+              | Some Eq -> Some Eq
+              | None -> None
+            end
+          | _ -> None
+        in
+        f
+      );
+    }
+
+
+  let name = Value.name
 
   let merge pre (post1, log1) (post2, log2) =
     assert false

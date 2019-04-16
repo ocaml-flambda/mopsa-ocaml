@@ -117,10 +117,10 @@ struct
       (fun (hd, tl) (hd', tl') ->
          (* if !opt_polymorphism then *)
          match hd, hd' with
-         | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
+         | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top
          | _ ->
            match tl.TD.abs_heap, tl'.TD.abs_heap with
-           | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
+           | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top
            | _ ->
              debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
              let p = create_partition hd tl

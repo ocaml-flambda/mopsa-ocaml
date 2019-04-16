@@ -57,7 +57,9 @@ struct
 
         (* Check if box is less precise *)
         if not (I.subset itv itv')
-        then man.set_value I.id var itv' a
+        then
+          let () = debug "interval of %a reduced from %a to %a" pp_var var I.print itv I.print itv' in
+          man.set_value I.id var itv' a
         else a
 
       ) a vars

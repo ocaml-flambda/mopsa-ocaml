@@ -261,6 +261,22 @@ let dlist_fold_apply f l init a =
   aux l init a
 
 
+type 'a map_opt = {
+  f: 't. 't dmodule -> 't -> 'a option;
+}
+
+(** Create an abstract value *)
+let dlist_map_opt f l a =
+  let rec aux : type t. t dlist -> t -> 'a option =
+    fun l a ->
+      match l, a with
+      | Nil, () -> None
+      | Cons(hd,tl), (hda,tla) ->
+        match f.f hd hda with
+        | None -> aux tl tla
+        | Some r -> Some r
+  in
+  aux l a
 
 (****************************************************************************)
 (**                       {2 Value creation}                                *)

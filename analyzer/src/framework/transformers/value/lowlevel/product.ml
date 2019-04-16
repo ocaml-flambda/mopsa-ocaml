@@ -162,7 +162,7 @@ struct
             | Nil, () -> raise Not_found
             | Cons(hd,tl), (vhd,vtl) ->
               let module Value = (val hd) in
-              match Core.Id.veq Value.id id with
+              match Core.Id.value_id_eq Value.id id with
               | Some Eq.Eq -> vhd
               | None -> aux tl vtl
         in
@@ -175,7 +175,7 @@ struct
             | Nil, () -> raise Not_found
             | Cons(hd,tl), (vhd,vtl) ->
               let module Value = (val hd) in
-              match Core.Id.veq Value.id id with
+              match Core.Id.value_id_eq Value.id id with
               | Some Eq.Eq -> x,vtl
               | None -> vhd,aux tl vtl
         in

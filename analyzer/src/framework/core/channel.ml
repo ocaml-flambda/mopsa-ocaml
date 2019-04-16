@@ -35,3 +35,8 @@ let return x =
 let bind f wc =
   let wc' = f wc.value in
   { wc' with channels = wc.channels @ wc'.channels }
+
+let has_channels a = a.channels = []
+
+let destruct (a:'a with_channel) : 'a * channel list =
+  a.value, a.channels

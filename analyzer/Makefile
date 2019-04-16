@@ -37,6 +37,7 @@ framework.core.sig.domain = lowlevel intermediate simplified stateless reduction
 framework.core.sig.stacked = lowlevel intermediate stateless
 framework.lattices = partial_map powerset total_map
 framework.engines = engine automatic interactive
+framework.transformers = value domain stacked
 framework.output = text json factory
 framework.config = paths visitor typer parser options
 
