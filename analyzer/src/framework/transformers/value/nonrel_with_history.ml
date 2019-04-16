@@ -88,10 +88,7 @@ let opt_collect_states = ref false
 module MakeWithHistory(Value: Sig.Value.Lowlevel.VALUE) =
 struct
 
-  module D = Nonrel.Make(Value)
-
-  include Sig.Domain.Simplified.MakeIntermediate(D)
-
+  include Nonrel.Make(Value)
 
   (****************************************************************************)
   (**                    {2 Program state history}                            *)
@@ -132,24 +129,19 @@ struct
     in
     C.key
 
-  let init_history flow =
-    Flow.set_ctx (
-      Flow.get_ctx flow |>
-      Context.add_unit history_key History.empty
-    ) flow
+  let init_history ctx =
+    Context.uadd history_key History.empty ctx
 
 
   (** Update the pre-condition of the statement *)
-  let update_pre stmt man flow =
+  let update_pre stmt ctx pre =
     match skind stmt with
     | S_assign _ | S_assume _
       when Location.is_orig stmt.srange ->
 
       let range = srange stmt in
-      let pre = get_domain_env T_cur man flow in
 
-      let ctx = Flow.get_ctx flow in
-      let history = Context.find_unit history_key ctx in
+      let history = Context.ufind history_key ctx in
 
       let old_pre, old_post =
         try History.find range history
@@ -158,22 +150,20 @@ struct
       let pre' = join old_pre pre in
       let history' = History.add range (pre', old_post) history in
 
-      let ctx' = Context.add_unit history_key history' ctx in
-      Flow.set_ctx ctx' flow
+      Context.uadd history_key history' ctx
 
-    | _ -> flow
+
+    | _ -> ctx
 
   (** Update the post-condition of the statement *)
-  let update_post stmt man flow =
+  let update_post stmt ctx post =
     match skind stmt with
     | S_assign _ | S_assume _
       when Location.is_orig stmt.srange ->
 
       let range = srange stmt in
-      let post = get_domain_env T_cur man flow in
 
-      let ctx = Flow.get_ctx flow in
-      let history = Context.find_unit history_key ctx in
+      let history = Context.ufind history_key ctx in
 
       let old_pre, old_post =
         try History.find range history
@@ -182,19 +172,17 @@ struct
       let post' = join old_post post in
       let history' = History.add range (old_pre, post') history in
 
-      let ctx' = Context.add_unit history_key history' ctx in
-      Flow.set_ctx ctx' flow
+      Context.uadd history_key history' ctx
 
-    | _ -> flow
+    | _ -> ctx
 
 
   (** Get history of reachable states *)
-  let get_history flow =
-    let ctx = Flow.get_ctx flow in
-    Context.find_unit history_key ctx
+  let get_history ctx =
+    Context.ufind history_key ctx
 
   let export_state (state:t) : state =
-    D.VarMap.fold (fun var value acc ->
+    VarMap.fold (fun var value acc ->
         let value_str =
           Value.print Format.str_formatter value;
           Format.flush_str_formatter ()
@@ -213,27 +201,27 @@ struct
   (****************************************************************************)
 
 
-  let init prog man flow =
-    init prog man flow |>
-    init_history
+  let init prog ctx =
+    let ctx' = init_history ctx in
+    init prog ctx'
 
-  let exec zone stmt man flow =
-    update_pre stmt man flow |>
 
-    exec zone stmt man |>
-    Option.lift @@ Post.bind @@ fun flow ->
+  let exec stmt ctx a =
+    let ctx = update_pre stmt ctx a in
 
-    update_post stmt man flow |>
-    Post.return
+    exec stmt ctx a |> Option.lift @@ fun (a',ctx) ->
 
-  let ask : type r. r query -> ('a,t) man -> 'a flow -> r option =
-    fun query man flow ->
+    let ctx = update_post stmt ctx a' in
+    a',ctx
+
+  let ask : type r. r query -> Context.uctx -> t -> r option =
+    fun query ctx a ->
       match query with
       | Q_reachable_states ->
-        let history = get_history flow in
+        let history = get_history ctx in
         Some (export_history history)
 
-      | _ -> ask query man flow
+      | _ -> ask query ctx a
 
 
 
@@ -242,17 +230,14 @@ end
 
 (** Create a non-relational abstraction with eventual history caching
     depending on the option opt_collect_states *)
-module Make(Value:Sig.Value.Lowlevel.VALUE) () : Sig.Domain.Intermediate.DOMAIN =
+module Make(Value:Sig.Value.Lowlevel.VALUE) () : Sig.Domain.Simplified.DOMAIN =
   (val
     if !opt_collect_states
     then
       let module M = MakeWithHistory(Value) in
       (module M)
     else
-      let module M = Sig.Domain.Simplified.MakeIntermediate(
-          Nonrel.Make(Value)
-        )
-      in
+      let module M = Nonrel.Make(Value) in
       (module M)
-    : Sig.Domain.Intermediate.DOMAIN
+    : Sig.Domain.Simplified.DOMAIN
   )

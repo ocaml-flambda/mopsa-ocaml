@@ -102,20 +102,20 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> t
+  val init : program -> uctx -> t * uctx
   (** Initial abstract element *)
 
-  val exec : stmt -> t -> t option
+  val exec : stmt -> uctx -> t -> (t * uctx) option
   (** Computation of post-conditions *)
 
-  val ask : 'r Query.query -> t -> 'r option
+  val ask : 'r Query.query -> uctx -> t -> 'r option
   (** Handler of queries *)
 
 
   (** {2 Reduction refinement} *)
   (** ************************ *)
 
-  val refine : channel -> t -> t with_channel
+  val refine : channel -> uctx -> t -> t with_channel
 
 
 end
@@ -133,7 +133,12 @@ struct
     D.merge pre (post1, block1) (post2, block2)
 
   let init prog man flow =
-    set_domain_env T_cur (D.init prog) man flow
+    let ctx = Flow.get_ctx flow in
+
+    let a', uctx = D.init prog (Context.get_unit ctx) in
+
+    set_domain_env T_cur a' man flow |>
+    Flow.set_ctx (Context.set_unit uctx ctx)
 
   let interface = {
     iexec = {
@@ -152,9 +157,12 @@ struct
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
       let a = get_domain_env T_cur man flow in
-      D.exec stmt a |> Option.lift @@ fun a' ->
+      let ctx = Flow.get_ctx flow in
+      D.exec stmt (Context.get_unit ctx) a |>
+      Option.lift @@ fun (a',uctx) ->
 
       set_domain_env T_cur a' man flow |>
+      Flow.set_ctx (Context.set_unit uctx ctx) |>
       Post.return
 
     | _ -> None
@@ -162,10 +170,10 @@ struct
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (get_domain_env T_cur man flow)
+    D.ask query (Flow.get_ctx flow |> Context.get_unit) (get_domain_env T_cur man flow)
 
   let refine channel man flow =
-    D.refine channel (get_domain_env T_cur man flow) |>
+    D.refine channel (Flow.get_ctx flow |> Context.get_unit) (get_domain_env T_cur man flow) |>
     Channel.bind @@ fun a ->
 
     set_domain_env T_cur a man flow |>

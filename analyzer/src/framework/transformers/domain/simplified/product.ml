@@ -139,10 +139,10 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let init prog =
+  let init prog ctx =
     let f = fun (type a) (m: a dmodule) ->
       let module Domain = (val m) in
-      Domain.init prog
+      Domain.init prog ctx
     in
     dlist_create { f } Spec.pool
 

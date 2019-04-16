@@ -235,7 +235,7 @@ struct
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  let init prog = empty
+  let init prog ctx = empty, ctx
 
   let zones = Value.zones
 
@@ -304,9 +304,12 @@ struct
     | _ -> None
 
 
-  let ask : type r. r Query.query -> t -> r option =
-    fun query map ->
-      Value.ask (man map) query
+  let exec stmt ctx map =
+    exec stmt map |> Option.lift @@ fun a' -> (a',ctx)
+
+
+  let ask query ctx map =
+    Value.ask (man map) query
 
 
   let refine channel a =

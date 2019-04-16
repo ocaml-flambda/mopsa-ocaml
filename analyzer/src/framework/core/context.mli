@@ -78,7 +78,9 @@ end
 
 val empty : 'a ctx
 
-val unit : 'a ctx -> uctx
+val get_unit : 'a ctx -> uctx
+
+val set_unit : uctx -> 'a ctx -> 'a ctx
 
 val find_unit : 'v ukey -> 'a ctx -> 'v
 
