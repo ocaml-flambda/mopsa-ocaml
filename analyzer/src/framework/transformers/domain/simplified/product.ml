@@ -146,17 +146,6 @@ struct
     in
     dlist_create { f } Spec.pool
 
-  let reduce stmt a =
-    a
-
-  let exec stmt a =
-    let f = fun (type a) (m: a dmodule) aa ->
-      let module Domain = (val m) in
-      Domain.exec stmt aa
-    in
-    dlist_apply_opt { f } Spec.pool a |>
-    Option.lift (reduce stmt)
-
 
   let ask query a =
     let f = fun (type a) (m: a dmodule) acc aa ->
@@ -169,11 +158,56 @@ struct
     dlist_fold_apply { f } Spec.pool None a
 
 
-  (** {2 Reduction refinement} *)
-  (** ************************ *)
-
   let refine channel a =
-    assert false
+    let f = fun (type a) (m: a dmodule) aa ->
+      let module Domain = (val m) in
+      Domain.refine channel aa
+    in
+    dlist_apply_with_channel { f } Spec.pool a
+
+
+  let reduction_man : Spec.t man = {
+    get = (fun id a ->
+        assert false
+      );
+
+    set = (fun id v a ->
+        assert false
+      );
+
+    get_value = (fun id var a ->
+        assert false
+      );
+
+    set_value = (fun id var v a ->
+        assert false
+      );
+
+    ask = (fun query a ->
+        assert false
+      );
+
+    refine = (fun channel a ->
+        assert false
+      );
+  }
+
+  let reduce stmt a =
+    List.fold_left (fun acc rule ->
+        let module R = (val rule : REDUCTION) in
+        R.reduce stmt reduction_man acc
+      ) a Spec.rules
+
+  let exec stmt a =
+    let f = fun (type a) (m: a dmodule) aa ->
+      let module Domain = (val m) in
+      Domain.exec stmt aa
+    in
+    dlist_apply_opt { f } Spec.pool a |>
+    Option.lift (reduce stmt)
+
+
+
 
 end
 

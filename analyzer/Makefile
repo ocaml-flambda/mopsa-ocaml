@@ -51,7 +51,7 @@ lang.universal.heap = pool recency
 lang.universal.numeric = rounding values relational reductions
 lang.universal.numeric.values = intervals congruences
 lang.universal.numeric.values.intervals = integer float
-lang.universal.numeric.reductions = intervals_congruences
+lang.universal.numeric.reductions = intervals_congruences intervals
 
 lang.repl = frontend
 

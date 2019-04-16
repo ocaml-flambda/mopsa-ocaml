@@ -295,7 +295,9 @@ struct
       let module Value = (val m) in
       Value.set man id v vv
     in
-    vlist_ret_man_opt { f } Spec.pool man
+    vlist_ret_man_opt { f } Spec.pool man |>
+    Option.lift @@ fun a ->
+    man.set (reduce @@ man.get a) a
 
 
   let ask man query =

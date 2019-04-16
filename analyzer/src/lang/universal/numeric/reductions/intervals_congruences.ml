@@ -26,14 +26,14 @@ open Core.Sig.Value.Reduction
 
 
 
-module I = Values.Intervals.Integer.Value
-module C = Values.Congruences.Value
-
 module Reduction =
 struct
 
   let name = "universal.numeric.reductions.intervals_congruences"
   let debug fmt = Debug.debug ~channel:name fmt
+
+  module I = Values.Intervals.Integer.Value
+  module C = Values.Congruences.Value
 
 
   (* Reduce a congruence and an interval *)

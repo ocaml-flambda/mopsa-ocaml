@@ -66,6 +66,9 @@
 			        ]
 		            }
                         }
+                    ],
+                    "reductions": [
+                        "universal.numeric.reductions.intervals"
                     ]
                 }
             }

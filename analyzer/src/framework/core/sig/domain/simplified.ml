@@ -349,6 +349,25 @@ let dlist_apply3 f l a b c =
   in
   aux l a b c
 
+
+
+type apply_with_channel = {
+  f: 't. 't dmodule -> 't -> 't with_channel;
+}
+
+let dlist_apply_with_channel f l a =
+  let rec aux : type t. t dlist -> t -> t with_channel=
+    fun l a ->
+      match l, a with
+      | Nil, () -> Channel.return ()
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd hda |> Channel.bind @@ fun hda ->
+        aux tl tla |> Channel.bind @@ fun tla ->
+        Channel.return (hda,tla)
+  in
+  aux l a
+
+
 (****************************************************************************)
 (**                         {2 Pretty printer}                              *)
 (****************************************************************************)

@@ -21,6 +21,8 @@
 
 (** Reduction rules of statements post-states *)
 
+open Ast.Var
+open Ast.Stmt
 open Id
 open Query
 open Channel
@@ -28,9 +30,11 @@ open Channel
 
 
 (** Manager used by post-state reduction rules *)
-type 'a xrman = {
-  get : 'r. 'r domain -> 'a -> 'r;
-  set : 'r. 'r domain -> 'r -> 'a -> 'a;
+type 'a man = {
+  get : 't. 't domain -> 'a -> 't;
+  set : 't. 't domain -> 't -> 'a -> 'a;
+  get_value : 't. 't value -> var -> 'a -> 't;
+  set_value : 't. 't value -> var -> 't -> 'a -> 'a;
   ask : 'r. 'r query -> 'a -> 'r;
   refine : channel -> 'a -> 'a;
 }
@@ -41,7 +45,7 @@ type 'a xrman = {
 module type REDUCTION =
 sig
   val name   : string
-  val reduce : 'a xrman -> 'a -> 'a
+  val reduce : stmt -> 'a man -> 'a -> 'a
 end
 
 

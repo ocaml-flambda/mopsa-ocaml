@@ -198,7 +198,11 @@ and domain_simplified (config:config) : (module Sig.Domain.Simplified.DOMAIN) =
 
 and domain_simplified_product (l:config list) (rules:string list) : (module Sig.Domain.Simplified.DOMAIN) =
   let ll = List.map domain_simplified l in
-  let rules = List.map Sig.Domain.Reduction.find_reduction rules in
+  let rules = List.map (fun name ->
+      try Sig.Domain.Reduction.find_reduction name
+      with Not_found -> Exceptions.panic "reduction %s not found" name
+    ) rules
+  in
   Transformers.Domain.Simplified.Product.make ll rules
 
 and domain_simplified_nonrel (v:config) : (module Sig.Domain.Simplified.DOMAIN) =
@@ -353,7 +357,11 @@ and value_chain_lowlevel (op:operator) (l:config list) : (module Sig.Value.Lowle
 
 and value_product_lowlevel (l:config list) (rules:string list) : (module Sig.Value.Lowlevel.VALUE) =
   let ll = List.map value_lowlevel l in
-  let rules = List.map Sig.Value.Reduction.find_reduction rules in
+  let rules = List.map (fun name ->
+      try Sig.Value.Reduction.find_reduction name
+      with Not_found -> Exceptions.panic "reduction %s not found" name
+    ) rules
+  in
   Transformers.Value.Lowlevel.Product.make ll rules
 
 
