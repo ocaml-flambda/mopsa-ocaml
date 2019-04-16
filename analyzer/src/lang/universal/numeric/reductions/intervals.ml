@@ -40,10 +40,6 @@ struct
   let get_related_vars v man ctx a =
     man.ask (R.Q_related_vars v) ctx a
 
-  (** Get a list of constant variables *)
-  let get_constant_vars man ctx a =
-    man.ask R.Q_constant_vars ctx a
-
 
   (** Get the list of modified variables *)
   let get_modified_vars stmt man ctx a =

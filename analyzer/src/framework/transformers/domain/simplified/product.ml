@@ -179,11 +179,11 @@ struct
 
   let reduction_man : Spec.t man = {
     get = (fun id a ->
-        assert false
+        Exceptions.panic ~loc:__LOC__ "get not implemented"
       );
 
     set = (fun id v a ->
-        assert false
+        Exceptions.panic ~loc:__LOC__ "set not implemented"
       );
 
     get_value = (
