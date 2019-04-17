@@ -76,17 +76,11 @@ and from_stmt (stmt: Py_parser.Ast.stmt) : stmt =
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)
 
-    | S_while (test, body, None) ->
-      Universal.Ast.S_while (
-        from_exp test,
-        from_stmt body
-      )
-
-    | S_while (test, body, Some orelse) ->
-      S_py_while(
+    | S_while (test, body, orelse) ->
+      S_py_while (
         from_exp test,
         from_stmt body,
-        from_stmt orelse
+        from_stmt_option srange' orelse
       )
 
     | S_break ->

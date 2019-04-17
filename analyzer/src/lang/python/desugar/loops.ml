@@ -46,10 +46,10 @@ module Domain =
       | S_py_while (test, body, orelse) ->
          man.exec
            (mk_while
-              (mk_one range)
+              (mk_true range)
               (mk_block [
                    mk_if
-                     (mk_not test range)
+                     (mk_not (Utils.mk_builtin_call "bool" [test] range) range)
                      (mk_block [
                           orelse;
                           mk_stmt S_break range
