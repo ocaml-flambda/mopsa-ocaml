@@ -314,6 +314,7 @@ class list(object):
     def __gt__(self, o): pass
     def __iadd__(self, o): pass
     def __imul__(self, o): pass
+    def __new__(self, o): pass
     def __init__(self, itr): pass
     def __iter__(self): pass
     def __le__(self, o): pass
