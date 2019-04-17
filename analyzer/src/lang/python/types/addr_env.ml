@@ -101,7 +101,10 @@ struct
     | S_assign({ekind = E_var (v, WEAK)}, {ekind = E_var (w, WEAK)}) ->
       let cur = get_domain_env T_cur man flow in
       if mem w cur then
-        set_domain_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
+        if mem v cur then
+          set_domain_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow |> Post.return |> Option.return
+        else
+          set_domain_env T_cur (add v (find w cur) cur) man flow |> Post.return |> Option.return
       else
         flow |> Post.return |> Option.return
 
