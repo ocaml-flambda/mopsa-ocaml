@@ -239,20 +239,40 @@ struct
            man.eval (mk_py_none range))
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__new__")}, _)}, args, []) ->
+      (* todo: check that first arg is list class *)
+      man.eval (mk_expr (E_py_list []) range) flow
+      |> Option.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__init__")}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.extend")}, _)}, args, []) ->
-      Utils.check_instances man flow range args
-        ["list"; "list"]
+      Utils.check_instances ~arguments_after_check:1 man flow range args
+        ["list"]
         (fun eargs flow ->
-           let list, sndlist = match eargs with [l; s] -> l, s | _ -> assert false in
-           let var_els = match ekind list with
-             | E_py_object ({addr_kind = A_py_list a}, _) -> a
-             | _ -> assert false in
-           let var_sndels = match ekind sndlist with
-             | E_py_object ({addr_kind = A_py_list a}, _) -> a
-             | _ -> assert false in
-           man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
-           man.eval (mk_py_none range)
+           let list, other = match eargs with e1::e2::[] -> e1, e2 | _ -> assert false in
+           assume_eval (mk_py_isinstance_builtin other "list" range) man flow
+             ~fthen:(fun flow ->
+                 let var_els = match ekind list with
+                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                   | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
+                 let var_sndels = match ekind other with
+                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                   | _ -> assert false in
+                 man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_var var_sndels ~mode:WEAK range) range) flow |>
+                 man.eval (mk_py_none range)
+               )
+             ~felse:(fun flow ->
+                 assume_eval (mk_py_isinstance_builtin other "range" range) man flow
+                   ~fthen:(fun flow ->
+                       let var_els = match ekind list with
+                         | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                         | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
+                       (* TODO: more precision on top (for range) *)
+                       man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
+                       man.eval (mk_py_none range)
+                     )
+                   ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
+               )
         )
       |> Option.return
 
@@ -274,12 +294,16 @@ struct
            Eval.join_list (eval_res :: eval_verror :: []))
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.pop")}, _)} as call, [arg], []) ->
+      let args' = arg :: (mk_constant T_int (C_int (Z.of_int (-1))) range) :: [] in
+      man.eval {exp with ekind = E_py_call(call, args', [])} flow
+      |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.pop")}, _)}, args, []) ->
       Utils.check_instances man flow range args
-        ["list"]
+        ["list"; "int"]
         (fun args flow ->
-           let list = match args with [l] -> l | _ -> assert false in
+           let list = match args with l::_::[] -> l | _ -> assert false in
            let var_els = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
@@ -353,22 +377,33 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__setitem__")}, _)}, args, []) ->
-      Utils.check_instances ~arguments_after_check:1 man flow range args
-        ["list"; "int"]
+      Utils.check_instances ~arguments_after_check:2 man flow range args
+        ["list"]
         (fun args flow ->
            let list, index, value = match args with | [l; i; v] -> l, i, v | _ -> assert false in
-           let var_els = match ekind list with
-             | E_py_object ({addr_kind = A_py_list a}, _) -> a
-             | _ -> assert false in
-           let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
-           let flow = Flow.copy_ctx indexerror_f flow in
+           assume_eval (mk_py_isinstance_builtin index "int" range) man flow
+             ~fthen:(fun flow ->
+                 let var_els = match ekind list with
+                   | E_py_object ({addr_kind = A_py_list a}, _) -> a
+                   | _ -> assert false in
+                 let indexerror_f = man.exec (Utils.mk_builtin_raise "IndexError" range) flow in
+                 let flow = Flow.copy_ctx indexerror_f flow in
 
-           let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
-           let indexerror_f = Flow.copy_ctx assignment_f indexerror_f in
+                 let assignment_f = man.exec (mk_assign (mk_var ~mode:WEAK var_els range) value range) flow in
+                 let indexerror_f = Flow.copy_ctx assignment_f indexerror_f in
 
-           let assignment = man.eval (mk_py_none range) assignment_f in
-           let indexerror = Eval.empty_singleton indexerror_f in
-           Eval.join_list (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
+                 let assignment = man.eval (mk_py_none range) assignment_f in
+                 let indexerror = Eval.empty_singleton indexerror_f in
+                 Eval.join_list (assignment :: (Eval.copy_ctx assignment indexerror) ::[])
+               )
+             ~felse:(fun flow ->
+                 assume_eval (mk_py_isinstance_builtin index "slice" range) man flow
+                   ~fthen:(fun flow ->
+                       man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range) flow
+                     )
+                   ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |>
+                                       Eval.empty_singleton)
+               )
         )
       |> Option.return
 
