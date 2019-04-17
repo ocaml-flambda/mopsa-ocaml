@@ -146,7 +146,8 @@ struct
     printf "  e[nv]            print the current abstract environment@.";
     printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
     printf "  w[here]          show current program point@.";
-    printf "  l[og] {on|off}   activate/deactivate logging@.";
+    printf "  l[og] {on|off}   activate/deactivate short logging@.";
+    printf "  llog {on|off}   activate/deactivate complete logging@.";
     printf "  h[elp]           print this message@.";
     ()
 
@@ -180,6 +181,15 @@ struct
       | "log off" | "l off" ->
         Core.Debug_tree.opt_short_log := false;
         read_command range ()
+
+      | "llog on" ->
+        Core.Debug_tree.opt_log := true;
+        read_command range ()
+
+      | "llog off" ->
+        Core.Debug_tree.opt_log := false;
+        read_command range ()
+
 
       | "" -> (
         match !last_command with
