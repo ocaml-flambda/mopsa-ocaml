@@ -45,7 +45,8 @@ def maximize(points):
 
 
 def benchmark(n):
-    points = [None] * n
+    # points = None
+    points = [Point(0)] * n
     for i in range(n):
        points[i] = Point(i)
     # points = [Point(i) for i in range(n)]
@@ -53,11 +54,18 @@ def benchmark(n):
         p.normalize()
     return maximize(points)
 
-
-if __name__ == "__main__":
-    # runner = perf.Runner()
-    # runner.metadata['description'] = "Float benchmark"
+def test_main():
+    import mopsa
 
     points = POINTS
-    # runner.bench_func('float', benchmark, points)
     benchmark(points)
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+
+# if __name__ == "__main__":
+#     # runner = perf.Runner()
+#     # runner.metadata['description'] = "Float benchmark"
+
+#     points = POINTS
+#     # runner.bench_func('float', benchmark, points)
+#     benchmark(points)

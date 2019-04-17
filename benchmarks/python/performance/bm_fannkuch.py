@@ -44,7 +44,7 @@ def fannkuch(n):
                 max_flips = flips_count
 
         while r != n:
-            perm1_ins(r, q)
+            perm1_ins(r, perm1_pop(0))
             count[r] -= 1
             if count[r] > 0:
                 break
@@ -52,9 +52,16 @@ def fannkuch(n):
         else:
             return max_flips
 
+def test_main():
+    import mopsa
 
-if __name__ == "__main__":
-    # runner = perf.Runner()
     arg = DEFAULT_ARG
-    # runner.bench_func('fannkuch', fannkuch, arg)
     fannkuch(arg)
+    mopsa.ignore_exception(IndexError)
+    mopsa.assert_safe()
+
+# if __name__ == "__main__":
+#     # runner = perf.Runner()
+#     arg = DEFAULT_ARG
+#     # runner.bench_func('fannkuch', fannkuch, arg)
+#     fannkuch(arg)
