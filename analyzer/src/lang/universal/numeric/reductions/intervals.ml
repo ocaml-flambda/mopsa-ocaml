@@ -43,14 +43,18 @@ struct
 
   (** Get the list of modified variables *)
   let get_modified_vars stmt man ctx a =
-    let l =
-      match skind stmt with
-      | S_assign({ekind = E_var (v, _)}, _) -> [v]
-      | S_assume e -> Visitor.expr_vars e
-      | _ -> []
-    in
-    List.fold_left (fun acc v -> get_related_vars v man ctx a @ acc) l l |>
-    List.sort_uniq compare_var
+    match skind stmt with
+    | S_assign({ekind = E_var (v, _)}, _) -> [v]
+
+    | S_assume e ->
+      (* In case of a filter, we search for the relations of the
+         variables present in the expression *)
+      let vars = Visitor.expr_vars e in
+      List.fold_left (fun acc v -> get_related_vars v man ctx a @ acc) vars vars |>
+      List.sort_uniq compare_var
+
+    | _ -> []
+
 
 
   (** Reduction operator *)
@@ -62,7 +66,7 @@ struct
     List.fold_left (fun post var ->
         (* Get the interval of var in the box domain *)
         let itv = man.get_value I.id var post in
-      
+
         (* Get the interval in all domain *)
         let itv' = man.ask (I.Q_interval (mk_var var stmt.srange)) ctx post in
 
