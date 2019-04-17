@@ -117,6 +117,7 @@ let addr_bool_top = {addr_uid = -3; addr_kind = A_py_instance "bool"; addr_mode 
 let addr_none = {addr_uid = -4; addr_kind = A_py_instance "NoneType"; addr_mode = STRONG}
 let addr_notimplemented = {addr_uid = -5; addr_kind = A_py_instance "NotImplementedType"; addr_mode = STRONG}
 let addr_integers = {addr_uid = -6; addr_kind = A_py_instance "int"; addr_mode = WEAK}
+let addr_float = {addr_uid = -7; addr_kind = A_py_instance "float"; addr_mode = WEAK}
 
 
 let pyvarcounter = ref (-1)
@@ -301,7 +302,8 @@ struct
           (* FIXME: weak vs strong updates? *)
           let cur = get_domain_env T_cur man flow in
           (* during strong updates, there should be just one sub element *)
-          assert (Polytypeset.cardinal (TMap.find alval cur.abs_heap) <= 1);
+          (* if not (Polytypeset.cardinal (TMap.find alval cur.abs_heap) <= 1) then
+           *   Exceptions.panic_at stmt.srange "In %a: TMap.find %a cur.abs_heap = %a" pp_stmt stmt pp_addr alval Polytypeset.print (TMap.find alval cur.abs_heap); *)
           let ael = Polytypeset.map (fun old_inst ->
               let old_inst = match old_inst with
                 | Instance i -> i
@@ -440,7 +442,7 @@ struct
 
     | E_constant (C_top (T_float _))
     | E_constant (C_float _) ->
-      allocate_builtin man range flow "float" |> Option.return
+      process_constant man flow range "float" addr_float |> Option.return
 
     | E_constant (C_top T_string) ->
       allocate_builtin man range flow "str" |> Option.return
@@ -639,6 +641,7 @@ struct
            match ekind earg with
            | E_py_object ({addr_kind = A_py_instance _ | A_py_var _ } as addr, _) ->
              let ptys = TMap.find addr cur.abs_heap in
+             debug "ptys = %a@cur=%a\n" Polytypeset.print ptys print cur;
              let types = Polytypeset.fold (fun pty acc ->
                  match pty with
                  | Instance {classn = Class (c, b) } ->
@@ -818,7 +821,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__new__")}, _)}, cls :: args, []) ->
       Utils.check_instances man flow range args
         ["int"; "int"; "int"]
-        (fun args flow -> allocate_builtin man range flow "range_iterator")
+        (fun args flow -> allocate_builtin man range flow "range")
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "range.__contains__")}, _)}, args, []) ->
