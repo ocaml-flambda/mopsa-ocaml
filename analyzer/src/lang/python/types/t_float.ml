@@ -93,8 +93,16 @@ module Domain =
                      ~fthen:(fun true_flow ->
                        man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow)
                      ~felse:(fun false_flow ->
-                       let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
-                       man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                         assume_eval (mk_py_isinstance_builtin e2 "int" range) man flow
+                           ~fthen:(fun true_flow ->
+                               let res = man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) (mk_py_top T_bool range) true_flow in
+                               let overflow = man.exec (Utils.mk_builtin_raise "OverflowError" range) true_flow |> Eval.empty_singleton in
+                               Eval.join_list (Eval.copy_ctx overflow res :: overflow :: [])
+                             )
+                           ~felse:(fun _ ->
+                               let expr = mk_constant ~etyp:T_py_not_implemented C_py_not_implemented range in
+                               man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) expr false_flow)
+                       )
                      man true_flow
                  )
                  ~felse:(fun false_flow ->
