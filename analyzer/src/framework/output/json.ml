@@ -70,9 +70,16 @@ let render_alarm alarm : json =
     "callstack", render_callstack cs;
   ]
 
+let render_var var : json =
+  `String var.Ast.Var.org_vname
+
+let render_value value : json =
+  `String value
+
 let render_env (var,value) : json =
   `Assoc [
-    var.Ast.Var.org_vname, `String value
+    "var", render_var var;
+    "val"   , render_value value;
   ]
 
 let render_state (range,(pre,post)) : json =
