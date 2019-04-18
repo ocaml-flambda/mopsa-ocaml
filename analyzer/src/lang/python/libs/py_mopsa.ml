@@ -71,25 +71,21 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [], []) ->
          man.eval (mk_py_top T_int range) flow |> Option.return
 
-      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
-                     {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
-                   ], []) ->
-         man.eval (mk_py_z_interval l u range) flow |> Option.return
+      (* | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [
+       *                {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
+       *              ], []) ->
+       *    man.eval (mk_py_z_interval l u range) flow |> Option.return *)
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_int")}, _)}, [l; u], []) ->
-         begin
-           match ekind l, ekind u with
-           | E_constant (C_int l), E_constant (C_int u) -> Eval.singleton (mk_py_z_interval l u range) flow
-           | _ ->
               let tmp = mktmp () in
               let l = Utils.mk_builtin_call "int" [l] range in
               let u = Utils.mk_builtin_call "int" [u] range in
               let flow = man.exec (mk_assign (mk_var tmp range) (mk_top T_int range) range) flow |>
-                           man.exec (mk_assume (mk_in (mk_var tmp range) l u range) range)
+                           man.exec (mk_assume (mk_py_in (mk_var tmp range) l u range) range)
               in
-              Eval.singleton (mk_var tmp range) ~cleaners:[mk_remove_var tmp range] flow
-         end
-         |> Option.return
+              man.eval (mk_var tmp range) flow |>
+              Eval.add_cleaners [mk_remove_var tmp range] |>
+              Option.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.random_float")}, _)}, [l; u], []) ->
          begin
@@ -236,7 +232,7 @@ module Domain =
                                                       acc
                                                  | _ -> Flow.set tk env man.lattice acc) (Flow.bottom ctx) flow in
          man.eval none flow |> Option.return
-      
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "mopsa.assert_exception_exists")}, _)}, [{ekind = E_py_object cls}], [])  ->
          Exceptions.panic "todo: fixme"
          (* begin
