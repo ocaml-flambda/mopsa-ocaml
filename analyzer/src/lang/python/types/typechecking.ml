@@ -112,39 +112,39 @@ struct
 
 
 
-  let join man a a' =
-    Framework.Core.Sig.Intermediate.Domain.lift_binop
-      (fun (hd, tl) (hd', tl') ->
-         (* if !opt_polymorphism then *)
-         match hd, hd' with
-         | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
-         | _ ->
-           match tl.TD.abs_heap, tl'.TD.abs_heap with
-           | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
-           | _ ->
-             debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
-             let p = create_partition hd tl
-             and p' = create_partition hd' tl' in
-             let ip = intersect_partitions p p' in
-             let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
-                 ip in
-             debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
-             (* FIXME: is that necessary? *)
-             let jhd = AD.join hd hd' and jtl = TD.join tl tl' in
-             let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
-                 let alpha = get_fresh_a_py_var () in
-                 let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
-                 let types = TD.Polytypeset.join ty1 ty2 in
-                 let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
-                 let rabsheap = TD.TMap.add addr types rabsheap in
-                 (rhd, rabsheap)
-               ) (jhd, jtl.abs_heap) ip in
-             let rtl = {jtl with abs_heap = rabsheap} in
-             debug "result is %a@\n%a@\n" AD.print rhd TD.print rtl;
-             rhd, {jtl with abs_heap = rabsheap}
-             (* else
-              *   Iter.join annot (hd, tl) (hd', tl') *)
-      ) man a a'
+  (* let join man a a' =
+   *   Framework.Core.Sig.Intermediate.Domain.lift_binop
+   *     (fun (hd, tl) (hd', tl') ->
+   *        (\* if !opt_polymorphism then *\)
+   *        match hd, hd' with
+   *        | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
+   *        | _ ->
+   *          match tl.TD.abs_heap, tl'.TD.abs_heap with
+   *          | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
+   *          | _ ->
+   *            debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
+   *            let p = create_partition hd tl
+   *            and p' = create_partition hd' tl' in
+   *            let ip = intersect_partitions p p' in
+   *            let ip = List.filter (fun (vars, ty1, ty2) -> not (TD.Polytypeset.is_top ty1) && not (TD.Polytypeset.is_top ty2) && VarSet.cardinal vars > 1 && TD.Polytypeset.cardinal ty1 > 0 && TD.Polytypeset.cardinal ty2 > 0 && not (TD.Polytypeset.cardinal ty1 = 1 && TD.Polytypeset.equal ty1 ty2))
+   *                ip in
+   *            debug "interesting partitions:@[@\n%a@]@\n" pp_ip ip;
+   *            (\* FIXME: is that necessary? *\)
+   *            let jhd = AD.join hd hd' and jtl = TD.join tl tl' in
+   *            let rhd, rabsheap = List.fold_left (fun (rhd, rabsheap) (vars, ty1, ty2) ->
+   *                let alpha = get_fresh_a_py_var () in
+   *                let addr = {addr_uid = alpha; addr_kind = A_py_var alpha; addr_mode = WEAK} in
+   *                let types = TD.Polytypeset.join ty1 ty2 in
+   *                let rhd = VarSet.fold (fun var rhd -> AD.AMap.add var (AD.ASet.singleton (Def addr)) rhd) vars rhd in
+   *                let rabsheap = TD.TMap.add addr types rabsheap in
+   *                (rhd, rabsheap)
+   *              ) (jhd, jtl.abs_heap) ip in
+   *            let rtl = {jtl with abs_heap = rabsheap} in
+   *            debug "result is %a@\n%a@\n" AD.print rhd TD.print rtl;
+   *            rhd, {jtl with abs_heap = rabsheap}
+   *            (\* else
+   *             *   Iter.join annot (hd, tl) (hd', tl') *\)
+   *     ) man a a' *)
 
 end
 
