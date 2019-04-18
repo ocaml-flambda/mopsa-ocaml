@@ -130,6 +130,7 @@ struct
     | Env    (** Print the current  abstract environment associated to token T_cur *)
     | Value of string (** Print the value of a variable *)
     | Where  (** Show current program point *)
+    | Token  (** Show the flow tokens in the current abstract state *)
 
 
   (** Reference to the last received command *)
@@ -145,6 +146,7 @@ struct
     printf "  p[rint]          print the abstract state@.";
     printf "  e[nv]            print the current abstract environment@.";
     printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
+    printf "  token            print the flow tokens of the abstract state@.";
     printf "  w[here]          show current program point@.";
     printf "  l[og] {on|off}   activate/deactivate short logging@.";
     printf "  llog {on|off}   activate/deactivate complete logging@.";
@@ -169,6 +171,7 @@ struct
       | "print" | "p"   -> Print
       | "env"   | "e"   -> Env
       | "where" | "w"   -> Where
+      | "token"         -> Token
 
       | "help"  | "h"   ->
         print_usage ();
@@ -321,6 +324,11 @@ struct
             let ret = apply_action action flow in
             break := true;
             ret
+
+          | Token ->
+            let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
+            printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
+            interact ~where:false action range flow
 
           | Print ->
             printf "%a@." (Flow.print man.lattice) flow;
