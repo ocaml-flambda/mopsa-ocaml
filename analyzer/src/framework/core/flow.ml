@@ -88,7 +88,7 @@ let meet_list lattice ?(ctx=Context.empty) l =
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
-  { tmap = TokenMap.widen lattice (Context.unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
+  { tmap = TokenMap.widen lattice (Context.get_unit flow2.ctx) flow1.tmap flow2.tmap; ctx = flow2.ctx }
 
 let print (lattice: 'a lattice) fmt (flow : 'a flow) : unit =
   TokenMap.print lattice fmt flow.tmap

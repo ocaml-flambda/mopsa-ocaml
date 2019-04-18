@@ -37,8 +37,8 @@ struct
   (** An abstract element is a partial map from pointer variables to a set
       of bases *)
   module Map =
-    Framework.Combiners.Value.Nonrel.MakeWithoutHistory(
-      Framework.Core.Sig.Simplified.Value.MakeLowlevel(Bases)
+    Framework.Transformers.Value.Nonrel.Make(
+      Framework.Core.Sig.Value.Simplified.MakeLowlevel(Bases)
     )
 
   type t = Map.t
@@ -733,8 +733,9 @@ struct
 
   let ask _ _ _ = None
 
+  let refine channel man sman flow = Channel.return flow
+
 end
 
 let () =
-  Framework.Core.Sig.Intermediate.Stacked.register_stack (module Domain);
-  ()
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain)

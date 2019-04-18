@@ -420,4 +420,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Stateless.Stacked.register_stack (module Domain)
+  Framework.Core.Sig.Stacked.Stateless.register_stack (module Domain)

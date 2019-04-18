@@ -21,16 +21,14 @@
 
 (** Configuration parser. *)
 
-open Core.Sig.Lowlevel.Domain
-
 val opt_config : string ref
 (** Path to the current configuration file *)
 
-val parse : unit -> string * (module DOMAIN)
-(** Construct an abstraction from the current configuration file *)
+val parse : string -> string * (module Core.Sig.Domain.Lowlevel.DOMAIN)
+(** Construct an abstraction from a configuration file *)
 
-val language : unit -> string
-(** Return the language of the current configuration file *)
+val language : string -> string
+(** Return the language of a configuration file *)
 
-val domains : unit -> string list
-(** Return the list of domains used in the current configuration file *)
+val domains : string -> string list
+(** Return the list of domains used in a configuration file *)

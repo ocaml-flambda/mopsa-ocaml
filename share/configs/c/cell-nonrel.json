@@ -1,0 +1,61 @@
+{
+    "language": "c",
+    "domain": {
+	"seq": [
+            // Universal iterators
+            "universal.iterators.intraproc",
+            "universal.iterators.loops",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.unittest",
+
+	    // Stubs iterator
+	    "stubs.iterator",
+
+	    // C libraries
+            "c.libs.libc",
+            "c.libs.libmopsa",
+
+	    // C iterators
+            "c.iterators.program",
+            "c.iterators.interproc",
+            "c.iterators.goto",
+            "c.iterators.switch",
+
+            // C desugar
+            "c.desugar.low_level",
+            "c.desugar.loops",
+            "c.desugar.record_copy",
+            "c.desugar.stub_init",
+            "c.desugar.cond_expr",
+
+	    // Resouce management
+            "universal.heap.recency.by_kind_callstack_range",
+	    "c.resources.file",
+	    "c.resources.common",
+
+            // Memory model
+	    {
+                "apply": {
+                    "compose": [
+                        "c.memory.cells.expand",
+                        "c.memory.cells.cell_2_scalar",
+                        {
+                            "seq": [
+			        "c.memory.pointer",
+			        "c.memory.machine_numbers"
+                            ]
+                        }
+                    ]
+                },
+		"on": {
+                    "nonrel": {
+			"disjoint": [
+			    "universal.numeric.values.intervals.float",
+                            "universal.numeric.values.intervals.integer"
+			]
+		    }
+                }
+	    }
+	]
+    }
+}

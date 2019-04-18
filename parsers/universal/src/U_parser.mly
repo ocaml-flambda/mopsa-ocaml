@@ -312,8 +312,8 @@ fundec:
 prog:
 | st=ext(block_no_curly)
        {{gvars = []; funs = [] ; main = st}}
-| d=ext(declaration) prg=prog {let () = print_string "adding declaration\n" in flush_all () ; add_declaration d prg}
-| d=ext(declaration) TOK_SEMICOLON prg=prog {let () = print_string "adding declaration\n" in flush_all () ; add_declaration d prg}
+| d=ext(declaration) prg=prog {add_declaration d prg}
+| d=ext(declaration) TOK_SEMICOLON prg=prog {add_declaration d prg}
 | d=ext(fundec) prg=prog {add_fundec d prg}
 | d=ext(fundec) TOK_SEMICOLON prg=prog {add_fundec d prg}
 

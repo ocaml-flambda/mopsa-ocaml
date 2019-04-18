@@ -282,6 +282,30 @@ struct
 
   type _ query += Q_interval : expr -> t query
 
+
+  let () =
+    register_query {
+      query_join = (
+        let f : type r. query_pool -> r query -> r -> r -> r =
+          fun next query a b ->
+            match query with
+            | Q_interval e -> join a b
+            | _ -> next.join query a b
+        in
+        f
+      );
+      query_meet = (
+        let f : type r. query_pool -> r query -> r -> r -> r =
+          fun next query a b ->
+            match query with
+            | Q_interval e -> meet a b
+            | _ -> next.meet query a b
+        in
+        f
+      );
+    }
+
+
   let ask : type r. r query -> (expr -> t) -> r option =
     fun query eval ->
       match query with
@@ -290,8 +314,10 @@ struct
 
       | _ -> None
 
+  let refine channel v = Channel.return v
+
 end
 
 
 let () =
-  Core.Sig.Simplified.Value.register_value (module Value)
+  Core.Sig.Value.Simplified.register_value (module Value)

@@ -318,3 +318,7 @@ let remove_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'a ctx =
 
 let print fmt ctx =
   Format.fprintf fmt "%a%a" uprint ctx.ctx_unit pprint ctx.ctx_poly
+
+let get_unit ctx = ctx.ctx_unit
+
+let set_unit unit ctx = { ctx with ctx_unit = unit }

@@ -1227,8 +1227,11 @@ module Domain = struct
 
     | _ -> None
 
+
+  let refine channel man sman flow = Channel.return flow
+
 end
 
 
 let () =
-  Framework.Core.Sig.Intermediate.Stacked.register_stack (module Domain);
+  Framework.Core.Sig.Stacked.Intermediate.register_stack (module Domain);

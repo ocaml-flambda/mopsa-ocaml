@@ -147,11 +147,13 @@ struct
 
   let ask _ _ _ = None
 
+  let refine channel man flow = Channel.return flow
+
 end
 
 module HeapRecency = Domain(Pool.AddrInfoRecency)
 module HeapTypes   = Domain(Pool.AddrInfoTypes)
 
 let () =
-  Framework.Core.Sig.Intermediate.Domain.register_domain (module HeapRecency);
-  Framework.Core.Sig.Intermediate.Domain.register_domain (module HeapTypes)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapRecency);
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes)

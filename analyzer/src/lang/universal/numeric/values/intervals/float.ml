@@ -22,11 +22,12 @@
 (** Interval abstraction of float values. *)
 
 open Mopsa
-open Core.Sig.Intermediate.Value
+open Core.Sig.Value.Lowlevel
+module Simplified = Core.Sig.Value.Simplified
 open Rounding
 open Ast
 open Bot
-    
+
 
 module Value =
 struct
@@ -61,9 +62,9 @@ struct
   let () =
     import_standalone_option Rounding.name ~into:name
 
-           
+
   (** Lattice operations *)
-           
+
   let bottom = I.bot
 
   let top = I.double_special
@@ -80,10 +81,12 @@ struct
 
   let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
 
-  let cast man id' a = leaf_cast man id id' a
+  let get man id' a = Simplified.leaf_get man id id' a
+
+  let set man id' v a = Simplified.leaf_set man id id' v a
 
   (** Arithmetic operators *)
-                      
+
   let prec : float_prec -> I.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
@@ -97,7 +100,7 @@ struct
     | Apron.Texpr1.Up -> `UP
     | Apron.Texpr1.Down -> `DOWN
     | Apron.Texpr1.Rnd -> `ANY
-                      
+
   let of_constant t c =
     match t, c with
     | T_float p, C_float i ->
@@ -107,7 +110,7 @@ struct
        I.of_float_prec (prec p) (round ()) lo up
 
     | T_float p, C_int_interval (lo,up) ->
-       I.of_z (prec p) (round ()) lo up      
+       I.of_z (prec p) (round ()) lo up
 
     | T_float p, C_int i ->
        I.of_z (prec p) (round ()) i i
@@ -120,7 +123,7 @@ struct
 
     | _ -> top
 
-  let unop man t op v = lift_unop (fun t op a ->
+  let unop man t op v = Simplified.lift_unop (fun op a ->
       match t with
       | T_float p ->
         (match op with
@@ -128,13 +131,13 @@ struct
          | O_plus  -> a
          | O_sqrt  -> I.sqrt (prec p) (round ()) a
          | O_cast  ->
-           let int_itv = man.vcast Integer.Value.id v in
+           let int_itv = man.cast Integer.Value.id v in
            I.of_int_itv_bot (prec p) (round ()) int_itv
          | _ -> top)
       | _ -> top
     ) man t op v
 
-  let binop man t op a1 a2 = lift_binop (fun t op a1 a2 ->
+  let binop man t op a1 a2 = Simplified.lift_binop (fun op a1 a2 ->
       match t with
       | T_float p ->
         (match op with
@@ -147,9 +150,9 @@ struct
       | _ -> top
     ) man t op a1 a2
 
-  let filter man a b = lift_filter (fun a b -> a) man a b
+  let filter man a b = Simplified.lift_filter (fun a b -> a) man a b
 
-  let bwd_unop man t op a r = lift_bwd_unop (fun t op a r ->
+  let bwd_unop man t op a r = Simplified.lift_bwd_unop (fun op a r ->
         match t with
         | T_float p ->
           (match op with
@@ -158,9 +161,9 @@ struct
            | O_sqrt  -> I.bwd_sqrt (prec p) (round ()) a r
            | _ -> a)
         |_ -> a
-      ) man t op a r 
+      ) man t op a r
 
-  let bwd_binop man t op a1 a2 r = lift_bwd_binop (fun t op a1 a2 r ->
+  let bwd_binop man t op a1 a2 r = Simplified.lift_bwd_binop (fun op a1 a2 r ->
       match t with
       | T_float p ->
         (match op with
@@ -173,7 +176,7 @@ struct
       | _ -> a1,a2
     ) man t op a1 a2 r
 
-  let compare man t op a1 a2 r = lift_compare (fun t op a1 a2 r ->
+  let compare man t op a1 a2 r = Simplified.lift_compare (fun op a1 a2 r ->
       match t with
       | T_float p ->
         (match r, op with
@@ -193,13 +196,11 @@ struct
 
   let ask man q = None
 
-  (** Casts *)
+  let refine man channel v = Channel.return v
 
-    (* let float_of_int (p:float_prec) (i:int_t) : float_t with_channel =
-     * return (I.of_int_itv_bot (prec p) (round ()) i) *)
 
 end
 
 
 let () =
-  Core.Sig.Lowlevel.Value.register_value (module Value)
+  Sig.Value.Lowlevel.register_value (module Value)

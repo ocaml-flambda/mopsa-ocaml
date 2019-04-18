@@ -14,9 +14,9 @@ struct
   module AD = Addr_env.Domain
   module TD = Typing.Domain
 
-  module Iter = Framework.Combiners.Domain.Sequence.Make
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(AD))
-      (Framework.Core.Sig.Intermediate.Domain.MakeLowlevelDomain(TD))
+  module Iter = Framework.Transformers.Domain.Lowlevel.Sequence.Make
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(AD))
+      (Framework.Core.Sig.Domain.Intermediate.MakeLowlevelDomain(TD))
 
   include Iter
 
@@ -113,14 +113,14 @@ struct
 
 
   let join man a a' =
-    Framework.Core.Sig.Intermediate.Domain.lift_binop
+    Framework.Core.Sig.Domain.Intermediate.lift_binop
       (fun (hd, tl) (hd', tl') ->
          (* if !opt_polymorphism then *)
          match hd, hd' with
-         | AD.AMap.Top, _ | _, AD.AMap.Top -> Iter.top
+         | AD.AMap.Map.Top, _ | _, AD.AMap.Map.Top -> Iter.top
          | _ ->
            match tl.TD.abs_heap, tl'.TD.abs_heap with
-           | TD.TMap.Top, _ | _, TD.TMap.Top -> Iter.top
+           | TD.TMap.Map.Top, _ | _, TD.TMap.Map.Top -> Iter.top
            | _ ->
              debug "hd, tl = %a, %a@\n@\nhd', tl' = %a, %a@\n" AD.print hd TD.print tl AD.print hd' TD.print tl';
              let p = create_partition hd tl
@@ -146,6 +146,7 @@ struct
               *   Iter.join annot (hd, tl) (hd', tl') *)
       ) man a a'
 
+
 end
 
-let () = Framework.Core.Sig.Lowlevel.Domain.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Lowlevel.register_domain (module Domain)

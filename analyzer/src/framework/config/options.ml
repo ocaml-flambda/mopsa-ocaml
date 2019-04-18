@@ -176,7 +176,7 @@ let () =
     category = "Configuration";
     doc = " list available domains; if a configuration is specified, only used domains are listed";
     spec = ArgExt.Unit_delayed (fun () ->
-        let domains = Parser.domains () in
+        let domains = Parser.domains !Parser.opt_config in
         Output.Factory.list_domains domains
       );
     default = "";
@@ -248,7 +248,7 @@ let () =
     key = "-collect-states";
     category = "Debugging";
     doc = " collect (non-relational) reachable states";
-    spec = ArgExt.Set Combiners.Value.Nonrel.opt_collect_states;
+    spec = ArgExt.Set Transformers.Value.Nonrel_with_history.opt_collect_states;
     default = "false";
   }
 
@@ -259,8 +259,8 @@ let help () =
     if !Parser.opt_config = "" then !options
     else
       (* Get the language and domains of selected configuration *)
-      let lang = Parser.language () in
-      let domains = Parser.domains () in
+      let lang = Parser.language !Parser.opt_config in
+      let domains = Parser.domains !Parser.opt_config in
 
       (* Get the options *)
       (get_builtin_options ())    @

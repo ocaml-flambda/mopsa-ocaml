@@ -204,4 +204,4 @@ module Domain =
 
   end
 
-let () = Framework.Core.Sig.Stateless.Domain.register_domain (module Domain)
+let () = Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

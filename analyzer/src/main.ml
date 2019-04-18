@@ -72,7 +72,7 @@ let parse_program lang files =
 let () =
   exit @@ parse_options (fun files ->
       try
-        let lang, domain = Config.Parser.parse () in
+        let lang, domain = Config.Parser.parse !Config.Parser.opt_config in
 
         let prog = parse_program lang files in
 

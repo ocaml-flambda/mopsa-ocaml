@@ -44,8 +44,8 @@ open Log
 module type ABSTRACTION =
 sig
 
-  (** {2 Abstraction lattice} *)
-  (** *********************** *)
+  (** {2 Abstraction header} *)
+  (** ********************** *)
 
   type t
 
@@ -53,7 +53,13 @@ sig
 
   val top: t
 
-  val is_bottom: (t, t) man -> t -> bool
+  val is_bottom: t -> bool
+
+  val print: Format.formatter -> t -> unit
+
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   val subset: (t, t) man -> t -> t -> bool
 
@@ -63,7 +69,6 @@ sig
 
   val widen: (t, t) man -> uctx -> t -> t -> t
 
-  val print: (t, t) man -> Format.formatter -> t -> unit
 
 
   (** {2 Transfer functions} *)
@@ -91,13 +96,13 @@ let debug fmt = Debug.debug ~channel:"framework.core.abstraction" fmt
 
 
 (** Encapsulate a domain into an abstraction *)
-module Make(Domain:Sig.Lowlevel.Domain.DOMAIN)
+module Make(Domain:Sig.Domain.Lowlevel.DOMAIN)
   : ABSTRACTION with type t = Domain.t
 =
 struct
 
-  (** {2 Abstraction lattice} *)
-  (** *********************** *)
+  (** {2 Abstraction header} *)
+  (** ********************** *)
 
   type t = Domain.t
 
@@ -105,7 +110,12 @@ struct
 
   let top = Domain.top
 
-  let is_bottom man a = Domain.is_bottom man a
+  let is_bottom = Domain.is_bottom
+
+  let print = Domain.print
+
+  (** {2 Lattice operators} *)
+  (** ********************* *)
 
   let subset man a a' = Domain.subset man a a'
 
@@ -114,8 +124,6 @@ struct
   let meet man a a' = Domain.meet man a a'
 
   let widen man ctx a a' = Domain.widen man ctx a a'
-
-  let print man fmt a = Domain.print man fmt a
 
 
   (** {2 Caches and zone maps} *)
