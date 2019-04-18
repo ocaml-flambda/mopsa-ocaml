@@ -51,8 +51,8 @@ let resolve_config_file config =
     else Exceptions.panic "unable to find configuration file %s" config
 
 
-(** {2 Specification of transformers} *)
-(** ********************************* *)
+(** {2 Specification of available transformers} *)
+(** ******************************************* *)
 
 let spec = {
   chain = (fun abstraction operator signature ->
@@ -78,6 +78,8 @@ let spec = {
       | _, S_lowlevel -> true
 
       | A_domain, S_simplified -> true
+
+      | A_stack, S_intermediate -> true
 
       | _ -> false
     );
