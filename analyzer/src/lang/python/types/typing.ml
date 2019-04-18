@@ -518,13 +518,17 @@ struct
 
 
     | E_binop(O_py_is, e1, e2) ->
-      begin match ekind e1, ekind e2 with
-      | E_py_object (a1, _), E_py_object (a2, _) when
-          compare_addr a1 a2 = 0 &&
-          (compare_addr a1 addr_notimplemented = 0 || compare_addr a1 addr_none = 0) ->
-        man.eval (mk_py_true range) flow
-      | _ -> man.eval (mk_py_top T_bool range) flow
-      end
+      Eval.eval_list (man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj)) [e1;e2] flow |>
+      Eval.bind (fun evals flow ->
+          let e1, e2 = match evals with [e1;e2] -> e1, e2 | _ -> assert false in
+          begin match ekind e1, ekind e2 with
+            | E_py_object (a1, _), E_py_object (a2, _) when
+                compare_addr a1 a2 = 0 &&
+                (compare_addr a1 addr_notimplemented = 0 || compare_addr a1 addr_none = 0) ->
+              man.eval (mk_py_true range) flow
+            | _ -> man.eval (mk_py_top T_bool range) flow
+          end
+        )
       |> Option.return
 
     | E_py_ll_hasattr({ekind = E_py_object (addr, objexpr)} as e, attr) ->
@@ -641,16 +645,19 @@ struct
            match ekind earg with
            | E_py_object ({addr_kind = A_py_instance _ | A_py_var _ } as addr, _) ->
              let ptys = TMap.find addr cur.abs_heap in
-             debug "ptys = %a@cur=%a\n" Polytypeset.print ptys print cur;
-             let types = Polytypeset.fold (fun pty acc ->
-                 match pty with
-                 | Instance {classn = Class (c, b) } ->
-                   let cur = get_domain_env T_cur man flow in
-                   let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
-                   (c, b, {cur with abs_heap})::acc
-                 | _ -> Exceptions.panic_at range "type : todo"
-               ) ptys [] in
-             List.map (proceed addr) types |> Eval.join_list
+             (* weird case happening sometimes in bm_chaos. To investigate? commit bfecf234 *)
+             if Polytypeset.is_empty ptys then
+               Eval.empty_singleton flow
+             else
+               let types = Polytypeset.fold (fun pty acc ->
+                   match pty with
+                   | Instance {classn = Class (c, b) } ->
+                     let cur = get_domain_env T_cur man flow in
+                     let abs_heap = TMap.add addr (Polytypeset.singleton pty) cur.abs_heap in
+                     (c, b, {cur with abs_heap})::acc
+                   | _ -> Exceptions.panic_at range "type : todo"
+                 ) ptys [] in
+               List.map (proceed addr) types |> Eval.join_list
 
            | E_py_object ({addr_kind = Objects.Py_list.A_py_list _} as a, _) ->
              let lc, lb = get_builtin "list" in
