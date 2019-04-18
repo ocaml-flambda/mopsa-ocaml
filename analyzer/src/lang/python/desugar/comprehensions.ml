@@ -71,7 +71,7 @@ module Domain =
       | E_py_list_comprehension (expr, comprehensions) ->
          let list = find_builtin "list" in
          let listappend = mk_py_object (find_builtin_attribute list "append") range in
-         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) range) listappend range in
+         let stmt, tmp_acc = unfold_comprehension [expr] comprehensions (mk_expr (E_py_list []) (tag_range range "acc")) listappend range in
          let acc_var = mk_var tmp_acc range in
          debug "Rewriting %a into %a@\n" pp_expr exp pp_stmt stmt;
          man.exec stmt flow |>
