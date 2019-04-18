@@ -71,6 +71,7 @@ class GVector(object):
 
 
 def GetKnots(points, degree):
+    # the line below is quite weird. It does not work in Py3.6, but does in Py2.7
     knots = [0] * degree + range(1, len(points) - degree)
     knots += [len(points) - degree] * degree
     return knots
@@ -105,27 +106,26 @@ degree of the Spline."""
 
     def __call__(self, u):
         """Calculates a point of the B-Spline using de Boors Algorithm"""
-        return 0
-        # dom = self.GetDomain()
-        # if u < dom[0] or u > dom[1]:
-        #     raise ValueError("Function value not in domain")
-        # if u == dom[0]:
-        #     return self.points[0]
-        # if u == dom[1]:
-        #     return self.points[-1]
-        # I = self.GetIndex(u)
-        # d = [self.points[I - self.degree + 1 + ii]
-        #      for ii in range(self.degree + 1)]
-        # U = self.knots
-        # for ik in range(1, self.degree + 1):
-        #     for ii in range(I - self.degree + ik + 1, I + 2):
-        #         ua = U[ii + self.degree - ik]
-        #         ub = U[ii - 1]
-        #         co1 = (ua - u) / (ua - ub)
-        #         co2 = (u - ub) / (ua - ub)
-        #         index = ii - I + self.degree - ik - 1
-        #         d[index] = d[index].linear_combination(d[index + 1], co1, co2)
-        # return d[0]
+        dom = self.GetDomain()
+        if u < dom[0] or u > dom[1]:
+            raise ValueError("Function value not in domain")
+        if u == dom[0]:
+            return self.points[0]
+        if u == dom[1]:
+            return self.points[-1]
+        I = self.GetIndex(u)
+        d = [self.points[I - self.degree + 1 + ii]
+             for ii in range(self.degree + 1)]
+        U = self.knots
+        for ik in range(1, self.degree + 1):
+            for ii in range(I - self.degree + ik + 1, I + 2):
+                ua = U[ii + self.degree - ik]
+                ub = U[ii - 1]
+                co1 = (ua - u) / (ua - ub)
+                co2 = (u - ub) / (ua - ub)
+                index = ii - I + self.degree - ik - 1
+                d[index] = d[index].linear_combination(d[index + 1], co1, co2)
+        return d[0]
 
     def GetIndex(self, u):
         dom = self.GetDomain()
@@ -150,15 +150,23 @@ def write_ppm(im, filename):
     w = len(im)
     h = len(im[0])
 
-    fp = open(filename, "w", encoding="latin1", newline='')
-    with fp:
-        fp.write(magic)
-        fp.write('%i %i\n%i\n' % (w, h, maxval))
-        for j in range(h):
-            for i in range(w):
-                val = im[i][j]
-                c = val * 255
-                fp.write('%c%c%c' % (c, c, c))
+    # fp = open(filename, "w") #, encoding="latin1", newline='')
+    # with fp:
+    #     fp.write(magic)
+    #     fp.write('%i %i\n%i\n' % (w, h, maxval))
+    #     for j in range(h):
+    #         for i in range(w):
+    #             val = im[i][j]
+    #             c = val * 255
+    #             fp.write('%c%c%c' % (c, c, c))
+    print(magic)
+    print("%i %i\n%i\n" % (w, h, maxval))
+    for j in range(h):
+        for i in range(w):
+            val = im[i][j]
+            c = val * 255
+            print('%c%c%c' % (c, c, c))
+
 
 
 class Chaosgame(object):
@@ -216,7 +224,8 @@ class Chaosgame(object):
             basepoint.y += -derivative.x / derivative.Mag() * (y - 0.5) * \
                 self.thickness
         else:
-            print("r", end='')
+            # print("r", end='')
+            print("r")
         self.truncate(basepoint)
         return basepoint
 
