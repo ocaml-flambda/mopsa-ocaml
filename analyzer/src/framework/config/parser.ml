@@ -285,7 +285,10 @@ and stack_cast_lowlevel (config:config) : (module Sig.Stacked.Lowlevel.STACK) =
     in
     (module SS)
 
-  | _ -> assert false
+  | s -> Exceptions.panic
+           "Stack signature %a can not be casted to signature %a"
+           pp_signature s
+           pp_signature S_lowlevel
 
 and stack_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
   match config.structure with

@@ -81,10 +81,10 @@ let pp_abstraction fmt = function
   | A_value -> pp_print_string fmt "𝒱"
 
 let pp_signature fmt = function
-  | S_lowlevel -> pp_print_string fmt "0"
-  | S_intermediate -> pp_print_string fmt "1"
-  | S_simplified -> pp_print_string fmt "2"
-  | S_stateless-> pp_print_string fmt "3"
+  | S_lowlevel -> pp_print_string fmt "lowlevel"
+  | S_intermediate -> pp_print_string fmt "intermediate"
+  | S_simplified -> pp_print_string fmt "simplified"
+  | S_stateless-> pp_print_string fmt "stateless"
 
 let pp_operator fmt = function
   | O_seq -> pp_print_string fmt " ; "
@@ -167,7 +167,7 @@ let subset (s1:signature) (s2:signature) =
 
   | S_simplified, S_simplified -> true
 
-  | S_stateless, S_simplified -> true
+  | S_stateless, S_stateless -> true
 
   | _ -> false
 
