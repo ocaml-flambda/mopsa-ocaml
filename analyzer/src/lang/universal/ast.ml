@@ -673,8 +673,7 @@ let mk_alloc_addr addr_kind ?(mode=STRONG) range =
   mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let is_int_type = function
-  | T_int -> true
-  | T_bool -> true
+  | T_int | T_bool -> true
   | _ -> false
 
 let is_float_type = function
@@ -682,7 +681,7 @@ let is_float_type = function
   | _ -> false
 
 let is_numeric_type = function
-  | T_int | T_float _ -> true
+  | T_bool | T_int | T_float _ -> true
   | _ -> false
 
 let is_math_type = function

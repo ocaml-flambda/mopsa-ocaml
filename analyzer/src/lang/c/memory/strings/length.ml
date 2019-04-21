@@ -46,6 +46,9 @@ open Common.Points_to
 module Domain =
 struct
 
+  (** {2 Domain header} *)
+  (** ***************** *)
+
   let name = "c.memory.strings.length"
 
   let interface = {
@@ -59,11 +62,28 @@ struct
     }
   }
 
+  (** {2 Initialization procedure} *)
+  (** **************************** *)
+  
   let init prog man flow = flow
 
-  let exec zone stmt man flow =
-    panic ~loc:__LOC__ "exec not implemented"
+  (** {2 Abstract transformers} *)
+  (** ************************* *)
 
+  (** Declaration of a C variable *)
+  let declare_variable v man sman flow =
+    assert false
+
+  (** Transformers entry point *)
+  let exec zone stmt man sman flow =
+    match skind stmt with
+    | S_c_declaration v -> declare_variable v man sman flow
+    | _ -> None
+                             
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
+  (** Evaluations entry point *)
   let eval zone exp man flow =
     panic ~loc:__LOC__ "eval not implemented"
 
