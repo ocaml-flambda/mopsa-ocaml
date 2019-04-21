@@ -61,5 +61,6 @@ val simplify: bool ref
 (* Whether to apply simplification *)                   
 
 val new_uid: context -> C_AST.uid
-                        
-                     
+
+val find_function : string -> context -> C_AST.func
+(** Find a function by its name. Not_found is raised when the function is missing. *)
