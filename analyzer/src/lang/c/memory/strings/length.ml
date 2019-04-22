@@ -51,14 +51,20 @@ struct
 
   let name = "c.memory.strings.length"
 
+  let debug fmt = Debug.debug ~channel:name fmt
+
   let interface = {
     iexec = {
-      provides = [Z_c_low_level];
+      provides = [Z_c];
       uses = [Z_u_num];
     };
     ieval = {
       provides = [Z_c_low_level, Z_u_num];
-      uses = [Z_c, Z_c_points_to];
+      uses = [
+        Z_c, Z_c_low_level;
+        Z_c, Z_c_points_to;
+        Z_c_low_level, Z_u_num
+      ];
     }
   }
 
@@ -66,6 +72,7 @@ struct
   (** **************************** *)
   
   let init prog man flow = flow
+
 
   (** {2 Abstract transformers} *)
   (** ************************* *)
@@ -81,9 +88,10 @@ struct
     let v = mkv org_vname uniq_vname vuid T_int in
     mk_var v range
 
+  (** Results when searching for the first zero *)
   type zero_pos =
     | NotFound of Z.t (** number of consumed bytes *)
-    | Found of Z.t
+    | Found of Z.t (** Zero position *)
   
   let init_variable length init size range man sman flow =
     (* Find the position of the first zero, or reach the end of the
@@ -95,14 +103,14 @@ struct
 
       | C_init_expr {ekind = E_constant(C_c_string (s, _))} ->
         let rec aux j =
-          if Z.add i j |> Z.equal size
-          then NotFound j
+          if Z.(i + j) |> Z.equal size
+          then NotFound Z.(i + j)
           else if Z.lt j (Z.of_int @@ String.length s)
           then
             if int_of_char (String.get s (Z.to_int j)) = 0
             then Found Z.(i + j)
             else aux Z.(j + one)
-          else NotFound j
+          else NotFound Z.(i + j)
         in
         aux Z.zero
 
@@ -111,7 +119,7 @@ struct
     let byte =
       match find_zero Z.zero init with
       | Found n -> n
-      | NotFound _ -> size
+      | NotFound n -> n
     in
     sman.post (mk_assign length (mk_z byte range) range) flow
 
@@ -144,11 +152,74 @@ struct
 
     | _ -> assert false
 
+  (** Abstract transformer for the set0 case *)
+  let set0_case length offset rhs size range man =
+    [ mk_binop offset O_ge (mk_zero range) range, true;
+      mk_binop offset O_le length range, true;
+      mk_binop offset O_lt size range, true;
+      mk_binop rhs O_eq (mk_zero range) range, true;
+    ],
+    fun flow -> man.post (mk_assign length (mk_zero range) range) flow
+
+  let to_numerci_expr e =
+    Visitor.map_expr
+      (fun e -> Visitor.VisitParts { e with etyp = T_int })
+      (fun s -> Visitor.VisitParts s)
+      e
+
+  let assign_base length offset rhs size range man flow =
+    let offset = to_numerci_expr offset in
+    let rhs = to_numerci_expr rhs in
+    switch_post [
+      set0_case length offset rhs size range man;
+    ] ~zone:Z_u_num man flow
+
+  (** Assignment abstract transformer *)
+  let assign lval rhs range man sman flow =
+    match ekind lval with
+    | E_var (v,_) ->
+      let base = V v in
+      let offset = mk_zero range in
+      let size = mk_z (sizeof_type v.vtyp) range ~typ:ul in
+      let length = mk_length_var base range in
+      assign_base length offset rhs size range man flow
+
+    | E_c_deref p ->
+      man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+      post_eval man @@ fun pt flow ->
+
+      begin match ekind pt with
+        | E_c_points_to (P_block (base, offset)) ->
+          let length = mk_length_var base range in
+
+          eval_base_size base range man flow |>
+          post_eval man @@ fun size flow ->
+
+          assign_base length offset size rhs range sman flow
+
+      | _ -> assert false
+
+      end
+
+    | _ -> assert false
+
+  
   (** Transformers entry point *)
   let exec zone stmt man sman flow =
     match skind stmt with
-    | S_c_declaration v -> declare_variable v man sman flow |>
-                           Option.return
+    | S_c_declaration v ->
+      declare_variable v man sman flow |>
+      Option.return
+
+    | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
+      man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
+      Option.return |> Option.lift @@ post_eval man @@ fun lval flow ->
+
+      man.eval ~zone:(Z_c,Z_c_low_level) rval flow |>
+      post_eval man @@ fun rval flow ->
+      
+      assign lval rval stmt.srange man sman flow
+
     | _ -> None
                              
   (** {2 Abstract evaluations} *)
