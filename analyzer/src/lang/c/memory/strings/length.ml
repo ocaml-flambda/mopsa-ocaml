@@ -61,14 +61,17 @@ struct
     iexec = {
       provides = [Z_c];
       uses = [
-        Z_u_num
+        Z_u_num;
+        Z_c_scalar
       ];
     };
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
       uses = [
         Z_c, Z_u_num;
+        Z_c_scalar, Z_u_num;
         Z_c, Z_c_low_level;
+        Z_c, Z_c_scalar;
         Z_c_low_level, Z_c_points_to;
       ];
     }
@@ -285,8 +288,15 @@ struct
       declare_variable v man sman flow |>
       Option.return
 
-    | S_assign({ ekind = E_var _}, rval) ->
-      None
+    | S_assign({ ekind = E_var _} as lval, rval) when is_c_scalar_type lval.etyp ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_scalar) rval flow |>
+        post_eval man @@ fun rval flow ->
+
+        let stmt = { stmt with skind = S_assign (lval, rval) } in
+        sman.post ~zone:Z_c_scalar stmt flow
+      )
+
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c,Z_c_low_level) lval flow |> Option.return |> Option.lift @@
@@ -304,10 +314,111 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
+  (** Dereference a base and an offset *)
+  let deref_base base offset typ range man flow =
+    let length = mk_length_var base range in
+
+    eval_base_size base range man flow |>
+    Eval.bind @@ fun size flow ->
+
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+    Eval.bind @@ fun size flow ->
+
+    man.eval ~zone:(Z_c, Z_u_num) offset flow |>
+    Eval.bind @@ fun offset flow ->
+
+    (* Compute the offset in bytes *)
+    let elm_size = sizeof_type typ in
+    let offset =
+      (* Pointer to void => return size in bytes *)
+      if is_c_void_type typ then offset
+      else
+      if Z.equal elm_size Z.one
+      then offset
+      else div size (of_z elm_size range) range
+    in
+
+    (* Check that offset ∈ [0, size - elm_size] *)
+    assume_eval (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+      ~fthen:(fun flow ->
+          if Z.gt elm_size Z.one
+          then
+            let l,u = rangeof typ in
+            Eval.singleton (mk_z_interval l u ~typ range) flow
+          else
+            switch_eval [
+              (* before case *)
+              (* Offset condition: offset ∈ [0, length[ *)
+              (* Evaluation: [1; 255] if unsigned, [-128, 127] otherwise *)
+              [
+                mk_binop offset O_ge (mk_zero range) range, true;
+                mk_binop offset O_lt length range, true;
+              ],
+              (fun flow ->
+                 if is_signed typ = false then
+                   Eval.singleton (mk_int_interval 1 255 ~typ range) flow
+                 else
+                   Eval.singleton (mk_int_interval (-128) 127 ~typ range) flow
+              );
+
+              (* at case *)
+              (* Offset condition: offset = length *)
+              (* Evaluation: 0 *)
+              [
+                mk_binop offset O_eq length range, true;
+              ],
+              (fun flow -> Eval.singleton (mk_zero ~typ range)flow)
+              ;
+
+              (* After case *)
+              (* Offset condition: offset > length *)
+              (* Evaluation: [0; 255] if unsigned, [-128, 127] otherwise *)
+              [
+                mk_binop offset O_gt length range, true;
+              ],
+              (fun flow ->
+                 if is_signed typ = false then
+                   Eval.singleton (mk_int_interval 0 255 ~typ range) flow
+                 else
+                   Eval.singleton (mk_int_interval (-128) 127 ~typ range) flow
+              );
+
+            ] ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          raise_alarm Alarms.AOutOfBound range ~bottom:true man flow |>
+          Eval.empty_singleton
+        )
+      ~zone:Z_u_num man flow
+
+
+  (** Abstract evaluation of a dereference *)
+  let deref p range man flow =
+    man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
+    Eval.bind @@ fun pt flow ->
+
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_alarm Alarms.ANullDeref range ~bottom:true man flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to P_invalid ->
+      raise_alarm Alarms.AInvalidDeref range ~bottom:true man flow |>
+      Eval.empty_singleton
+
+    | E_c_points_to (P_block (base, offset)) ->
+      deref_base base offset (under_pointer_type p.etyp) range man flow
+
+    | _ -> assert false
+
+
   (** Evaluations entry point *)
   let eval zone exp man flow =
     match ekind exp with
-    | E_c_deref p -> assert false
+    | E_c_deref p ->
+      deref p exp.erange man flow |>
+      Option.return
 
     | _ -> None
 

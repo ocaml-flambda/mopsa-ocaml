@@ -152,6 +152,7 @@ struct
   }
 
   let rec eval zone exp man flow =
+    debug "eval %a" pp_expr exp;
     let range = erange exp in
     match ekind exp with
     | E_binop(op, e, e') when op |> is_c_div &&
@@ -312,6 +313,7 @@ struct
       |> Option.return
 
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) ->
+      debug "constant";
       Eval.singleton {exp with etyp = to_universal_type exp.etyp} flow
       |> Option.return
 
