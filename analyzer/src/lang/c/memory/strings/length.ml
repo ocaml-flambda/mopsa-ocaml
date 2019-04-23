@@ -135,14 +135,12 @@ struct
 
     match scope, init with
     (** Uninitialized global variable *)
-    | Variable_global, None
-    | Variable_file_static _, None ->
+    | Variable_global, None | Variable_file_static _, None ->
       (* The variable is filled with 0 (C99 6.7.8.10) *)
       sman.post (mk_assign length (mk_zero range) range) flow
 
     (** Uninitialized local variable *)
-    | Variable_local _, None
-    | Variable_func_static _, None ->
+    | Variable_local _, None | Variable_func_static _, None ->
       (* The value of the variable is undetermined (C99 6.7.8.10), so
          the first zero can be in offsets [0, size]
       *)
@@ -189,68 +187,68 @@ struct
       )
     in
 
-    (* FIXME: assignments of multi-bytes not supported for the moment *)
-    if Z.gt elm_size Z.one then
-      assign_interval (mk_zero range) size flow
-    else
-      (* Check that offset in [0, size[ *)
-      assume_post (mk_in offset (mk_zero range) size ~right_strict:true range)
-        ~fthen:(fun flow ->
-            (* Safe cases *)
-            switch_post [
-              (* set0 case *)
-              (* Offset condition: offset ∈ [0, length] *)
-              (* RHS condition: rhs = 0 *)
-              (* Transformation: length := 0; *)
-              [
-                mk_binop offset O_ge (mk_zero range) range, true;
-                mk_binop offset O_le length range, true;
-                mk_binop rhs O_eq (mk_zero range) range, true;
-              ],
-              (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
-              ;
+    (* Check that offset ∈ [0, size - elm_size] *)
+    assume_post (mk_in offset (mk_zero range) (sub size (mk_z elm_size range) range) range)
+      ~fthen:(fun flow ->
+          if Z.gt elm_size Z.one
+          then
+            (* FIXME: assignments of multi-bytes not supported for the moment *)
+            assign_interval (mk_zero range) size flow
+          else
+          switch_post [
+            (* set0 case *)
+            (* Offset condition: offset ∈ [0, length] *)
+            (* RHS condition: rhs = 0 *)
+            (* Transformation: length := 0; *)
+            [
+              mk_binop offset O_ge (mk_zero range) range, true;
+              mk_binop offset O_le length range, true;
+              mk_binop rhs O_eq (mk_zero range) range, true;
+            ],
+            (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
+            ;
 
-              (* setnon0 case *)
-              (* Offset condition: offset = length *)
-              (* RHS condition: rhs ≠ 0 *)
-              (* Transformation: length := [offset + 1, size]; *)
-              [
-                mk_binop offset O_eq length range, true;
-                mk_binop rhs O_ne (mk_zero range) range, true;
-              ],
-              (fun flow -> assign_interval (add offset (one range) range) size flow)
-              ;
+            (* setnon0 case *)
+            (* Offset condition: offset = length *)
+            (* RHS condition: rhs ≠ 0 *)
+            (* Transformation: length := [offset + 1, size]; *)
+            [
+              mk_binop offset O_eq length range, true;
+              mk_binop rhs O_ne (mk_zero range) range, true;
+            ],
+            (fun flow -> assign_interval (add offset (one range) range) size flow)
+            ;
 
-              (* First unchanged case *)
-              (* Offset condition: offset ∈ [0, length[ *)
-              (* RHS condition: rhs ≠ 0 *)
-              (* Transformation: nop; *)
-              [
-                mk_binop offset O_ge (mk_zero range) range, true;
-                mk_binop offset O_lt length range, true;
-                mk_binop rhs O_ne (mk_zero range) range, true;
-              ],
-              (fun flow -> Post.return flow)
-              ;
+            (* First unchanged case *)
+            (* Offset condition: offset ∈ [0, length[ *)
+            (* RHS condition: rhs ≠ 0 *)
+            (* Transformation: nop; *)
+            [
+              mk_binop offset O_ge (mk_zero range) range, true;
+              mk_binop offset O_lt length range, true;
+              mk_binop rhs O_ne (mk_zero range) range, true;
+            ],
+            (fun flow -> Post.return flow)
+            ;
 
-              (* Second unchanged case *)
-              (* Offset condition: offset > length *)
-              (* RHS condition: ⊤ *)
-              (* Transformation: nop; *)
-              [
-                mk_binop offset O_gt length range, true;
-              ],
-              (fun flow -> Post.return flow)
+            (* Second unchanged case *)
+            (* Offset condition: offset > length *)
+            (* RHS condition: ⊤ *)
+            (* Transformation: nop; *)
+            [
+              mk_binop offset O_gt length range, true;
+            ],
+            (fun flow -> Post.return flow)
 
 
-            ] ~zone:Z_u_num man flow
-          )
-        ~felse:(fun flow ->
-            (* Unsafe case *)
-            let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
-            Post.return flow'
-          )
-        ~zone:Z_u_num man flow
+          ] ~zone:Z_u_num man flow
+        )
+      ~felse:(fun flow ->
+          (* Unsafe case *)
+          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
+          Post.return flow'
+        )
+      ~zone:Z_u_num man flow
 
 
   (** Assignment abstract transformer *)

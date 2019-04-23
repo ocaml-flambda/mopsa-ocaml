@@ -134,7 +134,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.memory.machine_numbers"
+  let name = "c.memory.scalars.machine_numbers"
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
@@ -360,8 +360,43 @@ struct
     Eval.singleton exp' flow
 
 
+  (* Declaration of a scalar numeric variable *)
+  let declare_var v range man sman flow =
+    let init, scope =
+      match v.vkind with
+      | V_c { var_init; var_scope } -> var_init, var_scope
+      | _ -> assert false
+    in
+
+    let vv = mk_var (to_universal_var v) range in
+
+    match scope, init with
+    (** Uninitialized global variable *)
+    | Variable_global, None | Variable_file_static _, None ->
+      (* The variable is initialized with 0 (C99 6.7.8.10) *)
+      sman.post ~zone:Z_u_num (mk_assign vv (mk_zero range) range) flow
+
+    (** Uninitialized local variable *)
+    | Variable_local _, None | Variable_func_static _, None ->
+      (* The value of the variable is undetermined (C99 6.7.8.10) *)
+      let l,u = rangeof v.vtyp in
+      sman.post ~zone:Z_u_num (mk_assign vv (mk_z_interval l u range) range) flow
+
+    | _, Some (C_init_expr e) ->
+      man.eval ~zone:(Z_c_scalar,Z_u_num) e flow |>
+      post_eval man @@ fun e flow ->
+
+      sman.post ~zone:Z_u_num (mk_assign vv e range) flow
+
+    | _ -> assert false
+
+
   let exec zone stmt man stman flow =
     match skind stmt with
+    | S_c_declaration v when is_c_num_type v.vtyp ->
+      declare_var v stmt.srange man stman flow |>
+      Option.return
+
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
       Option.return |> Option.lift @@ post_eval stman @@
