@@ -22,18 +22,21 @@
 (** String length abstraction.
 
     This abstract domain implements the technique presented in [1]. It
-    abstracts C strings by the position of the first `\0` character in
-    the base memory block. The length is kept in an underlying numeric
-    domain. Therefore, the domain is implemented as a stack domain, to
-    allow sharing the underlying domain with others.
+    abstracts C strings by the position of the first `\0` character within the
+    base memory block.
 
-    The domain is stateless. It abstraction is performed by rewriting
-    statements/expressions in C into equivalent ones in Universal using
-    the length variable.
+    The length is kept in an underlying numeric domain. Therefore, the domain
+    is implemented as a stack domain, to allow sharing the underlying domain
+    with others.
+
+    The domain is stateless, because abstraction is performed by rewriting
+    statements/expressions in C into equivalent ones in Universal over
+    the length variable. Not internal state is required.
 
     [1] M. Journault, A. Miné, A. Ouadjaout. Modular static analysis
     of string manipulations in C programs. SAS 2018. LNCS, vol. 11002.
 *)
+
 
 open Mopsa
 open Universal.Ast
@@ -43,8 +46,12 @@ open Zone
 open Common.Base
 open Common.Points_to
 
+
 module Domain =
 struct
+
+  (** Domain header *)
+  (** ************* *)
 
   let name = "c.memory.strings.length"
 
@@ -61,11 +68,58 @@ struct
 
   let init prog man flow = flow
 
+
+  (** {2 Length auxiliary variable} *)
+  (** ***************************** *)
+
+  let mk_var_length (v:var) : var =
+    let org_vname = v.org_vname ^ "_length" in
+    let uniq_vname = v.uniq_vname ^ "_length" in
+    let vuid = v.vuid in (** FIXME: this is not safe. We should use
+                             flow-insensitive contexts to keep bindings of
+                             C vars <-> length vars, so we generate new
+                             vuid if a binding does not already exists. *)
+    mkv org_vname uniq_vname vuid T_int
+
+
+  (** {2 Abstract transformers} *)
+  (** ************************* *)
+
+  (** Initialize the length of a global variable *)
+  let init_global_var_length v man flow =
+    let init, range = match v.vkind with
+      | V_c { var_init; var_range } -> var_init, var_range
+      | _ -> assert false
+    in
+
+    let l = mk_var (mk_var_length v) ~mode:STRONG range in
+
+    (** Add the variable in the underlying numeric domain *)
+    let flow = man.exec ~zone:Z_u_num (mk_add l range) flow in
+
+    match init with
+    | None ->
+      (** Uninitialized global variables are filled with 0s. See C99 6.7.8.10 *)
+      man.exec ~zone:Z_u_num (mk_assign l (mk_zero range) range) flow
+
+    | Some init ->
+      assert false
+
+
+  (** Abstract transformers entry point *)
   let exec zone stmt man flow =
     panic ~loc:__LOC__ "exec not implemented"
 
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
+
   let eval zone exp man flow =
     panic ~loc:__LOC__ "eval not implemented"
+
+
+  (** {2 Query handler} *)
+  (** ***************** *)
 
   let ask query man flow = None
 
