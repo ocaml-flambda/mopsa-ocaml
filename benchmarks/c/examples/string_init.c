@@ -6,4 +6,5 @@ void main() {
   char local_uninitilized[10];
 
   normal[2] = '\0';
+  normal[2] = 'b';
 }

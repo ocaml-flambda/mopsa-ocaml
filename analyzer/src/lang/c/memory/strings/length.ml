@@ -188,13 +188,33 @@ struct
 
     switch_post [
       (* set0 case *)
+      (* Offset condition: offset ∈ [0, length] ∧ offset < size *)
+      (* RHS condition: rhs = 0 *)
+      (* Transformation: length := 0; *)
       [
         mk_binop offset O_ge (mk_zero range) range, true;
         mk_binop offset O_le length range, true;
         mk_binop offset O_lt size range, true;
         mk_binop rhs O_eq (mk_zero range) range, true;
       ],
-      fun flow -> man.post (mk_assign length offset range) flow
+      (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
+      ;
+
+      (* setnon0 case *)
+      (* Offset condition: offset = length ∧ offset < size *)
+      (* RHS condition: rhs ≠ 0 *)
+      (* Transformation: length := [offset + 1, size]; *)
+      [
+        mk_binop offset O_eq length range, true;
+        mk_binop offset O_lt size range, true;
+        mk_binop rhs O_ne (mk_zero range) range, true;
+      ],
+      (fun flow -> man.post ~zone:Z_u_num (mk_forget length range) flow |>
+                   Post.bind (
+                     man.post ~zone:Z_u_num (mk_assume ((mk_in length (add offset (one range) range) size range)) range)
+                   )
+      )
+
     ] ~zone:Z_u_num man flow
 
 
