@@ -108,13 +108,13 @@ struct
     | C_init_expr {ekind = E_constant(C_c_string (s, _))} ->
       let rec aux j =
         if Z.equal j size
-        then size
+        then Z.pred size
         else if Z.lt j (Z.of_int @@ String.length s)
         then
           if int_of_char (String.get s (Z.to_int j)) = 0
           then j
           else aux Z.(j + one)
-          else j
+        else j
       in
       aux Z.zero
 
