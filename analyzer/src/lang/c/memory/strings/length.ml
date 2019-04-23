@@ -214,6 +214,19 @@ struct
                      man.post ~zone:Z_u_num (mk_assume ((mk_in length (add offset (one range) range) size range)) range)
                    )
       )
+      ;
+
+      (* unchanged case *)
+      (* Offset condition: offset ∈ [0, length[ ∧ offset < size *)
+      (* RHS condition: rhs ≠ 0 *)
+      (* Transformation: nop; *)
+      [
+        mk_binop offset O_ge (mk_zero range) range, true;
+        mk_binop offset O_lt length range, true;
+        mk_binop offset O_lt size range, true;
+        mk_binop rhs O_ne (mk_zero range) range, true;
+      ],
+      (fun flow -> Post.return flow)
 
     ] ~zone:Z_u_num man flow
 

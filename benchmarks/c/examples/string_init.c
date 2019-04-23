@@ -7,4 +7,6 @@ void main() {
 
   normal[2] = '\0';
   normal[2] = 'b';
+
+  string_longer_than_size[0] = '1';
 }
