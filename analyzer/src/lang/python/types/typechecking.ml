@@ -146,6 +146,34 @@ struct
    *             *   Iter.join annot (hd, tl) (hd', tl') *\)
    *     ) man a a' *)
 
+
+  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
+    match query with
+    | Framework.Engines.Interactive.Q_print_var ->
+      Some (
+        fun fmt v ->
+          let amap, tmap = get_domain_env T_cur man flow in
+          let ret = ref [] in
+          AD.AMap.iter (fun var addrs  ->
+              if var.org_vname = v then
+                AD.ASet.iter (fun addr ->
+                    match addr with
+                    | Def addr ->
+                      let ty = TD.TMap.find addr tmap.abs_heap in
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.uniq_vname pp_addr addr TD.Polytypeset.print ty) :: !ret
+                    | Undef_local ->
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.uniq_vname) :: !ret
+                    | Undef_global ->
+                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_global" var.uniq_vname) :: !ret
+                  ) addrs
+            ) amap;
+          Format.fprintf fmt "@[<v>%a@]"
+            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+               (fun fmt pp -> pp fmt)
+            ) !ret
+      )
+    | _ -> Iter.ask query man flow
+
 end
 
 let () = Framework.Core.Sig.Lowlevel.Domain.register_domain (module Domain)
