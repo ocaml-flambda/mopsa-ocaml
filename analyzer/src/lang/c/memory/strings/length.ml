@@ -157,6 +157,101 @@ struct
     | _ -> assert false
 
 
+  (** Assignment to a base and an offset *)
+  let assign_base base offset rhs typ range man sman flow =
+    let length = mk_length_var base range in
+
+    eval_base_size base range man flow |>
+    post_eval man @@ fun size flow ->
+
+    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+    post_eval man @@ fun size flow ->
+
+    man.eval ~zone:(Z_c, Z_u_num) offset flow |>
+    post_eval man @@ fun offset flow ->
+
+    (* Compute the offset in bytes *)
+    let elm_size = sizeof_type typ in
+    let offset =
+      (* Pointer to void => return size in bytes *)
+      if is_c_void_type typ then offset
+      else
+      if Z.equal elm_size Z.one
+      then offset
+      else div size (of_z elm_size range) range
+    in
+
+    (* Utility function to assign an interval *)
+    let assign_interval l u flow =
+      man.post ~zone:Z_u_num (mk_forget length range) flow |>
+      Post.bind (
+        man.post ~zone:Z_u_num (mk_assume ((mk_in length l u range)) range)
+      )
+    in
+
+    (* FIXME: assignments of multi-bytes not supported for the moment *)
+    if Z.gt elm_size Z.one then
+      assign_interval (mk_zero range) size flow
+    else
+      (* Check that offset in [0, size[ *)
+      assume_post (mk_in offset (mk_zero range) size ~right_strict:true range)
+        ~fthen:(fun flow ->
+            (* Safe cases *)
+            switch_post [
+              (* set0 case *)
+              (* Offset condition: offset ∈ [0, length] *)
+              (* RHS condition: rhs = 0 *)
+              (* Transformation: length := 0; *)
+              [
+                mk_binop offset O_ge (mk_zero range) range, true;
+                mk_binop offset O_le length range, true;
+                mk_binop rhs O_eq (mk_zero range) range, true;
+              ],
+              (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
+              ;
+
+              (* setnon0 case *)
+              (* Offset condition: offset = length *)
+              (* RHS condition: rhs ≠ 0 *)
+              (* Transformation: length := [offset + 1, size]; *)
+              [
+                mk_binop offset O_eq length range, true;
+                mk_binop rhs O_ne (mk_zero range) range, true;
+              ],
+              (fun flow -> assign_interval (add offset (one range) range) size flow)
+              ;
+
+              (* First unchanged case *)
+              (* Offset condition: offset ∈ [0, length[ *)
+              (* RHS condition: rhs ≠ 0 *)
+              (* Transformation: nop; *)
+              [
+                mk_binop offset O_ge (mk_zero range) range, true;
+                mk_binop offset O_lt length range, true;
+                mk_binop rhs O_ne (mk_zero range) range, true;
+              ],
+              (fun flow -> Post.return flow)
+              ;
+
+              (* Second unchanged case *)
+              (* Offset condition: offset > length *)
+              (* RHS condition: ⊤ *)
+              (* Transformation: nop; *)
+              [
+                mk_binop offset O_gt length range, true;
+              ],
+              (fun flow -> Post.return flow)
+
+
+            ] ~zone:Z_u_num man flow
+          )
+        ~felse:(fun flow ->
+            (* Unsafe case *)
+            let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
+            Post.return flow'
+          )
+        ~zone:Z_u_num man flow
+
 
   (** Assignment abstract transformer *)
   let assign lval rhs range man sman flow =
@@ -169,78 +264,19 @@ struct
     man.eval ~zone:(Z_c_low_level, Z_c_points_to) p flow |>
     post_eval man @@ fun pt flow ->
 
-    let base, offset =
-      match ekind pt with
-      | E_c_points_to (P_block (base, offset)) -> base, offset
-      | _ -> assert false
-    in
+    match ekind pt with
+    | E_c_points_to P_null ->
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
+      Post.return
 
-    let length = mk_length_var base range in
+    | E_c_points_to P_invalid ->
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow |>
+      Post.return
 
-    eval_base_size base range man flow |>
-    post_eval man @@ fun size flow ->
+    | E_c_points_to (P_block (base, offset)) ->
+      assign_base base offset rhs lval.etyp range man sman flow
 
-    man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
-    post_eval man @@ fun size flow ->
-
-    man.eval ~zone:(Z_c, Z_u_num) offset flow |>
-    post_eval man @@ fun offset flow ->
-
-    switch_post [
-      (* set0 case *)
-      (* Offset condition: offset ∈ [0, length] ∧ offset < size *)
-      (* RHS condition: rhs = 0 *)
-      (* Transformation: length := 0; *)
-      [
-        mk_binop offset O_ge (mk_zero range) range, true;
-        mk_binop offset O_le length range, true;
-        mk_binop offset O_lt size range, true;
-        mk_binop rhs O_eq (mk_zero range) range, true;
-      ],
-      (fun flow -> man.post ~zone:Z_u_num (mk_assign length offset range) flow)
-      ;
-
-      (* setnon0 case *)
-      (* Offset condition: offset = length ∧ offset < size *)
-      (* RHS condition: rhs ≠ 0 *)
-      (* Transformation: length := [offset + 1, size]; *)
-      [
-        mk_binop offset O_eq length range, true;
-        mk_binop offset O_lt size range, true;
-        mk_binop rhs O_ne (mk_zero range) range, true;
-      ],
-      (fun flow -> man.post ~zone:Z_u_num (mk_forget length range) flow |>
-                   Post.bind (
-                     man.post ~zone:Z_u_num (mk_assume ((mk_in length (add offset (one range) range) size range)) range)
-                   )
-      )
-      ;
-
-      (* First unchanged case *)
-      (* Offset condition: offset ∈ [0, length[ ∧ offset < size *)
-      (* RHS condition: rhs ≠ 0 *)
-      (* Transformation: nop; *)
-      [
-        mk_binop offset O_ge (mk_zero range) range, true;
-        mk_binop offset O_lt length range, true;
-        mk_binop offset O_lt size range, true;
-        mk_binop rhs O_ne (mk_zero range) range, true;
-      ],
-      (fun flow -> Post.return flow)
-      ;
-
-      (* Second unchanged case *)
-      (* Offset condition: offset > length ∧ offset < size *)
-      (* RHS condition: ⊤ *)
-      (* Transformation: nop; *)
-      [
-        mk_binop offset O_gt length range, true;
-        mk_binop offset O_lt size range, true;
-      ],
-      (fun flow -> Post.return flow)
-
-
-    ] ~zone:Z_u_num man flow
+    | _ -> assert false
 
 
 

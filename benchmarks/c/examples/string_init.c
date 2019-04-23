@@ -4,8 +4,10 @@ char string_longer_than_size[3] = "abcd";
 
 void main() {
   char local_uninitilized[10];
+  char *p;
+  p = normal;
 
-  normal[2] = '\0';
+  p[2] = '\0';
   normal[2] = 'b';
 
   string_longer_than_size[0] = '1';
