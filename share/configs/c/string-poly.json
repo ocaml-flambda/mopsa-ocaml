@@ -35,7 +35,17 @@
 
             // Memory model
 	    {
-                "apply": "c.memory.strings.length",
+                "apply": {
+                    "compose": [
+                        "c.memory.strings.length",
+                        {
+                            "seq": [
+			        "c.memory.pointer",
+			        "c.memory.machine_numbers"
+                            ]
+                        }
+                    ]
+                },
 		"on": {
                     "product": [
                         "universal.numeric.relational.polyhedra",
