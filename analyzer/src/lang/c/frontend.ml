@@ -43,6 +43,9 @@ let opt_include_dirs = ref []
 let opt_make_target = ref ""
 (** Name of the target binary to analyze *)
 
+let opt_without_libc = ref false
+(** Disable stubs of the standard library *)
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -64,6 +67,13 @@ let () =
     doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
     spec = ArgExt.Set_string opt_make_target;
     default = "";
+  };
+  register_language_option "c" {
+    key = "-without-libc";
+    category = "C";
+    doc = " disable stubs of the standard C library.";
+    spec = ArgExt.Set opt_without_libc;
+    default = "false";
   };
   ()
 
@@ -187,12 +197,25 @@ and parse_file (opts: string list) (file: string) ctx =
   C_parser.parse_file file opts' ctx
 
 and parse_stubs ctx () =
-  let stubs = [
-    Config.Paths.resolve_stub "c" "mopsa/mopsa.c";
-    Config.Paths.resolve_stub "c" "libc/libc.c";
-  ]
+  (** Check if main has arguments argc and argv *)
+  let has_arg =
+    try
+      let main = Clang_to_C.find_function "main" ctx in
+      Array.length main.C_AST.func_parameters <> 0
+    with Not_found -> false
   in
-  List.iter (fun stub -> parse_file [] stub ctx) stubs
+
+  if has_arg then
+    parse_file [] (Config.Paths.resolve_stub "c" "mopsa/init_arg.c") ctx
+  ;
+
+  (** Add stubs of the standard library *)
+  if not !opt_without_libc then
+    parse_file [] (Config.Paths.resolve_stub "c" "libc/libc.c") ctx
+  ;
+  
+  ()
+
 
 and from_project prj =
   (* Preliminary parsing of functions *)

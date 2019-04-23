@@ -98,7 +98,7 @@ let rec domain_lowlevel config : (module Sig.Domain.Lowlevel.DOMAIN) =
   | S_chain(op, l) -> domain_chain_lowlevel op l
   | S_apply(s,d) -> domain_apply_lowlevel s d
   | S_cast c -> domain_cast_lowlevel c
-  | _ -> assert false
+  | _ -> Exceptions.panic "unsupported domain configuration:@, %a" pp_config config
 
 and domain_chain_lowlevel (op:operator) (l:config list) : (module Sig.Domain.Lowlevel.DOMAIN) =
   match l with

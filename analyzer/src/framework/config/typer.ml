@@ -172,7 +172,7 @@ let subset (s1:signature) (s2:signature) =
   | _ -> false
 
 
-let strict_subset (s1:signature) (s2:signature) =
+let strict_subset (s1:signature) (s2:signature) =  
   if s1 = s2 then false
   else subset s1 s2
 
@@ -200,16 +200,20 @@ let unify c1 c2 =
 
 (** Return the smallest signature of a list of configurations *)
 let smallest_signature (l:config list) : signature =
-  List.fold_left (fun min c ->
-      let s = c.signature in
-      if strict_subset min s then s else min
-    ) S_stateless l
+  match l with
+  | [] -> assert false
+  | [c] -> c.signature
+  | hd :: tl ->
+    List.fold_left (fun min c ->
+        let s = c.signature in
+        if strict_subset min s then s else min
+      ) hd.signature tl
 
 (** Find the highest signature below [s] verifying the predicate [pred] *)
 let rec find_available_signature s pred =
-  match pred s with
-  | true -> s
-  | false -> find_available_signature (downgrade s) pred
+  if pred s
+  then s
+  else find_available_signature (downgrade s) pred
 
 (** Create a chain of a list of unified configurations *)
 let unified_chain spec op l =

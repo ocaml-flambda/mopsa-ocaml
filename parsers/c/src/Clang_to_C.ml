@@ -127,7 +127,9 @@ let new_uid ctx =
   ctx.ctx_uid <- i;
   i
 
-
+let find_function name ctx =
+  Hashtbl.find ctx.ctx_funcs name
+  
     
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (coms:comment list) (macros:C.macro list) =
 
