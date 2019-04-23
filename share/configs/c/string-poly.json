@@ -28,7 +28,7 @@
             "c.desugar.stub_init",
             "c.desugar.cond_expr",
 
-	    // Resouce management
+	    // Resource management
             "universal.heap.recency.by_kind_callstack_range",
 	    "c.resources.file",
 	    "c.resources.common",

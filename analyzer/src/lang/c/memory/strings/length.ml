@@ -216,7 +216,7 @@ struct
       )
       ;
 
-      (* unchanged case *)
+      (* First unchanged case *)
       (* Offset condition: offset ∈ [0, length[ ∧ offset < size *)
       (* RHS condition: rhs ≠ 0 *)
       (* Transformation: nop; *)
@@ -227,6 +227,18 @@ struct
         mk_binop rhs O_ne (mk_zero range) range, true;
       ],
       (fun flow -> Post.return flow)
+      ;
+
+      (* Second unchanged case *)
+      (* Offset condition: offset > length ∧ offset < size *)
+      (* RHS condition: ⊤ *)
+      (* Transformation: nop; *)
+      [
+        mk_binop offset O_gt length range, true;
+        mk_binop offset O_lt size range, true;
+      ],
+      (fun flow -> Post.return flow)
+
 
     ] ~zone:Z_u_num man flow
 
@@ -244,8 +256,8 @@ struct
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
       man.eval ~zone:(Z_c,Z_c_low_level) lval flow |> Option.return |> Option.lift @@
-
       post_eval man @@ fun lval flow ->
+
       man.eval ~zone:(Z_c,Z_u_num) rval flow |>
       post_eval man @@ fun rval flow ->
 
