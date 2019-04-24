@@ -132,7 +132,10 @@ struct
   let advance_offset (op:operator) (ptr:ptr) (o:expr) t range : ptr =
     let size = pointed_size t in
     let advance oo =
-      mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
+      if Z.equal size Z.one then
+        mk_binop oo op o range ~etyp:T_int
+      else
+        mk_binop oo op (mk_binop o O_mult (mk_z size range) range ~etyp:T_int) range ~etyp:T_int
     in
     match ptr with
     | ADDROF (b, oo) -> ADDROF (b, advance oo)

@@ -60,7 +60,7 @@ struct
       (man:('a, unit) man)
       (flow:'a flow)
     : 'a flow * 'a flow option =
-    debug "eval formula %a@\n%a" pp_formula f (Flow.print man.lattice) flow;
+    debug "eval formula@, %a@, in@, %a" pp_formula f (Flow.print man.lattice) flow;
     match f.content with
     | F_expr e ->
       man.exec (mk_assume e f.range) flow,
@@ -162,17 +162,20 @@ struct
     in
 
 
-    (* Replace [v] in [ff] with a quantified expression *)
+    (* Replace [v] in [ff] with a quantified expression in case of ∀ quantifier *)
     let ff1 =
-      visit_expr_in_formula
-        (fun e ->
-           match ekind e with
-           | E_var (vv, _) when compare_var v vv = 0 ->
-             Keep { e with ekind = E_stub_quantified (q, v, s) }
+      match q with
+      | EXISTS -> f
+      | FORALL ->
+        visit_expr_in_formula
+          (fun e ->
+             match ekind e with
+             | E_var (vv, _) when compare_var v vv = 0 ->
+               Keep { e with ekind = E_stub_quantified (FORALL, v, s) }
 
-           | _ -> VisitParts e
-        )
-        f
+             | _ -> VisitParts e
+          )
+          f
     in
 
     let ftrue, _ = eval_formula ff1 ~negate:false man flow in
@@ -192,9 +195,9 @@ struct
             (fun e ->
                match ekind e with
                | E_stub_quantified(FORALL, vv, s) when compare_var v vv = 0 ->
-                 VisitParts { e with ekind = E_stub_quantified(EXISTS, v, s) }
+                 VisitParts { e with ekind = E_var(vv, STRONG) }
 
-               | E_stub_quantified(EXISTS, vv, s) when compare_var v vv = 0 ->
+               | E_stub_quantified(EXISTS, vv, _) when compare_var v vv = 0 ->
                  VisitParts { e with ekind = E_stub_quantified(FORALL, v, s) }
 
                | _ -> VisitParts e

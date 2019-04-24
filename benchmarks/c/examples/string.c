@@ -1,26 +1,27 @@
-unsigned char s[10] = "abcd";
-
 /*$
- * requires: exists unsigned int i in [0, size(s) - 1]: s[i] == 0;
- * ensures:  return in [0, size(s) - 1];
- * ensures:  s[return] == 0;
- * ensures:  forall unsigned int i in [0, return - 1]: s[i] != 0;
+ * requires: exists unsigned int k in [0, size(s) - 1]: s[k] == 0;
+ *
+ * case "empty string" {
+ *   assumes: s[0] == 0;
+ *   ensures: return == 0;
+ * }
+ *
+ * case "non empty string" {
+ *   assumes: s[0] != 0;
+ *   ensures: return in [1, size(s) - 1];
+ *   ensures: s[return] == 0;
+ *   ensures: forall unsigned int k in [0, return - 1]: s[k] != 0;
+ * }
+ *
  */
 unsigned int strlen(unsigned char*s);
 
 void main() {
-  unsigned char *p = s;
-
-  p[2] = '\0';
-  s[2] = 'b';
-  s[2] = '\0';
-
-  unsigned char before = s[0];
-  unsigned char at = p[2];
-  unsigned char after = s[3];
-
-  int len1 = 0;
-  while (s[len1]) len1++;
-
-  int len2 = strlen(s);
+  unsigned char s[10];
+  unsigned int n = _mopsa_rand_int(0, 9), i;
+  for(i = 0; i < n; i ++) {
+    s[i] = 'a';
+  }
+  s[i] = '\0';
+  int len = strlen(s);
 }
