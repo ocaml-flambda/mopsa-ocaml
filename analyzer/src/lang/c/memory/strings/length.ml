@@ -280,7 +280,8 @@ struct
     | _ -> assert false
 
 
-  (** Compute the boundaries of a quantified offset *)
+  (** Compute symbolic boundaries of a quantified offset. *)
+  (* FIXME: works only for linear expressions *)
   let bound_quantified_offset offset =
     let rec maximize exp =
       match ekind exp with
@@ -307,10 +308,8 @@ struct
 
   (** Cases of the abstract transformer for tests *(p + ∀i) ? 0 *)
   let assume_quantified_zero_cases op base offset range man sman flow =
+    (** Get symbolic bounds of the offset *)
     let min, max = bound_quantified_offset offset in
-
-    debug "min = %a" pp_expr min;
-    debug "max = %a" pp_expr max;
 
     eval_base_size base range man flow |>
     post_eval man @@ fun size flow ->
@@ -326,7 +325,7 @@ struct
 
     let length = mk_length_var base range in
 
-    let bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
+    let mk_bottom flow = Flow.set T_cur man.lattice.bottom man.lattice flow in
 
     (* Safety condition: [min, max] ⊆ [0, size[ *)
     assume_post (
@@ -339,29 +338,41 @@ struct
       ~fthen:(fun flow ->
           switch_post [
             (* nonzero case *)
-            (* Range condition: max < length *)
-            (* Transformation: nop if op = O_ne, ⊥ if op = O_eq *)
+            (* Range condition: max < length
+
+               |--------|***********|---------|--------|->
+               0       min         max     length     size
+
+                     ∀ i ∈ [min, max] : s[i] != 0
+            *)
+            (* Transformation: ⊥ if op = O_eq, nop if op = O_ne *)
             [
               mk_binop max O_lt length range, true;
             ],
             (fun flow ->
                match op with
+               | O_eq -> Post.return (mk_bottom flow)
                | O_ne -> Post.return flow
-               | O_eq -> Post.return (bottom flow)
                | _ -> assert false
             )
             ;
 
             (* zero case *)
-            (* Range condition: length ≤ max *)
-            (* Transformation: ⊥ if op = O_ne, nop if op = O_eq *)
+            (* Range condition: length ≤ max
+
+               |--------|***********|********|-------|->
+               0       min        length    max     size
+
+                      ∃ i ∈ [min, max] : s[i] == 0
+            *)
+            (* Transformation: nop if op = O_eq, ⊥ if op = O_ne *)
             [
               mk_in max length size range, true;
             ],
             (fun flow ->
                match op with
-               | O_ne -> Post.return (bottom flow)
                | O_eq -> Post.return flow
+               | O_ne -> Post.return (mk_bottom flow)
                | _ -> assert false
             )
             ;
@@ -408,28 +419,6 @@ struct
 
 
 
-  (** Evaluate initialization expression of scalar declarations *)
-  let eval_scalar_init v range man flow =
-    let info =
-      match v.vkind with
-      | V_c info -> info
-      | _ -> assert false
-    in
-
-    match info.var_init with
-    | None -> Eval.singleton v flow
-    | Some (C_init_expr e) ->
-      man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
-      Eval.bind @@ fun e flow ->
-
-      let init = Some (C_init_expr e) in
-      let v = { v with vkind = V_c { info with var_init = init } } in
-      Eval.singleton v flow
-
-    | _ -> assert false
-
-
-
   (** Transformers entry point *)
   let exec zone stmt man sman flow =
     match skind stmt with
@@ -437,7 +426,21 @@ struct
       (* We need to simplify initialization expression before passing
          the statement to the underlying scalar domains *)
       Some (
-        eval_scalar_init v stmt.srange man flow |>
+        begin
+          match v.vkind with
+          | V_c { var_init = None} ->
+            Eval.singleton v flow
+
+          | V_c ({ var_init = Some (C_init_expr e) } as info) ->
+            man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+            Eval.bind @@ fun e flow ->
+
+            let init = Some (C_init_expr e) in
+            let v = { v with vkind = V_c { info with var_init = init } } in
+            Eval.singleton v flow
+
+          | _ -> assert false
+        end |>
         post_eval man @@ fun v flow ->
 
         let stmt = {stmt with skind = S_c_declaration v} in

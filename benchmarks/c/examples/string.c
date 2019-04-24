@@ -23,5 +23,6 @@ void main() {
     s[i] = 'a';
   }
   s[i] = '\0';
-  int len = strlen(s);
+  int l = strlen(s);
+  _mopsa_print();
 }
