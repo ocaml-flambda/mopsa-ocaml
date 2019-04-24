@@ -103,8 +103,7 @@ struct
 
 
 
-  (* Find the position of the first zero, or reach the end of the
-       allocation space *)
+  (* Find the position of the first zero in an initialization expression *)
   let find_zero typ init =
     let size = sizeof_type typ in
     match init with
@@ -280,10 +279,43 @@ struct
     | _ -> assert false
 
 
+  (** Evaluate initialization expression of scalar declarations *)
+  let eval_scalar_init v range man flow =
+    let info =
+      match v.vkind with
+      | V_c info -> info
+      | _ -> assert false
+    in
+
+    match info.var_init with
+    | None -> Eval.singleton v flow
+    | Some (C_init_expr e) ->
+      man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+      Eval.bind @@ fun e flow ->
+
+      let init = Some (C_init_expr e) in
+      let v = { v with vkind = V_c { info with var_init = init } } in
+      Eval.singleton v flow
+
+    | _ -> assert false
+
+
 
   (** Transformers entry point *)
   let exec zone stmt man sman flow =
     match skind stmt with
+    | S_c_declaration v when is_c_scalar_type v.vtyp ->
+      (* We need to simplify initialization expression before passing
+         the statement to the underlying scalar domains *)
+      Some (
+        eval_scalar_init v stmt.srange man flow |>
+        post_eval man @@ fun v flow ->
+
+        let stmt = {stmt with skind = S_c_declaration v} in
+
+        sman.post ~zone:Z_c_scalar stmt flow
+      )
+
     | S_c_declaration v when is_c_array_type v.vtyp ->
       declare_variable v man sman flow |>
       Option.return
@@ -299,13 +331,24 @@ struct
 
 
     | S_assign(lval, rval) when is_c_scalar_type lval.etyp ->
-      man.eval ~zone:(Z_c,Z_c_low_level) lval flow |> Option.return |> Option.lift @@
-      post_eval man @@ fun lval flow ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
+        post_eval man @@ fun lval flow ->
 
-      man.eval ~zone:(Z_c,Z_u_num) rval flow |>
-      post_eval man @@ fun rval flow ->
+        man.eval ~zone:(Z_c,Z_u_num) rval flow |>
+        post_eval man @@ fun rval flow ->
 
-      assign lval rval stmt.srange man sman flow
+        assign lval rval stmt.srange man sman flow
+      )
+
+    | S_assume(e) ->
+      Some (
+        man.eval ~zone:(Z_c,Z_c_scalar) e flow |>
+        post_eval man @@ fun e flow ->
+
+        let stmt = { stmt with skind = S_assume (e) } in
+        sman.post ~zone:Z_c_scalar stmt flow
+      )
 
 
     | _ -> None
