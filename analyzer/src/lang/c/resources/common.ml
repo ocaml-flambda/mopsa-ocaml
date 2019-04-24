@@ -150,13 +150,33 @@ struct
         Eval.singleton exp flow'
 
       | _ -> assert false
-        end
+      end
 
-    (* 𝔼⟦ size(@resource) ⟧ *)
-    | E_stub_builtin_call(SIZE, { ekind = E_addr ({ addr_kind = Stubs.Ast.A_stub_resource _ } as addr)}) ->
-      let bytes = mk_bytes_var addr exp.erange in
-      Eval.singleton bytes flow |>
-      Option.return
+    | E_stub_builtin_call(SIZE, p) ->
+      Some (
+        man.eval ~zone:(Z_c, Z_c_points_to) p flow |>
+        Eval.bind @@ fun pt flow ->
+
+        let base =
+          match ekind pt with
+          | E_c_points_to (P_block (base,_)) -> base
+          | _ -> assert false
+        in
+
+        match base with
+        | V var ->
+          Eval.singleton (mk_z (sizeof_type var.vtyp) exp.erange ~typ:ul) flow
+
+        | S str ->
+          Eval.singleton (mk_int (String.length str + 1) exp.erange ~typ:ul) flow
+
+        | A addr ->
+          let bytes = mk_bytes_var addr exp.erange in
+          Eval.singleton bytes flow
+
+        | Z -> panic ~loc:__LOC__ "eval_base_size: addresses not supported"
+      )
+
 
     | E_stub_attribute({ ekind = E_addr _ }, _) ->
       None
