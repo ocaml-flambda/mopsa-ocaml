@@ -589,7 +589,7 @@ struct
           Eval.singleton (mk_py_false range) flow
 
         | _ ->
-          debug "%a@\n" pp_expr e; assert false
+          Exceptions.panic_at range "%a@\n" pp_expr e
       end
       |> Option.return
 
