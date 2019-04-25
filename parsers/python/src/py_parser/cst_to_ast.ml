@@ -102,15 +102,20 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
       S_return (translate_expr_option range value)
 
     | Assign (targets, value) ->
-      S_block (
-        List.map (fun t -> {skind = S_assign (translate_expr t, translate_expr value); srange = range}) targets
-      )
+      if List.length targets = 1 then
+        (fun t -> S_assign (translate_expr t, translate_expr value)) (List.hd targets)
+      else
+        S_block (
+          List.map (fun t -> {skind = S_assign (translate_expr t, translate_expr value); srange = range}) targets
+        )
+
     | AugAssign (target, op, value) ->
       S_aug_assign (
         translate_expr target,
         O_arithmetic op,
         translate_expr value
       )
+
     | For (target, iter, body, orelse) ->
       S_for (
         translate_expr target,
@@ -380,7 +385,7 @@ and translate_block (sl : Cst.stmt list) range : Ast.stmt =
   (* FIXME: compute ranges of blocks *)
   match sl with
   | [] -> {skind = S_pass; srange = range}
-  | [s] -> translate_stmt s
+  (* | [s] -> translate_stmt s *)
   | (hd :: tl) as sl ->
     let range = block_range sl in
     {
