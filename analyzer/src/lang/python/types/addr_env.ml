@@ -59,7 +59,23 @@ let mk_avar ?(vtyp = T_any) addr_uid =
 module Domain =
 struct
 
-  module ASet = Framework.Lattices.Powerset.Make(PyAddr)
+  module ASet =
+    (struct
+      module PS = Framework.Lattices.Powerset.Make(PyAddr)
+      include PS
+      let undef a = match a with
+        | PyAddr.Def _ -> false
+        | _ -> true
+
+      let widen annot at bt =
+        Top.top_absorb2 (fun a b ->
+            if Set.cardinal b - Set.cardinal a = 1
+            && Set.exists undef b && Set.exists undef a then
+              Top.Nt (Set.union a b)
+            else
+              PS.widen annot at bt) at bt
+    end)
+
   module AMap = Framework.Lattices.Partial_map.Make
       (struct type t = var let compare = compare_var let print = pp_var end)
       (ASet)
