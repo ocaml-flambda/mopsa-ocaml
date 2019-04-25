@@ -271,6 +271,7 @@ struct
                        man.exec (mk_assign (mk_var var_els ~mode:WEAK range) (mk_py_top T_int range) range) flow  |>
                        man.eval (mk_py_none range)
                      )
+                   (* TODO: if object has iter field call it and then call next *)
                    ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton)
                )
         )
@@ -453,6 +454,12 @@ struct
         )
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.__contains__")}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 man flow range args ["list"]
+        (fun args flow ->
+           man.eval (mk_py_top T_bool range) flow)
+      |> Option.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "math.fsum")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
@@ -509,6 +516,15 @@ struct
            man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
         )
       |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.splitlines")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        ["str"]
+        (fun eargs flow ->
+           man.eval (mk_expr (E_py_list [mk_py_top T_string range]) range) flow
+        )
+      |> Option.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "dir")}, _)}, args, []) ->
       Utils.check_instances man flow range args []

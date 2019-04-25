@@ -252,6 +252,7 @@ module Domain =
         |> Option.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "sorted")}, _)}, [obj], [])  ->
+        (* todo: call list on obj first *)
         let seq = mktmp () in
         let flow = man.exec (mk_assign (mk_var seq range) obj range) flow in
         man.eval (Utils.mk_builtin_call "list.sort" [mk_var seq range] range) flow |>
