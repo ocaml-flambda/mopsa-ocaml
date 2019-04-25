@@ -72,7 +72,7 @@ BODIES = {
                 5.15138902046611451e-05 * SOLAR_MASS)}
 
 
-SYSTEM = list(BODIES.values())
+SYSTEM = [x for x in BODIES.values()] #list(BODIES.values())
 PAIRS = combinations(SYSTEM)
 
 

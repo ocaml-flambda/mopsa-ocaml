@@ -428,8 +428,8 @@ def bench_list_unpacking(loops):
 
 def bench_all(loops):
     dt1 = bench_tuple_unpacking(loops)
-    dt2 = bench_list_unpacking(loops)
-    return dt1 + dt2
+    # dt2 = bench_list_unpacking(loops)
+    return 0 # dt1 + dt2
 
 
 # def add_cmdline_args(cmd, args):

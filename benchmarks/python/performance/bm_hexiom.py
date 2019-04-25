@@ -13,7 +13,7 @@ Source: https://github.com/slowfrog/hexiom : hexiom2.py, level36.txt
 # import perf
 #from six.moves import xrange, StringIO
 # from six import u as u_lit, text_type
-from io import StringIO
+# from io import StringIO
 # 2016-07-07: CPython 3.6 takes ~25 ms to solve the board level 25
 DEFAULT_LEVEL = 25
 
@@ -348,7 +348,7 @@ def print_pos(pos, output):
     done = pos.done
     size = hex.size
     for y in range(size):
-        print(u" " * (size - y - 1), end=u"", file=output)
+        print(u" " * (size - y - 1), end=u"") #, file=output)
         for x in range(size + y):
             pos2 = (x, y)
             id = hex.get_by_pos(pos2).id
@@ -357,10 +357,10 @@ def print_pos(pos, output):
                     0] != EMPTY else u"."
             else:
                 c = u"?"
-            print(u"%s " % c, end=u"", file=output)
-        print(end=u"\n", file=output)
+            print(u"%s " % c, end=u"")#, file=output)
+        print(end=u"\n")#, file=output)
     for y in range(1, size):
-        print(u" " * y, end=u"", file=output)
+        print(u" " * y, end=u"")#, file=output)
         for x in range(y, size * 2 - 1):
             ry = size + y - 1
             pos2 = (x, ry)
@@ -370,8 +370,8 @@ def print_pos(pos, output):
                     0] != EMPTY else u"."
             else:
                 c = u"?"
-            print(u"%s " % c, end=u"", file=output)
-        print(end=u"\n", file=output)
+            print(u"%s " % c, end=u"")#, file=output)
+        print(end=u"\n")#, file=output)
 
 
 OPEN = 0
@@ -419,7 +419,7 @@ def solved(pos, output, verbose=False):
     return SOLVED
 
 
-def solve_step(prev, strategy, order, output, first=False):
+def solve_step(prev, strategy, order, output, first):
     if first:
         pos = prev.clone()
         while constraint_pass(pos):
@@ -443,7 +443,7 @@ def solve_step(prev, strategy, order, output, first=False):
             if cur_status != OPEN:
                 ret = cur_status
             else:
-                ret = solve_step(new_pos, strategy, order, output)
+                ret = solve_step(new_pos, strategy, order, output, False)
             if ret == SOLVED:
                 return SOLVED
     return IMPOSSIBLE
@@ -467,7 +467,7 @@ def check_valid(pos):
 
 def solve(pos, strategy, order, output):
     check_valid(pos)
-    return solve_step(pos, strategy, order, output, first=True)
+    return solve_step(pos, strategy, order, output, True)
 
 
 # TODO Write an 'iterator' to go over all x,y positions
@@ -626,7 +626,7 @@ def main(loops, level):
     board, solution = LEVELS[level]
     order = DESCENDING
     strategy = Done.FIRST_STRATEGY
-    stream = StringIO()
+    stream = None # StringIO()
 
     board = board.strip()
     expected = solution.rstrip()
@@ -635,14 +635,14 @@ def main(loops, level):
     # t0 = perf.perf_counter()
 
     for _ in range_it:
-        stream = StringIO()
+        # stream = StringIO()
         solve_file(board, strategy, order, stream)
-        output = stream.getvalue()
-        stream = None
+        # output = stream.getvalue()
+        # stream = None
 
     dt = 0 # perf.perf_counter() - t0
 
-    output = '\n'.join(line.rstrip() for line in output.splitlines())
+    output = '\n'#.join(line.rstrip() for line in output.splitlines())
     if output != expected:
         raise AssertionError("got a wrong answer:\n%s\nexpected: %s"
                              % (output, expected))
@@ -660,7 +660,7 @@ if __name__ == "__main__":
     #     # PyPy needs to compute more warmup values to warmup its JIT
     #     kw['warmups'] = 15
     # runner = perf.Runner(**kw)
-    levels = sorted(LEVELS)
+    # levels = sorted(LEVELS)
     # runner.argparser.add_argument("--level", type=int,
     #                               choices=levels,
     #                               default=DEFAULT_LEVEL,

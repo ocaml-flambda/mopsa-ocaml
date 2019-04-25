@@ -184,7 +184,7 @@ class Chaosgame(object):
         maxlength = thickness * self.width / self.height
         for spl in splines:
             length = 0
-            curr = spl(0)
+            curr = spl(0.0)
             for i in range(1, 1000):
                 last = curr
                 t = 1 / 999 * i
