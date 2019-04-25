@@ -77,6 +77,9 @@ module Domain =
            match skind orelse with
            | S_block [] -> [mk_stmt S_break range]
            | _ -> [orelse; mk_stmt S_break range] in
+        let body_list = match skind body with
+          | S_block l -> l
+          | _ -> assert false in
          let stmt =
            mk_block
              [
@@ -84,18 +87,16 @@ module Domain =
                mk_assign (mk_var tmp range) (Utils.mk_builtin_call "iter" [mk_var iterabletmp range] range) range;
                mk_while
                  (mk_py_true range)
-                 (mk_block [
-                      (Utils.mk_try_stopiteration
+                 (mk_block
+                      ((Utils.mk_try_stopiteration
                          (mk_assign
                             target
                             (Utils.mk_builtin_call "next" [mk_var tmp range] range)
                             range
                          )
                          (mk_block l_else range)
-                         range)
-                    ;
-                      body
-                    ] range)
+                         range) :: body_list)
+                    range)
                  range
              ]
              range
