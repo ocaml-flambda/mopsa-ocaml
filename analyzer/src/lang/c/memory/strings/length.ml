@@ -285,28 +285,45 @@ struct
 
   (** Compute symbolic boundaries of a quantified offset. *)
   (* FIXME: works only for linear expressions *)
-  let bound_quantified_offset offset =
-    let rec maximize exp =
-      match ekind exp with
-      | E_constant _ -> exp
-      | E_var (v, _) -> exp
-      | E_stub_quantified(FORALL, _, S_interval(_, u)) -> u
-      | E_unop (O_minus, e) -> { exp with ekind = E_unop (O_minus, minimize e) }
-      | E_binop (O_plus, e1, e2) -> { exp with ekind = E_binop (O_plus, maximize e1, maximize e2) }
-      | E_binop (O_minus, e1, e2) -> { exp with ekind = E_binop (O_minus, maximize e1, minimize e2) }
-      | _ -> panic ~loc:__LOC__ "maximize can not handle on %a" pp_expr exp
+  let rec bound_quantified_offset offset : expr * expr =
+    match ekind offset with
+     | E_constant _ -> offset, offset
 
-    and minimize exp =
-      match ekind exp with
-      | E_constant _ -> exp
-      | E_var (v, _) -> exp
-      | E_stub_quantified(FORALL, _, S_interval(l, _)) -> l
-      | E_unop (O_minus, e) -> { exp with ekind = E_unop (O_minus, maximize e) }
-      | E_binop (O_plus, e1, e2) -> { exp with ekind = E_binop (O_plus, minimize e1, minimize e2) }
-      | E_binop (O_minus, e1, e2) -> { exp with ekind = E_binop (O_minus, minimize e1, maximize e2) }
-      | _ -> panic ~loc:__LOC__ "minimize can not handle on %a" pp_expr exp
-    in
-    minimize offset, maximize offset
+     | E_var (v, _) -> offset, offset
+
+     | E_stub_quantified(FORALL, _, S_interval(l, u)) -> l, u
+
+     | E_unop (O_minus, e) ->
+       let l, u = bound_quantified_offset e in
+       { offset with ekind = E_unop (O_minus, u)},
+       { offset with ekind = E_unop (O_minus, l)}
+
+     | E_binop (O_plus, e1, e2) ->
+       let l1, u1 = bound_quantified_offset e1 in
+       let l2, u2 = bound_quantified_offset e2 in
+       { offset with ekind = E_binop (O_plus, l1, l2)},
+       { offset with ekind = E_binop (O_plus, u1, u2)}
+
+     | E_binop (O_minus, e1, e2) ->
+       let l1, u1 = bound_quantified_offset e1 in
+       let l2, u2 = bound_quantified_offset e2 in
+       { offset with ekind = E_binop (O_minus, l1, u2)},
+       { offset with ekind = E_binop (O_minus, u1, l2)}
+
+     | E_binop (O_mult, e, ({ ekind = E_constant (C_int c) } as const))
+     | E_binop (O_mult, ({ ekind = E_constant (C_int c) } as const), e) ->
+       let l, u = bound_quantified_offset e in
+       if Z.geq c Z.zero then
+         { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })},
+         { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })}
+       else
+         { offset with ekind = E_binop (O_mult, u, { const with ekind = E_constant (C_int c) })},
+         { offset with ekind = E_binop (O_mult, l, { const with ekind = E_constant (C_int c) })}
+
+
+     | _ -> panic ~loc:__LOC__
+              "bound_quantified_offset called on a non linear expression %a"
+              pp_expr offset
 
 
   (** Cases of the abstract transformer for tests *(p + ∀i) ? 0 *)
