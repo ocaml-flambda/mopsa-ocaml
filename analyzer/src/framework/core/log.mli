@@ -46,3 +46,5 @@ val append : stmt -> log -> log
 val append_fst : stmt -> log -> log
 
 val append_snd : stmt -> log -> log
+
+val print : Format.formatter -> log -> unit

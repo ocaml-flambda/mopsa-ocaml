@@ -1094,6 +1094,11 @@ module Domain = struct
       add_base (V v) man stman flow |>
       Post.return |> Option.return
 
+    (* 𝕊⟦ add @ ⟧ when @ is an address *)
+    | S_add { ekind = E_addr addr } ->
+      add_base (A addr) man stman flow |>
+      Post.return  |> Option.return
+
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->
       let u = get_domain_env T_cur man flow in

@@ -276,9 +276,20 @@ struct
 
   (** Execute an allocation of a new resource *)
   let exec_local_new v res range man flow =
+    (* Evaluation the allocation request *)
     man.eval (mk_stub_alloc_resource res range) flow |>
     exec_eval man @@ fun addr flow ->
+
+    (* Add the address dimension before doing the assignment *)
+    let flow =
+      match ekind addr with
+      | E_addr _ -> man.exec (mk_add addr range) flow
+      | _ -> flow
+    in
+
+    (* Assign the address to the variable *)
     man.exec (mk_assign (mk_var v range) addr range) flow
+
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)

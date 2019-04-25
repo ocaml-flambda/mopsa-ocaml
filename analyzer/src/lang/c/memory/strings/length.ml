@@ -94,7 +94,7 @@ struct
   *)
   let mk_length_var base range =
     let org_vname =
-      let () = Format.fprintf Format.str_formatter "%a_length" pp_base base in
+      let () = Format.fprintf Format.str_formatter "length(%a)" pp_base base in
       Format.flush_str_formatter ()
     in
     let vuid = base_uid base in
@@ -136,11 +136,14 @@ struct
 
     let length = mk_length_var (V v) range in
 
+    (* Add the length variable to the numeric domain *)
+    let post = sman.post (mk_add length range) flow in
+
     match scope, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is filled with 0 (C99 6.7.8.10) *)
-      sman.post (mk_assign length (mk_zero range) range) flow
+      Post.bind (sman.post (mk_assign length (mk_zero range) range)) post
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
@@ -148,12 +151,12 @@ struct
          the first zero can be in offsets [0, size]
       *)
       let size = sizeof_type v.vtyp in
-      sman.post (mk_assign length (mk_z_interval Z.zero size range) range) flow
+      Post.bind (sman.post (mk_assign length (mk_z_interval Z.zero size range) range)) post
 
     | _, Some init ->
       (* Find the first zero byte *)
       let zero_offset = find_zero v.vtyp init in
-      sman.post (mk_assign length (mk_z zero_offset range) range) flow
+      Post.bind (sman.post (mk_assign length (mk_z zero_offset range) range)) post
 
     | _ -> assert false
 
@@ -451,6 +454,23 @@ struct
     | S_c_declaration v when is_c_array_type v.vtyp ->
       declare_variable v man sman flow |>
       Option.return
+
+    | S_add { ekind = E_addr addr } ->
+      (* Add the length of the address @ to the numeric domain and
+         initialize it with the interval [0, size(@)] *)
+
+      Some (
+        eval_base_size (A addr) stmt.srange man flow |>
+        post_eval man @@ fun size flow ->
+
+        man.eval ~zone:(Z_c_scalar, Z_u_num) size flow |>
+        post_eval man @@ fun size flow ->
+
+        let length = mk_length_var (A addr) stmt.srange in
+
+        sman.post ~zone:Z_u_num (mk_add length stmt.srange) flow |>
+        Post.bind (sman.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero stmt.srange) size stmt.srange) stmt.srange))
+      )
 
     | S_assign({ ekind = E_var _} as lval, rval) when is_c_scalar_type lval.etyp ->
       Some (

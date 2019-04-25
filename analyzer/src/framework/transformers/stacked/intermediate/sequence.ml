@@ -45,7 +45,7 @@ struct
   include GenDomainId(
     struct
       type typ = t
-      let name = "framework.operators.sequence.stacked"
+      let name = "framework.transformers.stacked.intermediate.sequence"
     end
     )
 
@@ -66,9 +66,11 @@ struct
     get = (fun flow -> man.get flow |> fst);
     set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
     get_log = (fun glog -> man.get_log glog |> Log.first);
-    set_log = (fun log glog -> man.set_log (
-        Log.tuple (log, man.get_log glog |> Log.second)
-      ) glog);
+    set_log = (fun log glog ->
+        man.set_log (
+          Log.tuple (log, man.get_log glog |> Log.second)
+        ) glog
+      );
   }
 
   (** Global manager of [D] *)
@@ -77,9 +79,11 @@ struct
     get = (fun flow -> man.get flow |> snd);
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
     get_log = (fun glog -> man.get_log glog |> Log.second);
-    set_log = (fun log glog -> man.set_log (
-        Log.tuple (man.get_log glog |> Log.first, log)
-      ) glog);
+    set_log = (fun log glog ->
+        man.set_log (
+          Log.tuple (man.get_log glog |> Log.first, log)
+        ) glog
+      );
   }
 
 

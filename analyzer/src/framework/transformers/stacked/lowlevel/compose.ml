@@ -45,7 +45,7 @@ struct
   include GenDomainId(
     struct
       type typ = t
-      let name = "framework.operators.compose"
+      let name = "framework.transformers.stacked.lowlevel.compose"
     end
     )
 

@@ -106,7 +106,7 @@ struct
 
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
-    let vname = p.org_vname ^ "_offset" in
+    let vname = "offset(" ^ p.org_vname ^ ")" in
     let uniq = vname ^ ":" ^ (string_of_int p.vuid) in
     mkv vname uniq p.vuid T_int
 
