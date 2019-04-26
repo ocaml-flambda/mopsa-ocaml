@@ -159,8 +159,11 @@ struct
                 AD.ASet.iter (fun addr ->
                     match addr with
                     | Def addr ->
-                      let ty = TD.TMap.find addr tmap.abs_heap in
-                      ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.uniq_vname pp_addr addr TD.Polytypeset.print ty) :: !ret
+                      if TD.TMap.mem addr tmap.abs_heap then
+                        let ty = TD.TMap.find addr tmap.abs_heap in
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ %a" var.uniq_vname pp_addr addr TD.Polytypeset.print ty) :: !ret
+                      else
+                        ret := (fun fmt -> Format.fprintf fmt "%s ⇝ %a ⇝ notinmap" var.uniq_vname pp_addr addr) :: !ret
                     | Undef_local ->
                       ret := (fun fmt -> Format.fprintf fmt "%s ⇝ undef_local" var.uniq_vname) :: !ret
                     | Undef_global ->
