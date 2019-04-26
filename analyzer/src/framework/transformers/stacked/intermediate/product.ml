@@ -45,6 +45,9 @@ end
 module Make(Spec:SPEC) : STACK with type t = Spec.t =
 struct
 
+  (** {2 Stack header} *)
+  (** **************** *)
+
   type t = Spec.t
 
   include Core.Id.GenDomainId(
@@ -128,8 +131,8 @@ struct
     Exceptions.panic ~loc:__LOC__ "merge not implemented"
 
 
-  (** {2 Transfer functions} *)
-  (** ********************** *)
+  (** {2 Initialization procedure} *)
+  (** **************************** *)
 
   let init prog man flow =
     let f = fun (type a) (m:a smodule) (man:('a,a) man) flow ->
@@ -139,13 +142,56 @@ struct
     slist_man_fold { f } Spec.pool man flow
 
 
-  let exec zone stmt man flow =
-    Exceptions.panic ~loc:__LOC__ "exec not implemented"
+  (** {2 Abstract transformer} *)
+  (** ************************ *)
 
+  (** Entry point of abstract transformers *)
+  let exec zone =
+
+    (* Check coverage of exported zones of each stack *)
+    let coverage =
+      let f = fun (type a) (m:a smodule) ->
+        let module S = (val m) in
+        Interface.sat_exec zone S.interface
+      in
+      slist_map { f } Spec.pool
+    in
+
+    (fun stmt man sman flow ->
+       (* Compute the list of post-conditions by pointwise application *)
+       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) ->
+         if not covered then None
+         else
+           let module S = (val m) in
+           debug "exec %a in stack %s" pp_stmt stmt S.name;
+           let r = S.exec zone stmt man sman flow in
+           match r with
+           | Some post ->
+             debug "stack %s analyzed statement %a" S.name pp_stmt stmt;
+             Some (log_post_stmt stmt man post)
+           | None ->
+             debug "stack %s did not analyze statement %a" S.name pp_stmt stmt;
+             None
+       in
+
+       let pointwise_posts = slist_man_map_combined { f } Spec.pool coverage man in
+
+       (* Merge post-conditions *)
+
+
+       assert false
+    )
+
+
+  (** {2 Abstract evaluations} *)
+  (** ************************ *)
 
   let eval zone exp man flow =
     Exceptions.panic ~loc:__LOC__ "eval not implemented"
 
+
+  (** {2 Query handler} *)
+  (** ***************** *)
 
   let ask query man flow =
     let f = fun (type a) (m:a smodule) (man:('a,a) man) acc ->
@@ -156,6 +202,10 @@ struct
         ) acc
     in
     slist_man_fold { f } Spec.pool man None
+
+
+  (** {2 Broadcast reductions} *)
+  (** ************************ *)
 
   let refine channel man flow =
     Exceptions.panic ~loc:__LOC__ "refine not implemented"

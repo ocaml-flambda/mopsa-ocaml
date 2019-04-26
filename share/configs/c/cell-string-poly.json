@@ -39,7 +39,12 @@
                     "compose": [
                         {
                             "product": [
-                                "c.memory.cells.expand",
+                                {
+                                    "seq": [
+                                        "c.memory.cells.expand",
+                                        "c.memory.cells.cell_2_scalar"
+                                    ]
+                                },
                                 "c.memory.strings.length"
                             ]
                         },

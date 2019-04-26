@@ -298,6 +298,38 @@ type _ slist =
 (** {2 Iterators} *)
 (** ************* *)
 
+type 'b map = {
+  f: 't. 't smodule -> 'b;
+}
+
+
+let slist_map f l =
+  let rec aux : type t. t slist -> 'b list =
+    fun l ->
+      match l with
+      | Nil -> []
+      | Cons(hd,tl) ->
+        f.f hd :: aux tl
+  in
+  aux l
+
+
+type ('a,'b) map_combined = {
+  f: 't. 't smodule -> 'a -> 'b;
+}
+
+
+let slist_map_combined f l1 l2 =
+  let rec aux : type t. t slist -> 'a list -> 'b list =
+    fun l1 l2 ->
+      match l1, l2 with
+      | Nil, [] -> []
+      | Cons(hd1,tl1), hd2 :: tl2 ->
+        f.f hd1 hd2 :: aux tl1 tl2
+      | _ -> assert false
+  in
+  aux l1 l2
+
 
 type 'b fold = {
   f: 't. 't smodule -> 'b -> 'b;
@@ -468,3 +500,35 @@ let slist_man_fold f l man init =
         aux tl (tlman man) acc'
   in
   aux l man init
+
+
+type ('a,'b) man_map = {
+  f: 't. 't smodule -> ('a, 't) man -> 'b;
+}
+
+let slist_man_map f l man =
+  let rec aux : type t. t slist -> ('a,t) man -> 'b list =
+    fun l man ->
+      match l with
+      | Nil -> []
+      | Cons(hd,tl) ->
+        f.f hd (hdman man) :: aux tl (tlman man)
+  in
+  aux l man
+
+
+type ('a,'b,'c) man_map_combined = {
+  f: 't. 't smodule -> 'b -> ('a,'t) man -> 'c;
+}
+
+
+let slist_man_map_combined f l1 l2 man =
+  let rec aux : type t. t slist -> 'b list -> ('a,t) man -> 'c list =
+    fun l1 l2 man ->
+      match l1, l2 with
+      | Nil, [] -> []
+      | Cons(hd1,tl1), hd2 :: tl2 ->
+        f.f hd1 hd2 (hdman man) :: aux tl1 tl2 (tlman man)
+      | _ -> assert false
+  in
+  aux l1 l2 man
