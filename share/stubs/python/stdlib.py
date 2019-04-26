@@ -343,6 +343,11 @@ class list_iterator(object):
     def __next__(self): pass
     def __iter__(self): pass
 
+class enumerate(object):
+    def __new__(self): pass
+    def __next__(self): pass
+    def __iter__(self): pass
+
 class dict(object):
     def __new__(cls): pass
     def __getitem__(self, k): pass

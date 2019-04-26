@@ -480,6 +480,51 @@ struct
           else tyerror flow)
       |> Option.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "enumerate.__new__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        (* FIXME: first argument should be subclass of enumerate *)
+        ["type"; "list"]
+        (fun args flow ->
+           let list = match args with | [_; l] -> l | _ -> assert false in
+           let list_addr = match ekind list with
+             | E_py_object ({addr_kind = A_py_list _} as a, _) -> a
+             | _ -> assert false in
+           let a = mk_alloc_addr (A_py_iterator ("enumerate", list_addr, None)) range in
+           man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
+           Eval.bind (fun eaddr_it flow ->
+               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               Eval.singleton (mk_py_object (addr_it, None) range) flow
+             )
+        )
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "enumerate.__iter__")}, _)}, args, []) ->
+      Utils.check_instances man flow range args
+        ["enumerate"]
+        (fun args flow ->
+           Eval.singleton (List.hd args) flow)
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "enumerate.__next__")}, _)}, [iterator], []) ->
+      man.eval ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
+      Eval.bind (fun iterator flow ->
+          let list_addr = match ekind iterator with
+            | E_py_object ({addr_kind = A_py_iterator (s, a, _)}, _) when s = "enumerate" -> a
+            | _ -> Exceptions.panic "%a@\n" pp_expr iterator in
+          let var_els = match akind list_addr with
+            | A_py_list a -> a
+            | _ -> assert false in
+          let els = man.eval (mk_expr (E_py_tuple [mk_top T_int range;
+                                                   mk_var var_els ~mode:WEAK range]) range) flow in
+          let flow = Flow.set_ctx (Eval.choose_ctx els) flow in
+          let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow |> Eval.empty_singleton in
+          Eval.join_list (Eval.copy_ctx stopiteration els::stopiteration::[])
+        )
+      |> Option.return
+
+
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "str.join")}, _)}, args, []) ->
       let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow |> Eval.empty_singleton in
       Utils.check_instances man flow range args
