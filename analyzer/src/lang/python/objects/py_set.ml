@@ -147,7 +147,7 @@ struct
            let set_addr = match ekind set with
              | E_py_object ({addr_kind = A_py_set _} as a, _) -> a
              | _ -> assert false in
-           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", set_addr, None)) range in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", [set_addr], None)) range in
            man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) a flow |>
            Eval.bind (fun eaddr_it flow ->
                let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
@@ -161,7 +161,7 @@ struct
       man.eval  ~zone:(Zone.Z_py, Zone.Z_py_obj) iterator flow |>
       Eval.bind (fun iterator flow ->
           let set_addr = match ekind iterator with
-            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, a, _)}, _) when s = "set_iterator" -> a
+            | E_py_object ({addr_kind = Py_list.A_py_iterator (s, [a], _)}, _) when s = "set_iterator" -> a
             | _ -> assert false in
           let var_els = match akind set_addr with
             | A_py_set a -> a

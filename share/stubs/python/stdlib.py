@@ -348,6 +348,11 @@ class enumerate(object):
     def __next__(self): pass
     def __iter__(self): pass
 
+class zip(object):
+    def __new__(self): pass
+    def __next__(self): pass
+    def __iter__(self): pass
+
 class dict(object):
     def __new__(cls): pass
     def __getitem__(self, k): pass
@@ -464,8 +469,6 @@ class staticmethod(object): pass
 @mopsa.unsupported
 class super(object): pass
 
-@mopsa.unsupported
-class zip(object): pass
 
 
 ##################

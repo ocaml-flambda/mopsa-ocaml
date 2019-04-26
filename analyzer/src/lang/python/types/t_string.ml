@@ -203,7 +203,7 @@ module Domain =
              let str_addr = match ekind str with
                | E_py_object (a, _) -> a
                | _ -> assert false in
-             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", str_addr, None)) range in
+             let it_addr = mk_alloc_addr (Objects.Py_list.A_py_iterator ("str_iterator", [str_addr], None)) range in
              man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) it_addr flow |>
              Eval.bind (fun eit_addr flow ->
                  let it_addr = match ekind eit_addr with E_addr a -> a | _ -> assert false in
