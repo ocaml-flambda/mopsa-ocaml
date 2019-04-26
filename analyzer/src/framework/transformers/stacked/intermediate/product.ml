@@ -41,6 +41,7 @@ sig
 end
 
 
+(** Product functor *)
 module Make(Spec:SPEC) : STACK with type t = Spec.t =
 struct
 
@@ -161,3 +162,43 @@ struct
 
 
 end
+
+
+
+
+
+(** Factory function *)
+
+type spool = S : 'a slist -> spool
+
+let type_stack (type a) (s : (module STACK with type t = a)) =
+    let module S = (val s) in
+    (module S : STACK with type t = a)
+
+let rec type_stack_pool : (module STACK) list -> spool = function
+  | [] -> S Nil
+  | hd :: tl ->
+    let module S = (val hd) in
+    let s = type_stack (module S) in
+    let S tl = type_stack_pool tl in
+    S (Cons (s, tl))
+
+let make
+    (stacks: (module STACK) list)
+    (rules: (module REDUCTION) list)
+  : (module STACK) =
+
+  let S pool = type_stack_pool stacks in
+
+  let create_product (type a) (pool: a slist) =
+    let module S = Make(
+      struct
+        type t = a
+        let pool = pool
+        let rules = rules
+      end)
+    in
+    (module S : STACK)
+  in
+
+  create_product pool

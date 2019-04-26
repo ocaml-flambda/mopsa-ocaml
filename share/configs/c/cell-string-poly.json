@@ -37,7 +37,12 @@
 	    {
                 "apply": {
                     "compose": [
-                        "c.memory.strings.length",
+                        {
+                            "product": [
+                                "c.memory.cells.expand",
+                                "c.memory.strings.length"
+                            ]
+                        },
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
@@ -48,7 +53,7 @@
                 },
 		"on": {
                     "product": [
-                        "universal.numeric.relational.octagon",
+                        "universal.numeric.relational.polyhedra",
                         {
                             "nonrel": {
 			        "disjoint": [

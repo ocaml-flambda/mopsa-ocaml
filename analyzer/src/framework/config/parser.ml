@@ -294,6 +294,7 @@ and stack_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK)
   match config.structure with
   | S_leaf name -> Sig.Stacked.Intermediate.find_stack name
   | S_chain (op,l) -> stack_chain_intermediate op l
+  | S_product (l,r) -> stack_product_intermediate l r
   | S_cast c -> stack_cast_intermediate c
   | _ -> assert false
 
@@ -313,6 +314,16 @@ and stack_chain_intermediate (op:operator) (l:config list) : (module Sig.Stacked
       (module C)
 
     | _ -> assert false
+
+and stack_product_intermediate (l:config list) (rules:string list) : (module Sig.Stacked.Intermediate.STACK) =
+  let ll = List.map stack_intermediate l in
+  let rules = List.map (fun name ->
+      try Sig.Stacked.Reduction.find_reduction name
+      with Not_found -> Exceptions.panic "reduction %s not found" name
+    ) rules
+  in
+  Transformers.Stacked.Intermediate.Product.make ll rules
+
 
 and stack_cast_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
   match config.signature with
