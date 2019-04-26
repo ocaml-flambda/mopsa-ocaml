@@ -19,32 +19,48 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Journal logs *)
+(** Reduction rules for products of stack domains *)
 
+open Ast.Var
 open Ast.Stmt
+open Context
+open Id
+open Query
+open Channel
+open Zone
+open Flow
+open Post
 
-type log
+(** Manager used reduction rules *)
+type 'a man = {
+  get : 't. 't domain -> 'a -> 't;
+  set : 't. 't domain -> 't -> 'a -> 'a;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  sub_exec : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  ask : 'r. 'r query -> 'a flow -> 'r;
+}
 
-val concat : log -> log -> log
 
-val empty : log
 
-val is_empty : log -> bool
+(** Signature of a reduction rule *)
+module type REDUCTION =
+sig
+  val name   : string
+  val reduce : stmt -> 'a man -> 'a flow -> 'a flow -> 'a flow
+end
 
-val tuple : log * log -> log
 
-val first : log -> log
+(** Registered reductions *)
+let reductions : (module REDUCTION) list ref = ref []
 
-val second : log -> log
 
-val get_domain_block : log -> block
+(** Register a new reduction *)
+let register_reduction rule =
+  reductions := rule :: !reductions
 
-val get_domain_inner_log : log -> log
-
-val append : stmt -> log -> log
-
-val append_fst : stmt -> log -> log
-
-val append_snd : stmt -> log -> log
-
-val print : Format.formatter -> log -> unit
+(** Find a reduction by its name *)
+let find_reduction name =
+  List.find (fun v ->
+      let module V = (val v : REDUCTION) in
+      compare V.name name = 0
+    ) !reductions

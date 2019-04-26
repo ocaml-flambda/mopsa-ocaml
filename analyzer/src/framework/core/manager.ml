@@ -87,6 +87,8 @@ type 's sman = {
 (**                        {2 Utility functions}                            *)
 (*==========================================================================*)
 
+let debug fmt = Debug.debug ~channel:"framework.core.manager" fmt
+
 let log_post_stmt stmt man post =
   Post.map_log (fun tk log ->
       match tk with

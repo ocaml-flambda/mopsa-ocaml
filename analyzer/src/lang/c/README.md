@@ -7,12 +7,9 @@ This folder contains abstract memory models for C, with some common utility modu
 
 * `Pointers` is a non-relational abstract domains for managing pointer bases and offsets.
 
-* `Cells` module contains the cell-based abstraction of low-level memory access in C [1].
+* `Cells` contains the cell-based abstraction of low-level memory access in C [1].
+    
+* `Strings` contains specific abstractions for C strings, such as [2].
 
-	* `Cells.Cell` defines the `cell` type and its related functions.
-	
-	* `Cells.Expand` is a expension abstraction of cells.
-	
-	* `Cells.Cell2Scalar` translates cell statements and expressions into C scalar ones.
-
-[1]: "Field-sensitive value analysis of embedded C programs with union types and pointer arithmetics". Antoine Miné. In LCTES'06, 54–63, 2006. ACM.
+[1]: "Field-sensitive value analysis of embedded C programs with union types and pointer arithmetics". A. Miné. In LCTES'06, 54–63, 2006.
+[2]: "Modular static analysis of string manipulations in C programs". M. Journault, A. Miné, A. Ouadjaout. In SAS'18. LNCS, vol. 11002. 2018.

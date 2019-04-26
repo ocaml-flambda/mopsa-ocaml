@@ -165,7 +165,8 @@ struct
       add_missing_vars ctx a [var] |>
       Option.return
 
-    | S_remove { ekind = E_var (var, _) } ->
+    | S_remove { ekind = E_var (var, _) }
+    | S_forget { ekind = E_var (var, _) } ->
       let env = Apron.Abstract1.env a in
       let vars, ctx =
         List.filter (fun v -> is_env_var v a) [var] |>
@@ -175,9 +176,10 @@ struct
       (Apron.Abstract1.change_environment ApronManager.man a env true, ctx) |>
       Option.return
 
+
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
       let v1, ctx = var_to_apron ctx var1 in
-      let v2, ctx = var_to_apron ctx var2 in 
+      let v2, ctx = var_to_apron ctx var2 in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], ctx) |>
       Option.return
 

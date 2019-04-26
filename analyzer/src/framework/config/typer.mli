@@ -95,3 +95,6 @@ val cast : signature -> config -> config
 
 (** Print a configuration *)
 val pp_config : Format.formatter -> config -> unit
+
+(** Print a signature *)
+val pp_signature : Format.formatter -> signature -> unit

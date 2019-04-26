@@ -43,7 +43,7 @@ struct
   let interface = {
     iexec = {
       provides = [Z_c];
-      uses = [Z_c]
+      uses = []
     };
 
     ieval = {
@@ -102,7 +102,7 @@ struct
                   let lval = mk_c_member_access lval field range in
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
-                  man.exec ~zone:Z_c stmt flow
+                  man.exec stmt flow
                 ) flow
               |> Post.return
               |> Option.return
@@ -120,7 +120,7 @@ struct
                   let lval = mk_c_member_access lval field range in
                   let rval = mk_c_member_access rval field range in
                   let stmt = {stmt with skind = S_assign(lval, rval)} in
-                  man.exec ~zone:Z_c stmt flow
+                  man.exec stmt flow
                   |> Post.return
                   |> Option.return
                 | None -> Exceptions.panic "[%s] all fields have size 0" name

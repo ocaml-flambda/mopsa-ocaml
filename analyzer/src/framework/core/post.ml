@@ -28,6 +28,7 @@ open Log
 open Context
 open Lattice
 
+
 (** Disjunction case of a post-state *)
 type 'a case = {
   tmap: ('a * log) TokenMap.t;
@@ -36,6 +37,10 @@ type 'a case = {
 
 (** Disjunction of journaling flows *)
 type 'a post = 'a case list
+
+
+let debug fmt = Debug.debug ~channel:"framework.core.post" fmt
+
 
 let return flow : 'a post =
   [

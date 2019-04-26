@@ -28,7 +28,7 @@
             "c.desugar.stub_init",
             "c.desugar.cond_expr",
 
-	    // Resouce management
+	    // Resource management
             "universal.heap.recency.by_kind_callstack_range",
 	    "c.resources.file",
 	    "c.resources.common",
@@ -37,8 +37,7 @@
 	    {
                 "apply": {
                     "compose": [
-                        "c.memory.cells.expand",
-                        "c.memory.cells.cell_2_scalar",
+                        "c.memory.strings.length",
                         {
                             "seq": [
 			        "c.memory.scalars.pointer",
@@ -48,14 +47,22 @@
                     ]
                 },
 		"on": {
-                    "nonrel": {
-			"disjoint": [
-			    "universal.numeric.values.intervals.float",
-                            "universal.numeric.values.intervals.integer"
-			]
-		    }
+                    "product": [
+                        "universal.numeric.relational.octagon",
+                        {
+                            "nonrel": {
+			        "disjoint": [
+			            "universal.numeric.values.intervals.float",
+                                    "universal.numeric.values.intervals.integer"
+			        ]
+		            }
+                        }
+                    ],
+                    "reductions": [
+                        "universal.numeric.reductions.intervals"
+                    ]
                 }
-	    }
+            }
 	]
     }
 }

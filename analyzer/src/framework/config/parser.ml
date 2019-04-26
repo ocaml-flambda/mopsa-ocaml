@@ -51,8 +51,8 @@ let resolve_config_file config =
     else Exceptions.panic "unable to find configuration file %s" config
 
 
-(** {2 Specification of transformers} *)
-(** ********************************* *)
+(** {2 Specification of available transformers} *)
+(** ******************************************* *)
 
 let spec = {
   chain = (fun abstraction operator signature ->
@@ -79,6 +79,8 @@ let spec = {
 
       | A_domain, S_simplified -> true
 
+      | A_stack, S_intermediate -> true
+
       | _ -> false
     );
 
@@ -96,7 +98,7 @@ let rec domain_lowlevel config : (module Sig.Domain.Lowlevel.DOMAIN) =
   | S_chain(op, l) -> domain_chain_lowlevel op l
   | S_apply(s,d) -> domain_apply_lowlevel s d
   | S_cast c -> domain_cast_lowlevel c
-  | _ -> assert false
+  | _ -> Exceptions.panic "unsupported domain configuration:@, %a" pp_config config
 
 and domain_chain_lowlevel (op:operator) (l:config list) : (module Sig.Domain.Lowlevel.DOMAIN) =
   match l with
@@ -283,7 +285,10 @@ and stack_cast_lowlevel (config:config) : (module Sig.Stacked.Lowlevel.STACK) =
     in
     (module SS)
 
-  | _ -> assert false
+  | s -> Exceptions.panic
+           "Stack signature %a can not be casted to signature %a"
+           pp_signature s
+           pp_signature S_lowlevel
 
 and stack_intermediate (config:config) : (module Sig.Stacked.Intermediate.STACK) =
   match config.structure with

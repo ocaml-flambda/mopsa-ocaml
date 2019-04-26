@@ -880,9 +880,7 @@ module Domain = struct
 
     (* 𝔼⟦ ∃v ⟧ *)
     | E_stub_quantified(EXISTS, var, set) when var.vtyp |> is_c_scalar_type ->
-      let c = { b = V var; o = O_single Z.zero; t = remove_qual var.vtyp; p = false } in
-      Eval.singleton (mk_c_cell c exp.erange) flow |>
-      Option.return
+      assert false
 
     | _ -> None
 
@@ -1095,6 +1093,11 @@ module Domain = struct
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
       add_base (V v) man stman flow |>
       Post.return |> Option.return
+
+    (* 𝕊⟦ add @ ⟧ when @ is an address *)
+    | S_add { ekind = E_addr addr } ->
+      add_base (A addr) man stman flow |>
+      Post.return  |> Option.return
 
     (* 𝕊⟦ remove v ⟧ *)
     | S_remove { ekind = E_var (v, _) } when is_c_type v.vtyp ->

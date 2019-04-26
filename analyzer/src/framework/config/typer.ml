@@ -81,10 +81,10 @@ let pp_abstraction fmt = function
   | A_value -> pp_print_string fmt "𝒱"
 
 let pp_signature fmt = function
-  | S_lowlevel -> pp_print_string fmt "0"
-  | S_intermediate -> pp_print_string fmt "1"
-  | S_simplified -> pp_print_string fmt "2"
-  | S_stateless-> pp_print_string fmt "3"
+  | S_lowlevel -> pp_print_string fmt "lowlevel"
+  | S_intermediate -> pp_print_string fmt "intermediate"
+  | S_simplified -> pp_print_string fmt "simplified"
+  | S_stateless-> pp_print_string fmt "stateless"
 
 let pp_operator fmt = function
   | O_seq -> pp_print_string fmt " ; "
@@ -167,12 +167,12 @@ let subset (s1:signature) (s2:signature) =
 
   | S_simplified, S_simplified -> true
 
-  | S_stateless, S_simplified -> true
+  | S_stateless, S_stateless -> true
 
   | _ -> false
 
 
-let strict_subset (s1:signature) (s2:signature) =
+let strict_subset (s1:signature) (s2:signature) =  
   if s1 = s2 then false
   else subset s1 s2
 
@@ -200,16 +200,20 @@ let unify c1 c2 =
 
 (** Return the smallest signature of a list of configurations *)
 let smallest_signature (l:config list) : signature =
-  List.fold_left (fun min c ->
-      let s = c.signature in
-      if strict_subset min s then s else min
-    ) S_stateless l
+  match l with
+  | [] -> assert false
+  | [c] -> c.signature
+  | hd :: tl ->
+    List.fold_left (fun min c ->
+        let s = c.signature in
+        if strict_subset min s then s else min
+      ) hd.signature tl
 
 (** Find the highest signature below [s] verifying the predicate [pred] *)
 let rec find_available_signature s pred =
-  match pred s with
-  | true -> s
-  | false -> find_available_signature (downgrade s) pred
+  if pred s
+  then s
+  else find_available_signature (downgrade s) pred
 
 (** Create a chain of a list of unified configurations *)
 let unified_chain spec op l =

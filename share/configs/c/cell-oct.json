@@ -41,8 +41,8 @@
                         "c.memory.cells.cell_2_scalar",
                         {
                             "seq": [
-			        "c.memory.pointer",
-			        "c.memory.machine_numbers"
+			        "c.memory.scalars.pointer",
+			        "c.memory.scalars.machine_numbers"
                             ]
                         }
                     ]

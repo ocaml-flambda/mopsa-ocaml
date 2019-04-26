@@ -275,3 +275,196 @@ let names () =
       let module S = (val dom : STACK) in
       S.name
     ) !stacks
+
+
+
+(****************************************************************************)
+(**                      {2 List representation}                            *)
+(****************************************************************************)
+
+
+(** Abstract stack module *)
+type 't smodule = (module STACK with type t = 't)
+
+
+(** List of stack modules *)
+type _ slist =
+  | Nil : unit slist
+  | Cons : 't smodule * 'b slist -> ('t * 'b) slist
+
+
+
+
+(** {2 Iterators} *)
+(** ************* *)
+
+
+type 'b fold = {
+  f: 't. 't smodule -> 'b -> 'b;
+}
+
+
+let slist_fold f l init =
+  let rec aux : type t. t slist -> 'b -> 'b =
+    fun l acc ->
+      match l with
+      | Nil -> acc
+      | Cons(hd,tl) ->
+        let acc' = f.f hd acc in
+        aux tl acc'
+  in
+  aux l init
+
+
+type ('a,'b) fold_sub2 = {
+  f: 't. 't smodule -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
+}
+
+
+let slist_fold_sub2 f l init (a1,s1) (a2,s2) =
+  let rec aux : type t. t slist -> 'a -> t * 'b -> t * 'b -> 'a * 'b * 'b =
+    fun l acc (a1,s1) (a2,s2) ->
+      match l,a1,a2 with
+      | Nil,(),() -> acc,s1,s2
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let acc,s1,s2 = f.f hd acc (hda1,s1) (hda2,s2) in
+        aux tl acc (tla1,s1) (tla2,s2)
+  in
+  aux l init (a1,s1) (a2,s2)
+
+
+type 'b apply_sub2 = {
+  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 't * 'b * 'b;
+}
+
+
+let slist_apply_sub2 f l (a1,s1) (a2,s2) =
+  let rec aux : type t. t slist -> t * 'b -> t * 'b -> t * 'b * 'b =
+    fun l (a1,s1) (a2,s2) ->
+      match l,a1,a2 with
+      | Nil,(),() -> (),s1,s2
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let hda,s1,s2 = f.f hd (hda1,s1) (hda2,s2) in
+        let tla,s1,s2 = aux tl (tla1,s1) (tla2,s2) in
+        (hda,tla), s1, s2
+  in
+  aux l (a1,s1) (a2,s2)
+
+
+
+type ('ext,'b) fold_apply_sub_ext2 = {
+  f: 't. 't smodule -> 't * 'b -> 't * 'b -> 'ext -> 't * 'b * 'b * 'ext;
+}
+
+
+let slist_fold_apply_sub_ext2 f l (a1,s1) (a2,s2) ext =
+  let rec aux : type t. t slist -> t * 'b -> t * 'b -> 'ext -> t * 'b * 'b * 'ext=
+    fun l (a1,s1) (a2,s2) ext ->
+      match l,a1,a2 with
+      | Nil,(),() -> (),s1,s2,ext
+      | Cons(hd,tl), (hda1,tla1), (hda2,tla2) ->
+        let hda,s1,s2,ext = f.f hd (hda1,s1) (hda2,s2) ext in
+        let tla,s1,s2,ext = aux tl (tla1,s1) (tla2,s2) ext in
+        (hda,tla), s1, s2,ext
+  in
+  aux l (a1,s1) (a2,s2) ext
+
+
+(** {2 Value creation} *)
+(** ****************** *)
+
+type create = {
+  f: 't. 't smodule -> 't;
+}
+
+let slist_create f l =
+  let rec aux : type t. t slist -> t =
+    fun l ->
+      match l with
+      | Nil -> ()
+      | Cons(hd,tl) ->
+        f.f hd, aux tl
+  in
+  aux l
+
+
+
+(** {2 Pretty printer} *)
+(** ****************** *)
+
+type 'a print = {
+  f: 't. 't smodule -> Format.formatter -> 't -> unit;
+}
+
+
+(** Print an abstract value *)
+let slist_print f l sep fmt a =
+  let rec aux : type t. t slist -> Format.formatter -> t -> unit =
+    fun l fmt a ->
+      match l, a with
+      | Nil, () -> ()
+      | Cons(m,Nil), (aa, ()) -> f.f m fmt aa
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd fmt hda;
+        Format.fprintf fmt "%s" sep;
+        aux tl fmt tla
+  in
+  aux l fmt a
+
+
+(** {2 Predicates} *)
+(** ************** *)
+
+type 'a pred = {
+  f: 't. 't smodule -> 't -> bool;
+}
+
+(** Test an ∃ predicate *)
+let slist_exists f l a =
+  let rec aux : type t. t slist -> t -> bool =
+    fun l a ->
+      match l, a with
+      | Nil, () -> false
+      | Cons(hd,tl), (hda,tla) ->
+        f.f hd hda || aux tl tla
+  in
+  aux l a
+
+
+(** {2 Managers of list elements} *)
+(** ***************************** *)
+
+let hdman man = {
+  man with
+  get = (fun a -> man.get a |> fst);
+  set = (fun hd a -> man.set (hd, man.get a |> snd) a);
+  get_log = (fun log -> man.get_log log |> Log.first);
+  set_log = (fun l log -> man.set_log (Log.tuple (l, man.get_log log |> Log.second)) log);
+}
+
+let tlman man = {
+  man with
+  get = (fun a -> man.get a |> snd);
+  set = (fun tl a -> man.set (man.get a |> fst, tl) a);
+  get_log = (fun log -> man.get_log log |> Log.second);
+  set_log = (fun l log -> man.set_log (Log.tuple (man.get_log log |> Log.first, l)) log);
+}
+
+
+(** {2 Iterators with managers} *)
+(** *************************** *)
+
+type ('a,'b) man_fold = {
+  f: 't. 't smodule -> ('a, 't) man -> 'b -> 'b;
+}
+
+let slist_man_fold f l man init =
+  let rec aux : type t. t slist -> ('a,t) man -> 'b -> 'b =
+    fun l man acc ->
+      match l with
+      | Nil -> acc
+      | Cons(hd,tl) ->
+        let acc' = f.f hd (hdman man) acc in
+        aux tl (tlman man) acc'
+  in
+  aux l man init
