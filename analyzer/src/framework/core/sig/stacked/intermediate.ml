@@ -348,6 +348,24 @@ let slist_fold f l init =
   aux l init
 
 
+type ('a,'b) fold_combined = {
+  f: 't. 't smodule -> 'a -> 'b -> 'b;
+}
+
+
+let slist_fold_combined f l1 l2 init =
+  let rec aux : type t. t slist -> 'a list -> 'b -> 'b =
+    fun l1 l2 acc ->
+      match l1, l2 with
+      | Nil, [] -> acc
+      | Cons(hd1,tl1), hd2::tl2 ->
+        let acc' = f.f hd1 hd2 acc in
+        aux tl1 tl2 acc'
+      | _ -> assert false
+  in
+  aux l1 l2 init
+
+
 type ('a,'b) fold_sub2 = {
   f: 't. 't smodule -> 'a -> 't * 'b -> 't * 'b -> 'a * 'b * 'b;
 }
@@ -532,3 +550,22 @@ let slist_man_map_combined f l1 l2 man =
       | _ -> assert false
   in
   aux l1 l2 man
+
+
+type ('a,'b,'c) man_fold_combined = {
+  f: 't. 't smodule -> 'b -> ('a,'t) man -> 'c -> 'c;
+}
+
+
+let slist_man_fold_combined f l1 l2 man init =
+  let rec aux : type t. t slist -> 'b list -> ('a,t) man -> 'c -> 'c =
+    fun l1 l2 man acc ->
+      match l1, l2 with
+      | Nil, [] -> acc
+      | Cons(hd1,tl1), hd2::tl2 ->
+        let acc' = f.f hd1 hd2 (hdman man) acc in
+        aux tl1 tl2 (tlman man) acc'
+      | _ -> assert false
+  in
+  aux l1 l2 man init
+

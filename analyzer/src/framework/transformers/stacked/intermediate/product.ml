@@ -157,7 +157,7 @@ struct
       slist_map { f } Spec.pool
     in
 
-    (fun stmt man sman flow ->
+    (fun stmt man sman flow : 'a post option ->
        (* Compute the list of post-conditions by pointwise application *)
        let f = fun (type a) (m:a smodule) covered (man:('a,a) man) ->
          if not covered then None
@@ -177,9 +177,33 @@ struct
        let pointwise_posts = slist_man_map_combined { f } Spec.pool coverage man in
 
        (* Merge post-conditions *)
+       let f = fun (type a) (m:a smodule) post man pred ->
+         match post with
+         | None -> pred
+         | Some post ->
+           let module S = (val m) in
+           (* Put the computed state of S in all previous posts *)
+           let pred' =
+             pred |> List.map (fun post' ->
+                 Post.merge (fun tk (a,log) (a',log') ->
+                     man.set (man.get a) a',
+                     man.set_log (man.get_log log) log'
+                   ) post post'
+               )
+           in
+           post :: pred'
+       in
+       let merged_posts = slist_man_fold_combined { f } Spec.pool pointwise_posts man [] in
 
-
-       assert false
+       (* Meet post-conditions *)
+       let rec aux = function
+         | [] -> None
+         | post :: tl ->
+           match aux tl with
+           | None -> Some post
+           | Some post' -> Some (Post.meet man.lattice post post')
+       in
+       aux merged_posts
     )
 
 
