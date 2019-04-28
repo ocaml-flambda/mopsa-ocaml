@@ -151,7 +151,7 @@ struct
   (** Entry point of abstract transformers *)
   let exec zone =
 
-    (* Check coverage of exported zones of each stack *)
+    (* Compute the coverage mask of the required zone *)
     let coverage =
       let f = fun (type a) (m:a smodule) ->
         let module S = (val m) in
@@ -162,7 +162,8 @@ struct
 
     (fun stmt man sman flow : 'a post option ->
 
-       (* Compute the list of post-conditions by pointwise application *)
+       (* Compute the list of post-conditions by pointwise application.
+          Most recent context is propagated through applications *)
        let f = fun (type a) (m:a smodule) covered (man:('a,a) man) (acc,ctx) ->
          if not covered then
            (None :: acc, ctx)
@@ -216,7 +217,7 @@ struct
   (** Entry point of abstract evaluations *)
   let eval zone =
 
-    (* Check coverage of exported zones of each stack *)
+    (* Compute the coverage mask of the required zone *)
     let coverage =
       let f = fun (type a) (m:a smodule) ->
         let module S = (val m) in
@@ -227,15 +228,23 @@ struct
 
     (fun exp man flow : (expr,'a) eval option ->
 
-       (* Compute the list of evaluations by pointwise application *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) ->
-         if not covered then None
+       (* Compute the list of evaluations by pointwise application.
+          Most recent context is propagated through applications. 
+       *)
+       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) (acc,ctx) ->
+         if not covered then
+           None :: acc, ctx
          else
            let module S = (val m) in
-           S.eval zone exp man flow
+           let flow' = Flow.set_ctx ctx flow in
+           match S.eval zone exp man flow' with
+           | None -> None :: acc, ctx
+           | Some evl ->
+             let ctx' = Eval.choose_ctx evl in
+             Some evl :: acc, ctx'
        in
 
-       let pointwise_evl = slist_man_map_combined { f } Spec.pool coverage man in
+       let pointwise_evl, _ = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
 
        (* Meet evaluations *)
        let rec aux = function
