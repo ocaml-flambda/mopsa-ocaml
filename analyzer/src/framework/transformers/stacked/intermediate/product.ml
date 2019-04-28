@@ -19,6 +19,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
+(** The transformer [Product ∈ (𝒮 × ... × 𝒮) × (𝓡 × ... × 𝓡) → 𝒮] creates
+    an n-ary reduced product of stack domains, refined by a set of reduction
+    rules.
+*)
+
 
 open Ast.All
 open Core.All
@@ -27,9 +32,6 @@ open Sig.Stacked.Reduction
 open Core.Manager
 open Log
 
-(** The [Sequence.Product ∈ (𝒮 × ... × 𝒮) × (𝓡 × ... × 𝓡) → 𝒮] creates a
-    reduced product of stack domains, refined by a set of reduction rules.
-*)
 
 
 (** Specification of a reduced product *)
@@ -44,6 +46,7 @@ end
 (** Product functor *)
 module Make(Spec:SPEC) : STACK with type t = Spec.t =
 struct
+
 
   (** {2 Stack header} *)
   (** **************** *)
@@ -158,23 +161,23 @@ struct
     in
 
     (fun stmt man sman flow : 'a post option ->
+
        (* Compute the list of post-conditions by pointwise application *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) ->
-         if not covered then None
+       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) (acc,ctx) ->
+         if not covered then
+           (None :: acc, ctx)
          else
            let module S = (val m) in
-           debug "exec %a in stack %s" pp_stmt stmt S.name;
-           let r = S.exec zone stmt man sman flow in
-           match r with
+           let flow' = Flow.set_ctx ctx flow in
+           match S.exec zone stmt man sman flow' with
+           | None -> (None :: acc, ctx)
            | Some post ->
-             debug "stack %s analyzed statement %a" S.name pp_stmt stmt;
-             Some (log_post_stmt stmt man post)
-           | None ->
-             debug "stack %s did not analyze statement %a" S.name pp_stmt stmt;
-             None
+             let post' = log_post_stmt stmt man post in
+             let ctx' = Post.choose_ctx post' in
+             (Some post' :: acc, ctx')
        in
 
-       let pointwise_posts = slist_man_map_combined { f } Spec.pool coverage man in
+       let pointwise_posts, _ = slist_man_fold_combined { f } Spec.pool coverage man ([],Flow.get_ctx flow) in
 
        (* Merge post-conditions *)
        let f = fun (type a) (m:a smodule) post man pred ->
@@ -210,8 +213,42 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-  let eval zone exp man flow =
-    Exceptions.panic ~loc:__LOC__ "eval not implemented"
+  (** Entry point of abstract evaluations *)
+  let eval zone =
+
+    (* Check coverage of exported zones of each stack *)
+    let coverage =
+      let f = fun (type a) (m:a smodule) ->
+        let module S = (val m) in
+        Interface.sat_eval zone S.interface
+      in
+      slist_map { f } Spec.pool
+    in
+
+    (fun exp man flow : (expr,'a) eval option ->
+
+       (* Compute the list of evaluations by pointwise application *)
+       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) ->
+         if not covered then None
+         else
+           let module S = (val m) in
+           S.eval zone exp man flow
+       in
+
+       let pointwise_evl = slist_man_map_combined { f } Spec.pool coverage man in
+
+       (* Meet evaluations *)
+       let rec aux = function
+         | [] -> None
+         | None :: tl -> aux tl
+         | Some evl :: tl ->
+           match aux tl with
+           | None -> Some evl
+           | Some evl' ->
+             Some (Eval.meet evl evl')
+       in
+       aux pointwise_evl
+    )
 
 
   (** {2 Query handler} *)
