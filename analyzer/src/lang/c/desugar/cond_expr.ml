@@ -22,6 +22,7 @@
 (** Desugar conditional expressions `cond?e1:e2`. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 

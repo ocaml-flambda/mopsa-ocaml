@@ -34,7 +34,7 @@ open Expr
 open Stmt
 open Context
 open Flow
-open Manager
+open Lattice
 open Eval
 open Query
 open Log
@@ -43,6 +43,38 @@ open Zone
 open Id
 open Interface
 open Channel
+
+
+(*==========================================================================*)
+(**                         {2 Domain manager}                              *)
+(*==========================================================================*)
+
+
+(** Managers provide access to full analyzer, i.e. (i) the lattice
+    operators of the global abstraction ['a], (ii) the transfer functions
+    over ['a flow] and (iii) accessors to the domain's abstract element ['t]
+    within ['a].
+*)
+type ('a, 't) man = ('a,'t) Lowlevel.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merging logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+}
+
+
 
 
 (*==========================================================================*)
@@ -231,3 +263,40 @@ let names () =
       let module D = (val dom : DOMAIN) in
       D.name
     ) !domains
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
+
+let log_post_stmt = Lowlevel.log_post_stmt
+
+let set_domain_env = Lowlevel.set_domain_env
+
+let get_domain_env = Lowlevel.get_domain_env
+
+let map_domain_env = Lowlevel.map_domain_env
+
+let mem_domain_env = Lowlevel.mem_domain_env
+
+let assume = Lowlevel.assume
+
+let assume_eval = Lowlevel.assume_eval
+
+let assume_post = Lowlevel.assume_post
+
+let switch = Lowlevel.switch
+
+let switch_eval = Lowlevel.switch_eval
+
+let switch_post = Lowlevel.switch_post
+
+let exec_eval = Lowlevel.exec_eval
+
+let post_eval = Lowlevel.post_eval
+
+let post_eval_with_cleaners = Lowlevel.post_eval_with_cleaners
+
+let exec_stmt_on_all_flows = Lowlevel.exec_stmt_on_all_flows
+
+let exec_block_on_all_flows = Lowlevel.exec_block_on_all_flows

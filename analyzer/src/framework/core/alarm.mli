@@ -21,6 +21,8 @@
 
 (** Alarms reporting potential errors inferred by abstract domains. *)
 
+open Lattice
+
 type alarm_kind = ..
 
 type alarm_level =
@@ -57,4 +59,4 @@ val alarm_token : alarm -> Token.token
 
 val mk_alarm : alarm_kind ->  ?cs:Callstack.cs -> ?level:alarm_level -> Location.range -> alarm
 
-val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> ('a, 't) Manager.man -> 'a Flow.flow -> 'a Flow.flow
+val raise_alarm : alarm_kind -> Location.range -> ?level:alarm_level -> ?bottom:bool -> 'a lattice -> 'a Flow.flow -> 'a Flow.flow

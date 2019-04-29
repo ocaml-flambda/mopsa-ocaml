@@ -22,6 +22,7 @@
 (** Evaluation of built-in Libc functions *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -197,7 +198,7 @@ struct
             Eval.singleton ap flow
           )
         ~felse:(fun flow ->
-            raise_alarm Alarms.AOutOfBound range ~bottom:true man flow |>
+            raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
             Eval.empty_singleton
           )
         ~zone:Z_c
@@ -260,7 +261,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
-          let flow' = raise_alarm Alarms.AVaArgNoNext range ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.AVaArgNoNext range ~bottom:true man.lattice flow in
           Eval.empty_singleton flow'
         )
       ~zone:Universal.Zone.Z_u_num

@@ -22,6 +22,7 @@
 (** Intra-procedural iterator for blocks, assignments and tests *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 
 
@@ -77,4 +78,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

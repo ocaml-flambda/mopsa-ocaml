@@ -24,6 +24,7 @@
    point, it should be kept for the type analysis I think *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open MapExt

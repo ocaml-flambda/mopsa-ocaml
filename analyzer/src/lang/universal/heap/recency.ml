@@ -23,6 +23,7 @@
    arithmetic*)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Intermediate
 open Ast
 open Zone
 
@@ -155,5 +156,5 @@ module HeapRecency = Domain(Pool.AddrInfoRecency)
 module HeapTypes   = Domain(Pool.AddrInfoTypes)
 
 let () =
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapRecency);
-  Framework.Core.Sig.Domain.Intermediate.register_domain (module HeapTypes)
+  register_domain (module HeapRecency);
+  register_domain (module HeapTypes)

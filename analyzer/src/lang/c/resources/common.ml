@@ -22,6 +22,7 @@
 (** Common transfer functions for resource management *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Memory.Common.Points_to
@@ -225,4 +226,4 @@ struct
 end
 
 let () =
-    Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)

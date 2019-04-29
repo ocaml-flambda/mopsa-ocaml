@@ -22,6 +22,7 @@
 (** Cell to Scalar variable bindings *)
 
 open Mopsa
+open Framework.Core.Sig.Stacked.Stateless
 open Ast
 open Cell
 open Zone
@@ -128,7 +129,7 @@ struct
     | _ -> assert false
 
 
-  let exec zone stmt man stman flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_add ({ ekind = E_c_cell (c, _) } as e)->
       Some (

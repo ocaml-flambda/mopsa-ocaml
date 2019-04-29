@@ -20,7 +20,9 @@
 (****************************************************************************)
 
 (** Inliner of imported packages. *)
+
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast

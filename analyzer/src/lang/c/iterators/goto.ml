@@ -22,6 +22,7 @@
 (** Control flow abstraction for Goto statements. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 
 

@@ -311,7 +311,7 @@ struct
     | [hd] -> Some hd
     | hd :: tl ->
       let r =
-        List.fold_left (fun acc r -> Query.join query acc r) hd tl
+        List.fold_left (fun acc r -> meet_query query acc r) hd tl
       in
       Some r
 

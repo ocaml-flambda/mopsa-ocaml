@@ -20,6 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open MapExt
 open Addr

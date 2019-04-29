@@ -24,6 +24,7 @@
 (** MOPSA Python library. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Addr
 open Ast
 open Universal.Ast

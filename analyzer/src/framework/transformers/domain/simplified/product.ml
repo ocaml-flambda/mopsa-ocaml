@@ -159,7 +159,7 @@ struct
         let module Domain = (val m) in
         let rep = Domain.ask query ctx aa in
         Option.neutral2 (fun rep acc ->
-            Query.meet query rep acc
+            meet_query query rep acc
           ) rep acc
       in
       dlist_fold_apply { f } Spec.pool None a

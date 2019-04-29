@@ -26,11 +26,53 @@
 open Ast.All
 open Interface
 open Id
+open Lattice
 open Zone
-open Manager
 open Flow
 open Post
 open Eval
+open Log
+
+
+(*==========================================================================*)
+(**                         {2 Stack managers}                              *)
+(*==========================================================================*)
+
+(** Managers provide access to full analyzer and the sub-tree
+    abstraction of the stack domain.
+*)
+type ('a, 't, 's) man = ('a,'t,'s) Intermediate.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (* Accessors to the sub-tree abstract element ['s] within ['a] *)
+  get_sub : 'a -> 's;
+  set_sub : 's -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  exec_sub : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merge logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+
+  (** Accessors to the sub-tree merge logs *)
+  get_sub_log : log -> log;
+  set_sub_log : log -> log -> log;
+}
+
+
+(*==========================================================================*)
+(**                         {2 Stack signature}                             *)
+(*==========================================================================*)
 
 module type STACK =
 sig
@@ -47,16 +89,16 @@ sig
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow
+  val init : program -> ('a, unit,'s) man -> 'a flow -> 'a flow
   (** Initialization routine *)
 
-  val exec : zone -> stmt -> ('a, unit) man -> ('a,'s) man -> 'a flow -> 'a post option
+  val exec : zone -> stmt -> ('a, unit,'s) man -> 'a flow -> 'a post option
   (** Computation of post-conditions *)
 
-  val eval : zone * zone -> expr -> ('a, unit) man -> 'a flow -> (expr, 'a) eval option
+  val eval : zone * zone -> expr -> ('a, unit,'s) man -> 'a flow -> (expr, 'a) eval option
   (** Evaluation of expressions *)
 
-  val ask  : 'r Query.query -> ('a, unit) man -> 'a flow -> 'r option
+  val ask  : 'r Query.query -> ('a, unit,'s) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
 end
@@ -89,7 +131,7 @@ struct
   let exec = S.exec
   let eval = S.eval
   let ask = S.ask
-  let refine channel man sman flow = Channel.return flow
+  let refine channel man flow = Channel.return flow
 
 end
 
@@ -121,3 +163,26 @@ let names () =
       let module S = (val dom : STACK) in
       S.name
     ) !stacks
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
+
+let assume = Intermediate.assume
+
+let assume_eval = Intermediate.assume_eval
+
+let assume_post = Intermediate.assume_post
+
+let switch = Intermediate.switch
+
+let switch_eval = Intermediate.switch_eval
+
+let switch_post = Intermediate.switch_post
+
+let exec_eval = Intermediate.exec_eval
+
+let post_eval = Intermediate.post_eval
+
+let post_eval_with_cleaners = Intermediate.post_eval_with_cleaners

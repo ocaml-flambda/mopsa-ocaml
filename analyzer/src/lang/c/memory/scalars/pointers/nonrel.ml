@@ -22,6 +22,7 @@
 (** Non-relational abstraction for C pointers *)
 
 open Mopsa
+open Framework.Core.Sig.Stacked.Intermediate
 open Universal.Ast
 open Ast
 open Zone
@@ -502,7 +503,7 @@ struct
           let flow' = set_base v1 b1ne man flow |>
                       set_base v2 b2ne man
           in
-          let flow'' = raise_alarm Alarms.AIllegalPointerDiff ~bottom:true exp.erange man flow' in
+          let flow'' = raise_alarm Alarms.AIllegalPointerDiff ~bottom:true exp.erange man.lattice flow' in
           [Eval.empty_singleton flow'']
         else
           []
@@ -581,7 +582,7 @@ struct
   (** ================================== *)
 
   (** Assignment abstract transformer *)
-  let assign p q range man sman flow =
+  let assign p q range man flow =
     let o = mk_offset_var_expr p range in
     match eval_pointer q with
     | ADDROF (b, offset) ->
@@ -631,7 +632,7 @@ struct
 
 
   (* Declaration of a scalar pointer variable *)
-  let declare_var v range man sman flow =
+  let declare_var v range man flow =
     let init, scope =
       match v.vkind with
       | V_c { var_init; var_scope } -> var_init, var_scope
@@ -652,20 +653,20 @@ struct
       Post.return
 
     | _, Some (C_init_expr e) ->
-      assign v e range man sman flow
+      assign v e range man flow
 
     | _ -> assert false
 
 
-  let exec zone stmt man sman flow =
+  let exec zone stmt man flow =
     let range = srange stmt in
     match skind stmt with
     | S_c_declaration(p) when is_c_pointer_type p.vtyp ->
-      declare_var p stmt.srange man sman flow |>
+      declare_var p stmt.srange man flow |>
       Option.return
 
     | S_assign({ekind = E_var(p, _)}, q) when is_c_pointer_type p.vtyp ->
-      assign p q stmt.srange man sman flow |>
+      assign p q stmt.srange man flow |>
       Option.return
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
@@ -760,7 +761,7 @@ struct
 
   let ask _ _ _ = None
 
-  let refine channel man sman flow = Channel.return flow
+  let refine channel man flow = Channel.return flow
 
 end
 

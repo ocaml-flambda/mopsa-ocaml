@@ -28,7 +28,6 @@ open Core
 open Lattice
 open Token
 open Flow
-open Manager
 open Eval
 open Post
 open Query
@@ -42,26 +41,26 @@ type _ query += Q_print_var : (Format.formatter -> string -> unit) query
 
 let () =
   register_query {
-    query_join = (
+    join = (
       let doit : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
           | Q_print_var ->
             fun fmt var ->
               Format.fprintf fmt "%a@,%a" a var b var
-          | _ -> next.join query a b
+          | _ -> next.join_query query a b
       in
       doit
     );
 
-    query_meet = (
+    meet = (
       let doit : type r. query_pool -> r query -> r -> r -> r =
         fun next query a b ->
           match query with
           | Q_print_var ->
             fun fmt var ->
               Format.fprintf fmt "%a@,%a" a var b var
-          | _ -> next.meet query a b
+          | _ -> next.meet_query query a b
       in
       doit
     );

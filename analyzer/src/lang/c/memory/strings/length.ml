@@ -39,6 +39,7 @@
 
 
 open Mopsa
+open Core.Sig.Stacked.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -127,7 +128,7 @@ struct
 
 
   (** Declaration of a C variable *)
-  let declare_variable v man sman flow =
+  let declare_variable v man flow =
     let scope, init, range =
       match v.vkind with
       | V_c { var_scope; var_init; var_range } -> var_scope, var_init, var_range
@@ -137,13 +138,13 @@ struct
     let length = mk_length_var (V v) range in
 
     (* Add the length variable to the numeric domain *)
-    let post = sman.post (mk_add length range) flow in
+    let post = man.exec_sub (mk_add length range) flow in
 
     match scope, init with
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is filled with 0 (C99 6.7.8.10) *)
-      Post.bind (sman.post (mk_assign length (mk_zero range) range)) post
+      Post.bind (man.exec_sub (mk_assign length (mk_zero range) range)) post
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
@@ -151,18 +152,18 @@ struct
          the first zero can be in offsets [0, size]
       *)
       let size = sizeof_type v.vtyp in
-      Post.bind (sman.post (mk_assign length (mk_z_interval Z.zero size range) range)) post
+      Post.bind (man.exec_sub (mk_assign length (mk_z_interval Z.zero size range) range)) post
 
     | _, Some init ->
       (* Find the first zero byte *)
       let zero_offset = find_zero v.vtyp init in
-      Post.bind (sman.post (mk_assign length (mk_z zero_offset range) range)) post
+      Post.bind (man.exec_sub (mk_assign length (mk_z zero_offset range) range)) post
 
     | _ -> assert false
 
 
   (** Cases of the assignment abstract transformer *)
-  let assign_cases base offset rhs typ range man sman flow =
+  let assign_cases base offset rhs typ range man flow =
     let length = mk_length_var base range in
 
     eval_base_size base range man flow |>
@@ -251,14 +252,14 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
           Post.return flow'
         )
       ~zone:Z_u_num man flow
 
 
   (** Assignment abstract transformer *)
-  let assign lval rhs range man sman flow =
+  let assign lval rhs range man flow =
     let p =
       match ekind lval with
       | E_c_deref p -> p
@@ -270,15 +271,15 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow |>
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to (P_block (base, offset)) ->
-      assign_cases base offset rhs lval.etyp range man sman flow
+      assign_cases base offset rhs lval.etyp range man flow
 
     | _ -> assert false
 
@@ -327,7 +328,7 @@ struct
 
 
   (** Cases of the abstract transformer for tests *(p + ∀i) ? 0 *)
-  let assume_quantified_zero_cases op base offset range man sman flow =
+  let assume_quantified_zero_cases op base offset range man flow =
     (** Get symbolic bounds of the offset *)
     let min, max = bound_quantified_offset offset in
 
@@ -400,7 +401,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
           Post.return flow'
         )
       ~zone:Z_u_num man flow
@@ -409,7 +410,7 @@ struct
 
 
   (** Abstract transformer for tests *(p + ∀i) ? 0 *)
-  let assume_quantified_zero op lval range man sman flow =
+  let assume_quantified_zero op lval range man flow =
     let p =
       let rec find_pointer e =
         match ekind e with
@@ -425,22 +426,22 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
+      raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow |>
+      raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
       Post.return
 
     | E_c_points_to (P_block (base, offset)) ->
-      assume_quantified_zero_cases op base offset range man sman flow
+      assume_quantified_zero_cases op base offset range man flow
 
     | _ -> assert false
 
 
 
   (** Transformers entry point *)
-  let exec zone stmt man sman flow =
+  let exec zone stmt man flow =
     match skind stmt with
     | S_c_declaration v when is_c_scalar_type v.vtyp ->
       (* We need to simplify initialization expression before passing
@@ -465,11 +466,11 @@ struct
 
         let stmt = {stmt with skind = S_c_declaration v} in
 
-        sman.post ~zone:Z_c_scalar stmt flow
+        man.exec_sub ~zone:Z_c_scalar stmt flow
       )
 
     | S_c_declaration v when is_c_array_type v.vtyp ->
-      declare_variable v man sman flow |>
+      declare_variable v man flow |>
       Option.return
 
     | S_add { ekind = E_addr addr } ->
@@ -485,8 +486,8 @@ struct
 
         let length = mk_length_var (A addr) stmt.srange in
 
-        sman.post ~zone:Z_u_num (mk_add length stmt.srange) flow |>
-        Post.bind (sman.post ~zone:Z_u_num (mk_assume (mk_in length (mk_zero stmt.srange) size stmt.srange) stmt.srange))
+        man.exec_sub ~zone:Z_u_num (mk_add length stmt.srange) flow |>
+        Post.bind (man.exec_sub ~zone:Z_u_num (mk_assume (mk_in length (mk_zero stmt.srange) size stmt.srange) stmt.srange))
       )
 
     | S_assign({ ekind = E_var _} as lval, rval) when is_c_scalar_type lval.etyp ->
@@ -495,7 +496,7 @@ struct
         post_eval man @@ fun rval flow ->
 
         let stmt = { stmt with skind = S_assign (lval, rval) } in
-        sman.post ~zone:Z_c_scalar stmt flow
+        man.exec_sub ~zone:Z_c_scalar stmt flow
       )
 
 
@@ -507,7 +508,7 @@ struct
         man.eval ~zone:(Z_c,Z_u_num) rval flow |>
         post_eval man @@ fun rval flow ->
 
-        assign lval rval stmt.srange man sman flow
+        assign lval rval stmt.srange man flow
       )
 
     (* 𝕊⟦ *(p + ∀i) != 0 ⟧ *)
@@ -520,7 +521,7 @@ struct
         man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
         post_eval man @@ fun lval flow ->
 
-        assume_quantified_zero O_ne lval stmt.srange man sman flow
+        assume_quantified_zero O_ne lval stmt.srange man flow
       )
 
     (* 𝕊⟦ *(p + ∀i) == 0 ⟧ *)
@@ -533,7 +534,7 @@ struct
         man.eval ~zone:(Z_c,Z_c_low_level) lval flow |>
         post_eval man @@ fun lval flow ->
 
-        assume_quantified_zero O_eq lval stmt.srange man sman flow
+        assume_quantified_zero O_eq lval stmt.srange man flow
       )
 
     | S_assume(e) ->
@@ -542,7 +543,7 @@ struct
         post_eval man @@ fun e flow ->
 
         let stmt = { stmt with skind = S_assume (e) } in
-        sman.post ~zone:Z_c_scalar stmt flow
+        man.exec_sub ~zone:Z_c_scalar stmt flow
       )
 
 
@@ -625,7 +626,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          raise_alarm Alarms.AOutOfBound range ~bottom:true man flow |>
+          raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow |>
           Eval.empty_singleton
         )
       ~zone:Z_u_num man flow
@@ -638,11 +639,11 @@ struct
 
     match ekind pt with
     | E_c_points_to P_null ->
-      raise_alarm Alarms.ANullDeref range ~bottom:true man flow |>
+      raise_alarm Alarms.ANullDeref range ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to P_invalid ->
-      raise_alarm Alarms.AInvalidDeref range ~bottom:true man flow |>
+      raise_alarm Alarms.AInvalidDeref range ~bottom:true man.lattice flow |>
       Eval.empty_singleton
 
     | E_c_points_to (P_block (base, offset)) ->

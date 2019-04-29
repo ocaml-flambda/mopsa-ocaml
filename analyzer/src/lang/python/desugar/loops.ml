@@ -22,6 +22,7 @@
 (** Desugaring loops into a usual case *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Universal.Ast
 open Ast
 

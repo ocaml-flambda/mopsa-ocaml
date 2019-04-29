@@ -26,11 +26,16 @@ open Ast.All
 open Core.All
 open Log
 
+module Stacked = Sig.Stacked.Lowlevel
+open Stacked
+
+module Domain = Sig.Domain.Lowlevel
+open Domain
 
 module Make
-    (S:Sig.Stacked.Lowlevel.STACK)
-    (D:Sig.Domain.Lowlevel.DOMAIN)
-  : Sig.Domain.Lowlevel.DOMAIN with type t = S.t * D.t
+    (S:STACK)
+    (D:DOMAIN)
+  : DOMAIN with type t = S.t * D.t
 =
 struct
 
@@ -69,19 +74,8 @@ struct
   (**                           {2 Managers}                                *)
   (**************************************************************************)
 
-  (** Global manager of [S] *)
-  let s_man (man:('a, t) man) : ('a, S.t) man = {
-    man with
-    get = (fun flow -> man.get flow |> fst);
-    set = (fun a flow -> man.set (a, man.get flow |> snd) flow);
-    get_log = (fun glog -> man.get_log glog |> Log.first);
-    set_log = (fun log glog -> man.set_log (
-        Log.tuple (log, man.get_log glog |> Log.second)
-      ) glog);
-  }
-
   (** Global manager of [D] *)
-  let d_man (man:('a, t) man) : ('a, D.t) man = {
+  let d_man (man:('a, t) Domain.man) : ('a, D.t) Domain.man = {
     man with
     get = (fun flow -> man.get flow |> snd);
     set = (fun b flow -> man.set (man.get flow |> fst, b) flow);
@@ -91,37 +85,54 @@ struct
       ) glog);
   }
 
-  (** Sub-tree manager of [S] *)
-  let s_sman (man:('a,t) man) : ('a, D.t) man =
+  (** Stack manager of [S] *)
+  let s_man (man:('a, t) Domain.man) : ('a, S.t,D.t) Stacked.man =
     let dman = d_man man in
     {
-      dman with
-      post = (fun ?(zone=any_zone) stmt flow ->
+      lattice = man.lattice;
+      exec = man.exec;
+      post = man.post;
+      eval = man.eval;
+      ask = man.ask;
+      exec_sub = (fun ?(zone=any_zone) stmt flow ->
           dman.post ~zone stmt flow |>
-          log_post_stmt stmt dman
+          Domain.log_post_stmt stmt dman
         );
-    }
+
+      get = (fun a -> man.get a |> fst);
+      set = (fun a1 a -> man.set (a1, man.get a |> snd) a);
+      get_sub = dman.get;
+      set_sub = dman.set;
+      get_log = (fun log -> man.get_log log |> Log.first);
+      set_log = (fun l log ->
+          man.set_log (
+            Log.tuple (l, man.get_log log |> Log.second)
+          ) log
+        );
+      get_sub_log = dman.get_log;
+      set_sub_log = dman.set_log;
+  }
 
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
   let subset man a a' =
-    let b1, a, a' = S.subset (s_man man) (s_sman man) a a' in
+    let b1, a, a' = S.subset (s_man man) a a' in
     b1 && D.subset (d_man man) a a'
 
   let join man a a' =
-    let a1, a, a' = S.join (s_man man) (s_sman man) a a' in
+    let a1, a, a' = S.join (s_man man) a a' in
     let a2 = D.join (d_man man) a a' in
     (a1,a2)
 
   let meet man a a' =
-    let a1, a, a' = S.meet (s_man man) (s_sman man) a a' in
+    let a1, a, a' = S.meet (s_man man) a a' in
     let a2 = D.meet (d_man man) a a' in
     (a1,a2)
 
   let widen man ctx a a' =
-    let a1, a, a', stable = S.widen (s_man man) (s_sman man) ctx a a' in
+    let a1, a, a', stable = S.widen (s_man man) ctx a a' in
     if not stable then
       let a2 = D.join (d_man man) a a' in
       (a1,a2)
@@ -157,8 +168,8 @@ struct
       (* Only [S] provides an [exec] for such zone *)
       let f = S.exec zone in
       (fun stmt man flow ->
-         f stmt (s_man man) (s_sman man) flow |>
-         Option.lift @@ log_post_stmt stmt (s_man man)
+         f stmt (s_man man) flow |>
+         Option.lift @@ Stacked.log_post_stmt stmt (s_man man)
       )
 
     | false, true ->
@@ -166,7 +177,7 @@ struct
       let f = D.exec zone in
       (fun stmt man flow ->
          f stmt (d_man man) flow |>
-         Option.lift @@ log_post_stmt stmt (d_man man)
+         Option.lift @@ Domain.log_post_stmt stmt (d_man man)
       )
 
     | true, true ->
@@ -174,13 +185,13 @@ struct
       let f1 = S.exec zone in
       let f2 = D.exec zone in
       (fun stmt man flow ->
-         match f1 stmt (s_man man) (s_sman man) flow with
+         match f1 stmt (s_man man) flow with
          | Some post ->
-           Some (log_post_stmt stmt (s_man man) post)
+           Some (Stacked.log_post_stmt stmt (s_man man) post)
 
          | None ->
            f2 stmt (d_man man) flow |>
-           Option.lift (log_post_stmt stmt (d_man man))
+           Option.lift (Domain.log_post_stmt stmt (d_man man))
       )
 
 
@@ -223,11 +234,11 @@ struct
   let ask query man flow =
     let reply1 = S.ask query (s_man man) flow in
     let reply2 = D.ask query (d_man man) flow in
-    Option.neutral2 (Query.join query) reply1 reply2
+    Option.neutral2 (join_query query) reply1 reply2
 
   (** Reduction refinement *)
   let refine channel man flow =
-    S.refine channel (s_man man) (s_sman man) flow |>
+    S.refine channel (s_man man) flow |>
     Core.Channel.bind @@ D.refine channel (d_man man)
 
 

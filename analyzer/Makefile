@@ -28,8 +28,8 @@ mopsa = framework mopsa lang main
 # Framework
 framework = ast core lattices engines transformers output config
 framework.ast = program typ operator constant var expr stmt visitor all
-framework.core = query context zone token log lattice flow eval post manager \
-	         id interface channel sig callstack alarm debug_tree cache \
+framework.core = query context zone token log lattice flow eval post id \
+	         interface channel sig callstack alarm debug_tree cache \
 		 abstraction all
 framework.core.sig = value domain stacked
 framework.core.sig.value = lowlevel simplified reduction

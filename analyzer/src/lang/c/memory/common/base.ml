@@ -82,7 +82,7 @@ let base_range =
 
 
 (** Evaluate the size of a base *)
-let eval_base_size base ?(via=Z_any) range man flow =
+let eval_base_size base ?(via=Z_any) range (man:('a,'t,'s) Core.Sig.Stacked.Lowlevel.man) flow =
   match base with
   | V var -> Eval.singleton (mk_z (sizeof_type var.vtyp) range ~typ:ul) flow
   | S str -> Eval.singleton (mk_int (String.length str + 1) range ~typ:ul) flow

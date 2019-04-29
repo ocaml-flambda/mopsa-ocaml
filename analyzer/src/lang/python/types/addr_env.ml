@@ -22,6 +22,7 @@
 (** An environment is a total map from variables to addresses. *)
 
 open Mopsa
+open Sig.Domain.Intermediate
 open Ast
 open Addr
 open Universal.Ast

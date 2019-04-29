@@ -22,6 +22,7 @@
 (** Expansion-based abstraction of C memory cells. *)
 
 open Mopsa
+open Framework.Core.Sig.Stacked.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -334,7 +335,7 @@ module Domain = struct
           flow'
 
   (** [add_cell c range man flow] adds a cell [c] and its numerical constraints to [flow] *)
-  let add_cell c range (man:('a,t) man) flow =
+  let add_cell c range (man:('a,t,'s) man) flow =
     let a = get_domain_env T_cur man flow in
     let a' = {
       a with bases = Bases.add (cell_base c) a.bases;
@@ -354,7 +355,7 @@ module Domain = struct
       ) cells flow
 
   (** [add_base base man flow] adds a new base to the support *)
-  let add_base base man stman flow =
+  let add_base base man flow =
     map_domain_env T_cur (fun a ->
         { a with bases = Bases.add base a.bases }
       ) man flow
@@ -406,7 +407,7 @@ module Domain = struct
   (** {2 Domain initialization} *)
   (** ========================= *)
 
-  let rec init_visitor man stman =
+  let rec init_visitor man =
     Common.Init_visitor.{
       (* Initialization of scalars *)
       scalar = (fun v e range flow ->
@@ -444,7 +445,7 @@ module Domain = struct
               | init :: tl ->
                 let t' = under_array_type c.t in
                 let ci = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int i) * (sizeof_type t')); t = remove_qual t'; p = false;} in
-                let flow' = init_expr (init_visitor man stman) (mk_c_cell ci range) is_global init range flow in
+                let flow' = init_expr (init_visitor man) (mk_c_cell ci range) is_global init range flow in
                 aux (i + 1) tl flow'
           in
           aux 0 init_list flow
@@ -468,7 +469,7 @@ module Domain = struct
                 let field = List.nth record.c_record_fields i in
                 let t' = field.c_field_type in
                 let cf = {b = c.b; o = O_single Z.((cell_zoffset c) + (Z.of_int field.c_field_offset)); t = remove_qual t'; p = false;} in
-                let flow' = init_expr (init_visitor man stman) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
+                let flow' = init_expr (init_visitor man) (mk_c_cell cf ~mode:STRONG range) is_global init range flow in
                 aux (i + 1) tl flow'
             in
             aux 0 l flow
@@ -556,7 +557,7 @@ module Domain = struct
       Eval.singleton {b; o; t = remove_qual t; p = false} flow
 
     | O_out_of_bound ->
-      let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man flow in
+      let flow' = raise_alarm Alarms.AOutOfBound range ~bottom:true man.lattice flow in
       Eval.empty_singleton flow'
 
 
@@ -733,11 +734,11 @@ module Domain = struct
           Eval.singleton (Some c) flow
 
         | E_c_points_to(P_null) ->
-          let flow' = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow in
           Eval.empty_singleton flow'
 
         | E_c_points_to(P_invalid) ->
-          let flow' = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow in
+          let flow' = raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow in
           Eval.empty_singleton flow'
 
         | E_c_points_to(P_top) ->
@@ -774,7 +775,7 @@ module Domain = struct
 
 
   (** Entry-point of evaluations *)
-  let eval zone exp (man:('a,t) man) flow =
+  let eval zone exp (man:('a,t,'s) man) flow =
     match ekind exp with
     (* 𝔼⟦ v ⟧ *)
     | E_var (v, _) when is_c_scalar_type v.vtyp ->
@@ -807,11 +808,11 @@ module Domain = struct
           cell_singleton c exp.erange man flow
 
         | E_c_points_to(P_null) ->
-          raise_alarm Alarms.ANullDeref p.erange ~bottom:true man flow |>
+          raise_alarm Alarms.ANullDeref p.erange ~bottom:true man.lattice flow |>
           Eval.empty_singleton
 
         | E_c_points_to(P_invalid) ->
-          raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man flow |>
+          raise_alarm Alarms.AInvalidDeref p.erange ~bottom:true man.lattice flow |>
           Eval.empty_singleton
 
         | E_c_points_to(P_top) ->
@@ -890,7 +891,7 @@ module Domain = struct
   (** ============================== *)
 
   (** Assign an rval to a cell *)
-  let assign_cell c rval range man stman flow =
+  let assign_cell c rval range man flow =
     let lval = mk_c_cell c range in
     let flow' = map_domain_env T_cur (fun a -> { a with cells = Cells.add c a.cells}) man flow |>
                 man.exec ~zone:Z_c_cell (mk_assign lval rval range)
@@ -911,7 +912,7 @@ module Domain = struct
 
 
   (** Remove cells identified by a membership predicate *)
-  let remove_cells pred range man stman flow =
+  let remove_cells pred range man flow =
     let a = get_domain_env T_cur man flow in
     let cells = Cells.filter pred a.cells in
     let flow = set_domain_env T_cur { a with cells = Cells.diff a.cells cells } man flow in
@@ -919,7 +920,7 @@ module Domain = struct
     man.exec ~zone:Z_c_cell (mk_block block range) flow
 
   (** Remove a cell *)
-  let remove_cell c range man stman flow =
+  let remove_cell c range man flow =
     let flow = map_domain_env T_cur (fun a ->
         {a with cells = Cells.remove c a.cells}
       ) man flow
@@ -929,7 +930,7 @@ module Domain = struct
 
 
   (** Rename an old cell into a new one *)
-  let rename_cell old_cell new_cell range man stman flow =
+  let rename_cell old_cell new_cell range man flow =
     let flow' =
       (* Add the old cell in case it has not been accessed before so
          that its constraints are added in the sub domain *)
@@ -949,7 +950,7 @@ module Domain = struct
     man.exec ~zone:Z_c_cell stmt' flow'
 
   (** Rename bases and their cells *)
-  let rename_base base1 base2 range man stman flow =
+  let rename_base base1 base2 range man flow =
     let a = get_domain_env T_cur man flow in
     (* Cells of base1 *)
     let cells1 = Cells.filter (fun c ->
@@ -964,11 +965,11 @@ module Domain = struct
     let copy =
       if not (Bases.mem base2 a.bases) then
       (* If base2 is not already present => rename the cells *)
-        fun c flow -> rename_cell c (to_base2 c) range man stman flow
+        fun c flow -> rename_cell c (to_base2 c) range man flow
       else
         (* Otherwise, assign with weak update *)
-        fun c flow -> assign_cell (to_base2 c) (mk_c_cell c range) range man stman flow |>
-                      remove_cell c range man stman
+        fun c flow -> assign_cell (to_base2 c) (mk_c_cell c range) range man flow |>
+                      remove_cell c range man
     in
 
     (* Apply copy function *)
@@ -986,13 +987,13 @@ module Domain = struct
     flow
 
   (** Rename primed cells that have been declared in `assigns` stub section *)
-  let rename_primed_cells target offsets range man stman flow =
+  let rename_primed_cells target offsets range man flow =
     match offsets with
     | [] ->
       (* target should be a scalar lval *)
       eval_scalar_cell target man flow |>
       post_eval man @@ fun c flow ->
-      rename_cell { c with p = true } c range man stman flow |>
+      rename_cell { c with p = true } c range man flow |>
       Post.return
 
     | _ ->
@@ -1012,7 +1013,7 @@ module Domain = struct
         (* For primed cells, just rename to an unprimed cell *)
         let flow = Cells.fold (fun c flow ->
             if c.p
-            then rename_cell c { c with p = false } range man stman flow
+            then rename_cell c { c with p = false } range man flow
             else flow
           ) same_base_cells flow
         in
@@ -1049,7 +1050,7 @@ module Domain = struct
             Cells.mem c same_base_cells &&
             not (Cells.mem {c with p = true} same_base_cells) &&
             Itv.mem (cell_zoffset c) itv
-          ) range man stman flow |>
+          ) range man flow |>
         Post.return
 
       | E_c_points_to(P_top) ->
@@ -1060,7 +1061,7 @@ module Domain = struct
 
 
   (** Entry point of post-condition computation *)
-  let exec zone stmt man stman flow =
+  let exec zone stmt man flow =
     match skind stmt with
     (* 𝕊⟦ t v = e; ⟧ when v is a global variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_extern
@@ -1069,14 +1070,14 @@ module Domain = struct
                                                | Variable_func_static _;
                                      var_init = init}} as v)
       ->
-      add_base (V v) man stman flow |>
-      Common.Init_visitor.init_global (init_visitor man stman) v init stmt.srange |>
+      add_base (V v) man flow |>
+      Common.Init_visitor.init_global (init_visitor man) v init stmt.srange |>
       Post.return |> Option.return
 
     (* 𝕊⟦ t v = e; ⟧ when v is a local variable *)
     | S_c_declaration({vkind = V_c {var_scope = Variable_local _; var_init = init}} as v) ->
-      add_base (V v) man stman flow |>
-      Common.Init_visitor.init_local (init_visitor man stman) v init stmt.srange |>
+      add_base (V v) man flow |>
+      Common.Init_visitor.init_local (init_visitor man) v init stmt.srange |>
       Post.return |> Option.return
 
     (* 𝕊⟦ add v ⟧ when v is a scalar *)
@@ -1091,12 +1092,12 @@ module Domain = struct
 
     (* 𝕊⟦ add v ⟧ when v is not a scalar *)
     | S_add { ekind = E_var (v, _) } when not (is_c_scalar_type v.vtyp) ->
-      add_base (V v) man stman flow |>
+      add_base (V v) man flow |>
       Post.return |> Option.return
 
     (* 𝕊⟦ add @ ⟧ when @ is an address *)
     | S_add { ekind = E_addr addr } ->
-      add_base (A addr) man stman flow |>
+      add_base (A addr) man flow |>
       Post.return  |> Option.return
 
     (* 𝕊⟦ remove v ⟧ *)
@@ -1124,13 +1125,13 @@ module Domain = struct
       let flow =
         match cell_offset c with
         | O_single _ ->
-          assign_cell c rval stmt.srange man stman flow
+          assign_cell c rval stmt.srange man flow
 
         | O_region itv ->
           remove_cells (fun c' ->
               compare_base (cell_base c) (cell_base c') = 0 &&
               Itv.mem (cell_zoffset c') itv
-            ) stmt.srange man stman flow
+            ) stmt.srange man flow
 
         | _ -> panic_at stmt.srange "expand: lval cell %a not supported in assignments" pp_cell c
       in
@@ -1149,18 +1150,18 @@ module Domain = struct
 
     (* 𝕊⟦ rename(v1, v2) ⟧ *)
     | S_rename({ ekind = E_var (v1, _) }, { ekind = E_var (v2, _) }) ->
-      rename_base (V v1) (V v2) stmt.srange man stman flow |>
+      rename_base (V v1) (V v2) stmt.srange man flow |>
       Post.return |> Option.return
 
     (* 𝕊⟦ rename(addr1, addr2) ⟧ *)
     | S_rename({ ekind = E_addr addr1 }, { ekind = E_addr addr2 }) ->
-      rename_base (A addr1) (A addr2) stmt.srange man stman flow |>
+      rename_base (A addr1) (A addr2) stmt.srange man flow |>
       man.exec ~zone:Z_c_scalar stmt |>
       Post.return |> Option.return
 
     (* 𝕊⟦ rename primed p[a0, b0][a1, b1]... ⟧ *)
     | S_stub_rename_primed(p, offsets) ->
-      rename_primed_cells p offsets stmt.srange man stman flow |>
+      rename_primed_cells p offsets stmt.srange man flow |>
       Option.return
 
     | _ -> None
@@ -1169,7 +1170,7 @@ module Domain = struct
   (** Query handlers *)
   (** ============== *)
 
-  let ask : type r. r Query.query -> ('a, t) man -> 'a flow -> r option = fun query man flow ->
+  let ask : type r. r query -> ('a, t, 's) man -> 'a flow -> r option = fun query man flow ->
     match query with
     | Framework.Engines.Interactive.Q_print_var ->
       Some (
@@ -1231,7 +1232,7 @@ module Domain = struct
     | _ -> None
 
 
-  let refine channel man sman flow = Channel.return flow
+  let refine channel man flow = Channel.return flow
 
 end
 

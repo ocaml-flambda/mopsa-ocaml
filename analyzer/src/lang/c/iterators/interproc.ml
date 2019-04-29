@@ -22,6 +22,7 @@
 (** Abstraction of C function calls *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Memory.Common.Points_to
 open Universal.Ast
 open Ast

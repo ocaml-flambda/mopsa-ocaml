@@ -29,12 +29,13 @@
 open Ast.All
 open Core.All
 open Log
+open Sig.Domain.Lowlevel
 
 
 module Make
-    (D1:Sig.Domain.Lowlevel.DOMAIN)
-    (D2:Sig.Domain.Lowlevel.DOMAIN)
-  : Sig.Domain.Lowlevel.DOMAIN with type t = D1.t * D2.t
+    (D1:DOMAIN)
+    (D2:DOMAIN)
+  : DOMAIN with type t = D1.t * D2.t
 =
 struct
 
@@ -209,7 +210,7 @@ struct
   let ask query man flow =
     let reply1 = D1.ask query (d1_man man) flow in
     let reply2 = D2.ask query (d2_man man) flow in
-    Option.neutral2 (Query.join query) reply1 reply2
+    Option.neutral2 (join_query query) reply1 reply2
 
 
   (** Reduction refinement *)

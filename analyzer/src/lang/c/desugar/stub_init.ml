@@ -22,6 +22,7 @@
 (** Initialize variable with stubs. *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 

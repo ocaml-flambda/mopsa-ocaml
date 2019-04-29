@@ -27,7 +27,6 @@ open Ast.Stmt
 open Core
 open Flow
 open Eval
-open Manager
 open Zone
 open Abstraction
 

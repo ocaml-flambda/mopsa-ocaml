@@ -22,6 +22,7 @@
 (** Inter-procedural iterator by inlining.  *)
 
 open Mopsa
+open Framework.Core.Sig.Domain.Stateless
 open Ast
 open Zone
 open Callstack
@@ -181,4 +182,4 @@ end
 
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  register_domain (module Domain)

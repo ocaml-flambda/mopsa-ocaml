@@ -251,7 +251,7 @@ struct
   let ask man q =
     let a = V1.ask (v1_man man) q in
     let b = V2.ask (v2_man man) q in
-    Option.neutral2 (Query.join q) a b
+    Option.neutral2 (join_query q) a b
 
 
   (** {2 Reduction refiner} *)

@@ -63,6 +63,7 @@
 
 
 open Mopsa
+open Framework.Core.Sig.Domain.Intermediate
 open Universal.Ast
 open Stubs.Ast
 open Ast
@@ -394,4 +395,4 @@ struct
 end
 
 let () =
-    Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)
+  Framework.Core.Sig.Domain.Intermediate.register_domain (module Domain)

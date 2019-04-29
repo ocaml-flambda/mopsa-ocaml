@@ -27,9 +27,8 @@
 
 open Ast.All
 open Core.All
-open Sig.Stacked.Intermediate
 open Sig.Stacked.Reduction
-open Core.Manager
+open Sig.Stacked.Intermediate
 open Log
 
 
@@ -137,8 +136,8 @@ struct
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
-  let init prog man flow =
-    let f = fun (type a) (m:a smodule) (man:('a,a) man) flow ->
+  let init prog (man:('a,t,'s) man) flow =
+    let f = fun (type a) (m:a smodule) (man:('a,a,'s) man) flow ->
       let module S = (val m) in
       S.init prog man flow
     in
@@ -160,17 +159,17 @@ struct
       slist_map { f } Spec.pool
     in
 
-    (fun stmt man sman flow : 'a post option ->
+    (fun stmt man flow : 'a post option ->
 
        (* Compute the list of post-conditions by pointwise application.
           Most recent context is propagated through applications *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) (acc,ctx) ->
+       let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
          if not covered then
            (None :: acc, ctx)
          else
            let module S = (val m) in
            let flow' = Flow.set_ctx ctx flow in
-           match S.exec zone stmt man sman flow' with
+           match S.exec zone stmt man flow' with
            | None -> (None :: acc, ctx)
            | Some post ->
              let post' = log_post_stmt stmt man post in
@@ -231,7 +230,7 @@ struct
        (* Compute the list of evaluations by pointwise application.
           Most recent context is propagated through applications. 
        *)
-       let f = fun (type a) (m:a smodule) covered (man:('a,a) man) (acc,ctx) ->
+       let f = fun (type a) (m:a smodule) covered (man:('a,a,'s) man) (acc,ctx) ->
          if not covered then
            None :: acc, ctx
          else
@@ -264,12 +263,10 @@ struct
   (** ***************** *)
 
   let ask query man flow =
-    let f = fun (type a) (m:a smodule) (man:('a,a) man) acc ->
+    let f = fun (type a) (m:a smodule) (man:('a,a,'s) man) acc ->
       let module S = (val m) in
       S.ask query man flow |>
-      Option.neutral2 (fun ret1 ret2 ->
-          Query.meet query ret1 ret2
-        ) acc
+      Option.neutral2 (meet_query query) acc
     in
     slist_man_fold { f } Spec.pool man None
 

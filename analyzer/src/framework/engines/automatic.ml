@@ -26,7 +26,6 @@ open Ast.Expr
 open Core
 open Lattice
 open Flow
-open Manager
 open Eval
 open Zone
 open Query

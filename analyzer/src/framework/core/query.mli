@@ -26,18 +26,18 @@ type _ query = ..
 
 
 type query_pool = {
-  join : 'r. 'r query -> 'r -> 'r -> 'r;
-  meet : 'r. 'r query -> 'r -> 'r -> 'r;
+  join_query : 'r. 'r query -> 'r -> 'r -> 'r;
+  meet_query : 'r. 'r query -> 'r -> 'r -> 'r;
 }
 
-
-val join : 'r query -> 'r -> 'r -> 'r
-
-val meet : 'r query -> 'r -> 'r -> 'r
-
 type query_info = {
-  query_join : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
-  query_meet : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
+  join : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
+  meet : 'r. query_pool -> 'r query -> 'r -> 'r -> 'r;
 }
 
 val register_query : query_info -> unit
+
+val join_query : 'r query -> 'r -> 'r -> 'r
+
+val meet_query : 'r query -> 'r -> 'r -> 'r
+

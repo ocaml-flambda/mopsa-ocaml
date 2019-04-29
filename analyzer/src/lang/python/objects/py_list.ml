@@ -32,6 +32,7 @@
 (* TODO: add length for lists and position for iterator? *)
 
 open Mopsa
+open Sig.Domain.Stateless
 open Ast
 open Addr
 open Universal.Ast

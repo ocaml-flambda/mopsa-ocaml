@@ -27,10 +27,47 @@ open Ast.All
 open Interface
 open Id
 open Zone
-open Manager
+open Lattice
+open Log
 open Flow
 open Post
 open Eval
+
+
+(*==========================================================================*)
+(**                         {2 Domain manager}                              *)
+(*==========================================================================*)
+
+
+(** Managers provide access to full analyzer, i.e. (i) the lattice
+    operators of the global abstraction ['a], (ii) the transfer functions
+    over ['a flow] and (iii) accessors to the domain's abstract element ['t]
+    within ['a].
+*)
+type ('a, 't) man = ('a,'t) Intermediate.man = {
+  (* Lattice operators over global abstract elements ['a] *)
+  lattice : 'a lattice;
+
+  (* Accessors to the domain's abstract element ['t] within ['a] *)
+  get : 'a -> 't;
+  set : 't -> 'a -> 'a;
+
+  (** Analyzer transfer functions *)
+  post : ?zone:zone -> stmt -> 'a flow -> 'a post;
+  exec : ?zone:zone -> stmt -> 'a flow -> 'a flow;
+  eval : ?zone:(zone * zone) -> ?via:zone -> expr -> 'a flow -> (expr, 'a) eval;
+  ask : 'r. 'r Query.query -> 'a flow -> 'r;
+
+  (** Accessors to the domain's merging logs *)
+  get_log : log -> log;
+  set_log : log -> log -> log;
+}
+
+
+
+(*==========================================================================*)
+(**                        {2 Domain signature}                             *)
+(*==========================================================================*)
 
 
 module type DOMAIN =
@@ -121,3 +158,30 @@ let names () =
       let module D = (val dom : DOMAIN) in
       D.name
     ) !domains
+
+
+(*==========================================================================*)
+(**                        {2 Utility functions}                            *)
+(*==========================================================================*)
+
+let assume = Intermediate.assume
+
+let assume_eval = Intermediate.assume_eval
+
+let assume_post = Intermediate.assume_post
+
+let switch = Intermediate.switch
+
+let switch_eval = Intermediate.switch_eval
+
+let switch_post = Intermediate.switch_post
+
+let exec_eval = Intermediate.exec_eval
+
+let post_eval = Intermediate.post_eval
+
+let post_eval_with_cleaners = Intermediate.post_eval_with_cleaners
+
+let exec_stmt_on_all_flows = Intermediate.exec_stmt_on_all_flows
+
+let exec_block_on_all_flows = Intermediate.exec_block_on_all_flows

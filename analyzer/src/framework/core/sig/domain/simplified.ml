@@ -29,7 +29,6 @@ open Lattice
 open Context
 open Id
 open Zone
-open Manager
 open Interface
 open Token
 open Channel
@@ -137,7 +136,7 @@ struct
 
     let a', uctx = D.init prog (Context.get_unit ctx) in
 
-    set_domain_env T_cur a' man flow |>
+    Intermediate.set_domain_env T_cur a' man flow |>
     Flow.set_ctx (Context.set_unit uctx ctx)
 
   let interface = {
@@ -156,12 +155,12 @@ struct
     | S_assign _ | S_assume _ | S_add _ | S_remove _ | S_rename _
     | S_project _ | S_fold _ | S_expand _ | S_forget _
       ->
-      let a = get_domain_env T_cur man flow in
+      let a = Intermediate.get_domain_env T_cur man flow in
       let ctx = Flow.get_ctx flow in
       D.exec stmt (Context.get_unit ctx) a |>
       Option.lift @@ fun (a',uctx) ->
 
-      set_domain_env T_cur a' man flow |>
+      Intermediate.set_domain_env T_cur a' man flow |>
       Flow.set_ctx (Context.set_unit uctx ctx) |>
       Post.return
 
@@ -170,13 +169,13 @@ struct
   let eval zone exp man flow = None
 
   let ask query man flow =
-    D.ask query (Flow.get_ctx flow |> Context.get_unit) (get_domain_env T_cur man flow)
+    D.ask query (Flow.get_ctx flow |> Context.get_unit) (Intermediate.get_domain_env T_cur man flow)
 
   let refine channel man flow =
-    D.refine channel (get_domain_env T_cur man flow) |>
+    D.refine channel (Intermediate.get_domain_env T_cur man flow) |>
     Channel.bind @@ fun a ->
 
-    set_domain_env T_cur a man flow |>
+    Intermediate.set_domain_env T_cur a man flow |>
     Channel.return
 
 end
