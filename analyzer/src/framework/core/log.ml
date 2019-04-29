@@ -79,12 +79,14 @@ let second log =
 (** Return the block of statement logged by a domain *)
 let get_domain_block log =
   match log with
+  | L_empty -> []
   | L_singleton(block, _) -> block
   | _ -> assert false
 
 (** Return the inner logs of the domain *)
 let get_domain_inner_log log =
   match log with
+  | L_empty -> L_empty
   | L_singleton(_, l) -> l
   | _ -> assert false
 

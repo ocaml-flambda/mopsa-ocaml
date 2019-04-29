@@ -80,8 +80,16 @@ struct
 
   let name = Value.name
 
-  let merge pre (post1, log1) (post2, log2) =
-    assert false
+  let merge pre (a1, log1) (a2, log2) =
+    let patch stmt a acc =
+      match skind stmt with
+      | S_assign({ ekind = E_var (var, _)}, _) ->
+        let v = find var a in
+        add var v acc
+      | _ -> assert false
+    in
+    let acc = List.fold_left (fun acc stmt -> patch stmt a1 acc) a2 log1 in
+    List.fold_left (fun acc stmt -> patch stmt a2 acc) acc log2
 
   let print fmt a =
     Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a

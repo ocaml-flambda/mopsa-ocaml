@@ -177,36 +177,52 @@ struct
              (Some post' :: acc, ctx')
        in
 
-       let pointwise_posts, _ = slist_man_fold_combined { f } Spec.pool coverage man ([],Flow.get_ctx flow) in
+       let pointwise_posts, _ = slist_man_fold_combined { f } Spec.pool coverage man ([], Flow.get_ctx flow) in
 
        (* Merge post-conditions *)
-       let f = fun (type a) (m:a smodule) post man pred ->
-         match post with
-         | None -> pred
-         | Some post ->
-           let module S = (val m) in
-           (* Put the computed state of S in all previous posts *)
-           let pred' =
-             pred |> List.map (fun post' ->
-                 Post.merge (fun tk (a,log) (a',log') ->
-                     man.set (man.get a) a',
-                     man.set_log (man.get_log log) log'
-                   ) post post'
-               )
-           in
-           post :: pred'
-       in
-       let merged_posts = slist_man_fold_combined { f } Spec.pool pointwise_posts man [] in
+       let f = fun (type a) (m:a smodule) post (man:('a,a,'s) man) acc ->
+         Option.neutral2 (fun post acc ->
+             let module S = (val m) in
+             (* Patch the accumulated post by:
+                a. putting the newly state of S
+                b. merging the sub-tree state
+                c. meet the other states
+             *)
+             Post.merge (fun tk (a,log) (a',log') ->
+                 debug "merging@, a = %a@, log = %a@, a' = %a@, log' = %a"
+                   man.lattice.print a
+                   Log.print log
+                   man.lattice.print a'
+                   Log.print log'
+                 ;
 
-       (* Meet post-conditions *)
-       let rec aux = function
-         | [] -> None
-         | post :: tl ->
-           match aux tl with
-           | None -> Some post
-           | Some post' -> Some (Post.meet man.lattice post post')
+                 (* a. Update the state of S *)
+                 let a' = man.set (man.get a) a' in
+
+                 (* b. Merge the sub-tree *)
+                 let pre = Flow.get tk man.lattice flow |> man.get_sub in
+                 let slog = man.get_sub_log log in
+                 let slog' = man.get_sub_log log' in
+                 let merged = man.merge_sub
+                     pre
+                     (man.get_sub a, slog)
+                     (man.get_sub a', slog')
+                 in
+
+                 (* Meet the other states *)
+                 let a = man.set_sub merged a in
+                 let a' = man.set_sub merged a' in
+
+                 debug "merge@, a = %a@, a' = %a" man.lattice.print a man.lattice.print a';
+
+                 let aa = man.lattice.meet a a' in
+                 debug "meet@, aa = %a" man.lattice.print aa;
+
+                 aa, man.set_sub_log (Log.concat slog slog') log'
+               ) post acc
+           ) post acc
        in
-       aux merged_posts
+       slist_man_fold_combined { f } Spec.pool pointwise_posts man None
     )
 
 
