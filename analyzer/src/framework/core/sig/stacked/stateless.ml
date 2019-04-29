@@ -67,6 +67,9 @@ type ('a, 't, 's) man = ('a,'t,'s) Intermediate.man = {
   (** Accessors to the sub-tree merge logs *)
   get_sub_log : log -> log;
   set_sub_log : log -> log -> log;
+
+  (** Sub-tree merger *)
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 

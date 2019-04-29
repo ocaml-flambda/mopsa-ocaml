@@ -129,8 +129,8 @@ sig
   (** [widen man ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge: ('a,t) man -> 'a -> 'a * log -> 'a * log -> t
-  (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
+  val merge: t -> t * log -> t * log -> t
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the

@@ -77,6 +77,9 @@ type ('a, 't, 's) man = {
   (** Accessors to the sub-tree merge logs *)
   get_sub_log : log -> log;
   set_sub_log : log -> log -> log;
+
+  (** Sub-tree merger *)
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -128,8 +131,8 @@ sig
 
   val widen: ('a,t,'s) man -> uctx -> 'a -> 'a -> t * 'a * 'a * bool
 
-  val merge: ('a,t,'s) man -> 'a -> 'a * log -> 'a * log -> t
-  (** [merge man pre (post1, log1) (post2, log2)] synchronizes two divergent
+  val merge: t -> t * log -> t * log -> t
+  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the

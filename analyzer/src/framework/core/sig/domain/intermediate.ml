@@ -174,12 +174,6 @@ let lift_unop f man a = f (man.get a)
 
 let lift_binop f man a a' = f (man.get a) (man.get a')
 
-let lift_merge merge man pre (post1,log1) (post2,log2) =
-  merge
-    (man.get pre)
-    (man.get post1, man.get_log log1)
-    (man.get post2, man.get_log log2)
-
 
 (** Cast a unified signature into a low-level signature *)
 module MakeLowlevelDomain(D:DOMAIN) : Lowlevel.DOMAIN with type t = D.t =
@@ -216,8 +210,7 @@ struct
 
   let widen man ctx a a' = lift_binop (D.widen ctx) man a a'
 
-  let merge man pre (post1,log1) (post2,log2) =
-    lift_merge D.merge man pre (post1,log1) (post2,log2)
+  let merge = D.merge
 
 
   (** {2 Transfer functions} *)

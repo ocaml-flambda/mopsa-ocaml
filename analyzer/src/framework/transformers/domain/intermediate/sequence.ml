@@ -116,10 +116,9 @@ struct
     D1.widen ctx a1 a1',
     D2.widen ctx a2 a2'
 
-  let merge (pr1,pr2) ((a1,a2), log) ((a1',a2'), log') =
-    D1.merge pr1 (a1, Log.first log) (a1', Log.first log'),
-    D2.merge pr2 (a2, Log.second log) (a2', Log.second log')
-
+  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
+    D1.merge pre1 (a1, Log.first log) (a1', Log.first log'),
+    D2.merge pre2 (a2, Log.second log) (a2', Log.second log')
 
 
   (**************************************************************************)

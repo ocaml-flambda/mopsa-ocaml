@@ -80,6 +80,9 @@ type ('a, 't, 's) man = ('a,'t,'s) Lowlevel.man = {
   (** Accessors to the sub-tree merge logs *)
   get_sub_log : log -> log;
   set_sub_log : log -> log -> log;
+
+  (** Sub-tree merger *)
+  merge_sub : 's -> 's * log -> 's * log -> 's;
 }
 
 
@@ -322,12 +325,7 @@ struct
     in
     x, man.set_sub s a, man.set_sub s' a', stable
 
-  let merge man pre (post1,log1) (post2,log2) =
-    S.merge
-      (man.get pre)
-      (man.get post1, man.get_log log1)
-      (man.get post2, man.get_log log2)
-
+  let merge = S.merge
 
   (** {2 Transfer functions} *)
   (** ********************** *)
