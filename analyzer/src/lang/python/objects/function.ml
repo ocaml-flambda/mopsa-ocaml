@@ -113,7 +113,9 @@ module Domain =
                  else
                    (* Initialize local variables to undefined value and give the call to {!Universal} *)
                    (
-                     let flow = man.exec
+                     let flow =
+                       if pyfundec.py_func_locals = [] then flow else
+                       man.exec
                                   (mk_block (List.mapi (fun i v ->
                                                  let e =
                                                    (* Initialize locals with the same name of a builtin with its address *)
