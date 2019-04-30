@@ -142,9 +142,14 @@ let meet_list ?(empty=empty) (l: ('e, 'a) eval list) : ('e, 'a) eval =
 
 let print ~(pp: Format.formatter -> 'e -> unit) fmt (evl: ('e, 'a) eval) : unit =
   Dnf.print (fun fmt case ->
-      match case.eval_result with
-      | None -> Format.pp_print_string fmt "ϵ"
-      | Some x -> pp fmt x
+      Format.fprintf fmt "%a"
+        (fun fmt e -> match e with
+         | None -> Format.pp_print_string fmt "ϵ"
+         | Some x -> pp fmt x
+        )
+        case.eval_result
+        (* (Format.pp_print_list pp_stmt)
+         * case.eval_cleaners *)
     )
     fmt evl
 
@@ -160,7 +165,7 @@ let bind_opt f eval =
          let flow' = Flow.set_ctx ctx case.eval_flow in
          let eval' =
            match case.eval_result with
-           | None -> Some (empty_singleton flow')
+           | None -> Some (empty_singleton flow' |> (add_cleaners case.eval_cleaners))
            | Some expr -> f expr flow' |>
                           Option.lift (add_cleaners case.eval_cleaners)
          in
