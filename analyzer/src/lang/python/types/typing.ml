@@ -258,6 +258,7 @@ struct
     res
 
   let exec zone stmt man flow =
+    let range = stmt.srange in
     match skind stmt with
     | S_assign ({ekind = E_addr ({addr_mode} as la)}, {ekind = E_py_object (a, _)}) ->
       (* si l'adresse est weak et pas dans le store, faire un assign strong *)
@@ -298,6 +299,16 @@ struct
 
     | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
       begin match ekind lval, ekind rval with
+        | E_py_object ({addr_kind = A_py_class (C_user c, b)} as alval, _ ), E_py_object (arval, _) when alval.addr_mode = STRONG ->
+          if List.exists (fun v -> v.org_vname = attr) c.py_cls_static_attributes then
+            let var = List.find (fun v -> v.org_vname = attr) c.py_cls_static_attributes in
+            man.exec (mk_assign (mk_var var range) rval range) flow
+            |> Post.return |> Option.return
+          else
+            Exceptions.panic_at range "Adding an attribute to a *class* is not supported yet"
+        (* todo: enelver l'ancien c.py_cls_dec et ajouter le nouveau ave cla bonne variable, avant de faire la même assignation *)
+        | E_py_object ({addr_kind = A_py_class (_)}, _ ), E_py_object (arval, _) ->
+          Exceptions.panic_at range "Attr assignment on non user-defined classes not supported yet.@\n"
         | E_py_object (alval, _), E_py_object (arval, _) when alval.addr_mode = STRONG ->
           (* FIXME: weak vs strong updates? *)
           let cur = get_domain_env T_cur man flow in
@@ -755,18 +766,26 @@ struct
                 end) ptys []
             |> Eval.join_list
 
-          | Objects.Py_list.A_py_list _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "list") range) flow
+          | Objects.Py_list.A_py_list _, A_py_class (C_builtin "list", _)
+          | Objects.Py_set.A_py_set _, A_py_class (C_builtin "set", _)
+          | Objects.Dict.A_py_dict _, A_py_class (C_builtin "dict", _)
+          | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin "tuple", _) ->
+            man.eval (mk_py_true range) flow
 
-          | Objects.Py_set.A_py_set _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "set") range) flow
+          | Objects.Py_list.A_py_list _, A_py_class (c, b)
+          | Objects.Py_set.A_py_set _, A_py_class (c, b)
+          | Objects.Dict.A_py_dict _, A_py_class (c, b)
+          | Objects.Tuple.A_py_tuple _, A_py_class (c, b) ->
+            let str_addr = match akind addr_obj with
+              | Objects.Py_list.A_py_list _ -> "list"
+              | Objects.Py_set.A_py_set _ -> "set"
+              | Objects.Dict.A_py_dict _ -> "dict"
+              | Objects.Tuple.A_py_tuple _ -> "tuple"
+              | _ -> assert false in
+            assume_eval (mk_py_issubclass_builtin_l str_addr eattr range) man flow
+              ~fthen:(man.eval (mk_py_false range))
+              ~felse:(man.eval (mk_py_false range))
 
-          | Objects.Dict.A_py_dict _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "dict") range) flow
-
-
-          | Objects.Tuple.A_py_tuple _, A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = "tuple") range) flow
 
           | Objects.Py_list.A_py_iterator (s, _, _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = s) range) flow

@@ -313,6 +313,23 @@ let mk_py_float_interval l u range =
  *   let v = mkv vname uniq addr.addr_uid T_any in
  *   mk_var v range *)
 
+let mk_py_issubclass e1 e2 range =
+  mk_py_call (mk_py_object (find_builtin "issubclass") range) [e1; e2] range
+
+let mk_py_issubclass_builtin_r e builtin range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass e (mk_py_object obj range) range
+
+let mk_py_issubclass_builtin_l builtin e range =
+  let obj = find_builtin builtin in
+  mk_py_issubclass (mk_py_object obj range) e range
+
+
+let mk_py_issubclass_builtin2 blt1 blt2 range =
+  let obj1 = find_builtin blt1 in
+  let obj2 = find_builtin blt2 in
+  mk_py_issubclass (mk_py_object obj1 range) (mk_py_object obj2 range) range
+
 let mk_py_hasattr e attr range =
   mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
 
