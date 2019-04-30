@@ -112,9 +112,8 @@ struct
         (Flow.print man.lattice) flow_init
         (Flow.print man.lattice) flow_out
       ;
-
       let res0 =
-        lfp !opt_loop_widening_delay cond body man flow_init flow_init |>
+        lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init |>
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
         Flow.join man.lattice flow_out
       in
@@ -144,7 +143,8 @@ struct
 
     | _ -> None
 
-  and lfp delay cond body man flow_init flow =
+  and lfp count delay cond body man flow_init flow =
+    debug "lfp called, range = %a, count = %d@\n" pp_range body.srange count;
     let flow0 = Flow.remove T_continue flow |>
                 Flow.remove T_break
     in
@@ -164,19 +164,18 @@ struct
     let flow3 = Flow.join man.lattice flow_init flow2 in
 
     debug "lfp join:@\n res = @[%a@]" (Flow.print man.lattice) flow3;
-
     if Flow.subset man.lattice flow3 flow then flow3
-    else
-    if delay = 0 then
+    else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow3 in
-      debug
+      let () = debug
         "widening:@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
         (Flow.print man.lattice) flow
         (Flow.print man.lattice) flow3
-        (Flow.print man.lattice) wflow;
-      lfp !opt_loop_widening_delay cond body man flow_init wflow
+        (Flow.print man.lattice) wflow
+      in
+      lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
-      lfp (delay - 1) cond body man flow_init flow3
+      lfp (count+1) (delay - 1) cond body man flow_init flow3
 
   and unroll cond body man flow =
     let rec loop i flow =
