@@ -160,7 +160,12 @@ struct
       let flow = map_domain_env T_cur (remove v) man flow in
       if String.length v.org_vname >= 4 && String.sub v.org_vname 0 4 = "$tmp" then
         Post.return flow |> Option.return
-      else if String.length v.org_vname >= 3 && String.sub v.org_vname 0 3 = "$l*" then
+      else if (String.length v.org_vname >= 3 && (String.sub v.org_vname 0 3 = "$l*"
+                                                 || String.sub v.org_vname 0 3 = "$s*"
+                                                 || String.sub v.org_vname 0 3 = "$t:"))
+           || (String.length v.org_vname >= 5 && (String.sub v.org_vname 0 5 = "$d_k*" ||
+                                                  String.sub v.org_vname 0 5 = "$d_v*"))
+                                                 then
         Post.return flow |> Option.return
       else
         (* if the variable maps to a list, we should remove the temporary variable associated, ONLY if it's not used by another list *)
@@ -246,10 +251,12 @@ struct
               (Eval.singleton (mk_py_object (find_builtin v.org_vname) range) flow :: acc, annots)
 
             | Undef_global ->
+              debug "Incoming NameError, on var %a, cs = %a @\n" pp_var v Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "NameError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
             | Undef_local ->
+              debug "Incoming UnboundLocalError, on var %a, cs = %a @\n" pp_var v Callstack.print (Callstack.get flow);
               let flow = man.exec (Utils.mk_builtin_raise "UnboundLocalError" range) flow in
               (Eval.empty_singleton flow :: acc, Flow.get_ctx flow)
 
