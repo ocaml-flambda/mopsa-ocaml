@@ -2,4 +2,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/types.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG}  -widening-delay=1 -loop-unrolling=1 $@
+${MOPSADIR}/bin/mopsa -config=${CONFIG}  -widening-delay=0 -loop-unrolling=2 $@
