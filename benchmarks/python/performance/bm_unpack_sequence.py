@@ -1,3 +1,4 @@
+# 400 unpack, 3 itérations pour converger, 2 appels de fonctions -> 2400 unpack
 """Microbenchmark for Python's sequence unpacking."""
 
 # import perf
@@ -427,8 +428,10 @@ def bench_list_unpacking(loops):
 
 
 def bench_all(loops):
+    dt2 = bench_list_unpacking(loops)
     dt1 = bench_tuple_unpacking(loops)
-    # dt2 = bench_list_unpacking(loops)
+    # on perd 20s en changeant l'ordre
+    # j'ai l'impression que les tuples prennent moins de temps que les listes aussi (de manière non négligeable)
     return 0 # dt1 + dt2
 
 

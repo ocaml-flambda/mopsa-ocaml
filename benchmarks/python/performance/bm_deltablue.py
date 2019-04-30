@@ -39,7 +39,7 @@ class Strength(object):
     WEAKEST = None
 
     def __init__(self, strength, name):
-        super(Strength, self).__init__()
+        # super(Strength, self).__init__()
         self.strength = strength
         self.name = name
 
@@ -92,7 +92,7 @@ Strength.WEAKEST = Strength(6, "weakest")
 class Constraint(object):
 
     def __init__(self, strength):
-        super(Constraint, self).__init__()
+        # super(Constraint, self).__init__()
         self.strength = strength
 
     def add_constraint(self):
@@ -139,7 +139,7 @@ class Constraint(object):
 class UrnaryConstraint(Constraint):
 
     def __init__(self, v, strength):
-        super(UrnaryConstraint, self).__init__(strength)
+        Constraint.__init__(self, strength) #super(UrnaryConstraint, self).__init__(strength)
         self.my_output = v
         self.satisfied = False
         self.add_constraint()
@@ -188,8 +188,8 @@ class UrnaryConstraint(Constraint):
 
 class StayConstraint(UrnaryConstraint):
 
-    def __init__(self, v, string):
-        super(StayConstraint, self).__init__(v, string)
+    # def __init__(self, v, string):
+        # super(StayConstraint, self).__init__(v, string)
 
     def execute(self):
         # The methods, THEY DO NOTHING.
@@ -198,8 +198,8 @@ class StayConstraint(UrnaryConstraint):
 
 class EditConstraint(UrnaryConstraint):
 
-    def __init__(self, v, string):
-        super(EditConstraint, self).__init__(v, string)
+    # def __init__(self, v, string):
+    #     super(EditConstraint, self).__init__(v, string)
 
     def is_input(self):
         return True
@@ -219,7 +219,8 @@ class Direction(object):
 class BinaryConstraint(Constraint):
 
     def __init__(self, v1, v2, strength):
-        super(BinaryConstraint, self).__init__(strength)
+        Constraint.__init__(self, strength)
+        # super(BinaryConstraint, self).__init__(strength)
         self.v1 = v1
         self.v2 = v2
         self.direction = Direction.NONE
@@ -305,15 +306,18 @@ class ScaleConstraint(BinaryConstraint):
         self.direction = Direction.NONE
         self.scale = scale
         self.offset = offset
-        super(ScaleConstraint, self).__init__(src, dest, strength)
+        # super(ScaleConstraint, self).__init__(src, dest, strength)
+        BinaryConstraint.__init__(self, src, dest, strength)
 
     def add_to_graph(self):
-        super(ScaleConstraint, self).add_to_graph()
+        # super(ScaleConstraint, self).add_to_graph()
+        BinaryConstraint.add_to_graph(self)
         self.scale.add_constraint(self)
         self.offset.add_constraint(self)
 
     def remove_from_graph(self):
-        super(ScaleConstraint, self).remove_from_graph()
+        BinaryConstraint.remove_from_graph(self)
+        #super(ScaleConstraint, self).remove_from_graph()
 
         if self.scale is not None:
             self.scale.remove_constraint(self)
@@ -322,7 +326,8 @@ class ScaleConstraint(BinaryConstraint):
             self.offset.remove_constraint(self)
 
     def mark_inputs(self, mark):
-        super(ScaleConstraint, self).mark_inputs(mark)
+        # super(ScaleConstraint, self).mark_inputs(mark)
+        BinaryConstraint.mark_inputs(self, mark)
         self.scale.mark = mark
         self.offset.mark = mark
 
@@ -353,7 +358,7 @@ class EqualityConstraint(BinaryConstraint):
 class Variable(object):
 
     def __init__(self, name, initial_value=0):
-        super(Variable, self).__init__()
+        # super(Variable, self).__init__()
         self.name = name
         self.value = initial_value
         self.constraints = OrderedCollection()
@@ -382,7 +387,7 @@ class Variable(object):
 class Planner(object):
 
     def __init__(self):
-        super(Planner, self).__init__()
+        # super(Planner, self).__init__()
         self.current_mark = 0
 
     def incremental_add(self, constraint):
@@ -493,7 +498,7 @@ class Planner(object):
 class Plan(object):
 
     def __init__(self):
-        super(Plan, self).__init__()
+        # super(Plan, self).__init__()
         self.v = OrderedCollection()
 
     def add_constraint(self, c):
@@ -634,6 +639,6 @@ if __name__ == "__main__":
     # runner = perf.Runner()
     # runner.metadata['description'] = "DeltaBlue benchmark"
 
-    n = 100
+    n = 10000
     # runner.bench_func('deltablue', delta_blue, n)
     delta_blue(n)

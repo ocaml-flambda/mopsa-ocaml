@@ -1,3 +1,6 @@
+# issue during Board init
+# seems like square.set_neighbours() creates addresses to top or something
+
 """
 Go board game
 """

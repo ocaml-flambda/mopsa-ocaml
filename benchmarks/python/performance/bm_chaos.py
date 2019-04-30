@@ -1,9 +1,7 @@
-# Soucis, à la fin de minx on a ça comme type pour self:
-# Instance[Class {Chaosgame}, {minx:@inst[float]:150:w;splines:@list[$l*1345]:205:s;thickness:@inst[float]:2:s}, ∅]
-# Instance[Class {Chaosgame}, {minx:@inst[float]:152:w;splines:@list[$l*1345]:205:s;thickness:@inst[float]:2:s}, ∅]
-# Instance[Class {Chaosgame}, {minx:@inst[float]:187:w;splines:@list[$l*1345]:205:s;thickness:@inst[float]:2:s}, ∅]
-# Instance[Class {Chaosgame}, {minx:@inst[float]:189:w;splines:@list[$l*1345]:205:s;thickness:@inst[float]:2:s}, ∅]
-# ça fait beaucoup trop de types différents
+# il y a beaucoup d'appels de fonctions, ça serait mieux d'avoir des
+# signatures de fonction pour gagner du temps.
+# il y a aussi beaucoup trop de flots d'erreur (~100aine), à abstraire
+# en commentant quelques appels de fonction on arrive à faire terminer
 """create chaosgame-like fractals
 
 Copyright (C) 2005 Carl Friedrich Bolz
@@ -114,6 +112,7 @@ degree of the Spline."""
         if u == dom[1]:
             return self.points[-1]
         I = self.GetIndex(u)
+        d = [self.points[I]]
         d = [self.points[I - self.degree + 1 + ii]
              for ii in range(self.degree + 1)]
         U = self.knots
@@ -124,7 +123,8 @@ degree of the Spline."""
                 co1 = (ua - u) / (ua - ub)
                 co2 = (u - ub) / (ua - ub)
                 index = ii - I + self.degree - ik - 1
-                d[index] = d[index].linear_combination(d[index + 1], co1, co2)
+                # cheat
+                # d[index] = d[index].linear_combination(d[index + 1], co1, co2)
         return d[0]
 
     def GetIndex(self, u):
@@ -136,6 +136,7 @@ degree of the Spline."""
         else:
             I = dom[1] - 1
         return I
+
 
     def __len__(self):
         return len(self.points)
