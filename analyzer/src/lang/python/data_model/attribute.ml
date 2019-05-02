@@ -142,7 +142,7 @@ module Domain =
                                               (mk_py_isinstance_builtin obj' "function" range)
                                               ~fthen:(fun flow ->
                                                   debug "obj'=%a; exp=%a@\n" pp_expr obj' pp_expr exp;
-                                                  eval_alloc man (A_py_method (object_of_expr obj', e)) range flow |>
+                                                  eval_alloc ~mode:WEAK man (A_py_method (object_of_expr obj', e)) range flow |>
                                                   Eval.bind (fun addr flow ->
                                                       let obj = (addr, None) in
                                                       Eval.singleton (mk_py_object obj range) flow)

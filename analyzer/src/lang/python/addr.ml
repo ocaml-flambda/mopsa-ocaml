@@ -66,8 +66,8 @@ type addr_kind +=
 
 
 (** Allocate an object on the heap and return its address as an evaluation *)
-let eval_alloc man kind range flow =
-  let exp = mk_alloc_addr kind range in
+let eval_alloc ?(mode=STRONG) man kind range flow =
+  let exp = mk_alloc_addr kind ~mode range in
   man.eval ~zone:(Universal.Zone.Z_u_heap, Z_any) exp flow |>
   Eval.bind (fun exp flow ->
       match ekind exp with
@@ -586,6 +586,11 @@ let () =
                | M_builtin s1, M_builtin s2 -> Pervasives.compare s1 s2
                | _, _ -> default a1 a2
              end
+           | A_py_method ((addr1, oexpr1), expr1), A_py_method ((addr2, oexpr2), expr2) ->
+             Compare.compose
+               [ (fun () -> compare_addr addr1 addr2);
+                 (fun () -> Compare.option compare_expr oexpr1 oexpr2);
+                 (fun () -> compare_expr expr1 expr2); ]
            | _ -> default a1 a2)
     }
   )
