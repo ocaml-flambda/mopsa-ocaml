@@ -46,19 +46,21 @@ module Domain =
       | S_py_while (test, body, orelse) ->
          man.exec
            (mk_while
-              (mk_true range)
-              (mk_block [
-                   mk_if
-                     (mk_not (Utils.mk_builtin_call "bool" [test] range) range)
-                     (mk_block [
-                          orelse;
-                          mk_stmt S_break range
-                        ] range)
-                     (mk_block [] range)
-                     range
-                 ;
-                   body
-                 ] range)
+              (* (mk_true range)
+               * (mk_block [
+               *      mk_if
+               *        (mk_not (Utils.mk_builtin_call "bool" [test] range) range)
+               *        (mk_block [
+               *             orelse;
+               *             mk_stmt S_break range
+               *           ] range)
+               *        (mk_block [] range)
+               *        range
+               *    ;
+               *      body
+               *    ] range) *)
+              (Utils.mk_builtin_call "bool" [test] range)
+              body
               range
            ) flow
          |> Post.return
@@ -113,7 +115,7 @@ module Domain =
             range
         in
         man.exec stmt flow |>
-        exec_block_on_all_flows (List.map (fun x -> mk_remove_var x range) [iterabletmp; tmp]) man |>
+        exec_block_on_all_flows (List.map (fun x -> mk_remove_var x (tag_range range "forclean")) [iterabletmp; tmp]) man |>
         Post.return |>
         Option.return
 
