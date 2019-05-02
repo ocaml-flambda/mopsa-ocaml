@@ -25,6 +25,7 @@ open Ast
 open Addr
 open Data_model.Attribute
 open MapExt
+open SetExt
 open Universal.Ast
 
 type polytype =
@@ -158,12 +159,74 @@ type _ query += Q_exn_string_query : expr -> string query
 module Domain =
 struct
 
-  module Polytypeset = Framework.Lattices.Powerset.Make
-      (struct
+  (* module Polytypeset = Framework.Lattices.Powerset.Make
+   *     (struct
+   *       type t = polytype
+   *       let compare = compare_polytype
+   *       let print = pp_polytype
+   *     end) *)
+
+  module Polytypeset =
+  struct
+    include Framework.Lattices.Powerset.Make(struct
         type t = polytype
         let compare = compare_polytype
         let print = pp_polytype
       end)
+
+
+    exception JoinError
+
+    let join t1 t2 =
+      let proceed i1 s2 =
+        let s, r = Set.fold (fun e2 (sacc, ok) ->
+            match e2 with
+            | Instance i2 when compare_polytype i1.classn i2.classn = 0 &&
+                               (StringMap.compare compare_addr i1.uattrs i2.uattrs <> 0 ||
+                               StringMap.compare compare_addr i1.oattrs i2.oattrs <> 0) ->
+              begin try
+                let ru, o1, o2 = StringMap.fold2o
+                    (fun k v1 (accr, acc1o, acc2o) -> (accr, StringMap.add k v1 acc1o, acc2o))
+                    (fun k v2 (accr, acc1o, acc2o) -> (accr, acc1o, StringMap.add k v2 acc2o))
+                    (fun k v1 v2 (accr, acc1o, acc2o) ->
+                       if compare_addr v1 v2 = 0 then
+                         (StringMap.add k v1 accr, acc1o, acc2o)
+                       else
+                         raise JoinError
+                    ) i1.uattrs i2.uattrs (StringMap.empty, i1.oattrs, i2.oattrs) in
+                let ro = StringMap.fold2o
+                    StringMap.add
+                    StringMap.add
+                    (fun k v1 v2 acc ->
+                       if compare_addr v1 v2 = 0 then
+                         StringMap.add k v1 acc
+                       else
+                         raise JoinError
+                    )
+                    o1 o2 StringMap.empty
+                in
+                let ri = {classn = i1.classn; uattrs = ru; oattrs = ro} in
+                (* Format.printf "join @[@\n%a@\n%a@\n%a@]@\n@\n" pp_polytype (Instance i1) pp_polytype (Instance i2) pp_polytype (Instance ri); *)
+                Set.add (Instance ri) sacc, true
+              with JoinError ->
+                Set.add (Instance i2) sacc, ok
+            end
+            | _ -> Set.add e2 sacc, ok
+          ) s2 (Set.empty, false) in
+        if r then s else Set.add (Instance i1) s in
+      Top.top_lift2 (fun s1 s2 ->
+          if cardinal t1 = 1 then
+            match choose t1 with
+            | Instance i1 ->proceed i1 s2
+            | _ -> Set.union s1 s2
+          else if cardinal t2 = 1 then
+            match choose t2 with
+            | Instance i2 -> proceed i2 s1
+            | _ -> Set.union s1 s2
+          else
+            Set.union s1 s2
+        ) t1 t2
+  end
 
   (* module PolytypesetJoin =
    * struct
@@ -223,16 +286,18 @@ struct
       pp_typevar_env typevar_env
 
   let subset d d' =
+    debug "subset %a %a..." print d print d';
     let res = TMap.fold (fun absaddr ptys acc ->
         if TMap.mem absaddr d'.abs_heap then
           let ptys' = TMap.find absaddr d'.abs_heap in
+          debug "absaddr = %a, ptys' = %a@\n" pp_addr absaddr Polytypeset.print ptys';
           (* acc && polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env) *)
           acc && Polytypeset.for_all (fun pty -> Polytypeset.exists (fun pty' -> polytype_leq (pty, d.typevar_env) (pty', d'.typevar_env)) ptys') ptys
         else false
       )
         d.abs_heap true
     in
-    debug "subset %a %a = %b@\n" print d print d' res;
+    debug "= %b@\n" res;
     res
 
   let meet _ _ =  Exceptions.panic "todo meet "
@@ -321,7 +386,7 @@ struct
                 | _ -> assert false in
               Instance {classn = old_inst.classn;
                         uattrs = StringMap.add attr arval old_inst.uattrs;
-                        oattrs = old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
+                        oattrs = StringMap.remove attr old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
           let abs_heap = TMap.add alval ael cur.abs_heap in
           let flow = set_domain_env T_cur {cur with abs_heap} man flow in
           Post.return flow |>
@@ -344,6 +409,7 @@ struct
               let old_inst = match old_inst with
                 | Instance i -> i
                 | _ -> assert false in
+              assert (not (StringMap.mem attr old_inst.uattrs));
               Instance {classn = old_inst.classn;
                         uattrs = old_inst.uattrs;
                         oattrs = StringMap.add attr arval old_inst.oattrs}) (TMap.find alval cur.abs_heap) in
