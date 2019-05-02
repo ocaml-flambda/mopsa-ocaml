@@ -92,12 +92,11 @@ struct
       struct
         type t = Equiv.t
         let print fmt m =
-          Format.fprintf fmt "List annots: @[%a@]" Equiv.print m
+          Format.fprintf fmt "List annots: @[%a@]" (Equiv.print ?pp_sep:None) m
       end
       )
     in
     K.key
-
 
   let fresh_smashed_var =  mkfresh (fun uid -> "$l*" ^ (string_of_int uid)) T_any
 
@@ -219,7 +218,7 @@ struct
         ["list"]
         (fun args flow ->
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
-           debug "list: %a@\n" pp_expr list;
+           debug "list: %a@\nelement = %a@\nflow = %a@\n" pp_expr list pp_expr element (Flow.print man.lattice) flow;
            let var_els = match ekind list with
              | E_py_object ({addr_kind = A_py_list a}, _) -> a
              | _ -> assert false in
@@ -282,6 +281,18 @@ struct
       Utils.check_instances ~arguments_after_check:1 man flow range args
         ["list"]
         (fun _ flow -> man.eval (mk_py_top T_int range) flow)
+      |> Option.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.clear")}, _)}, args, []) ->
+      Utils.check_instances man flow range args ["list"]
+        (fun args flow ->
+           let list = List.hd args in
+           let var_els = match ekind list with
+             | E_py_object ({addr_kind = A_py_list a}, _) ->a
+             | _ -> Exceptions.panic_at range "%a@\n" pp_expr list in
+           man.exec (mk_remove_var var_els range) flow |>
+           man.eval (mk_py_none range)
+        )
       |> Option.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "list.index")}, _)}, args, []) ->
