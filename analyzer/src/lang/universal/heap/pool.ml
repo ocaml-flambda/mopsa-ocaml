@@ -134,7 +134,7 @@ struct
     let module K = Context.GenUnitKey(
       struct
         type t = Equiv.t
-        let print fmt m = Format.fprintf fmt "Addr uids: @[%a@]" Equiv.print m
+        let print fmt m = Format.fprintf fmt "Addr uids: @[%a@]" (Equiv.print ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")) m
       end)
     in
     K.key
@@ -153,10 +153,10 @@ struct
       Exceptions.panic "get_addr_flag: %a not found" pp_addr addr
 
   let is_recent addr flow =
-    get_addr_flag addr flow == recent_flag
+    get_addr_flag addr flow = recent_flag
 
   let is_old addr flow =
-    get_addr_flag addr flow == old_flag
+    get_addr_flag addr flow = old_flag
 
 
 

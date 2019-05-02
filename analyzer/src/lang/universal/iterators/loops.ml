@@ -100,7 +100,7 @@ struct
   let rec exec zone stmt (man:('a,unit) man) flow =
     match skind stmt with
     | S_while(cond, body) ->
-      debug "while:@\n abs = @[%a@]" (Flow.print man.lattice) flow;
+      (* debug "while:@\n abs = @[%a@]" (Flow.print man.lattice) flow; *)
 
       let flow0 = Flow.remove T_continue flow |>
                   Flow.remove T_break
@@ -108,10 +108,10 @@ struct
 
       let flow_init, flow_out = unroll cond body man flow0 in
 
-      debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
-        (Flow.print man.lattice) flow_init
-        (Flow.print man.lattice) flow_out
-      ;
+      (* debug "post unroll:@\n abs0 = @[%a@]@\n abs out = @[%a@]"
+       *   (Flow.print man.lattice) flow_init
+       *   (Flow.print man.lattice) flow_out
+       * ; *)
       let res0 =
         lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init |>
         man.exec (mk_assume (mk_not cond cond.erange) cond.erange) |>
@@ -123,7 +123,7 @@ struct
                  Flow.set T_continue (Flow.get T_continue man.lattice flow) man.lattice
       in
 
-      debug "while post abs:@\n abs = @[%a@]" (Flow.print man.lattice) res1;
+      (* debug "while post abs %a:@\n abs = @[%a@]" pp_range stmt.srange (Flow.print man.lattice) res1; *)
 
       Some (Post.return res1)
 
@@ -144,14 +144,14 @@ struct
     | _ -> None
 
   and lfp count delay cond body man flow_init flow =
-    debug "lfp called, range = %a, count = %d@\n" pp_range body.srange count;
+    debug "lfp called, range = %a, count = %d@\nflow = %a@\n" pp_range body.srange count (Flow.print man.lattice) flow;
     let flow0 = Flow.remove T_continue flow |>
                 Flow.remove T_break
     in
 
-    debug "lfp:@\n delay = %d@\n abs = @[%a@]"
-      delay (Flow.print man.lattice) flow0
-    ;
+    (* debug "lfp:@\n delay = %d@\n abs = @[%a@]"
+     *   delay (Flow.print man.lattice) flow0
+     * ; *)
 
     let flow1 = man.exec (mk_assume cond cond.erange) flow0 |>
                 man.exec body
@@ -159,19 +159,22 @@ struct
 
     let flow2 = merge_cur_and_continue man flow1 in
 
-    debug "lfp post:@\n res = @[%a@]" (Flow.print man.lattice) flow1;
+    (* debug "lfp post:@\n res = @[%a@]" (Flow.print man.lattice) flow1; *)
 
     let flow3 = Flow.join man.lattice flow_init flow2 in
 
-    debug "lfp join:@\n res = @[%a@]" (Flow.print man.lattice) flow3;
-    if Flow.subset man.lattice flow3 flow then flow3
+    (* debug "lfp join: %a@\n res = @[%a@]" pp_range body.srange (Flow.print man.lattice) flow3; *)
+    let is_sub = Flow.subset man.lattice flow3 flow in
+    debug "lfp range %a is_sub: %b@\n" pp_range body.srange is_sub;
+    if is_sub then flow3
     else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow3 in
       let () = debug
-        "widening:@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
-        (Flow.print man.lattice) flow
-        (Flow.print man.lattice) flow3
-        (Flow.print man.lattice) wflow
+          "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
+          pp_range body.srange
+          (Flow.print man.lattice) flow
+          (Flow.print man.lattice) flow3
+          (Flow.print man.lattice) wflow
       in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else

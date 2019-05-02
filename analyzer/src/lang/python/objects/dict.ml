@@ -93,7 +93,7 @@ struct
       struct
         type t = Equiv.t
         let print fmt m =
-          Format.fprintf fmt "Dict annots: @[%a@]" Equiv.print m
+          Format.fprintf fmt "Dict annots: @[%a@]" (Equiv.print ?pp_sep:None) m
       end
       )
     in
