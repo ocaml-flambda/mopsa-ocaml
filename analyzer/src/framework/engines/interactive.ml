@@ -131,6 +131,7 @@ struct
     | Value of string (** Print the value of a variable *)
     | Where  (** Show current program point *)
     | Token  (** Show the flow tokens in the current abstract state *)
+    | Callstack (** Show current callstack *)
 
 
   (** Reference to the last received command *)
@@ -147,6 +148,7 @@ struct
     printf "  e[nv]            print the current abstract environment@.";
     printf "  e[nv] <var>      print the value of a variable in the current abstract environment@.";
     printf "  token            print the flow tokens of the abstract state@.";
+    printf "  cs               print the current call stack@.";
     printf "  w[here]          show current program point@.";
     printf "  l[og] {on|off}   activate/deactivate short logging@.";
     printf "  llog {on|off}   activate/deactivate complete logging@.";
@@ -172,6 +174,7 @@ struct
       | "env"   | "e"   -> Env
       | "where" | "w"   -> Where
       | "token"         -> Token
+      | "cs"            -> Callstack
 
       | "help"  | "h"   ->
         print_usage ();
@@ -329,6 +332,12 @@ struct
             let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
             printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
             interact ~where:false action range flow
+
+          | Callstack ->
+            let cs = Callstack.get flow in
+            printf "%a@." Callstack.print cs;
+            interact ~where:false action range flow
+
 
           | Print ->
             printf "%a@." (Flow.print man.lattice) flow;
