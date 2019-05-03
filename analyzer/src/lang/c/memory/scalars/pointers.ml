@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Non-relational abstraction for C pointers *)
+(** Non-relational abstraction of C pointers *)
 
 open Mopsa
 open Framework.Core.Sig.Stacked.Intermediate
@@ -27,6 +27,111 @@ open Universal.Ast
 open Ast
 open Zone
 open Common.Points_to
+open Common.Base
+
+
+(** {2 Value lattice of bases} *)
+(** ========================== *)
+
+module BaseSet =
+struct
+
+  (** Pointer base *)
+  type pb =
+    | PB_block of base         (** Memory blocks *)
+    | PB_fun   of Ast.c_fundec (** Function point *)
+    | PB_null                  (** Null pointer *)
+    | PB_invalid               (** Invalid pointer *)
+
+
+  include Framework.Lattices.Powerset.Make(
+      struct
+
+        type t = pb
+
+        let print fmt = function
+          | PB_block base -> pp_base fmt base
+          | PB_fun f -> Format.pp_print_string fmt f.Ast.c_func_org_name
+          | PB_null-> Format.pp_print_string fmt "NULL"
+          | PB_invalid -> Format.pp_print_string fmt "Invalid"
+
+        let compare p1 p2 =
+          match p1, p2 with
+          | PB_block b1, PB_block b2 -> compare_base b1 b2
+          | PB_fun f1, PB_fun f2 -> compare f1.Ast.c_func_unique_name f2.Ast.c_func_unique_name
+          | _, _ -> Pervasives.compare p1 p2
+      end
+      )
+
+
+  include Framework.Core.Id.GenValueId(struct
+      type typ = t
+      let name = "c.memory.pointers"
+      let display = "pointers"
+    end)
+
+  let zones = [Zone.Z_c_scalar]
+
+  let null = singleton PB_null
+
+  let invalid = singleton PB_invalid
+
+  let block b = singleton (PB_block b)
+
+  let bfun f = singleton (PB_fun f)
+
+  let mem_block v =
+    if is_top v then true
+    else exists (function PB_block _ -> true | _ -> false) v
+
+  let types = []
+
+  let of_constant c =
+    match c with
+    | C_int n when Z.equal n Z.zero -> null
+    | _ -> top
+
+  let unop op v = top
+
+  let binop op v1 v2 = top
+
+  let bwd_unop = Framework.Core.Sig.Value.Simplified.default_bwd_unop
+
+  let bwd_binop = Framework.Core.Sig.Value.Simplified.default_bwd_binop
+
+  let filter v b =
+    if b then diff v null
+    else meet v null
+
+  let is_singleton v =
+    not (is_top v) &&
+    cardinal v == 1
+
+  let compare op v1 v2 r =
+    let op = if r then op else negate_comparison op in
+    match op with
+    | O_eq ->
+      let v = meet v1 v2 in
+      v, v
+
+    | O_ne ->
+      if is_singleton v1 then v1, diff v2 v1
+      else if is_singleton v2 then diff v1 v2, v2
+      else v1, v2
+
+    | _ -> v1, v2
+
+
+  let ask _ _ = None
+
+  let refine channel v = Channel.return v
+
+
+end
+
+
+(** {2 Abstract domain of pointers} *)
+(** =============================== *)
 
 module Domain =
 struct
@@ -39,7 +144,7 @@ struct
       of bases *)
   module Map =
     Framework.Transformers.Value.Nonrel.Make(
-      Framework.Core.Sig.Value.Simplified.MakeLowlevel(Bases)
+      Framework.Core.Sig.Value.Simplified.MakeLowlevel(BaseSet)
     )
 
   type t = Map.t
@@ -155,24 +260,24 @@ struct
 
 
   (* Get the base and eventual pointer offset from a pointer evaluation *)
-  let get_pointer_info (p:ptr) man flow : (Bases.t * expr option * var option) =
+  let get_pointer_info (p:ptr) man flow : (BaseSet.t * expr option * var option) =
     match p with
-    | ADDROF (b, o) -> Bases.block b, Some o, None
+    | ADDROF (b, o) -> BaseSet.block b, Some o, None
 
     | EQ(q, o) ->
       let b = get_domain_env T_cur man flow |>
               Map.find q
       in
-      b, (if Bases.mem_block b then Some o else None), Some q
+      b, (if BaseSet.mem_block b then Some o else None), Some q
 
     | NULL ->
-      Bases.null, None, None
+      BaseSet.null, None, None
 
     | INVALID ->
-      Bases.invalid, None, None
+      BaseSet.invalid, None, None
 
     | TOP ->
-      Bases.top, None, None
+      BaseSet.top, None, None
 
     | FUN _ -> panic ~loc:__LOC__ "function pointers not supported"
 
@@ -286,10 +391,10 @@ struct
     | EQ (p, offset) ->
       let offset' = mk_binop (mk_offset_var_expr p exp.erange) O_plus offset ~etyp:T_int exp.erange in
       let bases = Map.find p (get_domain_env T_cur man flow) in
-      if Bases.is_top bases then
+      if BaseSet.is_top bases then
         Eval.singleton (mk_c_points_to_top exp.erange) flow
       else
-        let el = Bases.fold (fun b acc ->
+        let el = BaseSet.fold (fun b acc ->
             match b with
             | PB_block b ->
               Eval.singleton (mk_c_points_to_bloc b offset' exp.erange) flow :: acc
@@ -336,14 +441,14 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1', b2' = Bases.compare O_eq b1 b2 true in
+      let b1', b2' = BaseSet.compare O_eq b1 b2 true in
 
       let flow' = set_base v1 b1' man flow |>
                   set_base v2 b2' man
       in
 
       (* Refine offsets in case p or q may point to a block *)
-      if Bases.mem_block b1' && Bases.mem_block b2' then
+      if BaseSet.mem_block b1' && BaseSet.mem_block b2' then
         man.eval ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) (compare_cond O_eq v1 o1 v2 o2 exp.erange) flow' |>
         Option.return
       else
@@ -352,7 +457,7 @@ struct
           match v with
           | None -> flow
           | Some vv ->
-            if Bases.mem_block b then
+            if BaseSet.mem_block b then
               man.exec (mk_remove (mk_offset_var_expr vv exp.erange) exp.erange) flow
             else
               flow
@@ -378,12 +483,12 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
+      let b1eq, b2eq = BaseSet.compare O_eq b1 b2 true in
+      let b1ne, b2ne = BaseSet.compare O_ne b1 b2 true in
 
       (* Case 1: different bases *)
       let case1 =
-        if not (Bases.is_bottom b1ne) && not (Bases.is_bottom b2ne) then
+        if not (BaseSet.is_bottom b1ne) && not (BaseSet.is_bottom b2ne) then
           let flow' = set_base v1 b1ne man flow |>
                       set_base v2 b2ne man
           in
@@ -394,7 +499,7 @@ struct
 
       (* Case 2: same base => different offsets *)
       let case2 =
-        if not (Bases.is_bottom b1eq) && not (Bases.is_bottom b2eq) then
+        if not (BaseSet.is_bottom b1eq) && not (BaseSet.is_bottom b2eq) then
           let flow' = set_base v1 b1eq man flow |>
                       set_base v2 b2eq man
           in
@@ -471,18 +576,18 @@ struct
 
       (* Check if the bases are the same *)
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
+      let b1eq, b2eq = BaseSet.compare O_eq b1 b2 true in
+      let b1ne, b2ne = BaseSet.compare O_ne b1 b2 true in
 
       (* Size of a pointed element *)
       let elem_size = pointed_size p1.etyp in
 
       (* Case 1 : same base => return difference of offset *)
       let case1 =
-        if not (Bases.is_bottom b1eq) &&
-           not (Bases.is_bottom b2eq) &&
-           Bases.mem_block b1eq &&
-           Bases.mem_block b2eq
+        if not (BaseSet.is_bottom b1eq) &&
+           not (BaseSet.is_bottom b2eq) &&
+           BaseSet.mem_block b1eq &&
+           BaseSet.mem_block b2eq
         then
           let flow' = set_base v1 b1eq man flow |>
                       set_base v2 b2eq man
@@ -497,8 +602,8 @@ struct
 
       (* Case 2: different base => raise an alarm *)
       let case2 =
-        if not (Bases.is_bottom b1ne) &&
-           not (Bases.is_bottom b2ne)
+        if not (BaseSet.is_bottom b1ne) &&
+           not (BaseSet.is_bottom b2ne)
         then
           let flow' = set_base v1 b1ne man flow |>
                       set_base v2 b2ne man
@@ -538,12 +643,12 @@ struct
       let b2, o2, v2 = get_pointer_info p2 man flow in
 
       (* Compute new bases *)
-      let b1eq, b2eq = Bases.compare O_eq b1 b2 true in
-      let b1ne, b2ne = Bases.compare O_ne b1 b2 true in
+      let b1eq, b2eq = BaseSet.compare O_eq b1 b2 true in
+      let b1ne, b2ne = BaseSet.compare O_ne b1 b2 true in
 
       (* Case 1: different bases *)
       let case1 =
-        if not (Bases.is_bottom b1ne) && not (Bases.is_bottom b2ne) then
+        if not (BaseSet.is_bottom b1ne) && not (BaseSet.is_bottom b2ne) then
           let flow' = set_base v1 b1ne man flow |>
                       set_base v2 b2ne man
           in
@@ -554,7 +659,7 @@ struct
 
       (* Case 2: same base => compare offsets *)
       let case2 =
-        if not (Bases.is_bottom b1eq) && not (Bases.is_bottom b2eq) then
+        if not (BaseSet.is_bottom b1eq) && not (BaseSet.is_bottom b2eq) then
           let flow' = set_base v1 b1eq man flow |>
                       set_base v2 b2eq man
           in
@@ -586,7 +691,7 @@ struct
     let o = mk_offset_var_expr p range in
     match eval_pointer q with
     | ADDROF (b, offset) ->
-      let flow' = map_domain_env T_cur (Map.add p (Bases.block b)) man flow in
+      let flow' = map_domain_env T_cur (Map.add p (BaseSet.block b)) man flow in
 
       man.eval offset ~zone:(Z_c_scalar, Universal.Zone.Z_u_num) flow' |>
       post_eval man @@ fun offset flow' ->
@@ -597,7 +702,7 @@ struct
     | EQ (q, offset) ->
       let flow' = map_domain_env T_cur (fun a -> Map.add p (Map.find q a) a) man flow in
       (* Assign offset only if q points to a block *)
-      if mem_domain_env T_cur (fun a -> Map.find q a |> Bases.mem_block) man flow then
+      if mem_domain_env T_cur (fun a -> Map.find q a |> BaseSet.mem_block) man flow then
         let qo = mk_offset_var_expr q range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
 
@@ -611,22 +716,22 @@ struct
         Post.return
 
     | FUN f ->
-      map_domain_env T_cur (Map.add p (Bases.bfun f)) man flow |>
+      map_domain_env T_cur (Map.add p (BaseSet.bfun f)) man flow |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
       Post.return
 
     | INVALID ->
-      map_domain_env T_cur (Map.add p Bases.invalid) man flow  |>
+      map_domain_env T_cur (Map.add p BaseSet.invalid) man flow  |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
       Post.return
 
     | NULL ->
-      map_domain_env T_cur (Map.add p Bases.null) man flow |>
+      map_domain_env T_cur (Map.add p BaseSet.null) man flow |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_remove o range) |>
       Post.return
 
     | TOP ->
-      map_domain_env T_cur (Map.add p Bases.top) man flow |>
+      map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_assign o (mk_top T_int range) range) |>
       Post.return
 
@@ -643,13 +748,13 @@ struct
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
-      map_domain_env T_cur (Map.add v Bases.null) man flow |>
+      map_domain_env T_cur (Map.add v BaseSet.null) man flow |>
       Post.return
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
       (* The value of the variable is undetermined (C99 6.7.8.10) *)
-      map_domain_env T_cur (Map.add v Bases.invalid) man flow |>
+      map_domain_env T_cur (Map.add v BaseSet.invalid) man flow |>
       Post.return
 
     | _, Some (C_init_expr e) ->
@@ -671,7 +776,7 @@ struct
 
     | S_add { ekind = E_var (p, _) } when is_c_pointer_type p.vtyp ->
       let o = mk_offset_var_expr p range in
-      map_domain_env T_cur (Map.add p Bases.top) man flow |>
+      map_domain_env T_cur (Map.add p BaseSet.top) man flow |>
       man.exec ~zone:(Universal.Zone.Z_u_num) (mk_add o range) |>
       Post.return |>
       Option.return
@@ -684,15 +789,15 @@ struct
       Option.return
 
     | S_remove { ekind = E_addr addr } ->
-      let block = Bases.PB_block (A addr) in
+      let block = BaseSet.PB_block (A addr) in
       let flow' = map_domain_env T_cur (fun a ->
           let a' = Map.map (fun base ->
-              if not (Bases.mem block base) then
+              if not (BaseSet.mem block base) then
                 base
               else
-                let base' = Bases.add PB_invalid base in
+                let base' = BaseSet.add PB_invalid base in
                 if addr.addr_mode = STRONG then
-                  Bases.remove block base'
+                  BaseSet.remove block base'
                 else
                   base'
             ) a
@@ -737,14 +842,14 @@ struct
       Option.return
 
     | S_rename ({ekind = E_addr addr1}, {ekind = E_addr addr2}) ->
-      let block1 = Bases.PB_block (A addr1) in
-      let block2 = Bases.PB_block (A addr2) in
+      let block1 = BaseSet.PB_block (A addr1) in
+      let block2 = BaseSet.PB_block (A addr2) in
       let flow' = map_domain_env T_cur (fun a ->
           let a' = Map.map (fun bases ->
-              if not (Bases.mem block1 bases) then bases
+              if not (BaseSet.mem block1 bases) then bases
               else
-                Bases.remove block1 bases |>
-                Bases.add block2
+                BaseSet.remove block1 bases |>
+                BaseSet.add block2
             ) a
           in
           a'

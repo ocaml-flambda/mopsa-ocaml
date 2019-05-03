@@ -149,7 +149,7 @@ struct
 
   include Framework.Core.Id.GenDomainId(struct
       type typ = t
-      let name = "c.resources.file"
+      let name = "c.cstubs.file"
     end)
 
 

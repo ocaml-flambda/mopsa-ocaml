@@ -37,27 +37,12 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.resources.common"
+  let name = "c.cstubs.resources"
   let debug fmt = Debug.debug ~channel:name fmt
-
-
-  (** Zoning definition *)
-  (** ================= *)
-
-  type zone +=
-    | Z_c_resource
-
-  let () =
-    register_zone {
-      zone = Z_c_resource;
-      zone_subset = None;
-      zone_name = "C/Resource";
-      zone_eval = (fun e -> Process);
-    }
 
   let interface= {
     iexec = {
-      provides = [Z_c_resource];
+      provides = [Z_c];
       uses = [Z_c]
     };
 

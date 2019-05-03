@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 open Mopsa
-open Framework.Core.Sig.Domain.Stateless
+open Framework.Core.Sig.Stacked.Stateless
 open Universal.Ast
 open Ast
 open Zone
@@ -32,7 +32,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.desugar.low_level"
+  let name = "c.memory.structured.destruct"
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)
@@ -40,8 +40,8 @@ struct
 
   let interface = {
     iexec = {
-      provides = [];
-      uses = []
+      provides = [Z_c];
+      uses = [Z_c_low_level]
     };
 
     ieval = {
@@ -55,7 +55,12 @@ struct
 
   let init _ _ flow = flow
 
-  let exec _ _ _ _ = None
+  let exec zone stmt man flow =
+    match skind stmt with
+    | S_c_declaration(v) -> assert false
+    | S_assign(lval, e) -> assert false
+    | S_assume(e) -> assert false
+    | _ -> None
 
   let rec eval zone exp man flow =
     match ekind exp with
@@ -197,4 +202,4 @@ struct
 end
 
 let () =
-  Framework.Core.Sig.Domain.Stateless.register_domain (module Domain)
+  Framework.Core.Sig.Stacked.Stateless.register_stack (module Domain)

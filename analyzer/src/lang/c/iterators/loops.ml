@@ -35,7 +35,7 @@ struct
   (** Domain identification *)
   (** ===================== *)
 
-  let name = "c.desugar.loops"
+  let name = "c.iterators.loops"
   let debug fmt = Debug.debug ~channel:name fmt
 
   (** Zoning definition *)

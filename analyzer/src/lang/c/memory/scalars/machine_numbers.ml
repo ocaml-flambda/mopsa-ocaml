@@ -402,32 +402,27 @@ struct
 
     | S_assign(lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~zone:(Z_c_scalar, Z_u_num) lval flow |>
-      Option.return |> Option.lift @@ post_eval man @@
-      fun lval' flow ->
+      Option.return |> Option.lift @@ post_eval man @@ fun lval' flow ->
 
       man.eval ~zone:(Z_c_scalar, Z_u_num) rval flow |>
       post_eval man @@ fun rval' flow ->
 
-      man.exec ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow |>
-      Post.return
+      man.exec_sub ~zone:Z_u_num (mk_assign lval' rval' stmt.srange) flow
 
     | S_add v when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
-      man.exec ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_add vv stmt.srange) flow |>
       Option.return
 
     | S_expand(v, vl) when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
       let vvl = List.map to_universal_expr vl in
-      man.exec ~zone:Z_u_num (mk_expand vv vvl stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_expand vv vvl stmt.srange) flow |>
       Option.return
 
     | S_remove v when is_c_num_type v.etyp ->
       let vv = to_universal_expr v in
-      man.exec ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_remove vv stmt.srange) flow |>
       Option.return
 
     | S_rename(v1, v2) when is_c_num_type v1.etyp &&
@@ -435,8 +430,7 @@ struct
       ->
       let vv1 = to_universal_expr v1 in
       let vv2 = to_universal_expr v2 in
-      man.exec ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
-      Post.return |>
+      man.exec_sub ~zone:Z_u_num (mk_rename vv1 vv2 stmt.srange) flow |>
       Option.return
 
 
@@ -444,8 +438,7 @@ struct
       man.eval ~zone:(Z_c_scalar, Z_u_num) e flow |>
       Option.return |> Option.lift @@ post_eval man @@ fun e' flow ->
 
-      man.exec ~zone:Z_u_num (mk_assume e' stmt.srange) flow |>
-      Post.return
+      man.exec_sub ~zone:Z_u_num (mk_assume e' stmt.srange) flow
 
     | _ -> None
 

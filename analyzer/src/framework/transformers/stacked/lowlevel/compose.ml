@@ -106,6 +106,7 @@ struct
           log_post_stmt stmt man2
         );
       merge_sub = (fun (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') ->
+          debug "merge_sub %a and %a" Log.print (Log.second log) Log.print (Log.second log');
           S2.merge pre1 (a1, Log.first log) (a1', Log.first log'),
           man.merge_sub pre2 (a2, Log.second log) (a2', Log.second log')
         );

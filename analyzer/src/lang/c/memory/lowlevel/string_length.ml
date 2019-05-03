@@ -55,13 +55,13 @@ struct
   (** {2 Domain header} *)
   (** ***************** *)
 
-  let name = "c.memory.strings.length"
+  let name = "c.memory.lowlevel.string_length"
 
   let debug fmt = Debug.debug ~channel:name fmt
 
   let interface = {
     iexec = {
-      provides = [Z_c];
+      provides = [Z_c_low_level];
       uses = [
         Z_u_num;
         Z_c_scalar
@@ -70,10 +70,9 @@ struct
     ieval = {
       provides = [Z_c_low_level, Z_c_scalar];
       uses = [
-        Z_c, Z_u_num;
+        Z_c_low_level, Z_u_num;
         Z_c_scalar, Z_u_num;
-        Z_c, Z_c_low_level;
-        Z_c, Z_c_scalar;
+        Z_c_low_level, Z_c_scalar;
         Z_c_low_level, Z_c_points_to;
       ];
     }

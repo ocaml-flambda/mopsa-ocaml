@@ -5,9 +5,12 @@ void swap (int *x , int * y) {
 }
 
 int main () {
-  int a = 10 ;
-  int b = 5 ;
+  int a, b;
+
+  a = 10 ;
+  b = 5 ;
   swap(&a,&b);
+
   a = 2;
   b = 0;
   swap(&a,&b);
