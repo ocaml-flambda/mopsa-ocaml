@@ -27,8 +27,10 @@ def eval_times_u(func, u):
 
 
 def eval_AtA_times_u(u):
-    return eval_times_u(part_At_times_u, eval_times_u(part_A_times_u, u))
-
+    # currently unsupported due to recursive calls
+    #    return eval_times_u(part_At_times_u, eval_times_u(part_A_times_u, u))
+    a = eval_times_u(part_A_times_u, u)
+    return eval_times_u(part_At_times_u, a)
 
 def part_A_times_u(i_u):
     i, u = i_u

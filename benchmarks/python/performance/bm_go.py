@@ -1,5 +1,16 @@
+# Square.find, Square.remove have been altered to remove recursive calls...
+
 # issue during Board init
+# recursion between attributes makes things complicated here:
+# Board's self has an attribute squares, being a list of Squares. Each of these Sqaures has an attribute board being the initial Board.
+
 # seems like square.set_neighbours() creates addresses to top or something
+# Pour @inst[Square]:105:w, on a d'abord:
+# Instance[Class {Square}, {board:@inst[Board]:95:s;pos:@inst[int]:-6:w;removestamp:@inst[int]:-6:w;timestamp:@inst[int]:-6:w;zobrist_strings:@list[$l*1429]:101:s}, ∅],
+# Instance[Class {Square}, {board:@inst[Board]:95:s;pos:@inst[int]:-6:w;removestamp:@inst[int]:-6:w;timestamp:@inst[int]:-6:w;zobrist_strings:@list[$l*1429]:101:s}, {neighbours:@list[$l*1474]:115:s}]
+# Instance[Class {Square}, {board:@inst[Board]:95:s;neighbours:@list[$l*1474]:115:s;pos:@inst[int]:-6:w;removestamp:@inst[int]:-6:w;timestamp:@inst[int]:-6:w;zobrist_strings:@list[$l*1429]:101:s}, ∅]
+# Instance[Class {Square}, {board:@inst[Board]:95:s;neighbours:@list[$l*1474]:115:s;pos:@inst[int]:-6:w;removestamp:@inst[int]:-6:w;timestamp:@inst[int]:-6:w;zobrist_strings:@list[$l*1429]:101:s}, {neighbours:@list[$l*1474]:115:s}]}
+# Avant de monter à top
 
 """
 Go board game
@@ -62,7 +73,8 @@ class Square:
             if neighcolor == EMPTY:
                 self.ledges += 1
             else:
-                neighbour_ref = neighbour.find(update=True)
+                # neighbour_ref = neighbour.find(update=True)
+                neighbour_ref = neighbour.find(True)
                 if neighcolor == color:
                     if neighbour_ref.reference.pos != self.pos:
                         self.ledges += neighbour_ref.ledges
@@ -71,10 +83,10 @@ class Square:
                 else:
                     neighbour_ref.ledges -= 1
                     if neighbour_ref.ledges == 0:
-                        neighbour.remove(neighbour_ref)
+                        neighbour.remove(neighbour_ref, True)
         self.board.zobrist.add()
 
-    def remove(self, reference, update=True):
+    def remove(self, reference, update): #update=True):
         self.board.zobrist.update(self, EMPTY)
         self.removestamp = TIMESTAMP
         if update:
@@ -87,18 +99,18 @@ class Square:
         for neighbour in self.neighbours:
             if neighbour.color != EMPTY and neighbour.removestamp != TIMESTAMP:
                 neighbour_ref = neighbour.find(update)
-                if neighbour_ref.pos == reference.pos:
-                    neighbour.remove(reference, update)
-                else:
-                    if update:
-                        neighbour_ref.ledges += 1
+                # if neighbour_ref.pos == reference.pos:
+                #     neighbour.remove(reference, update)
+                # else:
+                #     if update:
+                #         neighbour_ref.ledges += 1
 
-    def find(self, update=False):
+    def find(self, update): #update=False
         reference = self.reference
-        if reference.pos != self.pos:
-            reference = reference.find(update)
-            if update:
-                self.reference = reference
+        # if reference.pos != self.pos:
+        #     reference = reference.find(update)
+        #     if update:
+        #         self.reference = reference
         return reference
 
     def __repr__(self):
@@ -218,7 +230,7 @@ class Board:
             if neighcolor == EMPTY:
                 empties += 1
                 continue
-            neighbour_ref = neighbour.find()
+            neighbour_ref = neighbour.find(False)
             if neighbour_ref.timestamp != TIMESTAMP:
                 if neighcolor == self.color:
                     neighs += 1
@@ -232,7 +244,7 @@ class Board:
                     weak_neighs += 1
                 else:
                     weak_opps += 1
-                    neighbour_ref.remove(neighbour_ref, update=False)
+                    neighbour_ref.remove(neighbour_ref, False)
         dupe = self.zobrist.dupe()
         self.zobrist.hash = old_hash
         strong_neighs = neighs - weak_neighs

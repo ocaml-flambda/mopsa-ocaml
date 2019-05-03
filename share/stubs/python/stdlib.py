@@ -402,6 +402,7 @@ class range_iterator(object):
     def __iter__(self): pass
 
 class set(object):
+    def __new__(self): pass
     def __init__(self, start, stop): pass
     def __len__(self): pass
     def __iter__(self): pass
