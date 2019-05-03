@@ -135,11 +135,10 @@ module Domain =
                    let cs = Callstack.get true_flow in
                    let str = man.ask (Types.Typing.Q_exn_string_query exp) flow in
                    let a =
-                     if List.mem str !opt_unprecise_exn then
+                     if List.exists (fun x -> Pervasives.compare x str = 0) !opt_unprecise_exn then
                        let range = tag_range (R_fresh 0) "unprecise exn" in
                        let cs = [] in
-                       (* FIXME: re-computation of exp is ugly *)
-                       let exp = mk_py_object (find_builtin str) range in
+                       let exp = Utils.strip_object exp in
                        mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR
                      else
                        mk_alarm (APyException (exp, str)) range ~cs ~level:ERROR in
@@ -297,7 +296,14 @@ module Domain =
                               ~fthen:(fun true_flow -> Post.return true_flow)
                               ~felse:(fun false_flow ->
                                   let cs = Callstack.get false_flow in
-                                  let a = mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
+                                  let a =
+                                    if List.mem s !opt_unprecise_exn then
+                                      let range = tag_range (R_fresh 0) "unprecise exn" in
+                                      let cs = [] in
+                                      let exp = Utils.strip_object exn in
+                                      mk_alarm (APyException (exp, s)) range ~cs ~level:ERROR
+                                    else
+                                      mk_alarm (APyException (exn, s)) range ~cs ~level:ERROR in
                                   Flow.add (T_alarm a) env man.lattice false_flow |> Post.return)
                               true_flow)
                         ~felse:(fun false_flow -> Post.return false_flow)

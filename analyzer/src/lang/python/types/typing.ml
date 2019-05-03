@@ -805,12 +805,17 @@ struct
           | A_py_var _, A_py_class (c, mro)
           | A_py_instance _, A_py_class (c, mro) ->
             let cur = get_domain_env T_cur man flow in
-            let ptys = TMap.find addr_obj cur.abs_heap in
-            let ptys = if not (Polytypeset.is_empty ptys) then ptys
+            let ptys =
+              if TMap.mem addr_obj cur.abs_heap then
+                TMap.find addr_obj cur.abs_heap
+              else
+                Polytypeset.empty in
+            let ptys =
+              if not (Polytypeset.is_empty ptys) then ptys
               else
                 let is_ao addr = compare_addr addr_obj addr = 0 in
                 let process bltin =
-                  let bltin_cls, bltin_mro = get_builtin "bool" in
+                  let bltin_cls, bltin_mro = get_builtin bltin in
                   Polytypeset.singleton (Instance {classn = Class (bltin_cls, bltin_mro);
                                                    uattrs = StringMap.empty;
                                                    oattrs = StringMap.empty}) in
@@ -822,6 +827,13 @@ struct
                   process "NotImplementedType"
                 else if is_ao addr_integers then
                   process "int"
+                else if addr_obj.addr_uid <= 0 then
+                  match akind addr_obj with
+                  | A_py_instance i ->
+                    assert (is_builtin_name i);
+                    process i
+                  | _ ->
+                    Exceptions.panic_at range "wtf @ %a@\n" pp_addr addr_obj
                 else
                   Exceptions.panic_at range "wtf @ %a@\n" pp_addr addr_obj
             in
